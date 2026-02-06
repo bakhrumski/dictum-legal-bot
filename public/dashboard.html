@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dictum - Murojaatlar Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-left h1 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .header-right {
+            text-align: right;
+        }
+        
+        .user-info {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .role-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .role-master {
+            background: #3498db;
+            color: white;
+        }
+        
+        .role-student {
+            background: #9b59b6;
+            color: white;
+        }
+        
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .logout-btn:hover {
+            background: #c0392b;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card h3 {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .pending { color: #f39c12; }
+        .student-responded { color: #9b59b6; }
+        .answered { color: #27ae60; }
+        .rejected { color: #e74c3c; }
+        
+        .requests-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .filter-section {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .filter-section select {
+            min-width: 180px;
+        }
+        
+        select {
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .request-item {
+            border: 1px solid #ecf0f1;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .request-item:hover {
+            background: #f8f9fa;
+            border-color: #3498db;
+        }
+        
+        .request-item.needs-approval {
+            border-left: 4px solid #9b59b6;
+            background: #f8f4ff;
+        }
+        
+        .request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .client-name {
+            font-weight: bold;
+            font-size: 18px;
+            color: #2c3e50;
+        }
+        
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-student_responded {
+            background: #e8daef;
+            color: #5b2c6f;
+        }
+        
+        .status-answered {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-rejected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .request-preview {
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+        
+        .request-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #95a5a6;
+            flex-wrap: wrap;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            position: relative;
+            background: white;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 30px;
+            border-radius: 10px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 28px;
+            cursor: pointer;
+            color: #7f8c8d;
+        }
+        
+        .close-btn:hover {
+            color: #2c3e50;
+        }
+        
+        .detail-section {
+            margin-bottom: 20px;
+        }
+        
+        .detail-section h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        
+        .detail-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        
+        .detail-label {
+            font-weight: bold;
+            color: #7f8c8d;
+            width: 150px;
+        }
+        
+        .detail-value {
+            color: #2c3e50;
+        }
+        
+        .request-text-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+            margin-top: 10px;
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .btn {
+            background: #3498db;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-right: 10px;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .btn-success {
+            background: #27ae60;
+        }
+        
+        .btn-success:hover {
+            background: #229954;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .response-box {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #28a745;
+            margin-top: 10px;
+        }
+        
+        .student-response-box {
+            background: #e8daef;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #9b59b6;
+            margin-top: 10px;
+        }
+        
+        .approval-section {
+            background: #fff3cd;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+            border-left: 4px solid #f39c12;
+        }
+        
+        .approval-section h4 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+        
+        .file-attachment {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .file-icon {
+            font-size: 32px;
+        }
+        
+        .file-details {
+            flex: 1;
+        }
+        
+        .file-name {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .file-size {
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+        
+        .file-preview {
+            margin-top: 10px;
+        }
+        
+        .file-preview img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 5px;
+        }
+        
+        .file-preview audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .file-preview video {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 5px;
+        }
+        
+        .admin-actions {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #f39c12;
+        }
+        
+        .admin-actions h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .block-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8d7da;
+            border-radius: 5px;
+            color: #721c24;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+        
+        .empty-state h2 {
+            margin-bottom: 10px;
+            color: #95a5a6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>🏛️ Dictum Advokatlik Firmasi</h1>
+                <p class="subtitle">Murojaatlar boshqaruv tizimi</p>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <span id="userName"></span>
+                    <span id="userRole" class="role-badge"></span>
+                </div>
+                <button class="logout-btn" onclick="logout()">Chiqish</button>
+            </div>
+        </header>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Jami Murojaatlar</h3>
+                <div class="number" id="totalRequests">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Kutilmoqda</h3>
+                <div class="number pending" id="pendingRequests">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Student javobi</h3>
+                <div class="number student-responded" id="studentResponded">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Javob Berilgan</h3>
+                <div class="number answered" id="answeredRequests">0</div>
+            </div>
+        </div>
+        
+        <div class="requests-container">
+            <div class="controls">
+                <div class="controls-header">
+                    <h2>Murojaatlar ro'yxati</h2>
+                    <button class="btn btn-success" onclick="exportToExcel()">
+                        📊 Excel ga eksport qilish
+                    </button>
+                </div>
+                <div class="filter-section">
+                    <select id="categoryFilter" onchange="filterRequests()">
+                        <option value="">Barcha yo'nalishlar</option>
+                        <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
+                        <option value="Jinoyat huquqi">Jinoyat huquqi</option>
+                        <option value="Mehnat huquqi">Mehnat huquqi</option>
+                        <option value="Oila huquqi">Oila huquqi</option>
+                        <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
+                        <option value="Ko'chmas mulk">Ko'chmas mulk</option>
+                        <option value="Soliq huquqi">Soliq huquqi</option>
+                        <option value="Ma'muriy huquq">Ma'muriy huquq</option>
+                        <option value="Boshqa">Boshqa</option>
+                    </select>
+                    
+                    <select id="assigneeFilter" onchange="filterRequests()">
+                        <option value="">Barcha javob beruvchilar</option>
+                        <option value="Master Admin">Master Admin</option>
+                        <option value="Student Admin 1">Student Admin 1</option>
+                    </select>
+                    
+                    <select id="statusFilter" onchange="filterRequests()">
+                        <option value="">Barcha statuslar</option>
+                        <option value="pending">Kutilmoqda</option>
+                        <option value="student_responded">Student javobi</option>
+                        <option value="answered">Javob berilgan</option>
+                        <option value="rejected">Rad etilgan</option>
+                    </select>
+                    
+                    <select id="assignedFilter" onchange="filterRequests()">
+                        <option value="">Barcha tayinlovlar</option>
+                        <option value="unassigned">Tayinlanmagan</option>
+                        <option value="assigned">Tayinlangan</option>
+                    </select>
+                    
+                    <button class="btn" onclick="clearFilters()" style="background: #95a5a6; padding: 8px 15px;">
+                        ↺ Tozalash
+                    </button>
+                </div>
+            </div>
+            <div id="requestsList">
+                <div class="loading">Yuklanmoqda...</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="requestModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+    
+    <script>
+        let requests = [];
+        let currentUser = {};
+        let allAdmins = [];
+        let currentFilters = {
+            category: '',
+            assignee: '',
+            status: '',
+            assigned: ''
+        };
+        
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('http://localhost:3001/api/user-info');
+                const data = await response.json();
+                currentUser = data;
+                
+                document.getElementById('userName').textContent = data.fullName || data.username;
+                const roleBadge = document.getElementById('userRole');
+                roleBadge.textContent = data.role === 'master' ? 'Master Admin' : 'Student Admin';
+                roleBadge.className = 'role-badge role-' + data.role;
+            } catch (error) {
+                console.error('Error loading user info:', error);
+            }
+        }
+        
+        async function loadAdmins() {
+            try {
+                const response = await fetch('http://localhost:3001/api/admins');
+                allAdmins = await response.json();
+            } catch (error) {
+                console.error('Error loading admins:', error);
+            }
+        }
+        
+        async function loadRequests() {
+            try {
+                const response = await fetch('http://localhost:3001/api/requests');
+                requests = await response.json();
+                
+                displayRequests(
+                    currentFilters.category,
+                    currentFilters.assignee,
+                    currentFilters.status,
+                    currentFilters.assigned
+                );
+                updateStats();
+            } catch (error) {
+                console.error('Error loading requests:', error);
+                document.getElementById('requestsList').innerHTML = 
+                    '<div class="empty-state"><h2>Xatolik yuz berdi</h2><p>Serverga ulanib bo\'lmadi</p></div>';
+            }
+        }
+        
+        function filterRequests() {
+            currentFilters.category = document.getElementById('categoryFilter').value;
+            currentFilters.assignee = document.getElementById('assigneeFilter').value;
+            currentFilters.status = document.getElementById('statusFilter').value;
+            currentFilters.assigned = document.getElementById('assignedFilter').value;
+            
+            displayRequests(
+                currentFilters.category,
+                currentFilters.assignee,
+                currentFilters.status,
+                currentFilters.assigned
+            );
+        }
+        
+        function clearFilters() {
+            document.getElementById('categoryFilter').value = '';
+            document.getElementById('assigneeFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('assignedFilter').value = '';
+            
+            currentFilters = {
+                category: '',
+                assignee: '',
+                status: '',
+                assigned: ''
+            };
+            
+            displayRequests();
+        }
+        
+        function displayRequests(filterCategory = '', filterAssignee = '', filterStatus = '', filterAssigned = '') {
+            const container = document.getElementById('requestsList');
+            
+            let filteredRequests = requests;
+            
+            if (filterCategory) {
+                filteredRequests = filteredRequests.filter(r => r.category === filterCategory);
+            }
+            if (filterAssignee) {
+                filteredRequests = filteredRequests.filter(r => r.responded_by === filterAssignee);
+            }
+            if (filterStatus) {
+                filteredRequests = filteredRequests.filter(r => r.status === filterStatus);
+            }
+            if (filterAssigned === 'unassigned') {
+                filteredRequests = filteredRequests.filter(r => !r.assigned_to);
+            } else if (filterAssigned === 'assigned') {
+                filteredRequests = filteredRequests.filter(r => r.assigned_to);
+            }
+            
+            if (filteredRequests.length === 0) {
+                container.innerHTML = 
+                    '<div class="empty-state"><h2>Hech qanday murojaat topilmadi</h2></div>';
+                return;
+            }
+            
+            container.innerHTML = filteredRequests.map(req => {
+                const needsApproval = req.status === 'student_responded' && currentUser.role === 'master';
+                const statusText = {
+                    'pending': 'Kutilmoqda',
+                    'student_responded': 'Student javobi (Tasdiq kutilmoqda)',
+                    'answered': 'Javob berilgan',
+                    'rejected': 'Rad etilgan'
+                };
+                
+                return `
+                <div class="request-item ${needsApproval ? 'needs-approval' : ''}" onclick="showRequestDetail(${req.id})">
+                    <div class="request-header">
+                        <div class="client-name">${req.first_name || req.name || 'N/A'} (@${req.username || 'N/A'})</div>
+                        <span class="status-badge status-${req.status}">
+                            ${statusText[req.status] || req.status}
+                        </span>
+                    </div>
+                    <div class="request-preview">
+                        ${req.request_text.substring(0, 150)}${req.request_text.length > 150 ? '...' : ''}
+                    </div>
+                    <div class="request-meta">
+                        <span>👤 @${req.username || 'N/A'}</span>
+                        ${req.file_id ? `<span>${getFileIcon(req.request_type)} ${req.request_type}</span>` : ''}
+                        <span>📂 ${req.category || 'N/A'}</span>
+                        ${req.assigned_lawyer_name ? `<span>👤 ${req.assigned_lawyer_name}</span>` : '<span style="color: #e67e22;">⚠️ Tayinlanmagan</span>'}
+                        <span>🕐 ${new Date(req.created_at).toLocaleString('uz-UZ')}</span>
+                        ${req.responded_by ? `<span>✍️ ${req.responded_by}</span>` : ''}
+                    </div>
+                </div>
+            `;
+            }).join('');
+        }
+        
+        function updateStats() {
+            const total = requests.length;
+            const pending = requests.filter(r => r.status === 'pending' || r.status === 'rejected').length;
+            const studentResponded = requests.filter(r => r.status === 'student_responded').length;
+            const answered = requests.filter(r => r.status === 'answered').length;
+            
+            document.getElementById('totalRequests').textContent = total;
+            document.getElementById('pendingRequests').textContent = pending;
+            document.getElementById('studentResponded').textContent = studentResponded;
+            document.getElementById('answeredRequests').textContent = answered;
+        }
+        
+        function getFileIcon(type) {
+            const icons = {
+                'voice': '🎤',
+                'video': '🎥',
+                'video_note': '🎬',
+                'photo': '🖼️',
+                'document': '📄',
+                'audio': '🎵'
+            };
+            return icons[type] || '📎';
+        }
+        
+        function formatFileSize(bytes) {
+            if (!bytes) return 'N/A';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+        
+        function renderFilePreview(request) {
+            const fileId = request.file_id;
+            
+            if (!fileId) return '';
+            
+            if (request.request_type === 'voice' || request.request_type === 'audio') {
+                return `
+                    <div style="text-align: center; padding: 20px;">
+                        <p style="color: #7f8c8d; margin-bottom: 10px;">Ovozli xabarni tinglash uchun pastdagi tugmani bosing</p>
+                        <button class="btn" onclick="playAudio('${fileId}', ${request.id})">
+                            ▶️ Tinglash
+                        </button>
+                        <div id="audioPlayer_${request.id}" style="margin-top: 10px;"></div>
+                    </div>
+                `;
+            }
+            
+            if (request.request_type === 'photo') {
+                return `
+                    <div style="text-align: center;">
+                        <p style="color: #7f8c8d; margin-bottom: 10px;">Rasmni ko'rish uchun tugmani bosing</p>
+                        <button class="btn" onclick="viewImage('${fileId}', ${request.id})">
+                            🖼️ Rasmni ko'rish
+                        </button>
+                        <div id="imageViewer_${request.id}" style="margin-top: 10px;"></div>
+                    </div>
+                `;
+            }
+            
+            if (request.request_type === 'video' || request.request_type === 'video_note') {
+                return `
+                    <div style="text-align: center;">
+                        <p style="color: #7f8c8d; margin-bottom: 10px;">Videoni ko'rish uchun tugmani bosing</p>
+                        <button class="btn" onclick="playVideo('${fileId}', ${request.id})">
+                            ▶️ Videoni ko'rish
+                        </button>
+                        <div id="videoPlayer_${request.id}" style="margin-top: 10px;"></div>
+                    </div>
+                `;
+            }
+            
+            if (request.request_type === 'document') {
+                return `
+                    <div style="text-align: center;">
+                        <button class="btn" onclick="downloadFile('${fileId}', '${request.file_name}')">
+                            📥 Faylni yuklash
+                        </button>
+                    </div>
+                `;
+            }
+            
+            return '';
+        }
+        
+        async function playAudio(fileId, requestId) {
+            try {
+                const response = await fetch(`http://localhost:3001/api/files/${fileId}`);
+                const data = await response.json();
+                
+                const playerDiv = document.getElementById(`audioPlayer_${requestId}`);
+                playerDiv.innerHTML = `
+                    <audio controls autoplay style="width: 100%; margin-top: 10px;">
+                        <source src="${data.fileLink}" type="audio/ogg">
+                        Brauzeringiz audio fayllarni qo'llab-quvvatlamaydi.
+                    </audio>
+                `;
+            } catch (error) {
+                console.error('Error playing audio:', error);
+                alert('Ovozli xabarni yuklab bo\'lmadi');
+            }
+        }
+        
+        async function viewImage(fileId, requestId) {
+            try {
+                const response = await fetch(`http://localhost:3001/api/files/${fileId}`);
+                const data = await response.json();
+                
+                const viewerDiv = document.getElementById(`imageViewer_${requestId}`);
+                viewerDiv.innerHTML = `
+                    <img src="${data.fileLink}" alt="Rasm" style="max-width: 100%; border-radius: 5px; margin-top: 10px;">
+                `;
+            } catch (error) {
+                console.error('Error loading image:', error);
+                alert('Rasmni yuklab bo\'lmadi');
+            }
+        }
+        
+        async function playVideo(fileId, requestId) {
+            try {
+                const response = await fetch(`http://localhost:3001/api/files/${fileId}`);
+                const data = await response.json();
+                
+                const playerDiv = document.getElementById(`videoPlayer_${requestId}`);
+                playerDiv.innerHTML = `
+                    <video controls style="max-width: 100%; border-radius: 5px; margin-top: 10px;">
+                        <source src="${data.fileLink}" type="video/mp4">
+                        Brauzeringiz video fayllarni qo'llab-quvvatlamaydi.
+                    </video>
+                `;
+            } catch (error) {
+                console.error('Error playing video:', error);
+                alert('Videoni yuklab bo\'lmadi');
+            }
+        }
+        
+        async function downloadFile(fileId, fileName) {
+            try {
+                const response = await fetch(`http://localhost:3001/api/files/${fileId}`);
+                const data = await response.json();
+                window.open(data.fileLink, '_blank');
+            } catch (error) {
+                console.error('Error downloading file:', error);
+                alert('Faylni yuklab bo\'lmadi');
+            }
+        }
+        
+        function showRequestDetail(id) {
+            const request = requests.find(r => r.id === id);
+            if (!request) return;
+            
+            let modalContent = `
+                <h2 style="margin-bottom: 20px;">Murojaat tafsilotlari</h2>
+                
+                <div class="detail-section">
+                    <h3>Foydalanuvchi ma'lumotlari</h3>
+                    <div class="detail-row">
+                        <div class="detail-label">Ism:</div>
+                        <div class="detail-value">${request.first_name || request.name || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Username:</div>
+                        <div class="detail-value">
+                            @${request.username || 'N/A'}
+                            ${request.blocked ? '<span style="color: red; margin-left: 10px;">🚫 BLOKLANGAN</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Yo\'nalish:</div>
+                        <div class="detail-value">${request.category || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Sana:</div>
+                        <div class="detail-value">${new Date(request.created_at).toLocaleString('uz-UZ')}</div>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Tayinlov</h3>
+                    <div class="detail-row">
+                        <div class="detail-label">Tayinlangan:</div>
+                        <div class="detail-value">
+                            ${request.assigned_lawyer_name || '<span style="color: #e67e22;">Hali tayinlanmagan</span>'}
+                        </div>
+                    </div>
+                    ${request.assigned_at ? `
+                    <div class="detail-row">
+                        <div class="detail-label">Tayinlangan vaqt:</div>
+                        <div class="detail-value">${new Date(request.assigned_at).toLocaleString('uz-UZ')}</div>
+                    </div>
+                    ` : ''}
+                    ${currentUser.role === 'master' ? `
+                    <div style="margin-top: 10px;">
+                        <select id="lawyerSelect" style="padding: 8px; margin-right: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                            <option value="">-- Yuristni tanlang --</option>
+                            ${allAdmins.filter(a => a.role === 'master').map(admin => 
+                                `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
+                            ).join('')}
+                        </select>
+                        <button class="btn" onclick="assignRequest(${request.id})" style="padding: 8px 20px;">
+                            Tayinlash
+                        </button>
+                        ${request.assigned_to ? `
+                        <button class="btn btn-danger" onclick="unassignRequest(${request.id})" style="padding: 8px 20px;">
+                            Tayinlovni bekor qilish
+                        </button>
+                        ` : ''}
+                    </div>
+                    ` : ''}
+                </div>
+                
+                ${currentUser.role === 'master' ? `
+                <div class="detail-section admin-actions">
+                    <h3>🔐 Master Admin Amallar</h3>
+                    <div class="action-buttons">
+                        <button class="btn btn-danger" onclick="deleteRequest(${request.id})" style="background: #e74c3c;">
+                            🗑️ Murojaatni o'chirish
+                        </button>
+                        ${request.blocked ? `
+                        <button class="btn btn-success" onclick="showUnblockDialog(${request.user_id}, '${request.username}')">
+                            ✅ Blokdan chiqarish
+                        </button>
+                        ` : `
+                        <button class="btn btn-danger" onclick="blockUser(${request.user_id}, '${request.username}')" style="background: #c0392b;">
+                            🚫 Foydalanuvchini bloklash
+                        </button>
+                        `}
+                        <button class="btn" onclick="viewBlockHistory(${request.user_id}, '${request.username}')" style="background: #95a5a6;">
+                            📋 Blok tarixi
+                        </button>
+                    </div>
+                    ${request.blocked ? `
+                    <div class="block-info">
+                        <strong>Hozirgi holat:</strong> 🚫 BLOKLANGAN<br>
+                        <strong>Sabab:</strong> ${request.block_reason || 'Sabab ko\'rsatilmagan'}<br>
+                        <strong>Vaqt:</strong> ${new Date(request.blocked_at).toLocaleString('uz-UZ')}
+                    </div>
+                    ` : `
+                    <div style="margin-top: 10px; padding: 10px; background: #d4edda; border-radius: 5px; color: #155724;">
+                        <strong>Holat:</strong> ✅ Aktiv
+                    </div>
+                    `}
+                </div>
+                ` : ''}
+                
+                <div class="detail-section">
+                    <h3>Murojaat</h3>
+                    <div class="request-text-box">${request.request_text}</div>
+                    
+                    ${request.file_id ? `
+                    <div class="file-attachment">
+                        <div class="file-info">
+                            <div class="file-icon">${getFileIcon(request.request_type)}</div>
+                            <div class="file-details">
+                                <div class="file-name">${request.file_name || 'Fayl'}</div>
+                                <div class="file-size">${formatFileSize(request.file_size)}</div>
+                            </div>
+                        </div>
+                        <div class="file-preview" id="filePreview_${request.id}">
+                            ${renderFilePreview(request)}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            if (request.status === 'answered') {
+                modalContent += `
+                    <div class="detail-section">
+                        <h3>Berilgan javob</h3>
+                        <div class="response-box">${request.response_text}</div>
+                        <p style="color: #7f8c8d; margin-top: 10px; font-size: 13px;">
+                            Javob berdi: ${request.responded_by || 'N/A'}<br>
+                            Javob berilgan: ${new Date(request.answered_at).toLocaleString('uz-UZ')}
+                        </p>
+                    </div>
+                `;
+            } else if (request.status === 'student_responded') {
+                modalContent += `
+                    <div class="detail-section">
+                        <h3>Student javobi</h3>
+                        <div class="student-response-box">${request.student_response}</div>
+                        <p style="color: #7f8c8d; margin-top: 10px; font-size: 13px;">
+                            Javob berdi: ${request.responded_by || 'N/A'}
+                        </p>
+                    </div>
+                `;
+                
+                if (currentUser.role === 'master') {
+                    modalContent += `
+                        <div class="approval-section">
+                            <h4>⚠️ Tasdiq kutilmoqda</h4>
+                            <p style="margin-bottom: 15px;">Bu javob mijozga yuborilmaydi, siz tasdiqlamaguningizcha.</p>
+                            <button class="btn btn-success" onclick="approveResponse(${request.id})">
+                                ✓ Tasdiqlash va yuborish
+                            </button>
+                            <button class="btn btn-danger" onclick="rejectResponse(${request.id})">
+                                ✗ Rad etish
+                            </button>
+                        </div>
+                    `;
+                }
+            } else if (request.status === 'pending' || request.status === 'rejected') {
+                if (request.status === 'rejected' && request.student_response) {
+                    modalContent += `
+                        <div class="detail-section">
+                            <h3>Rad etilgan javob</h3>
+                            <div class="student-response-box">${request.student_response}</div>
+                        </div>
+                    `;
+                }
+                
+                modalContent += `
+                    <div class="detail-section">
+                        <h3>Javob yozish</h3>
+                        <textarea id="responseText" placeholder="Javobingizni shu yerga yozing..."></textarea>
+                        <div style="margin-top: 15px;">
+                `;
+                
+                if (currentUser.role === 'student') {
+                    modalContent += `
+                        <button class="btn" onclick="submitStudentResponse(${request.id})">
+                            Javobni yuborish (Tasdiq kutadi)
+                        </button>
+                    `;
+                } else {
+                    modalContent += `
+                        <button class="btn" onclick="sendMasterResponse(${request.id})">
+                            To'g'ridan-to'g'ri yuborish
+                        </button>
+                    `;
+                }
+                
+                modalContent += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('modalContent').innerHTML = modalContent;
+            document.getElementById('requestModal').style.display = 'block';
+        }
+        
+        async function submitStudentResponse(requestId) {
+            const responseText = document.getElementById('responseText').value.trim();
+            if (!responseText) {
+                alert('Iltimos javob matnini kiriting!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/student-response', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, responseText })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Javob yuborildi! Master admin tasdiqidan keyin mijozga yetib boradi.');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function approveResponse(requestId) {
+            if (!confirm('Javobni tasdiqlaysizmi? Bu javob darhol mijozga yuboriladi.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/approve-response', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Javob tasdiqlandi va mijozga yuborildi!');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function rejectResponse(requestId) {
+            const reason = prompt('Rad etish sababi (ixtiyoriy):');
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/reject-response', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, reason })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Javob rad etildi. Student qayta yozishi mumkin.');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function sendMasterResponse(requestId) {
+            const responseText = document.getElementById('responseText').value.trim();
+            if (!responseText) {
+                alert('Iltimos javob matnini kiriting!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/master-response', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, responseText })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Javob muvaffaqiyatli yuborildi!');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function assignRequest(requestId) {
+            const lawyerId = document.getElementById('lawyerSelect').value;
+            
+            if (!lawyerId) {
+                alert('Iltimos, yuristni tanlang!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/assign-request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, lawyerId })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ Murojaat ${data.lawyerName}ga tayinlandi!`);
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function unassignRequest(requestId) {
+            if (!confirm('Tayinlovni bekor qilishni xohlaysizmi?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/unassign-request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Tayinlov bekor qilindi!');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function deleteRequest(requestId) {
+            const confirmation = prompt('O\'chirish uchun "DELETE" deb yozing:');
+            
+            if (confirmation !== 'DELETE') {
+                alert('Bekor qilindi');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://localhost:3001/api/requests/${requestId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    alert('✅ Murojaat o\'chirildi!');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function blockUser(userId, username) {
+            const reason = prompt(`Foydalanuvchi @${username}ni bloklash sababi:`);
+            
+            if (!reason) {
+                alert('Sabab kiritilmadi. Bekor qilindi.');
+                return;
+            }
+            
+            if (!confirm(`@${username}ni bloklashni tasdiqlaysizmi?\n\nSabab: ${reason}`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/users/block', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, reason })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Foydalanuvchi bloklandi!');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function showUnblockDialog(userId, username) {
+            const reason = prompt(`@${username}ni blokdan chiqarish sababi (ixtiyoriy):`);
+            
+            if (reason === null) {
+                return;
+            }
+            
+            if (!confirm(`@${username}ni blokdan chiqarishni tasdiqlaysizmi?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/users/unblock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, reason: reason || 'Blokdan chiqarildi' })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Foydalanuvchi blokdan chiqarildi!');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function viewBlockHistory(userId, username) {
+            try {
+                const response = await fetch(`http://localhost:3001/api/users/${userId}/block-history`);
+                
+                if (!response.ok) {
+                    alert('❌ Tarixni yuklab bo\'lmadi');
+                    return;
+                }
+                
+                const history = await response.json();
+                
+                if (history.length === 0) {
+                    alert(`@${username} uchun blok tarixi mavjud emas.`);
+                    return;
+                }
+                
+                let historyHTML = `
+                    <div style="max-width: 600px; max-height: 500px; overflow-y: auto;">
+                        <h2 style="margin-bottom: 20px;">📋 Blok tarixi: @${username}</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                `;
+                
+                history.forEach(item => {
+                    const isBlock = item.action === 'blocked';
+                    const bgColor = isBlock ? '#f8d7da' : '#d4edda';
+                    const textColor = isBlock ? '#721c24' : '#155724';
+                    const icon = isBlock ? '🚫' : '✅';
+                    const actionText = isBlock ? 'BLOKLANGAN' : 'BLOKDAN CHIQARILGAN';
+                    
+                    historyHTML += `
+                        <div style="background: ${bgColor}; padding: 15px; border-radius: 5px; border-left: 4px solid ${textColor};">
+                            <div style="font-weight: bold; color: ${textColor}; margin-bottom: 5px;">
+                                ${icon} ${actionText}
+                            </div>
+                            <div style="font-size: 13px; color: #666; margin-bottom: 5px;">
+                                <strong>Vaqt:</strong> ${new Date(item.performed_at).toLocaleString('uz-UZ')}
+                            </div>
+                            <div style="font-size: 13px; color: #666; margin-bottom: 5px;">
+                                <strong>Admin:</strong> ${item.performed_by_name || 'N/A'}
+                            </div>
+                            <div style="font-size: 13px; color: #666;">
+                                <strong>Sabab:</strong> ${item.reason || 'Sabab ko\'rsatilmagan'}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                historyHTML += `
+                        </div>
+                        <div style="margin-top: 20px; text-align: center;">
+                            <button class="btn" onclick="closeModal()" style="background: #95a5a6;">
+                                Yopish
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('modalContent').innerHTML = historyHTML;
+                document.getElementById('requestModal').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+        
+        async function exportToExcel() {
+            try {
+                const response = await fetch('http://localhost:3001/api/export-excel');
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `dictum_murojaatlar_${new Date().toISOString().split('T')[0]}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    alert('❌ Eksport xatolik bilan yakunlandi.');
+                }
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('❌ Eksport xatolik bilan yakunlandi.');
+            }
+        }
+        
+        async function logout() {
+            try {
+                await fetch('http://localhost:3001/api/logout', { method: 'POST' });
+                window.location.href = '/login.html';
+            } catch (error) {
+                window.location.href = '/login.html';
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('requestModal').style.display = 'none';
+        }
+        
+        window.onclick = function(event) {
+            const modal = document.getElementById('requestModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+        
+        loadUserInfo();
+        loadAdmins();
+        loadRequests();
+        setInterval(loadRequests, 30000);
+    </script>
+</body>
+</html>
