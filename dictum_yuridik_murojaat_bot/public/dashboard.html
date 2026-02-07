@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -2090,32 +2091,55 @@
                 const chartW = (cw - 6) / 2;
                 const chartH = chartW * 0.65; // proper aspect ratio
 
-                // Status Doughnut
+                // Datalabels config for pie/doughnut charts (show percentage)
+                const pctLabels = {
+                    datalabels: {
+                        color: '#fff', font: { size: 14, weight: 'bold' },
+                        formatter: (val, ctx) => {
+                            const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = ((val / sum) * 100).toFixed(0);
+                            return val > 0 ? `${pct}%` : '';
+                        },
+                        textShadowColor: 'rgba(0,0,0,0.4)', textShadowBlur: 4
+                    }
+                };
+                // Datalabels for bar charts (show count on top)
+                const barLabels = {
+                    datalabels: {
+                        anchor: 'end', align: 'top', color: '#333', font: { size: 13, weight: 'bold' },
+                        formatter: (val) => val > 0 ? val : ''
+                    }
+                };
+
+                // Status Doughnut + percentages
                 const statusColors = ['#e67e22', '#8e44ad', '#27ae60', '#c0392b'];
                 const statusChart = await renderChart('statusChart', {
                     type: 'doughnut',
                     data: { labels: ['Kutilmoqda', 'Student javobi', 'Javob berilgan', 'Rad etilgan'],
                         datasets: [{ data: [pendingReqs, studentReqs, answeredReqs, rejectedReqs], backgroundColor: statusColors, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
                     options: { responsive: false, cutout: '55%', layout: { padding: { bottom: 10, top: 5 } },
-                        plugins: { title: { display: true, text: 'MUROJAATLAR HOLATI', font: { size: 20, weight: 'bold' }, color: '#2c3e50', padding: { bottom: 8 } },
+                        plugins: { ...pctLabels,
+                            title: { display: true, text: 'MUROJAATLAR HOLATI', font: { size: 20, weight: 'bold' }, color: '#2c3e50', padding: { bottom: 8 } },
                             legend: { position: 'bottom', labels: { font: { size: 13, weight: 'bold' }, padding: 12, usePointStyle: true, pointStyleWidth: 12 } } } },
-                    plugins: [shadow3DPlugin, doughnut3DPlugin]
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
                 });
                 doc.addImage(statusChart.toDataURL('image/png'), 'PNG', m, 28, chartW, chartH);
 
-                // Category Doughnut
+                // Category Doughnut + percentages
                 const categoryChart = await renderChart('categoryChart', {
                     type: 'doughnut',
                     data: { labels: catEntries.map(e => e[0]),
                         datasets: [{ data: catEntries.map(e => e[1]), backgroundColor: catBarColors.slice(0, catEntries.length), borderWidth: 3, borderColor: '#fff', offset: 2 }] },
                     options: { responsive: false, cutout: '50%', layout: { padding: { bottom: 10, top: 5 } },
-                        plugins: { title: { display: true, text: "YO'NALISHLAR BO'YICHA", font: { size: 20, weight: 'bold' }, color: '#2c3e50', padding: { bottom: 8 } },
+                        plugins: { datalabels: { color: '#fff', font: { size: 12, weight: 'bold' },
+                                formatter: (val, ctx) => { const sum = ctx.dataset.data.reduce((a,b) => a+b, 0); const p = ((val/sum)*100).toFixed(0); return val > 0 && p >= 5 ? `${p}%` : ''; } },
+                            title: { display: true, text: "YO'NALISHLAR BO'YICHA", font: { size: 20, weight: 'bold' }, color: '#2c3e50', padding: { bottom: 8 } },
                             legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, padding: 8, usePointStyle: true, pointStyleWidth: 10 } } } },
-                    plugins: [shadow3DPlugin, doughnut3DPlugin]
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
                 });
                 doc.addImage(categoryChart.toDataURL('image/png'), 'PNG', m + chartW + 6, 28, chartW, chartH);
 
-                // Monthly Bar Chart - proper sizing
+                // Monthly Bar Chart + value labels
                 const barChartY = 28 + chartH + 6;
                 const monthlyData = {};
                 requests.forEach(r => {
@@ -2135,15 +2159,16 @@
                         { label: 'Kutilmoqda', data: sortedMonths.map(k => monthlyData[k].pending), backgroundColor: '#e67e22', borderColor: '#d35400', baseColor: '#e67e22', borderWidth: 1, borderRadius: 6, borderSkipped: false }
                     ] },
                     options: { responsive: false,
-                        plugins: { title: { display: true, text: 'OYLIK DINAMIKA', font: { size: 20, weight: 'bold' }, color: '#2c3e50', padding: { bottom: 8 } },
+                        plugins: { ...barLabels,
+                            title: { display: true, text: 'OYLIK DINAMIKA', font: { size: 20, weight: 'bold' }, color: '#2c3e50', padding: { bottom: 8 } },
                             legend: { position: 'bottom', labels: { font: { size: 14, weight: 'bold' }, padding: 15, usePointStyle: true, pointStyleWidth: 14 } } },
                         scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 13 }, color: '#555' }, grid: { color: 'rgba(0,0,0,0.06)' } },
                             x: { ticks: { font: { size: 13 }, color: '#555' }, grid: { display: false } } } },
-                    plugins: [shadow3DPlugin, gradientBarPlugin]
+                    plugins: [shadow3DPlugin, gradientBarPlugin, ChartDataLabels]
                 });
                 doc.addImage(monthlyChart.toDataURL('image/png'), 'PNG', m, barChartY, cw, 55);
 
-                // Type Pie - proper sizing
+                // Type Pie - FIXED sizing: same as top doughnut charts
                 const typePieY = barChartY + 58;
                 const typeData = {};
                 const typeLabelsMap = { 'text': 'Matn', 'voice': 'Ovozli', 'video': 'Video', 'video_note': 'Video xabar', 'document': 'Fayl', 'photo': 'Rasm' };
@@ -2152,15 +2177,15 @@
                 const typeChart = await renderChart('typeChart', {
                     type: 'pie',
                     data: { labels: Object.keys(typeData),
-                        datasets: [{ data: Object.values(typeData), backgroundColor: ['#2980b9','#c0392b','#27ae60','#f39c12','#8e44ad','#16a085'], borderWidth: 3, borderColor: '#fff', offset: 3 }] },
+                        datasets: [{ data: Object.values(typeData), backgroundColor: ['#2980b9','#c0392b','#27ae60','#f39c12','#8e44ad','#16a085'], borderWidth: 3, borderColor: '#fff', offset: 2 }] },
                     options: { responsive: false, layout: { padding: { bottom: 10, top: 5 } },
-                        plugins: { title: { display: true, text: 'MUROJAAT TURLARI', font: { size: 20, weight: 'bold' }, color: '#2c3e50', padding: { bottom: 8 } },
+                        plugins: { ...pctLabels,
+                            title: { display: true, text: 'MUROJAAT TURLARI', font: { size: 20, weight: 'bold' }, color: '#2c3e50', padding: { bottom: 8 } },
                             legend: { position: 'bottom', labels: { font: { size: 14, weight: 'bold' }, padding: 15, usePointStyle: true, pointStyleWidth: 14 } } } },
-                    plugins: [shadow3DPlugin, doughnut3DPlugin]
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
                 });
-                const remainH = ph - typePieY - 18;
-                const pieSize = Math.min(remainH, cw * 0.45);
-                doc.addImage(typeChart.toDataURL('image/png'), 'PNG', m + (cw - pieSize) / 2, typePieY, pieSize, pieSize * 0.85);
+                // Fixed: use same width as top doughnut charts, centered
+                doc.addImage(typeChart.toDataURL('image/png'), 'PNG', m + cw / 4, typePieY, chartW, chartH);
                 addPageFooter(2);
 
                 // ===== PAGE 3: USER STATS =====
