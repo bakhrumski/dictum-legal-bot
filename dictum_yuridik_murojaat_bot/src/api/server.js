@@ -433,6 +433,24 @@ app.post('/api/assign-request', requireAuth, async (req, res) => {
   }
 });
 
+// Update request category
+app.post('/api/update-category', requireAuth, async (req, res) => {
+  try {
+    const { requestId, category } = req.body;
+
+    await pool.query(
+      'UPDATE requests SET category = $1 WHERE id = $2',
+      [category, requestId]
+    );
+
+    res.json({ success: true, message: 'Category updated' });
+
+  } catch (error) {
+    console.error('Error updating category:', error);
+    res.status(500).json({ error: 'Failed to update category' });
+  }
+});
+
 // Unassign request
 app.post('/api/unassign-request', requireAuth, async (req, res) => {
   try {
