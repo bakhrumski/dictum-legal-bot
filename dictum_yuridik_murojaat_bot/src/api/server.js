@@ -247,7 +247,7 @@ ${request_text.substring(0, 100)}...
 📝 Student javobi:
 ${responseText.substring(0, 100)}...
 
-Dashboard: http://localhost:3000
+Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}
 Tasdiqlash uchun dashboardga kiring!
         `;
         
