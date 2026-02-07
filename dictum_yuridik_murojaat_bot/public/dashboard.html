@@ -707,6 +707,177 @@
         .date-group-content .request-item .client-name {
             font-size: 15px;
         }
+
+        /* ========== COMMUNITY CHAT ========== */
+        body.chat-open { padding-right: 370px; transition: padding-right 0.3s ease; }
+
+        .chat-toggle-btn {
+            background: #3498db; color: white; border: none; padding: 8px 16px;
+            border-radius: 5px; cursor: pointer; font-size: 14px; margin-right: 10px;
+            position: relative; transition: background 0.3s;
+        }
+        .chat-toggle-btn:hover { background: #2980b9; }
+        .chat-toggle-btn .unread-badge {
+            position: absolute; top: -6px; right: -6px; background: #e74c3c; color: white;
+            font-size: 11px; font-weight: bold; width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            animation: pulse-badge 2s infinite;
+        }
+
+        /* Chat notifications */
+        .chat-notification-container {
+            position: fixed; top: 20px; right: 20px; z-index: 10000;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+        }
+        .chat-notification {
+            pointer-events: auto;
+            background: white; border-radius: 12px; padding: 14px 18px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.18); border-left: 4px solid #3498db;
+            max-width: 340px; min-width: 280px; cursor: pointer;
+            transform: translateX(400px); opacity: 0;
+            animation: notif-slide-in 0.4s ease forwards;
+        }
+        .chat-notification.mention-all { border-left-color: #f39c12; }
+        .chat-notification.mention-me { border-left-color: #e74c3c; }
+        .chat-notification.removing {
+            animation: notif-slide-out 0.3s ease forwards;
+        }
+        .chat-notification-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+        }
+        .chat-notification-sender {
+            font-weight: 600; font-size: 13px; color: #2c3e50;
+        }
+        .chat-notification-time {
+            font-size: 11px; color: #95a5a6;
+        }
+        .chat-notification-text {
+            font-size: 13px; color: #555; line-height: 1.4;
+            overflow: hidden; text-overflow: ellipsis;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
+        .chat-notification-text .mention-all {
+            background: #fef3cd; color: #856404; padding: 1px 4px; border-radius: 3px; font-weight: 600;
+        }
+        .chat-notification-text .mention {
+            background: #d4effd; color: #1a6fb5; padding: 1px 4px; border-radius: 3px; font-weight: 600;
+        }
+        .chat-notification-tag {
+            display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px;
+            border-radius: 4px; margin-left: 8px;
+        }
+        .chat-notification-tag.all { background: #fef3cd; color: #856404; }
+        .chat-notification-tag.me { background: #fde8e8; color: #c0392b; }
+        @keyframes notif-slide-in {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes notif-slide-out {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+
+        .chat-panel {
+            position: fixed; top: 0; right: -370px; width: 360px; height: 100vh;
+            background: white; box-shadow: -3px 0 15px rgba(0,0,0,0.15); z-index: 999;
+            display: flex; flex-direction: column; transition: right 0.3s ease;
+        }
+        .chat-panel.open { right: 0; }
+
+        .chat-header {
+            padding: 15px 20px; background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+        }
+        .chat-header h3 { font-size: 16px; margin: 0; }
+        .chat-header-info { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+        .chat-close-btn {
+            background: none; border: none; color: white; font-size: 22px;
+            cursor: pointer; padding: 0 5px; opacity: 0.8;
+        }
+        .chat-close-btn:hover { opacity: 1; }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 15px; background: #ecf0f1;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+
+        .chat-msg {
+            max-width: 85%; padding: 8px 12px; border-radius: 12px;
+            font-size: 13px; line-height: 1.4; word-wrap: break-word;
+        }
+        .chat-msg.own {
+            align-self: flex-end; background: #d4effd; border-bottom-right-radius: 4px;
+        }
+        .chat-msg.other {
+            align-self: flex-start; background: white; border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+        .chat-msg-sender { font-weight: bold; font-size: 12px; margin-bottom: 3px; }
+        .chat-msg-sender.role-master { color: #2980b9; }
+        .chat-msg-sender.role-student { color: #8e44ad; }
+        .chat-msg-text { color: #2c3e50; }
+        .chat-msg-text .mention {
+            background: #dbeafe; color: #1e40af; padding: 1px 4px;
+            border-radius: 3px; font-weight: 600;
+        }
+        .chat-msg-text .mention-all {
+            background: #fef3c7; color: #92400e; padding: 1px 4px;
+            border-radius: 3px; font-weight: 600;
+        }
+        .chat-msg-time { font-size: 10px; color: #95a5a6; text-align: right; margin-top: 3px; }
+
+        .chat-date-separator { text-align: center; font-size: 11px; color: #7f8c8d; padding: 5px 0; }
+        .chat-date-separator span {
+            background: #dfe6e9; padding: 2px 12px; border-radius: 10px; font-weight: 600;
+        }
+
+        .chat-input-area {
+            padding: 10px 15px; background: white; border-top: 1px solid #e0e0e0;
+            flex-shrink: 0; position: relative;
+        }
+        .chat-input-wrapper { display: flex; gap: 8px; align-items: flex-end; }
+        .chat-input {
+            flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 20px;
+            font-family: inherit; font-size: 13px; resize: none;
+            max-height: 100px; min-height: 38px; outline: none; line-height: 1.3;
+        }
+        .chat-input:focus { border-color: #3498db; }
+        .chat-send-btn {
+            background: #3498db; color: white; border: none; width: 38px; height: 38px;
+            border-radius: 50%; cursor: pointer; font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: background 0.2s;
+        }
+        .chat-send-btn:hover { background: #2980b9; }
+        .chat-send-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+        .mention-dropdown {
+            position: absolute; bottom: 100%; left: 15px; right: 15px;
+            background: white; border: 1px solid #ddd; border-radius: 8px;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.15); max-height: 200px;
+            overflow-y: auto; display: none; z-index: 1001;
+        }
+        .mention-dropdown.visible { display: block; }
+        .mention-item {
+            padding: 8px 12px; cursor: pointer; display: flex;
+            justify-content: space-between; align-items: center;
+            font-size: 13px; transition: background 0.15s;
+        }
+        .mention-item:hover, .mention-item.active { background: #eaf2f8; }
+        .mention-item-name { font-weight: 600; color: #2c3e50; }
+        .mention-item-username { color: #7f8c8d; font-size: 12px; }
+        .mention-item-role {
+            font-size: 11px; padding: 2px 8px; border-radius: 10px;
+        }
+        .mention-item-role.master { background: #dbeafe; color: #2980b9; }
+        .mention-item-role.student { background: #f3e8ff; color: #8e44ad; }
+        .mention-item-role.all-role { background: #fef3c7; color: #92400e; }
+
+        @media (max-width: 768px) {
+            .chat-panel { width: 100%; right: -100%; }
+            .chat-panel.open { right: 0; }
+            body.chat-open { padding-right: 0; overflow: hidden; }
+        }
     </style>
 </head>
 <body>
@@ -721,6 +892,10 @@
                     <span id="userName"></span>
                     <span id="userRole" class="role-badge"></span>
                 </div>
+                <button class="chat-toggle-btn" onclick="toggleChat()" title="Guruh chat">
+                    💬 Chat
+                    <span class="unread-badge" id="chatUnreadBadge" style="display:none;">0</span>
+                </button>
                 <button class="logout-btn" onclick="logout()">Chiqish</button>
             </div>
         </header>
@@ -811,7 +986,35 @@
             <div id="modalContent"></div>
         </div>
     </div>
-    
+
+    <!-- Chat Notification Container -->
+    <div class="chat-notification-container" id="chatNotifContainer"></div>
+
+    <!-- Community Chat Panel -->
+    <div class="chat-panel" id="chatPanel">
+        <div class="chat-header">
+            <div>
+                <h3>Guruh Chat</h3>
+                <div class="chat-header-info">Yuristlar va studentlar uchun</div>
+            </div>
+            <button class="chat-close-btn" onclick="toggleChat()">&times;</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div style="padding:40px 20px; text-align:center; color:#7f8c8d;">Xabarlar yuklanmoqda...</div>
+        </div>
+        <div class="chat-input-area">
+            <div class="mention-dropdown" id="mentionDropdown"></div>
+            <div class="chat-input-wrapper">
+                <textarea class="chat-input" id="chatInput"
+                    placeholder="Xabar yozing... (@ bilan mention)"
+                    rows="1"
+                    onkeydown="handleChatKeydown(event)"
+                    oninput="handleChatInput(event)"></textarea>
+                <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()" title="Yuborish">&#10148;</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let requests = [];
         let currentUser = {};
@@ -1292,13 +1495,7 @@
                         }
                     }
 
-                    // Refresh the list behind the modal
-                    displayRequests(
-                        currentFilters.category,
-                        currentFilters.assignee,
-                        currentFilters.status,
-                        currentFilters.assigned
-                    );
+                    // No displayRequests here - modal stays open, list refreshes on close
                 }
             } catch (error) {
                 console.error('Error updating category:', error);
@@ -1655,8 +1852,8 @@
                 
                 if (response.ok) {
                     alert(`✅ Murojaat ${data.lawyerName}ga tayinlandi!`);
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -1665,23 +1862,23 @@
                 alert('❌ Xatolik yuz berdi.');
             }
         }
-        
+
         async function unassignRequest(requestId) {
             if (!confirm('Tayinlovni bekor qilishni xohlaysizmi?')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/unassign-request', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId })
                 });
-                
+
                 if (response.ok) {
                     alert('✅ Tayinlov bekor qilindi!');
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -1849,7 +2046,7 @@
         // ========== 3D CHART PLUGINS ==========
         const shadow3DPlugin = {
             id: 'shadow3d',
-            beforeDraw: (chart) => {
+            beforeDatasetsDraw: (chart) => {
                 const ctx = chart.ctx;
                 ctx.save();
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
@@ -1857,7 +2054,7 @@
                 ctx.shadowOffsetX = 3;
                 ctx.shadowOffsetY = 3;
             },
-            afterDraw: (chart) => {
+            afterDatasetsDraw: (chart) => {
                 chart.ctx.restore();
             }
         };
@@ -2096,91 +2293,42 @@
                 });
                 addPageFooter(1);
 
-                // ===== SECTION HEADER & SEPARATOR HELPERS =====
-                function drawSectionHeader(y, title, sectionNum, r, g, b, startX) {
-                    const sx = startX !== undefined ? startX : m;
-                    const lineW = startX !== undefined ? chartW : cw;
-                    // Accent bar left edge
-                    doc.setFillColor(r, g, b);
-                    doc.roundedRect(sx, y, 3, 14, 1.5, 1.5, 'F');
-                    // Number badge
-                    doc.setFillColor(r, g, b);
-                    doc.roundedRect(sx + 6, y + 1, 10, 12, 3, 3, 'F');
-                    setFont('bold'); doc.setTextColor(255, 255, 255); doc.setFontSize(9);
-                    doc.text(String(sectionNum).padStart(2, '0'), sx + 11, y + 9, { align: 'center' });
-                    // Title text
-                    setFont('bold'); doc.setTextColor(30, 45, 65); doc.setFontSize(11);
-                    doc.text(title, sx + 20, y + 9.5);
-                    // Accent underline
-                    doc.setFillColor(r, g, b);
-                    doc.rect(sx + 20, y + 12, Math.min(40, lineW - 25), 1.2, 'F');
-                    // Thin fading line
-                    doc.setFillColor(200, 210, 220);
-                    doc.rect(sx + 20 + Math.min(40, lineW - 25) + 2, y + 12.3, lineW - Math.min(40, lineW - 25) - 25, 0.4, 'F');
-                    return y + 18;
-                }
-
-                function drawSeparator(y) {
-                    const cx = pw / 2;
-                    // Left line
-                    doc.setDrawColor(190, 200, 210); doc.setLineWidth(0.3);
-                    doc.line(m + 25, y + 4, cx - 8, y + 4);
-                    // Right line
-                    doc.line(cx + 8, y + 4, pw - m - 25, y + 4);
-                    // Center diamond
-                    const d = 3;
-                    doc.setFillColor(44, 62, 80);
-                    doc.triangle(cx, y + 4 - d, cx + d, y + 4, cx, y + 4 + d, 'F');
-                    doc.triangle(cx, y + 4 - d, cx - d, y + 4, cx, y + 4 + d, 'F');
-                    return y + 12;
-                }
-
-                function drawChartFrame(x, y, w, h) {
-                    // Shadow
-                    doc.setFillColor(220, 225, 230);
-                    doc.roundedRect(x + 1.5, y + 1.5, w, h, 4, 4, 'F');
-                    // Card
-                    doc.setFillColor(255, 255, 255);
-                    doc.roundedRect(x, y, w, h, 4, 4, 'F');
-                    // Thin border
-                    doc.setDrawColor(220, 228, 236); doc.setLineWidth(0.4);
-                    doc.roundedRect(x, y, w, h, 4, 4, 'S');
-                }
-
+                // ===== CLEAN HELPERS =====
                 function hexToRgb(hex) {
                     return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
                 }
 
-                function drawPdfLegend(cx, y, labels, colors, maxW) {
-                    setFont('bold'); doc.setFontSize(7);
-                    const dotR = 1.8;
-                    const gap = 3;
-                    const itemGap = 8;
-                    // Calculate total width for centering
-                    const items = labels.map((lbl, i) => {
-                        const tw = doc.getTextWidth(lbl);
-                        return { label: lbl, color: colors[i], textW: tw, totalW: dotR * 2 + gap + tw };
-                    });
-                    const totalW = items.reduce((s, it) => s + it.totalW, 0) + (items.length - 1) * itemGap;
-                    let x = cx - totalW / 2;
-                    if (x < 10) x = 10;
-                    items.forEach((it) => {
-                        const rgb = hexToRgb(it.color);
-                        doc.setFillColor(...rgb);
-                        doc.circle(x + dotR, y, dotR, 'F');
-                        doc.setTextColor(70, 70, 70);
-                        doc.text(it.label, x + dotR * 2 + gap, y + 1.2);
-                        x += it.totalW + itemGap;
-                    });
+                function drawChartTitle(cx, y, title) {
+                    setFont('bold'); doc.setTextColor(30, 45, 65); doc.setFontSize(11);
+                    doc.text(title, cx, y, { align: 'center' });
+                    const tw = doc.getTextWidth(title);
+                    doc.setFillColor(41, 128, 185);
+                    doc.rect(cx - tw / 2, y + 2, tw, 0.8, 'F');
+                    return y + 8;
                 }
 
-                // ===== PAGE 2: CHARTS - HOLAT & YO'NALISHLAR =====
+                function drawPdfLegend(x, y, labels, colors) {
+                    setFont('normal'); doc.setFontSize(7.5);
+                    const dotR = 1.5;
+                    const gap = 2.5;
+                    const lineH = 4.5;
+                    labels.forEach((lbl, i) => {
+                        const ly = y + i * lineH;
+                        const rgb = hexToRgb(colors[i]);
+                        doc.setFillColor(...rgb);
+                        doc.circle(x + dotR, ly, dotR, 'F');
+                        doc.setTextColor(60, 60, 60);
+                        doc.text(lbl, x + dotR * 2 + gap, ly + 1.5);
+                    });
+                    return y + labels.length * lineH;
+                }
+
+                // ===== PAGE 2: CHARTS =====
                 doc.addPage();
                 addPageHeader('INFOGRAFIKA - MUROJAATLAR TAHLILI');
 
-                const chartW = (cw - 14) / 2;
-                const chartH = chartW * 0.62;
-                const rightChartX = m + chartW + 14;
+                const chartW = (cw - 10) / 2;
+                const chartH = chartW * 0.65;
 
                 // Datalabels config
                 const pctLabels = {
@@ -2196,58 +2344,47 @@
                 };
                 const barLabels = {
                     datalabels: {
-                        anchor: 'end', align: 'top', color: '#333', font: { size: 13, weight: 'bold' },
+                        anchor: 'end', align: 'top', color: '#333', font: { size: 22, weight: 'bold' },
                         formatter: (val) => val > 0 ? val : ''
                     }
                 };
 
-                // --- Section 01: Status Doughnut ---
-                let secY = drawSectionHeader(28, 'MUROJAATLAR HOLATI', 1, 41, 128, 185);
+                // --- Status Doughnut (left) ---
+                let curY = drawChartTitle(m + chartW / 2, 30, 'MUROJAATLAR HOLATI');
                 const statusColors = ['#e67e22', '#8e44ad', '#27ae60', '#c0392b'];
                 const statusLabelsArr = ['Kutilmoqda', 'Student javobi', 'Javob berilgan', 'Rad etilgan'];
                 const statusChart = await renderChart('statusChart', {
                     type: 'doughnut',
                     data: { labels: statusLabelsArr,
                         datasets: [{ data: [pendingReqs, studentReqs, answeredReqs, rejectedReqs], backgroundColor: statusColors, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
-                    options: { responsive: false, cutout: '55%', layout: { padding: 8 },
+                    options: { responsive: false, cutout: '55%', layout: { padding: 6 },
                         plugins: { ...pctLabels, title: { display: false }, legend: { display: false } } },
                     plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
                 });
-                const legH = 8;
-                drawChartFrame(m, secY, chartW, chartH + legH);
-                doc.addImage(statusChart.toDataURL('image/png'), 'PNG', m + 2, secY + 2, chartW - 4, chartH - 4);
-                drawPdfLegend(m + chartW / 2, secY + chartH + 1, statusLabelsArr, statusColors, chartW);
+                doc.addImage(statusChart.toDataURL('image/png'), 'PNG', m, curY, chartW, chartH);
+                const statusLegEnd = drawPdfLegend(m + 2, curY + chartH + 3, statusLabelsArr, statusColors);
 
-                // --- Section 02: Category Doughnut (beside status) ---
-                drawSectionHeader(28, "YO'NALISHLAR BO'YICHA", 2, 142, 68, 173, rightChartX);
+                // --- Category Doughnut (right) ---
+                const rightX = m + chartW + 10;
+                drawChartTitle(rightX + chartW / 2, 30, "YO'NALISHLAR BO'YICHA");
                 const catLabelsArr = catEntries.map(e => e[0]);
                 const catColorsArr = catBarColors.slice(0, catEntries.length);
                 const categoryChart = await renderChart('categoryChart', {
                     type: 'doughnut',
                     data: { labels: catLabelsArr,
                         datasets: [{ data: catEntries.map(e => e[1]), backgroundColor: catColorsArr, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
-                    options: { responsive: false, cutout: '50%', layout: { padding: 8 },
+                    options: { responsive: false, cutout: '50%', layout: { padding: 6 },
                         plugins: { datalabels: { color: '#fff', font: { size: 12, weight: 'bold' },
                                 formatter: (val, ctx) => { const sum = ctx.dataset.data.reduce((a,b) => a+b, 0); const p = ((val/sum)*100).toFixed(0); return val > 0 && p >= 5 ? `${p}%` : ''; } },
                             title: { display: false }, legend: { display: false } } },
                     plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
                 });
-                drawChartFrame(rightChartX, secY, chartW, chartH + legH);
-                doc.addImage(categoryChart.toDataURL('image/png'), 'PNG', rightChartX + 2, secY + 2, chartW - 4, chartH - 4);
-                // Category legend - multi-row if many items
-                const catLegY = secY + chartH + 1;
-                const catPerRow = 3;
-                for (let row = 0; row < Math.ceil(catLabelsArr.length / catPerRow); row++) {
-                    const slice = catLabelsArr.slice(row * catPerRow, (row + 1) * catPerRow);
-                    const sliceColors = catColorsArr.slice(row * catPerRow, (row + 1) * catPerRow);
-                    drawPdfLegend(rightChartX + chartW / 2, catLegY + row * 4, slice, sliceColors, chartW);
-                }
+                doc.addImage(categoryChart.toDataURL('image/png'), 'PNG', rightX, curY, chartW, chartH);
+                const catLegEnd = drawPdfLegend(rightX + 2, curY + chartH + 3, catLabelsArr, catColorsArr);
 
-                // --- Separator ---
-                let sepY = drawSeparator(secY + chartH + legH + 6);
-
-                // --- Section 03: Monthly Bar Chart ---
-                secY = drawSectionHeader(sepY, 'OYLIK DINAMIKA', 3, 39, 174, 96);
+                // --- Monthly Bar Chart ---
+                const barStartY = Math.max(statusLegEnd, catLegEnd) + 6;
+                curY = drawChartTitle(pw / 2, barStartY, 'OYLIK DINAMIKA');
                 const monthlyData = {};
                 requests.forEach(r => {
                     const d = new Date(r.created_at);
@@ -2270,70 +2407,152 @@
                     ] },
                     options: { responsive: false,
                         plugins: { ...barLabels, title: { display: false }, legend: { display: false } },
-                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 13 }, color: '#555' }, grid: { color: 'rgba(0,0,0,0.06)' } },
-                            x: { ticks: { font: { size: 13 }, color: '#555' }, grid: { display: false } } } },
+                        layout: { padding: { top: 30 } },
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 20 }, color: '#555' }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                            x: { ticks: { font: { size: 20 }, color: '#555' }, grid: { display: false } } } },
                     plugins: [shadow3DPlugin, gradientBarPlugin, ChartDataLabels]
                 });
-                drawChartFrame(m, secY, cw, barChartH + legH);
-                doc.addImage(monthlyChart.toDataURL('image/png'), 'PNG', m + 2, secY + 2, cw - 4, barChartH - 4);
-                drawPdfLegend(pw / 2, secY + barChartH + 1, barLegLabels, barLegColors, cw);
+                doc.addImage(monthlyChart.toDataURL('image/png'), 'PNG', m, curY, cw, barChartH);
+                const barLegEnd = drawPdfLegend(m + 2, curY + barChartH + 3, barLegLabels, barLegColors);
 
-                // --- Separator ---
-                sepY = drawSeparator(secY + barChartH + legH + 6);
-
-                // --- Section 04: Type Pie ---
-                secY = drawSectionHeader(sepY, 'MUROJAAT TURLARI', 4, 230, 126, 34);
+                // --- Type Doughnut ---
+                const pieStartY = barLegEnd + 6;
+                curY = drawChartTitle(pw / 2, pieStartY, 'MUROJAAT TURLARI');
                 const typeData = {};
                 const typeLabelsMap = { 'text': 'Matn', 'voice': 'Ovozli', 'video': 'Video', 'video_note': 'Video xabar', 'document': 'Fayl', 'photo': 'Rasm' };
                 requests.forEach(r => { const t = typeLabelsMap[r.request_type] || r.request_type; typeData[t] = (typeData[t] || 0) + 1; });
 
                 const typeLabelsArr = Object.keys(typeData);
                 const typeColorsArr = ['#2980b9','#c0392b','#27ae60','#f39c12','#8e44ad','#16a085'].slice(0, typeLabelsArr.length);
-                const typePieW = chartW + 10;
-                const typePieH = typePieW * 0.55;
+                const typePieW = chartW;
+                const typePieH = chartH;
                 const typeChart = await renderChart('typeChart', {
-                    type: 'pie',
+                    type: 'doughnut',
                     data: { labels: typeLabelsArr,
                         datasets: [{ data: Object.values(typeData), backgroundColor: typeColorsArr, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
-                    options: { responsive: false, layout: { padding: 8 },
+                    options: { responsive: false, cutout: '50%', layout: { padding: 6 },
                         plugins: { ...pctLabels, title: { display: false }, legend: { display: false } } },
                     plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
                 });
-                const typeX = (pw - typePieW) / 2;
-                drawChartFrame(typeX, secY, typePieW, typePieH + legH);
-                doc.addImage(typeChart.toDataURL('image/png'), 'PNG', typeX + 2, secY + 2, typePieW - 4, typePieH - 4);
-                drawPdfLegend(pw / 2, secY + typePieH + 1, typeLabelsArr, typeColorsArr, typePieW);
+                // Chart on right half, legend on left half
+                const typeChartX = m + chartW + 10;
+                doc.addImage(typeChart.toDataURL('image/png'), 'PNG', typeChartX, curY, typePieW, typePieH);
+                // Legend vertically centered to the left of the chart
+                const typeLegStartY = curY + (typePieH - typeLabelsArr.length * 4.5) / 2;
+                drawPdfLegend(m + 5, typeLegStartY, typeLabelsArr, typeColorsArr);
                 addPageFooter(2);
 
-                // ===== PAGE 3: USER STATS =====
+                // ===== PAGE 3: LAWYERS & STUDENTS STATS + TOP PETITIONERS =====
                 doc.addPage();
-                addPageHeader('FOYDALANUVCHILAR STATISTIKASI');
+                addPageHeader('YURISTLAR VA STUDENTLAR STATISTIKASI');
 
-                const userStats = {};
+                // Build admin answer stats from responded_by field
+                const adminAnswerCounts = {};
                 requests.forEach(r => {
-                    const uid = r.telegram_id;
-                    if (!userStats[uid]) { userStats[uid] = { name: r.first_name || 'N/A', username: r.username || 'N/A', total: 0, answered: 0, pending: 0, blocked: r.blocked }; }
-                    userStats[uid].total++;
-                    if (r.status === 'answered') userStats[uid].answered++; else userStats[uid].pending++;
+                    if (r.responded_by) {
+                        adminAnswerCounts[r.responded_by] = (adminAnswerCounts[r.responded_by] || 0) + 1;
+                    }
                 });
-                const userTableData = Object.values(userStats).sort((a, b) => b.total - a.total).map((u, i) => [
-                    i + 1, u.name, `@${u.username}`, u.total, u.answered, u.pending, u.blocked ? 'BLOKLANGAN' : 'Aktiv'
+                // Build assigned counts from assigned_to field
+                const adminAssignedCounts = {};
+                requests.forEach(r => {
+                    if (r.assigned_to) {
+                        adminAssignedCounts[r.assigned_to] = (adminAssignedCounts[r.assigned_to] || 0) + 1;
+                    }
+                });
+
+                const roleLabels = { 'master': 'Yurist', 'student': 'Student' };
+                const adminTableData = allAdmins.map((admin, i) => [
+                    i + 1,
+                    admin.full_name,
+                    `@${admin.username}`,
+                    roleLabels[admin.role] || admin.role,
+                    adminAssignedCounts[admin.id] || 0,
+                    adminAnswerCounts[admin.full_name] || 0
                 ]);
 
                 doc.autoTable({
                     startY: 30,
-                    head: [['#', 'Ism', 'Username', 'Jami', 'Javob', 'Kutilmoqda', 'Holat']],
-                    body: userTableData,
+                    head: [['#', 'Ism', 'Username', 'Lavozimi', 'Tayinlangan', 'Javob bergan']],
+                    body: adminTableData,
                     theme: 'striped',
                     headStyles: { fillColor: [30, 45, 65], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
                     bodyStyles: { fontSize: 9, halign: 'center', cellPadding: 3.5, font: fontName },
-                    columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 35, halign: 'left' }, 2: { cellWidth: 32, halign: 'left' }, 6: { cellWidth: 28 } },
+                    columnStyles: {
+                        0: { cellWidth: 10 },
+                        1: { cellWidth: 40, halign: 'left' },
+                        2: { cellWidth: 35, halign: 'left' },
+                        3: { cellWidth: 25 },
+                        4: { cellWidth: 28 },
+                        5: { cellWidth: 28 }
+                    },
                     alternateRowStyles: { fillColor: [240, 245, 250] },
+                    styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
+                    didParseCell: function(data) {
+                        if (data.section === 'body' && data.column.index === 3) {
+                            if (data.cell.raw === 'Yurist') { data.cell.styles.textColor = [41, 128, 185]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Student') { data.cell.styles.textColor = [142, 68, 173]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                    }
+                });
+
+                // --- TOP MUROJAATCHILAR (Top Petitioners) ---
+                const petitionerEndY = doc.lastAutoTable.finalY + 12;
+                setFont('bold'); doc.setTextColor(30, 45, 65); doc.setFontSize(13);
+                doc.text('TOP MUROJAATCHILAR', pw / 2, petitionerEndY, { align: 'center' });
+                const titleUnderY = petitionerEndY + 2;
+                const titleW = doc.getTextWidth('TOP MUROJAATCHILAR');
+                doc.setFillColor(41, 128, 185);
+                doc.rect(pw / 2 - titleW / 2, titleUnderY, titleW, 0.8, 'F');
+
+                const petitionerStats = {};
+                requests.forEach(r => {
+                    const uid = r.telegram_id;
+                    if (!petitionerStats[uid]) {
+                        petitionerStats[uid] = {
+                            name: r.first_name || 'N/A',
+                            username: r.username || 'N/A',
+                            total: 0,
+                            answered: 0,
+                            pending: 0,
+                            blocked: r.blocked
+                        };
+                    }
+                    petitionerStats[uid].total++;
+                    if (r.status === 'answered') petitionerStats[uid].answered++; else petitionerStats[uid].pending++;
+                });
+                const petitionerTableData = Object.values(petitionerStats)
+                    .sort((a, b) => b.total - a.total)
+                    .map((u, i) => [
+                        i + 1, u.name, `@${u.username}`, u.total, u.answered, u.pending, u.blocked ? 'BLOKLANGAN' : 'Aktiv'
+                    ]);
+
+                doc.autoTable({
+                    startY: titleUnderY + 6,
+                    head: [['#', 'Ism', 'Username', 'Jami', 'Javob', 'Kutilmoqda', 'Holat']],
+                    body: petitionerTableData,
+                    theme: 'striped',
+                    headStyles: { fillColor: [44, 62, 80], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
+                    bodyStyles: { fontSize: 9, halign: 'center', cellPadding: 3.5, font: fontName },
+                    columnStyles: {
+                        0: { cellWidth: 10 },
+                        1: { cellWidth: 35, halign: 'left' },
+                        2: { cellWidth: 32, halign: 'left' },
+                        3: { cellWidth: 18 },
+                        4: { cellWidth: 18 },
+                        5: { cellWidth: 25 },
+                        6: { cellWidth: 28 }
+                    },
+                    alternateRowStyles: { fillColor: [245, 248, 252] },
                     styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
                     didParseCell: function(data) {
                         if (data.section === 'body' && data.column.index === 6) {
                             if (data.cell.raw === 'BLOKLANGAN') { data.cell.styles.textColor = [192, 57, 43]; data.cell.styles.fontStyle = 'bold'; }
                             if (data.cell.raw === 'Aktiv') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                        // Highlight top 3 rows
+                        if (data.section === 'body' && data.row.index < 3 && data.column.index === 0) {
+                            data.cell.styles.textColor = [230, 126, 34]; data.cell.styles.fontStyle = 'bold';
                         }
                     }
                 });
@@ -2421,19 +2640,344 @@
         
         function closeModal() {
             document.getElementById('requestModal').style.display = 'none';
+            loadRequests();
         }
-        
+
+        // ========== COMMUNITY CHAT ==========
+        let chatMessages = [];
+        let chatLastId = 0;
+        let chatPollInterval = null;
+        let chatIsOpen = false;
+        let chatUnreadCount = 0;
+        let mentionDropdownVisible = false;
+        let mentionSelectedIndex = 0;
+        let mentionFilteredAdmins = [];
+        let mentionCursorStart = -1;
+
+        function toggleChat() {
+            chatIsOpen = !chatIsOpen;
+            const panel = document.getElementById('chatPanel');
+            if (chatIsOpen) {
+                panel.classList.add('open');
+                document.body.classList.add('chat-open');
+                chatUnreadCount = 0;
+                updateUnreadBadge();
+                if (chatMessages.length === 0) loadChatMessages();
+                startChatPolling();
+                scrollChatToBottom();
+                setTimeout(() => document.getElementById('chatInput').focus(), 350);
+            } else {
+                panel.classList.remove('open');
+                document.body.classList.remove('chat-open');
+                stopChatPolling();
+            }
+        }
+
+        async function loadChatMessages() {
+            try {
+                const url = chatLastId > 0
+                    ? `/api/chat/messages?since_id=${chatLastId}`
+                    : '/api/chat/messages?limit=50';
+                const response = await fetch(url);
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.messages && data.messages.length > 0) {
+                    if (chatLastId === 0) {
+                        chatMessages = data.messages;
+                    } else {
+                        chatMessages.push(...data.messages);
+                        checkAndNotify(data.messages);
+                        if (!chatIsOpen) {
+                            const newFromOthers = data.messages.filter(m => m.admin_id !== currentUser.adminId);
+                            chatUnreadCount += newFromOthers.length;
+                            updateUnreadBadge();
+                        }
+                    }
+                    chatLastId = data.messages[data.messages.length - 1].id;
+                    renderChatMessages();
+                }
+            } catch (error) {
+                console.error('Chat load error:', error);
+            }
+        }
+
+        function startChatPolling() {
+            if (chatPollInterval) return;
+            chatPollInterval = setInterval(loadChatMessages, 3000);
+        }
+
+        function stopChatPolling() {
+            if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
+        }
+
+        // Background poll for unread badge + notifications (started after init)
+        let bgPollStarted = false;
+        function startBackgroundPoll() {
+            if (bgPollStarted) return;
+            bgPollStarted = true;
+            // Do an initial silent load to set chatLastId cursor
+            loadChatMessages().then(() => {
+                setInterval(() => { if (!chatIsOpen) loadChatMessages(); }, 5000);
+            });
+        }
+
+        function renderChatMessages() {
+            const container = document.getElementById('chatMessages');
+            if (chatMessages.length === 0) {
+                container.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#7f8c8d;"><p style="font-size:16px;font-weight:bold;">Hali xabar yo\'q</p><p>Birinchi xabaringizni yozing!</p></div>';
+                return;
+            }
+            let html = '';
+            let lastDate = '';
+            chatMessages.forEach(msg => {
+                const msgDate = new Date(msg.created_at).toLocaleDateString('uz-UZ');
+                if (msgDate !== lastDate) {
+                    lastDate = msgDate;
+                    const today = new Date().toLocaleDateString('uz-UZ');
+                    const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('uz-UZ');
+                    let dateLabel = msgDate;
+                    if (msgDate === today) dateLabel = 'Bugun';
+                    else if (msgDate === yesterday) dateLabel = 'Kecha';
+                    html += `<div class="chat-date-separator"><span>${dateLabel}</span></div>`;
+                }
+                const isOwn = msg.admin_id === currentUser.adminId;
+                const timeStr = new Date(msg.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+                html += `<div class="chat-msg ${isOwn ? 'own' : 'other'}">
+                    ${!isOwn ? `<div class="chat-msg-sender role-${msg.role}">${msg.full_name}</div>` : ''}
+                    <div class="chat-msg-text">${renderMsgText(msg.message)}</div>
+                    <div class="chat-msg-time">${timeStr}</div>
+                </div>`;
+            });
+            container.innerHTML = html;
+            scrollChatToBottom();
+        }
+
+        function renderMsgText(text) {
+            let s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            s = s.replace(/@all\b/gi, '<span class="mention-all">@Hammaga</span>');
+            s = s.replace(/@(\w+)/g, (match, uname) => {
+                if (uname.toLowerCase() === 'all') return match;
+                const admin = allAdmins.find(a => a.username.toLowerCase() === uname.toLowerCase());
+                if (admin) return `<span class="mention" title="@${admin.username}">@${admin.full_name}</span>`;
+                return match;
+            });
+            return s.replace(/\n/g, '<br>');
+        }
+
+        function scrollChatToBottom() {
+            requestAnimationFrame(() => {
+                const c = document.getElementById('chatMessages');
+                c.scrollTop = c.scrollHeight;
+            });
+        }
+
+        function updateUnreadBadge() {
+            const badge = document.getElementById('chatUnreadBadge');
+            if (chatUnreadCount > 0) {
+                badge.textContent = chatUnreadCount > 99 ? '99+' : chatUnreadCount;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // ---- Chat Notifications ----
+        function playNotifSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.3);
+            } catch (e) { /* ignore if audio blocked */ }
+        }
+
+        function showChatNotification(msg, type) {
+            const container = document.getElementById('chatNotifContainer');
+            const notif = document.createElement('div');
+            notif.className = 'chat-notification' + (type === 'all' ? ' mention-all' : ' mention-me');
+            const timeStr = new Date(msg.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+            const tagHtml = type === 'all'
+                ? '<span class="chat-notification-tag all">@all</span>'
+                : '<span class="chat-notification-tag me">@' + currentUser.username + '</span>';
+            notif.innerHTML = `
+                <div class="chat-notification-header">
+                    <span class="chat-notification-sender">${msg.full_name}${tagHtml}</span>
+                    <span class="chat-notification-time">${timeStr}</span>
+                </div>
+                <div class="chat-notification-text">${renderMsgText(msg.message)}</div>`;
+            notif.onclick = () => {
+                notif.classList.add('removing');
+                setTimeout(() => notif.remove(), 300);
+                if (!chatIsOpen) toggleChat();
+            };
+            container.appendChild(notif);
+            playNotifSound();
+            setTimeout(() => {
+                if (notif.parentNode) {
+                    notif.classList.add('removing');
+                    setTimeout(() => notif.remove(), 300);
+                }
+            }, 6000);
+        }
+
+        function checkAndNotify(newMessages) {
+            if (!currentUser.adminId) return;
+            const myName = currentUser.username.toLowerCase();
+            newMessages.forEach(msg => {
+                if (msg.admin_id === currentUser.adminId) return;
+                const mentions = msg.mentions || [];
+                const mentionsLower = mentions.map(m => m.toLowerCase());
+                if (mentionsLower.includes('all')) {
+                    showChatNotification(msg, 'all');
+                } else if (mentionsLower.includes(myName)) {
+                    showChatNotification(msg, 'me');
+                }
+            });
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            const sendBtn = document.getElementById('chatSendBtn');
+            sendBtn.disabled = true;
+            try {
+                const response = await fetch('/api/chat/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    chatMessages.push(data.message);
+                    chatLastId = data.message.id;
+                    renderChatMessages();
+                    input.value = '';
+                    input.style.height = '38px';
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+            } finally {
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        }
+
+        function handleChatKeydown(event) {
+            if (mentionDropdownVisible) {
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    mentionSelectedIndex = Math.min(mentionSelectedIndex + 1, mentionFilteredAdmins.length - 1);
+                    renderMentionDropdown(); return;
+                }
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    mentionSelectedIndex = Math.max(mentionSelectedIndex - 1, 0);
+                    renderMentionDropdown(); return;
+                }
+                if (event.key === 'Enter' || event.key === 'Tab') {
+                    event.preventDefault();
+                    selectMention(mentionSelectedIndex); return;
+                }
+                if (event.key === 'Escape') { closeMentionDropdown(); return; }
+            }
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendChatMessage();
+            }
+        }
+
+        function handleChatInput(event) {
+            const input = event.target;
+            input.style.height = '38px';
+            input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+            const cursorPos = input.selectionStart;
+            const textBefore = input.value.substring(0, cursorPos);
+            const mentionMatch = textBefore.match(/(^|[\s])@(\w*)$/);
+            if (mentionMatch) {
+                const query = mentionMatch[2].toLowerCase();
+                mentionCursorStart = cursorPos - mentionMatch[2].length - 1;
+                mentionFilteredAdmins = [];
+                if ('all'.startsWith(query)) {
+                    mentionFilteredAdmins.push({ username: 'all', full_name: 'Hamma', role: 'all', isAll: true });
+                }
+                allAdmins.forEach(admin => {
+                    if (admin.username.toLowerCase().startsWith(query) || admin.full_name.toLowerCase().includes(query)) {
+                        mentionFilteredAdmins.push(admin);
+                    }
+                });
+                if (mentionFilteredAdmins.length > 0) {
+                    mentionSelectedIndex = 0;
+                    mentionDropdownVisible = true;
+                    renderMentionDropdown();
+                } else { closeMentionDropdown(); }
+            } else { closeMentionDropdown(); }
+        }
+
+        function renderMentionDropdown() {
+            const dropdown = document.getElementById('mentionDropdown');
+            let html = '';
+            mentionFilteredAdmins.forEach((admin, i) => {
+                const active = i === mentionSelectedIndex ? 'active' : '';
+                if (admin.isAll) {
+                    html += `<div class="mention-item ${active}" onclick="selectMention(${i})">
+                        <div><span class="mention-item-name">@all</span>
+                        <span class="mention-item-username"> - Hammaga xabar</span></div>
+                        <span class="mention-item-role all-role">Barchaga</span></div>`;
+                } else {
+                    html += `<div class="mention-item ${active}" onclick="selectMention(${i})">
+                        <div><span class="mention-item-name">${admin.full_name}</span>
+                        <span class="mention-item-username">@${admin.username}</span></div>
+                        <span class="mention-item-role ${admin.role}">${admin.role === 'master' ? 'Yurist' : 'Student'}</span></div>`;
+                }
+            });
+            dropdown.innerHTML = html;
+            dropdown.classList.add('visible');
+        }
+
+        function selectMention(index) {
+            const admin = mentionFilteredAdmins[index];
+            if (!admin) return;
+            const input = document.getElementById('chatInput');
+            const before = input.value.substring(0, mentionCursorStart);
+            const after = input.value.substring(input.selectionStart);
+            const mentionText = `@${admin.username} `;
+            input.value = before + mentionText + after;
+            const newPos = before.length + mentionText.length;
+            input.selectionStart = newPos;
+            input.selectionEnd = newPos;
+            closeMentionDropdown();
+            input.focus();
+        }
+
+        function closeMentionDropdown() {
+            mentionDropdownVisible = false;
+            document.getElementById('mentionDropdown').classList.remove('visible');
+        }
+        // ========== END CHAT ==========
+
         window.onclick = function(event) {
             const modal = document.getElementById('requestModal');
             if (event.target === modal) {
                 closeModal();
             }
+            if (!event.target.closest('.chat-input-area')) {
+                closeMentionDropdown();
+            }
         }
-        
+
         // Set default filter to "Kutilmoqda"
         document.getElementById('statusFilter').value = 'pending';
 
-        loadUserInfo();
+        loadUserInfo().then(() => startBackgroundPoll());
         loadAdmins();
         loadRequests();
         setInterval(loadRequests, 30000);

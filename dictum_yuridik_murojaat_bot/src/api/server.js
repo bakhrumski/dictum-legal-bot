@@ -92,6 +92,7 @@ app.post('/api/logout', (req, res) => {
 // Get current user info
 app.get('/api/user-info', requireAuth, (req, res) => {
   res.json({
+    adminId: req.session.adminId,
     username: req.session.username,
     role: req.session.role,
     fullName: req.session.fullName
@@ -630,6 +631,93 @@ app.get('/api/users/:userId/block-history', requireMasterAdmin, async (req, res)
   } catch (error) {
     console.error('Error fetching block history:', error);
     res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+// ========== COMMUNITY CHAT API ==========
+
+// Get chat messages (supports polling via ?since_id=N)
+app.get('/api/chat/messages', requireAuth, async (req, res) => {
+  try {
+    const sinceId = parseInt(req.query.since_id) || 0;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+
+    let query, params;
+    if (sinceId > 0) {
+      query = `
+        SELECT cm.id, cm.message, cm.mentions, cm.created_at,
+               a.id as admin_id, a.username, a.full_name, a.role
+        FROM chat_messages cm
+        JOIN admins a ON cm.admin_id = a.id
+        WHERE cm.id > $1
+        ORDER BY cm.id ASC
+        LIMIT $2
+      `;
+      params = [sinceId, limit];
+    } else {
+      query = `
+        SELECT cm.id, cm.message, cm.mentions, cm.created_at,
+               a.id as admin_id, a.username, a.full_name, a.role
+        FROM chat_messages cm
+        JOIN admins a ON cm.admin_id = a.id
+        ORDER BY cm.id DESC
+        LIMIT $1
+      `;
+      params = [limit];
+    }
+
+    const result = await pool.query(query, params);
+    const messages = sinceId > 0 ? result.rows : result.rows.reverse();
+    res.json({ messages });
+  } catch (error) {
+    console.error('Error fetching chat messages:', error);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Send a chat message
+app.post('/api/chat/messages', requireAuth, async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message cannot be empty' });
+    }
+    if (message.length > 2000) {
+      return res.status(400).json({ error: 'Message too long' });
+    }
+
+    const mentionRegex = /@(\w+)/g;
+    const mentions = [];
+    let match;
+    while ((match = mentionRegex.exec(message)) !== null) {
+      mentions.push(match[1].toLowerCase());
+    }
+
+    const result = await pool.query(
+      `INSERT INTO chat_messages (admin_id, message, mentions)
+       VALUES ($1, $2, $3)
+       RETURNING id, message, mentions, created_at`,
+      [req.session.adminId, message.trim(), JSON.stringify(mentions)]
+    );
+
+    const newMsg = result.rows[0];
+    res.json({
+      success: true,
+      message: {
+        id: newMsg.id,
+        message: newMsg.message,
+        mentions: newMsg.mentions,
+        created_at: newMsg.created_at,
+        admin_id: req.session.adminId,
+        username: req.session.username,
+        full_name: req.session.fullName,
+        role: req.session.role
+      }
+    });
+  } catch (error) {
+    console.error('Error sending chat message:', error);
+    res.status(500).json({ error: 'Failed to send message' });
   }
 });
 

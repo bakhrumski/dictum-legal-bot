@@ -77,6 +77,21 @@ async function setupDatabase() {
     `);
     console.log('✅ Block_history table created');
 
+    // Create chat_messages table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        mentions JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)
+    `);
+    console.log('✅ Chat_messages table created');
+
     // Create trigger for block history
     await client.query(`
       CREATE OR REPLACE FUNCTION log_block_action()
