@@ -25,3 +25,13 @@ test-db.js
 
 # Database files
 *.sql.backup
+
+# Local Windows files
+*.bat
+*.vbs
+.env.txt
+test-api.js
+nul
+
+# Claude Code
+.claude/

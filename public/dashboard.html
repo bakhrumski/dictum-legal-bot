@@ -589,7 +589,7 @@
         
         async function loadUserInfo() {
             try {
-                const response = await fetch('http://localhost:3001/api/user-info');
+                const response = await fetch('/api/user-info');
                 const data = await response.json();
                 currentUser = data;
                 
@@ -604,7 +604,7 @@
         
         async function loadAdmins() {
             try {
-                const response = await fetch('http://localhost:3001/api/admins');
+                const response = await fetch('/api/admins');
                 allAdmins = await response.json();
             } catch (error) {
                 console.error('Error loading admins:', error);
@@ -613,7 +613,7 @@
         
         async function loadRequests() {
             try {
-                const response = await fetch('http://localhost:3001/api/requests');
+                const response = await fetch('/api/requests');
                 requests = await response.json();
                 
                 displayRequests(
@@ -743,6 +743,18 @@
             return icons[type] || '📎';
         }
         
+        function getCategoryOptions(currentCategory) {
+            const categories = [
+                'Fuqarolik huquqi', 'Jinoyat huquqi', 'Mehnat huquqi',
+                'Oila huquqi', 'Biznes/Korporativ huquq', "Ko'chmas mulk",
+                'Soliq huquqi', "Ma'muriy huquq", 'Boshqa'
+            ];
+            return categories.map(function(cat) {
+                var selected = currentCategory === cat ? ' selected' : '';
+                return '<option value="' + cat + '"' + selected + '>' + cat + '</option>';
+            }).join('');
+        }
+
         function formatFileSize(bytes) {
             if (!bytes) return 'N/A';
             if (bytes < 1024) return bytes + ' B';
@@ -806,7 +818,7 @@
         
         async function playAudio(fileId, requestId) {
             try {
-                const response = await fetch(`http://localhost:3001/api/files/${fileId}`);
+                const response = await fetch(`/api/files/${fileId}`);
                 const data = await response.json();
                 
                 const playerDiv = document.getElementById(`audioPlayer_${requestId}`);
@@ -824,7 +836,7 @@
         
         async function viewImage(fileId, requestId) {
             try {
-                const response = await fetch(`http://localhost:3001/api/files/${fileId}`);
+                const response = await fetch(`/api/files/${fileId}`);
                 const data = await response.json();
                 
                 const viewerDiv = document.getElementById(`imageViewer_${requestId}`);
@@ -839,7 +851,7 @@
         
         async function playVideo(fileId, requestId) {
             try {
-                const response = await fetch(`http://localhost:3001/api/files/${fileId}`);
+                const response = await fetch(`/api/files/${fileId}`);
                 const data = await response.json();
                 
                 const playerDiv = document.getElementById(`videoPlayer_${requestId}`);
@@ -857,7 +869,7 @@
         
         async function downloadFile(fileId, fileName) {
             try {
-                const response = await fetch(`http://localhost:3001/api/files/${fileId}`);
+                const response = await fetch(`/api/files/${fileId}`);
                 const data = await response.json();
                 window.open(data.fileLink, '_blank');
             } catch (error) {
@@ -911,10 +923,10 @@
                     </div>
                     ` : ''}
                     ${currentUser.role === 'master' ? `
-                    <div style="margin-top: 10px;">
-                        <select id="lawyerSelect" style="padding: 8px; margin-right: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                        <select id="lawyerSelect" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
                             <option value="">-- Yuristni tanlang --</option>
-                            ${allAdmins.filter(a => a.role === 'master').map(admin => 
+                            ${allAdmins.filter(a => a.role === 'master').map(admin =>
                                 `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
                             ).join('')}
                         </select>
@@ -926,6 +938,15 @@
                             Tayinlovni bekor qilish
                         </button>
                         ` : ''}
+                    </div>
+                    <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+                        <select id="categorySelect" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
+                            <option value="">-- Yo'nalishni tanlang --</option>
+                            ${getCategoryOptions(request.category)}
+                        </select>
+                        <button class="btn" onclick="updateCategory(${request.id})" style="padding: 8px 20px; background: #27ae60;">
+                            Yo'nalishni saqlash
+                        </button>
                     </div>
                     ` : ''}
                 </div>
@@ -1070,7 +1091,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:3001/api/student-response', {
+                const response = await fetch('/api/student-response', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId, responseText })
@@ -1095,7 +1116,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:3001/api/approve-response', {
+                const response = await fetch('/api/approve-response', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId })
@@ -1118,7 +1139,7 @@
             const reason = prompt('Rad etish sababi (ixtiyoriy):');
             
             try {
-                const response = await fetch('http://localhost:3001/api/reject-response', {
+                const response = await fetch('/api/reject-response', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId, reason })
@@ -1145,7 +1166,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:3001/api/master-response', {
+                const response = await fetch('/api/master-response', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId, responseText })
@@ -1173,7 +1194,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:3001/api/assign-request', {
+                const response = await fetch('/api/assign-request', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId, lawyerId })
@@ -1200,7 +1221,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:3001/api/unassign-request', {
+                const response = await fetch('/api/unassign-request', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId })
@@ -1219,6 +1240,33 @@
             }
         }
         
+        async function updateCategory(requestId) {
+            const category = document.getElementById('categorySelect').value;
+            if (!category) {
+                alert('Iltimos, yo\'nalishni tanlang!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/update-category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, category })
+                });
+
+                if (response.ok) {
+                    alert('✅ Yo\'nalish saqlandi!');
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+
         async function deleteRequest(requestId) {
             const confirmation = prompt('O\'chirish uchun "DELETE" deb yozing:');
             
@@ -1228,7 +1276,7 @@
             }
             
             try {
-                const response = await fetch(`http://localhost:3001/api/requests/${requestId}`, {
+                const response = await fetch(`/api/requests/${requestId}`, {
                     method: 'DELETE'
                 });
                 
@@ -1258,7 +1306,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:3001/api/users/block', {
+                const response = await fetch('/api/users/block', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId, reason })
@@ -1289,7 +1337,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:3001/api/users/unblock', {
+                const response = await fetch('/api/users/unblock', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId, reason: reason || 'Blokdan chiqarildi' })
@@ -1310,7 +1358,7 @@
         
         async function viewBlockHistory(userId, username) {
             try {
-                const response = await fetch(`http://localhost:3001/api/users/${userId}/block-history`);
+                const response = await fetch(`/api/users/${userId}/block-history`);
                 
                 if (!response.ok) {
                     alert('❌ Tarixni yuklab bo\'lmadi');
@@ -1376,7 +1424,7 @@
         
         async function exportToExcel() {
             try {
-                const response = await fetch('http://localhost:3001/api/export-excel');
+                const response = await fetch('/api/export-excel');
                 
                 if (response.ok) {
                     const blob = await response.blob();
@@ -1399,7 +1447,7 @@
         
         async function logout() {
             try {
-                await fetch('http://localhost:3001/api/logout', { method: 'POST' });
+                await fetch('/api/logout', { method: 'POST' });
                 window.location.href = '/login.html';
             } catch (error) {
                 window.location.href = '/login.html';

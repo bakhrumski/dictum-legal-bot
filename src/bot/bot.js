@@ -8,15 +8,15 @@ const path = require('path');
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-// Store pending requests temporarily
-let pendingRequests = {};
-
-// Start command
-bot.onText(/\/start/, (msg) => {
+// Handle all messages (text, voice, video, documents)
+bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
-  const username = msg.from.username || 'Noma\'lum';
-  
-  const welcomeMessage = `
+  const username = msg.from.username || `user_${msg.from.id}`;
+  const firstName = msg.from.first_name || 'Foydalanuvchi';
+
+  // Handle /start command
+  if (msg.text && msg.text.startsWith('/start')) {
+    const welcomeMessage = `
 Assalomu aleykum, ${msg.from.first_name}! 👋
 
 Dictum advokatlik firmasi murojaatlar bo'limiga xush kelibsiz!
@@ -24,21 +24,18 @@ Dictum advokatlik firmasi murojaatlar bo'limiga xush kelibsiz!
 📝 Yuridik masalangizni yuboring:
 • Matn shaklida
 • Ovozli xabar
-• Video xabar  
+• Video xabar
 • Fayl (max 5MB)
 
 Yuristlarimiz tez orada javob berishadi.
-  `;
-  
-  bot.sendMessage(chatId, welcomeMessage);
-  pendingRequests[chatId] = { username, messages: [] };
-});
+    `;
+    bot.sendMessage(chatId, welcomeMessage);
+    return;
+  }
 
-// Help command
-bot.onText(/\/help/, (msg) => {
-  const chatId = msg.chat.id;
-  
-  const helpMessage = `
+  // Handle /help command
+  if (msg.text && msg.text.startsWith('/help')) {
+    const helpMessage = `
 📋 Yordam
 
 Murojaat yuborish uchun:
@@ -47,18 +44,12 @@ Murojaat yuborish uchun:
 3. Yurist javobini kuting
 
 Qo'shimcha savol bo'lsa: /start ni qayta bosing
-  `;
-  
-  bot.sendMessage(chatId, helpMessage);
-});
+    `;
+    bot.sendMessage(chatId, helpMessage);
+    return;
+  }
 
-// Handle all messages (text, voice, video, documents)
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
-  const username = msg.from.username || `user_${msg.from.id}`;
-  const firstName = msg.from.first_name || 'Foydalanuvchi';
-  
-  // Ignore commands
+  // Ignore other commands
   if (msg.text && msg.text.startsWith('/')) return;
   
   let requestData = {
