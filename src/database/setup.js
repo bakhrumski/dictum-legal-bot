@@ -72,6 +72,20 @@ async function setupDatabase() {
     `);
     console.log('block_history table created');
 
+    // Create student_ratings table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS student_ratings (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+        student_id INTEGER REFERENCES admins(id) ON DELETE CASCADE,
+        rated_by INTEGER REFERENCES admins(id),
+        rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(request_id)
+      )
+    `);
+    console.log('student_ratings table created');
+
     // Insert default master admin
     const existingAdmin = await client.query(
       "SELECT id FROM admins WHERE username = 'admin'"

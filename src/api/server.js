@@ -699,6 +699,94 @@ app.put('/api/admins/:id', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// Rate student response
+app.post('/api/rate-student', requireMasterOrLawyer, async (req, res) => {
+  try {
+    const { requestId, rating } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+
+    // Get student_admin_id from the request
+    const reqResult = await pool.query('SELECT student_admin_id FROM requests WHERE id = $1', [requestId]);
+    if (reqResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    const studentId = reqResult.rows[0].student_admin_id;
+    if (!studentId) {
+      return res.status(400).json({ error: 'No student assigned to this request' });
+    }
+
+    // Check if already rated
+    const existing = await pool.query('SELECT id FROM student_ratings WHERE request_id = $1', [requestId]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Already rated' });
+    }
+
+    await pool.query(
+      'INSERT INTO student_ratings (request_id, student_id, rated_by, rating) VALUES ($1, $2, $3, $4)',
+      [requestId, studentId, req.session.adminId, rating]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error rating student:', error);
+    res.status(500).json({ error: 'Failed to rate student' });
+  }
+});
+
+// Get student rankings
+app.get('/api/student-rankings', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.id,
+        a.full_name,
+        a.username,
+        COUNT(DISTINCT CASE WHEN r.status = 'answered' OR r.status = 'student_responded' THEN r.id END) as total_responses,
+        COUNT(DISTINCT CASE WHEN r.status = 'rejected' THEN r.id END) as total_rejects,
+        COALESCE(ROUND(AVG(sr.rating)::numeric, 1), 0) as avg_rating,
+        COUNT(DISTINCT sr.id) as total_ratings,
+        CASE
+          WHEN COUNT(DISTINCT CASE WHEN r.answered_at IS NOT NULL THEN r.id END) > 0
+          THEN ROUND(AVG(CASE WHEN r.answered_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (r.answered_at - r.created_at)) / 3600
+            END)::numeric, 1)
+          ELSE NULL
+        END as avg_response_hours
+      FROM admins a
+      LEFT JOIN requests r ON r.student_admin_id = a.id
+      LEFT JOIN student_ratings sr ON sr.student_id = a.id
+      WHERE a.role = 'student'
+      GROUP BY a.id, a.full_name, a.username
+      ORDER BY COALESCE(AVG(sr.rating), 0) DESC, COUNT(DISTINCT CASE WHEN r.status = 'answered' OR r.status = 'student_responded' THEN r.id END) DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching student rankings:', error);
+    res.status(500).json({ error: 'Failed to fetch rankings' });
+  }
+});
+
+// Check if request has been rated
+app.get('/api/request-rating/:requestId', requireAuth, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const result = await pool.query('SELECT rating FROM student_ratings WHERE request_id = $1', [requestId]);
+    if (result.rows.length > 0) {
+      res.json({ rated: true, rating: result.rows[0].rating });
+    } else {
+      res.json({ rated: false });
+    }
+  } catch (error) {
+    console.error('Error checking rating:', error);
+    res.status(500).json({ error: 'Failed to check rating' });
+  }
+});
+
 // Delete admin
 app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
   try {

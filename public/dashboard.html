@@ -631,6 +631,86 @@
             gap: 10px;
             margin-top: 20px;
         }
+
+        .star-rating {
+            display: inline-flex;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        .star-rating .star {
+            font-size: 28px;
+            color: #ddd;
+            cursor: pointer;
+            transition: color 0.2s, transform 0.15s;
+        }
+
+        .star-rating .star:hover,
+        .star-rating .star.active {
+            color: #f1c40f;
+            transform: scale(1.15);
+        }
+
+        .star-rating .star.hover-fill {
+            color: #f1c40f;
+        }
+
+        .star-rating.disabled .star {
+            cursor: default;
+        }
+
+        .rating-section {
+            background: #fef9e7;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #f1c40f;
+            margin-top: 15px;
+        }
+
+        .rating-section h4 {
+            color: #7d6608;
+            margin-bottom: 10px;
+        }
+
+        .rankings-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .rankings-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .rankings-table th,
+        .rankings-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+            font-size: 14px;
+        }
+
+        .rankings-table th {
+            background: #f8f9fa;
+            color: #7f8c8d;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .rankings-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .stars-display {
+            color: #f1c40f;
+            font-size: 16px;
+            letter-spacing: 1px;
+        }
     </style>
 </head>
 <body>
@@ -725,6 +805,26 @@
             </div>
         </div>
 
+        <!-- Student Rankings Section -->
+        <div class="rankings-section" id="rankingsSection">
+            <h2>Studentlar reytingi</h2>
+            <table class="rankings-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ism</th>
+                        <th>Reyting</th>
+                        <th>Javoblar</th>
+                        <th>Rad etilgan</th>
+                        <th>O'rtacha javob vaqti</th>
+                    </tr>
+                </thead>
+                <tbody id="rankingsTableBody">
+                    <tr><td colspan="6" style="text-align:center;color:#7f8c8d;">Yuklanmoqda...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <div class="requests-container">
             <div class="controls">
                 <div class="controls-header">
@@ -749,8 +849,6 @@
                     
                     <select id="assigneeFilter" onchange="filterRequests()">
                         <option value="">Barcha javob beruvchilar</option>
-                        <option value="Master Admin">Master Admin</option>
-                        <option value="Student Admin 1">Student Admin 1</option>
                     </select>
                     
                     <select id="statusFilter" onchange="filterRequests()">
@@ -827,9 +925,41 @@
                 if (currentUser.role === 'master') {
                     renderAdminTable();
                 }
+                populateAssigneeFilter();
             } catch (error) {
                 console.error('Error loading admins:', error);
             }
+        }
+
+        function populateAssigneeFilter() {
+            const select = document.getElementById('assigneeFilter');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">Barcha javob beruvchilar</option>';
+
+            const masters = allAdmins.filter(a => a.role === 'master').sort((a, b) => a.full_name.localeCompare(b.full_name));
+            const lawyers = allAdmins.filter(a => a.role === 'lawyer').sort((a, b) => a.full_name.localeCompare(b.full_name));
+            const students = allAdmins.filter(a => a.role === 'student').sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+            if (masters.length > 0) {
+                const grp1 = document.createElement('optgroup');
+                grp1.label = 'Master';
+                masters.forEach(a => { const o = document.createElement('option'); o.value = a.full_name; o.textContent = a.full_name; grp1.appendChild(o); });
+                select.appendChild(grp1);
+            }
+            if (lawyers.length > 0) {
+                const grp2 = document.createElement('optgroup');
+                grp2.label = 'Yuristlar';
+                lawyers.forEach(a => { const o = document.createElement('option'); o.value = a.full_name; o.textContent = a.full_name; grp2.appendChild(o); });
+                select.appendChild(grp2);
+            }
+            if (students.length > 0) {
+                const grp3 = document.createElement('optgroup');
+                grp3.label = 'Studentlar';
+                students.forEach(a => { const o = document.createElement('option'); o.value = a.full_name; o.textContent = a.full_name; grp3.appendChild(o); });
+                select.appendChild(grp3);
+            }
+
+            if (currentVal) select.value = currentVal;
         }
 
         // ========== ADMIN MANAGEMENT ==========
@@ -959,6 +1089,66 @@
             }
         }
         // ========== END ADMIN MANAGEMENT ==========
+
+        // ========== STUDENT RANKINGS ==========
+        let studentRankings = [];
+
+        async function loadStudentRankings() {
+            try {
+                const response = await fetch('/api/student-rankings');
+                studentRankings = await response.json();
+                renderStudentRankings();
+            } catch (error) {
+                console.error('Error loading rankings:', error);
+            }
+        }
+
+        function renderStudentRankings() {
+            const section = document.getElementById('rankingsSection');
+            const tbody = document.getElementById('rankingsTableBody');
+            if (!section || !tbody) return;
+
+            if (studentRankings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#7f8c8d;">Studentlar topilmadi</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = studentRankings.map((s, i) => {
+                const avgRating = parseFloat(s.avg_rating) || 0;
+                const fullStars = Math.floor(avgRating);
+                const halfStar = avgRating - fullStars >= 0.5;
+                let starsHtml = '';
+                for (let j = 0; j < 5; j++) {
+                    if (j < fullStars) starsHtml += '<span style="color:#f1c40f;">★</span>';
+                    else if (j === fullStars && halfStar) starsHtml += '<span style="color:#f1c40f;">★</span>';
+                    else starsHtml += '<span style="color:#ddd;">★</span>';
+                }
+
+                const hours = s.avg_response_hours;
+                let timeStr = '-';
+                if (hours !== null && hours !== undefined) {
+                    const h = parseFloat(hours);
+                    if (h < 1) timeStr = Math.round(h * 60) + ' daqiqa';
+                    else if (h < 24) timeStr = h.toFixed(1) + ' soat';
+                    else timeStr = (h / 24).toFixed(1) + ' kun';
+                }
+
+                return `
+                    <tr>
+                        <td><strong>${i + 1}</strong></td>
+                        <td><strong>${s.full_name}</strong></td>
+                        <td>
+                            <span class="stars-display">${starsHtml}</span>
+                            <span style="color:#7f8c8d;font-size:12px;margin-left:4px;">(${avgRating})</span>
+                        </td>
+                        <td>${s.total_responses}</td>
+                        <td style="color:${parseInt(s.total_rejects) > 0 ? '#e74c3c' : '#27ae60'};">${s.total_rejects}</td>
+                        <td>${timeStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        // ========== END STUDENT RANKINGS ==========
 
         async function loadRequests() {
             try {
@@ -1274,10 +1464,17 @@
                     ${currentUser.role === 'master' ? `
                     <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                         <select id="lawyerSelect" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
-                            <option value="">-- Yuristni tanlang --</option>
-                            ${allAdmins.filter(a => a.role === 'master' || a.role === 'lawyer').map(admin =>
-                                `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
-                            ).join('')}
+                            <option value="">-- Tayinlash --</option>
+                            ${(() => {
+                                const masters = allAdmins.filter(a => a.role === 'master').sort((a, b) => a.full_name.localeCompare(b.full_name));
+                                const lawyers = allAdmins.filter(a => a.role === 'lawyer').sort((a, b) => a.full_name.localeCompare(b.full_name));
+                                const students = allAdmins.filter(a => a.role === 'student').sort((a, b) => a.full_name.localeCompare(b.full_name));
+                                let html = '';
+                                if (masters.length) { html += '<optgroup label="Master">'; masters.forEach(a => { html += '<option value="' + a.id + '"' + (request.assigned_to === a.id ? ' selected' : '') + '>' + a.full_name + '</option>'; }); html += '</optgroup>'; }
+                                if (lawyers.length) { html += '<optgroup label="Yuristlar">'; lawyers.forEach(a => { html += '<option value="' + a.id + '"' + (request.assigned_to === a.id ? ' selected' : '') + '>' + a.full_name + '</option>'; }); html += '</optgroup>'; }
+                                if (students.length) { html += '<optgroup label="Studentlar">'; students.forEach(a => { html += '<option value="' + a.id + '"' + (request.assigned_to === a.id ? ' selected' : '') + '>' + a.full_name + '</option>'; }); html += '</optgroup>'; }
+                                return html;
+                            })()}
                         </select>
                         <button class="btn" onclick="assignRequest(${request.id})" style="padding: 8px 20px;">
                             Tayinlash
@@ -1378,7 +1575,19 @@
                         </p>
                     </div>
                 `;
-                
+
+                if (currentUser.role === 'master' || currentUser.role === 'lawyer') {
+                    modalContent += `
+                        <div class="rating-section" id="ratingSection_${request.id}">
+                            <h4>⭐ Student javobini baholang</h4>
+                            <div class="star-rating" id="starRating_${request.id}">
+                                ${[1,2,3,4,5].map(i => `<span class="star" data-value="${i}" onclick="rateStudent(${request.id}, ${i})">★</span>`).join('')}
+                            </div>
+                            <span id="ratingStatus_${request.id}" style="margin-left: 10px; color: #7f8c8d; font-size: 13px;"></span>
+                        </div>
+                    `;
+                }
+
                 if (currentUser.role === 'master') {
                     modalContent += `
                         <div class="approval-section">
@@ -1432,6 +1641,82 @@
             
             document.getElementById('modalContent').innerHTML = modalContent;
             document.getElementById('requestModal').style.display = 'block';
+
+            // Check if already rated (for student_responded requests)
+            if (request.status === 'student_responded' && (currentUser.role === 'master' || currentUser.role === 'lawyer')) {
+                checkExistingRating(request.id);
+            }
+        }
+
+        async function checkExistingRating(requestId) {
+            try {
+                const response = await fetch(`/api/request-rating/${requestId}`);
+                const data = await response.json();
+                if (data.rated) {
+                    const container = document.getElementById(`starRating_${requestId}`);
+                    const status = document.getElementById(`ratingStatus_${requestId}`);
+                    if (container) {
+                        container.classList.add('disabled');
+                        const stars = container.querySelectorAll('.star');
+                        stars.forEach((star, i) => {
+                            if (i < data.rating) star.classList.add('active');
+                            star.onclick = null;
+                            star.style.cursor = 'default';
+                        });
+                    }
+                    if (status) status.textContent = `Baholangan: ${data.rating}/5`;
+                } else {
+                    // Add hover effects
+                    const container = document.getElementById(`starRating_${requestId}`);
+                    if (container) {
+                        const stars = container.querySelectorAll('.star');
+                        stars.forEach((star, idx) => {
+                            star.addEventListener('mouseenter', () => {
+                                stars.forEach((s, j) => { s.classList.toggle('hover-fill', j <= idx); });
+                            });
+                            star.addEventListener('mouseleave', () => {
+                                stars.forEach(s => s.classList.remove('hover-fill'));
+                            });
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking rating:', error);
+            }
+        }
+
+        async function rateStudent(requestId, rating) {
+            try {
+                const response = await fetch('/api/rate-student', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, rating })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    const container = document.getElementById(`starRating_${requestId}`);
+                    const status = document.getElementById(`ratingStatus_${requestId}`);
+                    if (container) {
+                        container.classList.add('disabled');
+                        const stars = container.querySelectorAll('.star');
+                        stars.forEach((star, i) => {
+                            star.classList.remove('hover-fill');
+                            if (i < rating) star.classList.add('active');
+                            else star.classList.remove('active');
+                            star.onclick = null;
+                            star.style.cursor = 'default';
+                        });
+                    }
+                    if (status) status.textContent = `Baholangan: ${rating}/5`;
+                    loadStudentRankings();
+                } else {
+                    alert('❌ ' + (data.error || 'Baholashda xatolik'));
+                }
+            } catch (error) {
+                console.error('Error rating:', error);
+                alert('❌ Baholashda xatolik');
+            }
         }
         
         async function submitStudentResponse(requestId) {
@@ -2210,7 +2495,7 @@
                     }
                 });
 
-                const roleLabels = { 'master': 'Yurist', 'student': 'Student' };
+                const roleLabels = { 'master': 'Master', 'lawyer': 'Yurist', 'student': 'Student' };
                 const adminTableData = allAdmins.map((admin, i) => [
                     i + 1,
                     admin.full_name,
@@ -2239,11 +2524,66 @@
                     styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
                     didParseCell: function(data) {
                         if (data.section === 'body' && data.column.index === 3) {
-                            if (data.cell.raw === 'Yurist') { data.cell.styles.textColor = [41, 128, 185]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Master') { data.cell.styles.textColor = [41, 128, 185]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Yurist') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
                             if (data.cell.raw === 'Student') { data.cell.styles.textColor = [142, 68, 173]; data.cell.styles.fontStyle = 'bold'; }
                         }
                     }
                 });
+
+                // --- STUDENT RANKINGS ---
+                if (studentRankings.length > 0) {
+                    const rankStartY = doc.lastAutoTable.finalY + 12;
+                    setFont('bold'); doc.setTextColor(30, 45, 65); doc.setFontSize(13);
+                    doc.text('STUDENTLAR REYTINGI', pw / 2, rankStartY, { align: 'center' });
+                    const rankTitleW = doc.getTextWidth('STUDENTLAR REYTINGI');
+                    doc.setFillColor(241, 196, 15);
+                    doc.rect(pw / 2 - rankTitleW / 2, rankStartY + 2, rankTitleW, 0.8, 'F');
+
+                    const rankTableData = studentRankings.map((s, i) => {
+                        const avgR = parseFloat(s.avg_rating) || 0;
+                        const stars = '★'.repeat(Math.round(avgR)) + '☆'.repeat(5 - Math.round(avgR));
+                        const hours = s.avg_response_hours;
+                        let timeStr = '-';
+                        if (hours !== null && hours !== undefined) {
+                            const h = parseFloat(hours);
+                            if (h < 1) timeStr = Math.round(h * 60) + ' daq';
+                            else if (h < 24) timeStr = h.toFixed(1) + ' soat';
+                            else timeStr = (h / 24).toFixed(1) + ' kun';
+                        }
+                        return [i + 1, s.full_name, stars + ' (' + avgR + ')', s.total_responses, s.total_rejects, timeStr];
+                    });
+
+                    doc.autoTable({
+                        startY: rankStartY + 8,
+                        head: [['#', 'Ism', 'Reyting', 'Javoblar', 'Rad etilgan', 'Javob vaqti']],
+                        body: rankTableData,
+                        theme: 'striped',
+                        headStyles: { fillColor: [127, 140, 41], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
+                        bodyStyles: { fontSize: 9, halign: 'center', cellPadding: 3.5, font: fontName },
+                        columnStyles: {
+                            0: { cellWidth: 10 },
+                            1: { cellWidth: 40, halign: 'left' },
+                            2: { cellWidth: 40 },
+                            3: { cellWidth: 22 },
+                            4: { cellWidth: 22 },
+                            5: { cellWidth: 28 }
+                        },
+                        alternateRowStyles: { fillColor: [255, 253, 231] },
+                        styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
+                        didParseCell: function(data) {
+                            if (data.section === 'body' && data.column.index === 2) {
+                                data.cell.styles.textColor = [241, 196, 15];
+                                data.cell.styles.fontStyle = 'bold';
+                            }
+                            if (data.section === 'body' && data.column.index === 4) {
+                                const val = parseInt(data.cell.raw);
+                                if (val > 0) { data.cell.styles.textColor = [192, 57, 43]; data.cell.styles.fontStyle = 'bold'; }
+                                else { data.cell.styles.textColor = [39, 174, 96]; }
+                            }
+                        }
+                    });
+                }
 
                 // --- TOP MUROJAATCHILAR ---
                 const petitionerEndY = doc.lastAutoTable.finalY + 12;
@@ -2380,6 +2720,7 @@
         loadUserInfo();
         loadAdmins();
         loadRequests();
+        loadStudentRankings();
         setInterval(loadRequests, 30000);
     </script>
 </body>
