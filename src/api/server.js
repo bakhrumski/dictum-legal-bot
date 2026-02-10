@@ -25,9 +25,17 @@ app.use(session({
 // Serve static files
 app.use(express.static('public'));
 
+// Single-session enforcement: one active session per admin
+const activeSessions = new Map(); // adminId -> sessionId
+
 // Authentication middleware
 function requireAuth(req, res, next) {
   if (req.session.isAuthenticated) {
+    const activeSessionId = activeSessions.get(req.session.adminId);
+    if (activeSessionId && activeSessionId !== req.sessionID) {
+      req.session.destroy();
+      return res.status(401).json({ error: 'Boshqa qurilmadan kirilgan. Iltimos, qayta kiring.' });
+    }
     next();
   } else {
     res.status(401).json({ error: 'Unauthorized' });
@@ -67,11 +75,14 @@ app.post('/api/login', async (req, res) => {
       req.session.adminId = admin.id;
       req.session.username = admin.username;
       req.session.fullName = admin.full_name;
-      
-      res.json({ 
-        success: true, 
+
+      // Enforce single session: register this as the only active session
+      activeSessions.set(admin.id, req.sessionID);
+
+      res.json({
+        success: true,
         role: admin.role,
-        fullName: admin.full_name 
+        fullName: admin.full_name
       });
     } else {
       res.status(401).json({ error: 'Noto\'g\'ri foydalanuvchi nomi yoki parol' });
@@ -84,6 +95,9 @@ app.post('/api/login', async (req, res) => {
 
 // Logout endpoint
 app.post('/api/logout', (req, res) => {
+  if (req.session.adminId) {
+    activeSessions.delete(req.session.adminId);
+  }
   req.session.destroy();
   res.json({ success: true });
 });
