@@ -93,7 +93,8 @@ app.get('/api/user-info', requireAuth, (req, res) => {
   res.json({
     username: req.session.username,
     role: req.session.role,
-    fullName: req.session.fullName
+    fullName: req.session.fullName,
+    adminId: req.session.adminId
   });
 });
 
@@ -110,7 +111,7 @@ app.get('/', (req, res) => {
 app.get('/api/requests', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
+      SELECT
         r.id,
         r.user_id,
         r.category,
@@ -125,6 +126,7 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         r.responded_by,
         r.master_approved,
         r.assigned_to,
+        r.assigned_student_id,
         r.assigned_at,
         r.created_at,
         r.answered_at,
@@ -134,10 +136,12 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         u.blocked,
         u.blocked_at,
         u.block_reason,
-        a.full_name as assigned_lawyer_name
+        a.full_name as assigned_lawyer_name,
+        sa.full_name as assigned_student_name
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
+      LEFT JOIN admins sa ON r.assigned_student_id = sa.id
       ORDER BY r.created_at DESC
     `);
     
@@ -153,7 +157,7 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(`
-      SELECT 
+      SELECT
         r.id,
         r.user_id,
         r.category,
@@ -168,6 +172,7 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         r.responded_by,
         r.master_approved,
         r.assigned_to,
+        r.assigned_student_id,
         r.assigned_at,
         r.created_at,
         r.answered_at,
@@ -177,10 +182,12 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         u.blocked,
         u.blocked_at,
         u.block_reason,
-        a.full_name as assigned_lawyer_name
+        a.full_name as assigned_lawyer_name,
+        sa.full_name as assigned_student_name
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
+      LEFT JOIN admins sa ON r.assigned_student_id = sa.id
       WHERE r.id = $1
     `, [id]);
     
@@ -207,75 +214,103 @@ app.get('/api/files/:fileId', requireAuth, async (req, res) => {
   }
 });
 
-// Student submits response (doesn't send to client yet)
+// Student submits response (goes to assigned lawyer first, then master)
 app.post('/api/student-response', requireAuth, async (req, res) => {
   try {
     const { requestId, responseText } = req.body;
-    
+
+    // Verify this student is the assigned student
+    const reqCheck = await pool.query('SELECT assigned_student_id FROM requests WHERE id = $1', [requestId]);
+    if (reqCheck.rows.length > 0 && reqCheck.rows[0].assigned_student_id && reqCheck.rows[0].assigned_student_id !== req.session.adminId) {
+      return res.status(403).json({ error: 'Bu murojaat sizga tayinlanmagan' });
+    }
+
     // Update request with student response
     await pool.query(`
-      UPDATE requests 
-      SET student_response = $1, 
+      UPDATE requests
+      SET student_response = $1,
           status = 'student_responded',
           student_admin_id = $3,
           responded_by = $4
       WHERE id = $2
     `, [responseText, requestId, req.session.adminId, req.session.fullName]);
-    
-    // Notify master admin on Telegram
-    try {
-      const requestDetails = await pool.query(`
-        SELECT u.username, u.first_name, r.request_text, r.category
-        FROM requests r
-        JOIN users u ON r.user_id = u.id
-        WHERE r.id = $1
-      `, [requestId]);
-      
-      if (requestDetails.rows.length > 0) {
-        const { username, first_name, request_text, category } = requestDetails.rows[0];
-        const masterNotification = `
-🔔 Student admindan yangi javob!
 
-👤 Foydalanuvchi: ${first_name} (@${username})
-✍️ Student: ${req.session.fullName}
-📂 Yo'nalish: ${category}
+    res.json({ success: true, message: 'Javob yuborildi! Yurist ko\'rib chiqadi.' });
 
-📝 Murojaat:
-${request_text.substring(0, 100)}...
-
-📝 Student javobi:
-${responseText.substring(0, 100)}...
-
-Dashboard: http://localhost:3000
-Tasdiqlash uchun dashboardga kiring!
-        `;
-        
-        await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID, masterNotification);
-      }
-    } catch (error) {
-      console.error('Failed to notify master admin:', error);
-    }
-    
-    res.json({ success: true, message: 'Response submitted for approval' });
-    
   } catch (error) {
     console.error('Error submitting student response:', error);
     res.status(500).json({ error: 'Failed to submit response' });
   }
 });
 
-// Master admin approves response (sends to client)
+// Lawyer approves student response (sends to master for final approval)
+app.post('/api/lawyer-approve', requireMasterOrLawyer, async (req, res) => {
+  try {
+    const { requestId } = req.body;
+
+    // Verify this lawyer is the assigned lawyer
+    const reqCheck = await pool.query('SELECT assigned_to, status FROM requests WHERE id = $1', [requestId]);
+    if (reqCheck.rows.length === 0) return res.status(404).json({ error: 'Request not found' });
+    if (reqCheck.rows[0].status !== 'student_responded') return res.status(400).json({ error: 'Bu murojaat tasdiqlanishi mumkin emas' });
+
+    const assignedLawyer = reqCheck.rows[0].assigned_to;
+    if (assignedLawyer && assignedLawyer !== req.session.adminId && req.session.role !== 'master') {
+      return res.status(403).json({ error: 'Bu murojaat sizga tayinlanmagan' });
+    }
+
+    await pool.query(`
+      UPDATE requests SET status = 'lawyer_approved' WHERE id = $1
+    `, [requestId]);
+
+    res.json({ success: true, message: 'Javob tasdiqlandi! Master admin ko\'rib chiqadi.' });
+
+  } catch (error) {
+    console.error('Error lawyer approving:', error);
+    res.status(500).json({ error: 'Failed to approve' });
+  }
+});
+
+// Lawyer rejects student response
+app.post('/api/lawyer-reject', requireMasterOrLawyer, async (req, res) => {
+  try {
+    const { requestId, reason } = req.body;
+
+    const reqCheck = await pool.query('SELECT assigned_to, status FROM requests WHERE id = $1', [requestId]);
+    if (reqCheck.rows.length === 0) return res.status(404).json({ error: 'Request not found' });
+
+    const assignedLawyer = reqCheck.rows[0].assigned_to;
+    if (assignedLawyer && assignedLawyer !== req.session.adminId && req.session.role !== 'master') {
+      return res.status(403).json({ error: 'Bu murojaat sizga tayinlanmagan' });
+    }
+
+    await pool.query(`
+      UPDATE requests
+      SET status = 'rejected',
+          student_response = student_response || E'\n\n--- YURIST RAD ETDI ---\nSabab: ' || $2
+      WHERE id = $1
+    `, [requestId, reason || 'Sabab ko\'rsatilmagan']);
+
+    res.json({ success: true, message: 'Javob rad etildi' });
+
+  } catch (error) {
+    console.error('Error lawyer rejecting:', error);
+    res.status(500).json({ error: 'Failed to reject' });
+  }
+});
+
+// Master admin final approval (sends to client)
 app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId } = req.body;
-    
+
     // Get request details
     const requestResult = await pool.query(`
-      SELECT 
-        u.telegram_id, 
+      SELECT
+        u.telegram_id,
         u.username,
-        u.first_name, 
-        r.student_response
+        u.first_name,
+        r.student_response,
+        r.status
       FROM requests r
       JOIN users u ON r.user_id = u.id
       WHERE r.id = $1
@@ -339,13 +374,13 @@ app.post('/api/reject-response', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// Master admin sends direct response (bypasses student)
-app.post('/api/master-response', requireMasterOrLawyer, async (req, res) => {
+// Master admin sends direct response (only when no student/lawyer assigned)
+app.post('/api/master-response', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId, responseText } = req.body;
-    
+
     const requestResult = await pool.query(`
-      SELECT u.telegram_id, u.username, u.first_name
+      SELECT u.telegram_id, u.username, u.first_name, r.assigned_to, r.assigned_student_id
       FROM requests r
       JOIN users u ON r.user_id = u.id
       WHERE r.id = $1
@@ -403,29 +438,33 @@ app.get('/api/admins', requireAuth, async (req, res) => {
   }
 });
 
-// Assign request to lawyer
+// Assign request (lawyer + student)
 app.post('/api/assign-request', requireMasterAdmin, async (req, res) => {
   try {
-    const { requestId, lawyerId } = req.body;
-    
+    const { requestId, lawyerId, studentId } = req.body;
+
     await pool.query(`
-      UPDATE requests 
-      SET assigned_to = $1, assigned_at = NOW()
-      WHERE id = $2
-    `, [lawyerId, requestId]);
-    
-    // Get lawyer name for notification
-    const lawyerResult = await pool.query(
-      'SELECT full_name FROM admins WHERE id = $1',
-      [lawyerId]
-    );
-    
-    res.json({ 
-      success: true, 
+      UPDATE requests
+      SET assigned_to = $1, assigned_student_id = $2, assigned_at = NOW()
+      WHERE id = $3
+    `, [lawyerId || null, studentId || null, requestId]);
+
+    const names = [];
+    if (lawyerId) {
+      const lr = await pool.query('SELECT full_name FROM admins WHERE id = $1', [lawyerId]);
+      if (lr.rows[0]) names.push(lr.rows[0].full_name);
+    }
+    if (studentId) {
+      const sr = await pool.query('SELECT full_name FROM admins WHERE id = $1', [studentId]);
+      if (sr.rows[0]) names.push(sr.rows[0].full_name);
+    }
+
+    res.json({
+      success: true,
       message: 'Request assigned successfully',
-      lawyerName: lawyerResult.rows[0]?.full_name 
+      assignedNames: names.join(', ')
     });
-    
+
   } catch (error) {
     console.error('Error assigning request:', error);
     res.status(500).json({ error: 'Failed to assign request' });
@@ -438,8 +477,8 @@ app.post('/api/unassign-request', requireMasterAdmin, async (req, res) => {
     const { requestId } = req.body;
     
     await pool.query(`
-      UPDATE requests 
-      SET assigned_to = NULL, assigned_at = NULL
+      UPDATE requests
+      SET assigned_to = NULL, assigned_student_id = NULL, assigned_at = NULL
       WHERE id = $1
     `, [requestId]);
     
@@ -501,7 +540,8 @@ app.get('/api/export-excel', requireAuth, async (req, res) => {
       'Turi': row.request_type,
       'Status': row.status === 'pending' ? 'Kutilmoqda' :
                 row.status === 'student_responded' ? 'Student javobi' :
-                row.status === 'answered' ? 'Javob berilgan' : 
+                row.status === 'lawyer_approved' ? 'Yurist tasdiqlagan' :
+                row.status === 'answered' ? 'Javob berilgan' :
                 row.status === 'rejected' ? 'Rad etilgan' : row.status,
       'Javob': row.response_text || '',
       'Javob berdi': row.responded_by || '',
@@ -745,7 +785,7 @@ app.get('/api/student-rankings', requireAuth, async (req, res) => {
         a.id,
         a.full_name,
         a.username,
-        COUNT(DISTINCT CASE WHEN r.status = 'answered' OR r.status = 'student_responded' THEN r.id END) as total_responses,
+        COUNT(DISTINCT CASE WHEN r.status IN ('answered', 'student_responded', 'lawyer_approved') THEN r.id END) as total_responses,
         COUNT(DISTINCT CASE WHEN r.status = 'rejected' THEN r.id END) as total_rejects,
         COALESCE(ROUND(AVG(sr.rating)::numeric, 1), 0) as avg_rating,
         COUNT(DISTINCT sr.id) as total_ratings,
@@ -761,7 +801,7 @@ app.get('/api/student-rankings', requireAuth, async (req, res) => {
       LEFT JOIN student_ratings sr ON sr.student_id = a.id
       WHERE a.role = 'student'
       GROUP BY a.id, a.full_name, a.username
-      ORDER BY COALESCE(AVG(sr.rating), 0) DESC, COUNT(DISTINCT CASE WHEN r.status = 'answered' OR r.status = 'student_responded' THEN r.id END) DESC
+      ORDER BY COALESCE(AVG(sr.rating), 0) DESC, COUNT(DISTINCT CASE WHEN r.status IN ('answered', 'student_responded', 'lawyer_approved') THEN r.id END) DESC
     `);
 
     res.json(result.rows);

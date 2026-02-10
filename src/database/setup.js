@@ -59,6 +59,12 @@ async function setupDatabase() {
     `);
     console.log('requests table created');
 
+    // Add assigned_student_id column if not exists
+    await client.query(`
+      ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_student_id INTEGER REFERENCES admins(id)
+    `);
+    console.log('assigned_student_id column ensured');
+
     // Create block_history table
     await client.query(`
       CREATE TABLE IF NOT EXISTS block_history (
