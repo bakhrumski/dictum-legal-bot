@@ -131,10 +131,27 @@ Qo'shimcha savol bo'lsa: /start ni qayta bosing
     return;
   }
   
+  // Check if user has 3+ unanswered requests
+  try {
+    const userRow = await pool.query('SELECT id FROM users WHERE telegram_id = $1', [chatId]);
+    if (userRow.rows.length > 0) {
+      const pending = await pool.query(
+        "SELECT COUNT(*) as cnt FROM requests WHERE user_id = $1 AND status NOT IN ('answered')",
+        [userRow.rows[0].id]
+      );
+      if (parseInt(pending.rows[0].cnt) >= 3) {
+        bot.sendMessage(chatId, '⏳ Sizda javob berilmagan 3 ta murojaat mavjud. Iltimos, avvalgi murojaatlaringizga javob berilishini kuting.');
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('Error checking pending requests:', error);
+  }
+
   // Save to database
   try {
     const result = await saveRequest(requestData);
-    
+
     if (result.success) {
       const confirmation = `
 ✅ Murojaat qabul qilindi!
