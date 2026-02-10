@@ -1028,7 +1028,11 @@
 
             <!-- Compact Rankings Sidebar -->
             <div class="rankings-sidebar" id="rankingsSection">
-                <h3>⭐ Studentlar reytingi</h3>
+                <h3>⚖️ Yuristlar reytingi</h3>
+                <div id="lawyerRankingsBody">
+                    <div style="text-align:center;color:#7f8c8d;font-size:13px;padding:20px 0;">Yuklanmoqda...</div>
+                </div>
+                <h3 style="margin-top:15px;">🎓 Studentlar reytingi</h3>
                 <div id="rankingsBody">
                     <div style="text-align:center;color:#7f8c8d;font-size:13px;padding:20px 0;">Yuklanmoqda...</div>
                 </div>
@@ -1268,8 +1272,24 @@
         }
         // ========== END ADMIN MANAGEMENT ==========
 
-        // ========== STUDENT RANKINGS ==========
+        // ========== RANKINGS ==========
         let studentRankings = [];
+        let lawyerRankings = [];
+
+        function makeStars(avg) {
+            const full = Math.round(avg);
+            let h = '';
+            for (let j = 0; j < 5; j++) h += j < full ? '★' : '☆';
+            return h;
+        }
+
+        function formatSpeed(hours) {
+            if (!hours && hours !== 0) return '';
+            const h = parseFloat(hours);
+            if (h < 1) return Math.round(h * 60) + ' min';
+            if (h < 24) return h.toFixed(1) + ' soat';
+            return (h / 24).toFixed(1) + ' kun';
+        }
 
         async function loadStudentRankings() {
             try {
@@ -1277,7 +1297,17 @@
                 studentRankings = await response.json();
                 renderStudentRankings();
             } catch (error) {
-                console.error('Error loading rankings:', error);
+                console.error('Error loading student rankings:', error);
+            }
+        }
+
+        async function loadLawyerRankings() {
+            try {
+                const response = await fetch('/api/lawyer-rankings');
+                lawyerRankings = await response.json();
+                renderLawyerRankings();
+            } catch (error) {
+                console.error('Error loading lawyer rankings:', error);
             }
         }
 
@@ -1292,25 +1322,45 @@
 
             body.innerHTML = studentRankings.map((s, i) => {
                 const avgRating = parseFloat(s.avg_rating) || 0;
-                const fullStars = Math.round(avgRating);
-                let starsHtml = '';
-                for (let j = 0; j < 5; j++) {
-                    starsHtml += j < fullStars ? '★' : '☆';
-                }
-
+                const speed = formatSpeed(s.avg_response_hours);
                 return `
                     <div class="ranking-item">
                         <div class="ranking-num ${i < 3 ? 'top' : ''}">${i + 1}</div>
                         <div class="ranking-info">
                             <div class="ranking-name">${s.full_name}</div>
-                            <div class="ranking-stats">${s.total_responses} javob · ${s.total_rejects} rad</div>
+                            <div class="ranking-stats">${s.total_responses} javob${speed ? ' · ' + speed : ''}</div>
                         </div>
-                        <div class="ranking-stars" title="${avgRating}/5">${starsHtml}</div>
+                        <div class="ranking-stars" title="${avgRating}/5">${makeStars(avgRating)}</div>
                     </div>
                 `;
             }).join('');
         }
-        // ========== END STUDENT RANKINGS ==========
+
+        function renderLawyerRankings() {
+            const body = document.getElementById('lawyerRankingsBody');
+            if (!body) return;
+
+            if (lawyerRankings.length === 0) {
+                body.innerHTML = '<div style="text-align:center;color:#7f8c8d;font-size:13px;padding:20px 0;">Yuristlar topilmadi</div>';
+                return;
+            }
+
+            body.innerHTML = lawyerRankings.map((l, i) => {
+                const avgRating = parseFloat(l.avg_rating) || 0;
+                const speed = formatSpeed(l.avg_action_hours);
+                return `
+                    <div class="ranking-item">
+                        <div class="ranking-num ${i < 3 ? 'top' : ''}">${i + 1}</div>
+                        <div class="ranking-info">
+                            <div class="ranking-name">${l.full_name}</div>
+                            <div class="ranking-stats">${l.total_approved} tasdiq · ${l.total_rejected} rad${speed ? ' · ' + speed : ''}</div>
+                        </div>
+                        <div class="ranking-stars" title="${avgRating}/5">${makeStars(avgRating)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        // ========== END RANKINGS ==========
 
         async function loadRequests() {
             try {
@@ -3122,6 +3172,7 @@
         loadAdmins();
         loadRequests();
         loadStudentRankings();
+        loadLawyerRankings();
         setInterval(loadRequests, 30000);
     </script>
 </body>

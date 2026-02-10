@@ -92,6 +92,20 @@ async function setupDatabase() {
     `);
     console.log('student_ratings table created');
 
+    // Create lawyer_ratings table (ratings from Telegram users)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS lawyer_ratings (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+        lawyer_id INTEGER REFERENCES admins(id) ON DELETE CASCADE,
+        telegram_id BIGINT,
+        rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(request_id)
+      )
+    `);
+    console.log('lawyer_ratings table created');
+
     // Insert default master admin
     const existingAdmin = await client.query(
       "SELECT id FROM admins WHERE username = 'admin'"

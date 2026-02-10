@@ -259,6 +259,51 @@ function getRequestTypeLabel(type) {
   return labels[type] || 'Noma\'lum';
 }
 
+// Handle rating callback from inline keyboard
+bot.on('callback_query', async (query) => {
+  const data = query.data;
+  if (!data.startsWith('rate_')) return;
+
+  const parts = data.split('_');
+  const requestId = parseInt(parts[1]);
+  const rating = parseInt(parts[2]);
+  const telegramId = query.from.id;
+
+  try {
+    // Get the lawyer assigned to this request
+    const reqResult = await pool.query('SELECT assigned_to FROM requests WHERE id = $1', [requestId]);
+    if (reqResult.rows.length === 0) {
+      await bot.answerCallbackQuery(query.id, { text: 'Murojaat topilmadi' });
+      return;
+    }
+
+    const lawyerId = reqResult.rows[0].assigned_to;
+
+    // Check if already rated
+    const existing = await pool.query('SELECT id FROM lawyer_ratings WHERE request_id = $1', [requestId]);
+    if (existing.rows.length > 0) {
+      await bot.answerCallbackQuery(query.id, { text: 'Siz allaqachon baholagan ekansiz!' });
+      return;
+    }
+
+    // Save rating
+    await pool.query(
+      'INSERT INTO lawyer_ratings (request_id, lawyer_id, telegram_id, rating) VALUES ($1, $2, $3, $4)',
+      [requestId, lawyerId, telegramId, rating]
+    );
+
+    const stars = '⭐'.repeat(rating);
+    await bot.answerCallbackQuery(query.id, { text: `Rahmat! Siz ${rating} ball berdingiz` });
+    await bot.editMessageText(`✅ Baholandi: ${stars}\nRahmat, fikringiz muhim!`, {
+      chat_id: query.message.chat.id,
+      message_id: query.message.message_id
+    });
+  } catch (error) {
+    console.error('Error saving rating:', error);
+    await bot.answerCallbackQuery(query.id, { text: 'Xatolik yuz berdi' });
+  }
+});
+
 // Export bot for use in other modules
 module.exports = { bot };
 

@@ -347,18 +347,29 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
     `, [requestId]);
     
     // Send to client
-    const message = `
-✅ Yuristdan javob keldi!
+    const message = `✅ Yuristdan javob keldi!
 
 Hurmatli ${first_name},
 
 ${student_response}
 
-Dictum advokatlik firmasi
-    `;
-    
+Dictum advokatlik firmasi`;
+
     await bot.sendMessage(telegram_id, message);
-    
+
+    // Ask user to rate the response
+    await bot.sendMessage(telegram_id, '⭐ Iltimos, javobni baholang (1-5):', {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '1⭐', callback_data: `rate_${requestId}_1` },
+          { text: '2⭐', callback_data: `rate_${requestId}_2` },
+          { text: '3⭐', callback_data: `rate_${requestId}_3` },
+          { text: '4⭐', callback_data: `rate_${requestId}_4` },
+          { text: '5⭐', callback_data: `rate_${requestId}_5` }
+        ]]
+      }
+    });
+
     res.json({ success: true, message: 'Response approved and sent to client' });
     
   } catch (error) {
@@ -416,18 +427,29 @@ app.post('/api/master-response', requireMasterAdmin, async (req, res) => {
       WHERE id = $2
     `, [responseText, requestId, req.session.fullName]);
     
-    const message = `
-✅ Yuristdan javob keldi!
+    const message = `✅ Yuristdan javob keldi!
 
 Hurmatli ${first_name},
 
 ${responseText}
 
-Dictum advokatlik firmasi
-    `;
-    
+Dictum advokatlik firmasi`;
+
     await bot.sendMessage(telegram_id, message);
-    
+
+    // Ask user to rate the response
+    await bot.sendMessage(telegram_id, '⭐ Iltimos, javobni baholang (1-5):', {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '1⭐', callback_data: `rate_${requestId}_1` },
+          { text: '2⭐', callback_data: `rate_${requestId}_2` },
+          { text: '3⭐', callback_data: `rate_${requestId}_3` },
+          { text: '4⭐', callback_data: `rate_${requestId}_4` },
+          { text: '5⭐', callback_data: `rate_${requestId}_5` }
+        ]]
+      }
+    });
+
     res.json({ success: true, message: 'Response sent successfully' });
     
   } catch (error) {
@@ -791,7 +813,7 @@ app.post('/api/rate-student', requireMasterOrLawyer, async (req, res) => {
   }
 });
 
-// Get student rankings
+// Get student rankings (ranked by: responses count, then speed, then stars)
 app.get('/api/student-rankings', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -815,12 +837,53 @@ app.get('/api/student-rankings', requireAuth, async (req, res) => {
       LEFT JOIN student_ratings sr ON sr.student_id = a.id
       WHERE a.role = 'student'
       GROUP BY a.id, a.full_name, a.username
-      ORDER BY COALESCE(AVG(sr.rating), 0) DESC, COUNT(DISTINCT CASE WHEN r.status IN ('answered', 'student_responded', 'lawyer_approved') THEN r.id END) DESC
+      ORDER BY
+        COUNT(DISTINCT CASE WHEN r.status IN ('answered', 'student_responded', 'lawyer_approved') THEN r.id END) DESC,
+        COALESCE(AVG(CASE WHEN r.answered_at IS NOT NULL THEN EXTRACT(EPOCH FROM (r.answered_at - r.created_at)) END), 999999) ASC,
+        COALESCE(AVG(sr.rating), 0) DESC
     `);
 
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching student rankings:', error);
+    res.status(500).json({ error: 'Failed to fetch rankings' });
+  }
+});
+
+// Get lawyer rankings (ranked by: approved/rejected count, then speed, then requester stars)
+app.get('/api/lawyer-rankings', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.id,
+        a.full_name,
+        a.username,
+        COUNT(DISTINCT CASE WHEN r.status IN ('answered', 'lawyer_approved') THEN r.id END) as total_approved,
+        COUNT(DISTINCT CASE WHEN r.status = 'rejected' AND r.assigned_to = a.id THEN r.id END) as total_rejected,
+        COUNT(DISTINCT CASE WHEN r.status IN ('answered', 'lawyer_approved', 'rejected') THEN r.id END) as total_actions,
+        COALESCE(ROUND(AVG(lr.rating)::numeric, 1), 0) as avg_rating,
+        COUNT(DISTINCT lr.id) as total_ratings,
+        CASE
+          WHEN COUNT(DISTINCT CASE WHEN r.answered_at IS NOT NULL THEN r.id END) > 0
+          THEN ROUND(AVG(CASE WHEN r.answered_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (r.answered_at - r.assigned_at)) / 3600
+            END)::numeric, 1)
+          ELSE NULL
+        END as avg_action_hours
+      FROM admins a
+      LEFT JOIN requests r ON r.assigned_to = a.id
+      LEFT JOIN lawyer_ratings lr ON lr.lawyer_id = a.id
+      WHERE a.role = 'lawyer'
+      GROUP BY a.id, a.full_name, a.username
+      ORDER BY
+        COUNT(DISTINCT CASE WHEN r.status IN ('answered', 'lawyer_approved', 'rejected') THEN r.id END) DESC,
+        COALESCE(AVG(CASE WHEN r.answered_at IS NOT NULL THEN EXTRACT(EPOCH FROM (r.answered_at - r.assigned_at)) END), 999999) ASC,
+        COALESCE(AVG(lr.rating), 0) DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching lawyer rankings:', error);
     res.status(500).json({ error: 'Failed to fetch rankings' });
   }
 });
@@ -868,6 +931,17 @@ async function runMigrations() {
         request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
         student_id INTEGER REFERENCES admins(id) ON DELETE CASCADE,
         rated_by INTEGER REFERENCES admins(id),
+        rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(request_id)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lawyer_ratings (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+        lawyer_id INTEGER REFERENCES admins(id) ON DELETE CASCADE,
+        telegram_id BIGINT,
         rating INTEGER CHECK (rating >= 1 AND rating <= 5),
         created_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(request_id)
