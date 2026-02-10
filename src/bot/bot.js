@@ -16,19 +16,19 @@ bot.on('message', async (msg) => {
 
   // Handle /start command
   if (msg.text && msg.text.startsWith('/start')) {
-    const welcomeMessage = `
-Assalomu aleykum, ${msg.from.first_name}! 👋
+    const welcomeMessage = `Assalomu aleykum, ${msg.from.first_name}! 👋
 
 Dictum advokatlik firmasi murojaatlar bo'limiga xush kelibsiz!
 
-📝 Yuridik masalangizni yuboring:
+📝 Muammoyingizni yuboring:
 • Matn shaklida
 • Ovozli xabar
 • Video xabar
 • Fayl (max 5MB)
 
-Yuristlarimiz tez orada javob berishadi.
-    `;
+❗️Iltimos, tezroq va sifatliroq javob berishimiz uchun murojaatingizni to'liq, bitta xabar bilan yuborishga harakat qiling.
+
+Yuristlarimiz tez orada javob berishadi.`;
     bot.sendMessage(chatId, welcomeMessage);
     return;
   }
