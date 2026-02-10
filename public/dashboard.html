@@ -501,6 +501,136 @@
             margin-bottom: 10px;
             color: #95a5a6;
         }
+
+        .admin-management {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .admin-table th,
+        .admin-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+            font-size: 14px;
+        }
+
+        .admin-table th {
+            background: #f8f9fa;
+            color: #7f8c8d;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .admin-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .admin-role-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .admin-role-badge.master { background: #3498db; }
+        .admin-role-badge.lawyer { background: #27ae60; }
+        .admin-role-badge.student { background: #9b59b6; }
+
+        .admin-actions-cell {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-sm {
+            padding: 5px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+        }
+
+        .btn-sm-edit { background: #3498db; }
+        .btn-sm-edit:hover { background: #2980b9; }
+        .btn-sm-delete { background: #e74c3c; }
+        .btn-sm-delete:hover { background: #c0392b; }
+
+        .admin-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+        }
+
+        .admin-modal-overlay.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .admin-modal {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 450px;
+            position: relative;
+        }
+
+        .admin-modal h3 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        .admin-modal .form-group {
+            margin-bottom: 15px;
+        }
+
+        .admin-modal label {
+            display: block;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .admin-modal input,
+        .admin-modal select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .admin-modal input:focus,
+        .admin-modal select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .admin-modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -538,6 +668,63 @@
             </div>
         </div>
         
+        <!-- Admin Management Section (Master Only) -->
+        <div class="admin-management" id="adminManagement" style="display: none;">
+            <div class="controls-header">
+                <h2>Admin boshqaruvi</h2>
+                <button class="btn btn-success" onclick="showAddAdmin()">
+                    + Yangi admin qo'shish
+                </button>
+            </div>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ism</th>
+                        <th>Username</th>
+                        <th>Rol</th>
+                        <th>Yaratilgan</th>
+                        <th>Amallar</th>
+                    </tr>
+                </thead>
+                <tbody id="adminTableBody">
+                    <tr><td colspan="6" style="text-align:center;color:#7f8c8d;">Yuklanmoqda...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Admin Add/Edit Modal -->
+        <div class="admin-modal-overlay" id="adminModal">
+            <div class="admin-modal">
+                <h3 id="adminModalTitle">Yangi admin qo'shish</h3>
+                <input type="hidden" id="adminEditId">
+                <div class="form-group">
+                    <label>To'liq ism</label>
+                    <input type="text" id="adminFullName" placeholder="Ism Familiya">
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="adminUsername" placeholder="username">
+                </div>
+                <div class="form-group">
+                    <label>Parol <span id="adminPasswordHint" style="font-weight:normal;color:#95a5a6;font-size:12px;"></span></label>
+                    <input type="password" id="adminPassword" placeholder="Parol">
+                </div>
+                <div class="form-group">
+                    <label>Rol</label>
+                    <select id="adminRole">
+                        <option value="student">Student</option>
+                        <option value="lawyer">Yurist</option>
+                        <option value="master">Master Admin</option>
+                    </select>
+                </div>
+                <div class="admin-modal-actions">
+                    <button class="btn btn-success" onclick="saveAdmin()">Saqlash</button>
+                    <button class="btn" onclick="closeAdminModal()" style="background:#95a5a6;">Bekor qilish</button>
+                </div>
+            </div>
+        </div>
+
         <div class="requests-container">
             <div class="controls">
                 <div class="controls-header">
@@ -637,11 +824,142 @@
             try {
                 const response = await fetch('/api/admins');
                 allAdmins = await response.json();
+                if (currentUser.role === 'master') {
+                    renderAdminTable();
+                }
             } catch (error) {
                 console.error('Error loading admins:', error);
             }
         }
-        
+
+        // ========== ADMIN MANAGEMENT ==========
+        function renderAdminTable() {
+            const section = document.getElementById('adminManagement');
+            if (!section) return;
+            section.style.display = 'block';
+
+            const roleNames = { 'master': 'Master Admin', 'lawyer': 'Yurist', 'student': 'Student' };
+            const tbody = document.getElementById('adminTableBody');
+            if (allAdmins.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#7f8c8d;">Adminlar topilmadi</td></tr>';
+                return;
+            }
+            tbody.innerHTML = allAdmins.map((admin, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td><strong>${admin.full_name || 'N/A'}</strong></td>
+                    <td>@${admin.username}</td>
+                    <td><span class="admin-role-badge ${admin.role}">${roleNames[admin.role] || admin.role}</span></td>
+                    <td>${admin.created_at ? new Date(admin.created_at).toLocaleDateString('uz-UZ') : '-'}</td>
+                    <td>
+                        <div class="admin-actions-cell">
+                            <button class="btn-sm btn-sm-edit" onclick="showEditAdmin(${admin.id})">Tahrir</button>
+                            ${admin.id !== currentUser.adminId ? `<button class="btn-sm btn-sm-delete" onclick="deleteAdmin(${admin.id}, '${admin.full_name}')">O'chirish</button>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function showAddAdmin() {
+            document.getElementById('adminModalTitle').textContent = 'Yangi admin qo\'shish';
+            document.getElementById('adminEditId').value = '';
+            document.getElementById('adminFullName').value = '';
+            document.getElementById('adminUsername').value = '';
+            document.getElementById('adminUsername').disabled = false;
+            document.getElementById('adminPassword').value = '';
+            document.getElementById('adminPasswordHint').textContent = '';
+            document.getElementById('adminRole').value = 'student';
+            document.getElementById('adminModal').classList.add('show');
+        }
+
+        function showEditAdmin(id) {
+            const admin = allAdmins.find(a => a.id === id);
+            if (!admin) return;
+            document.getElementById('adminModalTitle').textContent = 'Adminni tahrirlash';
+            document.getElementById('adminEditId').value = id;
+            document.getElementById('adminFullName').value = admin.full_name || '';
+            document.getElementById('adminUsername').value = admin.username;
+            document.getElementById('adminUsername').disabled = true;
+            document.getElementById('adminPassword').value = '';
+            document.getElementById('adminPasswordHint').textContent = '(bo\'sh qoldiring = o\'zgarmaydi)';
+            document.getElementById('adminRole').value = admin.role;
+            document.getElementById('adminModal').classList.add('show');
+        }
+
+        function closeAdminModal() {
+            document.getElementById('adminModal').classList.remove('show');
+        }
+
+        async function saveAdmin() {
+            const editId = document.getElementById('adminEditId').value;
+            const full_name = document.getElementById('adminFullName').value.trim();
+            const username = document.getElementById('adminUsername').value.trim();
+            const password = document.getElementById('adminPassword').value;
+            const role = document.getElementById('adminRole').value;
+
+            if (!full_name || !username) {
+                alert('Iltimos, ism va username kiriting!');
+                return;
+            }
+
+            try {
+                let response;
+                if (editId) {
+                    // Update
+                    const body = { full_name, role };
+                    if (password) body.password = password;
+                    response = await fetch(`/api/admins/${editId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                } else {
+                    // Create
+                    if (!password) {
+                        alert('Iltimos, parol kiriting!');
+                        return;
+                    }
+                    response = await fetch('/api/admins', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password, full_name, role })
+                    });
+                }
+
+                const data = await response.json();
+                if (response.ok) {
+                    alert(editId ? '✅ Admin yangilandi!' : '✅ Yangi admin yaratildi!');
+                    closeAdminModal();
+                    loadAdmins();
+                } else {
+                    alert('❌ ' + (data.error || 'Xatolik yuz berdi'));
+                }
+            } catch (error) {
+                console.error('Error saving admin:', error);
+                alert('❌ Xatolik yuz berdi');
+            }
+        }
+
+        async function deleteAdmin(id, name) {
+            if (!confirm(`"${name}" adminni o'chirishni tasdiqlaysizmi?`)) return;
+
+            try {
+                const response = await fetch(`/api/admins/${id}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (response.ok) {
+                    alert('✅ Admin o\'chirildi!');
+                    loadAdmins();
+                } else {
+                    alert('❌ ' + (data.error || 'Xatolik yuz berdi'));
+                }
+            } catch (error) {
+                console.error('Error deleting admin:', error);
+                alert('❌ Xatolik yuz berdi');
+            }
+        }
+        // ========== END ADMIN MANAGEMENT ==========
+
         async function loadRequests() {
             try {
                 const response = await fetch('/api/requests');
@@ -2048,6 +2366,10 @@
             const modal = document.getElementById('requestModal');
             if (event.target === modal) {
                 closeModal();
+            }
+            const adminModal = document.getElementById('adminModal');
+            if (event.target === adminModal) {
+                closeAdminModal();
             }
         }
         

@@ -391,7 +391,7 @@ Dictum advokatlik firmasi
 app.get('/api/admins', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, username, full_name, role
+      SELECT id, username, full_name, role, created_at
       FROM admins
       ORDER BY role DESC, full_name
     `);
@@ -628,6 +628,91 @@ app.get('/api/users/:userId/block-history', requireMasterAdmin, async (req, res)
   } catch (error) {
     console.error('Error fetching block history:', error);
     res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+// Create new admin
+app.post('/api/admins', requireMasterAdmin, async (req, res) => {
+  try {
+    const { username, password, full_name, role } = req.body;
+
+    if (!username || !password || !full_name || !role) {
+      return res.status(400).json({ error: 'Barcha maydonlarni to\'ldiring' });
+    }
+
+    if (!['master', 'lawyer', 'student'].includes(role)) {
+      return res.status(400).json({ error: 'Noto\'g\'ri rol' });
+    }
+
+    const existing = await pool.query('SELECT id FROM admins WHERE username = $1', [username]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Bu username allaqachon mavjud' });
+    }
+
+    const result = await pool.query(
+      'INSERT INTO admins (username, password, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, full_name, role, created_at',
+      [username, password, full_name, role]
+    );
+
+    res.json({ success: true, admin: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating admin:', error);
+    res.status(500).json({ error: 'Admin yaratishda xatolik' });
+  }
+});
+
+// Update admin
+app.put('/api/admins/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { full_name, role, password } = req.body;
+
+    if (!full_name || !role) {
+      return res.status(400).json({ error: 'Ism va rol majburiy' });
+    }
+
+    if (!['master', 'lawyer', 'student'].includes(role)) {
+      return res.status(400).json({ error: 'Noto\'g\'ri rol' });
+    }
+
+    // Prevent demoting yourself
+    if (parseInt(id) === req.session.adminId && role !== 'master') {
+      return res.status(400).json({ error: 'O\'z rolingizni o\'zgartira olmaysiz' });
+    }
+
+    if (password) {
+      await pool.query(
+        'UPDATE admins SET full_name = $1, role = $2, password = $3 WHERE id = $4',
+        [full_name, role, password, id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE admins SET full_name = $1, role = $2 WHERE id = $3',
+        [full_name, role, id]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating admin:', error);
+    res.status(500).json({ error: 'Admin yangilashda xatolik' });
+  }
+});
+
+// Delete admin
+app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (parseInt(id) === req.session.adminId) {
+      return res.status(400).json({ error: 'O\'zingizni o\'chira olmaysiz' });
+    }
+
+    await pool.query('DELETE FROM admins WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting admin:', error);
+    res.status(500).json({ error: 'Admin o\'chirishda xatolik' });
   }
 });
 
