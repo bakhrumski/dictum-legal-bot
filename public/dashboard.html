@@ -1276,7 +1276,21 @@
             } else if (filterAssigned === 'assigned') {
                 filteredRequests = filteredRequests.filter(r => r.assigned_to);
             }
-            
+
+            // For students/lawyers: show assigned requests first, then pending
+            if (currentUser.role === 'student' || currentUser.role === 'lawyer') {
+                const myId = currentUser.adminId;
+                filteredRequests = [...filteredRequests].sort((a, b) => {
+                    const aMyAssigned = (a.assigned_to === myId || a.assigned_student_id === myId) ? 1 : 0;
+                    const bMyAssigned = (b.assigned_to === myId || b.assigned_student_id === myId) ? 1 : 0;
+                    if (aMyAssigned !== bMyAssigned) return bMyAssigned - aMyAssigned;
+                    const aPending = a.status === 'pending' ? 1 : 0;
+                    const bPending = b.status === 'pending' ? 1 : 0;
+                    if (aPending !== bPending) return bPending - aPending;
+                    return new Date(b.created_at) - new Date(a.created_at);
+                });
+            }
+
             if (filteredRequests.length === 0) {
                 container.innerHTML = 
                     '<div class="empty-state"><h2>Hech qanday murojaat topilmadi</h2></div>';
