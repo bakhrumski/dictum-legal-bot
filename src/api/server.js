@@ -844,6 +844,29 @@ app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Dashboard server running on http://localhost:${PORT}`);
+// Auto-migrate database on startup
+async function runMigrations() {
+  try {
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_student_id INTEGER REFERENCES admins(id)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS student_ratings (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+        student_id INTEGER REFERENCES admins(id) ON DELETE CASCADE,
+        rated_by INTEGER REFERENCES admins(id),
+        rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(request_id)
+      )
+    `);
+    console.log('Database migrations completed');
+  } catch (error) {
+    console.error('Migration error:', error.message);
+  }
+}
+
+runMigrations().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Dashboard server running on http://localhost:${PORT}`);
+  });
 });
