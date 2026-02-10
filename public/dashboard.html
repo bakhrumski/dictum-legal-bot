@@ -1439,16 +1439,23 @@
                 filteredRequests = filteredRequests.filter(r => r.assigned_to);
             }
 
-            // For students/lawyers: show assigned requests first, then pending
+            // For students/lawyers: assigned to me first, then unassigned, then others
             if (currentUser.role === 'student' || currentUser.role === 'lawyer') {
                 const myId = currentUser.adminId;
                 filteredRequests = [...filteredRequests].sort((a, b) => {
-                    const aMyAssigned = (a.assigned_to === myId || a.assigned_student_id === myId) ? 1 : 0;
-                    const bMyAssigned = (b.assigned_to === myId || b.assigned_student_id === myId) ? 1 : 0;
-                    if (aMyAssigned !== bMyAssigned) return bMyAssigned - aMyAssigned;
-                    const aPending = a.status === 'pending' ? 1 : 0;
-                    const bPending = b.status === 'pending' ? 1 : 0;
-                    if (aPending !== bPending) return bPending - aPending;
+                    const aIsMe = (a.assigned_to === myId || a.assigned_student_id === myId) ? 0 : 1;
+                    const bIsMe = (b.assigned_to === myId || b.assigned_student_id === myId) ? 0 : 1;
+                    if (aIsMe !== bIsMe) return aIsMe - bIsMe;
+                    // Within non-mine: unassigned before assigned-to-others
+                    if (aIsMe === 1 && bIsMe === 1) {
+                        const aUnassigned = (!a.assigned_to && !a.assigned_student_id) ? 0 : 1;
+                        const bUnassigned = (!b.assigned_to && !b.assigned_student_id) ? 0 : 1;
+                        if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned;
+                    }
+                    // Within same group: pending first, then by date
+                    const aPending = a.status === 'pending' ? 0 : 1;
+                    const bPending = b.status === 'pending' ? 0 : 1;
+                    if (aPending !== bPending) return aPending - bPending;
                     return new Date(b.created_at) - new Date(a.created_at);
                 });
             }
