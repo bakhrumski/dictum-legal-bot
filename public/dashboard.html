@@ -984,11 +984,11 @@
                             🗑️ Murojaatni o'chirish
                         </button>
                         ${request.blocked ? `
-                        <button class="btn btn-success" onclick="showUnblockDialog(${request.user_id}, '${request.username}')">
+                        <button class="btn btn-success" onclick="showUnblockDialog(${request.user_id}, '${request.username}', ${request.id})">
                             ✅ Blokdan chiqarish
                         </button>
                         ` : `
-                        <button class="btn btn-danger" onclick="blockUser(${request.user_id}, '${request.username}')" style="background: #c0392b;">
+                        <button class="btn btn-danger" onclick="blockUser(${request.user_id}, '${request.username}', ${request.id})" style="background: #c0392b;">
                             🚫 Foydalanuvchini bloklash
                         </button>
                         `}
@@ -1229,8 +1229,8 @@
                 
                 if (response.ok) {
                     alert(`✅ Murojaat ${data.lawyerName}ga tayinlandi!`);
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -1239,7 +1239,7 @@
                 alert('❌ Xatolik yuz berdi.');
             }
         }
-        
+
         async function unassignRequest(requestId) {
             if (!confirm('Tayinlovni bekor qilishni xohlaysizmi?')) {
                 return;
@@ -1254,8 +1254,8 @@
                 
                 if (response.ok) {
                     alert('✅ Tayinlov bekor qilindi!');
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -1264,7 +1264,7 @@
                 alert('❌ Xatolik yuz berdi.');
             }
         }
-        
+
         async function updateCategory(requestId) {
             const category = document.getElementById('categorySelect').value;
             if (!category) {
@@ -1281,8 +1281,8 @@
 
                 if (response.ok) {
                     alert('✅ Yo\'nalish saqlandi!');
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -1318,29 +1318,29 @@
             }
         }
         
-        async function blockUser(userId, username) {
+        async function blockUser(userId, username, requestId) {
             const reason = prompt(`Foydalanuvchi @${username}ni bloklash sababi:`);
-            
+
             if (!reason) {
                 alert('Sabab kiritilmadi. Bekor qilindi.');
                 return;
             }
-            
+
             if (!confirm(`@${username}ni bloklashni tasdiqlaysizmi?\n\nSabab: ${reason}`)) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/users/block', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId, reason })
                 });
-                
+
                 if (response.ok) {
                     alert('✅ Foydalanuvchi bloklandi!');
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -1350,28 +1350,28 @@
             }
         }
         
-        async function showUnblockDialog(userId, username) {
+        async function showUnblockDialog(userId, username, requestId) {
             const reason = prompt(`@${username}ni blokdan chiqarish sababi (ixtiyoriy):`);
-            
+
             if (reason === null) {
                 return;
             }
-            
+
             if (!confirm(`@${username}ni blokdan chiqarishni tasdiqlaysizmi?`)) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/users/unblock', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId, reason: reason || 'Blokdan chiqarildi' })
                 });
-                
+
                 if (response.ok) {
                     alert('✅ Foydalanuvchi blokdan chiqarildi!');
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -2043,6 +2043,10 @@
             }
         }
         
+        // Set default filter to "Kutilmoqda"
+        document.getElementById('statusFilter').value = 'pending';
+        currentFilters.status = 'pending';
+
         loadUserInfo();
         loadAdmins();
         loadRequests();
