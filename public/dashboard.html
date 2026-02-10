@@ -4,7 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dictum - Murojaatlar Dashboard</title>
+    <!-- PDF & Chart Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
     <style>
+        @font-face {
+            font-family: 'Roboto';
+            src: url('/fonts/Roboto-Regular.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'Roboto';
+            src: url('/fonts/Roboto-Bold.ttf') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
         * {
             margin: 0;
             padding: 0;
@@ -520,8 +537,8 @@
             <div class="controls">
                 <div class="controls-header">
                     <h2>Murojaatlar ro'yxati</h2>
-                    <button class="btn btn-success" onclick="exportToExcel()">
-                        📊 Excel ga eksport qilish
+                    <button class="btn btn-success" onclick="exportToPDF()">
+                        📊 PDF Hisobot
                     </button>
                 </div>
                 <div class="filter-section">
@@ -569,6 +586,14 @@
         </div>
     </div>
     
+    <!-- Hidden chart canvases for PDF export (high-res) -->
+    <div id="chartContainer" style="position: absolute; left: -9999px; top: -9999px;">
+        <canvas id="statusChart" width="900" height="600"></canvas>
+        <canvas id="categoryChart" width="900" height="600"></canvas>
+        <canvas id="monthlyChart" width="1200" height="500"></canvas>
+        <canvas id="typeChart" width="900" height="600"></canvas>
+    </div>
+
     <div id="requestModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal()">&times;</span>
@@ -1422,26 +1447,579 @@
             }
         }
         
-        async function exportToExcel() {
-            try {
-                const response = await fetch('/api/export-excel');
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `dictum_murojaatlar_${new Date().toISOString().split('T')[0]}.xlsx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                } else {
-                    alert('❌ Eksport xatolik bilan yakunlandi.');
+        // ========== 3D CHART PLUGINS ==========
+        const shadow3DPlugin = {
+            id: 'shadow3d',
+            beforeDatasetsDraw: (chart) => {
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+                ctx.shadowBlur = 12;
+                ctx.shadowOffsetX = 3;
+                ctx.shadowOffsetY = 3;
+            },
+            afterDatasetsDraw: (chart) => {
+                chart.ctx.restore();
+            }
+        };
+
+        const doughnut3DPlugin = {
+            id: 'doughnut3d',
+            beforeDraw: (chart) => {
+                if (chart.config.type !== 'doughnut' && chart.config.type !== 'pie') return;
+                const ctx = chart.ctx;
+                const meta = chart.getDatasetMeta(0);
+                if (!meta || !meta.data || meta.data.length === 0) return;
+                const depth = 6;
+                ctx.save();
+                for (let layer = depth; layer > 0; layer--) {
+                    meta.data.forEach((arc, i) => {
+                        const bgColor = chart.data.datasets[0].backgroundColor[i];
+                        ctx.beginPath();
+                        ctx.arc(arc.x, arc.y + layer, arc.outerRadius, arc.startAngle, arc.endAngle);
+                        if (chart.config.type === 'doughnut') {
+                            ctx.arc(arc.x, arc.y + layer, arc.innerRadius, arc.endAngle, arc.startAngle, true);
+                        } else {
+                            ctx.lineTo(arc.x, arc.y + layer);
+                        }
+                        ctx.closePath();
+                        ctx.fillStyle = darkenColor(bgColor, 0.35);
+                        ctx.fill();
+                    });
                 }
+                ctx.restore();
+            }
+        };
+
+        function darkenColor(hex, amount) {
+            hex = hex.replace('#', '');
+            const r = Math.max(0, Math.floor(parseInt(hex.substring(0, 2), 16) * (1 - amount)));
+            const g = Math.max(0, Math.floor(parseInt(hex.substring(2, 4), 16) * (1 - amount)));
+            const b = Math.max(0, Math.floor(parseInt(hex.substring(4, 6), 16) * (1 - amount)));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        function lightenColor(hex, amount) {
+            hex = hex.replace('#', '');
+            const r = Math.min(255, Math.floor(parseInt(hex.substring(0, 2), 16) + (255 - parseInt(hex.substring(0, 2), 16)) * amount));
+            const g = Math.min(255, Math.floor(parseInt(hex.substring(2, 4), 16) + (255 - parseInt(hex.substring(2, 4), 16)) * amount));
+            const b = Math.min(255, Math.floor(parseInt(hex.substring(4, 6), 16) + (255 - parseInt(hex.substring(4, 6), 16)) * amount));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        const gradientBarPlugin = {
+            id: 'gradientBar',
+            beforeDatasetsDraw: (chart) => {
+                if (chart.config.type !== 'bar') return;
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    const baseColor = dataset.baseColor || dataset.borderColor || '#3498db';
+                    meta.data.forEach((bar) => {
+                        const gradient = ctx.createLinearGradient(bar.x - bar.width / 2, bar.y, bar.x + bar.width / 2, bar.base);
+                        gradient.addColorStop(0, lightenColor(baseColor, 0.3));
+                        gradient.addColorStop(0.5, baseColor);
+                        gradient.addColorStop(1, darkenColor(baseColor, 0.2));
+                        bar.options.backgroundColor = gradient;
+                    });
+                });
+            }
+        };
+
+        // ========== FONT LOADING FOR CYRILLIC SUPPORT ==========
+        async function loadPdfFonts(doc) {
+            try {
+                const [regularResp, boldResp] = await Promise.all([
+                    fetch('/fonts/Roboto-Regular.ttf'),
+                    fetch('/fonts/Roboto-Bold.ttf')
+                ]);
+                if (!regularResp.ok || !boldResp.ok) throw new Error('Font fetch failed');
+                const [regularBuf, boldBuf] = await Promise.all([
+                    regularResp.arrayBuffer(),
+                    boldResp.arrayBuffer()
+                ]);
+
+                function arrayBufferToBase64(buffer) {
+                    let binary = '';
+                    const bytes = new Uint8Array(buffer);
+                    for (let i = 0; i < bytes.byteLength; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    return btoa(binary);
+                }
+
+                doc.addFileToVFS('Roboto-Regular.ttf', arrayBufferToBase64(regularBuf));
+                doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
+                doc.addFileToVFS('Roboto-Bold.ttf', arrayBufferToBase64(boldBuf));
+                doc.addFont('Roboto-Bold.ttf', 'Roboto', 'bold');
+                doc.setFont('Roboto', 'normal');
+                return true;
+            } catch (e) {
+                console.warn('Could not load Cyrillic fonts, using default:', e);
+                return false;
+            }
+        }
+
+        // ========== RENDER CHART TO CANVAS ==========
+        async function renderChart(canvasId, config) {
+            if (!window._chartFontLoaded) {
+                try {
+                    await document.fonts.load('16px Roboto');
+                    await document.fonts.load('bold 16px Roboto');
+                } catch(e) { /* fallback to system fonts */ }
+                Chart.defaults.font.family = "'Roboto', 'Segoe UI', Arial, sans-serif";
+                window._chartFontLoaded = true;
+            }
+            return new Promise((resolve) => {
+                const canvas = document.getElementById(canvasId);
+                const ctx = canvas.getContext('2d');
+                const existingChart = Chart.getChart(canvas);
+                if (existingChart) existingChart.destroy();
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                config.options = config.options || {};
+                config.options.animation = false;
+                config.options.devicePixelRatio = 2;
+                const extraPlugins = config.plugins || [];
+                delete config.plugins;
+                new Chart(ctx, { ...config, plugins: extraPlugins });
+                setTimeout(() => resolve(canvas), 600);
+            });
+        }
+
+        // ========== PDF EXPORT ==========
+        async function exportToPDF() {
+            if (requests.length === 0) { alert('Eksport qilish uchun murojaatlar mavjud emas!'); return; }
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pw = doc.internal.pageSize.getWidth();
+                const ph = doc.internal.pageSize.getHeight();
+                const m = 14;
+                const cw = pw - m * 2;
+                const now = new Date();
+
+                // Load Cyrillic fonts
+                const hasCyrillic = await loadPdfFonts(doc);
+                const fontName = hasCyrillic ? 'Roboto' : 'helvetica';
+
+                // Stats
+                const totalReqs = requests.length;
+                const pendingReqs = requests.filter(r => r.status === 'pending').length;
+                const studentReqs = requests.filter(r => r.status === 'student_responded').length;
+                const answeredReqs = requests.filter(r => r.status === 'answered').length;
+                const rejectedReqs = requests.filter(r => r.status === 'rejected').length;
+                const uniqueUsers = new Set(requests.map(r => r.telegram_id || r.user_id)).size;
+                const responseRate = totalReqs > 0 ? ((answeredReqs / totalReqs) * 100).toFixed(1) : '0';
+                const avgResponseTime = (() => {
+                    const ans = requests.filter(r => r.answered_at && r.created_at);
+                    if (!ans.length) return 'N/A';
+                    const hrs = ans.reduce((s, r) => s + (new Date(r.answered_at) - new Date(r.created_at)) / 3600000, 0) / ans.length;
+                    if (hrs < 1) return `${Math.round(hrs * 60)} daqiqa`;
+                    if (hrs < 24) return `${hrs.toFixed(1)} soat`;
+                    return `${(hrs / 24).toFixed(1)} kun`;
+                })();
+
+                // Category data
+                const categoryData = {};
+                requests.forEach(r => { categoryData[r.category || 'Boshqa'] = (categoryData[r.category || 'Boshqa'] || 0) + 1; });
+                const catEntries = Object.entries(categoryData).sort((a, b) => b[1] - a[1]);
+                const catBarColors = ['#2980b9', '#c0392b', '#27ae60', '#f39c12', '#8e44ad', '#16a085', '#d35400', '#2c3e50', '#7f8c8d'];
+
+                // ===== HELPERS =====
+                function setFont(style) { doc.setFont(fontName, style || 'normal'); }
+                function drawGradientRect(x, y, w, h, r1, g1, b1, r2, g2, b2) {
+                    const steps = 40, stepH = h / steps;
+                    for (let i = 0; i < steps; i++) {
+                        const t = i / steps;
+                        doc.setFillColor(Math.round(r1+(r2-r1)*t), Math.round(g1+(g2-g1)*t), Math.round(b1+(b2-b1)*t));
+                        doc.rect(x, y + i * stepH, w, stepH + 0.5, 'F');
+                    }
+                }
+                function addPageHeader(title) {
+                    drawGradientRect(0, 0, pw, 22, 30, 45, 65, 45, 70, 100);
+                    doc.setFillColor(41, 128, 185); doc.rect(0, 22, pw, 1.5, 'F');
+                    doc.setTextColor(255); setFont('bold'); doc.setFontSize(13);
+                    doc.text(title, pw / 2, 14, { align: 'center' }); setFont('normal');
+                }
+                function addPageFooter(n) {
+                    doc.setDrawColor(200); doc.line(m, ph - 14, pw - m, ph - 14);
+                    setFont('normal'); doc.setFontSize(7); doc.setTextColor(140);
+                    doc.text('DICTUM Advokatlik Firmasi | Maxfiy hujjat', m, ph - 9);
+                    doc.text(now.toLocaleDateString('uz-UZ'), pw / 2, ph - 9, { align: 'center' });
+                    doc.text(`${n}-sahifa`, pw - m, ph - 9, { align: 'right' });
+                }
+                function drawStatCard(x, y, w, h, value, label, r, g, b) {
+                    doc.setFillColor(215, 215, 215); doc.roundedRect(x + 1.5, y + 1.5, w, h, 4, 4, 'F');
+                    doc.setFillColor(255, 255, 255); doc.roundedRect(x, y, w, h, 4, 4, 'F');
+                    doc.setFillColor(r, g, b); doc.roundedRect(x, y, 3, h, 2, 2, 'F');
+                    setFont('bold'); doc.setTextColor(r, g, b); doc.setFontSize(28);
+                    doc.text(String(value), x + w / 2, y + 18, { align: 'center' });
+                    setFont('normal'); doc.setTextColor(100); doc.setFontSize(7);
+                    doc.text(label, x + w / 2, y + 28, { align: 'center' });
+                    doc.setFillColor(r, g, b); doc.rect(x + 8, y + h - 3, w - 16, 1.5, 'F');
+                }
+                function drawMetricBox(x, y, w, h, label, value, r, g, b) {
+                    doc.setFillColor(230, 230, 230); doc.roundedRect(x + 1, y + 1, w, h, 3, 3, 'F');
+                    doc.setFillColor(250, 250, 252); doc.roundedRect(x, y, w, h, 3, 3, 'F');
+                    doc.setDrawColor(r, g, b); doc.setLineWidth(0.8);
+                    doc.line(x + 8, y + 8, x + 8, y + h - 8);
+                    setFont('normal'); doc.setTextColor(120); doc.setFontSize(8); doc.text(label, x + 14, y + 11);
+                    setFont('bold'); doc.setTextColor(r, g, b); doc.setFontSize(18); doc.text(String(value), x + 14, y + 24);
+                }
+
+                // ===== PAGE 1: COVER =====
+                drawGradientRect(0, 0, pw, 80, 25, 40, 60, 50, 75, 110);
+                doc.setFillColor(218, 165, 32); doc.rect(0, 80, pw, 2, 'F');
+                doc.setFillColor(184, 134, 11); doc.rect(0, 82, pw, 0.5, 'F');
+
+                setFont('bold'); doc.setTextColor(218, 165, 32); doc.setFontSize(36);
+                doc.text('DICTUM', pw / 2, 28, { align: 'center' });
+                setFont('normal'); doc.setTextColor(200, 210, 220); doc.setFontSize(12);
+                doc.text('ADVOKATLIK FIRMASI', pw / 2, 40, { align: 'center' });
+                doc.setDrawColor(100, 130, 170); doc.setLineWidth(0.3);
+                doc.line(pw / 2 - 40, 46, pw / 2 + 40, 46);
+                setFont('bold'); doc.setTextColor(255); doc.setFontSize(16);
+                doc.text('MUROJAATLAR HISOBOTI', pw / 2, 58, { align: 'center' });
+                setFont('normal'); doc.setFontSize(9); doc.setTextColor(180, 195, 215);
+                doc.text(`Hisobot sanasi: ${now.toLocaleDateString('uz-UZ')}  |  Tayyorlagan: ${currentUser.fullName || currentUser.username}`, pw / 2, 72, { align: 'center' });
+
+                // Stat cards
+                const cardW = (cw - 18) / 4, cardY = 92, cardH = 35;
+                drawStatCard(m, cardY, cardW, cardH, totalReqs, 'JAMI MUROJAATLAR', 44, 62, 80);
+                drawStatCard(m + cardW + 6, cardY, cardW, cardH, pendingReqs, 'KUTILMOQDA', 230, 126, 34);
+                drawStatCard(m + (cardW + 6) * 2, cardY, cardW, cardH, studentReqs, 'STUDENT JAVOBI', 142, 68, 173);
+                drawStatCard(m + (cardW + 6) * 3, cardY, cardW, cardH, answeredReqs, 'JAVOB BERILGAN', 39, 174, 96);
+
+                // Metrics
+                const metW = (cw - 9) / 3, metY = 138;
+                drawMetricBox(m, metY, metW, 30, 'FOYDALANUVCHILAR SONI', uniqueUsers, 52, 152, 219);
+                drawMetricBox(m + metW + 4.5, metY, metW, 30, "O'RTACHA JAVOB VAQTI", avgResponseTime, 230, 126, 34);
+                drawMetricBox(m + (metW + 4.5) * 2, metY, metW, 30, 'JAVOB DARAJASI', `${responseRate}%`, 39, 174, 96);
+
+                // Category bars
+                const catSumY = 178;
+                doc.setFillColor(240, 242, 245); doc.roundedRect(m, catSumY, cw, 8, 2, 2, 'F');
+                setFont('bold'); doc.setTextColor(60); doc.setFontSize(9);
+                doc.text("YO'NALISHLAR TAQSIMOTI", m + 5, catSumY + 6);
+                setFont('normal');
+
+                let catItemY = catSumY + 13;
+                catEntries.forEach((entry, i) => {
+                    const [cat, count] = entry;
+                    const pct = ((count / totalReqs) * 100).toFixed(0);
+                    const barMaxW = cw - 60, barW = (count / totalReqs) * barMaxW;
+                    const hex = catBarColors[i % catBarColors.length];
+                    const rgb = [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+                    doc.setFontSize(7); doc.setTextColor(80); doc.text(cat, m + 3, catItemY + 3.5);
+                    doc.setFillColor(230, 230, 230); doc.roundedRect(m + 52, catItemY, barMaxW, 5, 2, 2, 'F');
+                    if (barW > 0) { doc.setFillColor(...rgb); doc.roundedRect(m + 52, catItemY, Math.max(barW, 4), 5, 2, 2, 'F'); }
+                    doc.setTextColor(...rgb); doc.setFontSize(7); doc.text(`${count} (${pct}%)`, m + 52 + barMaxW + 2, catItemY + 4);
+                    catItemY += 8;
+                });
+                addPageFooter(1);
+
+                // ===== CHART HELPERS =====
+                function hexToRgb(hex) {
+                    return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+                }
+
+                function drawChartTitle(cx, y, title) {
+                    setFont('bold'); doc.setTextColor(30, 45, 65); doc.setFontSize(11);
+                    doc.text(title, cx, y, { align: 'center' });
+                    const tw = doc.getTextWidth(title);
+                    doc.setFillColor(41, 128, 185);
+                    doc.rect(cx - tw / 2, y + 2, tw, 0.8, 'F');
+                    return y + 8;
+                }
+
+                function drawPdfLegend(x, y, labels, colors) {
+                    setFont('normal'); doc.setFontSize(7.5);
+                    const dotR = 1.5;
+                    const gap = 2.5;
+                    const lineH = 4.5;
+                    labels.forEach((lbl, i) => {
+                        const ly = y + i * lineH;
+                        const rgb = hexToRgb(colors[i]);
+                        doc.setFillColor(...rgb);
+                        doc.circle(x + dotR, ly, dotR, 'F');
+                        doc.setTextColor(60, 60, 60);
+                        doc.text(lbl, x + dotR * 2 + gap, ly + 1.5);
+                    });
+                    return y + labels.length * lineH;
+                }
+
+                // ===== PAGE 2: CHARTS =====
+                doc.addPage();
+                addPageHeader('INFOGRAFIKA - MUROJAATLAR TAHLILI');
+
+                const chartW = (cw - 10) / 2;
+                const chartH = chartW * 0.65;
+
+                // Datalabels config
+                const pctLabels = {
+                    datalabels: {
+                        color: '#fff', font: { size: 14, weight: 'bold' },
+                        formatter: (val, ctx) => {
+                            const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = ((val / sum) * 100).toFixed(0);
+                            return val > 0 ? `${pct}%` : '';
+                        },
+                        textShadowColor: 'rgba(0,0,0,0.4)', textShadowBlur: 4
+                    }
+                };
+                const barLabels = {
+                    datalabels: {
+                        anchor: 'end', align: 'top', color: '#333', font: { size: 22, weight: 'bold' },
+                        formatter: (val) => val > 0 ? val : ''
+                    }
+                };
+
+                // --- Status Doughnut (left) ---
+                let curY = drawChartTitle(m + chartW / 2, 30, 'MUROJAATLAR HOLATI');
+                const statusColors = ['#e67e22', '#8e44ad', '#27ae60', '#c0392b'];
+                const statusLabelsArr = ['Kutilmoqda', 'Student javobi', 'Javob berilgan', 'Rad etilgan'];
+                const statusChart = await renderChart('statusChart', {
+                    type: 'doughnut',
+                    data: { labels: statusLabelsArr,
+                        datasets: [{ data: [pendingReqs, studentReqs, answeredReqs, rejectedReqs], backgroundColor: statusColors, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
+                    options: { responsive: false, cutout: '55%', layout: { padding: 6 },
+                        plugins: { ...pctLabels, title: { display: false }, legend: { display: false } } },
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
+                });
+                doc.addImage(statusChart.toDataURL('image/png'), 'PNG', m, curY, chartW, chartH);
+                const statusLegEnd = drawPdfLegend(m + 2, curY + chartH + 3, statusLabelsArr, statusColors);
+
+                // --- Category Doughnut (right) ---
+                const rightX = m + chartW + 10;
+                drawChartTitle(rightX + chartW / 2, 30, "YO'NALISHLAR BO'YICHA");
+                const catLabelsArr = catEntries.map(e => e[0]);
+                const catColorsArr = catBarColors.slice(0, catEntries.length);
+                const categoryChart = await renderChart('categoryChart', {
+                    type: 'doughnut',
+                    data: { labels: catLabelsArr,
+                        datasets: [{ data: catEntries.map(e => e[1]), backgroundColor: catColorsArr, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
+                    options: { responsive: false, cutout: '50%', layout: { padding: 6 },
+                        plugins: { datalabels: { color: '#fff', font: { size: 12, weight: 'bold' },
+                                formatter: (val, ctx) => { const sum = ctx.dataset.data.reduce((a,b) => a+b, 0); const p = ((val/sum)*100).toFixed(0); return val > 0 && p >= 5 ? `${p}%` : ''; } },
+                            title: { display: false }, legend: { display: false } } },
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
+                });
+                doc.addImage(categoryChart.toDataURL('image/png'), 'PNG', rightX, curY, chartW, chartH);
+                const catLegEnd = drawPdfLegend(rightX + 2, curY + chartH + 3, catLabelsArr, catColorsArr);
+
+                // --- Monthly Bar Chart ---
+                const barStartY = Math.max(statusLegEnd, catLegEnd) + 6;
+                curY = drawChartTitle(pw / 2, barStartY, 'OYLIK DINAMIKA');
+                const monthlyData = {};
+                requests.forEach(r => {
+                    const d = new Date(r.created_at);
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    if (!monthlyData[key]) monthlyData[key] = { answered: 0, pending: 0 };
+                    if (r.status === 'answered') monthlyData[key].answered++; else monthlyData[key].pending++;
+                });
+                const sortedMonths = Object.keys(monthlyData).sort();
+                const monthNames = ['Yan','Fev','Mar','Apr','May','Iyn','Iyl','Avg','Sen','Okt','Noy','Dek'];
+                const monthLabels = sortedMonths.map(k => { const [y,mo] = k.split('-'); return `${monthNames[parseInt(mo)-1]} ${y}`; });
+
+                const barChartH = 52;
+                const barLegLabels = ['Javob berilgan', 'Kutilmoqda'];
+                const barLegColors = ['#27ae60', '#e67e22'];
+                const monthlyChart = await renderChart('monthlyChart', {
+                    type: 'bar',
+                    data: { labels: monthLabels, datasets: [
+                        { label: barLegLabels[0], data: sortedMonths.map(k => monthlyData[k].answered), backgroundColor: '#27ae60', borderColor: '#1e8449', baseColor: '#27ae60', borderWidth: 1, borderRadius: 6, borderSkipped: false },
+                        { label: barLegLabels[1], data: sortedMonths.map(k => monthlyData[k].pending), backgroundColor: '#e67e22', borderColor: '#d35400', baseColor: '#e67e22', borderWidth: 1, borderRadius: 6, borderSkipped: false }
+                    ] },
+                    options: { responsive: false,
+                        plugins: { ...barLabels, title: { display: false }, legend: { display: false } },
+                        layout: { padding: { top: 30 } },
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 20 }, color: '#555' }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                            x: { ticks: { font: { size: 20 }, color: '#555' }, grid: { display: false } } } },
+                    plugins: [shadow3DPlugin, gradientBarPlugin, ChartDataLabels]
+                });
+                doc.addImage(monthlyChart.toDataURL('image/png'), 'PNG', m, curY, cw, barChartH);
+                const barLegEnd = drawPdfLegend(m + 2, curY + barChartH + 3, barLegLabels, barLegColors);
+
+                // --- Type Doughnut ---
+                const pieStartY = barLegEnd + 6;
+                curY = drawChartTitle(pw / 2, pieStartY, 'MUROJAAT TURLARI');
+                const typeData = {};
+                const typeLabelsMap = { 'text': 'Matn', 'voice': 'Ovozli', 'video': 'Video', 'video_note': 'Video xabar', 'document': 'Fayl', 'photo': 'Rasm' };
+                requests.forEach(r => { const t = typeLabelsMap[r.request_type] || r.request_type; typeData[t] = (typeData[t] || 0) + 1; });
+
+                const typeLabelsArr = Object.keys(typeData);
+                const typeColorsArr = ['#2980b9','#c0392b','#27ae60','#f39c12','#8e44ad','#16a085'].slice(0, typeLabelsArr.length);
+                const typePieW = chartW;
+                const typePieH = chartH;
+                const typeChart = await renderChart('typeChart', {
+                    type: 'doughnut',
+                    data: { labels: typeLabelsArr,
+                        datasets: [{ data: Object.values(typeData), backgroundColor: typeColorsArr, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
+                    options: { responsive: false, cutout: '50%', layout: { padding: 6 },
+                        plugins: { ...pctLabels, title: { display: false }, legend: { display: false } } },
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
+                });
+                const typeChartX = m + chartW + 10;
+                doc.addImage(typeChart.toDataURL('image/png'), 'PNG', typeChartX, curY, typePieW, typePieH);
+                const typeLegStartY = curY + (typePieH - typeLabelsArr.length * 4.5) / 2;
+                drawPdfLegend(m + 5, typeLegStartY, typeLabelsArr, typeColorsArr);
+                addPageFooter(2);
+
+                // ===== PAGE 3: LAWYERS & STUDENTS STATS + TOP PETITIONERS =====
+                doc.addPage();
+                addPageHeader('YURISTLAR VA STUDENTLAR STATISTIKASI');
+
+                const adminAnswerCounts = {};
+                requests.forEach(r => {
+                    if (r.responded_by) {
+                        adminAnswerCounts[r.responded_by] = (adminAnswerCounts[r.responded_by] || 0) + 1;
+                    }
+                });
+                const adminAssignedCounts = {};
+                requests.forEach(r => {
+                    if (r.assigned_to) {
+                        adminAssignedCounts[r.assigned_to] = (adminAssignedCounts[r.assigned_to] || 0) + 1;
+                    }
+                });
+
+                const roleLabels = { 'master': 'Yurist', 'student': 'Student' };
+                const adminTableData = allAdmins.map((admin, i) => [
+                    i + 1,
+                    admin.full_name,
+                    `@${admin.username}`,
+                    roleLabels[admin.role] || admin.role,
+                    adminAssignedCounts[admin.id] || 0,
+                    adminAnswerCounts[admin.full_name] || 0
+                ]);
+
+                doc.autoTable({
+                    startY: 30,
+                    head: [['#', 'Ism', 'Username', 'Lavozimi', 'Tayinlangan', 'Javob bergan']],
+                    body: adminTableData,
+                    theme: 'striped',
+                    headStyles: { fillColor: [30, 45, 65], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
+                    bodyStyles: { fontSize: 9, halign: 'center', cellPadding: 3.5, font: fontName },
+                    columnStyles: {
+                        0: { cellWidth: 10 },
+                        1: { cellWidth: 40, halign: 'left' },
+                        2: { cellWidth: 35, halign: 'left' },
+                        3: { cellWidth: 25 },
+                        4: { cellWidth: 28 },
+                        5: { cellWidth: 28 }
+                    },
+                    alternateRowStyles: { fillColor: [240, 245, 250] },
+                    styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
+                    didParseCell: function(data) {
+                        if (data.section === 'body' && data.column.index === 3) {
+                            if (data.cell.raw === 'Yurist') { data.cell.styles.textColor = [41, 128, 185]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Student') { data.cell.styles.textColor = [142, 68, 173]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                    }
+                });
+
+                // --- TOP MUROJAATCHILAR ---
+                const petitionerEndY = doc.lastAutoTable.finalY + 12;
+                setFont('bold'); doc.setTextColor(30, 45, 65); doc.setFontSize(13);
+                doc.text('TOP MUROJAATCHILAR', pw / 2, petitionerEndY, { align: 'center' });
+                const titleUnderY = petitionerEndY + 2;
+                const titleW = doc.getTextWidth('TOP MUROJAATCHILAR');
+                doc.setFillColor(41, 128, 185);
+                doc.rect(pw / 2 - titleW / 2, titleUnderY, titleW, 0.8, 'F');
+
+                const petitionerStats = {};
+                requests.forEach(r => {
+                    const uid = r.telegram_id || r.user_id;
+                    if (!petitionerStats[uid]) {
+                        petitionerStats[uid] = {
+                            name: r.first_name || 'N/A',
+                            username: r.username || 'N/A',
+                            total: 0,
+                            answered: 0,
+                            pending: 0,
+                            blocked: r.blocked
+                        };
+                    }
+                    petitionerStats[uid].total++;
+                    if (r.status === 'answered') petitionerStats[uid].answered++; else petitionerStats[uid].pending++;
+                });
+                const petitionerTableData = Object.values(petitionerStats)
+                    .sort((a, b) => b.total - a.total)
+                    .map((u, i) => [
+                        i + 1, u.name, `@${u.username}`, u.total, u.answered, u.pending, u.blocked ? 'BLOKLANGAN' : 'Aktiv'
+                    ]);
+
+                doc.autoTable({
+                    startY: titleUnderY + 6,
+                    head: [['#', 'Ism', 'Username', 'Jami', 'Javob', 'Kutilmoqda', 'Holat']],
+                    body: petitionerTableData,
+                    theme: 'striped',
+                    headStyles: { fillColor: [44, 62, 80], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
+                    bodyStyles: { fontSize: 9, halign: 'center', cellPadding: 3.5, font: fontName },
+                    columnStyles: {
+                        0: { cellWidth: 10 },
+                        1: { cellWidth: 35, halign: 'left' },
+                        2: { cellWidth: 32, halign: 'left' },
+                        3: { cellWidth: 18 },
+                        4: { cellWidth: 18 },
+                        5: { cellWidth: 25 },
+                        6: { cellWidth: 28 }
+                    },
+                    alternateRowStyles: { fillColor: [245, 248, 252] },
+                    styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
+                    didParseCell: function(data) {
+                        if (data.section === 'body' && data.column.index === 6) {
+                            if (data.cell.raw === 'BLOKLANGAN') { data.cell.styles.textColor = [192, 57, 43]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Aktiv') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                        if (data.section === 'body' && data.row.index < 3 && data.column.index === 0) {
+                            data.cell.styles.textColor = [230, 126, 34]; data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                });
+                addPageFooter(3);
+
+                // ===== PAGE 4+: ALL REQUESTS =====
+                doc.addPage();
+                addPageHeader("BARCHA MUROJAATLAR RO'YXATI");
+
+                const statusLabels = { 'pending': 'Kutilmoqda', 'student_responded': 'Student javobi', 'answered': 'Javob berilgan', 'rejected': 'Rad etilgan' };
+                const tableData = requests.map((r, i) => [
+                    i + 1, r.first_name || 'N/A', `@${r.username || 'N/A'}`, r.category || 'Boshqa',
+                    (r.request_text || '').substring(0, 55) + ((r.request_text || '').length > 55 ? '...' : ''),
+                    statusLabels[r.status] || r.status, new Date(r.created_at).toLocaleDateString('uz-UZ'), r.responded_by || '-'
+                ]);
+
+                let currentPage = 4;
+                doc.autoTable({
+                    startY: 30,
+                    head: [['#', 'Ism', 'Username', "Yo'nalish", 'Murojaat', 'Status', 'Sana', 'Javob berdi']],
+                    body: tableData,
+                    theme: 'striped',
+                    headStyles: { fillColor: [30, 45, 65], fontSize: 8, halign: 'center', cellPadding: 3.5, fontStyle: 'bold', font: fontName },
+                    bodyStyles: { fontSize: 7.5, cellPadding: 3, font: fontName },
+                    columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 22 }, 2: { cellWidth: 22 }, 3: { cellWidth: 24 },
+                        4: { cellWidth: 48 }, 5: { cellWidth: 22, halign: 'center' }, 6: { cellWidth: 18, halign: 'center' }, 7: { cellWidth: 22 } },
+                    alternateRowStyles: { fillColor: [245, 248, 252] },
+                    styles: { lineColor: [200, 210, 220], lineWidth: 0.2, font: fontName },
+                    didParseCell: function(data) {
+                        if (data.section === 'body' && data.column.index === 5) {
+                            const v = data.cell.raw;
+                            if (v === 'Kutilmoqda') { data.cell.styles.textColor = [230, 126, 34]; data.cell.styles.fontStyle = 'bold'; }
+                            else if (v === 'Student javobi') { data.cell.styles.textColor = [142, 68, 173]; data.cell.styles.fontStyle = 'bold'; }
+                            else if (v === 'Javob berilgan') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
+                            else if (v === 'Rad etilgan') { data.cell.styles.textColor = [192, 57, 43]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                    },
+                    didDrawPage: function() { addPageFooter(currentPage); currentPage++; },
+                    margin: { top: 30 }
+                });
+
+                doc.save(`Dictum_Hisobot_${now.toISOString().split('T')[0]}.pdf`);
             } catch (error) {
-                console.error('Export error:', error);
-                alert('❌ Eksport xatolik bilan yakunlandi.');
+                console.error('PDF export error:', error);
+                alert('PDF eksport xatolik bilan yakunlandi: ' + error.message);
             }
         }
         
