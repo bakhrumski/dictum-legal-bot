@@ -1480,8 +1480,18 @@
                 userGroups.get(key).requests.push(req);
             });
 
-            // Sort groups: groups with pending/needs-approval first
+            // Sort groups: assigned-to-me first, then unassigned, then others; within that by pending count
+            const myId = currentUser.adminId;
             const sortedGroups = [...userGroups.values()].sort((a, b) => {
+                const aHasMine = a.requests.some(r => r.assigned_to === myId || r.assigned_student_id === myId) ? 0 : 1;
+                const bHasMine = b.requests.some(r => r.assigned_to === myId || r.assigned_student_id === myId) ? 0 : 1;
+                if (aHasMine !== bHasMine) return aHasMine - bHasMine;
+                // Within non-mine: unassigned groups before assigned-to-others
+                if (aHasMine === 1 && bHasMine === 1) {
+                    const aUnassigned = a.requests.some(r => !r.assigned_to && !r.assigned_student_id) ? 0 : 1;
+                    const bUnassigned = b.requests.some(r => !r.assigned_to && !r.assigned_student_id) ? 0 : 1;
+                    if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned;
+                }
                 const aPending = a.requests.filter(r => r.status === 'pending' || r.status === 'student_responded' || r.status === 'lawyer_approved').length;
                 const bPending = b.requests.filter(r => r.status === 'pending' || r.status === 'student_responded' || r.status === 'lawyer_approved').length;
                 if (aPending !== bPending) return bPending - aPending;
