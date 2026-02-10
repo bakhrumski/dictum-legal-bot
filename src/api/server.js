@@ -42,6 +42,14 @@ function requireMasterAdmin(req, res, next) {
   }
 }
 
+function requireMasterOrLawyer(req, res, next) {
+  if (req.session.isAuthenticated && (req.session.role === 'master' || req.session.role === 'lawyer')) {
+    next();
+  } else {
+    res.status(403).json({ error: 'Lawyer or Master admin access required' });
+  }
+}
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
@@ -332,7 +340,7 @@ app.post('/api/reject-response', requireMasterAdmin, async (req, res) => {
 });
 
 // Master admin sends direct response (bypasses student)
-app.post('/api/master-response', requireMasterAdmin, async (req, res) => {
+app.post('/api/master-response', requireMasterOrLawyer, async (req, res) => {
   try {
     const { requestId, responseText } = req.body;
     
@@ -396,7 +404,7 @@ app.get('/api/admins', requireAuth, async (req, res) => {
 });
 
 // Assign request to lawyer
-app.post('/api/assign-request', requireAuth, async (req, res) => {
+app.post('/api/assign-request', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId, lawyerId } = req.body;
     
@@ -425,7 +433,7 @@ app.post('/api/assign-request', requireAuth, async (req, res) => {
 });
 
 // Unassign request
-app.post('/api/unassign-request', requireAuth, async (req, res) => {
+app.post('/api/unassign-request', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId } = req.body;
     
@@ -444,7 +452,7 @@ app.post('/api/unassign-request', requireAuth, async (req, res) => {
 });
 
 // Update request category
-app.post('/api/update-category', requireAuth, async (req, res) => {
+app.post('/api/update-category', requireMasterOrLawyer, async (req, res) => {
   try {
     const { requestId, category } = req.body;
 

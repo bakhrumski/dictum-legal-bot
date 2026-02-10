@@ -83,7 +83,12 @@
             background: #9b59b6;
             color: white;
         }
-        
+
+        .role-lawyer {
+            background: #27ae60;
+            color: white;
+        }
+
         .logout-btn {
             background: #e74c3c;
             color: white;
@@ -620,7 +625,8 @@
                 
                 document.getElementById('userName').textContent = data.fullName || data.username;
                 const roleBadge = document.getElementById('userRole');
-                roleBadge.textContent = data.role === 'master' ? 'Master Admin' : 'Student Admin';
+                const roleNames = { 'master': 'Master Admin', 'lawyer': 'Yurist', 'student': 'Student Admin' };
+                roleBadge.textContent = roleNames[data.role] || data.role;
                 roleBadge.className = 'role-badge role-' + data.role;
             } catch (error) {
                 console.error('Error loading user info:', error);
@@ -951,7 +957,7 @@
                     <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                         <select id="lawyerSelect" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
                             <option value="">-- Yuristni tanlang --</option>
-                            ${allAdmins.filter(a => a.role === 'master').map(admin =>
+                            ${allAdmins.filter(a => a.role === 'master' || a.role === 'lawyer').map(admin =>
                                 `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
                             ).join('')}
                         </select>
@@ -964,6 +970,8 @@
                         </button>
                         ` : ''}
                     </div>
+                    ` : ''}
+                    ${currentUser.role === 'master' || currentUser.role === 'lawyer' ? `
                     <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
                         <select id="categorySelect" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
                             <option value="">-- Yo'nalishni tanlang --</option>
