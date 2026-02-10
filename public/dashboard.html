@@ -181,74 +181,178 @@
             border-color: #3498db;
         }
         
-        .request-item {
+        .user-group {
             border: 1px solid #ecf0f1;
-            padding: 15px;
-            margin-bottom: 15px;
             border-radius: 8px;
-            cursor: pointer;
+            margin-bottom: 12px;
+            overflow: hidden;
             transition: all 0.3s;
         }
-        
-        .request-item:hover {
-            background: #f8f9fa;
-            border-color: #3498db;
+
+        .user-group.has-pending {
+            border-left: 4px solid #e67e22;
         }
-        
-        .request-item.needs-approval {
+
+        .user-group.has-approval {
             border-left: 4px solid #9b59b6;
+        }
+
+        .user-group-header {
+            padding: 14px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background 0.2s;
+        }
+
+        .user-group-header:hover {
+            background: #f8f9fa;
+        }
+
+        .user-group-toggle {
+            font-size: 12px;
+            color: #95a5a6;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .user-group.expanded .user-group-toggle {
+            transform: rotate(90deg);
+        }
+
+        .user-group-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-group-name {
+            font-weight: bold;
+            font-size: 16px;
+            color: #2c3e50;
+        }
+
+        .user-group-preview {
+            color: #7f8c8d;
+            font-size: 13px;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-group-badges {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .pending-count {
+            background: #e67e22;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .total-count {
+            background: #ecf0f1;
+            color: #7f8c8d;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .approval-badge {
+            background: #9b59b6;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .user-group-requests {
+            display: none;
+            border-top: 1px solid #ecf0f1;
+        }
+
+        .user-group.expanded .user-group-requests {
+            display: block;
+        }
+
+        .request-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        .request-item:last-child {
+            border-bottom: none;
+        }
+
+        .request-item:hover {
+            background: #f0f7ff;
+        }
+
+        .request-item.needs-approval {
             background: #f8f4ff;
         }
-        
+
         .request-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
-        
+
         .client-name {
             font-weight: bold;
             font-size: 18px;
             color: #2c3e50;
         }
-        
+
         .status-badge {
-            padding: 5px 15px;
+            padding: 4px 12px;
             border-radius: 20px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
         }
-        
+
         .status-pending {
             background: #fff3cd;
             color: #856404;
         }
-        
+
         .status-student_responded {
             background: #e8daef;
             color: #5b2c6f;
         }
-        
+
         .status-answered {
             background: #d4edda;
             color: #155724;
         }
-        
+
         .status-rejected {
             background: #f8d7da;
             color: #721c24;
         }
-        
+
         .request-preview {
             color: #7f8c8d;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
+            font-size: 13px;
         }
-        
+
         .request-meta {
             display: flex;
-            gap: 20px;
-            font-size: 13px;
+            gap: 15px;
+            font-size: 12px;
             color: #95a5a6;
             flex-wrap: wrap;
         }
@@ -1257,11 +1361,19 @@
             displayRequests();
         }
         
+        const statusText = {
+            'pending': 'Kutilmoqda',
+            'student_responded': 'Student javobi',
+            'lawyer_approved': 'Yurist tasdiqlagan',
+            'answered': 'Javob berilgan',
+            'rejected': 'Rad etilgan'
+        };
+
         function displayRequests(filterCategory = '', filterAssignee = '', filterStatus = '', filterAssigned = '') {
             const container = document.getElementById('requestsList');
-            
+
             let filteredRequests = requests;
-            
+
             if (filterCategory) {
                 filteredRequests = filteredRequests.filter(r => r.category === filterCategory);
             }
@@ -1292,48 +1404,117 @@
             }
 
             if (filteredRequests.length === 0) {
-                container.innerHTML = 
+                container.innerHTML =
                     '<div class="empty-state"><h2>Hech qanday murojaat topilmadi</h2></div>';
                 return;
             }
-            
-            container.innerHTML = filteredRequests.map(req => {
-                const isAssignedLawyer = req.assigned_to === currentUser.adminId && currentUser.role === 'lawyer';
-                const needsApproval = (req.status === 'student_responded' && isAssignedLawyer)
-                    || (req.status === 'student_responded' && currentUser.role === 'master' && !req.assigned_to)
-                    || (req.status === 'lawyer_approved' && currentUser.role === 'master');
-                const statusText = {
-                    'pending': 'Kutilmoqda',
-                    'student_responded': 'Student javobi (Yurist kutmoqda)',
-                    'lawyer_approved': 'Yurist tasdiqlagan (Master kutmoqda)',
-                    'answered': 'Javob berilgan',
-                    'rejected': 'Rad etilgan'
-                };
-                
+
+            // Group by user
+            const userGroups = new Map();
+            filteredRequests.forEach(req => {
+                const key = req.telegram_id || req.user_id;
+                if (!userGroups.has(key)) {
+                    userGroups.set(key, {
+                        name: req.first_name || 'N/A',
+                        username: req.username || 'N/A',
+                        requests: []
+                    });
+                }
+                userGroups.get(key).requests.push(req);
+            });
+
+            // Sort groups: groups with pending/needs-approval first
+            const sortedGroups = [...userGroups.values()].sort((a, b) => {
+                const aPending = a.requests.filter(r => r.status === 'pending' || r.status === 'student_responded' || r.status === 'lawyer_approved').length;
+                const bPending = b.requests.filter(r => r.status === 'pending' || r.status === 'student_responded' || r.status === 'lawyer_approved').length;
+                if (aPending !== bPending) return bPending - aPending;
+                return new Date(b.requests[0].created_at) - new Date(a.requests[0].created_at);
+            });
+
+            container.innerHTML = sortedGroups.map(group => {
+                const pendingCount = group.requests.filter(r => r.status !== 'answered').length;
+                const needsApprovalCount = group.requests.filter(r => {
+                    const isAssignedLawyer = r.assigned_to === currentUser.adminId && currentUser.role === 'lawyer';
+                    return (r.status === 'student_responded' && isAssignedLawyer)
+                        || (r.status === 'student_responded' && currentUser.role === 'master' && !r.assigned_to)
+                        || (r.status === 'lawyer_approved' && currentUser.role === 'master');
+                }).length;
+                const latestReq = group.requests[0];
+                const hasOnlyOne = group.requests.length === 1;
+                const groupClass = needsApprovalCount > 0 ? 'has-approval' : (pendingCount > 0 ? 'has-pending' : '');
+
+                const requestsHtml = group.requests.map(req => {
+                    const isAssignedLawyer = req.assigned_to === currentUser.adminId && currentUser.role === 'lawyer';
+                    const needsApproval = (req.status === 'student_responded' && isAssignedLawyer)
+                        || (req.status === 'student_responded' && currentUser.role === 'master' && !req.assigned_to)
+                        || (req.status === 'lawyer_approved' && currentUser.role === 'master');
+                    return `
+                    <div class="request-item ${needsApproval ? 'needs-approval' : ''}" onclick="event.stopPropagation(); showRequestDetail(${req.id})">
+                        <div class="request-header">
+                            <span style="font-weight:600; color:#2c3e50; font-size:14px;">
+                                ${req.request_text.substring(0, 80)}${req.request_text.length > 80 ? '...' : ''}
+                            </span>
+                            <span class="status-badge status-${req.status}">
+                                ${statusText[req.status] || req.status}
+                            </span>
+                        </div>
+                        <div class="request-meta">
+                            <span>📂 ${req.category || 'N/A'}</span>
+                            ${req.file_id ? `<span>${getFileIcon(req.request_type)} ${req.request_type}</span>` : ''}
+                            ${req.assigned_lawyer_name ? `<span>⚖️ ${req.assigned_lawyer_name}</span>` : ''}
+                            ${req.assigned_student_name ? `<span>🎓 ${req.assigned_student_name}</span>` : ''}
+                            ${!req.assigned_lawyer_name && !req.assigned_student_name ? '<span style="color:#e67e22;">⚠️ Tayinlanmagan</span>' : ''}
+                            <span>🕐 ${new Date(req.created_at).toLocaleString('uz-UZ')}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                if (hasOnlyOne) {
+                    // Single request — no grouping, just show directly
+                    const req = latestReq;
+                    const isAssignedLawyer = req.assigned_to === currentUser.adminId && currentUser.role === 'lawyer';
+                    const needsApproval = (req.status === 'student_responded' && isAssignedLawyer)
+                        || (req.status === 'student_responded' && currentUser.role === 'master' && !req.assigned_to)
+                        || (req.status === 'lawyer_approved' && currentUser.role === 'master');
+                    return `
+                    <div class="user-group ${groupClass}" style="cursor:pointer;" onclick="showRequestDetail(${req.id})">
+                        <div class="user-group-header">
+                            <div class="user-group-info">
+                                <div class="user-group-name">${group.name} (@${group.username})</div>
+                                <div class="user-group-preview">${req.request_text.substring(0, 100)}${req.request_text.length > 100 ? '...' : ''}</div>
+                            </div>
+                            <div class="user-group-badges">
+                                ${needsApproval ? '<span class="approval-badge">Tasdiqlash</span>' : ''}
+                                <span class="status-badge status-${req.status}">${statusText[req.status] || req.status}</span>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
                 return `
-                <div class="request-item ${needsApproval ? 'needs-approval' : ''}" onclick="showRequestDetail(${req.id})">
-                    <div class="request-header">
-                        <div class="client-name">${req.first_name || req.name || 'N/A'} (@${req.username || 'N/A'})</div>
-                        <span class="status-badge status-${req.status}">
-                            ${statusText[req.status] || req.status}
-                        </span>
+                <div class="user-group ${groupClass}" id="group-${latestReq.telegram_id}">
+                    <div class="user-group-header" onclick="toggleUserGroup('${latestReq.telegram_id}')">
+                        <span class="user-group-toggle">▶</span>
+                        <div class="user-group-info">
+                            <div class="user-group-name">${group.name} (@${group.username})</div>
+                            <div class="user-group-preview">${latestReq.request_text.substring(0, 100)}${latestReq.request_text.length > 100 ? '...' : ''}</div>
+                        </div>
+                        <div class="user-group-badges">
+                            ${needsApprovalCount > 0 ? `<span class="approval-badge">${needsApprovalCount} tasdiqlash</span>` : ''}
+                            ${pendingCount > 0 ? `<span class="pending-count">${pendingCount} javobsiz</span>` : ''}
+                            <span class="total-count">${group.requests.length} murojaat</span>
+                        </div>
                     </div>
-                    <div class="request-preview">
-                        ${req.request_text.substring(0, 150)}${req.request_text.length > 150 ? '...' : ''}
+                    <div class="user-group-requests">
+                        ${requestsHtml}
                     </div>
-                    <div class="request-meta">
-                        <span>👤 @${req.username || 'N/A'}</span>
-                        ${req.file_id ? `<span>${getFileIcon(req.request_type)} ${req.request_type}</span>` : ''}
-                        <span>📂 ${req.category || 'N/A'}</span>
-                        ${req.assigned_lawyer_name ? `<span>⚖️ ${req.assigned_lawyer_name}</span>` : ''}
-                        ${req.assigned_student_name ? `<span>🎓 ${req.assigned_student_name}</span>` : ''}
-                        ${!req.assigned_lawyer_name && !req.assigned_student_name ? '<span style="color: #e67e22;">⚠️ Tayinlanmagan</span>' : ''}
-                        <span>🕐 ${new Date(req.created_at).toLocaleString('uz-UZ')}</span>
-                        ${req.responded_by ? `<span>✍️ ${req.responded_by}</span>` : ''}
-                    </div>
-                </div>
-            `;
+                </div>`;
             }).join('');
+        }
+
+        function toggleUserGroup(telegramId) {
+            const group = document.getElementById('group-' + telegramId);
+            if (group) group.classList.toggle('expanded');
         }
         
         function updateStats() {
