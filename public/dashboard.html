@@ -502,6 +502,83 @@
             color: #2c3e50;
         }
         
+        .ai-tahlil-btn {
+            background: #8e44ad !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-tahlil-btn:hover {
+            background: #7d3c98 !important;
+        }
+        .ai-tahlil-btn:disabled {
+            background: #bdc3c7 !important;
+            cursor: not-allowed;
+        }
+        .ai-tahlil-btn .ai-icon {
+            font-size: 16px;
+        }
+        .ai-analysis-container {
+            margin-top: 15px;
+        }
+        .ai-analysis-content {
+            background: #f8f4fc;
+            border: 1px solid #d5b8e8;
+            border-radius: 8px;
+            padding: 20px;
+            font-size: 14px;
+            line-height: 1.7;
+            color: #2c3e50;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .ai-analysis-content h1, .ai-analysis-content h2, .ai-analysis-content h3 {
+            color: #6c3483;
+            margin-top: 15px;
+            margin-bottom: 8px;
+        }
+        .ai-analysis-content h1 { font-size: 18px; }
+        .ai-analysis-content h2 { font-size: 16px; }
+        .ai-analysis-content h3 { font-size: 14px; border: none; }
+        .ai-analysis-content ul, .ai-analysis-content ol {
+            padding-left: 20px;
+            margin-bottom: 10px;
+        }
+        .ai-analysis-content li {
+            margin-bottom: 4px;
+        }
+        .ai-analysis-content strong {
+            color: #4a235a;
+        }
+        .ai-analysis-content a {
+            color: #8e44ad;
+            text-decoration: underline;
+        }
+        .ai-analysis-content code {
+            background: #e8daef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        .ai-loading {
+            text-align: center;
+            padding: 30px;
+            color: #8e44ad;
+        }
+        .ai-loading .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #d5b8e8;
+            border-top-color: #8e44ad;
+            border-radius: 50%;
+            animation: ai-spin 0.8s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes ai-spin {
+            to { transform: rotate(360deg); }
+        }
         .detail-section {
             margin-bottom: 20px;
         }
@@ -3124,8 +3201,17 @@
                         </button>
                     `;
                 }
-                
+
                 modalContent += `
+                        <button class="btn ai-tahlil-btn" onclick="runAiAnalysis(${request.id})" data-request-text="${(request.request_text || '').replace(/"/g, '&quot;')}" data-category="${(request.category || '').replace(/"/g, '&quot;')}" style="background: #8e44ad; margin-left: 10px;">
+                            <span class="ai-icon">&#129302;</span> AI tahlil
+                        </button>
+                        </div>
+                    </div>
+                    <div id="aiAnalysisResult-${request.id}" class="ai-analysis-container" style="display:none;">
+                        <div class="detail-section">
+                            <h3><span class="ai-icon">&#129302;</span> AI huquqiy tahlil</h3>
+                            <div id="aiAnalysisContent-${request.id}" class="ai-analysis-content"></div>
                         </div>
                     </div>
                 `;
@@ -3135,6 +3221,54 @@
             document.getElementById('requestModal').style.display = 'block';
         }
         
+        function simpleMarkdown(text) {
+            return text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/`(.+?)`/g, '<code>$1</code>')
+                .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>')
+                .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+                .replace(/\n{2,}/g, '<br><br>')
+                .replace(/\n/g, '<br>');
+        }
+
+        async function runAiAnalysis(requestId) {
+            const container = document.getElementById('aiAnalysisResult-' + requestId);
+            const content = document.getElementById('aiAnalysisContent-' + requestId);
+            const btn = event.target.closest('.ai-tahlil-btn');
+            const requestText = btn.getAttribute('data-request-text');
+            const category = btn.getAttribute('data-category');
+
+            container.style.display = 'block';
+            content.innerHTML = '<div class="ai-loading"><span class="spinner"></span>AI tahlil qilinmoqda... Biroz kuting.</div>';
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="ai-icon">&#129302;</span> Tahlil qilinmoqda...'; }
+
+            try {
+                const response = await fetch('/api/ai-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestText, category })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    content.innerHTML = simpleMarkdown(data.analysis);
+                } else {
+                    content.innerHTML = '<div style="color: #e74c3c; padding: 15px;">Xatolik: ' + (data.error || 'AI tahlil amalga oshmadi') + '</div>';
+                }
+            } catch (error) {
+                content.innerHTML = '<div style="color: #e74c3c; padding: 15px;">Tarmoq xatoligi: ' + error.message + '</div>';
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<span class="ai-icon">&#129302;</span> AI tahlil'; }
+            }
+        }
+
         async function submitStudentResponse(requestId) {
             if (!checkCategoryBeforeResponse()) return;
 
