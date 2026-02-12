@@ -125,8 +125,18 @@ app.post('/api/login', async (req, res) => {
       res.status(401).json({ error: 'Noto\'g\'ri foydalanuvchi nomi yoki parol' });
     }
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Login error:', error.message, error.stack);
+    res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Health check
+app.get('/api/health', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*) as count FROM admins');
+    res.json({ status: 'ok', admins: result.rows[0].count, db: 'connected' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', db: error.message });
   }
 });
 
