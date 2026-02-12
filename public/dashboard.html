@@ -3204,13 +3204,13 @@
 
                 modalContent += `
                         <button class="btn ai-tahlil-btn" onclick="runAiAnalysis(${request.id})" data-request-text="${(request.request_text || '').replace(/"/g, '&quot;')}" data-category="${(request.category || '').replace(/"/g, '&quot;')}" style="background: #8e44ad; margin-left: 10px;">
-                            <span class="ai-icon">&#129302;</span> AI tahlil
+                            &#10024; AI tahlil
                         </button>
                         </div>
                     </div>
                     <div id="aiAnalysisResult-${request.id}" class="ai-analysis-container" style="display:none;">
                         <div class="detail-section">
-                            <h3><span class="ai-icon">&#129302;</span> AI huquqiy tahlil</h3>
+                            <h3>&#10024; AI huquqiy tahlil</h3>
                             <div id="aiAnalysisContent-${request.id}" class="ai-analysis-content"></div>
                         </div>
                     </div>
@@ -3247,7 +3247,7 @@
 
             container.style.display = 'block';
             content.innerHTML = '<div class="ai-loading"><span class="spinner"></span>AI tahlil qilinmoqda... Biroz kuting.</div>';
-            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="ai-icon">&#129302;</span> Tahlil qilinmoqda...'; }
+            if (btn) { btn.disabled = true; btn.innerHTML = '&#10024; Tahlil qilinmoqda...'; }
 
             try {
                 const response = await fetch('/api/ai-analysis', {
@@ -3265,7 +3265,7 @@
             } catch (error) {
                 content.innerHTML = '<div style="color: #e74c3c; padding: 15px;">Tarmoq xatoligi: ' + error.message + '</div>';
             } finally {
-                if (btn) { btn.disabled = false; btn.innerHTML = '<span class="ai-icon">&#129302;</span> AI tahlil'; }
+                if (btn) { btn.disabled = false; btn.innerHTML = '&#10024; AI tahlil'; }
             }
         }
 
