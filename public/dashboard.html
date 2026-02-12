@@ -90,6 +90,9 @@
         .profile-avatar.role-master {
             background: linear-gradient(135deg, #1a5276, #2e86c1);
         }
+        .profile-avatar.role-lawyer {
+            background: linear-gradient(135deg, #1e8449, #27ae60);
+        }
         .profile-avatar.role-student {
             background: linear-gradient(135deg, #6c3483, #a569bd);
         }
@@ -122,6 +125,11 @@
             background: linear-gradient(135deg, #1a5276, #2e86c1);
             color: white;
             box-shadow: 0 2px 6px rgba(26,82,118,0.3);
+        }
+        .profile-role-tag.lawyer-tag {
+            background: linear-gradient(135deg, #1e8449, #27ae60);
+            color: white;
+            box-shadow: 0 2px 6px rgba(30,132,73,0.3);
         }
         .profile-role-tag.student-tag {
             background: linear-gradient(135deg, #6c3483, #a569bd);
@@ -179,6 +187,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
         .profile-dropdown-header .dd-avatar.role-master { background: linear-gradient(135deg, #1a5276, #2e86c1); }
+        .profile-dropdown-header .dd-avatar.role-lawyer { background: linear-gradient(135deg, #1e8449, #27ae60); }
         .profile-dropdown-header .dd-avatar.role-student { background: linear-gradient(135deg, #6c3483, #a569bd); }
         .profile-dropdown-header .dd-name {
             font-weight: 600;
@@ -232,8 +241,9 @@
             font-weight: bold;
             margin-left: 10px;
         }
-        .role-master { background: #3498db; color: white; }
-        .role-student { background: #9b59b6; color: white; }
+        .role-master { color: #2c3e50; }
+        .role-lawyer { color: #2c3e50; }
+        .role-student { color: #2c3e50; }
         
         .logout-btn:hover {
             background: #c0392b;
@@ -344,6 +354,13 @@
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .requests-container #requestsList {
+            max-height: 70vh;
+            overflow-y: auto;
+            flex: 1;
         }
         
         .controls {
@@ -1010,6 +1027,7 @@
         }
         .chat-msg-sender { font-weight: bold; font-size: 12px; margin-bottom: 3px; }
         .chat-msg-sender.role-master { color: #2980b9; }
+        .chat-msg-sender.role-lawyer { color: #27ae60; }
         .chat-msg-sender.role-student { color: #8e44ad; }
         .chat-msg-text { color: #2c3e50; }
         .chat-msg-text .mention {
@@ -1066,6 +1084,7 @@
             font-size: 11px; padding: 2px 8px; border-radius: 10px;
         }
         .mention-item-role.master { background: #dbeafe; color: #2980b9; }
+        .mention-item-role.lawyer { background: #d5f5e3; color: #27ae60; }
         .mention-item-role.student { background: #f3e8ff; color: #8e44ad; }
         .mention-item-role.all-role { background: #fef3c7; color: #92400e; }
 
@@ -1785,7 +1804,8 @@
                 <label>Rol</label>
                 <select id="newAdminRole">
                     <option value="student">Student</option>
-                    <option value="master">Yurist</option>
+                    <option value="lawyer">Yurist</option>
+                    <option value="master">Admin</option>
                 </select>
             </div>
             <div class="admin-modal-btns">
@@ -1816,7 +1836,8 @@
                 <label>Rol</label>
                 <select id="editAdminRole">
                     <option value="student">Student</option>
-                    <option value="master">Yurist</option>
+                    <option value="lawyer">Yurist</option>
+                    <option value="master">Admin</option>
                 </select>
             </div>
             <div class="admin-modal-btns">
@@ -1921,7 +1942,8 @@
 
                 const name = data.fullName || data.username;
                 const initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-                const roleText = data.role === 'master' ? 'Yurist - Master Admin' : 'Student Admin';
+                const roleNames = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
+                const roleText = roleNames[data.role] || data.role;
                 const roleClass = 'role-' + data.role;
 
                 // Profile toggle (closed state)
@@ -1929,18 +1951,14 @@
                 avatar.textContent = initials;
                 avatar.className = 'profile-avatar ' + roleClass;
                 const roleLabel = document.getElementById('profileRoleLabel');
-                if (data.role === 'master') {
-                    roleLabel.innerHTML = '<span class="profile-role-tag master-tag">Yurist</span><span class="profile-admin-tag">Master Admin</span>';
-                } else {
-                    roleLabel.innerHTML = '<span class="profile-role-tag student-tag">Student</span><span class="profile-admin-tag">Admin</span>';
-                }
+                roleLabel.innerHTML = `<span class="profile-role-tag ${data.role}-tag">${roleText}</span>`;
 
                 // Dropdown header
                 const ddAvatar = document.getElementById('ddAvatar');
                 ddAvatar.textContent = initials;
                 ddAvatar.className = 'dd-avatar ' + roleClass;
                 document.getElementById('ddName').textContent = name;
-                document.getElementById('ddRole').textContent = data.role === 'master' ? 'Master Admin' : 'Student Admin';
+                document.getElementById('ddRole').textContent = roleText;
 
                 // Hidden spans for backward compatibility
                 document.getElementById('userName').textContent = name;
@@ -2010,8 +2028,8 @@
             if (!tbody || allAdmins.length === 0) return;
 
             const isMaster = currentUser.role === 'master';
-            const roleLabels = { 'master': 'Yurist', 'student': 'Student' };
-            const roleBadgeColors = { 'master': '#3498db', 'student': '#8e44ad' };
+            const roleLabels = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
+            const roleBadgeColors = { 'master': '#2c3e50', 'lawyer': '#2c3e50', 'student': '#2c3e50' };
 
             // Show/hide actions column based on role
             const actionsHeader = document.getElementById('actionsColHeader');
@@ -3844,7 +3862,7 @@
                     }
                 });
 
-                const roleLabels = { 'master': 'Yurist', 'student': 'Student' };
+                const roleLabels = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
                 const adminTableData = allAdmins.map((admin, i) => [
                     String(i + 1),
                     admin.full_name,
@@ -3873,7 +3891,8 @@
                     styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
                     didParseCell: function(data) {
                         if (data.section === 'body' && data.column.index === 3) {
-                            if (data.cell.raw === 'Yurist') { data.cell.styles.textColor = [41, 128, 185]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Admin') { data.cell.styles.textColor = [41, 128, 185]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Yurist') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
                             if (data.cell.raw === 'Student') { data.cell.styles.textColor = [142, 68, 173]; data.cell.styles.fontStyle = 'bold'; }
                         }
                     }
@@ -4326,7 +4345,7 @@
                     html += `<div class="mention-item ${active}" onclick="selectMention(${i})">
                         <div><span class="mention-item-name">${admin.full_name}</span>
                         <span class="mention-item-username">@${admin.username}</span></div>
-                        <span class="mention-item-role ${admin.role}">${admin.role === 'master' ? 'Yurist' : 'Student'}</span></div>`;
+                        <span class="mention-item-role ${admin.role}">${{'master':'Admin','lawyer':'Yurist','student':'Student'}[admin.role] || admin.role}</span></div>`;
                 }
             });
             dropdown.innerHTML = html;
