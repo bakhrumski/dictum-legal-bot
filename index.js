@@ -1,7 +1,7 @@
 require('dotenv').config();
 
-// Start the dashboard server
-require('./src/api/server');
+// Start the Telegram bot first (creates the polling instance)
+const { bot } = require('./src/bot/bot');
 
-// Start the Telegram bot
-require('./src/bot/bot');
+// Start the dashboard server (shares the bot instance)
+require('./src/api/server');
