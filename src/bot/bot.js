@@ -131,6 +131,17 @@ Qo'shimcha savol bo'lsa: /start ni qayta bosing
     return;
   }
   
+  // Check if user is blocked
+  try {
+    const blockedCheck = await pool.query('SELECT blocked FROM users WHERE telegram_id = $1', [chatId]);
+    if (blockedCheck.rows.length > 0 && blockedCheck.rows[0].blocked) {
+      bot.sendMessage(chatId, '⛔ Sizning hisobingiz bloklangan. Murojaat yuborishingiz mumkin emas.');
+      return;
+    }
+  } catch (error) {
+    console.error('Error checking block status:', error);
+  }
+
   // Check if user has 3+ unanswered requests
   try {
     const userRow = await pool.query('SELECT id FROM users WHERE telegram_id = $1', [chatId]);

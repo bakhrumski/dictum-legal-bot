@@ -84,37 +84,6 @@
         .error-message.show {
             display: block;
         }
-        .password-wrapper {
-            position: relative;
-        }
-        .password-wrapper input {
-            padding-right: 45px;
-        }
-        .toggle-password {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 0;
-            line-height: 1;
-            display: flex;
-            align-items: center;
-        }
-        .toggle-password svg {
-            width: 20px;
-            height: 20px;
-            fill: none;
-            stroke: #999;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-        }
-        .toggle-password.active svg {
-            stroke: #667eea;
-        }
     </style>
 </head>
 <body>
@@ -131,54 +100,19 @@
             </div>
             <div class="form-group">
                 <label>Parol</label>
-                <div class="password-wrapper">
-                    <input type="password" id="password" required>
-                    <button type="button" class="toggle-password" id="toggleBtn">
-                        <svg id="eyeIcon" viewBox="0 0 24 24">
-                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                            <line x1="1" y1="1" x2="23" y2="23"/>
-                        </svg>
-                    </button>
-                </div>
+                <input type="password" id="password" required>
             </div>
             <button type="submit" class="btn">Kirish</button>
         </form>
     </div>
     <script>
-        // Hold-to-show password
-        (function() {
-            const input = document.getElementById('password');
-            const btn = document.getElementById('toggleBtn');
-            const icon = document.getElementById('eyeIcon');
-            const eyeOpen = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
-            const eyeClosed = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
-
-            function showPassword() {
-                input.type = 'text';
-                btn.classList.add('active');
-                icon.innerHTML = eyeOpen;
-            }
-            function hidePassword() {
-                input.type = 'password';
-                btn.classList.remove('active');
-                icon.innerHTML = eyeClosed;
-            }
-
-            btn.addEventListener('mousedown', showPassword);
-            btn.addEventListener('mouseup', hidePassword);
-            btn.addEventListener('mouseleave', hidePassword);
-            btn.addEventListener('touchstart', function(e) { e.preventDefault(); showPassword(); });
-            btn.addEventListener('touchend', hidePassword);
-        })();
-
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('errorMessage');
             try {
-                const response = await fetch('/api/login', {
+                const response = await fetch('http://localhost:3000/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: username, password: password })
