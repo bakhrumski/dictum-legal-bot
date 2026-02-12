@@ -84,6 +84,35 @@
         .error-message.show {
             display: block;
         }
+        .password-wrapper {
+            position: relative;
+        }
+        .password-wrapper input {
+            padding-right: 42px;
+        }
+        .eye-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: #999;
+            font-size: 18px;
+            line-height: 1;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .eye-btn:hover {
+            color: #667eea;
+        }
+        .eye-btn svg {
+            width: 20px;
+            height: 20px;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -100,12 +129,31 @@
             </div>
             <div class="form-group">
                 <label>Parol</label>
-                <input type="password" id="password" required>
+                <div class="password-wrapper">
+                    <input type="password" id="password" required>
+                    <button type="button" class="eye-btn" id="eyeBtn">
+                        <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <button type="submit" class="btn">Kirish</button>
         </form>
     </div>
     <script>
+        // Eye icon - show password on press & hold
+        const eyeBtn = document.getElementById('eyeBtn');
+        const passwordInput = document.getElementById('password');
+        function showPassword() { passwordInput.type = 'text'; }
+        function hidePassword() { passwordInput.type = 'password'; }
+        eyeBtn.addEventListener('mousedown', showPassword);
+        eyeBtn.addEventListener('mouseup', hidePassword);
+        eyeBtn.addEventListener('mouseleave', hidePassword);
+        eyeBtn.addEventListener('touchstart', function(e) { e.preventDefault(); showPassword(); });
+        eyeBtn.addEventListener('touchend', hidePassword);
+
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const username = document.getElementById('username').value;

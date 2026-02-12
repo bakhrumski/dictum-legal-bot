@@ -261,6 +261,7 @@
             box-shadow: 0 1px 4px rgba(0,0,0,0.08);
             border-left: 3px solid #3498db;
             transition: transform 0.15s, box-shadow 0.15s;
+            cursor: pointer;
         }
         .stat-card:hover {
             transform: translateY(-2px);
@@ -1624,14 +1625,14 @@
         </header>
         
         <div class="stats">
-            <div class="stat-card">
+            <div class="stat-card" onclick="scrollToRequests('')">
                 <div class="stat-icon">&#128203;</div>
                 <div class="stat-info">
                     <div class="number" id="totalRequests">0</div>
                     <h3>Jami</h3>
                 </div>
             </div>
-            <div class="stat-card card-pending">
+            <div class="stat-card card-pending" onclick="scrollToRequests('pending')">
                 <div class="stat-icon">&#9203;</div>
                 <div class="stat-info">
                     <div class="stat-badges">
@@ -1640,14 +1641,14 @@
                     <h3>Jarayonda</h3>
                 </div>
             </div>
-            <div class="stat-card card-student">
+            <div class="stat-card card-student" onclick="scrollToRequests('student_responded')">
                 <div class="stat-icon">&#127891;</div>
                 <div class="stat-info">
                     <div class="number student-responded" id="studentResponded">0</div>
                     <h3>Student javobi</h3>
                 </div>
             </div>
-            <div class="stat-card card-answered">
+            <div class="stat-card card-answered" onclick="scrollToRequests('answered')">
                 <div class="stat-icon">&#9989;</div>
                 <div class="stat-info">
                     <div class="number answered" id="answeredRequests">0</div>
@@ -1702,7 +1703,7 @@
         </div>
 
         <div class="main-content-area">
-            <div class="requests-container">
+            <div class="requests-container" id="requestsSection">
                 <div class="controls">
                     <div class="controls-header">
                         <h2>Murojaatlar ro'yxati</h2>
@@ -2431,6 +2432,12 @@
             );
         }
         
+        function scrollToRequests(statusValue) {
+            document.getElementById('statusFilter').value = statusValue;
+            filterRequests();
+            document.getElementById('requestsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
         function clearFilters() {
             document.getElementById('categoryFilter').value = '';
             document.getElementById('assigneeFilter').value = '';
