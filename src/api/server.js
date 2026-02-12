@@ -1215,7 +1215,7 @@ app.post('/api/ai-analysis', requireAuth, async (req, res) => {
 
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const systemPrompt = `You are an AI Legal Research Assistant integrated into an educational legal-tech platform for Uzbekistan.
 
