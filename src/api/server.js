@@ -1215,7 +1215,7 @@ app.post('/api/ai-analysis', requireAuth, async (req, res) => {
 
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
 
     const systemPrompt = `You are an AI Legal Research Assistant integrated into an educational legal-tech platform for Uzbekistan.
 
@@ -1310,8 +1310,8 @@ IMPORTANT: Respond in Uzbek language. Use markdown formatting for readability.`;
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userMessage }] }],
       generationConfig: {
-        maxOutputTokens: 4096,
-        temperature: 0.3,
+        maxOutputTokens: 8192,
+        temperature: 1.0,
       },
     });
 
