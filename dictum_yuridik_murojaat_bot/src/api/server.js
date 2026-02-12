@@ -120,6 +120,25 @@ app.get('/', (req, res) => {
   }
 });
 
+// Get request stats
+app.get('/api/stats', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+        COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
+        COUNT(*) FILTER (WHERE status = 'student_responded') AS student_responded,
+        COUNT(*) FILTER (WHERE status = 'answered') AS answered
+      FROM requests
+    `);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Get all requests
 app.get('/api/requests', requireAuth, async (req, res) => {
   try {
@@ -452,6 +471,204 @@ app.put('/api/admins/:id/timeslot', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error updating timeslot:', error);
     res.status(500).json({ error: 'Ish vaqtini yangilab bo\'lmadi' });
+  }
+});
+
+// Create new admin (master only)
+app.post('/api/admins', requireMasterAdmin, async (req, res) => {
+  try {
+    const { username, password, full_name, role } = req.body;
+    if (!username || !password || !full_name || !role) {
+      return res.status(400).json({ error: 'Barcha maydonlar to\'ldirilishi shart' });
+    }
+    if (!['master', 'student'].includes(role)) {
+      return res.status(400).json({ error: 'Rol faqat master yoki student bo\'lishi mumkin' });
+    }
+    const existing = await pool.query('SELECT id FROM admins WHERE username = $1', [username]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Bu username allaqachon mavjud' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO admins (username, password, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, full_name, role, created_at',
+      [username, hashedPassword, full_name, role]
+    );
+    res.json({ success: true, admin: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating admin:', error);
+    res.status(500).json({ error: 'Admin yaratib bo\'lmadi' });
+  }
+});
+
+// Update admin (master only)
+app.put('/api/admins/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { full_name, username, password, role } = req.body;
+    if (!full_name || !username || !role) {
+      return res.status(400).json({ error: 'Ism, username va rol to\'ldirilishi shart' });
+    }
+    if (!['master', 'student'].includes(role)) {
+      return res.status(400).json({ error: 'Rol faqat master yoki student bo\'lishi mumkin' });
+    }
+    // Check username uniqueness (excluding current admin)
+    const existing = await pool.query('SELECT id FROM admins WHERE username = $1 AND id != $2', [username, id]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Bu username allaqachon mavjud' });
+    }
+    if (password && password.length > 0) {
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Parol kamida 6 ta belgidan iborat bo\'lishi kerak' });
+      }
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await pool.query(
+        'UPDATE admins SET full_name = $1, username = $2, password = $3, role = $4 WHERE id = $5',
+        [full_name, username, hashedPassword, role, id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE admins SET full_name = $1, username = $2, role = $3 WHERE id = $4',
+        [full_name, username, role, id]
+      );
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating admin:', error);
+    res.status(500).json({ error: 'Admin yangilab bo\'lmadi' });
+  }
+});
+
+// Delete admin (master only)
+app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = parseInt(id);
+    // Prevent deleting yourself
+    if (adminId === req.session.adminId) {
+      return res.status(400).json({ error: 'O\'zingizni o\'chira olmaysiz' });
+    }
+    // Check if admin exists
+    const adminCheck = await pool.query('SELECT id, full_name FROM admins WHERE id = $1', [adminId]);
+    if (adminCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin topilmadi' });
+    }
+    // Unassign any requests assigned to this admin
+    await pool.query('UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1', [adminId]);
+    // Delete the admin
+    await pool.query('DELETE FROM admins WHERE id = $1', [adminId]);
+    res.json({ success: true, deleted: adminCheck.rows[0].full_name });
+  } catch (error) {
+    console.error('Error deleting admin:', error);
+    res.status(500).json({ error: 'Admin o\'chirib bo\'lmadi' });
+  }
+});
+
+// Get rankings data
+app.get('/api/rankings', requireAuth, async (req, res) => {
+  try {
+    // Lawyer rankings: admins with role='master', count answered requests
+    const lawyerResult = await pool.query(`
+      SELECT a.id, a.full_name, a.username,
+        COUNT(CASE WHEN r.status = 'answered' AND r.responded_by = a.full_name THEN 1 END) AS answered_count,
+        COUNT(CASE WHEN r.assigned_to = a.id THEN 1 END) AS assigned_count,
+        AVG(CASE WHEN r.status = 'answered' AND r.responded_by = a.full_name AND r.answered_at IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (r.answered_at - r.created_at)) / 3600.0 END) AS avg_hours
+      FROM admins a
+      LEFT JOIN requests r ON r.assigned_to = a.id OR r.responded_by = a.full_name
+      WHERE a.role = 'master'
+      GROUP BY a.id, a.full_name, a.username
+      ORDER BY answered_count DESC, avg_hours ASC
+    `);
+
+    // Student rankings
+    const studentResult = await pool.query(`
+      SELECT a.id, a.full_name, a.username,
+        COUNT(CASE WHEN r.student_admin_id = a.id THEN 1 END) AS response_count,
+        COUNT(CASE WHEN r.status = 'answered' AND r.responded_by = a.full_name THEN 1 END) AS approved_count,
+        AVG(CASE WHEN r.student_admin_id = a.id AND r.answered_at IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (r.answered_at - r.created_at)) / 3600.0 END) AS avg_hours
+      FROM admins a
+      LEFT JOIN requests r ON r.student_admin_id = a.id OR r.responded_by = a.full_name
+      WHERE a.role = 'student'
+      GROUP BY a.id, a.full_name, a.username
+      ORDER BY response_count DESC, avg_hours ASC
+    `);
+
+    // Compute star ratings (scale 1-5 relative to team max)
+    const computeStars = (rows, countField) => {
+      const maxCount = Math.max(...rows.map(r => parseInt(r[countField]) || 0), 1);
+      return rows.map(r => ({
+        ...r,
+        stars: Math.max(1, Math.round((parseInt(r[countField]) || 0) / maxCount * 5))
+      }));
+    };
+
+    res.json({
+      lawyers: computeStars(lawyerResult.rows, 'answered_count'),
+      students: computeStars(studentResult.rows, 'response_count')
+    });
+  } catch (error) {
+    console.error('Error fetching rankings:', error);
+    res.status(500).json({ error: 'Reyting ma\'lumotlarini olishda xatolik' });
+  }
+});
+
+// Monte Carlo simulation data
+app.get('/api/monte-carlo', requireAuth, async (req, res) => {
+  try {
+    // Daily request counts for past 60 days
+    const dailyResult = await pool.query(`
+      SELECT DATE(created_at) as day, COUNT(*) as count
+      FROM requests
+      WHERE created_at >= NOW() - INTERVAL '60 days'
+      GROUP BY DATE(created_at)
+      ORDER BY day
+    `);
+
+    // Resolution times for answered requests
+    const resolutionResult = await pool.query(`
+      SELECT EXTRACT(EPOCH FROM (answered_at - created_at)) / 3600.0 AS hours
+      FROM requests
+      WHERE status = 'answered' AND answered_at IS NOT NULL AND created_at IS NOT NULL
+    `);
+
+    // Compute stats for daily requests
+    const dailyCounts = dailyResult.rows.map(r => parseInt(r.count));
+    const dailyMean = dailyCounts.length > 0 ? dailyCounts.reduce((a, b) => a + b, 0) / dailyCounts.length : 0;
+    const dailyStd = dailyCounts.length > 1
+      ? Math.sqrt(dailyCounts.reduce((sum, v) => sum + Math.pow(v - dailyMean, 2), 0) / (dailyCounts.length - 1))
+      : dailyMean * 0.3;
+
+    // Compute stats for resolution times
+    const resTimes = resolutionResult.rows.map(r => parseFloat(r.hours)).filter(h => h > 0 && h < 720);
+    const resMean = resTimes.length > 0 ? resTimes.reduce((a, b) => a + b, 0) / resTimes.length : 0;
+    const resStd = resTimes.length > 1
+      ? Math.sqrt(resTimes.reduce((sum, v) => sum + Math.pow(v - resMean, 2), 0) / (resTimes.length - 1))
+      : resMean * 0.3;
+
+    // Sort resolution times for percentiles
+    const sortedRes = [...resTimes].sort((a, b) => a - b);
+    const percentile = (arr, p) => arr.length > 0 ? arr[Math.floor(arr.length * p / 100)] : 0;
+
+    res.json({
+      volume: {
+        daily_history: dailyResult.rows,
+        mean: Math.round(dailyMean * 10) / 10,
+        std: Math.round(dailyStd * 10) / 10,
+        sample_size: dailyCounts.length
+      },
+      resolution: {
+        mean_hours: Math.round(resMean * 10) / 10,
+        std_hours: Math.round(resStd * 10) / 10,
+        p10_hours: Math.round(percentile(sortedRes, 10) * 10) / 10,
+        p50_hours: Math.round(percentile(sortedRes, 50) * 10) / 10,
+        p90_hours: Math.round(percentile(sortedRes, 90) * 10) / 10,
+        sample_size: resTimes.length
+      }
+    });
+  } catch (error) {
+    console.error('Error computing Monte Carlo:', error);
+    res.status(500).json({ error: 'Monte Carlo hisoblashda xatolik' });
   }
 });
 
