@@ -43,6 +43,18 @@ function requireMasterAdmin(req, res, next) {
   }
 }
 
+// Activity tracking middleware - updates last_active_at on every authenticated request
+function trackActivity(req, res, next) {
+  if (req.session && req.session.isAuthenticated && req.session.adminId) {
+    pool.query(
+      'UPDATE admins SET last_active_at = NOW() WHERE id = $1',
+      [req.session.adminId]
+    ).catch(err => console.error('Activity tracking error:', err));
+  }
+  next();
+}
+app.use(trackActivity);
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
@@ -389,19 +401,57 @@ Dictum advokatlik firmasi
   }
 });
 
-// Get all admins (for assignment dropdown)
+// Get all admins (for assignment dropdown + admin management)
 app.get('/api/admins', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, username, full_name, role
+      SELECT id, username, full_name, role, duty_start, duty_end, last_active_at, created_at,
+        CASE
+          WHEN last_active_at IS NOT NULL
+               AND last_active_at > NOW() - INTERVAL '15 minutes'
+          THEN true
+          ELSE false
+        END AS is_active
       FROM admins
       ORDER BY role DESC, full_name
     `);
-    
+
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching admins:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Update admin timeslot (duty hours)
+app.put('/api/admins/:id/timeslot', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { duty_start, duty_end } = req.body;
+
+    // Authorization: admin can only update their own, master can update anyone
+    if (req.session.role !== 'master' && req.session.adminId !== parseInt(id)) {
+      return res.status(403).json({ error: 'Faqat o\'z smenangizni o\'zgartira olasiz' });
+    }
+
+    // Validate time format (HH:MM)
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    if (duty_start && !timeRegex.test(duty_start)) {
+      return res.status(400).json({ error: 'duty_start formati noto\'g\'ri (HH:MM)' });
+    }
+    if (duty_end && !timeRegex.test(duty_end)) {
+      return res.status(400).json({ error: 'duty_end formati noto\'g\'ri (HH:MM)' });
+    }
+
+    await pool.query(
+      'UPDATE admins SET duty_start = $1, duty_end = $2 WHERE id = $3',
+      [duty_start || null, duty_end || null, id]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating timeslot:', error);
+    res.status(500).json({ error: 'Ish vaqtini yangilab bo\'lmadi' });
   }
 });
 

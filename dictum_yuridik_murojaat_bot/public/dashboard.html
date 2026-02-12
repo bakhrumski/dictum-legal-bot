@@ -873,10 +873,170 @@
         .mention-item-role.student { background: #f3e8ff; color: #8e44ad; }
         .mention-item-role.all-role { background: #fef3c7; color: #92400e; }
 
+        /* Admin Management Section */
+        .admin-management {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        .admin-management-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .admin-management-header h2 {
+            color: #2c3e50;
+            margin: 0;
+        }
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .admin-table th,
+        .admin-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        .admin-table th {
+            background: #2c3e50;
+            color: white;
+            font-weight: bold;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        .admin-table tr:hover {
+            background: #f8f9fa;
+        }
+        .admin-table tr.own-row {
+            background: #eaf6ff;
+        }
+        .admin-table tr.own-row:hover {
+            background: #d5ecfa;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-indicator.active {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-indicator.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.active {
+            background: #28a745;
+            animation: pulse-dot 2s infinite;
+        }
+        .status-dot.inactive {
+            background: #dc3545;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .timeslot-display {
+            font-size: 13px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        .timeslot-display.not-set {
+            color: #95a5a6;
+            font-style: italic;
+            font-weight: normal;
+        }
+        .duty-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 6px;
+        }
+        .duty-badge.on-duty {
+            background: #d4edda;
+            color: #155724;
+        }
+        .duty-badge.off-duty {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .timeslot-edit-btn {
+            background: none;
+            border: 1px solid #3498db;
+            color: #3498db;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .timeslot-edit-btn:hover {
+            background: #3498db;
+            color: white;
+        }
+        .timeslot-form {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .timeslot-form input[type="time"] {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 110px;
+        }
+        .timeslot-form button {
+            padding: 4px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .timeslot-save-btn {
+            background: #27ae60;
+            color: white;
+        }
+        .timeslot-save-btn:hover {
+            background: #219a52;
+        }
+        .timeslot-cancel-btn {
+            background: #95a5a6;
+            color: white;
+        }
+        .timeslot-cancel-btn:hover {
+            background: #7f8c8d;
+        }
+        .last-active-text {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+
         @media (max-width: 768px) {
             .chat-panel { width: 100%; right: -100%; }
             .chat-panel.open { right: 0; }
             body.chat-open { padding-right: 0; overflow: hidden; }
+            .admin-table th, .admin-table td { padding: 8px 10px; font-size: 12px; }
+            .admin-management-header { flex-direction: column; gap: 10px; }
         }
     </style>
 </head>
@@ -970,8 +1130,31 @@
                 <div class="loading">Yuklanmoqda...</div>
             </div>
         </div>
+
+        <!-- Admin Management Section -->
+        <div class="admin-management" id="adminManagementSection">
+            <div class="admin-management-header">
+                <h2>Jamoa holati</h2>
+            </div>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ism</th>
+                        <th>Username</th>
+                        <th>Rol</th>
+                        <th>Ish vaqti (Smena)</th>
+                        <th>Holati</th>
+                        <th>Oxirgi faollik</th>
+                    </tr>
+                </thead>
+                <tbody id="adminTableBody">
+                    <tr><td colspan="7" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
-    
+
     <!-- Hidden chart canvases for PDF export (high-res) -->
     <div id="chartContainer" style="position: absolute; left: -9999px; top: -9999px;">
         <canvas id="statusChart" width="900" height="600"></canvas>
@@ -1047,11 +1230,135 @@
             try {
                 const response = await fetch('/api/admins');
                 allAdmins = await response.json();
+                renderAdminTable();
             } catch (error) {
                 console.error('Error loading admins:', error);
             }
         }
-        
+
+        function formatTimeslot(timeStr) {
+            if (!timeStr) return '';
+            return timeStr.substring(0, 5);
+        }
+
+        function checkIsOnDuty(dutyStart, dutyEnd) {
+            if (!dutyStart || !dutyEnd) return false;
+            const now = new Date();
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+            const [startH, startM] = dutyStart.split(':').map(Number);
+            const [endH, endM] = dutyEnd.split(':').map(Number);
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+            if (startMinutes <= endMinutes) {
+                return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+            } else {
+                return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+            }
+        }
+
+        function formatTimeAgo(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 1) return 'Hozir';
+            if (diffMins < 60) return `${diffMins} daqiqa oldin`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours} soat oldin`;
+            const diffDays = Math.floor(diffHours / 24);
+            return `${diffDays} kun oldin`;
+        }
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('adminTableBody');
+            if (!tbody || allAdmins.length === 0) return;
+
+            const roleLabels = { 'master': 'Yurist', 'student': 'Student' };
+            const roleBadgeColors = { 'master': '#3498db', 'student': '#8e44ad' };
+
+            tbody.innerHTML = allAdmins.map((admin, i) => {
+                const isOwnRow = admin.id === currentUser.adminId;
+                const canEdit = isOwnRow || currentUser.role === 'master';
+
+                // Timeslot display
+                let timeslotHtml;
+                if (admin.duty_start && admin.duty_end) {
+                    const isOnDuty = checkIsOnDuty(admin.duty_start, admin.duty_end);
+                    timeslotHtml = `
+                        <span class="timeslot-display">
+                            ${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}
+                            <span class="duty-badge ${isOnDuty ? 'on-duty' : 'off-duty'}">
+                                ${isOnDuty ? 'Smenada' : 'Smena tashqari'}
+                            </span>
+                        </span>`;
+                } else {
+                    timeslotHtml = '<span class="timeslot-display not-set">Belgilanmagan</span>';
+                }
+                if (canEdit) {
+                    timeslotHtml += `<button class="timeslot-edit-btn" onclick="editTimeslot(${admin.id}, '${admin.duty_start || ''}', '${admin.duty_end || ''}')">&#9998;</button>`;
+                }
+
+                // Status display
+                const statusHtml = admin.is_active
+                    ? '<span class="status-indicator active"><span class="status-dot active"></span>Aktiv</span>'
+                    : '<span class="status-indicator inactive"><span class="status-dot inactive"></span>Nofaol</span>';
+
+                // Last active display
+                let lastActiveHtml = '<span class="last-active-text">Hech qachon</span>';
+                if (admin.last_active_at) {
+                    lastActiveHtml = `<span class="last-active-text">${formatTimeAgo(admin.last_active_at)}</span>`;
+                }
+
+                return `<tr class="${isOwnRow ? 'own-row' : ''}">
+                    <td>${i + 1}</td>
+                    <td><strong>${admin.full_name}</strong>${isOwnRow ? ' <small style="color:#3498db;">(siz)</small>' : ''}</td>
+                    <td>@${admin.username}</td>
+                    <td><span class="role-badge role-${admin.role}">${roleLabels[admin.role] || admin.role}</span></td>
+                    <td id="timeslot-cell-${admin.id}">${timeslotHtml}</td>
+                    <td>${statusHtml}</td>
+                    <td>${lastActiveHtml}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function editTimeslot(adminId, currentStart, currentEnd) {
+            const cell = document.getElementById(`timeslot-cell-${adminId}`);
+            if (!cell) return;
+            cell.innerHTML = `
+                <div class="timeslot-form">
+                    <input type="time" id="dutyStart-${adminId}" value="${formatTimeslot(currentStart)}" />
+                    <span>-</span>
+                    <input type="time" id="dutyEnd-${adminId}" value="${formatTimeslot(currentEnd)}" />
+                    <button class="timeslot-save-btn" onclick="saveTimeslot(${adminId})">&#10003;</button>
+                    <button class="timeslot-cancel-btn" onclick="loadAdmins()">&#10005;</button>
+                </div>`;
+        }
+
+        async function saveTimeslot(adminId) {
+            const dutyStart = document.getElementById(`dutyStart-${adminId}`).value;
+            const dutyEnd = document.getElementById(`dutyEnd-${adminId}`).value;
+            if (!dutyStart || !dutyEnd) {
+                alert('Iltimos, ish vaqti boshlanish va tugashini kiriting');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/admins/${adminId}/timeslot`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ duty_start: dutyStart, duty_end: dutyEnd })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    loadAdmins();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (error) {
+                console.error('Error saving timeslot:', error);
+                alert('Serverga ulanib bo\'lmadi');
+            }
+        }
+
         async function loadRequests() {
             try {
                 const response = await fetch('/api/requests');
@@ -2467,24 +2774,30 @@
                     admin.full_name,
                     `@${admin.username}`,
                     roleLabels[admin.role] || admin.role,
+                    admin.duty_start && admin.duty_end
+                        ? `${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}`
+                        : 'Belgilanmagan',
+                    admin.is_active ? 'Aktiv' : 'Nofaol',
                     adminAssignedCounts[admin.id] || 0,
                     adminAnswerCounts[admin.full_name] || 0
                 ]);
 
                 doc.autoTable({
                     startY: 30,
-                    head: [['#', 'Ism', 'Username', 'Lavozimi', 'Tayinlangan', 'Javob bergan']],
+                    head: [['#', 'Ism', 'Username', 'Lavozimi', 'Ish vaqti', 'Holati', 'Tayinlangan', 'Javob bergan']],
                     body: adminTableData,
                     theme: 'striped',
                     headStyles: { fillColor: [30, 45, 65], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
                     bodyStyles: { fontSize: 9, halign: 'center', cellPadding: 3.5, font: fontName },
                     columnStyles: {
                         0: { cellWidth: 10 },
-                        1: { cellWidth: 40, halign: 'left' },
-                        2: { cellWidth: 35, halign: 'left' },
-                        3: { cellWidth: 25 },
+                        1: { cellWidth: 35, halign: 'left' },
+                        2: { cellWidth: 28, halign: 'left' },
+                        3: { cellWidth: 22 },
                         4: { cellWidth: 28 },
-                        5: { cellWidth: 28 }
+                        5: { cellWidth: 18 },
+                        6: { cellWidth: 22 },
+                        7: { cellWidth: 22 }
                     },
                     alternateRowStyles: { fillColor: [240, 245, 250] },
                     styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
@@ -2492,6 +2805,10 @@
                         if (data.section === 'body' && data.column.index === 3) {
                             if (data.cell.raw === 'Yurist') { data.cell.styles.textColor = [41, 128, 185]; data.cell.styles.fontStyle = 'bold'; }
                             if (data.cell.raw === 'Student') { data.cell.styles.textColor = [142, 68, 173]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                        if (data.section === 'body' && data.column.index === 5) {
+                            if (data.cell.raw === 'Aktiv') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Nofaol') { data.cell.styles.textColor = [231, 76, 60]; data.cell.styles.fontStyle = 'bold'; }
                         }
                     }
                 });
@@ -2977,10 +3294,13 @@
         // Set default filter to "Kutilmoqda"
         document.getElementById('statusFilter').value = 'pending';
 
-        loadUserInfo().then(() => startBackgroundPoll());
-        loadAdmins();
+        loadUserInfo().then(() => {
+            startBackgroundPoll();
+            loadAdmins();
+        });
         loadRequests();
         setInterval(loadRequests, 30000);
+        setInterval(loadAdmins, 60000);
     </script>
 </body>
 </html>
