@@ -84,8 +84,19 @@ app.post('/api/login', async (req, res) => {
     if (result.rows.length > 0) {
       const admin = result.rows[0];
 
-      // Compare password with hashed password
-      const passwordMatch = await bcrypt.compare(password, admin.password);
+      // Try bcrypt first, then plain text fallback (for legacy passwords)
+      let passwordMatch = false;
+      const isBcryptHash = admin.password && admin.password.startsWith('$2');
+      if (isBcryptHash) {
+        passwordMatch = await bcrypt.compare(password, admin.password);
+      } else {
+        passwordMatch = (password === admin.password);
+        // Auto-upgrade plain text password to bcrypt
+        if (passwordMatch) {
+          const hashed = await bcrypt.hash(password, 10);
+          await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hashed, admin.id]);
+        }
+      }
 
       if (passwordMatch) {
         req.session.isAuthenticated = true;
