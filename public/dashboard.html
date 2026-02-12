@@ -1656,6 +1656,51 @@
             </div>
         </div>
         
+        <!-- Admin Management Section -->
+        <div class="admin-management" id="adminManagementSection">
+            <div class="admin-management-header">
+                <h2>Jamoa holati</h2>
+                <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="openAddMemberModal()">+ Yangi a'zo qo'shish</button>
+            </div>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ism</th>
+                        <th>Username</th>
+                        <th>Rol</th>
+                        <th>Ish vaqti (Smena)</th>
+                        <th>Holati</th>
+                        <th>Oxirgi faollik</th>
+                        <th id="actionsColHeader" style="display:none; text-align:center;">Amallar</th>
+                    </tr>
+                </thead>
+                <tbody id="adminTableBody">
+                    <tr><td colspan="8" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Monte Carlo Simulation Section -->
+        <div class="monte-carlo-section" id="monteCarloSection">
+            <div class="mc-card">
+                <h3><span class="mc-icon">📈</span> Murojaatlar prognozi (Monte Carlo)</h3>
+                <div id="mcForecast">
+                    <div class="forecast-bars" id="forecastBars"></div>
+                    <div class="mc-summary" id="forecastSummary"></div>
+                </div>
+            </div>
+            <div class="mc-card">
+                <h3><span class="mc-icon">⏱️</span> Hal qilish vaqti tahlili</h3>
+                <div id="mcResolution">
+                    <div class="mc-percentile-bar" id="resolutionBar"></div>
+                    <div class="mc-percentile-labels" id="resolutionLabels"></div>
+                    <div class="mc-resolution-stats" id="resolutionStats"></div>
+                    <div class="mc-summary" id="resolutionSummary"></div>
+                </div>
+            </div>
+        </div>
+
         <div class="main-content-area">
             <div class="requests-container">
                 <div class="controls">
@@ -1714,51 +1759,6 @@
                 <div class="ranking-card">
                     <h3 class="student-title">Studentlar reytingi</h3>
                     <div id="studentRankings"><div style="color:#95a5a6; font-size:12px;">Yuklanmoqda...</div></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Admin Management Section -->
-        <div class="admin-management" id="adminManagementSection">
-            <div class="admin-management-header">
-                <h2>Jamoa holati</h2>
-                <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="openAddMemberModal()">+ Yangi a'zo qo'shish</button>
-            </div>
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Ism</th>
-                        <th>Username</th>
-                        <th>Rol</th>
-                        <th>Ish vaqti (Smena)</th>
-                        <th>Holati</th>
-                        <th>Oxirgi faollik</th>
-                        <th id="actionsColHeader" style="display:none; text-align:center;">Amallar</th>
-                    </tr>
-                </thead>
-                <tbody id="adminTableBody">
-                    <tr><td colspan="8" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Monte Carlo Simulation Section -->
-        <div class="monte-carlo-section" id="monteCarloSection">
-            <div class="mc-card">
-                <h3><span class="mc-icon">📈</span> Murojaatlar prognozi (Monte Carlo)</h3>
-                <div id="mcForecast">
-                    <div class="forecast-bars" id="forecastBars"></div>
-                    <div class="mc-summary" id="forecastSummary"></div>
-                </div>
-            </div>
-            <div class="mc-card">
-                <h3><span class="mc-icon">⏱️</span> Hal qilish vaqti tahlili</h3>
-                <div id="mcResolution">
-                    <div class="mc-percentile-bar" id="resolutionBar"></div>
-                    <div class="mc-percentile-labels" id="resolutionLabels"></div>
-                    <div class="mc-resolution-stats" id="resolutionStats"></div>
-                    <div class="mc-summary" id="resolutionSummary"></div>
                 </div>
             </div>
         </div>
