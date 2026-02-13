@@ -4,25 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kirish - Dictum Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --login-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --login-card: #ffffff;
+            --login-text: #2c3e50;
+            --login-text-secondary: #7f8c8d;
+            --login-input-bg: #ffffff;
+            --login-input-border: #ddd;
+            --login-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        [data-theme="dark"] {
+            --login-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            --login-card: #161b22;
+            --login-text: #e6edf3;
+            --login-text-secondary: #8b949e;
+            --login-input-bg: #1c2333;
+            --login-input-border: #30363d;
+            --login-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        *, *::before, *::after {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--login-bg);
             height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
         }
         .login-container {
-            background: white;
+            background: var(--login-card);
             padding: 40px;
             border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            box-shadow: var(--login-shadow);
             width: 100%;
             max-width: 400px;
         }
@@ -31,12 +55,12 @@
             margin-bottom: 30px;
         }
         .logo h1 {
-            color: #2c3e50;
+            color: var(--login-text);
             font-size: 28px;
             margin-bottom: 5px;
         }
         .logo p {
-            color: #7f8c8d;
+            color: var(--login-text-secondary);
             font-size: 14px;
         }
         .form-group {
@@ -44,16 +68,18 @@
         }
         label {
             display: block;
-            color: #2c3e50;
+            color: var(--login-text);
             font-weight: bold;
             margin-bottom: 8px;
         }
         input {
             width: 100%;
             padding: 12px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--login-input-border);
             border-radius: 5px;
             font-size: 14px;
+            background: var(--login-input-bg);
+            color: var(--login-text);
         }
         input:focus {
             outline: none;
@@ -84,12 +110,68 @@
         .error-message.show {
             display: block;
         }
+        /* Theme toggle */
+        .theme-toggle {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            z-index: 9999;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.15);
+            color: white;
+            font-size: 22px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            backdrop-filter: blur(8px);
+            transition: all 0.3s ease;
+        }
+        .theme-toggle:hover {
+            transform: scale(1.1) rotate(15deg);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .theme-toggle:active { transform: scale(0.95); }
+        .theme-toggle .icon-sun,
+        .theme-toggle .icon-moon {
+            position: absolute;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg); }
+        .theme-toggle .icon-moon { opacity: 0; transform: rotate(-90deg); }
+        [data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(90deg); }
+        [data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg); }
     </style>
 </head>
 <body>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish">
+        <span class="icon-sun">&#9728;</span>
+        <span class="icon-moon">&#9790;</span>
+    </button>
+    <script>
+        (function() {
+            const saved = localStorage.getItem('dictum-theme');
+            if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        })();
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            if (current === 'dark') {
+                html.removeAttribute('data-theme');
+                localStorage.setItem('dictum-theme', 'light');
+            } else {
+                html.setAttribute('data-theme', 'dark');
+                localStorage.setItem('dictum-theme', 'dark');
+            }
+        }
+    </script>
     <div class="login-container">
         <div class="logo">
-            <h1>🏛️ Dictum</h1>
+            <h1>&#127963; Dictum</h1>
             <p>Murojaatlar boshqaruv tizimi</p>
         </div>
         <div id="errorMessage" class="error-message"></div>
@@ -112,7 +194,7 @@
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('errorMessage');
             try {
-                const response = await fetch('http://localhost:3000/api/login', {
+                const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: username, password: password })
