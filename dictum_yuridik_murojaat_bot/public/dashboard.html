@@ -671,6 +671,27 @@
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
         }
+        .detail-select {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            min-width: 220px;
+            margin-right: 10px;
+        }
+        .detail-select.select-warning {
+            border-color: #e74c3c;
+            background-color: rgba(231, 76, 60, 0.06);
+        }
+        .detail-select.select-success {
+            border-color: #27ae60;
+            background-color: rgba(39, 174, 96, 0.06);
+        }
+        [data-theme="dark"] .detail-select.select-warning {
+            background-color: rgba(231, 76, 60, 0.12);
+        }
+        [data-theme="dark"] .detail-select.select-success {
+            background-color: rgba(39, 174, 96, 0.12);
+        }
         
         .request-item {
             border: 1px solid var(--glass-border-light);
@@ -3633,7 +3654,7 @@
                         <div class="detail-label">Yo\'nalish:</div>
                         <div class="detail-value">
                             ${currentUser.role === 'master' || request.status !== 'answered' ? `
-                            <select id="categorySelect" onchange="updateCategory(${request.id}, this.value)" style="padding: 8px 12px; border-radius: 5px; border: 1px solid ${request.category === 'Boshqa' ? '#e74c3c' : '#27ae60'}; font-size: 14px; min-width: 220px; background: ${request.category === 'Boshqa' ? '#fff5f5' : '#f0fff0'};">
+                            <select id="categorySelect" onchange="updateCategory(${request.id}, this.value)" class="detail-select ${request.category === 'Boshqa' ? 'select-warning' : 'select-success'}">
                                 <option value="Boshqa" ${request.category === 'Boshqa' ? 'selected' : ''}>-- Yo'nalishni tanlang --</option>
                                 <option value="Fuqarolik huquqi" ${request.category === 'Fuqarolik huquqi' ? 'selected' : ''}>Fuqarolik huquqi</option>
                                 <option value="Jinoyat huquqi" ${request.category === 'Jinoyat huquqi' ? 'selected' : ''}>Jinoyat huquqi</option>
@@ -3670,7 +3691,7 @@
                     ` : ''}
                     ${currentUser.role === 'master' ? `
                     <div style="margin-top: 10px;">
-                        <select id="lawyerSelect" style="padding: 8px; margin-right: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <select id="lawyerSelect" class="detail-select">
                             <option value="">-- Yuristni tanlang --</option>
                             ${allAdmins.filter(a => a.role === 'master').map(admin => 
                                 `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
