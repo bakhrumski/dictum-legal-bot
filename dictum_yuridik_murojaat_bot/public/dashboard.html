@@ -316,9 +316,6 @@
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
         }
-        .profile-area {
-            position: relative;
-        }
         .profile-toggle {
             display: flex;
             align-items: center;
@@ -328,43 +325,13 @@
             border-radius: 50px;
             border: 2px solid #bdc3c7;
             background: transparent;
-            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
+            transition: gap 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+                        padding 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+                        border-color 0.4s ease,
+                        background 0.4s ease,
+                        box-shadow 0.4s ease;
         }
-        .profile-toggle .profile-role-label,
-        .profile-toggle .profile-chevron {
-            max-width: 0;
-            opacity: 0;
-            overflow: hidden;
-            white-space: nowrap;
-            transition: max-width 0.8s cubic-bezier(0.4, 0, 0.2, 1),
-                        opacity 0.5s ease,
-                        margin 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-            margin: 0;
-        }
-        .profile-toggle.open {
-            gap: 8px;
-            padding: 3px 10px 3px 3px;
-            border-color: #95a5a6;
-            background: var(--glass-bg, rgba(255,255,255,0.9));
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-            width: 210px;
-        }
-        .profile-toggle.open .profile-role-label {
-            max-width: 120px;
-            opacity: 1;
-        }
-        .profile-toggle.open .profile-chevron {
-            max-width: 20px;
-            opacity: 0.6;
-        }
-        [data-theme="dark"] .profile-toggle {
-            border-color: rgba(255, 255, 255, 0.15);
-        }
-        [data-theme="dark"] .profile-toggle.open {
-            border-color: rgba(255, 255, 255, 0.3);
-            background: rgba(255, 255, 255, 0.08);
-        }
+        /* --- Avatar: visible when closed, fades out when open --- */
         .profile-avatar {
             width: 42px;
             height: 42px;
@@ -376,171 +343,90 @@
             font-weight: 700;
             color: white;
             letter-spacing: 0.5px;
-            position: relative;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             flex-shrink: 0;
             background: linear-gradient(135deg, #1a5276, #2e86c1);
+            transition: opacity 0.4s ease,
+                        width 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
         }
-        .profile-avatar.role-master {
-            background: linear-gradient(135deg, #1a5276, #2e86c1);
+        .profile-avatar.role-master { background: linear-gradient(135deg, #1a5276, #2e86c1); }
+        .profile-avatar.role-lawyer { background: linear-gradient(135deg, #1e8449, #27ae60); }
+        .profile-avatar.role-student { background: linear-gradient(135deg, #6c3483, #a569bd); }
+        .profile-toggle.open .profile-avatar {
+            opacity: 0;
+            width: 0;
+            margin: 0;
         }
-        .profile-avatar.role-lawyer {
-            background: linear-gradient(135deg, #1e8449, #27ae60);
-        }
-        .profile-avatar.role-student {
-            background: linear-gradient(135deg, #6c3483, #a569bd);
-        }
-        .profile-avatar::after { display: none; }
-        .profile-role-label {
+        /* --- Info (fullname + role): hidden when closed, fades in when open --- */
+        .profile-info {
             display: flex;
             flex-direction: column;
             align-items: flex-start;
-            gap: 3px;
-        }
-        .profile-role-tag {
-            font-size: 11px;
-            font-weight: 700;
-            padding: 3px 10px;
-            border-radius: 6px;
-            letter-spacing: 0.3px;
-        }
-        .profile-role-tag.master-tag {
-            background: linear-gradient(135deg, #1a5276, #2e86c1);
-            color: white;
-            box-shadow: 0 2px 6px rgba(26,82,118,0.3);
-        }
-        .profile-role-tag.lawyer-tag {
-            background: linear-gradient(135deg, #1e8449, #27ae60);
-            color: white;
-            box-shadow: 0 2px 6px rgba(30,132,73,0.3);
-        }
-        .profile-role-tag.student-tag {
-            background: linear-gradient(135deg, #6c3483, #a569bd);
-            color: white;
-            box-shadow: 0 2px 6px rgba(108,52,131,0.3);
-        }
-        .profile-admin-tag {
-            font-size: 9px;
-            font-weight: 700;
-            color: #5d6d7e;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            padding-left: 2px;
-        }
-        .profile-chevron {
-            color: var(--text-secondary);
-            font-size: 9px;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            margin-left: -2px;
-            opacity: 0.6;
-        }
-        .profile-toggle.open .profile-chevron {
-            transform: rotate(180deg);
-        }
-        .profile-dropdown {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            background: var(--dropdown-bg);
-            backdrop-filter: blur(var(--glass-blur-strong));
-            -webkit-backdrop-filter: blur(var(--glass-blur-strong));
-            border-radius: var(--ios-radius);
-            box-shadow: var(--shadow-lg);
-            width: 210px;
-            z-index: 999;
-            overflow: hidden;
-            border: 1px solid var(--glass-border);
-            visibility: hidden;
+            max-width: 0;
             opacity: 0;
-            transform: translateY(-8px) scale(0.96);
-            pointer-events: none;
-            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                        transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-                        visibility 0s linear 0.5s;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: max-width 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.5s ease 0.15s;
         }
-        .profile-dropdown.open {
-            visibility: visible;
+        .profile-toggle.open .profile-info {
+            max-width: 200px;
             opacity: 1;
-            transform: translateY(0) scale(1);
-            pointer-events: auto;
-            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
-                        transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
-                        visibility 0s linear 0s;
         }
-        .profile-dropdown-header {
-            padding: 12px;
-            background: var(--dropdown-header-bg);
-            color: white;
-            text-align: center;
+        .profile-fullname {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.2;
         }
-        .profile-dropdown-header .dd-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            margin: 0 auto 6px;
+        .profile-role-text {
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        /* --- Exit button: hidden when closed, fades in when open --- */
+        .profile-exit-btn {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            border: none;
-            box-shadow: none;
-        }
-        .profile-dropdown-header .dd-avatar.role-master { background: linear-gradient(135deg, #1a5276, #2e86c1); }
-        .profile-dropdown-header .dd-avatar.role-lawyer { background: linear-gradient(135deg, #1e8449, #27ae60); }
-        .profile-dropdown-header .dd-avatar.role-student { background: linear-gradient(135deg, #6c3483, #a569bd); }
-        .profile-dropdown-header .dd-name {
-            font-weight: 600;
-            font-size: 13px;
-        }
-        .profile-dropdown-header .dd-role {
-            font-size: 10px;
-            opacity: 0.8;
-            margin-top: 1px;
-        }
-        .profile-dropdown-menu {
-            padding: 4px 0;
-        }
-        .profile-dropdown-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 16px;
+            max-width: 0;
+            opacity: 0;
+            overflow: hidden;
             cursor: pointer;
-            font-size: 14px;
-            color: var(--text-primary);
-            border: none;
-            background: none;
-            width: 100%;
-            text-align: left;
-            transition: background 0.15s;
-        }
-        .profile-dropdown-item:hover {
-            background: var(--dropdown-hover);
-        }
-        .profile-dropdown-item .dd-icon {
-            font-size: 16px;
-            width: 20px;
-            text-align: center;
-        }
-        .profile-dropdown-item.logout-item {
             color: #95a5a6;
-            border-top: 1px solid var(--border-light);
-            margin-top: 2px;
-            padding: 8px 16px;
+            transition: max-width 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.4s ease 0.2s,
+                        color 0.2s ease;
+            flex-shrink: 0;
         }
-        .profile-dropdown-item.logout-item:hover {
-            background: var(--dropdown-hover);
-            color: #7f8c8d;
+        .profile-exit-btn svg { width: 18px; height: 18px; }
+        .profile-exit-btn:hover { color: #e74c3c; }
+        .profile-toggle.open .profile-exit-btn {
+            max-width: 40px;
+            opacity: 1;
         }
-        .profile-dropdown-item.logout-item .dd-icon {
-            display: flex; align-items: center;
+        /* --- Toggle open state --- */
+        .profile-toggle.open {
+            gap: 10px;
+            padding: 6px 12px 6px 14px;
+            border-color: #95a5a6;
+            background: var(--glass-bg, rgba(255,255,255,0.9));
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
         }
-        .profile-dropdown-item.logout-item .dd-icon svg {
-            width: 16px; height: 16px;
+        /* --- Dark mode --- */
+        [data-theme="dark"] .profile-toggle {
+            border-color: rgba(255, 255, 255, 0.15);
         }
-
+        [data-theme="dark"] .profile-toggle.open {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        [data-theme="dark"] .profile-fullname { color: #e0e0e0; }
+        [data-theme="dark"] .profile-role-text { color: #aaa; }
         .role-badge {
             display: inline-block;
             font-size: 13px;
@@ -2352,24 +2238,16 @@
                 </button>
             </div>
             <div class="header-right" style="display:flex; align-items:center; gap:12px;">
-              <div class="profile-area">
                 <button class="profile-toggle" id="profileToggle" onclick="toggleProfileDropdown(event)">
                     <div class="profile-avatar" id="profileAvatar">A</div>
-                    <span class="profile-role-label" id="profileRoleLabel">...</span>
-                    <span class="profile-chevron">&#9660;</span>
+                    <div class="profile-info">
+                        <span class="profile-fullname" id="profileFullName"></span>
+                        <span class="profile-role-text" id="profileRoleText"></span>
+                    </div>
+                    <span class="profile-exit-btn" onclick="event.stopPropagation(); logout();" title="Chiqish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    </span>
                 </button>
-                <div class="profile-dropdown" id="profileDropdown">
-                    <div class="profile-dropdown-header">
-                        <div class="dd-name" id="ddName"></div>
-                        <div class="dd-role" id="ddRole"></div>
-                    </div>
-                    <div class="profile-dropdown-menu">
-                        <button class="profile-dropdown-item logout-item" onclick="logout()">
-                            <span class="dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#95a5a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Chiqish
-                        </button>
-                    </div>
-                </div>
-              </div>
                 <!-- Hidden spans for backward compatibility -->
                 <span id="userName" style="display:none;"></span>
                 <span id="userRole" style="display:none;"></span>
@@ -2713,18 +2591,14 @@
                 const roleText = roleNames[data.role] || data.role;
                 const roleClass = 'role-' + data.role;
 
-                // Profile toggle (closed state)
                 const avatar = document.getElementById('profileAvatar');
                 if (avatar) { avatar.textContent = initials; avatar.className = 'profile-avatar ' + roleClass; }
 
-                const roleLabel = document.getElementById('profileRoleLabel');
-                if (roleLabel) roleLabel.innerHTML = '<span class="profile-role-tag ' + data.role + '-tag">' + roleText + '</span>';
+                const fullNameEl = document.getElementById('profileFullName');
+                if (fullNameEl) fullNameEl.textContent = name;
 
-                // Dropdown header
-                const dn = document.getElementById('ddName');
-                if (dn) dn.textContent = name;
-                const dr = document.getElementById('ddRole');
-                if (dr) dr.textContent = roleText;
+                const roleTextEl = document.getElementById('profileRoleText');
+                if (roleTextEl) roleTextEl.textContent = roleText;
 
                 // Hidden spans for backward compatibility
                 const un = document.getElementById('userName');
@@ -2738,11 +2612,9 @@
 
         function toggleProfileDropdown(e) {
             e.stopPropagation();
-            document.getElementById('profileDropdown').classList.toggle('open');
             document.getElementById('profileToggle').classList.toggle('open');
         }
         function closeProfileDropdown() {
-            document.getElementById('profileDropdown').classList.remove('open');
             document.getElementById('profileToggle').classList.remove('open');
         }
         
