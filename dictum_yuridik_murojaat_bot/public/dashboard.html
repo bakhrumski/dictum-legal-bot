@@ -3600,8 +3600,7 @@
                     const select = document.getElementById('categorySelect');
                     if (select) {
                         const isDefault = category === 'Boshqa';
-                        select.style.border = `1px solid ${isDefault ? '#e74c3c' : '#27ae60'}`;
-                        select.style.background = isDefault ? '#fff5f5' : '#f0fff0';
+                        select.className = 'detail-select ' + (isDefault ? 'select-warning' : 'select-success');
                         const hint = select.nextElementSibling;
                         if (hint) {
                             hint.innerHTML = isDefault
@@ -3882,8 +3881,15 @@
                 const response = await fetch('/api/ai-analysis', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify({ requestText, category })
                 });
+
+                if (response.status === 401) {
+                    content.innerHTML = '<div style="color: #e74c3c; padding: 15px;">Sessiya tugagan. Qayta kiring.</div>';
+                    setTimeout(() => { window.location.href = '/login.html'; }, 2000);
+                    return;
+                }
 
                 const data = await response.json();
                 if (response.ok) {
