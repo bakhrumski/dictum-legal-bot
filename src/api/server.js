@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
@@ -29,8 +30,8 @@ app.use(session({
   cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// Serve static files
-app.use(express.static('public'));
+// Serve static files (absolute path to project root /public)
+app.use(express.static(path.join(__dirname, '..', '..', 'public')));
 
 // Single-session enforcement: one active session per admin
 const activeSessions = new Map(); // adminId -> sessionId
@@ -1081,10 +1082,14 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
     let query, params;
     if (sinceId > 0) {
       query = `
-        SELECT cm.id, cm.message, cm.mentions, cm.created_at,
-               a.id as admin_id, a.username, a.full_name, a.role
+        SELECT cm.id, cm.message, cm.mentions, cm.created_at, cm.reply_to_id,
+               a.id as admin_id, a.username, a.full_name, a.role,
+               rm.message as reply_message,
+               ra.full_name as reply_sender_name, ra.id as reply_sender_id
         FROM chat_messages cm
         JOIN admins a ON cm.admin_id = a.id
+        LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
+        LEFT JOIN admins ra ON rm.admin_id = ra.id
         WHERE cm.id > $1
         ORDER BY cm.id ASC
         LIMIT $2
@@ -1092,10 +1097,14 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
       params = [sinceId, limit];
     } else {
       query = `
-        SELECT cm.id, cm.message, cm.mentions, cm.created_at,
-               a.id as admin_id, a.username, a.full_name, a.role
+        SELECT cm.id, cm.message, cm.mentions, cm.created_at, cm.reply_to_id,
+               a.id as admin_id, a.username, a.full_name, a.role,
+               rm.message as reply_message,
+               ra.full_name as reply_sender_name, ra.id as reply_sender_id
         FROM chat_messages cm
         JOIN admins a ON cm.admin_id = a.id
+        LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
+        LEFT JOIN admins ra ON rm.admin_id = ra.id
         ORDER BY cm.id DESC
         LIMIT $1
       `;
@@ -1113,7 +1122,7 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
 
 app.post('/api/chat/messages', requireAuth, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, reply_to_id } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message cannot be empty' });
@@ -1129,14 +1138,30 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
       mentions.push(match[1].toLowerCase());
     }
 
+    const replyToId = reply_to_id ? parseInt(reply_to_id) : null;
+
     const result = await pool.query(
-      `INSERT INTO chat_messages (admin_id, message, mentions)
-       VALUES ($1, $2, $3)
-       RETURNING id, message, mentions, created_at`,
-      [req.session.adminId, message.trim(), JSON.stringify(mentions)]
+      `INSERT INTO chat_messages (admin_id, message, mentions, reply_to_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, message, mentions, created_at, reply_to_id`,
+      [req.session.adminId, message.trim(), JSON.stringify(mentions), replyToId]
     );
 
     const newMsg = result.rows[0];
+
+    // Fetch reply info if replying to a message
+    let replyInfo = {};
+    if (replyToId) {
+      const replyResult = await pool.query(
+        `SELECT cm.message as reply_message, a.full_name as reply_sender_name, a.id as reply_sender_id
+         FROM chat_messages cm JOIN admins a ON cm.admin_id = a.id WHERE cm.id = $1`,
+        [replyToId]
+      );
+      if (replyResult.rows.length > 0) {
+        replyInfo = replyResult.rows[0];
+      }
+    }
+
     res.json({
       success: true,
       message: {
@@ -1144,6 +1169,10 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
         message: newMsg.message,
         mentions: newMsg.mentions,
         created_at: newMsg.created_at,
+        reply_to_id: newMsg.reply_to_id,
+        reply_message: replyInfo.reply_message || null,
+        reply_sender_name: replyInfo.reply_sender_name || null,
+        reply_sender_id: replyInfo.reply_sender_id || null,
         admin_id: req.session.adminId,
         username: req.session.username,
         full_name: req.session.fullName,
@@ -1196,6 +1225,7 @@ async function runMigrations() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)`);
+    await pool.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL`);
     console.log('Database migrations completed');
   } catch (error) {
     console.error('Migration error:', error.message);

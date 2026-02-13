@@ -52,6 +52,59 @@
         }
         .header-right {
             position: relative;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-chat-btn {
+            position: relative;
+            background: #ecf0f1;
+            border: none;
+            border-radius: 10px;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .header-chat-btn:hover {
+            background: #dfe6e9;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header-chat-btn:active {
+            transform: scale(0.95);
+        }
+        .header-chat-dots {
+            display: flex;
+            gap: 3px;
+        }
+        .header-chat-dots span {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #7f8c8d;
+        }
+        .header-chat-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            font-size: 10px;
+            font-weight: 800;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(231,76,60,0.4);
+            animation: pulse-badge 2s infinite;
+            line-height: 1;
         }
         .profile-toggle {
             display: flex;
@@ -1113,6 +1166,38 @@
             border-radius: 3px; font-weight: 600;
         }
         .chat-msg-time { font-size: 10px; color: #95a5a6; text-align: right; margin-top: 3px; }
+        .chat-msg-reply-btn {
+            display: none; position: absolute; top: 4px; right: 6px;
+            background: rgba(0,0,0,0.06); border: none; cursor: pointer;
+            font-size: 13px; padding: 2px 6px; border-radius: 6px; color: #7f8c8d;
+            transition: background 0.15s;
+        }
+        .chat-msg:hover .chat-msg-reply-btn { display: block; }
+        .chat-msg-reply-btn:hover { background: rgba(0,0,0,0.12); color: #2c3e50; }
+        .chat-msg { position: relative; }
+        .chat-reply-quote {
+            background: rgba(0,0,0,0.05); border-left: 3px solid #3498db;
+            border-radius: 4px; padding: 4px 8px; margin-bottom: 5px;
+            font-size: 11px; cursor: pointer; overflow: hidden;
+            max-height: 36px;
+        }
+        .chat-reply-quote-sender { font-weight: 700; color: #2980b9; margin-bottom: 1px; }
+        .chat-reply-quote-text { color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-reply-preview {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #f0f4f8; border-left: 3px solid #3498db;
+            border-radius: 6px; padding: 8px 12px; margin-bottom: 8px;
+            animation: notif-slide-in 0.2s ease;
+        }
+        .chat-reply-preview-info { flex: 1; overflow: hidden; }
+        .chat-reply-preview-sender { font-size: 12px; font-weight: 700; color: #2980b9; }
+        .chat-reply-preview-text { font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-reply-preview-close {
+            background: none; border: none; font-size: 18px; color: #95a5a6;
+            cursor: pointer; padding: 0 4px; margin-left: 8px; line-height: 1;
+        }
+        .chat-reply-preview-close:hover { color: #e74c3c; }
+        .chat-notification-tag.reply { background: #e8f4fd; color: #2980b9; }
 
         .chat-date-separator { text-align: center; font-size: 11px; color: #7f8c8d; padding: 5px 0; }
         .chat-date-separator span {
@@ -1242,6 +1327,10 @@
         @keyframes pulse-dot {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
+        }
+        @keyframes pulse-badge {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
         .timeslot-cell-inner {
             display: flex;
@@ -1692,6 +1781,12 @@
                 </button>
             </div>
             <div class="header-right">
+                <button class="header-chat-btn" onclick="toggleChat()" title="Guruh chat">
+                    <div class="header-chat-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <span class="header-chat-badge" id="headerChatBadge" style="display:none;">0</span>
+                </button>
                 <button class="profile-toggle" id="profileToggle" onclick="toggleProfileDropdown(event)">
                     <div class="profile-avatar" id="profileAvatar">A</div>
                     <span class="profile-role-label" id="profileRoleLabel">...</span>
@@ -1704,10 +1799,6 @@
                         <div class="dd-role" id="ddRole"></div>
                     </div>
                     <div class="profile-dropdown-menu">
-                        <button class="profile-dropdown-item" onclick="toggleChat(); closeProfileDropdown();">
-                            <span class="dd-icon">💬</span> Guruh chat
-                            <span class="unread-badge" id="chatUnreadBadge" style="display:none; margin-left:auto;">0</span>
-                        </button>
                         <button class="profile-dropdown-item logout-item" onclick="logout()">
                             <span class="dd-icon">🚪</span> Chiqish
                         </button>
@@ -1967,6 +2058,13 @@
             <div style="padding:40px 20px; text-align:center; color:#7f8c8d;">Xabarlar yuklanmoqda...</div>
         </div>
         <div class="chat-input-area">
+            <div id="chatReplyPreview" style="display:none;" class="chat-reply-preview">
+                <div class="chat-reply-preview-info">
+                    <div class="chat-reply-preview-sender" id="replyPreviewSender"></div>
+                    <div class="chat-reply-preview-text" id="replyPreviewText"></div>
+                </div>
+                <button class="chat-reply-preview-close" onclick="cancelReply()">&times;</button>
+            </div>
             <div class="mention-dropdown" id="mentionDropdown"></div>
             <div class="chat-input-wrapper">
                 <textarea class="chat-input" id="chatInput"
@@ -4195,6 +4293,7 @@
         let mentionSelectedIndex = 0;
         let mentionFilteredAdmins = [];
         let mentionCursorStart = -1;
+        let replyToMsg = null; // { id, full_name, message, admin_id }
 
         function toggleChat() {
             chatIsOpen = !chatIsOpen;
@@ -4284,8 +4383,18 @@
                 }
                 const isOwn = msg.admin_id === currentUser.adminId;
                 const timeStr = new Date(msg.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
-                html += `<div class="chat-msg ${isOwn ? 'own' : 'other'}">
+                let replyHtml = '';
+                if (msg.reply_to_id && msg.reply_sender_name) {
+                    const replyText = (msg.reply_message || '').substring(0, 80);
+                    replyHtml = `<div class="chat-reply-quote" onclick="scrollToMsg(${msg.reply_to_id})">
+                        <div class="chat-reply-quote-sender">${msg.reply_sender_name}</div>
+                        <div class="chat-reply-quote-text">${replyText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+                    </div>`;
+                }
+                html += `<div class="chat-msg ${isOwn ? 'own' : 'other'}" data-msg-id="${msg.id}">
+                    <button class="chat-msg-reply-btn" onclick="setReply(${msg.id})" title="Javob berish">&#8617;</button>
                     ${!isOwn ? `<div class="chat-msg-sender role-${msg.role}">${msg.full_name}</div>` : ''}
+                    ${replyHtml}
                     <div class="chat-msg-text">${renderMsgText(msg.message)}</div>
                     <div class="chat-msg-time">${timeStr}</div>
                 </div>`;
@@ -4314,12 +4423,13 @@
         }
 
         function updateUnreadBadge() {
-            const badge = document.getElementById('chatUnreadBadge');
+            const headerBadge = document.getElementById('headerChatBadge');
+            const countText = chatUnreadCount > 99 ? '99+' : chatUnreadCount;
             if (chatUnreadCount > 0) {
-                badge.textContent = chatUnreadCount > 99 ? '99+' : chatUnreadCount;
-                badge.style.display = 'flex';
+                headerBadge.textContent = countText;
+                headerBadge.style.display = 'flex';
             } else {
-                badge.style.display = 'none';
+                headerBadge.style.display = 'none';
             }
         }
 
@@ -4346,9 +4456,14 @@
             const notif = document.createElement('div');
             notif.className = 'chat-notification' + (type === 'all' ? ' mention-all' : ' mention-me');
             const timeStr = new Date(msg.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
-            const tagHtml = type === 'all'
-                ? '<span class="chat-notification-tag all">@all</span>'
-                : '<span class="chat-notification-tag me">@' + currentUser.username + '</span>';
+            let tagHtml;
+            if (type === 'all') {
+                tagHtml = '<span class="chat-notification-tag all">@all</span>';
+            } else if (type === 'reply') {
+                tagHtml = '<span class="chat-notification-tag reply">javob berdi</span>';
+            } else {
+                tagHtml = '<span class="chat-notification-tag me">@' + currentUser.username + '</span>';
+            }
             notif.innerHTML = `
                 <div class="chat-notification-header">
                     <span class="chat-notification-sender">${msg.full_name}${tagHtml}</span>
@@ -4381,8 +4496,35 @@
                     showChatNotification(msg, 'all');
                 } else if (mentionsLower.includes(myName)) {
                     showChatNotification(msg, 'me');
+                } else if (msg.reply_sender_id === currentUser.adminId) {
+                    showChatNotification(msg, 'reply');
                 }
             });
+        }
+
+        function setReply(msgId) {
+            const msg = chatMessages.find(m => m.id === msgId);
+            if (!msg) return;
+            replyToMsg = { id: msg.id, full_name: msg.full_name, message: msg.message, admin_id: msg.admin_id };
+            document.getElementById('replyPreviewSender').textContent = msg.full_name;
+            document.getElementById('replyPreviewText').textContent = msg.message.substring(0, 100);
+            document.getElementById('chatReplyPreview').style.display = 'flex';
+            document.getElementById('chatInput').focus();
+        }
+
+        function cancelReply() {
+            replyToMsg = null;
+            document.getElementById('chatReplyPreview').style.display = 'none';
+        }
+
+        function scrollToMsg(msgId) {
+            const el = document.querySelector(`.chat-msg[data-msg-id="${msgId}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.style.transition = 'background 0.3s';
+                el.style.background = '#fef9c3';
+                setTimeout(() => { el.style.background = ''; }, 1500);
+            }
         }
 
         async function sendChatMessage() {
@@ -4392,10 +4534,12 @@
             const sendBtn = document.getElementById('chatSendBtn');
             sendBtn.disabled = true;
             try {
+                const body = { message };
+                if (replyToMsg) body.reply_to_id = replyToMsg.id;
                 const response = await fetch('/api/chat/messages', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
+                    body: JSON.stringify(body)
                 });
                 if (response.ok) {
                     const data = await response.json();
@@ -4404,6 +4548,7 @@
                     renderChatMessages();
                     input.value = '';
                     input.style.height = '38px';
+                    cancelReply();
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
