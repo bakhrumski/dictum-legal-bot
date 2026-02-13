@@ -325,7 +325,7 @@
             border-radius: 50px;
             border: 2px solid #bdc3c7;
             background: transparent;
-            transition: all 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
         }
         .profile-toggle .profile-role-label,
@@ -334,9 +334,9 @@
             opacity: 0;
             overflow: hidden;
             white-space: nowrap;
-            transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1),
-                        opacity 0.4s ease,
-                        margin 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: max-width 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.5s ease,
+                        margin 0.8s cubic-bezier(0.4, 0, 0.2, 1);
             margin: 0;
         }
         .profile-toggle.open {
@@ -434,7 +434,6 @@
             transform: rotate(180deg);
         }
         .profile-dropdown {
-            display: none;
             position: absolute;
             top: calc(100% + 8px);
             right: 0;
@@ -443,12 +442,27 @@
             -webkit-backdrop-filter: blur(var(--glass-blur-strong));
             border-radius: var(--ios-radius);
             box-shadow: var(--shadow-lg);
-            min-width: 220px;
+            min-width: 180px;
             z-index: 999;
             overflow: hidden;
             border: 1px solid var(--glass-border);
+            visibility: hidden;
+            opacity: 0;
+            transform: translateY(-8px) scale(0.96);
+            pointer-events: none;
+            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0s linear 0.5s;
         }
-        .profile-dropdown.open { display: block; min-width: 180px; }
+        .profile-dropdown.open {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
+                        transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
+                        visibility 0s linear 0s;
+        }
         .profile-dropdown-header {
             padding: 12px;
             background: var(--dropdown-header-bg);
