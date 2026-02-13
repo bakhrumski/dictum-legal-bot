@@ -1172,6 +1172,22 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Dashboard server running on http://localhost:${PORT}`);
+// Auto-migrate database on startup (add missing columns)
+async function runMigrations() {
+  try {
+    await pool.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT DEFAULT NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_start TIME DEFAULT NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_end TIME DEFAULT NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP DEFAULT NULL`);
+    console.log('[DB] Migrations completed successfully');
+  } catch (err) {
+    console.error('[DB] Migration error:', err.message);
+  }
+}
+
+runMigrations().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Dashboard server running on http://localhost:${PORT}`);
+  });
 });
