@@ -43,7 +43,8 @@ async function setupDatabase() {
     await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_start TIME DEFAULT NULL`);
     await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_end TIME DEFAULT NULL`);
     await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP DEFAULT NULL`);
-    console.log('✅ Admins table columns updated (duty_start, duty_end, last_active_at)');
+    await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT DEFAULT NULL`);
+    console.log('✅ Admins table columns updated (duty_start, duty_end, last_active_at, telegram_chat_id)');
 
     // Create requests table
     await client.query(`

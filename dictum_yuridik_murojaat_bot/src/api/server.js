@@ -676,25 +676,87 @@ app.get('/api/monte-carlo', requireAuth, async (req, res) => {
 app.post('/api/assign-request', requireAuth, async (req, res) => {
   try {
     const { requestId, lawyerId } = req.body;
-    
+
     await pool.query(`
-      UPDATE requests 
+      UPDATE requests
       SET assigned_to = $1, assigned_at = NOW()
       WHERE id = $2
     `, [lawyerId, requestId]);
-    
-    // Get lawyer name for notification
+
+    // Get lawyer info for notification
     const lawyerResult = await pool.query(
-      'SELECT full_name FROM admins WHERE id = $1',
+      'SELECT full_name, telegram_chat_id FROM admins WHERE id = $1',
       [lawyerId]
     );
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Request assigned successfully',
-      lawyerName: lawyerResult.rows[0]?.full_name 
+      lawyerName: lawyerResult.rows[0]?.full_name
     });
-    
+
+    // Send Telegram notification to assigned admin (async, don't block response)
+    const lawyer = lawyerResult.rows[0];
+    if (lawyer && lawyer.telegram_chat_id) {
+      (async () => {
+        try {
+          const reqResult = await pool.query(
+            `SELECT r.id, r.request_text, r.request_type, r.file_id,
+                    u.first_name, u.username, u.telegram_id
+             FROM requests r JOIN users u ON r.user_id = u.id
+             WHERE r.id = $1`,
+            [requestId]
+          );
+
+          if (reqResult.rows.length > 0) {
+            const req = reqResult.rows[0];
+            const typeLabels = { text: 'Matn', voice: 'Ovozli xabar', video: 'Video', video_note: 'Video xabar', document: 'Fayl', photo: 'Rasm' };
+            const typeLabel = typeLabels[req.request_type] || req.request_type;
+            const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
+
+            let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojatchi: ${req.first_name || 'Noma\'lum'}`;
+            if (req.username) notifText += ` (@${req.username})`;
+            notifText += `\n📝 Turi: ${typeLabel}`;
+            notifText += `\n🔢 Murojaat #${req.id}`;
+
+            if (req.request_type === 'text' && req.request_text) {
+              const preview = req.request_text.length > 300 ? req.request_text.substring(0, 300) + '...' : req.request_text;
+              notifText += `\n\n📄 Murojaat:\n${preview}`;
+            }
+
+            // Send notification with inline keyboard
+            const keyboard = {
+              inline_keyboard: [[
+                { text: '✏️ Javob berish', callback_data: `respond_${requestId}` },
+                { text: '📊 Dashboard', url: dashboardUrl }
+              ]]
+            };
+
+            await bot.sendMessage(lawyer.telegram_chat_id, notifText, { reply_markup: keyboard });
+
+            // For non-text requests, also forward the file
+            if (req.file_id && req.request_type !== 'text') {
+              try {
+                if (req.request_type === 'voice') {
+                  await bot.sendVoice(lawyer.telegram_chat_id, req.file_id);
+                } else if (req.request_type === 'video' || req.request_type === 'video_note') {
+                  await bot.sendVideo(lawyer.telegram_chat_id, req.file_id);
+                } else if (req.request_type === 'document') {
+                  await bot.sendDocument(lawyer.telegram_chat_id, req.file_id);
+                } else if (req.request_type === 'photo') {
+                  await bot.sendPhoto(lawyer.telegram_chat_id, req.file_id);
+                }
+              } catch (fileErr) {
+                console.error('Failed to forward file to admin:', fileErr);
+              }
+            }
+          }
+        } catch (notifErr) {
+          console.error('Assignment Telegram notification error:', notifErr);
+        }
+      })();
+    }
+
   } catch (error) {
     console.error('Error assigning request:', error);
     res.status(500).json({ error: 'Failed to assign request' });
@@ -1009,6 +1071,47 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
         ...replyData
       }
     });
+
+    // Send Telegram DM notifications to mentioned admins (async, don't block response)
+    if (mentions.length > 0) {
+      const senderName = req.session.fullName;
+      const msgPreview = message.trim().length > 200 ? message.trim().substring(0, 200) + '...' : message.trim();
+      const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
+
+      (async () => {
+        try {
+          const notifiedIds = new Set();
+          for (const uname of mentions) {
+            if (uname === 'all') {
+              const allResult = await pool.query(
+                'SELECT telegram_chat_id FROM admins WHERE telegram_chat_id IS NOT NULL AND id != $1',
+                [req.session.adminId]
+              );
+              for (const row of allResult.rows) {
+                if (!notifiedIds.has(String(row.telegram_chat_id))) {
+                  notifiedIds.add(String(row.telegram_chat_id));
+                  const notifText = `💬 Guruh Chat - ${senderName} hammani eslatdi:\n\n"${msgPreview}"\n\nDashboard: ${dashboardUrl}`;
+                  bot.sendMessage(row.telegram_chat_id, notifText).catch(() => {});
+                }
+              }
+            } else {
+              const adminResult = await pool.query(
+                'SELECT telegram_chat_id FROM admins WHERE LOWER(username) = $1 AND telegram_chat_id IS NOT NULL AND id != $2',
+                [uname, req.session.adminId]
+              );
+              if (adminResult.rows.length > 0 && !notifiedIds.has(String(adminResult.rows[0].telegram_chat_id))) {
+                notifiedIds.add(String(adminResult.rows[0].telegram_chat_id));
+                const notifText = `💬 Guruh Chat - ${senderName} sizni eslatdi:\n\n"${msgPreview}"\n\nDashboard: ${dashboardUrl}`;
+                bot.sendMessage(adminResult.rows[0].telegram_chat_id, notifText).catch(() => {});
+              }
+            }
+          }
+        } catch (notifErr) {
+          console.error('Chat mention Telegram notification error:', notifErr);
+        }
+      })();
+    }
+
   } catch (error) {
     console.error('Error sending chat message:', error);
     res.status(500).json({ error: 'Failed to send message' });
