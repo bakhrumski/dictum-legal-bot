@@ -2284,7 +2284,7 @@
             <div class="stat-card card-pending" onclick="scrollToRequests('pending')">
                 <div class="stat-icon">&#9203;</div>
                 <div class="stat-info">
-                    <div class="number" id="pendingRequests">0</div>
+                    <div class="number" style="display:flex; gap:10px;"><span id="pendingRequests" style="color:#f39c12;">0</span><span id="rejectedRequests" style="color:#e74c3c;">0</span></div>
                     <h3>Jarayonda</h3>
                 </div>
             </div>
@@ -3414,7 +3414,8 @@
                 const response = await fetch('/api/stats');
                 const data = await response.json();
                 animateCounter(document.getElementById('totalRequests'), data.total || 0, 800);
-                animateCounter(document.getElementById('pendingRequests'), (data.pending || 0) + (data.rejected || 0), 800);
+                animateCounter(document.getElementById('pendingRequests'), data.pending || 0, 800);
+                animateCounter(document.getElementById('rejectedRequests'), data.rejected || 0, 800);
                 animateCounter(document.getElementById('studentResponded'), data.student_responded || 0, 800);
                 animateCounter(document.getElementById('answeredRequests'), data.answered || 0, 800);
             } catch (error) {
