@@ -1185,33 +1185,80 @@ app.post('/api/ai-analysis', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Gemini API kaliti sozlanmagan. GEMINI_API_KEY env o\'rnatilmagan.' });
     }
 
-    const prompt = `Sen O'zbekiston Respublikasi huquqi bo'yicha tajribali yuristsan. Quyidagi murojaat bo'yicha batafsil huquqiy tahlil ber.
+    const prompt = `You are an AI Legal Research Assistant integrated into a legal-tech educational platform in Uzbekistan.
 
 ${category && category !== 'Boshqa' ? `Yo'nalish: ${category}` : ''}
 
-Murojaat matni:
+Case matni:
 "${requestText}"
 
-Quyidagi strukturada javob ber:
+Your task:
+- Tahlil qilish
+- Lex.uz'dan faqat amaldagi hujjatlarni topish
+- Eskirgan va kuchini yo'qotgan hujjatlarni inkor qilish
+- Qisqa va aniq huquqiy xulosa berish
 
-## Huquqiy tahlil
+⚠ Natija faqat O'zbek (lotin) tilida bo'lishi shart.
+⚠ Javob qisqa, aniq va strukturali bo'lishi shart.
+⚠ Ortiqcha izoh berilmasin.
 
-### 1. Muammoning mohiyati
-Murojaat qiluvchining muammosini qisqacha tavsiflang.
+## 1-QADAM: MUAMMONI TAHLIL QILISH
 
-### 2. Tegishli qonunchilik
-O'zbekiston qonunlariga asoslanib, tegishli normativ-huquqiy hujjatlarni ko'rsating (qonun nomi, modda raqami).
+Case matnidan aniqlang:
+- Huquq sohasi
+- Asosiy masala
+- Kalit so'zlar
 
-### 3. Huquqiy maslahat
-Murojaat qiluvchiga aniq va amaliy maslahatlar bering.
+Format:
+**MASALA:** ...
+**KALIT_SOZLAR:** ...
 
-### 4. Tavsiya etiladigan harakatlar
-Keyingi qadamlar bo'yicha ro'yxat bering.
+## 2-QADAM: LEX.UZ DAN HUJJAT QIDIRISH
 
-### 5. Muhim eslatmalar
-Ehtiyot bo'lish kerak bo'lgan jihatlarni ko'rsating.
+Kalit so'zlar asosida Lex.uz'da qidiring.
+Ustuvorlik: Kodekslar > Qonunlar > Prezident farmonlari > VMQ > Plenum qarorlari
 
-Javobni o'zbek tilida, professional va tushunarli tilda yozing.`;
+## 3-QADAM: HUJJAT HOLATINI TEKSHIRISH (MAJBURIY)
+
+- "Hujjat kuchini yo'qotgan" yoki "O'z kuchini yo'qotgan" - ❌ Hujjatni butunlay inkor qiling.
+- Faqat amaldagi versiya asosida ishlang.
+- ✔ Qizil ogohlantirish yo'q
+- ✔ Amaldagi versiya
+
+## 4-QADAM: TEGISHLI NORMALAR
+
+Format (har bir norma uchun):
+- **Hujjat nomi:** ...
+- **Modda:** ...
+- **Amaldagi sana:** ...
+- **Qisqa mazmun:** ...
+- **Lex.uz havola:** https://lex.uz/...
+
+Faqat zarur modda ko'rsatiladi. To'liq matn ko'chirib olinmaydi.
+
+## 5-QADAM: QISQA HUQUQIY TAHLIL
+
+- **Masala:** ...
+- **Qo'llaniladigan norma:** ...
+- **Qo'llanishi:** ...
+- **Xulosa:** ...
+
+## 6-QADAM: NATIJA PROGNOZI
+
+- **Da'vo ehtimoli:** __%
+- **Qarshi tomon ehtimoli:** __%
+- **Noaniqlik:** Past / O'rta / Yuqori
+
+> "Ushbu xulosa sun'iy intellekt asosida shakllantirilgan va sud qarori hisoblanmaydi."
+
+## 7-QADAM: YAKUNIY TEKSHIRUV
+
+Tasdiqlang:
+- ✔ Qizil ogohlantirishli hujjat ishlatilmagan
+- ✔ Amaldagi versiya tanlangan
+- ✔ Eskirgan norma ishlatilmagan
+
+Agar shubha bo'lsa → hujjatni ishlatmang.`;
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
@@ -1221,8 +1268,8 @@ Javobni o'zbek tilida, professional va tushunarli tilda yozing.`;
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048,
+          temperature: 0.4,
+          maxOutputTokens: 8192,
         }
       })
     });
