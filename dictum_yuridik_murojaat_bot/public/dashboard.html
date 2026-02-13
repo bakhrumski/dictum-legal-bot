@@ -325,7 +325,7 @@
             border-radius: 50px;
             border: 2px solid #bdc3c7;
             background: transparent;
-            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.55s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
         }
         .profile-toggle .profile-role-label,
@@ -334,36 +334,32 @@
             opacity: 0;
             overflow: hidden;
             white-space: nowrap;
-            transition: max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-                        opacity 0.25s ease,
-                        margin 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.4s ease,
+                        margin 0.55s cubic-bezier(0.4, 0, 0.2, 1);
             margin: 0;
         }
-        .profile-toggle:hover {
+        .profile-toggle.open {
             gap: 8px;
             padding: 3px 10px 3px 3px;
             border-color: #95a5a6;
             background: var(--glass-bg, rgba(255,255,255,0.9));
             box-shadow: 0 2px 12px rgba(0,0,0,0.1);
         }
-        .profile-toggle:hover .profile-role-label {
+        .profile-toggle.open .profile-role-label {
             max-width: 120px;
             opacity: 1;
         }
-        .profile-toggle:hover .profile-chevron {
+        .profile-toggle.open .profile-chevron {
             max-width: 20px;
             opacity: 0.6;
         }
         [data-theme="dark"] .profile-toggle {
             border-color: rgba(255, 255, 255, 0.15);
         }
-        [data-theme="dark"] .profile-toggle:hover {
+        [data-theme="dark"] .profile-toggle.open {
             border-color: rgba(255, 255, 255, 0.3);
             background: rgba(255, 255, 255, 0.08);
-        }
-        .profile-toggle:active {
-            transform: scale(0.97);
-            transition-duration: 0.1s;
         }
         .profile-avatar {
             width: 42px;
@@ -2329,14 +2325,14 @@
                     <span class="icon-sun">☀️</span>
                     <span class="icon-moon">🌙</span>
                 </button>
-            </div>
-            <div class="header-right" style="display:flex; align-items:center; gap:12px;">
                 <button class="header-chat-btn" onclick="toggleChat()" title="Guruh chat">
                     <div class="header-chat-dots">
                         <span></span><span></span><span></span>
                     </div>
                     <span class="header-chat-badge" id="headerChatBadge" style="display:none;">0</span>
                 </button>
+            </div>
+            <div class="header-right" style="display:flex; align-items:center; gap:12px;">
                 <button class="profile-toggle" id="profileToggle" onclick="toggleProfileDropdown(event)">
                     <div class="profile-avatar" id="profileAvatar">A</div>
                     <span class="profile-role-label" id="profileRoleLabel">...</span>
