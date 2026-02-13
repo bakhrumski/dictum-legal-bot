@@ -1,4 +1,7 @@
-require('dotenv').config();
+// bot.js can be run standalone or imported by server.js
+if (!process.env.TELEGRAM_BOT_TOKEN) {
+  require('dotenv').config();
+}
 const TelegramBot = require('node-telegram-bot-api');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../database/db');

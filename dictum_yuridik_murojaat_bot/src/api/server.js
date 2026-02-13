@@ -9,8 +9,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize Telegram bot
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+// Import bot from bot.js (shared polling instance)
+const { bot } = require('../bot/bot');
 
 app.use(cors());
 app.use(express.json());
