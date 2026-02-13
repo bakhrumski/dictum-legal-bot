@@ -341,19 +341,17 @@
             justify-content: center;
             font-size: 16px;
             font-weight: 700;
-            color: white;
+            color: #95a5a6;
             letter-spacing: 0.5px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            box-shadow: none;
             flex-shrink: 0;
-            background: linear-gradient(135deg, #1a5276, #2e86c1);
+            background: white;
+            border: 2px solid #bdc3c7;
             transition: opacity 0.4s ease,
                         width 0.6s cubic-bezier(0.4, 0, 0.2, 1),
                         margin 0.6s cubic-bezier(0.4, 0, 0.2, 1);
             overflow: hidden;
         }
-        .profile-avatar.role-master { background: linear-gradient(135deg, #1a5276, #2e86c1); }
-        .profile-avatar.role-lawyer { background: linear-gradient(135deg, #1e8449, #27ae60); }
-        .profile-avatar.role-student { background: linear-gradient(135deg, #6c3483, #a569bd); }
         .profile-toggle.open .profile-avatar {
             opacity: 0;
             width: 0;
@@ -424,6 +422,11 @@
         [data-theme="dark"] .profile-toggle.open {
             border-color: rgba(255, 255, 255, 0.3);
             background: rgba(255, 255, 255, 0.08);
+        }
+        [data-theme="dark"] .profile-avatar {
+            background: transparent;
+            border-color: rgba(255, 255, 255, 0.15);
+            color: white;
         }
         [data-theme="dark"] .profile-fullname { color: #e0e0e0; }
         [data-theme="dark"] .profile-role-text { color: #aaa; }
