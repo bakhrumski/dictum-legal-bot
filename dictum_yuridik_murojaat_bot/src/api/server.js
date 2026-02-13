@@ -7,29 +7,41 @@ const { pool } = require('../database/db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Import bot from bot.js (webhook mode — no polling)
+// Import bot from bot.js (created with polling: false)
 const { bot } = require('../bot/bot');
 
-// Webhook endpoint for Telegram bot (Railway production)
+// Detect environment
 const WEBHOOK_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBHOOK_DOMAIN;
+const IS_RAILWAY = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PUBLIC_DOMAIN);
+
+console.log('[BOT] Environment:', IS_RAILWAY ? 'Railway' : 'Local');
+console.log('[BOT] WEBHOOK_DOMAIN:', WEBHOOK_DOMAIN || 'NOT SET');
+
 if (WEBHOOK_DOMAIN) {
+  // Production: webhook mode — no polling at all
   const secretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
-  bot.setWebHook(`https://${WEBHOOK_DOMAIN}${secretPath}`).then(() => {
-    console.log(`Bot webhook set: https://${WEBHOOK_DOMAIN}${secretPath}`);
-  }).catch(err => {
-    console.error('Failed to set webhook:', err.message);
-  });
   app.post(secretPath, express.json(), (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
   });
+  bot.setWebHook(`https://${WEBHOOK_DOMAIN}${secretPath}`).then(() => {
+    console.log('[BOT] Webhook active:', WEBHOOK_DOMAIN);
+  }).catch(err => {
+    console.error('[BOT] Webhook setup failed:', err.message);
+  });
+} else if (IS_RAILWAY) {
+  // On Railway but no public domain — do NOT poll, just warn
+  console.error('[BOT] ERROR: Railway detected but no public domain!');
+  console.error('[BOT] Go to Railway → Settings → Networking → Generate Domain');
+  console.error('[BOT] Then set WEBHOOK_DOMAIN env var if needed');
 } else {
-  // Local development — start polling
+  // Local development only — safe to poll
   bot.startPolling();
   bot.on('polling_error', (error) => {
+    if (error.code === 'ETELEGRAM' && error.message.includes('409')) return; // suppress during dev
     console.error('Bot polling error:', error.code, error.message);
   });
-  console.log('Bot started in polling mode (local dev)');
+  console.log('[BOT] Polling mode (local dev)');
 }
 
 app.use(cors());

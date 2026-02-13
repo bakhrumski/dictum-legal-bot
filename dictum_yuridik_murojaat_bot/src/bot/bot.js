@@ -10,16 +10,17 @@ const https = require('https');
 const path = require('path');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const isStandalone = require.main === module;
 
-// Standalone (local dev): use polling
-// Imported by server.js (Railway): no polling — server sets up webhook
-const bot = new TelegramBot(token, { polling: isStandalone });
+// NEVER start polling in constructor — polling is started explicitly when needed
+const bot = new TelegramBot(token, { polling: false });
 
-if (isStandalone) {
+// If run directly (node bot.js) — start polling for local dev
+if (require.main === module) {
+  bot.startPolling();
   bot.on('polling_error', (error) => {
     console.error('Bot polling error:', error.code, error.message);
   });
+  console.log('[BOT] Standalone polling mode');
 }
 
 // Store pending requests temporarily
