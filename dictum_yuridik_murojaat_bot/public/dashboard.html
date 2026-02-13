@@ -2682,10 +2682,12 @@
         async function loadUserInfo() {
             try {
                 const response = await fetch('/api/user-info');
+                if (!response.ok) return;
                 const data = await response.json();
+                if (!data || !data.role) return;
                 currentUser = data;
 
-                const name = data.fullName || data.username;
+                const name = data.fullName || data.username || '';
                 const initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
                 const roleNames = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
                 const roleText = roleNames[data.role] || data.role;
@@ -2693,20 +2695,22 @@
 
                 // Profile toggle (closed state)
                 const avatar = document.getElementById('profileAvatar');
-                avatar.textContent = initials;
-                avatar.className = 'profile-avatar ' + roleClass;
+                if (avatar) { avatar.textContent = initials; avatar.className = 'profile-avatar ' + roleClass; }
+
                 const roleLabel = document.getElementById('profileRoleLabel');
-                roleLabel.innerHTML = `<span class="profile-role-tag ${data.role}-tag">${roleText}</span>`;
+                if (roleLabel) roleLabel.innerHTML = '<span class="profile-role-tag ' + data.role + '-tag">' + roleText + '</span>';
 
                 // Dropdown header
-                document.getElementById('ddName').textContent = name;
-                document.getElementById('ddRole').textContent = roleText;
+                const dn = document.getElementById('ddName');
+                if (dn) dn.textContent = name;
+                const dr = document.getElementById('ddRole');
+                if (dr) dr.textContent = roleText;
 
                 // Hidden spans for backward compatibility
-                document.getElementById('userName').textContent = name;
+                const un = document.getElementById('userName');
+                if (un) un.textContent = name;
                 const roleBadge = document.getElementById('userRole');
-                roleBadge.textContent = data.role === 'master' ? 'Master Admin' : 'Student Admin';
-                roleBadge.className = 'role-badge ' + roleClass;
+                if (roleBadge) { roleBadge.textContent = data.role === 'master' ? 'Master Admin' : 'Student Admin'; roleBadge.className = 'role-badge ' + roleClass; }
             } catch (error) {
                 console.error('Error loading user info:', error);
             }
