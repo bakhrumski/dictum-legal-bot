@@ -1188,6 +1188,6 @@ async function runMigrations() {
 
 runMigrations().then(() => {
   app.listen(PORT, () => {
-    console.log(`Dashboard server running on http://localhost:${PORT}`);
+    console.log(`[SERVER] Dashboard running on port ${PORT}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
   });
 });
