@@ -125,23 +125,24 @@
 
         /* Theme toggle button */
         .theme-toggle-header {
-            width: 40px;
-            height: 40px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.3);
-            background: rgba(255,255,255,0.15);
-            color: white;
-            font-size: 20px;
+            border: none;
+            background: var(--bg-body);
+            color: var(--text-primary);
+            font-size: 22px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             transition: all 0.3s ease;
         }
         .theme-toggle-header:hover {
-            background: rgba(255,255,255,0.25);
-            transform: rotate(15deg);
+            transform: scale(1.1) rotate(15deg);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
         }
         .theme-toggle-header .icon-sun,
         .theme-toggle-header .icon-moon {
@@ -1942,16 +1943,16 @@
                 <h1>🏛️ Dictum Advokatlik Firmasi</h1>
                 <p class="subtitle">Murojaatlar boshqaruv tizimi</p>
             </div>
-            <div class="header-center">
+            <div class="header-center" style="display:flex; align-items:center; gap:12px;">
                 <button class="btn btn-success" onclick="exportToPDF()" style="padding: 10px 22px; font-size: 14px;">
                     📊 PDF Hisobot
                 </button>
-            </div>
-            <div class="header-right" style="display:flex; align-items:center; gap:12px;">
                 <button class="theme-toggle-header" onclick="toggleTheme()" title="Rejimni almashtirish">
                     <span class="icon-sun">&#9728;</span>
                     <span class="icon-moon">&#9790;</span>
                 </button>
+            </div>
+            <div class="header-right" style="display:flex; align-items:center; gap:12px;">
                 <button class="profile-toggle" id="profileToggle" onclick="toggleProfileDropdown(event)">
                     <div class="profile-avatar" id="profileAvatar">A</div>
                     <span class="profile-role-label" id="profileRoleLabel">...</span>
