@@ -912,10 +912,13 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
     let query, params;
     if (sinceId > 0) {
       query = `
-        SELECT cm.id, cm.message, cm.mentions, cm.created_at,
-               a.id as admin_id, a.username, a.full_name, a.role
+        SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
+               a.id as admin_id, a.username, a.full_name, a.role,
+               rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
         FROM chat_messages cm
         JOIN admins a ON cm.admin_id = a.id
+        LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
+        LEFT JOIN admins ra ON rm.admin_id = ra.id
         WHERE cm.id > $1
         ORDER BY cm.id ASC
         LIMIT $2
@@ -923,10 +926,13 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
       params = [sinceId, limit];
     } else {
       query = `
-        SELECT cm.id, cm.message, cm.mentions, cm.created_at,
-               a.id as admin_id, a.username, a.full_name, a.role
+        SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
+               a.id as admin_id, a.username, a.full_name, a.role,
+               rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
         FROM chat_messages cm
         JOIN admins a ON cm.admin_id = a.id
+        LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
+        LEFT JOIN admins ra ON rm.admin_id = ra.id
         ORDER BY cm.id DESC
         LIMIT $1
       `;
@@ -945,7 +951,7 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
 // Send a chat message
 app.post('/api/chat/messages', requireAuth, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, reply_to_id } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message cannot be empty' });
@@ -961,25 +967,46 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
       mentions.push(match[1].toLowerCase());
     }
 
+    const replyId = reply_to_id ? parseInt(reply_to_id) : null;
+
     const result = await pool.query(
-      `INSERT INTO chat_messages (admin_id, message, mentions)
-       VALUES ($1, $2, $3)
-       RETURNING id, message, mentions, created_at`,
-      [req.session.adminId, message.trim(), JSON.stringify(mentions)]
+      `INSERT INTO chat_messages (admin_id, message, mentions, reply_to_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, message, mentions, reply_to_id, created_at`,
+      [req.session.adminId, message.trim(), JSON.stringify(mentions), replyId]
     );
 
     const newMsg = result.rows[0];
+    let replyData = {};
+    if (replyId) {
+      const replyResult = await pool.query(
+        `SELECT cm.message, a.full_name as reply_sender, a.role as reply_role
+         FROM chat_messages cm JOIN admins a ON cm.admin_id = a.id WHERE cm.id = $1`,
+        [replyId]
+      );
+      if (replyResult.rows.length > 0) {
+        replyData = {
+          reply_to_id: replyId,
+          reply_message: replyResult.rows[0].message,
+          reply_sender: replyResult.rows[0].reply_sender,
+          reply_role: replyResult.rows[0].reply_role
+        };
+      }
+    }
+
     res.json({
       success: true,
       message: {
         id: newMsg.id,
         message: newMsg.message,
         mentions: newMsg.mentions,
+        reply_to_id: newMsg.reply_to_id,
         created_at: newMsg.created_at,
         admin_id: req.session.adminId,
         username: req.session.username,
         full_name: req.session.fullName,
-        role: req.session.role
+        role: req.session.role,
+        ...replyData
       }
     });
   } catch (error) {

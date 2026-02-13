@@ -90,11 +90,16 @@ async function setupDatabase() {
         admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
         message TEXT NOT NULL,
         mentions JSONB DEFAULT '[]',
+        reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)
+    `);
+    // Migration: add reply_to_id if table already exists without it
+    await client.query(`
+      ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL
     `);
     console.log('✅ Chat_messages table created');
 
