@@ -1172,6 +1172,81 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
   }
 });
 
+// AI Analysis endpoint using Gemini 2.5
+app.post('/api/ai-analysis', requireAuth, async (req, res) => {
+  try {
+    const { requestText, category } = req.body;
+    if (!requestText) {
+      return res.status(400).json({ error: 'Murojaat matni topilmadi' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Gemini API kaliti sozlanmagan. GEMINI_API_KEY env o\'rnatilmagan.' });
+    }
+
+    const prompt = `Sen O'zbekiston Respublikasi huquqi bo'yicha tajribali yuristsan. Quyidagi murojaat bo'yicha batafsil huquqiy tahlil ber.
+
+${category && category !== 'Boshqa' ? `Yo'nalish: ${category}` : ''}
+
+Murojaat matni:
+"${requestText}"
+
+Quyidagi strukturada javob ber:
+
+## Huquqiy tahlil
+
+### 1. Muammoning mohiyati
+Murojaat qiluvchining muammosini qisqacha tavsiflang.
+
+### 2. Tegishli qonunchilik
+O'zbekiston qonunlariga asoslanib, tegishli normativ-huquqiy hujjatlarni ko'rsating (qonun nomi, modda raqami).
+
+### 3. Huquqiy maslahat
+Murojaat qiluvchiga aniq va amaliy maslahatlar bering.
+
+### 4. Tavsiya etiladigan harakatlar
+Keyingi qadamlar bo'yicha ro'yxat bering.
+
+### 5. Muhim eslatmalar
+Ehtiyot bo'lish kerak bo'lgan jihatlarni ko'rsating.
+
+Javobni o'zbek tilida, professional va tushunarli tilda yozing.`;
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+    const geminiResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+        }
+      })
+    });
+
+    if (!geminiResponse.ok) {
+      const errText = await geminiResponse.text();
+      console.error('[AI] Gemini API error:', geminiResponse.status, errText);
+      return res.status(500).json({ error: `Gemini API xatolik: ${geminiResponse.status}` });
+    }
+
+    const geminiData = await geminiResponse.json();
+    const analysis = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!analysis) {
+      return res.status(500).json({ error: 'Gemini javob bermadi' });
+    }
+
+    res.json({ analysis });
+  } catch (error) {
+    console.error('[AI] Analysis error:', error);
+    res.status(500).json({ error: 'AI tahlil xatoligi: ' + error.message });
+  }
+});
+
 // Auto-migrate database on startup (add missing columns)
 async function runMigrations() {
   try {
