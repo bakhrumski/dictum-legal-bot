@@ -9,24 +9,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --login-bg: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-            --login-card: rgba(255, 255, 255, 0.72);
-            --login-card-border: rgba(255, 255, 255, 0.45);
+            --login-bg: linear-gradient(160deg, #e8eaf6 0%, #f3e5f5 30%, #fce4ec 60%, #e8eaf6 100%);
+            --login-card: rgba(255, 255, 255, 0.78);
+            --login-card-border: rgba(255, 255, 255, 0.6);
             --login-text: #1a1a2e;
             --login-text-secondary: #5a5a7a;
             --login-input-bg: rgba(255, 255, 255, 0.5);
-            --login-input-border: rgba(255, 255, 255, 0.4);
-            --login-shadow: 0 12px 40px rgba(0,0,0,0.12);
+            --login-input-border: rgba(255, 255, 255, 0.5);
+            --login-shadow: 0 12px 40px rgba(0,0,0,0.08);
         }
         [data-theme="dark"] {
-            --login-bg: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
-            --login-card: rgba(30, 30, 50, 0.72);
-            --login-card-border: rgba(255, 255, 255, 0.12);
+            --login-bg: linear-gradient(160deg, #0a0a0f 0%, #111118 30%, #0d0d14 60%, #0a0a0f 100%);
+            --login-card: rgba(20, 20, 30, 0.8);
+            --login-card-border: rgba(255, 255, 255, 0.08);
             --login-text: #e6edf3;
             --login-text-secondary: #9ca3af;
-            --login-input-bg: rgba(255, 255, 255, 0.08);
-            --login-input-border: rgba(255, 255, 255, 0.12);
-            --login-shadow: 0 12px 40px rgba(0,0,0,0.3);
+            --login-input-bg: rgba(255, 255, 255, 0.06);
+            --login-input-border: rgba(255, 255, 255, 0.1);
+            --login-shadow: 0 12px 40px rgba(0,0,0,0.4);
         }
         *, *::before, *::after {
             transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
@@ -40,43 +40,56 @@
             box-sizing: border-box;
         }
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Inter', BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--login-bg);
             background-attachment: fixed;
             height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         .login-container {
             background: var(--login-card);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
             border: 1px solid var(--login-card-border);
-            padding: 40px;
-            border-radius: 20px;
+            padding: 44px 36px;
+            border-radius: 24px;
             box-shadow: var(--login-shadow);
             width: 100%;
             max-width: 400px;
-            animation: loginSlideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation: loginSlideUp 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         @keyframes loginSlideUp {
-            0% { opacity: 0; transform: translateY(30px) scale(0.97); }
+            0% { opacity: 0; transform: translateY(40px) scale(0.95); }
             100% { opacity: 1; transform: translateY(0) scale(1); }
         }
         .logo {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 32px;
+        }
+        .logo-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            display: block;
+            animation: logoFloat 3s ease-in-out infinite;
+        }
+        @keyframes logoFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
         }
         .logo h1 {
             color: var(--login-text);
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 700;
-            margin-bottom: 5px;
+            letter-spacing: -0.5px;
         }
         .logo p {
             color: var(--login-text-secondary);
             font-size: 14px;
+            margin-top: 4px;
         }
         .form-group {
             margin-bottom: 20px;
@@ -86,14 +99,16 @@
             color: var(--login-text);
             font-weight: 600;
             margin-bottom: 8px;
-            font-size: 14px;
+            font-size: 13px;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
         }
         input {
             width: 100%;
-            padding: 12px 16px;
+            padding: 14px 16px;
             border: 1px solid var(--login-input-border);
-            border-radius: 12px;
-            font-size: 14px;
+            border-radius: 14px;
+            font-size: 15px;
             font-family: inherit;
             background: var(--login-input-bg);
             backdrop-filter: blur(10px);
@@ -104,40 +119,59 @@
         input:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+            transform: scale(1.01);
         }
         .btn {
             width: 100%;
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
-            padding: 13px;
+            padding: 14px;
             border: none;
-            border-radius: 12px;
+            border-radius: 14px;
             font-size: 16px;
             font-weight: 600;
             font-family: inherit;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35);
+            letter-spacing: 0.3px;
+            position: relative;
+            overflow: hidden;
         }
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(rgba(255,255,255,0.2), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .btn:hover::after { opacity: 1; }
         .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.45);
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.45);
         }
         .btn:active {
-            transform: scale(0.97);
+            transform: scale(0.96);
+            transition-duration: 0.1s;
         }
         .error-message {
             background: rgba(248, 215, 218, 0.8);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             color: #721c24;
-            padding: 10px 14px;
-            border-radius: 12px;
+            padding: 12px 16px;
+            border-radius: 14px;
             border: 1px solid rgba(231, 76, 60, 0.2);
             margin-bottom: 20px;
             display: none;
             font-size: 14px;
+        }
+        [data-theme="dark"] .error-message {
+            background: rgba(80, 30, 30, 0.8);
+            color: #f8a0a0;
+            border-color: rgba(231, 76, 60, 0.3);
         }
         .error-message.show {
             display: block;
@@ -148,7 +182,7 @@
             25% { transform: translateX(-6px); }
             75% { transform: translateX(6px); }
         }
-        /* Theme toggle */
+        /* Theme toggle — iOS circle */
         .theme-toggle {
             position: fixed;
             top: 24px;
@@ -167,30 +201,39 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation: loginSlideUp 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
         }
         .theme-toggle:hover {
             background: rgba(255,255,255,0.3);
-            transform: scale(1.1) rotate(15deg);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            transform: scale(1.15) rotate(20deg);
+            box-shadow: 0 6px 25px rgba(0,0,0,0.15);
         }
-        .theme-toggle:active { transform: scale(0.95); }
+        .theme-toggle:active { transform: scale(0.9); transition-duration: 0.1s; }
         .theme-toggle .icon-sun,
         .theme-toggle .icon-moon {
             position: absolute;
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg); }
-        .theme-toggle .icon-moon { opacity: 0; transform: rotate(-90deg); }
-        [data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(90deg); }
-        [data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg); }
+        .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+        .theme-toggle .icon-moon { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+        [data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(90deg) scale(0.5); }
+        [data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+        [data-theme="dark"] .theme-toggle {
+            border-color: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.08);
+        }
+        [data-theme="dark"] .theme-toggle:hover {
+            background: rgba(255,255,255,0.15);
+            box-shadow: 0 6px 25px rgba(100,100,255,0.12);
+        }
     </style>
 </head>
 <body>
     <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish">
-        <span class="icon-sun">&#9728;</span>
-        <span class="icon-moon">&#9790;</span>
+        <span class="icon-sun">☀️</span>
+        <span class="icon-moon">🌙</span>
     </button>
     <script>
         (function() {
@@ -211,18 +254,19 @@
     </script>
     <div class="login-container">
         <div class="logo">
-            <h1>&#127963; Dictum</h1>
+            <span class="logo-icon">⚖️</span>
+            <h1>Dictum</h1>
             <p>Murojaatlar boshqaruv tizimi</p>
         </div>
         <div id="errorMessage" class="error-message"></div>
         <form id="loginForm">
             <div class="form-group">
                 <label>Foydalanuvchi nomi</label>
-                <input type="text" id="username" required autofocus>
+                <input type="text" id="username" placeholder="username" required autofocus>
             </div>
             <div class="form-group">
                 <label>Parol</label>
-                <input type="password" id="password" required>
+                <input type="password" id="password" placeholder="••••••" required>
             </div>
             <button type="submit" class="btn">Kirish</button>
         </form>
@@ -244,10 +288,14 @@
                     window.location.href = '/dashboard.html';
                 } else {
                     errorDiv.textContent = data.error || 'Kirish xato';
+                    errorDiv.classList.remove('show');
+                    void errorDiv.offsetWidth;
                     errorDiv.classList.add('show');
                 }
             } catch (error) {
                 errorDiv.textContent = 'Xatolik: ' + error.message;
+                errorDiv.classList.remove('show');
+                void errorDiv.offsetWidth;
                 errorDiv.classList.add('show');
             }
         });
