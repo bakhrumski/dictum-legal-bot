@@ -319,28 +319,50 @@
         .profile-toggle {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 0px;
             cursor: pointer;
-            padding: 5px 12px 5px 5px;
+            padding: 3px;
             border-radius: 50px;
-            border: 1px solid var(--glass-border-light);
-            background: var(--glass-bg);
+            border: 2px solid #bdc3c7;
+            background: transparent;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
+            overflow: hidden;
+        }
+        .profile-toggle .profile-role-label,
+        .profile-toggle .profile-chevron {
+            max-width: 0;
+            opacity: 0;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.25s ease,
+                        margin 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            margin: 0;
         }
         .profile-toggle:hover {
-            background: var(--glass-bg);
-            box-shadow: var(--shadow-sm);
-            transform: translateY(-1px);
+            gap: 8px;
+            padding: 3px 10px 3px 3px;
+            border-color: #95a5a6;
+            background: var(--glass-bg, rgba(255,255,255,0.9));
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+        .profile-toggle:hover .profile-role-label {
+            max-width: 120px;
+            opacity: 1;
+        }
+        .profile-toggle:hover .profile-chevron {
+            max-width: 20px;
+            opacity: 0.6;
         }
         [data-theme="dark"] .profile-toggle {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.15);
         }
         [data-theme="dark"] .profile-toggle:hover {
-            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.08);
         }
         .profile-toggle:active {
             transform: scale(0.97);
