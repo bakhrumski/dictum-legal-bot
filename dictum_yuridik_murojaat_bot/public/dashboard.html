@@ -241,13 +241,15 @@
             backdrop-filter: blur(var(--glass-blur-strong));
             -webkit-backdrop-filter: blur(var(--glass-blur-strong));
             border: 1px solid var(--glass-border);
-            padding: 20px;
+            padding: 16px 20px;
             border-radius: var(--ios-radius-lg);
             margin-bottom: 20px;
             box-shadow: var(--shadow-md);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
+            z-index: 10;
         }
 
         .header-left h1 {
@@ -265,44 +267,47 @@
         .profile-toggle {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             cursor: pointer;
-            padding: 6px 10px 6px 6px;
-            border-radius: 14px;
+            padding: 5px 12px 5px 5px;
+            border-radius: 50px;
             border: 1px solid var(--glass-border-light);
-            background: rgba(255, 255, 255, 0.2);
+            background: var(--glass-bg);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
         }
         .profile-toggle:hover {
-            background: rgba(255, 255, 255, 0.35);
+            background: var(--glass-bg);
             box-shadow: var(--shadow-sm);
             transform: translateY(-1px);
         }
         [data-theme="dark"] .profile-toggle {
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.1);
         }
         [data-theme="dark"] .profile-toggle:hover {
-            background: rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.1);
         }
         .profile-toggle:active {
-            transform: translateY(0);
+            transform: scale(0.97);
+            transition-duration: 0.1s;
         }
         .profile-avatar {
-            width: 46px;
-            height: 46px;
-            border-radius: 12px;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 19px;
-            font-weight: 800;
+            font-size: 16px;
+            font-weight: 700;
             color: white;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
             position: relative;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            flex-shrink: 0;
         }
         .profile-avatar.role-master {
             background: linear-gradient(135deg, #1a5276, #2e86c1);
@@ -316,13 +321,13 @@
         .profile-avatar::after {
             content: '';
             position: absolute;
-            bottom: -2px;
-            right: -2px;
-            width: 12px;
-            height: 12px;
+            bottom: 0px;
+            right: 0px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            background: #27ae60;
-            border: 2px solid white;
+            background: #34d399;
+            border: 2px solid var(--glass-bg);
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
         .profile-role-label {
@@ -362,10 +367,11 @@
             padding-left: 2px;
         }
         .profile-chevron {
-            color: #95a5a6;
-            font-size: 10px;
-            transition: transform 0.2s;
-            margin-left: -4px;
+            color: var(--text-secondary);
+            font-size: 9px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-left: -2px;
+            opacity: 0.6;
         }
         .profile-toggle.open .profile-chevron {
             transform: rotate(180deg);
@@ -395,14 +401,14 @@
         .profile-dropdown-header .dd-avatar {
             width: 52px;
             height: 52px;
-            border-radius: 14px;
+            border-radius: 50%;
             margin: 0 auto 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
-            font-weight: 800;
-            letter-spacing: 1px;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
             border: 2px solid rgba(255,255,255,0.25);
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
