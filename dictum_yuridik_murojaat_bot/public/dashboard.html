@@ -483,6 +483,12 @@
             margin-bottom: 20px;
         }
 
+        /* Staggered entrance for stat cards */
+        @keyframes statCardEnter {
+            0% { opacity: 0; transform: translateY(30px) scale(0.92); }
+            60% { opacity: 1; transform: translateY(-4px) scale(1.01); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
         .stat-card {
             flex: 1;
             display: flex;
@@ -498,7 +504,13 @@
             border-left: 3px solid #3498db;
             transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
             cursor: pointer;
+            opacity: 0;
+            animation: statCardEnter 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
         }
+        .stat-card:nth-child(1) { animation-delay: 0.1s; }
+        .stat-card:nth-child(2) { animation-delay: 0.2s; }
+        .stat-card:nth-child(3) { animation-delay: 0.3s; }
+        .stat-card:nth-child(4) { animation-delay: 0.4s; }
         .stat-card:hover {
             transform: translateY(-4px) scale(1.02);
             box-shadow: 0 12px 30px rgba(0,0,0,0.12);
@@ -537,6 +549,16 @@
             font-weight: 800;
             line-height: 1.1;
             color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+        /* Finance ticker glow on update */
+        @keyframes numberPulse {
+            0% { text-shadow: none; }
+            30% { text-shadow: 0 0 8px currentColor; }
+            100% { text-shadow: none; }
+        }
+        .number-updated {
+            animation: numberPulse 0.6s ease-out;
         }
         .stat-info h3 {
             color: var(--text-muted);
@@ -3354,15 +3376,40 @@
             }
         }
         
+        // Financial counting-up animation
+        function animateCounter(el, target, duration) {
+            const start = parseInt(el.textContent) || 0;
+            if (start === target) return;
+            const diff = target - start;
+            const startTime = performance.now();
+            const dur = Math.min(duration, Math.max(400, Math.abs(diff) * 60));
+            function easeOutExpo(t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); }
+            function step(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / dur, 1);
+                const eased = easeOutExpo(progress);
+                el.textContent = Math.round(start + diff * eased);
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    el.textContent = target;
+                    el.classList.remove('number-updated');
+                    void el.offsetWidth;
+                    el.classList.add('number-updated');
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
         async function updateStats() {
             try {
                 const response = await fetch('/api/stats');
                 const data = await response.json();
-                document.getElementById('totalRequests').textContent = data.total || 0;
-                document.getElementById('pendingRequests').textContent = data.pending || 0;
-                document.getElementById('rejectedRequests').textContent = data.rejected || 0;
-                document.getElementById('studentResponded').textContent = data.student_responded || 0;
-                document.getElementById('answeredRequests').textContent = data.answered || 0;
+                animateCounter(document.getElementById('totalRequests'), data.total || 0, 800);
+                animateCounter(document.getElementById('pendingRequests'), data.pending || 0, 800);
+                animateCounter(document.getElementById('rejectedRequests'), data.rejected || 0, 800);
+                animateCounter(document.getElementById('studentResponded'), data.student_responded || 0, 800);
+                animateCounter(document.getElementById('answeredRequests'), data.answered || 0, 800);
             } catch (error) {
                 console.error('Error loading stats:', error);
             }
