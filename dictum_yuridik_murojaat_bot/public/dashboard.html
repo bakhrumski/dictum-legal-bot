@@ -316,6 +316,9 @@
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
         }
+        .profile-area {
+            position: relative;
+        }
         .profile-toggle {
             display: flex;
             align-items: center;
@@ -345,6 +348,7 @@
             border-color: #95a5a6;
             background: var(--glass-bg, rgba(255,255,255,0.9));
             box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            width: 210px;
         }
         .profile-toggle.open .profile-role-label {
             max-width: 120px;
@@ -442,7 +446,7 @@
             -webkit-backdrop-filter: blur(var(--glass-blur-strong));
             border-radius: var(--ios-radius);
             box-shadow: var(--shadow-lg);
-            min-width: 180px;
+            width: 210px;
             z-index: 999;
             overflow: hidden;
             border: 1px solid var(--glass-border);
@@ -2348,6 +2352,7 @@
                 </button>
             </div>
             <div class="header-right" style="display:flex; align-items:center; gap:12px;">
+              <div class="profile-area">
                 <button class="profile-toggle" id="profileToggle" onclick="toggleProfileDropdown(event)">
                     <div class="profile-avatar" id="profileAvatar">A</div>
                     <span class="profile-role-label" id="profileRoleLabel">...</span>
@@ -2364,6 +2369,7 @@
                         </button>
                     </div>
                 </div>
+              </div>
                 <!-- Hidden spans for backward compatibility -->
                 <span id="userName" style="display:none;"></span>
                 <span id="userRole" style="display:none;"></span>
