@@ -4,13 +4,33 @@ const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../database/db');
-const TelegramBot = require('node-telegram-bot-api');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Import bot from bot.js (shared polling instance)
+// Import bot from bot.js (webhook mode — no polling)
 const { bot } = require('../bot/bot');
+
+// Webhook endpoint for Telegram bot (Railway production)
+const WEBHOOK_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBHOOK_DOMAIN;
+if (WEBHOOK_DOMAIN) {
+  const secretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+  bot.setWebHook(`https://${WEBHOOK_DOMAIN}${secretPath}`).then(() => {
+    console.log(`Bot webhook set: https://${WEBHOOK_DOMAIN}${secretPath}`);
+  }).catch(err => {
+    console.error('Failed to set webhook:', err.message);
+  });
+  app.post(secretPath, express.json(), (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+  });
+} else {
+  // Local development — start polling
+  bot.startPolling();
+  bot.on('polling_error', (error) => {
+    console.error('Bot polling error:', error.code, error.message);
+  });
+  console.log('Bot started in polling mode (local dev)');
+}
 
 app.use(cors());
 app.use(express.json());

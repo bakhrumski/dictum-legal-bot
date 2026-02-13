@@ -10,16 +10,17 @@ const https = require('https');
 const path = require('path');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
+const isStandalone = require.main === module;
 
-// Handle polling errors gracefully (e.g. 409 conflict during deployment)
-bot.on('polling_error', (error) => {
-  if (error.code === 'ETELEGRAM' && error.message.includes('409')) {
-    console.warn('Bot polling conflict detected (409). Another instance may be running. Retrying...');
-  } else {
+// Standalone (local dev): use polling
+// Imported by server.js (Railway): no polling — server sets up webhook
+const bot = new TelegramBot(token, { polling: isStandalone });
+
+if (isStandalone) {
+  bot.on('polling_error', (error) => {
     console.error('Bot polling error:', error.code, error.message);
-  }
-});
+  });
+}
 
 // Store pending requests temporarily
 let pendingRequests = {};
