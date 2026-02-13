@@ -7,15 +7,36 @@ const { pool } = require('../database/db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Prevent process crashes from unhandled errors
+process.on('unhandledRejection', (err) => {
+  console.error('[PROCESS] Unhandled rejection:', err.message || err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[PROCESS] Uncaught exception:', err.message || err);
+});
+
 // Import bot from bot.js (created with polling: false)
 const { bot } = require('../bot/bot');
 
+// Catch ALL bot errors to prevent crashes
+bot.on('error', (err) => {
+  console.error('[BOT] Bot error:', err.message || err);
+});
+bot.on('polling_error', (err) => {
+  console.error('[BOT] Polling error:', err.message || err);
+});
+bot.on('webhook_error', (err) => {
+  console.error('[BOT] Webhook error:', err.message || err);
+});
+
 // Detect environment
 const WEBHOOK_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBHOOK_DOMAIN;
-const IS_RAILWAY = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PUBLIC_DOMAIN);
+const IS_RAILWAY = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_SERVICE_NAME || process.env.PORT === '8080');
 
 console.log('[BOT] Environment:', IS_RAILWAY ? 'Railway' : 'Local');
+console.log('[BOT] RAILWAY_PUBLIC_DOMAIN:', process.env.RAILWAY_PUBLIC_DOMAIN || 'NOT SET');
 console.log('[BOT] WEBHOOK_DOMAIN:', WEBHOOK_DOMAIN || 'NOT SET');
+console.log('[BOT] PORT:', PORT);
 
 if (WEBHOOK_DOMAIN) {
   // Production: webhook mode — no polling at all
@@ -24,25 +45,26 @@ if (WEBHOOK_DOMAIN) {
     bot.processUpdate(req.body);
     res.sendStatus(200);
   });
-  bot.setWebHook(`https://${WEBHOOK_DOMAIN}${secretPath}`).then(() => {
+  bot.deleteWebHook().then(() => {
+    return bot.setWebHook(`https://${WEBHOOK_DOMAIN}${secretPath}`);
+  }).then(() => {
     console.log('[BOT] Webhook active:', WEBHOOK_DOMAIN);
   }).catch(err => {
     console.error('[BOT] Webhook setup failed:', err.message);
   });
 } else if (IS_RAILWAY) {
-  // On Railway but no public domain — do NOT poll, just warn
-  console.error('[BOT] ERROR: Railway detected but no public domain!');
-  console.error('[BOT] Go to Railway → Settings → Networking → Generate Domain');
-  console.error('[BOT] Then set WEBHOOK_DOMAIN env var if needed');
+  // On Railway but no public domain — do NOT poll
+  console.error('[BOT] WARNING: On Railway but no WEBHOOK_DOMAIN set!');
+  console.error('[BOT] Bot messages will not work until domain is configured.');
+  console.error('[BOT] Set WEBHOOK_DOMAIN env var to your Railway domain.');
 } else {
   // Local development only — safe to poll
   bot.startPolling();
-  bot.on('polling_error', (error) => {
-    if (error.code === 'ETELEGRAM' && error.message.includes('409')) return; // suppress during dev
-    console.error('Bot polling error:', error.code, error.message);
-  });
   console.log('[BOT] Polling mode (local dev)');
 }
+
+// Health check endpoint for Railway
+app.get('/health', (req, res) => res.status(200).send('OK'));
 
 app.use(cors());
 app.use(express.json());
