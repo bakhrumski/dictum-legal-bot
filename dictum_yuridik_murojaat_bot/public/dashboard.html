@@ -653,6 +653,18 @@
             color: var(--text-primary);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        select option {
+            background: #ffffff;
+            color: #1d1d1f;
+            padding: 8px;
+        }
+        [data-theme="dark"] select {
+            background-color: #161b22;
+        }
+        [data-theme="dark"] select option {
+            background: #161b22;
+            color: #e6edf3;
+        }
 
         select:focus {
             outline: none;
