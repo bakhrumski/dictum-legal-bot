@@ -124,41 +124,40 @@
         }
 
         /* Theme toggle button */
-        .theme-toggle {
-            position: fixed;
-            bottom: 24px;
-            left: 24px;
-            z-index: 9999;
-            width: 48px;
-            height: 48px;
+        .theme-toggle-header {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            border: 2px solid var(--border-color);
-            background: var(--bg-card);
-            color: var(--text-primary);
-            font-size: 22px;
+            border: 2px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.15);
+            color: white;
+            font-size: 20px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            position: relative;
             transition: all 0.3s ease;
         }
-        .theme-toggle:hover {
-            transform: scale(1.1) rotate(15deg);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+        .theme-toggle-header:hover {
+            background: rgba(255,255,255,0.25);
+            transform: rotate(15deg);
         }
-        .theme-toggle:active {
-            transform: scale(0.95);
-        }
-        .theme-toggle .icon-sun,
-        .theme-toggle .icon-moon {
+        .theme-toggle-header .icon-sun,
+        .theme-toggle-header .icon-moon {
             position: absolute;
             transition: opacity 0.3s ease, transform 0.3s ease;
         }
-        .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg); }
-        .theme-toggle .icon-moon { opacity: 0; transform: rotate(-90deg); }
-        [data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(90deg); }
-        [data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg); }
+        .theme-toggle-header .icon-sun { opacity: 1; transform: rotate(0deg); }
+        .theme-toggle-header .icon-moon { opacity: 0; transform: rotate(-90deg); }
+        [data-theme="dark"] .theme-toggle-header .icon-sun { opacity: 0; transform: rotate(90deg); }
+        [data-theme="dark"] .theme-toggle-header .icon-moon { opacity: 1; transform: rotate(0deg); }
+        .theme-dropdown-label .theme-mode-text::after { content: "Qorong'u rejim"; }
+        [data-theme="dark"] .theme-dropdown-label .theme-mode-text::after { content: "Yorug' rejim"; }
+        .theme-dropdown-label .icon-sun { display: inline; }
+        .theme-dropdown-label .icon-moon { display: none; }
+        [data-theme="dark"] .theme-dropdown-label .icon-sun { display: none; }
+        [data-theme="dark"] .theme-dropdown-label .icon-moon { display: inline; }
 
         * {
             margin: 0;
@@ -1929,11 +1928,7 @@
     </style>
 </head>
 <body>
-    <!-- Theme Toggle -->
-    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Rejimni almashtirish">
-        <span class="icon-sun">&#9728;</span>
-        <span class="icon-moon">&#9790;</span>
-    </button>
+    <!-- Theme saved state applied in inline script below -->
     <script>
         // Apply saved theme immediately to prevent flash
         (function() {
@@ -1952,7 +1947,11 @@
                     📊 PDF Hisobot
                 </button>
             </div>
-            <div class="header-right">
+            <div class="header-right" style="display:flex; align-items:center; gap:12px;">
+                <button class="theme-toggle-header" onclick="toggleTheme()" title="Rejimni almashtirish">
+                    <span class="icon-sun">&#9728;</span>
+                    <span class="icon-moon">&#9790;</span>
+                </button>
                 <button class="profile-toggle" id="profileToggle" onclick="toggleProfileDropdown(event)">
                     <div class="profile-avatar" id="profileAvatar">A</div>
                     <span class="profile-role-label" id="profileRoleLabel">...</span>
@@ -1968,6 +1967,10 @@
                         <button class="profile-dropdown-item" onclick="toggleChat(); closeProfileDropdown();">
                             <span class="dd-icon">💬</span> Guruh chat
                             <span class="unread-badge" id="chatUnreadBadge" style="display:none; margin-left:auto;">0</span>
+                        </button>
+                        <button class="profile-dropdown-item" onclick="toggleTheme(); closeProfileDropdown();">
+                            <span class="dd-icon theme-dropdown-label"><span class="icon-sun">&#9728;</span><span class="icon-moon">&#9790;</span></span>
+                            <span class="theme-dropdown-label"><span class="theme-mode-text"></span></span>
                         </button>
                         <button class="profile-dropdown-item logout-item" onclick="logout()">
                             <span class="dd-icon">🚪</span> Chiqish
