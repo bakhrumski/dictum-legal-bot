@@ -250,6 +250,15 @@
             overflow: hidden;
         }
 
+        .header-brand {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+        .header-brand-icon {
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
         .header-left h1 {
             color: #7c5cbf;
             margin-bottom: 2px;
@@ -257,6 +266,7 @@
             letter-spacing: 6px;
             text-transform: uppercase;
             font-size: 28px;
+            line-height: 1;
         }
         
         .header-center {
@@ -2588,8 +2598,13 @@
     <div class="container">
         <header>
             <div class="header-left">
-                <h1>DICTUM</h1>
-                <p class="subtitle">Murojaatlar boshqaruv tizimi</p>
+                <div class="header-brand">
+                    <div class="header-brand-text">
+                        <h1>DICTUM</h1>
+                        <p class="subtitle">Murojaatlar boshqaruv tizimi</p>
+                    </div>
+                    <svg class="header-brand-icon" width="32" height="32" viewBox="0 0 64 64" fill="none" stroke="#bdc3c7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="32" y1="8" x2="32" y2="56"/><line x1="12" y1="56" x2="52" y2="56"/><line x1="12" y1="18" x2="52" y2="18"/><circle cx="32" cy="8" r="3" fill="#bdc3c7" stroke="none"/><path d="M12 18 L6 38"/><path d="M12 18 L18 38"/><path d="M6 38 Q12 46 18 38"/><path d="M52 18 L46 38"/><path d="M52 18 L58 38"/><path d="M46 38 Q52 46 58 38"/></svg>
+                </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
                 <button class="header-icon-btn" onclick="exportToPDF()" title="PDF">
