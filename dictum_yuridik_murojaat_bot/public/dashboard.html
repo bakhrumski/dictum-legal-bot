@@ -5487,19 +5487,9 @@
 
         function checkAndNotify(newMessages) {
             if (!currentUser.adminId) return;
-            const myName = currentUser.username.toLowerCase();
             newMessages.forEach(msg => {
                 if (msg.admin_id === currentUser.adminId) return;
-                // Show header stack notification for ALL messages from others
                 showHeaderChatNotification(msg);
-                // Also show @mention corner notification
-                const mentions = msg.mentions || [];
-                const mentionsLower = mentions.map(m => m.toLowerCase());
-                if (mentionsLower.includes('all')) {
-                    showChatNotification(msg, 'all');
-                } else if (mentionsLower.includes(myName)) {
-                    showChatNotification(msg, 'me');
-                }
             });
         }
 
