@@ -1053,8 +1053,11 @@
             border-radius: 12px;
             padding: 24px;
             font-size: 14px;
-            line-height: 1.8;
+            line-height: 1.6;
             color: var(--text-primary);
+        }
+        .ai-analysis-content p {
+            margin: 0 0 6px 0;
         }
         [data-theme="dark"] .ai-analysis-content {
             background: rgba(22, 97, 190, 0.08);
@@ -1144,6 +1147,247 @@
             margin-bottom: 4px;
             font-size: 12px;
             text-transform: uppercase;
+        }
+        /* AI Feedback */
+        .ai-feedback-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: var(--glass-bg);
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+        }
+        .ai-feedback-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .ai-feedback-btn {
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            background: var(--glass-bg);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .ai-feedback-btn:hover { transform: scale(1.1); }
+        .ai-feedback-btn.selected {
+            border-color: #019CE0;
+            background: rgba(1, 156, 224, 0.15);
+            transform: scale(1.1);
+        }
+        .ai-feedback-status {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        /* AI Action Buttons */
+        .ai-action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        .ai-action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 18px;
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .ai-action-btn:hover {
+            background: rgba(1, 156, 224, 0.08);
+            border-color: rgba(1, 156, 224, 0.3);
+        }
+        /* AI Chat Section */
+        .ai-chat-section { margin-top: 16px; }
+        .ai-chat-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 16px 0;
+            color: var(--text-muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .ai-chat-divider::before,
+        .ai-chat-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--glass-border);
+        }
+        .ai-chat-messages {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .ai-chat-msg {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+        .ai-chat-msg.user {
+            background: linear-gradient(135deg, #019CE0, #0C7ECF);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .ai-chat-msg.model {
+            background: rgba(0, 185, 242, 0.04);
+            border: 1px solid rgba(1, 156, 224, 0.15);
+            color: var(--text-primary);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        [data-theme="dark"] .ai-chat-msg.model {
+            background: rgba(22, 97, 190, 0.08);
+        }
+        .ai-chat-msg.model .ai-analysis-content {
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        .ai-chat-typing {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+            align-self: flex-start;
+        }
+        .ai-chat-typing span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            animation: ai-typing 1.4s infinite;
+        }
+        .ai-chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+        .ai-chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes ai-typing {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+        /* AI Chat Input Area */
+        .ai-chat-input-area {
+            padding: 12px 24px;
+            border-top: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            flex-shrink: 0;
+        }
+        .ai-chat-input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .ai-chat-input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: none;
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            max-height: 80px;
+            min-height: 42px;
+            outline: none;
+            line-height: 1.4;
+            transition: border-color 0.2s;
+        }
+        .ai-chat-input:focus {
+            border-color: rgba(1, 156, 224, 0.4);
+            box-shadow: 0 0 0 3px rgba(1, 156, 224, 0.08);
+        }
+        .ai-chat-send-btn {
+            background: linear-gradient(135deg, #019CE0, #0C7ECF);
+            color: white;
+            border: none;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 17px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(22, 97, 190, 0.25);
+        }
+        .ai-chat-send-btn:hover { transform: scale(1.08); }
+        .ai-chat-send-btn:active { transform: scale(0.95); }
+        .ai-chat-send-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
+        /* Template Picker */
+        .ai-template-picker {
+            padding: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-self: flex-start;
+        }
+        .ai-template-picker-title {
+            width: 100%;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .ai-template-type-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .ai-template-type-btn:hover {
+            background: rgba(1, 156, 224, 0.1);
+            border-color: rgba(1, 156, 224, 0.3);
+        }
+        .ai-template-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #0C7ECF;
+        }
+        [data-theme="dark"] .ai-template-header { color: #00B9F2; }
+        .ai-copy-btn {
+            padding: 6px 14px;
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .ai-copy-btn:hover { background: rgba(1, 156, 224, 0.08); }
             letter-spacing: 0.3px;
         }
         .detail-section {
@@ -3011,6 +3255,36 @@
             <div class="ai-modal-body">
                 <div id="aiRequestPreview" class="ai-request-preview"></div>
                 <div id="aiAnalysisContent" class="ai-analysis-content"></div>
+
+                <!-- Feedback -->
+                <div id="aiFeedbackSection" class="ai-feedback-section" style="display:none;">
+                    <span class="ai-feedback-label">AI tahlil foydali bo'ldimi?</span>
+                    <button class="ai-feedback-btn" id="aiFeedbackUp" onclick="submitAiFeedback(1)">&#128077;</button>
+                    <button class="ai-feedback-btn" id="aiFeedbackDown" onclick="submitAiFeedback(-1)">&#128078;</button>
+                    <span class="ai-feedback-status" id="aiFeedbackStatus"></span>
+                </div>
+
+                <!-- Action buttons -->
+                <div id="aiActionButtons" class="ai-action-buttons" style="display:none;">
+                    <button class="ai-action-btn" onclick="generateLegalTemplate()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        Hujjat namunasi
+                    </button>
+                </div>
+
+                <!-- Chat section -->
+                <div id="aiChatSection" class="ai-chat-section" style="display:none;">
+                    <div class="ai-chat-divider"><span>Qo'shimcha savollar</span></div>
+                    <div id="aiChatMessages" class="ai-chat-messages"></div>
+                </div>
+            </div>
+
+            <!-- Chat input fixed at bottom -->
+            <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
+                <div class="ai-chat-input-wrapper">
+                    <textarea class="ai-chat-input" id="aiChatInput" placeholder="Qo'shimcha savol yozing..." rows="1" onkeydown="handleAiChatKeydown(event)"></textarea>
+                    <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChatMessage()">&#10148;</button>
+                </div>
             </div>
         </div>
     </div>
@@ -4389,7 +4663,7 @@
         }
         
         function simpleMarkdown(text) {
-            return text
+            return ('<p>' + text
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                 .replace(/^### (.+)$/gm, '<h3>$1</h3>')
                 .replace(/^## (.+)$/gm, '<h2>$1</h2>')
@@ -4401,21 +4675,43 @@
                 .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
                 .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
                 .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-                .replace(/\n{2,}/g, '<br><br>')
-                .replace(/\n/g, '<br>');
+                .replace(/\n{2,}/g, '</p><p>')
+                .replace(/\n/g, '<br>') + '</p>');
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         let aiCurrentRequestId = null;
+        let aiConversationHistory = [];
+        let aiCurrentRequestText = '';
+        let aiCurrentCategory = '';
+        let aiAnalysisComplete = false;
 
         function openAiAnalysis(requestId, btnEl) {
             const btn = btnEl || event.target.closest('.ai-tahlil-btn');
             const requestText = btn.getAttribute('data-request-text');
             const category = btn.getAttribute('data-category');
             aiCurrentRequestId = requestId;
+            aiCurrentRequestText = requestText;
+            aiCurrentCategory = category;
+            aiConversationHistory = [];
+            aiAnalysisComplete = false;
 
             // Hide request modal, show AI modal
             document.getElementById('requestModal').style.display = 'none';
             document.getElementById('aiModal').style.display = 'block';
+
+            // Reset UI
+            document.getElementById('aiChatSection').style.display = 'none';
+            document.getElementById('aiChatInputArea').style.display = 'none';
+            document.getElementById('aiActionButtons').style.display = 'none';
+            document.getElementById('aiFeedbackSection').style.display = 'none';
+            document.getElementById('aiChatMessages').innerHTML = '';
+            document.getElementById('aiFeedbackUp').classList.remove('selected');
+            document.getElementById('aiFeedbackDown').classList.remove('selected');
+            document.getElementById('aiFeedbackStatus').textContent = '';
 
             // Show request preview
             const preview = document.getElementById('aiRequestPreview');
@@ -4449,6 +4745,18 @@
                 const data = await response.json();
                 if (response.ok) {
                     content.innerHTML = simpleMarkdown(data.analysis);
+
+                    // Store conversation history
+                    aiConversationHistory = [
+                        { role: 'user', text: requestText },
+                        { role: 'model', text: data.analysis }
+                    ];
+                    aiAnalysisComplete = true;
+
+                    // Show chat, actions, feedback
+                    document.getElementById('aiChatInputArea').style.display = 'block';
+                    document.getElementById('aiActionButtons').style.display = 'flex';
+                    document.getElementById('aiFeedbackSection').style.display = 'flex';
                 } else {
                     content.innerHTML = '<div style="color: #e74c3c; padding: 20px; text-align: center;">Xatolik: ' + (data.error || 'AI tahlil amalga oshmadi') + '</div>';
                 }
@@ -4461,10 +4769,187 @@
 
         function closeAiModal() {
             document.getElementById('aiModal').style.display = 'none';
-            // Re-open the request detail modal
             if (aiCurrentRequestId) {
                 showRequestDetail(aiCurrentRequestId);
             }
+        }
+
+        // --- AI Feedback ---
+        async function submitAiFeedback(rating) {
+            if (!aiCurrentRequestId) return;
+            const upBtn = document.getElementById('aiFeedbackUp');
+            const downBtn = document.getElementById('aiFeedbackDown');
+            const status = document.getElementById('aiFeedbackStatus');
+
+            upBtn.classList.toggle('selected', rating === 1);
+            downBtn.classList.toggle('selected', rating === -1);
+
+            try {
+                const response = await fetch('/api/ai-feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ requestId: aiCurrentRequestId, rating })
+                });
+                if (response.ok) {
+                    status.textContent = 'Rahmat!';
+                    setTimeout(() => { status.textContent = ''; }, 3000);
+                }
+            } catch (error) {
+                status.textContent = 'Xatolik';
+            }
+        }
+
+        // --- AI Chat ---
+        function handleAiChatKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendAiChatMessage();
+            }
+        }
+
+        async function sendAiChatMessage() {
+            const input = document.getElementById('aiChatInput');
+            const text = input.value.trim();
+            if (!text || !aiAnalysisComplete) return;
+
+            const chatMessages = document.getElementById('aiChatMessages');
+            document.getElementById('aiChatSection').style.display = 'block';
+
+            chatMessages.innerHTML += `<div class="ai-chat-msg user">${escapeHtml(text)}</div>`;
+            input.value = '';
+
+            aiConversationHistory.push({ role: 'user', text });
+
+            // Cap history at 20 messages
+            let messagesToSend = [...aiConversationHistory];
+            if (messagesToSend.length > 20) {
+                messagesToSend = [messagesToSend[0], messagesToSend[1], ...messagesToSend.slice(-18)];
+            }
+
+            chatMessages.innerHTML += '<div class="ai-chat-typing" id="aiTyping"><span></span><span></span><span></span></div>';
+            const body = document.querySelector('.ai-modal-body');
+            body.scrollTop = body.scrollHeight;
+
+            document.getElementById('aiChatSendBtn').disabled = true;
+
+            try {
+                const response = await fetch('/api/ai-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        messages: messagesToSend,
+                        requestText: aiCurrentRequestText,
+                        category: aiCurrentCategory
+                    })
+                });
+
+                const typing = document.getElementById('aiTyping');
+                if (typing) typing.remove();
+
+                const data = await response.json();
+                if (response.ok) {
+                    aiConversationHistory.push({ role: 'model', text: data.reply });
+                    chatMessages.innerHTML += `<div class="ai-chat-msg model"><div class="ai-analysis-content">${simpleMarkdown(data.reply)}</div></div>`;
+                } else {
+                    chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Xatolik: ${data.error}</div>`;
+                }
+            } catch (error) {
+                const typing = document.getElementById('aiTyping');
+                if (typing) typing.remove();
+                chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Tarmoq xatoligi</div>`;
+            } finally {
+                document.getElementById('aiChatSendBtn').disabled = false;
+                body.scrollTop = body.scrollHeight;
+            }
+        }
+
+        // --- AI Legal Template ---
+        function generateLegalTemplate() {
+            if (!aiAnalysisComplete || aiConversationHistory.length < 2) return;
+
+            const chatMessages = document.getElementById('aiChatMessages');
+            document.getElementById('aiChatSection').style.display = 'block';
+
+            chatMessages.innerHTML += `<div class="ai-chat-msg user">Hujjat namunasi tayyorlash</div>`;
+            chatMessages.innerHTML += `
+                <div class="ai-template-picker" id="aiTemplatePicker">
+                    <div class="ai-template-picker-title">Hujjat turini tanlang:</div>
+                    <button class="ai-template-type-btn" onclick="requestTemplate('auto')">Avtomatik</button>
+                    <button class="ai-template-type-btn" onclick="requestTemplate('ariza')">Ariza</button>
+                    <button class="ai-template-type-btn" onclick="requestTemplate('davo')">Da'vo arizasi</button>
+                    <button class="ai-template-type-btn" onclick="requestTemplate('shikoyat')">Shikoyat</button>
+                    <button class="ai-template-type-btn" onclick="requestTemplate('shartnoma')">Shartnoma</button>
+                    <button class="ai-template-type-btn" onclick="requestTemplate('ishonchnoma')">Ishonchnoma</button>
+                    <button class="ai-template-type-btn" onclick="requestTemplate('bayonnoma')">Bayonnoma</button>
+                </div>
+            `;
+            const body = document.querySelector('.ai-modal-body');
+            body.scrollTop = body.scrollHeight;
+        }
+
+        async function requestTemplate(templateType) {
+            const picker = document.getElementById('aiTemplatePicker');
+            if (picker) picker.remove();
+
+            const chatMessages = document.getElementById('aiChatMessages');
+            chatMessages.innerHTML += '<div class="ai-chat-typing" id="aiTyping"><span></span><span></span><span></span></div>';
+            const body = document.querySelector('.ai-modal-body');
+            body.scrollTop = body.scrollHeight;
+
+            try {
+                const analysisText = aiConversationHistory[1]?.text || '';
+
+                const response = await fetch('/api/ai-generate-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        requestText: aiCurrentRequestText,
+                        category: aiCurrentCategory,
+                        analysisText,
+                        templateType
+                    })
+                });
+
+                const typing = document.getElementById('aiTyping');
+                if (typing) typing.remove();
+
+                const data = await response.json();
+                if (response.ok) {
+                    aiConversationHistory.push(
+                        { role: 'user', text: `Hujjat namunasi: ${templateType}` },
+                        { role: 'model', text: data.template }
+                    );
+
+                    chatMessages.innerHTML += `
+                        <div class="ai-chat-msg model">
+                            <div class="ai-template-header">
+                                <span>Hujjat namunasi</span>
+                                <button class="ai-copy-btn" onclick="copyTemplate(this)">Nusxa olish</button>
+                            </div>
+                            <div class="ai-analysis-content">${simpleMarkdown(data.template)}</div>
+                        </div>
+                    `;
+                } else {
+                    chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Xatolik: ${data.error}</div>`;
+                }
+            } catch (error) {
+                const typing = document.getElementById('aiTyping');
+                if (typing) typing.remove();
+                chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Tarmoq xatoligi</div>`;
+            }
+            body.scrollTop = body.scrollHeight;
+        }
+
+        function copyTemplate(btn) {
+            const content = btn.closest('.ai-chat-msg').querySelector('.ai-analysis-content');
+            const text = content.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = 'Nusxa olindi!';
+                setTimeout(() => { btn.textContent = 'Nusxa olish'; }, 2000);
+            });
         }
 
         async function submitStudentResponse(requestId) {

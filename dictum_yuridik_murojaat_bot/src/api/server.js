@@ -1246,6 +1246,26 @@ app.post('/api/ai-analysis', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Gemini API kaliti sozlanmagan. GEMINI_API_KEY env o\'rnatilmagan.' });
     }
 
+    // Check recent feedback for quality adjustment
+    let feedbackNote = '';
+    try {
+      const fbResult = await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE rating = 1)::int AS pos,
+          COUNT(*) FILTER (WHERE rating = -1)::int AS neg
+        FROM ai_feedback
+        WHERE created_at > NOW() - INTERVAL '30 days'
+      `);
+      const { pos, neg } = fbResult.rows[0];
+      const total = pos + neg;
+      if (total > 5) {
+        const satisfaction = Math.round(pos / total * 100);
+        if (satisfaction < 70) {
+          feedbackNote = `\n\nEslatma: Foydalanuvchilar so'nggi 30 kunda ${satisfaction}% qoniqish bildirdi. Iltimos, tahlilni yanada batafsil va aniq qiling. Har bir xulosani asoslang.`;
+        }
+      }
+    } catch (e) { /* feedback query failure is non-critical */ }
+
     const prompt = `You are an AI Legal Research Assistant integrated into a legal-tech educational platform in Uzbekistan.
 
 ${category && category !== 'Boshqa' ? `Yo'nalish: ${category}` : ''}
@@ -1318,8 +1338,25 @@ Tasdiqlang:
 - ✔ Qizil ogohlantirishli hujjat ishlatilmagan
 - ✔ Amaldagi versiya tanlangan
 - ✔ Eskirgan norma ishlatilmagan
+- ✔ Sud amaliyoti tekshirilgan
 
-Agar shubha bo'lsa → hujjatni ishlatmang.`;
+Agar shubha bo'lsa → hujjatni ishlatmang.
+
+## 8-QADAM: SUD AMALIYOTI TAHLILI
+
+O'zbekiston Respublikasi sudlari amaliyotidan tegishli ishlarni toping.
+Har bir ish uchun:
+- **Ish raqami:** ...
+- **Sud nomi:** ...
+- **Sana:** ...
+- **Mohiyati:** Qisqacha faktlar va sud qarori
+- **Aloqadorlik:** Bu ish joriy masalaga qanday bog'liq
+- **Havola:** https://public.sud.uz/report
+
+Kamida 2-3 ta eng aloqador sud ishini keltiring.
+Qisqa qiyosiy tahlil bering: sudlar qanday qaror qabul qilgan va joriy ishga qanday ta'sir qiladi.
+
+> "Sud amaliyoti ma'lumotlari AI xotirasi asosida shakllantirilgan. Aniq ma'lumot uchun public.sud.uz saytidan qidiring."${feedbackNote}`;
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
@@ -1355,6 +1392,175 @@ Agar shubha bo'lsa → hujjatni ishlatmang.`;
   }
 });
 
+// AI Chat follow-up endpoint
+app.post('/api/ai-chat', requireAuth, async (req, res) => {
+  try {
+    const { messages, requestText, category } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Xabarlar topilmadi' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Gemini API kaliti sozlanmagan' });
+    }
+
+    const systemContext = `Siz O'zbekiston huquqi bo'yicha AI yordamchisiz.
+Quyidagi murojaat haqida savollarga javob bering.
+${category && category !== 'Boshqa' ? `Yo'nalish: ${category}` : ''}
+Murojaat matni: "${requestText}"
+Javoblaringiz O'zbek (lotin) tilida, qisqa va aniq bo'lsin.
+Huquqiy normalar va lex.uz havolalari bilan javob bering.`;
+
+    const contents = [];
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      contents.push({
+        role: msg.role,
+        parts: [{ text: i === 0 && msg.role === 'user'
+          ? systemContext + '\n\n' + msg.text
+          : msg.text }]
+      });
+    }
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+    const geminiResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 4096,
+        }
+      })
+    });
+
+    if (!geminiResponse.ok) {
+      const errText = await geminiResponse.text();
+      console.error('[AI Chat] Gemini API error:', geminiResponse.status, errText);
+      return res.status(500).json({ error: `Gemini API xatolik: ${geminiResponse.status}` });
+    }
+
+    const geminiData = await geminiResponse.json();
+    const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!reply) {
+      return res.status(500).json({ error: 'Gemini javob bermadi' });
+    }
+
+    res.json({ reply });
+  } catch (error) {
+    console.error('[AI Chat] Error:', error);
+    res.status(500).json({ error: 'AI chat xatoligi: ' + error.message });
+  }
+});
+
+// AI Legal Document Template Generation
+app.post('/api/ai-generate-template', requireAuth, async (req, res) => {
+  try {
+    const { requestText, category, analysisText, templateType } = req.body;
+
+    if (!requestText || !analysisText) {
+      return res.status(400).json({ error: 'Ma\'lumotlar yetarli emas' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Gemini API kaliti sozlanmagan' });
+    }
+
+    const templateTypes = {
+      'ariza': 'Ariza (sud, prokuratura, yoki boshqa organga)',
+      'shikoyat': 'Shikoyat (apellyatsiya yoki kassatsiya)',
+      'davo': 'Da\'vo arizasi',
+      'shartnoma': 'Shartnoma yoki kelishuv',
+      'ishonchnoma': 'Ishonchnoma',
+      'bayonnoma': 'Bayonnoma',
+      'auto': 'Murojaat mazmuniga eng mos hujjat turini aniqlang'
+    };
+
+    const selectedType = templateTypes[templateType] || templateTypes['auto'];
+
+    const prompt = `Siz O'zbekiston huquqi bo'yicha hujjat tayyorlovchi AI yordamchisiz.
+
+Murojaat matni: "${requestText}"
+${category && category !== 'Boshqa' ? `Yo'nalish: ${category}` : ''}
+
+AI tahlil xulosasi:
+${analysisText.substring(0, 2000)}
+
+Vazifa: ${selectedType}
+
+Qoidalar:
+1. Hujjat O'zbekiston qonunchiligiga to'liq mos bo'lishi shart
+2. To'g'ri format va tuzilma: sarlavha, kirish, asosiy qism, so'rov, imzo
+3. [SHAXS_ISMI], [MANZIL], [SANA] kabi to'ldirish joylari qoldiring
+4. Tegishli qonun moddalariga havola qiling
+5. Faqat O'zbek (lotin) tilida yozing
+6. Oxirida qisqa izoh: qaysi organga topshirish, nusxa soni, ilova qilinishi kerak bo'lgan hujjatlar
+
+Hujjatni to'liq yozing:`;
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+    const geminiResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 8192,
+        }
+      })
+    });
+
+    if (!geminiResponse.ok) {
+      const errText = await geminiResponse.text();
+      console.error('[AI Template] Gemini API error:', geminiResponse.status, errText);
+      return res.status(500).json({ error: `Gemini API xatolik: ${geminiResponse.status}` });
+    }
+
+    const geminiData = await geminiResponse.json();
+    const template = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!template) {
+      return res.status(500).json({ error: 'Gemini hujjat yaratmadi' });
+    }
+
+    res.json({ template });
+  } catch (error) {
+    console.error('[AI Template] Error:', error);
+    res.status(500).json({ error: 'Hujjat yaratish xatoligi: ' + error.message });
+  }
+});
+
+// Submit AI feedback
+app.post('/api/ai-feedback', requireAuth, async (req, res) => {
+  try {
+    const { requestId, rating, comment } = req.body;
+
+    if (!requestId || ![1, -1].includes(rating)) {
+      return res.status(400).json({ error: 'Noto\'g\'ri ma\'lumot' });
+    }
+
+    await pool.query(`
+      INSERT INTO ai_feedback (request_id, admin_id, rating, comment)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (request_id, admin_id)
+      DO UPDATE SET rating = $3, comment = $4, created_at = NOW()
+    `, [requestId, req.session.adminId, rating, comment || null]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[AI Feedback] Error:', error);
+    res.status(500).json({ error: 'Fikr-mulohaza saqlashda xatolik' });
+  }
+});
+
 // Auto-migrate database on startup (add missing columns)
 async function runMigrations() {
   try {
@@ -1363,6 +1569,17 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_start TIME DEFAULT NULL`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_end TIME DEFAULT NULL`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP DEFAULT NULL`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_feedback (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+        admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+        rating SMALLINT NOT NULL CHECK (rating IN (-1, 1)),
+        comment TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(request_id, admin_id)
+      )
+    `);
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
