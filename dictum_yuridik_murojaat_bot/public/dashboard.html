@@ -3582,6 +3582,12 @@
                 if (un) un.textContent = name;
                 const roleBadge = document.getElementById('userRole');
                 if (roleBadge) { roleBadge.textContent = data.role === 'master' ? 'Master Admin' : 'Student Admin'; roleBadge.className = 'role-badge ' + roleClass; }
+
+                // Hide AI archive section for non-master users
+                const aiArchive = document.getElementById('aiArchiveSection');
+                if (aiArchive && data.role !== 'master') {
+                    aiArchive.style.display = 'none';
+                }
             } catch (error) {
                 console.error('Error loading user info:', error);
             }
@@ -4817,10 +4823,13 @@
                     `;
                 }
 
-                modalContent += `
+                if (currentUser.role === 'master') {
+                    modalContent += `
                         <button class="btn ai-tahlil-btn" onclick="openAiAnalysis(${request.id}, this)" data-request-text="${(request.request_text || '').replace(/"/g, '&quot;')}" data-category="${(request.category || '').replace(/"/g, '&quot;')}" style="margin-left: 10px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg> AI tahlil
-                        </button>
+                        </button>`;
+                }
+                modalContent += `
                         </div>
                     </div>
                 `;

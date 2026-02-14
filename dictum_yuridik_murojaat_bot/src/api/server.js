@@ -1234,7 +1234,7 @@ app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
 });
 
 // AI Analysis endpoint using Gemini 2.5
-app.post('/api/ai-analysis', requireAuth, async (req, res) => {
+app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
   try {
     const { requestText, category, requestId } = req.body;
     if (!requestText) {
@@ -1406,7 +1406,7 @@ Qisqa qiyosiy tahlil bering: sudlar qanday qaror qabul qilgan va joriy ishga qan
 });
 
 // Get archived AI analyses (with filters)
-app.get('/api/ai-analyses', requireAuth, async (req, res) => {
+app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
   try {
     const { category, adminId, dateFrom, dateTo, search } = req.query;
     let query = `
@@ -1461,7 +1461,7 @@ app.get('/api/ai-analyses', requireAuth, async (req, res) => {
 });
 
 // Get single archived AI analysis
-app.get('/api/ai-analyses/:id', requireAuth, async (req, res) => {
+app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT aa.id, aa.request_id, aa.category, aa.request_text,
@@ -1489,7 +1489,7 @@ app.get('/api/ai-analyses/:id', requireAuth, async (req, res) => {
 });
 
 // AI Chat follow-up endpoint
-app.post('/api/ai-chat', requireAuth, async (req, res) => {
+app.post('/api/ai-chat', requireMasterAdmin, async (req, res) => {
   try {
     const { messages, requestText, category } = req.body;
 
@@ -1555,7 +1555,7 @@ Huquqiy normalar va lex.uz havolalari bilan javob bering.`;
 });
 
 // AI Legal Document Template Generation
-app.post('/api/ai-generate-template', requireAuth, async (req, res) => {
+app.post('/api/ai-generate-template', requireMasterAdmin, async (req, res) => {
   try {
     const { requestText, category, analysisText, templateType } = req.body;
 
@@ -1635,7 +1635,7 @@ Hujjatni to'liq yozing:`;
 });
 
 // Submit AI feedback
-app.post('/api/ai-feedback', requireAuth, async (req, res) => {
+app.post('/api/ai-feedback', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId, rating, comment } = req.body;
 
