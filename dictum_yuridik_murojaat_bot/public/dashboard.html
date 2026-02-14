@@ -1563,15 +1563,16 @@
             left: calc(100% + 12px);
             transform: translateY(-50%);
             z-index: 9998;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
             pointer-events: none;
-            max-width: 340px;
-            min-width: 300px;
+            width: 320px;
+            height: 0;
         }
         .chat-msg-notif {
             pointer-events: auto;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
             background: rgba(255, 255, 255, 0.92);
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
@@ -1580,17 +1581,15 @@
             padding: 12px 16px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
             cursor: pointer;
-            transform: translateY(-20px) scale(0.95);
-            opacity: 0;
-            animation: msgNotifIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-            transition: transform 0.2s, box-shadow 0.2s;
             display: flex;
             gap: 12px;
             align-items: flex-start;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                        box-shadow 0.2s;
         }
-        .chat-msg-notif:hover {
-            transform: translateY(-1px) scale(1.01);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.16), 0 4px 12px rgba(0,0,0,0.08);
+        .chat-msg-notif.entering {
+            animation: msgNotifIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
         .chat-msg-notif.removing {
             animation: msgNotifOut 0.3s ease forwards;
@@ -5435,8 +5434,23 @@
             }, 6000);
         }
 
-        // ---- Header Message Notification Stack ----
+        // ---- Header Message Notification Stack (layered) ----
         const MAX_HEADER_NOTIFS = 3;
+        const NOTIF_STACK_OFFSET = 5; // px each card peeks behind
+
+        function repositionNotifStack() {
+            const stack = document.getElementById('chatMsgNotifStack');
+            const cards = Array.from(stack.querySelectorAll('.chat-msg-notif:not(.removing)'));
+            const total = cards.length;
+            // Latest card = last child = front (highest z-index, no offset)
+            cards.forEach((card, i) => {
+                const depth = total - 1 - i; // 0 = front, 1 = behind, 2 = furthest
+                card.style.zIndex = 100 - depth;
+                card.style.transform = `translateY(${-depth * NOTIF_STACK_OFFSET}px) scale(${1 - depth * 0.03})`;
+                card.style.opacity = depth === 0 ? '1' : (1 - depth * 0.15).toString();
+            });
+        }
+
         function showHeaderChatNotification(msg) {
             if (chatIsOpen) return;
             const stack = document.getElementById('chatMsgNotifStack');
@@ -5444,15 +5458,14 @@
             if (existing.length >= MAX_HEADER_NOTIFS) {
                 const oldest = existing[0];
                 oldest.classList.add('removing');
-                setTimeout(() => oldest.remove(), 300);
+                setTimeout(() => { oldest.remove(); repositionNotifStack(); }, 300);
             }
             const roleBadgeMap = { master: 'Admin', lawyer: 'Yurist', student: 'Student' };
             const initials = (msg.full_name || '?').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
             const timeStr = new Date(msg.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
             const preview = msg.message.length > 80 ? msg.message.substring(0, 80) + '...' : msg.message;
             const notif = document.createElement('div');
-            notif.className = 'chat-msg-notif';
-            notif.style.position = 'relative';
+            notif.className = 'chat-msg-notif entering';
             notif.innerHTML = `
                 <div class="chat-msg-notif-avatar ${msg.role || ''}">${initials}</div>
                 <div class="chat-msg-notif-body">
@@ -5468,6 +5481,9 @@
                 if (!chatIsOpen) toggleChat();
             };
             stack.appendChild(notif);
+            // Remove entering class after animation completes
+            setTimeout(() => notif.classList.remove('entering'), 400);
+            repositionNotifStack();
             playNotifSound();
             setTimeout(() => {
                 if (notif.parentNode && !notif.classList.contains('removing')) {
@@ -5479,7 +5495,7 @@
         function dismissHeaderNotif(el) {
             if (!el || el.classList.contains('removing')) return;
             el.classList.add('removing');
-            setTimeout(() => el.remove(), 300);
+            setTimeout(() => { el.remove(); repositionNotifStack(); }, 300);
         }
 
         function clearAllHeaderNotifs() {
