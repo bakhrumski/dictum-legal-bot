@@ -896,23 +896,31 @@
         }
         
         .ai-tahlil-btn {
-            background: #0C7ECF !important;
+            background: none !important;
+            color: var(--text-primary) !important;
+            border: 1px solid var(--border-light, #ddd) !important;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
             padding: 12px 30px;
             box-sizing: border-box;
+            box-shadow: none !important;
         }
         .ai-tahlil-btn:hover {
-            background: #1661BE !important;
+            background: rgba(0,0,0,0.05) !important;
+        }
+        [data-theme="dark"] .ai-tahlil-btn:hover {
+            background: rgba(255,255,255,0.08) !important;
         }
         .ai-tahlil-btn:disabled {
-            background: #bdc3c7 !important;
+            background: none !important;
+            opacity: 0.5;
             cursor: not-allowed;
         }
         .ai-tahlil-btn .ai-icon {
-            font-size: 16px;
+            display: inline-flex;
+            align-items: center;
         }
         /* AI Analysis Modal */
         .ai-modal {
@@ -4331,8 +4339,8 @@
                 }
 
                 modalContent += `
-                        <button class="btn ai-tahlil-btn" onclick="openAiAnalysis(${request.id}, this)" data-request-text="${(request.request_text || '').replace(/"/g, '&quot;')}" data-category="${(request.category || '').replace(/"/g, '&quot;')}" style="background: #0C7ECF; margin-left: 10px;">
-                            &#10024; AI tahlil
+                        <button class="btn ai-tahlil-btn" onclick="openAiAnalysis(${request.id}, this)" data-request-text="${(request.request_text || '').replace(/"/g, '&quot;')}" data-category="${(request.category || '').replace(/"/g, '&quot;')}" style="margin-left: 10px;">
+                            <span class="ai-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg></span> AI tahlil
                         </button>
                         </div>
                     </div>
@@ -4410,7 +4418,7 @@
             } catch (error) {
                 content.innerHTML = '<div style="color: #e74c3c; padding: 20px; text-align: center;">Tarmoq xatoligi: ' + error.message + '</div>';
             } finally {
-                if (btn) { btn.disabled = false; btn.innerHTML = '&#10024; AI tahlil'; }
+                if (btn) { btn.disabled = false; btn.innerHTML = '<span class="ai-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg></span> AI tahlil'; }
             }
         }
 
