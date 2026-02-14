@@ -1834,21 +1834,29 @@
 
         /* Message hover actions */
         .chat-msg-actions {
-            position: absolute; top: 4px; right: 4px; opacity: 0;
-            transition: opacity 0.15s;
-            display: flex; gap: 4px;
+            display: none;
+            gap: 0;
+            margin-top: 6px;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            padding-top: 6px;
         }
-        .chat-msg.other .chat-msg-actions { right: auto; left: auto; right: 4px; }
-        .chat-msg:hover .chat-msg-actions { opacity: 1; }
-        .chat-reply-btn, .chat-delete-btn {
-            background: rgba(0,0,0,0.05); border: none; width: 28px; height: 28px;
-            border-radius: 50%; cursor: pointer; font-size: 14px; color: var(--text-muted);
-            display: flex; align-items: center; justify-content: center;
-            transition: all 0.15s;
+        .chat-msg.actions-open .chat-msg-actions { display: flex; }
+        .chat-msg-action-btn {
+            background: none; border: none; cursor: pointer;
+            font-size: 12.5px; font-weight: 600; font-family: inherit;
+            padding: 4px 12px; border-radius: 8px;
+            transition: background 0.15s;
+            display: flex; align-items: center; gap: 5px;
         }
-        .chat-reply-btn:hover { background: rgba(1,156,224,0.12); color: #019CE0; }
-        .chat-delete-btn:hover { background: rgba(231,76,60,0.12); color: #e74c3c; }
-        .chat-delete-btn { font-size: 13px; }
+        .chat-msg-action-btn.reply-action { color: #019CE0; }
+        .chat-msg-action-btn.reply-action:hover { background: rgba(1,156,224,0.1); }
+        .chat-msg-action-btn.delete-action { color: #e74c3c; }
+        .chat-msg-action-btn.delete-action:hover { background: rgba(231,76,60,0.1); }
+        [data-theme="dark"] .chat-msg-actions { border-top-color: rgba(255,255,255,0.08); }
+        [data-theme="dark"] .chat-msg-action-btn.reply-action { color: #00B9F2; }
+        [data-theme="dark"] .chat-msg-action-btn.reply-action:hover { background: rgba(0,185,242,0.12); }
+        [data-theme="dark"] .chat-msg-action-btn.delete-action { color: #f87171; }
+        [data-theme="dark"] .chat-msg-action-btn.delete-action:hover { background: rgba(248,113,113,0.12); }
         .chat-header-delete-all {
             background: none; border: none; cursor: pointer;
             color: rgba(255,255,255,0.7); font-size: 13px; padding: 4px 10px;
@@ -5355,11 +5363,7 @@
                 }
 
                 const isMaster = currentUser.role === 'master';
-                html += `<div class="chat-msg ${isOwn ? 'own' : 'other'}" data-msg-id="${msg.id}">
-                    <div class="chat-msg-actions">
-                        <button class="chat-reply-btn" onclick="startReply(${msg.id})" title="Javob berish">&#8617;</button>
-                        ${isMaster ? `<button class="chat-delete-btn" onclick="deleteChatMessage(${msg.id})" title="O'chirish">&#128465;</button>` : ''}
-                    </div>
+                html += `<div class="chat-msg ${isOwn ? 'own' : 'other'}" data-msg-id="${msg.id}" onclick="toggleMsgActions(this, event)">
                     ${!isOwn ? `<div class="chat-msg-sender role-${msg.role}">
                         ${msg.full_name}
                         <span class="chat-msg-sender-badge ${msg.role}">${roleBadgeMap[msg.role] || msg.role}</span>
@@ -5367,6 +5371,10 @@
                     ${replyHtml}
                     <div class="chat-msg-text">${renderMsgText(msg.message)}</div>
                     <div class="chat-msg-time">${timeStr}</div>
+                    <div class="chat-msg-actions">
+                        <button class="chat-msg-action-btn reply-action" onclick="event.stopPropagation(); startReply(${msg.id});">Javob berish</button>
+                        ${isMaster ? `<button class="chat-msg-action-btn delete-action" onclick="event.stopPropagation(); deleteChatMessage(${msg.id});">O'chirish</button>` : ''}
+                    </div>
                 </div>`;
             });
             container.innerHTML = html;
@@ -5586,6 +5594,15 @@
                 sendBtn.disabled = false;
                 input.focus();
             }
+        }
+
+        function toggleMsgActions(el, event) {
+            // Don't toggle if clicking on reply preview or action buttons
+            if (event.target.closest('.chat-msg-reply') || event.target.closest('.chat-msg-action-btn')) return;
+            const wasOpen = el.classList.contains('actions-open');
+            // Close all open action bars first
+            document.querySelectorAll('.chat-msg.actions-open').forEach(m => m.classList.remove('actions-open'));
+            if (!wasOpen) el.classList.add('actions-open');
         }
 
         async function deleteChatMessage(msgId) {
