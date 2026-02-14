@@ -1172,6 +1172,30 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
   }
 });
 
+// Delete single chat message (master admin only)
+app.delete('/api/chat/messages/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const msgId = parseInt(req.params.id);
+    if (!msgId) return res.status(400).json({ error: 'Invalid message ID' });
+    await pool.query('DELETE FROM chat_messages WHERE id = $1', [msgId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting chat message:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// Delete all chat messages (master admin only)
+app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM chat_messages');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting all chat messages:', error);
+    res.status(500).json({ error: 'Failed to delete messages' });
+  }
+});
+
 // AI Analysis endpoint using Gemini 2.5
 app.post('/api/ai-analysis', requireAuth, async (req, res) => {
   try {

@@ -1836,16 +1836,27 @@
         .chat-msg-actions {
             position: absolute; top: 4px; right: 4px; opacity: 0;
             transition: opacity 0.15s;
+            display: flex; gap: 4px;
         }
         .chat-msg.other .chat-msg-actions { right: auto; left: auto; right: 4px; }
         .chat-msg:hover .chat-msg-actions { opacity: 1; }
-        .chat-reply-btn {
+        .chat-reply-btn, .chat-delete-btn {
             background: rgba(0,0,0,0.05); border: none; width: 28px; height: 28px;
             border-radius: 50%; cursor: pointer; font-size: 14px; color: var(--text-muted);
             display: flex; align-items: center; justify-content: center;
             transition: all 0.15s;
         }
         .chat-reply-btn:hover { background: rgba(1,156,224,0.12); color: #019CE0; }
+        .chat-delete-btn:hover { background: rgba(231,76,60,0.12); color: #e74c3c; }
+        .chat-delete-btn { font-size: 13px; }
+        .chat-header-delete-all {
+            background: none; border: none; cursor: pointer;
+            color: rgba(255,255,255,0.7); font-size: 13px; padding: 4px 10px;
+            border-radius: 8px; transition: all 0.2s; margin-right: 8px;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .chat-header-delete-all:hover { background: rgba(255,255,255,0.15); color: white; }
+        .chat-header-delete-all svg { width: 14px; height: 14px; }
 
         /* Reply preview inside message */
         .chat-msg-reply {
@@ -2861,7 +2872,13 @@
                     <div class="chat-header-info" id="chatMemberCount">Yuristlar va studentlar uchun</div>
                 </div>
             </div>
-            <button class="chat-close-btn" onclick="toggleChat()">&times;</button>
+            <div style="display:flex; align-items:center;">
+                <button class="chat-header-delete-all" id="chatDeleteAllBtn" onclick="deleteAllChatMessages()" title="Barcha xabarlarni o'chirish" style="display:none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    Tozalash
+                </button>
+                <button class="chat-close-btn" onclick="toggleChat()">&times;</button>
+            </div>
         </div>
         <!-- Members panel -->
         <div class="chat-members-panel" id="chatMembersPanel">
@@ -5179,6 +5196,9 @@
                 chatUnreadCount = 0;
                 updateUnreadBadge();
                 clearAllHeaderNotifs();
+                if (currentUser.role === 'master') {
+                    document.getElementById('chatDeleteAllBtn').style.display = 'flex';
+                }
                 updateChatMemberCount();
                 if (chatMessages.length === 0) loadChatMessages();
                 startChatPolling();
@@ -5313,9 +5333,11 @@
                     </div>`;
                 }
 
+                const isMaster = currentUser.role === 'master';
                 html += `<div class="chat-msg ${isOwn ? 'own' : 'other'}" data-msg-id="${msg.id}">
                     <div class="chat-msg-actions">
                         <button class="chat-reply-btn" onclick="startReply(${msg.id})" title="Javob berish">&#8617;</button>
+                        ${isMaster ? `<button class="chat-delete-btn" onclick="deleteChatMessage(${msg.id})" title="O'chirish">&#128465;</button>` : ''}
                     </div>
                     ${!isOwn ? `<div class="chat-msg-sender role-${msg.role}">
                         ${msg.full_name}
@@ -5542,6 +5564,37 @@
             } finally {
                 sendBtn.disabled = false;
                 input.focus();
+            }
+        }
+
+        async function deleteChatMessage(msgId) {
+            if (!confirm("Bu xabarni o'chirishni xohlaysizmi?")) return;
+            try {
+                const response = await fetch(`/api/chat/messages/${msgId}`, { method: 'DELETE' });
+                if (response.ok) {
+                    chatMessages = chatMessages.filter(m => m.id !== msgId);
+                    renderChatMessages();
+                } else if (response.status === 403) {
+                    alert("Faqat admin xabarlarni o'chira oladi");
+                }
+            } catch (error) {
+                console.error('Error deleting message:', error);
+            }
+        }
+
+        async function deleteAllChatMessages() {
+            if (!confirm("Barcha xabarlarni o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi!")) return;
+            try {
+                const response = await fetch('/api/chat/messages', { method: 'DELETE' });
+                if (response.ok) {
+                    chatMessages = [];
+                    chatLastId = 0;
+                    renderChatMessages();
+                } else if (response.status === 403) {
+                    alert("Faqat admin barcha xabarlarni o'chira oladi");
+                }
+            } catch (error) {
+                console.error('Error deleting all messages:', error);
             }
         }
 
