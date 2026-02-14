@@ -1236,7 +1236,7 @@ app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
 // AI Analysis endpoint using Gemini 2.5
 app.post('/api/ai-analysis', requireAuth, async (req, res) => {
   try {
-    const { requestText, category } = req.body;
+    const { requestText, category, requestId } = req.body;
     if (!requestText) {
       return res.status(400).json({ error: 'Murojaat matni topilmadi' });
     }
@@ -1385,10 +1385,106 @@ Qisqa qiyosiy tahlil bering: sudlar qanday qaror qabul qilgan va joriy ishga qan
       return res.status(500).json({ error: 'Gemini javob bermadi' });
     }
 
-    res.json({ analysis });
+    // Archive the analysis
+    let archiveId = null;
+    try {
+      const archiveResult = await pool.query(
+        `INSERT INTO ai_analyses (request_id, admin_id, category, request_text, analysis_text)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [requestId || null, req.session.adminId, category, requestText, analysis]
+      );
+      archiveId = archiveResult.rows[0].id;
+    } catch (archiveErr) {
+      console.error('[AI] Archive save error:', archiveErr.message);
+    }
+
+    res.json({ analysis, archiveId });
   } catch (error) {
     console.error('[AI] Analysis error:', error);
     res.status(500).json({ error: 'AI tahlil xatoligi: ' + error.message });
+  }
+});
+
+// Get archived AI analyses (with filters)
+app.get('/api/ai-analyses', requireAuth, async (req, res) => {
+  try {
+    const { category, adminId, dateFrom, dateTo, search } = req.query;
+    let query = `
+      SELECT aa.id, aa.request_id, aa.category, aa.request_text,
+             aa.analysis_text, aa.created_at,
+             a.full_name as admin_name
+      FROM ai_analyses aa
+      LEFT JOIN admins a ON aa.admin_id = a.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramIdx = 1;
+
+    if (category) {
+      query += ` AND aa.category = $${paramIdx++}`;
+      params.push(category);
+    }
+    if (adminId) {
+      query += ` AND aa.admin_id = $${paramIdx++}`;
+      params.push(adminId);
+    }
+    if (dateFrom) {
+      query += ` AND aa.created_at >= $${paramIdx++}`;
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      query += ` AND aa.created_at < ($${paramIdx++})::date + 1`;
+      params.push(dateTo);
+    }
+    if (search) {
+      query += ` AND aa.request_text ILIKE $${paramIdx++}`;
+      params.push(`%${search}%`);
+    }
+
+    query += ` ORDER BY aa.created_at DESC LIMIT 100`;
+
+    const result = await pool.query(query, params);
+
+    // Anonymize request_text for non-master users
+    const rows = result.rows.map(row => {
+      if (req.session.role !== 'master') {
+        return { ...row, request_text: `Murojatchi #${row.request_id || row.id}` };
+      }
+      return row;
+    });
+
+    res.json(rows);
+  } catch (error) {
+    console.error('[AI Archive] Error:', error);
+    res.status(500).json({ error: 'Arxiv yuklashda xatolik' });
+  }
+});
+
+// Get single archived AI analysis
+app.get('/api/ai-analyses/:id', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT aa.id, aa.request_id, aa.category, aa.request_text,
+             aa.analysis_text, aa.created_at,
+             a.full_name as admin_name
+      FROM ai_analyses aa
+      LEFT JOIN admins a ON aa.admin_id = a.id
+      WHERE aa.id = $1
+    `, [req.params.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tahlil topilmadi' });
+    }
+
+    const row = result.rows[0];
+    if (req.session.role !== 'master') {
+      row.request_text = `Murojatchi #${row.request_id || row.id}`;
+    }
+
+    res.json(row);
+  } catch (error) {
+    console.error('[AI Archive] Error:', error);
+    res.status(500).json({ error: 'Tahlil yuklashda xatolik' });
   }
 });
 
@@ -1580,6 +1676,18 @@ async function runMigrations() {
         UNIQUE(request_id, admin_id)
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_analyses (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+        admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+        category VARCHAR(255),
+        request_text TEXT,
+        analysis_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_analyses_created ON ai_analyses(created_at DESC)`);
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);

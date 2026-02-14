@@ -1388,7 +1388,141 @@
             transition: all 0.2s;
         }
         .ai-copy-btn:hover { background: rgba(1, 156, 224, 0.08); }
-            letter-spacing: 0.3px;
+        /* AI Archive Section */
+        .ai-archive-section {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--ios-radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-md);
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .ai-archive-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .ai-archive-header .toggle-chevron {
+            transition: transform 0.3s ease;
+            margin-right: 8px;
+        }
+        .ai-archive-section.collapsed .ai-archive-header .toggle-chevron {
+            transform: rotate(-90deg);
+        }
+        .ai-archive-section.collapsed .ai-archive-filters,
+        .ai-archive-section.collapsed .ai-archive-list {
+            display: none;
+        }
+        .ai-archive-section.collapsed .ai-archive-header {
+            margin-bottom: 0;
+        }
+        .ai-archive-header h2 {
+            font-size: 16px;
+            color: var(--text-primary);
+        }
+        .ai-archive-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        .ai-archive-filters select,
+        .ai-archive-filters input {
+            padding: 8px 12px;
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 13px;
+        }
+        .ai-archive-filters input[type="date"] {
+            min-width: 130px;
+        }
+        .ai-archive-filters input[type="text"] {
+            min-width: 180px;
+        }
+        .ai-archive-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .ai-archive-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 16px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ai-archive-item:hover {
+            background: rgba(1, 156, 224, 0.06);
+            border-color: rgba(1, 156, 224, 0.2);
+        }
+        .ai-archive-item-id {
+            font-size: 12px;
+            font-weight: 700;
+            color: #0C7ECF;
+            min-width: 40px;
+        }
+        [data-theme="dark"] .ai-archive-item-id { color: #00B9F2; }
+        .ai-archive-item-meta {
+            flex: 1;
+            min-width: 0;
+        }
+        .ai-archive-item-meta .archive-top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            flex-wrap: wrap;
+        }
+        .ai-archive-item-meta .archive-category {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: rgba(1, 156, 224, 0.1);
+            color: #0C7ECF;
+        }
+        [data-theme="dark"] .ai-archive-item-meta .archive-category {
+            background: rgba(0, 185, 242, 0.15);
+            color: #00B9F2;
+        }
+        .ai-archive-item-meta .archive-author {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .ai-archive-item-meta .archive-preview {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ai-archive-item-date {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            text-align: right;
+        }
+        .ai-archive-empty {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-muted);
+            font-size: 13px;
         }
         .detail-section {
             margin-bottom: 20px;
@@ -3128,6 +3262,40 @@
             </div>
         </div>
 
+        <!-- AI Analyses Archive Section -->
+        <div class="ai-archive-section collapsed" id="aiArchiveSection">
+            <div class="ai-archive-header" onclick="document.getElementById('aiArchiveSection').classList.toggle('collapsed'); if(!document.getElementById('aiArchiveSection').classList.contains('collapsed') && !aiArchiveLoaded) loadAiArchive();">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>AI tahlillar arxivi</h2>
+                </div>
+            </div>
+            <div class="ai-archive-filters">
+                <select id="archiveCategoryFilter" onchange="loadAiArchive()">
+                    <option value="">Barcha yo'nalishlar</option>
+                    <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
+                    <option value="Jinoyat huquqi">Jinoyat huquqi</option>
+                    <option value="Mehnat huquqi">Mehnat huquqi</option>
+                    <option value="Oila huquqi">Oila huquqi</option>
+                    <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
+                    <option value="Ko'chmas mulk">Ko'chmas mulk</option>
+                    <option value="Soliq huquqi">Soliq huquqi</option>
+                    <option value="Ma'muriy huquq">Ma'muriy huquq</option>
+                    <option value="Boshqa">Boshqa</option>
+                </select>
+                <select id="archiveAuthorFilter" onchange="loadAiArchive()">
+                    <option value="">Barcha mualliflar</option>
+                </select>
+                <input type="date" id="archiveDateFrom" onchange="loadAiArchive()" title="Boshlanish sanasi">
+                <input type="date" id="archiveDateTo" onchange="loadAiArchive()" title="Tugash sanasi">
+                <input type="text" id="archiveSearch" placeholder="Qidirish..." onkeyup="if(event.key==='Enter')loadAiArchive()">
+                <button class="btn" onclick="clearArchiveFilters()" style="background:#95a5a6;padding:8px 15px;border:none;border-radius:10px;color:white;font-family:inherit;font-size:13px;cursor:pointer;">&#8634; Tozalash</button>
+            </div>
+            <div class="ai-archive-list" id="aiArchiveList">
+                <div class="ai-archive-empty">Arxivni ko'rish uchun bo'limni oching</div>
+            </div>
+        </div>
+
         <!-- Monte Carlo Simulation Section -->
         <div class="monte-carlo-section" id="monteCarloSection">
             <div class="mc-card">
@@ -4688,8 +4856,10 @@
         let aiCurrentRequestText = '';
         let aiCurrentCategory = '';
         let aiAnalysisComplete = false;
+        let aiOpenedFromRequest = false;
 
         function openAiAnalysis(requestId, btnEl) {
+            aiOpenedFromRequest = true;
             const btn = btnEl || event.target.closest('.ai-tahlil-btn');
             const requestText = btn.getAttribute('data-request-text');
             const category = btn.getAttribute('data-category');
@@ -4733,7 +4903,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
-                    body: JSON.stringify({ requestText, category })
+                    body: JSON.stringify({ requestText, category, requestId: aiCurrentRequestId })
                 });
 
                 if (response.status === 401) {
@@ -4769,9 +4939,10 @@
 
         function closeAiModal() {
             document.getElementById('aiModal').style.display = 'none';
-            if (aiCurrentRequestId) {
+            if (aiOpenedFromRequest && aiCurrentRequestId) {
                 showRequestDetail(aiCurrentRequestId);
             }
+            aiOpenedFromRequest = false;
         }
 
         // --- AI Feedback ---
@@ -4951,6 +5122,137 @@
                 setTimeout(() => { btn.textContent = 'Nusxa olish'; }, 2000);
             });
         }
+
+        // --- AI Archive ---
+        let aiArchiveLoaded = false;
+
+        async function loadAiArchive() {
+            aiArchiveLoaded = true;
+            const list = document.getElementById('aiArchiveList');
+            list.innerHTML = '<div class="ai-archive-empty">Yuklanmoqda...</div>';
+
+            const params = new URLSearchParams();
+            const category = document.getElementById('archiveCategoryFilter').value;
+            const adminId = document.getElementById('archiveAuthorFilter').value;
+            const dateFrom = document.getElementById('archiveDateFrom').value;
+            const dateTo = document.getElementById('archiveDateTo').value;
+            const search = document.getElementById('archiveSearch').value.trim();
+
+            if (category) params.set('category', category);
+            if (adminId) params.set('adminId', adminId);
+            if (dateFrom) params.set('dateFrom', dateFrom);
+            if (dateTo) params.set('dateTo', dateTo);
+            if (search) params.set('search', search);
+
+            try {
+                const response = await fetch('/api/ai-analyses?' + params.toString(), { credentials: 'same-origin' });
+                if (!response.ok) throw new Error('Server error');
+                const data = await response.json();
+
+                if (data.length === 0) {
+                    list.innerHTML = '<div class="ai-archive-empty">Tahlillar topilmadi</div>';
+                    return;
+                }
+
+                list.innerHTML = data.map(item => {
+                    const date = new Date(item.created_at);
+                    const dateStr = date.toLocaleDateString('uz-UZ');
+                    const timeStr = date.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+                    const preview = (item.request_text || '').substring(0, 100) + ((item.request_text || '').length > 100 ? '...' : '');
+                    return `
+                        <div class="ai-archive-item" onclick="openArchivedAnalysis(${item.id})">
+                            <div class="ai-archive-item-id">#${item.id}</div>
+                            <div class="ai-archive-item-meta">
+                                <div class="archive-top">
+                                    ${item.category ? `<span class="archive-category">${escapeHtml(item.category)}</span>` : ''}
+                                    <span class="archive-author">${escapeHtml(item.admin_name || 'Noma\'lum')}</span>
+                                    ${item.request_id ? `<span class="archive-author">Murojaat #${item.request_id}</span>` : ''}
+                                </div>
+                                <div class="archive-preview">${escapeHtml(preview)}</div>
+                            </div>
+                            <div class="ai-archive-item-date">${dateStr}<br>${timeStr}</div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                list.innerHTML = '<div class="ai-archive-empty" style="color:#e74c3c;">Xatolik: ' + error.message + '</div>';
+            }
+        }
+
+        async function openArchivedAnalysis(archiveId) {
+            // Open AI modal with archived analysis
+            document.getElementById('aiModal').style.display = 'block';
+
+            const content = document.getElementById('aiAnalysisContent');
+            content.innerHTML = '<div class="ai-loading"><span class="spinner"></span><div class="ai-loading-text">Yuklanmoqda...</div></div>';
+
+            // Reset UI
+            document.getElementById('aiChatSection').style.display = 'none';
+            document.getElementById('aiChatInputArea').style.display = 'none';
+            document.getElementById('aiActionButtons').style.display = 'none';
+            document.getElementById('aiFeedbackSection').style.display = 'none';
+            document.getElementById('aiChatMessages').innerHTML = '';
+
+            try {
+                const response = await fetch('/api/ai-analyses/' + archiveId, { credentials: 'same-origin' });
+                if (!response.ok) throw new Error('Tahlil topilmadi');
+                const data = await response.json();
+
+                // Set context for follow-up chat
+                aiCurrentRequestId = data.request_id;
+                aiCurrentRequestText = data.request_text || '';
+                aiCurrentCategory = data.category || '';
+                aiConversationHistory = [
+                    { role: 'user', text: aiCurrentRequestText },
+                    { role: 'model', text: data.analysis_text }
+                ];
+                aiAnalysisComplete = true;
+
+                // Show preview
+                const preview = document.getElementById('aiRequestPreview');
+                const previewText = aiCurrentRequestText.length > 300 ? aiCurrentRequestText.substring(0, 300) + '...' : aiCurrentRequestText;
+                preview.innerHTML = `<strong>Murojaat matni${data.category && data.category !== 'Boshqa' ? ` — ${escapeHtml(data.category)}` : ''}</strong>${escapeHtml(previewText)}`;
+
+                // Show analysis
+                content.innerHTML = simpleMarkdown(data.analysis_text);
+
+                // Show chat, actions, feedback
+                document.getElementById('aiChatInputArea').style.display = 'block';
+                document.getElementById('aiActionButtons').style.display = 'flex';
+                document.getElementById('aiFeedbackSection').style.display = 'flex';
+                document.getElementById('aiFeedbackUp').classList.remove('selected');
+                document.getElementById('aiFeedbackDown').classList.remove('selected');
+                document.getElementById('aiFeedbackStatus').textContent = '';
+            } catch (error) {
+                content.innerHTML = '<div style="color:#e74c3c;padding:20px;text-align:center;">Xatolik: ' + error.message + '</div>';
+            }
+        }
+
+        function clearArchiveFilters() {
+            document.getElementById('archiveCategoryFilter').value = '';
+            document.getElementById('archiveAuthorFilter').value = '';
+            document.getElementById('archiveDateFrom').value = '';
+            document.getElementById('archiveDateTo').value = '';
+            document.getElementById('archiveSearch').value = '';
+            loadAiArchive();
+        }
+
+        // Populate archive author filter from admin list
+        async function loadArchiveAuthors() {
+            try {
+                const response = await fetch('/api/admins', { credentials: 'same-origin' });
+                if (!response.ok) return;
+                const admins = await response.json();
+                const select = document.getElementById('archiveAuthorFilter');
+                admins.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a.id;
+                    opt.textContent = a.full_name || a.username;
+                    select.appendChild(opt);
+                });
+            } catch (e) { /* non-critical */ }
+        }
+        loadArchiveAuthors();
 
         async function submitStudentResponse(requestId) {
             if (!checkCategoryBeforeResponse()) return;
