@@ -3191,9 +3191,11 @@
                 // Actions column (master only)
                 let actionsHtml = '';
                 if (isMaster) {
-                    actionsHtml = `<td class="actions-cell" style="text-align:center;">
-                        <button class="action-btn edit-btn" onclick="openEditMemberModal(${admin.id})" title="Tahrirlash"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(135deg)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-                        ${!isOwnRow ? `<button class="action-btn delete-btn" onclick="confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
+                    actionsHtml = `<td class="actions-cell">
+                        <div style="display:flex;justify-content:center;gap:4px;min-width:60px;">
+                            <button class="action-btn edit-btn" onclick="openEditMemberModal(${admin.id})" title="Tahrirlash"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(135deg)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+                            ${!isOwnRow ? `<button class="action-btn delete-btn" onclick="confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : '<span style="width:27px;"></span>'}
+                        </div>
                     </td>`;
                 }
 
