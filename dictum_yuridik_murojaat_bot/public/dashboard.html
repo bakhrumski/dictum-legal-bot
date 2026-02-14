@@ -654,22 +654,18 @@
         }
         .requests-preview-list {
             display: flex;
-            gap: 10px;
-            overflow-x: auto;
-            padding-bottom: 4px;
+            flex-direction: column;
+            gap: 8px;
         }
         .requests-preview-item {
-            flex-shrink: 0;
             background: var(--glass-bg, #f0f2f5);
             border-radius: 12px;
             padding: 10px 14px;
-            min-width: 220px;
-            max-width: 280px;
             cursor: pointer;
             transition: transform 0.2s;
         }
         .requests-preview-item:hover {
-            transform: translateY(-2px);
+            transform: translateX(4px);
         }
         .requests-preview-item .rp-name {
             font-weight: 600;
@@ -707,9 +703,6 @@
         .requests-preview-item {
             border: 1px solid var(--glass-border, rgba(0,0,0,0.06));
         }
-        .requests-preview-list::-webkit-scrollbar { height: 4px; }
-        .requests-preview-list::-webkit-scrollbar-track { background: transparent; }
-        .requests-preview-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 2px; }
         
         .filter-section {
             display: flex;
