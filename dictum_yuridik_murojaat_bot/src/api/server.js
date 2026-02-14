@@ -1027,6 +1027,23 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
 
     let query, params;
     if (sinceId > 0) {
+      // Check if since_id still exists (messages may have been deleted)
+      const check = await pool.query('SELECT COUNT(*)::int as cnt FROM chat_messages WHERE id <= $1', [sinceId]);
+      if (check.rows[0].cnt === 0) {
+        // All messages up to since_id were deleted — signal full reset
+        const fresh = await pool.query(`
+          SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
+                 a.id as admin_id, a.username, a.full_name, a.role,
+                 rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
+          FROM chat_messages cm
+          JOIN admins a ON cm.admin_id = a.id
+          LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
+          LEFT JOIN admins ra ON rm.admin_id = ra.id
+          ORDER BY cm.id DESC
+          LIMIT $1
+        `, [limit]);
+        return res.json({ messages: fresh.rows.reverse(), reset: true });
+      }
       query = `
         SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
                a.id as admin_id, a.username, a.full_name, a.role,
@@ -1057,7 +1074,9 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
 
     const result = await pool.query(query, params);
     const messages = sinceId > 0 ? result.rows : result.rows.reverse();
-    res.json({ messages });
+    // Include total count so client can detect individual deletions
+    const totalResult = await pool.query('SELECT COUNT(*)::int as total FROM chat_messages');
+    res.json({ messages, total: totalResult.rows[0].total });
   } catch (error) {
     console.error('Error fetching chat messages:', error);
     res.status(500).json({ error: 'Failed to fetch messages' });

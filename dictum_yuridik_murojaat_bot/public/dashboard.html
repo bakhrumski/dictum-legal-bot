@@ -5261,6 +5261,27 @@
                 const response = await fetch(url);
                 if (!response.ok) return;
                 const data = await response.json();
+                // Server signals messages were deleted — full reset
+                if (data.reset) {
+                    chatMessages = data.messages || [];
+                    chatLastId = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1].id : 0;
+                    chatUnreadCount = 0;
+                    updateUnreadBadge();
+                    renderChatMessages();
+                    return;
+                }
+                // Detect individual message deletions (server total < local count)
+                if (typeof data.total === 'number' && chatLastId > 0 && data.total < chatMessages.length) {
+                    // Some messages were deleted — do a full reload
+                    const freshResp = await fetch('/api/chat/messages?limit=50');
+                    if (freshResp.ok) {
+                        const freshData = await freshResp.json();
+                        chatMessages = freshData.messages || [];
+                        chatLastId = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1].id : 0;
+                        renderChatMessages();
+                    }
+                    return;
+                }
                 if (data.messages && data.messages.length > 0) {
                     if (chatLastId === 0) {
                         chatMessages = data.messages;
