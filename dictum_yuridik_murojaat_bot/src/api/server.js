@@ -98,6 +98,20 @@ function requireMasterAdmin(req, res, next) {
   }
 }
 
+// Anonymize applicant personal info for non-master users
+function anonymizeRequest(row, role) {
+  if (role === 'master') return row;
+  return {
+    ...row,
+    first_name: `Murojatchi #${row.id}`,
+    username: null,
+    telegram_id: null,
+    blocked: false,
+    blocked_at: null,
+    block_reason: null
+  };
+}
+
 // Activity tracking middleware - updates last_active_at on every authenticated request
 function trackActivity(req, res, next) {
   if (req.session && req.session.isAuthenticated && req.session.adminId) {
@@ -229,7 +243,8 @@ app.get('/api/requests', requireAuth, async (req, res) => {
       ORDER BY r.created_at DESC
     `);
     
-    res.json(result.rows);
+    const rows = result.rows.map(r => anonymizeRequest(r, req.session.role));
+    res.json(rows);
   } catch (error) {
     console.error('Error fetching requests:', error);
     res.status(500).json({ error: 'Database error' });
@@ -276,7 +291,7 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
     
-    res.json(result.rows[0]);
+    res.json(anonymizeRequest(result.rows[0], req.session.role));
   } catch (error) {
     console.error('Error fetching request:', error);
     res.status(500).json({ error: 'Database error' });
@@ -769,8 +784,7 @@ app.post('/api/assign-request', requireAuth, async (req, res) => {
             const typeLabel = typeLabels[req.request_type] || req.request_type;
             const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
 
-            let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojatchi: ${req.first_name || 'Noma\'lum'}`;
-            if (req.username) notifText += ` (@${req.username})`;
+            let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojatchi: Murojatchi #${req.id}`;
             notifText += `\n📝 Turi: ${typeLabel}`;
             notifText += `\n🔢 Murojaat #${req.id}`;
 
@@ -878,10 +892,13 @@ app.get('/api/export-excel', requireAuth, async (req, res) => {
       ORDER BY r.created_at DESC
     `);
     
+    // Anonymize for non-master users
+    const rows = result.rows.map(r => anonymizeRequest(r, req.session.role));
+
     // Format data for Excel
-    const excelData = result.rows.map(row => ({
+    const excelData = rows.map(row => ({
       'ID': row.id,
-      'Username': row.username,
+      'Username': row.username || '',
       'Ism': row.first_name,
       'Yo\'nalish': row.category,
       'Murojaat': row.request_text,
