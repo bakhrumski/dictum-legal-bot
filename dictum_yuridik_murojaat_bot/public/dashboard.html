@@ -2758,12 +2758,11 @@
                         <th>Rol</th>
                         <th>Ish vaqti (Smena)</th>
                         <th>Holati</th>
-                        <th>Oxirgi faollik</th>
                         <th id="actionsColHeader" style="display:none; text-align:center;">Amallar</th>
                     </tr>
                 </thead>
                 <tbody id="adminTableBody">
-                    <tr><td colspan="8" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
+                    <tr><td colspan="7" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -3175,15 +3174,14 @@
                 const editBtn = canEdit ? `<button class="timeslot-edit-btn" onclick="editTimeslot(${admin.id}, '${admin.duty_start || ''}', '${admin.duty_end || ''}')">&#9998;</button>` : '';
                 const timeslotHtml = `<div class="timeslot-cell-inner">${timeslotInner}${editBtn}</div>`;
 
-                // Status display
-                const statusHtml = admin.is_active
-                    ? '<span class="status-indicator active">Aktiv</span>'
-                    : '<span class="status-indicator inactive">Nofaol</span>';
-
-                // Last active display
-                let lastActiveHtml = '<span class="last-active-text">Hech qachon</span>';
-                if (admin.last_active_at) {
-                    lastActiveHtml = `<span class="last-active-text">${formatTimeAgo(admin.last_active_at)}</span>`;
+                // Status display (merged with last active)
+                let statusHtml;
+                if (admin.is_active) {
+                    statusHtml = '<span class="status-indicator active">Aktiv</span>';
+                } else if (admin.last_active_at) {
+                    statusHtml = `<span class="status-indicator inactive">${formatTimeAgo(admin.last_active_at)}</span>`;
+                } else {
+                    statusHtml = '<span class="status-indicator inactive">Hech qachon</span>';
                 }
 
                 // Actions column (master only)
@@ -3202,7 +3200,6 @@
                     <td><span class="role-badge role-${admin.role}">${roleLabels[admin.role] || admin.role}</span></td>
                     <td id="timeslot-cell-${admin.id}">${timeslotHtml}</td>
                     <td>${statusHtml}</td>
-                    <td>${lastActiveHtml}</td>
                     ${actionsHtml}
                 </tr>`;
             }).join('');
