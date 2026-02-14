@@ -5581,8 +5581,11 @@
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    chatMessages.push(data.message);
-                    chatLastId = data.message.id;
+                    // Avoid duplicate if polling already fetched this message
+                    if (!chatMessages.some(m => m.id === data.message.id)) {
+                        chatMessages.push(data.message);
+                    }
+                    chatLastId = Math.max(chatLastId, data.message.id);
                     renderChatMessages();
                     input.value = '';
                     input.style.height = '40px';
