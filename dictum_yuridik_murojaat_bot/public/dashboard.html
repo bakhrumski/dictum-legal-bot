@@ -906,11 +906,18 @@
             padding: 12px !important;
             box-sizing: border-box;
             box-shadow: none !important;
+            width: auto !important;
+            transform: none !important;
+            overflow: visible !important;
         }
+        .ai-tahlil-btn::after { display: none !important; }
         .ai-tahlil-btn:hover {
             background: rgba(0,0,0,0.05) !important;
             transform: none !important;
             box-shadow: none !important;
+        }
+        .ai-tahlil-btn:active {
+            transform: none !important;
         }
         [data-theme="dark"] .ai-tahlil-btn:hover {
             background: rgba(255,255,255,0.08) !important;
@@ -923,11 +930,18 @@
             box-shadow: none !important;
             display: inline-flex;
             align-items: center;
+            width: auto !important;
+            transform: none !important;
+            overflow: visible !important;
         }
+        .modal-action-btn::after { display: none !important; }
         .modal-action-btn:hover {
             background: rgba(0,0,0,0.05) !important;
             transform: none !important;
             box-shadow: none !important;
+        }
+        .modal-action-btn:active {
+            transform: none !important;
         }
         [data-theme="dark"] .modal-action-btn:hover {
             background: rgba(255,255,255,0.08) !important;
