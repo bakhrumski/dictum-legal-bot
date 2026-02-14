@@ -66,15 +66,6 @@ if (WEBHOOK_DOMAIN) {
 // Health check endpoint for Railway
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
-// Webhook debug endpoint
-app.get('/webhook-status', async (req, res) => {
-  try {
-    const info = await bot.getWebHookInfo();
-    res.json(info);
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
 
 app.use(cors());
 app.use(express.json());
