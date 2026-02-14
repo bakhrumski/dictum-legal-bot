@@ -642,6 +642,74 @@
         .requests-container.collapsed #requestsList {
             display: none;
         }
+        .requests-container.collapsed .controls-header {
+            margin-bottom: 0;
+        }
+        .requests-preview {
+            display: none;
+            padding: 10px 0 0;
+        }
+        .requests-container.collapsed .requests-preview {
+            display: block;
+        }
+        .requests-preview-list {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+        .requests-preview-item {
+            flex-shrink: 0;
+            background: var(--glass-bg, #f0f2f5);
+            border-radius: 12px;
+            padding: 10px 14px;
+            min-width: 220px;
+            max-width: 280px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .requests-preview-item:hover {
+            transform: translateY(-2px);
+        }
+        .requests-preview-item .rp-name {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--text-primary);
+            margin-bottom: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .requests-preview-item .rp-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .requests-preview-item .rp-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+            font-size: 11px;
+            color: var(--text-muted, #999);
+        }
+        .requests-preview-item .rp-status {
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .rp-status.pending { background: rgba(243,156,18,0.15); color: #f39c12; }
+        .rp-status.answered { background: rgba(39,174,96,0.15); color: #27ae60; }
+        .rp-status.blocked { background: rgba(231,76,60,0.15); color: #e74c3c; }
+        .requests-preview-item {
+            border: 1px solid var(--glass-border, rgba(0,0,0,0.06));
+        }
+        .requests-preview-list::-webkit-scrollbar { height: 4px; }
+        .requests-preview-list::-webkit-scrollbar-track { background: transparent; }
+        .requests-preview-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 2px; }
         
         .filter-section {
             display: flex;
@@ -2707,7 +2775,7 @@
         </div>
 
         <div class="main-content-area">
-            <div class="requests-container" id="requestsSection">
+            <div class="requests-container collapsed" id="requestsSection">
                 <div class="controls">
                     <div class="controls-header" onclick="document.getElementById('requestsSection').classList.toggle('collapsed')">
                         <div style="display:flex;align-items:center;gap:6px;">
@@ -2752,6 +2820,9 @@
                             ↺ Tozalash
                         </button>
                     </div>
+                </div>
+                <div class="requests-preview">
+                    <div class="requests-preview-list" id="requestsPreviewList"></div>
                 </div>
                 <div id="requestsList">
                     <div class="loading">Yuklanmoqda...</div>
@@ -3767,6 +3838,52 @@
             });
 
             container.innerHTML = html;
+            updateRequestsPreview();
+        }
+
+        function updateRequestsPreview() {
+            const container = document.getElementById('requestsPreviewList');
+            if (!container || !requests.length) {
+                if (container) container.innerHTML = '';
+                return;
+            }
+
+            const statusText = {
+                'pending': 'Kutilmoqda',
+                'student_responded': 'Student javobi',
+                'lawyer_approved': 'Tasdiqlangan',
+                'answered': 'Javob berilgan',
+                'rejected': 'Rad etilgan'
+            };
+
+            const statusClass = {
+                'pending': 'pending',
+                'student_responded': 'pending',
+                'lawyer_approved': 'pending',
+                'answered': 'answered',
+                'rejected': 'blocked'
+            };
+
+            // Sort by newest first, take latest 8
+            const latest = [...requests]
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                .slice(0, 8);
+
+            container.innerHTML = latest.map(req => {
+                const name = req.first_name || req.name || 'N/A';
+                const text = req.request_text || '';
+                const time = new Date(req.created_at).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' });
+                return `
+                    <div class="requests-preview-item" onclick="showRequestDetail(${req.id})">
+                        <div class="rp-name">${name}</div>
+                        <div class="rp-text">${text.substring(0, 60)}${text.length > 60 ? '...' : ''}</div>
+                        <div class="rp-meta">
+                            <span class="rp-status ${statusClass[req.status] || 'pending'}">${statusText[req.status] || req.status}</span>
+                            <span>${time}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function toggleFolder(folderId) {
