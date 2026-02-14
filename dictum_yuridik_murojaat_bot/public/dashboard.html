@@ -898,12 +898,12 @@
         .ai-tahlil-btn {
             background: none !important;
             color: var(--text-primary) !important;
-            border: 1px solid var(--border-light, #ddd) !important;
+            border: none !important;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
-            padding: 12px 30px;
+            padding: 12px !important;
             box-sizing: border-box;
             box-shadow: none !important;
         }
@@ -911,6 +911,19 @@
             background: rgba(0,0,0,0.05) !important;
         }
         [data-theme="dark"] .ai-tahlil-btn:hover {
+            background: rgba(255,255,255,0.08) !important;
+        }
+        .modal-action-btn {
+            background: none !important;
+            color: var(--text-primary) !important;
+            border: none !important;
+            padding: 12px !important;
+            box-shadow: none !important;
+        }
+        .modal-action-btn:hover {
+            background: rgba(0,0,0,0.05) !important;
+        }
+        [data-theme="dark"] .modal-action-btn:hover {
             background: rgba(255,255,255,0.08) !important;
         }
         .ai-tahlil-btn:disabled {
@@ -4332,8 +4345,8 @@
                     `;
                 } else {
                     modalContent += `
-                        <button class="btn" onclick="sendMasterResponse(${request.id})">
-                            To'g'ridan-to'g'ri yuborish
+                        <button class="btn modal-action-btn" onclick="sendMasterResponse(${request.id})">
+                            Javob berish
                         </button>
                     `;
                 }
