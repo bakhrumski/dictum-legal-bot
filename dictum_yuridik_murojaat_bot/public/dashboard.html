@@ -2323,6 +2323,7 @@
         .main-content-area {
             display: flex;
             gap: 20px;
+            margin-top: 20px;
             margin-bottom: 20px;
             align-items: stretch;
         }
@@ -3865,7 +3866,8 @@
             container.innerHTML = latest.map(req => {
                 const name = req.first_name || req.name || 'N/A';
                 const text = req.request_text || '';
-                const time = new Date(req.created_at).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' });
+                const d = new Date(req.created_at);
+                const time = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
                 return `
                     <div class="requests-preview-item" onclick="showRequestDetail(${req.id})">
                         <div class="rp-name">${name}</div>
