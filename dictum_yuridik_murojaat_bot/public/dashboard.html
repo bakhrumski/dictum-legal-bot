@@ -2039,6 +2039,18 @@
             margin-bottom: 15px;
             border-bottom: 2px solid #019CE0;
             padding-bottom: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .admin-management-header .toggle-chevron {
+            transition: transform 0.3s ease;
+            margin-right: 8px;
+        }
+        .admin-management.collapsed .toggle-chevron {
+            transform: rotate(-90deg);
+        }
+        .admin-management.collapsed .admin-table {
+            display: none;
         }
         .admin-management-header h2 {
             color: var(--text-primary);
@@ -2652,9 +2664,12 @@
         
         <!-- Admin Management Section -->
         <div class="admin-management" id="adminManagementSection">
-            <div class="admin-management-header">
-                <h2>Jamoa</h2>
-                <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="openAddMemberModal()">+ Yangi a'zo qo'shish</button>
+            <div class="admin-management-header" onclick="toggleJamoaTable(event)">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>Jamoa</h2>
+                </div>
+                <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="event.stopPropagation(); openAddMemberModal()">+ Yangi a'zo qo'shish</button>
             </div>
             <table class="admin-table">
                 <thead>
@@ -3185,6 +3200,11 @@
         }
 
         // ========== ADMIN CREATION ==========
+        function toggleJamoaTable(event) {
+            if (event.target.closest('.add-member-btn')) return;
+            document.getElementById('adminManagementSection').classList.toggle('collapsed');
+        }
+
         function openAddMemberModal() {
             document.getElementById('addMemberModal').classList.add('active');
             document.getElementById('newAdminName').value = '';
