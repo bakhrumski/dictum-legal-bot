@@ -2241,17 +2241,18 @@
         }
         .timeslot-edit-btn {
             background: none;
-            border: 1px solid #019CE0;
+            border: none;
             color: #019CE0;
-            padding: 3px 8px;
-            border-radius: 4px;
+            padding: 3px 6px;
             cursor: pointer;
             font-size: 11px;
-            margin-left: 6px;
+            margin-left: 4px;
+            display: inline-flex;
+            align-items: center;
+            transition: transform 0.15s;
         }
         .timeslot-edit-btn:hover {
-            background: #019CE0;
-            color: white;
+            transform: scale(1.15);
         }
         .timeslot-form {
             display: flex;
@@ -2294,13 +2295,17 @@
             text-align: center;
             white-space: nowrap;
         }
+        .actions-cell {
+            text-align: center;
+        }
         .action-btn {
             border: none;
             background: none;
             cursor: pointer;
-            padding: 5px 8px;
+            padding: 5px 6px;
             border-radius: 6px;
-            font-size: 15px;
+            display: inline-flex;
+            align-items: center;
             transition: background 0.2s, transform 0.15s;
         }
         .action-btn:hover {
@@ -2497,19 +2502,17 @@
         }
         .admin-modal-btns .cancel-btn:hover { background: rgba(236, 240, 241, 0.8); }
         .add-member-btn {
-            background: linear-gradient(135deg, #1661BE, #0C7ECF);
-            color: white;
+            background: none;
+            color: var(--text-secondary);
             border: none;
-            padding: 8px 18px;
-            border-radius: var(--ios-radius-sm);
-            font-size: 13px;
-            font-weight: 600;
+            padding: 6px;
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(22, 97, 190, 0.3);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            transition: transform 0.2s, color 0.2s;
         }
-        .add-member-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(22, 97, 190, 0.4); }
-        .add-member-btn:active { transform: scale(0.97); }
+        .add-member-btn:hover { transform: scale(1.15); color: #0C7ECF; }
+        .add-member-btn:active { transform: scale(0.95); }
 
         /* Monte Carlo Section */
         .monte-carlo-section {
@@ -2747,7 +2750,7 @@
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     <h2>Jamoa</h2>
                 </div>
-                <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="event.stopPropagation(); openAddMemberModal()">+ Yangi a'zo qo'shish</button>
+                <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="event.stopPropagation(); openAddMemberModal()" title="Yangi a'zo qo'shish"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button>
             </div>
             <table class="admin-table">
                 <thead>
@@ -3171,7 +3174,7 @@
                 } else {
                     timeslotInner = '<span class="timeslot-display not-set">Belgilanmagan</span>';
                 }
-                const editBtn = canEdit ? `<button class="timeslot-edit-btn" onclick="editTimeslot(${admin.id}, '${admin.duty_start || ''}', '${admin.duty_end || ''}')">&#9998;</button>` : '';
+                const editBtn = canEdit ? `<button class="timeslot-edit-btn" onclick="editTimeslot(${admin.id}, '${admin.duty_start || ''}', '${admin.duty_end || ''}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>` : '';
                 const timeslotHtml = `<div class="timeslot-cell-inner">${timeslotInner}${editBtn}</div>`;
 
                 // Status display (merged with last active)
@@ -3187,9 +3190,9 @@
                 // Actions column (master only)
                 let actionsHtml = '';
                 if (isMaster) {
-                    actionsHtml = `<td class="actions-cell">
-                        <button class="action-btn edit-btn" onclick="openEditMemberModal(${admin.id})" title="Tahrirlash">&#9998;</button>
-                        ${!isOwnRow ? `<button class="action-btn delete-btn" onclick="confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish">&#128465;</button>` : ''}
+                    actionsHtml = `<td class="actions-cell" style="text-align:center;">
+                        <button class="action-btn edit-btn" onclick="openEditMemberModal(${admin.id})" title="Tahrirlash"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+                        ${!isOwnRow ? `<button class="action-btn delete-btn" onclick="confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
                     </td>`;
                 }
 
