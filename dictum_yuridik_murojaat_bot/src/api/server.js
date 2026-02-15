@@ -98,12 +98,20 @@ function requireMasterAdmin(req, res, next) {
   }
 }
 
+// Format anonymous ID: #ID_MM_YY
+function anonId(id, dateStr) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `#${id}_${mm}_${yy}`;
+}
+
 // Anonymize applicant personal info for non-master users
 function anonymizeRequest(row, role) {
   if (role === 'master') return row;
   return {
     ...row,
-    first_name: `Murojatchi #${row.id}`,
+    first_name: `Murojaatchi ${anonId(row.id, row.created_at)}`,
     username: null,
     telegram_id: null,
     blocked: false,
@@ -771,7 +779,7 @@ app.post('/api/assign-request', requireAuth, async (req, res) => {
       (async () => {
         try {
           const reqResult = await pool.query(
-            `SELECT r.id, r.request_text, r.request_type, r.file_id,
+            `SELECT r.id, r.request_text, r.request_type, r.file_id, r.created_at,
                     u.first_name, u.username, u.telegram_id
              FROM requests r JOIN users u ON r.user_id = u.id
              WHERE r.id = $1`,
@@ -784,7 +792,7 @@ app.post('/api/assign-request', requireAuth, async (req, res) => {
             const typeLabel = typeLabels[req.request_type] || req.request_type;
             const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
 
-            let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojatchi: Murojatchi #${req.id}`;
+            let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojaatchi: Murojaatchi ${anonId(req.id, req.created_at)}`;
             notifText += `\n📝 Turi: ${typeLabel}`;
             notifText += `\n🔢 Murojaat #${req.id}`;
 
@@ -1448,7 +1456,7 @@ app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
     // Anonymize request_text for non-master users
     const rows = result.rows.map(row => {
       if (req.session.role !== 'master') {
-        return { ...row, request_text: `Murojatchi #${row.request_id || row.id}` };
+        return { ...row, request_text: `Murojaatchi ${anonId(row.request_id || row.id, row.created_at)}` };
       }
       return row;
     });
@@ -1478,7 +1486,7 @@ app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
 
     const row = result.rows[0];
     if (req.session.role !== 'master') {
-      row.request_text = `Murojatchi #${row.request_id || row.id}`;
+      row.request_text = `Murojaatchi ${anonId(row.request_id || row.id, row.created_at)}`;
     }
 
     res.json(row);
