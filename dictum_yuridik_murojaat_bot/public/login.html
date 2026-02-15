@@ -203,8 +203,10 @@
             margin-bottom: 8px; font-size: 13px; color: var(--login-text-secondary);
         }
         .agreement-item input[type="checkbox"] {
-            width: 16px; height: 16px; min-width: 16px; padding: 0; border-radius: 4px; cursor: pointer;
+            width: 16px; height: 16px; min-width: 16px; padding: 0; border-radius: 4px;
+            pointer-events: none;
         }
+        .agreement-item { cursor: pointer; }
         .agreement-item a { color: #1661BE; text-decoration: underline; cursor: pointer; font-weight: 500; }
         .agreement-error { color: #e74c3c; font-size: 12px; margin-top: -4px; margin-bottom: 8px; display: none; }
 
@@ -377,14 +379,14 @@
 
                 <!-- Agreements -->
                 <div class="agreement-section">
-                    <div class="agreement-item">
-                        <input type="checkbox" id="privacyCheck" disabled>
-                        <span><a onclick="openPolicy('privacy')">Maxfiylik siyosati</a>ni o'qing va tasdiqlang</span>
+                    <div class="agreement-item" onclick="openPolicy('privacy')">
+                        <input type="checkbox" id="privacyCheck">
+                        <span><a>Maxfiylik siyosati</a>ni o'qing va tasdiqlang</span>
                     </div>
                     <div class="agreement-error" id="privacyError">Maxfiylik siyosatini tasdiqlang!</div>
-                    <div class="agreement-item">
-                        <input type="checkbox" id="ofertaCheck" disabled>
-                        <span><a onclick="openPolicy('oferta')">Ommaviy oferta</a>ni o'qing va tasdiqlang</span>
+                    <div class="agreement-item" onclick="openPolicy('oferta')">
+                        <input type="checkbox" id="ofertaCheck">
+                        <span><a>Ommaviy oferta</a>ni o'qing va tasdiqlang</span>
                     </div>
                     <div class="agreement-error" id="ofertaError">Ommaviy ofertani tasdiqlang!</div>
                 </div>
@@ -536,11 +538,9 @@
             const overlay = document.getElementById('policyOverlay');
             if (currentPolicyType === 'privacy') {
                 document.getElementById('privacyCheck').checked = true;
-                document.getElementById('privacyCheck').disabled = false;
                 document.getElementById('privacyError').style.display = 'none';
             } else {
                 document.getElementById('ofertaCheck').checked = true;
-                document.getElementById('ofertaCheck').disabled = false;
                 document.getElementById('ofertaError').style.display = 'none';
             }
             overlay.classList.remove('active');
@@ -556,16 +556,6 @@
             const ok = document.getElementById('privacyCheck').checked && document.getElementById('ofertaCheck').checked;
             document.getElementById('registerBtn').disabled = !ok;
         }
-
-        // Checkbox change listeners
-        document.getElementById('privacyCheck').addEventListener('change', function() {
-            if (!this.checked) { this.disabled = true; }
-            updateRegBtn();
-        });
-        document.getElementById('ofertaCheck').addEventListener('change', function() {
-            if (!this.checked) { this.disabled = true; }
-            updateRegBtn();
-        });
 
         // Login form
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
