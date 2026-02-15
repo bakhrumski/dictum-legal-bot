@@ -2037,11 +2037,33 @@ app.get('/api/registration-document/:fileId', requireMasterAdmin, async (req, re
 // Auto-migrate database on startup (add missing columns)
 async function runMigrations() {
   try {
-    await pool.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL`);
+    // Admins table migrations
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT DEFAULT NULL`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_start TIME DEFAULT NULL`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_end TIME DEFAULT NULL`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP DEFAULT NULL`);
+
+    // Users table migrations (ensure all columns exist)
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_by INTEGER`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS block_reason TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)`);
+
+    // Requests table migrations (ensure all columns exist)
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS category VARCHAR(255) DEFAULT 'Boshqa'`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS student_response TEXT`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS student_admin_id INTEGER`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_to INTEGER`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS answered_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS master_approved BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS responded_by VARCHAR(255)`);
+    // Widen file_id to TEXT in case Telegram IDs exceed 255 chars
+    await pool.query(`ALTER TABLE requests ALTER COLUMN file_id TYPE TEXT`);
+
+    // Chat messages migration
+    await pool.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ai_feedback (
         id SERIAL PRIMARY KEY,

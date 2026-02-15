@@ -495,12 +495,13 @@ Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}
 
       console.log('Yangi murojaat saqlandi!');
     } else {
-      bot.sendMessage(chatId, 'Xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.');
-      console.error('Save error:', result.error);
+      const errMsg = result.error?.message || result.error || 'Unknown DB error';
+      console.error('Save error:', errMsg, result.error?.detail || '');
+      bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${errMsg})`);
     }
   } catch (error) {
-    console.error('Error processing request:', error);
-    bot.sendMessage(chatId, 'Xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.');
+    console.error('Error processing request:', error.message, error.stack);
+    bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${error.message})`);
   }
 });
 
