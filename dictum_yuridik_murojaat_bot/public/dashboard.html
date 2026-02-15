@@ -1414,7 +1414,6 @@
         .ai-archive-section.collapsed .ai-archive-header .toggle-chevron {
             transform: rotate(-90deg);
         }
-        .ai-archive-section.collapsed .ai-archive-filters,
         .ai-archive-section.collapsed .ai-archive-list {
             display: none;
         }
@@ -1425,71 +1424,123 @@
             font-size: 16px;
             color: var(--text-primary);
         }
-        .ai-archive-filters {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 15px;
-            margin-bottom: 15px;
-            align-items: center;
-        }
-        .ai-archive-filters select,
-        .ai-archive-filters input {
-            padding: 8px 12px;
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            background: var(--glass-bg);
-            color: var(--text-primary);
-            font-family: inherit;
-            font-size: 13px;
-        }
-        .ai-archive-filters input[type="date"] {
-            min-width: 130px;
-        }
-        .ai-archive-filters input[type="text"] {
-            min-width: 180px;
-        }
         .ai-archive-list {
             display: flex;
             flex-direction: column;
             gap: 10px;
             max-height: 60vh;
             overflow-y: auto;
+            margin-top: 15px;
         }
-        .ai-archive-item {
+        .ai-archive-empty {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .archive-month-group {
+            margin-bottom: 12px;
+        }
+        .archive-month-header {
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding: 12px 16px;
+            gap: 8px;
+            padding: 10px 14px;
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: 12px;
             cursor: pointer;
+            user-select: none;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
             transition: all 0.2s;
         }
-        .ai-archive-item:hover {
+        .archive-month-header:hover {
             background: rgba(1, 156, 224, 0.06);
-            border-color: rgba(1, 156, 224, 0.2);
         }
-        .ai-archive-item-id {
-            font-size: 12px;
-            font-weight: 700;
-            color: #0C7ECF;
-            min-width: 40px;
+        .archive-month-header .toggle-chevron {
+            transition: transform 0.3s ease;
         }
-        [data-theme="dark"] .ai-archive-item-id { color: #00B9F2; }
-        .ai-archive-item-meta {
-            flex: 1;
-            min-width: 0;
+        .archive-month-group.collapsed .archive-month-header .toggle-chevron {
+            transform: rotate(-90deg);
         }
-        .ai-archive-item-meta .archive-top {
+        .archive-month-group.collapsed .archive-month-body {
+            display: none;
+        }
+        .archive-month-body {
+            padding-left: 16px;
+            margin-top: 6px;
+        }
+        .archive-sender-group {
+            margin-bottom: 8px;
+        }
+        .archive-sender-header {
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-bottom: 4px;
-            flex-wrap: wrap;
+            padding: 8px 12px;
+            cursor: pointer;
+            user-select: none;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-radius: 10px;
+            transition: all 0.2s;
         }
-        .ai-archive-item-meta .archive-category {
+        .archive-sender-header:hover {
+            background: rgba(1, 156, 224, 0.04);
+        }
+        .archive-sender-header .toggle-chevron {
+            transition: transform 0.3s ease;
+        }
+        .archive-sender-group.collapsed .archive-sender-header .toggle-chevron {
+            transform: rotate(-90deg);
+        }
+        .archive-sender-group.collapsed .archive-sender-body {
+            display: none;
+        }
+        .archive-sender-header .sender-name {
+            color: #0C7ECF;
+            font-weight: 700;
+        }
+        [data-theme="dark"] .archive-sender-header .sender-name {
+            color: #00B9F2;
+        }
+        .archive-sender-header .sender-count {
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+        .archive-sender-body {
+            padding-left: 20px;
+            margin-top: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .archive-analysis-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .archive-analysis-row:hover {
+            background: rgba(1, 156, 224, 0.06);
+        }
+        .archive-analysis-row .anon-id {
+            font-weight: 700;
+            color: #0C7ECF;
+            min-width: 110px;
+        }
+        [data-theme="dark"] .archive-analysis-row .anon-id {
+            color: #00B9F2;
+        }
+        .archive-analysis-row .analysis-category {
             font-size: 11px;
             font-weight: 600;
             padding: 2px 8px;
@@ -1497,32 +1548,15 @@
             background: rgba(1, 156, 224, 0.1);
             color: #0C7ECF;
         }
-        [data-theme="dark"] .ai-archive-item-meta .archive-category {
+        [data-theme="dark"] .archive-analysis-row .analysis-category {
             background: rgba(0, 185, 242, 0.15);
             color: #00B9F2;
         }
-        .ai-archive-item-meta .archive-author {
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-        .ai-archive-item-meta .archive-preview {
-            font-size: 13px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .ai-archive-item-date {
+        .archive-analysis-row .analysis-date {
+            margin-left: auto;
             font-size: 11px;
             color: var(--text-muted);
             white-space: nowrap;
-            text-align: right;
-        }
-        .ai-archive-empty {
-            text-align: center;
-            padding: 30px;
-            color: var(--text-muted);
-            font-size: 13px;
         }
         .detail-section {
             margin-bottom: 20px;
@@ -3269,27 +3303,6 @@
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     <h2>AI tahlillar arxivi</h2>
                 </div>
-            </div>
-            <div class="ai-archive-filters">
-                <select id="archiveCategoryFilter" onchange="loadAiArchive()">
-                    <option value="">Barcha yo'nalishlar</option>
-                    <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
-                    <option value="Jinoyat huquqi">Jinoyat huquqi</option>
-                    <option value="Mehnat huquqi">Mehnat huquqi</option>
-                    <option value="Oila huquqi">Oila huquqi</option>
-                    <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
-                    <option value="Ko'chmas mulk">Ko'chmas mulk</option>
-                    <option value="Soliq huquqi">Soliq huquqi</option>
-                    <option value="Ma'muriy huquq">Ma'muriy huquq</option>
-                    <option value="Boshqa">Boshqa</option>
-                </select>
-                <select id="archiveAuthorFilter" onchange="loadAiArchive()">
-                    <option value="">Barcha mualliflar</option>
-                </select>
-                <input type="date" id="archiveDateFrom" onchange="loadAiArchive()" title="Boshlanish sanasi">
-                <input type="date" id="archiveDateTo" onchange="loadAiArchive()" title="Tugash sanasi">
-                <input type="text" id="archiveSearch" placeholder="Qidirish..." onkeyup="if(event.key==='Enter')loadAiArchive()">
-                <button class="btn" onclick="clearArchiveFilters()" style="background:#95a5a6;padding:8px 15px;border:none;border-radius:10px;color:white;font-family:inherit;font-size:13px;cursor:pointer;">&#8634; Tozalash</button>
             </div>
             <div class="ai-archive-list" id="aiArchiveList">
                 <div class="ai-archive-empty">Arxivni ko'rish uchun bo'limni oching</div>
@@ -5140,21 +5153,8 @@
             const list = document.getElementById('aiArchiveList');
             list.innerHTML = '<div class="ai-archive-empty">Yuklanmoqda...</div>';
 
-            const params = new URLSearchParams();
-            const category = document.getElementById('archiveCategoryFilter').value;
-            const adminId = document.getElementById('archiveAuthorFilter').value;
-            const dateFrom = document.getElementById('archiveDateFrom').value;
-            const dateTo = document.getElementById('archiveDateTo').value;
-            const search = document.getElementById('archiveSearch').value.trim();
-
-            if (category) params.set('category', category);
-            if (adminId) params.set('adminId', adminId);
-            if (dateFrom) params.set('dateFrom', dateFrom);
-            if (dateTo) params.set('dateTo', dateTo);
-            if (search) params.set('search', search);
-
             try {
-                const response = await fetch('/api/ai-analyses?' + params.toString(), { credentials: 'same-origin' });
+                const response = await fetch('/api/ai-archive-grouped', { credentials: 'same-origin' });
                 if (!response.ok) throw new Error('Server error');
                 const data = await response.json();
 
@@ -5163,25 +5163,35 @@
                     return;
                 }
 
-                list.innerHTML = data.map(item => {
-                    const date = new Date(item.created_at);
-                    const dateStr = date.toLocaleDateString('uz-UZ');
-                    const timeStr = date.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
-                    const preview = (item.request_text || '').substring(0, 100) + ((item.request_text || '').length > 100 ? '...' : '');
-                    return `
-                        <div class="ai-archive-item" onclick="openArchivedAnalysis(${item.id})">
-                            <div class="ai-archive-item-id">#${item.id}</div>
-                            <div class="ai-archive-item-meta">
-                                <div class="archive-top">
-                                    ${item.category ? `<span class="archive-category">${escapeHtml(item.category)}</span>` : ''}
-                                    <span class="archive-author">${escapeHtml(item.admin_name || 'Noma\'lum')}</span>
-                                    ${item.request_id ? `<span class="archive-author">Murojaat #${item.request_id}</span>` : ''}
-                                </div>
-                                <div class="archive-preview">${escapeHtml(preview)}</div>
+                list.innerHTML = data.map((month, mi) => {
+                    const sendersHtml = month.senders.map((sender, si) => {
+                        const analysesHtml = sender.analyses.map(a => {
+                            const date = new Date(a.created_at);
+                            const dateStr = date.toLocaleDateString('uz-UZ');
+                            return `<div class="archive-analysis-row" onclick="openArchivedAnalysis(${a.id})">
+                                <span class="anon-id">${escapeHtml(a.anon_id)}</span>
+                                ${a.category ? `<span class="analysis-category">${escapeHtml(a.category)}</span>` : ''}
+                                <span class="analysis-date">${dateStr}</span>
+                            </div>`;
+                        }).join('');
+
+                        return `<div class="archive-sender-group${si > 0 ? ' collapsed' : ''}">
+                            <div class="archive-sender-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                                <svg class="toggle-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                <span class="sender-name">${escapeHtml(sender.anon_name)}</span>
+                                <span class="sender-count">&mdash; ${sender.total_requests} ta murojaat</span>
                             </div>
-                            <div class="ai-archive-item-date">${dateStr}<br>${timeStr}</div>
+                            <div class="archive-sender-body">${analysesHtml}</div>
+                        </div>`;
+                    }).join('');
+
+                    return `<div class="archive-month-group${mi > 0 ? ' collapsed' : ''}">
+                        <div class="archive-month-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            ${escapeHtml(month.label)}
                         </div>
-                    `;
+                        <div class="archive-month-body">${sendersHtml}</div>
+                    </div>`;
                 }).join('');
             } catch (error) {
                 list.innerHTML = '<div class="ai-archive-empty" style="color:#e74c3c;">Xatolik: ' + error.message + '</div>';
@@ -5237,31 +5247,8 @@
             }
         }
 
-        function clearArchiveFilters() {
-            document.getElementById('archiveCategoryFilter').value = '';
-            document.getElementById('archiveAuthorFilter').value = '';
-            document.getElementById('archiveDateFrom').value = '';
-            document.getElementById('archiveDateTo').value = '';
-            document.getElementById('archiveSearch').value = '';
-            loadAiArchive();
-        }
 
-        // Populate archive author filter from admin list
-        async function loadArchiveAuthors() {
-            try {
-                const response = await fetch('/api/admins', { credentials: 'same-origin' });
-                if (!response.ok) return;
-                const admins = await response.json();
-                const select = document.getElementById('archiveAuthorFilter');
-                admins.forEach(a => {
-                    const opt = document.createElement('option');
-                    opt.value = a.id;
-                    opt.textContent = a.full_name || a.username;
-                    select.appendChild(opt);
-                });
-            } catch (e) { /* non-critical */ }
-        }
-        loadArchiveAuthors();
+
 
         async function submitStudentResponse(requestId) {
             if (!checkCategoryBeforeResponse()) return;

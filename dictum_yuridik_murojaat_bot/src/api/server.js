@@ -98,12 +98,21 @@ function requireMasterAdmin(req, res, next) {
   }
 }
 
-// Format anonymous ID: #ID_MM_YY
-function anonId(id, dateStr) {
+// Format anonymous ID: #userOrdinal_MM_YY_seq
+function anonId(userId, dateStr, seq) {
   const d = dateStr ? new Date(dateStr) : new Date();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yy = String(d.getFullYear()).slice(-2);
-  return `#${id}_${mm}_${yy}`;
+  const seqStr = String(seq || 1).padStart(2, '0');
+  return `#${userId}_${mm}_${yy}_${seqStr}`;
+}
+
+// Short anonymous label (without seq): #userOrdinal_MM_YY
+function anonLabel(userId, dateStr) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `#${userId}_${mm}_${yy}`;
 }
 
 // Anonymize applicant personal info for non-master users
@@ -111,7 +120,7 @@ function anonymizeRequest(row, role) {
   if (role === 'master') return row;
   return {
     ...row,
-    first_name: `Murojaatchi ${anonId(row.id, row.created_at)}`,
+    first_name: `Murojaatchi ${anonId(row.user_id, row.created_at, row.user_request_seq)}`,
     username: null,
     telegram_id: null,
     blocked: false,
@@ -244,7 +253,8 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         u.blocked,
         u.blocked_at,
         u.block_reason,
-        a.full_name as assigned_lawyer_name
+        a.full_name as assigned_lawyer_name,
+        ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
@@ -288,7 +298,8 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         u.blocked,
         u.blocked_at,
         u.block_reason,
-        a.full_name as assigned_lawyer_name
+        a.full_name as assigned_lawyer_name,
+        (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
@@ -779,8 +790,9 @@ app.post('/api/assign-request', requireAuth, async (req, res) => {
       (async () => {
         try {
           const reqResult = await pool.query(
-            `SELECT r.id, r.request_text, r.request_type, r.file_id, r.created_at,
-                    u.first_name, u.username, u.telegram_id
+            `SELECT r.id, r.user_id, r.request_text, r.request_type, r.file_id, r.created_at,
+                    u.first_name, u.username, u.telegram_id,
+                    (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
              FROM requests r JOIN users u ON r.user_id = u.id
              WHERE r.id = $1`,
             [requestId]
@@ -792,7 +804,7 @@ app.post('/api/assign-request', requireAuth, async (req, res) => {
             const typeLabel = typeLabels[req.request_type] || req.request_type;
             const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
 
-            let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojaatchi: Murojaatchi ${anonId(req.id, req.created_at)}`;
+            let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojaatchi: Murojaatchi ${anonId(req.user_id, req.created_at, req.user_request_seq)}`;
             notifText += `\n📝 Turi: ${typeLabel}`;
             notifText += `\n🔢 Murojaat #${req.id}`;
 
@@ -883,8 +895,9 @@ app.get('/api/export-excel', requireAuth, async (req, res) => {
     const XLSX = require('xlsx');
     
     const result = await pool.query(`
-      SELECT 
+      SELECT
         r.id,
+        r.user_id,
         u.username,
         u.first_name,
         r.category,
@@ -894,7 +907,8 @@ app.get('/api/export-excel', requireAuth, async (req, res) => {
         r.response_text,
         r.responded_by,
         r.created_at,
-        r.answered_at
+        r.answered_at,
+        (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
       FROM requests r
       JOIN users u ON r.user_id = u.id
       ORDER BY r.created_at DESC
@@ -1420,9 +1434,12 @@ app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
     let query = `
       SELECT aa.id, aa.request_id, aa.category, aa.request_text,
              aa.analysis_text, aa.created_at,
-             a.full_name as admin_name
+             a.full_name as admin_name,
+             r.user_id,
+             (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
       FROM ai_analyses aa
       LEFT JOIN admins a ON aa.admin_id = a.id
+      LEFT JOIN requests r ON aa.request_id = r.id
       WHERE 1=1
     `;
     const params = [];
@@ -1453,13 +1470,11 @@ app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
 
     const result = await pool.query(query, params);
 
-    // Anonymize request_text for non-master users
-    const rows = result.rows.map(row => {
-      if (req.session.role !== 'master') {
-        return { ...row, request_text: `Murojaatchi ${anonId(row.request_id || row.id, row.created_at)}` };
-      }
-      return row;
-    });
+    // Add anonymous label to each row
+    const rows = result.rows.map(row => ({
+      ...row,
+      anon_name: row.user_id ? `Murojaatchi ${anonId(row.user_id, row.created_at, row.user_request_seq)}` : `Murojaatchi #${row.id}`
+    }));
 
     res.json(rows);
   } catch (error) {
@@ -1474,9 +1489,12 @@ app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
     const result = await pool.query(`
       SELECT aa.id, aa.request_id, aa.category, aa.request_text,
              aa.analysis_text, aa.created_at,
-             a.full_name as admin_name
+             a.full_name as admin_name,
+             r.user_id,
+             (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
       FROM ai_analyses aa
       LEFT JOIN admins a ON aa.admin_id = a.id
+      LEFT JOIN requests r ON aa.request_id = r.id
       WHERE aa.id = $1
     `, [req.params.id]);
 
@@ -1486,13 +1504,91 @@ app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
 
     const row = result.rows[0];
     if (req.session.role !== 'master') {
-      row.request_text = `Murojaatchi ${anonId(row.request_id || row.id, row.created_at)}`;
+      row.request_text = `Murojaatchi ${anonId(row.user_id || row.id, row.created_at, row.user_request_seq)}`;
     }
 
     res.json(row);
   } catch (error) {
     console.error('[AI Archive] Error:', error);
     res.status(500).json({ error: 'Tahlil yuklashda xatolik' });
+  }
+});
+
+// AI Archive grouped by month → sender
+app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT aa.id, aa.request_id, aa.category, aa.created_at,
+             r.user_id,
+             (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
+      FROM ai_analyses aa
+      LEFT JOIN requests r ON aa.request_id = r.id
+      ORDER BY aa.created_at DESC
+    `);
+
+    const uzMonths = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+
+    // Group by month/year → user_id
+    const monthMap = new Map();
+    for (const row of result.rows) {
+      const d = new Date(row.created_at);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yy = String(d.getFullYear()).slice(-2);
+      const monthKey = `${mm}_${yy}`;
+      const monthLabel = `${uzMonths[d.getMonth()]} 20${yy}`;
+
+      if (!monthMap.has(monthKey)) {
+        monthMap.set(monthKey, { month: monthKey, label: monthLabel, sortDate: d, senderMap: new Map() });
+      }
+      const monthData = monthMap.get(monthKey);
+
+      const userId = row.user_id || 0;
+      if (!monthData.senderMap.has(userId)) {
+        monthData.senderMap.set(userId, {
+          user_id: userId,
+          anon_name: userId ? `Murojaatchi ${anonLabel(userId, row.created_at)}` : `Murojaatchi #${row.id}`,
+          analyses: []
+        });
+      }
+      monthData.senderMap.get(userId).analyses.push({
+        id: row.id,
+        request_id: row.request_id,
+        category: row.category,
+        created_at: row.created_at,
+        anon_id: userId ? anonId(userId, row.created_at, row.user_request_seq) : `#${row.id}`
+      });
+    }
+
+    // Convert to array
+    const grouped = [];
+    for (const [, monthData] of monthMap) {
+      const senders = [];
+      for (const [, sender] of monthData.senderMap) {
+        senders.push({
+          user_id: sender.user_id,
+          anon_name: sender.anon_name,
+          total_requests: sender.analyses.length,
+          analyses: sender.analyses
+        });
+      }
+      grouped.push({
+        month: monthData.month,
+        label: monthData.label,
+        senders
+      });
+    }
+
+    // Sort by date descending (newest months first)
+    grouped.sort((a, b) => {
+      const [am, ay] = a.month.split('_').map(Number);
+      const [bm, by] = b.month.split('_').map(Number);
+      return by !== ay ? by - ay : bm - am;
+    });
+
+    res.json(grouped);
+  } catch (error) {
+    console.error('[AI Archive Grouped] Error:', error);
+    res.status(500).json({ error: 'Arxiv yuklashda xatolik' });
   }
 });
 
