@@ -1514,16 +1514,18 @@ app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// AI Archive grouped by month → sender
+// Archive grouped by month → sender (all answered requests)
 app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT aa.id, aa.request_id, aa.category, aa.created_at,
-             r.user_id,
-             (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
-      FROM ai_analyses aa
-      LEFT JOIN requests r ON aa.request_id = r.id
-      ORDER BY aa.created_at DESC
+      SELECT r.id, r.category, r.created_at, r.answered_at,
+             r.responded_by, r.user_id,
+             ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq,
+             aa.id as ai_analysis_id
+      FROM requests r
+      LEFT JOIN ai_analyses aa ON aa.request_id = r.id
+      WHERE r.status = 'answered'
+      ORDER BY r.answered_at DESC
     `);
 
     const uzMonths = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
@@ -1531,14 +1533,14 @@ app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
     // Group by month/year → user_id
     const monthMap = new Map();
     for (const row of result.rows) {
-      const d = new Date(row.created_at);
+      const d = new Date(row.answered_at || row.created_at);
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const yy = String(d.getFullYear()).slice(-2);
       const monthKey = `${mm}_${yy}`;
       const monthLabel = `${uzMonths[d.getMonth()]} 20${yy}`;
 
       if (!monthMap.has(monthKey)) {
-        monthMap.set(monthKey, { month: monthKey, label: monthLabel, sortDate: d, senderMap: new Map() });
+        monthMap.set(monthKey, { month: monthKey, label: monthLabel, senderMap: new Map() });
       }
       const monthData = monthMap.get(monthKey);
 
@@ -1547,15 +1549,18 @@ app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
         monthData.senderMap.set(userId, {
           user_id: userId,
           anon_name: userId ? `Murojaatchi ${anonLabel(userId, row.created_at)}` : `Murojaatchi #${row.id}`,
-          analyses: []
+          items: []
         });
       }
-      monthData.senderMap.get(userId).analyses.push({
+      monthData.senderMap.get(userId).items.push({
         id: row.id,
-        request_id: row.request_id,
         category: row.category,
         created_at: row.created_at,
-        anon_id: userId ? anonId(userId, row.created_at, row.user_request_seq) : `#${row.id}`
+        answered_at: row.answered_at,
+        anon_id: userId ? anonId(userId, row.created_at, row.user_request_seq) : `#${row.id}`,
+        has_ai: !!row.ai_analysis_id,
+        ai_analysis_id: row.ai_analysis_id,
+        responded_by: row.responded_by
       });
     }
 
@@ -1567,8 +1572,8 @@ app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
         senders.push({
           user_id: sender.user_id,
           anon_name: sender.anon_name,
-          total_requests: sender.analyses.length,
-          analyses: sender.analyses
+          total_requests: sender.items.length,
+          items: sender.items
         });
       }
       grouped.push({
@@ -1587,7 +1592,7 @@ app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
 
     res.json(grouped);
   } catch (error) {
-    console.error('[AI Archive Grouped] Error:', error);
+    console.error('[Archive Grouped] Error:', error);
     res.status(500).json({ error: 'Arxiv yuklashda xatolik' });
   }
 });

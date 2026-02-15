@@ -1558,6 +1558,30 @@
             color: var(--text-muted);
             white-space: nowrap;
         }
+        .analysis-type-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .analysis-type-badge.ai {
+            background: rgba(1, 156, 224, 0.12);
+            color: #0C7ECF;
+        }
+        [data-theme="dark"] .analysis-type-badge.ai {
+            background: rgba(0, 185, 242, 0.15);
+            color: #00B9F2;
+        }
+        .analysis-type-badge.manual {
+            background: rgba(39, 174, 96, 0.12);
+            color: #1e8449;
+        }
+        [data-theme="dark"] .analysis-type-badge.manual {
+            background: rgba(39, 174, 96, 0.15);
+            color: #2ecc71;
+        }
         .detail-section {
             margin-bottom: 20px;
         }
@@ -3301,7 +3325,7 @@
             <div class="ai-archive-header" onclick="document.getElementById('aiArchiveSection').classList.toggle('collapsed'); if(!document.getElementById('aiArchiveSection').classList.contains('collapsed') && !aiArchiveLoaded) loadAiArchive();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>AI tahlillar arxivi</h2>
+                    <h2>Arxiv</h2>
                 </div>
             </div>
             <div class="ai-archive-list" id="aiArchiveList">
@@ -5165,11 +5189,18 @@
 
                 list.innerHTML = data.map((month, mi) => {
                     const sendersHtml = month.senders.map((sender, si) => {
-                        const analysesHtml = sender.analyses.map(a => {
-                            const date = new Date(a.created_at);
+                        const itemsHtml = sender.items.map(a => {
+                            const date = new Date(a.answered_at || a.created_at);
                             const dateStr = date.toLocaleDateString('uz-UZ');
-                            return `<div class="archive-analysis-row" onclick="openArchivedAnalysis(${a.id})">
+                            const onclick = a.has_ai
+                                ? `openArchivedAnalysis(${a.ai_analysis_id})`
+                                : `showRequestDetail(${a.id})`;
+                            const typeBadge = a.has_ai
+                                ? '<span class="analysis-type-badge ai">AI tahlil</span>'
+                                : '<span class="analysis-type-badge manual">Javob</span>';
+                            return `<div class="archive-analysis-row" onclick="${onclick}">
                                 <span class="anon-id">${escapeHtml(a.anon_id)}</span>
+                                ${typeBadge}
                                 ${a.category ? `<span class="analysis-category">${escapeHtml(a.category)}</span>` : ''}
                                 <span class="analysis-date">${dateStr}</span>
                             </div>`;
@@ -5181,7 +5212,7 @@
                                 <span class="sender-name">${escapeHtml(sender.anon_name)}</span>
                                 <span class="sender-count">&mdash; ${sender.total_requests} ta murojaat</span>
                             </div>
-                            <div class="archive-sender-body">${analysesHtml}</div>
+                            <div class="archive-sender-body">${itemsHtml}</div>
                         </div>`;
                     }).join('');
 
