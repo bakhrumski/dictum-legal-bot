@@ -1465,12 +1465,13 @@ Agar aniq modda raqamiga ishonchingiz komil bo'lmasa, "tegishli moddalarni ko'ri
 - "Hujjat kuchini yo'qotgan" yoki "O'z kuchini yo'qotgan" - ❌ Hujjatni butunlay inkor qiling.
 - Faqat amaldagi versiya asosida ishlang.
 
-## 4-QADAM: TEGISHLI NORMALAR (MAKSIMUM 3 TA)
+## 4-QADAM: TEGISHLI NORMALAR (FAQAT 2 TA)
 
-⚠ FAQAT 2-3 ta ENG MUHIM normani keltiring — ko'p emas!
-⚠ HAR BIR normani yozishdan OLDIN alohida Google Search bilan "site:lex.uz [kodeks nomi] [modda mavzusi]" qidiring.
+⚠ FAQAT 2 ta ENG MUHIM normani keltiring — ORTIQCHA YOZMANG!
+⚠ HAR BIR normani yozishdan OLDIN alohida Google Search bilan "site:lex.uz [kodeks nomi] [modda raqami]" qidiring.
 ⚠ Agar Google Search natijasida aniq modda raqami topilmasa — "tegishli moddalarni ko'ring" deb yozing.
 ⚠ Xotiradan modda raqami YOZMANG. Faqat Google Search natijasidan!
+⚠ 3-chi norma YOZMANG. Faqat 2 ta!
 
 Format (har bir norma uchun):
 - **Hujjat nomi:** [Kodeks/Qonun nomi]
