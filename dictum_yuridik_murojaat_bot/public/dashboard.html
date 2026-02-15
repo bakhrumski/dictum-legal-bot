@@ -1426,78 +1426,81 @@
         }
         .ai-archive-list {
             display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-height: 60vh;
-            overflow-y: auto;
+            flex-direction: row;
+            gap: 16px;
+            overflow-x: auto;
+            overflow-y: hidden;
             margin-top: 15px;
+            padding-bottom: 8px;
+            scroll-snap-type: x mandatory;
         }
         .ai-archive-empty {
             text-align: center;
             padding: 30px;
             color: var(--text-muted);
             font-size: 13px;
+            width: 100%;
         }
-        .archive-month-group {
-            margin-bottom: 12px;
-        }
-        .archive-month-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 14px;
+        /* Kanban column per month */
+        .archive-month-column {
+            min-width: 300px;
+            max-width: 340px;
+            flex-shrink: 0;
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            cursor: pointer;
-            user-select: none;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            max-height: 65vh;
+            scroll-snap-align: start;
+        }
+        .archive-month-title {
+            padding: 14px 16px 10px;
             font-size: 15px;
             font-weight: 700;
             color: var(--text-primary);
-            transition: all 0.2s;
-        }
-        .archive-month-header:hover {
-            background: rgba(1, 156, 224, 0.06);
-        }
-        .archive-month-header .toggle-chevron {
-            transition: transform 0.3s ease;
-        }
-        .archive-month-group.collapsed .archive-month-header .toggle-chevron {
-            transform: rotate(-90deg);
-        }
-        .archive-month-group.collapsed .archive-month-body {
-            display: none;
+            border-bottom: 1px solid var(--glass-border);
+            position: sticky;
+            top: 0;
+            background: var(--glass-bg);
+            border-radius: 14px 14px 0 0;
+            z-index: 1;
         }
         .archive-month-body {
-            padding-left: 16px;
-            margin-top: 6px;
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 12px 12px;
         }
-        .archive-sender-group {
-            margin-bottom: 8px;
+        /* Sender card inside column */
+        .archive-sender-card {
+            margin-bottom: 10px;
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            overflow: hidden;
         }
         .archive-sender-header {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
+            gap: 6px;
+            padding: 9px 12px;
             cursor: pointer;
             user-select: none;
             font-size: 13px;
             font-weight: 600;
             color: var(--text-secondary);
-            border-radius: 10px;
-            transition: all 0.2s;
+            transition: background 0.2s;
         }
         .archive-sender-header:hover {
             background: rgba(1, 156, 224, 0.04);
         }
         .archive-sender-header .toggle-chevron {
             transition: transform 0.3s ease;
+            flex-shrink: 0;
         }
-        .archive-sender-group.collapsed .archive-sender-header .toggle-chevron {
+        .archive-sender-card.collapsed .archive-sender-header .toggle-chevron {
             transform: rotate(-90deg);
         }
-        .archive-sender-group.collapsed .archive-sender-body {
+        .archive-sender-card.collapsed .archive-sender-body {
             display: none;
         }
         .archive-sender-header .sender-name {
@@ -1510,24 +1513,27 @@
         .archive-sender-header .sender-count {
             color: var(--text-muted);
             font-weight: 400;
+            margin-left: auto;
+            font-size: 12px;
         }
         .archive-sender-body {
-            padding-left: 20px;
-            margin-top: 4px;
+            border-top: 1px solid var(--glass-border);
+            padding: 4px 6px 6px;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 3px;
         }
         .archive-analysis-row {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 7px 12px;
+            gap: 6px;
+            padding: 6px 8px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-secondary);
             transition: all 0.2s;
+            flex-wrap: wrap;
         }
         .archive-analysis-row:hover {
             background: rgba(1, 156, 224, 0.06);
@@ -1535,16 +1541,16 @@
         .archive-analysis-row .anon-id {
             font-weight: 700;
             color: #0C7ECF;
-            min-width: 110px;
+            font-size: 12px;
         }
         [data-theme="dark"] .archive-analysis-row .anon-id {
             color: #00B9F2;
         }
         .archive-analysis-row .analysis-category {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 6px;
+            padding: 1px 6px;
+            border-radius: 5px;
             background: rgba(1, 156, 224, 0.1);
             color: #0C7ECF;
         }
@@ -1554,15 +1560,15 @@
         }
         .archive-analysis-row .analysis-date {
             margin-left: auto;
-            font-size: 11px;
+            font-size: 10px;
             color: var(--text-muted);
             white-space: nowrap;
         }
         .analysis-type-badge {
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 700;
-            padding: 2px 7px;
-            border-radius: 5px;
+            padding: 1px 6px;
+            border-radius: 4px;
             text-transform: uppercase;
             letter-spacing: 0.3px;
         }
@@ -5187,7 +5193,7 @@
                     return;
                 }
 
-                list.innerHTML = data.map((month, mi) => {
+                list.innerHTML = data.map(month => {
                     const sendersHtml = month.senders.map((sender, si) => {
                         const itemsHtml = sender.items.map(a => {
                             const date = new Date(a.answered_at || a.created_at);
@@ -5196,7 +5202,7 @@
                                 ? `openArchivedAnalysis(${a.ai_analysis_id})`
                                 : `showRequestDetail(${a.id})`;
                             const typeBadge = a.has_ai
-                                ? '<span class="analysis-type-badge ai">AI tahlil</span>'
+                                ? '<span class="analysis-type-badge ai">AI</span>'
                                 : '<span class="analysis-type-badge manual">Javob</span>';
                             return `<div class="archive-analysis-row" onclick="${onclick}">
                                 <span class="anon-id">${escapeHtml(a.anon_id)}</span>
@@ -5206,21 +5212,18 @@
                             </div>`;
                         }).join('');
 
-                        return `<div class="archive-sender-group${si > 0 ? ' collapsed' : ''}">
+                        return `<div class="archive-sender-card${si > 0 ? ' collapsed' : ''}">
                             <div class="archive-sender-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                                <svg class="toggle-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                <svg class="toggle-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                                 <span class="sender-name">${escapeHtml(sender.anon_name)}</span>
-                                <span class="sender-count">&mdash; ${sender.total_requests} ta murojaat</span>
+                                <span class="sender-count">${sender.total_requests}</span>
                             </div>
                             <div class="archive-sender-body">${itemsHtml}</div>
                         </div>`;
                     }).join('');
 
-                    return `<div class="archive-month-group${mi > 0 ? ' collapsed' : ''}">
-                        <div class="archive-month-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                            <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                            ${escapeHtml(month.label)}
-                        </div>
+                    return `<div class="archive-month-column">
+                        <div class="archive-month-title">${escapeHtml(month.label)}</div>
                         <div class="archive-month-body">${sendersHtml}</div>
                     </div>`;
                 }).join('');
