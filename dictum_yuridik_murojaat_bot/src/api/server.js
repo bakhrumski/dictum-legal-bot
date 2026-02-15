@@ -1391,14 +1391,52 @@ Case matni:
 
 Your task:
 - Tahlil qilish
-- Lex.uz'dan faqat amaldagi hujjatlarni topish
-- Eskirgan va kuchini yo'qotgan hujjatlarni inkor qilish
+- Quyidagi lex.uz hujjatlar katalogidan tegishli normalarni topish
 - Qisqa va aniq huquqiy xulosa berish
 
 ⚠ Natija faqat O'zbek (lotin) tilida bo'lishi shart.
 ⚠ Javob qisqa, aniq va strukturali bo'lishi shart.
 ⚠ Ortiqcha izoh berilmasin.
-⚠ MUHIM: Google Search orqali lex.uz saytidan haqiqiy hujjatlarni qidiring. Modda raqamlarini va havola URLlarni to'qib chiqarmang! Faqat qidiruv natijalarida topilgan haqiqiy manbalarni ko'rsating.
+
+## O'ZBEKISTON QONUNCHILIK KATALOGI (lex.uz)
+
+Quyidagi hujjatlardan FAQAT tegishlilarini tanlang:
+
+KODEKSLAR:
+- Fuqarolik kodeksi (FK): https://lex.uz/docs/111189
+- Mehnat kodeksi (MK): https://lex.uz/docs/145261
+- Jinoyat kodeksi (JK): https://lex.uz/docs/111457
+- Oila kodeksi (OK): https://lex.uz/docs/104723
+- Soliq kodeksi (SK): https://lex.uz/docs/4674893
+- Ma'muriy javobgarlik to'g'risida kodeks (MJK): https://lex.uz/docs/97661
+- Iqtisodiy protsessual kodeks (IPK): https://lex.uz/docs/112168
+- Fuqarolik protsessual kodeks (FPK): https://lex.uz/docs/111325
+- Jinoyat-protsessual kodeks (JPK): https://lex.uz/docs/111463
+- Ma'muriy sudlov ishlarini yuritish kodeksi: https://lex.uz/docs/3523895
+- Uy-joy kodeksi: https://lex.uz/docs/97012
+- Yer kodeksi: https://lex.uz/docs/149946
+- Budjet kodeksi: https://lex.uz/docs/3523816
+- Bojxona kodeksi: https://lex.uz/docs/4102378
+
+ASOSIY QONUNLAR:
+- Konstitutsiya: https://lex.uz/docs/35869
+- Tadbirkorlik faoliyati erkinligining kafolatlari: https://lex.uz/docs/4538291
+- Aksiyadorlik jamiyatlari to'g'risida: https://lex.uz/docs/5765400
+- MChJ to'g'risida: https://lex.uz/docs/5765406
+- Iste'molchilar huquqlarini himoya qilish: https://lex.uz/docs/89690
+- Ijro va sud qarorlari ijrosi: https://lex.uz/docs/5765444
+- Bankrotlik to'g'risida: https://lex.uz/docs/5767454
+- Davlat xaridlari to'g'risida: https://lex.uz/docs/5759393
+- Litsenziyalash to'g'risida: https://lex.uz/docs/6006025
+- Korrupsiyaga qarshi kurashish: https://lex.uz/docs/5765442
+- Raqamli texnologiyalar: https://lex.uz/docs/6879937
+- Advokatlik faoliyati: https://lex.uz/docs/5765396
+- Notariat to'g'risida: https://lex.uz/docs/5765430
+- Sudlar to'g'risida: https://lex.uz/docs/5965818
+- Prokuratura to'g'risida: https://lex.uz/docs/112128
+- Bolalar huquqlari kafolatlari: https://lex.uz/docs/49560
+- Genderli tenglik: https://lex.uz/docs/5765412
+- Xalqaro arbitraj: https://lex.uz/docs/6555446
 
 ## 1-QADAM: MUAMMONI TAHLIL QILISH
 
@@ -1411,30 +1449,29 @@ Format:
 **MASALA:** ...
 **KALIT_SOZLAR:** ...
 
-## 2-QADAM: LEX.UZ DAN HUJJAT QIDIRISH
+## 2-QADAM: TEGISHLI NORMALARNI TOPISH
 
-Google Search yordamida "site:lex.uz" kalit so'zlarini qidiring.
-Faqat qidiruv natijalarida topilgan haqiqiy hujjatlardan foydalaning.
-Ustuvorlik: Kodekslar > Qonunlar > Prezident farmonlari > VMQ > Plenum qarorlari
-Modda raqami va lex.uz havolasini faqat qidiruv natijalaridan oling — to'qib chiqarmang!
+Google Search yordamida yuqoridagi lex.uz hujjatlardan tegishli moddalarni qidiring.
+- Birinchi navbatda yuqoridagi katalogdan tegishli kodeks yoki qonunni tanlang
+- Keyin Google Search bilan "site:lex.uz [kodeks nomi] [modda mavzusi]" qidiring
+- Faqat Google Search natijalarida TASDIQLANGAN modda raqamlarini ko'rsating
+- Agar aniq modda raqamini topa olmasangiz, faqat kodeks/qonun nomini va bobni ko'rsating
+
+⚠ MUHIM: Modda raqamini to'qib chiqarish QATTIYAN TAQIQLANADI!
+Agar aniq modda raqamiga ishonchingiz komil bo'lmasa, "tegishli moddalarni ko'ring" deb yozing va kodeks havolasini bering.
 
 ## 3-QADAM: HUJJAT HOLATINI TEKSHIRISH (MAJBURIY)
 
 - "Hujjat kuchini yo'qotgan" yoki "O'z kuchini yo'qotgan" - ❌ Hujjatni butunlay inkor qiling.
 - Faqat amaldagi versiya asosida ishlang.
-- ✔ Qizil ogohlantirish yo'q
-- ✔ Amaldagi versiya
 
 ## 4-QADAM: TEGISHLI NORMALAR
 
 Format (har bir norma uchun):
-- **Hujjat nomi:** ...
-- **Modda:** ...
-- **Amaldagi sana:** ...
-- **Qisqa mazmun:** ...
-- **Lex.uz havola:** https://lex.uz/...
-
-Faqat zarur modda ko'rsatiladi. To'liq matn ko'chirib olinmaydi.
+- **Hujjat nomi:** [Kodeks/Qonun nomi]
+- **Modda:** [Raqam — FAQAT Google Search orqali tasdiqlangan bo'lsa. Aks holda "tegishli moddalarni ko'ring" deb yozing]
+- **Qisqa mazmun:** [Bu norma nima haqida — moddaning mazmunini yozing]
+- **Lex.uz havola:** [Yuqoridagi katalogdan to'g'ri URL]
 
 ## 5-QADAM: QISQA HUQUQIY TAHLIL
 
@@ -1454,28 +1491,24 @@ Faqat zarur modda ko'rsatiladi. To'liq matn ko'chirib olinmaydi.
 ## 7-QADAM: YAKUNIY TEKSHIRUV
 
 Tasdiqlang:
-- ✔ Qizil ogohlantirishli hujjat ishlatilmagan
+- ✔ Modda raqamlari Google Search bilan tasdiqlangan yoki "tegishli moddalarni ko'ring" deb yozilgan
+- ✔ Lex.uz havolalar faqat yuqoridagi katalogdan olingan
 - ✔ Amaldagi versiya tanlangan
-- ✔ Eskirgan norma ishlatilmagan
-- ✔ Sud amaliyoti tekshirilgan
-
-Agar shubha bo'lsa → hujjatni ishlatmang.
 
 ## 8-QADAM: SUD AMALIYOTI TAHLILI
 
-O'zbekiston Respublikasi sudlari amaliyotidan tegishli ishlarni toping.
+Google Search yordamida "site:public.sud.uz" orqali O'zbekiston sudlari amaliyotidan tegishli ishlarni qidiring.
 Har bir ish uchun:
 - **Ish raqami:** ...
 - **Sud nomi:** ...
 - **Sana:** ...
 - **Mohiyati:** Qisqacha faktlar va sud qarori
 - **Aloqadorlik:** Bu ish joriy masalaga qanday bog'liq
-- **Havola:** https://public.sud.uz/report
 
 Kamida 2-3 ta eng aloqador sud ishini keltiring.
-Qisqa qiyosiy tahlil bering: sudlar qanday qaror qabul qilgan va joriy ishga qanday ta'sir qiladi.
+Agar aniq ish topa olmasangiz, shu sohada umumiy sud amaliyoti tendensiyasini yozing.
 
-> "Sud amaliyoti ma'lumotlari AI xotirasi asosida shakllantirilgan. Aniq ma'lumot uchun public.sud.uz saytidan qidiring."
+> "Sud amaliyoti va modda raqamlarini lex.uz va public.sud.uz saytlaridan tekshiring."
 
 ## 9-QADAM: YURXIZMAT.UZ HUJJAT NAMUNALARI
 
