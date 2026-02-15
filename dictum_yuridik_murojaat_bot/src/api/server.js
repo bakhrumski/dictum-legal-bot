@@ -17,6 +17,85 @@ const regUpload = multer({
     cb(ok ? null : new Error('Faqat JPG, PNG, WebP yoki PDF'), ok);
   }
 });
+
+// yurxizmat.uz document template catalog (verified URLs)
+const YURXIZMAT_CATALOG = [
+  { cat: 'Shartnomalar', url: '/uz/category/contracts', subs: [
+    { name: 'Yuridik shaxslarga oid shartnomalar', url: '/uz/category/for-juridical-contracts' },
+    { name: "Ko'chmas mulkka oid shartnomalar", url: '/uz/category/real-estate-contracts' },
+    { name: 'Avtotransportlarga oid shartnomalar', url: '/uz/category/contracts-for-auto' },
+    { name: "Mahsulot sotish, xizmat ko'rsatish", url: '/uz/category/services-contract' },
+    { name: 'Boshqa turdagi shartnomalar', url: '/uz/category/other-types-of-contracts' },
+    { name: 'Kelishuvlar', url: '/uz/category/agreements' },
+    { name: 'Bitimlar', url: '/uz/category/deals' },
+    { name: 'Ishonchnomalar', url: '/uz/category/power-of-attorneys' }
+  ]},
+  { cat: 'Arizalar', url: '/uz/category/statements', subs: [
+    { name: 'Yuridik shaxslarga oid arizalar', url: '/uz/category/applications-for-legal' },
+    { name: 'Jismoniy shaxslarga oid arizalar', url: '/uz/category/applications-for-individuals' },
+    { name: 'Bolalarga oid arizalar', url: '/uz/category/for-kids' },
+    { name: 'Iltimosnomalar', url: '/uz/category/petitions' }
+  ]},
+  { cat: 'Shaxsiy tarkibga oid hujjatlar', url: '/uz/category/personal-documents', subs: [
+    { name: 'Arizalar', url: '/uz/category/personal-applications' },
+    { name: 'Bildirishnomalar', url: '/uz/category/notifications' },
+    { name: 'Buyruqlar', url: '/uz/category/commands' },
+    { name: 'Dalolatnamalar', url: '/uz/category/acts' },
+    { name: 'Kelishuvlar va shartnomalar', url: '/uz/category/personal-agreements' },
+    { name: 'Boshqa hujjatlar', url: '/uz/category/other-documents' }
+  ]},
+  { cat: 'Notarial hujjatlar', url: '/uz/category/notarial', subs: [
+    { name: 'Meros va vasiyatnoma arizalari', url: '/uz/category/notarial-inheritance' },
+    { name: "Ko'chmas mulk rasmiylash.", url: '/uz/category/notarial-registration' },
+    { name: 'Avtotransport rasmiylash.', url: '/uz/category/notarial-auto' },
+    { name: 'Nikoh va oila masalalari', url: '/uz/category/notarial-wedding' },
+    { name: 'Boshqa notarial arizalar', url: '/uz/category/notarial-others' },
+    { name: 'Vasiyatnamalar', url: '/uz/category/wills' },
+    { name: 'Notarial ishonchnomalar', url: '/uz/category/notarial-credentials' },
+    { name: 'Ayirboshlash shartnomasi', url: '/uz/category/contracts-con' },
+    { name: 'Garov shartnomasi', url: '/uz/category/contracts-bail' },
+    { name: 'Ijara shartnomasi', url: '/uz/category/contracts-rent' },
+    { name: 'Ipoteka shartnomasi', url: '/uz/category/contracts-mortgage' },
+    { name: 'Qarz shartnomasi', url: '/uz/category/contracts-debt' },
+    { name: 'Merosga oid shartnomalar', url: '/uz/category/contracts-heritage' },
+    { name: 'Renta shartnomasi', url: '/uz/category/contracts-rent-agreement' },
+    { name: 'Hadya shartnomasi', url: '/uz/category/contracts-gift-agreement' },
+    { name: 'Oilaviy munosabatlar', url: '/uz/category/contracts-family' },
+    { name: 'Oldi-sotdi shartnomasi', url: '/uz/category/contracts-buy' },
+    { name: 'Boshqa notarial shartnomalar', url: '/uz/category/contracts-other-documents' }
+  ]},
+  { cat: 'Sudga oid hujjatlar', url: '/uz/category/court', subs: [
+    { name: "Da'vo arizalari (mehnat)", url: '/uz/category/claims-t' },
+    { name: "Da'vo arizalari (uy-joy)", url: '/uz/category/claims-home' },
+    { name: "Da'vo arizalari (oilaviy)", url: '/uz/category/claims-family' },
+    { name: "Da'vo arizalari (zarar)", url: '/uz/category/claims-harm' },
+    { name: "Da'vo arizalari (meros)", url: '/uz/category/claims-testament' },
+    { name: "Da'vo arizalari (avto)", url: '/uz/category/claims-auto' },
+    { name: "Da'vo arizalari (boshqa)", url: '/uz/category/claims-others' },
+    { name: 'Sud hujjatlaridan nusxa', url: '/uz/category/apply-court-copy' },
+    { name: 'Talablarga aniqlik kiritish', url: '/uz/category/apply-court-update' },
+    { name: "Ta'minlash choralari", url: '/uz/category/claims-note' },
+    { name: "Ishlarni qayta ko'rib chiqish", url: '/uz/category/court-back' },
+    { name: 'Sud qarorining ijrosi', url: '/uz/category/court-decree' },
+    { name: 'Boshqa sud arizalari', url: '/uz/category/court-others' },
+    { name: 'Apellyatsiya, kassatsiya', url: '/uz/category/appeals-cassation-complaints' },
+    { name: 'Bayonnomalar', url: '/uz/category/corporate-protocols' },
+    { name: 'Sud iltimosnomalar', url: '/uz/category/court-petitions' }
+  ]},
+  { cat: 'Korporativ hujjatlar', url: '/uz/category/corporate-documents', subs: [
+    { name: 'Talablar', url: '/uz/category/corporate-demands' },
+    { name: 'Nizomlar', url: '/uz/category/corporate-u' },
+    { name: 'Dalolatnamalar va bayonnomalar', url: '/uz/category/corporate-acts' },
+    { name: 'Boshqa korporativ hujjatlar', url: '/uz/category/corporate-other-documents' }
+  ]}
+];
+
+function getYurxizmatCatalogText() {
+  return YURXIZMAT_CATALOG.map(c =>
+    `${c.cat} (${c.url}):\n` + c.subs.map(s => `  - ${s.name}: ${s.url}`).join('\n')
+  ).join('\n');
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -1391,7 +1470,26 @@ Har bir ish uchun:
 Kamida 2-3 ta eng aloqador sud ishini keltiring.
 Qisqa qiyosiy tahlil bering: sudlar qanday qaror qabul qilgan va joriy ishga qanday ta'sir qiladi.
 
-> "Sud amaliyoti ma'lumotlari AI xotirasi asosida shakllantirilgan. Aniq ma'lumot uchun public.sud.uz saytidan qidiring."${feedbackNote}`;
+> "Sud amaliyoti ma'lumotlari AI xotirasi asosida shakllantirilgan. Aniq ma'lumot uchun public.sud.uz saytidan qidiring."
+
+## 9-QADAM: YURXIZMAT.UZ HUJJAT NAMUNALARI
+
+Quyidagi katalogdan murojaatga eng mos 2-4 ta toifani tanlang.
+
+Katalog:
+${getYurxizmatCatalogText()}
+
+Javobingiz eng oxirida quyidagi blokni yozing:
+
+<!--YURXIZMAT-->
+[{"name":"Toifa nomi","url":"/uz/category/..."},{"name":"Toifa nomi","url":"/uz/category/..."}]
+<!--/YURXIZMAT-->
+
+Qoidalar:
+- Faqat yuqoridagi katalogdagi URLlardan foydalaning
+- 2 dan 4 gacha eng mos toifani tanlang
+- name maydoniga qisqa, tushunarli nom yozing
+- Agar hech qanday mos namuna topilmasa bo'sh massiv qaytaring: []${feedbackNote}`;
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
@@ -1414,13 +1512,32 @@ Qisqa qiyosiy tahlil bering: sudlar qanday qaror qabul qilgan va joriy ishga qan
     }
 
     const geminiData = await geminiResponse.json();
-    const analysis = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    const rawAnalysis = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!analysis) {
+    if (!rawAnalysis) {
       return res.status(500).json({ error: 'Gemini javob bermadi' });
     }
 
-    // Archive the analysis
+    // Extract yurxizmat.uz template suggestions from response
+    let templateSuggestions = [];
+    let analysis = rawAnalysis;
+    const suggestionsMatch = rawAnalysis.match(/<!--YURXIZMAT-->\s*([\s\S]*?)\s*<!--\/YURXIZMAT-->/);
+    if (suggestionsMatch) {
+      analysis = rawAnalysis.replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->/, '').trim();
+      try {
+        const parsed = JSON.parse(suggestionsMatch[1].trim());
+        if (Array.isArray(parsed)) {
+          templateSuggestions = parsed
+            .filter(s => s.name && s.url && s.url.startsWith('/uz/category/'))
+            .map(s => ({ name: s.name, url: 'https://yurxizmat.uz' + s.url }))
+            .slice(0, 5);
+        }
+      } catch (e) {
+        console.error('[AI] Failed to parse yurxizmat suggestions:', e.message);
+      }
+    }
+
+    // Archive the analysis (clean text without markers)
     let archiveId = null;
     try {
       const archiveResult = await pool.query(
@@ -1433,7 +1550,7 @@ Qisqa qiyosiy tahlil bering: sudlar qanday qaror qabul qilgan va joriy ishga qan
       console.error('[AI] Archive save error:', archiveErr.message);
     }
 
-    res.json({ analysis, archiveId });
+    res.json({ analysis, archiveId, templateSuggestions });
   } catch (error) {
     console.error('[AI] Analysis error:', error);
     res.status(500).json({ error: 'AI tahlil xatoligi: ' + error.message });

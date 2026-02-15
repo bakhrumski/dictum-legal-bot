@@ -1215,6 +1215,68 @@
             background: rgba(1, 156, 224, 0.08);
             border-color: rgba(1, 156, 224, 0.3);
         }
+        /* yurxizmat.uz Template Suggestions */
+        .ai-yurxizmat-section {
+            margin-top: 16px;
+            padding: 14px 18px;
+            background: rgba(0, 185, 242, 0.04);
+            border: 1px solid rgba(1, 156, 224, 0.15);
+            border-radius: 12px;
+        }
+        [data-theme="dark"] .ai-yurxizmat-section {
+            background: rgba(22, 97, 190, 0.08);
+        }
+        .ai-yurxizmat-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #0C7ECF;
+            margin-bottom: 10px;
+        }
+        [data-theme="dark"] .ai-yurxizmat-header { color: #00B9F2; }
+        .ai-yurxizmat-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 6px;
+            background: rgba(1, 156, 224, 0.12);
+            color: #0C7ECF;
+            letter-spacing: 0.3px;
+        }
+        [data-theme="dark"] .ai-yurxizmat-badge {
+            background: rgba(0, 185, 242, 0.15);
+            color: #00B9F2;
+        }
+        .ai-yurxizmat-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .ai-yurxizmat-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: 1px solid rgba(1, 156, 224, 0.2);
+            border-radius: 8px;
+            background: var(--glass-bg);
+            color: #0C7ECF;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        [data-theme="dark"] .ai-yurxizmat-link { color: #00B9F2; }
+        .ai-yurxizmat-link:hover {
+            background: rgba(1, 156, 224, 0.1);
+            border-color: rgba(1, 156, 224, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(1, 156, 224, 0.15);
+        }
+        .ai-yurxizmat-link svg { flex-shrink: 0; }
         /* AI Chat Section */
         .ai-chat-section { margin-top: 16px; }
         .ai-chat-divider {
@@ -3601,6 +3663,16 @@
                     <span class="ai-feedback-status" id="aiFeedbackStatus"></span>
                 </div>
 
+                <!-- yurxizmat.uz Template Suggestions -->
+                <div id="aiYurxizmatSection" class="ai-yurxizmat-section" style="display:none;">
+                    <div class="ai-yurxizmat-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        Tayyor hujjat namunalari
+                        <span class="ai-yurxizmat-badge">yurxizmat.uz</span>
+                    </div>
+                    <div id="aiYurxizmatLinks" class="ai-yurxizmat-links"></div>
+                </div>
+
                 <!-- Action buttons -->
                 <div id="aiActionButtons" class="ai-action-buttons" style="display:none;">
                     <button class="ai-action-btn" onclick="generateLegalTemplate()">
@@ -5067,6 +5139,8 @@
             document.getElementById('aiChatInputArea').style.display = 'none';
             document.getElementById('aiActionButtons').style.display = 'none';
             document.getElementById('aiFeedbackSection').style.display = 'none';
+            document.getElementById('aiYurxizmatSection').style.display = 'none';
+            document.getElementById('aiYurxizmatLinks').innerHTML = '';
             document.getElementById('aiChatMessages').innerHTML = '';
             document.getElementById('aiFeedbackUp').classList.remove('selected');
             document.getElementById('aiFeedbackDown').classList.remove('selected');
@@ -5111,6 +5185,18 @@
                         { role: 'model', text: data.analysis }
                     ];
                     aiAnalysisComplete = true;
+
+                    // Show yurxizmat.uz template suggestions
+                    const yxSection = document.getElementById('aiYurxizmatSection');
+                    const yxLinks = document.getElementById('aiYurxizmatLinks');
+                    if (data.templateSuggestions && data.templateSuggestions.length > 0) {
+                        yxLinks.innerHTML = data.templateSuggestions.map(s =>
+                            `<a href="${s.url}" target="_blank" rel="noopener noreferrer" class="ai-yurxizmat-link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${s.name}</a>`
+                        ).join('');
+                        yxSection.style.display = 'block';
+                    } else {
+                        yxSection.style.display = 'none';
+                    }
 
                     // Show chat, actions, feedback
                     document.getElementById('aiChatInputArea').style.display = 'block';
@@ -5381,6 +5467,8 @@
             document.getElementById('aiChatInputArea').style.display = 'none';
             document.getElementById('aiActionButtons').style.display = 'none';
             document.getElementById('aiFeedbackSection').style.display = 'none';
+            document.getElementById('aiYurxizmatSection').style.display = 'none';
+            document.getElementById('aiYurxizmatLinks').innerHTML = '';
             document.getElementById('aiChatMessages').innerHTML = '';
 
             try {
