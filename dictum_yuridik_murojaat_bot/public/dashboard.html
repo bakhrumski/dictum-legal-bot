@@ -1590,6 +1590,108 @@
             background: rgba(39, 174, 96, 0.15);
             color: #2ecc71;
         }
+        /* Registration requests section */
+        .reg-section {
+            background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border); border-radius: var(--ios-radius-lg);
+            padding: 20px; box-shadow: var(--shadow-md); margin-top: 20px; margin-bottom: 20px;
+        }
+        .reg-section-header {
+            display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;
+        }
+        .reg-section-header .toggle-chevron { transition: transform 0.3s ease; margin-right: 8px; }
+        .reg-section.collapsed .reg-section-header .toggle-chevron { transform: rotate(-90deg); }
+        .reg-section.collapsed .reg-section-body { display: none; }
+        .reg-section-header h2 { font-size: 16px; color: var(--text-primary); }
+        .reg-pending-badge {
+            background: rgba(243, 156, 18, 0.15); color: #e67e22; font-size: 11px;
+            font-weight: 700; padding: 2px 8px; border-radius: 8px; margin-left: 8px;
+        }
+        .reg-section-body { margin-top: 15px; }
+        .reg-kanban {
+            display: flex; flex-direction: row; gap: 16px; overflow-x: auto;
+            overflow-y: hidden; padding-bottom: 8px; scroll-snap-type: x mandatory;
+        }
+        .reg-kanban-col {
+            min-width: 280px; max-width: 320px; flex-shrink: 0;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: 14px; display: flex; flex-direction: column;
+            max-height: 65vh; scroll-snap-align: start;
+        }
+        .reg-kanban-col-title {
+            padding: 12px 14px; font-size: 14px; font-weight: 700; color: var(--text-primary);
+            border-bottom: 1px solid var(--glass-border); position: sticky; top: 0;
+            background: var(--glass-bg); border-radius: 14px 14px 0 0; z-index: 1;
+        }
+        .reg-kanban-col-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .reg-card {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all 0.2s;
+        }
+        .reg-card:hover { border-color: rgba(1, 156, 224, 0.3); background: rgba(1, 156, 224, 0.04); }
+        .reg-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+        .reg-card-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .reg-ai-badge { font-size: 16px; }
+        .reg-ai-badge.passed { color: #27ae60; }
+        .reg-ai-badge.flagged { color: #f39c12; }
+        .reg-ai-badge.pending { color: var(--text-muted); }
+        .reg-card-meta { font-size: 12px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 6px; }
+        .reg-card-meta span { display: inline-flex; align-items: center; gap: 3px; }
+        .reg-card-actions { display: flex; gap: 6px; margin-top: 10px; }
+        .reg-card-actions button {
+            flex: 1; padding: 6px 10px; border: none; border-radius: 8px;
+            font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 0.2s;
+        }
+        .reg-btn-view { background: rgba(1, 156, 224, 0.1); color: #0C7ECF; }
+        .reg-btn-approve { background: rgba(39, 174, 96, 0.1); color: #1e8449; }
+        .reg-btn-reject { background: rgba(231, 76, 60, 0.1); color: #c0392b; }
+        .reg-btn-view:hover { background: rgba(1, 156, 224, 0.2); }
+        .reg-btn-approve:hover { background: rgba(39, 174, 96, 0.2); }
+        .reg-btn-reject:hover { background: rgba(231, 76, 60, 0.2); }
+        .reg-empty { text-align: center; padding: 30px; color: var(--text-muted); font-size: 13px; width: 100%; }
+        /* Registration detail modal */
+        .reg-detail-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px); z-index: 2000;
+            justify-content: center; align-items: center;
+        }
+        .reg-detail-overlay.active { display: flex; }
+        .reg-detail-box {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: 20px; width: 92%; max-width: 520px; max-height: 85vh;
+            overflow-y: auto; padding: 24px; box-shadow: var(--shadow-lg);
+        }
+        .reg-detail-box h3 { font-size: 18px; color: var(--text-primary); margin-bottom: 16px; }
+        .reg-detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border); font-size: 13px; }
+        .reg-detail-label { color: var(--text-muted); font-weight: 600; }
+        .reg-detail-value { color: var(--text-primary); text-align: right; max-width: 60%; word-break: break-word; }
+        .reg-ai-section { margin-top: 16px; padding: 14px; border-radius: 12px; font-size: 13px; }
+        .reg-ai-section.passed { background: rgba(39, 174, 96, 0.08); border: 1px solid rgba(39, 174, 96, 0.2); }
+        .reg-ai-section.flagged { background: rgba(243, 156, 18, 0.08); border: 1px solid rgba(243, 156, 18, 0.2); }
+        .reg-ai-section h4 { margin-bottom: 8px; font-size: 14px; }
+        .reg-ai-section .ai-note { color: var(--text-secondary); line-height: 1.6; }
+        .reg-detail-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .reg-detail-actions button {
+            flex: 1; padding: 12px; border: none; border-radius: 12px;
+            font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+            color: white;
+        }
+        .reg-detail-approve { background: linear-gradient(135deg, #27ae60, #2ecc71); }
+        .reg-detail-reject { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .reg-detail-close { background: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--glass-border) !important; }
+        .reg-cred-box {
+            margin-top: 16px; padding: 14px; background: rgba(39, 174, 96, 0.08);
+            border: 1px solid rgba(39, 174, 96, 0.2); border-radius: 12px; font-size: 13px; color: var(--text-primary);
+        }
+        .reg-cred-box code { background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+        [data-theme="dark"] .reg-cred-box code { background: rgba(255,255,255,0.08); }
+        .reg-copy-btn {
+            margin-top: 10px; padding: 8px 16px; border: 1px solid var(--glass-border);
+            border-radius: 8px; background: var(--glass-bg); color: var(--text-primary);
+            font-size: 12px; font-family: inherit; cursor: pointer;
+        }
         .detail-section {
             margin-bottom: 20px;
         }
@@ -3342,6 +3444,27 @@
             </div>
         </div>
 
+        <!-- Registration Requests Section (Master Only) -->
+        <div class="reg-section collapsed" id="regSection" style="display:none;">
+            <div class="reg-section-header" onclick="document.getElementById('regSection').classList.toggle('collapsed'); if(!document.getElementById('regSection').classList.contains('collapsed') && !regRequestsLoaded) loadRegRequests();">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>So'rovlar</h2>
+                    <span class="reg-pending-badge" id="regPendingBadge" style="display:none;"></span>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <div class="reg-kanban" id="regKanban">
+                    <div class="reg-empty">So'rovlarni ko'rish uchun bo'limni oching</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Registration Detail Modal -->
+        <div class="reg-detail-overlay" id="regDetailOverlay" onclick="if(event.target===this)this.classList.remove('active')">
+            <div class="reg-detail-box" id="regDetailBox"></div>
+        </div>
+
         <!-- Monte Carlo Simulation Section -->
         <div class="monte-carlo-section" id="monteCarloSection">
             <div class="mc-card">
@@ -3633,6 +3756,17 @@
                 const aiArchive = document.getElementById('aiArchiveSection');
                 if (aiArchive && data.role !== 'master') {
                     aiArchive.style.display = 'none';
+                }
+
+                // Show registration requests section for master only
+                const regSection = document.getElementById('regSection');
+                if (regSection) {
+                    if (data.role === 'master') {
+                        regSection.style.display = '';
+                        loadRegStats();
+                    } else {
+                        regSection.style.display = 'none';
+                    }
                 }
             } catch (error) {
                 console.error('Error loading user info:', error);
@@ -5284,8 +5418,201 @@
             }
         }
 
+        // ========== REGISTRATION REQUESTS ==========
+        let regRequestsLoaded = false;
+        let allRegRequests = [];
 
+        async function loadRegStats() {
+            try {
+                const r = await fetch('/api/registration-requests/stats', { credentials: 'same-origin' });
+                if (!r.ok) return;
+                const s = await r.json();
+                const badge = document.getElementById('regPendingBadge');
+                if (parseInt(s.pending) > 0) {
+                    badge.textContent = s.pending + ' kutilmoqda';
+                    badge.style.display = 'inline';
+                } else { badge.style.display = 'none'; }
+            } catch (e) {}
+        }
 
+        async function loadRegRequests() {
+            regRequestsLoaded = true;
+            const kanban = document.getElementById('regKanban');
+            kanban.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                const r = await fetch('/api/registration-requests?status=pending', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Server error');
+                allRegRequests = await r.json();
+
+                if (allRegRequests.length === 0) {
+                    kanban.innerHTML = '<div class="reg-empty">Kutilayotgan so\'rovlar yo\'q</div>';
+                    return;
+                }
+
+                // Group: students by level, lawyers separate
+                const students = {};
+                const lawyers = [];
+                allRegRequests.forEach(reg => {
+                    if (reg.type === 'lawyer') { lawyers.push(reg); }
+                    else {
+                        const key = reg.level || 'Noma\'lum';
+                        if (!students[key]) students[key] = [];
+                        students[key].push(reg);
+                    }
+                });
+
+                let html = '';
+                // Student columns by level
+                ['1-bosqich', '2-bosqich', '3-bosqich', '4-bosqich'].forEach(lvl => {
+                    const regs = students[lvl];
+                    if (!regs || regs.length === 0) return;
+                    html += renderRegColumn(lvl, regs);
+                });
+                // Lawyer column
+                if (lawyers.length > 0) {
+                    html += renderRegColumn('Advokatlar', lawyers);
+                }
+
+                kanban.innerHTML = html || '<div class="reg-empty">Kutilayotgan so\'rovlar yo\'q</div>';
+            } catch (e) {
+                kanban.innerHTML = '<div class="reg-empty" style="color:#e74c3c;">Xatolik: ' + e.message + '</div>';
+            }
+        }
+
+        function renderRegColumn(title, regs) {
+            const cards = regs.map(reg => {
+                const aiBadge = reg.ai_screening_status === 'passed'
+                    ? '<span class="reg-ai-badge passed" title="AI tekshiruvi o\'tdi">&#10004;</span>'
+                    : reg.ai_screening_status === 'flagged'
+                    ? '<span class="reg-ai-badge flagged" title="AI shubhali deb belgiladi">&#9888;</span>'
+                    : '<span class="reg-ai-badge pending" title="AI tekshiruv kutilmoqda">&#8987;</span>';
+                const date = new Date(reg.created_at).toLocaleDateString('uz-UZ');
+                const extra = reg.type === 'lawyer'
+                    ? `<span>${escapeHtml(reg.specialization || '')}</span>`
+                    : '';
+                return `<div class="reg-card">
+                    <div class="reg-card-top">
+                        <span class="reg-card-name">${escapeHtml(reg.last_name)} ${escapeHtml(reg.first_name)}</span>
+                        ${aiBadge}
+                    </div>
+                    <div class="reg-card-meta">
+                        <span>@${escapeHtml(reg.telegram_username)}</span>
+                        ${extra}
+                        <span>${date}</span>
+                    </div>
+                    <div class="reg-card-actions">
+                        <button class="reg-btn-view" onclick="viewRegDetail(${reg.id})">Ko'rish</button>
+                        <button class="reg-btn-approve" onclick="approveReg(${reg.id})">&#10004;</button>
+                        <button class="reg-btn-reject" onclick="rejectReg(${reg.id})">&#10008;</button>
+                    </div>
+                </div>`;
+            }).join('');
+            return `<div class="reg-kanban-col">
+                <div class="reg-kanban-col-title">${escapeHtml(title)} <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(${regs.length})</span></div>
+                <div class="reg-kanban-col-body">${cards}</div>
+            </div>`;
+        }
+
+        function viewRegDetail(id) {
+            const reg = allRegRequests.find(r => r.id === id);
+            if (!reg) return;
+            const box = document.getElementById('regDetailBox');
+            const aiResult = reg.ai_screening_result ? (typeof reg.ai_screening_result === 'string' ? JSON.parse(reg.ai_screening_result) : reg.ai_screening_result) : null;
+            const aiClass = reg.ai_screening_status === 'passed' ? 'passed' : 'flagged';
+
+            let aiHtml = '';
+            if (aiResult) {
+                const checks = [
+                    aiResult.name_match !== undefined ? `Ism moslik: ${aiResult.name_match ? '&#10004;' : '&#10008;'}` : '',
+                    aiResult.is_law_field !== undefined ? `Huquq sohasi: ${aiResult.is_law_field ? '&#10004;' : '&#10008;'}` : '',
+                    aiResult.info_complete !== undefined ? `Ma'lumot to'liq: ${aiResult.info_complete ? '&#10004;' : '&#10008;'}` : '',
+                    aiResult.document_authentic !== undefined ? `Hujjat haqiqiy: ${aiResult.document_authentic ? '&#10004;' : '&#10008;'}` : ''
+                ].filter(Boolean).join(' &nbsp;|&nbsp; ');
+                aiHtml = `<div class="reg-ai-section ${aiClass}">
+                    <h4>${reg.ai_screening_status === 'passed' ? '&#10004; AI tekshiruvi o\'tdi' : '&#9888; AI shubhali deb belgiladi'}</h4>
+                    <div style="margin-bottom:6px;">${checks}</div>
+                    <div class="ai-note">${escapeHtml(aiResult.notes || '')}</div>
+                </div>`;
+            } else {
+                aiHtml = '<div class="reg-ai-section flagged"><h4>&#8987; AI tekshiruv hali tugallanmagan</h4></div>';
+            }
+
+            let docHtml = reg.document_file_id
+                ? `<a href="#" onclick="viewRegDoc('${reg.document_file_id}');return false;" style="color:#0C7ECF;font-weight:600;">Hujjatni ko'rish</a>`
+                : '<span style="color:var(--text-muted);">Yuklanmagan</span>';
+
+            box.innerHTML = `
+                <h3>${escapeHtml(reg.last_name)} ${escapeHtml(reg.first_name)}</h3>
+                <div class="reg-detail-row"><span class="reg-detail-label">Turi</span><span class="reg-detail-value">${reg.type === 'lawyer' ? 'Advokat' : 'Student'}</span></div>
+                ${reg.level ? `<div class="reg-detail-row"><span class="reg-detail-label">Bosqich</span><span class="reg-detail-value">${escapeHtml(reg.level)}</span></div>` : ''}
+                ${reg.specialization ? `<div class="reg-detail-row"><span class="reg-detail-label">Mutaxassislik</span><span class="reg-detail-value">${escapeHtml(reg.specialization)}</span></div>` : ''}
+                ${reg.experience_years ? `<div class="reg-detail-row"><span class="reg-detail-label">Tajriba</span><span class="reg-detail-value">${reg.experience_years} yil</span></div>` : ''}
+                ${reg.license_number ? `<div class="reg-detail-row"><span class="reg-detail-label">Guvohnoma</span><span class="reg-detail-value">${escapeHtml(reg.license_number)}</span></div>` : ''}
+                <div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(reg.telegram_username)}</span></div>
+                <div class="reg-detail-row"><span class="reg-detail-label">Sana</span><span class="reg-detail-value">${new Date(reg.created_at).toLocaleString('uz-UZ')}</span></div>
+                <div class="reg-detail-row"><span class="reg-detail-label">Hujjat</span><span class="reg-detail-value">${docHtml}</span></div>
+                ${aiHtml}
+                <div class="reg-detail-actions" id="regDetailActions">
+                    <button class="reg-detail-approve" onclick="approveReg(${reg.id})">&#10004; Tasdiqlash</button>
+                    <button class="reg-detail-reject" onclick="rejectReg(${reg.id})">&#10008; Rad etish</button>
+                    <button class="reg-detail-close" onclick="document.getElementById('regDetailOverlay').classList.remove('active')">Yopish</button>
+                </div>
+            `;
+            document.getElementById('regDetailOverlay').classList.add('active');
+        }
+
+        async function viewRegDoc(fileId) {
+            try {
+                const r = await fetch('/api/registration-document/' + fileId, { credentials: 'same-origin' });
+                const data = await r.json();
+                if (data.fileLink) window.open(data.fileLink, '_blank');
+                else alert('Hujjatni olishda xatolik');
+            } catch (e) { alert('Xatolik: ' + e.message); }
+        }
+
+        async function approveReg(id) {
+            if (!confirm('Bu so\'rovni tasdiqlaysizmi? Yangi hisob yaratiladi.')) return;
+            try {
+                const r = await fetch('/api/registration-requests/' + id + '/approve', { method: 'POST', credentials: 'same-origin' });
+                const data = await r.json();
+                if (data.success) {
+                    const c = data.credentials;
+                    const actions = document.getElementById('regDetailActions');
+                    if (actions) {
+                        actions.innerHTML = `<div class="reg-cred-box">
+                            <strong>&#10004; Hisob yaratildi!</strong><br><br>
+                            Username: <code>${c.username}</code><br>
+                            Parol: <code>${c.password}</code><br>
+                            Telegram: <code>@${c.telegram}</code><br>
+                            ${data.telegramSent ? '<br><span style="color:#27ae60;">&#10004; Telegram orqali yuborildi</span>' : '<br><span style="color:#f39c12;">&#9888; Telegram orqali yuborib bo\'lmadi. Qo\'lda yuboring.</span>'}
+                            <br><button class="reg-copy-btn" onclick="navigator.clipboard.writeText('Username: ${c.username}\\nParol: ${c.password}');this.textContent='Nusxalandi!'">Nusxalash</button>
+                        </div>`;
+                    } else {
+                        alert('Hisob yaratildi!\n\nUsername: ' + c.username + '\nParol: ' + c.password);
+                    }
+                    loadRegRequests();
+                    loadRegStats();
+                } else { alert(data.error || 'Xatolik'); }
+            } catch (e) { alert('Xatolik: ' + e.message); }
+        }
+
+        async function rejectReg(id) {
+            const reason = prompt('Rad etish sababini kiriting:');
+            if (!reason) return;
+            try {
+                const r = await fetch('/api/registration-requests/' + id + '/reject', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                });
+                const data = await r.json();
+                if (data.success) {
+                    document.getElementById('regDetailOverlay').classList.remove('active');
+                    loadRegRequests();
+                    loadRegStats();
+                } else { alert(data.error || 'Xatolik'); }
+            } catch (e) { alert('Xatolik: ' + e.message); }
+        }
 
         async function submitStudentResponse(requestId) {
             if (!checkCategoryBeforeResponse()) return;

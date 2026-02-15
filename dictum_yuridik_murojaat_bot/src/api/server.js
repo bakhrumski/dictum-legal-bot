@@ -3,7 +3,20 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const os = require('os');
+const fs = require('fs');
 const { pool } = require('../database/db');
+
+// Multer config for registration document uploads
+const regUpload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype);
+    cb(ok ? null : new Error('Faqat JPG, PNG, WebP yoki PDF'), ok);
+  }
+});
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -1766,6 +1779,261 @@ app.post('/api/ai-feedback', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// ========== SELF-REGISTRATION ==========
+
+// AI Screening using Gemini 2.5 Flash
+async function triggerAiScreening(regId, regData) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return;
+
+  try {
+    let parts = [];
+
+    // If document uploaded, fetch and include as vision input
+    if (regData.document_file_id) {
+      try {
+        const fileLink = await bot.getFileLink(regData.document_file_id);
+        const resp = await fetch(fileLink);
+        const buffer = await resp.arrayBuffer();
+        const base64Data = Buffer.from(buffer).toString('base64');
+        const mimeType = fileLink.toLowerCase().includes('.pdf') ? 'application/pdf' : 'image/jpeg';
+        parts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
+      } catch (e) {
+        console.error('[AI SCREENING] Could not fetch document:', e.message);
+      }
+    }
+
+    const isLawyer = regData.type === 'lawyer';
+    const infoBlock = isLawyer
+      ? `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Advokat\nMutaxassislik: ${regData.specialization || '-'}\nTajriba: ${regData.experience_years || '-'} yil\nGuvohnoma raqami: ${regData.license_number || '-'}\nTelegram: @${regData.telegram_username}`
+      : `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Student\nBosqich: ${regData.level || '-'}\nTelegram: @${regData.telegram_username}`;
+
+    const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${parts.length > 0 ? 'Yuklangan hujjatni ko\'ring.' : 'Hujjat yuklanmagan.'}\n\nTekshiring:\n1. Hujjatdagi ism-familiya ariza beruvchi kiritgan ma'lumotlarga mosmi?\n2. Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?\n3. Barcha ma'lumotlar to'liqmi?\n4. Hujjat haqiqiymi yoki shubhalimi?\n${isLawyer ? '5. Advokatlk guvohnoma raqami formatiga mosmi?\n6. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
+
+    parts.push({ text: screenPrompt });
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const geminiResp = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+      })
+    });
+
+    if (!geminiResp.ok) {
+      console.error('[AI SCREENING] Gemini API error:', geminiResp.status);
+      return;
+    }
+
+    const data = await geminiResp.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText) return;
+
+    let screeningResult;
+    try {
+      const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+      screeningResult = jsonMatch ? JSON.parse(jsonMatch[0]) : { status: 'flagged', notes: 'Parse xatolik' };
+    } catch (e) {
+      screeningResult = { status: 'flagged', notes: 'AI javobini parse qilib bo\'lmadi', raw: resultText.substring(0, 500) };
+    }
+
+    const aiStatus = screeningResult.status === 'passed' ? 'passed' : 'flagged';
+    await pool.query(
+      `UPDATE registration_requests SET ai_screening_result = $1, ai_screening_status = $2 WHERE id = $3`,
+      [JSON.stringify(screeningResult), aiStatus, regId]
+    );
+    console.log(`[AI SCREENING] Request #${regId}: ${aiStatus}`);
+  } catch (error) {
+    console.error('[AI SCREENING] Error:', error);
+  }
+}
+
+// POST /api/register — public self-registration
+app.post('/api/register', regUpload.single('document'), async (req, res) => {
+  try {
+    const { first_name, last_name, type, level, specialization, experience_years, license_number, telegram_username } = req.body;
+
+    if (!first_name || !last_name || !telegram_username || !type) {
+      return res.status(400).json({ error: 'Barcha maydonlar to\'ldirilishi shart' });
+    }
+
+    const regType = type === 'lawyer' ? 'lawyer' : 'student';
+    if (regType === 'student' && !level) {
+      return res.status(400).json({ error: 'Bosqichni tanlang' });
+    }
+    if (regType === 'lawyer' && (!specialization || !license_number)) {
+      return res.status(400).json({ error: 'Mutaxassislik va guvohnoma raqamini kiriting' });
+    }
+
+    const cleanUsername = telegram_username.replace(/@/g, '').trim();
+    if (!cleanUsername || cleanUsername.length < 3) {
+      return res.status(400).json({ error: 'Noto\'g\'ri Telegram username' });
+    }
+
+    // Check duplicate pending
+    const existing = await pool.query(
+      `SELECT id FROM registration_requests WHERE telegram_username = $1 AND status = 'pending'`,
+      [cleanUsername]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Bu Telegram username bilan allaqachon so\'rov yuborilgan. Admin javobini kuting.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Iltimos, isbotlovchi hujjatni yuklang' });
+    }
+
+    // Upload document to Telegram for persistent storage
+    let documentFileId = null;
+    let documentFileName = null;
+    try {
+      const caption = regType === 'lawyer'
+        ? `📋 Yangi advokat ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📜 ${specialization}\n📱 @${cleanUsername}`
+        : `📋 Yangi student ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📚 ${level}\n📱 @${cleanUsername}`;
+      const sentDoc = await bot.sendDocument(process.env.ADMIN_TELEGRAM_ID, req.file.path, { caption }, { filename: req.file.originalname, contentType: req.file.mimetype });
+      documentFileId = sentDoc.document.file_id;
+      documentFileName = req.file.originalname;
+    } catch (uploadErr) {
+      console.error('[REGISTER] Telegram upload error:', uploadErr.message);
+      return res.status(500).json({ error: 'Hujjatni yuklashda xatolik' });
+    } finally {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+
+    const result = await pool.query(
+      `INSERT INTO registration_requests (type, first_name, last_name, level, specialization, experience_years, license_number, telegram_username, document_file_id, document_file_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername, documentFileId, documentFileName]
+    );
+
+    // Trigger AI screening asynchronously
+    triggerAiScreening(result.rows[0].id, { type: regType, first_name, last_name, level, specialization, experience_years, license_number, telegram_username: cleanUsername, document_file_id: documentFileId }).catch(e => console.error('[AI SCREENING]', e));
+
+    res.json({ success: true, message: 'Tabriklaymiz, Sizning so\'rovingiz muvaffaqiyatli yuborildi! Admin javobini kuting!' });
+  } catch (error) {
+    if (req.file) { try { fs.unlinkSync(req.file.path); } catch (e) {} }
+    console.error('[REGISTER] Error:', error);
+    res.status(500).json({ error: 'Ro\'yxatdan o\'tishda xatolik' });
+  }
+});
+
+// GET /api/registration-requests — master only
+app.get('/api/registration-requests', requireMasterAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = `SELECT rr.*, a.full_name as reviewer_name FROM registration_requests rr LEFT JOIN admins a ON rr.reviewed_by = a.id`;
+    const params = [];
+    if (status) { query += ' WHERE rr.status = $1'; params.push(status); }
+    query += ' ORDER BY rr.created_at DESC';
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('[REG REQUESTS] Error:', error);
+    res.status(500).json({ error: 'So\'rovlar yuklashda xatolik' });
+  }
+});
+
+// GET /api/registration-requests/stats
+app.get('/api/registration-requests/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+             COUNT(*) FILTER (WHERE status = 'approved') AS approved,
+             COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
+      FROM registration_requests
+    `);
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// POST /api/registration-requests/:id/approve — master only
+app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (req, res) => {
+  try {
+    const regResult = await pool.query('SELECT * FROM registration_requests WHERE id = $1 AND status = $2', [req.params.id, 'pending']);
+    if (regResult.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi yoki allaqachon ko\'rib chiqilgan' });
+
+    const reg = regResult.rows[0];
+
+    // Generate username
+    let username = (reg.first_name.toLowerCase() + '_' + reg.last_name.toLowerCase()).replace(/[^a-z0-9_]/g, '').substring(0, 30);
+    let finalUsername = username;
+    let suffix = 0;
+    while ((await pool.query('SELECT id FROM admins WHERE username = $1', [finalUsername])).rows.length > 0) {
+      suffix++;
+      finalUsername = username + suffix;
+    }
+
+    // Generate random password
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let password = '';
+    for (let i = 0; i < 8; i++) password += chars.charAt(Math.floor(Math.random() * chars.length));
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const fullName = `${reg.last_name} ${reg.first_name}`;
+    const role = reg.type === 'lawyer' ? 'lawyer' : 'student';
+
+    await pool.query('INSERT INTO admins (username, password, full_name, role) VALUES ($1, $2, $3, $4)', [finalUsername, hashedPassword, fullName, role]);
+    await pool.query('UPDATE registration_requests SET status = $1, reviewed_at = NOW(), reviewed_by = $2 WHERE id = $3', ['approved', req.session.adminId, req.params.id]);
+
+    // Try to notify via Telegram
+    const approvalMsg = `✅ Tabriklaymiz! Ro'yxatdan o'tish so'rovingiz tasdiqlandi!\n\n🔑 Kirish ma'lumotlari:\n👤 Username: ${finalUsername}\n🔒 Parol: ${password}\n\n🌐 Dashboard: ${process.env.DASHBOARD_URL || 'https://' + (process.env.WEBHOOK_DOMAIN || 'localhost:3000')}\n\nDictum advokatlik firmasi`;
+    let telegramSent = false;
+    try {
+      const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
+      if (tgUser.rows.length > 0) {
+        await bot.sendMessage(tgUser.rows[0].telegram_id, approvalMsg);
+        telegramSent = true;
+      }
+    } catch (e) { console.error('[APPROVE] Telegram error:', e.message); }
+
+    res.json({ success: true, credentials: { username: finalUsername, password, telegram: reg.telegram_username, fullName }, telegramSent, telegramMessage: approvalMsg });
+  } catch (error) {
+    console.error('[APPROVE] Error:', error);
+    res.status(500).json({ error: 'Tasdiqlashda xatolik' });
+  }
+});
+
+// POST /api/registration-requests/:id/reject — master only
+app.post('/api/registration-requests/:id/reject', requireMasterAdmin, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    if (!reason) return res.status(400).json({ error: 'Rad etish sababi ko\'rsatilishi shart' });
+
+    const regResult = await pool.query('SELECT * FROM registration_requests WHERE id = $1 AND status = $2', [req.params.id, 'pending']);
+    if (regResult.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
+
+    const reg = regResult.rows[0];
+    await pool.query('UPDATE registration_requests SET status = $1, rejection_reason = $2, reviewed_at = NOW(), reviewed_by = $3 WHERE id = $4', ['rejected', reason, req.session.adminId, req.params.id]);
+
+    // Try to notify via Telegram
+    try {
+      const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
+      if (tgUser.rows.length > 0) {
+        await bot.sendMessage(tgUser.rows[0].telegram_id, `❌ Ro'yxatdan o'tish so'rovingiz rad etildi.\n\nSabab: ${reason}\n\nDictum advokatlik firmasi`);
+      }
+    } catch (e) { console.error('[REJECT] Telegram error:', e.message); }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[REJECT] Error:', error);
+    res.status(500).json({ error: 'Rad etishda xatolik' });
+  }
+});
+
+// GET /api/registration-document/:fileId — master only
+app.get('/api/registration-document/:fileId', requireMasterAdmin, async (req, res) => {
+  try {
+    const fileLink = await bot.getFileLink(req.params.fileId);
+    res.json({ fileLink });
+  } catch (error) {
+    res.status(500).json({ error: 'Hujjatni olishda xatolik' });
+  }
+});
+
 // Auto-migrate database on startup (add missing columns)
 async function runMigrations() {
   try {
@@ -1797,6 +2065,30 @@ async function runMigrations() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_analyses_created ON ai_analyses(created_at DESC)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS registration_requests (
+        id SERIAL PRIMARY KEY,
+        type VARCHAR(10) NOT NULL DEFAULT 'student',
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        level VARCHAR(20),
+        specialization VARCHAR(255),
+        experience_years INTEGER,
+        license_number VARCHAR(100),
+        telegram_username VARCHAR(100) NOT NULL,
+        document_file_id TEXT,
+        document_file_name VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'pending',
+        ai_screening_result JSONB,
+        ai_screening_status VARCHAR(20) DEFAULT 'pending',
+        rejection_reason TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        reviewed_at TIMESTAMP,
+        reviewed_by INTEGER REFERENCES admins(id) ON DELETE SET NULL
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_reg_requests_status ON registration_requests(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_reg_requests_created ON registration_requests(created_at DESC)`);
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
