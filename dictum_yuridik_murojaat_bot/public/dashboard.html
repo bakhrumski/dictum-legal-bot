@@ -1880,6 +1880,48 @@
             margin-top: 10px;
             color: var(--text-primary);
         }
+        /* Kanban layout: Berilgan javob + AI javob side by side */
+        .response-kanban {
+            display: flex; gap: 16px; margin-top: 0;
+        }
+        .response-kanban-col {
+            flex: 1; min-width: 0;
+        }
+        .response-kanban-col h3 {
+            margin-bottom: 0;
+        }
+        @media (max-width: 700px) {
+            .response-kanban { flex-direction: column; gap: 12px; }
+        }
+        .ai-javob-box {
+            background: rgba(230, 242, 254, 0.5);
+            padding: 15px;
+            border-radius: var(--ios-radius-sm);
+            border-left: 4px solid #0C7ECF;
+            margin-top: 10px;
+            color: var(--text-primary);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        [data-theme="dark"] .ai-javob-box {
+            background: rgba(15, 30, 55, 0.4);
+        }
+        .ai-javob-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px;
+            border: 1px solid rgba(1, 156, 224, 0.25);
+            border-radius: 8px;
+            background: rgba(1, 156, 224, 0.06);
+            color: #0C7ECF;
+            font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            font-family: inherit;
+        }
+        [data-theme="dark"] .ai-javob-btn { color: #00B9F2; }
+        .ai-javob-btn:hover {
+            background: rgba(1, 156, 224, 0.12);
+            border-color: rgba(1, 156, 224, 0.4);
+        }
 
         .student-response-box {
             background: var(--bg-student-response);
@@ -5009,7 +5051,30 @@
             `;
             
             if (request.status === 'answered') {
-                modalContent += `
+                if (request.ai_analysis_id) {
+                    modalContent += `
+                    <div class="detail-section response-kanban">
+                        <div class="response-kanban-col">
+                            <h3>Berilgan javob</h3>
+                            <div class="response-box">${request.response_text}</div>
+                            <p style="color: #7f8c8d; margin-top: 10px; font-size: 13px;">
+                                Javob berdi: ${request.responded_by || 'N/A'}<br>
+                                Javob berilgan: ${new Date(request.answered_at).toLocaleString('uz-UZ')}
+                            </p>
+                        </div>
+                        <div class="response-kanban-col">
+                            <h3 style="display:flex;align-items:center;gap:8px;">AI javob <span class="ai-badge" style="font-size:10px;">GEMINI</span></h3>
+                            <div class="ai-javob-box" id="aiJavobContent_${request.id}">
+                                <div style="text-align:center;color:var(--text-secondary);padding:20px;cursor:pointer;" onclick="loadAiJavob(${request.ai_analysis_id}, ${request.id})">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg>
+                                    <div style="margin-top:6px;font-size:13px;">Ko'rish uchun bosing</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                } else {
+                    modalContent += `
                     <div class="detail-section">
                         <h3>Berilgan javob</h3>
                         <div class="response-box">${request.response_text}</div>
@@ -5018,7 +5083,8 @@
                             Javob berilgan: ${new Date(request.answered_at).toLocaleString('uz-UZ')}
                         </p>
                     </div>
-                `;
+                    `;
+                }
             } else if (request.status === 'student_responded') {
                 modalContent += `
                     <div class="detail-section">
@@ -5080,6 +5146,12 @@
                         <button class="btn ai-tahlil-btn" onclick="openAiAnalysis(${request.id}, this)" data-request-text="${(request.request_text || '').replace(/"/g, '&quot;')}" data-category="${(request.category || '').replace(/"/g, '&quot;')}" style="margin-left: 10px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg> AI tahlil
                         </button>`;
+                    if (request.ai_analysis_id) {
+                        modalContent += `
+                        <button class="ai-javob-btn" onclick="openArchivedAnalysis(${request.ai_analysis_id})" style="margin-left: 8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg> AI javob
+                        </button>`;
+                    }
                 }
                 modalContent += `
                         </div>
@@ -5186,6 +5258,12 @@
                     ];
                     aiAnalysisComplete = true;
 
+                    // Save archiveId to the request object so AI javob button works
+                    if (data.archiveId && aiCurrentRequestId) {
+                        const req = requests.find(r => r.id === aiCurrentRequestId);
+                        if (req) req.ai_analysis_id = data.archiveId;
+                    }
+
                     // Show yurxizmat.uz template suggestions
                     const yxSection = document.getElementById('aiYurxizmatSection');
                     const yxLinks = document.getElementById('aiYurxizmatLinks');
@@ -5218,6 +5296,22 @@
                 showRequestDetail(aiCurrentRequestId);
             }
             aiOpenedFromRequest = false;
+        }
+
+        // Load AI analysis inline in the request detail kanban
+        async function loadAiJavob(archiveId, requestId) {
+            const box = document.getElementById('aiJavobContent_' + requestId);
+            if (!box) return;
+            box.innerHTML = '<div style="text-align:center;padding:15px;"><span class="spinner"></span></div>';
+            try {
+                const response = await fetch('/api/ai-analyses/' + archiveId, { credentials: 'same-origin' });
+                if (!response.ok) throw new Error('Tahlil topilmadi');
+                const data = await response.json();
+                box.innerHTML = simpleMarkdown(data.analysis_text);
+                box.style.maxHeight = '400px';
+            } catch (e) {
+                box.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:10px;">' + e.message + '</div>';
+            }
         }
 
         // --- AI Feedback ---
