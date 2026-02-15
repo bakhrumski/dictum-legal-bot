@@ -1398,6 +1398,7 @@ Your task:
 ⚠ Natija faqat O'zbek (lotin) tilida bo'lishi shart.
 ⚠ Javob qisqa, aniq va strukturali bo'lishi shart.
 ⚠ Ortiqcha izoh berilmasin.
+⚠ MUHIM: Google Search orqali lex.uz saytidan haqiqiy hujjatlarni qidiring. Modda raqamlarini va havola URLlarni to'qib chiqarmang! Faqat qidiruv natijalarida topilgan haqiqiy manbalarni ko'rsating.
 
 ## 1-QADAM: MUAMMONI TAHLIL QILISH
 
@@ -1412,8 +1413,10 @@ Format:
 
 ## 2-QADAM: LEX.UZ DAN HUJJAT QIDIRISH
 
-Kalit so'zlar asosida Lex.uz'da qidiring.
+Google Search yordamida "site:lex.uz" kalit so'zlarini qidiring.
+Faqat qidiruv natijalarida topilgan haqiqiy hujjatlardan foydalaning.
 Ustuvorlik: Kodekslar > Qonunlar > Prezident farmonlari > VMQ > Plenum qarorlari
+Modda raqami va lex.uz havolasini faqat qidiruv natijalaridan oling — to'qib chiqarmang!
 
 ## 3-QADAM: HUJJAT HOLATINI TEKSHIRISH (MAJBURIY)
 
@@ -1501,9 +1504,10 @@ Qoidalar:
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.4,
+          temperature: 0.3,
           maxOutputTokens: 8192,
-        }
+        },
+        tools: [{ google_search: {} }]
       })
     });
 
@@ -1514,7 +1518,9 @@ Qoidalar:
     }
 
     const geminiData = await geminiResponse.json();
-    const rawAnalysis = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    // With Google Search grounding, response may have multiple text parts
+    const parts = geminiData.candidates?.[0]?.content?.parts || [];
+    const rawAnalysis = parts.map(p => p.text || '').join('');
 
     if (!rawAnalysis) {
       return res.status(500).json({ error: 'Gemini javob bermadi' });
@@ -1769,9 +1775,10 @@ Huquqiy normalar va lex.uz havolalari bilan javob bering.`;
       body: JSON.stringify({
         contents,
         generationConfig: {
-          temperature: 0.4,
+          temperature: 0.3,
           maxOutputTokens: 4096,
-        }
+        },
+        tools: [{ google_search: {} }]
       })
     });
 
@@ -1782,7 +1789,8 @@ Huquqiy normalar va lex.uz havolalari bilan javob bering.`;
     }
 
     const geminiData = await geminiResponse.json();
-    const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+    const chatParts = geminiData.candidates?.[0]?.content?.parts || [];
+    const reply = chatParts.map(p => p.text || '').join('');
 
     if (!reply) {
       return res.status(500).json({ error: 'Gemini javob bermadi' });
