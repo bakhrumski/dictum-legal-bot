@@ -204,8 +204,24 @@
             margin-bottom: 8px; font-size: 13px; color: var(--login-text-secondary);
         }
         .agreement-item input[type="checkbox"] {
-            width: 16px; height: 16px; min-width: 16px; padding: 0; border-radius: 4px;
-            pointer-events: none;
+            display: none;
+        }
+        .agreement-item .check-icon {
+            width: 20px; height: 20px; min-width: 20px;
+            border: 2px solid var(--login-input-border); border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.25s ease;
+            background: var(--login-input-bg);
+        }
+        .agreement-item input[type="checkbox"]:checked + .check-icon {
+            background: #1661BE; border-color: #1661BE;
+        }
+        .agreement-item input[type="checkbox"]:checked + .check-icon svg {
+            opacity: 1; transform: scale(1);
+        }
+        .agreement-item .check-icon svg {
+            width: 12px; height: 12px; opacity: 0; transform: scale(0.5);
+            transition: all 0.2s ease;
         }
         .agreement-item { cursor: pointer; }
         .agreement-item a { color: #1661BE; text-decoration: underline; cursor: pointer; font-weight: 500; }
@@ -382,11 +398,13 @@
                 <div class="agreement-section">
                     <div class="agreement-item" onclick="openPolicy('privacy')">
                         <input type="checkbox" id="privacyCheck">
+                        <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         <span><a>Maxfiylik siyosati</a>ni o'qing va tasdiqlang</span>
                     </div>
                     <div class="agreement-error" id="privacyError">Maxfiylik siyosatini tasdiqlang!</div>
                     <div class="agreement-item" onclick="openPolicy('oferta')">
                         <input type="checkbox" id="ofertaCheck">
+                        <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         <span><a>Ommaviy oferta</a>ni o'qing va tasdiqlang</span>
                     </div>
                     <div class="agreement-error" id="ofertaError">Ommaviy ofertani tasdiqlang!</div>
