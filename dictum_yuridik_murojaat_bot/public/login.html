@@ -92,14 +92,12 @@
         }
         select { cursor: pointer; }
         select option { background: var(--login-card); color: var(--login-text); }
+        input[type="number"] { -moz-appearance: textfield; }
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
-            opacity: 1;
-            -webkit-appearance: inner-spin-button;
-            background: transparent;
-            filter: var(--spin-filter, none);
+            -webkit-appearance: none;
+            margin: 0;
         }
-        [data-theme="dark"] { --spin-filter: invert(1); }
         input:focus, select:focus {
             outline: none; border-color: #019CE0;
             box-shadow: 0 0 0 2px rgba(1, 156, 224, 0.1);
