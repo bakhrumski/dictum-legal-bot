@@ -1397,6 +1397,7 @@ Your task:
 ⚠ Natija faqat O'zbek (lotin) tilida bo'lishi shart.
 ⚠ Javob qisqa, aniq va strukturali bo'lishi shart.
 ⚠ Ortiqcha izoh berilmasin.
+⚠ QATTIYAN TAQIQLANADI: Lex.uz havolalarini to'qib chiqarish (fabricate) mutlaqo man etiladi! Agar aniq URL manzilini bilmasangiz, havola bermang. Mavjud bo'lmagan yoki taxminiy URL yozish MUMKIN EMAS.
 
 ## O'ZBEKISTON QONUNCHILIK KATALOGI (lex.uz)
 
@@ -1477,7 +1478,8 @@ Format (har bir norma uchun):
 - **Hujjat nomi:** [Kodeks/Qonun nomi]
 - **Modda:** [Raqam — FAQAT Google Search natijasida ko'ringan bo'lsa]
 - **Qisqa mazmun:** [Bu norma nima haqida]
-- **Lex.uz havola:** [Yuqoridagi katalogdan to'g'ri URL]
+
+❌ Lex.uz havolasini HECH QACHON to'qib chiqarmang! URL faqat Google Search natijasida aniq ko'ringan bo'lsa yozing, aks holda havola bermang.
 
 ## 5-QADAM: QISQA HUQUQIY TAHLIL
 
