@@ -2393,7 +2393,7 @@ async function runMigrations() {
         specialization VARCHAR(255),
         experience_years INTEGER,
         license_number VARCHAR(100),
-        telegram_username VARCHAR(100) NOT NULL,
+        telegram_username VARCHAR(100),
         document_file_id TEXT,
         document_file_name VARCHAR(255),
         status VARCHAR(20) DEFAULT 'pending',
@@ -2411,6 +2411,7 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_base64 TEXT`);
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_mimetype VARCHAR(100)`);
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT`);
+    await pool.query(`ALTER TABLE registration_requests ALTER COLUMN telegram_username DROP NOT NULL`);
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
 
