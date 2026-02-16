@@ -623,9 +623,8 @@
             }
         });
 
-        // Remove red border on input focus/change
+        // Remove red border only when user types or changes value (not on focus)
         document.querySelectorAll('#registerForm input, #registerForm select').forEach(function(el) {
-            el.addEventListener('focus', function() { this.classList.remove('input-invalid'); });
             el.addEventListener('input', function() { this.classList.remove('input-invalid'); });
             el.addEventListener('change', function() { this.classList.remove('input-invalid'); });
         });
