@@ -746,13 +746,13 @@ app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Admin topilmadi' });
     }
     // Remove all FK references to this admin before deleting
+    await pool.query('DELETE FROM chat_messages WHERE admin_id = $1', [adminId]);
+    await pool.query('DELETE FROM ai_feedback WHERE admin_id = $1', [adminId]);
+    await pool.query('DELETE FROM ai_analyses WHERE admin_id = $1', [adminId]);
     await pool.query('UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1', [adminId]);
     await pool.query('UPDATE requests SET student_admin_id = NULL WHERE student_admin_id = $1', [adminId]);
     try { await pool.query('UPDATE block_history SET performed_by = NULL WHERE performed_by = $1', [adminId]); } catch(e) {}
     await pool.query('UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by = $1', [adminId]);
-    await pool.query('UPDATE chat_messages SET admin_id = NULL WHERE admin_id = $1', [adminId]);
-    await pool.query('UPDATE ai_feedback SET admin_id = NULL WHERE admin_id = $1', [adminId]);
-    await pool.query('UPDATE ai_analyses SET admin_id = NULL WHERE admin_id = $1', [adminId]);
     // Delete the admin
     await pool.query('DELETE FROM admins WHERE id = $1', [adminId]);
     res.json({ success: true, deleted: adminCheck.rows[0].full_name });
