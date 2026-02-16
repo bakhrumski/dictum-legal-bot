@@ -2199,14 +2199,23 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
     const approvalMsg = `✅ Tabriklaymiz! Ro'yxatdan o'tish so'rovingiz tasdiqlandi!\n\n🔑 Kirish ma'lumotlari:\n👤 Username: ${finalUsername}\n🔒 Parol: ${parolText}\n\n🌐 Dashboard: ${process.env.DASHBOARD_URL || 'https://' + (process.env.WEBHOOK_DOMAIN || 'localhost:3000')}\n\nDictum advokatlik firmasi`;
     let telegramSent = false;
     try {
-      // Try users table first (bot users), then admins table (linked accounts)
       let chatId = null;
+      // 1) Search users table by telegram username (bot users who sent requests)
       const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
       if (tgUser.rows.length > 0) {
         chatId = tgUser.rows[0].telegram_id;
-      } else {
+      }
+      // 2) Search admins table for linked telegram account
+      if (!chatId) {
         const tgAdmin = await pool.query('SELECT telegram_chat_id FROM admins WHERE telegram_chat_id IS NOT NULL AND LOWER(username) = $1', [finalUsername.toLowerCase()]);
         if (tgAdmin.rows.length > 0) chatId = tgAdmin.rows[0].telegram_chat_id;
+      }
+      // 3) Try resolving @username via Telegram API (works if user has interacted with bot before)
+      if (!chatId) {
+        try {
+          const chat = await bot.getChat('@' + reg.telegram_username);
+          if (chat && chat.id) chatId = chat.id;
+        } catch (e) { /* @username lookup not available for this user */ }
       }
       if (chatId) {
         await bot.sendMessage(chatId, approvalMsg);
@@ -2238,9 +2247,17 @@ app.post('/api/registration-requests/:id/reject', requireMasterAdmin, async (req
     let telegramSent = false;
     try {
       let chatId = null;
+      // 1) Search users table by telegram username
       const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
       if (tgUser.rows.length > 0) {
         chatId = tgUser.rows[0].telegram_id;
+      }
+      // 2) Try resolving @username via Telegram API
+      if (!chatId) {
+        try {
+          const chat = await bot.getChat('@' + reg.telegram_username);
+          if (chat && chat.id) chatId = chat.id;
+        } catch (e) { /* @username lookup not available */ }
       }
       if (chatId) {
         await bot.sendMessage(chatId, rejectMsg);
