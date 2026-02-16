@@ -347,6 +347,11 @@
             border-radius: 50px;
             border: 2px solid #bdc3c7;
             background: transparent;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 11;
             transition: gap 0.7s cubic-bezier(0.4, 0, 0.2, 1),
                         padding 0.7s cubic-bezier(0.4, 0, 0.2, 1),
                         border-color 0.4s ease,
@@ -436,11 +441,6 @@
             border-color: #95a5a6;
             background: var(--glass-bg, rgba(255,255,255,0.9));
             box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-            position: absolute;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 11;
         }
         /* --- Dark mode --- */
         [data-theme="dark"] .profile-toggle {
@@ -3926,18 +3926,21 @@
             toggle.classList.toggle('open');
             const center = document.querySelector('.header-center');
             if (toggle.classList.contains('open')) {
+                center.style.transition = 'opacity 0.2s ease';
                 center.style.opacity = '0';
                 center.style.pointerEvents = 'none';
             } else {
+                center.style.transition = 'opacity 0.3s ease 0.4s';
                 center.style.opacity = '1';
-                center.style.pointerEvents = '';
+                setTimeout(function() { center.style.pointerEvents = ''; }, 700);
             }
         }
         function closeProfileDropdown() {
             document.getElementById('profileToggle').classList.remove('open');
             const center = document.querySelector('.header-center');
+            center.style.transition = 'opacity 0.3s ease 0.4s';
             center.style.opacity = '1';
-            center.style.pointerEvents = '';
+            setTimeout(function() { center.style.pointerEvents = ''; }, 700);
         }
         
         async function loadAdmins() {
