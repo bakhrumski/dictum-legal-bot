@@ -2372,14 +2372,29 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS block_reason TEXT`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)`);
 
-    // Fix FK constraints on requests/block_history — add ON DELETE SET NULL so admins can be deleted
+    // Drop ALL FK constraints referencing admins, re-add with ON DELETE SET NULL
     try {
-      await pool.query(`ALTER TABLE requests DROP CONSTRAINT IF EXISTS requests_assigned_to_fkey`);
-      await pool.query(`ALTER TABLE requests ADD CONSTRAINT requests_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES admins(id) ON DELETE SET NULL`);
-      await pool.query(`ALTER TABLE requests DROP CONSTRAINT IF EXISTS requests_student_admin_id_fkey`);
-      await pool.query(`ALTER TABLE requests ADD CONSTRAINT requests_student_admin_id_fkey FOREIGN KEY (student_admin_id) REFERENCES admins(id) ON DELETE SET NULL`);
-      await pool.query(`ALTER TABLE block_history DROP CONSTRAINT IF EXISTS block_history_performed_by_fkey`);
-      await pool.query(`ALTER TABLE block_history ADD CONSTRAINT block_history_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES admins(id) ON DELETE SET NULL`);
+      const fks = await pool.query(`
+        SELECT con.conname, rel.relname AS table_name
+        FROM pg_constraint con
+        JOIN pg_class rel ON con.conrelid = rel.oid
+        JOIN pg_class ref ON con.confrelid = ref.oid
+        WHERE con.contype = 'f' AND ref.relname = 'admins'
+      `);
+      for (const fk of fks.rows) {
+        const action = fk.table_name === 'chat_messages' ? 'CASCADE' : 'SET NULL';
+        // Find the column(s) for this constraint
+        const colResult = await pool.query(`
+          SELECT a.attname FROM pg_constraint c
+          JOIN pg_attribute a ON a.attnum = ANY(c.conkey) AND a.attrelid = c.conrelid
+          WHERE c.conname = $1
+        `, [fk.conname]);
+        const col = colResult.rows[0]?.attname;
+        if (!col) continue;
+        await pool.query(`ALTER TABLE ${fk.table_name} DROP CONSTRAINT ${fk.conname}`);
+        await pool.query(`ALTER TABLE ${fk.table_name} ADD CONSTRAINT ${fk.conname} FOREIGN KEY (${col}) REFERENCES admins(id) ON DELETE ${action}`);
+        console.log(`[DB] Fixed FK: ${fk.table_name}.${col} -> ON DELETE ${action}`);
+      }
     } catch(e) { console.log('[DB] FK constraint migration:', e.message); }
 
     // Requests table migrations (ensure all columns exist)
