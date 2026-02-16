@@ -9,6 +9,8 @@ const fs = require('fs');
 const https = require('https');
 const path = require('path');
 
+const { verificationCodes } = require('../verification-store');
+
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 // NEVER start polling in constructor — polling is started explicitly when needed
@@ -202,7 +204,17 @@ bot.on('callback_query', async (callbackQuery) => {
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  const username = msg.from.username || 'Noma\'lum';
+  const username = msg.from.username || '';
+
+  // Check if this user has a pending verification code for registration
+  if (username) {
+    const cleanUsername = username.toLowerCase();
+    const pending = verificationCodes.get(cleanUsername);
+    if (pending && Date.now() < pending.expiresAt) {
+      bot.sendMessage(chatId, `🔐 Dictum Dashboard tasdiqlash kodi: ${pending.code}\n\nUshbu kod 5 daqiqa amal qiladi.\nKodni ro'yxatdan o'tish formasiga kiriting.`);
+      return;
+    }
+  }
 
   const welcomeMessage = `
 Assalomu aleykum, ${msg.from.first_name}! 👋
@@ -221,7 +233,7 @@ Yuristlarimiz tez orada javob berishadi.
   `;
 
   bot.sendMessage(chatId, welcomeMessage);
-  pendingRequests[chatId] = { username, messages: [] };
+  pendingRequests[chatId] = { username: username || 'Noma\'lum', messages: [] };
 });
 
 bot.onText(/\/help/, (msg) => {

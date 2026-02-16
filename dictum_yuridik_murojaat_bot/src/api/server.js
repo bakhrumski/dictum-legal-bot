@@ -8,8 +8,8 @@ const os = require('os');
 const fs = require('fs');
 const { pool } = require('../database/db');
 
-// In-memory store for Telegram verification codes
-const verificationCodes = new Map(); // key: cleaned_telegram_username, value: { code, expiresAt, sentAt }
+// Shared in-memory store for Telegram verification codes (used by bot.js too)
+const { verificationCodes } = require('../verification-store');
 
 // Multer config for registration document uploads
 const regUpload = multer({
@@ -2046,7 +2046,7 @@ async function triggerAiScreening(regId, regData) {
   }
 }
 
-// POST /api/send-verification-code — send 4-digit code via Telegram
+// POST /api/send-verification-code — generate code, user picks it up via bot /start
 app.post('/api/send-verification-code', async (req, res) => {
   try {
     const { telegram_username } = req.body;
@@ -2064,27 +2064,13 @@ app.post('/api/send-verification-code', async (req, res) => {
       return res.status(429).json({ error: `${wait} soniya kutib turing` });
     }
 
-    // Resolve chat_id via Telegram API
-    let chatId = null;
-    try {
-      const chat = await bot.getChat('@' + cleanUsername);
-      if (chat && chat.id) chatId = chat.id;
-    } catch (e) { /* username not resolvable */ }
-
-    if (!chatId) {
-      return res.status(400).json({ error: 'Telegram hisobingiz topilmadi. Avval @dictum_yuridik_murojaat_bot ga /start yuboring, keyin qayta urinib ko\'ring.' });
-    }
-
-    // Generate 4-digit code
+    // Generate 4-digit code and store (bot /start handler will deliver it)
     const code = String(Math.floor(1000 + Math.random() * 9000));
-
-    // Send via Telegram
-    await bot.sendMessage(chatId, `🔐 Dictum Dashboard tasdiqlash kodi: ${code}\n\nUshbu kod 5 daqiqa amal qiladi.`);
-
-    // Store with 5-minute expiration
     verificationCodes.set(cleanUsername, { code, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
 
-    res.json({ success: true, message: 'Tasdiqlash kodi Telegram orqali yuborildi' });
+    console.log(`[VERIFY] Code generated for @${cleanUsername}`);
+
+    res.json({ success: true, message: 'Kod yaratildi. Telegram botga /start yuboring.' });
   } catch (error) {
     console.error('[VERIFY CODE] Error:', error);
     res.status(500).json({ error: 'Kod yuborishda xatolik yuz berdi' });
@@ -2463,10 +2449,6 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_mimetype VARCHAR(100)`);
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
-
-    // ONE-TIME: Delete all non-master team members (FK constraints now have ON DELETE SET NULL/CASCADE)
-    const delResult = await pool.query(`DELETE FROM admins WHERE role != 'master' RETURNING full_name`);
-    if (delResult.rows.length > 0) console.log(`[DB] Deleted ${delResult.rows.length} non-master admins:`, delResult.rows.map(r => r.full_name).join(', '));
 
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
