@@ -634,7 +634,6 @@
             let firstInvalid = null;
             requiredFields.forEach(function(field) {
                 const parent = field.closest('.student-fields, .lawyer-fields');
-                if (parent && !parent.style.display !== 'none' && parent.style.display === 'none') return;
                 if (parent) {
                     if (parent.classList.contains('student-fields') && regType !== 'student') return;
                     if (parent.classList.contains('lawyer-fields') && regType !== 'lawyer') return;
@@ -660,8 +659,6 @@
                 document.getElementById('ofertaError').style.display = 'block';
                 return;
             }
-
-            const regType = document.querySelector('.register-form').getAttribute('data-type');
             const formData = new FormData();
             formData.append('type', regType);
             formData.append('first_name', document.getElementById('regFirstName').value.trim());
