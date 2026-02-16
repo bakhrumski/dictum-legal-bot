@@ -9,7 +9,7 @@ const fs = require('fs');
 const https = require('https');
 const path = require('path');
 
-const { verificationCodes, verificationTokens } = require('../verification-store');
+const { verificationTokens } = require('../verification-store');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -210,13 +210,10 @@ bot.onText(/\/start(.*)/, (msg, match) => {
   // Deep link: /start verify_TOKEN — deliver verification code
   if (param.startsWith('verify_')) {
     const deepToken = param.replace('verify_', '');
-    const cleanUsername = verificationTokens.get(deepToken);
-    if (cleanUsername) {
-      const pending = verificationCodes.get(cleanUsername);
-      if (pending && Date.now() < pending.expiresAt) {
-        bot.sendMessage(chatId, `🔐 Dictum Dashboard tasdiqlash kodi: ${pending.code}\n\nUshbu kod 5 daqiqa amal qiladi.\nKodni ro'yxatdan o'tish formasiga kiriting.`);
-        return;
-      }
+    const pending = verificationTokens.get(deepToken);
+    if (pending && Date.now() < pending.expiresAt) {
+      bot.sendMessage(chatId, `🔐 Dictum Dashboard tasdiqlash kodi: ${pending.code}\n\nUshbu kod 5 daqiqa amal qiladi.\nKodni ro'yxatdan o'tish formasiga kiriting.`);
+      return;
     }
     bot.sendMessage(chatId, '⏳ Tasdiqlash kodi topilmadi yoki muddati o\'tgan.\nIltimos, ro\'yxatdan o\'tish sahifasida qayta "Kod yuborish" tugmasini bosing.');
     return;

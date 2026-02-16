@@ -9,7 +9,7 @@ const fs = require('fs');
 const { pool } = require('../database/db');
 
 // Shared in-memory store for Telegram verification codes (used by bot.js too)
-const { verificationCodes, verificationTokens } = require('../verification-store');
+const { verificationTokens } = require('../verification-store');
 const crypto = require('crypto');
 
 // Multer config for registration document uploads
@@ -2050,34 +2050,13 @@ async function triggerAiScreening(regId, regData) {
 // POST /api/send-verification-code — generate code + deep link token
 app.post('/api/send-verification-code', async (req, res) => {
   try {
-    const { telegram_username } = req.body;
-    if (!telegram_username) return res.status(400).json({ error: 'Telegram username kiriting' });
-
-    const cleanUsername = telegram_username.replace(/@/g, '').trim().toLowerCase();
-    if (!cleanUsername || cleanUsername.length < 3) {
-      return res.status(400).json({ error: 'Noto\'g\'ri Telegram username' });
-    }
-
-    // Rate limit: 60 seconds between sends
-    const existing = verificationCodes.get(cleanUsername);
-    if (existing && Date.now() - existing.sentAt < 60000) {
-      const wait = Math.ceil((60000 - (Date.now() - existing.sentAt)) / 1000);
-      return res.status(429).json({ error: `${wait} soniya kutib turing` });
-    }
-
-    // Clean up old token if exists
-    if (existing && existing.token) {
-      verificationTokens.delete(existing.token);
-    }
-
     // Generate 4-digit code + unique deep link token
     const code = String(Math.floor(1000 + Math.random() * 9000));
     const token = crypto.randomBytes(8).toString('hex');
 
-    verificationCodes.set(cleanUsername, { code, token, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
-    verificationTokens.set(token, cleanUsername);
+    verificationTokens.set(token, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
 
-    console.log(`[VERIFY] Code generated for @${cleanUsername}, token: ${token}`);
+    console.log(`[VERIFY] Code generated, token: ${token}`);
 
     res.json({ success: true, token });
   } catch (error) {
@@ -2089,9 +2068,9 @@ app.post('/api/send-verification-code', async (req, res) => {
 // POST /api/register — public self-registration
 app.post('/api/register', regUpload.single('document'), async (req, res) => {
   try {
-    const { first_name, last_name, type, level, specialization, experience_years, license_number, telegram_username, password, verification_code } = req.body;
+    const { first_name, last_name, type, level, specialization, experience_years, license_number, telegram_username, password, verification_code, verification_token } = req.body;
 
-    if (!first_name || !last_name || !telegram_username || !type) {
+    if (!first_name || !last_name || !type) {
       return res.status(400).json({ error: 'Barcha maydonlar to\'ldirilishi shart' });
     }
 
@@ -2107,27 +2086,25 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
       return res.status(400).json({ error: 'Mutaxassislik va guvohnoma raqamini kiriting' });
     }
 
-    const cleanUsername = telegram_username.replace(/@/g, '').trim();
-    if (!cleanUsername || cleanUsername.length < 3) {
-      return res.status(400).json({ error: 'Noto\'g\'ri Telegram username' });
-    }
+    const cleanUsername = telegram_username ? telegram_username.replace(/@/g, '').trim() : '';
 
-    // Verify Telegram code
-    const storedCode = verificationCodes.get(cleanUsername.toLowerCase());
+    // Verify Telegram code via token
+    if (!verification_token || !verification_code) {
+      return res.status(400).json({ error: 'Telegram tasdiqlash kodini kiriting' });
+    }
+    const storedCode = verificationTokens.get(verification_token);
     if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
       return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta kod yuboring.' });
     }
-    // Clean up both maps
-    if (storedCode.token) verificationTokens.delete(storedCode.token);
-    verificationCodes.delete(cleanUsername.toLowerCase());
+    verificationTokens.delete(verification_token);
 
-    // Check duplicate pending
+    // Check duplicate pending (by name since telegram username is optional)
     const existing = await pool.query(
-      `SELECT id FROM registration_requests WHERE telegram_username = $1 AND status = 'pending'`,
-      [cleanUsername]
+      `SELECT id FROM registration_requests WHERE first_name = $1 AND last_name = $2 AND status = 'pending'`,
+      [first_name.trim(), last_name.trim()]
     );
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Bu Telegram username bilan allaqachon so\'rov yuborilgan. Admin javobini kuting.' });
+      return res.status(400).json({ error: 'Sizning ismingiz bilan allaqachon so\'rov yuborilgan. Admin javobini kuting.' });
     }
 
     if (!req.file) {
@@ -2143,9 +2120,10 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     let documentFileId = null;
     let documentFileName = req.file.originalname;
     try {
+      const tgInfo = cleanUsername ? `\n📱 @${cleanUsername}` : '';
       const caption = regType === 'lawyer'
-        ? `📋 Yangi advokat ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📜 ${specialization}\n📱 @${cleanUsername}`
-        : `📋 Yangi student ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📚 ${level}\n📱 @${cleanUsername}`;
+        ? `📋 Yangi advokat ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📜 ${specialization}${tgInfo}`
+        : `📋 Yangi student ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📚 ${level}${tgInfo}`;
       const sentDoc = await bot.sendDocument(process.env.ADMIN_TELEGRAM_ID, req.file.path, { caption }, { filename: req.file.originalname, contentType: req.file.mimetype });
       documentFileId = sentDoc.document.file_id;
     } catch (uploadErr) {

@@ -413,11 +413,12 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Telegram username</label>
-                    <div class="tg-verify-row">
-                        <input type="text" id="regTelegram" placeholder="@username" required>
-                        <button type="button" class="send-code-btn" id="sendCodeBtn" onclick="sendVerificationCode()">Kod yuborish</button>
-                    </div>
+                    <label>Telegram username <span class="label-hint">(ixtiyoriy)</span></label>
+                    <input type="text" id="regTelegram" placeholder="@username">
+                </div>
+                <div class="form-group">
+                    <label>Telegram tasdiqlash</label>
+                    <button type="button" class="send-code-btn" id="sendCodeBtn" onclick="sendVerificationCode()" style="width:100%;padding:13px;border-radius:14px;font-size:14px;">Kod yuborish</button>
                     <div class="verify-success" id="codeSentMsg"></div>
                     <div class="agreement-error" id="codeError" style="display:none"></div>
                 </div>
@@ -693,8 +694,8 @@
 
         // Send verification code
         let codeVerified = false;
+        let verifyToken = '';
         async function sendVerificationCode() {
-            const tgInput = document.getElementById('regTelegram');
             const btn = document.getElementById('sendCodeBtn');
             const errorEl = document.getElementById('codeError');
             const successEl = document.getElementById('codeSentMsg');
@@ -703,15 +704,6 @@
             errorEl.style.display = 'none';
             successEl.classList.remove('show');
 
-            let tgVal = tgInput.value.trim();
-            if (!tgVal) {
-                tgInput.classList.add('input-invalid');
-                tgInput.focus();
-                return;
-            }
-            if (!tgVal.startsWith('@')) tgVal = '@' + tgVal;
-            tgInput.value = tgVal;
-
             btn.disabled = true;
             btn.textContent = 'Yuborilmoqda...';
 
@@ -719,10 +711,11 @@
                 const resp = await fetch('/api/send-verification-code', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_username: tgVal })
+                    body: JSON.stringify({})
                 });
                 const data = await resp.json();
                 if (resp.ok) {
+                    verifyToken = data.token;
                     const deepLink = 'https://t.me/dictum_yuridik_murojaat_bot?start=verify_' + data.token;
                     successEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:#1661BE;font-weight:700;text-decoration:underline;">Kodni olish uchun shu yerni bosing</a> — Telegram ochiladi va kod keladi';
                     successEl.classList.add('show');
@@ -838,6 +831,7 @@
             formData.append('telegram_username', document.getElementById('regTelegram').value.trim());
             formData.append('password', regPwd.value);
             formData.append('verification_code', document.getElementById('regVerifyCode').value.trim());
+            formData.append('verification_token', verifyToken);
 
             if (regType === 'student') {
                 formData.append('level', document.getElementById('regLevel').value);
