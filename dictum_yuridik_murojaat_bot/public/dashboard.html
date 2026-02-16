@@ -4063,7 +4063,7 @@
                 return `<tr class="${isOwnRow ? 'own-row' : ''}">
                     <td>${i + 1}</td>
                     <td><strong>${admin.full_name}</strong>${isOwnRow ? ' <small style="color:#019CE0;">(siz)</small>' : ''}</td>
-                    <td>@${admin.username}</td>
+                    <td>@${admin.telegram_username || admin.username}</td>
                     <td><span class="role-badge role-${admin.role}">${roleLabels[admin.role] || admin.role}</span></td>
                     <td id="timeslot-cell-${admin.id}">${timeslotHtml}</td>
                     <td>${statusHtml}</td>
@@ -6624,7 +6624,7 @@
                 const adminTableData = allAdmins.map((admin, i) => [
                     String(i + 1),
                     admin.full_name,
-                    `@${admin.username}`,
+                    `@${admin.telegram_username || admin.username}`,
                     roleLabels[admin.role] || admin.role,
                     adminAssignedCounts[admin.id] || 0,
                     adminAnswerCounts[admin.full_name] || 0

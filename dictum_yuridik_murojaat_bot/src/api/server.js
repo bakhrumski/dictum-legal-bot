@@ -8,6 +8,9 @@ const os = require('os');
 const fs = require('fs');
 const { pool } = require('../database/db');
 
+// In-memory store for Telegram verification codes
+const verificationCodes = new Map(); // key: cleaned_telegram_username, value: { code, expiresAt, sentAt }
+
 // Multer config for registration document uploads
 const regUpload = multer({
   dest: os.tmpdir(),
@@ -614,7 +617,7 @@ Dictum advokatlik firmasi
 app.get('/api/admins', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, username, full_name, role, duty_start, duty_end, last_active_at, created_at,
+      SELECT id, username, full_name, role, telegram_username, duty_start, duty_end, last_active_at, created_at,
         CASE
           WHEN last_active_at IS NOT NULL
                AND last_active_at > NOW() - INTERVAL '15 minutes'
@@ -2048,10 +2051,55 @@ async function triggerAiScreening(regId, regData) {
   }
 }
 
+// POST /api/send-verification-code — send 4-digit code via Telegram
+app.post('/api/send-verification-code', async (req, res) => {
+  try {
+    const { telegram_username } = req.body;
+    if (!telegram_username) return res.status(400).json({ error: 'Telegram username kiriting' });
+
+    const cleanUsername = telegram_username.replace(/@/g, '').trim().toLowerCase();
+    if (!cleanUsername || cleanUsername.length < 3) {
+      return res.status(400).json({ error: 'Noto\'g\'ri Telegram username' });
+    }
+
+    // Rate limit: 60 seconds between sends
+    const existing = verificationCodes.get(cleanUsername);
+    if (existing && Date.now() - existing.sentAt < 60000) {
+      const wait = Math.ceil((60000 - (Date.now() - existing.sentAt)) / 1000);
+      return res.status(429).json({ error: `${wait} soniya kutib turing` });
+    }
+
+    // Resolve chat_id via Telegram API
+    let chatId = null;
+    try {
+      const chat = await bot.getChat('@' + cleanUsername);
+      if (chat && chat.id) chatId = chat.id;
+    } catch (e) { /* username not resolvable */ }
+
+    if (!chatId) {
+      return res.status(400).json({ error: 'Telegram hisobingiz topilmadi. Avval @dictum_yuridik_murojaat_bot ga /start yuboring, keyin qayta urinib ko\'ring.' });
+    }
+
+    // Generate 4-digit code
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+
+    // Send via Telegram
+    await bot.sendMessage(chatId, `🔐 Dictum Dashboard tasdiqlash kodi: ${code}\n\nUshbu kod 5 daqiqa amal qiladi.`);
+
+    // Store with 5-minute expiration
+    verificationCodes.set(cleanUsername, { code, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
+
+    res.json({ success: true, message: 'Tasdiqlash kodi Telegram orqali yuborildi' });
+  } catch (error) {
+    console.error('[VERIFY CODE] Error:', error);
+    res.status(500).json({ error: 'Kod yuborishda xatolik yuz berdi' });
+  }
+});
+
 // POST /api/register — public self-registration
 app.post('/api/register', regUpload.single('document'), async (req, res) => {
   try {
-    const { first_name, last_name, type, level, specialization, experience_years, license_number, telegram_username, password } = req.body;
+    const { first_name, last_name, type, level, specialization, experience_years, license_number, telegram_username, password, verification_code } = req.body;
 
     if (!first_name || !last_name || !telegram_username || !type) {
       return res.status(400).json({ error: 'Barcha maydonlar to\'ldirilishi shart' });
@@ -2073,6 +2121,13 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     if (!cleanUsername || cleanUsername.length < 3) {
       return res.status(400).json({ error: 'Noto\'g\'ri Telegram username' });
     }
+
+    // Verify Telegram code
+    const storedCode = verificationCodes.get(cleanUsername.toLowerCase());
+    if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
+      return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta kod yuboring.' });
+    }
+    verificationCodes.delete(cleanUsername.toLowerCase());
 
     // Check duplicate pending
     const existing = await pool.query(
@@ -2196,7 +2251,7 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
     const fullName = `${reg.last_name} ${reg.first_name}`;
     const role = reg.type === 'lawyer' ? 'lawyer' : 'student';
 
-    await pool.query('INSERT INTO admins (username, password, full_name, role) VALUES ($1, $2, $3, $4)', [finalUsername, finalHashedPassword, fullName, role]);
+    await pool.query('INSERT INTO admins (username, password, full_name, role, telegram_username) VALUES ($1, $2, $3, $4, $5)', [finalUsername, finalHashedPassword, fullName, role, reg.telegram_username]);
     await pool.query('UPDATE registration_requests SET status = $1, reviewed_at = NOW(), reviewed_by = $2 WHERE id = $3', ['approved', req.session.adminId, req.params.id]);
 
     // Try to notify via Telegram
@@ -2313,6 +2368,7 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_start TIME DEFAULT NULL`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_end TIME DEFAULT NULL`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP DEFAULT NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100) DEFAULT NULL`);
 
     // Users table migrations (ensure all columns exist)
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE`);
