@@ -470,6 +470,12 @@
             document.querySelector('.register-form').setAttribute('data-type', type);
             document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
             event.target.classList.add('active');
+            // Reset agreements on type switch
+            document.getElementById('privacyCheck').checked = false;
+            document.getElementById('ofertaCheck').checked = false;
+            document.getElementById('privacyError').style.display = 'none';
+            document.getElementById('ofertaError').style.display = 'none';
+            updateRegBtn();
         }
 
         // File handling
