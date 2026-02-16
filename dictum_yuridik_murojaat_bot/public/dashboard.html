@@ -5255,6 +5255,7 @@
         }
 
         function escapeHtml(text) {
+            if (!text) return '';
             return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
@@ -5752,7 +5753,7 @@
                         ${aiBadge}
                     </div>
                     <div class="reg-card-meta">
-                        <span>@${escapeHtml(reg.telegram_username)}</span>
+                        <span>${reg.telegram_username ? '@' + escapeHtml(reg.telegram_username) : ''}</span>
                         ${extra}
                         <span>${date}</span>
                     </div>
@@ -5804,7 +5805,7 @@
                 ${reg.specialization ? `<div class="reg-detail-row"><span class="reg-detail-label">Mutaxassislik</span><span class="reg-detail-value">${escapeHtml(reg.specialization)}</span></div>` : ''}
                 ${reg.experience_years ? `<div class="reg-detail-row"><span class="reg-detail-label">Tajriba</span><span class="reg-detail-value">${reg.experience_years} yil</span></div>` : ''}
                 ${reg.license_number ? `<div class="reg-detail-row"><span class="reg-detail-label">Guvohnoma</span><span class="reg-detail-value">${escapeHtml(reg.license_number)}</span></div>` : ''}
-                <div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(reg.telegram_username)}</span></div>
+                ${reg.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(reg.telegram_username)}</span></div>` : ''}
                 <div class="reg-detail-row"><span class="reg-detail-label">Sana</span><span class="reg-detail-value">${new Date(reg.created_at).toLocaleString('uz-UZ')}</span></div>
                 <div class="reg-detail-row"><span class="reg-detail-label">Hujjat</span><span class="reg-detail-value">${docHtml}</span></div>
                 ${aiHtml}
