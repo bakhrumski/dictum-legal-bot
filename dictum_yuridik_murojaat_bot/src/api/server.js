@@ -303,6 +303,7 @@ app.get('/', (req, res) => {
 // Get request stats
 app.get('/api/stats', requireAuth, async (req, res) => {
   try {
+    const studentFilter = req.session.role === 'student' ? `WHERE assigned_to = ${parseInt(req.session.adminId)}` : '';
     const result = await pool.query(`
       SELECT
         COUNT(*) AS total,
@@ -311,6 +312,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'student_responded') AS student_responded,
         COUNT(*) FILTER (WHERE status = 'answered') AS answered
       FROM requests
+      ${studentFilter}
     `);
     res.json(result.rows[0]);
   } catch (error) {
@@ -322,8 +324,10 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 // Get all requests
 app.get('/api/requests', requireAuth, async (req, res) => {
   try {
+    // Students only see requests assigned to them
+    const studentFilter = req.session.role === 'student' ? `WHERE r.assigned_to = ${parseInt(req.session.adminId)}` : '';
     const result = await pool.query(`
-      SELECT 
+      SELECT
         r.id,
         r.user_id,
         r.category,
@@ -353,9 +357,10 @@ app.get('/api/requests', requireAuth, async (req, res) => {
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
+      ${studentFilter}
       ORDER BY r.created_at DESC
     `);
-    
+
     const rows = result.rows.map(r => anonymizeRequest(r, req.session.role));
     res.json(rows);
   } catch (error) {

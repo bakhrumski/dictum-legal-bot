@@ -3927,6 +3927,10 @@
                     aiArchive.style.display = 'none';
                 }
 
+                // Hide PDF button for non-master users
+                var pdfBtn = document.querySelector('.header-icon-btn[title="PDF"]');
+                if (pdfBtn && data.role !== 'master') pdfBtn.style.display = 'none';
+
                 // Show registration requests section for master only
                 const regSection = document.getElementById('regSection');
                 if (regSection) {
