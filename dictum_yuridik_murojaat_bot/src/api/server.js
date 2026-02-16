@@ -746,19 +746,24 @@ app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Admin topilmadi' });
     }
     // Remove all FK references to this admin before deleting
-    await pool.query('DELETE FROM chat_messages WHERE admin_id = $1', [adminId]);
-    await pool.query('DELETE FROM ai_feedback WHERE admin_id = $1', [adminId]);
-    await pool.query('DELETE FROM ai_analyses WHERE admin_id = $1', [adminId]);
-    await pool.query('UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1', [adminId]);
-    await pool.query('UPDATE requests SET student_admin_id = NULL WHERE student_admin_id = $1', [adminId]);
-    try { await pool.query('UPDATE block_history SET performed_by = NULL WHERE performed_by = $1', [adminId]); } catch(e) {}
-    await pool.query('UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by = $1', [adminId]);
+    const tables = [
+      `DELETE FROM chat_messages WHERE admin_id = $1`,
+      `DELETE FROM ai_feedback WHERE admin_id = $1`,
+      `DELETE FROM ai_analyses WHERE admin_id = $1`,
+      `UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1`,
+      `UPDATE requests SET student_admin_id = NULL WHERE student_admin_id = $1`,
+      `UPDATE block_history SET performed_by = NULL WHERE performed_by = $1`,
+      `UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by = $1`,
+    ];
+    for (const sql of tables) {
+      try { await pool.query(sql, [adminId]); } catch(e) { console.log(`[DELETE ADMIN] Skipped: ${e.message}`); }
+    }
     // Delete the admin
     await pool.query('DELETE FROM admins WHERE id = $1', [adminId]);
     res.json({ success: true, deleted: adminCheck.rows[0].full_name });
   } catch (error) {
-    console.error('Error deleting admin:', error);
-    res.status(500).json({ error: 'Admin o\'chirib bo\'lmadi' });
+    console.error('Error deleting admin:', error.message, error.detail || '');
+    res.status(500).json({ error: 'Admin o\'chirib bo\'lmadi: ' + error.message });
   }
 });
 
@@ -2447,20 +2452,22 @@ async function runMigrations() {
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
 
-    // ONE-TIME: Delete all non-master team members
-    const nmIds = (await pool.query(`SELECT id FROM admins WHERE role != 'master'`)).rows.map(r => r.id);
-    if (nmIds.length > 0) {
-      const idList = nmIds.join(',');
-      // Delete or nullify every FK reference
-      await pool.query(`DELETE FROM chat_messages WHERE admin_id IN (${idList})`);
-      await pool.query(`DELETE FROM ai_feedback WHERE admin_id IN (${idList})`);
-      await pool.query(`DELETE FROM ai_analyses WHERE admin_id IN (${idList})`);
-      await pool.query(`UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to IN (${idList})`);
-      await pool.query(`UPDATE requests SET student_admin_id = NULL WHERE student_admin_id IN (${idList})`);
-      await pool.query(`UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by IN (${idList})`);
-      try { await pool.query(`UPDATE block_history SET performed_by = NULL WHERE performed_by IN (${idList})`); } catch(e) {}
-      const delResult = await pool.query(`DELETE FROM admins WHERE id IN (${idList}) RETURNING full_name`);
-      console.log(`[DB] Deleted ${delResult.rows.length} non-master admins:`, delResult.rows.map(r => r.full_name).join(', '));
+    // ONE-TIME: Delete all non-master team members (each admin individually)
+    const nmRows = (await pool.query(`SELECT id, full_name FROM admins WHERE role != 'master'`)).rows;
+    for (const nm of nmRows) {
+      try {
+        await pool.query(`DELETE FROM chat_messages WHERE admin_id = $1`, [nm.id]);
+        await pool.query(`DELETE FROM ai_feedback WHERE admin_id = $1`, [nm.id]);
+        await pool.query(`DELETE FROM ai_analyses WHERE admin_id = $1`, [nm.id]);
+        await pool.query(`UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1`, [nm.id]);
+        await pool.query(`UPDATE requests SET student_admin_id = NULL WHERE student_admin_id = $1`, [nm.id]);
+        await pool.query(`UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by = $1`, [nm.id]);
+        try { await pool.query(`UPDATE block_history SET performed_by = NULL WHERE performed_by = $1`, [nm.id]); } catch(e) {}
+        await pool.query(`DELETE FROM admins WHERE id = $1`, [nm.id]);
+        console.log(`[DB] Deleted admin: ${nm.full_name} (id=${nm.id})`);
+      } catch (delErr) {
+        console.error(`[DB] Failed to delete admin ${nm.full_name} (id=${nm.id}):`, delErr.message);
+      }
     }
 
     console.log('[DB] Migrations completed successfully');
