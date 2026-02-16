@@ -212,6 +212,8 @@ bot.onText(/\/start(.*)/, (msg, match) => {
     const deepToken = param.replace('verify_', '');
     const pending = verificationTokens.get(deepToken);
     if (pending && Date.now() < pending.expiresAt) {
+      // Save chat_id so we can notify this user on approve/reject
+      pending.chatId = chatId;
       bot.sendMessage(chatId, `🔐 Dictum Dashboard tasdiqlash kodi: ${pending.code}\n\nUshbu kod 5 daqiqa amal qiladi.\nKodni ro'yxatdan o'tish formasiga kiriting.`);
       return;
     }

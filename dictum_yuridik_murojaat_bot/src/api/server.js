@@ -2096,6 +2096,7 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
       return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta kod yuboring.' });
     }
+    const applicantChatId = storedCode.chatId || null;
     verificationTokens.delete(verification_token);
 
     // Check duplicate pending (by name since telegram username is optional)
@@ -2136,9 +2137,9 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO registration_requests (type, first_name, last_name, level, specialization, experience_years, license_number, telegram_username, document_file_id, document_file_name, password_hash, document_base64, document_mimetype)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
-      [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername, documentFileId, documentFileName, passwordHash, documentBase64, documentMimetype]
+      `INSERT INTO registration_requests (type, first_name, last_name, level, specialization, experience_years, license_number, telegram_username, document_file_id, document_file_name, password_hash, document_base64, document_mimetype, telegram_chat_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+      [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername || null, documentFileId, documentFileName, passwordHash, documentBase64, documentMimetype, applicantChatId]
     );
 
     // Trigger AI screening asynchronously
@@ -2197,8 +2198,10 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
 
     const reg = regResult.rows[0];
 
-    // Use Telegram username as login username (what the applicant expects)
-    let baseUsername = reg.telegram_username.toLowerCase().replace(/[^a-z0-9_]/g, '').substring(0, 30);
+    // Use Telegram username as login username, fall back to name-based
+    const rawUsername = reg.telegram_username || `${reg.first_name}_${reg.last_name}`;
+    let baseUsername = rawUsername.toLowerCase().replace(/[^a-z0-9_]/g, '').substring(0, 30);
+    if (!baseUsername) baseUsername = 'user';
     let finalUsername = baseUsername;
     let suffix = 0;
     while ((await pool.query('SELECT id FROM admins WHERE LOWER(username) = $1', [finalUsername.toLowerCase()])).rows.length > 0) {
@@ -2224,29 +2227,12 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
     await pool.query('INSERT INTO admins (username, password, full_name, role, telegram_username) VALUES ($1, $2, $3, $4, $5)', [finalUsername, finalHashedPassword, fullName, role, reg.telegram_username]);
     await pool.query('UPDATE registration_requests SET status = $1, reviewed_at = NOW(), reviewed_by = $2 WHERE id = $3', ['approved', req.session.adminId, req.params.id]);
 
-    // Try to notify via Telegram
+    // Notify via Telegram using stored chat_id from verification
     const parolText = reg.password_hash ? "Siz ro'yxatdan o'tishda yaratgan parol" : '(Admin tomonidan beriladi)';
     const approvalMsg = `✅ Tabriklaymiz! Ro'yxatdan o'tish so'rovingiz tasdiqlandi!\n\n🔑 Kirish ma'lumotlari:\n👤 Username: ${finalUsername}\n🔒 Parol: ${parolText}\n\n🌐 Dashboard: ${process.env.DASHBOARD_URL || 'https://' + (process.env.WEBHOOK_DOMAIN || 'localhost:3000')}\n\nDictum advokatlik firmasi`;
     let telegramSent = false;
     try {
-      let chatId = null;
-      // 1) Search users table by telegram username (bot users who sent requests)
-      const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
-      if (tgUser.rows.length > 0) {
-        chatId = tgUser.rows[0].telegram_id;
-      }
-      // 2) Search admins table for linked telegram account
-      if (!chatId) {
-        const tgAdmin = await pool.query('SELECT telegram_chat_id FROM admins WHERE telegram_chat_id IS NOT NULL AND LOWER(username) = $1', [finalUsername.toLowerCase()]);
-        if (tgAdmin.rows.length > 0) chatId = tgAdmin.rows[0].telegram_chat_id;
-      }
-      // 3) Try resolving @username via Telegram API (works if user has interacted with bot before)
-      if (!chatId) {
-        try {
-          const chat = await bot.getChat('@' + reg.telegram_username);
-          if (chat && chat.id) chatId = chat.id;
-        } catch (e) { /* @username lookup not available for this user */ }
-      }
+      const chatId = reg.telegram_chat_id;
       if (chatId) {
         await bot.sendMessage(chatId, approvalMsg);
         telegramSent = true;
@@ -2272,23 +2258,11 @@ app.post('/api/registration-requests/:id/reject', requireMasterAdmin, async (req
     const reg = regResult.rows[0];
     await pool.query('UPDATE registration_requests SET status = $1, rejection_reason = $2, reviewed_at = NOW(), reviewed_by = $3 WHERE id = $4', ['rejected', reason, req.session.adminId, req.params.id]);
 
-    // Try to notify via Telegram
+    // Notify via Telegram using stored chat_id from verification
     const rejectMsg = `❌ Ro'yxatdan o'tish so'rovingiz rad etildi.\n\nSabab: ${reason}\n\nDictum advokatlik firmasi`;
     let telegramSent = false;
     try {
-      let chatId = null;
-      // 1) Search users table by telegram username
-      const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
-      if (tgUser.rows.length > 0) {
-        chatId = tgUser.rows[0].telegram_id;
-      }
-      // 2) Try resolving @username via Telegram API
-      if (!chatId) {
-        try {
-          const chat = await bot.getChat('@' + reg.telegram_username);
-          if (chat && chat.id) chatId = chat.id;
-        } catch (e) { /* @username lookup not available */ }
-      }
+      const chatId = reg.telegram_chat_id;
       if (chatId) {
         await bot.sendMessage(chatId, rejectMsg);
         telegramSent = true;
@@ -2436,6 +2410,7 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS password_hash TEXT`);
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_base64 TEXT`);
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_mimetype VARCHAR(100)`);
+    await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT`);
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
 
