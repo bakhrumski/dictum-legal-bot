@@ -2097,7 +2097,6 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
       return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta kod yuboring.' });
     }
     const applicantChatId = storedCode.chatId || null;
-    verificationTokens.delete(verification_token);
 
     // Check duplicate pending (by name since telegram username is optional)
     const existing = await pool.query(
@@ -2141,6 +2140,9 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
       [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername || null, documentFileId, documentFileName, passwordHash, documentBase64, documentMimetype, applicantChatId]
     );
+
+    // Registration succeeded — now safe to delete the verification token
+    verificationTokens.delete(verification_token);
 
     // Trigger AI screening asynchronously
     triggerAiScreening(result.rows[0].id, { type: regType, first_name, last_name, level, specialization, experience_years, license_number, telegram_username: cleanUsername, document_file_id: documentFileId }).catch(e => console.error('[AI SCREENING]', e));
