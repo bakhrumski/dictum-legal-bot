@@ -1973,7 +1973,20 @@ async function triggerAiScreening(regId, regData) {
         parts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
         docFetched = true;
       } catch (e) {
-        console.error('[AI SCREENING] Could not fetch document:', e.message);
+        console.error('[AI SCREENING] Could not fetch document from Telegram:', e.message);
+      }
+    }
+
+    // Fallback: use DB-stored base64 document
+    if (!docFetched) {
+      try {
+        const dbDoc = await pool.query('SELECT document_base64, document_mimetype FROM registration_requests WHERE id = $1', [regId]);
+        if (dbDoc.rows.length > 0 && dbDoc.rows[0].document_base64) {
+          parts.push({ inline_data: { mime_type: dbDoc.rows[0].document_mimetype, data: dbDoc.rows[0].document_base64 } });
+          docFetched = true;
+        }
+      } catch (e) {
+        console.error('[AI SCREENING] Could not fetch document from DB:', e.message);
       }
     }
 
@@ -2067,7 +2080,12 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
       return res.status(400).json({ error: 'Iltimos, isbotlovchi hujjatni yuklang' });
     }
 
-    // Upload document to Telegram for persistent storage
+    // Read file into base64 for DB storage (reliable fallback)
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const documentBase64 = fileBuffer.toString('base64');
+    const documentMimetype = req.file.mimetype;
+
+    // Try uploading to Telegram for persistent storage
     let documentFileId = null;
     let documentFileName = req.file.originalname;
     try {
@@ -2077,8 +2095,7 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
       const sentDoc = await bot.sendDocument(process.env.ADMIN_TELEGRAM_ID, req.file.path, { caption }, { filename: req.file.originalname, contentType: req.file.mimetype });
       documentFileId = sentDoc.document.file_id;
     } catch (uploadErr) {
-      console.error('[REGISTER] Telegram upload error:', uploadErr.message, uploadErr);
-      // Don't block registration — proceed without Telegram file_id
+      console.error('[REGISTER] Telegram upload error:', uploadErr.message);
       documentFileId = 'upload_failed';
     } finally {
       try { fs.unlinkSync(req.file.path); } catch (e) {}
@@ -2087,9 +2104,9 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO registration_requests (type, first_name, last_name, level, specialization, experience_years, license_number, telegram_username, document_file_id, document_file_name, password_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-      [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername, documentFileId, documentFileName, passwordHash]
+      `INSERT INTO registration_requests (type, first_name, last_name, level, specialization, experience_years, license_number, telegram_username, document_file_id, document_file_name, password_hash, document_base64, document_mimetype)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername, documentFileId, documentFileName, passwordHash, documentBase64, documentMimetype]
     );
 
     // Trigger AI screening asynchronously
@@ -2112,7 +2129,13 @@ app.get('/api/registration-requests', requireMasterAdmin, async (req, res) => {
     if (status) { query += ' WHERE rr.status = $1'; params.push(status); }
     query += ' ORDER BY rr.created_at DESC';
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    // Strip large base64 data from list response, send flag instead
+    const rows = result.rows.map(r => {
+      const { document_base64, ...rest } = r;
+      rest.has_document_base64 = !!document_base64;
+      return rest;
+    });
+    res.json(rows);
   } catch (error) {
     console.error('[REG REQUESTS] Error:', error);
     res.status(500).json({ error: 'So\'rovlar yuklashda xatolik' });
@@ -2233,8 +2256,26 @@ app.post('/api/registration-requests/:id/reject', requireMasterAdmin, async (req
 // GET /api/registration-document/:fileId — master only
 app.get('/api/registration-document/:fileId', requireMasterAdmin, async (req, res) => {
   try {
-    const fileLink = await bot.getFileLink(req.params.fileId);
-    res.json({ fileLink });
+    const fileId = req.params.fileId;
+    // If Telegram file_id is valid, use Telegram
+    if (fileId && fileId !== 'upload_failed') {
+      try {
+        const fileLink = await bot.getFileLink(fileId);
+        return res.json({ fileLink });
+      } catch (e) {
+        console.error('[REG DOC] Telegram getFileLink failed:', e.message);
+      }
+    }
+    // Fallback: serve from DB base64
+    const regId = req.query.regId;
+    if (regId) {
+      const dbDoc = await pool.query('SELECT document_base64, document_mimetype, document_file_name FROM registration_requests WHERE id = $1', [regId]);
+      if (dbDoc.rows.length > 0 && dbDoc.rows[0].document_base64) {
+        const row = dbDoc.rows[0];
+        return res.json({ dataUrl: `data:${row.document_mimetype};base64,${row.document_base64}`, fileName: row.document_file_name });
+      }
+    }
+    res.status(404).json({ error: 'Hujjat topilmadi' });
   } catch (error) {
     res.status(500).json({ error: 'Hujjatni olishda xatolik' });
   }
@@ -2318,6 +2359,8 @@ async function runMigrations() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_reg_requests_status ON registration_requests(status)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_reg_requests_created ON registration_requests(created_at DESC)`);
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS password_hash TEXT`);
+    await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_base64 TEXT`);
+    await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_mimetype VARCHAR(100)`);
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
     console.log('[DB] Migrations completed successfully');

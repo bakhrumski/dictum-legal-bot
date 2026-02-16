@@ -5789,8 +5789,8 @@
                 aiHtml = '<div class="reg-ai-section flagged"><h4>&#8987; AI tekshiruv hali tugallanmagan</h4></div>';
             }
 
-            let docHtml = reg.document_file_id
-                ? `<a href="#" onclick="viewRegDoc('${reg.document_file_id}');return false;" style="color:#0C7ECF;font-weight:600;">Hujjatni ko'rish</a>`
+            let docHtml = (reg.document_file_id || reg.has_document_base64)
+                ? `<a href="#" onclick="viewRegDoc('${reg.document_file_id || ''}', ${reg.id});return false;" style="color:#0C7ECF;font-weight:600;">Hujjatni ko'rish</a>`
                 : '<span style="color:var(--text-muted);">Yuklanmagan</span>';
 
             box.innerHTML = `
@@ -5813,12 +5813,18 @@
             document.getElementById('regDetailOverlay').classList.add('active');
         }
 
-        async function viewRegDoc(fileId) {
+        async function viewRegDoc(fileId, regId) {
             try {
-                const r = await fetch('/api/registration-document/' + fileId, { credentials: 'same-origin' });
+                const url = '/api/registration-document/' + encodeURIComponent(fileId || 'none') + '?regId=' + regId;
+                const r = await fetch(url, { credentials: 'same-origin' });
                 const data = await r.json();
-                if (data.fileLink) window.open(data.fileLink, '_blank');
-                else alert('Hujjatni olishda xatolik');
+                if (data.fileLink) {
+                    window.open(data.fileLink, '_blank');
+                } else if (data.dataUrl) {
+                    window.open(data.dataUrl, '_blank');
+                } else {
+                    alert('Hujjat topilmadi');
+                }
             } catch (e) { alert('Xatolik: ' + e.message); }
         }
 
