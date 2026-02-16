@@ -378,7 +378,7 @@
                 <div class="lawyer-fields">
                     <div class="form-group">
                         <label>Mutaxassislik</label>
-                        <select id="regSpecialization">
+                        <select id="regSpecialization" required>
                             <option value="">Tanlang...</option>
                             <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
                             <option value="Jinoyat huquqi">Jinoyat huquqi</option>
@@ -392,11 +392,11 @@
                     </div>
                     <div class="form-group">
                         <label>Tajriba (yil)</label>
-                        <input type="number" id="regExperience" min="0" max="50" placeholder="Masalan: 5">
+                        <input type="text" id="regExperience" inputmode="numeric" pattern="[0-9]*" placeholder="Masalan: 5" required>
                     </div>
                     <div class="form-group">
                         <label>Advokatlk guvohnoma raqami</label>
-                        <input type="text" id="regLicense" placeholder="Guvohnoma raqami">
+                        <input type="text" id="regLicense" placeholder="Guvohnoma raqami" required>
                     </div>
                 </div>
 
@@ -637,6 +637,11 @@
                 errorDiv.textContent = 'Xatolik: ' + error.message;
                 errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
             }
+        });
+
+        // Tajriba: allow only numbers
+        document.getElementById('regExperience').addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
         });
 
         // Remove red border only when user types or changes value (not on focus)
