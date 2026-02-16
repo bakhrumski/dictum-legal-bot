@@ -3902,7 +3902,7 @@
 
                 const name = data.fullName || data.username || '';
                 const initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-                const roleNames = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
+                const roleNames = { 'master': 'Master Admin', 'lawyer': 'Yurist', 'student': 'Student' };
                 const roleText = roleNames[data.role] || data.role;
                 const roleClass = 'role-' + data.role;
 
