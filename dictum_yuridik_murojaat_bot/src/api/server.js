@@ -745,20 +745,7 @@ app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
     if (adminCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Admin topilmadi' });
     }
-    // Remove all FK references to this admin before deleting
-    const tables = [
-      `DELETE FROM chat_messages WHERE admin_id = $1`,
-      `DELETE FROM ai_feedback WHERE admin_id = $1`,
-      `DELETE FROM ai_analyses WHERE admin_id = $1`,
-      `UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1`,
-      `UPDATE requests SET student_admin_id = NULL WHERE student_admin_id = $1`,
-      `UPDATE block_history SET performed_by = NULL WHERE performed_by = $1`,
-      `UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by = $1`,
-    ];
-    for (const sql of tables) {
-      try { await pool.query(sql, [adminId]); } catch(e) { console.log(`[DELETE ADMIN] Skipped: ${e.message}`); }
-    }
-    // Delete the admin
+    // Delete the admin (FK constraints have ON DELETE SET NULL/CASCADE)
     await pool.query('DELETE FROM admins WHERE id = $1', [adminId]);
     res.json({ success: true, deleted: adminCheck.rows[0].full_name });
   } catch (error) {
@@ -2385,6 +2372,16 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS block_reason TEXT`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)`);
 
+    // Fix FK constraints on requests/block_history — add ON DELETE SET NULL so admins can be deleted
+    try {
+      await pool.query(`ALTER TABLE requests DROP CONSTRAINT IF EXISTS requests_assigned_to_fkey`);
+      await pool.query(`ALTER TABLE requests ADD CONSTRAINT requests_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES admins(id) ON DELETE SET NULL`);
+      await pool.query(`ALTER TABLE requests DROP CONSTRAINT IF EXISTS requests_student_admin_id_fkey`);
+      await pool.query(`ALTER TABLE requests ADD CONSTRAINT requests_student_admin_id_fkey FOREIGN KEY (student_admin_id) REFERENCES admins(id) ON DELETE SET NULL`);
+      await pool.query(`ALTER TABLE block_history DROP CONSTRAINT IF EXISTS block_history_performed_by_fkey`);
+      await pool.query(`ALTER TABLE block_history ADD CONSTRAINT block_history_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES admins(id) ON DELETE SET NULL`);
+    } catch(e) { console.log('[DB] FK constraint migration:', e.message); }
+
     // Requests table migrations (ensure all columns exist)
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS category VARCHAR(255) DEFAULT 'Boshqa'`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS student_response TEXT`);
@@ -2452,23 +2449,9 @@ async function runMigrations() {
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
 
-    // ONE-TIME: Delete all non-master team members (each admin individually)
-    const nmRows = (await pool.query(`SELECT id, full_name FROM admins WHERE role != 'master'`)).rows;
-    for (const nm of nmRows) {
-      try {
-        await pool.query(`DELETE FROM chat_messages WHERE admin_id = $1`, [nm.id]);
-        await pool.query(`DELETE FROM ai_feedback WHERE admin_id = $1`, [nm.id]);
-        await pool.query(`DELETE FROM ai_analyses WHERE admin_id = $1`, [nm.id]);
-        await pool.query(`UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1`, [nm.id]);
-        await pool.query(`UPDATE requests SET student_admin_id = NULL WHERE student_admin_id = $1`, [nm.id]);
-        await pool.query(`UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by = $1`, [nm.id]);
-        try { await pool.query(`UPDATE block_history SET performed_by = NULL WHERE performed_by = $1`, [nm.id]); } catch(e) {}
-        await pool.query(`DELETE FROM admins WHERE id = $1`, [nm.id]);
-        console.log(`[DB] Deleted admin: ${nm.full_name} (id=${nm.id})`);
-      } catch (delErr) {
-        console.error(`[DB] Failed to delete admin ${nm.full_name} (id=${nm.id}):`, delErr.message);
-      }
-    }
+    // ONE-TIME: Delete all non-master team members (FK constraints now have ON DELETE SET NULL/CASCADE)
+    const delResult = await pool.query(`DELETE FROM admins WHERE role != 'master' RETURNING full_name`);
+    if (delResult.rows.length > 0) console.log(`[DB] Deleted ${delResult.rows.length} non-master admins:`, delResult.rows.map(r => r.full_name).join(', '));
 
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
