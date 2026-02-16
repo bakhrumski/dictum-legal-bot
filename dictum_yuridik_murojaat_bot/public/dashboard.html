@@ -264,6 +264,7 @@
             transform: translate(-50%, -50%);
             display: flex;
             align-items: center;
+            gap: 12px;
         }
         .header-right {
             position: relative;
@@ -3357,28 +3358,17 @@
             .stats { flex-wrap: wrap; }
             .stat-card { flex: 1 1 45%; min-width: 140px; }
 
-            /* --- Mobile header: move icons next to profile --- */
-            header { height: auto; padding: 12px 16px; flex-wrap: wrap; }
+            /* --- Mobile header: icons centered between logo and profile --- */
+            header { height: auto; padding: 12px 16px; display: flex; flex-wrap: nowrap; align-items: center; }
+            .header-left { flex-shrink: 0; }
             .header-left h1 { font-size: 20px; letter-spacing: 4px; }
             .header-left .subtitle { font-size: 10px; }
             .header-center {
                 position: static !important;
                 transform: none !important;
-                order: 0;
+                flex: 1;
+                justify-content: center;
             }
-            .header-right {
-                display: flex !important;
-                align-items: center;
-                gap: 4px !important;
-                order: 1;
-                margin-left: auto;
-            }
-            header {
-                display: flex;
-                flex-wrap: nowrap;
-            }
-            .header-left { flex-shrink: 1; min-width: 0; }
-            .header-center { flex-shrink: 0; }
             .header-right { flex-shrink: 0; }
             .header-icon-btn, .header-chat-btn { width: 36px; height: 36px; }
             .header-icon-btn svg, .header-chat-btn svg { width: 16px; height: 16px; }
