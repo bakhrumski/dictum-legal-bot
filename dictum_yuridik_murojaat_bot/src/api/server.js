@@ -9,7 +9,8 @@ const fs = require('fs');
 const { pool } = require('../database/db');
 
 // Shared in-memory store for Telegram verification codes (used by bot.js too)
-const { verificationCodes } = require('../verification-store');
+const { verificationCodes, verificationTokens } = require('../verification-store');
+const crypto = require('crypto');
 
 // Multer config for registration document uploads
 const regUpload = multer({
@@ -2046,7 +2047,7 @@ async function triggerAiScreening(regId, regData) {
   }
 }
 
-// POST /api/send-verification-code — generate code, user picks it up via bot /start
+// POST /api/send-verification-code — generate code + deep link token
 app.post('/api/send-verification-code', async (req, res) => {
   try {
     const { telegram_username } = req.body;
@@ -2064,13 +2065,21 @@ app.post('/api/send-verification-code', async (req, res) => {
       return res.status(429).json({ error: `${wait} soniya kutib turing` });
     }
 
-    // Generate 4-digit code and store (bot /start handler will deliver it)
+    // Clean up old token if exists
+    if (existing && existing.token) {
+      verificationTokens.delete(existing.token);
+    }
+
+    // Generate 4-digit code + unique deep link token
     const code = String(Math.floor(1000 + Math.random() * 9000));
-    verificationCodes.set(cleanUsername, { code, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
+    const token = crypto.randomBytes(8).toString('hex');
 
-    console.log(`[VERIFY] Code generated for @${cleanUsername}`);
+    verificationCodes.set(cleanUsername, { code, token, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
+    verificationTokens.set(token, cleanUsername);
 
-    res.json({ success: true, message: 'Kod yaratildi. Telegram botga /start yuboring.' });
+    console.log(`[VERIFY] Code generated for @${cleanUsername}, token: ${token}`);
+
+    res.json({ success: true, token });
   } catch (error) {
     console.error('[VERIFY CODE] Error:', error);
     res.status(500).json({ error: 'Kod yuborishda xatolik yuz berdi' });
@@ -2108,6 +2117,8 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
       return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta kod yuboring.' });
     }
+    // Clean up both maps
+    if (storedCode.token) verificationTokens.delete(storedCode.token);
     verificationCodes.delete(cleanUsername.toLowerCase());
 
     // Check duplicate pending

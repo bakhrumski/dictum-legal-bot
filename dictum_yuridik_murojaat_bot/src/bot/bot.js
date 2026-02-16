@@ -9,7 +9,7 @@ const fs = require('fs');
 const https = require('https');
 const path = require('path');
 
-const { verificationCodes } = require('../verification-store');
+const { verificationCodes, verificationTokens } = require('../verification-store');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -202,18 +202,24 @@ bot.on('callback_query', async (callbackQuery) => {
 
 // ========== START & HELP COMMANDS ==========
 
-bot.onText(/\/start/, (msg) => {
+bot.onText(/\/start(.*)/, (msg, match) => {
   const chatId = msg.chat.id;
   const username = msg.from.username || '';
+  const param = (match[1] || '').trim();
 
-  // Check if this user has a pending verification code for registration
-  if (username) {
-    const cleanUsername = username.toLowerCase();
-    const pending = verificationCodes.get(cleanUsername);
-    if (pending && Date.now() < pending.expiresAt) {
-      bot.sendMessage(chatId, `🔐 Dictum Dashboard tasdiqlash kodi: ${pending.code}\n\nUshbu kod 5 daqiqa amal qiladi.\nKodni ro'yxatdan o'tish formasiga kiriting.`);
-      return;
+  // Deep link: /start verify_TOKEN — deliver verification code
+  if (param.startsWith('verify_')) {
+    const deepToken = param.replace('verify_', '');
+    const cleanUsername = verificationTokens.get(deepToken);
+    if (cleanUsername) {
+      const pending = verificationCodes.get(cleanUsername);
+      if (pending && Date.now() < pending.expiresAt) {
+        bot.sendMessage(chatId, `🔐 Dictum Dashboard tasdiqlash kodi: ${pending.code}\n\nUshbu kod 5 daqiqa amal qiladi.\nKodni ro'yxatdan o'tish formasiga kiriting.`);
+        return;
+      }
     }
+    bot.sendMessage(chatId, '⏳ Tasdiqlash kodi topilmadi yoki muddati o\'tgan.\nIltimos, ro\'yxatdan o\'tish sahifasida qayta "Kod yuborish" tugmasini bosing.');
+    return;
   }
 
   const welcomeMessage = `

@@ -723,7 +723,8 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    successEl.innerHTML = 'Endi <a href="https://t.me/dictum_yuridik_murojaat_bot" target="_blank" style="color:#1661BE;font-weight:700;text-decoration:underline;">@dictum_yuridik_murojaat_bot</a> ga /start yuboring — kod Telegramga keladi';
+                    const deepLink = 'https://t.me/dictum_yuridik_murojaat_bot?start=verify_' + data.token;
+                    successEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:#1661BE;font-weight:700;text-decoration:underline;">Kodni olish uchun shu yerni bosing</a> — Telegram ochiladi va kod keladi';
                     successEl.classList.add('show');
                     verifyGroup.classList.add('show');
                     document.getElementById('regVerifyCode').focus();
