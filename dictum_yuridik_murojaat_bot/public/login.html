@@ -92,10 +92,11 @@
         }
         select { cursor: pointer; }
         select option { background: var(--login-card); color: var(--login-text); }
-        input[type="number"] { -moz-appearance: textfield; }
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
             opacity: 1;
+            -webkit-appearance: inner-spin-button;
+            background: transparent;
             filter: var(--spin-filter, none);
         }
         [data-theme="dark"] { --spin-filter: invert(1); }
@@ -349,7 +350,7 @@
 
             <form id="registerForm" novalidate>
                 <div class="form-group">
-                    <label>Familiya <span class="label-hint">(HEMIS platformasidagi)</span></label>
+                    <label>Familiya <span class="label-hint">(HEMISdagi ism-familiya bilan bir xil bo'lishi kerak)</span></label>
                     <input type="text" id="regLastName" placeholder="Familiya" required>
                 </div>
                 <div class="form-group">
