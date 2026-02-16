@@ -748,8 +748,11 @@ app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
     // Remove all FK references to this admin before deleting
     await pool.query('UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1', [adminId]);
     await pool.query('UPDATE requests SET student_admin_id = NULL WHERE student_admin_id = $1', [adminId]);
-    await pool.query('UPDATE block_history SET performed_by = NULL WHERE performed_by = $1', [adminId]);
+    try { await pool.query('UPDATE block_history SET performed_by = NULL WHERE performed_by = $1', [adminId]); } catch(e) {}
     await pool.query('UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by = $1', [adminId]);
+    await pool.query('UPDATE chat_messages SET admin_id = NULL WHERE admin_id = $1', [adminId]);
+    await pool.query('UPDATE ai_feedback SET admin_id = NULL WHERE admin_id = $1', [adminId]);
+    await pool.query('UPDATE ai_analyses SET admin_id = NULL WHERE admin_id = $1', [adminId]);
     // Delete the admin
     await pool.query('DELETE FROM admins WHERE id = $1', [adminId]);
     res.json({ success: true, deleted: adminCheck.rows[0].full_name });
@@ -2444,11 +2447,16 @@ async function runMigrations() {
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
 
-    // ONE-TIME: Delete all non-master team members
-    await pool.query(`UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to IN (SELECT id FROM admins WHERE role != 'master')`);
-    await pool.query(`UPDATE requests SET student_admin_id = NULL WHERE student_admin_id IN (SELECT id FROM admins WHERE role != 'master')`);
-    try { await pool.query(`UPDATE block_history SET performed_by = NULL WHERE performed_by IN (SELECT id FROM admins WHERE role != 'master')`); } catch(e) {}
-    await pool.query(`UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by IN (SELECT id FROM admins WHERE role != 'master')`);
+    // ONE-TIME: Delete all non-master team members (clean ALL FK refs first)
+    const nonMasterIds = `SELECT id FROM admins WHERE role != 'master'`;
+    await pool.query(`UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to IN (${nonMasterIds})`);
+    await pool.query(`UPDATE requests SET student_admin_id = NULL WHERE student_admin_id IN (${nonMasterIds})`);
+    await pool.query(`UPDATE requests SET responded_by = NULL WHERE responded_by IN (SELECT full_name FROM admins WHERE role != 'master')`);
+    try { await pool.query(`UPDATE block_history SET performed_by = NULL WHERE performed_by IN (${nonMasterIds})`); } catch(e) {}
+    await pool.query(`UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by IN (${nonMasterIds})`);
+    await pool.query(`UPDATE chat_messages SET admin_id = NULL WHERE admin_id IN (${nonMasterIds})`);
+    await pool.query(`UPDATE ai_feedback SET admin_id = NULL WHERE admin_id IN (${nonMasterIds})`);
+    await pool.query(`UPDATE ai_analyses SET admin_id = NULL WHERE admin_id IN (${nonMasterIds})`);
     const delResult = await pool.query(`DELETE FROM admins WHERE role != 'master' RETURNING id, full_name`);
     if (delResult.rows.length > 0) console.log(`[DB] Deleted ${delResult.rows.length} non-master admins`);
 
