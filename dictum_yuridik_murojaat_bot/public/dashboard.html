@@ -3384,11 +3384,16 @@
             .header-icon-btn svg, .header-chat-btn svg { width: 16px; height: 16px; }
             .theme-toggle-header { transform: scale(0.85); }
 
-            /* --- Mobile Jamoa table: horizontal scroll like GitHub --- */
-            .admin-management { padding: 14px; overflow: visible; }
-            .admin-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
-            .admin-table thead, .admin-table tbody, .admin-table tr { display: table; width: 100%; table-layout: auto; }
-            .admin-table th, .admin-table td { white-space: nowrap; padding: 8px 12px; font-size: 12px; }
+            /* --- Mobile Jamoa table: show only Ism, Rol, Holati --- */
+            .admin-management { padding: 14px; overflow: hidden; }
+            .admin-table { display: table; width: 100%; overflow: hidden; }
+            .admin-table th:nth-child(1), .admin-table td:nth-child(1),
+            .admin-table th:nth-child(3), .admin-table td:nth-child(3),
+            .admin-table th:nth-child(5), .admin-table td:nth-child(5),
+            .admin-table th:nth-child(7), .admin-table td:nth-child(7) {
+                display: none !important;
+            }
+            .admin-table th, .admin-table td { padding: 8px 10px; font-size: 12px; }
         }
     </style>
 </head>
