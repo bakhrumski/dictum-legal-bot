@@ -402,6 +402,17 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Parol <span class="label-hint">(kamida 6 ta belgi)</span></label>
+                    <input type="password" id="regPassword" placeholder="••••••" minlength="6" required>
+                </div>
+                <div class="form-group">
+                    <label>Parolni tasdiqlang</label>
+                    <input type="password" id="regPasswordConfirm" placeholder="••••••" required>
+                    <div class="agreement-error" id="passwordMatchError" style="display:none">Parollar mos kelmaydi!</div>
+                    <div class="agreement-error" id="passwordLengthError" style="display:none">Parol kamida 6 ta belgi bo'lishi kerak!</div>
+                </div>
+
+                <div class="form-group">
                     <label>Tasdiqlovchi hujjat <span class="label-hint">(mygov.uzdan ma'lumotnoma)</span></label>
                     <div class="file-zone" id="fileZone">
                         <input type="file" id="regDocument" accept=".jpg,.jpeg,.png,.webp,.pdf" onchange="handleFile(this)">
@@ -681,6 +692,22 @@
                 return;
             }
 
+            // Validate password
+            var regPwd = document.getElementById('regPassword');
+            var regPwdConfirm = document.getElementById('regPasswordConfirm');
+            document.getElementById('passwordMatchError').style.display = 'none';
+            document.getElementById('passwordLengthError').style.display = 'none';
+            if (regPwd.value.length < 6) {
+                document.getElementById('passwordLengthError').style.display = 'block';
+                regPwd.focus();
+                return;
+            }
+            if (regPwd.value !== regPwdConfirm.value) {
+                document.getElementById('passwordMatchError').style.display = 'block';
+                regPwdConfirm.focus();
+                return;
+            }
+
             // Validate agreements
             if (!document.getElementById('privacyCheck').checked) {
                 document.getElementById('privacyError').style.display = 'block';
@@ -695,6 +722,7 @@
             formData.append('first_name', document.getElementById('regFirstName').value.trim());
             formData.append('last_name', document.getElementById('regLastName').value.trim());
             formData.append('telegram_username', document.getElementById('regTelegram').value.trim());
+            formData.append('password', regPwd.value);
 
             if (regType === 'student') {
                 formData.append('level', document.getElementById('regLevel').value);

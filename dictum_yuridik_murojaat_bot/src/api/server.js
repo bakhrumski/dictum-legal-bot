@@ -1956,16 +1956,19 @@ async function triggerAiScreening(regId, regData) {
 
   try {
     let parts = [];
+    let docFetched = false;
 
     // If document uploaded, fetch and include as vision input
-    if (regData.document_file_id) {
+    if (regData.document_file_id && regData.document_file_id !== 'upload_failed') {
       try {
         const fileLink = await bot.getFileLink(regData.document_file_id);
         const resp = await fetch(fileLink);
         const buffer = await resp.arrayBuffer();
         const base64Data = Buffer.from(buffer).toString('base64');
-        const mimeType = fileLink.toLowerCase().includes('.pdf') ? 'application/pdf' : 'image/jpeg';
+        const ext = fileLink.toLowerCase();
+        const mimeType = ext.includes('.pdf') ? 'application/pdf' : ext.includes('.png') ? 'image/png' : ext.includes('.webp') ? 'image/webp' : 'image/jpeg';
         parts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
+        docFetched = true;
       } catch (e) {
         console.error('[AI SCREENING] Could not fetch document:', e.message);
       }
@@ -1976,7 +1979,11 @@ async function triggerAiScreening(regId, regData) {
       ? `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Advokat\nMutaxassislik: ${regData.specialization || '-'}\nTajriba: ${regData.experience_years || '-'} yil\nGuvohnoma raqami: ${regData.license_number || '-'}\nTelegram: @${regData.telegram_username}`
       : `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Student\nBosqich: ${regData.level || '-'}\nTelegram: @${regData.telegram_username}`;
 
-    const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${parts.length > 0 ? 'Yuklangan hujjatni ko\'ring.' : 'Hujjat yuklanmagan.'}\n\nTekshiring:\n1. Hujjatdagi ism-familiya ariza beruvchi kiritgan ma'lumotlarga mosmi?\n2. Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?\n3. Barcha ma'lumotlar to'liqmi?\n4. Hujjat haqiqiymi yoki shubhalimi?\n${isLawyer ? '5. Advokatlk guvohnoma raqami formatiga mosmi?\n6. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
+    const docNote = docFetched
+      ? 'Yuklangan hujjatni ko\'ring va tekshiring.'
+      : 'Hujjat yuklangan, lekin texnik sabablarga ko\'ra olinmadi. Faqat boshqa ma\'lumotlar asosida baholang. document_authentic ni true deb belgilang.';
+
+    const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${docNote}\n\nTekshiring:\n1. ${docFetched ? 'Hujjatdagi ism-familiya ariza beruvchi kiritgan ma\'lumotlarga mosmi?' : 'Ism-familiya to\'g\'ri formatdami?'}\n2. ${docFetched ? 'Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?' : 'Ma\'lumotlar to\'liqmi?'}\n3. Barcha ma'lumotlar to'liqmi?\n4. ${docFetched ? 'Hujjat haqiqiymi yoki shubhalimi?' : 'Hujjat texnik sabablarga ko\'ra ko\'rib bo\'lmadi — true deb belgilang.'}\n${isLawyer ? '5. Advokatlk guvohnoma raqami formatiga mosmi?\n6. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
 
     parts.push({ text: screenPrompt });
 
@@ -2021,10 +2028,14 @@ async function triggerAiScreening(regId, regData) {
 // POST /api/register — public self-registration
 app.post('/api/register', regUpload.single('document'), async (req, res) => {
   try {
-    const { first_name, last_name, type, level, specialization, experience_years, license_number, telegram_username } = req.body;
+    const { first_name, last_name, type, level, specialization, experience_years, license_number, telegram_username, password } = req.body;
 
     if (!first_name || !last_name || !telegram_username || !type) {
       return res.status(400).json({ error: 'Barcha maydonlar to\'ldirilishi shart' });
+    }
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
     }
 
     const regType = type === 'lawyer' ? 'lawyer' : 'student';
@@ -2070,10 +2081,12 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
       try { fs.unlinkSync(req.file.path); } catch (e) {}
     }
 
+    const passwordHash = await bcrypt.hash(password, 10);
+
     const result = await pool.query(
-      `INSERT INTO registration_requests (type, first_name, last_name, level, specialization, experience_years, license_number, telegram_username, document_file_id, document_file_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-      [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername, documentFileId, documentFileName]
+      `INSERT INTO registration_requests (type, first_name, last_name, level, specialization, experience_years, license_number, telegram_username, document_file_id, document_file_name, password_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+      [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername, documentFileId, documentFileName, passwordHash]
     );
 
     // Trigger AI screening asynchronously
@@ -2135,20 +2148,27 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
       finalUsername = username + suffix;
     }
 
-    // Generate random password
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let password = '';
-    for (let i = 0; i < 8; i++) password += chars.charAt(Math.floor(Math.random() * chars.length));
+    // Use password from registration or generate fallback
+    let finalHashedPassword;
+    if (reg.password_hash) {
+      finalHashedPassword = reg.password_hash;
+    } else {
+      // Fallback for old registrations without password
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+      let tempPwd = '';
+      for (let i = 0; i < 8; i++) tempPwd += chars.charAt(Math.floor(Math.random() * chars.length));
+      finalHashedPassword = await bcrypt.hash(tempPwd, 10);
+    }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
     const fullName = `${reg.last_name} ${reg.first_name}`;
     const role = reg.type === 'lawyer' ? 'lawyer' : 'student';
 
-    await pool.query('INSERT INTO admins (username, password, full_name, role) VALUES ($1, $2, $3, $4)', [finalUsername, hashedPassword, fullName, role]);
+    await pool.query('INSERT INTO admins (username, password, full_name, role) VALUES ($1, $2, $3, $4)', [finalUsername, finalHashedPassword, fullName, role]);
     await pool.query('UPDATE registration_requests SET status = $1, reviewed_at = NOW(), reviewed_by = $2 WHERE id = $3', ['approved', req.session.adminId, req.params.id]);
 
     // Try to notify via Telegram
-    const approvalMsg = `✅ Tabriklaymiz! Ro'yxatdan o'tish so'rovingiz tasdiqlandi!\n\n🔑 Kirish ma'lumotlari:\n👤 Username: ${finalUsername}\n🔒 Parol: ${password}\n\n🌐 Dashboard: ${process.env.DASHBOARD_URL || 'https://' + (process.env.WEBHOOK_DOMAIN || 'localhost:3000')}\n\nDictum advokatlik firmasi`;
+    const parolText = reg.password_hash ? "Siz ro'yxatdan o'tishda yaratgan parol" : '(Admin tomonidan beriladi)';
+    const approvalMsg = `✅ Tabriklaymiz! Ro'yxatdan o'tish so'rovingiz tasdiqlandi!\n\n🔑 Kirish ma'lumotlari:\n👤 Username: ${finalUsername}\n🔒 Parol: ${parolText}\n\n🌐 Dashboard: ${process.env.DASHBOARD_URL || 'https://' + (process.env.WEBHOOK_DOMAIN || 'localhost:3000')}\n\nDictum advokatlik firmasi`;
     let telegramSent = false;
     try {
       const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
@@ -2158,7 +2178,7 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
       }
     } catch (e) { console.error('[APPROVE] Telegram error:', e.message); }
 
-    res.json({ success: true, credentials: { username: finalUsername, password, telegram: reg.telegram_username, fullName }, telegramSent, telegramMessage: approvalMsg });
+    res.json({ success: true, credentials: { username: finalUsername, telegram: reg.telegram_username, fullName, userSetPassword: !!reg.password_hash }, telegramSent, telegramMessage: approvalMsg });
   } catch (error) {
     console.error('[APPROVE] Error:', error);
     res.status(500).json({ error: 'Tasdiqlashda xatolik' });
@@ -2279,6 +2299,7 @@ async function runMigrations() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_reg_requests_status ON registration_requests(status)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_reg_requests_created ON registration_requests(created_at DESC)`);
+    await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS password_hash TEXT`);
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
