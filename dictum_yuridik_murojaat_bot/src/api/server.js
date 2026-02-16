@@ -738,7 +738,7 @@ app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
     // Remove all FK references to this admin before deleting
     await pool.query('UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to = $1', [adminId]);
     await pool.query('UPDATE requests SET student_admin_id = NULL WHERE student_admin_id = $1', [adminId]);
-    await pool.query('UPDATE admin_actions SET performed_by = NULL WHERE performed_by = $1', [adminId]);
+    await pool.query('UPDATE block_history SET performed_by = NULL WHERE performed_by = $1', [adminId]);
     await pool.query('UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by = $1', [adminId]);
     // Delete the admin
     await pool.query('DELETE FROM admins WHERE id = $1', [adminId]);
