@@ -232,7 +232,11 @@
             background: var(--login-input-bg);
         }
         .agreement-item input[type="checkbox"]:checked + .check-icon {
-            background: #1661BE; border-color: #1661BE;
+            background: transparent; border-color: var(--login-input-border);
+            color: #000000;
+        }
+        [data-theme="dark"] .agreement-item input[type="checkbox"]:checked + .check-icon {
+            color: #ffffff;
         }
         .agreement-item input[type="checkbox"]:checked + .check-icon svg {
             opacity: 1; transform: scale(1);
@@ -419,13 +423,13 @@
                 <div class="agreement-section">
                     <div class="agreement-item" onclick="openPolicy('privacy')">
                         <input type="checkbox" id="privacyCheck">
-                        <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         <span><a>Maxfiylik siyosati</a>ni o'qing va tasdiqlang</span>
                     </div>
                     <div class="agreement-error" id="privacyError">Maxfiylik siyosatini tasdiqlang!</div>
                     <div class="agreement-item" onclick="openPolicy('oferta')">
                         <input type="checkbox" id="ofertaCheck">
-                        <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         <span><a>Ommaviy oferta</a>ni o'qing va tasdiqlang</span>
                     </div>
                     <div class="agreement-error" id="ofertaError">Ommaviy ofertani tasdiqlang!</div>
