@@ -238,9 +238,11 @@ app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
   try {
+    // Strip @ prefix and make case-insensitive (users may enter Telegram-style username)
+    const cleanUsername = (username || '').replace(/^@/, '').trim();
     const result = await pool.query(
-      'SELECT * FROM admins WHERE username = $1',
-      [username]
+      'SELECT * FROM admins WHERE LOWER(username) = LOWER($1)',
+      [cleanUsername]
     );
 
     if (result.rows.length > 0) {
@@ -2165,13 +2167,13 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
 
     const reg = regResult.rows[0];
 
-    // Generate username
-    let username = (reg.first_name.toLowerCase() + '_' + reg.last_name.toLowerCase()).replace(/[^a-z0-9_]/g, '').substring(0, 30);
-    let finalUsername = username;
+    // Use Telegram username as login username (what the applicant expects)
+    let baseUsername = reg.telegram_username.toLowerCase().replace(/[^a-z0-9_]/g, '').substring(0, 30);
+    let finalUsername = baseUsername;
     let suffix = 0;
-    while ((await pool.query('SELECT id FROM admins WHERE username = $1', [finalUsername])).rows.length > 0) {
+    while ((await pool.query('SELECT id FROM admins WHERE LOWER(username) = $1', [finalUsername.toLowerCase()])).rows.length > 0) {
       suffix++;
-      finalUsername = username + suffix;
+      finalUsername = baseUsername + suffix;
     }
 
     // Use password from registration or generate fallback
