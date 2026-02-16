@@ -2272,7 +2272,7 @@ app.get('/api/registration-document/:fileId', requireMasterAdmin, async (req, re
       const dbDoc = await pool.query('SELECT document_base64, document_mimetype, document_file_name FROM registration_requests WHERE id = $1', [regId]);
       if (dbDoc.rows.length > 0 && dbDoc.rows[0].document_base64) {
         const row = dbDoc.rows[0];
-        return res.json({ dataUrl: `data:${row.document_mimetype};base64,${row.document_base64}`, fileName: row.document_file_name });
+        return res.json({ base64: row.document_base64, mimetype: row.document_mimetype, fileName: row.document_file_name });
       }
     }
     res.status(404).json({ error: 'Hujjat topilmadi' });

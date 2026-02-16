@@ -5820,8 +5820,14 @@
                 const data = await r.json();
                 if (data.fileLink) {
                     window.open(data.fileLink, '_blank');
-                } else if (data.dataUrl) {
-                    window.open(data.dataUrl, '_blank');
+                } else if (data.base64 && data.mimetype) {
+                    // Convert base64 to Blob URL (browsers can't render data: URLs for PDFs)
+                    var byteChars = atob(data.base64);
+                    var byteArr = new Uint8Array(byteChars.length);
+                    for (var i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+                    var blob = new Blob([byteArr], { type: data.mimetype });
+                    var blobUrl = URL.createObjectURL(blob);
+                    window.open(blobUrl, '_blank');
                 } else {
                     alert('Hujjat topilmadi');
                 }
