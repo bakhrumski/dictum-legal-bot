@@ -96,8 +96,7 @@
         }
         input.input-invalid, select.input-invalid {
             border-color: #e74c3c !important;
-            box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.2) !important;
-            animation: inputShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+            box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1) !important;
         }
         @keyframes inputShake {
             0%, 100% { transform: translateX(0); }
@@ -628,6 +627,13 @@
             const errorDiv = document.getElementById('regError');
             errorDiv.classList.remove('show');
 
+            // Auto-prepend @ to telegram username if missing
+            const telegramInput = document.getElementById('regTelegram');
+            const tgVal = telegramInput.value.trim();
+            if (tgVal && !tgVal.startsWith('@')) {
+                telegramInput.value = '@' + tgVal;
+            }
+
             // Custom validation: highlight empty required fields with red border
             const regType = document.querySelector('.register-form').getAttribute('data-type');
             const requiredFields = this.querySelectorAll('input[required], select[required]');
@@ -638,8 +644,8 @@
                     if (parent.classList.contains('student-fields') && regType !== 'student') return;
                     if (parent.classList.contains('lawyer-fields') && regType !== 'lawyer') return;
                 }
-                if (!field.value.trim()) {
-                    field.classList.remove('input-invalid');
+                field.classList.remove('input-invalid');
+                if (!field.value.trim() || (field.tagName === 'SELECT' && !field.value)) {
                     void field.offsetWidth;
                     field.classList.add('input-invalid');
                     if (!firstInvalid) firstInvalid = field;
