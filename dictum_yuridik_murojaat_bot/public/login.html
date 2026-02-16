@@ -569,10 +569,18 @@
 
             title.textContent = type === 'privacy' ? 'Maxfiylik siyosati' : 'Ommaviy oferta';
             body.innerHTML = type === 'privacy' ? PRIVACY_TEXT : OFERTA_TEXT;
-            body.scrollTop = 0;
             btn.disabled = true;
             hint.textContent = 'Pastga aylantiring';
             overlay.classList.add('active');
+            // Reset scroll to top after overlay is visible
+            requestAnimationFrame(function() {
+                body.scrollTop = 0;
+                // If content fits without scrolling, enable button immediately
+                if (body.scrollHeight <= body.clientHeight + 5) {
+                    btn.disabled = false;
+                    hint.textContent = '';
+                }
+            });
         }
 
         function checkPolicyScroll() {
