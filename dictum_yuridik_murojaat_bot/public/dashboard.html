@@ -5829,18 +5829,20 @@
                 const data = await r.json();
                 if (data.success) {
                     const c = data.credentials;
+                    const parolLine = c.userSetPassword ? "Parol: <code>Foydalanuvchi o'zi yaratgan</code>" : (c.password ? "Parol: <code>" + c.password + "</code>" : "");
+                    const copyText = c.userSetPassword ? 'Username: ' + c.username : 'Username: ' + c.username + '\\nParol: ' + (c.password || '');
                     const actions = document.getElementById('regDetailActions');
                     if (actions) {
                         actions.innerHTML = `<div class="reg-cred-box">
                             <strong>&#10004; Hisob yaratildi!</strong><br><br>
                             Username: <code>${c.username}</code><br>
-                            Parol: <code>${c.password}</code><br>
+                            ${parolLine}<br>
                             Telegram: <code>@${c.telegram}</code><br>
-                            ${data.telegramSent ? '<br><span style="color:#27ae60;">&#10004; Telegram orqali yuborildi</span>' : '<br><span style="color:#f39c12;">&#9888; Telegram orqali yuborib bo\'lmadi. Qo\'lda yuboring.</span>'}
-                            <br><button class="reg-copy-btn" onclick="navigator.clipboard.writeText('Username: ${c.username}\\nParol: ${c.password}');this.textContent='Nusxalandi!'">Nusxalash</button>
+                            ${data.telegramSent ? '<br><span style="color:#27ae60;">&#10004; Telegram orqali yuborildi</span>' : '<br><span style="color:#f39c12;">&#9888; Telegram orqali yuborib bo\'lmadi. Qo\'lda yuboring:</span><br><pre style="white-space:pre-wrap;font-size:12px;margin-top:6px;padding:8px;background:var(--card-bg);border-radius:6px;">' + (data.telegramMessage || '') + '</pre>'}
+                            <br><button class="reg-copy-btn" onclick="navigator.clipboard.writeText('${copyText}');this.textContent='Nusxalandi!'">Nusxalash</button>
                         </div>`;
                     } else {
-                        alert('Hisob yaratildi!\n\nUsername: ' + c.username + '\nParol: ' + c.password);
+                        alert('Hisob yaratildi!\n\nUsername: ' + c.username);
                     }
                     loadRegRequests();
                     loadRegStats();
@@ -5859,9 +5861,19 @@
                 });
                 const data = await r.json();
                 if (data.success) {
-                    document.getElementById('regDetailOverlay').classList.remove('active');
-                    loadRegRequests();
-                    loadRegStats();
+                    const actions = document.getElementById('regDetailActions');
+                    if (actions) {
+                        actions.innerHTML = `<div class="reg-cred-box" style="border-left:4px solid #e74c3c;">
+                            <strong style="color:#e74c3c;">&#10008; Rad etildi</strong><br><br>
+                            Sabab: ${reason}<br>
+                            ${data.telegramSent ? '<br><span style="color:#27ae60;">&#10004; Telegram orqali yuborildi</span>' : '<br><span style="color:#f39c12;">&#9888; Telegram orqali yuborib bo\'lmadi</span>'}
+                        </div>`;
+                    }
+                    setTimeout(function() {
+                        document.getElementById('regDetailOverlay').classList.remove('active');
+                        loadRegRequests();
+                        loadRegStats();
+                    }, 2000);
                 } else { alert(data.error || 'Xatolik'); }
             } catch (e) { alert('Xatolik: ' + e.message); }
         }

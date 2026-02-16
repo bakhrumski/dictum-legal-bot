@@ -2171,9 +2171,17 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
     const approvalMsg = `✅ Tabriklaymiz! Ro'yxatdan o'tish so'rovingiz tasdiqlandi!\n\n🔑 Kirish ma'lumotlari:\n👤 Username: ${finalUsername}\n🔒 Parol: ${parolText}\n\n🌐 Dashboard: ${process.env.DASHBOARD_URL || 'https://' + (process.env.WEBHOOK_DOMAIN || 'localhost:3000')}\n\nDictum advokatlik firmasi`;
     let telegramSent = false;
     try {
+      // Try users table first (bot users), then admins table (linked accounts)
+      let chatId = null;
       const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
       if (tgUser.rows.length > 0) {
-        await bot.sendMessage(tgUser.rows[0].telegram_id, approvalMsg);
+        chatId = tgUser.rows[0].telegram_id;
+      } else {
+        const tgAdmin = await pool.query('SELECT telegram_chat_id FROM admins WHERE telegram_chat_id IS NOT NULL AND LOWER(username) = $1', [finalUsername.toLowerCase()]);
+        if (tgAdmin.rows.length > 0) chatId = tgAdmin.rows[0].telegram_chat_id;
+      }
+      if (chatId) {
+        await bot.sendMessage(chatId, approvalMsg);
         telegramSent = true;
       }
     } catch (e) { console.error('[APPROVE] Telegram error:', e.message); }
@@ -2198,14 +2206,21 @@ app.post('/api/registration-requests/:id/reject', requireMasterAdmin, async (req
     await pool.query('UPDATE registration_requests SET status = $1, rejection_reason = $2, reviewed_at = NOW(), reviewed_by = $3 WHERE id = $4', ['rejected', reason, req.session.adminId, req.params.id]);
 
     // Try to notify via Telegram
+    const rejectMsg = `❌ Ro'yxatdan o'tish so'rovingiz rad etildi.\n\nSabab: ${reason}\n\nDictum advokatlik firmasi`;
+    let telegramSent = false;
     try {
+      let chatId = null;
       const tgUser = await pool.query('SELECT telegram_id FROM users WHERE LOWER(username) = $1', [reg.telegram_username.toLowerCase()]);
       if (tgUser.rows.length > 0) {
-        await bot.sendMessage(tgUser.rows[0].telegram_id, `❌ Ro'yxatdan o'tish so'rovingiz rad etildi.\n\nSabab: ${reason}\n\nDictum advokatlik firmasi`);
+        chatId = tgUser.rows[0].telegram_id;
+      }
+      if (chatId) {
+        await bot.sendMessage(chatId, rejectMsg);
+        telegramSent = true;
       }
     } catch (e) { console.error('[REJECT] Telegram error:', e.message); }
 
-    res.json({ success: true });
+    res.json({ success: true, telegramSent, telegramMessage: rejectMsg });
   } catch (error) {
     console.error('[REJECT] Error:', error);
     res.status(500).json({ error: 'Rad etishda xatolik' });
