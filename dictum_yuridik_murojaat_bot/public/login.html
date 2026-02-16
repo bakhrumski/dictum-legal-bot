@@ -224,8 +224,10 @@
             transition: all 0.2s ease;
         }
         .agreement-item { cursor: pointer; }
-        .agreement-item a { color: #ffffff; text-decoration: none; cursor: pointer; font-weight: 500; }
-        [data-theme="dark"] .agreement-item a { color: #58a6ff; }
+        .agreement-item a { color: #000000; text-decoration: none; cursor: pointer; font-weight: 600; }
+        .agreement-item a:active, .agreement-item a:visited { color: #000000; }
+        [data-theme="dark"] .agreement-item a { color: #ffffff; }
+        [data-theme="dark"] .agreement-item a:active, [data-theme="dark"] .agreement-item a:visited { color: #ffffff; }
         .agreement-error { color: #e74c3c; font-size: 12px; margin-top: -4px; margin-bottom: 8px; display: none; }
 
         /* Policy modal */
