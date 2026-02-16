@@ -2055,17 +2055,17 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
 
     // Upload document to Telegram for persistent storage
     let documentFileId = null;
-    let documentFileName = null;
+    let documentFileName = req.file.originalname;
     try {
       const caption = regType === 'lawyer'
         ? `📋 Yangi advokat ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📜 ${specialization}\n📱 @${cleanUsername}`
         : `📋 Yangi student ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📚 ${level}\n📱 @${cleanUsername}`;
       const sentDoc = await bot.sendDocument(process.env.ADMIN_TELEGRAM_ID, req.file.path, { caption }, { filename: req.file.originalname, contentType: req.file.mimetype });
       documentFileId = sentDoc.document.file_id;
-      documentFileName = req.file.originalname;
     } catch (uploadErr) {
-      console.error('[REGISTER] Telegram upload error:', uploadErr.message);
-      return res.status(500).json({ error: 'Hujjatni yuklashda xatolik' });
+      console.error('[REGISTER] Telegram upload error:', uploadErr.message, uploadErr);
+      // Don't block registration — proceed without Telegram file_id
+      documentFileId = 'upload_failed';
     } finally {
       try { fs.unlinkSync(req.file.path); } catch (e) {}
     }
