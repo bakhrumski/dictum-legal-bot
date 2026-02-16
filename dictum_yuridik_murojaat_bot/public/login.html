@@ -94,6 +94,16 @@
             outline: none; border-color: #019CE0;
             box-shadow: 0 0 0 4px rgba(1, 156, 224, 0.15);
         }
+        input.input-invalid, select.input-invalid {
+            border-color: #e74c3c !important;
+            box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.2) !important;
+            animation: inputShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+        }
+        @keyframes inputShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
         .btn {
             width: 100%;
             background: linear-gradient(135deg, #1661BE, #0C7ECF);
@@ -330,7 +340,7 @@
                 <button onclick="setRegType('lawyer')">Advokat</button>
             </div>
 
-            <form id="registerForm">
+            <form id="registerForm" novalidate>
                 <div class="form-group">
                     <label>Familiya <span class="label-hint">(HEMIS platformasidagi)</span></label>
                     <input type="text" id="regLastName" placeholder="Familiya" required>
@@ -605,11 +615,41 @@
             }
         });
 
+        // Remove red border on input focus/change
+        document.querySelectorAll('#registerForm input, #registerForm select').forEach(function(el) {
+            el.addEventListener('focus', function() { this.classList.remove('input-invalid'); });
+            el.addEventListener('input', function() { this.classList.remove('input-invalid'); });
+            el.addEventListener('change', function() { this.classList.remove('input-invalid'); });
+        });
+
         // Register form
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const errorDiv = document.getElementById('regError');
             errorDiv.classList.remove('show');
+
+            // Custom validation: highlight empty required fields with red border
+            const regType = document.querySelector('.register-form').getAttribute('data-type');
+            const requiredFields = this.querySelectorAll('input[required], select[required]');
+            let firstInvalid = null;
+            requiredFields.forEach(function(field) {
+                const parent = field.closest('.student-fields, .lawyer-fields');
+                if (parent && !parent.style.display !== 'none' && parent.style.display === 'none') return;
+                if (parent) {
+                    if (parent.classList.contains('student-fields') && regType !== 'student') return;
+                    if (parent.classList.contains('lawyer-fields') && regType !== 'lawyer') return;
+                }
+                if (!field.value.trim()) {
+                    field.classList.remove('input-invalid');
+                    void field.offsetWidth;
+                    field.classList.add('input-invalid');
+                    if (!firstInvalid) firstInvalid = field;
+                }
+            });
+            if (firstInvalid) {
+                firstInvalid.focus();
+                return;
+            }
 
             // Validate agreements
             if (!document.getElementById('privacyCheck').checked) {
