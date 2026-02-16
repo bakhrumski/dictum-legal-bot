@@ -2444,6 +2444,14 @@ async function runMigrations() {
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
 
+    // ONE-TIME: Delete all non-master team members
+    await pool.query(`UPDATE requests SET assigned_to = NULL, assigned_at = NULL WHERE assigned_to IN (SELECT id FROM admins WHERE role != 'master')`);
+    await pool.query(`UPDATE requests SET student_admin_id = NULL WHERE student_admin_id IN (SELECT id FROM admins WHERE role != 'master')`);
+    try { await pool.query(`UPDATE block_history SET performed_by = NULL WHERE performed_by IN (SELECT id FROM admins WHERE role != 'master')`); } catch(e) {}
+    await pool.query(`UPDATE registration_requests SET reviewed_by = NULL WHERE reviewed_by IN (SELECT id FROM admins WHERE role != 'master')`);
+    const delResult = await pool.query(`DELETE FROM admins WHERE role != 'master' RETURNING id, full_name`);
+    if (delResult.rows.length > 0) console.log(`[DB] Deleted ${delResult.rows.length} non-master admins`);
+
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
