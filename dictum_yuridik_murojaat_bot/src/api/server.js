@@ -2416,6 +2416,7 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_by INTEGER`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS block_reason TEXT`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP DEFAULT NOW()`);
 
     // Drop ALL FK constraints referencing admins, re-add with ON DELETE SET NULL
     try {
