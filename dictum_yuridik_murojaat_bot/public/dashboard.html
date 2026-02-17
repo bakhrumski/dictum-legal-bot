@@ -2832,7 +2832,20 @@
         .admin-management.collapsed .toggle-chevron {
             transform: rotate(-90deg);
         }
-        .admin-management.collapsed .admin-table {
+        .jamoa-content {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .jamoa-content .admin-table {
+            flex: 1;
+            min-width: 0;
+        }
+        .jamoa-content .rankings-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+        }
+        .admin-management.collapsed .jamoa-content {
             display: none;
         }
         .admin-management.collapsed .admin-management-header {
@@ -3037,28 +3050,14 @@
             background: #fdedec;
         }
 
-        /* Two-column layout: requests + rankings sidebar */
         .main-content-area {
-            display: flex;
-            gap: 20px;
             margin-top: 20px;
             margin-bottom: 20px;
-            align-items: stretch;
-        }
-        .main-content-area .requests-container {
-            flex: 1;
-            min-width: 0;
-            margin-bottom: 0;
         }
         .rankings-sidebar {
-            width: 280px;
-            flex-shrink: 0;
             display: flex;
             flex-direction: column;
             gap: 15px;
-        }
-        .rankings-sidebar .ranking-card:last-child {
-            flex: 1;
         }
         .ranking-card {
             background: var(--glass-bg);
@@ -3356,8 +3355,8 @@
         .mc-res-stat.worst .stat-val { color: #e74c3c; }
 
         @media (max-width: 1024px) {
-            .main-content-area { flex-direction: column; }
-            .rankings-sidebar { width: 100%; flex-direction: row; }
+            .jamoa-content { flex-direction: column; }
+            .jamoa-content .rankings-sidebar { width: 100%; flex-direction: row; }
             .ranking-card { flex: 1; }
             .monte-carlo-section { grid-template-columns: 1fr; }
         }
@@ -3367,7 +3366,7 @@
             body.chat-open { padding-right: 0; overflow: hidden; }
             .admin-table th, .admin-table td { padding: 8px 10px; font-size: 12px; }
             .admin-management-header { flex-direction: row; gap: 10px; }
-            .rankings-sidebar { flex-direction: column; }
+            .jamoa-content .rankings-sidebar { flex-direction: column; width: 100%; }
             .stats { flex-wrap: wrap; }
             .stat-card { flex: 1 1 45%; min-width: 140px; }
 
@@ -3537,22 +3536,35 @@
                 </div>
                 <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="event.stopPropagation(); openAddMemberModal()" title="Yangi a'zo qo'shish"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button>
             </div>
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Ism</th>
-                        <th>Username</th>
-                        <th>Rol</th>
-                        <th>Ish vaqti (Smena)</th>
-                        <th>Holati</th>
-                        <th id="actionsColHeader" style="display:none; text-align:center;">Amallar</th>
-                    </tr>
-                </thead>
-                <tbody id="adminTableBody">
-                    <tr><td colspan="7" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
-                </tbody>
-            </table>
+            <div class="jamoa-content">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Ism</th>
+                            <th>Username</th>
+                            <th>Rol</th>
+                            <th>Ish vaqti (Smena)</th>
+                            <th>Holati</th>
+                            <th id="actionsColHeader" style="display:none; text-align:center;">Amallar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminTableBody">
+                        <tr><td colspan="7" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
+                    </tbody>
+                </table>
+                <!-- Rankings Sidebar (inside Jamoa) -->
+                <div class="rankings-sidebar">
+                    <div class="ranking-card">
+                        <h3>Yuristlar reytingi</h3>
+                        <div id="lawyerRankings"><div style="color:#95a5a6; font-size:12px;">Yuklanmoqda...</div></div>
+                    </div>
+                    <div class="ranking-card">
+                        <h3 class="student-title">Studentlar reytingi</h3>
+                        <div id="studentRankings"><div style="color:#95a5a6; font-size:12px;">Yuklanmoqda...</div></div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="main-content-area">
@@ -3610,17 +3622,6 @@
                 </div>
             </div>
 
-            <!-- Rankings Sidebar -->
-            <div class="rankings-sidebar">
-                <div class="ranking-card">
-                    <h3>Yuristlar reytingi</h3>
-                    <div id="lawyerRankings"><div style="color:#95a5a6; font-size:12px;">Yuklanmoqda...</div></div>
-                </div>
-                <div class="ranking-card">
-                    <h3 class="student-title">Studentlar reytingi</h3>
-                    <div id="studentRankings"><div style="color:#95a5a6; font-size:12px;">Yuklanmoqda...</div></div>
-                </div>
-            </div>
         </div>
 
         <!-- AI Analyses Archive Section -->
