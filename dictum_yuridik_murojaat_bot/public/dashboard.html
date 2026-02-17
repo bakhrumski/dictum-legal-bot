@@ -659,9 +659,12 @@
         .requests-container.collapsed .controls-header {
             margin-bottom: 0;
         }
+        .requests-container.collapsed {
+            flex: 0 0 auto !important;
+        }
         .requests-preview {
             display: none;
-            padding: 10px 0 0;
+            padding: 14px 0 0;
         }
         .requests-container.collapsed .requests-preview {
             display: none;
@@ -669,26 +672,59 @@
         .requests-preview-list {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 6px;
         }
         .requests-preview-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             background: var(--glass-bg, #f0f2f5);
-            border-radius: 12px;
-            padding: 10px 14px;
+            border-radius: 14px;
+            padding: 12px 16px;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.2s ease;
+            border: 1px solid var(--glass-border, rgba(0,0,0,0.06));
         }
         .requests-preview-item:hover {
             transform: translateX(4px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .requests-preview-item .rp-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1661BE, #019CE0);
+            color: white;
+            font-size: 13px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .requests-preview-item .rp-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .requests-preview-item .rp-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 2px;
         }
         .requests-preview-item .rp-name {
             font-weight: 600;
             font-size: 13px;
             color: var(--text-primary);
-            margin-bottom: 3px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+        .requests-preview-item .rp-time {
+            font-size: 10px;
+            color: var(--text-muted, #999);
+            flex-shrink: 0;
         }
         .requests-preview-item .rp-text {
             font-size: 12px;
@@ -701,21 +737,30 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            margin-top: 5px;
-            font-size: 11px;
-            color: var(--text-muted, #999);
+            margin-top: 4px;
         }
         .requests-preview-item .rp-status {
-            padding: 1px 8px;
+            padding: 2px 8px;
             border-radius: 10px;
             font-size: 10px;
             font-weight: 600;
         }
-        .rp-status.pending { background: rgba(243,156,18,0.15); color: #f39c12; }
-        .rp-status.answered { background: rgba(39,174,96,0.15); color: #27ae60; }
-        .rp-status.blocked { background: rgba(231,76,60,0.15); color: #e74c3c; }
-        .requests-preview-item {
-            border: 1px solid var(--glass-border, rgba(0,0,0,0.06));
+        .rp-status.pending { background: rgba(243,156,18,0.12); color: #f39c12; }
+        .rp-status.answered { background: rgba(39,174,96,0.12); color: #27ae60; }
+        .rp-status.blocked { background: rgba(231,76,60,0.12); color: #e74c3c; }
+        .requests-preview-footer {
+            text-align: center;
+            padding: 10px 0 2px;
+        }
+        .requests-preview-footer span {
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        .requests-preview-footer span:hover {
+            color: #1661BE;
         }
         
         .filter-section {
@@ -4755,27 +4800,39 @@
                 'rejected': 'blocked'
             };
 
-            // Sort by newest first, take latest 8
+            // Sort by newest first, take latest 5
             const latest = [...requests]
                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                .slice(0, 8);
+                .slice(0, 5);
 
+            const totalCount = requests.length;
             container.innerHTML = latest.map(req => {
                 const name = req.first_name || req.name || 'N/A';
+                const initial = name.charAt(0).toUpperCase();
                 const text = req.request_text || '';
                 const d = new Date(req.created_at);
                 const time = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
                 return `
                     <div class="requests-preview-item" onclick="showRequestDetail(${req.id})">
-                        <div class="rp-name">${name}</div>
-                        <div class="rp-text">${text.substring(0, 60)}${text.length > 60 ? '...' : ''}</div>
-                        <div class="rp-meta">
-                            <span class="rp-status ${statusClass[req.status] || 'pending'}">${statusText[req.status] || req.status}</span>
-                            <span>${time}</span>
+                        <div class="rp-avatar">${initial}</div>
+                        <div class="rp-content">
+                            <div class="rp-header">
+                                <div class="rp-name">${name}</div>
+                                <span class="rp-time">${time}</span>
+                            </div>
+                            <div class="rp-text">${text.substring(0, 55)}${text.length > 55 ? '...' : ''}</div>
+                            <div class="rp-meta">
+                                <span class="rp-status ${statusClass[req.status] || 'pending'}">${statusText[req.status] || req.status}</span>
+                            </div>
                         </div>
                     </div>
                 `;
             }).join('');
+            container.innerHTML += `
+                <div class="requests-preview-footer">
+                    <span onclick="document.getElementById('requestsSection').classList.remove('collapsed')">${totalCount} ta murojaat — hammasini ko'rish ›</span>
+                </div>
+            `;
         }
 
         function toggleFolder(folderId) {
