@@ -5051,10 +5051,13 @@
                     ${currentUser.role === 'master' ? `
                     <div style="margin-top: 10px;">
                         <select id="lawyerSelect" class="detail-select">
-                            <option value="">-- Yuristni tanlang --</option>
-                            ${allAdmins.filter(a => a.role === 'master').map(admin => 
+                            <option value="">-- Tayinlash --</option>
+                            ${allAdmins.filter(a => a.role === 'master').length ? '<optgroup label="Yuristlar">' + allAdmins.filter(a => a.role === 'master').map(admin =>
                                 `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
-                            ).join('')}
+                            ).join('') + '</optgroup>' : ''}
+                            ${allAdmins.filter(a => a.role === 'student').length ? '<optgroup label="Talabalar">' + allAdmins.filter(a => a.role === 'student').map(admin =>
+                                `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
+                            ).join('') + '</optgroup>' : ''}
                         </select>
                         <button class="btn" onclick="assignRequest(${request.id})" style="padding: 8px 20px;">
                             Tayinlash
