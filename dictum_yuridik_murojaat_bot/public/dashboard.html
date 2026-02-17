@@ -3363,22 +3363,23 @@
             .stat-card { flex: 1 1 45%; min-width: 140px; }
 
             /* --- Mobile header --- */
-            header { height: 64px; max-height: 64px; padding: 10px 14px; display: flex; flex-wrap: nowrap; align-items: center; }
-            .header-left { flex-shrink: 0; }
-            .header-left h1 { font-size: 17px; letter-spacing: 3px; }
-            .header-left h1 svg { width: 16px; height: 16px; }
-            .header-left .subtitle { font-size: 8px; }
+            header { height: 56px; max-height: 56px; padding: 8px 10px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; }
+            .header-left { flex-shrink: 0; min-width: 0; }
+            .header-left h1 { font-size: 15px; letter-spacing: 2px; gap: 6px !important; }
+            .header-left h1 svg { width: 14px; height: 14px; }
+            .header-left .subtitle { font-size: 7px; letter-spacing: 1px; }
             .header-center {
                 position: static !important;
                 transform: none !important;
                 flex: 1;
                 justify-content: center;
                 gap: 2px !important;
+                min-width: 0;
             }
             .header-right { flex-shrink: 0; }
-            .header-icon-btn, .header-chat-btn { width: 32px; height: 32px; }
-            .header-icon-btn svg, .header-chat-btn svg { width: 15px; height: 15px; }
-            .theme-toggle-header { transform: scale(0.8); }
+            .header-icon-btn, .header-chat-btn { width: 30px; height: 30px; }
+            .header-icon-btn svg, .header-chat-btn svg { width: 14px; height: 14px; }
+            .theme-toggle-header { transform: scale(0.7); margin: 0 -4px; }
             /* --- Mobile profile toggle --- */
             .profile-toggle {
                 position: absolute !important;
@@ -3399,6 +3400,20 @@
             .profile-exit-btn svg { width: 15px; height: 15px; }
             .profile-toggle.open .profile-exit-btn { max-width: 30px; }
 
+        }
+        @media (max-width: 480px) {
+            header { height: 50px; max-height: 50px; padding: 6px 8px; }
+            .header-left h1 { font-size: 13px; letter-spacing: 1px; gap: 4px !important; }
+            .header-left h1 svg { width: 12px; height: 12px; }
+            .header-left .subtitle { display: none; }
+            .header-icon-btn, .header-chat-btn { width: 28px; height: 28px; }
+            .header-icon-btn svg, .header-chat-btn svg { width: 13px; height: 13px; }
+            .theme-toggle-header { transform: scale(0.65); margin: 0 -6px; }
+            .profile-avatar { width: 30px; height: 30px; font-size: 11px; }
+            .profile-toggle { height: 36px !important; }
+        }
+
+        @media (max-width: 768px) {
             /* --- Mobile Jamoa table: show only Ism, Rol, Holati --- */
             .admin-management { padding: 14px; overflow: hidden; }
             .admin-table { display: table; width: 100%; overflow: hidden; }
@@ -5037,9 +5052,9 @@
                 <div class="detail-section">
                     <h3>Tayinlov</h3>
                     <div class="detail-row">
-                        <div class="detail-label">Tayinlangan:</div>
+                        <div class="detail-label">Yurist:</div>
                         <div class="detail-value">
-                            ${request.assigned_lawyer_name || '<span style="color: #e67e22;">Hali tayinlanmagan</span>'}
+                            ${request.assigned_lawyer_name || '<span style="color: #e67e22;">Tayinlanmagan</span>'}
                         </div>
                     </div>
                     ${request.assigned_at ? `
@@ -5048,25 +5063,38 @@
                         <div class="detail-value">${new Date(request.assigned_at).toLocaleString('uz-UZ')}</div>
                     </div>
                     ` : ''}
+                    <div class="detail-row">
+                        <div class="detail-label">Talaba:</div>
+                        <div class="detail-value">
+                            ${request.assigned_student_name || '<span style="color: #e67e22;">Tayinlanmagan</span>'}
+                        </div>
+                    </div>
+                    ${request.assigned_student_at ? `
+                    <div class="detail-row">
+                        <div class="detail-label">Tayinlangan vaqt:</div>
+                        <div class="detail-value">${new Date(request.assigned_student_at).toLocaleString('uz-UZ')}</div>
+                    </div>
+                    ` : ''}
                     ${currentUser.role === 'master' ? `
-                    <div style="margin-top: 10px;">
-                        <select id="lawyerSelect" class="detail-select">
-                            <option value="">-- Tayinlash --</option>
-                            ${allAdmins.filter(a => a.role === 'master').length ? '<optgroup label="Yuristlar">' + allAdmins.filter(a => a.role === 'master').map(admin =>
+                    <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                        <select id="lawyerSelect" class="detail-select" style="flex:1; min-width: 140px;">
+                            <option value="">-- Yurist --</option>
+                            ${allAdmins.filter(a => a.role === 'master').map(admin =>
                                 `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
-                            ).join('') + '</optgroup>' : ''}
-                            ${allAdmins.filter(a => a.role === 'student').length ? '<optgroup label="Talabalar">' + allAdmins.filter(a => a.role === 'student').map(admin =>
-                                `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
-                            ).join('') + '</optgroup>' : ''}
+                            ).join('')}
                         </select>
-                        <button class="btn" onclick="assignRequest(${request.id})" style="padding: 8px 20px;">
-                            Tayinlash
-                        </button>
-                        ${request.assigned_to ? `
-                        <button class="btn btn-danger" onclick="unassignRequest(${request.id})" style="padding: 8px 20px;">
-                            Tayinlovni bekor qilish
-                        </button>
-                        ` : ''}
+                        <button class="btn" onclick="assignRequest(${request.id})" style="padding: 8px 16px;">Tayinlash</button>
+                        ${request.assigned_to ? `<button class="btn btn-danger" onclick="unassignRequest(${request.id})" style="padding: 8px 12px;">Bekor</button>` : ''}
+                    </div>
+                    <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                        <select id="studentSelect" class="detail-select" style="flex:1; min-width: 140px;">
+                            <option value="">-- Talaba --</option>
+                            ${allAdmins.filter(a => a.role === 'student').map(admin =>
+                                `<option value="${admin.id}" ${request.assigned_student_id === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
+                            ).join('')}
+                        </select>
+                        <button class="btn" onclick="assignStudent(${request.id})" style="padding: 8px 16px;">Tayinlash</button>
+                        ${request.assigned_student_id ? `<button class="btn btn-danger" onclick="unassignStudent(${request.id})" style="padding: 8px 12px;">Bekor</button>` : ''}
                     </div>
                     ` : ''}
                 </div>
@@ -6065,6 +6093,50 @@
             }
         }
         
+        async function assignStudent(requestId) {
+            const studentId = document.getElementById('studentSelect').value;
+            if (!studentId) { alert('Talabani tanlang!'); return; }
+            try {
+                const response = await fetch('/api/assign-student', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, studentId: parseInt(studentId) })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    alert('✅ Talaba tayinlandi: ' + (data.studentName || ''));
+                    await loadRequests();
+                    showRequestDetail(requestId);
+                } else {
+                    alert('❌ ' + (data.error || 'Xatolik yuz berdi.'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+
+        async function unassignStudent(requestId) {
+            if (!confirm('Talaba tayinlovini bekor qilishni xohlaysizmi?')) return;
+            try {
+                const response = await fetch('/api/unassign-student', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId })
+                });
+                if (response.ok) {
+                    alert('✅ Talaba tayinlovi bekor qilindi!');
+                    await loadRequests();
+                    showRequestDetail(requestId);
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+
         async function deleteRequest(requestId) {
             const confirmation = prompt('O\'chirish uchun "DELETE" deb yozing:');
             

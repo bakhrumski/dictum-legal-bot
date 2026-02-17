@@ -329,7 +329,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 app.get('/api/requests', requireAuth, async (req, res) => {
   try {
     // Students only see requests assigned to them
-    const studentFilter = req.session.role === 'student' ? `WHERE r.assigned_to = ${parseInt(req.session.adminId)}` : '';
+    const studentFilter = req.session.role === 'student' ? `WHERE (r.assigned_to = ${parseInt(req.session.adminId)} OR r.assigned_student_id = ${parseInt(req.session.adminId)})` : '';
     const result = await pool.query(`
       SELECT
         r.id,
@@ -347,6 +347,8 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         r.master_approved,
         r.assigned_to,
         r.assigned_at,
+        r.assigned_student_id,
+        r.assigned_student_at,
         r.created_at,
         r.answered_at,
         u.telegram_id,
@@ -356,11 +358,13 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         u.blocked_at,
         u.block_reason,
         a.full_name as assigned_lawyer_name,
+        sa.full_name as assigned_student_name,
         ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq,
         (SELECT aa.id FROM ai_analyses aa WHERE aa.request_id = r.id ORDER BY aa.created_at DESC LIMIT 1) as ai_analysis_id
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
+      LEFT JOIN admins sa ON r.assigned_student_id = sa.id
       ${studentFilter}
       ORDER BY r.created_at DESC
     `);
@@ -378,7 +382,7 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(`
-      SELECT 
+      SELECT
         r.id,
         r.user_id,
         r.category,
@@ -394,6 +398,8 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         r.master_approved,
         r.assigned_to,
         r.assigned_at,
+        r.assigned_student_id,
+        r.assigned_student_at,
         r.created_at,
         r.answered_at,
         u.telegram_id,
@@ -403,11 +409,13 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         u.blocked_at,
         u.block_reason,
         a.full_name as assigned_lawyer_name,
+        sa.full_name as assigned_student_name,
         (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq,
         (SELECT aa.id FROM ai_analyses aa WHERE aa.request_id = r.id ORDER BY aa.created_at DESC LIMIT 1) as ai_analysis_id
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
+      LEFT JOIN admins sa ON r.assigned_student_id = sa.id
       WHERE r.id = $1
     `, [id]);
     
@@ -989,6 +997,77 @@ app.post('/api/unassign-request', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error unassigning request:', error);
     res.status(500).json({ error: 'Failed to unassign request' });
+  }
+});
+
+// Assign student to request
+app.post('/api/assign-student', requireAuth, async (req, res) => {
+  try {
+    const { requestId, studentId } = req.body;
+
+    await pool.query(`
+      UPDATE requests
+      SET assigned_student_id = $1, assigned_student_at = NOW()
+      WHERE id = $2
+    `, [studentId, requestId]);
+
+    const studentResult = await pool.query(
+      'SELECT full_name, telegram_chat_id FROM admins WHERE id = $1',
+      [studentId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Student assigned successfully',
+      studentName: studentResult.rows[0]?.full_name
+    });
+
+    // Telegram notification to assigned student
+    const student = studentResult.rows[0];
+    if (student && student.telegram_chat_id) {
+      (async () => {
+        try {
+          const reqResult = await pool.query(
+            `SELECT r.id, r.request_text, r.request_type, r.category FROM requests r WHERE r.id = $1`,
+            [requestId]
+          );
+          if (reqResult.rows.length > 0) {
+            const r = reqResult.rows[0];
+            const preview = (r.request_text || '').substring(0, 100);
+            await bot.sendMessage(student.telegram_chat_id,
+              `📋 Sizga yangi murojaat tayinlandi!\n\n` +
+              `🆔 Murojaat #${r.id}\n` +
+              `📂 ${r.category || 'Boshqa'}\n` +
+              `📝 ${preview}${preview.length >= 100 ? '...' : ''}\n\n` +
+              `Dashboard orqali javob bering.`
+            );
+          }
+        } catch (e) {
+          console.error('[ASSIGN STUDENT] Telegram notify error:', e.message);
+        }
+      })();
+    }
+  } catch (error) {
+    console.error('Error assigning student:', error);
+    res.status(500).json({ error: 'Failed to assign student' });
+  }
+});
+
+// Unassign student from request
+app.post('/api/unassign-student', requireAuth, async (req, res) => {
+  try {
+    const { requestId } = req.body;
+
+    await pool.query(`
+      UPDATE requests
+      SET assigned_student_id = NULL, assigned_student_at = NULL
+      WHERE id = $1
+    `, [requestId]);
+
+    res.json({ success: true, message: 'Student assignment removed' });
+  } catch (error) {
+    console.error('Error unassigning student:', error);
+    res.status(500).json({ error: 'Failed to unassign student' });
   }
 });
 
@@ -2369,6 +2448,8 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS student_admin_id INTEGER`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_to INTEGER`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_student_id INTEGER`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_student_at TIMESTAMP`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS answered_at TIMESTAMP`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS master_approved BOOLEAN DEFAULT FALSE`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS responded_by VARCHAR(255)`);
