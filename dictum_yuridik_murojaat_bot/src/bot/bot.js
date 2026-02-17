@@ -474,22 +474,36 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // Check pending request limit (max 3 unanswered)
+  // Check pending request limit (max 3 per cycle, resets after any response)
   try {
     const userRow = await pool.query(
       'SELECT id FROM users WHERE telegram_id = $1',
       [chatId]
     );
     if (userRow.rows.length > 0) {
-      const pendingCount = await pool.query(
-        "SELECT COUNT(*) as cnt FROM requests WHERE user_id = $1 AND status IN ('pending', 'student_responded')",
-        [userRow.rows[0].id]
+      const uid = userRow.rows[0].id;
+      // Find the latest response time (when a lawyer/student last answered)
+      const lastResponse = await pool.query(
+        "SELECT MAX(answered_at) as last_answered FROM requests WHERE user_id = $1 AND status = 'answered' AND answered_at IS NOT NULL",
+        [uid]
       );
-      if (parseInt(pendingCount.rows[0].cnt) >= 3) {
+      const lastAnswered = lastResponse.rows[0]?.last_answered;
+      // Count requests created AFTER the last response (or all if no response yet)
+      let countQuery;
+      let countParams;
+      if (lastAnswered) {
+        countQuery = "SELECT COUNT(*) as cnt FROM requests WHERE user_id = $1 AND created_at > $2";
+        countParams = [uid, lastAnswered];
+      } else {
+        countQuery = "SELECT COUNT(*) as cnt FROM requests WHERE user_id = $1";
+        countParams = [uid];
+      }
+      const requestCount = await pool.query(countQuery, countParams);
+      if (parseInt(requestCount.rows[0].cnt) >= 3) {
         bot.sendMessage(chatId,
-          '⚠️ Sizda 3 ta javob kutayotgan murojaat bor.\n\n' +
+          '⚠️ Sizda 3 ta murojaat yuborilgan.\n\n' +
           'Yangi murojaat yuborish uchun avvalgi murojaatlaringizga javob kelishini kuting.\n\n' +
-          'Javob kelgandan so\'ng yana murojaat yuborishingiz mumkin.'
+          'Javob kelgandan so\'ng yana 3 ta murojaat yuborishingiz mumkin.'
         );
         return;
       }
