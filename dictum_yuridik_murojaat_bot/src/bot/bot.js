@@ -474,6 +474,30 @@ bot.on('message', async (msg) => {
     return;
   }
 
+  // Check pending request limit (max 3 unanswered)
+  try {
+    const userRow = await pool.query(
+      'SELECT id FROM users WHERE telegram_id = $1',
+      [chatId]
+    );
+    if (userRow.rows.length > 0) {
+      const pendingCount = await pool.query(
+        "SELECT COUNT(*) as cnt FROM requests WHERE user_id = $1 AND status IN ('pending', 'student_responded')",
+        [userRow.rows[0].id]
+      );
+      if (parseInt(pendingCount.rows[0].cnt) >= 3) {
+        bot.sendMessage(chatId,
+          '⚠️ Sizda 3 ta javob kutayotgan murojaat bor.\n\n' +
+          'Yangi murojaat yuborish uchun avvalgi murojaatlaringizga javob kelishini kuting.\n\n' +
+          'Javob kelgandan so\'ng yana murojaat yuborishingiz mumkin.'
+        );
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('Error checking pending limit:', error);
+  }
+
   // Save to database
   try {
     const result = await saveRequest(requestData);
