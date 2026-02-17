@@ -5323,6 +5323,11 @@
 
                 const data = await response.json();
                 if (response.ok) {
+                    // Update AI provider badge
+                    const aiBadgeEl = document.querySelector('.ai-modal-title .ai-badge');
+                    if (aiBadgeEl && data.provider) {
+                        aiBadgeEl.textContent = data.provider === 'Gemini' ? 'GEMINI 2.5' : data.provider.toUpperCase();
+                    }
                     content.innerHTML = simpleMarkdown(data.analysis);
 
                     // Store conversation history

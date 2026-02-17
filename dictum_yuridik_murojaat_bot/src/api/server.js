@@ -1358,17 +1358,112 @@ app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// ========== AI PROVIDER FALLBACK SYSTEM ==========
+// Tries providers in order: Gemini → Groq → Mistral
+async function callAI(messages, options = {}) {
+  const { temperature = 0.3, maxTokens = 8192, useSearch = false } = options;
+  const providers = [];
+
+  // Provider 1: Gemini 2.5 Flash (primary)
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    providers.push({
+      name: 'Gemini',
+      call: async () => {
+        const contents = messages.length === 1 && messages[0].role === 'user'
+          ? [{ parts: [{ text: messages[0].text }] }]
+          : messages.map(m => ({ role: m.role, parts: [{ text: m.text }] }));
+        const body = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens } };
+        if (useSearch) body.tools = [{ google_search: {} }];
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        );
+        if (!resp.ok) throw new Error(`Gemini ${resp.status}`);
+        const data = await resp.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const text = parts.map(p => p.text || '').join('');
+        if (!text) throw new Error('Gemini empty response');
+        return text;
+      }
+    });
+  }
+
+  // Provider 2: Groq (Llama 3.3 70B — free tier)
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey) {
+    providers.push({
+      name: 'Groq',
+      call: async () => {
+        const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+            temperature,
+            max_tokens: maxTokens
+          })
+        });
+        if (!resp.ok) throw new Error(`Groq ${resp.status}`);
+        const data = await resp.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (!text) throw new Error('Groq empty response');
+        return text;
+      }
+    });
+  }
+
+  // Provider 3: Mistral (free tier)
+  const mistralKey = process.env.MISTRAL_API_KEY;
+  if (mistralKey) {
+    providers.push({
+      name: 'Mistral',
+      call: async () => {
+        const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${mistralKey}` },
+          body: JSON.stringify({
+            model: 'mistral-small-latest',
+            messages: messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+            temperature,
+            max_tokens: maxTokens
+          })
+        });
+        if (!resp.ok) throw new Error(`Mistral ${resp.status}`);
+        const data = await resp.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (!text) throw new Error('Mistral empty response');
+        return text;
+      }
+    });
+  }
+
+  if (providers.length === 0) {
+    throw new Error('Hech qanday AI API kaliti sozlanmagan (GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY)');
+  }
+
+  // Try each provider in order
+  for (const provider of providers) {
+    try {
+      console.log(`[AI] Trying ${provider.name}...`);
+      const result = await provider.call();
+      console.log(`[AI] ${provider.name} succeeded`);
+      return { text: result, provider: provider.name };
+    } catch (err) {
+      console.error(`[AI] ${provider.name} failed: ${err.message}`);
+    }
+  }
+
+  throw new Error('Barcha AI provayderlar ishlamadi');
+}
+
 // AI Analysis endpoint using Gemini 2.5
 app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
   try {
     const { requestText, category, requestId } = req.body;
     if (!requestText) {
       return res.status(400).json({ error: 'Murojaat matni topilmadi' });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Gemini API kaliti sozlanmagan. GEMINI_API_KEY env o\'rnatilmagan.' });
     }
 
     // Check recent feedback for quality adjustment
@@ -1546,35 +1641,9 @@ Qoidalar:
 - name maydoniga qisqa, tushunarli nom yozing
 - Agar hech qanday mos namuna topilmasa bo'sh massiv qaytaring: []${feedbackNote}`;
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-    const geminiResponse = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 8192,
-        },
-        tools: [{ google_search: {} }]
-      })
-    });
-
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error('[AI] Gemini API error:', geminiResponse.status, errText);
-      return res.status(500).json({ error: `Gemini API xatolik: ${geminiResponse.status}` });
-    }
-
-    const geminiData = await geminiResponse.json();
-    // With Google Search grounding, response may have multiple text parts
-    const parts = geminiData.candidates?.[0]?.content?.parts || [];
-    const rawAnalysis = parts.map(p => p.text || '').join('');
-
-    if (!rawAnalysis) {
-      return res.status(500).json({ error: 'Gemini javob bermadi' });
-    }
+    const aiResult = await callAI([{ role: 'user', text: prompt }], { useSearch: true, maxTokens: 8192 });
+    const rawAnalysis = aiResult.text;
+    const aiProvider = aiResult.provider;
 
     // Extract yurxizmat.uz template suggestions from response
     let templateSuggestions = [];
@@ -1608,7 +1677,7 @@ Qoidalar:
       console.error('[AI] Archive save error:', archiveErr.message);
     }
 
-    res.json({ analysis, archiveId, templateSuggestions });
+    res.json({ analysis, archiveId, templateSuggestions, provider: aiProvider });
   } catch (error) {
     console.error('[AI] Analysis error:', error);
     res.status(500).json({ error: 'AI tahlil xatoligi: ' + error.message });
@@ -1794,11 +1863,6 @@ app.post('/api/ai-chat', requireMasterAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Xabarlar topilmadi' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Gemini API kaliti sozlanmagan' });
-    }
-
     const systemContext = `Siz O'zbekiston huquqi bo'yicha AI yordamchisiz.
 Quyidagi murojaat haqida savollarga javob bering.
 ${category && category !== 'Boshqa' ? `Yo'nalish: ${category}` : ''}
@@ -1806,47 +1870,14 @@ Murojaat matni: "${requestText}"
 Javoblaringiz O'zbek (lotin) tilida, qisqa va aniq bo'lsin.
 Huquqiy normalar va lex.uz havolalari bilan javob bering.`;
 
-    const contents = [];
-    for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i];
-      contents.push({
-        role: msg.role,
-        parts: [{ text: i === 0 && msg.role === 'user'
-          ? systemContext + '\n\n' + msg.text
-          : msg.text }]
-      });
-    }
+    const aiMessages = messages.map((msg, i) => ({
+      role: msg.role,
+      text: i === 0 && msg.role === 'user' ? systemContext + '\n\n' + msg.text : msg.text
+    }));
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 4096 });
 
-    const geminiResponse = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 4096,
-        },
-        tools: [{ google_search: {} }]
-      })
-    });
-
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error('[AI Chat] Gemini API error:', geminiResponse.status, errText);
-      return res.status(500).json({ error: `Gemini API xatolik: ${geminiResponse.status}` });
-    }
-
-    const geminiData = await geminiResponse.json();
-    const chatParts = geminiData.candidates?.[0]?.content?.parts || [];
-    const reply = chatParts.map(p => p.text || '').join('');
-
-    if (!reply) {
-      return res.status(500).json({ error: 'Gemini javob bermadi' });
-    }
-
-    res.json({ reply });
+    res.json({ reply: aiResult.text });
   } catch (error) {
     console.error('[AI Chat] Error:', error);
     res.status(500).json({ error: 'AI chat xatoligi: ' + error.message });
@@ -1860,11 +1891,6 @@ app.post('/api/ai-generate-template', requireMasterAdmin, async (req, res) => {
 
     if (!requestText || !analysisText) {
       return res.status(400).json({ error: 'Ma\'lumotlar yetarli emas' });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Gemini API kaliti sozlanmagan' });
     }
 
     const templateTypes = {
@@ -1899,34 +1925,9 @@ Qoidalar:
 
 Hujjatni to'liq yozing:`;
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const aiResult = await callAI([{ role: 'user', text: prompt }], { maxTokens: 8192 });
 
-    const geminiResponse = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 8192,
-        }
-      })
-    });
-
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error('[AI Template] Gemini API error:', geminiResponse.status, errText);
-      return res.status(500).json({ error: `Gemini API xatolik: ${geminiResponse.status}` });
-    }
-
-    const geminiData = await geminiResponse.json();
-    const template = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!template) {
-      return res.status(500).json({ error: 'Gemini hujjat yaratmadi' });
-    }
-
-    res.json({ template });
+    res.json({ template: aiResult.text });
   } catch (error) {
     console.error('[AI Template] Error:', error);
     res.status(500).json({ error: 'Hujjat yaratish xatoligi: ' + error.message });
@@ -2010,14 +2011,27 @@ async function triggerAiScreening(regId, regData) {
     parts.push({ text: screenPrompt });
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const geminiResp = await fetch(apiUrl, {
+    const fetchBody = JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+    });
+
+    let geminiResp = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
-      })
+      body: fetchBody
     });
+
+    // Retry once after 3s if rate-limited (429)
+    if (geminiResp.status === 429) {
+      console.log('[AI SCREENING] Rate limited, retrying in 3s...');
+      await new Promise(r => setTimeout(r, 3000));
+      geminiResp = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: fetchBody
+      });
+    }
 
     if (!geminiResp.ok) {
       console.error('[AI SCREENING] Gemini API error:', geminiResp.status);
