@@ -1503,14 +1503,16 @@
             border-bottom-right-radius: 4px;
         }
         .legal-chat-msg.ai {
-            background: rgba(0, 185, 242, 0.04);
-            border: 1px solid rgba(1, 156, 224, 0.15);
+            background: none;
+            border: none;
             color: var(--text-primary);
             align-self: flex-start;
             border-bottom-left-radius: 4px;
         }
-        [data-theme="dark"] .legal-chat-msg.ai {
-            background: rgba(22, 97, 190, 0.08);
+        .legal-chat-msg.ai ul, .legal-chat-msg.ai ol {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
         }
         .legal-chat-msg.ai a {
             color: #019CE0;
