@@ -4053,7 +4053,7 @@
                 } else {
                     timeslotInner = '<span class="timeslot-display not-set">Belgilanmagan</span>';
                 }
-                const editBtn = canEdit ? `<button class="timeslot-edit-btn" onclick="editTimeslot(${admin.id}, '${admin.duty_start || ''}', '${admin.duty_end || ''}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(360deg)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>` : '';
+                const editBtn = canEdit ? `<button class="timeslot-edit-btn" onclick="event.stopPropagation();editTimeslot(${admin.id}, '${admin.duty_start || ''}', '${admin.duty_end || ''}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(360deg)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>` : '';
                 const timeslotHtml = `<div class="timeslot-cell-inner">${timeslotInner}${editBtn}</div>`;
 
                 // Status display (merged with last active)
@@ -4071,13 +4071,13 @@
                 if (isMaster) {
                     actionsHtml = `<td class="actions-cell">
                         <div style="display:flex;justify-content:center;gap:4px;min-width:60px;">
-                            <button class="action-btn edit-btn" onclick="openEditMemberModal(${admin.id})" title="Tahrirlash"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(360deg)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-                            ${!isOwnRow ? `<button class="action-btn delete-btn" onclick="confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : '<span style="width:27px;"></span>'}
+                            <button class="action-btn edit-btn" onclick="event.stopPropagation();openEditMemberModal(${admin.id})" title="Tahrirlash"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(360deg)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+                            ${!isOwnRow ? `<button class="action-btn delete-btn" onclick="event.stopPropagation();confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : '<span style="width:27px;"></span>'}
                         </div>
                     </td>`;
                 }
 
-                return `<tr class="${isOwnRow ? 'own-row' : ''}">
+                return `<tr class="${isOwnRow ? 'own-row' : ''}" onclick="viewMemberDetail(${admin.id})" style="cursor:pointer;">
                     <td>${i + 1}</td>
                     <td><strong>${admin.full_name}</strong>${isOwnRow ? ' <small style="color:#019CE0;">(siz)</small>' : ''}</td>
                     <td>@${admin.telegram_username || admin.username}</td>
@@ -5854,6 +5854,105 @@
                 </div>
             `;
             document.getElementById('regDetailOverlay').classList.add('active');
+        }
+
+        async function viewMemberDetail(adminId) {
+            const admin = allAdmins.find(a => a.id === adminId);
+            if (!admin) return;
+            const box = document.getElementById('regDetailBox');
+
+            // Show basic info immediately while loading registration data
+            const roleLabels = { 'master': 'Admin', 'lawyer': 'Advokat', 'student': 'Student' };
+            box.innerHTML = `
+                <h3>${escapeHtml(admin.full_name)}</h3>
+                <div class="reg-detail-row"><span class="reg-detail-label">Rol</span><span class="reg-detail-value">${roleLabels[admin.role] || admin.role}</span></div>
+                <div class="reg-detail-row"><span class="reg-detail-label">Username</span><span class="reg-detail-value"><code>${escapeHtml(admin.username)}</code></span></div>
+                ${admin.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(admin.telegram_username)}</span></div>` : ''}
+                ${admin.duty_start && admin.duty_end ? `<div class="reg-detail-row"><span class="reg-detail-label">Ish vaqti</span><span class="reg-detail-value">${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}</span></div>` : ''}
+                <div class="reg-detail-row"><span class="reg-detail-label">Holati</span><span class="reg-detail-value">${admin.is_active ? '<span style="color:#27ae60;">Aktiv</span>' : '<span style="color:#999;">Aktiv emas</span>'}</span></div>
+                <div style="text-align:center;padding:20px;color:var(--text-muted);">Ro'yxatdan o'tish ma'lumotlari yuklanmoqda...</div>
+                <div class="reg-detail-actions">
+                    <button class="reg-detail-close" onclick="document.getElementById('regDetailOverlay').classList.remove('active')">Yopish</button>
+                </div>
+            `;
+            document.getElementById('regDetailOverlay').classList.add('active');
+
+            // Try to find the approved registration request for this member
+            try {
+                const r = await fetch('/api/registration-requests?status=approved', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Fetch failed');
+                const regs = await r.json();
+                // Match by telegram_username or full_name
+                const reg = regs.find(rr =>
+                    (admin.telegram_username && rr.telegram_username && rr.telegram_username.toLowerCase() === admin.telegram_username.toLowerCase()) ||
+                    (`${rr.last_name} ${rr.first_name}`.toLowerCase() === admin.full_name.toLowerCase())
+                );
+
+                if (reg) {
+                    const aiResult = reg.ai_screening_result ? (typeof reg.ai_screening_result === 'string' ? JSON.parse(reg.ai_screening_result) : reg.ai_screening_result) : null;
+                    let aiHtml = '';
+                    if (aiResult) {
+                        const checks = [
+                            aiResult.name_match !== undefined ? `Ism moslik: ${aiResult.name_match ? '&#10004;' : '&#10008;'}` : '',
+                            aiResult.is_law_field !== undefined ? `Huquq sohasi: ${aiResult.is_law_field ? '&#10004;' : '&#10008;'}` : '',
+                            aiResult.info_complete !== undefined ? `Ma'lumot to'liq: ${aiResult.info_complete ? '&#10004;' : '&#10008;'}` : '',
+                            aiResult.document_authentic !== undefined ? `Hujjat haqiqiy: ${aiResult.document_authentic ? '&#10004;' : '&#10008;'}` : ''
+                        ].filter(Boolean).join(' &nbsp;|&nbsp; ');
+                        const aiClass = reg.ai_screening_status === 'passed' ? 'passed' : 'flagged';
+                        aiHtml = `<div class="reg-ai-section ${aiClass}">
+                            <h4>${reg.ai_screening_status === 'passed' ? '&#10004; AI tekshiruvi o\'tdi' : '&#9888; AI shubhali deb belgiladi'}</h4>
+                            <div style="margin-bottom:6px;">${checks}</div>
+                            <div class="ai-note">${escapeHtml(aiResult.notes || '')}</div>
+                        </div>`;
+                    }
+                    let docHtml = (reg.document_file_id || reg.has_document_base64)
+                        ? `<a href="#" onclick="viewRegDoc('${reg.document_file_id || ''}', ${reg.id});return false;" style="color:#0C7ECF;font-weight:600;">Hujjatni ko'rish</a>`
+                        : '<span style="color:var(--text-muted);">Yuklanmagan</span>';
+
+                    const copyText = 'Username: ' + admin.username;
+                    box.innerHTML = `
+                        <h3>${escapeHtml(reg.last_name)} ${escapeHtml(reg.first_name)}</h3>
+                        <div class="reg-detail-row"><span class="reg-detail-label">Turi</span><span class="reg-detail-value">${reg.type === 'lawyer' ? 'Advokat' : 'Student'}</span></div>
+                        ${reg.level ? `<div class="reg-detail-row"><span class="reg-detail-label">Bosqich</span><span class="reg-detail-value">${escapeHtml(reg.level)}</span></div>` : ''}
+                        ${reg.specialization ? `<div class="reg-detail-row"><span class="reg-detail-label">Mutaxassislik</span><span class="reg-detail-value">${escapeHtml(reg.specialization)}</span></div>` : ''}
+                        ${reg.experience_years ? `<div class="reg-detail-row"><span class="reg-detail-label">Tajriba</span><span class="reg-detail-value">${reg.experience_years} yil</span></div>` : ''}
+                        ${reg.license_number ? `<div class="reg-detail-row"><span class="reg-detail-label">Guvohnoma</span><span class="reg-detail-value">${escapeHtml(reg.license_number)}</span></div>` : ''}
+                        ${reg.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(reg.telegram_username)}</span></div>` : ''}
+                        <div class="reg-detail-row"><span class="reg-detail-label">Ariza sanasi</span><span class="reg-detail-value">${new Date(reg.created_at).toLocaleString('uz-UZ')}</span></div>
+                        ${reg.reviewed_at ? `<div class="reg-detail-row"><span class="reg-detail-label">Tasdiqlangan</span><span class="reg-detail-value">${new Date(reg.reviewed_at).toLocaleString('uz-UZ')}</span></div>` : ''}
+                        <div class="reg-detail-row"><span class="reg-detail-label">Hujjat</span><span class="reg-detail-value">${docHtml}</span></div>
+                        ${aiHtml}
+                        <div class="reg-cred-box" style="margin-top:12px;">
+                            <strong>&#10004; Hisob yaratilgan</strong><br><br>
+                            Username: <code>${escapeHtml(admin.username)}</code><br>
+                            Telegram: <code>@${escapeHtml(admin.telegram_username || '')}</code><br>
+                            ${admin.duty_start && admin.duty_end ? `Ish vaqti: <code>${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}</code><br>` : ''}
+                            <br><button class="reg-copy-btn" onclick="navigator.clipboard.writeText('${copyText}');this.textContent='Nusxalandi!'">Nusxalash</button>
+                        </div>
+                        <div class="reg-detail-actions">
+                            <button class="reg-detail-close" onclick="document.getElementById('regDetailOverlay').classList.remove('active')">Yopish</button>
+                        </div>
+                    `;
+                } else {
+                    // No registration found — show admin info only (manually added member)
+                    box.innerHTML = `
+                        <h3>${escapeHtml(admin.full_name)}</h3>
+                        <div class="reg-detail-row"><span class="reg-detail-label">Rol</span><span class="reg-detail-value">${roleLabels[admin.role] || admin.role}</span></div>
+                        <div class="reg-detail-row"><span class="reg-detail-label">Username</span><span class="reg-detail-value"><code>${escapeHtml(admin.username)}</code></span></div>
+                        ${admin.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(admin.telegram_username)}</span></div>` : ''}
+                        ${admin.duty_start && admin.duty_end ? `<div class="reg-detail-row"><span class="reg-detail-label">Ish vaqti</span><span class="reg-detail-value">${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}</span></div>` : ''}
+                        <div class="reg-detail-row"><span class="reg-detail-label">Holati</span><span class="reg-detail-value">${admin.is_active ? '<span style="color:#27ae60;">Aktiv</span>' : '<span style="color:#999;">Aktiv emas</span>'}</span></div>
+                        <div class="reg-detail-row"><span class="reg-detail-label">Qo'shilgan</span><span class="reg-detail-value">${new Date(admin.created_at).toLocaleString('uz-UZ')}</span></div>
+                        <div class="reg-detail-actions">
+                            <button class="reg-detail-close" onclick="document.getElementById('regDetailOverlay').classList.remove('active')">Yopish</button>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                // If fetch fails (non-master), show basic admin info
+                const loadingDiv = box.querySelector('div[style*="text-align:center"]');
+                if (loadingDiv) loadingDiv.remove();
+            }
         }
 
         async function viewRegDoc(fileId, regId) {
