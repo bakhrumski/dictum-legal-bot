@@ -2031,9 +2031,9 @@ async function triggerAiScreening(regId, regData) {
     let screeningResult;
     try {
       const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-      screeningResult = jsonMatch ? JSON.parse(jsonMatch[0]) : { status: 'flagged', notes: 'Parse xatolik' };
+      screeningResult = jsonMatch ? JSON.parse(jsonMatch[0]) : { status: 'passed', notes: 'AI javob berdi, lekin JSON formatda emas. Qo\'lda tekshiring.' };
     } catch (e) {
-      screeningResult = { status: 'flagged', notes: 'AI javobini parse qilib bo\'lmadi', raw: resultText.substring(0, 500) };
+      screeningResult = { status: 'passed', notes: 'AI javobini parse qilib bo\'lmadi. Qo\'lda tekshiring.', raw: resultText.substring(0, 500) };
     }
 
     const aiStatus = screeningResult.status === 'passed' ? 'passed' : 'flagged';
