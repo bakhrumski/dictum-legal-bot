@@ -642,6 +642,9 @@
             cursor: pointer;
             user-select: none;
         }
+        .controls-header h2 {
+            font-size: 16px;
+        }
         .controls-header .toggle-chevron {
             transition: transform 0.3s ease;
             margin-right: 8px;
@@ -655,9 +658,6 @@
         }
         .requests-container.collapsed .controls-header {
             margin-bottom: 0;
-        }
-        .requests-container.collapsed ~ .rankings-sidebar {
-            display: none;
         }
         .requests-preview {
             display: none;
@@ -2835,9 +2835,15 @@
         .admin-management.collapsed .admin-table {
             display: none;
         }
+        .admin-management.collapsed .admin-management-header {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
         .admin-management-header h2 {
             color: var(--text-primary);
             margin: 0;
+            font-size: 16px;
         }
         .admin-table {
             width: 100%;
