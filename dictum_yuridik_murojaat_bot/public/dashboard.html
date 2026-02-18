@@ -4806,23 +4806,8 @@
                 userGroups[key].requests.push(req);
             });
 
-            // Sort users: assigned-to-me first, then unanswered, then by most recent
-            const myId = currentUser.adminId;
+            // Sort users by most recent request date (newest first)
             const sortedUsers = Object.values(userGroups).sort((a, b) => {
-                // Assigned to me first
-                const aHasMine = a.requests.some(r => r.assigned_to === myId || r.assigned_student_id === myId) ? 0 : 1;
-                const bHasMine = b.requests.some(r => r.assigned_to === myId || r.assigned_student_id === myId) ? 0 : 1;
-                if (aHasMine !== bHasMine) return aHasMine - bHasMine;
-                // Then unassigned before assigned-to-others
-                if (aHasMine === 1 && bHasMine === 1) {
-                    const aUnassigned = a.requests.some(r => !r.assigned_to && !r.assigned_student_id) ? 0 : 1;
-                    const bUnassigned = b.requests.some(r => !r.assigned_to && !r.assigned_student_id) ? 0 : 1;
-                    if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned;
-                }
-                const aUnanswered = a.requests.filter(isUnanswered).length;
-                const bUnanswered = b.requests.filter(isUnanswered).length;
-                if (aUnanswered > 0 && bUnanswered === 0) return -1;
-                if (bUnanswered > 0 && aUnanswered === 0) return 1;
                 const aLatest = new Date(a.requests[0].created_at);
                 const bLatest = new Date(b.requests[0].created_at);
                 return bLatest - aLatest;
