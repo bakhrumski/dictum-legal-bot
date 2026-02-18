@@ -4192,23 +4192,28 @@
             e.stopPropagation();
             const toggle = document.getElementById('profileToggle');
             toggle.classList.toggle('open');
-            const center = document.querySelector('.header-center');
-            if (toggle.classList.contains('open')) {
-                center.style.transition = 'opacity 0.2s ease';
-                center.style.opacity = '0';
-                center.style.pointerEvents = 'none';
-            } else {
-                center.style.transition = 'opacity 0.3s ease 0.4s';
-                center.style.opacity = '1';
-                setTimeout(function() { center.style.pointerEvents = ''; }, 700);
+            // Only hide center icons on mobile (480px and below)
+            if (window.innerWidth <= 480) {
+                const center = document.querySelector('.header-center');
+                if (toggle.classList.contains('open')) {
+                    center.style.transition = 'opacity 0.2s ease';
+                    center.style.opacity = '0';
+                    center.style.pointerEvents = 'none';
+                } else {
+                    center.style.transition = 'opacity 0.3s ease 0.4s';
+                    center.style.opacity = '1';
+                    setTimeout(function() { center.style.pointerEvents = ''; }, 700);
+                }
             }
         }
         function closeProfileDropdown() {
             document.getElementById('profileToggle').classList.remove('open');
-            const center = document.querySelector('.header-center');
-            center.style.transition = 'opacity 0.3s ease 0.4s';
-            center.style.opacity = '1';
-            setTimeout(function() { center.style.pointerEvents = ''; }, 700);
+            if (window.innerWidth <= 480) {
+                const center = document.querySelector('.header-center');
+                center.style.transition = 'opacity 0.3s ease 0.4s';
+                center.style.opacity = '1';
+                setTimeout(function() { center.style.pointerEvents = ''; }, 700);
+            }
         }
         
         async function loadAdmins() {
