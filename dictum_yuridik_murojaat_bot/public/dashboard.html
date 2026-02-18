@@ -3551,7 +3551,12 @@
             .header-left h1 svg { width: 14px; height: 14px; }
             .header-left .subtitle { font-size: 7px; letter-spacing: 1px; }
             .header-center {
-                display: none !important;
+                position: static !important;
+                transform: none !important;
+                flex: 1;
+                justify-content: center;
+                gap: 2px !important;
+                min-width: 0;
             }
             .header-right { flex-shrink: 0; }
             .header-icon-btn, .header-chat-btn { width: 30px; height: 30px; }
@@ -3580,6 +3585,7 @@
         }
         @media (max-width: 480px) {
             header { height: 50px; max-height: 50px; padding: 6px 8px; }
+            .header-center { display: none !important; }
             .header-left h1 { font-size: 13px; letter-spacing: 1px; gap: 4px !important; }
             .header-left h1 svg { width: 12px; height: 12px; }
             .header-left .subtitle { display: none; }
