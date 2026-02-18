@@ -813,6 +813,24 @@ app.get('/api/rankings', requireAuth, async (req, res) => {
   }
 });
 
+// Get request stats for a specific admin
+app.get('/api/admin-stats/:id', requireAuth, async (req, res) => {
+  try {
+    const adminId = parseInt(req.params.id);
+    const result = await pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM requests WHERE assigned_to = $1) AS assigned_count,
+        (SELECT COUNT(*) FROM requests WHERE assigned_to = $1 AND status = 'answered') AS answered_count,
+        (SELECT COUNT(*) FROM requests WHERE student_admin_id = $1) AS student_response_count,
+        (SELECT COUNT(*) FROM requests WHERE responded_by = (SELECT full_name FROM admins WHERE id = $1) AND status = 'answered') AS responded_count
+    `, [adminId]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching admin stats:', error);
+    res.status(500).json({ error: 'Statistika olishda xatolik' });
+  }
+});
+
 // Monte Carlo simulation data
 app.get('/api/monte-carlo', requireAuth, async (req, res) => {
   try {

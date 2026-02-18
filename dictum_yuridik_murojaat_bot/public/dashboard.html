@@ -6167,11 +6167,15 @@
             `;
             document.getElementById('regDetailOverlay').classList.add('active');
 
-            // Try to find the approved registration request for this member
+            // Fetch registration data and admin stats in parallel
             try {
-                const r = await fetch('/api/registration-requests?status=approved', { credentials: 'same-origin' });
+                const [r, statsResp] = await Promise.all([
+                    fetch('/api/registration-requests?status=approved', { credentials: 'same-origin' }),
+                    fetch('/api/admin-stats/' + adminId, { credentials: 'same-origin' })
+                ]);
                 if (!r.ok) throw new Error('Fetch failed');
                 const regs = await r.json();
+                const stats = statsResp.ok ? await statsResp.json() : null;
                 // Match by telegram_username or full_name
                 const reg = regs.find(rr =>
                     (admin.telegram_username && rr.telegram_username && rr.telegram_username.toLowerCase() === admin.telegram_username.toLowerCase()) ||
@@ -6211,6 +6215,8 @@
                         <div class="reg-detail-row"><span class="reg-detail-label">Ariza sanasi</span><span class="reg-detail-value">${new Date(reg.created_at).toLocaleString('uz-UZ')}</span></div>
                         ${reg.reviewed_at ? `<div class="reg-detail-row"><span class="reg-detail-label">Tasdiqlangan</span><span class="reg-detail-value">${new Date(reg.reviewed_at).toLocaleString('uz-UZ')}</span></div>` : ''}
                         <div class="reg-detail-row"><span class="reg-detail-label">Hujjat</span><span class="reg-detail-value">${docHtml}</span></div>
+                        ${stats ? `<div class="reg-detail-row"><span class="reg-detail-label">Tayinlangan</span><span class="reg-detail-value"><strong>${stats.assigned_count || 0}</strong> ta murojaat</span></div>
+                        <div class="reg-detail-row"><span class="reg-detail-label">Javob bergan</span><span class="reg-detail-value"><strong>${stats.responded_count || 0}</strong> ta murojaat</span></div>` : ''}
                         ${aiHtml}
                         <div class="reg-cred-box" style="margin-top:12px;">
                             <strong>&#10004; Hisob yaratilgan</strong><br><br>
@@ -6232,6 +6238,8 @@
                         ${admin.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(admin.telegram_username)}</span></div>` : ''}
                         ${admin.duty_start && admin.duty_end ? `<div class="reg-detail-row"><span class="reg-detail-label">Ish vaqti</span><span class="reg-detail-value">${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}</span></div>` : ''}
                         <div class="reg-detail-row"><span class="reg-detail-label">Holati</span><span class="reg-detail-value">${admin.is_active ? '<span style="color:#27ae60;">Aktiv</span>' : '<span style="color:#999;">Aktiv emas</span>'}</span></div>
+                        ${stats ? `<div class="reg-detail-row"><span class="reg-detail-label">Tayinlangan</span><span class="reg-detail-value"><strong>${stats.assigned_count || 0}</strong> ta murojaat</span></div>
+                        <div class="reg-detail-row"><span class="reg-detail-label">Javob bergan</span><span class="reg-detail-value"><strong>${stats.responded_count || 0}</strong> ta murojaat</span></div>` : ''}
                         <div class="reg-detail-row"><span class="reg-detail-label">Qo'shilgan</span><span class="reg-detail-value">${new Date(admin.created_at).toLocaleString('uz-UZ')}</span></div>
                         <div class="reg-detail-actions">
                             <button class="reg-detail-close" onclick="document.getElementById('regDetailOverlay').classList.remove('active')">Yopish</button>
