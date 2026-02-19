@@ -329,7 +329,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 app.get('/api/requests', requireAuth, async (req, res) => {
   try {
     // Students only see requests assigned to them
-    const studentFilter = req.session.role === 'student' ? `WHERE (r.assigned_to = ${parseInt(req.session.adminId)} OR r.assigned_student_id = ${parseInt(req.session.adminId)})` : '';
+    const studentFilter = req.session.role === 'student' ? `WHERE (r.assigned_to = ${parseInt(req.session.adminId)} OR EXISTS (SELECT 1 FROM request_students rs2 WHERE rs2.request_id = r.id AND rs2.student_id = ${parseInt(req.session.adminId)}))` : '';
     const result = await pool.query(`
       SELECT
         r.id,
@@ -347,8 +347,6 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         r.master_approved,
         r.assigned_to,
         r.assigned_at,
-        r.assigned_student_id,
-        r.assigned_student_at,
         r.created_at,
         r.answered_at,
         u.telegram_id,
@@ -358,13 +356,16 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         u.blocked_at,
         u.block_reason,
         a.full_name as assigned_lawyer_name,
-        sa.full_name as assigned_student_name,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', adm.id, 'full_name', adm.full_name, 'assigned_at', rs.assigned_at))
+           FROM request_students rs JOIN admins adm ON rs.student_id = adm.id WHERE rs.request_id = r.id),
+          '[]'::json
+        ) as assigned_students,
         ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq,
         (SELECT aa.id FROM ai_analyses aa WHERE aa.request_id = r.id ORDER BY aa.created_at DESC LIMIT 1) as ai_analysis_id
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
-      LEFT JOIN admins sa ON r.assigned_student_id = sa.id
       ${studentFilter}
       ORDER BY r.created_at DESC
     `);
@@ -398,8 +399,6 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         r.master_approved,
         r.assigned_to,
         r.assigned_at,
-        r.assigned_student_id,
-        r.assigned_student_at,
         r.created_at,
         r.answered_at,
         u.telegram_id,
@@ -409,13 +408,16 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         u.blocked_at,
         u.block_reason,
         a.full_name as assigned_lawyer_name,
-        sa.full_name as assigned_student_name,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', adm.id, 'full_name', adm.full_name, 'assigned_at', rs.assigned_at))
+           FROM request_students rs JOIN admins adm ON rs.student_id = adm.id WHERE rs.request_id = r.id),
+          '[]'::json
+        ) as assigned_students,
         (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq,
         (SELECT aa.id FROM ai_analyses aa WHERE aa.request_id = r.id ORDER BY aa.created_at DESC LIMIT 1) as ai_analysis_id
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
-      LEFT JOIN admins sa ON r.assigned_student_id = sa.id
       WHERE r.id = $1
     `, [id]);
     
@@ -1006,10 +1008,9 @@ app.post('/api/assign-student', requireAuth, async (req, res) => {
     const { requestId, studentId } = req.body;
 
     await pool.query(`
-      UPDATE requests
-      SET assigned_student_id = $1, assigned_student_at = NOW()
-      WHERE id = $2
-    `, [studentId, requestId]);
+      INSERT INTO request_students (request_id, student_id) VALUES ($1, $2)
+      ON CONFLICT (request_id, student_id) DO NOTHING
+    `, [requestId, studentId]);
 
     const studentResult = await pool.query(
       'SELECT full_name, telegram_chat_id FROM admins WHERE id = $1',
@@ -1056,13 +1057,11 @@ app.post('/api/assign-student', requireAuth, async (req, res) => {
 // Unassign student from request
 app.post('/api/unassign-student', requireAuth, async (req, res) => {
   try {
-    const { requestId } = req.body;
+    const { requestId, studentId } = req.body;
 
     await pool.query(`
-      UPDATE requests
-      SET assigned_student_id = NULL, assigned_student_at = NULL
-      WHERE id = $1
-    `, [requestId]);
+      DELETE FROM request_students WHERE request_id = $1 AND student_id = $2
+    `, [requestId, studentId]);
 
     res.json({ success: true, message: 'Student assignment removed' });
   } catch (error) {
@@ -2451,6 +2450,27 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_student_id INTEGER`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_student_at TIMESTAMP`);
+
+    // Multi-student assignment junction table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS request_students (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
+        student_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+        assigned_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(request_id, student_id)
+      )
+    `);
+    // Migrate existing single-student assignments into junction table
+    try {
+      await pool.query(`
+        INSERT INTO request_students (request_id, student_id, assigned_at)
+        SELECT id, assigned_student_id, COALESCE(assigned_student_at, NOW())
+        FROM requests WHERE assigned_student_id IS NOT NULL
+        ON CONFLICT (request_id, student_id) DO NOTHING
+      `);
+    } catch(e) { console.log('[DB] Student migration note:', e.message); }
+
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS answered_at TIMESTAMP`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS master_approved BOOLEAN DEFAULT FALSE`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS responded_by VARCHAR(255)`);

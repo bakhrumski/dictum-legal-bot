@@ -781,6 +781,33 @@
             background-color: rgba(39, 174, 96, 0.12);
         }
         
+        .student-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(1, 156, 224, 0.1);
+            color: #019CE0;
+            border: 1px solid rgba(1, 156, 224, 0.25);
+            border-radius: 16px;
+            padding: 3px 10px;
+            font-size: 13px;
+            font-weight: 600;
+            margin: 2px;
+        }
+        .chip-remove {
+            background: none;
+            border: none;
+            color: #e74c3c;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 2px;
+            line-height: 1;
+            font-weight: bold;
+        }
+        .chip-remove:hover {
+            color: #c0392b;
+        }
+
         .request-item {
             border: 1px solid var(--glass-border-light);
             padding: 15px;
@@ -4561,12 +4588,12 @@
             if (currentUser.role === 'student' || currentUser.role === 'lawyer') {
                 const myId = currentUser.adminId;
                 filteredRequests = [...filteredRequests].sort((a, b) => {
-                    const aIsMe = (a.assigned_to === myId || a.assigned_student_id === myId) ? 0 : 1;
-                    const bIsMe = (b.assigned_to === myId || b.assigned_student_id === myId) ? 0 : 1;
+                    const aIsMe = (a.assigned_to === myId || (a.assigned_students || []).some(s => s.id === myId)) ? 0 : 1;
+                    const bIsMe = (b.assigned_to === myId || (b.assigned_students || []).some(s => s.id === myId)) ? 0 : 1;
                     if (aIsMe !== bIsMe) return aIsMe - bIsMe;
                     if (aIsMe === 1 && bIsMe === 1) {
-                        const aUnassigned = (!a.assigned_to && !a.assigned_student_id) ? 0 : 1;
-                        const bUnassigned = (!b.assigned_to && !b.assigned_student_id) ? 0 : 1;
+                        const aUnassigned = (!a.assigned_to && (a.assigned_students || []).length === 0) ? 0 : 1;
+                        const bUnassigned = (!b.assigned_to && (b.assigned_students || []).length === 0) ? 0 : 1;
                         if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned;
                     }
                     const aPending = a.status === 'pending' ? 0 : 1;
@@ -4602,13 +4629,13 @@
             const myId = currentUser.adminId;
             const sortedUsers = Object.values(userGroups).sort((a, b) => {
                 // Assigned to me first
-                const aHasMine = a.requests.some(r => r.assigned_to === myId || r.assigned_student_id === myId) ? 0 : 1;
-                const bHasMine = b.requests.some(r => r.assigned_to === myId || r.assigned_student_id === myId) ? 0 : 1;
+                const aHasMine = a.requests.some(r => r.assigned_to === myId || (r.assigned_students || []).some(s => s.id === myId)) ? 0 : 1;
+                const bHasMine = b.requests.some(r => r.assigned_to === myId || (r.assigned_students || []).some(s => s.id === myId)) ? 0 : 1;
                 if (aHasMine !== bHasMine) return aHasMine - bHasMine;
                 // Then unassigned before assigned-to-others
                 if (aHasMine === 1 && bHasMine === 1) {
-                    const aUnassigned = a.requests.some(r => !r.assigned_to && !r.assigned_student_id) ? 0 : 1;
-                    const bUnassigned = b.requests.some(r => !r.assigned_to && !r.assigned_student_id) ? 0 : 1;
+                    const aUnassigned = a.requests.some(r => !r.assigned_to && (r.assigned_students || []).length === 0) ? 0 : 1;
+                    const bUnassigned = b.requests.some(r => !r.assigned_to && (b.assigned_students || []).length === 0) ? 0 : 1;
                     if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned;
                 }
                 const aUnanswered = a.requests.filter(isUnanswered).length;
@@ -5083,17 +5110,15 @@
                     </div>
                     ` : ''}
                     <div class="detail-row">
-                        <div class="detail-label">Talaba:</div>
+                        <div class="detail-label">Talabalar:</div>
                         <div class="detail-value">
-                            ${request.assigned_student_name || '<span style="color: #e67e22;">Tayinlanmagan</span>'}
+                            ${(() => {
+                                const students = request.assigned_students || [];
+                                if (students.length === 0) return '<span style="color: #e67e22;">Tayinlanmagan</span>';
+                                return students.map(s => `<span class="student-chip">${escapeHtml(s.full_name)}${currentUser.role === 'master' ? ` <button class="chip-remove" onclick="event.stopPropagation();unassignStudent(${request.id},${s.id})" title="Olib tashlash">&times;</button>` : ''}</span>`).join(' ');
+                            })()}
                         </div>
                     </div>
-                    ${request.assigned_student_at ? `
-                    <div class="detail-row">
-                        <div class="detail-label">Tayinlangan vaqt:</div>
-                        <div class="detail-value">${new Date(request.assigned_student_at).toLocaleString('uz-UZ')}</div>
-                    </div>
-                    ` : ''}
                     ${currentUser.role === 'master' ? `
                     <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
                         <select id="lawyerSelect" class="detail-select" style="flex:1; min-width: 140px;">
@@ -5108,12 +5133,11 @@
                     <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
                         <select id="studentSelect" class="detail-select" style="flex:1; min-width: 140px;">
                             <option value="">-- Talaba --</option>
-                            ${allAdmins.filter(a => a.role === 'student').map(admin =>
-                                `<option value="${admin.id}" ${request.assigned_student_id === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
+                            ${allAdmins.filter(a => a.role === 'student').filter(a => !(request.assigned_students || []).some(s => s.id === a.id)).map(admin =>
+                                `<option value="${admin.id}">${admin.full_name}</option>`
                             ).join('')}
                         </select>
                         <button class="btn" onclick="assignStudent(${request.id})" style="padding: 8px 16px;">Tayinlash</button>
-                        ${request.assigned_student_id ? `<button class="btn btn-danger" onclick="unassignStudent(${request.id})" style="padding: 8px 12px;">Bekor</button>` : ''}
                     </div>
                     ` : ''}
                 </div>
@@ -6234,16 +6258,15 @@
             }
         }
 
-        async function unassignStudent(requestId) {
-            if (!confirm('Talaba tayinlovini bekor qilishni xohlaysizmi?')) return;
+        async function unassignStudent(requestId, studentId) {
+            if (!confirm('Talabani olib tashlashni xohlaysizmi?')) return;
             try {
                 const response = await fetch('/api/unassign-student', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ requestId })
+                    body: JSON.stringify({ requestId, studentId })
                 });
                 if (response.ok) {
-                    alert('✅ Talaba tayinlovi bekor qilindi!');
                     await loadRequests();
                     showRequestDetail(requestId);
                 } else {
