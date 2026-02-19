@@ -367,7 +367,7 @@ app.get('/api/requests', requireAuth, async (req, res) => {
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
       ${studentFilter}
-      ORDER BY r.created_at DESC
+      ORDER BY r.created_at ASC
     `);
 
     const rows = result.rows.map(r => anonymizeRequest(r, req.session.role));

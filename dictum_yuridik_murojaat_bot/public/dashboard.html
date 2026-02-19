@@ -4858,9 +4858,9 @@
                 const bUnanswered = b.requests.filter(isUnanswered).length;
                 if (aUnanswered > 0 && bUnanswered === 0) return -1;
                 if (bUnanswered > 0 && aUnanswered === 0) return 1;
-                const aLatest = new Date(a.requests[0].created_at);
-                const bLatest = new Date(b.requests[0].created_at);
-                return bLatest - aLatest;
+                const aLatest = new Date(a.requests[a.requests.length - 1].created_at);
+                const bLatest = new Date(b.requests[b.requests.length - 1].created_at);
+                return aLatest - bLatest;
             });
 
             const statusText = {
