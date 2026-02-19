@@ -815,6 +815,24 @@ app.get('/api/rankings', requireAuth, async (req, res) => {
   }
 });
 
+// Get request stats for a specific admin
+app.get('/api/admin-stats/:id', requireAuth, async (req, res) => {
+  try {
+    const adminId = parseInt(req.params.id);
+    const result = await pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM requests WHERE assigned_to = $1) AS assigned_count,
+        (SELECT COUNT(*) FROM requests WHERE assigned_to = $1 AND status = 'answered') AS answered_count,
+        (SELECT COUNT(*) FROM requests WHERE student_admin_id = $1) AS student_response_count,
+        (SELECT COUNT(*) FROM requests WHERE responded_by = (SELECT full_name FROM admins WHERE id = $1) AND status = 'answered') AS responded_count
+    `, [adminId]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching admin stats:', error);
+    res.status(500).json({ error: 'Statistika olishda xatolik' });
+  }
+});
+
 // Monte Carlo simulation data
 app.get('/api/monte-carlo', requireAuth, async (req, res) => {
   try {
@@ -1759,6 +1777,64 @@ Qoidalar:
   } catch (error) {
     console.error('[AI] Analysis error:', error);
     res.status(500).json({ error: 'AI tahlil xatoligi: ' + error.message });
+  }
+});
+
+// ========== LEGAL SEARCH CHAT ==========
+app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
+  try {
+    const { message, history } = req.body;
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Xabar matni topilmadi' });
+    }
+
+    const systemPrompt = `Siz O'zbekiston huquqi bo'yicha qonun qidirish yordamchisisiz.
+
+VAZIFANGIZ:
+Foydalanuvchi savoliga FAQAT quyidagi manbalar asosida javob bering:
+1. lex.uz — O'zbekiston Respublikasi qonunchilik ma'lumotlar bazasi
+2. public.sud.uz — O'zbekiston sudlari qarorlari bazasi
+
+QOIDALAR:
+- FAQAT Google Search yordamida "site:lex.uz [savol]" va "site:public.sud.uz [savol]" qidiruv natijalariga tayanib javob bering
+- Har bir topilgan qonun yoki sud qarori uchun TO'G'RIDAN-TO'G'RI havola bering (masalan: https://lex.uz/docs/111189)
+- Havola to'qib chiqarish QATTIYAN TAQIQLANADI! Faqat Google Search natijalarida ko'ringan havolalarni bering
+- Agar aniq havola topa olmasangiz, "Aniq havola topilmadi, lex.uz saytida qidiring" deb yozing
+- Javob FAQAT O'zbek (lotin) tilida bo'lishi shart
+- Javob qisqa, aniq va strukturali bo'lsin
+- Tegishli moddalarning raqami va mazmunini ko'rsating
+- Sud amaliyotidan tegishli ishlarni keltiring (agar mavjud bo'lsa)
+
+JAVOB FORMATI:
+1. **Tegishli qonunlar:** (lex.uz dan)
+   - Qonun/kodeks nomi, modda raqami, qisqa mazmun, havola
+2. **Sud amaliyoti:** (public.sud.uz dan)
+   - Ish raqami, sud, sana, qisqa mazmun, havola
+3. **Xulosa:** Qisqa huquqiy fikr
+
+> "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun lex.uz va public.sud.uz saytlaridan tekshiring."`;
+
+    // Build messages array for callAI
+    const aiMessages = [];
+
+    if (Array.isArray(history) && history.length > 0) {
+      const recentHistory = history.length > 18 ? history.slice(-18) : history;
+      recentHistory.forEach((msg, i) => {
+        aiMessages.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          text: i === 0 && msg.role === 'user' ? systemPrompt + '\n\n' + msg.text : msg.text
+        });
+      });
+    }
+
+    const currentText = aiMessages.length === 0 ? systemPrompt + '\n\n' + message : message;
+    aiMessages.push({ role: 'user', text: currentText });
+
+    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 4096 });
+    res.json({ reply: aiResult.text, provider: aiResult.provider });
+  } catch (error) {
+    console.error('[Legal Chat] Error:', error);
+    res.status(500).json({ error: 'Qonun qidirish xatoligi: ' + error.message });
   }
 });
 
