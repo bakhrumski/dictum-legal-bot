@@ -4688,8 +4688,10 @@
         async function loadRequests() {
             try {
                 const response = await fetch('/api/requests');
+                if (!response.ok) throw new Error('Server ' + response.status);
                 requests = await response.json();
-                
+                if (!Array.isArray(requests)) { requests = []; throw new Error('Invalid response'); }
+
                 displayRequests(
                     currentFilters.category,
                     currentFilters.assignee,
@@ -4839,7 +4841,8 @@
                 userGroups[key].requests.push(req);
             });
 
-            // Sort users by most recent request date (newest first)
+            // Sort users: assigned-to-me first, then unanswered, then by most recent
+            const myId = currentUser.adminId;
             const sortedUsers = Object.values(userGroups).sort((a, b) => {
                 // Assigned to me first
                 const aHasMine = a.requests.some(r => r.assigned_to === myId || (r.assigned_students || []).some(s => s.id === myId)) ? 0 : 1;
