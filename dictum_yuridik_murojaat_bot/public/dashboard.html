@@ -47,9 +47,9 @@
             --border-color: rgba(0, 0, 0, 0.08);
             --border-light: rgba(0, 0, 0, 0.05);
             --border-input: rgba(0, 0, 0, 0.1);
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-            --shadow-lg: 0 12px 40px rgba(0,0,0,0.1);
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+            --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
             --dropdown-bg: rgba(255, 255, 255, 0.95);
             --dropdown-header-bg: linear-gradient(135deg, #1661BE, #0C7ECF);
             --dropdown-hover: rgba(245, 245, 247, 0.9);
@@ -71,9 +71,9 @@
             --monte-card-bg: rgba(255, 255, 255, 0.95);
             --ranking-bg: rgba(255, 255, 255, 0.95);
             --bg-card-hover: rgba(245, 245, 247, 0.9);
-            --ios-radius: 16px;
-            --ios-radius-lg: 20px;
-            --ios-radius-sm: 12px;
+            --ios-radius: 14px;
+            --ios-radius-lg: 18px;
+            --ios-radius-sm: 10px;
         }
 
         [data-theme="dark"] {
@@ -108,9 +108,9 @@
             --border-color: rgba(255, 255, 255, 0.08);
             --border-light: rgba(255, 255, 255, 0.04);
             --border-input: rgba(255, 255, 255, 0.1);
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-            --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+            --shadow-md: 0 2px 8px rgba(0,0,0,0.3);
+            --shadow-lg: 0 8px 30px rgba(0,0,0,0.4);
             --dropdown-bg: rgba(22, 27, 34, 0.98);
             --dropdown-header-bg: linear-gradient(135deg, #0d2440, #133a5c);
             --dropdown-hover: rgba(255, 255, 255, 0.06);
@@ -200,6 +200,7 @@
             background-attachment: fixed;
             min-height: 100vh;
             padding: 20px;
+            padding-bottom: calc(64px + 20px + env(safe-area-inset-bottom, 0px));
             color: var(--text-primary);
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -229,23 +230,185 @@
             margin: 0 auto;
         }
 
+        /* ========== TAB SYSTEM ========== */
+        .tab-view {
+            display: none;
+            animation: fadeTabIn 0.25s ease both;
+        }
+        .tab-view.active {
+            display: block;
+        }
+        @keyframes fadeTabIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ========== BOTTOM TAB BAR ========== */
+        .bottom-tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            background: var(--glass-bg-strong);
+            backdrop-filter: blur(var(--glass-blur-strong));
+            -webkit-backdrop-filter: blur(var(--glass-blur-strong));
+            border-top: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 8px;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            z-index: 900;
+            box-shadow: 0 -2px 20px rgba(0,0,0,0.06);
+        }
+        [data-theme="dark"] .bottom-tab-bar {
+            background: rgba(13, 17, 23, 0.95);
+            border-top-color: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 -2px 20px rgba(0,0,0,0.3);
+        }
+        .tab-bar-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            padding: 6px 14px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: color 0.2s ease, transform 0.15s ease;
+            position: relative;
+            -webkit-tap-highlight-color: transparent;
+            min-width: 56px;
+            font-family: inherit;
+        }
+        .tab-bar-item:active {
+            transform: scale(0.9);
+        }
+        .tab-bar-item.active {
+            color: #019CE0;
+        }
+        [data-theme="dark"] .tab-bar-item.active {
+            color: #00B9F2;
+        }
+        .tab-bar-item .tab-icon {
+            transition: all 0.2s ease;
+        }
+        .tab-bar-item.active .tab-icon {
+            stroke: #019CE0;
+        }
+        [data-theme="dark"] .tab-bar-item.active .tab-icon {
+            stroke: #00B9F2;
+        }
+        .tab-label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .tab-badge {
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            background: #e74c3c;
+            color: white;
+            font-size: 9px;
+            font-weight: 800;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            line-height: 1;
+            animation: pulse-badge 2s infinite;
+        }
+
+        /* ========== CHAT AS TAB ========== */
+        body.chat-tab-active { overflow: hidden !important; height: 100vh !important; }
+        #tabChat.tab-view.active {
+            overflow: hidden;
+            height: calc(100vh - 68px - 64px - 40px);
+        }
+        .chat-tab-wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--ios-radius-lg);
+            overflow: hidden;
+        }
+        .chat-tab-wrapper .chat-header {
+            flex-shrink: 0;
+        }
+        .chat-tab-wrapper .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .chat-tab-wrapper .chat-input-area {
+            flex-shrink: 0;
+            border-top: 1px solid var(--glass-border);
+        }
+        .chat-tab-wrapper .chat-members-panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10;
+        }
+
+        /* ========== TAB SECTION OVERRIDES ========== */
+        .tab-view > .admin-management { margin-top: 0; }
+        .tab-view > .ai-archive-section { margin-top: 0; }
+        .tab-view > .reg-section { margin-top: 0; }
+        .tab-view > .monte-carlo-section { margin-top: 16px; }
+        .tab-view > .legal-chat-section { margin-top: 0; }
+
+        /* Ensure sections in tabs are always visible (no collapsed state) */
+        .tab-view > .admin-management .jamoa-content,
+        .tab-view > .legal-chat-section .legal-chat-body,
+        .tab-view > .ai-archive-section .ai-archive-list,
+        .tab-view > .reg-section .reg-section-body {
+            display: flex !important;
+        }
+        .tab-view > .admin-management .jamoa-content { flex-direction: row; }
+        .tab-view > .legal-chat-section .legal-chat-body { flex-direction: column; }
+        .tab-view > .ai-archive-section .ai-archive-list { flex-direction: row; }
+        .tab-view > .reg-section .reg-section-body { display: block !important; }
+
+        /* Hide chat wrapper button (chat is now a tab) */
+        .header-chat-wrapper { display: none; }
+        /* Float notification stack on top */
+        .chat-msg-notif-stack {
+            position: fixed !important;
+            top: 20px !important;
+            right: 20px !important;
+            z-index: 1001 !important;
+        }
+
         header {
             background: var(--glass-bg);
             backdrop-filter: blur(var(--glass-blur-strong));
             -webkit-backdrop-filter: blur(var(--glass-blur-strong));
             border: 1px solid var(--glass-border);
-            padding: 16px 20px;
+            padding: 12px 20px;
             border-radius: var(--ios-radius-lg);
-            margin-bottom: 20px;
-            box-shadow: var(--shadow-md);
+            margin-bottom: 16px;
+            box-shadow: var(--shadow-sm);
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: relative;
             z-index: 10;
-            height: 80px;
+            height: 68px;
             overflow: visible;
-            max-height: 80px;
+            max-height: 68px;
         }
 
         .header-left h1 {
@@ -625,7 +788,7 @@
             flex-direction: column;
         }
         .requests-container #requestsList {
-            height: 70vh;
+            height: calc(70vh - 64px);
             overflow-y: auto;
             flex: 1;
         }
@@ -3570,6 +3733,14 @@
             .jamoa-content .rankings-sidebar { flex-direction: column; width: 100%; }
             .stats { flex-wrap: wrap; }
             .stat-card { flex: 1 1 45%; min-width: 140px; }
+            /* --- Bottom tab bar mobile --- */
+            .bottom-tab-bar { height: 56px; }
+            .tab-label { font-size: 9px; }
+            .tab-bar-item .tab-icon { width: 20px; height: 20px; }
+            .tab-bar-item { min-width: 48px; padding: 6px 8px; }
+            body { padding-bottom: calc(56px + 12px + env(safe-area-inset-bottom, 0px)) !important; }
+            #tabChat.tab-view.active { height: calc(100vh - 56px - 56px - 24px); }
+            .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius); }
 
             /* --- Mobile header --- */
             header { height: 56px; max-height: 56px; padding: 8px 10px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; }
@@ -3611,6 +3782,14 @@
 
         }
         @media (max-width: 480px) {
+            /* --- Bottom tab bar ultra-small --- */
+            .tab-label { display: none; }
+            .tab-bar-item { min-width: 44px; padding: 8px; }
+            .bottom-tab-bar { height: 50px; }
+            body { padding-bottom: calc(50px + 8px + env(safe-area-inset-bottom, 0px)) !important; }
+            #tabChat.tab-view.active { height: calc(100vh - 50px - 50px - 16px); }
+            .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius-sm); }
+
             header { height: 50px; max-height: 50px; padding: 6px 8px; }
             .header-center { display: none !important; }
             .header-left h1 { font-size: 13px; letter-spacing: 1px; gap: 4px !important; }
@@ -3696,8 +3875,8 @@
                 <span id="userRole" style="display:none;"></span>
             </div>
         </header>
-        <!-- Mobile: icons and profile grouped together via CSS order -->
-        
+        <!-- TAB: Home — Stats -->
+        <div class="tab-view active" data-tab="home">
         <div class="stats">
             <div class="stat-card" onclick="scrollToRequests('')">
                 <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
@@ -3728,12 +3907,14 @@
                 </div>
             </div>
         </div>
-        
+        </div><!-- /tab-view home: stats -->
+
+        <!-- TAB: Jamoa (Team) -->
+        <div class="tab-view" id="tabJamoa" data-tab="jamoa">
         <!-- Admin Management Section -->
-        <div class="admin-management collapsed" id="adminManagementSection">
-            <div class="admin-management-header" onclick="toggleJamoaTable(event)">
+        <div class="admin-management" id="adminManagementSection">
+            <div class="admin-management-header">
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     <h2>Jamoa</h2>
                 </div>
                 <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="event.stopPropagation(); openAddMemberModal()" title="Yangi a'zo qo'shish"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button>
@@ -3768,9 +3949,12 @@
                 </div>
             </div>
         </div>
+        </div><!-- /tab-view jamoa -->
 
+        <!-- TAB: AI (Master only) -->
+        <div class="tab-view" id="tabAi" data-tab="ai">
         <!-- Legal Search Chat Section (Master Admin Only) -->
-        <div class="legal-chat-section collapsed" id="legalChatSection" style="display:none;">
+        <div class="legal-chat-section" id="legalChatSection">
             <div class="legal-chat-header" onclick="document.getElementById('legalChatSection').classList.toggle('collapsed')">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -3795,7 +3979,11 @@
                 </div>
             </div>
         </div>
+        <!-- AI Archive will be added below after requests -->
+        </div><!-- /tab-view ai: legal chat -->
 
+        <!-- TAB: Home — Requests -->
+        <div class="tab-view active" data-tab="home">
         <div class="main-content-area">
             <div class="requests-container" id="requestsSection">
                 <div class="controls">
@@ -3852,9 +4040,12 @@
             </div>
 
         </div>
+        </div><!-- /tab-view home: requests -->
 
+        <!-- TAB: AI — Archive (continuation of AI tab) -->
+        <div class="tab-view" data-tab="ai">
         <!-- AI Analyses Archive Section -->
-        <div class="ai-archive-section collapsed" id="aiArchiveSection">
+        <div class="ai-archive-section" id="aiArchiveSection">
             <div class="ai-archive-header" onclick="document.getElementById('aiArchiveSection').classList.toggle('collapsed'); if(!document.getElementById('aiArchiveSection').classList.contains('collapsed') && !aiArchiveLoaded) loadAiArchive();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -3865,9 +4056,12 @@
                 <div class="ai-archive-empty">Arxivni ko'rish uchun bo'limni oching</div>
             </div>
         </div>
+        </div><!-- /tab-view ai: archive -->
 
+        <!-- TAB: So'rovlar (Registrations) -->
+        <div class="tab-view" id="tabSorov" data-tab="sorov">
         <!-- Registration Requests Section (Master Only) -->
-        <div class="reg-section collapsed" id="regSection" style="display:none;">
+        <div class="reg-section" id="regSection">
             <div class="reg-section-header" onclick="document.getElementById('regSection').classList.toggle('collapsed'); if(!document.getElementById('regSection').classList.contains('collapsed') && !regRequestsLoaded) loadRegRequests();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -3886,7 +4080,10 @@
         <div class="reg-detail-overlay" id="regDetailOverlay" onclick="if(event.target===this)this.classList.remove('active')">
             <div class="reg-detail-box" id="regDetailBox"></div>
         </div>
+        </div><!-- /tab-view sorov -->
 
+        <!-- TAB: Home — Monte Carlo -->
+        <div class="tab-view active" data-tab="home">
         <!-- Monte Carlo Simulation Section -->
         <div class="monte-carlo-section" id="monteCarloSection">
             <div class="mc-card">
@@ -3906,7 +4103,85 @@
                 </div>
             </div>
         </div>
-    </div>
+        </div><!-- /tab-view home: monte carlo -->
+
+        <!-- TAB: Chat -->
+        <div class="tab-view" id="tabChat" data-tab="chat">
+            <div class="chat-tab-wrapper" id="chatTabWrapper">
+                <div class="chat-header">
+                    <div class="chat-header-left" onclick="toggleMembersPanel()">
+                        <div class="chat-header-avatar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                        <div>
+                            <h3>Guruh Chat</h3>
+                            <div class="chat-header-info" id="chatMemberCount">Yuristlar va studentlar uchun</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center;">
+                        <button class="chat-header-delete-all" id="chatDeleteAllBtn" onclick="deleteAllChatMessages()" title="Barcha xabarlarni o'chirish" style="display:none;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Tozalash
+                        </button>
+                    </div>
+                </div>
+                <!-- Members panel -->
+                <div class="chat-members-panel" id="chatMembersPanel">
+                    <div class="chat-members-header">
+                        <h3 id="chatMembersTitle">A'zolar</h3>
+                        <button class="chat-members-back" onclick="toggleMembersPanel()">&times;</button>
+                    </div>
+                    <div class="chat-members-list" id="chatMembersList"></div>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <div style="padding:40px 20px;text-align:center;color:#667781;"><p style="font-size:16px;font-weight:600;">Xabarlar yo'q</p><p style="font-size:13px;">Birinchi xabaringizni yozing!</p></div>
+                </div>
+                <div class="chat-input-area">
+                    <div class="mention-dropdown" id="mentionDropdown"></div>
+                    <div class="chat-reply-preview" id="chatReplyPreview">
+                        <div class="chat-reply-preview-content">
+                            <div class="chat-reply-preview-sender" id="chatReplyPreviewSender"></div>
+                            <div class="chat-reply-preview-text" id="chatReplyPreviewText"></div>
+                        </div>
+                        <button class="chat-reply-cancel" onclick="cancelReply()">&times;</button>
+                    </div>
+                    <div class="chat-input-wrapper">
+                        <textarea class="chat-input" id="chatInput"
+                            placeholder="Xabar yozing... (@ bilan mention)"
+                            rows="1"
+                            onkeydown="handleChatKeydown(event)"
+                            oninput="handleChatInput(event)"></textarea>
+                        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()" title="Yuborish">&#10148;</button>
+                    </div>
+                </div>
+            </div>
+        </div><!-- /tab-view chat -->
+
+    </div><!-- /.container -->
+
+    <!-- Bottom Tab Bar -->
+    <nav class="bottom-tab-bar" id="bottomTabBar">
+        <button class="tab-bar-item active" data-tab="home" onclick="switchTab('home')">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span class="tab-label">Asosiy</span>
+        </button>
+        <button class="tab-bar-item" data-tab="jamoa" onclick="switchTab('jamoa')">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="tab-label">Jamoa</span>
+        </button>
+        <button class="tab-bar-item" data-tab="chat" onclick="switchTab('chat')">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="tab-label">Chat</span>
+            <span class="tab-badge" id="tabChatBadge" style="display:none;">0</span>
+        </button>
+        <button class="tab-bar-item" data-tab="ai" id="tabBarAi" onclick="switchTab('ai')" style="display:none;">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/></svg>
+            <span class="tab-label">AI</span>
+        </button>
+        <button class="tab-bar-item" data-tab="sorov" id="tabBarSorov" onclick="switchTab('sorov')" style="display:none;">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>
+            <span class="tab-label">So'rovlar</span>
+            <span class="tab-badge" id="tabSorovBadge" style="display:none;">0</span>
+        </button>
+    </nav>
 
     <!-- Admin Creation Modal -->
     <div class="admin-modal-overlay" id="addMemberModal">
@@ -4062,55 +4337,101 @@
     <div class="chat-notification-container" id="chatNotifContainer"></div>
 
     <!-- Community Chat Panel -->
-    <div class="chat-panel" id="chatPanel">
-        <div class="chat-header">
-            <div class="chat-header-left" onclick="toggleMembersPanel()">
-                <div class="chat-header-avatar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-                <div>
-                    <h3>Guruh Chat</h3>
-                    <div class="chat-header-info" id="chatMemberCount">Yuristlar va studentlar uchun</div>
-                </div>
-            </div>
-            <div style="display:flex; align-items:center;">
-                <button class="chat-header-delete-all" id="chatDeleteAllBtn" onclick="deleteAllChatMessages()" title="Barcha xabarlarni o'chirish" style="display:none;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    Tozalash
-                </button>
-                <button class="chat-close-btn" onclick="toggleChat()">&times;</button>
-            </div>
-        </div>
-        <!-- Members panel -->
-        <div class="chat-members-panel" id="chatMembersPanel">
-            <div class="chat-members-header">
-                <h3 id="chatMembersTitle">A'zolar</h3>
-                <button class="chat-members-back" onclick="toggleMembersPanel()">&times;</button>
-            </div>
-            <div class="chat-members-list" id="chatMembersList"></div>
-        </div>
-        <div class="chat-messages" id="chatMessages">
-            <div style="padding:40px 20px;text-align:center;color:#667781;"><p style="font-size:16px;font-weight:600;">Xabarlar yo'q</p><p style="font-size:13px;">Birinchi xabaringizni yozing!</p></div>
-        </div>
-        <div class="chat-input-area">
-            <div class="mention-dropdown" id="mentionDropdown"></div>
-            <div class="chat-reply-preview" id="chatReplyPreview">
-                <div class="chat-reply-preview-content">
-                    <div class="chat-reply-preview-sender" id="chatReplyPreviewSender"></div>
-                    <div class="chat-reply-preview-text" id="chatReplyPreviewText"></div>
-                </div>
-                <button class="chat-reply-cancel" onclick="cancelReply()">&times;</button>
-            </div>
-            <div class="chat-input-wrapper">
-                <textarea class="chat-input" id="chatInput"
-                    placeholder="Xabar yozing... (@ bilan mention)"
-                    rows="1"
-                    onkeydown="handleChatKeydown(event)"
-                    oninput="handleChatInput(event)"></textarea>
-                <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()" title="Yuborish">&#10148;</button>
-            </div>
-        </div>
-    </div>
+    <!-- Old chat panel kept as hidden placeholder for JS compatibility -->
+    <div class="chat-panel" id="chatPanel" style="display:none !important;"></div>
 
     <script>
+        // ========== TAB NAVIGATION SYSTEM ==========
+        let currentTab = 'home';
+
+        function switchTab(tabName) {
+            // Hide all tab views
+            document.querySelectorAll('.tab-view').forEach(function(view) {
+                view.classList.remove('active');
+            });
+            // Deactivate all tab bar items
+            document.querySelectorAll('.tab-bar-item').forEach(function(item) {
+                item.classList.remove('active');
+            });
+
+            // Show all tab views matching the selected tab
+            document.querySelectorAll('.tab-view[data-tab="' + tabName + '"]').forEach(function(view) {
+                view.classList.add('active');
+            });
+
+            // Activate tab bar item
+            var targetItem = document.querySelector('.tab-bar-item[data-tab="' + tabName + '"]');
+            if (targetItem) targetItem.classList.add('active');
+
+            var prevTab = currentTab;
+            currentTab = tabName;
+
+            // Lock body scroll for chat tab
+            if (tabName === 'chat') {
+                document.body.classList.add('chat-tab-active');
+                onChatTabActivated();
+            } else {
+                document.body.classList.remove('chat-tab-active');
+                if (prevTab === 'chat') onChatTabDeactivated();
+            }
+
+            if (tabName === 'ai') {
+                // Auto-expand legal chat if collapsed
+                var legalChat = document.getElementById('legalChatSection');
+                if (legalChat && legalChat.classList.contains('collapsed')) {
+                    legalChat.classList.remove('collapsed');
+                }
+                // Load AI archive if not loaded
+                if (typeof aiArchiveLoaded !== 'undefined' && !aiArchiveLoaded && typeof loadAiArchive === 'function') {
+                    loadAiArchive();
+                }
+            }
+
+            if (tabName === 'sorov') {
+                var regSection = document.getElementById('regSection');
+                if (regSection && regSection.classList.contains('collapsed')) {
+                    regSection.classList.remove('collapsed');
+                }
+                if (typeof regRequestsLoaded !== 'undefined' && !regRequestsLoaded && typeof loadRegRequests === 'function') {
+                    loadRegRequests();
+                }
+            }
+
+            // Save tab preference
+            try { localStorage.setItem('dictum-active-tab', tabName); } catch(e) {}
+
+            // Scroll to top on tab switch
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function onChatTabActivated() {
+            if (typeof chatIsOpen !== 'undefined') chatIsOpen = true;
+            if (typeof chatUnreadCount !== 'undefined') chatUnreadCount = 0;
+            if (typeof updateUnreadBadge === 'function') updateUnreadBadge();
+            if (typeof clearAllHeaderNotifs === 'function') clearAllHeaderNotifs();
+            if (typeof currentUser !== 'undefined' && currentUser.role === 'master') {
+                var btn = document.getElementById('chatDeleteAllBtn');
+                if (btn) btn.style.display = 'flex';
+            }
+            if (typeof updateChatMemberCount === 'function') updateChatMemberCount();
+            if (typeof chatMessages !== 'undefined' && chatMessages.length === 0 && typeof loadChatMessages === 'function') {
+                loadChatMessages();
+            }
+            if (typeof startChatPolling === 'function') startChatPolling();
+            if (typeof scrollChatToBottom === 'function') {
+                setTimeout(scrollChatToBottom, 100);
+            }
+            setTimeout(function() {
+                var input = document.getElementById('chatInput');
+                if (input) input.focus();
+            }, 350);
+        }
+
+        function onChatTabDeactivated() {
+            if (typeof chatIsOpen !== 'undefined') chatIsOpen = false;
+            if (typeof stopChatPolling === 'function') stopChatPolling();
+        }
+
         // Theme toggle function
         function toggleTheme() {
             const html = document.documentElement;
@@ -4210,6 +4531,12 @@
                         regSection.style.display = 'none';
                     }
                 }
+
+                // Show/hide master-only tabs in bottom tab bar
+                var tabBarAi = document.getElementById('tabBarAi');
+                if (tabBarAi) tabBarAi.style.display = data.role === 'master' ? '' : 'none';
+                var tabBarSorov = document.getElementById('tabBarSorov');
+                if (tabBarSorov) tabBarSorov.style.display = data.role === 'master' ? '' : 'none';
             } catch (error) {
                 console.error('Error loading user info:', error);
             }
@@ -4721,9 +5048,12 @@
         }
         
         function scrollToRequests(statusValue) {
+            if (currentTab !== 'home') switchTab('home');
             document.getElementById('statusFilter').value = statusValue;
             filterRequests();
-            document.getElementById('requestsSection').scrollIntoView({ behavior: 'smooth' });
+            setTimeout(function() {
+                document.getElementById('requestsSection').scrollIntoView({ behavior: 'smooth' });
+            }, 100);
         }
 
         function clearFilters() {
@@ -6045,10 +6375,19 @@
                 if (!r.ok) return;
                 const s = await r.json();
                 const badge = document.getElementById('regPendingBadge');
-                if (parseInt(s.pending) > 0) {
+                var pendingCount = parseInt(s.pending) || 0;
+                if (pendingCount > 0) {
                     badge.textContent = s.pending + ' kutilmoqda';
                     badge.style.display = 'inline';
                 } else { badge.style.display = 'none'; }
+                // Update tab bar badge
+                var tabBadge = document.getElementById('tabSorovBadge');
+                if (tabBadge) {
+                    if (pendingCount > 0) {
+                        tabBadge.textContent = pendingCount;
+                        tabBadge.style.display = 'flex';
+                    } else { tabBadge.style.display = 'none'; }
+                }
             } catch (e) {}
         }
 
@@ -7334,26 +7673,11 @@
         let chatReplyTo = null;
 
         function toggleChat() {
-            chatIsOpen = !chatIsOpen;
-            const panel = document.getElementById('chatPanel');
-            if (chatIsOpen) {
-                panel.classList.add('open');
-                document.body.classList.add('chat-open');
-                chatUnreadCount = 0;
-                updateUnreadBadge();
-                clearAllHeaderNotifs();
-                if (currentUser.role === 'master') {
-                    document.getElementById('chatDeleteAllBtn').style.display = 'flex';
-                }
-                updateChatMemberCount();
-                if (chatMessages.length === 0) loadChatMessages();
-                startChatPolling();
-                scrollChatToBottom();
-                setTimeout(() => document.getElementById('chatInput').focus(), 350);
+            // Redirect to tab-based navigation
+            if (currentTab === 'chat') {
+                switchTab('home');
             } else {
-                panel.classList.remove('open');
-                document.body.classList.remove('chat-open');
-                stopChatPolling();
+                switchTab('chat');
             }
         }
 
@@ -7568,11 +7892,23 @@
         function updateUnreadBadge() {
             const headerBadge = document.getElementById('headerChatBadge');
             const countText = chatUnreadCount > 99 ? '99+' : chatUnreadCount;
-            if (chatUnreadCount > 0) {
-                headerBadge.textContent = countText;
-                headerBadge.style.display = 'flex';
-            } else {
-                headerBadge.style.display = 'none';
+            if (headerBadge) {
+                if (chatUnreadCount > 0) {
+                    headerBadge.textContent = countText;
+                    headerBadge.style.display = 'flex';
+                } else {
+                    headerBadge.style.display = 'none';
+                }
+            }
+            // Also update tab bar chat badge
+            var tabBadge = document.getElementById('tabChatBadge');
+            if (tabBadge) {
+                if (chatUnreadCount > 0 && currentTab !== 'chat') {
+                    tabBadge.textContent = countText;
+                    tabBadge.style.display = 'flex';
+                } else {
+                    tabBadge.style.display = 'none';
+                }
             }
         }
 
@@ -7902,6 +8238,14 @@
             if (currentUser.role === 'master') {
                 const addBtn = document.getElementById('addMemberBtn');
                 if (addBtn) addBtn.style.display = 'inline-block';
+            }
+            // Restore last active tab (validate it exists and is visible)
+            var savedTab = localStorage.getItem('dictum-active-tab');
+            if (savedTab && savedTab !== 'home') {
+                var tabBtn = document.querySelector('.tab-bar-item[data-tab="' + savedTab + '"]');
+                if (tabBtn && tabBtn.style.display !== 'none') {
+                    switchTab(savedTab);
+                }
             }
         });
         loadRequests();
