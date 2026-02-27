@@ -228,6 +228,7 @@
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            padding: 0 16px;
         }
 
         /* ========== TAB SYSTEM ========== */
@@ -3178,6 +3179,7 @@
             padding: 20px;
             box-shadow: var(--shadow-md);
             margin-top: 20px;
+            overflow: hidden;
         }
         .admin-management-header {
             display: flex;
@@ -3201,12 +3203,13 @@
             gap: 20px;
             align-items: flex-start;
         }
-        .jamoa-content .admin-table {
+        .admin-table-wrapper {
             flex: 1;
             min-width: 0;
+            overflow-x: auto;
         }
         .jamoa-content .rankings-sidebar {
-            width: 280px;
+            width: 260px;
             flex-shrink: 0;
         }
         .admin-management.collapsed .jamoa-content {
@@ -3920,6 +3923,7 @@
                 <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="event.stopPropagation(); openAddMemberModal()" title="Yangi a'zo qo'shish"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button>
             </div>
             <div class="jamoa-content">
+                <div class="admin-table-wrapper">
                 <table class="admin-table">
                     <thead>
                         <tr>
@@ -3936,6 +3940,7 @@
                         <tr><td colspan="7" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
                     </tbody>
                 </table>
+                </div>
                 <!-- Rankings Sidebar (inside Jamoa) -->
                 <div class="rankings-sidebar">
                     <div class="ranking-card">
