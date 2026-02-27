@@ -406,14 +406,16 @@
             max-height: 68px;
         }
 
+        .header-brand { cursor: pointer; }
         .header-left h1 {
             color: #1a2332;
             margin-bottom: 2px;
-            font-weight: 300;
-            letter-spacing: 6px;
+            font-weight: 400;
+            letter-spacing: 8px;
             text-transform: uppercase;
-            font-size: 28px;
+            font-size: 26px;
             line-height: 1;
+            font-family: 'Georgia', 'Times New Roman', serif;
         }
         [data-theme="dark"] .header-left h1 { color: #e6edf3; }
 
@@ -632,7 +634,10 @@
         
         .subtitle {
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: 13px;
+            font-style: italic;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            letter-spacing: 0.5px;
         }
         
         .stats {
@@ -4238,8 +4243,8 @@
     <div class="container">
         <header>
             <div class="header-left">
-                <div class="header-brand">
-                    <h1 style="display:inline-flex;align-items:center;gap:14px;">DICTUM <svg width="22" height="22" viewBox="0 0 64 64" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="32" y1="8" x2="32" y2="56"/><line x1="12" y1="56" x2="52" y2="56"/><line x1="12" y1="18" x2="52" y2="18"/><circle cx="32" cy="8" r="3" fill="var(--text-secondary)" stroke="none"/><path d="M12 18 L6 38"/><path d="M12 18 L18 38"/><path d="M6 38 Q12 46 18 38"/><path d="M52 18 L46 38"/><path d="M52 18 L58 38"/><path d="M46 38 Q52 46 58 38"/></svg></h1>
+                <div class="header-brand" onclick="switchTab('home')">
+                    <h1 style="display:inline-flex;align-items:center;gap:12px;">DICTUM <svg width="26" height="26" viewBox="0 0 64 64" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="32" y1="6" x2="32" y2="56"/><line x1="14" y1="56" x2="50" y2="56"/><line x1="14" y1="18" x2="50" y2="18"/><circle cx="32" cy="6" r="3" fill="var(--text-secondary)" stroke="none"/><path d="M14 18 L7 38"/><path d="M14 18 L21 38"/><path d="M7 38 Q14 46 21 38"/><path d="M50 18 L43 38"/><path d="M50 18 L57 38"/><path d="M43 38 Q50 46 57 38"/></svg></h1>
                     <p class="subtitle">Murojaatlar boshqaruv tizimi</p>
                 </div>
             </div>
