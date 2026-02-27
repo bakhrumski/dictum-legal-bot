@@ -378,7 +378,6 @@
         .tab-view > .reg-section .reg-section-body {
             display: flex !important;
         }
-        .tab-view > .admin-management .jamoa-content { flex-direction: row; }
         .tab-view > .legal-chat-section .legal-chat-body { flex-direction: column; }
         .tab-view > .ai-archive-section .ai-archive-list { flex-direction: row; }
         .tab-view > .reg-section .reg-section-body { display: block !important; }
@@ -3722,8 +3721,9 @@
         .mc-res-stat.worst .stat-val { color: #e74c3c; }
 
         @media (max-width: 1024px) {
-            .jamoa-content { flex-direction: column; }
-            .jamoa-content .rankings-sidebar { width: 100%; flex-direction: column; }
+            .jamoa-content { flex-direction: column !important; }
+            .jamoa-content .rankings-sidebar { width: 100%; flex-direction: column; flex-shrink: 1; }
+            .admin-table-wrapper { overflow-x: auto; }
             .monte-carlo-section { grid-template-columns: 1fr; }
         }
         @media (max-width: 768px) {
