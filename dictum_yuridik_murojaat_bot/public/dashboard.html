@@ -407,6 +407,12 @@
         }
 
         .header-brand { cursor: pointer; }
+        .header-logo {
+            height: 44px;
+            width: auto;
+            object-fit: contain;
+        }
+        [data-theme="dark"] .header-logo { filter: brightness(0) invert(1); }
         .header-left h1 {
             color: #1a2332;
             margin-bottom: 2px;
@@ -4150,6 +4156,7 @@
             /* --- Mobile header --- */
             header { height: 56px; max-height: 56px; padding: 8px 10px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; }
             .header-left { flex-shrink: 0; min-width: 0; }
+            .header-logo { height: 36px; }
             .header-left h1 { font-size: 15px; letter-spacing: 2px; gap: 6px !important; }
             .header-left h1 svg { width: 14px; height: 14px; }
             .header-left .subtitle { font-size: 7px; letter-spacing: 1px; }
@@ -4197,6 +4204,7 @@
 
             header { height: 50px; max-height: 50px; padding: 6px 8px; }
             .header-center { display: none !important; }
+            .header-logo { height: 28px; }
             .header-left h1 { font-size: 13px; letter-spacing: 1px; gap: 4px !important; }
             .header-left h1 svg { width: 12px; height: 12px; }
             .header-left .subtitle { display: none; }
@@ -4244,8 +4252,7 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="switchTab('home')">
-                    <h1 style="display:inline-flex;align-items:center;gap:12px;">DICTUM <svg width="26" height="26" viewBox="0 0 64 64" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="32" y1="6" x2="32" y2="56"/><line x1="14" y1="56" x2="50" y2="56"/><line x1="14" y1="18" x2="50" y2="18"/><circle cx="32" cy="6" r="3" fill="var(--text-secondary)" stroke="none"/><path d="M14 18 L7 38"/><path d="M14 18 L21 38"/><path d="M7 38 Q14 46 21 38"/><path d="M50 18 L43 38"/><path d="M50 18 L57 38"/><path d="M43 38 Q50 46 57 38"/></svg></h1>
-                    <p class="subtitle">Murojaatlar boshqaruv tizimi</p>
+                    <img src="/dictum_logo.png" alt="DICTUM" class="header-logo">
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
