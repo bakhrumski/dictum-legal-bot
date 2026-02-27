@@ -331,7 +331,7 @@
         body.chat-tab-active { overflow: hidden !important; height: 100vh !important; }
         #tabChat.tab-view.active {
             overflow: hidden;
-            height: calc(100vh - 68px - 64px - 40px);
+            height: calc(100vh - 76px - 64px - 32px - env(safe-area-inset-bottom, 0px));
         }
         .chat-tab-wrapper {
             display: flex;
@@ -4150,7 +4150,7 @@
             .tab-bar-item .tab-icon { width: 20px; height: 20px; }
             .tab-bar-item { min-width: 48px; padding: 6px 8px; }
             body { padding-bottom: calc(56px + 12px + env(safe-area-inset-bottom, 0px)) !important; }
-            #tabChat.tab-view.active { height: calc(100vh - 56px - 56px - 24px); }
+            #tabChat.tab-view.active { height: calc(100vh - 56px - 56px - 16px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius); }
 
             /* --- Mobile header --- */
@@ -4199,7 +4199,7 @@
             .tab-bar-item { min-width: 44px; padding: 8px; }
             .bottom-tab-bar { height: 50px; }
             body { padding-bottom: calc(50px + 8px + env(safe-area-inset-bottom, 0px)) !important; }
-            #tabChat.tab-view.active { height: calc(100vh - 50px - 50px - 16px); }
+            #tabChat.tab-view.active { height: calc(100vh - 50px - 50px - 8px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius-sm); }
 
             header { height: 50px; max-height: 50px; padding: 6px 8px; }
