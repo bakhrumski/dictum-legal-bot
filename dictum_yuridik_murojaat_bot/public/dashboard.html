@@ -1957,8 +1957,18 @@
             padding: 14px 20px;
             gap: 16px;
         }
-        .ai-ws-grid.list-view .ai-ws-card-body { flex: 1; }
-        .ai-ws-grid.list-view .ai-ws-card-meta { margin-left: auto; }
+        .ai-ws-grid.list-view .ai-ws-card-body { flex: 1; min-width: 0; }
+        .ai-ws-grid.list-view .ai-ws-card-meta { margin-left: auto; flex-shrink: 0; white-space: nowrap; }
+        .ai-ws-grid.list-view .ai-ws-card-search {
+            min-height: auto;
+            padding: 12px 20px;
+        }
+        .ai-ws-grid.list-view .ai-ws-card-search .ai-ws-card-icon {
+            width: 36px; height: 36px;
+        }
+        .ai-ws-grid.list-view .ai-ws-card-search .ai-ws-card-icon svg { width: 18px; height: 18px; }
+        .ai-ws-grid.list-view .ai-ws-card-search h3 { font-size: 14px; }
+        .ai-ws-grid.list-view .ai-ws-card-search p { display: none; }
 
         /* Special search card */
         .ai-ws-card-search {
