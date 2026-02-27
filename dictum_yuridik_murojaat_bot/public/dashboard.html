@@ -15,7 +15,7 @@
     <style>
         /* ========== PROFESSIONAL LEGAL THEME ========== */
         :root {
-            --bg-gradient: #f5f5f7;
+            --bg-gradient: #f8f9fb;
             --glass-bg: rgba(255, 255, 255, 0.95);
             --glass-bg-strong: rgba(255, 255, 255, 0.98);
             --glass-bg-light: rgba(255, 255, 255, 0.8);
@@ -37,9 +37,9 @@
             --bg-response: rgba(232, 245, 233, 0.8);
             --bg-student-response: rgba(224, 240, 254, 0.8);
             --bg-ai-analysis: rgba(230, 242, 254, 0.8);
-            --bg-table-header: linear-gradient(135deg, #1661BE, #0C7ECF);
+            --bg-table-header: rgba(37, 99, 235, 0.06);
             --bg-table-row-even: rgba(245, 245, 247, 0.5);
-            --bg-table-row-hover: rgba(1, 156, 224, 0.08);
+            --bg-table-row-hover: rgba(37, 99, 235, 0.06);
             --text-primary: #1d1d1f;
             --text-secondary: #6e6e73;
             --text-muted: #98989d;
@@ -51,10 +51,10 @@
             --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
             --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
             --dropdown-bg: rgba(255, 255, 255, 0.95);
-            --dropdown-header-bg: linear-gradient(135deg, #1661BE, #0C7ECF);
+            --dropdown-header-bg: linear-gradient(135deg, #1e40af, #2563eb);
             --dropdown-hover: rgba(245, 245, 247, 0.9);
-            --badge-total-bg: rgba(1, 156, 224, 0.1);
-            --badge-total-border: rgba(1, 156, 224, 0.3);
+            --badge-total-bg: rgba(37, 99, 235, 0.08);
+            --badge-total-border: rgba(37, 99, 235, 0.25);
             --badge-answered-bg: rgba(232, 245, 233, 0.8);
             --badge-answered-border: rgba(165, 214, 167, 0.5);
             --date-badge-bg: rgba(245, 245, 247, 0.9);
@@ -64,7 +64,7 @@
             --seg-pending-border: rgba(212, 165, 32, 0.4);
             --seg-rejected-bg: rgba(255, 235, 238, 0.9);
             --seg-rejected-color: #c62828;
-            --stat-icon-blue: rgba(1, 156, 224, 0.12);
+            --stat-icon-blue: rgba(37, 99, 235, 0.10);
             --stat-icon-yellow: rgba(255, 248, 225, 0.9);
             --stat-icon-purple: rgba(224, 240, 254, 0.9);
             --stat-icon-green: rgba(232, 245, 233, 0.9);
@@ -289,19 +289,19 @@
             transform: scale(0.9);
         }
         .tab-bar-item.active {
-            color: #019CE0;
+            color: #2563eb;
         }
         [data-theme="dark"] .tab-bar-item.active {
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .tab-bar-item .tab-icon {
             transition: all 0.2s ease;
         }
         .tab-bar-item.active .tab-icon {
-            stroke: #019CE0;
+            stroke: #2563eb;
         }
         [data-theme="dark"] .tab-bar-item.active .tab-icon {
-            stroke: #00B9F2;
+            stroke: #3b82f6;
         }
         .tab-label {
             font-size: 10px;
@@ -366,20 +366,15 @@
 
         /* ========== TAB SECTION OVERRIDES ========== */
         .tab-view > .admin-management { margin-top: 0; }
-        .tab-view > .ai-archive-section { margin-top: 0; }
         .tab-view > .reg-section { margin-top: 0; }
         .tab-view > .monte-carlo-section { margin-top: 16px; }
-        .tab-view > .legal-chat-section { margin-top: 0; }
+        .tab-view > .ai-workspace { margin-top: 0; }
 
         /* Ensure sections in tabs are always visible (no collapsed state) */
         .tab-view > .admin-management .jamoa-content,
-        .tab-view > .legal-chat-section .legal-chat-body,
-        .tab-view > .ai-archive-section .ai-archive-list,
         .tab-view > .reg-section .reg-section-body {
             display: flex !important;
         }
-        .tab-view > .legal-chat-section .legal-chat-body { flex-direction: column; }
-        .tab-view > .ai-archive-section .ai-archive-list { flex-direction: row; }
         .tab-view > .reg-section .reg-section-body { display: block !important; }
 
         /* Hide chat wrapper button (chat is now a tab) */
@@ -412,7 +407,7 @@
         }
 
         .header-left h1 {
-            color: #7c5cbf;
+            color: #1a2332;
             margin-bottom: 2px;
             font-weight: 300;
             letter-spacing: 6px;
@@ -420,7 +415,8 @@
             font-size: 28px;
             line-height: 1;
         }
-        
+        [data-theme="dark"] .header-left h1 { color: #e6edf3; }
+
         .header-center {
             position: absolute;
             left: 50%;
@@ -626,9 +622,9 @@
             font-size: 13px;
             font-weight: 600;
         }
-        .role-master { color: #1661BE; }
-        .role-lawyer { color: #1661BE; }
-        .role-student { color: #1661BE; }
+        .role-master { color: #1e40af; }
+        .role-lawyer { color: #1e40af; }
+        .role-student { color: #1e40af; }
         
         .logout-btn:hover {
             background: #c0392b;
@@ -663,7 +659,7 @@
             padding: 10px 16px;
             border-radius: var(--ios-radius);
             box-shadow: var(--shadow-sm);
-            border-left: 3px solid #019CE0;
+            border-left: 3px solid #2563eb;
             transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
             cursor: pointer;
             opacity: 0;
@@ -683,7 +679,7 @@
             transition-duration: 0.1s;
         }
         .stat-card.card-pending { border-left-color: #f39c12; }
-        .stat-card.card-student { border-left-color: #019CE0; }
+        .stat-card.card-student { border-left-color: #2563eb; }
         .stat-card.card-answered { border-left-color: #27ae60; }
 
         .stat-icon {
@@ -745,7 +741,7 @@
         }
 
         .pending { color: #f39c12; }
-        .student-responded { color: #019CE0; }
+        .student-responded { color: #2563eb; }
         .answered { color: #27ae60; }
         .rejected { color: #e74c3c; }
 
@@ -919,7 +915,7 @@
 
         select:focus {
             outline: none;
-            border-color: #019CE0;
+            border-color: #2563eb;
             box-shadow: 0 0 0 3px rgba(1, 156, 224, 0.15);
         }
         .detail-select {
@@ -949,7 +945,7 @@
             align-items: center;
             gap: 4px;
             background: rgba(1, 156, 224, 0.1);
-            color: #019CE0;
+            color: #2563eb;
             border: 1px solid rgba(1, 156, 224, 0.25);
             border-radius: 16px;
             padding: 3px 10px;
@@ -988,7 +984,7 @@
         }
         
         .request-item.needs-approval {
-            border-left: 4px solid #019CE0;
+            border-left: 4px solid #2563eb;
             background: var(--bg-student-response);
         }
         
@@ -1022,7 +1018,7 @@
 
         .status-student_responded {
             background: rgba(220, 237, 252, 0.8);
-            color: #1661BE;
+            color: #1e40af;
             border: 1px solid rgba(1, 156, 224, 0.3);
         }
 
@@ -1235,7 +1231,7 @@
             gap: 8px;
         }
         .ai-modal-title .ai-badge {
-            background: linear-gradient(135deg, #0C7ECF, #019CE0);
+            background: linear-gradient(135deg, #1e40af, #2563eb);
             color: white;
             font-size: 11px;
             font-weight: 700;
@@ -1265,14 +1261,14 @@
             border-color: rgba(1, 156, 224, 0.15);
         }
         .ai-analysis-content h1, .ai-analysis-content h2, .ai-analysis-content h3 {
-            color: #0C7ECF;
+            color: #1e40af;
             margin-top: 18px;
             margin-bottom: 8px;
         }
         [data-theme="dark"] .ai-analysis-content h1,
         [data-theme="dark"] .ai-analysis-content h2,
         [data-theme="dark"] .ai-analysis-content h3 {
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .ai-analysis-content h1 { font-size: 18px; }
         .ai-analysis-content h2 { font-size: 16px; }
@@ -1285,13 +1281,13 @@
             margin-bottom: 4px;
         }
         .ai-analysis-content strong {
-            color: #1661BE;
+            color: #1e40af;
         }
         [data-theme="dark"] .ai-analysis-content strong {
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .ai-analysis-content a {
-            color: #019CE0;
+            color: #2563eb;
             text-decoration: underline;
         }
         .ai-analysis-content code {
@@ -1306,17 +1302,17 @@
         .ai-loading {
             text-align: center;
             padding: 60px 20px;
-            color: #0C7ECF;
+            color: #1e40af;
         }
         [data-theme="dark"] .ai-loading {
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .ai-loading .spinner {
             display: block;
             width: 40px;
             height: 40px;
             border: 3px solid rgba(1, 156, 224, 0.2);
-            border-top-color: #019CE0;
+            border-top-color: #2563eb;
             border-radius: 50%;
             animation: ai-spin 0.8s linear infinite;
             margin: 0 auto 16px;
@@ -1335,7 +1331,7 @@
         }
         .ai-request-preview {
             background: var(--bg-request-text);
-            border-left: 4px solid #019CE0;
+            border-left: 4px solid #2563eb;
             padding: 12px 16px;
             border-radius: 8px;
             margin-bottom: 20px;
@@ -1380,7 +1376,7 @@
         }
         .ai-feedback-btn:hover { transform: scale(1.1); }
         .ai-feedback-btn.selected {
-            border-color: #019CE0;
+            border-color: #2563eb;
             background: rgba(1, 156, 224, 0.15);
             transform: scale(1.1);
         }
@@ -1431,22 +1427,22 @@
             gap: 8px;
             font-size: 13px;
             font-weight: 600;
-            color: #0C7ECF;
+            color: #1e40af;
             margin-bottom: 10px;
         }
-        [data-theme="dark"] .ai-yurxizmat-header { color: #00B9F2; }
+        [data-theme="dark"] .ai-yurxizmat-header { color: #3b82f6; }
         .ai-yurxizmat-badge {
             font-size: 10px;
             font-weight: 700;
             padding: 2px 7px;
             border-radius: 6px;
             background: rgba(1, 156, 224, 0.12);
-            color: #0C7ECF;
+            color: #1e40af;
             letter-spacing: 0.3px;
         }
         [data-theme="dark"] .ai-yurxizmat-badge {
             background: rgba(0, 185, 242, 0.15);
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .ai-yurxizmat-links {
             display: flex;
@@ -1461,14 +1457,14 @@
             border: 1px solid rgba(1, 156, 224, 0.2);
             border-radius: 8px;
             background: var(--glass-bg);
-            color: #0C7ECF;
+            color: #1e40af;
             font-size: 13px;
             font-weight: 500;
             text-decoration: none;
             transition: all 0.2s;
             font-family: inherit;
         }
-        [data-theme="dark"] .ai-yurxizmat-link { color: #00B9F2; }
+        [data-theme="dark"] .ai-yurxizmat-link { color: #3b82f6; }
         .ai-yurxizmat-link:hover {
             background: rgba(1, 156, 224, 0.1);
             border-color: rgba(1, 156, 224, 0.4);
@@ -1509,7 +1505,7 @@
             word-wrap: break-word;
         }
         .ai-chat-msg.user {
-            background: linear-gradient(135deg, #019CE0, #0C7ECF);
+            background: linear-gradient(135deg, #2563eb, #1e40af);
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 4px;
@@ -1581,7 +1577,7 @@
             box-shadow: 0 0 0 3px rgba(1, 156, 224, 0.08);
         }
         .ai-chat-send-btn {
-            background: linear-gradient(135deg, #019CE0, #0C7ECF);
+            background: linear-gradient(135deg, #2563eb, #1e40af);
             color: white;
             border: none;
             width: 42px;
@@ -1687,7 +1683,7 @@
             to { opacity: 1; transform: translateY(0); }
         }
         .legal-chat-msg.user {
-            background: linear-gradient(135deg, #019CE0, #0C7ECF);
+            background: linear-gradient(135deg, #2563eb, #1e40af);
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 4px;
@@ -1705,13 +1701,13 @@
             margin: 0;
         }
         .legal-chat-msg.ai a {
-            color: #019CE0;
+            color: #2563eb;
             text-decoration: none;
             border-bottom: 1px solid rgba(1, 156, 224, 0.3);
             transition: border-color 0.2s;
         }
         .legal-chat-msg.ai a:hover {
-            border-bottom-color: #019CE0;
+            border-bottom-color: #2563eb;
         }
         .legal-chat-typing {
             display: flex;
@@ -1750,7 +1746,7 @@
             box-shadow: 0 0 0 3px rgba(1, 156, 224, 0.08);
         }
         .legal-chat-send-btn {
-            background: linear-gradient(135deg, #019CE0, #0C7ECF);
+            background: linear-gradient(135deg, #2563eb, #1e40af);
             color: white;
             border: none;
             width: 42px;
@@ -1809,9 +1805,9 @@
             align-items: center;
             margin-bottom: 12px;
             font-weight: 600;
-            color: #0C7ECF;
+            color: #1e40af;
         }
-        [data-theme="dark"] .ai-template-header { color: #00B9F2; }
+        [data-theme="dark"] .ai-template-header { color: #3b82f6; }
         .ai-copy-btn {
             padding: 6px 14px;
             border: 1px solid var(--glass-border);
@@ -1824,7 +1820,384 @@
             font-family: inherit;
             transition: all 0.2s;
         }
-        .ai-copy-btn:hover { background: rgba(1, 156, 224, 0.08); }
+        .ai-copy-btn:hover { background: rgba(37, 99, 235, 0.08); }
+
+        /* ========== AI WORKSPACE DASHBOARD ========== */
+        .ai-workspace {
+            padding: 4px 0;
+        }
+        .ai-ws-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+        .ai-ws-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        .ai-ws-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+        .ai-ws-new-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+            white-space: nowrap;
+        }
+        .ai-ws-new-btn:hover { background: #1e40af; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+        .ai-ws-new-btn:active { transform: scale(0.97); }
+
+        .ai-ws-toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .ai-ws-search {
+            flex: 1;
+            position: relative;
+        }
+        .ai-ws-search svg {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+        .ai-ws-search input {
+            width: 100%;
+            padding: 11px 16px 11px 42px;
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            box-sizing: border-box;
+        }
+        .ai-ws-search input:focus {
+            border-color: rgba(37, 99, 235, 0.4);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+        }
+        .ai-ws-search input::placeholder { color: var(--text-muted); }
+        .ai-ws-view-toggle {
+            display: flex;
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .ai-ws-view-btn {
+            background: var(--glass-bg);
+            border: none;
+            padding: 9px 12px;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ai-ws-view-btn:first-child { border-right: 1px solid var(--glass-border); }
+        .ai-ws-view-btn.active {
+            background: #2563eb;
+            color: white;
+        }
+        .ai-ws-view-btn:hover:not(.active) { background: var(--bg-card-hover); }
+
+        /* Project Grid */
+        .ai-ws-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .ai-ws-grid.list-view {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+        .ai-ws-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--ios-radius);
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .ai-ws-card:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
+            transform: translateY(-2px);
+        }
+        .ai-ws-grid.list-view .ai-ws-card {
+            flex-direction: row;
+            align-items: center;
+            padding: 14px 20px;
+            gap: 16px;
+        }
+        .ai-ws-grid.list-view .ai-ws-card-body { flex: 1; }
+        .ai-ws-grid.list-view .ai-ws-card-meta { margin-left: auto; }
+
+        /* Special search card */
+        .ai-ws-card-search {
+            border: 2px dashed var(--glass-border);
+            text-align: center;
+            align-items: center;
+            justify-content: center;
+            min-height: 180px;
+            background: var(--glass-bg-light);
+        }
+        .ai-ws-card-search:hover {
+            border-color: #2563eb;
+            background: rgba(37, 99, 235, 0.03);
+        }
+        .ai-ws-card-search .ai-ws-card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: rgba(37, 99, 235, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ai-ws-card-search h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        .ai-ws-card-search p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* Archive project card */
+        .ai-ws-card-project .ai-ws-card-top {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .ai-ws-card-project .ai-ws-card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: rgba(37, 99, 235, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .ai-ws-card-project h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+            line-height: 1.3;
+        }
+        .ai-ws-card-project .ai-ws-card-category {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: rgba(37, 99, 235, 0.08);
+            color: #2563eb;
+        }
+        [data-theme="dark"] .ai-ws-card-project .ai-ws-card-category {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+        }
+        .ai-ws-card-project .ai-ws-card-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .ai-ws-card-project .ai-ws-card-type {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .ai-ws-card-project .ai-ws-card-type.ai {
+            background: rgba(37, 99, 235, 0.1);
+            color: #2563eb;
+        }
+        .ai-ws-card-project .ai-ws-card-type.manual {
+            background: rgba(39, 174, 96, 0.1);
+            color: #1e8449;
+        }
+        [data-theme="dark"] .ai-ws-card-project .ai-ws-card-type.ai {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+        }
+        [data-theme="dark"] .ai-ws-card-project .ai-ws-card-type.manual {
+            background: rgba(39, 174, 96, 0.15);
+            color: #2ecc71;
+        }
+
+        /* Empty state */
+        .ai-ws-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .ai-ws-empty svg {
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+        .ai-ws-empty h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 6px;
+        }
+        .ai-ws-empty p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin: 0 0 20px;
+        }
+        .ai-ws-empty-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 22px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ai-ws-empty-btn:hover { background: #1e40af; }
+
+        /* Legal Chat Modal */
+        .ai-chat-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-modal-overlay);
+            z-index: 1100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .ai-chat-modal {
+            width: 92%;
+            max-width: 720px;
+            height: 82vh;
+            max-height: 700px;
+            background: var(--glass-bg-strong);
+            backdrop-filter: blur(var(--glass-blur-strong));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--ios-radius-lg);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        @keyframes modalSlideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .ai-chat-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--glass-border);
+            flex-shrink: 0;
+        }
+        .ai-chat-modal-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ai-chat-modal-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .ai-chat-modal-btn {
+            background: none;
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .ai-chat-modal-btn:hover { background: var(--bg-card-hover); }
+        .ai-chat-modal-btn.close-btn {
+            border: none;
+            font-size: 18px;
+            padding: 4px 8px;
+            color: var(--text-muted);
+        }
+        .ai-chat-modal-btn.close-btn:hover { color: var(--text-primary); }
+        .ai-chat-modal .legal-chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            max-height: none;
+        }
+        .ai-chat-modal .legal-chat-input-area {
+            padding: 12px 20px 16px;
+            border-top: 1px solid var(--glass-border);
+            margin-top: 0;
+        }
+
+        @media (max-width: 768px) {
+            .ai-ws-header { flex-direction: column; gap: 12px; }
+            .ai-ws-new-btn { align-self: flex-start; }
+            .ai-ws-grid { grid-template-columns: 1fr 1fr; }
+            .ai-chat-modal { width: 100%; height: 100vh; max-height: none; border-radius: 0; }
+        }
+        @media (max-width: 480px) {
+            .ai-ws-grid { grid-template-columns: 1fr; }
+            .ai-ws-toolbar { flex-direction: column; }
+            .ai-ws-view-toggle { align-self: flex-end; }
+        }
+
         /* AI Archive Section */
         .ai-archive-section {
             background: var(--glass-bg);
@@ -1941,11 +2314,11 @@
             display: none;
         }
         .archive-sender-header .sender-name {
-            color: #0C7ECF;
+            color: #1e40af;
             font-weight: 700;
         }
         [data-theme="dark"] .archive-sender-header .sender-name {
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .archive-sender-header .sender-count {
             color: var(--text-muted);
@@ -1977,11 +2350,11 @@
         }
         .archive-analysis-row .anon-id {
             font-weight: 700;
-            color: #0C7ECF;
+            color: #1e40af;
             font-size: 12px;
         }
         [data-theme="dark"] .archive-analysis-row .anon-id {
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .archive-analysis-row .analysis-category {
             font-size: 10px;
@@ -1989,11 +2362,11 @@
             padding: 1px 6px;
             border-radius: 5px;
             background: rgba(1, 156, 224, 0.1);
-            color: #0C7ECF;
+            color: #1e40af;
         }
         [data-theme="dark"] .archive-analysis-row .analysis-category {
             background: rgba(0, 185, 242, 0.15);
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .archive-analysis-row .analysis-date {
             margin-left: auto;
@@ -2011,11 +2384,11 @@
         }
         .analysis-type-badge.ai {
             background: rgba(1, 156, 224, 0.12);
-            color: #0C7ECF;
+            color: #1e40af;
         }
         [data-theme="dark"] .analysis-type-badge.ai {
             background: rgba(0, 185, 242, 0.15);
-            color: #00B9F2;
+            color: #3b82f6;
         }
         .analysis-type-badge.manual {
             background: rgba(39, 174, 96, 0.12);
@@ -2078,7 +2451,7 @@
             flex: 1; padding: 6px 10px; border: none; border-radius: 8px;
             font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 0.2s;
         }
-        .reg-btn-view { background: rgba(1, 156, 224, 0.1); color: #0C7ECF; }
+        .reg-btn-view { background: rgba(1, 156, 224, 0.1); color: #1e40af; }
         .reg-btn-approve { background: rgba(39, 174, 96, 0.1); color: #1e8449; }
         .reg-btn-reject { background: rgba(231, 76, 60, 0.1); color: #c0392b; }
         .reg-btn-view:hover { background: rgba(1, 156, 224, 0.2); }
@@ -2135,7 +2508,7 @@
         .detail-section h3 {
             color: var(--text-primary);
             margin-bottom: 10px;
-            border-bottom: 2px solid #019CE0;
+            border-bottom: 2px solid #2563eb;
             padding-bottom: 5px;
         }
         
@@ -2158,7 +2531,7 @@
             background: var(--bg-request-text);
             padding: 15px;
             border-radius: var(--ios-radius-sm);
-            border-left: 4px solid #019CE0;
+            border-left: 4px solid #2563eb;
             margin-top: 10px;
             color: var(--text-primary);
         }
@@ -2181,12 +2554,12 @@
 
         textarea:focus {
             outline: none;
-            border-color: #019CE0;
+            border-color: #2563eb;
             box-shadow: 0 0 0 3px rgba(1, 156, 224, 0.15);
         }
         
         .btn {
-            background: linear-gradient(135deg, #1661BE, #0C7ECF);
+            background: linear-gradient(135deg, #1e40af, #1e40af);
             color: white;
             padding: 12px 30px;
             border: none;
@@ -2271,7 +2644,7 @@
             background: rgba(230, 242, 254, 0.5);
             padding: 15px;
             border-radius: var(--ios-radius-sm);
-            border-left: 4px solid #0C7ECF;
+            border-left: 4px solid #1e40af;
             margin-top: 10px;
             color: var(--text-primary);
             max-height: 300px;
@@ -2286,12 +2659,12 @@
             border: 1px solid rgba(1, 156, 224, 0.25);
             border-radius: 8px;
             background: rgba(1, 156, 224, 0.06);
-            color: #0C7ECF;
+            color: #1e40af;
             font-size: 13px; font-weight: 600;
             cursor: pointer; transition: all 0.2s;
             font-family: inherit;
         }
-        [data-theme="dark"] .ai-javob-btn { color: #00B9F2; }
+        [data-theme="dark"] .ai-javob-btn { color: #3b82f6; }
         .ai-javob-btn:hover {
             background: rgba(1, 156, 224, 0.12);
             border-color: rgba(1, 156, 224, 0.4);
@@ -2301,7 +2674,7 @@
             background: var(--bg-student-response);
             padding: 15px;
             border-radius: var(--ios-radius-sm);
-            border-left: 4px solid #019CE0;
+            border-left: 4px solid #2563eb;
             margin-top: 10px;
             color: var(--text-primary);
         }
@@ -2325,7 +2698,7 @@
             padding: 15px;
             border-radius: var(--ios-radius-sm);
             margin-top: 10px;
-            border-left: 4px solid #019CE0;
+            border-left: 4px solid #2563eb;
         }
         
         .file-info {
@@ -2477,7 +2850,7 @@
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            background: #019CE0;
+            background: #2563eb;
             color: white;
             display: flex;
             align-items: center;
@@ -2516,7 +2889,7 @@
 
         .badge-total {
             background: var(--badge-total-bg);
-            color: #0C7ECF;
+            color: #1e40af;
             border: 1px solid var(--badge-total-border);
         }
 
@@ -2630,11 +3003,11 @@
         body.chat-open { padding-right: 410px; transition: padding-right 0.3s ease; }
 
         .chat-toggle-btn {
-            background: #019CE0; color: white; border: none; padding: 8px 16px;
+            background: #2563eb; color: white; border: none; padding: 8px 16px;
             border-radius: 8px; cursor: pointer; font-size: 14px; margin-right: 10px;
             position: relative; transition: all 0.3s; font-weight: 500;
         }
-        .chat-toggle-btn:hover { background: #0C7ECF; transform: translateY(-1px); }
+        .chat-toggle-btn:hover { background: #1e40af; transform: translateY(-1px); }
         .chat-toggle-btn .unread-badge {
             position: absolute; top: -6px; right: -6px; background: #e74c3c; color: white;
             font-size: 11px; font-weight: bold; width: 20px; height: 20px; border-radius: 50%;
@@ -2654,7 +3027,7 @@
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.4);
             border-radius: var(--ios-radius); padding: 14px 18px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.15); border-left: 4px solid #019CE0;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15); border-left: 4px solid #2563eb;
             max-width: 340px; min-width: 280px; cursor: pointer;
             transform: translateX(400px); opacity: 0;
             animation: notif-slide-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
@@ -2668,7 +3041,7 @@
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
         }
         .chat-notification-sender {
-            font-weight: 600; font-size: 13px; color: #1661BE;
+            font-weight: 600; font-size: 13px; color: #1e40af;
         }
         .chat-notification-time {
             font-size: 11px; color: #95a5a6;
@@ -2682,7 +3055,7 @@
             background: #fef3cd; color: #856404; padding: 1px 4px; border-radius: 3px; font-weight: 600;
         }
         .chat-notification-text .mention {
-            background: #d4eaf7; color: #1661BE; padding: 1px 4px; border-radius: 3px; font-weight: 600;
+            background: #d4eaf7; color: #1e40af; padding: 1px 4px; border-radius: 3px; font-weight: 600;
         }
         .chat-notification-tag {
             display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px;
@@ -2751,11 +3124,11 @@
             font-weight: 700;
             color: white;
             flex-shrink: 0;
-            background: linear-gradient(135deg, #019CE0, #0C7ECF);
+            background: linear-gradient(135deg, #2563eb, #1e40af);
         }
-        .chat-msg-notif-avatar.master { background: linear-gradient(135deg, #1661BE, #0C7ECF); }
-        .chat-msg-notif-avatar.lawyer { background: linear-gradient(135deg, #0C7ECF, #019CE0); }
-        .chat-msg-notif-avatar.student { background: linear-gradient(135deg, #019CE0, #00B9F2); }
+        .chat-msg-notif-avatar.master { background: linear-gradient(135deg, #1e40af, #1e40af); }
+        .chat-msg-notif-avatar.lawyer { background: linear-gradient(135deg, #1e40af, #2563eb); }
+        .chat-msg-notif-avatar.student { background: linear-gradient(135deg, #2563eb, #3b82f6); }
         .chat-msg-notif-body {
             flex: 1;
             min-width: 0;
@@ -2769,7 +3142,7 @@
         .chat-msg-notif-sender {
             font-weight: 600;
             font-size: 13px;
-            color: #1661BE;
+            color: #1e40af;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -2781,7 +3154,7 @@
             border-radius: 8px;
             margin-left: 6px;
             background: rgba(1, 156, 224, 0.12);
-            color: #0C7ECF;
+            color: #1e40af;
             flex-shrink: 0;
         }
         .chat-msg-notif-time {
@@ -2803,7 +3176,7 @@
         }
         .chat-msg-notif-text .mention, .chat-msg-notif-text .mention-all {
             background: rgba(1, 156, 224, 0.12);
-            color: #0C7ECF;
+            color: #1e40af;
             padding: 1px 4px;
             border-radius: 4px;
             font-weight: 600;
@@ -2847,9 +3220,9 @@
         [data-theme="dark"] .chat-msg-notif:hover {
             box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
         }
-        [data-theme="dark"] .chat-msg-notif-sender { color: #00B9F2; }
+        [data-theme="dark"] .chat-msg-notif-sender { color: #3b82f6; }
         [data-theme="dark"] .chat-msg-notif-text { color: #c9d1d9; }
-        [data-theme="dark"] .chat-msg-notif-role { background: rgba(0, 185, 242, 0.15); color: #00B9F2; }
+        [data-theme="dark"] .chat-msg-notif-role { background: rgba(0, 185, 242, 0.15); color: #3b82f6; }
         [data-theme="dark"] .chat-msg-notif-close { background: rgba(255,255,255,0.06); color: #8b949e; }
         [data-theme="dark"] .chat-msg-notif-close:hover { background: rgba(255,255,255,0.12); color: #c9d1d9; }
 
@@ -2867,7 +3240,7 @@
 
         .chat-header {
             padding: 16px 20px;
-            background: linear-gradient(135deg, #1661BE, #0C7ECF);
+            background: linear-gradient(135deg, #1e40af, #1e40af);
             color: white; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
         }
         .chat-header-left { display: flex; align-items: center; gap: 12px; }
@@ -2900,7 +3273,7 @@
         .chat-members-panel.open { transform: translateY(0); }
         .chat-members-header {
             padding: 16px 20px;
-            background: linear-gradient(135deg, #1661BE, #0C7ECF);
+            background: linear-gradient(135deg, #1e40af, #1e40af);
             color: white; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
         }
         .chat-members-header h3 { font-size: 16px; margin: 0; font-weight: 600; }
@@ -2926,9 +3299,9 @@
             font-size: 15px; font-weight: 700; color: white; flex-shrink: 0;
             position: relative;
         }
-        .chat-member-avatar.master-av { background: linear-gradient(135deg, #1661BE, #019CE0); }
-        .chat-member-avatar.lawyer-av { background: linear-gradient(135deg, #0C7ECF, #019CE0); }
-        .chat-member-avatar.student-av { background: linear-gradient(135deg, #1661BE, #019CE0); }
+        .chat-member-avatar.master-av { background: linear-gradient(135deg, #1e40af, #2563eb); }
+        .chat-member-avatar.lawyer-av { background: linear-gradient(135deg, #1e40af, #2563eb); }
+        .chat-member-avatar.student-av { background: linear-gradient(135deg, #1e40af, #2563eb); }
         .chat-member-avatar .online-dot {
             position: absolute; bottom: 0; right: 0;
             width: 10px; height: 10px; border-radius: 50%;
@@ -2945,12 +3318,12 @@
             font-size: 11px; font-weight: 600; margin-top: 2px;
             display: inline-block; padding: 1px 8px; border-radius: 4px;
         }
-        .chat-member-role.master-role { background: rgba(22,97,190,0.15); color: #1661BE; }
-        .chat-member-role.lawyer-role { background: rgba(12,126,207,0.15); color: #0C7ECF; }
-        .chat-member-role.student-role { background: rgba(22,97,190,0.15); color: #1661BE; }
-        [data-theme="dark"] .chat-member-role.master-role { background: rgba(22,97,190,0.2); color: #00B9F2; }
-        [data-theme="dark"] .chat-member-role.lawyer-role { background: rgba(12,126,207,0.2); color: #00B9F2; }
-        [data-theme="dark"] .chat-member-role.student-role { background: rgba(22,97,190,0.2); color: #00B9F2; }
+        .chat-member-role.master-role { background: rgba(22,97,190,0.15); color: #1e40af; }
+        .chat-member-role.lawyer-role { background: rgba(12,126,207,0.15); color: #1e40af; }
+        .chat-member-role.student-role { background: rgba(22,97,190,0.15); color: #1e40af; }
+        [data-theme="dark"] .chat-member-role.master-role { background: rgba(22,97,190,0.2); color: #3b82f6; }
+        [data-theme="dark"] .chat-member-role.lawyer-role { background: rgba(12,126,207,0.2); color: #3b82f6; }
+        [data-theme="dark"] .chat-member-role.student-role { background: rgba(22,97,190,0.2); color: #3b82f6; }
 
         .chat-messages {
             flex: 1; overflow-y: auto; padding: 14px 16px;
@@ -2994,12 +3367,12 @@
             transition: background 0.15s;
             display: flex; align-items: center; gap: 5px;
         }
-        .chat-msg-action-btn.reply-action { color: #019CE0; }
+        .chat-msg-action-btn.reply-action { color: #2563eb; }
         .chat-msg-action-btn.reply-action:hover { background: rgba(1,156,224,0.1); }
         .chat-msg-action-btn.delete-action { color: #e74c3c; }
         .chat-msg-action-btn.delete-action:hover { background: rgba(231,76,60,0.1); }
         [data-theme="dark"] .chat-msg-actions { border-top-color: rgba(255,255,255,0.08); }
-        [data-theme="dark"] .chat-msg-action-btn.reply-action { color: #00B9F2; }
+        [data-theme="dark"] .chat-msg-action-btn.reply-action { color: #3b82f6; }
         [data-theme="dark"] .chat-msg-action-btn.reply-action:hover { background: rgba(0,185,242,0.12); }
         [data-theme="dark"] .chat-msg-action-btn.delete-action { color: #f87171; }
         [data-theme="dark"] .chat-msg-action-btn.delete-action:hover { background: rgba(248,113,113,0.12); }
@@ -3014,21 +3387,21 @@
 
         /* Reply preview inside message */
         .chat-msg-reply {
-            background: rgba(1,156,224,0.06); border-left: 3px solid #019CE0;
+            background: rgba(1,156,224,0.06); border-left: 3px solid #2563eb;
             border-radius: 8px; padding: 6px 10px; margin-bottom: 6px;
             cursor: pointer; transition: background 0.15s;
         }
         .chat-msg-reply:hover { background: rgba(1,156,224,0.12); }
-        .chat-msg.own .chat-msg-reply { border-left-color: #0C7ECF; background: rgba(22,97,190,0.08); }
+        .chat-msg.own .chat-msg-reply { border-left-color: #1e40af; background: rgba(22,97,190,0.08); }
         .chat-msg.own .chat-msg-reply:hover { background: rgba(22,97,190,0.14); }
         [data-theme="dark"] .chat-msg-reply { background: rgba(0,185,242,0.06); }
         [data-theme="dark"] .chat-msg-reply:hover { background: rgba(0,185,242,0.12); }
-        .chat-msg-reply-sender { font-size: 12px; font-weight: 600; color: #0C7ECF; }
-        .chat-msg.own .chat-msg-reply-sender { color: #1661BE; }
-        .chat-msg-reply-sender.role-master { color: #1661BE; }
-        .chat-msg-reply-sender.role-lawyer { color: #0C7ECF; }
-        .chat-msg-reply-sender.role-student { color: #019CE0; }
-        [data-theme="dark"] .chat-msg-reply-sender { color: #00B9F2; }
+        .chat-msg-reply-sender { font-size: 12px; font-weight: 600; color: #1e40af; }
+        .chat-msg.own .chat-msg-reply-sender { color: #1e40af; }
+        .chat-msg-reply-sender.role-master { color: #1e40af; }
+        .chat-msg-reply-sender.role-lawyer { color: #1e40af; }
+        .chat-msg-reply-sender.role-student { color: #2563eb; }
+        [data-theme="dark"] .chat-msg-reply-sender { color: #3b82f6; }
         .chat-msg-reply-text {
             font-size: 12px; color: var(--text-muted); white-space: nowrap;
             overflow: hidden; text-overflow: ellipsis; max-width: 240px;
@@ -3045,29 +3418,29 @@
             font-weight: 600; font-size: 13px; margin-bottom: 3px;
             display: flex; align-items: center; gap: 6px;
         }
-        .chat-msg-sender.role-master { color: #1661BE; }
-        .chat-msg-sender.role-lawyer { color: #0C7ECF; }
-        .chat-msg-sender.role-student { color: #019CE0; }
-        [data-theme="dark"] .chat-msg-sender.role-master { color: #00B9F2; }
-        [data-theme="dark"] .chat-msg-sender.role-lawyer { color: #00B9F2; }
-        [data-theme="dark"] .chat-msg-sender.role-student { color: #00B9F2; }
+        .chat-msg-sender.role-master { color: #1e40af; }
+        .chat-msg-sender.role-lawyer { color: #1e40af; }
+        .chat-msg-sender.role-student { color: #2563eb; }
+        [data-theme="dark"] .chat-msg-sender.role-master { color: #3b82f6; }
+        [data-theme="dark"] .chat-msg-sender.role-lawyer { color: #3b82f6; }
+        [data-theme="dark"] .chat-msg-sender.role-student { color: #3b82f6; }
         .chat-msg-sender-badge {
             font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
         }
-        .chat-msg-sender-badge.master { background: rgba(22,97,190,0.1); color: #1661BE; }
-        .chat-msg-sender-badge.lawyer { background: rgba(12,126,207,0.1); color: #0C7ECF; }
-        .chat-msg-sender-badge.student { background: rgba(1,156,224,0.1); color: #019CE0; }
-        [data-theme="dark"] .chat-msg-sender-badge.master { background: rgba(0,185,242,0.12); color: #00B9F2; }
-        [data-theme="dark"] .chat-msg-sender-badge.lawyer { background: rgba(0,185,242,0.12); color: #00B9F2; }
-        [data-theme="dark"] .chat-msg-sender-badge.student { background: rgba(0,185,242,0.12); color: #00B9F2; }
+        .chat-msg-sender-badge.master { background: rgba(22,97,190,0.1); color: #1e40af; }
+        .chat-msg-sender-badge.lawyer { background: rgba(12,126,207,0.1); color: #1e40af; }
+        .chat-msg-sender-badge.student { background: rgba(1,156,224,0.1); color: #2563eb; }
+        [data-theme="dark"] .chat-msg-sender-badge.master { background: rgba(0,185,242,0.12); color: #3b82f6; }
+        [data-theme="dark"] .chat-msg-sender-badge.lawyer { background: rgba(0,185,242,0.12); color: #3b82f6; }
+        [data-theme="dark"] .chat-msg-sender-badge.student { background: rgba(0,185,242,0.12); color: #3b82f6; }
 
         .chat-msg-text { color: var(--text-primary); }
         .chat-msg-text .mention {
-            background: rgba(22,97,190,0.1); color: #1661BE; padding: 2px 6px;
+            background: rgba(22,97,190,0.1); color: #1e40af; padding: 2px 6px;
             border-radius: 6px; font-weight: 600;
         }
         [data-theme="dark"] .chat-msg-text .mention {
-            background: rgba(0,185,242,0.15); color: #00B9F2;
+            background: rgba(0,185,242,0.15); color: #3b82f6;
         }
         .chat-msg-text .mention-all {
             background: rgba(243,156,18,0.12); color: #b8860b; padding: 2px 6px;
@@ -3096,13 +3469,13 @@
         .chat-reply-preview {
             display: none; padding: 10px 14px;
             background: var(--glass-bg-light);
-            border-left: 3px solid #019CE0; margin: 0;
+            border-left: 3px solid #2563eb; margin: 0;
             border-radius: 0; position: relative;
         }
         .chat-reply-preview.visible { display: flex; align-items: center; justify-content: space-between; }
         .chat-reply-preview-content { flex: 1; min-width: 0; }
-        .chat-reply-preview-sender { font-size: 12px; font-weight: 600; color: #0C7ECF; }
-        [data-theme="dark"] .chat-reply-preview-sender { color: #00B9F2; }
+        .chat-reply-preview-sender { font-size: 12px; font-weight: 600; color: #1e40af; }
+        [data-theme="dark"] .chat-reply-preview-sender { color: #3b82f6; }
         .chat-reply-preview-text {
             font-size: 13px; color: var(--text-muted); white-space: nowrap;
             overflow: hidden; text-overflow: ellipsis;
@@ -3131,7 +3504,7 @@
         }
         .chat-input:focus { border-color: rgba(1,156,224,0.4); box-shadow: 0 0 0 3px rgba(1,156,224,0.08); }
         .chat-send-btn {
-            background: linear-gradient(135deg, #019CE0, #0C7ECF); color: white; border: none;
+            background: linear-gradient(135deg, #2563eb, #1e40af); color: white; border: none;
             width: 42px; height: 42px;
             border-radius: 50%; cursor: pointer; font-size: 17px;
             display: flex; align-items: center; justify-content: center;
@@ -3163,9 +3536,9 @@
         .mention-item-role {
             font-size: 11px; padding: 2px 8px; border-radius: 10px;
         }
-        .mention-item-role.master { background: #d4eaf7; color: #0C7ECF; }
-        .mention-item-role.lawyer { background: #d4eaf7; color: #019CE0; }
-        .mention-item-role.student { background: #e8f3fd; color: #0C7ECF; }
+        .mention-item-role.master { background: #d4eaf7; color: #1e40af; }
+        .mention-item-role.lawyer { background: #d4eaf7; color: #2563eb; }
+        .mention-item-role.student { background: #e8f3fd; color: #1e40af; }
         .mention-item-role.all-role { background: #fef3c7; color: #92400e; }
 
         /* Admin Management Section */
@@ -3184,7 +3557,7 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
-            border-bottom: 2px solid #019CE0;
+            border-bottom: 2px solid #2563eb;
             padding-bottom: 10px;
             cursor: pointer;
             user-select: none;
@@ -3332,7 +3705,7 @@
         .timeslot-edit-btn {
             background: none;
             border: none;
-            color: #019CE0;
+            color: #2563eb;
             padding: 3px 6px;
             cursor: pointer;
             font-size: 11px;
@@ -3403,7 +3776,7 @@
             transform: scale(1.15);
         }
         .action-btn.edit-btn {
-            color: #0C7ECF;
+            color: #1e40af;
         }
         .action-btn.edit-btn:hover {
             background: none;
@@ -3438,10 +3811,10 @@
             color: var(--text-primary);
             margin-bottom: 12px;
             padding-bottom: 8px;
-            border-bottom: 2px solid #019CE0;
+            border-bottom: 2px solid #2563eb;
         }
         .ranking-card h3.student-title {
-            border-bottom-color: #0C7ECF;
+            border-bottom-color: #1e40af;
         }
         .ranking-item {
             display: flex;
@@ -3463,7 +3836,7 @@
             flex-shrink: 0;
         }
         .rank-medal.gold { background: linear-gradient(135deg, #f7dc6f, #f1c40f); color: #7d6608; }
-        .rank-medal.silver { background: linear-gradient(135deg, #d5dbdb, #95a5a6); color: #1661BE; }
+        .rank-medal.silver { background: linear-gradient(135deg, #d5dbdb, #95a5a6); color: #1e40af; }
         .rank-medal.bronze { background: linear-gradient(135deg, #e59866, #d35400); color: white; }
         .rank-medal.default { background: var(--date-badge-bg); color: var(--text-secondary); }
         .ranking-info {
@@ -3544,7 +3917,7 @@
         .admin-modal input:focus,
         .admin-modal select:focus {
             outline: none;
-            border-color: #019CE0;
+            border-color: #2563eb;
             box-shadow: 0 0 0 3px rgba(1, 156, 224, 0.15);
         }
         .admin-modal-btns {
@@ -3562,7 +3935,7 @@
             cursor: pointer;
         }
         .admin-modal-btns .save-btn {
-            background: linear-gradient(135deg, #1661BE, #0C7ECF);
+            background: linear-gradient(135deg, #1e40af, #1e40af);
             color: white;
             box-shadow: 0 4px 12px rgba(22, 97, 190, 0.3);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -3586,7 +3959,7 @@
             align-items: center;
             transition: transform 0.2s, color 0.2s;
         }
-        .add-member-btn:hover { transform: scale(1.15); color: #0C7ECF; }
+        .add-member-btn:hover { transform: scale(1.15); color: #1e40af; }
         .add-member-btn:active { transform: scale(0.95); }
 
         /* Monte Carlo Section */
@@ -3611,7 +3984,7 @@
             font-size: 16px;
             margin-bottom: 15px;
             padding-bottom: 8px;
-            border-bottom: 2px solid #1661BE;
+            border-bottom: 2px solid #1e40af;
         }
         .mc-card h3 .mc-icon { margin-right: 6px; }
         .forecast-bars {
@@ -3637,7 +4010,7 @@
         }
         .forecast-bar .range-bar {
             width: 100%;
-            background: linear-gradient(180deg, #00B9F2, #019CE0);
+            background: linear-gradient(180deg, #3b82f6, #2563eb);
             border-radius: 4px 4px 0 0;
             position: relative;
         }
@@ -3656,7 +4029,7 @@
         }
         .forecast-bar-value {
             font-size: 10px;
-            color: #1661BE;
+            color: #1e40af;
             font-weight: bold;
             margin-bottom: 3px;
         }
@@ -3959,34 +4332,60 @@
 
         <!-- TAB: AI (Master only) -->
         <div class="tab-view" id="tabAi" data-tab="ai">
-        <!-- Legal Search Chat Section (Master Admin Only) -->
-        <div class="legal-chat-section" id="legalChatSection">
-            <div class="legal-chat-header" onclick="document.getElementById('legalChatSection').classList.toggle('collapsed')">
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>Qonun qidirish</h2>
+        <div class="ai-workspace">
+            <!-- Workspace Header -->
+            <div class="ai-ws-header">
+                <div>
+                    <h2 class="ai-ws-title">Huquqiy tadqiqot</h2>
+                    <p class="ai-ws-subtitle">AI yordamida qonun qidirish va tahlil</p>
                 </div>
-                <button class="legal-chat-clear-btn" onclick="event.stopPropagation(); clearLegalChat()" title="Chatni tozalash">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <button class="ai-ws-new-btn" onclick="openLegalChatModal()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Yangi qidiruv
                 </button>
             </div>
-            <div class="legal-chat-body">
-                <div class="legal-chat-messages" id="legalChatMessages">
-                    <div class="legal-chat-welcome">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#019CE0" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                        <p>Huquqiy savolingizni yozing. AI lex.uz va public.sud.uz saytlaridan tegishli qonunlar va sud qarorlarini qidiradi.</p>
-                    </div>
+
+            <!-- Search + View Toggle -->
+            <div class="ai-ws-toolbar">
+                <div class="ai-ws-search">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <input type="text" id="aiProjectSearch" placeholder="Loyihalarni qidirish..." oninput="filterAiProjects(this.value)">
                 </div>
-                <div class="legal-chat-input-area">
-                    <div class="legal-chat-input-wrapper">
-                        <textarea class="legal-chat-input" id="legalChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendLegalChat();}"></textarea>
-                        <button class="legal-chat-send-btn" id="legalChatSendBtn" onclick="sendLegalChat()">&#10148;</button>
-                    </div>
+                <div class="ai-ws-view-toggle">
+                    <button class="ai-ws-view-btn active" data-view="grid" onclick="setAiView('grid')" title="Katak ko'rinish">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </button>
+                    <button class="ai-ws-view-btn" data-view="list" onclick="setAiView('list')" title="Ro'yxat ko'rinish">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    </button>
                 </div>
             </div>
+
+            <!-- Project Grid -->
+            <div class="ai-ws-grid" id="aiProjectGrid">
+                <!-- Legal Search card (always first) -->
+                <div class="ai-ws-card ai-ws-card-search" onclick="openLegalChatModal()">
+                    <div class="ai-ws-card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    </div>
+                    <h3>Qonun qidirish</h3>
+                    <p>lex.uz dan qonunlarni AI yordamida qidiring</p>
+                </div>
+                <!-- Archive cards loaded dynamically -->
+            </div>
+
+            <!-- Empty state -->
+            <div class="ai-ws-empty" id="aiWsEmpty" style="display:none;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                <h3>Loyihalar topilmadi</h3>
+                <p>Birinchi qidiruvingizni boshlang</p>
+                <button class="ai-ws-empty-btn" onclick="openLegalChatModal()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Yangi qidiruv
+                </button>
+            </div>
         </div>
-        <!-- AI Archive will be added below after requests -->
-        </div><!-- /tab-view ai: legal chat -->
+        </div><!-- /tab-view ai -->
 
         <!-- TAB: Home — Requests -->
         <div class="tab-view active" data-tab="home">
@@ -4048,21 +4447,36 @@
         </div>
         </div><!-- /tab-view home: requests -->
 
-        <!-- TAB: AI — Archive (continuation of AI tab) -->
-        <div class="tab-view" data-tab="ai">
-        <!-- AI Analyses Archive Section -->
-        <div class="ai-archive-section" id="aiArchiveSection">
-            <div class="ai-archive-header" onclick="document.getElementById('aiArchiveSection').classList.toggle('collapsed'); if(!document.getElementById('aiArchiveSection').classList.contains('collapsed') && !aiArchiveLoaded) loadAiArchive();">
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>Arxiv</h2>
+        <!-- Legal Chat Modal (moved out of tab flow) -->
+        <div class="ai-chat-modal-overlay" id="legalChatOverlay" style="display:none;">
+            <div class="ai-chat-modal">
+                <div class="ai-chat-modal-header">
+                    <h3>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                        Qonun qidirish
+                    </h3>
+                    <div class="ai-chat-modal-actions">
+                        <button class="ai-chat-modal-btn" onclick="clearLegalChat()" title="Chatni tozalash">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Tozalash
+                        </button>
+                        <button class="ai-chat-modal-btn close-btn" onclick="closeLegalChatModal()" title="Yopish">&times;</button>
+                    </div>
+                </div>
+                <div class="legal-chat-messages" id="legalChatMessages">
+                    <div class="legal-chat-welcome">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                        <p>Huquqiy savolingizni yozing. AI lex.uz saytidan tegishli qonunlarni qidiradi.</p>
+                    </div>
+                </div>
+                <div class="legal-chat-input-area">
+                    <div class="legal-chat-input-wrapper">
+                        <textarea class="legal-chat-input" id="legalChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendLegalChat();}"></textarea>
+                        <button class="legal-chat-send-btn" id="legalChatSendBtn" onclick="sendLegalChat()">&#10148;</button>
+                    </div>
                 </div>
             </div>
-            <div class="ai-archive-list" id="aiArchiveList">
-                <div class="ai-archive-empty">Arxivni ko'rish uchun bo'limni oching</div>
-            </div>
         </div>
-        </div><!-- /tab-view ai: archive -->
 
         <!-- TAB: So'rovlar (Registrations) -->
         <div class="tab-view" id="tabSorov" data-tab="sorov">
@@ -4382,11 +4796,6 @@
             }
 
             if (tabName === 'ai') {
-                // Auto-expand legal chat if collapsed
-                var legalChat = document.getElementById('legalChatSection');
-                if (legalChat && legalChat.classList.contains('collapsed')) {
-                    legalChat.classList.remove('collapsed');
-                }
                 // Load AI archive if not loaded
                 if (typeof aiArchiveLoaded !== 'undefined' && !aiArchiveLoaded && typeof loadAiArchive === 'function') {
                     loadAiArchive();
@@ -4625,7 +5034,7 @@
 
             const isMaster = currentUser.role === 'master';
             const roleLabels = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
-            const roleBadgeColors = { 'master': '#1661BE', 'lawyer': '#1661BE', 'student': '#1661BE' };
+            const roleBadgeColors = { 'master': '#1e40af', 'lawyer': '#1e40af', 'student': '#1e40af' };
 
             // Show/hide actions column based on role
             const actionsHeader = document.getElementById('actionsColHeader');
@@ -4669,7 +5078,7 @@
 
                 return `<tr class="${isOwnRow ? 'own-row' : ''}" onclick="viewMemberDetail(${admin.id})" style="cursor:pointer;">
                     <td>${i + 1}</td>
-                    <td><strong>${admin.full_name}</strong>${isOwnRow ? ' <small style="color:#019CE0;">(siz)</small>' : ''}</td>
+                    <td><strong>${admin.full_name}</strong>${isOwnRow ? ' <small style="color:#2563eb;">(siz)</small>' : ''}</td>
                     <td>@${admin.telegram_username || admin.username}</td>
                     <td><span class="role-badge role-${admin.role}">${roleLabels[admin.role] || admin.role}</span></td>
                     <td id="timeslot-cell-${admin.id}">${timeslotHtml}</td>
@@ -6116,7 +6525,7 @@
         function clearLegalChat() {
             legalChatHistory = [];
             const msgs = document.getElementById('legalChatMessages');
-            msgs.innerHTML = '<div class="legal-chat-welcome"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#019CE0" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><p>Huquqiy savolingizni yozing. AI lex.uz va public.sud.uz saytlaridan tegishli qonunlar va sud qarorlarini qidiradi.</p></div>';
+            msgs.innerHTML = '<div class="legal-chat-welcome"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><p>Huquqiy savolingizni yozing. AI lex.uz va public.sud.uz saytlaridan tegishli qonunlar va sud qarorlarini qidiradi.</p></div>';
         }
 
         async function sendLegalChat() {
@@ -6266,57 +6675,148 @@
         // --- AI Archive ---
         let aiArchiveLoaded = false;
 
+        var aiProjectCards = []; // store for filtering
+
         async function loadAiArchive() {
             aiArchiveLoaded = true;
-            const list = document.getElementById('aiArchiveList');
-            list.innerHTML = '<div class="ai-archive-empty">Yuklanmoqda...</div>';
+            var grid = document.getElementById('aiProjectGrid');
+            var emptyEl = document.getElementById('aiWsEmpty');
+
+            // Keep the search card, clear the rest
+            var searchCard = grid.querySelector('.ai-ws-card-search');
+            grid.innerHTML = '';
+            if (searchCard) grid.appendChild(searchCard);
 
             try {
-                const response = await fetch('/api/ai-archive-grouped', { credentials: 'same-origin' });
+                var response = await fetch('/api/ai-archive-grouped', { credentials: 'same-origin' });
                 if (!response.ok) throw new Error('Server error');
-                const data = await response.json();
+                var data = await response.json();
 
-                if (data.length === 0) {
-                    list.innerHTML = '<div class="ai-archive-empty">Tahlillar topilmadi</div>';
-                    return;
+                // Flatten all items from all months/senders into card data
+                aiProjectCards = [];
+                data.forEach(function(month) {
+                    month.senders.forEach(function(sender) {
+                        sender.items.forEach(function(a) {
+                            aiProjectCards.push({
+                                anon_id: a.anon_id,
+                                anon_name: sender.anon_name,
+                                category: a.category || '',
+                                date: a.answered_at || a.created_at,
+                                has_ai: a.has_ai,
+                                ai_analysis_id: a.ai_analysis_id,
+                                request_id: a.id,
+                                month_label: month.label
+                            });
+                        });
+                    });
+                });
+
+                if (aiProjectCards.length === 0 && emptyEl) {
+                    emptyEl.style.display = 'block';
+                } else {
+                    if (emptyEl) emptyEl.style.display = 'none';
+                    renderAiProjectCards(aiProjectCards);
                 }
-
-                list.innerHTML = data.map(month => {
-                    const sendersHtml = month.senders.map((sender, si) => {
-                        const itemsHtml = sender.items.map(a => {
-                            const date = new Date(a.answered_at || a.created_at);
-                            const dateStr = date.toLocaleDateString('uz-UZ');
-                            const onclick = a.has_ai
-                                ? `openArchivedAnalysis(${a.ai_analysis_id})`
-                                : `showRequestDetail(${a.id})`;
-                            const typeBadge = a.has_ai
-                                ? '<span class="analysis-type-badge ai">AI</span>'
-                                : '<span class="analysis-type-badge manual">Javob</span>';
-                            return `<div class="archive-analysis-row" onclick="${onclick}">
-                                <span class="anon-id">${escapeHtml(a.anon_id)}</span>
-                                ${typeBadge}
-                                ${a.category ? `<span class="analysis-category">${escapeHtml(a.category)}</span>` : ''}
-                                <span class="analysis-date">${dateStr}</span>
-                            </div>`;
-                        }).join('');
-
-                        return `<div class="archive-sender-card${si > 0 ? ' collapsed' : ''}">
-                            <div class="archive-sender-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                                <svg class="toggle-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                                <span class="sender-name">${escapeHtml(sender.anon_name)}</span>
-                                <span class="sender-count">${sender.total_requests}</span>
-                            </div>
-                            <div class="archive-sender-body">${itemsHtml}</div>
-                        </div>`;
-                    }).join('');
-
-                    return `<div class="archive-month-column">
-                        <div class="archive-month-title">${escapeHtml(month.label)}</div>
-                        <div class="archive-month-body">${sendersHtml}</div>
-                    </div>`;
-                }).join('');
             } catch (error) {
-                list.innerHTML = '<div class="ai-archive-empty" style="color:#e74c3c;">Xatolik: ' + error.message + '</div>';
+                grid.innerHTML = '';
+                if (searchCard) grid.appendChild(searchCard);
+                if (emptyEl) {
+                    emptyEl.style.display = 'block';
+                    emptyEl.querySelector('h3').textContent = 'Xatolik yuz berdi';
+                    emptyEl.querySelector('p').textContent = error.message;
+                }
+            }
+        }
+
+        function renderAiProjectCards(cards) {
+            var grid = document.getElementById('aiProjectGrid');
+            // Remove existing project cards (keep search card)
+            grid.querySelectorAll('.ai-ws-card-project').forEach(function(c) { c.remove(); });
+
+            cards.forEach(function(card) {
+                var date = new Date(card.date);
+                var now = new Date();
+                var diffMs = now - date;
+                var diffDays = Math.floor(diffMs / 86400000);
+                var timeAgo = diffDays === 0 ? 'Bugun' : diffDays === 1 ? 'Kecha' : diffDays + ' kun oldin';
+
+                var onclick = card.has_ai
+                    ? 'openArchivedAnalysis(' + card.ai_analysis_id + ')'
+                    : 'showRequestDetail(' + card.request_id + ')';
+                var typeBadge = card.has_ai
+                    ? '<span class="ai-ws-card-type ai">AI</span>'
+                    : '<span class="ai-ws-card-type manual">Javob</span>';
+
+                var cardEl = document.createElement('div');
+                cardEl.className = 'ai-ws-card ai-ws-card-project';
+                cardEl.setAttribute('onclick', onclick);
+                cardEl.setAttribute('data-search', (card.anon_id + ' ' + card.anon_name + ' ' + card.category).toLowerCase());
+                cardEl.innerHTML = '<div class="ai-ws-card-top">'
+                    + '<div class="ai-ws-card-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>'
+                    + '<h4>' + escapeHtml(card.anon_id) + '</h4>'
+                    + '</div>'
+                    + '<div class="ai-ws-card-body">'
+                    + (card.category ? '<span class="ai-ws-card-category">' + escapeHtml(card.category) + '</span>' : '')
+                    + '</div>'
+                    + '<div class="ai-ws-card-meta">'
+                    + typeBadge
+                    + '<span>' + timeAgo + '</span>'
+                    + '</div>';
+
+                grid.appendChild(cardEl);
+            });
+        }
+
+        function openLegalChatModal() {
+            document.getElementById('legalChatOverlay').style.display = 'flex';
+            var input = document.getElementById('legalChatInput');
+            if (input) setTimeout(function() { input.focus(); }, 200);
+        }
+
+        function closeLegalChatModal() {
+            document.getElementById('legalChatOverlay').style.display = 'none';
+        }
+
+        // Close modal on overlay click
+        (function() {
+            var overlay = document.getElementById('legalChatOverlay');
+            if (overlay) {
+                overlay.addEventListener('click', function(e) {
+                    if (e.target === overlay) closeLegalChatModal();
+                });
+            }
+        })();
+
+        function filterAiProjects(query) {
+            var q = query.toLowerCase().trim();
+            var grid = document.getElementById('aiProjectGrid');
+            var cards = grid.querySelectorAll('.ai-ws-card-project');
+            var shown = 0;
+            cards.forEach(function(card) {
+                var searchText = card.getAttribute('data-search') || '';
+                if (!q || searchText.indexOf(q) !== -1) {
+                    card.style.display = '';
+                    shown++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            var emptyEl = document.getElementById('aiWsEmpty');
+            if (emptyEl) {
+                emptyEl.style.display = (shown === 0 && aiProjectCards.length > 0) ? 'block' : 'none';
+            }
+        }
+
+        function setAiView(mode) {
+            var grid = document.getElementById('aiProjectGrid');
+            var btns = document.querySelectorAll('.ai-ws-view-btn');
+            btns.forEach(function(b) { b.classList.remove('active'); });
+            var targetBtn = document.querySelector('.ai-ws-view-btn[data-view="' + mode + '"]');
+            if (targetBtn) targetBtn.classList.add('active');
+            if (mode === 'list') {
+                grid.classList.add('list-view');
+            } else {
+                grid.classList.remove('list-view');
             }
         }
 
@@ -6500,7 +7000,7 @@
             }
 
             let docHtml = (reg.document_file_id || reg.has_document_base64)
-                ? `<a href="#" onclick="viewRegDoc('${reg.document_file_id || ''}', ${reg.id});return false;" style="color:#0C7ECF;font-weight:600;">Hujjatni ko'rish</a>`
+                ? `<a href="#" onclick="viewRegDoc('${reg.document_file_id || ''}', ${reg.id});return false;" style="color:#1e40af;font-weight:600;">Hujjatni ko'rish</a>`
                 : '<span style="color:var(--text-muted);">Yuklanmagan</span>';
 
             box.innerHTML = `
@@ -6577,7 +7077,7 @@
                         </div>`;
                     }
                     let docHtml = (reg.document_file_id || reg.has_document_base64)
-                        ? `<a href="#" onclick="viewRegDoc('${reg.document_file_id || ''}', ${reg.id});return false;" style="color:#0C7ECF;font-weight:600;">Hujjatni ko'rish</a>`
+                        ? `<a href="#" onclick="viewRegDoc('${reg.document_file_id || ''}', ${reg.id});return false;" style="color:#1e40af;font-weight:600;">Hujjatni ko'rish</a>`
                         : '<span style="color:var(--text-muted);">Yuklanmagan</span>';
 
                     const copyText = 'Username: ' + admin.username;
@@ -7135,7 +7635,7 @@
                 const ctx = chart.ctx;
                 chart.data.datasets.forEach((dataset, i) => {
                     const meta = chart.getDatasetMeta(i);
-                    const baseColor = dataset.baseColor || dataset.borderColor || '#019CE0';
+                    const baseColor = dataset.baseColor || dataset.borderColor || '#2563eb';
                     meta.data.forEach((bar) => {
                         const gradient = ctx.createLinearGradient(bar.x - bar.width / 2, bar.y, bar.x + bar.width / 2, bar.base);
                         gradient.addColorStop(0, lightenColor(baseColor, 0.3));
@@ -7221,7 +7721,7 @@
                 const categoryData = {};
                 requests.forEach(r => { categoryData[r.category || 'Boshqa'] = (categoryData[r.category || 'Boshqa'] || 0) + 1; });
                 const catEntries = Object.entries(categoryData).sort((a, b) => b[1] - a[1]);
-                const catBarColors = ['#0C7ECF', '#c0392b', '#27ae60', '#f39c12', '#0C7ECF', '#00B9F2', '#d35400', '#1661BE', '#7f8c8d'];
+                const catBarColors = ['#1e40af', '#c0392b', '#27ae60', '#f39c12', '#1e40af', '#3b82f6', '#d35400', '#1e40af', '#7f8c8d'];
 
                 // ===== HELPERS =====
                 function setFont(style) { doc.setFont(fontName, style || 'normal'); }
@@ -7366,7 +7866,7 @@
 
                 // --- Status Doughnut (left) ---
                 let curY = drawChartTitle(m + chartW / 2, 30, 'MUROJAATLAR HOLATI');
-                const statusColors = ['#e67e22', '#0C7ECF', '#27ae60', '#c0392b'];
+                const statusColors = ['#e67e22', '#1e40af', '#27ae60', '#c0392b'];
                 const statusLabelsArr = ['Kutilmoqda', 'Student javobi', 'Javob berilgan', 'Rad etilgan'];
                 const statusChart = await renderChart('statusChart', {
                     type: 'doughnut',
@@ -7438,7 +7938,7 @@
                 requests.forEach(r => { const t = typeLabelsMap[r.request_type] || r.request_type; typeData[t] = (typeData[t] || 0) + 1; });
 
                 const typeLabelsArr = Object.keys(typeData);
-                const typeColorsArr = ['#0C7ECF','#c0392b','#27ae60','#f39c12','#0C7ECF','#00B9F2'].slice(0, typeLabelsArr.length);
+                const typeColorsArr = ['#1e40af','#c0392b','#27ae60','#f39c12','#1e40af','#3b82f6'].slice(0, typeLabelsArr.length);
                 const typePieW = chartW;
                 const typePieH = chartH;
                 const typeChart = await renderChart('typeChart', {
