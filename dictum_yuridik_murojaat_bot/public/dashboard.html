@@ -2030,6 +2030,20 @@
             background: rgba(59, 130, 246, 0.15);
             color: #3b82f6;
         }
+        .ai-ws-card-project .ai-ws-card-topic {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 0 0 6px;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .ai-ws-grid.list-view .ai-ws-card-project .ai-ws-card-topic {
+            -webkit-line-clamp: 1;
+            margin-bottom: 4px;
+        }
         .ai-ws-card-project .ai-ws-card-meta {
             display: flex;
             align-items: center;
@@ -6699,6 +6713,7 @@
                                 anon_id: a.anon_id,
                                 anon_name: sender.anon_name,
                                 category: a.category || '',
+                                topic: a.topic || '',
                                 date: a.answered_at || a.created_at,
                                 has_ai: a.has_ai,
                                 ai_analysis_id: a.ai_analysis_id,
@@ -6731,6 +6746,12 @@
             // Remove existing project cards (keep search card)
             grid.querySelectorAll('.ai-ws-card-project').forEach(function(c) { c.remove(); });
 
+            // Default to list view
+            grid.classList.add('list-view');
+            document.querySelectorAll('.ai-ws-view-btn').forEach(function(b) { b.classList.remove('active'); });
+            var listBtn = document.querySelector('.ai-ws-view-btn[data-view="list"]');
+            if (listBtn) listBtn.classList.add('active');
+
             cards.forEach(function(card) {
                 var date = new Date(card.date);
                 var now = new Date();
@@ -6745,15 +6766,19 @@
                     ? '<span class="ai-ws-card-type ai">AI</span>'
                     : '<span class="ai-ws-card-type manual">Javob</span>';
 
+                var topicText = card.topic ? card.topic : 'Mavzu ko\'rsatilmagan';
+                if (topicText.length > 80) topicText = topicText.substring(0, 80) + '...';
+
                 var cardEl = document.createElement('div');
                 cardEl.className = 'ai-ws-card ai-ws-card-project';
                 cardEl.setAttribute('onclick', onclick);
-                cardEl.setAttribute('data-search', (card.anon_id + ' ' + card.anon_name + ' ' + card.category).toLowerCase());
+                cardEl.setAttribute('data-search', (card.anon_id + ' ' + card.anon_name + ' ' + card.category + ' ' + card.topic).toLowerCase());
                 cardEl.innerHTML = '<div class="ai-ws-card-top">'
                     + '<div class="ai-ws-card-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>'
                     + '<h4>' + escapeHtml(card.anon_id) + '</h4>'
                     + '</div>'
                     + '<div class="ai-ws-card-body">'
+                    + '<p class="ai-ws-card-topic">' + escapeHtml(topicText) + '</p>'
                     + (card.category ? '<span class="ai-ws-card-category">' + escapeHtml(card.category) + '</span>' : '')
                     + '</div>'
                     + '<div class="ai-ws-card-meta">'

@@ -1926,6 +1926,7 @@ app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
     const result = await pool.query(`
       SELECT r.id, r.category, r.created_at, r.answered_at,
              r.responded_by, r.user_id,
+             LEFT(r.request_text, 120) as topic,
              ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq,
              aa.id as ai_analysis_id
       FROM requests r
@@ -1964,6 +1965,7 @@ app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
         created_at: row.created_at,
         answered_at: row.answered_at,
         anon_id: userId ? anonId(userId, row.created_at, row.user_request_seq) : `#${row.id}`,
+        topic: row.topic || '',
         has_ai: !!row.ai_analysis_id,
         ai_analysis_id: row.ai_analysis_id,
         responded_by: row.responded_by
