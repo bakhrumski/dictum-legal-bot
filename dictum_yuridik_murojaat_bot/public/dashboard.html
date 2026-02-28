@@ -407,23 +407,23 @@
         }
 
         .header-brand { cursor: pointer; }
-        .header-logo {
-            height: 70px;
-            width: auto;
-            object-fit: contain;
-        }
-        [data-theme="dark"] .header-logo { filter: brightness(0) invert(1); }
         .header-left h1 {
-            color: #1a2332;
+            color: var(--text);
             margin-bottom: 2px;
-            font-weight: 400;
-            letter-spacing: 8px;
-            text-transform: uppercase;
-            font-size: 26px;
-            line-height: 1;
             font-family: 'Georgia', 'Times New Roman', serif;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-size: 28px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
         }
-        [data-theme="dark"] .header-left h1 { color: #e6edf3; }
+        .header-left .logo-scales {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+        }
 
         .header-center {
             position: absolute;
@@ -4252,7 +4252,8 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="switchTab('home')">
-                    <img src="/dictum_logo.png" alt="DICTUM" class="header-logo">
+                    <h1>DICTUM <svg class="logo-scales" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="10" r="4" fill="currentColor"/><line x1="50" y1="14" x2="50" y2="108" stroke="currentColor" stroke-width="5"/><line x1="10" y1="22" x2="90" y2="22" stroke="currentColor" stroke-width="4"/><rect x="30" y="108" width="40" height="5" rx="2" fill="currentColor"/><line x1="10" y1="22" x2="2" y2="68" stroke="currentColor" stroke-width="2.5"/><line x1="10" y1="22" x2="18" y2="68" stroke="currentColor" stroke-width="2.5"/><path d="M2 68 Q10 80 18 68" stroke="currentColor" stroke-width="2.5" fill="none"/><line x1="90" y1="22" x2="82" y2="68" stroke="currentColor" stroke-width="2.5"/><line x1="90" y1="22" x2="98" y2="68" stroke="currentColor" stroke-width="2.5"/><path d="M82 68 Q90 80 98 68" stroke="currentColor" stroke-width="2.5" fill="none"/></svg></h1>
+                    <p class="subtitle">Yuristlar yordamchi tizimi</p>
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">

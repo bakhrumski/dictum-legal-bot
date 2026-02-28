@@ -30,14 +30,28 @@
             text-align: center;
             margin-bottom: 30px;
         }
+        .logo-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
         .logo h1 {
             color: #2c3e50;
-            font-size: 28px;
-            margin-bottom: 5px;
+            font-size: 36px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            letter-spacing: 4px;
+            margin-bottom: 2px;
+        }
+        .logo-scales {
+            width: 42px;
+            height: 42px;
+            flex-shrink: 0;
         }
         .logo p {
             color: #7f8c8d;
-            font-size: 14px;
+            font-size: 15px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-style: italic;
         }
         .form-group {
             margin-bottom: 20px;
@@ -118,8 +132,22 @@
 <body>
     <div class="login-container">
         <div class="logo">
-            <h1>🏛️ Dictum</h1>
-            <p>Murojaatlar boshqaruv tizimi</p>
+            <div class="logo-row">
+                <h1>DICTUM</h1>
+                <svg class="logo-scales" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="10" r="4" fill="#2c3e50"/>
+                    <line x1="50" y1="14" x2="50" y2="108" stroke="#2c3e50" stroke-width="5"/>
+                    <line x1="10" y1="22" x2="90" y2="22" stroke="#2c3e50" stroke-width="4"/>
+                    <rect x="30" y="108" width="40" height="5" rx="2" fill="#2c3e50"/>
+                    <line x1="10" y1="22" x2="2" y2="68" stroke="#2c3e50" stroke-width="2.5"/>
+                    <line x1="10" y1="22" x2="18" y2="68" stroke="#2c3e50" stroke-width="2.5"/>
+                    <path d="M2 68 Q10 80 18 68" stroke="#2c3e50" stroke-width="2.5" fill="none"/>
+                    <line x1="90" y1="22" x2="82" y2="68" stroke="#2c3e50" stroke-width="2.5"/>
+                    <line x1="90" y1="22" x2="98" y2="68" stroke="#2c3e50" stroke-width="2.5"/>
+                    <path d="M82 68 Q90 80 98 68" stroke="#2c3e50" stroke-width="2.5" fill="none"/>
+                </svg>
+            </div>
+            <p>Yuristlar yordamchi tizimi</p>
         </div>
         <div id="errorMessage" class="error-message"></div>
         <form id="loginForm">

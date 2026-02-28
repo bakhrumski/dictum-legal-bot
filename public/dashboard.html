@@ -45,6 +45,16 @@
         .header-left h1 {
             color: #2c3e50;
             margin-bottom: 5px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            letter-spacing: 3px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header-left .logo-scales {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
         }
         
         .header-center {
@@ -303,6 +313,8 @@
         .subtitle {
             color: #7f8c8d;
             font-size: 14px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-style: italic;
         }
         
         .stats {
@@ -1773,8 +1785,8 @@
     <div class="container">
         <header>
             <div class="header-left">
-                <h1>🏛️ Dictum Advokatlik Firmasi</h1>
-                <p class="subtitle">Murojaatlar boshqaruv tizimi</p>
+                <h1>DICTUM <svg class="logo-scales" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="10" r="4" fill="#2c3e50"/><line x1="50" y1="14" x2="50" y2="108" stroke="#2c3e50" stroke-width="5"/><line x1="10" y1="22" x2="90" y2="22" stroke="#2c3e50" stroke-width="4"/><rect x="30" y="108" width="40" height="5" rx="2" fill="#2c3e50"/><line x1="10" y1="22" x2="2" y2="68" stroke="#2c3e50" stroke-width="2.5"/><line x1="10" y1="22" x2="18" y2="68" stroke="#2c3e50" stroke-width="2.5"/><path d="M2 68 Q10 80 18 68" stroke="#2c3e50" stroke-width="2.5" fill="none"/><line x1="90" y1="22" x2="82" y2="68" stroke="#2c3e50" stroke-width="2.5"/><line x1="90" y1="22" x2="98" y2="68" stroke="#2c3e50" stroke-width="2.5"/><path d="M82 68 Q90 80 98 68" stroke="#2c3e50" stroke-width="2.5" fill="none"/></svg></h1>
+                <p class="subtitle">Yuristlar yordamchi tizimi</p>
             </div>
             <div class="header-center">
                 <button class="btn btn-success" onclick="exportToPDF()" style="padding: 10px 22px; font-size: 14px;">
