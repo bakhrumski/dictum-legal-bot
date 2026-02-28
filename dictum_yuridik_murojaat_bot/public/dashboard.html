@@ -2183,17 +2183,21 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            min-width: 0;
+            overflow: hidden;
         }
         .ai-chat-modal-actions {
             display: flex;
             gap: 8px;
             align-items: center;
+            flex-shrink: 0;
         }
         .ai-chat-modal-btn {
             background: none;
             border: none;
             color: var(--text-muted);
             width: 36px;
+            min-width: 36px;
             height: 36px;
             border-radius: 50%;
             cursor: pointer;
@@ -2202,6 +2206,7 @@
             align-items: center;
             justify-content: center;
             padding: 0;
+            flex-shrink: 0;
         }
         .ai-chat-modal-btn:hover { background: var(--bg-card-hover); color: var(--text-secondary); }
         .ai-chat-modal-btn.close-btn {
