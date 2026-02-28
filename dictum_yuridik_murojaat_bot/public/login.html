@@ -9,329 +9,601 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --login-bg: #f5f5f7;
-            --login-card: rgba(255, 255, 255, 0.95);
-            --login-card-border: rgba(0, 0, 0, 0.08);
-            --login-text: #1d1d1f;
-            --login-text-secondary: #6e6e73;
-            --login-input-bg: rgba(245, 245, 247, 0.9);
-            --login-input-border: rgba(0, 0, 0, 0.1);
-            --login-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            --bg: #f0f0f5;
+            --card-bg: #ffffff;
+            --card-border: rgba(0,0,0,0.06);
+            --card-shadow: 0 8px 40px rgba(0,0,0,0.08);
+            --text: #1a1a2e;
+            --text-secondary: #6b7280;
+            --input-bg: #ffffff;
+            --input-border: #e0e0e6;
+            --input-focus: #6c5ce7;
+            --accent: #6c5ce7;
+            --accent-hover: #5a4bd1;
+            --accent-gradient: linear-gradient(135deg, #6c5ce7 0%, #a855f7 100%);
+            --hero-gradient: linear-gradient(160deg, #a855f7 0%, #6c5ce7 40%, #4f46e5 70%, #818cf8 100%);
+            --error-bg: #fef2f2;
+            --error-text: #dc2626;
+            --error-border: #fecaca;
+            --success-bg: #f0fdf4;
+            --success-text: #16a34a;
         }
         [data-theme="dark"] {
-            --login-bg: #0d1117;
-            --login-card: rgba(22, 27, 34, 0.95);
-            --login-card-border: rgba(255, 255, 255, 0.06);
-            --login-text: #e6edf3;
-            --login-text-secondary: #8b949e;
-            --login-input-bg: rgba(255, 255, 255, 0.06);
-            --login-input-border: rgba(255, 255, 255, 0.08);
-            --login-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
-        *, *::before, *::after {
-            transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                        color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                        border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                        box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            --bg: #0d1117;
+            --card-bg: #161b22;
+            --card-border: rgba(255,255,255,0.06);
+            --card-shadow: 0 8px 40px rgba(0,0,0,0.4);
+            --text: #e6edf3;
+            --text-secondary: #8b949e;
+            --input-bg: #0d1117;
+            --input-border: rgba(255,255,255,0.1);
+            --input-focus: #a78bfa;
+            --accent: #a78bfa;
+            --accent-hover: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            --hero-gradient: linear-gradient(160deg, #7c3aed 0%, #4f46e5 40%, #3730a3 70%, #6366f1 100%);
+            --error-bg: rgba(220,38,38,0.1);
+            --error-text: #f87171;
+            --error-border: rgba(220,38,38,0.2);
+            --success-bg: rgba(22,163,74,0.1);
+            --success-text: #4ade80;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Inter', BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--login-bg);
-            background-attachment: fixed;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
             min-height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
-            padding: 0 20px 12vh;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            overflow-y: scroll;
+            justify-content: center;
+            padding: 20px;
         }
-        .login-container {
-            background: var(--login-card);
-            backdrop-filter: blur(40px);
-            -webkit-backdrop-filter: blur(40px);
-            border: 1px solid var(--login-card-border);
-            padding: 44px 36px;
-            border-radius: 24px;
-            box-shadow: var(--login-shadow);
+
+        /* ========== MAIN CARD ========== */
+        .login-card {
+            display: flex;
             width: 100%;
-            max-width: 420px;
-            animation: loginSlideUp 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-width: 960px;
+            min-height: 580px;
+            background: var(--card-bg);
+            border-radius: 24px;
+            border: 1px solid var(--card-border);
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+            animation: cardAppear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes cardAppear {
+            from { opacity: 0; transform: translateY(20px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* ========== LEFT HERO PANEL ========== */
+        .hero-panel {
+            width: 42%;
+            background: var(--hero-gradient);
+            padding: 40px 36px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-panel::before {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
+            top: -80px;
+            right: -80px;
+        }
+        .hero-panel::after {
+            content: '';
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 50%;
+            bottom: 60px;
+            left: -60px;
+        }
+        .hero-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            z-index: 1;
+        }
+        .hero-logo h2 {
+            color: #fff;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 26px;
+            letter-spacing: 4px;
+            font-weight: 400;
+        }
+        .hero-logo svg { color: #fff; }
+        .hero-text {
+            position: relative;
+            z-index: 1;
+        }
+        .hero-text .hero-small {
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .hero-text h3 {
+            color: #fff;
+            font-size: 26px;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        /* ========== RIGHT FORM PANEL ========== */
+        .form-panel {
+            flex: 1;
+            padding: 40px 44px;
+            overflow-y: auto;
             position: relative;
         }
-        @keyframes loginSlideUp {
-            0% { opacity: 0; transform: translateY(40px) scale(0.95); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 6px;
+            border-radius: 8px;
+            transition: background 0.2s;
         }
-        .logo { text-align: center; margin-bottom: 32px; }
-        .logo-block { display: inline-block; text-align: left; }
-        .logo-row { display: inline-flex; align-items: center; gap: 8px; }
-        .logo-scales { width: 40px; height: 40px; flex-shrink: 0; color: var(--login-text); }
-        .logo h1 { color: var(--login-text); font-size: 36px; font-family: 'Georgia', 'Times New Roman', serif; letter-spacing: 4px; text-transform: uppercase; margin: 0; }
-        .logo p { color: var(--login-text-secondary); font-size: 15px; margin-top: 2px; font-family: 'Georgia', 'Times New Roman', serif; font-style: italic; }
-        .form-group { margin-bottom: 16px; }
-        label {
-            display: block; color: var(--login-text); font-weight: 600;
-            margin-bottom: 6px; font-size: 12px; letter-spacing: 0.3px; text-transform: uppercase;
+        .theme-toggle:hover { background: rgba(108,92,231,0.08); }
+        [data-theme="dark"] .icon-sun { display: none; }
+        .icon-moon { display: none; }
+        [data-theme="dark"] .icon-moon { display: block; }
+
+        .form-logo {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
         }
-        .label-hint { text-transform: none; font-weight: 400; color: var(--login-text-secondary); font-size: 11px; }
-        input, select {
-            width: 100%; padding: 12px 14px;
-            border: 1px solid var(--login-input-border); border-radius: 14px;
-            font-size: 14px; font-family: inherit;
-            background: var(--login-input-bg); color: var(--login-text);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            -webkit-appearance: none;
+        .form-logo svg { color: var(--accent); }
+        .form-heading {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 6px;
         }
-        select { cursor: pointer; }
-        select option { background: var(--login-card); color: var(--login-text); }
-        input[type="number"] { -moz-appearance: textfield; }
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
+        .form-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 28px;
         }
-        input:focus, select:focus {
-            outline: none; border-color: #019CE0;
-            box-shadow: 0 0 0 2px rgba(1, 156, 224, 0.1);
+
+        /* ========== FORM ELEMENTS ========== */
+        .form-group { margin-bottom: 18px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 6px;
         }
-        input.input-invalid, select.input-invalid {
-            border-color: #e74c3c !important;
-            box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1) !important;
+        .label-hint { font-weight: 400; color: var(--text-secondary); font-size: 11px; }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1.5px solid var(--input-border);
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: inherit;
+            background: var(--input-bg);
+            color: var(--text);
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
         }
-        @keyframes inputShake {
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: var(--input-focus);
+            box-shadow: 0 0 0 3px rgba(108,92,231,0.12);
+        }
+        .form-group input::placeholder { color: var(--text-secondary); opacity: 0.6; }
+        .input-invalid {
+            border-color: var(--error-text) !important;
+            box-shadow: 0 0 0 3px rgba(220,38,38,0.1) !important;
+            animation: shake 0.4s ease;
+        }
+        @keyframes shake {
             0%, 100% { transform: translateX(0); }
             25% { transform: translateX(-4px); }
             75% { transform: translateX(4px); }
         }
+
+        /* ========== BUTTONS ========== */
         .btn {
             width: 100%;
-            background: linear-gradient(135deg, #1661BE, #0C7ECF);
-            color: white; padding: 13px; border: none; border-radius: 14px;
-            font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
-            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-            box-shadow: 0 2px 10px rgba(22, 97, 190, 0.25);
-            letter-spacing: 0.3px; position: relative; overflow: hidden;
+            padding: 13px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            background: var(--accent-gradient);
+            color: #fff;
+            transition: opacity 0.2s, transform 0.15s;
+            margin-top: 6px;
         }
-        .btn::after {
-            content: ''; position: absolute; inset: 0;
-            background: linear-gradient(rgba(255,255,255,0.2), transparent);
-            opacity: 0; transition: opacity 0.3s;
-        }
-        .btn:hover::after { opacity: 1; }
-        .btn:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 6px 20px rgba(22, 97, 190, 0.35); }
-        .btn:active { transform: scale(0.96); transition-duration: 0.1s; }
-        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-        .btn:disabled::after { display: none; }
-        .error-message {
-            background: rgba(248, 215, 218, 0.8); color: #721c24;
-            padding: 10px 14px; border-radius: 14px;
-            border: 1px solid rgba(231, 76, 60, 0.2);
-            margin-bottom: 16px; display: none; font-size: 13px;
-        }
-        [data-theme="dark"] .error-message {
-            background: rgba(80, 30, 30, 0.8); color: #f8a0a0;
-            border-color: rgba(231, 76, 60, 0.3);
-        }
-        .error-message.show { display: block; animation: errorShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
-        @keyframes errorShake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-6px); }
-            75% { transform: translateX(6px); }
-        }
-        /* Theme toggle */
-        .theme-toggle {
-            position: absolute; top: 12px; right: 12px; z-index: 10;
-            width: 36px; height: 36px; border: none; background: none; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; padding: 0;
-            overflow: hidden;
-        }
-        .theme-toggle:hover { box-shadow: none; }
-        .theme-toggle:active { transform: scale(0.95); }
-        .theme-toggle .icon-sun, .theme-toggle .icon-moon {
-            position: absolute; transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); line-height: 1;
-        }
-        .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
-        .theme-toggle .icon-moon { opacity: 0; transform: rotate(-90deg) scale(0.5); }
-        [data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(90deg) scale(0.5); }
-        [data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-        /* Toggle login/register */
-        .login-form, .register-form, .success-view { display: none; }
-        .login-container[data-view="login"] .login-form { display: block; }
-        .login-container[data-view="register"] .register-form { display: block; }
-        .login-container[data-view="success"] .success-view { display: block; }
-        .register-form { animation: loginSlideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .success-view { animation: loginSlideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        /* ========== DIVIDER ========== */
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 22px 0;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--input-border);
+        }
 
-        .switch-link { text-align: center; margin-top: 16px; font-size: 13px; color: var(--login-text-secondary); }
-        .switch-link a { color: #1661BE; text-decoration: none; font-weight: 600; cursor: pointer; }
+        /* ========== TELEGRAM BUTTON ========== */
+        .telegram-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 12px;
+            border: 1.5px solid var(--input-border);
+            border-radius: 12px;
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            text-decoration: none;
+        }
+        .telegram-btn:hover {
+            border-color: #0088cc;
+            background: rgba(0,136,204,0.06);
+        }
+        .telegram-btn svg { flex-shrink: 0; }
+
+        /* ========== SWITCH LINK ========== */
+        .switch-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .switch-link a {
+            color: var(--accent);
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
         .switch-link a:hover { text-decoration: underline; }
 
-        /* Type toggle */
-        .type-toggle {
-            display: flex; gap: 0; margin-bottom: 18px;
-            background: var(--login-input-bg); border-radius: 12px; padding: 3px;
-            border: 1px solid var(--login-input-border);
+        /* ========== ERROR / SUCCESS ========== */
+        .error-message {
+            background: var(--error-bg);
+            color: var(--error-text);
+            border: 1px solid var(--error-border);
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+            animation: fadeSlide 0.3s ease;
         }
-        .type-toggle button {
-            flex: 1; padding: 10px; border: none; border-radius: 10px;
-            font-size: 13px; font-weight: 600; font-family: inherit;
-            cursor: pointer; background: transparent; color: var(--login-text-secondary);
-            transition: all 0.3s;
-        }
-        .type-toggle button.active {
-            background: linear-gradient(135deg, #1661BE, #0C7ECF);
-            color: white; box-shadow: 0 2px 8px rgba(22, 97, 190, 0.25);
-        }
-
-        /* File upload zone */
-        .file-zone {
-            border: 2px dashed var(--login-input-border); border-radius: 14px;
-            padding: 20px; text-align: center; cursor: pointer;
-            background: var(--login-input-bg); transition: all 0.3s;
-            position: relative;
-        }
-        .file-zone:hover, .file-zone.dragover {
-            border-color: #019CE0; background: rgba(1, 156, 224, 0.05);
-        }
-        .file-zone.has-file { border-color: #27ae60; border-style: solid; }
-        .file-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-        .file-zone-text { color: var(--login-text-secondary); font-size: 13px; pointer-events: none; }
-        .file-zone-text .file-icon { font-size: 24px; display: block; margin-bottom: 6px; }
-        .file-zone-name { color: #27ae60; font-weight: 600; font-size: 13px; margin-top: 6px; word-break: break-all; }
-
-        /* Verification code */
-        .tg-verify-row { display: flex; gap: 8px; align-items: center; }
-        .tg-verify-row input { flex: 1; }
-        .send-code-btn {
-            padding: 12px 16px; border: none; border-radius: 14px;
-            font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
-            background: linear-gradient(135deg, #1661BE, #0C7ECF); color: white;
-            white-space: nowrap; transition: all 0.3s;
-        }
-        .send-code-btn:hover { opacity: 0.9; }
-        .send-code-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .verify-group { display: none; margin-top: 8px; }
-        .verify-group.show { display: block; }
-        .verify-success { color: var(--login-text); font-size: 12px; margin-top: 6px; display: none; line-height: 1.5; }
-        .verify-success.show { display: block; }
-
-        /* Student/lawyer field visibility */
-        .student-fields, .lawyer-fields { display: none; }
-        .register-form[data-type="student"] .student-fields { display: block; }
-        .register-form[data-type="lawyer"] .lawyer-fields { display: block; }
-
-        /* Agreement section */
-        .agreement-section { margin: 18px 0 16px; }
-        .agreement-item {
-            display: flex; align-items: center; gap: 8px;
-            margin-bottom: 8px; font-size: 13px; color: var(--login-text-secondary);
-        }
-        .agreement-item input[type="checkbox"] {
+        .error-message.show { display: block; }
+        .agreement-error {
+            color: var(--error-text);
+            font-size: 12px;
+            margin-top: 4px;
             display: none;
         }
-        .agreement-item .check-icon {
-            width: 20px; height: 20px; min-width: 20px;
-            border: 2px solid var(--login-input-border); border-radius: 6px;
-            display: flex; align-items: center; justify-content: center;
-            transition: all 0.25s ease;
-            background: var(--login-input-bg);
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .agreement-item input[type="checkbox"]:checked + .check-icon {
-            background: transparent; border-color: var(--login-input-border);
-            color: #000000;
+        .verify-success {
+            font-size: 13px;
+            color: var(--success-text);
+            margin-top: 8px;
+            display: none;
         }
-        [data-theme="dark"] .agreement-item input[type="checkbox"]:checked + .check-icon {
-            color: #ffffff;
-        }
-        .agreement-item input[type="checkbox"]:checked + .check-icon svg {
-            opacity: 1; transform: scale(1);
-        }
-        .agreement-item .check-icon svg {
-            width: 12px; height: 12px; opacity: 0; transform: scale(0.5);
-            transition: all 0.2s ease;
-        }
-        .agreement-item { cursor: pointer; }
-        .agreement-item a { color: #000000; text-decoration: none; cursor: pointer; font-weight: 600; }
-        .agreement-item a:active, .agreement-item a:visited { color: #000000; }
-        [data-theme="dark"] .agreement-item a { color: #ffffff; }
-        [data-theme="dark"] .agreement-item a:active, [data-theme="dark"] .agreement-item a:visited { color: #ffffff; }
-        .agreement-error { color: #e74c3c; font-size: 12px; margin-top: -4px; margin-bottom: 8px; display: none; }
+        .verify-success.show { display: block; }
 
-        /* Policy modal */
+        /* ========== TYPE TOGGLE ========== */
+        .type-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 10px;
+            padding: 3px;
+            margin-bottom: 20px;
+        }
+        .type-toggle button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .type-toggle button.active {
+            background: var(--accent-gradient);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(108,92,231,0.25);
+        }
+
+        /* ========== SEND CODE BUTTON ========== */
+        .send-code-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            background: var(--input-bg);
+            color: var(--accent);
+            border: 1.5px solid var(--accent);
+            transition: all 0.2s;
+        }
+        .send-code-btn:hover:not(:disabled) { background: rgba(108,92,231,0.08); }
+        .send-code-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ========== FILE ZONE ========== */
+        .file-zone {
+            border: 2px dashed var(--input-border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .file-zone:hover, .file-zone.dragover { border-color: var(--accent); background: rgba(108,92,231,0.04); }
+        .file-zone.has-file { border-color: var(--success-text); border-style: solid; }
+        .file-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-zone-text { color: var(--text-secondary); font-size: 13px; }
+        .file-icon { font-size: 18px; margin-right: 4px; }
+        .file-zone-name { color: var(--success-text); font-size: 12px; margin-top: 4px; font-weight: 500; }
+
+        /* ========== AGREEMENTS ========== */
+        .agreement-section { margin: 18px 0 8px; }
+        .agreement-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .agreement-item input { display: none; }
+        .check-icon {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--input-border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+            color: transparent;
+        }
+        .agreement-item input:checked + .check-icon {
+            background: var(--accent-gradient);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .check-icon svg { width: 12px; height: 12px; }
+        .agreement-item a { color: var(--accent); font-weight: 500; }
+
+        /* ========== VERIFY GROUP ========== */
+        .verify-group { display: none; }
+        .verify-group.show { display: block; }
+
+        /* ========== VIEW MANAGEMENT ========== */
+        .login-container .register-form,
+        .login-container .success-view { display: none; }
+        .login-container[data-view="register"] .login-form { display: none; }
+        .login-container[data-view="register"] .register-form { display: block; }
+        .login-container[data-view="success"] .login-form { display: none; }
+        .login-container[data-view="success"] .success-view { display: block; }
+
+        /* Register type fields */
+        .register-form .lawyer-fields { display: none; }
+        .register-form[data-type="lawyer"] .student-fields { display: none; }
+        .register-form[data-type="lawyer"] .lawyer-fields { display: block; }
+
+        /* ========== SUCCESS VIEW ========== */
+        .success-view {
+            text-align: center;
+            padding: 40px 0;
+        }
+        .success-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--accent-gradient);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 16px;
+        }
+        .success-text {
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        /* ========== POLICY MODAL ========== */
         .policy-overlay {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            z-index: 2000; justify-content: center; align-items: center;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
         .policy-overlay.active { display: flex; }
         .policy-box {
-            background: var(--login-card); border: 1px solid var(--login-card-border);
-            border-radius: 20px; width: 92%; max-width: 560px; max-height: 80vh;
-            display: flex; flex-direction: column;
-            animation: loginSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            box-shadow: var(--login-shadow);
+            background: var(--card-bg);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 520px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
         }
         .policy-box-title {
-            padding: 18px 20px 14px; font-size: 16px; font-weight: 700;
-            color: var(--login-text); border-bottom: 1px solid var(--login-card-border);
+            padding: 20px 24px;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            border-bottom: 1px solid var(--input-border);
         }
         .policy-box-body {
-            flex: 1; overflow-y: auto; padding: 20px;
-            color: var(--login-text); font-size: 13px; line-height: 1.8;
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            font-size: 14px;
+            line-height: 1.7;
+            color: var(--text-secondary);
         }
-        .policy-box-body h3 { font-size: 14px; margin: 14px 0 6px; color: var(--login-text); }
-        .policy-box-body p { margin-bottom: 10px; }
+        .policy-box-body h3 {
+            color: var(--text);
+            font-size: 15px;
+            margin: 16px 0 6px;
+        }
+        .policy-box-body h3:first-child { margin-top: 0; }
         .policy-box-footer {
-            padding: 14px 20px; border-top: 1px solid var(--login-card-border);
-            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 16px 24px;
+            border-top: 1px solid var(--input-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
-        .policy-scroll-hint { font-size: 11px; color: var(--login-text-secondary); }
+        .policy-scroll-hint { font-size: 12px; color: var(--text-secondary); }
         .policy-confirm-btn {
-            padding: 8px 20px; border: none; border-radius: 10px;
-            font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
-            background: linear-gradient(135deg, #1661BE, #0C7ECF); color: white;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            background: var(--accent-gradient);
+            color: #fff;
+            transition: opacity 0.2s;
         }
         .policy-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        /* Success view */
-        .success-view { text-align: center; padding: 20px 0; }
-        .success-icon { font-size: 52px; margin-bottom: 16px; color: #27ae60; }
-        .success-text { color: var(--login-text); font-size: 15px; line-height: 1.7; margin-bottom: 20px; }
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 768px) {
+            body { padding: 0; align-items: stretch; }
+            .login-card {
+                flex-direction: column;
+                max-width: 100%;
+                min-height: 100vh;
+                border-radius: 0;
+                border: none;
+            }
+            .hero-panel {
+                width: 100%;
+                padding: 32px 28px 28px;
+                min-height: auto;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .hero-text .hero-small { display: none; }
+            .hero-text h3 { font-size: 16px; }
+            .form-panel { padding: 28px 24px; }
+        }
+        @media (min-width: 769px) {
+            .form-panel { max-height: 90vh; }
+        }
     </style>
-</head>
-<body>
     <script>
         (function() {
             const saved = localStorage.getItem('dictum-theme');
             if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
         })();
-        function toggleTheme() {
-            const html = document.documentElement;
-            if (html.getAttribute('data-theme') === 'dark') {
-                html.removeAttribute('data-theme');
-                localStorage.setItem('dictum-theme', 'light');
-            } else {
-                html.setAttribute('data-theme', 'dark');
-                localStorage.setItem('dictum-theme', 'dark');
-            }
-        }
     </script>
+</head>
+<body>
+    <div class="login-card">
+        <!-- LEFT HERO PANEL -->
+        <div class="hero-panel">
+            <div class="hero-logo">
+                <h2>DICTUM</h2>
+                <svg width="28" height="28" viewBox="0 0 80 96" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="40" cy="5" r="3.5"/>
+                    <rect x="38" y="8" width="4" height="72" rx="1"/>
+                    <rect x="5" y="14" width="70" height="3" rx="1.5"/>
+                    <rect x="24" y="80" width="32" height="4" rx="2"/>
+                    <line x1="9" y1="17" x2="1" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    <line x1="9" y1="17" x2="17" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    <path d="M0.5 52 C1 58 5 62 9 62 C13 62 17 58 17.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    <line x1="71" y1="17" x2="63" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    <line x1="71" y1="17" x2="79" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    <path d="M62.5 52 C63 58 67 62 71 62 C75 62 79 58 79.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <div class="hero-text">
+                <p class="hero-small">Siz osongina</p>
+                <h3>Huquqiy maslahat olish tizimiga kiring</h3>
+            </div>
+        </div>
 
-    <div class="login-container" data-view="login">
-        <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish">
-            <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="#bdc3c7" stroke="none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3" stroke="#bdc3c7" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke="#bdc3c7" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="#bdc3c7" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="#bdc3c7" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke="#bdc3c7" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke="#bdc3c7" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="#bdc3c7" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="#bdc3c7" stroke-width="2" stroke-linecap="round"/></svg></span>
-            <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="#bdc3c7" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg></span>
-        </button>
-        <div class="logo">
-            <div class="logo-block">
-                <div class="logo-row">
-                    <h1>DICTUM</h1>
-                    <svg class="logo-scales" viewBox="0 0 80 96" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <!-- RIGHT FORM PANEL -->
+        <div class="form-panel">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish">
+                <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-secondary)" stroke="none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/></svg></span>
+                <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-secondary)" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg></span>
+            </button>
+
+            <div class="login-container" data-view="login">
+                <!-- FORM HEADER -->
+                <div class="form-logo">
+                    <svg width="22" height="22" viewBox="0 0 80 96" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color:var(--accent);">
                         <circle cx="40" cy="5" r="3.5"/>
                         <rect x="38" y="8" width="4" height="72" rx="1"/>
                         <rect x="5" y="14" width="70" height="3" rx="1.5"/>
@@ -344,150 +616,162 @@
                         <path d="M62.5 52 C63 58 67 62 71 62 C75 62 79 58 79.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
                     </svg>
                 </div>
-                <p>Yuristlar yordamchi tizimi</p>
-            </div>
-        </div>
 
-        <!-- LOGIN FORM -->
-        <div class="login-form">
-            <div id="loginError" class="error-message"></div>
-            <form id="loginForm">
-                <div class="form-group">
-                    <label>Foydalanuvchi nomi</label>
-                    <input type="text" id="username" placeholder="username" required autofocus>
-                </div>
-                <div class="form-group">
-                    <label>Parol</label>
-                    <input type="password" id="password" placeholder="••••••" required>
-                </div>
-                <button type="submit" class="btn">Kirish</button>
-            </form>
-            <div class="switch-link">
-                Yangi a'zomisiz? <a onclick="showView('register')">Ro'yxatdan o'tish</a>
-            </div>
-        </div>
+                <!-- LOGIN FORM -->
+                <div class="login-form">
+                    <h1 class="form-heading">Tizimga kirish</h1>
+                    <p class="form-subtitle">Dictum yuristlar yordamchi tizimiga xush kelibsiz</p>
 
-        <!-- REGISTER FORM -->
-        <div class="register-form" data-type="student">
-            <div id="regError" class="error-message"></div>
-
-            <div class="type-toggle">
-                <button class="active" onclick="setRegType('student')">Student</button>
-                <button onclick="setRegType('lawyer')">Yurist</button>
-            </div>
-
-            <form id="registerForm" novalidate>
-                <div class="form-group">
-                    <label>Familiya <span class="label-hint">(HEMISdagi ism-familiya bilan bir xil bo'lishi kerak)</span></label>
-                    <input type="text" id="regLastName" placeholder="Familiya" required>
-                </div>
-                <div class="form-group">
-                    <label>Ism</label>
-                    <input type="text" id="regFirstName" placeholder="Ism" required>
-                </div>
-
-                <!-- Student fields -->
-                <div class="student-fields">
-                    <div class="form-group">
-                        <label>Bosqich</label>
-                        <select id="regLevel" required>
-                            <option value="">Tanlang...</option>
-                            <option value="1-bosqich">1-bosqich</option>
-                            <option value="2-bosqich">2-bosqich</option>
-                            <option value="3-bosqich">3-bosqich</option>
-                            <option value="4-bosqich">4-bosqich</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Lawyer fields -->
-                <div class="lawyer-fields">
-                    <div class="form-group">
-                        <label>Mutaxassislik</label>
-                        <select id="regSpecialization" required>
-                            <option value="">Tanlang...</option>
-                            <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
-                            <option value="Jinoyat huquqi">Jinoyat huquqi</option>
-                            <option value="Mehnat huquqi">Mehnat huquqi</option>
-                            <option value="Oila huquqi">Oila huquqi</option>
-                            <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
-                            <option value="Ko'chmas mulk">Ko'chmas mulk</option>
-                            <option value="Soliq huquqi">Soliq huquqi</option>
-                            <option value="Ma'muriy huquq">Ma'muriy huquq</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Tajriba (yil)</label>
-                        <input type="text" id="regExperience" inputmode="numeric" pattern="[0-9]*" placeholder="Masalan: 5" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Telegram username <span class="label-hint">(ixtiyoriy)</span></label>
-                    <input type="text" id="regTelegram" placeholder="@username">
-                </div>
-                <div class="form-group">
-                    <label>Telegram tasdiqlash</label>
-                    <button type="button" class="send-code-btn" id="sendCodeBtn" onclick="sendVerificationCode()" style="width:100%;padding:13px;border-radius:14px;font-size:14px;">Kod yuborish</button>
-                    <div class="verify-success" id="codeSentMsg"></div>
-                    <div class="agreement-error" id="codeError" style="display:none"></div>
-                </div>
-                <div class="form-group verify-group" id="verifyGroup">
-                    <label>Tasdiqlash kodi <span class="label-hint">(Telegramga yuborilgan 4 raqamli kod)</span></label>
-                    <input type="text" id="regVerifyCode" placeholder="1234" maxlength="4" inputmode="numeric" pattern="[0-9]*" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Parol <span class="label-hint">(kamida 6 ta belgi)</span></label>
-                    <input type="password" id="regPassword" placeholder="••••••" minlength="6" required>
-                </div>
-                <div class="form-group">
-                    <label>Parolni tasdiqlang</label>
-                    <input type="password" id="regPasswordConfirm" placeholder="••••••" required>
-                    <div class="agreement-error" id="passwordMatchError" style="display:none">Parollar mos kelmaydi!</div>
-                    <div class="agreement-error" id="passwordLengthError" style="display:none">Parol kamida 6 ta belgi bo'lishi kerak!</div>
-                </div>
-
-                <div class="form-group">
-                    <label>Tasdiqlovchi hujjat <span class="label-hint">(mygov.uzdan ma'lumotnoma)</span></label>
-                    <div class="file-zone" id="fileZone">
-                        <input type="file" id="regDocument" accept=".jpg,.jpeg,.png,.webp,.pdf" onchange="handleFile(this)">
-                        <div class="file-zone-text">
-                            <span class="file-icon">📎</span>
-                            JPG, PNG yoki PDF yuklang
+                    <div id="loginError" class="error-message"></div>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label>Foydalanuvchi nomi</label>
+                            <input type="text" id="username" placeholder="username" required autofocus>
                         </div>
-                        <div class="file-zone-name" id="fileName"></div>
+                        <div class="form-group">
+                            <label>Parol</label>
+                            <input type="password" id="password" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" required>
+                        </div>
+                        <button type="submit" class="btn">Kirish</button>
+                    </form>
+
+                    <div class="divider">yoki</div>
+                    <a class="telegram-btn" href="https://t.me/dictum_yuridik_murojaat_bot" target="_blank">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#0088cc"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                        Telegram bot orqali murojaat
+                    </a>
+
+                    <div class="switch-link">
+                        Yangi a'zomisiz? <a onclick="showView('register')">Ro'yxatdan o'tish</a>
                     </div>
                 </div>
 
-                <!-- Agreements -->
-                <div class="agreement-section">
-                    <div class="agreement-item" onclick="openPolicy('privacy')">
-                        <input type="checkbox" id="privacyCheck">
-                        <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                        <span><a>Maxfiylik siyosati</a>ni o'qing va tasdiqlang</span>
+                <!-- REGISTER FORM -->
+                <div class="register-form" data-type="student">
+                    <h1 class="form-heading">Ro'yxatdan o'tish</h1>
+                    <p class="form-subtitle">Dictum jamoasiga qo'shiling</p>
+
+                    <div id="regError" class="error-message"></div>
+
+                    <div class="type-toggle">
+                        <button class="active" onclick="setRegType('student')">Student</button>
+                        <button onclick="setRegType('lawyer')">Yurist</button>
                     </div>
-                    <div class="agreement-error" id="privacyError">Maxfiylik siyosatini tasdiqlang!</div>
-                    <div class="agreement-item" onclick="openPolicy('oferta')">
-                        <input type="checkbox" id="ofertaCheck">
-                        <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                        <span><a>Ommaviy oferta</a>ni o'qing va tasdiqlang</span>
+
+                    <form id="registerForm" novalidate>
+                        <div class="form-group">
+                            <label>Familiya <span class="label-hint">(HEMISdagi ism-familiya bilan bir xil bo'lishi kerak)</span></label>
+                            <input type="text" id="regLastName" placeholder="Familiya" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Ism</label>
+                            <input type="text" id="regFirstName" placeholder="Ism" required>
+                        </div>
+
+                        <!-- Student fields -->
+                        <div class="student-fields">
+                            <div class="form-group">
+                                <label>Bosqich</label>
+                                <select id="regLevel" required>
+                                    <option value="">Tanlang...</option>
+                                    <option value="1-bosqich">1-bosqich</option>
+                                    <option value="2-bosqich">2-bosqich</option>
+                                    <option value="3-bosqich">3-bosqich</option>
+                                    <option value="4-bosqich">4-bosqich</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Lawyer fields -->
+                        <div class="lawyer-fields">
+                            <div class="form-group">
+                                <label>Mutaxassislik</label>
+                                <select id="regSpecialization" required>
+                                    <option value="">Tanlang...</option>
+                                    <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
+                                    <option value="Jinoyat huquqi">Jinoyat huquqi</option>
+                                    <option value="Mehnat huquqi">Mehnat huquqi</option>
+                                    <option value="Oila huquqi">Oila huquqi</option>
+                                    <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
+                                    <option value="Ko'chmas mulk">Ko'chmas mulk</option>
+                                    <option value="Soliq huquqi">Soliq huquqi</option>
+                                    <option value="Ma'muriy huquq">Ma'muriy huquq</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Tajriba (yil)</label>
+                                <input type="text" id="regExperience" inputmode="numeric" pattern="[0-9]*" placeholder="Masalan: 5" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Telegram username <span class="label-hint">(ixtiyoriy)</span></label>
+                            <input type="text" id="regTelegram" placeholder="@username">
+                        </div>
+                        <div class="form-group">
+                            <label>Telegram tasdiqlash</label>
+                            <button type="button" class="send-code-btn" id="sendCodeBtn" onclick="sendVerificationCode()">Kod yuborish</button>
+                            <div class="verify-success" id="codeSentMsg"></div>
+                            <div class="agreement-error" id="codeError" style="display:none"></div>
+                        </div>
+                        <div class="form-group verify-group" id="verifyGroup">
+                            <label>Tasdiqlash kodi <span class="label-hint">(Telegramga yuborilgan 4 raqamli kod)</span></label>
+                            <input type="text" id="regVerifyCode" placeholder="1234" maxlength="4" inputmode="numeric" pattern="[0-9]*" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Parol <span class="label-hint">(kamida 6 ta belgi)</span></label>
+                            <input type="password" id="regPassword" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" minlength="6" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Parolni tasdiqlang</label>
+                            <input type="password" id="regPasswordConfirm" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" required>
+                            <div class="agreement-error" id="passwordMatchError" style="display:none">Parollar mos kelmaydi!</div>
+                            <div class="agreement-error" id="passwordLengthError" style="display:none">Parol kamida 6 ta belgi bo'lishi kerak!</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Tasdiqlovchi hujjat <span class="label-hint">(mygov.uzdan ma'lumotnoma)</span></label>
+                            <div class="file-zone" id="fileZone">
+                                <input type="file" id="regDocument" accept=".jpg,.jpeg,.png,.webp,.pdf" onchange="handleFile(this)">
+                                <div class="file-zone-text">
+                                    <span class="file-icon">📎</span>
+                                    JPG, PNG yoki PDF yuklang
+                                </div>
+                                <div class="file-zone-name" id="fileName"></div>
+                            </div>
+                        </div>
+
+                        <!-- Agreements -->
+                        <div class="agreement-section">
+                            <div class="agreement-item" onclick="openPolicy('privacy')">
+                                <input type="checkbox" id="privacyCheck">
+                                <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                                <span><a>Maxfiylik siyosati</a>ni o'qing va tasdiqlang</span>
+                            </div>
+                            <div class="agreement-error" id="privacyError">Maxfiylik siyosatini tasdiqlang!</div>
+                            <div class="agreement-item" onclick="openPolicy('oferta')">
+                                <input type="checkbox" id="ofertaCheck">
+                                <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                                <span><a>Ommaviy oferta</a>ni o'qing va tasdiqlang</span>
+                            </div>
+                            <div class="agreement-error" id="ofertaError">Ommaviy ofertani tasdiqlang!</div>
+                        </div>
+
+                        <button type="submit" class="btn" id="registerBtn" disabled>Ro'yxatdan o'tish</button>
+                    </form>
+                    <div class="switch-link">
+                        Hisobingiz bormi? <a onclick="showView('login')">Kirish</a>
                     </div>
-                    <div class="agreement-error" id="ofertaError">Ommaviy ofertani tasdiqlang!</div>
                 </div>
 
-                <button type="submit" class="btn" id="registerBtn" disabled>Ro'yxatdan o'tish</button>
-            </form>
-            <div class="switch-link">
-                Hisobingiz bormi? <a onclick="showView('login')">Kirish</a>
+                <!-- SUCCESS VIEW -->
+                <div class="success-view">
+                    <div class="success-icon">&#10004;</div>
+                    <div class="success-text" id="successText">Tabriklaymiz, Sizning so'rovingiz muvaffaqiyatli yuborildi! Admin javobini kuting!</div>
+                    <div class="switch-link"><a onclick="showView('login')">Kirish sahifasiga qaytish</a></div>
+                </div>
             </div>
-        </div>
-
-        <!-- SUCCESS VIEW -->
-        <div class="success-view">
-            <div class="success-icon">&#10004;</div>
-            <div class="success-text" id="successText">Tabriklaymiz, Sizning so'rovingiz muvaffaqiyatli yuborildi! Admin javobini kuting!</div>
-            <div class="switch-link"><a onclick="showView('login')">Kirish sahifasiga qaytish</a></div>
         </div>
     </div>
 
@@ -504,6 +788,18 @@
     </div>
 
     <script>
+        // Theme toggle
+        function toggleTheme() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            if (isDark) {
+                document.documentElement.removeAttribute('data-theme');
+                localStorage.removeItem('dictum-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('dictum-theme', 'dark');
+            }
+        }
+
         // View management
         function showView(view) {
             document.querySelector('.login-container').setAttribute('data-view', view);
@@ -515,7 +811,6 @@
             document.querySelector('.register-form').setAttribute('data-type', type);
             document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
             event.target.classList.add('active');
-            // Reset agreements on type switch
             document.getElementById('privacyCheck').checked = false;
             document.getElementById('ofertaCheck').checked = false;
             document.getElementById('privacyError').style.display = 'none';
@@ -613,10 +908,8 @@
             btn.disabled = true;
             hint.textContent = 'Pastga aylantiring';
             overlay.classList.add('active');
-            // Reset scroll to top after overlay is visible
             requestAnimationFrame(function() {
                 body.scrollTop = 0;
-                // If content fits without scrolling, enable button immediately
                 if (body.scrollHeight <= body.clientHeight + 5) {
                     btn.disabled = false;
                     hint.textContent = '';
@@ -646,7 +939,6 @@
             updateRegBtn();
         }
 
-        // Close policy on overlay click
         document.getElementById('policyOverlay').addEventListener('click', function(e) {
             if (e.target === this) this.classList.remove('active');
         });
@@ -687,7 +979,7 @@
             this.value = this.value.replace(/[^0-9]/g, '');
         });
 
-        // Remove red border only when user types or changes value (not on focus)
+        // Remove red border on input
         document.querySelectorAll('#registerForm input, #registerForm select').forEach(function(el) {
             el.addEventListener('input', function() { this.classList.remove('input-invalid'); });
             el.addEventListener('change', function() { this.classList.remove('input-invalid'); });
@@ -723,12 +1015,11 @@
                 if (resp.ok) {
                     verifyToken = data.token;
                     const deepLink = 'https://t.me/dictum_yuridik_murojaat_bot?start=verify_' + data.token;
-                    successEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:#1661BE;font-weight:700;text-decoration:underline;">Kodni olish uchun shu yerni bosing</a> — Telegram ochiladi va kod keladi';
+                    successEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:var(--accent);font-weight:700;text-decoration:underline;">Kodni olish uchun shu yerni bosing</a> — Telegram ochiladi va kod keladi';
                     successEl.classList.add('show');
                     verifyGroup.classList.add('show');
                     document.getElementById('regVerifyCode').focus();
                     codeVerified = true;
-                    // Cooldown timer
                     let seconds = 120;
                     btn.textContent = `${seconds}s`;
                     const timer = setInterval(() => {
@@ -760,14 +1051,12 @@
             const errorDiv = document.getElementById('regError');
             errorDiv.classList.remove('show');
 
-            // Auto-prepend @ to telegram username if missing
             const telegramInput = document.getElementById('regTelegram');
             const tgVal = telegramInput.value.trim();
             if (tgVal && !tgVal.startsWith('@')) {
                 telegramInput.value = '@' + tgVal;
             }
 
-            // Custom validation: highlight empty required fields with red border
             const regType = document.querySelector('.register-form').getAttribute('data-type');
             const requiredFields = this.querySelectorAll('input[required], select[required]');
             let firstInvalid = null;
@@ -777,7 +1066,6 @@
                     if (parent.classList.contains('student-fields') && regType !== 'student') return;
                     if (parent.classList.contains('lawyer-fields') && regType !== 'lawyer') return;
                 }
-                // Skip verify code field (validated separately)
                 if (field.id === 'regVerifyCode') return;
                 field.classList.remove('input-invalid');
                 if (!field.value.trim() || (field.tagName === 'SELECT' && !field.value)) {
@@ -791,7 +1079,6 @@
                 return;
             }
 
-            // Validate password
             var regPwd = document.getElementById('regPassword');
             var regPwdConfirm = document.getElementById('regPasswordConfirm');
             document.getElementById('passwordMatchError').style.display = 'none';
@@ -807,7 +1094,6 @@
                 return;
             }
 
-            // Validate verification code
             var verifyCode = document.getElementById('regVerifyCode');
             if (!codeVerified || !verifyCode.value.trim() || verifyCode.value.trim().length !== 4) {
                 if (!codeVerified) {
@@ -821,7 +1107,6 @@
                 return;
             }
 
-            // Validate agreements
             if (!document.getElementById('privacyCheck').checked) {
                 document.getElementById('privacyError').style.display = 'block';
                 return;
@@ -851,7 +1136,6 @@
                 formData.append('document', fileInput.files[0]);
             }
 
-            // Disable button during submission
             const btn = document.getElementById('registerBtn');
             btn.disabled = true;
             btn.textContent = 'Yuborilmoqda...';
