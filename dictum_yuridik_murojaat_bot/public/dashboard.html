@@ -1679,7 +1679,6 @@
         .ai-db-chip {
             display: inline-flex;
             align-items: center;
-            gap: 5px;
             padding: 5px 10px;
             border-radius: 8px;
             border: 1px solid var(--glass-border);
@@ -1706,19 +1705,6 @@
             background: rgba(59, 130, 246, 0.15);
             border-color: #3b82f6;
             color: #3b82f6;
-        }
-        .ai-db-chip-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--text-muted);
-            flex-shrink: 0;
-        }
-        .ai-db-chip.active .ai-db-chip-dot {
-            background: #2563eb;
-        }
-        [data-theme="dark"] .ai-db-chip.active .ai-db-chip-dot {
-            background: #3b82f6;
         }
 
         /* Conversation history */
@@ -4141,22 +4127,22 @@
                     <div class="ai-db-section-title">Ma'lumot bazalari</div>
                     <div class="ai-db-chips" id="aiDbChips">
                         <button class="ai-db-chip active" data-db="lex.uz" onclick="toggleDatabase('lex.uz')">
-                            <span class="ai-db-chip-dot"></span> lex.uz
+lex.uz
                         </button>
                         <button class="ai-db-chip" data-db="public.sud.uz" onclick="toggleDatabase('public.sud.uz')">
-                            <span class="ai-db-chip-dot"></span> sud.uz
+sud.uz
                         </button>
                         <button class="ai-db-chip" data-db="my.sud.uz" onclick="toggleDatabase('my.sud.uz')">
-                            <span class="ai-db-chip-dot"></span> my.sud
+my.sud
                         </button>
                         <button class="ai-db-chip" data-db="mib.uz" onclick="toggleDatabase('mib.uz')">
-                            <span class="ai-db-chip-dot"></span> mib.uz
+mib.uz
                         </button>
                         <button class="ai-db-chip" data-db="soliq.uz" onclick="toggleDatabase('soliq.uz')">
-                            <span class="ai-db-chip-dot"></span> soliq.uz
+soliq.uz
                         </button>
                         <button class="ai-db-chip" data-db="ihamkor.uz" onclick="toggleDatabase('ihamkor.uz')">
-                            <span class="ai-db-chip-dot"></span> ihamkor
+ihamkor
                         </button>
                     </div>
                 </div>
