@@ -1628,7 +1628,8 @@
             flex-direction: column;
             border-right: 1px solid var(--glass-border);
             background: var(--glass-bg);
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
         }
         .ai-sidebar-header {
             padding: 16px;
@@ -1724,6 +1725,7 @@
         .ai-history-section {
             flex: 1;
             overflow-y: auto;
+            overflow-x: hidden;
             padding: 10px 10px;
         }
         .ai-history-title {
@@ -1768,9 +1770,11 @@
         .ai-history-item-meta {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             font-size: 11px;
             color: var(--text-muted);
+            flex-wrap: wrap;
+            overflow: hidden;
         }
         .ai-history-item-db {
             font-size: 9px;
@@ -1779,6 +1783,8 @@
             border-radius: 4px;
             background: rgba(37, 99, 235, 0.08);
             color: #2563eb;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
         [data-theme="dark"] .ai-history-item-db {
             background: rgba(59, 130, 246, 0.12);
@@ -2102,10 +2108,13 @@
                 left: 0;
                 top: 0;
                 bottom: 0;
+                width: 280px;
+                min-width: 0;
                 z-index: 1000;
                 transform: translateX(-100%);
                 transition: transform 0.3s ease;
                 box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+                background: var(--glass-bg-strong, var(--glass-bg));
             }
             .ai-sidebar.open {
                 transform: translateX(0);
@@ -6518,10 +6527,15 @@
                     var now = new Date();
                     var diffDays = Math.floor((now - date) / 86400000);
                     var timeAgo = diffDays === 0 ? 'Bugun' : diffDays === 1 ? 'Kecha' : diffDays + ' kun oldin';
-                    var dbs = (s.databases || ['lex.uz']).map(function(db) {
+                    var allDbs = s.databases || ['lex.uz'];
+                    var shownDbs = allDbs.slice(0, 3);
+                    var dbs = shownDbs.map(function(db) {
                         var info = AI_DATABASES[db] || { label: db };
                         return '<span class="ai-history-item-db">' + info.label + '</span>';
                     }).join('');
+                    if (allDbs.length > 3) {
+                        dbs += '<span class="ai-history-item-db">+' + (allDbs.length - 3) + '</span>';
+                    }
                     var isActive = currentAiSessionId === s.id ? ' active' : '';
                     html += '<div class="ai-history-item' + isActive + '" onclick="openAiChatSession(' + s.id + ')">'
                         + '<div class="ai-history-item-title">' + escapeHtml(s.title || 'Nomsiz suhbat') + '</div>'
