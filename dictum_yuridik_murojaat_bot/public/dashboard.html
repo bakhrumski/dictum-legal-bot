@@ -331,7 +331,7 @@
         body.chat-tab-active { overflow: hidden !important; height: 100vh !important; }
         #tabChat.tab-view.active {
             overflow: hidden;
-            height: calc(100vh - 86px - 64px - 32px - env(safe-area-inset-bottom, 0px));
+            height: calc(100vh - 86px - 64px - 12px - env(safe-area-inset-bottom, 0px));
         }
         .chat-tab-wrapper {
             display: flex;
@@ -1971,7 +1971,7 @@
             gap: 16px;
         }
         .ai-ws-grid.list-view .ai-ws-card-body { flex: 1; min-width: 0; }
-        .ai-ws-grid.list-view .ai-ws-card-meta { margin-left: auto; flex-shrink: 0; white-space: nowrap; }
+        .ai-ws-grid.list-view .ai-ws-card-meta { margin-left: auto; flex-shrink: 0; white-space: nowrap; flex-direction: column; align-items: flex-end; gap: 4px; }
         .ai-ws-grid.list-view .ai-ws-card-search {
             min-height: auto;
             padding: 12px 20px;
@@ -4155,7 +4155,7 @@
             .tab-bar-item .tab-icon { width: 20px; height: 20px; }
             .tab-bar-item { min-width: 48px; padding: 6px 8px; }
             body { padding-bottom: calc(56px + 12px + env(safe-area-inset-bottom, 0px)) !important; }
-            #tabChat.tab-view.active { height: calc(100vh - 70px - 56px - 16px - env(safe-area-inset-bottom, 0px)); }
+            #tabChat.tab-view.active { height: calc(100vh - 70px - 56px - 6px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius); }
 
             /* --- Mobile header --- */
@@ -4204,7 +4204,7 @@
             .tab-bar-item { min-width: 44px; padding: 8px; }
             .bottom-tab-bar { height: 50px; }
             body { padding-bottom: calc(50px + 8px + env(safe-area-inset-bottom, 0px)) !important; }
-            #tabChat.tab-view.active { height: calc(100vh - 57px - 50px - 8px - env(safe-area-inset-bottom, 0px)); }
+            #tabChat.tab-view.active { height: calc(100vh - 57px - 50px - 4px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius-sm); }
 
             header { height: 57px; max-height: 57px; padding: 6px 8px; }
