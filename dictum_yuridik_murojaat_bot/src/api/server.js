@@ -1780,34 +1780,90 @@ Qoidalar:
   }
 });
 
-// ========== LEGAL SEARCH CHAT ==========
+// ========== LEGAL SEARCH CHAT (Multi-DB) ==========
+
+// Database configurations for RAG search
+const LEGAL_DATABASES = {
+  'lex.uz': {
+    site: 'lex.uz',
+    name: 'Lex.uz — Qonunchilik bazasi',
+    description: 'O\'zbekiston Respublikasi qonunchilik ma\'lumotlar bazasi. Kodekslar, qonunlar, farmonlar, qarorlar.',
+    searchHint: 'site:lex.uz'
+  },
+  'public.sud.uz': {
+    site: 'public.sud.uz',
+    name: 'Public.sud.uz — Sud qarorlari',
+    description: 'O\'zbekiston sudlari qarorlari va amaliyoti. Sud ishlari, hukmlar, ajrimlar.',
+    searchHint: 'site:public.sud.uz'
+  },
+  'my.sud.uz': {
+    site: 'my.sud.uz',
+    name: 'My.sud.uz — Sud ishi holati',
+    description: 'Sud ishlarining holati, jarayoni, qabul qilingan qarorlar.',
+    searchHint: 'site:my.sud.uz'
+  },
+  'mib.uz': {
+    site: 'mib.uz',
+    name: 'Mib.uz — Ijro byurosi',
+    description: 'Ijro hujjatlari, undirish jarayoni, ijro ishlarining holati.',
+    searchHint: 'site:mib.uz'
+  },
+  'soliq.uz': {
+    site: 'soliq.uz',
+    name: 'Soliq.uz — Soliq qo\'mitasi',
+    description: 'Soliq qonunchilik, soliq imtiyozlari, soliq hisobotlari, soliq to\'lovlari.',
+    searchHint: 'site:soliq.uz'
+  },
+  'ihamkor.uz': {
+    site: 'ihamkor.uz',
+    name: 'Ihamkor.uz — Ijtimoiy hamkorlik',
+    description: 'Ijtimoiy himoya, pensiya, nafaqa, mehnat munosabatlari.',
+    searchHint: 'site:ihamkor.uz'
+  }
+};
+
+function buildLegalSearchPrompt(databases) {
+  const dbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
+  const validDbs = dbs.filter(db => LEGAL_DATABASES[db]);
+  if (validDbs.length === 0) validDbs.push('lex.uz');
+
+  const dbDescriptions = validDbs.map(db => {
+    const info = LEGAL_DATABASES[db];
+    return `- **${info.name}**: ${info.description} (Qidiruv: "${info.searchHint} [savol]")`;
+  }).join('\n');
+
+  const searchSites = validDbs.map(db => LEGAL_DATABASES[db].searchHint).join(' OR ');
+
+  return `Siz O'zbekiston huquqi bo'yicha qonun qidirish yordamchisisiz.
+
+VAZIFANGIZ:
+Foydalanuvchi savoliga quyidagi ma'lumot bazalari asosida javob bering:
+${dbDescriptions}
+
+QOIDALAR:
+- Google Search yordamida yuqoridagi bazalardan tegishli ma'lumotlarni qidiring
+- Har bir baza uchun alohida "site:[domain] [savol]" qidiring
+- Har bir topilgan natija uchun TO'G'RIDAN-TO'G'RI havola bering
+- Havola to'qib chiqarish QATTIYAN TAQIQLANADI! Faqat Google Search natijalarida ko'ringan havolalarni bering
+- Agar aniq havola topa olmasangiz, "[sayt] dan qidiring" deb yozing
+- Javob FAQAT O'zbek (lotin) tilida bo'lishi shart
+- Javob qisqa, aniq va strukturali bo'lsin
+
+JAVOB FORMATI:
+${validDbs.indexOf('lex.uz') > -1 ? '1. **Tegishli qonunlar:** (lex.uz dan)\n   - Qonun/kodeks nomi, modda raqami, qisqa mazmun, havola\n' : ''}${validDbs.indexOf('public.sud.uz') > -1 ? '2. **Sud amaliyoti:** (public.sud.uz dan)\n   - Sud ishi, qaror, mohiyat, havola\n' : ''}${validDbs.indexOf('my.sud.uz') > -1 ? '3. **Sud ishi holati:** (my.sud.uz dan)\n   - Ish holati, ma\'lumot\n' : ''}${validDbs.indexOf('mib.uz') > -1 ? '4. **Ijro ma\'lumotlari:** (mib.uz dan)\n   - Ijro hujjati, holat, ma\'lumot\n' : ''}${validDbs.indexOf('soliq.uz') > -1 ? '5. **Soliq ma\'lumotlari:** (soliq.uz dan)\n   - Soliq qoidasi, ma\'lumot, havola\n' : ''}${validDbs.indexOf('ihamkor.uz') > -1 ? '6. **Ijtimoiy himoya:** (ihamkor.uz dan)\n   - Ma\'lumot, havola\n' : ''}
+**Xulosa:** Qisqa huquqiy fikr
+
+> "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun tegishli saytlardan tekshiring."`;
+}
+
 app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
   try {
-    const { message, history } = req.body;
+    const { message, history, databases } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
 
-    const systemPrompt = `Siz O'zbekiston huquqi bo'yicha qonun qidirish yordamchisisiz.
-
-VAZIFANGIZ:
-Foydalanuvchi savoliga FAQAT lex.uz — O'zbekiston Respublikasi qonunchilik ma'lumotlar bazasi asosida javob bering.
-
-QOIDALAR:
-- FAQAT Google Search yordamida "site:lex.uz [savol]" qidiruv natijalariga tayanib javob bering
-- Har bir topilgan qonun uchun TO'G'RIDAN-TO'G'RI havola bering (masalan: https://lex.uz/docs/111189)
-- Havola to'qib chiqarish QATTIYAN TAQIQLANADI! Faqat Google Search natijalarida ko'ringan havolalarni bering
-- Agar aniq havola topa olmasangiz, "Aniq havola topilmadi, lex.uz saytida qidiring" deb yozing
-- Javob FAQAT O'zbek (lotin) tilida bo'lishi shart
-- Javob qisqa, aniq va strukturali bo'lsin
-- Tegishli moddalarning raqami va mazmunini ko'rsating
-
-JAVOB FORMATI:
-1. **Tegishli qonunlar:** (lex.uz dan)
-   - Qonun/kodeks nomi, modda raqami, qisqa mazmun, havola
-2. **Xulosa:** Qisqa huquqiy fikr
-
-> "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun lex.uz saytidan tekshiring."`;
+    const systemPrompt = buildLegalSearchPrompt(databases);
 
     // Build messages array for callAI
     const aiMessages = [];
@@ -1826,10 +1882,113 @@ JAVOB FORMATI:
     aiMessages.push({ role: 'user', text: currentText });
 
     const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 4096 });
-    res.json({ reply: aiResult.text, provider: aiResult.provider });
+    const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
+    res.json({ reply: aiResult.text, provider: aiResult.provider, databases: usedDbs });
   } catch (error) {
     console.error('[Legal Chat] Error:', error);
     res.status(500).json({ error: 'Qonun qidirish xatoligi: ' + error.message });
+  }
+});
+
+// ========== AI CHAT SESSIONS CRUD ==========
+
+// List sessions
+app.get('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, title, databases, messages->0->>'text' as first_message,
+              jsonb_array_length(messages) as message_count,
+              created_at, updated_at
+       FROM ai_chat_sessions
+       WHERE admin_id = $1
+       ORDER BY updated_at DESC
+       LIMIT 50`,
+      [req.session.adminId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('[AI Sessions] List error:', error);
+    res.status(500).json({ error: 'Suhbatlar yuklanmadi' });
+  }
+});
+
+// Get single session with messages
+app.get('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, title, databases, messages, created_at, updated_at
+       FROM ai_chat_sessions
+       WHERE id = $1 AND admin_id = $2`,
+      [req.params.id, req.session.adminId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Suhbat topilmadi' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('[AI Sessions] Get error:', error);
+    res.status(500).json({ error: 'Suhbat yuklanmadi' });
+  }
+});
+
+// Create or update session
+app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id, title, databases, messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'Messages required' });
+    }
+
+    const dbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
+    const sessionTitle = title || (messages[0] && messages[0].text ? messages[0].text.substring(0, 60) : 'Nomsiz suhbat');
+
+    if (id) {
+      // Update existing session
+      const result = await pool.query(
+        `UPDATE ai_chat_sessions
+         SET title = $1, databases = $2, messages = $3::jsonb, updated_at = NOW()
+         WHERE id = $4 AND admin_id = $5
+         RETURNING id`,
+        [sessionTitle, dbs, JSON.stringify(messages), id, req.session.adminId]
+      );
+      if (result.rows.length === 0) {
+        // Session not found — create new
+        const newResult = await pool.query(
+          `INSERT INTO ai_chat_sessions (admin_id, title, databases, messages)
+           VALUES ($1, $2, $3, $4::jsonb)
+           RETURNING id`,
+          [req.session.adminId, sessionTitle, dbs, JSON.stringify(messages)]
+        );
+        return res.json({ id: newResult.rows[0].id });
+      }
+      res.json({ id: result.rows[0].id });
+    } else {
+      // Create new session
+      const result = await pool.query(
+        `INSERT INTO ai_chat_sessions (admin_id, title, databases, messages)
+         VALUES ($1, $2, $3, $4::jsonb)
+         RETURNING id`,
+        [req.session.adminId, sessionTitle, dbs, JSON.stringify(messages)]
+      );
+      res.json({ id: result.rows[0].id });
+    }
+  } catch (error) {
+    console.error('[AI Sessions] Save error:', error);
+    res.status(500).json({ error: 'Suhbat saqlanmadi' });
+  }
+});
+
+// Delete session
+app.delete('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM ai_chat_sessions WHERE id = $1 AND admin_id = $2`,
+      [req.params.id, req.session.adminId]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[AI Sessions] Delete error:', error);
+    res.status(500).json({ error: 'Suhbat o\'chirilmadi' });
   }
 });
 
@@ -2575,6 +2734,18 @@ async function runMigrations() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_analyses_created ON ai_analyses(created_at DESC)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_chat_sessions (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+        title TEXT,
+        databases TEXT[] DEFAULT '{lex.uz}',
+        messages JSONB DEFAULT '[]'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_updated ON ai_chat_sessions(updated_at DESC)`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS registration_requests (
         id SERIAL PRIMARY KEY,

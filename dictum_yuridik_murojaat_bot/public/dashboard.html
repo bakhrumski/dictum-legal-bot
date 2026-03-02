@@ -1608,136 +1608,440 @@
         .ai-chat-send-btn:active { transform: scale(0.95); }
         .ai-chat-send-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
         /* ===== Legal Search Chat Section ===== */
-        .legal-chat-section {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            -webkit-backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--ios-radius-lg);
-            padding: 20px;
-            box-shadow: var(--shadow-md);
-            margin-top: 20px;
-        }
-        .legal-chat-header {
+        /* ========== AI WORKSPACE — Sidebar + Chat Layout ========== */
+        .ai-workspace {
+            width: 100%;
+            padding: 0;
             display: flex;
-            justify-content: space-between;
+            height: calc(100vh - 190px - env(safe-area-inset-bottom, 0px));
+            border-radius: var(--ios-radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+        }
+
+        /* --- Sidebar --- */
+        .ai-sidebar {
+            width: 280px;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            overflow: hidden;
+        }
+        .ai-sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--glass-border);
+            flex-shrink: 0;
+        }
+        .ai-sidebar-new-btn {
+            display: flex;
             align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 11px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+        }
+        .ai-sidebar-new-btn:hover { background: #1e40af; }
+        .ai-sidebar-new-btn:active { transform: scale(0.97); }
+
+        /* Database selector */
+        .ai-db-section {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--glass-border);
+            flex-shrink: 0;
+        }
+        .ai-db-section-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+        .ai-db-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .ai-db-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
             user-select: none;
         }
-        .legal-chat-header h2 {
-            font-size: 16px;
+        .ai-db-chip:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+            background: rgba(37, 99, 235, 0.04);
+        }
+        .ai-db-chip.active {
+            background: rgba(37, 99, 235, 0.1);
+            border-color: #2563eb;
+            color: #2563eb;
+            font-weight: 600;
+        }
+        [data-theme="dark"] .ai-db-chip.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+        .ai-db-chip-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .ai-db-chip.active .ai-db-chip-dot {
+            background: #2563eb;
+        }
+        [data-theme="dark"] .ai-db-chip.active .ai-db-chip-dot {
+            background: #3b82f6;
+        }
+
+        /* Conversation history */
+        .ai-history-section {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 10px;
+        }
+        .ai-history-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            padding: 4px 6px 8px;
+        }
+        .ai-history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .ai-history-item {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .ai-history-item:hover {
+            background: var(--bg-card-hover);
+        }
+        .ai-history-item.active {
+            background: rgba(37, 99, 235, 0.08);
+        }
+        [data-theme="dark"] .ai-history-item.active {
+            background: rgba(59, 130, 246, 0.12);
+        }
+        .ai-history-item-title {
+            font-size: 13px;
+            font-weight: 600;
             color: var(--text-primary);
-            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        .legal-chat-header .toggle-chevron {
-            transition: transform 0.3s ease;
-            margin-right: 8px;
+        .ai-history-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-muted);
         }
-        .legal-chat-section.collapsed .toggle-chevron {
-            transform: rotate(-90deg);
+        .ai-history-item-db {
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: rgba(37, 99, 235, 0.08);
+            color: #2563eb;
         }
-        .legal-chat-section.collapsed .legal-chat-body {
+        [data-theme="dark"] .ai-history-item-db {
+            background: rgba(59, 130, 246, 0.12);
+            color: #3b82f6;
+        }
+        .ai-history-empty {
+            text-align: center;
+            padding: 24px 16px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        /* --- Main Chat Area --- */
+        .ai-chat-main {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-gradient);
+        }
+
+        /* Chat header */
+        .ai-chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--glass-border);
+            flex-shrink: 0;
+            background: var(--glass-bg);
+        }
+        .ai-chat-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+        .ai-sidebar-toggle {
             display: none;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 8px;
+            flex-shrink: 0;
         }
-        .legal-chat-section.collapsed .legal-chat-header {
-            margin-bottom: 0;
+        .ai-sidebar-toggle:hover { background: var(--bg-card-hover); }
+        .ai-chat-header-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        .legal-chat-clear-btn {
+        .ai-chat-header-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .ai-chat-header-btn {
             background: none;
             border: none;
             color: var(--text-muted);
-            cursor: pointer;
-            padding: 4px;
+            width: 34px;
+            height: 34px;
             border-radius: 8px;
+            cursor: pointer;
             transition: all 0.2s;
-        }
-        .legal-chat-clear-btn:hover {
-            color: #e74c3c;
-            background: rgba(231, 76, 60, 0.08);
-        }
-        .legal-chat-body {
-            margin-top: 15px;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
         }
-        .legal-chat-messages {
+        .ai-chat-header-btn:hover { background: var(--bg-card-hover); color: var(--text-secondary); }
+
+        /* Active DB badges in header */
+        .ai-chat-db-badges {
             display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 500px;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .ai-chat-db-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 5px;
+            background: rgba(37, 99, 235, 0.08);
+            color: #2563eb;
+            white-space: nowrap;
+        }
+        [data-theme="dark"] .ai-chat-db-badge {
+            background: rgba(59, 130, 246, 0.12);
+            color: #3b82f6;
+        }
+
+        /* Messages area */
+        .ai-chat-messages {
+            flex: 1;
             overflow-y: auto;
-            padding: 4px 2px;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
             scroll-behavior: smooth;
         }
-        .legal-chat-welcome {
-            text-align: center;
-            padding: 30px 20px;
-            color: var(--text-muted);
-            font-size: 13px;
+
+        /* Welcome screen */
+        .ai-chat-welcome {
+            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
+            justify-content: center;
+            text-align: center;
+            padding: 40px 20px;
+            gap: 16px;
         }
-        .legal-chat-welcome p { max-width: 400px; line-height: 1.6; }
-        .legal-chat-msg {
-            padding: 12px 16px;
-            border-radius: 12px;
+        .ai-chat-welcome-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: rgba(37, 99, 235, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ai-chat-welcome h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        .ai-chat-welcome p {
             font-size: 14px;
+            color: var(--text-secondary);
+            max-width: 440px;
             line-height: 1.6;
-            max-width: 85%;
-            word-wrap: break-word;
-            animation: legalMsgIn 0.3s ease;
+            margin: 0;
         }
-        @keyframes legalMsgIn {
+        .ai-chat-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 8px;
+            max-width: 560px;
+        }
+        .ai-chat-suggestion {
+            padding: 9px 16px;
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            background: var(--glass-bg);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ai-chat-suggestion:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+            background: rgba(37, 99, 235, 0.04);
+            color: #2563eb;
+        }
+
+        /* Chat message bubbles */
+        .ai-chat-msg {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 14px;
+            font-size: 14px;
+            line-height: 1.65;
+            word-wrap: break-word;
+            animation: aiMsgIn 0.3s ease;
+        }
+        @keyframes aiMsgIn {
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .legal-chat-msg.user {
+        .ai-chat-msg.user {
             background: linear-gradient(135deg, #2563eb, #1e40af);
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 4px;
         }
-        .legal-chat-msg.ai {
-            background: none;
-            border: none;
+        .ai-chat-msg.ai {
+            background: transparent;
             color: var(--text-primary);
             align-self: flex-start;
-            border-bottom-left-radius: 4px;
+            max-width: 90%;
+            padding: 12px 0;
         }
-        .legal-chat-msg.ai ul, .legal-chat-msg.ai ol {
+        .ai-chat-msg.ai ul, .ai-chat-msg.ai ol {
             list-style: none;
             padding-left: 0;
             margin: 0;
         }
-        .legal-chat-msg.ai a {
+        .ai-chat-msg.ai a {
             color: #2563eb;
             text-decoration: none;
-            border-bottom: 1px solid rgba(1, 156, 224, 0.3);
+            border-bottom: 1px solid rgba(37, 99, 235, 0.3);
             transition: border-color 0.2s;
         }
-        .legal-chat-msg.ai a:hover {
+        .ai-chat-msg.ai a:hover {
             border-bottom-color: #2563eb;
         }
-        .legal-chat-typing {
+        .ai-chat-typing {
             display: flex;
-            gap: 4px;
-            padding: 12px 16px;
+            gap: 5px;
+            padding: 12px 4px;
             align-self: flex-start;
         }
-        .legal-chat-input-area {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid var(--glass-border);
+        .ai-chat-typing span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            animation: ai-typing 1.4s infinite;
         }
-        .legal-chat-input-wrapper {
+        .ai-chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+        .ai-chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+        /* Source badges on AI messages */
+        .ai-msg-sources {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .ai-msg-source-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: rgba(37, 99, 235, 0.06);
+            color: #2563eb;
+        }
+        [data-theme="dark"] .ai-msg-source-badge {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+
+        /* Input bar */
+        .ai-chat-input-bar {
+            padding: 12px 20px 16px;
+            border-top: 1px solid var(--glass-border);
+            flex-shrink: 0;
+            background: var(--glass-bg);
+        }
+        .ai-chat-input-db-row {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .ai-chat-input-wrapper {
             display: flex;
             gap: 10px;
             align-items: flex-end;
         }
-        .legal-chat-input {
+        .ai-chat-textarea {
             flex: 1;
             padding: 10px 16px;
             border: 1px solid var(--glass-border);
@@ -1747,17 +2051,18 @@
             resize: none;
             background: var(--bg-input);
             color: var(--text-primary);
-            max-height: 80px;
+            max-height: 120px;
             min-height: 42px;
             outline: none;
             line-height: 1.4;
             transition: border-color 0.2s;
         }
-        .legal-chat-input:focus {
-            border-color: rgba(1, 156, 224, 0.4);
-            box-shadow: 0 0 0 3px rgba(1, 156, 224, 0.08);
+        .ai-chat-textarea:focus {
+            border-color: rgba(37, 99, 235, 0.4);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
         }
-        .legal-chat-send-btn {
+        .ai-chat-textarea::placeholder { color: var(--text-muted); }
+        .ai-chat-send-btn {
             background: linear-gradient(135deg, #2563eb, #1e40af);
             color: white;
             border: none;
@@ -1771,17 +2076,57 @@
             justify-content: center;
             flex-shrink: 0;
             transition: all 0.2s;
-            box-shadow: 0 2px 8px rgba(22, 97, 190, 0.25);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
         }
-        .legal-chat-send-btn:hover { transform: scale(1.08); }
-        .legal-chat-send-btn:active { transform: scale(0.95); }
-        .legal-chat-send-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
+        .ai-chat-send-btn:hover { transform: scale(1.08); }
+        .ai-chat-send-btn:active { transform: scale(0.95); }
+        .ai-chat-send-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* Sidebar overlay backdrop (mobile) */
+        .ai-sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 999;
+        }
+        .ai-sidebar-backdrop.active { display: block; }
+
+        /* Mobile responsive */
         @media (max-width: 768px) {
-            .legal-chat-messages { max-height: 400px; }
-            .legal-chat-msg { max-width: 92%; font-size: 13px; }
+            .ai-workspace {
+                height: calc(100vh - 166px - env(safe-area-inset-bottom, 0px));
+            }
+            .ai-sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                z-index: 1000;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+            }
+            .ai-sidebar.open {
+                transform: translateX(0);
+            }
+            .ai-sidebar-toggle {
+                display: flex;
+            }
+            .ai-chat-msg { max-width: 92%; font-size: 13px; }
+            .ai-chat-messages { padding: 16px 14px; }
+        }
+        @media (max-width: 480px) {
+            .ai-workspace {
+                height: calc(100vh - 147px - env(safe-area-inset-bottom, 0px));
+                border-radius: 0;
+                border: none;
+            }
+            .ai-chat-input-bar { padding: 10px 12px 14px; }
+            .ai-chat-msg.ai { max-width: 98%; }
         }
 
-        /* Template Picker */
+        /* Template Picker (kept for AI analysis) */
         .ai-template-picker {
             padding: 12px;
             display: flex;
@@ -1834,610 +2179,6 @@
         }
         .ai-copy-btn:hover { background: rgba(37, 99, 235, 0.08); }
 
-        /* ========== AI WORKSPACE DASHBOARD ========== */
-        .ai-workspace {
-            max-width: 860px;
-            margin: 0 auto;
-            padding: 4px 0;
-        }
-        .ai-ws-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 24px;
-        }
-        .ai-ws-title {
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin: 0;
-        }
-        .ai-ws-subtitle {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-top: 6px;
-        }
-        .ai-ws-new-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
-            white-space: nowrap;
-        }
-        .ai-ws-new-btn:hover { background: #1e40af; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
-        .ai-ws-new-btn:active { transform: scale(0.97); }
-
-        .ai-ws-toolbar {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-        .ai-ws-search {
-            flex: 1;
-            position: relative;
-        }
-        .ai-ws-search svg {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-            pointer-events: none;
-        }
-        .ai-ws-search input {
-            width: 100%;
-            padding: 11px 16px 11px 42px;
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            background: var(--glass-bg);
-            color: var(--text-primary);
-            font-size: 14px;
-            font-family: inherit;
-            outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            box-sizing: border-box;
-        }
-        .ai-ws-search input:focus {
-            border-color: rgba(37, 99, 235, 0.4);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-        }
-        .ai-ws-search input::placeholder { color: var(--text-muted); }
-        .ai-ws-view-toggle {
-            display: flex;
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            overflow: hidden;
-            flex-shrink: 0;
-        }
-        .ai-ws-view-btn {
-            background: var(--glass-bg);
-            border: none;
-            padding: 9px 12px;
-            cursor: pointer;
-            color: var(--text-muted);
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .ai-ws-view-btn:first-child { border-right: 1px solid var(--glass-border); }
-        .ai-ws-view-btn.active {
-            background: #2563eb;
-            color: white;
-        }
-        .ai-ws-view-btn:hover:not(.active) { background: var(--bg-card-hover); }
-
-        /* Project Grid */
-        .ai-ws-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px;
-        }
-        .ai-ws-grid.list-view {
-            grid-template-columns: 1fr;
-            gap: 8px;
-        }
-        .ai-ws-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--ios-radius);
-            padding: 20px;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .ai-ws-card:hover {
-            border-color: rgba(37, 99, 235, 0.3);
-            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
-            transform: translateY(-2px);
-        }
-        .ai-ws-grid.list-view .ai-ws-card {
-            flex-direction: row;
-            align-items: center;
-            padding: 14px 20px;
-            gap: 16px;
-        }
-        .ai-ws-grid.list-view .ai-ws-card-body { flex: 1; min-width: 0; }
-        .ai-ws-grid.list-view .ai-ws-card-meta { margin-left: auto; flex-shrink: 0; white-space: nowrap; flex-direction: column; align-items: flex-end; gap: 4px; }
-        .ai-ws-grid.list-view .ai-ws-card-search {
-            min-height: auto;
-            padding: 12px 20px;
-        }
-        .ai-ws-grid.list-view .ai-ws-card-search .ai-ws-card-icon {
-            width: 36px; height: 36px;
-        }
-        .ai-ws-grid.list-view .ai-ws-card-search .ai-ws-card-icon svg { width: 18px; height: 18px; }
-        .ai-ws-grid.list-view .ai-ws-card-search h3 { font-size: 14px; }
-        .ai-ws-grid.list-view .ai-ws-card-search p { display: none; }
-
-        /* Special search card */
-        .ai-ws-card-search {
-            border: 2px dashed var(--glass-border);
-            text-align: center;
-            align-items: center;
-            justify-content: center;
-            min-height: 180px;
-            background: var(--glass-bg-light);
-        }
-        .ai-ws-card-search:hover {
-            border-color: #2563eb;
-            background: rgba(37, 99, 235, 0.03);
-        }
-        .ai-ws-card-search .ai-ws-card-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 14px;
-            background: rgba(37, 99, 235, 0.08);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .ai-ws-card-search h3 {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin: 0;
-        }
-        .ai-ws-card-search p {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin: 0;
-        }
-
-        /* Archive project card */
-        .ai-ws-card-project .ai-ws-card-top {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .ai-ws-card-project .ai-ws-card-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            background: rgba(37, 99, 235, 0.08);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        .ai-ws-card-project h4 {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin: 0;
-            line-height: 1.3;
-        }
-        .ai-ws-card-project .ai-ws-card-category {
-            display: inline-block;
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 6px;
-            background: rgba(37, 99, 235, 0.08);
-            color: #2563eb;
-        }
-        [data-theme="dark"] .ai-ws-card-project .ai-ws-card-category {
-            background: rgba(59, 130, 246, 0.15);
-            color: #3b82f6;
-        }
-        .ai-ws-card-project .ai-ws-card-topic {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin: 0 0 6px;
-            line-height: 1.4;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        .ai-ws-grid.list-view .ai-ws-card-project .ai-ws-card-topic {
-            -webkit-line-clamp: 1;
-            margin-bottom: 4px;
-        }
-        .ai-ws-card-project .ai-ws-card-meta {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-        .ai-ws-card-project .ai-ws-card-type {
-            font-size: 10px;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-        .ai-ws-card-project .ai-ws-card-type.ai {
-            background: rgba(37, 99, 235, 0.1);
-            color: #2563eb;
-        }
-        .ai-ws-card-project .ai-ws-card-type.manual {
-            background: rgba(39, 174, 96, 0.1);
-            color: #1e8449;
-        }
-        [data-theme="dark"] .ai-ws-card-project .ai-ws-card-type.ai {
-            background: rgba(59, 130, 246, 0.15);
-            color: #3b82f6;
-        }
-        [data-theme="dark"] .ai-ws-card-project .ai-ws-card-type.manual {
-            background: rgba(39, 174, 96, 0.15);
-            color: #2ecc71;
-        }
-
-        /* Empty state */
-        .ai-ws-empty {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-muted);
-        }
-        .ai-ws-empty svg {
-            margin-bottom: 16px;
-            opacity: 0.4;
-        }
-        .ai-ws-empty h3 {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin: 0 0 6px;
-        }
-        .ai-ws-empty p {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin: 0 0 20px;
-        }
-        .ai-ws-empty-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 10px 22px;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .ai-ws-empty-btn:hover { background: #1e40af; }
-
-        /* Legal Chat Modal */
-        .ai-chat-modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: var(--bg-modal-overlay);
-            z-index: 1100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.2s ease;
-        }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .ai-chat-modal {
-            width: 92%;
-            max-width: 720px;
-            height: 82vh;
-            max-height: 700px;
-            background: var(--glass-bg-strong);
-            backdrop-filter: blur(var(--glass-blur-strong));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--ios-radius-lg);
-            box-shadow: var(--shadow-lg);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-        }
-        @keyframes modalSlideUp {
-            from { opacity: 0; transform: translateY(30px) scale(0.97); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .ai-chat-modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--glass-border);
-            flex-shrink: 0;
-        }
-        .ai-chat-modal-header h3 {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 0;
-            overflow: hidden;
-        }
-        .ai-chat-modal-actions {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-shrink: 0;
-        }
-        .ai-chat-modal-btn {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            width: 36px;
-            min-width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            flex-shrink: 0;
-        }
-        .ai-chat-modal-btn:hover { background: var(--bg-card-hover); color: var(--text-secondary); }
-        .ai-chat-modal-btn.close-btn {
-            color: var(--text-muted);
-        }
-        .ai-chat-modal-btn.close-btn:hover { color: var(--text-primary); }
-        .ai-chat-modal .legal-chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px 20px;
-            max-height: none;
-        }
-        .ai-chat-modal .legal-chat-input-area {
-            padding: 12px 20px 16px;
-            border-top: 1px solid var(--glass-border);
-            margin-top: 0;
-        }
-
-        @media (max-width: 768px) {
-            .ai-ws-header { flex-direction: column; gap: 12px; }
-            .ai-ws-new-btn { align-self: flex-start; }
-            .ai-ws-grid { grid-template-columns: 1fr 1fr; }
-            .ai-chat-modal { width: 100%; height: 100vh; max-height: none; border-radius: 0; }
-        }
-        @media (max-width: 480px) {
-            .ai-ws-grid { grid-template-columns: 1fr; }
-            .ai-ws-toolbar { flex-direction: column; }
-            .ai-ws-view-toggle { align-self: flex-end; }
-        }
-
-        /* AI Archive Section */
-        .ai-archive-section {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            -webkit-backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--ios-radius-lg);
-            padding: 20px;
-            box-shadow: var(--shadow-md);
-            margin-top: 20px;
-            margin-bottom: 20px;
-        }
-        .ai-archive-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-        }
-        .ai-archive-header .toggle-chevron {
-            transition: transform 0.3s ease;
-            margin-right: 8px;
-        }
-        .ai-archive-section.collapsed .ai-archive-header .toggle-chevron {
-            transform: rotate(-90deg);
-        }
-        .ai-archive-section.collapsed .ai-archive-list {
-            display: none;
-        }
-        .ai-archive-section.collapsed .ai-archive-header {
-            margin-bottom: 0;
-        }
-        .ai-archive-header h2 {
-            font-size: 16px;
-            color: var(--text-primary);
-        }
-        .ai-archive-list {
-            display: flex;
-            flex-direction: row;
-            gap: 16px;
-            overflow-x: auto;
-            overflow-y: hidden;
-            margin-top: 15px;
-            padding-bottom: 8px;
-            scroll-snap-type: x mandatory;
-        }
-        .ai-archive-empty {
-            text-align: center;
-            padding: 30px;
-            color: var(--text-muted);
-            font-size: 13px;
-            width: 100%;
-        }
-        /* Kanban column per month */
-        .archive-month-column {
-            min-width: 300px;
-            max-width: 340px;
-            flex-shrink: 0;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            display: flex;
-            flex-direction: column;
-            max-height: 65vh;
-            scroll-snap-align: start;
-        }
-        .archive-month-title {
-            padding: 14px 16px 10px;
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--text-primary);
-            border-bottom: 1px solid var(--glass-border);
-            position: sticky;
-            top: 0;
-            background: var(--glass-bg);
-            border-radius: 14px 14px 0 0;
-            z-index: 1;
-        }
-        .archive-month-body {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px 12px 12px;
-        }
-        /* Sender card inside column */
-        .archive-sender-card {
-            margin-bottom: 10px;
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .archive-sender-header {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 9px 12px;
-            cursor: pointer;
-            user-select: none;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            transition: background 0.2s;
-        }
-        .archive-sender-header:hover {
-            background: rgba(1, 156, 224, 0.04);
-        }
-        .archive-sender-header .toggle-chevron {
-            transition: transform 0.3s ease;
-            flex-shrink: 0;
-        }
-        .archive-sender-card.collapsed .archive-sender-header .toggle-chevron {
-            transform: rotate(-90deg);
-        }
-        .archive-sender-card.collapsed .archive-sender-body {
-            display: none;
-        }
-        .archive-sender-header .sender-name {
-            color: #1e40af;
-            font-weight: 700;
-        }
-        [data-theme="dark"] .archive-sender-header .sender-name {
-            color: #3b82f6;
-        }
-        .archive-sender-header .sender-count {
-            color: var(--text-muted);
-            font-weight: 400;
-            margin-left: auto;
-            font-size: 12px;
-        }
-        .archive-sender-body {
-            border-top: 1px solid var(--glass-border);
-            padding: 4px 6px 6px;
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-        }
-        .archive-analysis-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 8px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 12px;
-            color: var(--text-secondary);
-            transition: all 0.2s;
-            flex-wrap: wrap;
-        }
-        .archive-analysis-row:hover {
-            background: rgba(1, 156, 224, 0.06);
-        }
-        .archive-analysis-row .anon-id {
-            font-weight: 700;
-            color: #1e40af;
-            font-size: 12px;
-        }
-        [data-theme="dark"] .archive-analysis-row .anon-id {
-            color: #3b82f6;
-        }
-        .archive-analysis-row .analysis-category {
-            font-size: 10px;
-            font-weight: 600;
-            padding: 1px 6px;
-            border-radius: 5px;
-            background: rgba(1, 156, 224, 0.1);
-            color: #1e40af;
-        }
-        [data-theme="dark"] .archive-analysis-row .analysis-category {
-            background: rgba(0, 185, 242, 0.15);
-            color: #3b82f6;
-        }
-        .archive-analysis-row .analysis-date {
-            margin-left: auto;
-            font-size: 10px;
-            color: var(--text-muted);
-            white-space: nowrap;
-        }
-        .analysis-type-badge {
-            font-size: 9px;
-            font-weight: 700;
-            padding: 1px 6px;
-            border-radius: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-        .analysis-type-badge.ai {
-            background: rgba(1, 156, 224, 0.12);
-            color: #1e40af;
-        }
-        [data-theme="dark"] .analysis-type-badge.ai {
-            background: rgba(0, 185, 242, 0.15);
-            color: #3b82f6;
-        }
-        .analysis-type-badge.manual {
-            background: rgba(39, 174, 96, 0.12);
-            color: #1e8449;
-        }
-        [data-theme="dark"] .analysis-type-badge.manual {
-            background: rgba(39, 174, 96, 0.15);
-            color: #2ecc71;
-        }
         /* Registration requests section */
         .reg-section {
             background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur));
@@ -4377,56 +4118,99 @@
         <!-- TAB: AI (Master only) -->
         <div class="tab-view" id="tabAi" data-tab="ai">
         <div class="ai-workspace">
-            <!-- Workspace Header -->
-            <div class="ai-ws-header">
-                <div>
-                    <h2 class="ai-ws-title">Huquqiy tadqiqot</h2>
-                    <p class="ai-ws-subtitle">AI yordamida qonun qidirish va tahlil</p>
-                </div>
-                <button class="ai-ws-new-btn" onclick="openLegalChatModal()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Yangi qidiruv
-                </button>
-            </div>
-
-            <!-- Search + View Toggle -->
-            <div class="ai-ws-toolbar">
-                <div class="ai-ws-search">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                    <input type="text" id="aiProjectSearch" placeholder="Loyihalarni qidirish..." oninput="filterAiProjects(this.value)">
-                </div>
-                <div class="ai-ws-view-toggle">
-                    <button class="ai-ws-view-btn active" data-view="grid" onclick="setAiView('grid')" title="Katak ko'rinish">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                    </button>
-                    <button class="ai-ws-view-btn" data-view="list" onclick="setAiView('list')" title="Ro'yxat ko'rinish">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            <!-- Sidebar -->
+            <div class="ai-sidebar" id="aiSidebar">
+                <div class="ai-sidebar-header">
+                    <button class="ai-sidebar-new-btn" onclick="createNewAiChat()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Yangi suhbat
                     </button>
                 </div>
-            </div>
 
-            <!-- Project Grid -->
-            <div class="ai-ws-grid" id="aiProjectGrid">
-                <!-- Legal Search card (always first) -->
-                <div class="ai-ws-card ai-ws-card-search" onclick="openLegalChatModal()">
-                    <div class="ai-ws-card-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <!-- Database selector -->
+                <div class="ai-db-section">
+                    <div class="ai-db-section-title">Ma'lumot bazalari</div>
+                    <div class="ai-db-chips" id="aiDbChips">
+                        <button class="ai-db-chip active" data-db="lex.uz" onclick="toggleDatabase('lex.uz')">
+                            <span class="ai-db-chip-dot"></span> lex.uz
+                        </button>
+                        <button class="ai-db-chip" data-db="public.sud.uz" onclick="toggleDatabase('public.sud.uz')">
+                            <span class="ai-db-chip-dot"></span> sud.uz
+                        </button>
+                        <button class="ai-db-chip" data-db="my.sud.uz" onclick="toggleDatabase('my.sud.uz')">
+                            <span class="ai-db-chip-dot"></span> my.sud
+                        </button>
+                        <button class="ai-db-chip" data-db="mib.uz" onclick="toggleDatabase('mib.uz')">
+                            <span class="ai-db-chip-dot"></span> mib.uz
+                        </button>
+                        <button class="ai-db-chip" data-db="soliq.uz" onclick="toggleDatabase('soliq.uz')">
+                            <span class="ai-db-chip-dot"></span> soliq.uz
+                        </button>
+                        <button class="ai-db-chip" data-db="ihamkor.uz" onclick="toggleDatabase('ihamkor.uz')">
+                            <span class="ai-db-chip-dot"></span> ihamkor
+                        </button>
                     </div>
-                    <h3>Qonun qidirish</h3>
-                    <p>lex.uz dan qonunlarni AI yordamida qidiring</p>
                 </div>
-                <!-- Archive cards loaded dynamically -->
+
+                <!-- History -->
+                <div class="ai-history-section">
+                    <div class="ai-history-title">Suhbatlar tarixi</div>
+                    <div class="ai-history-list" id="aiHistoryList">
+                        <div class="ai-history-empty">Hali suhbat yo'q</div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Empty state -->
-            <div class="ai-ws-empty" id="aiWsEmpty" style="display:none;">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                <h3>Loyihalar topilmadi</h3>
-                <p>Birinchi qidiruvingizni boshlang</p>
-                <button class="ai-ws-empty-btn" onclick="openLegalChatModal()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Yangi qidiruv
-                </button>
+            <!-- Sidebar backdrop for mobile -->
+            <div class="ai-sidebar-backdrop" id="aiSidebarBackdrop" onclick="toggleAiSidebar()"></div>
+
+            <!-- Main Chat Area -->
+            <div class="ai-chat-main">
+                <!-- Chat header -->
+                <div class="ai-chat-header">
+                    <div class="ai-chat-header-left">
+                        <button class="ai-sidebar-toggle" onclick="toggleAiSidebar()" title="Menyu">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                        </button>
+                        <span class="ai-chat-header-title" id="aiChatHeaderTitle">Huquqiy tadqiqot</span>
+                        <div class="ai-chat-db-badges" id="aiChatDbBadges">
+                            <span class="ai-chat-db-badge">lex.uz</span>
+                        </div>
+                    </div>
+                    <div class="ai-chat-header-actions">
+                        <button class="ai-chat-header-btn" onclick="clearAiChat()" title="Tozalash">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div class="ai-chat-messages" id="aiChatMessages">
+                    <div class="ai-chat-welcome" id="aiChatWelcome">
+                        <div class="ai-chat-welcome-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                        </div>
+                        <h3>Huquqiy tadqiqot</h3>
+                        <p>AI yordamida O'zbekiston qonunchiligini qidiring. Chap paneldan ma'lumot bazalarini tanlang va savolingizni yozing.</p>
+                        <div class="ai-chat-suggestions">
+                            <button class="ai-chat-suggestion" onclick="useSuggestion('Mehnat shartnomasi buzilganda ishchining huquqlari qanday?')">Mehnat huquqlari</button>
+                            <button class="ai-chat-suggestion" onclick="useSuggestion('Uy-joy sotish shartnomasi uchun qanday hujjatlar kerak?')">Uy-joy savdosi</button>
+                            <button class="ai-chat-suggestion" onclick="useSuggestion('Soliq imtiyozlari haqida ma\'lumot bering')">Soliq imtiyozlari</button>
+                            <button class="ai-chat-suggestion" onclick="useSuggestion('Ijro varaqi bo\'yicha undirish tartibi qanday?')">Ijro varaqasi</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input bar -->
+                <div class="ai-chat-input-bar">
+                    <div class="ai-chat-input-db-row" id="aiInputDbRow">
+                        <span class="ai-chat-db-badge">lex.uz</span>
+                    </div>
+                    <div class="ai-chat-input-wrapper">
+                        <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
+                        <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()">&#10148;</button>
+                    </div>
+                </div>
             </div>
         </div>
         </div><!-- /tab-view ai -->
@@ -4491,37 +4275,7 @@
         </div>
         </div><!-- /tab-view home: requests -->
 
-        <!-- Legal Chat Modal (moved out of tab flow) -->
-        <div class="ai-chat-modal-overlay" id="legalChatOverlay" style="display:none;">
-            <div class="ai-chat-modal">
-                <div class="ai-chat-modal-header">
-                    <h3>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                        Qonun qidirish
-                    </h3>
-                    <div class="ai-chat-modal-actions">
-                        <button class="ai-chat-modal-btn" onclick="clearLegalChat()" title="Chatni tozalash">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </button>
-                        <button class="ai-chat-modal-btn close-btn" onclick="closeLegalChatModal()" title="Yopish">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="legal-chat-messages" id="legalChatMessages">
-                    <div class="legal-chat-welcome">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                        <p>Huquqiy savolingizni yozing. AI lex.uz saytidan tegishli qonunlarni qidiradi.</p>
-                    </div>
-                </div>
-                <div class="legal-chat-input-area">
-                    <div class="legal-chat-input-wrapper">
-                        <textarea class="legal-chat-input" id="legalChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendLegalChat();}"></textarea>
-                        <button class="legal-chat-send-btn" id="legalChatSendBtn" onclick="sendLegalChat()">&#10148;</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- (Legal chat modal removed — now inline in AI workspace) -->
 
         <!-- TAB: So'rovlar (Registrations) -->
         <div class="tab-view" id="tabSorov" data-tab="sorov">
@@ -4781,18 +4535,18 @@
                     </button>
                 </div>
 
-                <!-- Chat section -->
+                <!-- Chat section (analysis modal follow-up) -->
                 <div id="aiChatSection" class="ai-chat-section" style="display:none;">
                     <div class="ai-chat-divider"><span>Qo'shimcha savollar</span></div>
-                    <div id="aiChatMessages" class="ai-chat-messages"></div>
+                    <div id="aiChatMessages2" class="ai-chat-messages"></div>
                 </div>
             </div>
 
-            <!-- Chat input fixed at bottom -->
+            <!-- Chat input fixed at bottom (analysis modal) -->
             <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
                 <div class="ai-chat-input-wrapper">
-                    <textarea class="ai-chat-input" id="aiChatInput" placeholder="Qo'shimcha savol yozing..." rows="1" onkeydown="handleAiChatKeydown(event)"></textarea>
-                    <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChatMessage()">&#10148;</button>
+                    <textarea class="ai-chat-input" id="aiModalChatInput" placeholder="Qo'shimcha savol yozing..." rows="1" onkeydown="handleAiChatKeydown(event)"></textarea>
+                    <button class="ai-chat-send-btn" id="aiModalChatSendBtn" onclick="sendAiChatMessage()">&#10148;</button>
                 </div>
             </div>
         </div>
@@ -4841,9 +4595,9 @@
             }
 
             if (tabName === 'ai') {
-                // Load AI archive if not loaded
-                if (typeof aiArchiveLoaded !== 'undefined' && !aiArchiveLoaded && typeof loadAiArchive === 'function') {
-                    loadAiArchive();
+                // Load AI chat history if not loaded
+                if (typeof aiHistoryLoaded !== 'undefined' && !aiHistoryLoaded && typeof loadAiChatHistory === 'function') {
+                    loadAiChatHistory();
                 }
             }
 
@@ -6367,7 +6121,7 @@
             document.getElementById('aiFeedbackSection').style.display = 'none';
             document.getElementById('aiYurxizmatSection').style.display = 'none';
             document.getElementById('aiYurxizmatLinks').innerHTML = '';
-            document.getElementById('aiChatMessages').innerHTML = '';
+            document.getElementById('aiChatMessages2').innerHTML = '';
             document.getElementById('aiFeedbackUp').classList.remove('selected');
             document.getElementById('aiFeedbackDown').classList.remove('selected');
             document.getElementById('aiFeedbackStatus').textContent = '';
@@ -6508,11 +6262,11 @@
         }
 
         async function sendAiChatMessage() {
-            const input = document.getElementById('aiChatInput');
+            const input = document.getElementById('aiModalChatInput');
             const text = input.value.trim();
             if (!text || !aiAnalysisComplete) return;
 
-            const chatMessages = document.getElementById('aiChatMessages');
+            const chatMessages = document.getElementById('aiChatMessages2');
             document.getElementById('aiChatSection').style.display = 'block';
 
             chatMessages.innerHTML += `<div class="ai-chat-msg user">${escapeHtml(text)}</div>`;
@@ -6526,11 +6280,11 @@
                 messagesToSend = [messagesToSend[0], messagesToSend[1], ...messagesToSend.slice(-18)];
             }
 
-            chatMessages.innerHTML += '<div class="ai-chat-typing" id="aiTyping"><span></span><span></span><span></span></div>';
+            chatMessages.innerHTML += '<div class="ai-chat-typing" id="aiModalTyping"><span></span><span></span><span></span></div>';
             const body = document.querySelector('.ai-modal-body');
             body.scrollTop = body.scrollHeight;
 
-            document.getElementById('aiChatSendBtn').disabled = true;
+            document.getElementById('aiModalChatSendBtn').disabled = true;
 
             try {
                 const response = await fetch('/api/ai-chat', {
@@ -6544,7 +6298,7 @@
                     })
                 });
 
-                const typing = document.getElementById('aiTyping');
+                const typing = document.getElementById('aiModalTyping');
                 if (typing) typing.remove();
 
                 const data = await response.json();
@@ -6555,325 +6309,358 @@
                     chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Xatolik: ${data.error}</div>`;
                 }
             } catch (error) {
-                const typing = document.getElementById('aiTyping');
+                const typing = document.getElementById('aiModalTyping');
                 if (typing) typing.remove();
                 chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Tarmoq xatoligi</div>`;
             } finally {
-                document.getElementById('aiChatSendBtn').disabled = false;
+                document.getElementById('aiModalChatSendBtn').disabled = false;
                 body.scrollTop = body.scrollHeight;
             }
         }
 
-        // ===== LEGAL SEARCH CHAT =====
-        let legalChatHistory = [];
+        // ===== AI WORKSPACE — Chat + Multi-DB =====
+        var selectedDatabases = ['lex.uz'];
+        var aiChatHistory = [];
+        var aiChatSessions = [];
+        var currentAiSessionId = null;
+        var aiHistoryLoaded = false;
 
-        function clearLegalChat() {
-            legalChatHistory = [];
-            const msgs = document.getElementById('legalChatMessages');
-            msgs.innerHTML = '<div class="legal-chat-welcome"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><p>Huquqiy savolingizni yozing. AI lex.uz va public.sud.uz saytlaridan tegishli qonunlar va sud qarorlarini qidiradi.</p></div>';
+        // Database descriptions for display
+        var AI_DATABASES = {
+            'lex.uz':        { label: 'lex.uz',   desc: 'Qonunchilik bazasi' },
+            'public.sud.uz': { label: 'sud.uz',   desc: 'Sud qarorlari' },
+            'my.sud.uz':     { label: 'my.sud',   desc: 'Sud ishi holati' },
+            'mib.uz':        { label: 'mib.uz',   desc: 'Ijro byurosi' },
+            'soliq.uz':      { label: 'soliq.uz', desc: 'Soliq qo\'mitasi' },
+            'ihamkor.uz':    { label: 'ihamkor',  desc: 'Ijtimoiy hamkorlik' }
+        };
+
+        function toggleDatabase(db) {
+            var idx = selectedDatabases.indexOf(db);
+            if (idx > -1) {
+                if (selectedDatabases.length === 1) return; // must keep at least 1
+                selectedDatabases.splice(idx, 1);
+            } else {
+                selectedDatabases.push(db);
+            }
+            updateDbChipsUI();
         }
 
-        async function sendLegalChat() {
-            const input = document.getElementById('legalChatInput');
-            const text = input.value.trim();
+        function updateDbChipsUI() {
+            // Update sidebar chips
+            document.querySelectorAll('.ai-db-chip').forEach(function(chip) {
+                var db = chip.getAttribute('data-db');
+                if (selectedDatabases.indexOf(db) > -1) {
+                    chip.classList.add('active');
+                } else {
+                    chip.classList.remove('active');
+                }
+            });
+            // Update header badges
+            var badgesEl = document.getElementById('aiChatDbBadges');
+            var inputDbRow = document.getElementById('aiInputDbRow');
+            var badgesHtml = selectedDatabases.map(function(db) {
+                var info = AI_DATABASES[db] || { label: db };
+                return '<span class="ai-chat-db-badge">' + info.label + '</span>';
+            }).join('');
+            if (badgesEl) badgesEl.innerHTML = badgesHtml;
+            if (inputDbRow) inputDbRow.innerHTML = badgesHtml;
+        }
+
+        function createNewAiChat() {
+            aiChatHistory = [];
+            currentAiSessionId = null;
+            var msgs = document.getElementById('aiChatMessages');
+            var welcome = document.getElementById('aiChatWelcome');
+            msgs.innerHTML = '';
+            msgs.appendChild(welcome);
+            welcome.style.display = 'flex';
+            document.getElementById('aiChatHeaderTitle').textContent = 'Huquqiy tadqiqot';
+            // Deselect sidebar history items
+            document.querySelectorAll('.ai-history-item.active').forEach(function(el) {
+                el.classList.remove('active');
+            });
+            // Focus input
+            var input = document.getElementById('aiChatInput');
+            if (input) setTimeout(function() { input.focus(); }, 100);
+            // Close sidebar on mobile
+            closeMobileSidebar();
+        }
+
+        function clearAiChat() {
+            createNewAiChat();
+        }
+
+        function useSuggestion(text) {
+            var input = document.getElementById('aiChatInput');
+            if (input) {
+                input.value = text;
+                sendAiChat();
+            }
+        }
+
+        async function sendAiChat() {
+            var input = document.getElementById('aiChatInput');
+            var text = input.value.trim();
             if (!text) return;
 
-            const messagesEl = document.getElementById('legalChatMessages');
-            const sendBtn = document.getElementById('legalChatSendBtn');
+            var messagesEl = document.getElementById('aiChatMessages');
+            var sendBtn = document.getElementById('aiChatSendBtn');
 
-            // Remove welcome message if present
-            const welcome = messagesEl.querySelector('.legal-chat-welcome');
-            if (welcome) welcome.remove();
+            // Hide welcome
+            var welcome = document.getElementById('aiChatWelcome');
+            if (welcome) welcome.style.display = 'none';
 
-            // Add user message bubble
-            messagesEl.innerHTML += '<div class="legal-chat-msg user">' + escapeHtml(text) + '</div>';
+            // Add user bubble
+            messagesEl.innerHTML += '<div class="ai-chat-msg user">' + escapeHtml(text) + '</div>';
             input.value = '';
             input.style.height = 'auto';
 
-            // Add to history
-            legalChatHistory.push({ role: 'user', text: text });
+            aiChatHistory.push({ role: 'user', text: text });
 
-            // Show typing indicator
-            messagesEl.innerHTML += '<div class="legal-chat-typing" id="legalTyping"><span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);animation:ai-typing 1.4s infinite;"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);animation:ai-typing 1.4s infinite;animation-delay:0.2s;"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);animation:ai-typing 1.4s infinite;animation-delay:0.4s;"></span></div>';
+            // Update header title on first message
+            if (aiChatHistory.length === 1) {
+                var title = text.length > 40 ? text.substring(0, 40) + '...' : text;
+                document.getElementById('aiChatHeaderTitle').textContent = title;
+            }
+
+            // Typing indicator
+            messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
             messagesEl.scrollTop = messagesEl.scrollHeight;
-
             sendBtn.disabled = true;
 
             try {
-                const response = await fetch('/api/legal-chat', {
+                var response = await fetch('/api/legal-chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
                     body: JSON.stringify({
                         message: text,
-                        history: legalChatHistory.slice(0, -1)
+                        history: aiChatHistory.slice(0, -1),
+                        databases: selectedDatabases
                     })
                 });
 
-                const typing = document.getElementById('legalTyping');
+                var typing = document.getElementById('aiChatTyping');
                 if (typing) typing.remove();
 
-                const data = await response.json();
+                var data = await response.json();
                 if (response.ok) {
-                    legalChatHistory.push({ role: 'model', text: data.reply });
-                    messagesEl.innerHTML += '<div class="legal-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div></div>';
+                    aiChatHistory.push({ role: 'model', text: data.reply });
+                    var sourceBadges = '';
+                    if (data.databases && data.databases.length) {
+                        sourceBadges = '<div class="ai-msg-sources">' +
+                            data.databases.map(function(db) {
+                                return '<span class="ai-msg-source-badge">' + escapeHtml(db) + '</span>';
+                            }).join('') + '</div>';
+                    }
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + sourceBadges + '</div>';
                 } else {
-                    messagesEl.innerHTML += '<div class="legal-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
                 }
             } catch (error) {
-                const typing = document.getElementById('legalTyping');
+                var typing = document.getElementById('aiChatTyping');
                 if (typing) typing.remove();
-                messagesEl.innerHTML += '<div class="legal-chat-msg ai" style="color:#e74c3c;">Tarmoq xatoligi</div>';
+                messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Tarmoq xatoligi</div>';
             } finally {
                 sendBtn.disabled = false;
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }
+
+            // Auto-save session
+            saveAiChatSession();
         }
 
-        // --- AI Legal Template ---
+        async function saveAiChatSession() {
+            if (aiChatHistory.length < 2) return;
+            try {
+                var title = aiChatHistory[0].text;
+                if (title.length > 60) title = title.substring(0, 60) + '...';
+
+                var response = await fetch('/api/ai-chat-sessions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        id: currentAiSessionId,
+                        title: title,
+                        databases: selectedDatabases,
+                        messages: aiChatHistory
+                    })
+                });
+                if (response.ok) {
+                    var data = await response.json();
+                    currentAiSessionId = data.id;
+                    loadAiChatHistory(); // refresh sidebar
+                }
+            } catch (e) {
+                console.error('[AI] Save session error:', e);
+            }
+        }
+
+        async function loadAiChatHistory() {
+            aiHistoryLoaded = true;
+            try {
+                var response = await fetch('/api/ai-chat-sessions', { credentials: 'same-origin' });
+                if (!response.ok) return;
+                var sessions = await response.json();
+                aiChatSessions = sessions;
+
+                var list = document.getElementById('aiHistoryList');
+                if (sessions.length === 0) {
+                    list.innerHTML = '<div class="ai-history-empty">Hali suhbat yo\'q</div>';
+                    return;
+                }
+
+                var html = '';
+                sessions.forEach(function(s) {
+                    var date = new Date(s.updated_at || s.created_at);
+                    var now = new Date();
+                    var diffDays = Math.floor((now - date) / 86400000);
+                    var timeAgo = diffDays === 0 ? 'Bugun' : diffDays === 1 ? 'Kecha' : diffDays + ' kun oldin';
+                    var dbs = (s.databases || ['lex.uz']).map(function(db) {
+                        var info = AI_DATABASES[db] || { label: db };
+                        return '<span class="ai-history-item-db">' + info.label + '</span>';
+                    }).join('');
+                    var isActive = currentAiSessionId === s.id ? ' active' : '';
+                    html += '<div class="ai-history-item' + isActive + '" onclick="openAiChatSession(' + s.id + ')">'
+                        + '<div class="ai-history-item-title">' + escapeHtml(s.title || 'Nomsiz suhbat') + '</div>'
+                        + '<div class="ai-history-item-meta">' + dbs + '<span>' + timeAgo + '</span></div>'
+                        + '</div>';
+                });
+                list.innerHTML = html;
+            } catch (e) {
+                console.error('[AI] Load history error:', e);
+            }
+        }
+
+        async function openAiChatSession(sessionId) {
+            try {
+                var response = await fetch('/api/ai-chat-sessions/' + sessionId, { credentials: 'same-origin' });
+                if (!response.ok) throw new Error('Session not found');
+                var session = await response.json();
+
+                currentAiSessionId = session.id;
+                aiChatHistory = session.messages || [];
+                selectedDatabases = session.databases || ['lex.uz'];
+                updateDbChipsUI();
+
+                // Update header
+                document.getElementById('aiChatHeaderTitle').textContent = session.title || 'Suhbat';
+
+                // Render messages
+                var messagesEl = document.getElementById('aiChatMessages');
+                var welcome = document.getElementById('aiChatWelcome');
+                messagesEl.innerHTML = '';
+                if (welcome) {
+                    messagesEl.appendChild(welcome);
+                    welcome.style.display = 'none';
+                }
+
+                aiChatHistory.forEach(function(msg) {
+                    if (msg.role === 'user') {
+                        messagesEl.innerHTML += '<div class="ai-chat-msg user">' + escapeHtml(msg.text) + '</div>';
+                    } else {
+                        messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(msg.text) + '</div></div>';
+                    }
+                });
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+
+                // Highlight in sidebar
+                document.querySelectorAll('.ai-history-item').forEach(function(el) {
+                    el.classList.remove('active');
+                });
+                // Find and activate
+                document.querySelectorAll('.ai-history-item').forEach(function(el) {
+                    if (el.getAttribute('onclick') && el.getAttribute('onclick').indexOf(sessionId) > -1) {
+                        el.classList.add('active');
+                    }
+                });
+
+                closeMobileSidebar();
+            } catch (e) {
+                console.error('[AI] Open session error:', e);
+            }
+        }
+
+        // Mobile sidebar toggle
+        function toggleAiSidebar() {
+            var sidebar = document.getElementById('aiSidebar');
+            var backdrop = document.getElementById('aiSidebarBackdrop');
+            sidebar.classList.toggle('open');
+            backdrop.classList.toggle('active');
+        }
+        function closeMobileSidebar() {
+            var sidebar = document.getElementById('aiSidebar');
+            var backdrop = document.getElementById('aiSidebarBackdrop');
+            if (sidebar) sidebar.classList.remove('open');
+            if (backdrop) backdrop.classList.remove('active');
+        }
+
+        // --- AI Legal Template (kept for analysis modal) ---
         function generateLegalTemplate() {
             if (!aiAnalysisComplete || aiConversationHistory.length < 2) return;
 
-            const chatMessages = document.getElementById('aiChatMessages');
+            const chatMessages = document.getElementById('aiChatMessages2');
             document.getElementById('aiChatSection').style.display = 'block';
 
-            chatMessages.innerHTML += `<div class="ai-chat-msg user">Hujjat namunasi tayyorlash</div>`;
-            chatMessages.innerHTML += `
-                <div class="ai-template-picker" id="aiTemplatePicker">
-                    <div class="ai-template-picker-title">Hujjat turini tanlang:</div>
-                    <button class="ai-template-type-btn" onclick="requestTemplate('auto')">Avtomatik</button>
-                    <button class="ai-template-type-btn" onclick="requestTemplate('ariza')">Ariza</button>
-                    <button class="ai-template-type-btn" onclick="requestTemplate('davo')">Da'vo arizasi</button>
-                    <button class="ai-template-type-btn" onclick="requestTemplate('shikoyat')">Shikoyat</button>
-                    <button class="ai-template-type-btn" onclick="requestTemplate('shartnoma')">Shartnoma</button>
-                    <button class="ai-template-type-btn" onclick="requestTemplate('ishonchnoma')">Ishonchnoma</button>
-                    <button class="ai-template-type-btn" onclick="requestTemplate('bayonnoma')">Bayonnoma</button>
-                </div>
-            `;
-            const body = document.querySelector('.ai-modal-body');
+            chatMessages.innerHTML += '<div class="ai-chat-msg user">Hujjat namunasi tayyorlash</div>';
+            chatMessages.innerHTML += '<div class="ai-template-picker" id="aiTemplatePicker"><div class="ai-template-picker-title">Hujjat turini tanlang:</div><button class="ai-template-type-btn" onclick="requestTemplate(\'auto\')">Avtomatik</button><button class="ai-template-type-btn" onclick="requestTemplate(\'ariza\')">Ariza</button><button class="ai-template-type-btn" onclick="requestTemplate(\'davo\')">Da\'vo arizasi</button><button class="ai-template-type-btn" onclick="requestTemplate(\'shikoyat\')">Shikoyat</button><button class="ai-template-type-btn" onclick="requestTemplate(\'shartnoma\')">Shartnoma</button><button class="ai-template-type-btn" onclick="requestTemplate(\'ishonchnoma\')">Ishonchnoma</button><button class="ai-template-type-btn" onclick="requestTemplate(\'bayonnoma\')">Bayonnoma</button></div>';
+            var body = document.querySelector('.ai-modal-body');
             body.scrollTop = body.scrollHeight;
         }
 
         async function requestTemplate(templateType) {
-            const picker = document.getElementById('aiTemplatePicker');
+            var picker = document.getElementById('aiTemplatePicker');
             if (picker) picker.remove();
 
-            const chatMessages = document.getElementById('aiChatMessages');
+            var chatMessages = document.getElementById('aiChatMessages2');
             chatMessages.innerHTML += '<div class="ai-chat-typing" id="aiTyping"><span></span><span></span><span></span></div>';
-            const body = document.querySelector('.ai-modal-body');
+            var body = document.querySelector('.ai-modal-body');
             body.scrollTop = body.scrollHeight;
 
             try {
-                const analysisText = aiConversationHistory[1]?.text || '';
-
-                const response = await fetch('/api/ai-generate-template', {
+                var analysisText = aiConversationHistory[1] ? aiConversationHistory[1].text : '';
+                var response = await fetch('/api/ai-generate-template', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
                     body: JSON.stringify({
                         requestText: aiCurrentRequestText,
                         category: aiCurrentCategory,
-                        analysisText,
-                        templateType
+                        analysisText: analysisText,
+                        templateType: templateType
                     })
                 });
 
-                const typing = document.getElementById('aiTyping');
+                var typing = document.getElementById('aiTyping');
                 if (typing) typing.remove();
 
-                const data = await response.json();
+                var data = await response.json();
                 if (response.ok) {
                     aiConversationHistory.push(
-                        { role: 'user', text: `Hujjat namunasi: ${templateType}` },
+                        { role: 'user', text: 'Hujjat namunasi: ' + templateType },
                         { role: 'model', text: data.template }
                     );
-
-                    chatMessages.innerHTML += `
-                        <div class="ai-chat-msg model">
-                            <div class="ai-template-header">
-                                <span>Hujjat namunasi</span>
-                                <button class="ai-copy-btn" onclick="copyTemplate(this)">Nusxa olish</button>
-                            </div>
-                            <div class="ai-analysis-content">${simpleMarkdown(data.template)}</div>
-                        </div>
-                    `;
+                    chatMessages.innerHTML += '<div class="ai-chat-msg model"><div class="ai-template-header"><span>Hujjat namunasi</span><button class="ai-copy-btn" onclick="copyTemplate(this)">Nusxa olish</button></div><div class="ai-analysis-content">' + simpleMarkdown(data.template) + '</div></div>';
                 } else {
-                    chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Xatolik: ${data.error}</div>`;
+                    chatMessages.innerHTML += '<div class="ai-chat-msg model" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error) + '</div>';
                 }
             } catch (error) {
-                const typing = document.getElementById('aiTyping');
+                var typing = document.getElementById('aiTyping');
                 if (typing) typing.remove();
-                chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Tarmoq xatoligi</div>`;
+                chatMessages.innerHTML += '<div class="ai-chat-msg model" style="color:#e74c3c;">Tarmoq xatoligi</div>';
             }
             body.scrollTop = body.scrollHeight;
         }
 
         function copyTemplate(btn) {
-            const content = btn.closest('.ai-chat-msg').querySelector('.ai-analysis-content');
-            const text = content.innerText;
-            navigator.clipboard.writeText(text).then(() => {
+            var content = btn.closest('.ai-chat-msg').querySelector('.ai-analysis-content');
+            var text = content.innerText;
+            navigator.clipboard.writeText(text).then(function() {
                 btn.textContent = 'Nusxa olindi!';
-                setTimeout(() => { btn.textContent = 'Nusxa olish'; }, 2000);
+                setTimeout(function() { btn.textContent = 'Nusxa olish'; }, 2000);
             });
-        }
-
-        // --- AI Archive ---
-        let aiArchiveLoaded = false;
-
-        var aiProjectCards = []; // store for filtering
-
-        async function loadAiArchive() {
-            aiArchiveLoaded = true;
-            var grid = document.getElementById('aiProjectGrid');
-            var emptyEl = document.getElementById('aiWsEmpty');
-
-            // Keep the search card, clear the rest
-            var searchCard = grid.querySelector('.ai-ws-card-search');
-            grid.innerHTML = '';
-            if (searchCard) grid.appendChild(searchCard);
-
-            try {
-                var response = await fetch('/api/ai-archive-grouped', { credentials: 'same-origin' });
-                if (!response.ok) throw new Error('Server error');
-                var data = await response.json();
-
-                // Flatten all items from all months/senders into card data
-                aiProjectCards = [];
-                data.forEach(function(month) {
-                    month.senders.forEach(function(sender) {
-                        sender.items.forEach(function(a) {
-                            aiProjectCards.push({
-                                anon_id: a.anon_id,
-                                anon_name: sender.anon_name,
-                                category: a.category || '',
-                                topic: a.topic || '',
-                                date: a.answered_at || a.created_at,
-                                has_ai: a.has_ai,
-                                ai_analysis_id: a.ai_analysis_id,
-                                request_id: a.id,
-                                month_label: month.label
-                            });
-                        });
-                    });
-                });
-
-                if (aiProjectCards.length === 0 && emptyEl) {
-                    emptyEl.style.display = 'block';
-                } else {
-                    if (emptyEl) emptyEl.style.display = 'none';
-                    renderAiProjectCards(aiProjectCards);
-                }
-            } catch (error) {
-                grid.innerHTML = '';
-                if (searchCard) grid.appendChild(searchCard);
-                if (emptyEl) {
-                    emptyEl.style.display = 'block';
-                    emptyEl.querySelector('h3').textContent = 'Xatolik yuz berdi';
-                    emptyEl.querySelector('p').textContent = error.message;
-                }
-            }
-        }
-
-        function renderAiProjectCards(cards) {
-            var grid = document.getElementById('aiProjectGrid');
-            // Remove existing project cards (keep search card)
-            grid.querySelectorAll('.ai-ws-card-project').forEach(function(c) { c.remove(); });
-
-            // Default to list view
-            grid.classList.add('list-view');
-            document.querySelectorAll('.ai-ws-view-btn').forEach(function(b) { b.classList.remove('active'); });
-            var listBtn = document.querySelector('.ai-ws-view-btn[data-view="list"]');
-            if (listBtn) listBtn.classList.add('active');
-
-            cards.forEach(function(card) {
-                var date = new Date(card.date);
-                var now = new Date();
-                var diffMs = now - date;
-                var diffDays = Math.floor(diffMs / 86400000);
-                var timeAgo = diffDays === 0 ? 'Bugun' : diffDays === 1 ? 'Kecha' : diffDays + ' kun oldin';
-
-                var onclick = card.has_ai
-                    ? 'openArchivedAnalysis(' + card.ai_analysis_id + ')'
-                    : 'showRequestDetail(' + card.request_id + ')';
-                var typeBadge = card.has_ai
-                    ? '<span class="ai-ws-card-type ai">AI</span>'
-                    : '<span class="ai-ws-card-type manual">Javob</span>';
-
-                var topicText = card.topic ? card.topic : 'Mavzu ko\'rsatilmagan';
-                if (topicText.length > 80) topicText = topicText.substring(0, 80) + '...';
-
-                var cardEl = document.createElement('div');
-                cardEl.className = 'ai-ws-card ai-ws-card-project';
-                cardEl.setAttribute('onclick', onclick);
-                cardEl.setAttribute('data-search', (card.anon_id + ' ' + card.anon_name + ' ' + card.category + ' ' + card.topic).toLowerCase());
-                cardEl.innerHTML = '<div class="ai-ws-card-top">'
-                    + '<div class="ai-ws-card-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>'
-                    + '<h4>' + escapeHtml(card.anon_id) + '</h4>'
-                    + '</div>'
-                    + '<div class="ai-ws-card-body">'
-                    + '<p class="ai-ws-card-topic">' + escapeHtml(topicText) + '</p>'
-                    + (card.category ? '<span class="ai-ws-card-category">' + escapeHtml(card.category) + '</span>' : '')
-                    + '</div>'
-                    + '<div class="ai-ws-card-meta">'
-                    + typeBadge
-                    + '<span>' + timeAgo + '</span>'
-                    + '</div>';
-
-                grid.appendChild(cardEl);
-            });
-        }
-
-        function openLegalChatModal() {
-            document.getElementById('legalChatOverlay').style.display = 'flex';
-            var input = document.getElementById('legalChatInput');
-            if (input) setTimeout(function() { input.focus(); }, 200);
-        }
-
-        function closeLegalChatModal() {
-            document.getElementById('legalChatOverlay').style.display = 'none';
-        }
-
-        // Close modal on overlay click
-        (function() {
-            var overlay = document.getElementById('legalChatOverlay');
-            if (overlay) {
-                overlay.addEventListener('click', function(e) {
-                    if (e.target === overlay) closeLegalChatModal();
-                });
-            }
-        })();
-
-        function filterAiProjects(query) {
-            var q = query.toLowerCase().trim();
-            var grid = document.getElementById('aiProjectGrid');
-            var cards = grid.querySelectorAll('.ai-ws-card-project');
-            var shown = 0;
-            cards.forEach(function(card) {
-                var searchText = card.getAttribute('data-search') || '';
-                if (!q || searchText.indexOf(q) !== -1) {
-                    card.style.display = '';
-                    shown++;
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-            var emptyEl = document.getElementById('aiWsEmpty');
-            if (emptyEl) {
-                emptyEl.style.display = (shown === 0 && aiProjectCards.length > 0) ? 'block' : 'none';
-            }
-        }
-
-        function setAiView(mode) {
-            var grid = document.getElementById('aiProjectGrid');
-            var btns = document.querySelectorAll('.ai-ws-view-btn');
-            btns.forEach(function(b) { b.classList.remove('active'); });
-            var targetBtn = document.querySelector('.ai-ws-view-btn[data-view="' + mode + '"]');
-            if (targetBtn) targetBtn.classList.add('active');
-            if (mode === 'list') {
-                grid.classList.add('list-view');
-            } else {
-                grid.classList.remove('list-view');
-            }
         }
 
         async function openArchivedAnalysis(archiveId) {
@@ -6890,7 +6677,7 @@
             document.getElementById('aiFeedbackSection').style.display = 'none';
             document.getElementById('aiYurxizmatSection').style.display = 'none';
             document.getElementById('aiYurxizmatLinks').innerHTML = '';
-            document.getElementById('aiChatMessages').innerHTML = '';
+            document.getElementById('aiChatMessages2').innerHTML = '';
 
             try {
                 const response = await fetch('/api/ai-analyses/' + archiveId, { credentials: 'same-origin' });
