@@ -4691,10 +4691,15 @@ ihamkor
             assigned: ''
         };
         
-        async function loadUserInfo() {
+        async function loadUserInfo(retries) {
+            if (retries === undefined) retries = 2;
             try {
                 const response = await fetch('/api/user-info');
-                if (!response.ok) return;
+                if (response.status === 401) { window.location.href = '/login.html'; return; }
+                if (!response.ok) {
+                    if (retries > 0) { await new Promise(r => setTimeout(r, 3000)); return loadUserInfo(retries - 1); }
+                    return;
+                }
                 const data = await response.json();
                 if (!data || !data.role) return;
                 currentUser = data;
@@ -5227,9 +5232,11 @@ ihamkor
                 <div class="mc-summary-row"><span class="label">Tahlil qilingan murojaatlar:</span><span class="value">${resolution.sample_size} ta</span></div>`;
         }
 
-        async function loadRequests() {
+        async function loadRequests(retries) {
+            if (retries === undefined) retries = 2;
             try {
                 const response = await fetch('/api/requests');
+                if (response.status === 401) { window.location.href = '/login.html'; return; }
                 if (!response.ok) throw new Error('Server ' + response.status);
                 requests = await response.json();
                 if (!Array.isArray(requests)) { requests = []; throw new Error('Invalid response'); }
@@ -5243,7 +5250,11 @@ ihamkor
                 updateStats();
             } catch (error) {
                 console.error('Error loading requests:', error);
-                document.getElementById('requestsList').innerHTML = 
+                if (retries > 0) {
+                    await new Promise(r => setTimeout(r, 3000));
+                    return loadRequests(retries - 1);
+                }
+                document.getElementById('requestsList').innerHTML =
                     '<div class="empty-state"><h2>Xatolik yuz berdi</h2><p>Serverga ulanib bo\'lmadi</p></div>';
             }
         }

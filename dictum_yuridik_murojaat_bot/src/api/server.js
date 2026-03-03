@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const os = require('os');
@@ -166,8 +167,13 @@ app.get('/health', (req, res) => res.status(200).send('OK'));
 app.use(cors());
 app.use(express.json());
 
-// Session configuration
+// Session configuration — PostgreSQL store survives server restarts
 app.use(session({
+  store: new pgSession({
+    pool,
+    tableName: 'user_sessions',
+    createTableIfMissing: true
+  }),
   secret: process.env.JWT_SECRET,
   resave: false,
   saveUninitialized: false,
