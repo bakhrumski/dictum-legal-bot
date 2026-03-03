@@ -313,7 +313,9 @@ app.get('/', (req, res) => {
 // Get request stats
 app.get('/api/stats', requireAuth, async (req, res) => {
   try {
-    const studentFilter = req.session.role === 'student' ? `WHERE assigned_to = ${parseInt(req.session.adminId)}` : '';
+    const role = req.session.role;
+    const aid = parseInt(req.session.adminId);
+    const assignedFilter = (role === 'student' || role === 'lawyer') ? `WHERE assigned_to = ${aid}` : '';
     const result = await pool.query(`
       SELECT
         COUNT(*) AS total,
@@ -322,7 +324,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'student_responded') AS student_responded,
         COUNT(*) FILTER (WHERE status = 'answered') AS answered
       FROM requests
-      ${studentFilter}
+      ${assignedFilter}
     `);
     res.json(result.rows[0]);
   } catch (error) {
@@ -334,8 +336,10 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 // Get all requests
 app.get('/api/requests', requireAuth, async (req, res) => {
   try {
-    // Students only see requests assigned to them
-    const studentFilter = req.session.role === 'student' ? `WHERE (r.assigned_to = ${parseInt(req.session.adminId)} OR EXISTS (SELECT 1 FROM request_students rs2 WHERE rs2.request_id = r.id AND rs2.student_id = ${parseInt(req.session.adminId)}))` : '';
+    // Lawyers and students only see requests assigned to them
+    const role = req.session.role;
+    const aid = parseInt(req.session.adminId);
+    const assignedFilter = (role === 'student' || role === 'lawyer') ? `WHERE (r.assigned_to = ${aid} OR EXISTS (SELECT 1 FROM request_students rs2 WHERE rs2.request_id = r.id AND rs2.student_id = ${aid}))` : '';
     const result = await pool.query(`
       SELECT
         r.id,
@@ -372,7 +376,7 @@ app.get('/api/requests', requireAuth, async (req, res) => {
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
-      ${studentFilter}
+      ${assignedFilter}
       ORDER BY r.created_at ASC
     `);
 
