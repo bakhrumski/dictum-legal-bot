@@ -3268,7 +3268,7 @@
         .chat-reply-cancel:hover { color: var(--text-primary); }
 
         .chat-input-area {
-            padding: 10px 14px; background: var(--glass-bg);
+            padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--glass-bg);
             border-top: 1px solid var(--glass-border-light);
             flex-shrink: 0; position: relative;
         }
@@ -3896,8 +3896,8 @@
             .tab-bar-item .tab-icon { width: 20px; height: 20px; }
             .tab-bar-item { min-width: 48px; padding: 6px 8px; }
             body { padding-bottom: calc(56px + 12px + env(safe-area-inset-bottom, 0px)) !important; }
-            /* 70px header + 16px header-mb + 20px body-pt + 56px tab-bar + 4px buffer */
-            #tabChat.tab-view.active { height: calc(100vh - 166px - env(safe-area-inset-bottom, 0px)); }
+            /* 70px header + 16px header-mb + 20px body-pt + 56px tab-bar + 16px buffer */
+            #tabChat.tab-view.active { height: calc(100vh - 178px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius); }
 
             /* --- Mobile header --- */
@@ -3946,12 +3946,13 @@
             .tab-bar-item { min-width: 44px; padding: 8px; }
             .bottom-tab-bar { height: 50px; }
             body { padding-bottom: calc(50px + 8px + env(safe-area-inset-bottom, 0px)) !important; }
-            /* 57px header + 16px header-mb + 20px body-pt + 50px tab-bar + 4px buffer */
-            #tabChat.tab-view.active { height: calc(100vh - 147px - env(safe-area-inset-bottom, 0px)); }
+            /* 57px header + 16px header-mb + 20px body-pt + 50px tab-bar + 16px buffer */
+            #tabChat.tab-view.active { height: calc(100vh - 159px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius-sm); }
 
             header { height: 57px; max-height: 57px; padding: 6px 8px; }
-            .header-center { display: none !important; }
+            .header-center { gap: 0 !important; }
+            .header-chat-wrapper { display: none; }
             .header-logo { height: 48px; }
             .header-left h1 { font-size: 13px; letter-spacing: 1px; gap: 4px !important; }
             .header-left h1 svg { width: 12px; height: 12px; }
