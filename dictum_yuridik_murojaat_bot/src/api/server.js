@@ -371,6 +371,8 @@ app.get('/api/requests', requireAuth, async (req, res) => {
            FROM request_students rs JOIN admins adm ON rs.student_id = adm.id WHERE rs.request_id = r.id),
           '[]'::json
         ) as assigned_students,
+        r.triage_result,
+        r.verification_result,
         ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq,
         (SELECT aa.id FROM ai_analyses aa WHERE aa.request_id = r.id ORDER BY aa.created_at DESC LIMIT 1) as ai_analysis_id
       FROM requests r
@@ -423,6 +425,8 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
            FROM request_students rs JOIN admins adm ON rs.student_id = adm.id WHERE rs.request_id = r.id),
           '[]'::json
         ) as assigned_students,
+        r.triage_result,
+        r.verification_result,
         (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq,
         (SELECT aa.id FROM ai_analyses aa WHERE aa.request_id = r.id ORDER BY aa.created_at DESC LIMIT 1) as ai_analysis_id
       FROM requests r
@@ -1564,6 +1568,10 @@ async function callAI(messages, options = {}) {
   throw new Error('Barcha AI provayderlar ishlamadi');
 }
 
+// Initialize agent runner with callAI function
+const { initRunner } = require('../agents/runner');
+initRunner(callAI);
+
 // AI Analysis endpoint using Gemini 2.5
 app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
   try {
@@ -2277,6 +2285,41 @@ app.post('/api/ai-feedback', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// ========== AGENT ENDPOINTS ==========
+
+const { triageRequest } = require('../agents/triage');
+const { getTraces, getLatestTrace } = require('../agents/runner');
+
+// Re-run triage on a request
+app.post('/api/requests/:id/triage', requireAuth, async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    const request = await pool.query('SELECT request_text, request_type FROM requests WHERE id = $1', [requestId]);
+    if (request.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
+
+    const { request_text, request_type } = request.rows[0];
+    const result = await triageRequest(requestId, request_text, request_type);
+    if (!result) return res.status(500).json({ error: 'Triage agent xatolik berdi' });
+
+    res.json({ success: true, triage: result });
+  } catch (error) {
+    console.error('[API] Triage error:', error);
+    res.status(500).json({ error: 'Triage xatolik' });
+  }
+});
+
+// Get agent traces for a request
+app.get('/api/requests/:id/traces', requireAuth, async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    const traces = await getTraces(requestId);
+    res.json(traces);
+  } catch (error) {
+    console.error('[API] Traces error:', error);
+    res.status(500).json({ error: 'Traces xatolik' });
+  }
+});
+
 // ========== SELF-REGISTRATION ==========
 
 // AI Screening using Gemini 2.5 Flash
@@ -2789,6 +2832,29 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE registration_requests ALTER COLUMN telegram_username DROP NOT NULL`);
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
+
+    // Agent traces table — audit log for all AI agent runs
+    await pool.query(`CREATE TABLE IF NOT EXISTS agent_traces (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+      agent_type VARCHAR(50) NOT NULL,
+      input_summary TEXT,
+      output JSONB NOT NULL DEFAULT '{}',
+      sources JSONB DEFAULT '[]',
+      model_used VARCHAR(100),
+      tokens_used INTEGER DEFAULT 0,
+      duration_ms INTEGER DEFAULT 0,
+      error TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_traces_request ON agent_traces(request_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_traces_type ON agent_traces(agent_type)`);
+
+    // New columns on requests for agent results
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS triage_result JSONB`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS verification_result JSONB`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS ai_draft TEXT`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS ai_research_brief JSONB`);
 
     console.log('[DB] Migrations completed successfully');
   } catch (err) {

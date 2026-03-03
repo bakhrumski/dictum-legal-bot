@@ -592,15 +592,24 @@ async function saveRequest(data) {
     }
 
     // Insert request
-    await client.query(
+    const insertResult = await client.query(
       `INSERT INTO requests
        (user_id, request_text, request_type, file_id, file_size, file_name, status, category)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [userId, data.request_text, data.request_type, data.file_id, data.file_size, data.file_name, 'pending', 'Boshqa']
     );
 
     await client.query('COMMIT');
-    return { success: true };
+
+    const requestId = insertResult.rows[0].id;
+
+    // Async triage — classify request without blocking the response
+    const { triageRequest } = require('../agents/triage');
+    triageRequest(requestId, data.request_text, data.request_type).catch(err =>
+      console.error('[TRIAGE] Async error:', err.message)
+    );
+
+    return { success: true, requestId };
 
   } catch (error) {
     await client.query('ROLLBACK');

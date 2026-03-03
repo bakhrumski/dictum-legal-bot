@@ -1058,7 +1058,39 @@
             color: var(--text-muted);
             flex-wrap: wrap;
         }
-        
+
+        /* AI Triage badges */
+        .triage-urgency {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; border-radius: 50%; font-size: 10px; font-weight: 700;
+            margin-right: 6px; flex-shrink: 0; vertical-align: middle;
+        }
+        .triage-critical { background: #e74c3c; color: #fff; }
+        .triage-high { background: #e67e22; color: #fff; }
+        .triage-medium { background: #f1c40f; color: #333; }
+        .triage-low { background: #27ae60; color: #fff; }
+        .triage-chip {
+            display: inline-block; padding: 1px 8px; border-radius: 10px;
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+        }
+        .triage-section {
+            background: var(--glass-bg-light, var(--glass-bg)); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+        }
+        .triage-section h4 { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600; }
+        .triage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .triage-tag {
+            padding: 4px 10px; border-radius: 8px; font-size: 12px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary);
+        }
+        .triage-tag.urgency-critical { border-color: #e74c3c; color: #e74c3c; }
+        .triage-tag.urgency-high { border-color: #e67e22; color: #e67e22; }
+        .triage-tag.urgency-medium { border-color: #f1c40f; color: #9a7d0a; }
+        .triage-tag.urgency-low { border-color: #27ae60; color: #27ae60; }
+        [data-theme="dark"] .triage-tag.urgency-medium { color: #f1c40f; }
+
         .modal {
             display: none;
             position: fixed;
@@ -5498,6 +5530,7 @@ ihamkor
                         <div class="request-item ${needsApproval ? 'needs-approval' : ''}" onclick="event.stopPropagation(); showRequestDetail(${req.id})">
                             <div class="request-header">
                                 <div class="client-name">
+                                    ${req.triage_result ? `<span class="triage-urgency triage-${req.triage_result.urgency || 'medium'}" title="AI: ${req.triage_result.urgency || 'medium'}">${{critical:'!!',high:'!',medium:'~',low:''}[req.triage_result.urgency] || '~'}</span>` : ''}
                                     ${req.request_text.substring(0, 80)}${req.request_text.length > 80 ? '...' : ''}
                                 </div>
                                 <span class="status-badge status-${req.status}">
@@ -5507,6 +5540,7 @@ ihamkor
                             <div class="request-meta">
                                 ${req.file_id ? `<span>${getFileIcon(req.request_type)} ${req.request_type}</span>` : ''}
                                 <span>📂 ${req.category || 'N/A'}</span>
+                                ${req.triage_result ? `<span class="triage-chip" title="AI tasnif">${req.triage_result.complexity || ''}</span>` : ''}
                                 ${req.assigned_lawyer_name ? `<span>👤 ${req.assigned_lawyer_name}</span>` : '<span style="color: #e67e22;">⚠️ Tayinlanmagan</span>'}
                                 <span>🕐 ${new Date(req.created_at).toLocaleString('uz-UZ')}</span>
                                 ${req.responded_by ? `<span>✍️ ${req.responded_by}</span>` : ''}
@@ -5867,6 +5901,22 @@ ihamkor
                     </div>
                 </div>
                 
+                ${request.triage_result ? `
+                <div class="triage-section">
+                    <h4>AI Triage</h4>
+                    <div class="triage-grid">
+                        <span class="triage-tag urgency-${request.triage_result.urgency || 'medium'}">
+                            ${{critical:'🔴 Shoshilinch',high:'🟠 Muhim',medium:'🟡 O\'rtacha',low:'🟢 Oddiy'}[request.triage_result.urgency] || '🟡 O\'rtacha'}
+                        </span>
+                        <span class="triage-tag">${request.triage_result.complexity || '?'} murakkablik</span>
+                        ${request.triage_result.needs_document ? '<span class="triage-tag">📎 Hujjat kerak</span>' : ''}
+                        ${(request.triage_result.key_topics || []).map(t => '<span class="triage-tag">' + escapeHtml(t) + '</span>').join('')}
+                    </div>
+                    ${request.triage_result.summary ? '<p style="margin: 8px 0 0; font-size: 12px; color: var(--text-muted);">' + escapeHtml(request.triage_result.summary) + '</p>' : ''}
+                    ${request.triage_result.suggested_assignee_specialty ? '<p style="margin: 4px 0 0; font-size: 11px; color: var(--text-muted);">Tavsiya: <strong>' + escapeHtml(request.triage_result.suggested_assignee_specialty) + '</strong> mutaxassisi</p>' : ''}
+                </div>
+                ` : ''}
+
                 <div class="detail-section">
                     <h3>Tayinlov</h3>
                     <div class="detail-row">
