@@ -2098,12 +2098,16 @@
                 min-width: 0;
                 z-index: 1000;
                 transform: translateX(-100%);
-                transition: transform 0.3s ease;
-                box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+                visibility: hidden;
+                transition: transform 0.3s ease, visibility 0.3s;
+                box-shadow: none;
+                border-right: none;
                 background: var(--glass-bg-strong, var(--glass-bg));
             }
             .ai-sidebar.open {
                 transform: translateX(0);
+                visibility: visible;
+                box-shadow: 4px 0 20px rgba(0,0,0,0.15);
             }
             .ai-sidebar-toggle {
                 display: flex;
