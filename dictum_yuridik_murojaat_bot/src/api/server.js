@@ -2407,8 +2407,8 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     if (regType === 'student' && !level) {
       return res.status(400).json({ error: 'Bosqichni tanlang' });
     }
-    if (regType === 'lawyer' && (!specialization || !license_number)) {
-      return res.status(400).json({ error: 'Mutaxassislik va guvohnoma raqamini kiriting' });
+    if (regType === 'lawyer' && !specialization) {
+      return res.status(400).json({ error: 'Mutaxassislikni tanlang' });
     }
 
     const cleanUsername = telegram_username ? telegram_username.replace(/@/g, '').trim() : '';
