@@ -2309,7 +2309,7 @@ async function triggerAiScreening(regId, regData) {
 
     const isLawyer = regData.type === 'lawyer';
     const infoBlock = isLawyer
-      ? `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Advokat\nMutaxassislik: ${regData.specialization || '-'}\nTajriba: ${regData.experience_years || '-'} yil\nGuvohnoma raqami: ${regData.license_number || '-'}\nTelegram: @${regData.telegram_username}`
+      ? `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Advokat\nMutaxassislik: ${regData.specialization || '-'}\nTajriba: ${regData.experience_years || '-'} yil\nTelegram: @${regData.telegram_username}`
       : `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Student\nBosqich: ${regData.level || '-'}\nTelegram: @${regData.telegram_username}`;
 
     const docNote = docFetched
@@ -2317,14 +2317,14 @@ async function triggerAiScreening(regId, regData) {
       : 'Hujjat yuklangan, lekin texnik sabablarga ko\'ra olinmadi. Faqat boshqa ma\'lumotlar asosida baholang. document_authentic ni true deb belgilang.';
 
     const today = new Date().toISOString().split('T')[0];
-    const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nBugungi sana: ${today}\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${docNote}\n\nTekshiring:\n1. ${docFetched ? 'Hujjatdagi ism-familiya ariza beruvchi kiritgan ma\'lumotlarga mosmi?' : 'Ism-familiya to\'g\'ri formatdami?'}\n2. ${docFetched ? 'Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?' : 'Ma\'lumotlar to\'liqmi?'}\n3. Barcha ma'lumotlar to'liqmi?\n4. ${docFetched ? 'Hujjat haqiqiymi yoki shubhalimi? Bugungi sana ' + today + ' — hujjat sanasi bugungi yoki undan oldingi bo\'lsa, bu normal.' : 'Hujjat texnik sabablarga ko\'ra ko\'rib bo\'lmadi — true deb belgilang.'}\n${isLawyer ? '5. Advokatlk guvohnoma raqami formatiga mosmi?\n6. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
+    const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nBugungi sana: ${today}\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${docNote}\n\nTekshiring:\n1. ${docFetched ? 'Hujjatdagi ism-familiya ariza beruvchi kiritgan ma\'lumotlarga mosmi?' : 'Ism-familiya to\'g\'ri formatdami?'}\n2. ${docFetched ? 'Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?' : 'Ma\'lumotlar to\'liqmi?'}\n3. Barcha ma'lumotlar to'liqmi?\n4. ${docFetched ? 'Hujjat haqiqiymi yoki shubhalimi? Bugungi sana ' + today + ' — hujjat sanasi bugungi yoki undan oldingi bo\'lsa, bu normal.' : 'Hujjat texnik sabablarga ko\'ra ko\'rib bo\'lmadi — true deb belgilang.'}\n${isLawyer ? '5. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
 
     parts.push({ text: screenPrompt });
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const fetchBody = JSON.stringify({
       contents: [{ parts }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+      generationConfig: { temperature: 0.2, maxOutputTokens: 1024, responseMimeType: 'application/json' }
     });
 
     let geminiResp = await fetch(apiUrl, {
@@ -2355,7 +2355,9 @@ async function triggerAiScreening(regId, regData) {
 
     let screeningResult;
     try {
-      const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+      // Strip markdown code fences if present
+      const cleaned = resultText.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       screeningResult = jsonMatch ? JSON.parse(jsonMatch[0]) : { status: 'passed', notes: 'AI javob berdi, lekin JSON formatda emas. Qo\'lda tekshiring.' };
     } catch (e) {
       screeningResult = { status: 'passed', notes: 'AI javobini parse qilib bo\'lmadi. Qo\'lda tekshiring.', raw: resultText.substring(0, 500) };
