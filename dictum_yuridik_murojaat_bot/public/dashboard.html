@@ -1380,6 +1380,108 @@
         [data-theme="dark"] .ai-analysis-content code {
             background: rgba(0, 185, 242, 0.12);
         }
+        /* Legal GPT structured sections */
+        .ai-analysis-content .legal-section {
+            margin: 16px 0;
+            padding: 16px 18px;
+            border-radius: 10px;
+            border-left: 4px solid;
+        }
+        .ai-analysis-content .legal-section h2 {
+            margin-top: 0;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ai-analysis-content .legal-section h2::before {
+            font-size: 16px;
+        }
+        .legal-section.section-issue {
+            background: rgba(59,130,246,0.06);
+            border-left-color: #3b82f6;
+        }
+        .legal-section.section-issue h2::before { content: '\2696'; }
+        .legal-section.section-law {
+            background: rgba(16,185,129,0.06);
+            border-left-color: #10b981;
+        }
+        .legal-section.section-law h2::before { content: '\1F4D6'; }
+        .legal-section.section-court {
+            background: rgba(139,92,246,0.06);
+            border-left-color: #8b5cf6;
+        }
+        .legal-section.section-court h2::before { content: '\1F3DB'; }
+        .legal-section.section-analysis {
+            background: rgba(245,158,11,0.06);
+            border-left-color: #f59e0b;
+        }
+        .legal-section.section-analysis h2::before { content: '\1F50D'; }
+        .legal-section.section-conclusion {
+            background: rgba(239,68,68,0.06);
+            border-left-color: #ef4444;
+        }
+        .legal-section.section-conclusion h2::before { content: '\2705'; }
+        .legal-section.section-action {
+            background: rgba(6,182,212,0.06);
+            border-left-color: #06b6d4;
+        }
+        .legal-section.section-action h2::before { content: '\1F4CB'; }
+        [data-theme="dark"] .legal-section.section-issue { background: rgba(59,130,246,0.1); }
+        [data-theme="dark"] .legal-section.section-law { background: rgba(16,185,129,0.1); }
+        [data-theme="dark"] .legal-section.section-court { background: rgba(139,92,246,0.1); }
+        [data-theme="dark"] .legal-section.section-analysis { background: rgba(245,158,11,0.1); }
+        [data-theme="dark"] .legal-section.section-conclusion { background: rgba(239,68,68,0.1); }
+        [data-theme="dark"] .legal-section.section-action { background: rgba(6,182,212,0.1); }
+        /* Auto-detected law citation links */
+        .law-citation-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(30,64,175,0.08);
+            color: #1e40af;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid rgba(30,64,175,0.15);
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .law-citation-link:hover {
+            background: rgba(30,64,175,0.15);
+            border-color: rgba(30,64,175,0.3);
+            text-decoration: none;
+        }
+        .law-citation-link::before {
+            content: '\2696';
+            font-size: 12px;
+        }
+        [data-theme="dark"] .law-citation-link {
+            background: rgba(59,130,246,0.12);
+            color: #60a5fa;
+            border-color: rgba(59,130,246,0.2);
+        }
+        [data-theme="dark"] .law-citation-link:hover {
+            background: rgba(59,130,246,0.2);
+        }
+        .ai-analysis-content blockquote {
+            margin: 12px 0;
+            padding: 10px 16px;
+            border-left: 3px solid rgba(30,64,175,0.3);
+            background: rgba(30,64,175,0.04);
+            border-radius: 0 8px 8px 0;
+            font-style: italic;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+        [data-theme="dark"] .ai-analysis-content blockquote {
+            border-left-color: rgba(59,130,246,0.4);
+            background: rgba(59,130,246,0.06);
+        }
         .ai-loading {
             text-align: center;
             padding: 60px 20px;
@@ -6213,21 +6315,111 @@ ihamkor
             document.getElementById('requestModal').style.display = 'block';
         }
         
+        // Law citation map for auto-linking
+        const LAW_CITATION_MAP = {
+            'konstitutsiya': { url: 'https://lex.uz/docs/35869', name: 'Konstitutsiya' },
+            'fuqarolik kodeksi': { url: 'https://lex.uz/docs/111189', name: 'Fuqarolik kodeksi' },
+            'fk': { url: 'https://lex.uz/docs/111189', name: 'FK' },
+            'mehnat kodeksi': { url: 'https://lex.uz/docs/145261', name: 'Mehnat kodeksi' },
+            'mk': { url: 'https://lex.uz/docs/145261', name: 'MK' },
+            'jinoyat kodeksi': { url: 'https://lex.uz/docs/111457', name: 'Jinoyat kodeksi' },
+            'jk': { url: 'https://lex.uz/docs/111457', name: 'JK' },
+            'oila kodeksi': { url: 'https://lex.uz/docs/104723', name: 'Oila kodeksi' },
+            'ok': { url: 'https://lex.uz/docs/104723', name: 'OK' },
+            'soliq kodeksi': { url: 'https://lex.uz/docs/4674893', name: 'Soliq kodeksi' },
+            'sk': { url: 'https://lex.uz/docs/4674893', name: 'SK' },
+            'ma\'muriy javobgarlik': { url: 'https://lex.uz/docs/97661', name: 'MJK' },
+            'mjk': { url: 'https://lex.uz/docs/97661', name: 'MJK' },
+            'iqtisodiy protsessual kodeks': { url: 'https://lex.uz/docs/112168', name: 'IPK' },
+            'ipk': { url: 'https://lex.uz/docs/112168', name: 'IPK' },
+            'fuqarolik protsessual kodeks': { url: 'https://lex.uz/docs/111325', name: 'FPK' },
+            'fpk': { url: 'https://lex.uz/docs/111325', name: 'FPK' },
+            'jinoyat-protsessual kodeks': { url: 'https://lex.uz/docs/111463', name: 'JPK' },
+            'jpk': { url: 'https://lex.uz/docs/111463', name: 'JPK' },
+            'uy-joy kodeksi': { url: 'https://lex.uz/docs/97012', name: 'Uy-joy kodeksi' },
+            'yer kodeksi': { url: 'https://lex.uz/docs/149946', name: 'Yer kodeksi' },
+            'budjet kodeksi': { url: 'https://lex.uz/docs/3523816', name: 'Budjet kodeksi' },
+            'bojxona kodeksi': { url: 'https://lex.uz/docs/4102378', name: 'Bojxona kodeksi' },
+            'ma\'muriy sudlov': { url: 'https://lex.uz/docs/3523895', name: 'MSK' },
+        };
+
+        /**
+         * Auto-detect law citations and convert to clickable lex.uz links.
+         * Patterns: "Mehnat kodeksi, 100-modda" / "FK 354-modda" / "Konstitutsiya 53-modda"
+         */
+        function autoLinkCitations(html) {
+            // Pattern: [Law Name][,]? [number]-modda (or moddasi)
+            const citationRegex = /(?:^|\b)((?:Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Ma'muriy javobgarlik|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma'muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJK|IPK|FPK|JPK|MSK))(?:\s*,?\s*)(\d+)(?:\s*-\s*modda(?:si)?)/gi;
+
+            return html.replace(citationRegex, function(match, lawName, articleNum) {
+                const key = lawName.toLowerCase().trim();
+                const lawInfo = LAW_CITATION_MAP[key];
+                if (lawInfo) {
+                    return `<a href="${lawInfo.url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
+                }
+                return match;
+            });
+        }
+
         function simpleMarkdown(text) {
+            // Section mapping for Legal GPT structured response
+            const sectionMap = {
+                'HUQUQIY MASALA': 'section-issue',
+                'QONUNCHILIK ASOSI': 'section-law',
+                'SUD AMALIYOTI': 'section-court',
+                'HUQUQIY TAHLIL': 'section-analysis',
+                'XULOSA': 'section-conclusion',
+                'TAVSIYA ETILADIGAN HARAKATLAR': 'section-action',
+            };
+
+            let html = text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            // Convert structured Legal GPT sections into styled divs
+            const sectionKeys = Object.keys(sectionMap).join('|');
+            const sectionRegex = new RegExp(`^## (${sectionKeys})$`, 'gm');
+
+            // Split by sections
+            const parts = html.split(sectionRegex);
+
+            if (parts.length > 2) {
+                // Structured response detected
+                let result = '';
+                // First part is anything before the first section
+                if (parts[0].trim()) {
+                    result += formatBlock(parts[0]);
+                }
+                // Process section pairs (name, content)
+                for (let i = 1; i < parts.length; i += 2) {
+                    const sectionName = parts[i];
+                    const sectionContent = parts[i + 1] || '';
+                    const sectionClass = sectionMap[sectionName] || '';
+                    result += `<div class="legal-section ${sectionClass}"><h2>${sectionName}</h2>${formatBlock(sectionContent)}</div>`;
+                }
+                return autoLinkCitations(result);
+            }
+
+            // Fallback: regular markdown rendering (non-structured response)
+            return autoLinkCitations(formatBlock(html));
+        }
+
+        function formatBlock(text) {
             return ('<p>' + text
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/^### (.+)$/gm, '</p><h3>$1</h3><p>')
+                .replace(/^## (.+)$/gm, '</p><h2>$1</h2><p>')
+                .replace(/^# (.+)$/gm, '</p><h1>$1</h1><p>')
                 .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.+?)\*/g, '<em>$1</em>')
                 .replace(/`(.+?)`/g, '<code>$1</code>')
-                .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>')
+                .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+                .replace(/^&gt; (.+)$/gm, '</p><blockquote>$1</blockquote><p>')
                 .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
-                .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+                .replace(/<\/ul>\s*<ul>/g, '')
                 .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
                 .replace(/\n{2,}/g, '</p><p>')
-                .replace(/\n/g, '<br>') + '</p>');
+                .replace(/\n/g, '<br>') + '</p>')
+                .replace(/<p>\s*<\/p>/g, '');
         }
 
         function escapeHtml(text) {
@@ -6275,7 +6467,7 @@ ihamkor
 
             // Show loading state
             const content = document.getElementById('aiAnalysisContent');
-            content.innerHTML = '<div class="ai-loading"><span class="spinner"></span><div class="ai-loading-text">AI tahlil qilinmoqda...</div><div class="ai-loading-sub">Gemini 2.5 Flash huquqiy tahlil tayyorlamoqda</div></div>';
+            content.innerHTML = '<div class="ai-loading"><span class="spinner"></span><div class="ai-loading-text">AI tahlil qilinmoqda...</div><div class="ai-loading-sub">GPT-4o Legal RAG tahlil tayyorlamoqda</div></div>';
 
             // Start analysis
             runAiAnalysis(requestText, category, content, btn);
@@ -6303,7 +6495,7 @@ ihamkor
                     // Update AI provider badge
                     const aiBadgeEl = document.querySelector('.ai-modal-title .ai-badge');
                     if (aiBadgeEl && data.provider) {
-                        aiBadgeEl.textContent = data.provider === 'Gemini' ? 'GPT-4o' : data.provider.toUpperCase();
+                        aiBadgeEl.textContent = data.provider || 'GPT-4o';
                     }
                     content.innerHTML = simpleMarkdown(data.analysis);
 
