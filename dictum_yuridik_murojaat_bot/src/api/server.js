@@ -12,6 +12,7 @@ const { pool } = require('../database/db');
 // Shared in-memory store for Telegram verification codes (used by bot.js too)
 const { verificationTokens } = require('../verification-store');
 const crypto = require('crypto');
+const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addExample, updateExample, deleteExample, getAllExamples, getDatasetStats } = require('../dataset/legal-dataset');
 
 // Multer config for registration document uploads
 const regUpload = multer({
@@ -1559,6 +1560,18 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
       }
     } catch (e) { /* non-critical */ }
 
+    // ========== GOLDEN DATASET: RETRIEVE SIMILAR EXAMPLES ==========
+    let similarExamplesBlock = '';
+    try {
+      const similarExamples = await retrieveSimilarExamples(requestText, category);
+      similarExamplesBlock = formatExamplesForPrompt(similarExamples);
+      if (similarExamples.length > 0) {
+        console.log(`[AI] Injecting ${similarExamples.length} golden dataset examples into prompt`);
+      }
+    } catch (e) {
+      console.error('[AI] Golden dataset retrieval error:', e.message);
+    }
+
     // ========== LEGAL GPT SYSTEM PROMPT (RAG-BASED) ==========
     const systemPrompt = `You are an AI Legal Assistant specializing in the legislation of the Republic of Uzbekistan.
 
@@ -1691,6 +1704,8 @@ ${category && category !== 'Boshqa' ? `Murojaat yo'nalishi: ${category}` : ''}
 
 MUROJAAT MATNI:
 "${requestText}"
+
+${similarExamplesBlock}
 
 ${responseFormat}
 
@@ -2247,6 +2262,112 @@ app.post('/api/ai-feedback', requireMasterAdmin, async (req, res) => {
   } catch (error) {
     console.error('[AI Feedback] Error:', error);
     res.status(500).json({ error: 'Fikr-mulohaza saqlashda xatolik' });
+  }
+});
+
+
+// ========== GOLDEN LEGAL DATASET ENDPOINTS ==========
+
+// GET /api/legal-dataset — list examples with pagination
+app.get('/api/legal-dataset', requireMasterAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    const data = await getAllExamples(limit, offset);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Dataset yuklashda xatolik' });
+  }
+});
+
+// GET /api/legal-dataset/stats — dataset statistics
+app.get('/api/legal-dataset/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await getDatasetStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// POST /api/legal-dataset — add new example
+app.post('/api/legal-dataset', requireMasterAdmin, async (req, res) => {
+  try {
+    const { question, legal_field, legal_issue, applicable_law, court_practice, analysis, correct_answer, source, keywords } = req.body;
+    if (!question || !legal_field || !legal_issue || !applicable_law || !analysis || !correct_answer) {
+      return res.status(400).json({ error: 'Barcha majburiy maydonlar to\'ldirilishi shart' });
+    }
+    const example = await addExample(req.body);
+    res.json({ success: true, example });
+  } catch (error) {
+    res.status(500).json({ error: 'Namuna qo\'shishda xatolik' });
+  }
+});
+
+// PUT /api/legal-dataset/:id — update example
+app.put('/api/legal-dataset/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const example = await updateExample(parseInt(req.params.id), req.body);
+    if (!example) return res.status(404).json({ error: 'Namuna topilmadi' });
+    res.json({ success: true, example });
+  } catch (error) {
+    res.status(500).json({ error: 'Yangilashda xatolik' });
+  }
+});
+
+// DELETE /api/legal-dataset/:id — delete example
+app.delete('/api/legal-dataset/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    await deleteExample(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'O\'chirishda xatolik' });
+  }
+});
+
+// POST /api/legal-dataset/search — test similarity search
+app.post('/api/legal-dataset/search', requireMasterAdmin, async (req, res) => {
+  try {
+    const { question, legal_field } = req.body;
+    if (!question) return res.status(400).json({ error: 'Savol kerak' });
+    const results = await retrieveSimilarExamples(question, legal_field);
+    res.json({ results, count: results.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Qidirishda xatolik' });
+  }
+});
+
+// POST /api/legal-dataset/from-analysis — create dataset entry from approved AI analysis
+app.post('/api/legal-dataset/from-analysis', requireMasterAdmin, async (req, res) => {
+  try {
+    const { requestId } = req.body;
+    if (!requestId) return res.status(400).json({ error: 'requestId kerak' });
+
+    // Get the request and its analysis
+    const reqResult = await pool.query(`SELECT r.request_text, r.category, aa.analysis_text
+      FROM requests r
+      LEFT JOIN ai_analyses aa ON aa.request_id = r.id
+      WHERE r.id = $1
+      ORDER BY aa.created_at DESC LIMIT 1`, [requestId]);
+
+    if (reqResult.rows.length === 0) return res.status(404).json({ error: 'Murojaat topilmadi' });
+    const { request_text, category, analysis_text } = reqResult.rows[0];
+    if (!analysis_text) return res.status(400).json({ error: 'AI tahlil topilmadi' });
+
+    const example = await addExample({
+      question: request_text,
+      legal_field: category || 'Umumiy',
+      legal_issue: request_text.substring(0, 200),
+      applicable_law: 'AI tahlildan olingan — tekshiring',
+      analysis: analysis_text.substring(0, 2000),
+      correct_answer: analysis_text.substring(0, 1000),
+      source: 'ai_analysis_approved',
+      keywords: []
+    });
+
+    res.json({ success: true, example, note: 'Namuna yaratildi — iltimos, maydonlarni tekshirib tahrirlang.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Namuna yaratishda xatolik' });
   }
 });
 
@@ -2841,6 +2962,7 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS ai_research_brief JSONB`);
 
     console.log('[DB] Migrations completed successfully');
+    await initLegalDataset();
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }
