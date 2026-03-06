@@ -13,6 +13,9 @@ const { pool } = require('../database/db');
 const { verificationTokens } = require('../verification-store');
 const crypto = require('crypto');
 const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addExample, updateExample, deleteExample, getAllExamples, getDatasetStats } = require('../dataset/legal-dataset');
+const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
+const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
+const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
 
 // Multer config for registration document uploads
 const regUpload = multer({
@@ -519,7 +522,7 @@ Tasdiqlash uchun dashboardga kiring!
 // Master admin approves response (sends to client)
 app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
   try {
-    const { requestId } = req.body;
+    const { requestId, feedbackType, correctedAnswer, correctedReasoning, correctedArticles } = req.body;
     
     // Get request details
     const requestResult = await pool.query(`
@@ -527,7 +530,10 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
         u.telegram_id, 
         u.username,
         u.first_name, 
-        r.student_response
+        r.student_response,
+        r.request_text,
+        r.category,
+        r.response_text as ai_response
       FROM requests r
       JOIN users u ON r.user_id = u.id
       WHERE r.id = $1
@@ -537,29 +543,50 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
     
-    const { telegram_id, username, first_name, student_response } = requestResult.rows[0];
+    const { telegram_id, first_name, student_response, request_text, category, ai_response } = requestResult.rows[0];
+    
+    // Use corrected answer if provided, otherwise use student response
+    const finalResponse = (feedbackType && feedbackType !== 'correct' && correctedAnswer) ? correctedAnswer : student_response;
     
     // Update database
     await pool.query(`
       UPDATE requests 
-      SET response_text = student_response,
+      SET response_text = $2,
           status = 'answered',
           master_approved = TRUE,
-          answered_at = NOW()
+          answered_at = NOW(),
+          responded_by = $3
       WHERE id = $1
-    `, [requestId]);
+    `, [requestId, finalResponse, req.session.fullName]);
+    
+    // Save mentor feedback to learning dataset
+    if (feedbackType) {
+      try {
+        await saveMentorFeedback({
+          request_id: requestId,
+          question: request_text,
+          ai_answer: ai_response || student_response,
+          mentor_feedback_type: feedbackType,
+          corrected_answer: correctedAnswer || '',
+          corrected_legal_reasoning: correctedReasoning || '',
+          corrected_law_articles: correctedArticles || '',
+          legal_field: category || 'Umumiy',
+          mentor_id: req.session.adminId,
+          mentor_name: req.session.fullName
+        });
+      } catch (fbErr) {
+        console.error('[FEEDBACK] Save error (non-critical):', fbErr.message);
+      }
+    }
     
     // Send to client
-    const message = `
-✅ Yuristdan javob keldi!
+    const message = `✅ Yuristdan javob keldi!
 
 Hurmatli ${first_name},
 
-${student_response}
+${finalResponse}
 
-Dictum advokatlik firmasi
-    `;
-    
+Dictum advokatlik firmasi`;
     await bot.sendMessage(telegram_id, message);
     
     res.json({ success: true, message: 'Response approved and sent to client' });
@@ -1471,7 +1498,7 @@ app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
 
 // ========== AI PROVIDER: OpenAI GPT-4o ==========
 async function callAI(messages, options = {}) {
-  const { temperature = 0.3, maxTokens = 8192, useSearch = false } = options;
+  const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
 
   const gptKey = process.env.GPT_API_KEY;
   if (!gptKey) {
@@ -1560,10 +1587,24 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
       }
     } catch (e) { /* non-critical */ }
 
+    // ========== LEGAL FIELD CLASSIFICATION ==========
+    let classificationBlock = '';
+    let detectedField = category; // fallback to user-provided category
+    try {
+      const classification = await classifyLegalField(requestText, requestId || null);
+      classificationBlock = formatClassificationForPrompt(classification);
+      if (classification.legal_field !== 'Boshqa') {
+        detectedField = classification.legal_field;
+        console.log(`[AI] Classified as: ${classification.legal_field} (${classification.confidence}%)`);
+      }
+    } catch (e) {
+      console.error('[AI] Classification error:', e.message);
+    }
+
     // ========== GOLDEN DATASET: RETRIEVE SIMILAR EXAMPLES ==========
     let similarExamplesBlock = '';
     try {
-      const similarExamples = await retrieveSimilarExamples(requestText, category);
+      const similarExamples = await retrieveSimilarExamples(requestText, detectedField);
       similarExamplesBlock = formatExamplesForPrompt(similarExamples);
       if (similarExamples.length > 0) {
         console.log(`[AI] Injecting ${similarExamples.length} golden dataset examples into prompt`);
@@ -1572,39 +1613,102 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
       console.error('[AI] Golden dataset retrieval error:', e.message);
     }
 
-    // ========== LEGAL GPT SYSTEM PROMPT (RAG-BASED) ==========
-    const systemPrompt = `You are an AI Legal Assistant specializing in the legislation of the Republic of Uzbekistan.
+    // ========== FEEDBACK DATASET: RETRIEVE MENTOR CORRECTIONS ==========
+    let feedbackExamplesBlock = '';
+    try {
+      const feedbackExamples = await retrieveFeedbackExamples(requestText, detectedField);
+      feedbackExamplesBlock = formatFeedbackForPrompt(feedbackExamples);
+      if (feedbackExamples.length > 0) {
+        console.log(`[AI] Injecting ${feedbackExamples.length} mentor feedback corrections into prompt`);
+      }
+    } catch (e) {
+      console.error('[AI] Feedback dataset retrieval error:', e.message);
+    }
 
-Your purpose: provide accurate, structured, and professional legal analysis for lawyers, law students, and legal researchers.
+    // ========== CASE-LAW DATASET: RETRIEVE SIMILAR COURT DECISIONS ==========
+    let caseLawBlock = '';
+    try {
+      const similarCases = await retrieveSimilarCases(requestText, detectedField, 3);
+      caseLawBlock = formatCasesForPrompt(similarCases);
+      if (similarCases.length > 0) {
+        console.log(`[AI] Injecting ${similarCases.length} court cases into prompt`);
+      }
+    } catch (e) {
+      console.error('[AI] Case-law retrieval error:', e.message);
+    }
+
+    // ========== LEGAL REASONING ENGINE — SYSTEM PROMPT ==========
+    const systemPrompt = `You are a professional legal assistant specialized in the legislation of the Republic of Uzbekistan.
+
+Your task is to analyze legal requests submitted by users and provide precise, well-structured legal answers.
+
+You must base your analysis on:
+1. Official legal documents from lex.uz (legislation)
+2. Court practice from my.sud.uz / public.sud.uz (judicial decisions)
+
+When answering legal questions, you MUST:
+- Identify the legal issue
+- Cite relevant legislation from lex.uz
+- Reference similar court decisions from my.sud.uz if available in context
+- Analyze how courts interpret the law in similar situations
+- Provide a structured legal conclusion
+
+Use clear professional legal language suitable for lawyers and law students.
+All answers MUST be in O'zbek (lotin) tilida.
+
+LEGAL REASONING PROTOCOL (ICHKI TAHLIL — MAJBURIY):
+Javob yozishdan OLDIN, quyidagi 5 bosqichli ichki tahlilni o'tkazing:
+
+1-BOSQICH: MASALANI ANIQLASH
+- Foydalanuvchi nimani so'rayapti? Aniq huquqiy masala nima?
+- Qaysi huquqiy munosabat ko'zda tutilgan?
+
+2-BOSQICH: QONUN IZLASH
+- Web search orqali "site:lex.uz [kodeks nomi] [mavzu]" qidiring
+- Topilgan har bir norma uchun: AMALDAMI yoki O'Z KUCHINI YO'QOTGANMI tekshiring
+- Faqat AMALDAGI (hozirgi kuchga ega) normalarni qabul qiling
+- O'zgartirishlar (amendments) borligini tekshiring
+
+3-BOSQICH: SUD AMALIYOTINI TEKSHIRISH
+- Kontekstda berilgan sud ishlarini ko'rib chiqing — foydalanuvchi masalasiga tegishlimi?
+- Sudlar qonunni QANDAY talqin qilgan — shu talqinni tahlilga kiritish kerakmi?
+- "site:public.sud.uz [mavzu]" dan ham qo'shimcha sud qarorlarini izlang
+- Sud ishlariga murojaat qilganda: ish raqami, sud nomi, sanasi MAJBURIY
+
+4-BOSQICH: MANTIQIY TEKSHIRISH
+- Topilgan normalar va sud amaliyoti foydalanuvchi vaziyatiga TO'G'RIDAN-TO'G'RI tegishlimi?
+- Biror norma bilan javob berish uchun YETARLI asosmi? Agar YO'Q — ochiq ayting.
+
+5-BOSQICH: GALLYUTSINATSIYA FILTRI
+- Har bir da'voni tekshiring: manba bormi? Web searchda tasdiqlandimi?
+- Agar biror modda raqamini tasdiqlash imkoni bo'lmasa — UNI KELTIRMANG.
+- Sud qarorlarini to'qima qilmang — faqat kontekstda berilgan yoki web search orqali topilgan ishlarni keltiring.
+- Agar huquqiy javob to'liq tasdiqlanmasa, quyidagi iborani ishlating:
+  "Mavjud huquqiy ma'lumotlarga asosan aniq javob berish imkoni cheklangan. Qo'shimcha huquqiy ekspertiza talab qilinadi."
+
+Bu ichki tahlilni <!--REASONING--> va <!--/REASONING--> teglari orasida yozing.
+Bu qism foydalanuvchiga KO'RSATILMAYDI — faqat sifat nazorati uchun.
 
 PRIMARY LEGAL SOURCES:
 1. Lex.uz — official database of legislation of Uzbekistan
 2. My.sud.uz / Public.sud.uz — court decisions and judicial practice
 
-CORE RULES:
-1. Only rely on verified legislation and court practice.
-2. Always prioritize the most recent version of legislation.
-3. If a legal act is marked as invalidated (o'z kuchini yo'qotgan / утратил силу), it MUST NOT be used.
-4. Always cite: law name, article number, and if possible, legal act number or date.
-5. Never invent legislation, articles, or court decisions.
-6. If no clear legal regulation exists, state: "Qonunchilikda to'g'ridan-to'g'ri tartibga solish aniq belgilanmagan."
-7. When drafting legal documents, use formal legal language used in Uzbekistan.
-8. Answers must be detailed enough for legal professionals.
-9. All answers MUST be in O'zbek (lotin) tilida.
+CITATION FORMAT (MAJBURIY):
+Har bir huquqiy da'vo uchun quyidagi formatda manba keltiring:
+[Qonun nomi], [raqam]-modda (Manba: lex.uz)
 
-ANTI-HALLUCINATION PROTOCOL:
-Before providing any legal answer:
-1. Identify relevant legislation using web search on lex.uz
-2. Verify whether the law is currently valid (amaldagi)
-3. Verify whether amendments exist
-If legal information cannot be verified, respond: "Huquqiy ma'lumot rasmiy qonunchilik bazasidan tekshirishni talab qiladi."
+Misollar:
+- Mehnat kodeksi, 100-modda (Manba: lex.uz)
+- Fuqarolik kodeksi, 354-modda (Manba: lex.uz)
+- Oila kodeksi, 38-modda (Manba: lex.uz)
 
-CITATION FORMAT:
-When citing laws, use this exact format for auto-linking:
-[Qonun nomi], [raqam]-modda
-Examples: Mehnat kodeksi, 100-modda | Fuqarolik kodeksi, 354-modda | Konstitutsiya, 53-modda
+MANBASIZ BAYONOT QILISH QATTIYAN TAQIQLANADI.
+Agar qonun normasi web search orqali topilmasa — uni keltirmang.
 
-UZBEKISTAN LEGAL CODE CATALOG (for reference):
+If the law is unclear or missing, explicitly state:
+"Qonunchilikda to'g'ridan-to'g'ri tartibga solish aniq belgilanmagan. Malakali yuristga murojaat qilish tavsiya etiladi."
+
+UZBEKISTAN LEGAL CODE CATALOG:
 KODEKSLAR:
 - Konstitutsiya: https://lex.uz/docs/35869
 - Fuqarolik kodeksi (FK): https://lex.uz/docs/111189
@@ -1651,32 +1755,61 @@ Quyidagi murojaat turini aniqlang:
 Javob strukturasini murojaat turiga moslang.`;
 
     // ========== STRUCTURED RESPONSE FORMAT ==========
-    const responseFormat = `JAVOB FORMATI (QATTIYAN RIOYA QILING):
+    const responseFormat = `JAVOB TUZILISHI (QATTIYAN RIOYA QILING):
 
-Javobni quyidagi 6 bo'limda yozing. Har bir bo'lim sarlavhasini aynan shu formatda yozing:
+BIRINCHI: Ichki tahlilni <!--REASONING--> teglari orasida yozing (foydalanuvchiga ko'rsatilmaydi):
+<!--REASONING-->
+1. Masala: [huquqiy masalaning mohiyati]
+2. Tegishli normalar: [web search natijasida topilgan normalar]
+3. Normalar amaldami: [ha/yo'q har biri uchun]
+4. Gallyutsinatsiya tekshiruvi: [tasdiqlanmagan da'volar bormi?]
+5. Xulosa ishonchliligi: [yuqori/o'rta/past]
+<!--/REASONING-->
+
+KEYIN: Javobni quyidagi 6 bo'limda yozing:
 
 ## HUQUQIY MASALA
-Huquqiy savolning qisqa tavsifi.
+Foydalanuvchi savolidan kelib chiqadigan aniq huquqiy masalani aniqlang.
+Qaysi huquqiy munosabat ko'zda tutilgan — 1-2 gapda yozing.
 
 ## QONUNCHILIK ASOSI
-Tegishli qonunchilik moddalari. Har bir norma uchun:
-- Hujjat nomi va modda raqami (faqat web search natijasida tasdiqlangan)
+Tegishli qonunchilik normalarini keltiring. HAR BIR NORMA UCHUN:
+- Qonun nomi va modda raqami (Manba: lex.uz)
 - Modda mazmunining qisqa bayoni
-Web search orqali "site:lex.uz [kodeks nomi] [mavzu]" qidirib, faqat TASDIQLANGAN moddalarni keltiring.
+- Web search orqali "site:lex.uz [kodeks nomi] [mavzu]" qidirib TASDIQLANGAN moddalarni keltiring
+MANBASIZ MODDA KELTIRISH TAQIQLANADI.
 
 ## SUD AMALIYOTI
-Web search orqali "site:public.sud.uz [mavzu]" qidirib, tegishli sud ishlarini toping.
-Har bir ish uchun: ish raqami, sud nomi, sana, mohiyati.
+Kontekstda berilgan o'xshash sud ishlarini tahlil qiling. Har bir ish uchun:
+- Sud: [sud nomi]
+- Qaror sanasi: [kun oy yil]
+- Huquqiy masala: [qisqacha]
+- Sud mushohada: [sudlar qonunni qanday talqin qilgan]
+- Manba: my.sud.uz
+
+Agar kontekstda sud ishlari bo'lmasa — web search orqali "site:public.sud.uz [mavzu]" qidirib toping.
 Agar aniq ish topilmasa, shu sohada umumiy sud amaliyoti tendensiyasini yozing.
+SUD QARORLARINI TO'QIMA QILISH TAQIQLANADI.
 
 ## HUQUQIY TAHLIL
-Qonunchilikni batafsil talqin qilish. Muammoga qonunlarni qo'llash.
+Qonunchilik VA sud amaliyotini foydalanuvchi vaziyatiga BATAFSIL qo'llang:
+- Qonun normasi nima deydi?
+- Sudlar shu masalani QANDAY hal qilgan?
+- Bu normaga ko'ra foydalanuvchi vaziyati qanday baholanadi?
+- Qanday huquqiy oqibatlar kutiladi?
 
 ## XULOSA
-Aniq huquqiy javob. Da'vo ehtimoli (foizda) va noaniqlik darajasi (past/o'rta/yuqori).
+Aniq huquqiy javob — 2-3 gapda.
+Da'vo/murojaat muvaffaqiyat ehtimoli (foizda) va noaniqlik darajasi (past/o'rta/yuqori).
+
+Agar aniq javob berish imkoni bo'lmasa:
+"Mavjud huquqiy ma'lumotlarga asosan aniq javob berish imkoni cheklangan. Qo'shimcha huquqiy ekspertiza talab qilinadi."
 
 ## TAVSIYA ETILADIGAN HARAKATLAR
-Amaliy huquqiy maslahat yoki keyingi qadamlar.
+Amaliy huquqiy maslahat — raqamlangan ro'yxat shaklida:
+1. Birinchi qadam
+2. Ikkinchi qadam
+3. ...
 
 > "Ushbu tahlil sun'iy intellekt asosida shakllantirilgan va sud qarori hisoblanmaydi. Barcha ma'lumotlarni lex.uz va public.sud.uz saytlaridan tekshiring."`;
 
@@ -1700,25 +1833,41 @@ Faqat yuqoridagi katalogdagi URLlardan foydalaning. Agar mos namuna topilmasa: [
 
 ${classificationPrompt}
 
-${category && category !== 'Boshqa' ? `Murojaat yo'nalishi: ${category}` : ''}
+${classificationBlock}
+
+${detectedField && detectedField !== 'Boshqa' ? `Murojaat yo'nalishi: ${detectedField}` : ''}
 
 MUROJAAT MATNI:
 "${requestText}"
 
 ${similarExamplesBlock}
 
+${caseLawBlock}
+
+${feedbackExamplesBlock}
+
 ${responseFormat}
 
 ${yurxizmatBlock}
 ${feedbackNote}`;
 
-    const aiResult = await callAI([{ role: 'user', text: fullPrompt }], { useSearch: true, maxTokens: 8192 });
+    const aiResult = await callAI([{ role: 'user', text: fullPrompt }], { useSearch: true, maxTokens: 8192, temperature: 0.2 });
     const rawAnalysis = aiResult.text;
     const aiProvider = aiResult.provider;
 
+    // Extract hidden reasoning block (internal chain-of-thought, not shown to user)
+    let internalReasoning = null;
+    let analysisWithoutReasoning = rawAnalysis;
+    const reasoningMatch = rawAnalysis.match(/<!--REASONING-->\s*([\s\S]*?)\s*<!--\/REASONING-->/);
+    if (reasoningMatch) {
+      internalReasoning = reasoningMatch[1].trim();
+      analysisWithoutReasoning = rawAnalysis.replace(/<!--REASONING-->[\s\S]*?<!--\/REASONING-->\s*/, '').trim();
+      console.log(`[AI] Internal reasoning extracted (${internalReasoning.length} chars)`);
+    }
+
     // Extract yurxizmat.uz template suggestions from response
     let templateSuggestions = [];
-    let analysis = rawAnalysis;
+    let analysis = analysisWithoutReasoning;
     const suggestionsMatch = rawAnalysis.match(/<!--YURXIZMAT-->\s*([\s\S]*?)\s*<!--\/YURXIZMAT-->/);
     if (suggestionsMatch) {
       analysis = rawAnalysis.replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->/, '').trim();
@@ -1735,20 +1884,20 @@ ${feedbackNote}`;
       }
     }
 
-    // Archive the analysis
+    // Archive the analysis (including internal reasoning for audit)
     let archiveId = null;
     try {
       const archiveResult = await pool.query(
-        `INSERT INTO ai_analyses (request_id, admin_id, category, request_text, analysis_text)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [requestId || null, req.session.adminId, category, requestText, analysis]
+        `INSERT INTO ai_analyses (request_id, admin_id, category, request_text, analysis_text, internal_reasoning)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [requestId || null, req.session.adminId, detectedField || category, requestText, analysis, internalReasoning]
       );
       archiveId = archiveResult.rows[0].id;
     } catch (archiveErr) {
       console.error('[AI] Archive save error:', archiveErr.message);
     }
 
-    res.json({ analysis, archiveId, templateSuggestions, provider: aiProvider });
+    res.json({ analysis, archiveId, templateSuggestions, provider: aiProvider, detectedField });
   } catch (error) {
     console.error('[AI] Analysis error:', error);
     res.status(500).json({ error: 'AI tahlil xatoligi: ' + error.message });
@@ -2371,6 +2520,121 @@ app.post('/api/legal-dataset/from-analysis', requireMasterAdmin, async (req, res
   }
 });
 
+// ========== LAWYER FEEDBACK DATASET ENDPOINTS ==========
+
+// GET /api/lawyer-feedback — list feedback with pagination
+app.get('/api/lawyer-feedback', requireMasterAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    const data = await getAllFeedback(limit, offset);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Feedback yuklashda xatolik' });
+  }
+});
+
+// GET /api/lawyer-feedback/stats — feedback statistics
+app.get('/api/lawyer-feedback/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await getFeedbackStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// POST /api/lawyer-feedback — manual feedback submission
+app.post('/api/lawyer-feedback', requireMasterAdmin, async (req, res) => {
+  try {
+    const { request_id, question, ai_answer, mentor_feedback_type, corrected_answer,
+            corrected_legal_reasoning, corrected_law_articles, legal_field } = req.body;
+    if (!question || !mentor_feedback_type) {
+      return res.status(400).json({ error: 'Savol va baholash turi kerak' });
+    }
+    const feedback = await saveMentorFeedback({
+      ...req.body,
+      mentor_id: req.session.adminId,
+      mentor_name: req.session.fullName
+    });
+    res.json({ success: true, feedback });
+  } catch (error) {
+    res.status(500).json({ error: 'Feedback saqlashda xatolik' });
+  }
+});
+
+// ========== CASE-LAW DATASET ENDPOINTS ==========
+
+// GET /api/case-law — list court cases with pagination
+app.get('/api/case-law', requireMasterAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    const data = await getAllCases(limit, offset);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Sud ishlari yuklashda xatolik' });
+  }
+});
+
+// GET /api/case-law/stats — case-law statistics
+app.get('/api/case-law/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await getCaseLawStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// POST /api/case-law — add new court case
+app.post('/api/case-law', requireMasterAdmin, async (req, res) => {
+  try {
+    const { case_id, court_name, case_category, legal_issue, facts_summary, applied_laws, court_reasoning, final_decision } = req.body;
+    if (!case_id || !court_name || !legal_issue || !facts_summary || !applied_laws || !court_reasoning || !final_decision) {
+      return res.status(400).json({ error: 'Barcha majburiy maydonlar to\'ldirilishi shart' });
+    }
+    const courtCase = await addCase(req.body);
+    res.json({ success: true, courtCase });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'Bu ish raqami allaqachon mavjud' });
+    res.status(500).json({ error: 'Sud ishi qo\'shishda xatolik' });
+  }
+});
+
+// PUT /api/case-law/:id — update court case
+app.put('/api/case-law/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const courtCase = await updateCase(parseInt(req.params.id), req.body);
+    if (!courtCase) return res.status(404).json({ error: 'Sud ishi topilmadi' });
+    res.json({ success: true, courtCase });
+  } catch (error) {
+    res.status(500).json({ error: 'Yangilashda xatolik' });
+  }
+});
+
+// DELETE /api/case-law/:id — delete court case
+app.delete('/api/case-law/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    await deleteCase(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'O\'chirishda xatolik' });
+  }
+});
+
+// POST /api/case-law/search — test case similarity search
+app.post('/api/case-law/search', requireMasterAdmin, async (req, res) => {
+  try {
+    const { question, legal_field } = req.body;
+    if (!question) return res.status(400).json({ error: 'Savol kerak' });
+    const results = await retrieveSimilarCases(question, legal_field, 3);
+    res.json({ results, count: results.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Qidirishda xatolik' });
+  }
+});
+
 // ========== AGENT ENDPOINTS ==========
 
 const { triageRequest } = require('../agents/triage');
@@ -2391,6 +2655,21 @@ app.post('/api/requests/:id/triage', requireMasterAdmin, async (req, res) => {
   } catch (error) {
     console.error('[API] Triage error:', error);
     res.status(500).json({ error: 'Triage xatolik' });
+  }
+});
+
+// Classify legal field for a request
+app.post('/api/requests/:id/classify', requireAuth, async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    const request = await pool.query('SELECT request_text FROM requests WHERE id = $1', [requestId]);
+    if (request.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
+
+    const result = await classifyLegalField(request.rows[0].request_text, requestId);
+    res.json({ success: true, classification: result });
+  } catch (error) {
+    console.error('[API] Classification error:', error);
+    res.status(500).json({ error: 'Klassifikatsiya xatolik' });
   }
 });
 
@@ -2961,8 +3240,17 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS ai_draft TEXT`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS ai_research_brief JSONB`);
 
+    // Legal field classifier column
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS detected_legal_field VARCHAR(100)`);
+
+    // Internal reasoning storage for audit
+    await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS internal_reasoning TEXT`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_legal_field ON requests(detected_legal_field)`);
+
     console.log('[DB] Migrations completed successfully');
     await initLegalDataset();
+    await initFeedbackDataset();
+    await initCaseLawDataset();
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }

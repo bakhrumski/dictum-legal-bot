@@ -1482,7 +1482,35 @@
             border-left-color: rgba(59,130,246,0.4);
             background: rgba(59,130,246,0.06);
         }
-        .ai-loading {
+        /* Mentor feedback form */
+        .feedback-form { margin-top: 16px; }
+        .feedback-type-btns { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .feedback-type-btn {
+            flex: 1; min-width: 120px; padding: 10px 14px; border-radius: 10px;
+            border: 2px solid var(--glass-border); background: var(--glass-bg);
+            color: var(--text-primary); cursor: pointer; font-size: 13px; font-weight: 600;
+            text-align: center; transition: all 0.2s;
+        }
+        .feedback-type-btn:hover { border-color: #3b82f6; }
+        .feedback-type-btn.selected-correct { border-color: #10b981; background: rgba(16,185,129,0.1); color: #10b981; }
+        .feedback-type-btn.selected-partial { border-color: #f59e0b; background: rgba(245,158,11,0.1); color: #f59e0b; }
+        .feedback-type-btn.selected-incorrect { border-color: #ef4444; background: rgba(239,68,68,0.1); color: #ef4444; }
+        .feedback-correction-fields { display: none; margin-top: 12px; }
+        .feedback-correction-fields.visible { display: block; }
+        .feedback-correction-fields textarea,
+        .feedback-correction-fields input {
+            width: 100%; padding: 10px 14px; border-radius: 10px;
+            border: 1px solid var(--glass-border); background: var(--glass-bg);
+            color: var(--text-primary); font-size: 13px; margin-bottom: 8px;
+            font-family: inherit; resize: vertical;
+        }
+        .feedback-correction-fields label {
+            font-size: 12px; font-weight: 600; color: var(--text-secondary);
+            margin-bottom: 4px; display: block;
+        }
+        .feedback-actions { display: flex; gap: 8px; margin-top: 14px; }
+        .feedback-actions .btn { flex: 1; }
+                .ai-loading {
             text-align: center;
             padding: 60px 20px;
             color: #1e40af;
@@ -6251,14 +6279,31 @@ ihamkor
                 if (currentUser.role === 'master') {
                     modalContent += `
                         <div class="approval-section">
-                            <h4>⚠️ Tasdiq kutilmoqda</h4>
-                            <p style="margin-bottom: 15px;">Bu javob mijozga yuborilmaydi, siz tasdiqlamaguningizcha.</p>
-                            <button class="btn btn-success" onclick="approveResponse(${request.id})">
-                                ✓ Tasdiqlash va yuborish
-                            </button>
-                            <button class="btn btn-danger" onclick="rejectResponse(${request.id})">
-                                ✗ Rad etish
-                            </button>
+                            <h4>⚠️ Tasdiq kutilmoqda — Mentor baholashi</h4>
+                            <p style="margin-bottom: 12px; font-size: 13px;">Javobni baholang va kerak bo’lsa tuzating. Bu tuzatmalar AI ni yaxshilash uchun saqlanadi.</p>
+                            <div class="feedback-form" id="feedbackForm_${request.id}">
+                                <div class="feedback-type-btns">
+                                    <button class="feedback-type-btn" onclick="selectFeedbackType(${request.id}, 'correct', this)" data-type="correct">✅ To’g’ri</button>
+                                    <button class="feedback-type-btn" onclick="selectFeedbackType(${request.id}, 'partially_correct', this)" data-type="partially_correct">⚠️ Qisman to’g’ri</button>
+                                    <button class="feedback-type-btn" onclick="selectFeedbackType(${request.id}, 'incorrect', this)" data-type="incorrect">❌ Noto’g’ri</button>
+                                </div>
+                                <div class="feedback-correction-fields" id="feedbackFields_${request.id}">
+                                    <label>Tuzatilgan javob</label>
+                                    <textarea id="correctedAnswer_${request.id}" rows="4" placeholder="To’g’ri javobni yozing...">${(request.student_response || '').replace(/"/g, '&quot;').replace(/`/g, '`')}</textarea>
+                                    <label>Huquqiy mushohada (ixtiyoriy)</label>
+                                    <textarea id="correctedReasoning_${request.id}" rows="2" placeholder="Nima uchun bu javob to’g’ri/noto’g’ri..."></textarea>
+                                    <label>To’g’ri qonun moddalari (ixtiyoriy)</label>
+                                    <input type="text" id="correctedArticles_${request.id}" placeholder="Masalan: Mehnat kodeksi, 100-modda; FK 354-modda">
+                                </div>
+                                <div class="feedback-actions">
+                                    <button class="btn btn-success" id="approveBtn_${request.id}" onclick="approveWithFeedback(${request.id})" disabled>
+                                        ✓ Tasdiqlash va yuborish
+                                    </button>
+                                    <button class="btn btn-danger" onclick="rejectResponse(${request.id})">
+                                        ✗ Rad etish
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     `;
                 }
@@ -7419,20 +7464,92 @@ ihamkor
             }
         }
         
+        // ========== FEEDBACK LEARNING SYSTEM ==========
+
+        const feedbackState = {};
+
+        function selectFeedbackType(requestId, type, btnEl) {
+            feedbackState[requestId] = type;
+            const form = document.getElementById(`feedbackForm_${requestId}`);
+            if (!form) return;
+            form.querySelectorAll('.feedback-type-btn').forEach(btn => {
+                btn.classList.remove('selected-correct', 'selected-partial', 'selected-incorrect');
+            });
+            const classMap = { correct: 'selected-correct', partially_correct: 'selected-partial', incorrect: 'selected-incorrect' };
+            btnEl.classList.add(classMap[type] || '');
+
+            const fields = document.getElementById(`feedbackFields_${requestId}`);
+            if (fields) {
+                if (type === 'correct') {
+                    fields.classList.remove('visible');
+                } else {
+                    fields.classList.add('visible');
+                }
+            }
+
+            const approveBtn = document.getElementById(`approveBtn_${requestId}`);
+            if (approveBtn) approveBtn.disabled = false;
+        }
+
+        async function approveWithFeedback(requestId) {
+            if (!checkCategoryBeforeResponse()) return;
+            const feedbackType = feedbackState[requestId];
+            if (!feedbackType) { alert('Iltimos, avval javob turini tanlang.'); return; }
+
+            const correctedAnswer = document.getElementById(`correctedAnswer_${requestId}`)?.value || '';
+            const correctedReasoning = document.getElementById(`correctedReasoning_${requestId}`)?.value || '';
+            const correctedArticles = document.getElementById(`correctedArticles_${requestId}`)?.value || '';
+
+            if (feedbackType !== 'correct' && !correctedAnswer.trim()) {
+                alert('Iltimos, tuzatilgan javobni yozing.');
+                return;
+            }
+
+            if (!confirm('Javobni tasdiqlaysizmi? Bu javob darhol mijozga yuboriladi.')) return;
+
+            try {
+                const response = await fetch('/api/approve-response', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requestId,
+                        feedbackType,
+                        correctedAnswer: feedbackType !== 'correct' ? correctedAnswer : '',
+                        correctedReasoning,
+                        correctedArticles
+                    })
+                });
+
+                if (response.ok) {
+                    const msg = feedbackType === 'correct'
+                        ? '✅ Javob tasdiqlandi va mijozga yuborildi!'
+                        : '✅ Javob tasdiqlandi, tuzatma saqlandi va mijozga yuborildi!';
+                    alert(msg);
+                    closeModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Xatolik yuz berdi.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Xatolik yuz berdi.');
+            }
+        }
+
         async function approveResponse(requestId) {
             if (!checkCategoryBeforeResponse()) return;
 
             if (!confirm('Javobni tasdiqlaysizmi? Bu javob darhol mijozga yuboriladi.')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/approve-response', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId })
                 });
-                
+
                 if (response.ok) {
                     alert('✅ Javob tasdiqlandi va mijozga yuborildi!');
                     closeModal();
