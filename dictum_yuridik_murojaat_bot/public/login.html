@@ -111,24 +111,14 @@
         }
         .hero-logo {
             display: flex;
-            align-items: baseline;
-            gap: 0;
+            align-items: center;
+            gap: 8px;
             position: relative;
             z-index: 1;
-            font-family: 'Segoe UI', 'SF Pro Display', -apple-system, sans-serif;
-            font-size: 48px;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            line-height: 1;
         }
-        .hero-logo .logo-jurist {
-            color: #fff;
-        }
-        .hero-logo .logo-ai {
-            background: linear-gradient(180deg, #D4A843, #C49A3C, #E8C36A);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        .hero-logo img {
+            height: 56px;
+            width: auto;
         }
 
         /* ========== RIGHT FORM PANEL ========== */
@@ -572,7 +562,7 @@
         <!-- LEFT HERO PANEL -->
         <div class="hero-panel">
             <div class="hero-logo">
-                <span class="logo-jurist">Jurist</span><span class="logo-ai">AI</span>
+                <img src="/jurist_logo.png" alt="JuristAI" style="height: 56px; width: auto;">
             </div>
         </div>
 
