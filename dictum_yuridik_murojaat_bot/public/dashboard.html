@@ -451,6 +451,9 @@
             display: block;
             margin-bottom: 2px;
         }
+        .header-logo-dark { display: none; }
+        [data-theme="dark"] .header-logo-light { display: none; }
+        [data-theme="dark"] .header-logo-dark { display: block; }
 
         .header-center {
             position: absolute;
@@ -4315,7 +4318,8 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="switchTab('home')">
-                    <img src="/jurist_logo.png" alt="JuristAI" class="header-logo">
+                    <img src="/jurist_logo.png" alt="JuristAI" class="header-logo header-logo-light">
+                    <img src="/jurist_logo_white.png" alt="JuristAI" class="header-logo header-logo-dark">
                     <p class="subtitle">Yuristlar yordamchi tizimi</p>
                 </div>
             </div>

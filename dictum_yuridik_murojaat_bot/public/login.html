@@ -120,6 +120,9 @@
             height: 56px;
             width: auto;
         }
+        .hero-logo .logo-dark { display: none; }
+        [data-theme="dark"] .hero-logo .logo-light { display: none; }
+        [data-theme="dark"] .hero-logo .logo-dark { display: block; }
 
         /* ========== RIGHT FORM PANEL ========== */
         .form-panel {
@@ -562,7 +565,8 @@
         <!-- LEFT HERO PANEL -->
         <div class="hero-panel">
             <div class="hero-logo">
-                <img src="/jurist_logo.png" alt="JuristAI" style="height: 56px; width: auto;">
+                <img src="/jurist_logo.png" alt="JuristAI" class="logo-light" style="height: 56px; width: auto;">
+                <img src="/jurist_logo_white.png" alt="JuristAI" class="logo-dark" style="height: 56px; width: auto;">
             </div>
         </div>
 
