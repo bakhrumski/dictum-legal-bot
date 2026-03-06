@@ -2290,8 +2290,8 @@ app.post('/api/ai-feedback', requireMasterAdmin, async (req, res) => {
 const { triageRequest } = require('../agents/triage');
 const { getTraces, getLatestTrace } = require('../agents/runner');
 
-// Re-run triage on a request
-app.post('/api/requests/:id/triage', requireAuth, async (req, res) => {
+// Re-run triage on a request (master admin only)
+app.post('/api/requests/:id/triage', requireMasterAdmin, async (req, res) => {
   try {
     const requestId = parseInt(req.params.id);
     const request = await pool.query('SELECT request_text, request_type FROM requests WHERE id = $1', [requestId]);

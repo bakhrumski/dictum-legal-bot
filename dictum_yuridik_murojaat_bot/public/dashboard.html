@@ -335,8 +335,9 @@
             height: calc(100vh - 190px - env(safe-area-inset-bottom, 0px));
         }
         .chat-tab-wrapper {
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr auto;
             height: 100%;
             background: var(--glass-bg);
             backdrop-filter: blur(var(--glass-blur));
@@ -344,18 +345,24 @@
             border: 1px solid var(--glass-border);
             border-radius: var(--ios-radius-lg);
             overflow: hidden;
+            position: relative;
         }
         .chat-tab-wrapper .chat-header {
+            grid-column: 1;
+            grid-row: 1;
             flex-shrink: 0;
         }
         .chat-tab-wrapper .chat-messages {
-            flex: 1;
+            grid-column: 1;
+            grid-row: 2;
             overflow-y: auto;
         }
         .chat-tab-wrapper .chat-input-area {
-            flex-shrink: 0;
+            grid-column: 1;
+            grid-row: 3;
             border-top: 1px solid var(--glass-border);
         }
+        /* Mobile: members panel is overlay */
         .chat-tab-wrapper .chat-members-panel {
             position: absolute;
             top: 0;
@@ -363,6 +370,36 @@
             right: 0;
             bottom: 0;
             z-index: 10;
+        }
+        /* Desktop: members panel is a sidebar */
+        @media (min-width: 900px) {
+            .chat-tab-wrapper {
+                grid-template-columns: 260px 1fr;
+            }
+            .chat-tab-wrapper .chat-header {
+                grid-column: 1 / -1;
+                grid-row: 1;
+            }
+            .chat-tab-wrapper .chat-members-panel {
+                position: static;
+                grid-column: 1;
+                grid-row: 2 / 4;
+                transform: none !important;
+                border-right: 1px solid var(--glass-border);
+                z-index: auto;
+                background: var(--glass-bg);
+            }
+            .chat-tab-wrapper .chat-members-panel .chat-members-header {
+                display: none;
+            }
+            .chat-tab-wrapper .chat-messages {
+                grid-column: 2;
+                grid-row: 2;
+            }
+            .chat-tab-wrapper .chat-input-area {
+                grid-column: 2;
+                grid-row: 3;
+            }
         }
 
         /* ========== TAB SECTION OVERRIDES ========== */
@@ -3065,13 +3102,24 @@
         .chat-header-info { font-size: 12px; opacity: 0.85; margin-top: 2px; }
         .chat-header-left { cursor: pointer; }
         .chat-header-left:hover .chat-header-avatar { transform: scale(1.1); }
+        .chat-header-chevron {
+            opacity: 0.7; transition: transform 0.3s, opacity 0.2s; flex-shrink: 0;
+        }
+        .chat-header-chevron.rotated { transform: rotate(180deg); }
+        .chat-header-left:hover .chat-header-chevron { opacity: 1; }
+        /* Hide chevron on desktop — sidebar is always visible */
+        @media (min-width: 900px) {
+            .chat-header-chevron { display: none; }
+            .chat-header-left { cursor: default; }
+            .chat-header-left:hover .chat-header-avatar { transform: none; }
+        }
         .chat-close-btn {
             background: none; border: none; color: white; font-size: 22px;
             cursor: pointer; padding: 0 5px; opacity: 0.8; transition: opacity 0.2s;
         }
         .chat-close-btn:hover { opacity: 1; }
 
-        /* Members panel overlay */
+        /* Members panel — overlay on mobile, sidebar on desktop */
         .chat-members-panel {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             background: var(--glass-bg-strong);
@@ -3079,10 +3127,22 @@
             -webkit-backdrop-filter: blur(20px);
             z-index: 10;
             display: flex; flex-direction: column;
-            transform: translateY(-100%);
+            transform: translateX(-100%);
             transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .chat-members-panel.open { transform: translateY(0); }
+        .chat-members-panel.open { transform: translateX(0); }
+        /* Desktop sidebar mode */
+        @media (min-width: 900px) {
+            .chat-members-panel {
+                position: static;
+                transform: none;
+                transition: none;
+                z-index: auto;
+                background: var(--glass-bg);
+                backdrop-filter: none;
+                -webkit-backdrop-filter: none;
+            }
+        }
         .chat-members-header {
             padding: 16px 20px;
             background: linear-gradient(135deg, #1e40af, #1e40af);
@@ -3097,6 +3157,25 @@
         .chat-members-back:hover { opacity: 1; background: rgba(255,255,255,0.15); }
         .chat-members-list {
             flex: 1; overflow-y: auto; padding: 8px 0;
+        }
+        .chat-members-list-title {
+            display: none;
+        }
+        @media (min-width: 900px) {
+            .chat-members-list-title {
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 12px 16px 8px; font-size: 11px; font-weight: 700;
+                color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+            }
+            .chat-members-panel .chat-member-item {
+                padding: 8px 14px; gap: 10px;
+            }
+            .chat-members-panel .chat-member-avatar {
+                width: 36px; height: 36px; font-size: 13px;
+            }
+            .chat-members-panel .chat-member-name {
+                font-size: 13px;
+            }
         }
         .chat-member-item {
             display: flex; align-items: center; gap: 12px;
@@ -4367,6 +4446,7 @@ ihamkor
                             <h3>Guruh Chat</h3>
                             <div class="chat-header-info" id="chatMemberCount">Yuristlar va studentlar uchun</div>
                         </div>
+                        <svg class="chat-header-chevron" id="chatHeaderChevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                     <div style="display:flex; align-items:center;">
                         <button class="chat-header-delete-all" id="chatDeleteAllBtn" onclick="deleteAllChatMessages()" title="Barcha xabarlarni o'chirish" style="display:none;">
@@ -4661,6 +4741,7 @@ ihamkor
                 if (btn) btn.style.display = 'flex';
             }
             if (typeof updateChatMemberCount === 'function') updateChatMemberCount();
+            if (typeof ensureDesktopMembersSidebar === 'function') ensureDesktopMembersSidebar();
             if (typeof chatMessages !== 'undefined' && chatMessages.length === 0 && typeof loadChatMessages === 'function') {
                 loadChatMessages();
             }
@@ -8104,22 +8185,50 @@ ihamkor
             }
         }
 
+        function isDesktopChat() {
+            return window.innerWidth >= 900;
+        }
+
         function toggleMembersPanel() {
+            // On desktop, sidebar is always visible — clicking header does nothing
+            if (isDesktopChat()) return;
             const panel = document.getElementById('chatMembersPanel');
+            const chevron = document.getElementById('chatHeaderChevron');
             const isOpen = panel.classList.toggle('open');
+            if (chevron) chevron.classList.toggle('rotated', isOpen);
             if (isOpen) renderMembersList();
         }
+
+        /** Ensure members sidebar is rendered on desktop when chat tab opens */
+        function ensureDesktopMembersSidebar() {
+            if (isDesktopChat()) {
+                const panel = document.getElementById('chatMembersPanel');
+                const chevron = document.getElementById('chatHeaderChevron');
+                // Close mobile overlay if it was open
+                if (panel) panel.classList.remove('open');
+                if (chevron) chevron.classList.remove('rotated');
+                renderMembersList();
+            }
+        }
+
+        // Handle responsive switch
+        window.addEventListener('resize', function() {
+            if (currentTab === 'chat') ensureDesktopMembersSidebar();
+        });
 
         function renderMembersList() {
             const list = document.getElementById('chatMembersList');
             const title = document.getElementById('chatMembersTitle');
-            title.textContent = allAdmins.length + ' a\'zo';
+            if (title) title.textContent = allAdmins.length + ' a\'zo';
 
             const roleOrder = { master: 0, lawyer: 1, student: 2 };
             const roleLabels = { master: 'Bosh admin', lawyer: 'Yurist', student: 'Stajyor' };
             const sorted = [...allAdmins].sort((a, b) => (roleOrder[a.role] || 9) - (roleOrder[b.role] || 9));
 
-            list.innerHTML = sorted.map(admin => {
+            const onlineCount = sorted.filter(a => a.last_active_at && (Date.now() - new Date(a.last_active_at).getTime()) < 5 * 60 * 1000).length;
+
+            list.innerHTML = `<div class="chat-members-list-title"><span>A'zolar — ${allAdmins.length}</span><span style="color:#34d399;">${onlineCount} online</span></div>` +
+            sorted.map(admin => {
                 const initials = admin.full_name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
                 const avClass = admin.role === 'master' ? 'master-av' : admin.role === 'lawyer' ? 'lawyer-av' : 'student-av';
                 const roleClass = admin.role + '-role';
