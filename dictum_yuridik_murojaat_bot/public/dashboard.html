@@ -678,6 +678,7 @@
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
         /* Staggered entrance for stat cards */
@@ -687,7 +688,8 @@
             100% { opacity: 1; transform: translateY(0) scale(1); }
         }
         .stat-card {
-            flex: 1;
+            flex: 1 1 0;
+            min-width: 150px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -707,9 +709,10 @@
             text-align: center;
         }
         .stat-card:nth-child(1) { animation-delay: 0.1s; }
-        .stat-card:nth-child(2) { animation-delay: 0.2s; }
-        .stat-card:nth-child(3) { animation-delay: 0.3s; }
-        .stat-card:nth-child(4) { animation-delay: 0.4s; }
+        .stat-card:nth-child(2) { animation-delay: 0.15s; }
+        .stat-card:nth-child(3) { animation-delay: 0.2s; }
+        .stat-card:nth-child(4) { animation-delay: 0.25s; }
+        .stat-card:nth-child(5) { animation-delay: 0.3s; }
         .stat-card:hover {
             transform: translateY(-4px) scale(1.02);
             box-shadow: 0 12px 30px rgba(81,45,168,0.12);
@@ -720,6 +723,7 @@
             transition-duration: 0.1s;
         }
         .stat-card.card-pending { }
+        .stat-card.card-rejected { }
         .stat-card.card-student { }
         .stat-card.card-answered { }
 
@@ -736,13 +740,16 @@
         }
         .stat-card .stat-icon { background: rgba(81,45,168,0.08); }
         .stat-card.card-pending .stat-icon { background: rgba(171,71,188,0.10); }
+        .stat-card.card-rejected .stat-icon { background: rgba(198,40,40,0.08); }
         .stat-card.card-student .stat-icon { background: rgba(81,45,168,0.10); }
         .stat-card.card-answered .stat-icon { background: rgba(46,125,50,0.08); }
         [data-theme="dark"] .stat-icon { background: rgba(167,139,250,0.12); }
         [data-theme="dark"] .stat-card.card-pending .stat-icon { background: rgba(171,71,188,0.15); }
+        [data-theme="dark"] .stat-card.card-rejected .stat-icon { background: rgba(198,40,40,0.15); }
         [data-theme="dark"] .stat-card.card-student .stat-icon { background: rgba(167,139,250,0.15); }
         [data-theme="dark"] .stat-card.card-answered .stat-icon { background: rgba(46,125,50,0.15); }
         .stat-icon svg { stroke: #512DA8; }
+        .stat-card.card-rejected .stat-icon svg { stroke: #c62828; }
         .stat-card.card-answered .stat-icon svg { stroke: #2e7d32; }
         [data-theme="dark"] .stat-icon svg { stroke: #a78bfa; }
         [data-theme="dark"] .stat-card.card-answered .stat-icon svg { stroke: #82e0aa; }
@@ -4168,7 +4175,7 @@
             .admin-management-header { flex-direction: row; gap: 10px; }
             .jamoa-content .rankings-sidebar { flex-direction: column; width: 100%; }
             .stats { flex-wrap: wrap; }
-            .stat-card { flex: 1 1 45%; min-width: 140px; }
+            .stat-card { flex: 1 1 calc(33.33% - 8px); min-width: 120px; }
             /* --- Bottom tab bar mobile --- */
             .bottom-tab-bar { height: 56px; }
             .tab-label { font-size: 9px; }
@@ -4325,8 +4332,15 @@
             <div class="stat-card card-pending" onclick="scrollToRequests('pending')">
                 <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                 <div class="stat-info">
-                    <div class="number" style="display:flex; gap:10px;"><span class="num-pending" id="pendingRequests">0</span><span class="num-rejected" id="rejectedRequests">0</span></div>
+                    <div class="number num-pending" id="pendingRequests">0</div>
                     <h3>Jarayonda</h3>
+                </div>
+            </div>
+            <div class="stat-card card-rejected" onclick="scrollToRequests('rejected')">
+                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+                <div class="stat-info">
+                    <div class="number num-rejected" id="rejectedRequests">0</div>
+                    <h3>Rad etilgan</h3>
                 </div>
             </div>
             <div class="stat-card card-student" onclick="scrollToRequests('student_responded')">
@@ -4524,6 +4538,7 @@ ihamkor
                         <select id="statusFilter" onchange="filterRequests()">
                             <option value="">Barcha statuslar</option>
                             <option value="pending">Kutilmoqda</option>
+                            <option value="rejected">Rad etilgan</option>
                             <option value="student_responded">Student javobi</option>
                             <option value="answered">Javob berilgan</option>
                         </select>
@@ -5624,11 +5639,7 @@ ihamkor
                 filteredRequests = filteredRequests.filter(r => r.responded_by === filterAssignee);
             }
             if (filterStatus) {
-                if (filterStatus === 'pending') {
-                    filteredRequests = filteredRequests.filter(r => r.status === 'pending' || r.status === 'rejected');
-                } else {
-                    filteredRequests = filteredRequests.filter(r => r.status === filterStatus);
-                }
+                filteredRequests = filteredRequests.filter(r => r.status === filterStatus);
             }
             if (filterAssigned === 'unassigned') {
                 filteredRequests = filteredRequests.filter(r => !r.assigned_to);
