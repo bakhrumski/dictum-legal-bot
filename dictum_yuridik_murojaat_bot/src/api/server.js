@@ -1468,104 +1468,63 @@ app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// ========== AI PROVIDER FALLBACK SYSTEM ==========
-// Tries providers in order: Gemini → Groq → Mistral
+// ========== AI PROVIDER: OpenAI GPT-4o ==========
 async function callAI(messages, options = {}) {
   const { temperature = 0.3, maxTokens = 8192, useSearch = false } = options;
-  const providers = [];
 
-  // Provider 1: Gemini 2.5 Flash (primary)
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
-    providers.push({
-      name: 'Gemini',
-      call: async () => {
-        const contents = messages.length === 1 && messages[0].role === 'user'
-          ? [{ parts: [{ text: messages[0].text }] }]
-          : messages.map(m => ({ role: m.role, parts: [{ text: m.text }] }));
-        const body = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens } };
-        if (useSearch) body.tools = [{ google_search: {} }];
-        const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-        );
-        if (!resp.ok) throw new Error(`Gemini ${resp.status}`);
-        const data = await resp.json();
-        const parts = data.candidates?.[0]?.content?.parts || [];
-        const text = parts.map(p => p.text || '').join('');
-        if (!text) throw new Error('Gemini empty response');
-        return text;
-      }
-    });
+  const gptKey = process.env.GPT_API_KEY;
+  if (!gptKey) {
+    throw new Error('GPT_API_KEY sozlanmagan');
   }
 
-  // Provider 2: Groq (Llama 3.3 70B — free tier)
-  const groqKey = process.env.GROQ_API_KEY;
-  if (groqKey) {
-    providers.push({
-      name: 'Groq',
-      call: async () => {
-        const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
-            temperature,
-            max_tokens: maxTokens
-          })
-        });
-        if (!resp.ok) throw new Error(`Groq ${resp.status}`);
-        const data = await resp.json();
-        const text = data.choices?.[0]?.message?.content;
-        if (!text) throw new Error('Groq empty response');
-        return text;
-      }
-    });
+  console.log(`[AI] Calling GPT-4o${useSearch ? ' with web search' : ''}...`);
+
+  // Build input for OpenAI Responses API
+  const input = messages.map(m => ({
+    role: m.role === 'model' ? 'assistant' : (m.role === 'user' ? 'user' : 'assistant'),
+    content: m.text
+  }));
+
+  const body = {
+    model: 'gpt-4o',
+    input,
+    temperature,
+    max_output_tokens: maxTokens
+  };
+
+  // Enable web search for legal research queries
+  if (useSearch) {
+    body.tools = [{ type: 'web_search_preview' }];
   }
 
-  // Provider 3: Mistral (free tier)
-  const mistralKey = process.env.MISTRAL_API_KEY;
-  if (mistralKey) {
-    providers.push({
-      name: 'Mistral',
-      call: async () => {
-        const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${mistralKey}` },
-          body: JSON.stringify({
-            model: 'mistral-small-latest',
-            messages: messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
-            temperature,
-            max_tokens: maxTokens
-          })
-        });
-        if (!resp.ok) throw new Error(`Mistral ${resp.status}`);
-        const data = await resp.json();
-        const text = data.choices?.[0]?.message?.content;
-        if (!text) throw new Error('Mistral empty response');
-        return text;
-      }
-    });
+  const resp = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${gptKey}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`GPT-4o ${resp.status}: ${errBody.substring(0, 200)}`);
   }
 
-  if (providers.length === 0) {
-    throw new Error('Hech qanday AI API kaliti sozlanmagan (GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY)');
-  }
+  const data = await resp.json();
 
-  // Try each provider in order
-  for (const provider of providers) {
-    try {
-      console.log(`[AI] Trying ${provider.name}...`);
-      const result = await provider.call();
-      console.log(`[AI] ${provider.name} succeeded`);
-      return { text: result, provider: provider.name };
-    } catch (err) {
-      console.error(`[AI] ${provider.name} failed: ${err.message}`);
-    }
-  }
+  // Extract text from Responses API output
+  const text = (data.output || [])
+    .filter(o => o.type === 'message')
+    .flatMap(o => o.content || [])
+    .filter(c => c.type === 'output_text')
+    .map(c => c.text)
+    .join('');
 
-  throw new Error('Barcha AI provayderlar ishlamadi');
+  if (!text) throw new Error('GPT-4o empty response');
+
+  console.log('[AI] GPT-4o succeeded');
+  return { text, provider: 'GPT-4o' };
 }
 
 // Initialize agent runner with callAI function
@@ -2322,13 +2281,14 @@ app.get('/api/requests/:id/traces', requireAuth, async (req, res) => {
 
 // ========== SELF-REGISTRATION ==========
 
-// AI Screening using Gemini 2.5 Flash
+// AI Screening using GPT-4o
 async function triggerAiScreening(regId, regData) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GPT_API_KEY;
   if (!apiKey) return;
 
   try {
-    let parts = [];
+    let docBase64 = null;
+    let docMimeType = null;
     let docFetched = false;
 
     // If document uploaded, fetch and include as vision input
@@ -2337,10 +2297,9 @@ async function triggerAiScreening(regId, regData) {
         const fileLink = await bot.getFileLink(regData.document_file_id);
         const resp = await fetch(fileLink);
         const buffer = await resp.arrayBuffer();
-        const base64Data = Buffer.from(buffer).toString('base64');
+        docBase64 = Buffer.from(buffer).toString('base64');
         const ext = fileLink.toLowerCase();
-        const mimeType = ext.includes('.pdf') ? 'application/pdf' : ext.includes('.png') ? 'image/png' : ext.includes('.webp') ? 'image/webp' : 'image/jpeg';
-        parts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
+        docMimeType = ext.includes('.png') ? 'image/png' : ext.includes('.webp') ? 'image/webp' : 'image/jpeg';
         docFetched = true;
       } catch (e) {
         console.error('[AI SCREENING] Could not fetch document from Telegram:', e.message);
@@ -2352,8 +2311,15 @@ async function triggerAiScreening(regId, regData) {
       try {
         const dbDoc = await pool.query('SELECT document_base64, document_mimetype FROM registration_requests WHERE id = $1', [regId]);
         if (dbDoc.rows.length > 0 && dbDoc.rows[0].document_base64) {
-          parts.push({ inline_data: { mime_type: dbDoc.rows[0].document_mimetype, data: dbDoc.rows[0].document_base64 } });
-          docFetched = true;
+          docBase64 = dbDoc.rows[0].document_base64;
+          docMimeType = dbDoc.rows[0].document_mimetype;
+          // GPT-4o vision supports images only, skip PDFs
+          if (docMimeType && !docMimeType.startsWith('image/')) {
+            docBase64 = null;
+            docMimeType = null;
+          } else {
+            docFetched = true;
+          }
         }
       } catch (e) {
         console.error('[AI SCREENING] Could not fetch document from DB:', e.message);
@@ -2372,43 +2338,55 @@ async function triggerAiScreening(regId, regData) {
     const today = new Date().toISOString().split('T')[0];
     const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nBugungi sana: ${today}\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${docNote}\n\nTekshiring:\n1. ${docFetched ? 'Hujjatdagi ism-familiya ariza beruvchi kiritgan ma\'lumotlarga mosmi?' : 'Ism-familiya to\'g\'ri formatdami?'}\n2. ${docFetched ? 'Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?' : 'Ma\'lumotlar to\'liqmi?'}\n3. Barcha ma'lumotlar to'liqmi?\n4. ${docFetched ? 'Hujjat haqiqiymi yoki shubhalimi? Bugungi sana ' + today + ' — hujjat sanasi bugungi yoki undan oldingi bo\'lsa, bu normal.' : 'Hujjat texnik sabablarga ko\'ra ko\'rib bo\'lmadi — true deb belgilang.'}\n${isLawyer ? '5. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
 
-    parts.push({ text: screenPrompt });
+    // Build GPT-4o Chat Completions request with vision
+    const content = [];
+    if (docBase64 && docMimeType) {
+      content.push({ type: 'image_url', image_url: { url: `data:${docMimeType};base64,${docBase64}` } });
+    }
+    content.push({ type: 'text', text: screenPrompt });
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const fetchBody = JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 1024, responseMimeType: 'application/json' }
-    });
+    const gptBody = {
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content }],
+      temperature: 0.2,
+      max_tokens: 1024,
+      response_format: { type: 'json_object' }
+    };
 
-    let geminiResp = await fetch(apiUrl, {
+    let gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: fetchBody
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(gptBody)
     });
 
     // Retry once after 3s if rate-limited (429)
-    if (geminiResp.status === 429) {
+    if (gptResp.status === 429) {
       console.log('[AI SCREENING] Rate limited, retrying in 3s...');
       await new Promise(r => setTimeout(r, 3000));
-      geminiResp = await fetch(apiUrl, {
+      gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: fetchBody
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(gptBody)
       });
     }
 
-    if (!geminiResp.ok) {
-      console.error('[AI SCREENING] Gemini API error:', geminiResp.status);
+    if (!gptResp.ok) {
+      console.error('[AI SCREENING] GPT-4o API error:', gptResp.status);
       return;
     }
 
-    const data = await geminiResp.json();
-    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const data = await gptResp.json();
+    const resultText = data.choices?.[0]?.message?.content;
     if (!resultText) return;
 
     let screeningResult;
     try {
-      // Strip markdown code fences if present
       const cleaned = resultText.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       screeningResult = jsonMatch ? JSON.parse(jsonMatch[0]) : { status: 'passed', notes: 'AI javob berdi, lekin JSON formatda emas. Qo\'lda tekshiring.' };
