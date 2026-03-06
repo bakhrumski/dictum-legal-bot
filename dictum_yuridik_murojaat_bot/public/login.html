@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kirish - Dictum Dashboard</title>
+    <title>Kirish - JuristAI Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -116,14 +116,11 @@
             position: relative;
             z-index: 1;
         }
-        .hero-logo h2 {
-            color: #fff;
-            font-family: 'Georgia', 'Times New Roman', serif;
-            font-size: 26px;
-            letter-spacing: 4px;
-            font-weight: 400;
+        .hero-logo img {
+            height: 56px;
+            width: auto;
+            filter: brightness(0) invert(1);
         }
-        .hero-logo svg { color: #fff; }
 
         /* ========== RIGHT FORM PANEL ========== */
         .form-panel {
@@ -566,19 +563,7 @@
         <!-- LEFT HERO PANEL -->
         <div class="hero-panel">
             <div class="hero-logo">
-                <h2>DICTUM</h2>
-                <svg width="28" height="28" viewBox="0 0 80 96" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="40" cy="5" r="3.5"/>
-                    <rect x="38" y="8" width="4" height="72" rx="1"/>
-                    <rect x="5" y="14" width="70" height="3" rx="1.5"/>
-                    <rect x="24" y="80" width="32" height="4" rx="2"/>
-                    <line x1="9" y1="17" x2="1" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-                    <line x1="9" y1="17" x2="17" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-                    <path d="M0.5 52 C1 58 5 62 9 62 C13 62 17 58 17.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-                    <line x1="71" y1="17" x2="63" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-                    <line x1="71" y1="17" x2="79" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-                    <path d="M62.5 52 C63 58 67 62 71 62 C75 62 79 58 79.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-                </svg>
+                <img src="/jurist_logo.png" alt="JuristAI" style="height: 56px; width: auto;">
             </div>
         </div>
 
@@ -593,7 +578,7 @@
                 <!-- LOGIN FORM -->
                 <div class="login-form">
                     <h1 class="form-heading">Tizimga kirish</h1>
-                    <p class="form-subtitle">Dictum yuristlar yordamchi tizimiga xush kelibsiz</p>
+                    <p class="form-subtitle">JuristAI yordamchi tizimiga xush kelibsiz</p>
 
                     <div id="loginError" class="error-message"></div>
                     <form id="loginForm">
@@ -622,7 +607,7 @@
                 <!-- REGISTER FORM -->
                 <div class="register-form" data-type="student">
                     <h1 class="form-heading">Ro'yxatdan o'tish</h1>
-                    <p class="form-subtitle">Dictum jamoasiga qo'shiling</p>
+                    <p class="form-subtitle">JuristAI jamoasiga qo'shiling</p>
 
                     <div id="regError" class="error-message"></div>
 

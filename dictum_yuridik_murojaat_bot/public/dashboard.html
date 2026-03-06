@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dictum - Murojaatlar Dashboard</title>
+    <title>JuristAI - Murojaatlar Dashboard</title>
     <!-- PDF & Chart Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
@@ -445,22 +445,11 @@
         }
 
         .header-brand { cursor: pointer; }
-        .header-left h1 {
-            color: var(--text);
+        .header-logo {
+            height: 42px;
+            width: auto;
+            display: block;
             margin-bottom: 2px;
-            font-family: 'Georgia', 'Times New Roman', serif;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            font-size: 28px;
-            line-height: 1;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .header-left .logo-scales {
-            width: 24px;
-            height: 24px;
-            flex-shrink: 0;
         }
 
         .header-center {
@@ -4144,9 +4133,7 @@
             /* --- Mobile header --- */
             header { height: 70px; max-height: 70px; padding: 8px 10px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; }
             .header-left { flex-shrink: 0; min-width: 0; }
-            .header-logo { height: 55px; }
-            .header-left h1 { font-size: 15px; letter-spacing: 2px; gap: 6px !important; }
-            .header-left h1 svg { width: 14px; height: 14px; }
+            .header-logo { height: 32px; }
             .header-left .subtitle { font-size: 7px; letter-spacing: 1px; }
             .header-center {
                 position: static !important;
@@ -4194,9 +4181,7 @@
             header { height: 57px; max-height: 57px; padding: 6px 8px; }
             .header-center { gap: 0 !important; }
             .header-chat-wrapper { display: none; }
-            .header-logo { height: 48px; }
-            .header-left h1 { font-size: 13px; letter-spacing: 1px; gap: 4px !important; }
-            .header-left h1 svg { width: 12px; height: 12px; }
+            .header-logo { height: 26px; }
             .header-left .subtitle { display: none; }
             .header-icon-btn, .header-chat-btn { width: 28px; height: 28px; }
             .header-icon-btn svg, .header-chat-btn svg { width: 13px; height: 13px; }
@@ -4242,7 +4227,7 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="switchTab('home')">
-                    <h1>DICTUM <svg class="logo-scales" viewBox="0 0 80 96" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="5" r="3.5"/><rect x="38" y="8" width="4" height="72" rx="1"/><rect x="5" y="14" width="70" height="3" rx="1.5"/><rect x="24" y="80" width="32" height="4" rx="2"/><line x1="9" y1="17" x2="1" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><line x1="9" y1="17" x2="17" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M0.5 52 C1 58 5 62 9 62 C13 62 17 58 17.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><line x1="71" y1="17" x2="63" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><line x1="71" y1="17" x2="79" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M62.5 52 C63 58 67 62 71 62 C75 62 79 58 79.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></h1>
+                    <img src="/jurist_logo.png" alt="JuristAI" class="header-logo">
                     <p class="subtitle">Yuristlar yordamchi tizimi</p>
                 </div>
             </div>
@@ -8042,7 +8027,7 @@ ihamkor
                 function addPageFooter(n) {
                     doc.setDrawColor(200); doc.line(m, ph - 14, pw - m, ph - 14);
                     setFont('normal'); doc.setFontSize(7); doc.setTextColor(140);
-                    doc.text('DICTUM Advokatlik Firmasi | Maxfiy hujjat', m, ph - 9);
+                    doc.text('JuristAI | Maxfiy hujjat', m, ph - 9);
                     doc.text(now.toLocaleDateString('uz-UZ'), pw / 2, ph - 9, { align: 'center' });
                     doc.text(`${n}-sahifa`, pw - m, ph - 9, { align: 'right' });
                 }
@@ -8065,7 +8050,7 @@ ihamkor
                 drawGradientRect(0, 0, pw, 52, 22, 97, 190, 12, 126, 207);
 
                 setFont('bold'); doc.setTextColor(218, 165, 32); doc.setFontSize(28);
-                doc.text('DICTUM', pw / 2, 16, { align: 'center' });
+                doc.text('JuristAI', pw / 2, 16, { align: 'center' });
                 setFont('normal'); doc.setTextColor(200, 210, 220); doc.setFontSize(9);
                 doc.text('ADVOKATLIK FIRMASI', pw / 2, 24, { align: 'center' });
                 doc.setDrawColor(0, 185, 242); doc.setLineWidth(0.3);
@@ -8417,7 +8402,7 @@ ihamkor
                     margin: { top: 30 }
                 });
 
-                doc.save(`Dictum_Hisobot_${now.toISOString().split('T')[0]}.pdf`);
+                doc.save(`JuristAI_Hisobot_${now.toISOString().split('T')[0]}.pdf`);
             } catch (error) {
                 console.error('PDF export error:', error);
                 alert('PDF eksport xatolik bilan yakunlandi: ' + error.message);

@@ -224,7 +224,7 @@ bot.onText(/\/start(.*)/, (msg, match) => {
   const welcomeMessage = `
 Assalomu aleykum, ${msg.from.first_name}! 👋
 
-Dictum advokatlik firmasi murojaatlar bo'limiga xush kelibsiz!
+JuristAIga xush kelibsiz!
 
 📝 Yuridik masalangizni yuboring:
 • Matn shaklida
