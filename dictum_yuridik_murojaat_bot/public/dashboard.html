@@ -4031,61 +4031,60 @@
             background: linear-gradient(135deg, rgba(81,45,168,0.08), rgba(171,71,188,0.04));
             border-radius: 10px;
             border: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
         [data-theme="dark"] .mc-card h3 {
             background: linear-gradient(135deg, rgba(167,139,250,0.1), rgba(171,71,188,0.06));
         }
-        .mc-card h3 .mc-icon { margin-right: 6px; }
-        .forecast-bars {
-            display: flex;
-            align-items: flex-end;
-            gap: 10px;
-            height: 150px;
-            padding: 10px 4px 0;
-        }
-        .forecast-bar-group {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            height: 100%;
-            justify-content: flex-end;
-        }
-        .forecast-bar {
-            width: 100%;
-            border-radius: 8px 8px 4px 4px;
-            position: relative;
-            min-height: 8px;
-        }
-        .forecast-bar .range-bar {
-            width: 100%;
-            background: linear-gradient(180deg, #BA68C8, #9575CD, #512DA8);
-            border-radius: 8px 8px 4px 4px;
-            position: relative;
-            opacity: 0.75;
-        }
-        .forecast-bar .p50-line {
-            position: absolute;
-            width: calc(100% + 6px);
-            left: -3px;
-            height: 2px;
-            background: #512DA8;
-            border-radius: 1px;
-        }
-        .forecast-bar-label {
-            font-size: 10px;
+        .mc-card h3 .mc-icon { margin-right: 2px; }
+        .mc-info-btn {
+            margin-left: auto;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 1.5px solid var(--text-muted);
+            background: transparent;
             color: var(--text-muted);
-            margin-top: 6px;
-            text-align: center;
-            font-weight: 500;
-        }
-        .forecast-bar-value {
-            font-size: 11px;
-            color: #512DA8;
+            font-size: 12px;
             font-weight: 700;
-            margin-bottom: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.2s;
         }
-        [data-theme="dark"] .forecast-bar-value { color: #a78bfa; }
+        .mc-info-btn:hover { border-color: #9575CD; color: #9575CD; }
+        .mc-info-tooltip {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 30px;
+            width: 280px;
+            padding: 12px 14px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            z-index: 100;
+            text-align: left;
+        }
+        .mc-info-btn:hover .mc-info-tooltip { display: block; }
+        .mc-chart-wrap {
+            position: relative;
+            height: 200px;
+            padding: 0;
+        }
+        .mc-chart-wrap canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
         .mc-summary {
             margin-top: 15px;
             padding: 12px;
@@ -4100,27 +4099,60 @@
         }
         .mc-summary-row .label { color: var(--text-secondary); }
         .mc-summary-row .value { font-weight: bold; color: var(--text-primary); }
-        .mc-percentile-bar {
-            height: 8px;
-            background: rgba(81,45,168,0.08);
-            border-radius: 4px;
+        /* Resolution time - percentile track */
+        .mc-resolution-track {
             position: relative;
-            margin: 20px 0 8px;
-            overflow: visible;
+            height: 60px;
+            margin: 24px 16px 12px;
         }
-        [data-theme="dark"] .mc-percentile-bar {
-            background: rgba(167,139,250,0.1);
-        }
-        .mc-percentile-fill {
-            height: 100%;
-            border-radius: 4px;
+        .mc-resolution-line {
             position: absolute;
-            top: 0;
+            top: 28px;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: #EDE7F6;
+            border-radius: 2px;
         }
-        .mc-percentile-labels {
-            display: flex;
-            justify-content: space-between;
+        [data-theme="dark"] .mc-resolution-line {
+            background: rgba(167,139,250,0.15);
+        }
+        .mc-resolution-range {
+            position: absolute;
+            top: 28px;
+            height: 4px;
+            background: linear-gradient(90deg, #CE93D8, #AB47BC, #7B1FA2);
+            border-radius: 2px;
+        }
+        .mc-resolution-dot {
+            position: absolute;
+            top: 22px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            transform: translateX(-50%);
+            z-index: 2;
+        }
+        [data-theme="dark"] .mc-resolution-dot { border-color: var(--bg-primary); }
+        .mc-resolution-dot.p10 { background: #CE93D8; }
+        .mc-resolution-dot.p50 { background: #AB47BC; }
+        .mc-resolution-dot.p90 { background: #7B1FA2; }
+        .mc-resolution-dot-label {
+            position: absolute;
+            transform: translateX(-50%);
             font-size: 11px;
+            font-weight: 600;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .mc-resolution-dot-label.above {
+            top: 2px;
+            color: var(--text-primary);
+        }
+        .mc-resolution-dot-label.below {
+            top: 42px;
             color: var(--text-muted);
             font-weight: 500;
         }
@@ -4597,17 +4629,34 @@ ihamkor
         <!-- Monte Carlo Simulation Section -->
         <div class="monte-carlo-section" id="monteCarloSection">
             <div class="mc-card">
-                <h3><span class="mc-icon">📈</span> Murojaatlar prognozi (Monte Carlo)</h3>
+                <h3>
+                    <span class="mc-icon">📈</span> Murojaatlar prognozi (Monte Carlo)
+                    <button class="mc-info-btn" type="button">?
+                        <div class="mc-info-tooltip">
+                            <strong>Monte Carlo simulyatsiyasi</strong><br>
+                            O'tgan kunlar statistikasi asosida 1000 marta tasodifiy simulyatsiya o'tkaziladi. Natijada kelgusi haftaning har bir kuni uchun <em>kutilayotgan</em> (P50) va <em>mumkin bo'lgan oraliq</em> (P10-P90) prognozi chiqariladi. Binafsha rangli maydon — 80% ishonch oralig'ini bildiradi.
+                        </div>
+                    </button>
+                </h3>
                 <div id="mcForecast">
-                    <div class="forecast-bars" id="forecastBars"></div>
+                    <div class="mc-chart-wrap"><canvas id="forecastChart"></canvas></div>
                     <div class="mc-summary" id="forecastSummary"></div>
                 </div>
             </div>
             <div class="mc-card">
-                <h3><span class="mc-icon">⏱️</span> Hal qilish vaqti tahlili</h3>
+                <h3>
+                    <span class="mc-icon">⏱️</span> Hal qilish vaqti tahlili
+                    <button class="mc-info-btn" type="button">?
+                        <div class="mc-info-tooltip">
+                            <strong>Persentillar nima?</strong><br>
+                            <strong>P10</strong> — murojaatlarning 10% shu vaqtda hal bo'lgan (eng tez holatlar).<br>
+                            <strong>P50</strong> — murojaatlarning yarmi shu vaqtgacha hal bo'lgan (odatiy tezlik).<br>
+                            <strong>P90</strong> — murojaatlarning 90% shu vaqtgacha hal bo'lgan (eng sekin holatlar).
+                        </div>
+                    </button>
+                </h3>
                 <div id="mcResolution">
-                    <div class="mc-percentile-bar" id="resolutionBar"></div>
-                    <div class="mc-percentile-labels" id="resolutionLabels"></div>
+                    <div class="mc-resolution-track" id="resolutionTrack"></div>
                     <div class="mc-resolution-stats" id="resolutionStats"></div>
                     <div class="mc-summary" id="resolutionSummary"></div>
                 </div>
@@ -4951,6 +5000,8 @@ ihamkor
                 html.removeAttribute('data-theme');
                 localStorage.setItem('dictum-theme', 'light');
             }
+            // Re-render Chart.js forecast with new theme colors
+            if (typeof loadMonteCarlo === 'function') loadMonteCarlo();
         }
 
         // Fetch interceptor for single-session forced logout
@@ -5425,37 +5476,137 @@ ihamkor
             return results;
         }
 
+        let forecastChartInstance = null;
+
         function renderForecast(volume) {
-            const barsContainer = document.getElementById('forecastBars');
+            const canvas = document.getElementById('forecastChart');
             const summaryContainer = document.getElementById('forecastSummary');
-            if (!barsContainer) return;
+            if (!canvas) return;
 
             if (volume.sample_size < 3) {
-                barsContainer.innerHTML = '<div style="color:#95a5a6; text-align:center; padding:40px 0;">Yetarli ma\'lumot yo\'q (kamida 3 kun kerak)</div>';
+                canvas.parentElement.innerHTML = '<div style="color:#95a5a6; text-align:center; padding:60px 0;">Yetarli ma\'lumot yo\'q (kamida 3 kun kerak)</div>';
                 summaryContainer.innerHTML = '';
                 return;
             }
 
             const sim = runMonteCarloSim(volume.mean, volume.std, 7, 1000);
-            const maxVal = Math.max(...sim.map(s => s.p90), 1);
             const dayNames = ['Yak', 'Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan'];
             const today = new Date();
-
-            barsContainer.innerHTML = sim.map((s, i) => {
+            const labels = sim.map((_, i) => {
                 const date = new Date(today);
                 date.setDate(date.getDate() + i + 1);
-                const dayName = dayNames[date.getDay()];
-                const barHeight = Math.max(8, (s.p90 / maxVal) * 120);
-                const p50Pos = s.p90 > 0 ? ((s.p90 - s.p50) / s.p90) * barHeight : 0;
-                return `<div class="forecast-bar-group">
-                    <div class="forecast-bar-value">${s.p50}</div>
-                    <div class="forecast-bar" style="height:${barHeight}px;">
-                        <div class="range-bar" style="height:100%; opacity:0.6;"></div>
-                        <div class="p50-line" style="bottom:${barHeight - p50Pos}px;"></div>
-                    </div>
-                    <div class="forecast-bar-label">${dayName}</div>
-                </div>`;
-            }).join('');
+                return dayNames[date.getDay()];
+            });
+
+            if (forecastChartInstance) forecastChartInstance.destroy();
+
+            const ctx = canvas.getContext('2d');
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+            const textColor = isDark ? '#a0a0b0' : '#777';
+
+            forecastChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'P90 (yuqori chegara)',
+                            data: sim.map(s => s.p90),
+                            borderColor: 'transparent',
+                            backgroundColor: (context) => {
+                                const chart = context.chart;
+                                const { ctx: c, chartArea } = chart;
+                                if (!chartArea) return 'rgba(206,147,216,0.2)';
+                                const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                                gradient.addColorStop(0, isDark ? 'rgba(167,139,250,0.15)' : 'rgba(225,190,231,0.4)');
+                                gradient.addColorStop(1, isDark ? 'rgba(167,139,250,0.02)' : 'rgba(186,104,200,0.05)');
+                                return gradient;
+                            },
+                            fill: '+1',
+                            pointRadius: 0,
+                            tension: 0.4,
+                            order: 3
+                        },
+                        {
+                            label: 'P10 (pastki chegara)',
+                            data: sim.map(s => s.p10),
+                            borderColor: 'transparent',
+                            backgroundColor: 'transparent',
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0.4,
+                            order: 2
+                        },
+                        {
+                            label: 'Kutilayotgan (P50)',
+                            data: sim.map(s => s.p50),
+                            borderColor: isDark ? '#a78bfa' : '#9575CD',
+                            borderWidth: 2.5,
+                            backgroundColor: 'transparent',
+                            fill: false,
+                            pointRadius: 5,
+                            pointBackgroundColor: isDark ? '#a78bfa' : '#9575CD',
+                            pointBorderColor: isDark ? '#1a1a2e' : '#fff',
+                            pointBorderWidth: 2,
+                            pointHoverRadius: 7,
+                            tension: 0.4,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: isDark ? '#2d2d3f' : '#fff',
+                            titleColor: isDark ? '#e0e0e0' : '#333',
+                            bodyColor: isDark ? '#c0c0c0' : '#555',
+                            borderColor: isDark ? 'rgba(167,139,250,0.3)' : 'rgba(149,117,205,0.2)',
+                            borderWidth: 1,
+                            cornerRadius: 10,
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                title: (items) => items[0].label + ' kuni',
+                                label: (item) => {
+                                    const idx = item.dataIndex;
+                                    const s = sim[idx];
+                                    if (item.datasetIndex === 2) {
+                                        return [
+                                            'Kutilayotgan: ' + s.p50 + ' ta',
+                                            'Oraliq: ' + s.p10 + ' - ' + s.p90 + ' ta'
+                                        ];
+                                    }
+                                    return null;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: textColor, font: { size: 11, weight: 500 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: gridColor },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 },
+                                stepSize: 1,
+                                callback: (v) => Number.isInteger(v) ? v : ''
+                            }
+                        }
+                    }
+                }
+            });
 
             const weeklyMin = sim.reduce((s, d) => s + d.p10, 0);
             const weeklyMax = sim.reduce((s, d) => s + d.p90, 0);
@@ -5469,40 +5620,41 @@ ihamkor
         }
 
         function renderResolution(resolution) {
-            const barEl = document.getElementById('resolutionBar');
-            const labelsEl = document.getElementById('resolutionLabels');
+            const trackEl = document.getElementById('resolutionTrack');
             const statsEl = document.getElementById('resolutionStats');
             const summaryEl = document.getElementById('resolutionSummary');
-            if (!barEl) return;
-
-            if (resolution.sample_size < 2) {
-                statsEl.innerHTML = '<div style="color:#95a5a6; text-align:center; padding:20px; grid-column:1/-1;">Yetarli ma\'lumot yo\'q</div>';
-                barEl.innerHTML = '';
-                labelsEl.innerHTML = '';
-                summaryEl.innerHTML = '';
-                return;
-            }
-
-            const maxH = Math.max(resolution.p90_hours, 1);
-            const p10Pct = (resolution.p10_hours / maxH) * 100;
-            const p50Pct = (resolution.p50_hours / maxH) * 100;
-
-            barEl.innerHTML = `
-                <div class="mc-percentile-fill" style="left:0; width:${p10Pct}%; background: linear-gradient(90deg, #CE93D8, #BA68C8);"></div>
-                <div class="mc-percentile-fill" style="left:${p10Pct}%; width:${p50Pct - p10Pct}%; background: linear-gradient(90deg, #AB47BC, #9C27B0);"></div>
-                <div class="mc-percentile-fill" style="left:${p50Pct}%; width:${100 - p50Pct}%; background: linear-gradient(90deg, #7B1FA2, #4A148C);"></div>`;
-
-            labelsEl.innerHTML = `
-                <span>0 soat</span>
-                <span>P10: ${resolution.p10_hours}s</span>
-                <span>P50: ${resolution.p50_hours}s</span>
-                <span>P90: ${resolution.p90_hours}s</span>`;
+            if (!trackEl) return;
 
             function formatHours(h) {
                 if (h < 1) return Math.round(h * 60) + ' daq';
                 if (h < 24) return h.toFixed(1) + ' soat';
                 return (h / 24).toFixed(1) + ' kun';
             }
+
+            if (resolution.sample_size < 2) {
+                statsEl.innerHTML = '<div style="color:#95a5a6; text-align:center; padding:20px; grid-column:1/-1;">Yetarli ma\'lumot yo\'q</div>';
+                trackEl.innerHTML = '';
+                summaryEl.innerHTML = '';
+                return;
+            }
+
+            const maxH = Math.max(resolution.p90_hours * 1.1, 1);
+            const p10Pct = (resolution.p10_hours / maxH) * 100;
+            const p50Pct = (resolution.p50_hours / maxH) * 100;
+            const p90Pct = (resolution.p90_hours / maxH) * 100;
+
+            trackEl.innerHTML = `
+                <div class="mc-resolution-line"></div>
+                <div class="mc-resolution-range" style="left:${p10Pct}%; width:${p90Pct - p10Pct}%;"></div>
+                <div class="mc-resolution-dot-label above" style="left:${p10Pct}%">${formatHours(resolution.p10_hours)}</div>
+                <div class="mc-resolution-dot p10" style="left:${p10Pct}%"></div>
+                <div class="mc-resolution-dot-label below" style="left:${p10Pct}%">P10</div>
+                <div class="mc-resolution-dot-label above" style="left:${p50Pct}%">${formatHours(resolution.p50_hours)}</div>
+                <div class="mc-resolution-dot p50" style="left:${p50Pct}%"></div>
+                <div class="mc-resolution-dot-label below" style="left:${p50Pct}%">P50</div>
+                <div class="mc-resolution-dot-label above" style="left:${p90Pct}%">${formatHours(resolution.p90_hours)}</div>
+                <div class="mc-resolution-dot p90" style="left:${p90Pct}%"></div>
+                <div class="mc-resolution-dot-label below" style="left:${p90Pct}%">P90</div>`;
 
             statsEl.innerHTML = `
                 <div class="mc-res-stat best">
