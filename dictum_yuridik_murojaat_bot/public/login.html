@@ -709,7 +709,7 @@
 
                     <form id="registerForm" novalidate>
                         <div class="form-group">
-                            <label>Familiya <span class="label-hint">(HEMISdagi ism-familiya bilan bir xil bo'lishi kerak)</span></label>
+                            <label>Familiya <span class="label-hint">(F.I.O. yuklanadigan hujjat bilan bir xil bo'lishi kerak)</span></label>
                             <input type="text" id="regLastName" placeholder="Familiya" required>
                         </div>
                         <div class="form-group">
@@ -780,7 +780,8 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Tasdiqlovchi hujjat <span class="label-hint">(mygov.uzdan ma'lumotnoma)</span></label>
+                            <label class="student-fields">Tasdiqlovchi hujjat <span class="label-hint">(mygov.uz yoki HEMISdan ma'lumotnoma)</span></label>
+                            <label class="lawyer-fields">Tasdiqlovchi hujjat <span class="label-hint">(mygov.uzdan ish joyidan ma'lumotnoma)</span></label>
                             <div class="file-zone" id="fileZone">
                                 <input type="file" id="regDocument" accept=".jpg,.jpeg,.png,.webp,.pdf" onchange="handleFile(this)">
                                 <div class="file-zone-text">
