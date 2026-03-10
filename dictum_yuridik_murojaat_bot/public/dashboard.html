@@ -4489,7 +4489,7 @@
                         <button class="ai-sidebar-toggle" onclick="toggleAiSidebar()" title="Menyu">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                         </button>
-                        <span class="ai-chat-header-title" id="aiChatHeaderTitle">AI Yordamchi</span>
+                        <span class="ai-chat-header-title" id="aiChatHeaderTitle"></span>
                     </div>
                     <div class="ai-chat-header-actions">
                         <button class="ai-chat-header-btn" onclick="clearAiChat()" title="Tozalash">
@@ -4525,7 +4525,6 @@
 
                 <!-- Input bar -->
                 <div class="ai-chat-input-bar">
-                    <div class="ai-chat-input-db-row" id="aiInputDbRow"></div>
                     <div class="ai-chat-input-wrapper">
                         <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
                         <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()">&#10148;</button>
@@ -6933,9 +6932,7 @@
             if (selectedTopic === topic) {
                 selectedTopic = null;
                 document.querySelectorAll('.ai-topic-btn').forEach(function(btn) { btn.classList.remove('active'); });
-                var inputDbRow = document.getElementById('aiInputDbRow');
-                if (inputDbRow) inputDbRow.innerHTML = '';
-                document.getElementById('aiChatHeaderTitle').textContent = 'AI Yordamchi';
+                document.getElementById('aiChatHeaderTitle').textContent = '';
                 return;
             }
             selectedTopic = topic;
@@ -6947,14 +6944,9 @@
                     btn.classList.remove('active');
                 }
             });
-            // Show selected topic badge in input area
-            var inputDbRow = document.getElementById('aiInputDbRow');
             var topicInfo = AI_TOPICS[topic];
-            if (inputDbRow && topicInfo) {
-                inputDbRow.innerHTML = '<span class="ai-chat-db-badge">' + topicInfo.label + '</span>';
-            }
             // Update header
-            document.getElementById('aiChatHeaderTitle').textContent = topicInfo ? topicInfo.label : 'AI Yordamchi';
+            document.getElementById('aiChatHeaderTitle').textContent = topicInfo ? topicInfo.label : '';
             // Focus input
             var input = document.getElementById('aiChatInput');
             if (input) setTimeout(function() { input.focus(); }, 100);
@@ -6969,12 +6961,9 @@
             msgs.innerHTML = '';
             msgs.appendChild(welcome);
             welcome.style.display = 'flex';
-            document.getElementById('aiChatHeaderTitle').textContent = 'AI Yordamchi';
+            document.getElementById('aiChatHeaderTitle').textContent = '';
             // Reset topic buttons
             document.querySelectorAll('.ai-topic-btn').forEach(function(btn) { btn.classList.remove('active'); });
-            // Clear input db row
-            var inputDbRow = document.getElementById('aiInputDbRow');
-            if (inputDbRow) inputDbRow.innerHTML = '';
             // Deselect sidebar history items
             document.querySelectorAll('.ai-history-item.active').forEach(function(el) {
                 el.classList.remove('active');
