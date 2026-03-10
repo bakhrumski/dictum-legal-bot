@@ -488,11 +488,16 @@
 
         /* ========== VIEW MANAGEMENT ========== */
         .login-container .register-form,
-        .login-container .success-view { display: none; }
+        .login-container .success-view,
+        .login-container .recovery-form { display: none; }
         .login-container[data-view="register"] .login-form { display: none; }
         .login-container[data-view="register"] .register-form { display: block; }
         .login-container[data-view="success"] .login-form { display: none; }
         .login-container[data-view="success"] .success-view { display: block; }
+        .login-container[data-view="recovery"] .login-form { display: none; }
+        .login-container[data-view="recovery"] .recovery-form { display: block; }
+        .recovery-step { display: none; }
+        .recovery-step.active { display: block; }
 
         /* Register type fields */
         .register-form .lawyer-fields { display: none; }
@@ -653,7 +658,7 @@
                         </div>
                         <div class="form-options">
                             <label class="remember-me"><input type="checkbox" id="rememberMe"> Eslab qolish</label>
-                            <a href="#" class="forgot-link" onclick="event.preventDefault()">Parolni unutdingizmi?</a>
+                            <a href="#" class="forgot-link" onclick="event.preventDefault(); showView('recovery')">Parolni unutdingizmi?</a>
                         </div>
                         <button type="submit" class="btn">Kirish</button>
                     </form>
@@ -793,6 +798,53 @@
                     <div class="success-icon">&#10004;</div>
                     <div class="success-text" id="successText">Tabriklaymiz, Sizning so'rovingiz muvaffaqiyatli yuborildi! Admin javobini kuting!</div>
                     <div class="switch-link"><a onclick="showView('login')">Kirish sahifasiga qaytish</a></div>
+                </div>
+
+                <!-- PASSWORD RECOVERY VIEW -->
+                <div class="recovery-form">
+                    <h1 class="form-heading">Parolni tiklash</h1>
+                    <p class="form-subtitle">Ro'yxatdan o'tgan Telegram username orqali parolingizni tiklang</p>
+
+                    <div id="recoveryError" class="error-message"></div>
+
+                    <!-- STEP 1: Enter telegram username & get code -->
+                    <div class="recovery-step active" id="recoveryStep1">
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+                            <input type="text" id="recoveryTelegram" placeholder="telegram username" required>
+                        </div>
+                        <button type="button" class="btn" id="recoveryCodeBtn" onclick="sendRecoveryCode()">Kod olish</button>
+                        <div class="verify-success" id="recoveryCodeMsg"></div>
+                        <div class="agreement-error" id="recoveryCodeError" style="display:none"></div>
+                    </div>
+
+                    <!-- STEP 2: Enter code from telegram -->
+                    <div class="recovery-step" id="recoveryStep2">
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                            <input type="text" id="recoveryCode" placeholder="4 raqamli kod" maxlength="4" inputmode="numeric" pattern="[0-9]*" required>
+                        </div>
+                        <button type="button" class="btn" id="recoveryVerifyBtn" onclick="verifyRecoveryCode()">Tasdiqlash</button>
+                        <div class="agreement-error" id="recoveryVerifyError" style="display:none"></div>
+                    </div>
+
+                    <!-- STEP 3: New password -->
+                    <div class="recovery-step" id="recoveryStep3">
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                            <input type="password" id="recoveryNewPassword" placeholder="yangi parol (kamida 6 belgi)" minlength="6" required>
+                        </div>
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                            <input type="password" id="recoveryConfirmPassword" placeholder="parolni tasdiqlang" required>
+                        </div>
+                        <div class="agreement-error" id="recoveryPasswordError" style="display:none"></div>
+                        <button type="button" class="btn" onclick="submitNewPassword()">Parolni yangilash</button>
+                    </div>
+
+                    <div class="switch-link">
+                        <a onclick="showView('login')">Kirish sahifasiga qaytish</a> | <a onclick="showView('register')">Ro'yxatdan o'tish</a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -986,6 +1038,15 @@
                 });
                 const data = await response.json();
                 if (response.ok) {
+                    // Remember me
+                    if (document.getElementById('rememberMe').checked) {
+                        localStorage.setItem('juristai_remember', JSON.stringify({
+                            username: document.getElementById('username').value,
+                            password: document.getElementById('password').value
+                        }));
+                    } else {
+                        localStorage.removeItem('juristai_remember');
+                    }
                     window.location.href = '/dashboard.html';
                 } else {
                     errorDiv.textContent = data.error || 'Kirish xato';
@@ -1010,6 +1071,176 @@
 
         // Verification code: allow only numbers
         document.getElementById('regVerifyCode').addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // Remember me: restore saved credentials
+        (function() {
+            const saved = localStorage.getItem('juristai_remember');
+            if (saved) {
+                try {
+                    const { username, password } = JSON.parse(saved);
+                    document.getElementById('username').value = username || '';
+                    document.getElementById('password').value = password || '';
+                    document.getElementById('rememberMe').checked = true;
+                } catch(e) {}
+            }
+        })();
+
+        // Password recovery state
+        let recoveryToken = '';
+        let recoveryUsername = '';
+
+        async function sendRecoveryCode() {
+            const btn = document.getElementById('recoveryCodeBtn');
+            const errorEl = document.getElementById('recoveryCodeError');
+            const msgEl = document.getElementById('recoveryCodeMsg');
+            const mainError = document.getElementById('recoveryError');
+            const telegramInput = document.getElementById('recoveryTelegram').value.trim().replace('@', '');
+
+            errorEl.style.display = 'none';
+            msgEl.classList.remove('show');
+            mainError.textContent = '';
+            mainError.classList.remove('show');
+
+            if (!telegramInput) {
+                errorEl.textContent = 'Telegram username kiriting';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Tekshirilmoqda...';
+
+            try {
+                const resp = await fetch('/api/password-recovery/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_username: telegramInput })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    recoveryToken = data.token;
+                    recoveryUsername = telegramInput;
+                    const deepLink = 'https://t.me/yuristga_savolbot?start=recover_' + data.token;
+                    msgEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:var(--accent);font-weight:700;text-decoration:underline;">Kodni olish uchun shu yerni bosing</a> — Telegram ochiladi va kod keladi';
+                    msgEl.classList.add('show');
+                    // Show step 2
+                    document.getElementById('recoveryStep1').classList.remove('active');
+                    document.getElementById('recoveryStep2').classList.add('active');
+                    document.getElementById('recoveryCode').focus();
+                    // Countdown
+                    let seconds = 120;
+                    btn.textContent = seconds + 's';
+                    const timer = setInterval(() => {
+                        seconds--;
+                        btn.textContent = seconds + 's';
+                        if (seconds <= 0) {
+                            clearInterval(timer);
+                            btn.disabled = false;
+                            btn.textContent = 'Qayta yuborish';
+                        }
+                    }, 1000);
+                } else {
+                    errorEl.textContent = data.error || 'Xatolik yuz berdi';
+                    errorEl.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Kod olish';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Serverga ulanib bo\'lmadi';
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Kod olish';
+            }
+        }
+
+        async function verifyRecoveryCode() {
+            const btn = document.getElementById('recoveryVerifyBtn');
+            const errorEl = document.getElementById('recoveryVerifyError');
+            const code = document.getElementById('recoveryCode').value.trim();
+
+            errorEl.style.display = 'none';
+
+            if (!code || code.length !== 4) {
+                errorEl.textContent = '4 raqamli kodni kiriting';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Tekshirilmoqda...';
+
+            try {
+                const resp = await fetch('/api/password-recovery/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: recoveryToken, code: code })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    // Show step 3
+                    document.getElementById('recoveryStep2').classList.remove('active');
+                    document.getElementById('recoveryStep3').classList.add('active');
+                    document.getElementById('recoveryNewPassword').focus();
+                } else {
+                    errorEl.textContent = data.error || 'Kod noto\'g\'ri';
+                    errorEl.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Tasdiqlash';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Serverga ulanib bo\'lmadi';
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Tasdiqlash';
+            }
+        }
+
+        async function submitNewPassword() {
+            const errorEl = document.getElementById('recoveryPasswordError');
+            const mainError = document.getElementById('recoveryError');
+            const newPass = document.getElementById('recoveryNewPassword').value;
+            const confirmPass = document.getElementById('recoveryConfirmPassword').value;
+
+            errorEl.style.display = 'none';
+            mainError.textContent = '';
+            mainError.classList.remove('show');
+
+            if (newPass.length < 6) {
+                errorEl.textContent = 'Parol kamida 6 ta belgi bo\'lishi kerak';
+                errorEl.style.display = 'block';
+                return;
+            }
+            if (newPass !== confirmPass) {
+                errorEl.textContent = 'Parollar mos kelmaydi';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/password-recovery/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: recoveryToken, code: document.getElementById('recoveryCode').value.trim(), new_password: newPass })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    // Show success and go to login
+                    document.getElementById('successText').textContent = 'Parolingiz muvaffaqiyatli yangilandi! Endi yangi parol bilan kiring.';
+                    showView('success');
+                } else {
+                    errorEl.textContent = data.error || 'Xatolik yuz berdi';
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Serverga ulanib bo\'lmadi';
+                errorEl.style.display = 'block';
+            }
+        }
+
+        // Recovery code: only numbers
+        document.getElementById('recoveryCode').addEventListener('input', function() {
             this.value = this.value.replace(/[^0-9]/g, '');
         });
 

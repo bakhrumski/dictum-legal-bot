@@ -221,6 +221,19 @@ bot.onText(/\/start(.*)/, (msg, match) => {
     return;
   }
 
+  // Deep link: /start recover_TOKEN — deliver password recovery code
+  if (param.startsWith('recover_')) {
+    const deepToken = param.replace('recover_', '');
+    const pending = verificationTokens.get('recovery_' + deepToken);
+    if (pending && Date.now() < pending.expiresAt) {
+      pending.chatId = chatId;
+      bot.sendMessage(chatId, `🔑 Parolni tiklash kodi: ${pending.code}\n\nUshbu kod 5 daqiqa amal qiladi.\nKodni parolni tiklash formasiga kiriting.`);
+      return;
+    }
+    bot.sendMessage(chatId, '⏳ Tiklash kodi topilmadi yoki muddati o\'tgan.\nIltimos, qayta "Kod olish" tugmasini bosing.');
+    return;
+  }
+
   const welcomeMessage = `
 Assalomu aleykum, ${msg.from.first_name}! 👋
 

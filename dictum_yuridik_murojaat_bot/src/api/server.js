@@ -2919,6 +2919,105 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
   }
 });
 
+// ========== PASSWORD RECOVERY ==========
+
+// POST /api/password-recovery/request — check telegram username exists, generate code
+app.post('/api/password-recovery/request', async (req, res) => {
+  try {
+    const { telegram_username } = req.body;
+    if (!telegram_username) {
+      return res.status(400).json({ error: 'Telegram username kiriting' });
+    }
+    const cleanUsername = telegram_username.replace('@', '').trim().toLowerCase();
+
+    // Check if this telegram username exists in admins table
+    const adminResult = await pool.query(
+      'SELECT id, username, full_name FROM admins WHERE LOWER(telegram_username) = $1',
+      [cleanUsername]
+    );
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Bu Telegram username bilan ro\'yxatdan o\'tgan foydalanuvchi topilmadi. Ro\'yxatdan o\'ting.' });
+    }
+
+    // Generate 4-digit code + token
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const token = crypto.randomBytes(8).toString('hex');
+
+    verificationTokens.set('recovery_' + token, {
+      code,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      adminId: adminResult.rows[0].id,
+      telegramUsername: cleanUsername,
+      verified: false
+    });
+
+    console.log(`[RECOVERY] Code generated for ${cleanUsername}, token: ${token}`);
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('[RECOVERY REQUEST] Error:', error);
+    res.status(500).json({ error: 'Xatolik yuz berdi' });
+  }
+});
+
+// POST /api/password-recovery/verify — verify the 4-digit code
+app.post('/api/password-recovery/verify', async (req, res) => {
+  try {
+    const { token, code } = req.body;
+    if (!token || !code) {
+      return res.status(400).json({ error: 'Token va kod kerak' });
+    }
+
+    const pending = verificationTokens.get('recovery_' + token);
+    if (!pending || Date.now() > pending.expiresAt) {
+      return res.status(400).json({ error: 'Kod muddati o\'tgan. Qayta urinib ko\'ring.' });
+    }
+    if (pending.code !== code) {
+      return res.status(400).json({ error: 'Kod noto\'g\'ri' });
+    }
+
+    // Mark as verified
+    pending.verified = true;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[RECOVERY VERIFY] Error:', error);
+    res.status(500).json({ error: 'Xatolik yuz berdi' });
+  }
+});
+
+// POST /api/password-recovery/reset — set new password
+app.post('/api/password-recovery/reset', async (req, res) => {
+  try {
+    const { token, code, new_password } = req.body;
+    if (!token || !code || !new_password) {
+      return res.status(400).json({ error: 'Barcha maydonlarni to\'ldiring' });
+    }
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
+    }
+
+    const pending = verificationTokens.get('recovery_' + token);
+    if (!pending || Date.now() > pending.expiresAt) {
+      return res.status(400).json({ error: 'Sessiya muddati o\'tgan. Qayta urinib ko\'ring.' });
+    }
+    if (pending.code !== code || !pending.verified) {
+      return res.status(400).json({ error: 'Tasdiqlash xatosi' });
+    }
+
+    // Hash new password and update
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+    await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hashedPassword, pending.adminId]);
+
+    // Clean up token
+    verificationTokens.delete('recovery_' + token);
+
+    console.log(`[RECOVERY] Password reset for admin ID: ${pending.adminId}`);
+    res.json({ success: true, message: 'Parol muvaffaqiyatli yangilandi' });
+  } catch (error) {
+    console.error('[RECOVERY RESET] Error:', error);
+    res.status(500).json({ error: 'Parolni yangilashda xatolik' });
+  }
+});
+
 // GET /api/registration-requests — master only
 app.get('/api/registration-requests', requireMasterAdmin, async (req, res) => {
   try {
