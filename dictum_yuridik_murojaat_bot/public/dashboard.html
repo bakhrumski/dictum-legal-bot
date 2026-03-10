@@ -6418,7 +6418,7 @@ ihamkor
                 
                 <div class="detail-section">
                     <h3>Murojaat <span style="font-weight:500; font-size:13px; color:var(--text-muted);">(${getRequestTypeLabel(request.request_type)})</span></h3>
-                    <div class="request-text-box">${cleanRequestText(request.request_text) || '<span style="color:var(--text-muted); font-style:italic;">Matn yo\'q</span>'}</div>
+                    ${cleanRequestText(request.request_text) ? `<div class="request-text-box">${cleanRequestText(request.request_text)}</div>` : ''}
                     
                     ${request.file_id ? `
                     <div class="file-attachment">
