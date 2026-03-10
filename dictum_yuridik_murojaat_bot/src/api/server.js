@@ -1980,14 +1980,55 @@ ${validDbs.indexOf('lex.uz') > -1 ? '1. **Tegishli qonunlar:** (lex.uz dan)\n   
 > "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun tegishli saytlardan tekshiring."`;
 }
 
+// Topic labels for RAG-based legal chat
+const LEGAL_TOPICS = {
+  'mehnat':       'Mehnat huquqi',
+  'oila':         'Oila huquqi',
+  'fuqarolik':    'Fuqarolik huquqi',
+  'shartnoma':    'Shartnoma huquqi',
+  'soliq':        'Soliq huquqi',
+  'jinoyat':      'Jinoyat huquqi',
+  'mamuriy':      "Ma'muriy javobgarlik",
+  'korporativ':   'Korporativ huquq',
+  'tadbirkorlik': 'Tadbirkorlik huquqi',
+  'uy-joy':       'Uy-joy oldi-sotdisi',
+  'mulk':         'Mulk huquqi',
+  'notarius':     'Notarius xizmatlari',
+  'ijtimoiy':     'Ijtimoiy himoya'
+};
+
+function buildTopicPrompt(topic) {
+  const topicLabel = LEGAL_TOPICS[topic] || topic;
+  return `Siz O'zbekiston huquqi bo'yicha mutaxassis AI yordamchisiz.
+
+SOHA: ${topicLabel}
+
+VAZIFANGIZ:
+Foydalanuvchi savoliga "${topicLabel}" sohasiga oid O'zbekiston qonunchiligi asosida javob bering.
+
+QOIDALAR:
+- Javob FAQAT O'zbek (lotin) tilida bo'lishi shart
+- Tegishli qonun va kodeks moddalarini aniq ko'rsating
+- Agar lex.uz da tegishli qonun mavjud bo'lsa, havolani ko'rsating
+- Javob qisqa, aniq va strukturali bo'lsin
+- Amaliy maslahat bering
+
+JAVOB FORMATI:
+1. **Tegishli qonunlar:** Qonun/kodeks nomi, modda raqami, qisqa mazmun
+2. **Tushuntirish:** Savolga javob
+3. **Xulosa:** Qisqa huquqiy fikr
+
+> "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun lex.uz dan tekshiring."`;
+}
+
 app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
   try {
-    const { message, history, databases } = req.body;
+    const { message, history, databases, topic } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
 
-    const systemPrompt = buildLegalSearchPrompt(databases);
+    const systemPrompt = topic ? buildTopicPrompt(topic) : buildLegalSearchPrompt(databases);
 
     // Build messages array for callAI
     const aiMessages = [];

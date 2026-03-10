@@ -2154,6 +2154,12 @@
             background: rgba(81, 45, 168, 0.04);
             color: #7C4DFF;
         }
+        .ai-chat-suggestion.active {
+            border-color: #7C4DFF;
+            background: rgba(124, 77, 255, 0.1);
+            color: #7C4DFF;
+            font-weight: 600;
+        }
 
         /* Chat message bubbles */
         .ai-chat-msg {
@@ -4448,31 +4454,6 @@
                     </button>
                 </div>
 
-                <!-- Database selector -->
-                <div class="ai-db-section">
-                    <div class="ai-db-section-title">Ma'lumot bazalari</div>
-                    <div class="ai-db-chips" id="aiDbChips">
-                        <button class="ai-db-chip active" data-db="lex.uz" onclick="toggleDatabase('lex.uz')">
-lex.uz
-                        </button>
-                        <button class="ai-db-chip" data-db="public.sud.uz" onclick="toggleDatabase('public.sud.uz')">
-sud.uz
-                        </button>
-                        <button class="ai-db-chip" data-db="my.sud.uz" onclick="toggleDatabase('my.sud.uz')">
-my.sud
-                        </button>
-                        <button class="ai-db-chip" data-db="mib.uz" onclick="toggleDatabase('mib.uz')">
-mib.uz
-                        </button>
-                        <button class="ai-db-chip" data-db="soliq.uz" onclick="toggleDatabase('soliq.uz')">
-soliq.uz
-                        </button>
-                        <button class="ai-db-chip" data-db="ihamkor.uz" onclick="toggleDatabase('ihamkor.uz')">
-ihamkor
-                        </button>
-                    </div>
-                </div>
-
                 <!-- History -->
                 <div class="ai-history-section">
                     <div class="ai-history-title">Suhbatlar tarixi</div>
@@ -4493,10 +4474,7 @@ ihamkor
                         <button class="ai-sidebar-toggle" onclick="toggleAiSidebar()" title="Menyu">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                         </button>
-                        <span class="ai-chat-header-title" id="aiChatHeaderTitle">Huquqiy tadqiqot</span>
-                        <div class="ai-chat-db-badges" id="aiChatDbBadges">
-                            <span class="ai-chat-db-badge">lex.uz</span>
-                        </div>
+                        <span class="ai-chat-header-title" id="aiChatHeaderTitle">AI Yordamchi</span>
                     </div>
                     <div class="ai-chat-header-actions">
                         <button class="ai-chat-header-btn" onclick="clearAiChat()" title="Tozalash">
@@ -4509,24 +4487,30 @@ ihamkor
                 <div class="ai-chat-messages" id="aiChatMessages">
                     <div class="ai-chat-welcome" id="aiChatWelcome">
                         <div class="ai-chat-welcome-icon">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7C4DFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7C4DFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                         </div>
-                        <h3>Huquqiy tadqiqot</h3>
-                        <p>AI yordamida O'zbekiston qonunchiligini qidiring. Chap paneldan ma'lumot bazalarini tanlang va savolingizni yozing.</p>
+                        <p>Quyidagi sohalardan keraklisini tanlang!</p>
                         <div class="ai-chat-suggestions">
-                            <button class="ai-chat-suggestion" onclick="useSuggestion('Mehnat shartnomasi buzilganda ishchining huquqlari qanday?')">Mehnat huquqlari</button>
-                            <button class="ai-chat-suggestion" onclick="useSuggestion('Uy-joy sotish shartnomasi uchun qanday hujjatlar kerak?')">Uy-joy savdosi</button>
-                            <button class="ai-chat-suggestion" onclick="useSuggestion('Soliq imtiyozlari haqida ma\'lumot bering')">Soliq imtiyozlari</button>
-                            <button class="ai-chat-suggestion" onclick="useSuggestion('Ijro varaqi bo\'yicha undirish tartibi qanday?')">Ijro varaqasi</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mehnat" onclick="selectTopic('mehnat')">Mehnat</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="oila" onclick="selectTopic('oila')">Oila</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="fuqarolik" onclick="selectTopic('fuqarolik')">Fuqarolik</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="shartnoma" onclick="selectTopic('shartnoma')">Shartnoma</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="soliq" onclick="selectTopic('soliq')">Soliq</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="jinoyat" onclick="selectTopic('jinoyat')">Jinoyat</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mamuriy" onclick="selectTopic('mamuriy')">Ma'muriy javobgarlik</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="korporativ" onclick="selectTopic('korporativ')">Korporativ</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="tadbirkorlik" onclick="selectTopic('tadbirkorlik')">Tadbirkorlik</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="uy-joy" onclick="selectTopic('uy-joy')">Uy-joy oldi-sotdisi</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mulk" onclick="selectTopic('mulk')">Mulk huquqi</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="notarius" onclick="selectTopic('notarius')">Notarius</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="ijtimoiy" onclick="selectTopic('ijtimoiy')">Ijtimoiy</button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Input bar -->
                 <div class="ai-chat-input-bar">
-                    <div class="ai-chat-input-db-row" id="aiInputDbRow">
-                        <span class="ai-chat-db-badge">lex.uz</span>
-                    </div>
+                    <div class="ai-chat-input-db-row" id="aiInputDbRow"></div>
                     <div class="ai-chat-input-wrapper">
                         <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
                         <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()">&#10148;</button>
@@ -6905,64 +6889,68 @@ ihamkor
             }
         }
 
-        // ===== AI WORKSPACE — Chat + Multi-DB =====
+        // ===== AI WORKSPACE — Chat + Topic-based RAG =====
         var selectedDatabases = ['lex.uz'];
+        var selectedTopic = null;
         var aiChatHistory = [];
         var aiChatSessions = [];
         var currentAiSessionId = null;
         var aiHistoryLoaded = false;
 
-        // Database descriptions for display
-        var AI_DATABASES = {
-            'lex.uz':        { label: 'lex.uz',   desc: 'Qonunchilik bazasi' },
-            'public.sud.uz': { label: 'sud.uz',   desc: 'Sud qarorlari' },
-            'my.sud.uz':     { label: 'my.sud',   desc: 'Sud ishi holati' },
-            'mib.uz':        { label: 'mib.uz',   desc: 'Ijro byurosi' },
-            'soliq.uz':      { label: 'soliq.uz', desc: 'Soliq qo\'mitasi' },
-            'ihamkor.uz':    { label: 'ihamkor',  desc: 'Ijtimoiy hamkorlik' }
+        var AI_TOPICS = {
+            'mehnat':       { label: 'Mehnat',              desc: 'Mehnat huquqi' },
+            'oila':         { label: 'Oila',                desc: 'Oila huquqi' },
+            'fuqarolik':    { label: 'Fuqarolik',           desc: 'Fuqarolik huquqi' },
+            'shartnoma':    { label: 'Shartnoma',           desc: 'Shartnoma huquqi' },
+            'soliq':        { label: 'Soliq',               desc: 'Soliq huquqi' },
+            'jinoyat':      { label: 'Jinoyat',             desc: 'Jinoyat huquqi' },
+            'mamuriy':      { label: "Ma'muriy javobgarlik", desc: "Ma'muriy javobgarlik" },
+            'korporativ':   { label: 'Korporativ',          desc: 'Korporativ huquq' },
+            'tadbirkorlik': { label: 'Tadbirkorlik',         desc: 'Tadbirkorlik huquqi' },
+            'uy-joy':       { label: 'Uy-joy oldi-sotdisi', desc: 'Uy-joy oldi-sotdisi' },
+            'mulk':         { label: 'Mulk huquqi',         desc: 'Mulk huquqi' },
+            'notarius':     { label: 'Notarius',            desc: 'Notarius xizmatlari' },
+            'ijtimoiy':     { label: 'Ijtimoiy',            desc: 'Ijtimoiy himoya' }
         };
 
-        function toggleDatabase(db) {
-            var idx = selectedDatabases.indexOf(db);
-            if (idx > -1) {
-                if (selectedDatabases.length === 1) return; // must keep at least 1
-                selectedDatabases.splice(idx, 1);
-            } else {
-                selectedDatabases.push(db);
-            }
-            updateDbChipsUI();
-        }
-
-        function updateDbChipsUI() {
-            // Update sidebar chips
-            document.querySelectorAll('.ai-db-chip').forEach(function(chip) {
-                var db = chip.getAttribute('data-db');
-                if (selectedDatabases.indexOf(db) > -1) {
-                    chip.classList.add('active');
+        function selectTopic(topic) {
+            selectedTopic = topic;
+            // Update UI
+            document.querySelectorAll('.ai-topic-btn').forEach(function(btn) {
+                if (btn.getAttribute('data-topic') === topic) {
+                    btn.classList.add('active');
                 } else {
-                    chip.classList.remove('active');
+                    btn.classList.remove('active');
                 }
             });
-            // Update header badges
-            var badgesEl = document.getElementById('aiChatDbBadges');
+            // Show selected topic badge in input area
             var inputDbRow = document.getElementById('aiInputDbRow');
-            var badgesHtml = selectedDatabases.map(function(db) {
-                var info = AI_DATABASES[db] || { label: db };
-                return '<span class="ai-chat-db-badge">' + info.label + '</span>';
-            }).join('');
-            if (badgesEl) badgesEl.innerHTML = badgesHtml;
-            if (inputDbRow) inputDbRow.innerHTML = badgesHtml;
+            var topicInfo = AI_TOPICS[topic];
+            if (inputDbRow && topicInfo) {
+                inputDbRow.innerHTML = '<span class="ai-chat-db-badge">' + topicInfo.label + '</span>';
+            }
+            // Update header
+            document.getElementById('aiChatHeaderTitle').textContent = topicInfo ? topicInfo.label : 'AI Yordamchi';
+            // Focus input
+            var input = document.getElementById('aiChatInput');
+            if (input) setTimeout(function() { input.focus(); }, 100);
         }
 
         function createNewAiChat() {
             aiChatHistory = [];
             currentAiSessionId = null;
+            selectedTopic = null;
             var msgs = document.getElementById('aiChatMessages');
             var welcome = document.getElementById('aiChatWelcome');
             msgs.innerHTML = '';
             msgs.appendChild(welcome);
             welcome.style.display = 'flex';
-            document.getElementById('aiChatHeaderTitle').textContent = 'Huquqiy tadqiqot';
+            document.getElementById('aiChatHeaderTitle').textContent = 'AI Yordamchi';
+            // Reset topic buttons
+            document.querySelectorAll('.ai-topic-btn').forEach(function(btn) { btn.classList.remove('active'); });
+            // Clear input db row
+            var inputDbRow = document.getElementById('aiInputDbRow');
+            if (inputDbRow) inputDbRow.innerHTML = '';
             // Deselect sidebar history items
             document.querySelectorAll('.ai-history-item.active').forEach(function(el) {
                 el.classList.remove('active');
@@ -6990,6 +6978,10 @@ ihamkor
             var input = document.getElementById('aiChatInput');
             var text = input.value.trim();
             if (!text) return;
+            if (!selectedTopic) {
+                alert('Iltimos, avval sohani tanlang!');
+                return;
+            }
 
             var messagesEl = document.getElementById('aiChatMessages');
             var sendBtn = document.getElementById('aiChatSendBtn');
@@ -7024,7 +7016,8 @@ ihamkor
                     body: JSON.stringify({
                         message: text,
                         history: aiChatHistory.slice(0, -1),
-                        databases: selectedDatabases
+                        databases: selectedDatabases,
+                        topic: selectedTopic
                     })
                 });
 
@@ -7072,6 +7065,7 @@ ihamkor
                         id: currentAiSessionId,
                         title: title,
                         databases: selectedDatabases,
+                        topic: selectedTopic,
                         messages: aiChatHistory
                     })
                 });
@@ -7135,7 +7129,8 @@ ihamkor
                 currentAiSessionId = session.id;
                 aiChatHistory = session.messages || [];
                 selectedDatabases = session.databases || ['lex.uz'];
-                updateDbChipsUI();
+                selectedTopic = session.topic || null;
+                if (selectedTopic) selectTopic(selectedTopic);
 
                 // Update header
                 document.getElementById('aiChatHeaderTitle').textContent = session.title || 'Suhbat';
