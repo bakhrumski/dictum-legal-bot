@@ -194,6 +194,9 @@
             box-sizing: border-box;
         }
 
+        html {
+            scrollbar-gutter: stable;
+        }
         body {
             font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Inter', BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-gradient);
@@ -1847,7 +1850,10 @@
             background: var(--glass-bg);
             overflow-x: hidden;
             overflow-y: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
+        .ai-sidebar::-webkit-scrollbar { display: none; }
         .ai-sidebar-header {
             padding: 16px;
             border-bottom: 1px solid var(--glass-border);
@@ -2101,7 +2107,10 @@
             flex-direction: column;
             gap: 16px;
             scroll-behavior: smooth;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
+        .ai-chat-messages::-webkit-scrollbar { display: none; }
 
         /* Welcome screen */
         .ai-chat-welcome {
