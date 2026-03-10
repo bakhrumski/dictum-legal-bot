@@ -6929,6 +6929,15 @@
         };
 
         function selectTopic(topic) {
+            // Toggle: if already selected, unselect
+            if (selectedTopic === topic) {
+                selectedTopic = null;
+                document.querySelectorAll('.ai-topic-btn').forEach(function(btn) { btn.classList.remove('active'); });
+                var inputDbRow = document.getElementById('aiInputDbRow');
+                if (inputDbRow) inputDbRow.innerHTML = '';
+                document.getElementById('aiChatHeaderTitle').textContent = 'AI Yordamchi';
+                return;
+            }
             selectedTopic = topic;
             // Update UI
             document.querySelectorAll('.ai-topic-btn').forEach(function(btn) {
