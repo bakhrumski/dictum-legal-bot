@@ -4435,7 +4435,6 @@
                             <th>Rol</th>
                             <th>Ish vaqti (Smena)</th>
                             <th>Holati</th>
-                            <th id="actionsColHeader" style="display:none; text-align:center;">Amallar</th>
                         </tr>
                     </thead>
                     <tbody id="adminTableBody">
@@ -5183,10 +5182,6 @@
             const roleLabels = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
             const roleBadgeColors = { 'master': '#512DA8', 'lawyer': '#512DA8', 'student': '#512DA8' };
 
-            // Show/hide actions column based on role
-            const actionsHeader = document.getElementById('actionsColHeader');
-            if (actionsHeader) actionsHeader.style.display = isMaster ? '' : 'none';
-
             tbody.innerHTML = allAdmins.map((admin, i) => {
                 const isOwnRow = admin.id === currentUser.adminId;
                 const canEdit = isOwnRow || isMaster;
@@ -5212,17 +5207,6 @@
                     statusHtml = '<span class="status-indicator inactive">Hech qachon</span>';
                 }
 
-                // Actions column (master only)
-                let actionsHtml = '';
-                if (isMaster) {
-                    actionsHtml = `<td class="actions-cell">
-                        <div style="display:flex;justify-content:center;gap:4px;min-width:60px;">
-                            <button class="action-btn edit-btn" onclick="event.stopPropagation();openEditMemberModal(${admin.id})" title="Tahrirlash"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(360deg)"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-                            ${!isOwnRow ? `<button class="action-btn delete-btn" onclick="event.stopPropagation();confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : '<span style="width:27px;"></span>'}
-                        </div>
-                    </td>`;
-                }
-
                 return `<tr class="${isOwnRow ? 'own-row' : ''}" onclick="viewMemberDetail(${admin.id})" style="cursor:pointer;">
                     <td>${i + 1}</td>
                     <td><strong>${admin.full_name}</strong>${isOwnRow ? ' <small style="color:#7C4DFF;">(siz)</small>' : ''}</td>
@@ -5230,7 +5214,6 @@
                     <td><span class="role-badge role-${admin.role}">${roleLabels[admin.role] || admin.role}</span></td>
                     <td id="timeslot-cell-${admin.id}">${timeslotHtml}</td>
                     <td>${statusHtml}</td>
-                    ${actionsHtml}
                 </tr>`;
             }).join('');
         }
@@ -7467,6 +7450,15 @@
             document.getElementById('regDetailOverlay').classList.add('active');
         }
 
+        function buildMemberActionIcons(admin) {
+            const isMaster = currentUser.role === 'master';
+            const isOwn = admin.id === currentUser.adminId;
+            if (!isMaster) return '';
+            const editIcon = `<button class="action-btn edit-btn" onclick="event.stopPropagation();document.getElementById('regDetailOverlay').classList.remove('active');openEditMemberModal(${admin.id})" title="Tahrirlash" style="background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:var(--text-secondary);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>`;
+            const deleteIcon = !isOwn ? `<button class="action-btn delete-btn" onclick="event.stopPropagation();document.getElementById('regDetailOverlay').classList.remove('active');confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish" style="background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:#e74c3c;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : '';
+            return `<div style="display:flex;gap:2px;position:absolute;top:16px;right:16px;">${editIcon}${deleteIcon}</div>`;
+        }
+
         async function viewMemberDetail(adminId) {
             const admin = allAdmins.find(a => a.id === adminId);
             if (!admin) return;
@@ -7475,7 +7467,10 @@
             // Show basic info immediately while loading registration data
             const roleLabels = { 'master': 'Admin', 'lawyer': 'Advokat', 'student': 'Student' };
             box.innerHTML = `
-                <h3>${escapeHtml(admin.full_name)}</h3>
+                <div style="position:relative;">
+                    <h3>${escapeHtml(admin.full_name)}</h3>
+                    ${buildMemberActionIcons(admin)}
+                </div>
                 <div class="reg-detail-row"><span class="reg-detail-label">Rol</span><span class="reg-detail-value">${roleLabels[admin.role] || admin.role}</span></div>
                 <div class="reg-detail-row"><span class="reg-detail-label">Username</span><span class="reg-detail-value"><code>${escapeHtml(admin.username)}</code></span></div>
                 ${admin.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(admin.telegram_username)}</span></div>` : ''}
@@ -7526,7 +7521,10 @@
 
                     const copyText = 'Username: ' + admin.username;
                     box.innerHTML = `
-                        <h3>${escapeHtml(reg.last_name)} ${escapeHtml(reg.first_name)}</h3>
+                        <div style="position:relative;">
+                            <h3>${escapeHtml(reg.last_name)} ${escapeHtml(reg.first_name)}</h3>
+                            ${buildMemberActionIcons(admin)}
+                        </div>
                         <div class="reg-detail-row"><span class="reg-detail-label">Turi</span><span class="reg-detail-value">${reg.type === 'lawyer' ? 'Advokat' : 'Student'}</span></div>
                         ${reg.level ? `<div class="reg-detail-row"><span class="reg-detail-label">Bosqich</span><span class="reg-detail-value">${escapeHtml(reg.level)}</span></div>` : ''}
                         ${reg.specialization ? `<div class="reg-detail-row"><span class="reg-detail-label">Mutaxassislik</span><span class="reg-detail-value">${escapeHtml(reg.specialization)}</span></div>` : ''}
@@ -7553,7 +7551,10 @@
                 } else {
                     // No registration found — show admin info only (manually added member)
                     box.innerHTML = `
-                        <h3>${escapeHtml(admin.full_name)}</h3>
+                        <div style="position:relative;">
+                            <h3>${escapeHtml(admin.full_name)}</h3>
+                            ${buildMemberActionIcons(admin)}
+                        </div>
                         <div class="reg-detail-row"><span class="reg-detail-label">Rol</span><span class="reg-detail-value">${roleLabels[admin.role] || admin.role}</span></div>
                         <div class="reg-detail-row"><span class="reg-detail-label">Username</span><span class="reg-detail-value"><code>${escapeHtml(admin.username)}</code></span></div>
                         ${admin.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(admin.telegram_username)}</span></div>` : ''}
