@@ -6097,6 +6097,13 @@ ihamkor
             };
             return icons[type] || '📎';
         }
+        function getRequestTypeLabel(type) {
+            const labels = { 'text': 'Matnli xabar', 'voice': 'Ovozli xabar', 'video': 'Video xabar', 'video_note': 'Video xabar', 'document': 'Fayl', 'photo': 'Rasm', 'audio': 'Audio' };
+            return labels[type] || type || '';
+        }
+        function cleanRequestText(text) {
+            return (text || '').replace(/^\[(Ovozli xabar|Video xabar|Rasm|Fayl|Audio)\]\s*/i, '').trim();
+        }
         
         function formatFileSize(bytes) {
             if (!bytes) return 'N/A';
@@ -6410,8 +6417,8 @@ ihamkor
                 ` : ''}
                 
                 <div class="detail-section">
-                    <h3>Murojaat</h3>
-                    <div class="request-text-box">${request.request_text}</div>
+                    <h3>Murojaat <span style="font-weight:500; font-size:13px; color:var(--text-muted);">(${getRequestTypeLabel(request.request_type)})</span></h3>
+                    <div class="request-text-box">${cleanRequestText(request.request_text) || '<span style="color:var(--text-muted); font-style:italic;">Matn yo\'q</span>'}</div>
                     
                     ${request.file_id ? `
                     <div class="file-attachment">
