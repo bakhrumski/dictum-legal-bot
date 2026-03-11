@@ -2132,51 +2132,65 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+            transition: box-shadow 0.4s ease;
             position: relative;
             z-index: 2;
+            flex-shrink: 0;
         }
         .ai-chat-welcome-icon:hover {
-            transform: scale(1.1);
             box-shadow: 0 4px 20px rgba(124, 77, 255, 0.25);
         }
         .ai-chat-welcome-icon:active {
-            transform: scale(0.95);
+            opacity: 0.8;
         }
-        /* Collapsed state animations */
-        .ai-chat-welcome.collapsed .ai-chat-welcome-text {
-            opacity: 0;
-            transform: translateY(-10px);
-            max-height: 0;
-            margin: 0;
-            overflow: hidden;
-            pointer-events: none;
-        }
+
+        /* === Expand state (default): text visible, buttons visible === */
+        /* Text: fade in is delayed (buttons appear first), uses typing animation */
         .ai-chat-welcome .ai-chat-welcome-text {
             opacity: 1;
-            transform: translateY(0);
             max-height: 50px;
-            transition: opacity 0.35s ease, transform 0.35s ease, max-height 0.4s ease, margin 0.4s ease;
+            overflow: hidden;
+            /* Fade-OUT: text goes first (no delay), 0.45s duration */
+            transition: opacity 0.45s ease, max-height 0.5s ease 0.1s;
         }
-        .ai-chat-welcome.collapsed .ai-chat-suggestions {
-            opacity: 0;
-            transform: scale(0.15) translateY(-200px);
-            max-height: 0;
-            margin: 0;
-            pointer-events: none;
-        }
+        /* Buttons: fade in has no delay (appears first on expand) */
         .ai-chat-welcome .ai-chat-suggestions {
             opacity: 1;
             transform: scale(1) translateY(0);
             max-height: 300px;
-            transition: opacity 0.4s ease 0.05s, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.5s ease, margin 0.5s ease;
             transform-origin: center top;
+            /* Fade-OUT: buttons go second (delayed after text), 0.52s duration */
+            transition: opacity 0.52s ease 0.4s, transform 0.65s cubic-bezier(0.4, 0, 0.2, 1) 0.4s, max-height 0.65s ease 0.4s;
         }
-        .ai-chat-welcome.collapsed .ai-chat-welcome-icon {
-            transform: rotate(180deg);
+
+        /* === Collapsed state === */
+        .ai-chat-welcome.collapsed .ai-chat-welcome-text {
+            opacity: 0;
+            max-height: 0;
+            pointer-events: none;
+            /* Fade-IN (reverse = expanding): text comes second (delayed), appears with typing */
+            transition: opacity 0.45s ease, max-height 0.5s ease;
         }
-        .ai-chat-welcome.collapsed .ai-chat-welcome-icon:hover {
-            transform: rotate(180deg) scale(1.1);
+        .ai-chat-welcome.collapsed .ai-chat-suggestions {
+            opacity: 0;
+            transform: scale(0.12);
+            max-height: 0;
+            pointer-events: none;
+            /* Fade-IN (reverse = expanding): buttons come first (no delay) */
+            transition: opacity 0.52s ease, transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.65s ease;
+        }
+
+        /* Typing animation for text on expand */
+        @keyframes typeReveal {
+            from { max-width: 0; }
+            to { max-width: 600px; }
+        }
+        .ai-chat-welcome.expanding .ai-chat-welcome-text {
+            display: inline-block;
+            white-space: nowrap;
+            overflow: hidden;
+            animation: typeReveal 1.1s steps(40, end) 0.6s both;
+            opacity: 1;
         }
         .ai-chat-welcome h3 {
             font-size: 20px;
@@ -6959,7 +6973,19 @@
 
         function toggleWelcomeCategories() {
             var welcome = document.getElementById('aiChatWelcome');
-            if (welcome) welcome.classList.toggle('collapsed');
+            if (!welcome) return;
+            if (welcome.classList.contains('collapsed')) {
+                // Expanding: add expanding class for typing animation
+                welcome.classList.remove('collapsed');
+                welcome.classList.add('expanding');
+                setTimeout(function() {
+                    welcome.classList.remove('expanding');
+                }, 1800);
+            } else {
+                // Collapsing
+                welcome.classList.remove('expanding');
+                welcome.classList.add('collapsed');
+            }
         }
 
         function selectTopic(topic) {
