@@ -1603,11 +1603,49 @@ async function callOpenAI(messages, options = {}) {
   return { text, provider: 'GPT-4o' };
 }
 
+async function callGroq(messages, options = {}) {
+  const { temperature = 0.2, maxTokens = 8192 } = options;
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) throw new Error('GROQ_API_KEY sozlanmagan');
+
+  const input = messages.map(m => ({
+    role: m.role === 'model' ? 'assistant' : (m.role === 'system' ? 'system' : 'user'),
+    content: m.text
+  }));
+
+  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${groqKey}`
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: input,
+      temperature,
+      max_tokens: maxTokens
+    })
+  });
+
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`Groq ${resp.status}: ${errBody.substring(0, 200)}`);
+  }
+
+  const data = await resp.json();
+  const text = data.choices?.[0]?.message?.content || '';
+  if (!text) throw new Error('Groq empty response');
+  return { text, provider: 'Groq/Llama' };
+}
+
 async function callAI(messages, options = {}) {
   const geminiKey = process.env.GEMINI_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
   const gptKey = process.env.GPT_API_KEY;
 
-  // Try Gemini first (free tier, higher limits)
+  const errors = [];
+
+  // 1. Try Gemini first (Google Search grounding support)
   if (geminiKey) {
     try {
       console.log(`[AI] Calling Gemini${options.useSearch ? ' with Google Search' : ''}...`);
@@ -1616,20 +1654,37 @@ async function callAI(messages, options = {}) {
       return result;
     } catch (err) {
       console.warn(`[AI] Gemini failed: ${err.message}`);
-      // Always surface Gemini error — don't silently fall back to broken OpenAI quota
-      throw new Error(`Gemini xatoligi: ${err.message}`);
+      errors.push(`Gemini: ${err.message}`);
     }
   }
 
-  // Fallback to OpenAI GPT-4o
-  if (gptKey) {
-    console.log(`[AI] Calling GPT-4o${options.useSearch ? ' with web search' : ''}...`);
-    const result = await callOpenAI(messages, options);
-    console.log('[AI] GPT-4o succeeded');
-    return result;
+  // 2. Try Groq (free, fast, no search but good quality)
+  if (groqKey) {
+    try {
+      console.log('[AI] Calling Groq/Llama...');
+      const result = await callGroq(messages, options);
+      console.log('[AI] Groq succeeded');
+      return result;
+    } catch (err) {
+      console.warn(`[AI] Groq failed: ${err.message}`);
+      errors.push(`Groq: ${err.message}`);
+    }
   }
 
-  throw new Error('Hech qanday AI provayder sozlanmagan (GEMINI_API_KEY yoki GPT_API_KEY kerak)');
+  // 3. Try OpenAI GPT-4o
+  if (gptKey) {
+    try {
+      console.log(`[AI] Calling GPT-4o${options.useSearch ? ' with web search' : ''}...`);
+      const result = await callOpenAI(messages, options);
+      console.log('[AI] GPT-4o succeeded');
+      return result;
+    } catch (err) {
+      console.warn(`[AI] GPT-4o failed: ${err.message}`);
+      errors.push(`GPT-4o: ${err.message}`);
+    }
+  }
+
+  throw new Error('Barcha AI provayderlar ishlamayapti: ' + errors.join(' | '));
 }
 
 // Initialize agent runner with callAI function
