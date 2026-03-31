@@ -1533,10 +1533,18 @@
         .feedback-actions .btn { flex: 1; }
         .corpus-checkbox-label { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 13px; color: #6d3df9; cursor: pointer; background: #f3efff; border: 1px solid #d4c5ff; border-radius: 8px; padding: 8px 12px; margin-bottom: 4px; }
         .corpus-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: #6d3df9; cursor: pointer; }
-        .ai-verify-row { margin-top: 10px; }
+        .ai-verify-row { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
         .ai-verify-btn { background: #f3efff; color: #6d3df9; border: 1px solid #d4c5ff; border-radius: 20px; padding: 5px 14px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
         .ai-verify-btn:hover:not(:disabled) { background: #6d3df9; color: #fff; border-color: #6d3df9; }
         .ai-verify-btn:disabled { opacity: 0.7; cursor: default; }
+        .ai-edit-btn { background: #fff8e6; color: #d97706; border-color: #fcd34d; }
+        .ai-edit-btn:hover { background: #d97706 !important; color: #fff !important; border-color: #d97706 !important; }
+        .ai-cancel-btn { background: #f9f9f9; color: #888; border-color: #ddd; }
+        .ai-cancel-btn:hover { background: #888 !important; color: #fff !important; border-color: #888 !important; }
+        .ai-verify-editor { margin-top: 8px; background: #f8f6ff; border: 1px solid #d4c5ff; border-radius: 10px; padding: 10px; }
+        .ai-verify-textarea { width: 100%; min-height: 100px; max-height: 300px; resize: vertical; border: 1px solid #d4c5ff; border-radius: 8px; padding: 8px; font-size: 13px; font-family: inherit; line-height: 1.5; outline: none; box-sizing: border-box; }
+        .ai-verify-textarea:focus { border-color: #6d3df9; }
+        .ai-verify-editor-actions { display: flex; gap: 8px; margin-top: 8px; }
                 .ai-loading {
             text-align: center;
             padding: 60px 20px;
@@ -6963,11 +6971,13 @@
         var aiChatHistory = [];
         var aiVerifyMap = {}; // stores {question, answer, topic} by msgId for corpus verification
 
+        // Direct verify — no editing
         async function verifyAiAnswer(msgId) {
             var entry = aiVerifyMap[msgId];
             if (!entry) return;
-            var btn = document.getElementById('vbtn_' + msgId);
-            if (btn) { btn.disabled = true; btn.textContent = 'Qo\'shilmoqda...'; }
+            var row = document.getElementById('vrow_' + msgId);
+            var origHtml = row ? row.innerHTML : '';
+            if (row) row.innerHTML = '<span style="font-size:12px;color:#6d3df9;">Qo\'shilmoqda...</span>';
             try {
                 var resp = await fetch('/api/rag/verify-chat-answer', {
                     method: 'POST',
@@ -6977,14 +6987,65 @@
                 });
                 var data = await resp.json();
                 if (resp.ok && data.success) {
-                    if (btn) { btn.textContent = '✅ Korpusga qo\'shildi!'; btn.style.background = '#22c55e'; btn.style.color = '#fff'; }
+                    if (row) row.innerHTML = '<span style="font-size:12px;color:#22c55e;font-weight:600;">✅ Korpusga qo\'shildi!</span>';
                     delete aiVerifyMap[msgId];
                 } else {
-                    if (btn) { btn.disabled = false; btn.textContent = '📚 To\'g\'ri javob — Korpusga qo\'shish'; }
+                    if (row) row.innerHTML = origHtml;
                     alert('Xatolik: ' + (data.error || 'Nomalum xatolik'));
                 }
             } catch(e) {
-                if (btn) { btn.disabled = false; btn.textContent = '📚 To\'g\'ri javob — Korpusga qo\'shish'; }
+                if (row) row.innerHTML = origHtml;
+            }
+        }
+
+        // Open editable textarea pre-filled with AI answer
+        function openVerifyEditor(msgId) {
+            var entry = aiVerifyMap[msgId];
+            if (!entry) return;
+            var editor = document.getElementById('veditor_' + msgId);
+            var txt = document.getElementById('vtxt_' + msgId);
+            if (!editor || !txt) return;
+            txt.value = entry.answer;
+            editor.style.display = 'block';
+            txt.style.height = 'auto';
+            txt.style.height = Math.min(txt.scrollHeight, 300) + 'px';
+            txt.focus();
+        }
+
+        function closeVerifyEditor(msgId) {
+            var editor = document.getElementById('veditor_' + msgId);
+            if (editor) editor.style.display = 'none';
+        }
+
+        // Save improved answer to corpus
+        async function saveVerifiedEdit(msgId) {
+            var entry = aiVerifyMap[msgId];
+            if (!entry) return;
+            var txt = document.getElementById('vtxt_' + msgId);
+            var improvedAnswer = txt ? txt.value.trim() : '';
+            if (!improvedAnswer) { alert('Javob bo\'sh bo\'lmasin'); return; }
+            var saveBtn = document.getElementById('vsave_' + msgId);
+            if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saqlanmoqda...'; }
+            try {
+                var resp = await fetch('/api/rag/verify-chat-answer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ question: entry.question, answer: improvedAnswer, topic: entry.topic })
+                });
+                var data = await resp.json();
+                if (resp.ok && data.success) {
+                    var row = document.getElementById('vrow_' + msgId);
+                    var editor = document.getElementById('veditor_' + msgId);
+                    if (row) row.innerHTML = '<span style="font-size:12px;color:#22c55e;font-weight:600;">✅ Yaxshilangan javob korpusga qo\'shildi!</span>';
+                    if (editor) editor.style.display = 'none';
+                    delete aiVerifyMap[msgId];
+                } else {
+                    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '✅ Saqlash va korpusga qo\'shish'; }
+                    alert('Xatolik: ' + (data.error || 'Nomalum xatolik'));
+                }
+            } catch(e) {
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '✅ Saqlash va korpusga qo\'shish'; }
             }
         }
         var aiChatSessions = [];
@@ -7148,11 +7209,17 @@
                     // Store Q&A for verification
                     var msgId = 'aimsg_' + Date.now();
                     aiVerifyMap[msgId] = { question: currentQuestion, answer: data.reply, topic: selectedTopic };
-                    var verifyBtn = '<div class="ai-verify-row">' +
-                        '<button class="ai-verify-btn" id="vbtn_' + msgId + '" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Bu javob to\'g\'ri — RAG korpusiga qo\'shish">' +
-                        '📚 To\'g\'ri javob — Korpusga qo\'shish' +
-                        '</button></div>';
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + sourceBadges + verifyBtn + '</div>';
+                    var verifyRow = '<div class="ai-verify-row" id="vrow_' + msgId + '">' +
+                        '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
+                        '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
+                        '</div>' +
+                        '<div class="ai-verify-editor" id="veditor_' + msgId + '" style="display:none">' +
+                        '<textarea class="ai-verify-textarea" id="vtxt_' + msgId + '"></textarea>' +
+                        '<div class="ai-verify-editor-actions">' +
+                        '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
+                        '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
+                        '</div></div>';
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + sourceBadges + verifyRow + '</div>';
                 } else {
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
                 }
