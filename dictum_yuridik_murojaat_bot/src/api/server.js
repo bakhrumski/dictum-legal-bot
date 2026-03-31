@@ -2867,6 +2867,28 @@ app.get('/api/rag/verified-answers', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// POST /api/rag/verify-chat-answer — lawyer verifies an AI chat answer and adds to corpus
+app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
+  try {
+    const { question, answer, topic } = req.body;
+    if (!question || !answer) return res.status(400).json({ error: 'Savol va javob kerak' });
+
+    await insertVerifiedAnswer({
+      question,
+      answer,
+      category: topic || 'boshqa',
+      requestId: null,
+      verifiedBy: req.session.adminId,
+      verifiedByName: req.session.fullName
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[RAG] verify-chat-answer error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // DELETE /api/rag/verified-answers/:id — remove a verified QA from corpus
 app.delete('/api/rag/verified-answers/:id', requireMasterAdmin, async (req, res) => {
   try {

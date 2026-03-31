@@ -1533,6 +1533,10 @@
         .feedback-actions .btn { flex: 1; }
         .corpus-checkbox-label { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 13px; color: #6d3df9; cursor: pointer; background: #f3efff; border: 1px solid #d4c5ff; border-radius: 8px; padding: 8px 12px; margin-bottom: 4px; }
         .corpus-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: #6d3df9; cursor: pointer; }
+        .ai-verify-row { margin-top: 10px; }
+        .ai-verify-btn { background: #f3efff; color: #6d3df9; border: 1px solid #d4c5ff; border-radius: 20px; padding: 5px 14px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .ai-verify-btn:hover:not(:disabled) { background: #6d3df9; color: #fff; border-color: #6d3df9; }
+        .ai-verify-btn:disabled { opacity: 0.7; cursor: default; }
                 .ai-loading {
             text-align: center;
             padding: 60px 20px;
@@ -6957,6 +6961,32 @@
         var selectedDatabases = ['lex.uz'];
         var selectedTopic = null;
         var aiChatHistory = [];
+        var aiVerifyMap = {}; // stores {question, answer, topic} by msgId for corpus verification
+
+        async function verifyAiAnswer(msgId) {
+            var entry = aiVerifyMap[msgId];
+            if (!entry) return;
+            var btn = document.getElementById('vbtn_' + msgId);
+            if (btn) { btn.disabled = true; btn.textContent = 'Qo\'shilmoqda...'; }
+            try {
+                var resp = await fetch('/api/rag/verify-chat-answer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ question: entry.question, answer: entry.answer, topic: entry.topic })
+                });
+                var data = await resp.json();
+                if (resp.ok && data.success) {
+                    if (btn) { btn.textContent = '✅ Korpusga qo\'shildi!'; btn.style.background = '#22c55e'; btn.style.color = '#fff'; }
+                    delete aiVerifyMap[msgId];
+                } else {
+                    if (btn) { btn.disabled = false; btn.textContent = '📚 To\'g\'ri javob — Korpusga qo\'shish'; }
+                    alert('Xatolik: ' + (data.error || 'Nomalum xatolik'));
+                }
+            } catch(e) {
+                if (btn) { btn.disabled = false; btn.textContent = '📚 To\'g\'ri javob — Korpusga qo\'shish'; }
+            }
+        }
         var aiChatSessions = [];
         var currentAiSessionId = null;
         var aiHistoryLoaded = false;
@@ -7072,6 +7102,7 @@
 
             // Add user bubble
             messagesEl.innerHTML += '<div class="ai-chat-msg user">' + escapeHtml(text) + '</div>';
+            var currentQuestion = text;
             input.value = '';
             input.style.height = 'auto';
 
@@ -7114,7 +7145,14 @@
                                 return '<span class="ai-msg-source-badge">' + escapeHtml(db) + '</span>';
                             }).join('') + '</div>';
                     }
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + sourceBadges + '</div>';
+                    // Store Q&A for verification
+                    var msgId = 'aimsg_' + Date.now();
+                    aiVerifyMap[msgId] = { question: currentQuestion, answer: data.reply, topic: selectedTopic };
+                    var verifyBtn = '<div class="ai-verify-row">' +
+                        '<button class="ai-verify-btn" id="vbtn_' + msgId + '" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Bu javob to\'g\'ri — RAG korpusiga qo\'shish">' +
+                        '📚 To\'g\'ri javob — Korpusga qo\'shish' +
+                        '</button></div>';
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + sourceBadges + verifyBtn + '</div>';
                 } else {
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
                 }
