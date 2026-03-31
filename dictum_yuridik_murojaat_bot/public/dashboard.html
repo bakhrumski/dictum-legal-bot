@@ -1529,8 +1529,10 @@
             font-size: 12px; font-weight: 600; color: var(--text-secondary);
             margin-bottom: 4px; display: block;
         }
-        .feedback-actions { display: flex; gap: 8px; margin-top: 14px; }
+        .feedback-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
         .feedback-actions .btn { flex: 1; }
+        .corpus-checkbox-label { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 13px; color: #6d3df9; cursor: pointer; background: #f3efff; border: 1px solid #d4c5ff; border-radius: 8px; padding: 8px 12px; margin-bottom: 4px; }
+        .corpus-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: #6d3df9; cursor: pointer; }
                 .ai-loading {
             text-align: center;
             padding: 60px 20px;
@@ -6545,6 +6547,10 @@
                                     <input type="text" id="correctedArticles_${request.id}" placeholder="Masalan: Mehnat kodeksi, 100-modda; FK 354-modda">
                                 </div>
                                 <div class="feedback-actions">
+                                    <label class="corpus-checkbox-label" title="Tasdiqlangan javob kelajakda shunga o'xshash savollarga avtomatik ishlatiladi">
+                                        <input type="checkbox" id="addToCorpus_${request.id}">
+                                        📚 RAG korpusiga qo'shish (kelajakdagi javoblarga qo'llaniladi)
+                                    </label>
                                     <button class="btn btn-success" id="approveBtn_${request.id}" onclick="approveWithFeedback(${request.id})" disabled>
                                         ✓ Tasdiqlash va yuborish
                                     </button>
@@ -7801,6 +7807,8 @@
 
             if (!confirm('Javobni tasdiqlaysizmi? Bu javob darhol mijozga yuboriladi.')) return;
 
+            const addToCorpus = document.getElementById(`addToCorpus_${requestId}`)?.checked || false;
+
             try {
                 const response = await fetch('/api/approve-response', {
                     method: 'POST',
@@ -7810,14 +7818,17 @@
                         feedbackType,
                         correctedAnswer: feedbackType !== 'correct' ? correctedAnswer : '',
                         correctedReasoning,
-                        correctedArticles
+                        correctedArticles,
+                        addToCorpus
                     })
                 });
 
                 if (response.ok) {
-                    const msg = feedbackType === 'correct'
+                    const data = await response.json();
+                    let msg = feedbackType === 'correct'
                         ? '✅ Javob tasdiqlandi va mijozga yuborildi!'
                         : '✅ Javob tasdiqlandi, tuzatma saqlandi va mijozga yuborildi!';
+                    if (data.corpusAdded) msg += '\n📚 Javob RAG korpusiga qo\'shildi!';
                     alert(msg);
                     closeModal();
                     loadRequests();
@@ -7837,15 +7848,20 @@
                 return;
             }
 
+            const addToCorpus = document.getElementById(`addToCorpus_${requestId}`)?.checked || false;
+
             try {
                 const response = await fetch('/api/approve-response', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ requestId })
+                    body: JSON.stringify({ requestId, addToCorpus })
                 });
 
                 if (response.ok) {
-                    alert('✅ Javob tasdiqlandi va mijozga yuborildi!');
+                    const data = await response.json();
+                    let msg = '✅ Javob tasdiqlandi va mijozga yuborildi!';
+                    if (data.corpusAdded) msg += '\n📚 Javob RAG korpusiga qo\'shildi!';
+                    alert(msg);
                     closeModal();
                     loadRequests();
                 } else {

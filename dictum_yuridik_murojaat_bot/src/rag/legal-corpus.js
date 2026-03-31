@@ -58,11 +58,21 @@ async function initLegalCorpus() {
         embedding vector(${getEmbedDims()}),
         tsv tsvector,
 
+        -- Quality tracking (for human-verified Q&A pairs)
+        source_type VARCHAR(20) DEFAULT 'law_text',
+        quality_score FLOAT DEFAULT 0.5,
+        verified_by INTEGER,
+
         -- Timestamps
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+
+    // Add new columns if table already exists (idempotent)
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) DEFAULT 'law_text'`);
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS quality_score FLOAT DEFAULT 0.5`);
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS verified_by INTEGER`);
 
     // Indexes for hybrid search
     // 1. Vector similarity index (IVFFlat — good for < 1M rows; switch to HNSW if scaling)
@@ -326,10 +336,13 @@ async function hybridSearch(query, opts = {}) {
       lc.chapter,
       lc.source_url,
       lc.category,
-      c.combined_score AS score
+      lc.source_type,
+      lc.verified_by,
+      -- Boost verified human-approved Q&A pairs by +0.25
+      c.combined_score + CASE WHEN lc.source_type = 'verified_qa' THEN 0.25 ELSE 0 END AS score
     FROM combined c
     JOIN legal_chunks lc ON lc.id = c.id
-    ORDER BY c.combined_score DESC
+    ORDER BY score DESC
     LIMIT $3
   `;
 
@@ -339,6 +352,50 @@ async function hybridSearch(query, opts = {}) {
 
   const result = await pool.query(sqlFixed, fixedParams);
   return result.rows;
+}
+
+// ========== VERIFIED Q&A INSERT ==========
+
+/**
+ * Embed and store a human-verified Q&A pair into the corpus.
+ * These chunks are ranked higher than raw law text in hybrid search.
+ *
+ * @param {object} opts
+ * @param {string} opts.question   - the original user question
+ * @param {string} opts.answer     - the lawyer-approved answer
+ * @param {string} opts.category   - legal category (e.g. 'mehnat')
+ * @param {number} opts.requestId  - source request ID for traceability
+ * @param {number} opts.verifiedBy - admin ID of the approving lawyer
+ * @param {string} opts.verifiedByName - full name of the approving lawyer
+ */
+async function insertVerifiedAnswer({ question, answer, category, requestId, verifiedBy, verifiedByName }) {
+  await initLegalCorpus();
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+  if (!apiKey) throw new Error('Embedding uchun GEMINI_API_KEY yoki GPT_API_KEY kerak');
+
+  // Combine Q&A for embedding so semantic search finds this when similar questions arrive
+  const chunkText = `Savol: ${question}\n\nJavob: ${answer}`;
+  const embedding = await getEmbedding(chunkText, apiKey);
+  const embStr = `[${embedding.join(',')}]`;
+
+  const docId = `verified_qa_${requestId || Date.now()}`;
+  const lawName = verifiedByName
+    ? `Tasdiqlangan javob — ${verifiedByName}`
+    : 'Tasdiqlangan javob';
+
+  // Remove old version of this QA if it exists (re-approval)
+  await pool.query(`DELETE FROM legal_chunks WHERE doc_id = $1`, [docId]);
+
+  await pool.query(`
+    INSERT INTO legal_chunks (
+      law_name, doc_id, category, chunk_text, chunk_index,
+      is_valid, embedding, source_type, quality_score, verified_by
+    ) VALUES ($1, $2, $3, $4, 0, TRUE, $5::vector, 'verified_qa', 1.0, $6)
+  `, [lawName, docId, category || 'boshqa', chunkText, embStr, verifiedBy || null]);
+
+  console.log(`[LEGAL CORPUS] Verified QA added: request #${requestId} by ${verifiedByName}`);
+  return docId;
 }
 
 /**
@@ -428,5 +485,6 @@ module.exports = {
   hybridSearch,
   vectorSearch,
   getCorpusStats,
-  rebuildVectorIndex
+  rebuildVectorIndex,
+  insertVerifiedAnswer
 };

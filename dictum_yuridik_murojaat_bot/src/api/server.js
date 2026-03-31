@@ -16,7 +16,7 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, getCorpusStats } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, getCorpusStats, insertVerifiedAnswer } = require('../rag/legal-corpus');
 
 // Multer config for registration document uploads
 const regUpload = multer({
@@ -523,7 +523,7 @@ Tasdiqlash uchun dashboardga kiring!
 // Master admin approves response (sends to client)
 app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
   try {
-    const { requestId, feedbackType, correctedAnswer, correctedReasoning, correctedArticles } = req.body;
+    const { requestId, feedbackType, correctedAnswer, correctedReasoning, correctedArticles, addToCorpus } = req.body;
     
     // Get request details
     const requestResult = await pool.query(`
@@ -580,6 +580,25 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
       }
     }
     
+    // Add to RAG corpus if lawyer chose to (human-in-the-loop corpus improvement)
+    let corpusAdded = false;
+    if (addToCorpus && request_text && finalResponse) {
+      try {
+        await insertVerifiedAnswer({
+          question: request_text,
+          answer: finalResponse,
+          category: category || 'boshqa',
+          requestId,
+          verifiedBy: req.session.adminId,
+          verifiedByName: req.session.fullName
+        });
+        corpusAdded = true;
+        console.log(`[RAG] Verified QA added to corpus for request #${requestId}`);
+      } catch (corpusErr) {
+        console.error('[RAG] Corpus insert error (non-critical):', corpusErr.message);
+      }
+    }
+
     // Send to client
     const message = `✅ Yuristdan javob keldi!
 
@@ -589,8 +608,8 @@ ${finalResponse}
 
 Dictum advokatlik firmasi`;
     await bot.sendMessage(telegram_id, message);
-    
-    res.json({ success: true, message: 'Response approved and sent to client' });
+
+    res.json({ success: true, message: 'Response approved and sent to client', corpusAdded });
     
   } catch (error) {
     console.error('Error approving response:', error);
@@ -2161,7 +2180,8 @@ async function retrieveLegalContext(query, topic) {
 
     const chunks = results.map((r, i) => {
       const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
-      return `[${i + 1}] ${r.law_name}${arts ? ` (${arts}-moddalar)` : ''}${r.chapter ? ` | ${r.chapter}` : ''}
+      const verifiedBadge = r.source_type === 'verified_qa' ? ' ✅ [Yurist tomonidan tasdiqlangan]' : '';
+      return `[${i + 1}] ${r.law_name}${verifiedBadge}${arts ? ` (${arts}-moddalar)` : ''}${r.chapter ? ` | ${r.chapter}` : ''}
 ${r.chunk_text}
 ${r.source_url ? `(Manba: ${r.source_url})` : ''}`;
     }).join('\n\n');
@@ -2828,6 +2848,33 @@ app.get('/api/rag/stats', requireMasterAdmin, async (req, res) => {
     res.json(stats);
   } catch (error) {
     res.status(500).json({ error: 'RAG statistika xatolik: ' + error.message });
+  }
+});
+
+// GET /api/rag/verified-answers — list all human-verified Q&A corpus entries
+app.get('/api/rag/verified-answers', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, law_name, category, chunk_text, quality_score, verified_by, created_at
+      FROM legal_chunks
+      WHERE source_type = 'verified_qa' AND is_valid = TRUE
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
+    res.json({ answers: result.rows, total: result.rowCount });
+  } catch (error) {
+    res.status(500).json({ error: 'Tasdiqlanagan javoblar xatolik: ' + error.message });
+  }
+});
+
+// DELETE /api/rag/verified-answers/:id — remove a verified QA from corpus
+app.delete('/api/rag/verified-answers/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM legal_chunks WHERE id = $1 AND source_type = 'verified_qa'`, [id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
