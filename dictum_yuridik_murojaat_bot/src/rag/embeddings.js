@@ -34,8 +34,8 @@ function getApiKey() {
 
 const PROVIDERS = {
   gemini: {
-    model: 'text-embedding-004',
-    dims: 768,
+    model: 'gemini-embedding-001',
+    dims: 3072,
     maxInput: 8000,
     batchSize: 100  // Gemini supports batch via array of content objects
   },

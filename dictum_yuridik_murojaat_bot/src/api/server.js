@@ -1497,18 +1497,70 @@ app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// ========== AI PROVIDER: OpenAI GPT-4o ==========
-async function callAI(messages, options = {}) {
-  const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
+// ========== AI PROVIDER: Gemini (primary) + OpenAI GPT-4o (fallback) ==========
 
-  const gptKey = process.env.GPT_API_KEY;
-  if (!gptKey) {
-    throw new Error('GPT_API_KEY sozlanmagan');
+async function callGemini(messages, options = {}) {
+  const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) throw new Error('GEMINI_API_KEY sozlanmagan');
+
+  const model = 'gemini-2.0-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+
+  // Convert messages: first message with role 'system' becomes systemInstruction
+  let systemInstruction = null;
+  const chatMessages = [];
+  for (const m of messages) {
+    if (m.role === 'system') {
+      systemInstruction = { parts: [{ text: m.text }] };
+    } else {
+      chatMessages.push({
+        role: m.role === 'model' ? 'model' : 'user',
+        parts: [{ text: m.text }]
+      });
+    }
   }
 
-  console.log(`[AI] Calling GPT-4o${useSearch ? ' with web search' : ''}...`);
+  const body = {
+    contents: chatMessages,
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens
+    }
+  };
 
-  // Build input for OpenAI Responses API
+  if (systemInstruction) body.systemInstruction = systemInstruction;
+
+  // Enable Google Search grounding for legal research queries
+  if (useSearch) {
+    body.tools = [{ google_search: {} }];
+  }
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`Gemini ${resp.status}: ${errBody.substring(0, 300)}`);
+  }
+
+  const data = await resp.json();
+  const text = (data.candidates?.[0]?.content?.parts || [])
+    .map(p => p.text || '')
+    .join('');
+
+  if (!text) throw new Error('Gemini empty response');
+  return { text, provider: 'Gemini' };
+}
+
+async function callOpenAI(messages, options = {}) {
+  const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
+  const gptKey = process.env.GPT_API_KEY;
+  if (!gptKey) throw new Error('GPT_API_KEY sozlanmagan');
+
   const input = messages.map(m => ({
     role: m.role === 'model' ? 'assistant' : (m.role === 'user' ? 'user' : 'assistant'),
     content: m.text
@@ -1521,7 +1573,6 @@ async function callAI(messages, options = {}) {
     max_output_tokens: maxTokens
   };
 
-  // Enable web search for legal research queries
   if (useSearch) {
     body.tools = [{ type: 'web_search_preview' }];
   }
@@ -1541,8 +1592,6 @@ async function callAI(messages, options = {}) {
   }
 
   const data = await resp.json();
-
-  // Extract text from Responses API output
   const text = (data.output || [])
     .filter(o => o.type === 'message')
     .flatMap(o => o.content || [])
@@ -1551,9 +1600,36 @@ async function callAI(messages, options = {}) {
     .join('');
 
   if (!text) throw new Error('GPT-4o empty response');
-
-  console.log('[AI] GPT-4o succeeded');
   return { text, provider: 'GPT-4o' };
+}
+
+async function callAI(messages, options = {}) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const gptKey = process.env.GPT_API_KEY;
+
+  // Try Gemini first (free tier, higher limits)
+  if (geminiKey) {
+    try {
+      console.log(`[AI] Calling Gemini${options.useSearch ? ' with Google Search' : ''}...`);
+      const result = await callGemini(messages, options);
+      console.log('[AI] Gemini succeeded');
+      return result;
+    } catch (err) {
+      console.warn(`[AI] Gemini failed: ${err.message}`);
+      if (!gptKey) throw new Error(`Gemini xatoligi: ${err.message}`);
+      console.warn('[AI] Trying OpenAI fallback...');
+    }
+  }
+
+  // Fallback to OpenAI GPT-4o
+  if (gptKey) {
+    console.log(`[AI] Calling GPT-4o${options.useSearch ? ' with web search' : ''}...`);
+    const result = await callOpenAI(messages, options);
+    console.log('[AI] GPT-4o succeeded');
+    return result;
+  }
+
+  throw new Error('Hech qanday AI provayder sozlanmagan (GEMINI_API_KEY yoki GPT_API_KEY kerak)');
 }
 
 // Initialize agent runner with callAI function
