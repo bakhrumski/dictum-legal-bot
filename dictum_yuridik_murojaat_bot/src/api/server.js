@@ -1533,7 +1533,7 @@ async function callGemini(messages, options = {}) {
 
   // Enable Google Search grounding for legal research queries
   if (useSearch) {
-    body.tools = [{ google_search: {} }];
+    body.tools = [{ googleSearch: {} }];
   }
 
   const resp = await fetch(url, {
@@ -1616,8 +1616,8 @@ async function callAI(messages, options = {}) {
       return result;
     } catch (err) {
       console.warn(`[AI] Gemini failed: ${err.message}`);
-      if (!gptKey) throw new Error(`Gemini xatoligi: ${err.message}`);
-      console.warn('[AI] Trying OpenAI fallback...');
+      // Always surface Gemini error — don't silently fall back to broken OpenAI quota
+      throw new Error(`Gemini xatoligi: ${err.message}`);
     }
   }
 
