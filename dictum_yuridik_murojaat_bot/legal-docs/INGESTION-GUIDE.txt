@@ -1,0 +1,48 @@
+JuristAI Legal Document Ingestion Guide
+========================================
+
+DIRECTORY STRUCTURE:
+  legal-docs/
+    mehnat/          - Mehnat qonunchiligi
+    oila/            - Oila qonunchiligi
+    fuqarolik/       - Fuqarolik qonunchiligi
+    shartnoma/       - Shartnoma huquqi
+    soliq/           - Soliq qonunchiligi
+    jinoyat/         - Jinoyat qonunchiligi
+    mamuriy/         - Ma'muriy javobgarlik
+    korporativ/      - Korporativ huquq
+    tadbirkorlik/    - Tadbirkorlik huquqi
+    uy-joy/          - Uy-joy oldi-sotdisi
+    mulk/            - Mulk huquqi
+    notarius/        - Notarius xizmatlari
+    ijtimoiy/        - Ijtimoiy himoya
+
+HOW TO ADD A DOCUMENT:
+1. Copy the full law text from lex.uz
+2. Save as .txt file in the appropriate category folder
+3. Add this optional header at the top:
+
+   ---
+   law_name: Mehnat kodeksi
+   doc_id: mehnat-kodeks-1996
+   source_url: https://lex.uz/docs/145261
+   enforcement_date: 1996-04-01
+   ---
+
+4. Run ingestion:
+   npm run ingest -- legal-docs/mehnat/mehnat-kodeksi.txt --category mehnat
+
+   Or ingest an entire folder:
+   npm run ingest -- --dir legal-docs/mehnat --category mehnat
+
+5. Check stats:
+   npm run ingest:stats
+
+NAMING CONVENTION:
+  <law-name-in-latin>.txt
+  Example: mehnat-kodeksi.txt, oila-kodeksi.txt, soliq-kodeksi.txt
+
+IMPORTANT:
+  - Only use valid, current law text from lex.uz
+  - If a law is amended, re-ingest the updated version (old chunks are auto-replaced)
+  - The doc_id is used for deduplication; keep it consistent across updates

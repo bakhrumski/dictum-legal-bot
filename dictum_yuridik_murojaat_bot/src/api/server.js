@@ -16,6 +16,7 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
+const { initLegalCorpus, hybridSearch, getCorpusStats } = require('../rag/legal-corpus');
 
 // Multer config for registration document uploads
 const regUpload = multer({
@@ -1637,6 +1638,17 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
       console.error('[AI] Case-law retrieval error:', e.message);
     }
 
+    // ========== RAG CORPUS: RETRIEVE RELEVANT LAW TEXT ==========
+    let ragCorpusBlock = '';
+    try {
+      ragCorpusBlock = await retrieveLegalContext(requestText, detectedField !== 'Boshqa' ? detectedField : null);
+      if (ragCorpusBlock) {
+        console.log(`[AI] RAG corpus context injected for field: ${detectedField}`);
+      }
+    } catch (e) {
+      console.error('[AI] RAG corpus retrieval error:', e.message);
+    }
+
     // ========== LEGAL REASONING ENGINE — SYSTEM PROMPT ==========
     const systemPrompt = `You are a professional legal assistant specialized in the legislation of the Republic of Uzbekistan.
 
@@ -1844,6 +1856,8 @@ ${similarExamplesBlock}
 
 ${caseLawBlock}
 
+${ragCorpusBlock}
+
 ${feedbackExamplesBlock}
 
 ${responseFormat}
@@ -1997,7 +2011,46 @@ const LEGAL_TOPICS = {
   'ijtimoiy':     'Ijtimoiy himoya'
 };
 
-function buildTopicPrompt(topic) {
+/**
+ * Retrieve relevant legal chunks from the RAG corpus and format for prompt injection.
+ * Returns empty string if no corpus data available (graceful degradation).
+ */
+async function retrieveLegalContext(query, topic) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+  if (!apiKey) return '';
+
+  try {
+    const results = await hybridSearch(query, {
+      category: topic || null,
+      limit: 5,
+      apiKey
+    });
+
+    if (!results || results.length === 0) return '';
+
+    const chunks = results.map((r, i) => {
+      const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
+      return `[${i + 1}] ${r.law_name}${arts ? ` (${arts}-moddalar)` : ''}${r.chapter ? ` | ${r.chapter}` : ''}
+${r.chunk_text}
+${r.source_url ? `(Manba: ${r.source_url})` : ''}`;
+    }).join('\n\n');
+
+    console.log(`[RAG] Retrieved ${results.length} chunks for "${query.substring(0, 50)}..." (topic: ${topic || 'all'})`);
+
+    return `\n\nQONUNCHILIK KONTEKSTI (legal_chunks bazasidan):
+Quyidagi qonun matni sizga ma'lumot sifatida berilgan. Bu matnlarga ASOSLANIB javob bering.
+Agar bu kontekstda javob topilmasa, web search orqali qo'shimcha qidiring.
+
+${chunks}
+
+MUHIM: Yuqoridagi kontekstdagi moddalarni ANIQ keltiring. Agar kontekstda tegishli modda bo'lmasa — to'qib chiqarmang.`;
+  } catch (err) {
+    console.error('[RAG] Retrieval error:', err.message);
+    return '';
+  }
+}
+
+function buildTopicPrompt(topic, ragContext) {
   const topicLabel = LEGAL_TOPICS[topic] || topic;
   return `Siz O'zbekiston huquqi bo'yicha mutaxassis AI yordamchisiz.
 
@@ -2012,11 +2065,14 @@ QOIDALAR:
 - Agar lex.uz da tegishli qonun mavjud bo'lsa, havolani ko'rsating
 - Javob qisqa, aniq va strukturali bo'lsin
 - Amaliy maslahat bering
+${ragContext ? '\n- BIRINCHI NAVBATDA quyidagi QONUNCHILIK KONTEKSTIDAGI ma\'lumotlarga tayanib javob bering' : ''}
+${ragContext ? '- Kontekstdagi modda raqamlari va qonun nomlari ANIQ bo\'lishi kerak — to\'qib chiqarmang' : ''}
 
 JAVOB FORMATI:
 1. **Tegishli qonunlar:** Qonun/kodeks nomi, modda raqami, qisqa mazmun
 2. **Tushuntirish:** Savolga javob
 3. **Xulosa:** Qisqa huquqiy fikr
+${ragContext || ''}
 
 > "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun lex.uz dan tekshiring."`;
 }
@@ -2028,7 +2084,13 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
 
-    const systemPrompt = topic ? buildTopicPrompt(topic) : buildLegalSearchPrompt(databases);
+    // RAG retrieval: fetch relevant legal chunks for the user's query
+    let ragContext = '';
+    if (topic) {
+      ragContext = await retrieveLegalContext(message, topic);
+    }
+
+    const systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
 
     // Build messages array for callAI
     const aiMessages = [];
@@ -2048,7 +2110,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 
     const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 4096 });
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
-    res.json({ reply: aiResult.text, provider: aiResult.provider, databases: usedDbs });
+    res.json({ reply: aiResult.text, provider: aiResult.provider, databases: usedDbs, ragUsed: !!ragContext });
   } catch (error) {
     console.error('[Legal Chat] Error:', error);
     res.status(500).json({ error: 'Qonun qidirish xatoligi: ' + error.message });
@@ -2625,6 +2687,16 @@ app.get('/api/case-law/stats', requireMasterAdmin, async (req, res) => {
     res.json(stats);
   } catch (error) {
     res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// GET /api/rag/stats — RAG corpus statistics
+app.get('/api/rag/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await getCorpusStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: 'RAG statistika xatolik: ' + error.message });
   }
 });
 
@@ -3391,6 +3463,7 @@ async function runMigrations() {
     await initLegalDataset();
     await initFeedbackDataset();
     await initCaseLawDataset();
+    await initLegalCorpus().catch(e => console.log('[RAG] Legal corpus init skipped:', e.message));
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }
