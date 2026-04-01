@@ -2203,29 +2203,58 @@ MUHIM: Yuqoridagi kontekstdagi moddalarni ANIQ keltiring. Agar kontekstda tegish
 
 function buildTopicPrompt(topic, ragContext) {
   const topicLabel = LEGAL_TOPICS[topic] || topic;
-  return `Siz O'zbekiston huquqi bo'yicha mutaxassis AI yordamchisiz.
 
-SOHA: ${topicLabel}
+  const topicKnowledge = {
+    'mehnat':       "O'zbekiston Mehnat kodeksi (2022-yil yangi tahriri), mehnat shartnomalari, ishdan bo'shatish tartibi, ish haqi, ta'til, mehnat nizolari, kasaba uyushmalari, mehnat inspeksiyasi.",
+    'oila':         "O'zbekiston Oila kodeksi, nikoh va ajralish tartibi, nafaqa, bolalar huquqi, vasiylik, meros, ota-ona huquq va majburiyatlari.",
+    'fuqarolik':    "O'zbekiston Fuqarolik kodeksi (1-qism: umumiy qoidalar, 2-qism: mulkiy huquqlar, 3-qism: majburiyat huquqi), shartnomalar, zarar qoplash, da'vo muddatlari.",
+    'shartnoma':    "Fuqarolik kodeksining shartnomaviy bo'limlari, sotib olish-sotish, ijara, pudrat, xizmat ko'rsatish, qarz, kafolat, veksel, elektron shartnomalar.",
+    'soliq':        "O'zbekiston Soliq kodeksi, QQS (18%), daromad solig'i, mol-mulk solig'i, er solig'i, aktsiz, bojxona to'lovlari, soliq imtiyozlari, soliq nazorati.",
+    'jinoyat':      "O'zbekiston Jinoyat kodeksi, jinoyat tarkibi, jazo turlari, ozodlikdan mahrum qilish, jarima, jinoyatdan ozod qilish, recidiv, prescriptsiya muddatlari.",
+    'mamuriy':      "Ma'muriy javobgarlik to'g'risidagi kodeks, ma'muriy huquqbuzarliklar, jarima miqdorlari, tartib buzilishi, davlat organlariga shikoyat.",
+    'korporativ':   "Aksiyadorlik jamiyatlari to'g'risidagi qonun, MChJ, korporativ boshqaruv, ustav kapitali, ulushlar, aksiyadorlar huquqlari, bankrotlik.",
+    'tadbirkorlik': "Tadbirkorlik faoliyati to'g'risidagi qonun, ruxsatnomalar, litsenziyalar, soliq rejimlari (OYTT, QQS), tekshiruvlar, biznes registratsiya.",
+    'uy-joy':       "Uy-joy kodeksi, ko'chmas mulkni sotish-sotib olish, ipoteka, ijara, ko'chmas mulkni ro'yxatga olish, kommunal xizmatlar, mulkdorlar uyushmasi.",
+    'mulk':         "Fuqarolik kodeksining mulk huquqi bo'limlari, davlat mulki, xususiy mulk, umumiy mulk, servitut, gadov (zaklad), mulk himoyasi.",
+    'notarius':     "Notariat to'g'risidagi qonun, notarial harakatlar, vasiyatnoma, ishonchnoma, meros rasmiylashtirish, shartnomalarni tasdiqlash.",
+    'ijtimoiy':     "Pensiya to'g'risidagi qonun, ijtimoiy sug'urta, nogironlik nafaqasi, ishsizlik nafaqasi, onalaik nafaqasi, ijtimoiy yordam turlari."
+  };
 
-VAZIFANGIZ:
-Foydalanuvchi savoliga "${topicLabel}" sohasiga oid O'zbekiston qonunchiligi asosida javob bering.
+  const knowledgeBase = topicKnowledge[topic] || `${topicLabel} sohasiga oid O'zbekiston qonunlari`;
 
-QOIDALAR:
-- Javob FAQAT O'zbek (lotin) tilida bo'lishi shart
-- Tegishli qonun va kodeks moddalarini aniq ko'rsating
-- Agar lex.uz da tegishli qonun mavjud bo'lsa, havolani ko'rsating
-- Javob qisqa, aniq va strukturali bo'lsin
-- Amaliy maslahat bering
-${ragContext ? '\n- BIRINCHI NAVBATDA quyidagi QONUNCHILIK KONTEKSTIDAGI ma\'lumotlarga tayanib javob bering' : ''}
-${ragContext ? '- Kontekstdagi modda raqamlari va qonun nomlari ANIQ bo\'lishi kerak — to\'qib chiqarmang' : ''}
+  return `Siz O'zbekiston ${topicLabel} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
+Sizning bilim bazangiz: ${knowledgeBase}
 
-JAVOB FORMATI:
-1. **Tegishli qonunlar:** Qonun/kodeks nomi, modda raqami, qisqa mazmun
-2. **Tushuntirish:** Savolga javob
-3. **Xulosa:** Qisqa huquqiy fikr
-${ragContext || ''}
+═══════════════════════════════════════
+QATTIQ QOIDALAR (buzsangiz, javob noto'g'ri hisoblanadi):
+═══════════════════════════════════════
+1. Javob FAQAT O'zbek (lotin) tilida — hech qachon rus yoki ingliz tilida yozmang
+2. Modda raqamlarini FAQAT 100% ishonchli bo'lsangiz keltiring — noaniq bo'lsa "taxminan X-modda" deb belgilang
+3. To'qib chiqarishdan QATTIYAN SAQLANING — "bu modda mavjud emas" deyish "noto'g'ri modda keltirish" dan yaxshiroq
+4. Har bir huquqiy tasdiq uchun MANBA ko'rsating (qonun nomi + modda yoki lex.uz havolasi)
+5. Amaliy qadam ko'rsatmalarini bering — foydalanuvchi nima qilishi kerakligini aniq tushuntiring
+6. Javob chuqur va to'liq bo'lsin — sirtqi javob emas, huquqiy tahlil bering
+${ragContext ? '\n7. Quyidagi TASDIQLANGAN QONUN MATNI mavjud — BIRINCHI NAVBATDA shu matnlarga asoslaning' : ''}
 
-> "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun lex.uz dan tekshiring."`;
+═══════════════════════════════════════
+MAJBURIY JAVOB TUZILMASI:
+═══════════════════════════════════════
+## Huquqiy asos
+Tegishli qonun(lar), kodeks va moddalar ro'yxati — har biri uchun qisqacha mazmun
+
+## Holat tahlili
+Savolni huquqiy nuqtai nazardan chuqur tahlil qiling — qaysi normalar qo'llaniladi va nima uchun
+
+## Amaliy qadamlar
+Foydalanuvchi HOZIR nima qilishi kerak — 1, 2, 3... tartibida aniq ko'rsatmalar
+
+## Muddatlar va jarimallar (agar tegishli bo'lsa)
+Qonuniy muddatlar, buzilsa qanday oqibatlar
+
+## Maslahat
+Shu sohadagi xavf va imkoniyatlar — tajribali yurist sifatida amaliy fikr
+
+${ragContext ? ragContext + '\n' : ''}\n> ⚠️ Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
 }
 
 app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
@@ -2243,23 +2272,22 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 
     const systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
 
-    // Build messages array for callAI
-    const aiMessages = [];
+    // Build messages array — system prompt as dedicated system role (works with Groq + Gemini)
+    const aiMessages = [{ role: 'system', text: systemPrompt }];
 
     if (Array.isArray(history) && history.length > 0) {
       const recentHistory = history.length > 18 ? history.slice(-18) : history;
-      recentHistory.forEach((msg, i) => {
+      recentHistory.forEach(msg => {
         aiMessages.push({
           role: msg.role === 'user' ? 'user' : 'model',
-          text: i === 0 && msg.role === 'user' ? systemPrompt + '\n\n' + msg.text : msg.text
+          text: msg.text
         });
       });
     }
 
-    const currentText = aiMessages.length === 0 ? systemPrompt + '\n\n' + message : message;
-    aiMessages.push({ role: 'user', text: currentText });
+    aiMessages.push({ role: 'user', text: message });
 
-    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 4096 });
+    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
     res.json({ reply: aiResult.text, provider: aiResult.provider, databases: usedDbs, ragUsed: !!ragContext });
   } catch (error) {
@@ -2563,7 +2591,7 @@ Huquqiy normalar va lex.uz havolalari bilan javob bering.`;
       text: i === 0 && msg.role === 'user' ? systemContext + '\n\n' + msg.text : msg.text
     }));
 
-    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 4096 });
+    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
 
     res.json({ reply: aiResult.text });
   } catch (error) {
