@@ -2209,7 +2209,7 @@ function buildTopicPrompt(topic, ragContext) {
     'oila':         "O'zbekiston Oila kodeksi, nikoh va ajralish tartibi, nafaqa, bolalar huquqi, vasiylik, meros, ota-ona huquq va majburiyatlari.",
     'fuqarolik':    "O'zbekiston Fuqarolik kodeksi (1-qism: umumiy qoidalar, 2-qism: mulkiy huquqlar, 3-qism: majburiyat huquqi), shartnomalar, zarar qoplash, da'vo muddatlari.",
     'shartnoma':    "Fuqarolik kodeksining shartnomaviy bo'limlari, sotib olish-sotish, ijara, pudrat, xizmat ko'rsatish, qarz, kafolat, veksel, elektron shartnomalar.",
-    'soliq':        "O'zbekiston Soliq kodeksi, QQS (18%), daromad solig'i, mol-mulk solig'i, er solig'i, aktsiz, bojxona to'lovlari, soliq imtiyozlari, soliq nazorati.",
+    'soliq':        "O'zbekiston Soliq kodeksi, QQS (12%), daromad solig'i (fiz. shaxslar 12%, yuridik shaxslar 15%), mol-mulk solig'i, er solig'i, aktsiz, bojxona to'lovlari, soliq imtiyozlari, soliq nazorati.",
     'jinoyat':      "O'zbekiston Jinoyat kodeksi, jinoyat tarkibi, jazo turlari, ozodlikdan mahrum qilish, jarima, jinoyatdan ozod qilish, recidiv, prescriptsiya muddatlari.",
     'mamuriy':      "Ma'muriy javobgarlik to'g'risidagi kodeks, ma'muriy huquqbuzarliklar, jarima miqdorlari, tartib buzilishi, davlat organlariga shikoyat.",
     'korporativ':   "Aksiyadorlik jamiyatlari to'g'risidagi qonun, MChJ, korporativ boshqaruv, ustav kapitali, ulushlar, aksiyadorlar huquqlari, bankrotlik.",
@@ -3686,6 +3686,29 @@ async function runMigrations() {
     // Internal reasoning storage for audit
     await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS internal_reasoning TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_legal_field ON requests(detected_legal_field)`);
+
+    // Fix vector dimension mismatch — if embedding column exists with wrong dims, recreate it
+    try {
+      const { getEmbedDims } = require('../rag/embeddings');
+      const correctDims = getEmbedDims();
+      const dimCheck = await pool.query(`
+        SELECT atttypmod FROM pg_attribute
+        JOIN pg_class ON pg_class.oid = pg_attribute.attrelid
+        WHERE pg_class.relname = 'legal_chunks' AND pg_attribute.attname = 'embedding'
+      `);
+      if (dimCheck.rows.length > 0) {
+        const currentDims = dimCheck.rows[0].atttypmod;
+        // atttypmod for vector(n) = n + 4 (internal pg encoding), or -1 if no modifier
+        const storedDims = currentDims > 0 ? currentDims - 4 : 0;
+        if (storedDims > 0 && storedDims !== correctDims) {
+          console.log(`[DB] Fixing vector dims: ${storedDims} → ${correctDims}`);
+          await pool.query(`ALTER TABLE legal_chunks DROP COLUMN IF EXISTS embedding`);
+          await pool.query(`ALTER TABLE legal_chunks ADD COLUMN embedding vector(${correctDims})`);
+          await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
+          console.log(`[DB] Vector column recreated at ${correctDims}d`);
+        }
+      }
+    } catch(e) { console.log('[DB] Vector dim check skipped:', e.message); }
 
     console.log('[DB] Migrations completed successfully');
     await initLegalDataset();
