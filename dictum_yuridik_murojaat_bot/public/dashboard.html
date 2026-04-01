@@ -1546,6 +1546,9 @@
         .ai-doc-upload-status { margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5; }
         .ai-doc-upload-status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
         .ai-doc-upload-status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .ai-doc-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+        .ai-doc-tab { flex: 1; padding: 6px; border: 1px solid #d4c5ff; border-radius: 8px; background: #f8f6ff; color: #888; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+        .ai-doc-tab.active { background: #6d3df9; color: #fff; border-color: #6d3df9; }
         .ai-verify-row { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
         .ai-verify-btn { background: #f3efff; color: #6d3df9; border: 1px solid #d4c5ff; border-radius: 20px; padding: 5px 14px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
         .ai-verify-btn:hover:not(:disabled) { background: #6d3df9; color: #fff; border-color: #6d3df9; }
@@ -4566,8 +4569,7 @@
 
                 <!-- Document Upload -->
                 <div class="ai-doc-upload-section">
-                    <div class="ai-history-title">📂 Hujjat yuklash</div>
-                    <p class="ai-doc-upload-hint">PDF, TXT yoki DOCX hujjatni korpusga qo'shing — AI shu hujjat asosida javob beradi</p>
+                    <div class="ai-history-title">📂 Korpusga qo'shish</div>
                     <select id="docUploadTopic" class="ai-doc-topic-select">
                         <option value="">— Soha tanlang —</option>
                         <option value="mehnat">Mehnat huquqi</option>
@@ -4585,14 +4587,34 @@
                         <option value="ijtimoiy">Ijtimoiy himoya</option>
                     </select>
                     <input type="text" id="docUploadName" class="ai-doc-name-input" placeholder="Hujjat nomi (ixtiyoriy)">
-                    <label class="ai-doc-file-label" id="docFileLabel">
-                        <input type="file" id="docFileInput" accept=".pdf,.txt,.docx,.doc" onchange="onDocFileSelected(this)">
-                        📄 Fayl tanlash (PDF / TXT / DOCX)
-                    </label>
-                    <div id="docSelectedFile" class="ai-doc-selected-file" style="display:none"></div>
-                    <button class="ai-doc-upload-btn" id="docUploadBtn" onclick="uploadLegalDocument()" disabled>
-                        ⬆ Korpusga yuklash
-                    </button>
+
+                    <!-- Tab switcher: URL vs File -->
+                    <div class="ai-doc-tabs">
+                        <button class="ai-doc-tab active" id="tabUrlBtn" onclick="switchDocTab('url')">🔗 lex.uz URL</button>
+                        <button class="ai-doc-tab" id="tabFileBtn" onclick="switchDocTab('file')">📄 Fayl</button>
+                    </div>
+
+                    <!-- URL input -->
+                    <div id="docUrlPanel">
+                        <input type="url" id="docLexUrl" class="ai-doc-name-input"
+                            placeholder="https://lex.uz/uz/docs/..." style="margin-bottom:6px">
+                        <button class="ai-doc-upload-btn" id="docUrlBtn" onclick="ingestLexUrl()">
+                            ⬇ Lex.uz dan yuklash
+                        </button>
+                    </div>
+
+                    <!-- File input -->
+                    <div id="docFilePanel" style="display:none">
+                        <label class="ai-doc-file-label">
+                            <input type="file" id="docFileInput" accept=".pdf,.txt,.docx,.doc" onchange="onDocFileSelected(this)">
+                            📄 Fayl tanlash (PDF / TXT / DOCX)
+                        </label>
+                        <div id="docSelectedFile" class="ai-doc-selected-file" style="display:none"></div>
+                        <button class="ai-doc-upload-btn" id="docUploadBtn" onclick="uploadLegalDocument()" disabled>
+                            ⬆ Korpusga yuklash
+                        </button>
+                    </div>
+
                     <div id="docUploadStatus" class="ai-doc-upload-status" style="display:none"></div>
                 </div>
             </div>
@@ -7015,6 +7037,60 @@
         var selectedTopic = null;
         var aiChatHistory = [];
         var aiVerifyMap = {};
+
+        function switchDocTab(tab) {
+            document.getElementById('docUrlPanel').style.display = tab === 'url' ? 'block' : 'none';
+            document.getElementById('docFilePanel').style.display = tab === 'file' ? 'block' : 'none';
+            document.getElementById('tabUrlBtn').classList.toggle('active', tab === 'url');
+            document.getElementById('tabFileBtn').classList.toggle('active', tab === 'file');
+            document.getElementById('docUploadStatus').style.display = 'none';
+        }
+
+        async function ingestLexUrl() {
+            var url = document.getElementById('docLexUrl').value.trim();
+            var topic = document.getElementById('docUploadTopic').value;
+            var lawName = document.getElementById('docUploadName').value.trim();
+            var statusEl = document.getElementById('docUploadStatus');
+            var btn = document.getElementById('docUrlBtn');
+
+            if (!url) { alert('Iltimos, lex.uz havolasini kiriting'); return; }
+            if (!url.includes('lex.uz')) { alert('Faqat lex.uz havolalari qabul qilinadi'); return; }
+            if (!topic) { alert('Iltimos, soha tanlang'); return; }
+
+            btn.disabled = true;
+            btn.textContent = 'Yuklanmoqda...';
+            statusEl.style.display = 'none';
+
+            try {
+                var resp = await fetch('/api/rag/ingest-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ url, topic, law_name: lawName || undefined })
+                });
+                var data = await resp.json();
+                if (resp.ok && data.success) {
+                    statusEl.className = 'ai-doc-upload-status success';
+                    statusEl.innerHTML = '✅ <b>' + escapeHtml(data.doc_name) + '</b> yuklandi!<br>' +
+                        data.chunks + ' bo\'lak' +
+                        (data.embedded > 0 ? ', ' + data.embedded + ' ta vektori bilan' : ' (matn qidiruvi)');
+                    statusEl.style.display = 'block';
+                    document.getElementById('docLexUrl').value = '';
+                    document.getElementById('docUploadName').value = '';
+                } else {
+                    statusEl.className = 'ai-doc-upload-status error';
+                    statusEl.textContent = '❌ ' + (data.error || 'Xatolik yuz berdi');
+                    statusEl.style.display = 'block';
+                }
+            } catch(e) {
+                statusEl.className = 'ai-doc-upload-status error';
+                statusEl.textContent = '❌ Tarmoq xatoligi';
+                statusEl.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⬇ Lex.uz dan yuklash';
+            }
+        }
 
         function onDocFileSelected(input) {
             var btn = document.getElementById('docUploadBtn');

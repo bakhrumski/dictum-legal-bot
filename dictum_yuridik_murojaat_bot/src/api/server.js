@@ -3089,6 +3089,105 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
   }
 });
 
+// POST /api/rag/ingest-url — fetch a lex.uz URL and add to RAG corpus
+app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
+  try {
+    const { url, topic, law_name } = req.body;
+    if (!url || !url.includes('lex.uz')) {
+      return res.status(400).json({ error: 'Faqat lex.uz havolalari qabul qilinadi' });
+    }
+    if (!topic) return res.status(400).json({ error: 'Soha (topic) tanlanmadi' });
+
+    const { fetchLexDocument } = require('../rag/fetch-lex');
+    const { chunkLegalDocument } = require('../rag/chunker');
+    const { getEmbeddingsBatch } = require('../rag/embeddings');
+
+    // Fetch and parse lex.uz document
+    console.log(`[LEX INGEST] Fetching: ${url}`);
+    const doc = await fetchLexDocument(url);
+
+    if (!doc.body || doc.body.trim().length < 100) {
+      return res.status(400).json({ error: 'Hujjat matni topilmadi yoki bo\'sh. URL to\'g\'ri ekanligini tekshiring.' });
+    }
+
+    const finalLawName = law_name || doc.title || url;
+    const docId = `lex_${topic}_${Date.now()}`;
+
+    // Chunk using the legal-aware chunker
+    const chunks = chunkLegalDocument(doc.body, {
+      law_name: finalLawName,
+      doc_id: docId,
+      source_url: url,
+      category: topic
+    });
+
+    if (chunks.length === 0) {
+      return res.status(400).json({ error: 'Hujjatdan bo\'lak ajratib bo\'lmadi' });
+    }
+
+    // Embed (best-effort — skip if quota exhausted)
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    let embeddings = [];
+    let embeddedCount = 0;
+
+    if (apiKey) {
+      try {
+        embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
+        embeddedCount = embeddings.length;
+      } catch (embErr) {
+        console.warn('[LEX INGEST] Embedding failed, saving text-only:', embErr.message);
+      }
+    }
+
+    // Insert into corpus
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Remove previous version of this URL if re-ingesting
+      await client.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [url]);
+
+      for (let i = 0; i < chunks.length; i++) {
+        const c = chunks[i];
+        const m = c.metadata || {};
+        const articleNums = (m.articles || []).map(a => a.number).filter(Boolean);
+        const embStr = embeddings[i] ? `[${embeddings[i].join(',')}]` : null;
+        await client.query(`
+          INSERT INTO legal_chunks (law_name, doc_id, source_url, category, chunk_text, chunk_index,
+            article_numbers, chapter, is_valid, embedding, source_type, quality_score, verified_by)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9::vector,'uploaded_doc',0.8,$10)
+        `, [
+          finalLawName, docId, url, topic, c.text, i,
+          articleNums.length ? articleNums : null,
+          m.chapter || null,
+          embStr,
+          req.session.adminId
+        ]);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    console.log(`[LEX INGEST] Done: "${finalLawName}" — ${chunks.length} chunks, ${embeddedCount} embedded`);
+    res.json({
+      success: true,
+      doc_name: finalLawName,
+      doc_id: docId,
+      chunks: chunks.length,
+      embedded: embeddedCount,
+      topic,
+      source_url: url
+    });
+
+  } catch (error) {
+    console.error('[LEX INGEST] Error:', error.message);
+    res.status(500).json({ error: 'Lex.uz dan yuklashda xatolik: ' + error.message });
+  }
+});
+
 // GET /api/rag/uploaded-documents — list all uploaded documents
 app.get('/api/rag/uploaded-documents', requireMasterAdmin, async (req, res) => {
   try {
