@@ -3098,26 +3098,29 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     }
     if (!topic) return res.status(400).json({ error: 'Soha (topic) tanlanmadi' });
 
+    // Strip URL fragment (#...) — it's a browser anchor, not sent to server
+    const cleanUrl = url.split('#')[0];
+
     const { fetchLexDocument } = require('../rag/fetch-lex');
     const { chunkLegalDocument } = require('../rag/chunker');
     const { getEmbeddingsBatch } = require('../rag/embeddings');
 
     // Fetch and parse lex.uz document
-    console.log(`[LEX INGEST] Fetching: ${url}`);
-    const doc = await fetchLexDocument(url);
+    console.log(`[LEX INGEST] Fetching: ${cleanUrl}`);
+    const doc = await fetchLexDocument(cleanUrl);
 
     if (!doc.body || doc.body.trim().length < 100) {
       return res.status(400).json({ error: 'Hujjat matni topilmadi yoki bo\'sh. URL to\'g\'ri ekanligini tekshiring.' });
     }
 
-    const finalLawName = law_name || doc.title || url;
+    const finalLawName = law_name || doc.title || cleanUrl;
     const docId = `lex_${topic}_${Date.now()}`;
 
     // Chunk using the legal-aware chunker
     const chunks = chunkLegalDocument(doc.body, {
       law_name: finalLawName,
       doc_id: docId,
-      source_url: url,
+      source_url: cleanUrl,
       category: topic
     });
 
@@ -3144,7 +3147,7 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     try {
       await client.query('BEGIN');
       // Remove previous version of this URL if re-ingesting
-      await client.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [url]);
+      await client.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
 
       for (let i = 0; i < chunks.length; i++) {
         const c = chunks[i];
@@ -3156,7 +3159,7 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
             article_numbers, chapter, is_valid, embedding, source_type, quality_score, verified_by)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9::vector,'uploaded_doc',0.8,$10)
         `, [
-          finalLawName, docId, url, topic, c.text, i,
+          finalLawName, docId, cleanUrl, topic, c.text, i,
           articleNums.length ? articleNums : null,
           m.chapter || null,
           embStr,
@@ -3179,7 +3182,7 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       chunks: chunks.length,
       embedded: embeddedCount,
       topic,
-      source_url: url
+      source_url: cleanUrl
     });
 
   } catch (error) {
