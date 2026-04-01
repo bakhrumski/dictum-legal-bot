@@ -354,6 +354,60 @@ async function hybridSearch(query, opts = {}) {
   return result.rows;
 }
 
+// ========== TEXT-ONLY FALLBACK SEARCH ==========
+
+/**
+ * Full-text search only — no embeddings needed.
+ * Used when embedding API quota is exhausted.
+ * Always prioritizes verified_qa entries.
+ */
+async function textOnlySearch(query, opts = {}) {
+  await initLegalCorpus();
+  const { category = null, limit = 5 } = opts;
+
+  const categoryClause = category ? 'AND category = $3' : '';
+  const params = category ? [query, limit, category] : [query, limit];
+
+  // First try: verified Q&A full-text match
+  const verifiedSql = `
+    SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
+           source_type, verified_by,
+           ts_rank_cd(tsv, plainto_tsquery('simple', $1)) AS score
+    FROM legal_chunks
+    WHERE is_valid = TRUE
+      AND source_type = 'verified_qa'
+      AND tsv @@ plainto_tsquery('simple', $1)
+      ${categoryClause}
+    ORDER BY score DESC
+    LIMIT $2
+  `;
+
+  const verifiedResult = await pool.query(verifiedSql, params);
+
+  // If we have verified matches, return them first
+  if (verifiedResult.rows.length > 0) {
+    console.log(`[RAG] Text-only search: ${verifiedResult.rows.length} verified QA matches`);
+    return verifiedResult.rows;
+  }
+
+  // Fallback: any law text full-text match
+  const anySql = `
+    SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
+           source_type, verified_by,
+           ts_rank_cd(tsv, plainto_tsquery('simple', $1)) + CASE WHEN source_type = 'verified_qa' THEN 0.25 ELSE 0 END AS score
+    FROM legal_chunks
+    WHERE is_valid = TRUE
+      AND tsv @@ plainto_tsquery('simple', $1)
+      ${categoryClause}
+    ORDER BY score DESC
+    LIMIT $2
+  `;
+
+  const anyResult = await pool.query(anySql, params);
+  console.log(`[RAG] Text-only search: ${anyResult.rows.length} law text matches`);
+  return anyResult.rows;
+}
+
 // ========== VERIFIED Q&A INSERT ==========
 
 /**
@@ -483,6 +537,7 @@ module.exports = {
   insertChunks,
   deleteByDocId,
   hybridSearch,
+  textOnlySearch,
   vectorSearch,
   getCorpusStats,
   rebuildVectorIndex,

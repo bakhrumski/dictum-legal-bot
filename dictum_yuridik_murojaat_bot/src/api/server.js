@@ -16,7 +16,7 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, getCorpusStats, insertVerifiedAnswer } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, textOnlySearch, getCorpusStats, insertVerifiedAnswer } = require('../rag/legal-corpus');
 
 // Multer config for registration document uploads
 const regUpload = multer({
@@ -2167,38 +2167,49 @@ const LEGAL_TOPICS = {
  */
 async function retrieveLegalContext(query, topic) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
-  if (!apiKey) return '';
+
+  let results = [];
+  let searchMode = '';
 
   try {
-    const results = await hybridSearch(query, {
-      category: topic || null,
-      limit: 5,
-      apiKey
-    });
+    if (apiKey) {
+      // Try full hybrid search (vector + text)
+      results = await hybridSearch(query, { category: topic || null, limit: 6, apiKey });
+      searchMode = 'hybrid';
+    }
+  } catch (err) {
+    console.warn(`[RAG] Hybrid search failed (${err.message}), falling back to text-only search`);
+  }
 
-    if (!results || results.length === 0) return '';
+  // Fallback: text-only search (no embedding API needed)
+  if (!results || results.length === 0) {
+    try {
+      results = await textOnlySearch(query, { category: topic || null, limit: 6 });
+      searchMode = 'text-only';
+    } catch (err) {
+      console.error('[RAG] Text-only search also failed:', err.message);
+      return '';
+    }
+  }
 
-    const chunks = results.map((r, i) => {
-      const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
-      const verifiedBadge = r.source_type === 'verified_qa' ? ' ✅ [Yurist tomonidan tasdiqlangan]' : '';
-      return `[${i + 1}] ${r.law_name}${verifiedBadge}${arts ? ` (${arts}-moddalar)` : ''}${r.chapter ? ` | ${r.chapter}` : ''}
+  if (!results || results.length === 0) return '';
+
+  const chunks = results.map((r, i) => {
+    const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
+    const verifiedBadge = r.source_type === 'verified_qa' ? ' ✅ [Yurist tomonidan tasdiqlangan]' : '';
+    return `[${i + 1}] ${r.law_name}${verifiedBadge}${arts ? ` (${arts}-moddalar)` : ''}${r.chapter ? ` | ${r.chapter}` : ''}
 ${r.chunk_text}
 ${r.source_url ? `(Manba: ${r.source_url})` : ''}`;
-    }).join('\n\n');
+  }).join('\n\n');
 
-    console.log(`[RAG] Retrieved ${results.length} chunks for "${query.substring(0, 50)}..." (topic: ${topic || 'all'})`);
+  console.log(`[RAG] Retrieved ${results.length} chunks via ${searchMode} for "${query.substring(0, 50)}..."`);
 
-    return `\n\nQONUNCHILIK KONTEKSTI (legal_chunks bazasidan):
-Quyidagi qonun matni sizga ma'lumot sifatida berilgan. Bu matnlarga ASOSLANIB javob bering.
-Agar bu kontekstda javob topilmasa, web search orqali qo'shimcha qidiring.
+  return `\n\nQONUNCHILIK KONTEKSTI (${searchMode === 'text-only' ? 'matn qidiruvi' : 'vektoral qidiruv'} orqali):
+Quyidagi ma'lumotlarga BIRINCHI NAVBATDA asoslaning. Agar "✅ Yurist tomonidan tasdiqlangan" deb belgilangan bo'lsa — bu eng ishonchli manba.
 
 ${chunks}
 
 MUHIM: Yuqoridagi kontekstdagi moddalarni ANIQ keltiring. Agar kontekstda tegishli modda bo'lmasa — to'qib chiqarmang.`;
-  } catch (err) {
-    console.error('[RAG] Retrieval error:', err.message);
-    return '';
-  }
 }
 
 function buildTopicPrompt(topic, ragContext) {
