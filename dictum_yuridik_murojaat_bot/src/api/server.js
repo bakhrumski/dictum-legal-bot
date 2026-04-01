@@ -28,6 +28,23 @@ const regUpload = multer({
   }
 });
 
+// Legal document upload — accepts PDF, TXT, DOCX (text extraction)
+const docUpload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'text/plain',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword'
+    ];
+    const ok = allowed.includes(file.mimetype) ||
+      file.originalname.match(/\.(pdf|txt|docx|doc)$/i);
+    cb(ok ? null : new Error('Faqat PDF, TXT yoki DOCX formatlar qabul qilinadi'), ok);
+  }
+});
+
 // yurxizmat.uz document template catalog (verified URLs)
 const YURXIZMAT_CATALOG = [
   { cat: 'Shartnomalar', url: '/uz/category/contracts', subs: [
@@ -2934,6 +2951,173 @@ app.delete('/api/rag/verified-answers/:id', requireMasterAdmin, async (req, res)
     const { id } = req.params;
     await pool.query(`DELETE FROM legal_chunks WHERE id = $1 AND source_type = 'verified_qa'`, [id]);
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/rag/upload-document — upload a legal document to RAG corpus
+app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('document'), async (req, res) => {
+  const fs = require('fs');
+  const filePath = req.file ? req.file.path : null;
+
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
+
+    const { topic, doc_name, law_name } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Soha (topic) tanlanmadi' });
+
+    const { chunkLegalDocument } = require('../rag/chunker');
+    const { getEmbeddingsBatch } = require('../rag/embeddings');
+    const { insertChunks } = require('../rag/legal-corpus');
+
+    // ── Extract text ──────────────────────────────────────────
+    let rawText = '';
+    const mime = req.file.mimetype;
+    const origName = req.file.originalname.toLowerCase();
+
+    if (mime === 'application/pdf' || origName.endsWith('.pdf')) {
+      const pdfParse = require('pdf-parse');
+      const buffer = fs.readFileSync(filePath);
+      const parsed = await pdfParse(buffer);
+      rawText = parsed.text;
+    } else if (mime === 'text/plain' || origName.endsWith('.txt')) {
+      rawText = fs.readFileSync(filePath, 'utf-8');
+    } else if (origName.endsWith('.docx') || origName.endsWith('.doc')) {
+      // Extract text from docx using mammoth if available, else raw buffer
+      try {
+        const mammoth = require('mammoth');
+        const result = await mammoth.extractRawText({ path: filePath });
+        rawText = result.value;
+      } catch {
+        // mammoth not installed — read as utf-8 (works for some .doc files)
+        rawText = fs.readFileSync(filePath, 'utf-8');
+      }
+    }
+
+    if (!rawText || rawText.trim().length < 50) {
+      return res.status(400).json({ error: 'Fayldan matn ajratib olib bo\'lmadi yoki fayl bo\'sh' });
+    }
+
+    // ── Chunk ─────────────────────────────────────────────────
+    const docId = `upload_${topic}_${Date.now()}`;
+    const finalLawName = law_name || doc_name || req.file.originalname.replace(/\.[^.]+$/, '');
+
+    const chunks = chunkLegalDocument(rawText, {
+      law_name: finalLawName,
+      doc_id: docId,
+      source_url: null,
+      category: topic
+    });
+
+    if (chunks.length === 0) {
+      return res.status(400).json({ error: 'Hujjat bo\'sh yoki o\'qib bo\'lmadi' });
+    }
+
+    // ── Embed ─────────────────────────────────────────────────
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    let embeddings = [];
+    let embeddedCount = 0;
+
+    if (apiKey) {
+      try {
+        embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
+        embeddedCount = embeddings.length;
+      } catch (embErr) {
+        console.warn('[DOC UPLOAD] Embedding failed, saving without vectors:', embErr.message);
+      }
+    }
+
+    // ── Insert ────────────────────────────────────────────────
+    const chunksToInsert = chunks.map((c, i) => ({
+      text: c.text,
+      embedding: embeddings[i] || null,
+      chunkIndex: i,
+      metadata: {
+        ...(c.metadata || {}),
+        law_name: finalLawName,
+        doc_id: docId,
+        category: topic,
+        source_type: 'uploaded_doc'
+      }
+    }));
+
+    // Mark source_type as uploaded_doc (quality between law_text and verified_qa)
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const chunk of chunksToInsert) {
+        const m = chunk.metadata;
+        const articleNums = (m.articles || []).map(a => a.number).filter(Boolean);
+        const embStr = chunk.embedding ? `[${chunk.embedding.join(',')}]` : null;
+        await client.query(`
+          INSERT INTO legal_chunks (law_name, doc_id, category, chunk_text, chunk_index,
+            article_numbers, chapter, is_valid, embedding, source_type, quality_score, verified_by)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8::vector,$9,0.8,$10)
+        `, [
+          m.law_name, m.doc_id, m.category, chunk.text, chunk.chunkIndex,
+          articleNums.length ? articleNums : null,
+          m.chapter || null,
+          embStr,
+          'uploaded_doc',
+          req.session.adminId
+        ]);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    console.log(`[DOC UPLOAD] ${finalLawName}: ${chunks.length} chunks, ${embeddedCount} embedded, topic=${topic}`);
+    res.json({
+      success: true,
+      doc_name: finalLawName,
+      doc_id: docId,
+      chunks: chunks.length,
+      embedded: embeddedCount,
+      topic
+    });
+
+  } catch (error) {
+    console.error('[DOC UPLOAD] Error:', error.message);
+    res.status(500).json({ error: 'Hujjat yuklashda xatolik: ' + error.message });
+  } finally {
+    if (filePath) fs.unlink(filePath, () => {});
+  }
+});
+
+// GET /api/rag/uploaded-documents — list all uploaded documents
+app.get('/api/rag/uploaded-documents', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT doc_id, law_name, category, source_type,
+             COUNT(*) AS chunk_count,
+             COUNT(*) FILTER (WHERE embedding IS NOT NULL) AS embedded_count,
+             MIN(created_at) AS uploaded_at
+      FROM legal_chunks
+      WHERE source_type IN ('uploaded_doc', 'law_text')
+      GROUP BY doc_id, law_name, category, source_type
+      ORDER BY MIN(created_at) DESC
+      LIMIT 100
+    `);
+    res.json({ documents: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/rag/uploaded-documents/:docId — remove uploaded document from corpus
+app.delete('/api/rag/uploaded-documents/:docId', requireMasterAdmin, async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const result = await pool.query(
+      `DELETE FROM legal_chunks WHERE doc_id = $1 AND source_type = 'uploaded_doc' RETURNING id`,
+      [decodeURIComponent(docId)]
+    );
+    res.json({ success: true, deleted: result.rowCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

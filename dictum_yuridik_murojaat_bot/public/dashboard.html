@@ -1533,6 +1533,19 @@
         .feedback-actions .btn { flex: 1; }
         .corpus-checkbox-label { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 13px; color: #6d3df9; cursor: pointer; background: #f3efff; border: 1px solid #d4c5ff; border-radius: 8px; padding: 8px 12px; margin-bottom: 4px; }
         .corpus-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: #6d3df9; cursor: pointer; }
+        .ai-doc-upload-section { padding: 12px; border-top: 1px solid var(--border-color, #e5e7eb); margin-top: auto; }
+        .ai-doc-upload-hint { font-size: 11px; color: #888; margin: 4px 0 8px; line-height: 1.4; }
+        .ai-doc-topic-select, .ai-doc-name-input { width: 100%; padding: 7px 9px; border: 1px solid #d4c5ff; border-radius: 8px; font-size: 12px; margin-bottom: 6px; background: var(--bg-secondary, #fff); color: var(--text-primary, #1a1a2e); box-sizing: border-box; }
+        .ai-doc-file-label { display: block; padding: 7px 10px; background: #f3efff; border: 1px dashed #d4c5ff; border-radius: 8px; font-size: 12px; color: #6d3df9; cursor: pointer; text-align: center; margin-bottom: 6px; transition: background 0.2s; }
+        .ai-doc-file-label:hover { background: #e9e0ff; }
+        .ai-doc-file-label input[type="file"] { display: none; }
+        .ai-doc-selected-file { font-size: 11px; color: #555; margin-bottom: 6px; padding: 4px 8px; background: #f8f6ff; border-radius: 6px; word-break: break-all; }
+        .ai-doc-upload-btn { width: 100%; padding: 8px; background: #6d3df9; color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; transition: background 0.2s; }
+        .ai-doc-upload-btn:hover:not(:disabled) { background: #5a2dd6; }
+        .ai-doc-upload-btn:disabled { background: #b8a0f0; cursor: default; }
+        .ai-doc-upload-status { margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5; }
+        .ai-doc-upload-status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+        .ai-doc-upload-status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
         .ai-verify-row { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
         .ai-verify-btn { background: #f3efff; color: #6d3df9; border: 1px solid #d4c5ff; border-radius: 20px; padding: 5px 14px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
         .ai-verify-btn:hover:not(:disabled) { background: #6d3df9; color: #fff; border-color: #6d3df9; }
@@ -4550,6 +4563,38 @@
                         <div class="ai-history-empty">Hali suhbat yo'q</div>
                     </div>
                 </div>
+
+                <!-- Document Upload -->
+                <div class="ai-doc-upload-section">
+                    <div class="ai-history-title">📂 Hujjat yuklash</div>
+                    <p class="ai-doc-upload-hint">PDF, TXT yoki DOCX hujjatni korpusga qo'shing — AI shu hujjat asosida javob beradi</p>
+                    <select id="docUploadTopic" class="ai-doc-topic-select">
+                        <option value="">— Soha tanlang —</option>
+                        <option value="mehnat">Mehnat huquqi</option>
+                        <option value="oila">Oila huquqi</option>
+                        <option value="fuqarolik">Fuqarolik huquqi</option>
+                        <option value="shartnoma">Shartnoma huquqi</option>
+                        <option value="soliq">Soliq huquqi</option>
+                        <option value="jinoyat">Jinoyat huquqi</option>
+                        <option value="mamuriy">Ma'muriy javobgarlik</option>
+                        <option value="korporativ">Korporativ huquq</option>
+                        <option value="tadbirkorlik">Tadbirkorlik huquqi</option>
+                        <option value="uy-joy">Uy-joy oldi-sotdisi</option>
+                        <option value="mulk">Mulk huquqi</option>
+                        <option value="notarius">Notarius xizmatlari</option>
+                        <option value="ijtimoiy">Ijtimoiy himoya</option>
+                    </select>
+                    <input type="text" id="docUploadName" class="ai-doc-name-input" placeholder="Hujjat nomi (ixtiyoriy)">
+                    <label class="ai-doc-file-label" id="docFileLabel">
+                        <input type="file" id="docFileInput" accept=".pdf,.txt,.docx,.doc" onchange="onDocFileSelected(this)">
+                        📄 Fayl tanlash (PDF / TXT / DOCX)
+                    </label>
+                    <div id="docSelectedFile" class="ai-doc-selected-file" style="display:none"></div>
+                    <button class="ai-doc-upload-btn" id="docUploadBtn" onclick="uploadLegalDocument()" disabled>
+                        ⬆ Korpusga yuklash
+                    </button>
+                    <div id="docUploadStatus" class="ai-doc-upload-status" style="display:none"></div>
+                </div>
             </div>
 
             <!-- Sidebar backdrop for mobile -->
@@ -6969,7 +7014,71 @@
         var selectedDatabases = ['lex.uz'];
         var selectedTopic = null;
         var aiChatHistory = [];
-        var aiVerifyMap = {}; // stores {question, answer, topic} by msgId for corpus verification
+        var aiVerifyMap = {};
+
+        function onDocFileSelected(input) {
+            var btn = document.getElementById('docUploadBtn');
+            var label = document.getElementById('docSelectedFile');
+            if (input.files && input.files[0]) {
+                label.textContent = '📄 ' + input.files[0].name + ' (' + (input.files[0].size / 1024).toFixed(0) + ' KB)';
+                label.style.display = 'block';
+                btn.disabled = false;
+            } else {
+                label.style.display = 'none';
+                btn.disabled = true;
+            }
+        }
+
+        async function uploadLegalDocument() {
+            var topic = document.getElementById('docUploadTopic').value;
+            var docName = document.getElementById('docUploadName').value.trim();
+            var fileInput = document.getElementById('docFileInput');
+            var statusEl = document.getElementById('docUploadStatus');
+            var btn = document.getElementById('docUploadBtn');
+
+            if (!topic) { alert('Iltimos, soha tanlang'); return; }
+            if (!fileInput.files || !fileInput.files[0]) { alert('Iltimos, fayl tanlang'); return; }
+
+            var formData = new FormData();
+            formData.append('document', fileInput.files[0]);
+            formData.append('topic', topic);
+            if (docName) formData.append('law_name', docName);
+
+            btn.disabled = true;
+            btn.textContent = 'Yuklanmoqda...';
+            statusEl.style.display = 'none';
+
+            try {
+                var resp = await fetch('/api/rag/upload-document', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData
+                });
+                var data = await resp.json();
+                if (resp.ok && data.success) {
+                    statusEl.className = 'ai-doc-upload-status success';
+                    statusEl.innerHTML = '✅ <b>' + escapeHtml(data.doc_name) + '</b> yuklandi!<br>' +
+                        data.chunks + ' bo\'lak' + (data.embedded > 0 ? ', ' + data.embedded + ' ta vektori' : ' (vektorsiz, matn qidiruvi)');
+                    statusEl.style.display = 'block';
+                    fileInput.value = '';
+                    document.getElementById('docSelectedFile').style.display = 'none';
+                    document.getElementById('docUploadName').value = '';
+                    btn.textContent = '⬆ Korpusga yuklash';
+                } else {
+                    statusEl.className = 'ai-doc-upload-status error';
+                    statusEl.textContent = '❌ ' + (data.error || 'Xatolik yuz berdi');
+                    statusEl.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = '⬆ Korpusga yuklash';
+                }
+            } catch(e) {
+                statusEl.className = 'ai-doc-upload-status error';
+                statusEl.textContent = '❌ Tarmoq xatoligi';
+                statusEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = '⬆ Korpusga yuklash';
+            }
+        } // stores {question, answer, topic} by msgId for corpus verification
 
         // Direct verify — no editing
         async function verifyAiAnswer(msgId) {
