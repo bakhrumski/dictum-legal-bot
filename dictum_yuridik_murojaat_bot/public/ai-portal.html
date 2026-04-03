@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dictum AI — Yuridik AI Yordamchi</title>
+<link rel="icon" href="/jurist_logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   DESIGN SYSTEM — Dictum AI Portal
+   Based on dark SaaS aesthetic
+   ═══════════════════════════════════════════ */
+:root {
+  --bg-primary: #0B1120;
+  --bg-secondary: #111827;
+  --bg-card: #151D2E;
+  --bg-card-hover: #1A2540;
+  --border-color: #1E293B;
+  --border-accent: #0B8175;
+  --accent: #0ECB81;
+  --accent-teal: #0B8175;
+  --accent-blue: #3B82F6;
+  --accent-purple: #8B5CF6;
+  --accent-orange: #F59E0B;
+  --accent-cyan: #06B6D4;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --gradient-cta: linear-gradient(135deg, #0B8175 0%, #065F56 40%, #1E40AF 100%);
+  --gradient-hero: radial-gradient(ellipse at 20% 50%, rgba(11,129,117,0.15) 0%, transparent 60%),
+                   radial-gradient(ellipse at 80% 20%, rgba(59,130,246,0.08) 0%, transparent 50%);
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.25);
+  --shadow-glow: 0 0 40px rgba(11,129,117,0.15);
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══ LAYOUT ═══ */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+/* ═══ HEADER ═══ */
+.header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(11,17,32,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-color);
+  padding: 14px 0;
+}
+.header .container { display: flex; align-items: center; justify-content: space-between; }
+.logo-group { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.logo-icon {
+  width: 36px; height: 36px; background: var(--accent-teal);
+  border-radius: 10px; display: flex; align-items: center; justify-content: center;
+}
+.logo-icon svg { width: 20px; height: 20px; color: #fff; }
+.logo-text { font-weight: 700; font-size: 18px; color: var(--text-primary); letter-spacing: -0.3px; }
+.logo-sub { font-size: 10px; color: var(--text-muted); font-weight: 400; display: block; margin-top: -2px; letter-spacing: 0.5px; }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.lang-switch {
+  display: flex; align-items: center; gap: 4px; padding: 5px 10px;
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer;
+}
+.lang-switch:hover { border-color: var(--accent-teal); }
+.btn-login {
+  padding: 7px 20px; background: var(--accent-teal); color: #fff;
+  border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; font-family: var(--font);
+}
+.btn-login:hover { background: #0DA593; box-shadow: 0 0 20px rgba(11,129,117,0.3); }
+
+/* ═══ HERO ═══ */
+.hero {
+  padding: 140px 0 80px;
+  background: var(--gradient-hero);
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: ''; position: absolute; left: -150px; top: 50%; transform: translateY(-50%);
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(11,129,117,0.12) 0%, transparent 70%);
+  border-radius: 50%; filter: blur(60px);
+}
+.hero .container { display: flex; align-items: center; gap: 60px; position: relative; z-index: 1; }
+.hero-content { flex: 1; }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; background: rgba(11,129,117,0.12);
+  border: 1px solid rgba(11,129,117,0.25); border-radius: 20px;
+  font-size: 12px; color: var(--accent); font-weight: 500; margin-bottom: 20px;
+}
+.hero-badge svg { width: 14px; height: 14px; }
+.hero h1 {
+  font-size: 48px; font-weight: 800; line-height: 1.15;
+  letter-spacing: -1.5px; margin-bottom: 18px;
+  background: linear-gradient(135deg, #F1F5F9 30%, #0ECB81 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero p { font-size: 17px; color: var(--text-secondary); max-width: 500px; line-height: 1.7; margin-bottom: 30px; }
+.hero-buttons { display: flex; gap: 12px; margin-bottom: 40px; }
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 28px; background: var(--accent-teal); color: #fff;
+  border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: all 0.25s; font-family: var(--font); text-decoration: none;
+}
+.btn-primary:hover { background: #0DA593; box-shadow: var(--shadow-glow); transform: translateY(-1px); }
+.btn-primary svg { width: 16px; height: 16px; }
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 28px; background: transparent; color: var(--text-primary);
+  border: 1px solid var(--border-color); border-radius: 10px;
+  font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.25s;
+  font-family: var(--font); text-decoration: none;
+}
+.btn-secondary:hover { border-color: var(--text-muted); background: rgba(255,255,255,0.03); }
+.hero-stats { display: flex; gap: 40px; }
+.hero-stat-value { font-size: 26px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+.hero-stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-top: 2px; }
+
+/* Hero visual */
+.hero-visual {
+  width: 380px; min-height: 260px; flex-shrink: 0;
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 40px;
+  position: relative; overflow: hidden;
+}
+.hero-visual::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at center, rgba(11,129,117,0.08), transparent 70%);
+}
+.hero-visual-icon {
+  width: 72px; height: 72px; background: var(--accent-teal);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  margin-bottom: 18px; box-shadow: 0 0 40px rgba(11,129,117,0.25);
+  position: relative; z-index: 1;
+}
+.hero-visual-icon svg { width: 32px; height: 32px; color: #fff; }
+.hero-visual-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; position: relative; z-index: 1; }
+.hero-visual-sub { font-size: 13px; color: var(--text-muted); position: relative; z-index: 1; }
+
+/* ═══ SECTION BASE ═══ */
+.section { padding: 80px 0; }
+.section-dark { background: var(--bg-secondary); }
+.section-title { font-size: 32px; font-weight: 800; text-align: center; letter-spacing: -0.8px; margin-bottom: 10px; }
+.section-subtitle { font-size: 15px; color: var(--text-secondary); text-align: center; max-width: 600px; margin: 0 auto 50px; }
+
+/* ═══ FEATURES ═══ */
+.features-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.feature-card {
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg); padding: 28px 24px; transition: all 0.25s;
+}
+.feature-card:hover { border-color: var(--accent-teal); transform: translateY(-3px); box-shadow: var(--shadow-card); }
+.feature-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 18px;
+}
+.feature-icon svg { width: 22px; height: 22px; }
+.feature-icon.teal { background: rgba(11,129,117,0.15); color: var(--accent-teal); }
+.feature-icon.blue { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+.feature-icon.purple { background: rgba(139,92,246,0.15); color: var(--accent-purple); }
+.feature-icon.orange { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
+.feature-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.feature-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+
+/* ═══ HOW IT WORKS ═══ */
+.steps-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; position: relative; }
+.step-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 28px 24px; position: relative; }
+.step-number {
+  width: 36px; height: 36px; background: var(--accent-teal); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 16px;
+}
+.step-arrow {
+  position: absolute; right: -18px; top: 42px; color: var(--text-muted); font-size: 18px; z-index: 2;
+}
+.step-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+.step-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+
+/* ═══ FEATURE BLOCKS ═══ */
+.feature-blocks { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.feature-block {
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl); padding: 36px 32px;
+}
+.feature-block-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 20px;
+}
+.feature-block-icon.teal { background: rgba(11,129,117,0.15); color: var(--accent); }
+.feature-block-icon.blue { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+.feature-block-icon svg { width: 24px; height: 24px; }
+.feature-block h3 { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+.feature-block p { font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 20px; }
+.feature-list { list-style: none; }
+.feature-list li {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: var(--text-secondary); padding: 6px 0;
+}
+.feature-list li::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.feature-list.teal li::before { background: var(--accent); }
+.feature-list.blue li::before { background: var(--accent-blue); }
+
+/* ═══ PRICING ═══ */
+.pricing-toggle {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-bottom: 40px;
+}
+.pricing-toggle-btn {
+  padding: 8px 20px; border: 1px solid var(--border-color); background: transparent;
+  color: var(--text-secondary); border-radius: 8px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; font-family: var(--font);
+}
+.pricing-toggle-btn.active { background: var(--accent-teal); color: #fff; border-color: var(--accent-teal); }
+.pricing-toggle-btn .badge {
+  display: inline-block; padding: 1px 6px; background: rgba(14,203,129,0.15);
+  color: var(--accent); border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 4px;
+}
+.pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.pricing-card {
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl); padding: 32px 26px; position: relative;
+  transition: all 0.3s; display: flex; flex-direction: column;
+}
+.pricing-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-card); }
+.pricing-card.featured {
+  border-color: var(--accent-teal); box-shadow: var(--shadow-glow);
+}
+.pricing-card.featured::before {
+  content: 'Mashhur'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  padding: 4px 14px; background: var(--accent-teal); color: #fff;
+  border-radius: 12px; font-size: 11px; font-weight: 600;
+}
+.pricing-tier { font-size: 13px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+.pricing-price { font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+.pricing-price .currency { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
+.pricing-period { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+.pricing-features { list-style: none; margin-bottom: 28px; flex: 1; }
+.pricing-features li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; color: var(--text-secondary); padding: 7px 0;
+}
+.pricing-features li svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.pricing-btn {
+  width: 100%; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; font-family: var(--font);
+}
+.pricing-btn-outline { background: transparent; color: var(--text-primary); border: 1px solid var(--border-color); }
+.pricing-btn-outline:hover { border-color: var(--accent-teal); color: var(--accent); }
+.pricing-btn-filled { background: var(--accent-teal); color: #fff; border: none; }
+.pricing-btn-filled:hover { background: #0DA593; box-shadow: var(--shadow-glow); }
+
+/* Limit bar visualization */
+.limit-bar-container { margin: 16px 0; }
+.limit-bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.limit-bar {
+  height: 6px; background: var(--bg-primary); border-radius: 3px; overflow: hidden;
+}
+.limit-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+.limit-bar-fill.silver { width: 20%; background: var(--accent-teal); }
+.limit-bar-fill.gold { width: 50%; background: var(--accent-blue); }
+.limit-bar-fill.platinum { width: 100%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-orange)); }
+
+/* ═══ CTA ═══ */
+.cta-section {
+  padding: 80px 0;
+  background: var(--gradient-cta);
+  text-align: center;
+}
+.cta-section h2 { font-size: 36px; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.8px; }
+.cta-section p { font-size: 16px; color: rgba(255,255,255,0.75); margin-bottom: 30px; }
+.btn-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 36px; background: #fff; color: var(--bg-primary);
+  border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: all 0.25s; font-family: var(--font);
+}
+.btn-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+.btn-cta svg { width: 16px; height: 16px; }
+
+/* ═══ FOOTER ═══ */
+.footer {
+  padding: 30px 0; border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+.footer .container { display: flex; align-items: center; justify-content: space-between; }
+.footer-copy { font-size: 12px; color: var(--text-muted); }
+
+/* ═══ AUTH MODAL ═══ */
+.auth-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
+}
+.auth-overlay.active { display: flex; }
+.auth-card {
+  width: 440px; max-width: 95vw; background: var(--bg-card);
+  border: 1px solid var(--border-color); border-radius: var(--radius-xl);
+  padding: 36px 32px; position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.auth-close {
+  position: absolute; top: 16px; right: 16px; background: none; border: none;
+  color: var(--text-muted); cursor: pointer; font-size: 20px; width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center; border-radius: 8px;
+}
+.auth-close:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+.auth-toggle-group {
+  display: flex; background: var(--bg-primary); border-radius: 10px;
+  padding: 4px; margin-bottom: 28px;
+}
+.auth-toggle-btn {
+  flex: 1; padding: 10px; border: none; background: transparent;
+  color: var(--text-muted); font-size: 14px; font-weight: 600;
+  border-radius: 8px; cursor: pointer; transition: all 0.2s; font-family: var(--font);
+}
+.auth-toggle-btn.active { background: var(--accent-teal); color: #fff; }
+.auth-form { display: none; }
+.auth-form.active { display: block; }
+.auth-field { margin-bottom: 16px; }
+.auth-field label { display: block; font-size: 13px; color: var(--text-secondary); font-weight: 500; margin-bottom: 6px; }
+.auth-field input, .auth-field select {
+  width: 100%; padding: 11px 14px; background: var(--bg-primary);
+  border: 1px solid var(--border-color); border-radius: 10px;
+  color: var(--text-primary); font-size: 14px; font-family: var(--font);
+  outline: none; transition: border-color 0.2s;
+}
+.auth-field input:focus, .auth-field select:focus { border-color: var(--accent-teal); }
+.auth-field input::placeholder { color: var(--text-muted); }
+.auth-row { display: flex; gap: 12px; }
+.auth-row .auth-field { flex: 1; }
+.auth-submit {
+  width: 100%; padding: 12px; background: var(--accent-teal); color: #fff;
+  border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; font-family: var(--font); margin-top: 8px;
+}
+.auth-submit:hover { background: #0DA593; box-shadow: var(--shadow-glow); }
+.auth-submit:disabled { background: #1E293B; color: var(--text-muted); cursor: default; }
+.auth-divider { text-align: center; font-size: 12px; color: var(--text-muted); margin: 16px 0; }
+.auth-trust {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 16px; font-size: 11px; color: var(--text-muted);
+}
+.auth-trust svg { width: 14px; height: 14px; color: var(--accent); }
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 1024px) {
+  .features-grid, .steps-grid, .pricing-grid { grid-template-columns: repeat(2, 1fr); }
+  .step-arrow { display: none; }
+}
+@media (max-width: 768px) {
+  .hero .container { flex-direction: column; text-align: center; }
+  .hero h1 { font-size: 34px; }
+  .hero p { margin: 0 auto 30px; }
+  .hero-buttons { justify-content: center; }
+  .hero-stats { justify-content: center; }
+  .hero-visual { width: 100%; max-width: 320px; margin: 0 auto; }
+  .features-grid, .steps-grid { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
+  .feature-blocks { grid-template-columns: 1fr; }
+  .section-title { font-size: 26px; }
+}
+@media (max-width: 480px) {
+  .hero h1 { font-size: 28px; }
+  .hero-buttons { flex-direction: column; }
+  .hero-stats { flex-wrap: wrap; gap: 24px; }
+  .pricing-toggle { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="header">
+  <div class="container">
+    <a href="#" class="logo-group">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div>
+        <span class="logo-text">Dictum AI</span>
+        <span class="logo-sub">Yuridik AI Yordamchi</span>
+      </div>
+    </a>
+    <div class="header-actions">
+      <button class="lang-switch" onclick="cycleLang()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span id="langLabel">O'z</span>
+      </button>
+      <button class="btn-login" onclick="openAuth('login')">Kirish</button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        AI bilan ishlaydi
+      </div>
+      <h1>Sizning shaxsiy<br>yuridik AI yordamchingiz</h1>
+      <p>O'zbekiston qonunchiligi bo'yicha tezkor, aniq va chuqur huquqiy tahlil. RAG texnologiyasi asosida ishlaydi — har bir javob qonun matni bilan asoslanadi.</p>
+      <div class="hero-buttons">
+        <button class="btn-primary" onclick="openAuth('register')">
+          Boshlash
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+        <a href="#features" class="btn-secondary">Batafsil</a>
+      </div>
+      <div class="hero-stats">
+        <div><div class="hero-stat-value">13+</div><div class="hero-stat-label">Huquqiy soha</div></div>
+        <div><div class="hero-stat-value">50+</div><div class="hero-stat-label">Qonunlar bazasi</div></div>
+        <div><div class="hero-stat-value">99%</div><div class="hero-stat-label">Aniqlik</div></div>
+        <div><div class="hero-stat-value">24/7</div><div class="hero-stat-label">AI qo'llab-quvvatlash</div></div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hero-visual-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      </div>
+      <div class="hero-visual-title">AI Yordamchi tayyor</div>
+      <div class="hero-visual-sub">Hoziroq boshlang</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ WHY DICTUM AI ═══ -->
+<section class="section section-dark" id="features">
+  <div class="container">
+    <h2 class="section-title">Nima uchun Dictum AI?</h2>
+    <p class="section-subtitle">Professional yuristlar uchun barcha kerakli AI vositalar bir joyda</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon teal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        </div>
+        <h3>RAG Qidiruv</h3>
+        <p>O'zbekiston qonunchiligi bazasidan real-time qidiruv. Har bir javob manba bilan to'liq asoslanadi.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
+        <h3>AI Tahlil</h3>
+        <p>Chuqur huquqiy tahlil — tegishli qonunlar, moddalar, amaliy qadamlar va maslahatlar.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        </div>
+        <h3>24/7 Ishlaydi</h3>
+        <p>Tun-kun farqi yo'q — har doim tayyor. Yuristlar vaqtini tejaydi va samaradorlikni oshiradi.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <h3>Yurist Nazorati</h3>
+        <p>Har bir AI javob professional yuristlar tomonidan tekshiriladi va tasdiqlanadi.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HOW IT WORKS ═══ -->
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">Qanday ishlaydi?</h2>
+    <p class="section-subtitle">4 oddiy qadamda boshlang</p>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <span class="step-arrow">&#10132;</span>
+        <h3>Ro'yxatdan o'ting</h3>
+        <p>Tezkor ro'yxatdan o'tish — 1 daqiqada tayyor.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <span class="step-arrow">&#10132;</span>
+        <h3>Tarif tanlang</h3>
+        <p>Ehtiyojingizga mos tarif — bepul sinov davri bor.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <span class="step-arrow">&#10132;</span>
+        <h3>Savol bering</h3>
+        <p>AI chatga huquqiy savolingizni yozing — istalgan tilda.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">4</div>
+        <h3>Natija oling</h3>
+        <p>Qonunga asoslangan chuqur tahlil va amaliy maslahat.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FEATURE BLOCKS ═══ -->
+<section class="section section-dark">
+  <div class="container">
+    <div class="feature-blocks">
+      <div class="feature-block">
+        <div class="feature-block-icon teal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
+        <h3>RAG asosida aniq javoblar</h3>
+        <p>AI qonun bazasidan tegishli moddalarni topadi va javobni shu matnlar asosida beradi. To'qib chiqarish yo'q.</p>
+        <ul class="feature-list teal">
+          <li>Lex.uz dan real-time qidiruv</li>
+          <li>Modda raqamlarini aniq ko'rsatish</li>
+          <li>Yurist tomonidan tasdiqlangan javoblar</li>
+          <li>Doimiy yangilanuvchi qonun bazasi</li>
+        </ul>
+      </div>
+      <div class="feature-block">
+        <div class="feature-block-icon blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3>AI yordamchi siz tushunadi</h3>
+        <p>Savollaringizni oddiy tilda bering — AI professional yuridik tahlil bilan javob beradi.</p>
+        <ul class="feature-list blue">
+          <li>O'zbek, rus, ingliz tillarida</li>
+          <li>Sizning sohangizga moslashadi</li>
+          <li>Amaliy qadamlarni ko'rsatadi</li>
+          <li>Murakkab tushunchalarni tushuntiradi</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ PRICING ═══ -->
+<section class="section" id="pricing">
+  <div class="container">
+    <h2 class="section-title">Tariflar</h2>
+    <p class="section-subtitle">Ehtiyojingizga mos rejani tanlang</p>
+
+    <div class="pricing-toggle">
+      <button class="pricing-toggle-btn active" onclick="setPeriod(1, this)">1 oy</button>
+      <button class="pricing-toggle-btn" onclick="setPeriod(3, this)">3 oy <span class="badge">-10%</span></button>
+      <button class="pricing-toggle-btn" onclick="setPeriod(6, this)">6 oy <span class="badge">-15%</span></button>
+    </div>
+
+    <div class="pricing-grid">
+      <!-- Trial -->
+      <div class="pricing-card">
+        <div class="pricing-tier">Sinov</div>
+        <div class="pricing-price">Bepul</div>
+        <div class="pricing-period">1 hafta davomida</div>
+        <ul class="pricing-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>AI chat — asosiy rejim</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Kuniga 10 ta so'rov</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>RAG qidiruv (cheklangan)</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Asosiy huquqiy sohalar</li>
+        </ul>
+        <button class="pricing-btn pricing-btn-outline" onclick="openAuth('register')">Sinab ko'rish</button>
+      </div>
+
+      <!-- Silver -->
+      <div class="pricing-card">
+        <div class="pricing-tier">Silver</div>
+        <div class="pricing-price" id="priceSilver">299,000 <span class="currency">so'm</span></div>
+        <div class="pricing-period">oyiga</div>
+        <div class="limit-bar-container">
+          <div class="limit-bar-label"><span>So'rov limiti</span><span>Standart</span></div>
+          <div class="limit-bar"><div class="limit-bar-fill silver"></div></div>
+        </div>
+        <ul class="pricing-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Professional AI yordamchi</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Oyiga 300 ta so'rov</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>RAG to'liq qidiruv</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>13 ta huquqiy soha</li>
+        </ul>
+        <button class="pricing-btn pricing-btn-outline" onclick="openAuth('register')">Tanlash</button>
+      </div>
+
+      <!-- Gold -->
+      <div class="pricing-card featured">
+        <div class="pricing-tier">Gold</div>
+        <div class="pricing-price" id="priceGold">599,000 <span class="currency">so'm</span></div>
+        <div class="pricing-period">oyiga</div>
+        <div class="limit-bar-container">
+          <div class="limit-bar-label"><span>So'rov limiti</span><span>2.5x Silver</span></div>
+          <div class="limit-bar"><div class="limit-bar-fill gold"></div></div>
+        </div>
+        <ul class="pricing-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Oyiga 750 ta so'rov</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Ustuvor navbat</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Hujjat tahlili (OCR)</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>RAG + web qidiruv</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Chuqur huquqiy tahlil</li>
+        </ul>
+        <button class="pricing-btn pricing-btn-filled" onclick="openAuth('register')">Tanlash</button>
+      </div>
+
+      <!-- Platinum -->
+      <div class="pricing-card">
+        <div class="pricing-tier">Platinum</div>
+        <div class="pricing-price" id="pricePlatinum">1,199,000 <span class="currency">so'm</span></div>
+        <div class="pricing-period">oyiga</div>
+        <div class="limit-bar-container">
+          <div class="limit-bar-label"><span>So'rov limiti</span><span>5x Silver</span></div>
+          <div class="limit-bar"><div class="limit-bar-fill platinum"></div></div>
+        </div>
+        <ul class="pricing-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Oyiga 1,500 ta so'rov</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Ultra-yuqori kontekst</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Lex.uz yangilanishlar — birinchi</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Shaxsiy konsierj</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>API integratsiya</li>
+        </ul>
+        <button class="pricing-btn pricing-btn-outline" onclick="openAuth('register')">Tanlash</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CTA ═══ -->
+<section class="cta-section">
+  <h2>AI bilan huquqiy ishlarni boshlang</h2>
+  <p>Yuzlab yuristlar allaqachon Dictum AI dan foydalanmoqda</p>
+  <button class="btn-cta" onclick="openAuth('register')">
+    Bepul sinab ko'rish
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+  </button>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="footer">
+  <div class="container">
+    <a href="#" class="logo-group" style="text-decoration:none">
+      <div class="logo-icon" style="width:28px;height:28px;border-radius:8px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:#fff"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div>
+        <span class="logo-text" style="font-size:14px;">Dictum AI</span>
+        <span class="logo-sub">Yuridik AI Yordamchi</span>
+      </div>
+    </a>
+    <div class="footer-copy">&copy; 2025 Dictum. Barcha huquqlar himoyalangan.</div>
+  </div>
+</footer>
+
+<!-- ═══ AUTH MODAL ═══ -->
+<div class="auth-overlay" id="authOverlay" onclick="if(event.target===this)closeAuth()">
+  <div class="auth-card">
+    <button class="auth-close" onclick="closeAuth()">&times;</button>
+
+    <div class="auth-toggle-group">
+      <button class="auth-toggle-btn active" id="tabLogin" onclick="switchAuthTab('login')">Kirish</button>
+      <button class="auth-toggle-btn" id="tabRegister" onclick="switchAuthTab('register')">Ro'yxatdan o'tish</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <form class="auth-form active" id="formLogin" onsubmit="handleLogin(event)">
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" placeholder="email@example.com" required>
+      </div>
+      <div class="auth-field">
+        <label>Parol</label>
+        <input type="password" placeholder="Parolingiz" required>
+      </div>
+      <button type="submit" class="auth-submit">Kirish</button>
+      <div class="auth-trust">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Verified Legal AI
+      </div>
+    </form>
+
+    <!-- REGISTER FORM -->
+    <form class="auth-form" id="formRegister" onsubmit="handleRegister(event)">
+      <div class="auth-field">
+        <label>F.I.O.</label>
+        <input type="text" placeholder="To'liq ismingiz" required>
+      </div>
+      <div class="auth-row">
+        <div class="auth-field">
+          <label>Yuridik firma (ixtiyoriy)</label>
+          <input type="text" placeholder="Firma nomi">
+        </div>
+        <div class="auth-field">
+          <label>Telefon</label>
+          <input type="tel" placeholder="+998 __ ___ __ __" required>
+        </div>
+      </div>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" placeholder="email@example.com" required>
+      </div>
+      <div class="auth-field">
+        <label>Parol</label>
+        <input type="password" placeholder="Kamida 8 belgi" required minlength="8">
+      </div>
+      <div class="auth-field">
+        <label>Tarif</label>
+        <select>
+          <option value="trial">Sinov (1 hafta bepul)</option>
+          <option value="silver">Silver — 299,000 so'm/oy</option>
+          <option value="gold" selected>Gold — 599,000 so'm/oy</option>
+          <option value="platinum">Platinum — 1,199,000 so'm/oy</option>
+        </select>
+      </div>
+      <button type="submit" class="auth-submit">Ro'yxatdan o'tish</button>
+      <div class="auth-trust">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Verified Legal AI
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// ═══ AUTH MODAL ═══
+function openAuth(tab) {
+  document.getElementById('authOverlay').classList.add('active');
+  switchAuthTab(tab || 'login');
+}
+function closeAuth() {
+  document.getElementById('authOverlay').classList.remove('active');
+}
+function switchAuthTab(tab) {
+  document.getElementById('formLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('formRegister').classList.toggle('active', tab === 'register');
+  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+}
+function handleLogin(e) { e.preventDefault(); alert('Kirish funksiyasi ulangandan keyin ishlaydi'); }
+function handleRegister(e) { e.preventDefault(); alert('Ro\'yxatdan o\'tish ulangandan keyin ishlaydi'); }
+
+// ═══ PRICING TOGGLE ═══
+var basePrices = { silver: 299000, gold: 599000, platinum: 1199000 };
+var discounts = { 1: 0, 3: 0.10, 6: 0.15 };
+
+function setPeriod(months, btn) {
+  document.querySelectorAll('.pricing-toggle-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  for (var tier in basePrices) {
+    var price = Math.round(basePrices[tier] * (1 - discounts[months]));
+    var formatted = price.toLocaleString('uz-UZ');
+    document.getElementById('price' + tier.charAt(0).toUpperCase() + tier.slice(1)).innerHTML =
+      formatted + ' <span class="currency">so\'m</span>';
+  }
+}
+
+// ═══ LANG SWITCH ═══
+var langs = ['O\'z', 'Ру', 'En'];
+var langIdx = 0;
+function cycleLang() {
+  langIdx = (langIdx + 1) % langs.length;
+  document.getElementById('langLabel').textContent = langs[langIdx];
+}
+</script>
+
+</body>
+</html>
