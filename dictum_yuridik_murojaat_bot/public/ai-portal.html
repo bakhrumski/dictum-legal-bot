@@ -81,6 +81,18 @@ body {
   cursor: pointer; transition: all 0.2s; font-family: var(--font);
 }
 .btn-login:hover { background: #0DA593; box-shadow: 0 0 20px rgba(11,129,117,0.3); }
+/* Ghost button — JuristAI bridge */
+.btn-juristai {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 16px; background: transparent; color: var(--accent-teal);
+  border: 1px solid var(--accent-teal); border-radius: 8px;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.25s;
+  font-family: var(--font); text-decoration: none; white-space: nowrap;
+}
+.btn-juristai:hover {
+  background: rgba(11,129,117,0.1); box-shadow: 0 0 20px rgba(11,129,117,0.15);
+  color: var(--accent);
+}
 
 /* ═══ HERO ═══ */
 .hero {
@@ -360,6 +372,74 @@ body {
 }
 .auth-trust svg { width: 14px; height: 14px; color: var(--accent); }
 
+/* JuristAI Bridge Card */
+.juristai-bridge-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; background: transparent;
+  border: 1px solid var(--accent-teal); border-radius: var(--radius);
+  text-decoration: none; color: var(--text-primary); transition: all 0.25s;
+  margin-bottom: 10px;
+}
+.juristai-bridge-card:hover {
+  background: rgba(11,129,117,0.08); border-color: var(--accent);
+  box-shadow: 0 0 24px rgba(11,129,117,0.1);
+}
+.bridge-card-left { display: flex; align-items: center; gap: 12px; }
+.bridge-card-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(11,129,117,0.12); color: var(--accent-teal);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.juristai-bridge-card:hover .bridge-card-icon { background: rgba(11,129,117,0.2); color: var(--accent); }
+.bridge-card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.bridge-card-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+.bridge-card-arrow { color: var(--text-muted); transition: transform 0.2s; }
+.juristai-bridge-card:hover .bridge-card-arrow { transform: translateX(3px); color: var(--accent); }
+
+.bridge-sync-caption {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 10px; color: var(--text-muted); text-align: center;
+  margin-bottom: 14px; line-height: 1.4; padding: 0 8px;
+}
+.bridge-sync-caption svg { flex-shrink: 0; color: var(--accent-teal); }
+
+/* Help me choose */
+.help-choose {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12px; color: var(--accent-teal); cursor: pointer;
+  padding: 6px 0; transition: color 0.2s;
+}
+.help-choose:hover { color: var(--accent); }
+.help-choose svg { flex-shrink: 0; }
+
+/* Compare tooltip */
+.compare-tooltip {
+  display: none; flex-direction: row; gap: 0;
+  background: var(--bg-primary); border: 1px solid var(--border-color);
+  border-radius: var(--radius); padding: 16px; margin-top: 10px;
+  animation: tooltipFade 0.2s ease;
+}
+.compare-tooltip.active { display: flex; }
+@keyframes tooltipFade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.compare-col { flex: 1; }
+.compare-header {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border-color);
+}
+.compare-header.ai { color: var(--accent); }
+.compare-header.pro { color: var(--accent-blue); }
+.compare-divider { width: 1px; background: var(--border-color); margin: 0 14px; }
+.compare-col ul { list-style: none; }
+.compare-col ul li {
+  font-size: 12px; color: var(--text-secondary); padding: 3px 0;
+  display: flex; align-items: center; gap: 6px;
+}
+.compare-col ul li::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+}
+.compare-col:first-child ul li::before { background: var(--accent); }
+.compare-col:last-child ul li::before { background: var(--accent-blue); }
+
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 1024px) {
   .features-grid, .steps-grid, .pricing-grid { grid-template-columns: repeat(2, 1fr); }
@@ -382,6 +462,7 @@ body {
   .hero-buttons { flex-direction: column; }
   .hero-stats { flex-wrap: wrap; gap: 24px; }
   .pricing-toggle { flex-wrap: wrap; }
+  .btn-juristai { display: none; }
 }
 </style>
 </head>
@@ -404,6 +485,10 @@ body {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         <span id="langLabel">O'z</span>
       </button>
+      <a href="https://dictum-legal-bot-production.up.railway.app/login.html" class="btn-juristai" target="_blank" rel="noopener noreferrer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="M21 3l-9 9"/><path d="M15 3h6v6"/></svg>
+        JuristAI ga o'tish
+      </a>
       <button class="btn-login" onclick="openAuth('login')">Kirish</button>
     </div>
   </div>
@@ -726,6 +811,53 @@ body {
         Verified Legal AI
       </div>
     </form>
+
+    <!-- ═══ JURISTAI BRIDGE CARD ═══ -->
+    <div class="auth-divider">yoki</div>
+    <a href="https://dictum-legal-bot-production.up.railway.app/login.html" target="_blank" rel="noopener noreferrer" class="juristai-bridge-card">
+      <div class="bridge-card-left">
+        <div class="bridge-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="M21 3l-9 9"/><path d="M15 3h6v6"/></svg>
+        </div>
+        <div>
+          <div class="bridge-card-title">JuristAI ga o'tish</div>
+          <div class="bridge-card-sub">To'liq ish boshqaruvi va kengaytirilgan avtomatlashtirish uchun</div>
+        </div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="bridge-card-arrow"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </a>
+    <div class="bridge-sync-caption">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Yagona ekotizim: ma'lumotlaringiz AI yordamchi va asosiy platforma o'rtasida sinxronlashadi
+    </div>
+
+    <!-- ═══ HELP ME CHOOSE TOOLTIP ═══ -->
+    <div class="help-choose" onclick="toggleCompareTooltip()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Qaysi birini tanlashni bilmayapsizmi?
+    </div>
+    <div class="compare-tooltip" id="compareTooltip">
+      <div class="compare-col">
+        <div class="compare-header ai">Dictum AI</div>
+        <ul>
+          <li>Tezkor huquqiy tadqiqot</li>
+          <li>RAG asosidagi savol-javob</li>
+          <li>Hujjat tahlili</li>
+          <li>AI chatbot 24/7</li>
+        </ul>
+      </div>
+      <div class="compare-divider"></div>
+      <div class="compare-col">
+        <div class="compare-header pro">JuristAI</div>
+        <ul>
+          <li>Ish boshqaruvi (case tracking)</li>
+          <li>Firma miqyosida boshqaruv</li>
+          <li>Lex.uz to'liq ETL integratsiya</li>
+          <li>Barcha AI imkoniyatlar + boshqaruv</li>
+        </ul>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -746,6 +878,9 @@ function switchAuthTab(tab) {
 }
 function handleLogin(e) { e.preventDefault(); alert('Kirish funksiyasi ulangandan keyin ishlaydi'); }
 function handleRegister(e) { e.preventDefault(); alert('Ro\'yxatdan o\'tish ulangandan keyin ishlaydi'); }
+function toggleCompareTooltip() {
+  document.getElementById('compareTooltip').classList.toggle('active');
+}
 
 // ═══ PRICING TOGGLE ═══
 var basePrices = { silver: 299000, gold: 599000, platinum: 1199000 };
