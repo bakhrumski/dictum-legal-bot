@@ -22,8 +22,49 @@
  */
 
 const cheerio = require('cheerio');
+const https = require('https');
+const http = require('http');
 
 const LEX_BASE = 'https://lex.uz';
+
+/**
+ * Make an HTTP(S) GET request using Node built-in modules (no global fetch needed).
+ * Follows up to 5 redirects.
+ */
+function httpGet(url, maxRedirects = 5) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https') ? https : http;
+    const req = lib.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'uz,ru;q=0.9,en;q=0.8'
+      },
+      timeout: 60000,
+    }, (res) => {
+      // Follow redirects
+      if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) && res.headers.location) {
+        if (maxRedirects <= 0) return reject(new Error('Too many redirects'));
+        const next = res.headers.location.startsWith('http')
+          ? res.headers.location
+          : new URL(res.headers.location, url).href;
+        return httpGet(next, maxRedirects - 1).then(resolve, reject);
+      }
+
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+      }
+
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+  });
+}
 
 /**
  * Fetch a lex.uz document by URL or doc ID and return structured text.
@@ -38,19 +79,7 @@ async function fetchLexDocument(urlOrId) {
 
   console.log(`[FETCH-LEX] Fetching: ${url}`);
 
-  const resp = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': 'text/html,application/xhtml+xml',
-      'Accept-Language': 'uz,ru;q=0.9,en;q=0.8'
-    }
-  });
-
-  if (!resp.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${resp.status}`);
-  }
-
-  const html = await resp.text();
+  const html = await httpGet(url);
   console.log(`[FETCH-LEX] Downloaded ${(html.length / 1024).toFixed(0)} KB`);
 
   return parseLexHtml(html, url);

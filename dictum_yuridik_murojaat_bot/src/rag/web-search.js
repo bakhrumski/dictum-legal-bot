@@ -10,9 +10,44 @@
  * Free tier: 1000 req/month
  */
 
+const https = require('https');
+
 const TAVILY_URL = 'https://api.tavily.com/search';
 const MAX_RESULTS = 3;
 const TIMEOUT_MS = 10_000;
+
+/**
+ * POST JSON to an HTTPS endpoint using Node built-in https module.
+ */
+function httpsPost(url, body, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const payload = JSON.stringify(body);
+    const req = https.request({
+      hostname: parsed.hostname,
+      port: 443,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+      timeout: timeoutMs,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf-8');
+        resolve({ status: res.statusCode, text });
+      });
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Tavily timeout')); });
+    req.write(payload);
+    req.end();
+  });
+}
 
 /**
  * Search the web for legal information.
@@ -33,32 +68,21 @@ async function webSearch(query, { maxResults = MAX_RESULTS } = {}) {
   const enrichedQuery = `${query} законодательство Узбекистан lex.uz`;
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const resp = await httpsPost(TAVILY_URL, {
+      api_key: apiKey,
+      query: enrichedQuery,
+      search_depth: 'basic',
+      max_results: maxResults,
+      include_answer: false,
+      include_domains: ['lex.uz', 'gov.uz', 'norma.uz', 'parliament.gov.uz'],
+    }, TIMEOUT_MS);
 
-    const resp = await fetch(TAVILY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query: enrichedQuery,
-        search_depth: 'basic',
-        max_results: maxResults,
-        include_answer: false,
-        include_domains: ['lex.uz', 'gov.uz', 'norma.uz', 'parliament.gov.uz'],
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timer);
-
-    if (!resp.ok) {
-      const err = await resp.text().catch(() => '');
-      console.warn(`[WEB SEARCH] Tavily ${resp.status}: ${err.substring(0, 100)}`);
+    if (resp.status !== 200) {
+      console.warn(`[WEB SEARCH] Tavily ${resp.status}: ${resp.text.substring(0, 100)}`);
       return [];
     }
 
-    const data = await resp.json();
+    const data = JSON.parse(resp.text);
     const results = (data.results || []).map(r => ({
       title: r.title || '',
       url: r.url || '',
@@ -70,11 +94,7 @@ async function webSearch(query, { maxResults = MAX_RESULTS } = {}) {
     return results;
 
   } catch (err) {
-    if (err.name === 'AbortError') {
-      console.warn('[WEB SEARCH] Tavily timeout');
-    } else {
-      console.warn(`[WEB SEARCH] Tavily error: ${err.message}`);
-    }
+    console.warn(`[WEB SEARCH] Tavily error: ${err.message}`);
     return [];
   }
 }

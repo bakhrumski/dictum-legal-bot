@@ -1,5 +1,46 @@
 'use strict';
 
+const https = require('https');
+
+/**
+ * POST JSON to HTTPS endpoint using Node built-in https (no global fetch needed).
+ * Returns { status, body (parsed JSON) }.
+ */
+function httpsPostJson(url, body, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const payload = JSON.stringify(body);
+    const req = https.request({
+      hostname: parsed.hostname,
+      port: 443,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        ...headers,
+      },
+      timeout: 60000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf-8');
+        try {
+          resolve({ status: res.statusCode, body: JSON.parse(text), text });
+        } catch {
+          resolve({ status: res.statusCode, body: null, text });
+        }
+      });
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+    req.write(payload);
+    req.end();
+  });
+}
+
 /**
  * Embeddings Service — Multi-provider
  *
@@ -89,27 +130,23 @@ function addE5Prefix(text, isQuery = false) {
 async function hfEmbed(texts, apiKey, isQuery = false) {
   const inputs = texts.map(t => addE5Prefix(t, isQuery));
 
-  const resp = await fetch(PROVIDERS.huggingface.endpoint, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ inputs, options: { wait_for_model: true } }),
-  });
+  const resp = await httpsPostJson(
+    PROVIDERS.huggingface.endpoint,
+    { inputs, options: { wait_for_model: true } },
+    { 'Authorization': `Bearer ${apiKey}` }
+  );
 
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
+  if (resp.status !== 200) {
     // Model loading (503) — retry once after 20s
     if (resp.status === 503) {
       console.warn('[EMBEDDINGS] HuggingFace model loading, retrying in 20s...');
       await new Promise(r => setTimeout(r, 20_000));
       return hfEmbed(texts, apiKey, isQuery);
     }
-    throw new Error(`HuggingFace Embedding API ${resp.status}: ${errBody.substring(0, 200)}`);
+    throw new Error(`HuggingFace Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
   }
 
-  const data = await resp.json();
+  const data = resp.body;
   // Response is array of embedding arrays
   return Array.isArray(data[0]) ? data : data.map(d => d);
 }
@@ -117,7 +154,6 @@ async function hfEmbed(texts, apiKey, isQuery = false) {
 // ========== GEMINI EMBEDDINGS ==========
 
 async function geminiEmbed(texts, apiKey) {
-  // Gemini batchEmbedContents endpoint
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${PROVIDERS.gemini.model}:batchEmbedContents?key=${apiKey}`;
 
   const requests = texts.map(text => ({
@@ -126,41 +162,29 @@ async function geminiEmbed(texts, apiKey) {
     taskType: 'RETRIEVAL_DOCUMENT'
   }));
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requests })
-  });
+  const resp = await httpsPostJson(url, { requests });
 
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
-    throw new Error(`Gemini Embedding API ${resp.status}: ${errBody.substring(0, 200)}`);
+  if (resp.status !== 200) {
+    throw new Error(`Gemini Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
   }
 
-  const data = await resp.json();
-  return data.embeddings.map(e => e.values);
+  return resp.body.embeddings.map(e => e.values);
 }
 
 async function geminiEmbedQuery(text, apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${PROVIDERS.gemini.model}:embedContent?key=${apiKey}`;
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: `models/${PROVIDERS.gemini.model}`,
-      content: { parts: [{ text }] },
-      taskType: 'RETRIEVAL_QUERY'
-    })
+  const resp = await httpsPostJson(url, {
+    model: `models/${PROVIDERS.gemini.model}`,
+    content: { parts: [{ text }] },
+    taskType: 'RETRIEVAL_QUERY'
   });
 
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
-    throw new Error(`Gemini Embedding API ${resp.status}: ${errBody.substring(0, 200)}`);
+  if (resp.status !== 200) {
+    throw new Error(`Gemini Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
   }
 
-  const data = await resp.json();
-  return data.embedding.values;
+  return resp.body.embedding.values;
 }
 
 // ========== OPENAI EMBEDDINGS ==========
@@ -168,22 +192,17 @@ async function geminiEmbedQuery(text, apiKey) {
 async function openaiEmbed(texts, apiKey) {
   const inputs = texts.map(t => t.substring(0, PROVIDERS.openai.maxInput));
 
-  const resp = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({ model: PROVIDERS.openai.model, input: inputs })
-  });
+  const resp = await httpsPostJson(
+    'https://api.openai.com/v1/embeddings',
+    { model: PROVIDERS.openai.model, input: inputs },
+    { 'Authorization': `Bearer ${apiKey}` }
+  );
 
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
-    throw new Error(`OpenAI Embedding API ${resp.status}: ${errBody.substring(0, 200)}`);
+  if (resp.status !== 200) {
+    throw new Error(`OpenAI Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
   }
 
-  const data = await resp.json();
-  const sorted = data.data.sort((a, b) => a.index - b.index);
+  const sorted = resp.body.data.sort((a, b) => a.index - b.index);
   return sorted.map(d => d.embedding);
 }
 
