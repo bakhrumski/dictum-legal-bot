@@ -7081,6 +7081,7 @@
                     body: JSON.stringify({ url, topic, law_name: lawName || undefined })
                 });
                 var data = await resp.json();
+                if (!resp.ok) console.error('[INGEST] Server error:', resp.status, data);
                 if (resp.ok && data.success) {
                     statusEl.className = 'ai-doc-upload-status success';
                     statusEl.innerHTML = '✅ <b>' + escapeHtml(data.doc_name) + '</b> yuklandi!<br>' +
@@ -7097,8 +7098,9 @@
                 }
             } catch(e) {
                 statusEl.className = 'ai-doc-upload-status error';
-                statusEl.textContent = '❌ Tarmoq xatoligi';
+                statusEl.textContent = '❌ Tarmoq xatoligi: ' + e.message;
                 statusEl.style.display = 'block';
+                console.error('[INGEST] Network error:', e);
             } finally {
                 btn.disabled = false;
                 btn.textContent = '⬇ Lex.uz dan yuklash';

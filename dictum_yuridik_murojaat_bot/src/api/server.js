@@ -4167,8 +4167,20 @@ async function runMigrations() {
   }
 }
 
+// Diagnostic endpoint (no auth, safe info only)
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    node: process.version,
+    uptime: Math.round(process.uptime()),
+    mem: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+    hasFetch: typeof fetch === 'function',
+    hasFile: typeof File === 'function',
+  });
+});
+
 runMigrations().then(() => {
   app.listen(PORT, () => {
-    console.log(`[SERVER] Dashboard running on port ${PORT}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
+    console.log(`[SERVER] Dashboard running on port ${PORT} | Node ${process.version}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
   });
 });
