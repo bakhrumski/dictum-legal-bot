@@ -10,6 +10,17 @@ const https = require('https');
 const path = require('path');
 
 const { verificationTokens } = require('../verification-store');
+const {
+  isJustifyAvailable,
+  askJustify,
+} = require('../rag/justify-client');
+
+// Cache Justify availability at startup (re-check every 5 min)
+let _justifyOk = false;
+isJustifyAvailable().then(ok => { _justifyOk = ok; }).catch(() => {});
+setInterval(() => {
+  isJustifyAvailable().then(ok => { _justifyOk = ok; }).catch(() => {});
+}, 5 * 60 * 1000);
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -525,20 +536,61 @@ bot.on('message', async (msg) => {
     console.error('Error checking pending limit:', error);
   }
 
+  // ── AI-first: auto-answer text questions via Justify RAG ──
+  if (requestData.request_type === 'text' && _justifyOk) {
+    const question = requestData.request_text;
+    const MIN_QUESTION_LENGTH = 10;
+    if (question.length >= MIN_QUESTION_LENGTH) {
+      // Send "thinking" indicator
+      await bot.sendMessage(chatId, '⏳ Savolingiz tekshirilmoqda...').catch(() => {});
+      try {
+        const aiResult = await askJustify(question);
+        if (aiResult && aiResult.answer) {
+          // Format sources list
+          let sourcesText = '';
+          if (aiResult.sources && aiResult.sources.length > 0) {
+            const topSources = aiResult.sources.slice(0, 3);
+            sourcesText = '\n\n📎 *Manbalar:*\n' + topSources.map((s, i) => {
+              const title = s.title || s.article || 'Manba';
+              return s.url ? `${i + 1}. [${title}](${s.url})` : `${i + 1}. ${title}`;
+            }).join('\n');
+          }
+
+          const webNote = aiResult.web_search_used ? '\n_🌐 (Internet qidiruvi ham ishlatildi)_' : '';
+          const strategyNote = aiResult.strategy ? ` · _${aiResult.strategy}_` : '';
+
+          const aiMessage = `🤖 *AI Yurist javobi*${strategyNote}\n\n${aiResult.answer}${sourcesText}${webNote}`;
+
+          // Telegram has 4096 char limit; truncate if needed
+          const maxLen = 4000;
+          const finalMsg = aiMessage.length > maxLen
+            ? aiMessage.substring(0, maxLen) + '...'
+            : aiMessage;
+
+          await bot.sendMessage(chatId, finalMsg, {
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true,
+          }).catch(async () => {
+            // If Markdown fails, send plain text
+            await bot.sendMessage(chatId, aiResult.answer.substring(0, 4000)).catch(() => {});
+          });
+        }
+      } catch (aiErr) {
+        console.warn('[BOT] AI auto-answer failed:', aiErr.message);
+        // Continue silently — user still gets the request-saved message below
+      }
+    }
+  }
+
   // Save to database
   try {
     const result = await saveRequest(requestData);
 
     if (result.success) {
-      const confirmation = `
-✅ Murojaat qabul qilindi!
-
-📋 Sizning ma'lumotlaringiz:
-👤 Username: @${username}
-📝 Turi: ${getRequestTypeLabel(requestData.request_type)}
-
-Yurist tez orada murojatingizni ko'rib chiqadi va javob beradi. Rahmat!
-      `;
+      const aiAnswered = requestData.request_type === 'text' && _justifyOk && requestData.request_text.length >= 10;
+      const confirmation = aiAnswered
+        ? `✅ Murojaat yuristlarga ham yuborildi.\n\nYurist yaxshiroq javob yoki tuzatish kiritishi mumkin — shu yerda xabardor bo'lasiz.`
+        : `✅ Murojaat qabul qilindi!\n\n📋 Sizning ma'lumotlaringiz:\n👤 Username: @${username}\n📝 Turi: ${getRequestTypeLabel(requestData.request_type)}\n\nYurist tez orada murojatingizni ko'rib chiqadi va javob beradi. Rahmat!`;
 
       bot.sendMessage(chatId, confirmation);
 
