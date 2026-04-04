@@ -4205,7 +4205,21 @@ async function runMigrations() {
 }
 
 // Diagnostic endpoint (no auth, safe info only)
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let corpusInfo = {};
+  try {
+    const r = await pool.query(`
+      SELECT count(*) AS total,
+             count(*) FILTER (WHERE embedding IS NOT NULL) AS with_embeddings,
+             count(*) FILTER (WHERE tsv IS NOT NULL) AS with_tsv,
+             count(DISTINCT category) AS categories,
+             count(DISTINCT law_name) AS laws,
+             array_agg(DISTINCT category) AS category_list
+      FROM legal_chunks WHERE is_valid = TRUE
+    `);
+    corpusInfo = r.rows[0];
+  } catch (e) { corpusInfo = { error: e.message }; }
+
   res.json({
     status: 'ok',
     node: process.version,
@@ -4213,6 +4227,9 @@ app.get('/api/health', (req, res) => {
     mem: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
     hasFetch: typeof fetch === 'function',
     hasFile: typeof File === 'function',
+    embedding_provider: process.env.HF_TOKEN ? 'huggingface' : process.env.GEMINI_API_KEY ? 'gemini' : process.env.GPT_API_KEY ? 'openai' : 'none',
+    tavily: !!process.env.TAVILY_API_KEY,
+    corpus: corpusInfo,
   });
 });
 
