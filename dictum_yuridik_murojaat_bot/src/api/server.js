@@ -188,6 +188,7 @@ app.get('/health', (req, res) => res.status(200).send('OK'));
 
 app.use(cors());
 app.use(express.json());
+app.use(require('cookie-parser')());
 
 // Session configuration — PostgreSQL store survives server restarts
 app.use(session({
@@ -4012,6 +4013,12 @@ async function runMigrations() {
     await initFeedbackDataset();
     await initCaseLawDataset();
     await initLegalCorpus().catch(e => console.log('[RAG] Legal corpus init skipped:', e.message));
+
+    // Mount AI Portal API
+    try {
+      const { mountPortal } = require('../portal');
+      await mountPortal(app);
+    } catch (e) { console.log('[PORTAL] Mount skipped:', e.message); }
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }
