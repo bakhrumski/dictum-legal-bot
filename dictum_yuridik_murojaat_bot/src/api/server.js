@@ -3315,9 +3315,9 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[LEX INGEST] Error:', error.message);
-    await logIngest({ sourceType: 'url', sourceUrl: req.body?.url, lawName: req.body?.law_name || '', chunksTotal: 0, status: 'error', errorMsg: error.message });
-    res.status(500).json({ error: 'Lex.uz dan yuklashda xatolik: ' + error.message });
+    console.error('[LEX INGEST] Error:', error.message, '\nStack:', error.stack);
+    await logIngest({ sourceType: 'url', sourceUrl: req.body?.url, lawName: req.body?.law_name || '', chunksTotal: 0, status: 'error', errorMsg: error.message }).catch(() => {});
+    res.status(500).json({ error: 'Lex.uz dan yuklashda xatolik: ' + error.message, stack: (error.stack || '').split('\n').slice(0, 5) });
   }
 });
 
