@@ -370,6 +370,7 @@ body {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   margin-top: 16px; font-size: 11px; color: var(--text-muted);
 }
+.auth-error { font-size: 13px; color: #ef4444; min-height: 18px; text-align: center; }
 .auth-trust svg { width: 14px; height: 14px; color: var(--accent); }
 
 /* JuristAI Bridge Card */
@@ -759,13 +760,14 @@ body {
     <form class="auth-form active" id="formLogin" onsubmit="handleLogin(event)">
       <div class="auth-field">
         <label>Email</label>
-        <input type="email" placeholder="email@example.com" required>
+        <input type="email" id="loginEmail" placeholder="email@example.com" required>
       </div>
       <div class="auth-field">
         <label>Parol</label>
-        <input type="password" placeholder="Parolingiz" required>
+        <input type="password" id="loginPassword" placeholder="Parolingiz" required>
       </div>
-      <button type="submit" class="auth-submit">Kirish</button>
+      <div class="auth-error" id="loginError"></div>
+      <button type="submit" class="auth-submit" id="loginBtn">Kirish</button>
       <div class="auth-trust">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         Verified Legal AI
@@ -776,36 +778,37 @@ body {
     <form class="auth-form" id="formRegister" onsubmit="handleRegister(event)">
       <div class="auth-field">
         <label>F.I.O.</label>
-        <input type="text" placeholder="To'liq ismingiz" required>
+        <input type="text" id="regName" placeholder="To'liq ismingiz" required>
       </div>
       <div class="auth-row">
         <div class="auth-field">
           <label>Yuridik firma (ixtiyoriy)</label>
-          <input type="text" placeholder="Firma nomi">
+          <input type="text" id="regFirm" placeholder="Firma nomi">
         </div>
         <div class="auth-field">
           <label>Telefon</label>
-          <input type="tel" placeholder="+998 __ ___ __ __" required>
+          <input type="tel" id="regPhone" placeholder="+998 __ ___ __ __" required>
         </div>
       </div>
       <div class="auth-field">
         <label>Email</label>
-        <input type="email" placeholder="email@example.com" required>
+        <input type="email" id="regEmail" placeholder="email@example.com" required>
       </div>
       <div class="auth-field">
         <label>Parol</label>
-        <input type="password" placeholder="Kamida 8 belgi" required minlength="8">
+        <input type="password" id="regPassword" placeholder="Kamida 8 belgi" required minlength="8">
       </div>
       <div class="auth-field">
         <label>Tarif</label>
-        <select>
+        <select id="regPlan">
           <option value="trial">Sinov (1 hafta bepul)</option>
           <option value="silver">Silver — 299,000 so'm/oy</option>
           <option value="gold" selected>Gold — 599,000 so'm/oy</option>
           <option value="platinum">Platinum — 1,199,000 so'm/oy</option>
         </select>
       </div>
-      <button type="submit" class="auth-submit">Ro'yxatdan o'tish</button>
+      <div class="auth-error" id="regError"></div>
+      <button type="submit" class="auth-submit" id="regBtn">Ro'yxatdan o'tish</button>
       <div class="auth-trust">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         Verified Legal AI
@@ -876,8 +879,94 @@ function switchAuthTab(tab) {
   document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
   document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
 }
-function handleLogin(e) { e.preventDefault(); alert('Kirish funksiyasi ulangandan keyin ishlaydi'); }
-function handleRegister(e) { e.preventDefault(); alert('Ro\'yxatdan o\'tish ulangandan keyin ishlaydi'); }
+async function handleLogin(e) {
+  e.preventDefault();
+  var btn = document.getElementById('loginBtn');
+  var errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'Kirish...';
+  try {
+    var resp = await fetch('/api/portal/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: document.getElementById('loginEmail').value.trim(),
+        password: document.getElementById('loginPassword').value
+      })
+    });
+    var data = await resp.json();
+    if (resp.ok && data.accessToken) {
+      localStorage.setItem('portal_token', data.accessToken);
+      localStorage.setItem('portal_user', JSON.stringify(data.user));
+      closeAuth();
+      showLoggedInState(data.user);
+    } else {
+      errEl.textContent = data.error || 'Kirish xatoligi';
+    }
+  } catch(err) {
+    errEl.textContent = 'Tarmoq xatoligi';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Kirish';
+  }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  var btn = document.getElementById('regBtn');
+  var errEl = document.getElementById('regError');
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'Ro\'yxatdan o\'tish...';
+  try {
+    var resp = await fetch('/api/portal/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: document.getElementById('regName').value.trim(),
+        email: document.getElementById('regEmail').value.trim(),
+        phone: document.getElementById('regPhone').value.trim(),
+        password: document.getElementById('regPassword').value,
+        firmName: document.getElementById('regFirm').value.trim() || undefined,
+        plan: document.getElementById('regPlan').value
+      })
+    });
+    var data = await resp.json();
+    if (resp.ok && data.accessToken) {
+      localStorage.setItem('portal_token', data.accessToken);
+      localStorage.setItem('portal_user', JSON.stringify(data.user));
+      closeAuth();
+      showLoggedInState(data.user);
+    } else {
+      errEl.textContent = data.error || 'Ro\'yxatdan o\'tish xatoligi';
+    }
+  } catch(err) {
+    errEl.textContent = 'Tarmoq xatoligi';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ro\'yxatdan o\'tish';
+  }
+}
+
+function showLoggedInState(user) {
+  var loginBtn = document.querySelector('.btn-login');
+  if (loginBtn) {
+    loginBtn.textContent = user.fullName || user.email;
+    loginBtn.onclick = function() {
+      if (confirm('Chiqishni xohlaysizmi?')) {
+        localStorage.removeItem('portal_token');
+        localStorage.removeItem('portal_user');
+        location.reload();
+      }
+    };
+  }
+}
+
+// Check if already logged in on page load
+(function checkAuth() {
+  var user = localStorage.getItem('portal_user');
+  if (user) {
+    try { showLoggedInState(JSON.parse(user)); } catch {}
+  }
+})();
+
 function toggleCompareTooltip() {
   document.getElementById('compareTooltip').classList.toggle('active');
 }
