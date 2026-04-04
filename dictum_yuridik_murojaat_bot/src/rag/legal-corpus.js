@@ -407,10 +407,19 @@ async function textOnlySearch(query, opts = {}) {
   await initLegalCorpus();
   const { category = null, limit = 5 } = opts;
 
-  const categoryClause = category ? 'AND category = $3' : '';
-  const params = category ? [query, limit, category] : [query, limit];
+  // Normalize query: strip Uzbek apostrophes, extract key words for ILIKE fallback
+  const normalizedQuery = query.replace(/['ʼ''`]/g, "'");
+  const keywords = normalizedQuery
+    .toLowerCase()
+    .replace(/[^a-zA-Zа-яА-ЯёЁ\u0027\u02BC0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .slice(0, 6);
 
-  // First try: verified Q&A full-text match
+  const categoryClause = category ? 'AND category = $3' : '';
+  const params = category ? [normalizedQuery, limit, category] : [normalizedQuery, limit];
+
+  // 1. Full-text search (verified QA first)
   const verifiedSql = `
     SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
            source_type, verified_by,
@@ -423,17 +432,14 @@ async function textOnlySearch(query, opts = {}) {
     ORDER BY score DESC
     LIMIT $2
   `;
-
   const verifiedResult = await pool.query(verifiedSql, params);
-
-  // If we have verified matches, return them first
   if (verifiedResult.rows.length > 0) {
-    console.log(`[RAG] Text-only search: ${verifiedResult.rows.length} verified QA matches`);
+    console.log(`[RAG] Text-only: ${verifiedResult.rows.length} verified QA matches`);
     return verifiedResult.rows;
   }
 
-  // Fallback: any law text full-text match
-  const anySql = `
+  // 2. Full-text search (all law text)
+  const ftsSql = `
     SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
            source_type, verified_by,
            ts_rank_cd(tsv, plainto_tsquery('simple', $1)) + CASE WHEN source_type = 'verified_qa' THEN 0.25 ELSE 0 END AS score
@@ -444,10 +450,38 @@ async function textOnlySearch(query, opts = {}) {
     ORDER BY score DESC
     LIMIT $2
   `;
+  const ftsResult = await pool.query(ftsSql, params);
+  if (ftsResult.rows.length > 0) {
+    console.log(`[RAG] Text-only FTS: ${ftsResult.rows.length} matches`);
+    return ftsResult.rows;
+  }
 
-  const anyResult = await pool.query(anySql, params);
-  console.log(`[RAG] Text-only search: ${anyResult.rows.length} law text matches`);
-  return anyResult.rows;
+  // 3. ILIKE keyword fallback — when FTS fails (apostrophes, short queries, etc.)
+  if (keywords.length > 0) {
+    console.log(`[RAG] FTS returned 0, trying ILIKE with keywords: ${keywords.join(', ')}`);
+    const ilikeConds = keywords.slice(0, 4).map((_, i) => `chunk_text ILIKE $${i + 2 + (category ? 1 : 0)}`);
+    const ilikeParams = category
+      ? [limit, category, ...keywords.slice(0, 4).map(k => `%${k}%`)]
+      : [limit, ...keywords.slice(0, 4).map(k => `%${k}%`)];
+
+    const catFilter = category ? 'AND category = $2' : '';
+    const ilikeSql = `
+      SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
+             source_type, verified_by, 0.3 AS score
+      FROM legal_chunks
+      WHERE is_valid = TRUE ${catFilter}
+        AND (${ilikeConds.join(' OR ')})
+      ORDER BY CASE WHEN source_type = 'verified_qa' THEN 0 ELSE 1 END,
+               id
+      LIMIT $1
+    `;
+    const ilikeResult = await pool.query(ilikeSql, ilikeParams);
+    console.log(`[RAG] ILIKE fallback: ${ilikeResult.rows.length} matches`);
+    return ilikeResult.rows;
+  }
+
+  console.log(`[RAG] Text-only search: 0 matches for "${query.substring(0, 50)}"`);
+  return [];
 }
 
 // ========== VERIFIED Q&A INSERT ==========
