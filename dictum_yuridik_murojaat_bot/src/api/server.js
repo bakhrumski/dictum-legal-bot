@@ -16,7 +16,22 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, textOnlySearch, getCorpusStats, insertVerifiedAnswer } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { routeQuery } = require('../rag/router');
+const { correctiveFilter } = require('../rag/corrective');
+const { webSearch, formatWebResults } = require('../rag/web-search');
+// ── Justify RAG (optional external service, kept as bonus fallback) ──
+const {
+  isJustifyAvailable,
+  askJustify,
+  scrapeAndIndex: justifyScrape,
+  getJustifyStats,
+} = require('../rag/justify-client');
+let _justifyAvailable = false;
+isJustifyAvailable().then(ok => {
+  _justifyAvailable = ok;
+  if (ok) console.log(`[JUSTIFY] External RAG service available at ${process.env.JUSTIFY_URL || 'http://localhost:8000'}`);
+}).catch(() => { _justifyAvailable = false; });
 
 // Multer config for registration document uploads
 const regUpload = multer({
@@ -2179,54 +2194,111 @@ const LEGAL_TOPICS = {
 };
 
 /**
- * Retrieve relevant legal chunks from the RAG corpus and format for prompt injection.
- * Returns empty string if no corpus data available (graceful degradation).
+ * Retrieve relevant legal chunks using the full RAG pipeline:
+ *   Router → RRF Hybrid Search → Corrective Grading → Web Search fallback
+ *
+ * Falls back to text-only search if no embedding API key is configured.
  */
-async function retrieveLegalContext(query, topic) {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+async function retrieveLegalContext(query, topic, language = 'uz') {
+  const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+  const isUz = language === 'uz';
 
-  let results = [];
-  let searchMode = '';
+  // ── 1. Router: choose search strategy ──
+  const route = routeQuery(query);
+  console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
 
-  try {
-    if (apiKey) {
-      // Try full hybrid search (vector + text)
-      results = await hybridSearch(query, { category: topic || null, limit: 6, apiKey });
-      searchMode = 'hybrid';
+  // ── 2. RRF Hybrid Search ──
+  let rawResults = [];
+  let searchMode = 'text-only';
+
+  if (apiKey) {
+    try {
+      rawResults = await rrfSearch(query, {
+        category: topic || null,
+        limit: route.strategy === 'DIRECT' ? 4 : 8,
+        apiKey,
+      });
+      searchMode = 'rrf';
+    } catch (err) {
+      console.warn(`[RAG] RRF search failed (${err.message}), trying legacy hybrid`);
+      try {
+        rawResults = await hybridSearch(query, { category: topic || null, limit: 6, apiKey });
+        searchMode = 'hybrid';
+      } catch (err2) {
+        console.warn(`[RAG] Hybrid also failed (${err2.message})`);
+      }
     }
-  } catch (err) {
-    console.warn(`[RAG] Hybrid search failed (${err.message}), falling back to text-only search`);
   }
 
-  // Fallback: text-only search (no embedding API needed)
-  if (!results || results.length === 0) {
+  // Text-only fallback (no embeddings)
+  if (rawResults.length === 0) {
     try {
-      results = await textOnlySearch(query, { category: topic || null, limit: 6 });
+      rawResults = await textOnlySearch(query, { category: topic || null, limit: 6 });
       searchMode = 'text-only';
     } catch (err) {
-      console.error('[RAG] Text-only search also failed:', err.message);
-      return '';
+      console.error('[RAG] Text-only search failed:', err.message);
     }
   }
 
-  if (!results || results.length === 0) return '';
+  // ── 3. Corrective RAG: grade and filter ──
+  let goodChunks = rawResults;
+  let needsWebSearch = rawResults.length < 2;
 
-  const chunks = results.map((r, i) => {
+  if (rawResults.length > 0 && typeof callAI === 'function') {
+    try {
+      const corrective = await correctiveFilter(query, rawResults, callAI);
+      goodChunks = corrective.good.length > 0 ? corrective.good : rawResults.slice(0, 3);
+      needsWebSearch = corrective.needsWebSearch;
+    } catch (err) {
+      console.warn(`[RAG] Corrective filter failed (${err.message}), using raw results`);
+    }
+  }
+
+  // ── 4. Web Search fallback (Tavily) ──
+  let webResults = [];
+  if (needsWebSearch) {
+    try {
+      webResults = await webSearch(query);
+    } catch (_) {
+      webResults = [];
+    }
+  }
+
+  if (goodChunks.length === 0 && webResults.length === 0) return '';
+
+  // ── 5. Format context for prompt ──
+  const chunksText = goodChunks.map((r, i) => {
     const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
-    const verifiedBadge = r.source_type === 'verified_qa' ? ' ✅ [Yurist tomonidan tasdiqlangan]' : '';
-    return `[${i + 1}] ${r.law_name}${verifiedBadge}${arts ? ` (${arts}-moddalar)` : ''}${r.chapter ? ` | ${r.chapter}` : ''}
-${r.chunk_text}
-${r.source_url ? `(Manba: ${r.source_url})` : ''}`;
+    const verifiedBadge = r.source_type === 'verified_qa'
+      ? (isUz ? ' ✅ [Yurist tomonidan tasdiqlangan]' : ' ✅ [Проверено юристом]')
+      : '';
+    const scoreTag = r.score ? ` (${(r.score * 100).toFixed(0)}%)` : '';
+    const langTag = r.language === 'uz' ? ' [UZ]' : ' [RU]';
+
+    return [
+      `[${i + 1}] ${r.law_name}${verifiedBadge}${langTag}${scoreTag}`,
+      arts ? (isUz ? `  Moddalar: ${arts}` : `  Статьи: ${arts}`) : '',
+      r.chapter ? `  ${r.chapter}` : '',
+      r.chunk_text,
+      r.source_url ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.source_url})` : '',
+    ].filter(Boolean).join('\n');
   }).join('\n\n');
 
-  console.log(`[RAG] Retrieved ${results.length} chunks via ${searchMode} for "${query.substring(0, 50)}..."`);
+  const webText = formatWebResults(webResults, language);
 
-  return `\n\nQONUNCHILIK KONTEKSTI (${searchMode === 'text-only' ? 'matn qidiruvi' : 'vektoral qidiruv'} orqali):
-Quyidagi ma'lumotlarga BIRINCHI NAVBATDA asoslaning. Agar "✅ Yurist tomonidan tasdiqlangan" deb belgilangan bo'lsa — bu eng ishonchli manba.
+  console.log(`[RAG] ${searchMode}: ${goodChunks.length} chunks + ${webResults.length} web results for "${query.substring(0, 50)}"`);
 
-${chunks}
+  if (isUz) {
+    return `\n\nQONUNCHILIK KONTEKSTI (${searchMode}, ${goodChunks.length} natija):\n`
+      + `Quyidagi ma'lumotlarga BIRINCHI NAVBATDA asoslaning.\n\n`
+      + chunksText + webText + `\n\n`
+      + `MUHIM: Yuqoridagi kontekstdagi moddalarni ANIQ keltiring. To'qib chiqarmang.`;
+  }
 
-MUHIM: Yuqoridagi kontekstdagi moddalarni ANIQ keltiring. Agar kontekstda tegishli modda bo'lmasa — to'qib chiqarmang.`;
+  return `\n\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${searchMode}, ${goodChunks.length} результатов):\n`
+    + `Основывайся ПРЕЖДЕ ВСЕГО на следующих материалах.\n\n`
+    + chunksText + webText + `\n\n`
+    + `ВАЖНО: Цитируй статьи ТОЧНО из контекста. Не придумывай статьи, которых нет выше.`;
 }
 
 function buildTopicPrompt(topic, ragContext) {
@@ -2897,13 +2969,33 @@ app.get('/api/case-law/stats', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// GET /api/rag/stats — RAG corpus statistics
+// GET /api/rag/stats — RAG corpus statistics (pgvector + Justify)
 app.get('/api/rag/stats', requireMasterAdmin, async (req, res) => {
   try {
-    const stats = await getCorpusStats();
-    res.json(stats);
+    const [pgStats, justifyStats] = await Promise.allSettled([
+      getCorpusStats(),
+      getJustifyStats(),
+    ]);
+    res.json({
+      pgvector: pgStats.status === 'fulfilled' ? pgStats.value : { error: pgStats.reason?.message },
+      justify: justifyStats.status === 'fulfilled' ? justifyStats.value : { error: 'Justify unavailable' },
+      justify_available: _justifyAvailable,
+    });
   } catch (error) {
     res.status(500).json({ error: 'RAG statistika xatolik: ' + error.message });
+  }
+});
+
+// POST /api/rag/justify-ask — прямой вопрос к Justify RAG (для тестирования)
+app.post('/api/rag/justify-ask', requireMasterAdmin, async (req, res) => {
+  try {
+    const { question, strategy } = req.body;
+    if (!question) return res.status(400).json({ error: 'question required' });
+    if (!_justifyAvailable) return res.status(503).json({ error: 'Justify RAG service unavailable' });
+    const result = await askJustify(question, { strategy });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -3015,7 +3107,7 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
     }
 
     // ── Embed ─────────────────────────────────────────────────
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
     let embeddings = [];
     let embeddedCount = 0;
 
@@ -3072,6 +3164,17 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
     }
 
     console.log(`[DOC UPLOAD] ${finalLawName}: ${chunks.length} chunks, ${embeddedCount} embedded, topic=${topic}`);
+
+    await logIngest({
+      sourceType: 'file',
+      fileName: req.file.originalname,
+      lawName: finalLawName,
+      category: topic,
+      chunksTotal: chunks.length,
+      embedded: embeddedCount,
+      ingestBy: req.session?.adminId || null,
+    });
+
     res.json({
       success: true,
       doc_name: finalLawName,
@@ -3083,6 +3186,7 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
 
   } catch (error) {
     console.error('[DOC UPLOAD] Error:', error.message);
+    await logIngest({ sourceType: 'file', fileName: req.file?.originalname, lawName: req.body?.law_name || '', chunksTotal: 0, status: 'error', errorMsg: error.message });
     res.status(500).json({ error: 'Hujjat yuklashda xatolik: ' + error.message });
   } finally {
     if (filePath) fs.unlink(filePath, () => {});
@@ -3129,7 +3233,7 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     }
 
     // Embed (best-effort — skip if quota exhausted)
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
     let embeddings = [];
     let embeddedCount = 0;
 
@@ -3174,7 +3278,30 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       client.release();
     }
 
+    // Also index in Justify RAG (fire-and-forget, non-blocking)
+    let justifyResult = null;
+    try {
+      if (await isJustifyAvailable()) {
+        justifyResult = await justifyScrape(cleanUrl);
+        console.log(`[LEX INGEST] Justify indexed: ${justifyResult?.title || cleanUrl} (${justifyResult?.chunks || '?'} chunks)`);
+      }
+    } catch (justifyErr) {
+      console.warn('[LEX INGEST] Justify indexing failed (non-fatal):', justifyErr.message);
+    }
+
     console.log(`[LEX INGEST] Done: "${finalLawName}" — ${chunks.length} chunks, ${embeddedCount} embedded`);
+
+    await logIngest({
+      sourceType: 'url',
+      sourceUrl: cleanUrl,
+      lawName: finalLawName,
+      category: topic,
+      chunksTotal: chunks.length,
+      embedded: embeddedCount,
+      language: cleanUrl.includes('/uz/') ? 'uz' : 'ru',
+      ingestBy: req.session?.adminId || null,
+    });
+
     res.json({
       success: true,
       doc_name: finalLawName,
@@ -3182,11 +3309,13 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       chunks: chunks.length,
       embedded: embeddedCount,
       topic,
-      source_url: cleanUrl
+      source_url: cleanUrl,
+      justify: justifyResult ? { indexed: true, chunks: justifyResult.chunks } : { indexed: false }
     });
 
   } catch (error) {
     console.error('[LEX INGEST] Error:', error.message);
+    await logIngest({ sourceType: 'url', sourceUrl: req.body?.url, lawName: req.body?.law_name || '', chunksTotal: 0, status: 'error', errorMsg: error.message });
     res.status(500).json({ error: 'Lex.uz dan yuklashda xatolik: ' + error.message });
   }
 });
@@ -3206,6 +3335,20 @@ app.get('/api/rag/uploaded-documents', requireMasterAdmin, async (req, res) => {
       LIMIT 100
     `);
     res.json({ documents: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/rag/ingest-log — history of URL and file ingestions
+app.get('/api/rag/ingest-log', requireMasterAdmin, async (req, res) => {
+  try {
+    const { limit = 50, category, source_type } = req.query;
+    const [rows, stats] = await Promise.all([
+      getIngestLog({ limit: parseInt(limit), category, sourceType: source_type }),
+      getIngestStats(),
+    ]);
+    res.json({ log: rows, stats });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

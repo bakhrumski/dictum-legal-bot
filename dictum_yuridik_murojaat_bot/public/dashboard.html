@@ -4616,6 +4616,18 @@
                     </div>
 
                     <div id="docUploadStatus" class="ai-doc-upload-status" style="display:none"></div>
+
+                    <!-- Ingest Log -->
+                    <div style="margin-top:10px">
+                        <button onclick="toggleIngestLog()" style="width:100%;background:none;border:1px solid #d4c5ff;border-radius:8px;padding:7px 10px;font-size:12px;color:#6d3df9;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
+                            <span>📊 Yuklash tarixi</span>
+                            <span id="ingestLogToggleIcon">▼</span>
+                        </button>
+                        <div id="ingestLogPanel" style="display:none;margin-top:6px">
+                            <div id="ingestLogStats" style="font-size:11px;color:#888;padding:6px 8px;background:#f9f7ff;border-radius:6px;margin-bottom:6px"></div>
+                            <div id="ingestLogList" style="max-height:280px;overflow-y:auto;font-size:11px"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -7077,6 +7089,7 @@
                     statusEl.style.display = 'block';
                     document.getElementById('docLexUrl').value = '';
                     document.getElementById('docUploadName').value = '';
+                    if (_ingestLogOpen) loadIngestLog();
                 } else {
                     statusEl.className = 'ai-doc-upload-status error';
                     statusEl.textContent = '❌ ' + (data.error || 'Xatolik yuz berdi');
@@ -7140,6 +7153,7 @@
                     document.getElementById('docSelectedFile').style.display = 'none';
                     document.getElementById('docUploadName').value = '';
                     btn.textContent = '⬆ Korpusga yuklash';
+                    if (_ingestLogOpen) loadIngestLog();
                 } else {
                     statusEl.className = 'ai-doc-upload-status error';
                     statusEl.textContent = '❌ ' + (data.error || 'Xatolik yuz berdi');
@@ -7155,6 +7169,74 @@
                 btn.textContent = '⬆ Korpusga yuklash';
             }
         } // stores {question, answer, topic} by msgId for corpus verification
+
+        // ===== INGEST LOG =====
+        var _ingestLogOpen = false;
+
+        async function toggleIngestLog() {
+            _ingestLogOpen = !_ingestLogOpen;
+            var panel = document.getElementById('ingestLogPanel');
+            var icon  = document.getElementById('ingestLogToggleIcon');
+            panel.style.display = _ingestLogOpen ? 'block' : 'none';
+            icon.textContent = _ingestLogOpen ? '▲' : '▼';
+            if (_ingestLogOpen) await loadIngestLog();
+        }
+
+        async function loadIngestLog() {
+            var list  = document.getElementById('ingestLogList');
+            var stats = document.getElementById('ingestLogStats');
+            list.innerHTML = '<div style="color:#aaa;padding:8px">Yuklanmoqda...</div>';
+            try {
+                var resp = await fetch('/api/rag/ingest-log?limit=30', { credentials: 'same-origin' });
+                if (!resp.ok) { list.innerHTML = '<div style="color:red">Xatolik</div>'; return; }
+                var data = await resp.json();
+
+                // Stats bar
+                var s = data.stats || {};
+                stats.innerHTML =
+                    '📥 Jami: <b>' + (s.total_ingests || 0) + '</b> ta · ' +
+                    '✅ <b>' + (s.successful || 0) + '</b> muvaffaqiyatli · ' +
+                    '❌ <b>' + (s.failed || 0) + '</b> xato<br>' +
+                    '🧩 <b>' + (Number(s.total_chunks) || 0).toLocaleString() + '</b> bo\'lak · ' +
+                    '🔗 URL: <b>' + (s.url_count || 0) + '</b> · 📄 Fayl: <b>' + (s.file_count || 0) + '</b>';
+
+                // Log rows
+                var rows = data.log || [];
+                if (!rows.length) { list.innerHTML = '<div style="color:#aaa;padding:8px;text-align:center">Hozircha bo\'sh</div>'; return; }
+
+                list.innerHTML = rows.map(function(r) {
+                    var icon    = r.source_type === 'url' ? '🔗' : '📄';
+                    var label   = r.source_type === 'url'
+                        ? ('<a href="' + escapeHtml(r.source_url || '') + '" target="_blank" style="color:#6d3df9;text-decoration:none;word-break:break-all">' + escapeHtml(r.law_name || r.source_url || '—') + '</a>')
+                        : escapeHtml(r.law_name || r.file_name || '—');
+                    var statusBadge = r.status === 'ok'
+                        ? '<span style="color:#16a34a">✓</span>'
+                        : '<span style="color:#dc2626" title="' + escapeHtml(r.error_msg || '') + '">✗</span>';
+                    var date    = new Date(r.created_at).toLocaleDateString('uz-UZ', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+                    var langBadge = r.language === 'uz'
+                        ? '<span style="background:#e0f2fe;color:#0369a1;border-radius:3px;padding:1px 4px">UZ</span>'
+                        : '<span style="background:#f3f4f6;color:#6b7280;border-radius:3px;padding:1px 4px">RU</span>';
+
+                    return '<div style="padding:6px 8px;border-bottom:1px solid #f0ebff;display:flex;flex-direction:column;gap:2px">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+                            '<span>' + icon + ' ' + label + '</span>' +
+                            '<span>' + statusBadge + '</span>' +
+                        '</div>' +
+                        '<div style="color:#888;display:flex;gap:6px;flex-wrap:wrap">' +
+                            langBadge +
+                            (r.category ? '<span style="background:#f3efff;color:#6d3df9;border-radius:3px;padding:1px 4px">' + escapeHtml(r.category) + '</span>' : '') +
+                            '<span>🧩 ' + (r.chunks_total || 0) + ' bo\'lak</span>' +
+                            (r.embedded > 0 ? '<span>🔢 ' + r.embedded + ' vektor</span>' : '') +
+                            '<span style="margin-left:auto">' + date + '</span>' +
+                        '</div>' +
+                        (r.status !== 'ok' && r.error_msg ? '<div style="color:#dc2626;font-size:10px">' + escapeHtml(r.error_msg) + '</div>' : '') +
+                    '</div>';
+                }).join('');
+
+            } catch(e) {
+                list.innerHTML = '<div style="color:red;padding:8px">Tarmoq xatoligi</div>';
+            }
+        }
 
         // Direct verify — no editing
         async function verifyAiAnswer(msgId) {

@@ -73,6 +73,25 @@ async function initLegalCorpus() {
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) DEFAULT 'law_text'`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS quality_score FLOAT DEFAULT 0.5`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS verified_by INTEGER`);
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS language VARCHAR(5) DEFAULT 'ru'`);
+
+    // Handle embedding dimension migration (e.g. switching from Gemini 3072d to HF 1024d)
+    const dimCheck = await pool.query(`
+      SELECT atttypmod FROM pg_attribute
+      JOIN pg_class ON pg_class.oid = pg_attribute.attrelid
+      WHERE pg_class.relname = 'legal_chunks' AND pg_attribute.attname = 'embedding'
+    `);
+    if (dimCheck.rows.length > 0) {
+      const currentDim = dimCheck.rows[0].atttypmod;
+      const targetDim = getEmbedDims();
+      if (currentDim !== targetDim && currentDim > 0) {
+        console.log(`[LEGAL CORPUS] Embedding dimension changed (${currentDim} → ${targetDim}). Clearing old embeddings...`);
+        await pool.query(`UPDATE legal_chunks SET embedding = NULL`);
+        await pool.query(`ALTER TABLE legal_chunks ALTER COLUMN embedding TYPE vector(${targetDim}) USING NULL`);
+        await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
+        console.log(`[LEGAL CORPUS] Embedding column migrated to ${targetDim}d. Re-indexing required.`);
+      }
+    }
 
     // Indexes for hybrid search
     // 1. Vector similarity index (IVFFlat — good for < 1M rows; switch to HNSW if scaling)
@@ -131,6 +150,29 @@ async function initLegalCorpus() {
       CREATE TRIGGER trg_legal_chunks_tsv
       BEFORE INSERT OR UPDATE ON legal_chunks
       FOR EACH ROW EXECUTE FUNCTION legal_chunks_tsv_trigger()
+    `);
+
+    // Ingest history log
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rag_ingest_log (
+        id           SERIAL PRIMARY KEY,
+        source_type  VARCHAR(20)  NOT NULL DEFAULT 'url',  -- 'url' | 'file'
+        source_url   TEXT,
+        file_name    TEXT,
+        law_name     TEXT,
+        category     VARCHAR(100),
+        chunks_total INTEGER      NOT NULL DEFAULT 0,
+        embedded     INTEGER      NOT NULL DEFAULT 0,
+        language     VARCHAR(5)   DEFAULT 'ru',
+        status       VARCHAR(20)  NOT NULL DEFAULT 'ok',   -- 'ok' | 'error'
+        error_msg    TEXT,
+        ingest_by    INTEGER,                              -- admin id
+        created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_rag_ingest_log_created
+      ON rag_ingest_log(created_at DESC)
     `);
 
     _initialized = true;
@@ -506,6 +548,100 @@ async function getCorpusStats() {
   };
 }
 
+// ========== RRF HYBRID SEARCH ==========
+
+/**
+ * Hybrid search with Reciprocal Rank Fusion (RRF).
+ *
+ * Лучше простого weighted sum:
+ *   RRF(d) = Σ 1 / (k + rank_i)   где k=60 (стандарт)
+ *
+ * Пайплайн:
+ *   1. Dense vector search  → topN результатов с рангами
+ *   2. BM25 full-text search → topN результатов с рангами
+ *   3. RRF fusion → единый рейтинг
+ *   4. Boost verified_qa на +0.1
+ *
+ * @param {string} query
+ * @param {object} opts
+ * @param {string} opts.category  — фильтр по теме
+ * @param {string} opts.language  — 'ru' | 'uz' | null (оба языка)
+ * @param {number} opts.limit     — итоговое кол-во (default 8)
+ * @param {string} opts.apiKey
+ * @returns {Promise<Array>}
+ */
+async function rrfSearch(query, opts = {}) {
+  await initLegalCorpus();
+
+  const {
+    category = null,
+    language = null,
+    limit = 8,
+    topN = limit * 3,  // candidates per source
+    apiKey,
+    k = 60,            // RRF constant
+  } = opts;
+
+  if (!apiKey) throw new Error('API key required for RRF search');
+
+  const queryEmbedding = await getEmbedding(query, apiKey);
+  const embStr = `[${queryEmbedding.join(',')}]`;
+
+  const filters = ['is_valid = TRUE'];
+  const params = [embStr, query, topN];
+  let paramIdx = 4;
+
+  if (category) {
+    filters.push(`category = $${paramIdx++}`);
+    params.push(category);
+  }
+  if (language) {
+    filters.push(`language = $${paramIdx++}`);
+    params.push(language);
+  }
+
+  const whereClause = filters.join(' AND ');
+
+  const sql = `
+    WITH dense AS (
+      SELECT id,
+             ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) AS rank
+      FROM legal_chunks
+      WHERE ${whereClause} AND embedding IS NOT NULL
+      ORDER BY embedding <=> $1::vector
+      LIMIT $3
+    ),
+    bm25 AS (
+      SELECT id,
+             ROW_NUMBER() OVER (ORDER BY ts_rank_cd(tsv, plainto_tsquery('simple', $2)) DESC) AS rank
+      FROM legal_chunks
+      WHERE ${whereClause}
+        AND tsv @@ plainto_tsquery('simple', $2)
+      LIMIT $3
+    ),
+    rrf AS (
+      SELECT
+        COALESCE(d.id, b.id) AS id,
+        COALESCE(1.0 / (${k} + d.rank), 0) +
+        COALESCE(1.0 / (${k} + b.rank), 0) AS rrf_score
+      FROM dense d
+      FULL OUTER JOIN bm25 b ON d.id = b.id
+    )
+    SELECT
+      lc.id, lc.law_name, lc.chunk_text, lc.article_numbers,
+      lc.chapter, lc.source_url, lc.category, lc.source_type,
+      lc.language, lc.verified_by,
+      rrf.rrf_score + CASE WHEN lc.source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score
+    FROM rrf
+    JOIN legal_chunks lc ON lc.id = rrf.id
+    ORDER BY score DESC
+    LIMIT ${limit}
+  `;
+
+  const result = await pool.query(sql, params);
+  return result.rows;
+}
+
 /**
  * Rebuild IVFFlat index (call after bulk ingest).
  * IVFFlat needs data to build properly.
@@ -532,14 +668,119 @@ async function rebuildVectorIndex() {
   console.log(`[LEGAL CORPUS] IVFFlat index rebuilt with ${lists} lists (${n} vectors)`);
 }
 
+// ========== INGEST LOG ==========
+
+/**
+ * Write one ingest record to rag_ingest_log.
+ *
+ * @param {object} entry
+ * @param {'url'|'file'} entry.sourceType
+ * @param {string}  [entry.sourceUrl]
+ * @param {string}  [entry.fileName]
+ * @param {string}  entry.lawName
+ * @param {string}  [entry.category]
+ * @param {number}  entry.chunksTotal
+ * @param {number}  [entry.embedded]
+ * @param {string}  [entry.language]
+ * @param {'ok'|'error'} [entry.status]
+ * @param {string}  [entry.errorMsg]
+ * @param {number}  [entry.ingestBy]
+ */
+async function logIngest(entry) {
+  try {
+    await pool.query(`
+      INSERT INTO rag_ingest_log
+        (source_type, source_url, file_name, law_name, category,
+         chunks_total, embedded, language, status, error_msg, ingest_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    `, [
+      entry.sourceType || 'url',
+      entry.sourceUrl  || null,
+      entry.fileName   || null,
+      entry.lawName    || '',
+      entry.category   || null,
+      entry.chunksTotal || 0,
+      entry.embedded   || 0,
+      entry.language   || 'ru',
+      entry.status     || 'ok',
+      entry.errorMsg   || null,
+      entry.ingestBy   || null,
+    ]);
+  } catch (err) {
+    // non-fatal — don't break ingestion if logging fails
+    console.error('[INGEST LOG] Failed to write log:', err.message);
+  }
+}
+
+/**
+ * Get ingest history (newest first).
+ *
+ * @param {object} opts
+ * @param {number} [opts.limit=50]
+ * @param {string} [opts.category]   — filter by category
+ * @param {string} [opts.sourceType] — 'url' | 'file'
+ * @returns {Promise<Array>}
+ */
+async function getIngestLog({ limit = 50, category = null, sourceType = null } = {}) {
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (category) {
+    filters.push(`category = $${idx++}`);
+    params.push(category);
+  }
+  if (sourceType) {
+    filters.push(`source_type = $${idx++}`);
+    params.push(sourceType);
+  }
+
+  const where = filters.length ? 'WHERE ' + filters.join(' AND ') : '';
+  params.push(limit);
+
+  const result = await pool.query(`
+    SELECT id, source_type, source_url, file_name, law_name, category,
+           chunks_total, embedded, language, status, error_msg, ingest_by, created_at
+    FROM rag_ingest_log
+    ${where}
+    ORDER BY created_at DESC
+    LIMIT $${idx}
+  `, params);
+
+  return result.rows;
+}
+
+/**
+ * Summary stats for ingest log.
+ */
+async function getIngestStats() {
+  const result = await pool.query(`
+    SELECT
+      COUNT(*)                                        AS total_ingests,
+      COUNT(*) FILTER (WHERE status = 'ok')           AS successful,
+      COUNT(*) FILTER (WHERE status = 'error')        AS failed,
+      SUM(chunks_total)                               AS total_chunks,
+      SUM(embedded)                                   AS total_embedded,
+      COUNT(*) FILTER (WHERE source_type = 'url')    AS url_count,
+      COUNT(*) FILTER (WHERE source_type = 'file')   AS file_count,
+      MAX(created_at)                                 AS last_ingest_at
+    FROM rag_ingest_log
+  `);
+  return result.rows[0];
+}
+
 module.exports = {
   initLegalCorpus,
   insertChunks,
   deleteByDocId,
   hybridSearch,
+  rrfSearch,
   textOnlySearch,
   vectorSearch,
   getCorpusStats,
   rebuildVectorIndex,
-  insertVerifiedAnswer
+  insertVerifiedAnswer,
+  logIngest,
+  getIngestLog,
+  getIngestStats,
 };
