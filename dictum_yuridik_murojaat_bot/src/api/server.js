@@ -202,7 +202,8 @@ app.get('/health', (req, res) => res.status(200).send('OK'));
 
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 try { app.use(require('cookie-parser')()); } catch { console.log('[WARN] cookie-parser not installed, refresh tokens via cookie disabled'); }
 
 // Session configuration — PostgreSQL store survives server restarts
