@@ -2343,6 +2343,49 @@
             color: #a78bfa;
         }
 
+        /* RAG source info */
+        .ai-rag-info {
+            display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+            margin-top: 8px; padding: 6px 10px;
+            background: rgba(16, 185, 129, 0.06);
+            border: 1px solid rgba(16, 185, 129, 0.15);
+            border-radius: 8px; font-size: 11px;
+        }
+        [data-theme="dark"] .ai-rag-info {
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+        .ai-rag-mode {
+            font-weight: 600; color: #059669;
+            padding: 1px 6px; border-radius: 4px;
+            background: rgba(16, 185, 129, 0.1);
+        }
+        .ai-rag-mode.ai-rag-no {
+            color: #9CA3AF; background: rgba(156, 163, 175, 0.1);
+            border: 1px dashed rgba(156, 163, 175, 0.3);
+        }
+        [data-theme="dark"] .ai-rag-mode { color: #34D399; }
+        [data-theme="dark"] .ai-rag-mode.ai-rag-no { color: #6B7280; }
+        .ai-rag-src {
+            color: #6B7280; padding: 1px 6px;
+            background: rgba(107, 114, 128, 0.08);
+            border-radius: 4px;
+        }
+        [data-theme="dark"] .ai-rag-src {
+            background: rgba(107, 114, 128, 0.15);
+            color: #9CA3AF;
+        }
+        .ai-provider-badge {
+            font-size: 10px; font-weight: 500;
+            padding: 2px 8px; border-radius: 4px;
+            background: rgba(99, 102, 241, 0.08);
+            color: #6366F1; margin-left: auto;
+        }
+        [data-theme="dark"] .ai-provider-badge {
+            background: rgba(99, 102, 241, 0.15);
+            color: #A5B4FC;
+        }
+
         /* Input bar */
         .ai-chat-input-bar {
             padding: 12px 20px 16px;
@@ -7477,19 +7520,39 @@
                 var data = await response.json();
                 if (response.ok) {
                     aiChatHistory.push({ role: 'model', text: data.reply });
-                    var sourceBadges = '';
-                    if (data.databases && data.databases.length) {
-                        sourceBadges = '<div class="ai-msg-sources">' +
-                            data.databases.map(function(db) {
-                                return '<span class="ai-msg-source-badge">' + escapeHtml(db) + '</span>';
-                            }).join('') + '</div>';
+                    // ── RAG source info badge ──
+                    var ragBadge = '';
+                    if (data.rag && data.rag.chunks > 0) {
+                        var srcLabels = {
+                            'verified_qa': '✅ Tasdiqlangan',
+                            'uploaded_doc': '📄 Yuklangan hujjat',
+                            'law_text': '📜 Qonun matni',
+                            'fetched': '🌐 Lex.uz'
+                        };
+                        var srcParts = (data.rag.sources || []).map(function(s) {
+                            var label = srcLabels[s.type] || s.type;
+                            var lawList = s.laws && s.laws.length ? ' (' + s.laws.join(', ') + ')' : '';
+                            return '<span class="ai-rag-src">' + label + ' × ' + s.count + lawList + '</span>';
+                        }).join('');
+                        var webPart = data.rag.webResults > 0 ? '<span class="ai-rag-src">🌐 Internet × ' + data.rag.webResults + '</span>' : '';
+                        ragBadge = '<div class="ai-rag-info">'
+                            + '<span class="ai-rag-mode" title="RAG search mode">📊 ' + (data.rag.searchMode || 'text') + ' | ' + data.rag.chunks + ' chunk</span>'
+                            + srcParts + webPart
+                            + '</div>';
+                    } else if (data.ragUsed === false) {
+                        ragBadge = '<div class="ai-rag-info"><span class="ai-rag-mode ai-rag-no">🤖 RAG ishlatilmadi — faqat ' + escapeHtml(data.provider || 'AI') + '</span></div>';
                     }
+
+                    // ── Provider badge ──
+                    var providerBadge = data.provider ? '<span class="ai-provider-badge">' + escapeHtml(data.provider) + '</span>' : '';
+
                     // Store Q&A for verification
                     var msgId = 'aimsg_' + Date.now();
                     aiVerifyMap[msgId] = { question: currentQuestion, answer: data.reply, topic: selectedTopic };
                     var verifyRow = '<div class="ai-verify-row" id="vrow_' + msgId + '">' +
                         '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
                         '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
+                        providerBadge +
                         '</div>' +
                         '<div class="ai-verify-editor" id="veditor_' + msgId + '" style="display:none">' +
                         '<textarea class="ai-verify-textarea" id="vtxt_' + msgId + '"></textarea>' +
@@ -7497,7 +7560,7 @@
                         '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
                         '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
                         '</div></div>';
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + sourceBadges + verifyRow + '</div>';
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + ragBadge + verifyRow + '</div>';
                 } else {
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
                 }

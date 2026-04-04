@@ -1825,7 +1825,8 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
     // ========== RAG CORPUS: RETRIEVE RELEVANT LAW TEXT ==========
     let ragCorpusBlock = '';
     try {
-      ragCorpusBlock = await retrieveLegalContext(requestText, detectedField !== 'Boshqa' ? detectedField : null);
+      const ragResult = await retrieveLegalContext(requestText, detectedField !== 'Boshqa' ? detectedField : null);
+      ragCorpusBlock = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       if (ragCorpusBlock) {
         console.log(`[AI] RAG corpus context injected for field: ${detectedField}`);
       }
@@ -2266,7 +2267,7 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     }
   }
 
-  if (goodChunks.length === 0 && webResults.length === 0) return '';
+  if (goodChunks.length === 0 && webResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, sources: [] } };
 
   // ── 5. Format context for prompt ──
   const chunksText = goodChunks.map((r, i) => {
@@ -2290,17 +2291,43 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
 
   console.log(`[RAG] ${searchMode}: ${goodChunks.length} chunks + ${webResults.length} web results for "${query.substring(0, 50)}"`);
 
+  // Collect source metadata for the frontend
+  const sourcesSet = new Map();
+  goodChunks.forEach(r => {
+    const key = r.source_type || 'law_text';
+    if (!sourcesSet.has(key)) {
+      sourcesSet.set(key, { type: key, count: 0, laws: new Set() });
+    }
+    const s = sourcesSet.get(key);
+    s.count++;
+    if (r.law_name) s.laws.add(r.law_name.substring(0, 60));
+  });
+  const sources = Array.from(sourcesSet.values()).map(s => ({
+    type: s.type, count: s.count, laws: Array.from(s.laws).slice(0, 3)
+  }));
+
+  const meta = {
+    searchMode,
+    chunks: goodChunks.length,
+    webResults: webResults.length,
+    sources,
+    strategy: route.strategy,
+  };
+
+  let context;
   if (isUz) {
-    return `\n\nQONUNCHILIK KONTEKSTI (${searchMode}, ${goodChunks.length} natija):\n`
+    context = `\n\nQONUNCHILIK KONTEKSTI (${searchMode}, ${goodChunks.length} natija):\n`
       + `Quyidagi ma'lumotlarga BIRINCHI NAVBATDA asoslaning.\n\n`
       + chunksText + webText + `\n\n`
       + `MUHIM: Yuqoridagi kontekstdagi moddalarni ANIQ keltiring. To'qib chiqarmang.`;
+  } else {
+    context = `\n\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${searchMode}, ${goodChunks.length} результатов):\n`
+      + `Основывайся ПРЕЖДЕ ВСЕГО на следующих материалах.\n\n`
+      + chunksText + webText + `\n\n`
+      + `ВАЖНО: Цитируй статьи ТОЧНО из контекста. Не придумывай статьи, которых нет выше.`;
   }
 
-  return `\n\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${searchMode}, ${goodChunks.length} результатов):\n`
-    + `Основывайся ПРЕЖДЕ ВСЕГО на следующих материалах.\n\n`
-    + chunksText + webText + `\n\n`
-    + `ВАЖНО: Цитируй статьи ТОЧНО из контекста. Не придумывай статьи, которых нет выше.`;
+  return { context, meta };
 }
 
 function buildTopicPrompt(topic, ragContext) {
@@ -2368,8 +2395,11 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 
     // RAG retrieval: fetch relevant legal chunks for the user's query
     let ragContext = '';
+    let ragMeta = null;
     if (topic) {
-      ragContext = await retrieveLegalContext(message, topic);
+      const ragResult = await retrieveLegalContext(message, topic);
+      ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
+      ragMeta = ragResult.meta || null;
     }
 
     const systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
@@ -2391,7 +2421,13 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 
     const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
-    res.json({ reply: aiResult.text, provider: aiResult.provider, databases: usedDbs, ragUsed: !!ragContext });
+    res.json({
+      reply: aiResult.text,
+      provider: aiResult.provider,
+      databases: usedDbs,
+      ragUsed: !!ragContext,
+      rag: ragMeta,
+    });
   } catch (error) {
     console.error('[Legal Chat] Error:', error);
     res.status(500).json({ error: 'Qonun qidirish xatoligi: ' + error.message });
