@@ -898,8 +898,8 @@ async function handleLogin(e) {
     if (resp.ok && data.accessToken) {
       localStorage.setItem('portal_token', data.accessToken);
       localStorage.setItem('portal_user', JSON.stringify(data.user));
-      closeAuth();
-      showLoggedInState(data.user);
+      window.location.href = '/ai-dashboard.html';
+      return;
     } else {
       errEl.textContent = data.error || 'Kirish xatoligi';
     }
@@ -933,8 +933,8 @@ async function handleRegister(e) {
     if (resp.ok && data.accessToken) {
       localStorage.setItem('portal_token', data.accessToken);
       localStorage.setItem('portal_user', JSON.stringify(data.user));
-      closeAuth();
-      showLoggedInState(data.user);
+      window.location.href = '/ai-dashboard.html';
+      return;
     } else {
       errEl.textContent = data.error || 'Ro\'yxatdan o\'tish xatoligi';
     }
@@ -959,11 +959,11 @@ function showLoggedInState(user) {
   }
 }
 
-// Check if already logged in on page load
+// Check if already logged in on page load — redirect to dashboard
 (function checkAuth() {
-  var user = localStorage.getItem('portal_user');
-  if (user) {
-    try { showLoggedInState(JSON.parse(user)); } catch {}
+  var tkn = localStorage.getItem('portal_token');
+  if (tkn) {
+    window.location.href = '/ai-dashboard.html';
   }
 })();
 
