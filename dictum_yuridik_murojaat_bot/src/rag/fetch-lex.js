@@ -1,5 +1,15 @@
 'use strict';
 
+// Polyfill File for Node 18 — cheerio 1.x pulls undici which needs File at import time
+if (typeof globalThis.File === 'undefined') {
+  try {
+    const { Blob } = require('buffer');
+    globalThis.File = class File extends Blob {
+      constructor(chunks, name, opts) { super(chunks, opts); this.name = name; this.lastModified = (opts && opts.lastModified) || Date.now(); }
+    };
+  } catch { /* buffer.Blob unavailable, cheerio will fail */ }
+}
+
 /**
  * Lex.uz Document Fetcher
  *
