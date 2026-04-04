@@ -7319,6 +7319,15 @@
         var currentAiSessionId = null;
         var aiHistoryLoaded = false;
 
+        var AI_DATABASES = {
+            'lex.uz':       { label: 'Lex.uz' },
+            'norma.uz':     { label: 'Norma.uz' },
+            'gov.uz':       { label: 'Gov.uz' },
+            'corpus':       { label: 'Korpus' },
+            'verified_qa':  { label: 'Tasdiqlangan' },
+            'web':          { label: 'Internet' }
+        };
+
         var AI_TOPICS = {
             'mehnat':       { label: 'Mehnat',              desc: 'Mehnat huquqi' },
             'oila':         { label: 'Oila',                desc: 'Oila huquqi' },
