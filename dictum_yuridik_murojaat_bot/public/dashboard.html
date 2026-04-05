@@ -1731,6 +1731,78 @@
         .fb-review-btn:hover { border-color: #7C4DFF; color: #7C4DFF; }
         .fb-review-btn.done { background: rgba(81,45,168,0.1); color: #7C4DFF; border-color: #7C4DFF; }
 
+        /* Feedback Edit Modal */
+        .fb-edit-overlay {
+            display: none; position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center;
+        }
+        .fb-edit-overlay.open { display: flex; }
+        .fb-edit-modal {
+            background: var(--bg-card, #fff); border-radius: 16px;
+            width: 90%; max-width: 680px; max-height: 90vh;
+            overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+        }
+        .fb-edit-header {
+            padding: 18px 24px; border-bottom: 1px solid var(--glass-border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .fb-edit-header h3 { font-size: 16px; font-weight: 700; margin: 0; }
+        .fb-edit-close {
+            background: none; border: none; font-size: 22px; cursor: pointer;
+            color: var(--text-muted); padding: 4px 8px; border-radius: 6px;
+        }
+        .fb-edit-close:hover { background: var(--bg-hover, #f0f0f0); }
+        .fb-edit-body { padding: 20px 24px; }
+        .fb-edit-label {
+            font-size: 12px; font-weight: 600; color: var(--text-secondary);
+            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .fb-edit-question {
+            padding: 12px 14px; border-radius: 10px; margin-bottom: 16px;
+            background: rgba(81,45,168,0.06); border: 1px solid rgba(81,45,168,0.12);
+            font-size: 13px; color: var(--text-primary); line-height: 1.5;
+        }
+        .fb-edit-original {
+            padding: 12px 14px; border-radius: 10px; margin-bottom: 16px;
+            background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15);
+            font-size: 12px; color: var(--text-secondary); line-height: 1.5;
+            max-height: 120px; overflow-y: auto;
+        }
+        .fb-edit-textarea {
+            width: 100%; min-height: 180px; padding: 14px;
+            border: 2px solid var(--glass-border); border-radius: 10px;
+            font-family: inherit; font-size: 13px; line-height: 1.6;
+            background: var(--bg-card, #fff); color: var(--text-primary);
+            resize: vertical; margin-bottom: 16px;
+        }
+        .fb-edit-textarea:focus { outline: none; border-color: #7C4DFF; }
+        .fb-edit-footer {
+            padding: 16px 24px; border-top: 1px solid var(--glass-border);
+            display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;
+        }
+        .fb-edit-btn {
+            padding: 10px 20px; border-radius: 10px; border: none;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            font-family: inherit; transition: all 0.2s;
+        }
+        .fb-edit-btn.cancel {
+            background: var(--bg-hover, #f0f0f0); color: var(--text-secondary);
+        }
+        .fb-edit-btn.save {
+            background: #7C4DFF; color: #fff;
+        }
+        .fb-edit-btn.save-corpus {
+            background: linear-gradient(135deg, #0ECB81, #0A9D8C); color: #fff;
+        }
+        .fb-edit-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+        .fb-edit-checkbox {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;
+        }
+        .fb-edit-checkbox input { accent-color: #7C4DFF; }
+
         /* AI Action Buttons */
         .ai-action-buttons {
             display: flex;
@@ -5121,6 +5193,40 @@
         </div>
     </div>
 
+    <!-- Feedback Edit Modal -->
+    <div class="fb-edit-overlay" id="fbEditOverlay" onclick="if(event.target===this)closeFbEdit()">
+        <div class="fb-edit-modal">
+            <div class="fb-edit-header">
+                <h3>Javobni tahrirlash va tuzatish</h3>
+                <button class="fb-edit-close" onclick="closeFbEdit()">&times;</button>
+            </div>
+            <div class="fb-edit-body">
+                <input type="hidden" id="fbEditId">
+                <div class="fb-edit-label">Foydalanuvchi savoli</div>
+                <div class="fb-edit-question" id="fbEditQuestion"></div>
+
+                <div class="fb-edit-label">AI javob (asl nusxa)</div>
+                <div class="fb-edit-original" id="fbEditOriginal"></div>
+
+                <div class="fb-edit-label">Tuzatilgan javob</div>
+                <textarea class="fb-edit-textarea" id="fbEditCorrected" placeholder="To'g'ri javobni yozing..."></textarea>
+
+                <label class="fb-edit-checkbox">
+                    <input type="checkbox" id="fbEditAddCorpus" checked>
+                    Tuzatilgan javobni RAG korpusiga qo'shish (tasdiqlangan Q&A sifatida)
+                </label>
+
+                <div class="fb-edit-label">Izoh (ixtiyoriy)</div>
+                <textarea class="fb-edit-textarea" id="fbEditNote" placeholder="Nima uchun tuzatildi..." style="min-height:60px"></textarea>
+            </div>
+            <div class="fb-edit-footer">
+                <button class="fb-edit-btn cancel" onclick="closeFbEdit()">Bekor qilish</button>
+                <button class="fb-edit-btn save" onclick="saveFbEdit('confirmed_bad')">Yomon deb tasdiqlash</button>
+                <button class="fb-edit-btn save-corpus" onclick="saveFbEdit('corrected')">Tuzatib saqlash</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Hidden chart canvases for PDF export (high-res) -->
     <div id="chartContainer" style="position: absolute; left: -9999px; top: -9999px;">
         <canvas id="statusChart" width="900" height="600"></canvas>
@@ -7845,10 +7951,11 @@
                     var reviewed = fb.reviewed ? '<span style="color:#7C4DFF;font-size:10px">(' + (fb.review_result || 'reviewed') + ')</span>' : '';
                     var reviewBtns = '';
                     if (!fb.reviewed) {
+                        fbDataMap[fb.id] = { q: fb.user_question || '', a: fb.ai_response || '', topic: fb.topic || '' };
                         reviewBtns = '<div class="fb-review-btns">' +
                             '<button class="fb-review-btn" onclick="reviewFb(' + fb.id + ',\'confirmed_good\',this)">Tasdiqlash</button>' +
                             '<button class="fb-review-btn" onclick="reviewFb(' + fb.id + ',\'confirmed_bad\',this)">Yomon</button>' +
-                            '<button class="fb-review-btn" onclick="reviewFb(' + fb.id + ',\'corrected\',this)">Tuzatildi</button>' +
+                            '<button class="fb-review-btn" style="border-color:#7C4DFF;color:#7C4DFF;font-weight:600" onclick="openFbEdit(' + fb.id + ')">Tahrirlash</button>' +
                             '</div>';
                     }
                     var date = new Date(fb.created_at).toLocaleDateString('uz', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
@@ -7862,6 +7969,78 @@
                 container.innerHTML = html;
             } catch (e) {
                 container.innerHTML = '<div style="padding:10px;color:#e74c3c;font-size:11px">Xatolik: ' + e.message + '</div>';
+            }
+        }
+
+        var fbDataMap = {};
+
+        function openFbEdit(id) {
+            var data = fbDataMap[id];
+            if (!data) return;
+            document.getElementById('fbEditId').value = id;
+            document.getElementById('fbEditQuestion').textContent = data.q;
+            document.getElementById('fbEditOriginal').textContent = data.a;
+            document.getElementById('fbEditCorrected').value = data.a;
+            document.getElementById('fbEditNote').value = '';
+            document.getElementById('fbEditAddCorpus').checked = true;
+            document.getElementById('fbEditOverlay').classList.add('open');
+        }
+
+        function closeFbEdit() {
+            document.getElementById('fbEditOverlay').classList.remove('open');
+        }
+
+        async function saveFbEdit(reviewResult) {
+            var id = document.getElementById('fbEditId').value;
+            var corrected = document.getElementById('fbEditCorrected').value.trim();
+            var note = document.getElementById('fbEditNote').value.trim();
+            var addToCorpus = document.getElementById('fbEditAddCorpus').checked;
+
+            if (!corrected) { alert('Tuzatilgan javob bo\'sh bo\'lmasligi kerak'); return; }
+
+            try {
+                // 1. Mark feedback as reviewed with corrected text
+                var resp = await fetch('/api/jurist-feedback/' + id, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        reviewResult: reviewResult,
+                        reviewerNote: (note ? note + '\n\n' : '') + 'Tuzatilgan javob:\n' + corrected
+                    })
+                });
+
+                if (!resp.ok) { alert('Xatolik: ' + (await resp.json()).error); return; }
+
+                // 2. Optionally add corrected Q&A to RAG corpus as verified answer
+                if (addToCorpus && reviewResult === 'corrected') {
+                    var data = fbDataMap[id];
+                    var topic = data.topic || selectedTopic || '';
+                    try {
+                        var corpusResp = await fetch('/api/rag/verify-chat-answer', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({
+                                question: data.q,
+                                answer: corrected,
+                                topic: topic
+                            })
+                        });
+                        var corpusData = await corpusResp.json();
+                        if (corpusResp.ok && corpusData.success) {
+                            console.log('[FB] Corrected answer added to corpus');
+                        } else {
+                            console.warn('[FB] Corpus add failed:', corpusData.error);
+                        }
+                    } catch (e) { console.error('[FB] Corpus add error:', e); }
+                }
+
+                closeFbEdit();
+                loadFbStats();
+                loadFbList('all');
+            } catch (e) {
+                alert('Xatolik: ' + e.message);
             }
         }
 
