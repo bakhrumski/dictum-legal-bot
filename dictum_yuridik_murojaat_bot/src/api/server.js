@@ -1824,11 +1824,17 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
 
     // ========== RAG CORPUS: RETRIEVE RELEVANT LAW TEXT ==========
     let ragCorpusBlock = '';
+    let ragMeta = null;
     try {
       const ragResult = await retrieveLegalContext(requestText, detectedField !== 'Boshqa' ? detectedField : null);
-      ragCorpusBlock = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
+      if (typeof ragResult === 'string') {
+        ragCorpusBlock = ragResult;
+      } else {
+        ragCorpusBlock = ragResult.context || '';
+        ragMeta = ragResult.meta || null;
+      }
       if (ragCorpusBlock) {
-        console.log(`[AI] RAG corpus context injected for field: ${detectedField}`);
+        console.log(`[AI] RAG: ${ragMeta?.strategy || '?'} / ${ragMeta?.searchMode || '?'} — ${ragMeta?.chunks || 0} chunks`);
       }
     } catch (e) {
       console.error('[AI] RAG corpus retrieval error:', e.message);
@@ -2096,7 +2102,7 @@ ${feedbackNote}`;
       console.error('[AI] Archive save error:', archiveErr.message);
     }
 
-    res.json({ analysis, archiveId, templateSuggestions, provider: aiProvider, detectedField });
+    res.json({ analysis, archiveId, templateSuggestions, provider: aiProvider, detectedField, ragMeta });
   } catch (error) {
     console.error('[AI] Analysis error:', error);
     res.status(500).json({ error: 'AI tahlil xatoligi: ' + error.message });

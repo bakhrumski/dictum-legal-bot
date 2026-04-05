@@ -7153,6 +7153,28 @@
                     }
                     content.innerHTML = simpleMarkdown(data.analysis);
 
+                    // RAG meta badge
+                    var ragInfoEl = document.getElementById('aiRagMetaBadge');
+                    if (!ragInfoEl) {
+                        ragInfoEl = document.createElement('div');
+                        ragInfoEl.id = 'aiRagMetaBadge';
+                        ragInfoEl.style.cssText = 'margin:8px 0 4px;display:flex;flex-wrap:wrap;gap:6px;font-size:11px;';
+                        content.parentNode.insertBefore(ragInfoEl, content);
+                    }
+                    if (data.ragMeta && data.ragMeta.chunks > 0) {
+                        var m = data.ragMeta;
+                        var strategyColor = m.strategy === 'DIRECT' ? '#0369a1' : m.strategy === 'GRAPH' ? '#7c3aed' : '#166534';
+                        var strategyBg   = m.strategy === 'DIRECT' ? '#e0f2fe' : m.strategy === 'GRAPH' ? '#f3e8ff' : '#dcfce7';
+                        ragInfoEl.innerHTML =
+                            '<span style="background:' + strategyBg + ';color:' + strategyColor + ';border-radius:5px;padding:2px 8px;font-weight:600">📚 RAG: ' + (m.strategy || 'HYBRID') + '</span>' +
+                            '<span style="background:#f3f4f6;color:#374151;border-radius:5px;padding:2px 8px">🔍 ' + (m.searchMode || 'rrf') + '</span>' +
+                            '<span style="background:#f3f4f6;color:#374151;border-radius:5px;padding:2px 8px">🧩 ' + m.chunks + ' bo\'lak</span>' +
+                            (m.webResults > 0 ? '<span style="background:#fef3c7;color:#92400e;border-radius:5px;padding:2px 8px">🌐 ' + m.webResults + ' veb natija</span>' : '') +
+                            (m.webResults === 0 && m.chunks > 0 ? '' : '');
+                    } else {
+                        ragInfoEl.innerHTML = '<span style="background:#f3f4f6;color:#9ca3af;border-radius:5px;padding:2px 8px">📭 RAG ishlatilmadi</span>';
+                    }
+
                     // Store conversation history
                     aiConversationHistory = [
                         { role: 'user', text: requestText },

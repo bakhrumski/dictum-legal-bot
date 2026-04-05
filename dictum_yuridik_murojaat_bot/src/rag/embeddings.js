@@ -86,7 +86,7 @@ const PROVIDERS = {
     dims: 1024,
     maxInput: 512,   // tokens (not chars) — E5 context window
     batchSize: 32,   // HF Inference API batch limit
-    endpoint: 'https://api-inference.huggingface.co/models/intfloat/multilingual-e5-large',
+    endpoint: 'https://router.huggingface.co/hf-inference/models/intfloat/multilingual-e5-large/pipeline/feature-extraction',
   },
   gemini: {
     model: 'gemini-embedding-001',
@@ -131,14 +131,14 @@ function addE5Prefix(text, isQuery = false) {
 async function hfEmbed(texts, apiKey, isQuery = false) {
   const inputs = texts.map(t => addE5Prefix(t, isQuery));
 
+  // router.huggingface.co uses plain { inputs } — no options wrapper
   const resp = await httpsPostJson(
     PROVIDERS.huggingface.endpoint,
-    { inputs, options: { wait_for_model: true } },
+    { inputs },
     { 'Authorization': `Bearer ${apiKey}` }
   );
 
   if (resp.status !== 200) {
-    // Model loading (503) — retry once after 20s
     if (resp.status === 503) {
       console.warn('[EMBEDDINGS] HuggingFace model loading, retrying in 20s...');
       await new Promise(r => setTimeout(r, 20_000));
@@ -148,8 +148,12 @@ async function hfEmbed(texts, apiKey, isQuery = false) {
   }
 
   const data = resp.body;
-  // Response is array of embedding arrays
-  return Array.isArray(data[0]) ? data : data.map(d => d);
+  // router returns: array of embeddings (each embedding is a float array)
+  // Some models return nested arrays [[emb1], [emb2]] — flatten one level if needed
+  if (!Array.isArray(data)) {
+    throw new Error('HuggingFace: unexpected response format');
+  }
+  return Array.isArray(data[0]) ? data : data.map(d => Array.isArray(d) ? d : d.embedding || d);
 }
 
 // ========== GEMINI EMBEDDINGS ==========
