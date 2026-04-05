@@ -76,20 +76,24 @@ async function initLegalCorpus() {
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS language VARCHAR(5) DEFAULT 'ru'`);
 
     // Handle embedding dimension migration (e.g. switching from Gemini 3072d to HF 1024d)
+    // atttypmod for vector(n) equals n directly in pgvector
     const dimCheck = await pool.query(`
-      SELECT atttypmod FROM pg_attribute
+      SELECT atttypmod
+      FROM pg_attribute
       JOIN pg_class ON pg_class.oid = pg_attribute.attrelid
-      WHERE pg_class.relname = 'legal_chunks' AND pg_attribute.attname = 'embedding'
+      WHERE pg_class.relname = 'legal_chunks'
+        AND pg_attribute.attname = 'embedding'
+        AND pg_attribute.attnum > 0
     `);
     if (dimCheck.rows.length > 0) {
-      const currentDim = dimCheck.rows[0].atttypmod;
+      const currentDim = parseInt(dimCheck.rows[0].atttypmod, 10); // always parse to int
       const targetDim = getEmbedDims();
-      if (currentDim !== targetDim && currentDim > 0) {
-        console.log(`[LEGAL CORPUS] Embedding dimension changed (${currentDim} → ${targetDim}). Clearing old embeddings...`);
-        await pool.query(`UPDATE legal_chunks SET embedding = NULL`);
-        await pool.query(`ALTER TABLE legal_chunks ALTER COLUMN embedding TYPE vector(${targetDim}) USING NULL`);
+      if (!isNaN(currentDim) && currentDim > 0 && currentDim !== targetDim) {
+        console.log(`[LEGAL CORPUS] Embedding dim mismatch: table=${currentDim}d, provider=${targetDim}d. Rebuilding column...`);
         await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
-        console.log(`[LEGAL CORPUS] Embedding column migrated to ${targetDim}d. Re-indexing required.`);
+        await pool.query(`ALTER TABLE legal_chunks DROP COLUMN embedding`);
+        await pool.query(`ALTER TABLE legal_chunks ADD COLUMN embedding vector(${targetDim})`);
+        console.log(`[LEGAL CORPUS] Embedding column rebuilt to ${targetDim}d. Re-ingest required.`);
       }
     }
 

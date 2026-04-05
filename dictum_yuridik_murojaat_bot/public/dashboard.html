@@ -7129,7 +7129,11 @@
                     statusEl.className = 'ai-doc-upload-status success';
                     statusEl.innerHTML = '✅ <b>' + escapeHtml(data.doc_name) + '</b> yuklandi!<br>' +
                         data.chunks + ' bo\'lak' +
-                        (data.embedded > 0 ? ', ' + data.embedded + ' ta vektori bilan' : ' (matn qidiruvi)');
+                        (data.embedded > 0 ? ', ' + data.embedded + ' ta vektori bilan' : ' (matn qidiruvi, vektorsiz)');
+                    if (data.embed_warning) {
+                        statusEl.className = 'ai-doc-upload-status error';
+                        statusEl.innerHTML += '<br>⚠️ Vektorlashtirish amalga oshmadi: <b>' + escapeHtml(data.embed_warning) + '</b>';
+                    }
                     statusEl.style.display = 'block';
                     document.getElementById('docLexUrl').value = '';
                     document.getElementById('docUploadName').value = '';
@@ -7193,6 +7197,10 @@
                     statusEl.className = 'ai-doc-upload-status success';
                     statusEl.innerHTML = '✅ <b>' + escapeHtml(data.doc_name) + '</b> yuklandi!<br>' +
                         data.chunks + ' bo\'lak' + (data.embedded > 0 ? ', ' + data.embedded + ' ta vektori' : ' (vektorsiz, matn qidiruvi)');
+                    if (data.embed_warning) {
+                        statusEl.className = 'ai-doc-upload-status error';
+                        statusEl.innerHTML += '<br>⚠️ Vektorlashtirish amalga oshmadi: <b>' + escapeHtml(data.embed_warning) + '</b>';
+                    }
                     statusEl.style.display = 'block';
                     fileInput.value = '';
                     document.getElementById('docSelectedFile').style.display = 'none';

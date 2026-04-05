@@ -3148,12 +3148,17 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
     const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
     let embeddings = [];
     let embeddedCount = 0;
+    let embedError = null;
 
-    if (apiKey) {
+    if (!apiKey) {
+      embedError = 'Embedding API key not set (HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)';
+      console.warn('[DOC UPLOAD]', embedError);
+    } else {
       try {
         embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
         embeddedCount = embeddings.length;
       } catch (embErr) {
+        embedError = embErr.message;
         console.warn('[DOC UPLOAD] Embedding failed, saving without vectors:', embErr.message);
       }
     }
@@ -3219,7 +3224,8 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
       doc_id: docId,
       chunks: chunks.length,
       embedded: embeddedCount,
-      topic
+      topic,
+      ...(embedError ? { embed_warning: embedError } : {}),
     });
 
   } catch (error) {
@@ -3274,12 +3280,17 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
     let embeddings = [];
     let embeddedCount = 0;
+    let embedError = null;
 
-    if (apiKey) {
+    if (!apiKey) {
+      embedError = 'Embedding API key not set (HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)';
+      console.warn('[LEX INGEST]', embedError);
+    } else {
       try {
         embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
         embeddedCount = embeddings.length;
       } catch (embErr) {
+        embedError = embErr.message;
         console.warn('[LEX INGEST] Embedding failed, saving text-only:', embErr.message);
       }
     }
@@ -3348,7 +3359,8 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       embedded: embeddedCount,
       topic,
       source_url: cleanUrl,
-      justify: justifyResult ? { indexed: true, chunks: justifyResult.chunks } : { indexed: false }
+      justify: justifyResult ? { indexed: true, chunks: justifyResult.chunks } : { indexed: false },
+      ...(embedError ? { embed_warning: embedError } : {}),
     });
 
   } catch (error) {

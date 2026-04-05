@@ -103,9 +103,10 @@ const PROVIDERS = {
 };
 
 // Export the active dimensions (used by legal-corpus.js for table creation)
+// Default 1024 (multilingual-e5-large) — safest fallback for new installs
 function getEmbedDims() {
   const provider = detectProvider();
-  return provider ? PROVIDERS[provider].dims : 768; // default to Gemini dims
+  return provider ? PROVIDERS[provider].dims : 1024;
 }
 
 const EMBED_MODEL = () => {
@@ -223,6 +224,7 @@ async function getEmbedding(text, apiKey) {
   if (!text || text.trim().length === 0) throw new Error('Empty text cannot be embedded');
 
   const provider = detectProvider();
+  if (!provider) throw new Error('No embedding provider configured (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
 
   if (provider === 'huggingface') {
     const results = await hfEmbed([text], key, true /* isQuery */);
@@ -244,6 +246,7 @@ async function getEmbeddingsBatch(texts, apiKey) {
   if (!texts || texts.length === 0) return [];
 
   const provider = detectProvider();
+  if (!provider) throw new Error('No embedding provider configured (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
   const config = PROVIDERS[provider];
   const BATCH_SIZE = config.batchSize;
   const allEmbeddings = [];
