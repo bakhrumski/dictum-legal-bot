@@ -2276,6 +2276,8 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   if (goodChunks.length === 0 && webResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, sources: [] } };
 
   // ── 5. Format context for prompt ──
+  // Max chars per chunk: verified_qa gets more space, law text is trimmed
+  const MAX_CHUNK_CHARS = 1200;
   const chunksText = goodChunks.map((r, i) => {
     const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
     const verifiedBadge = r.source_type === 'verified_qa'
@@ -2283,12 +2285,16 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
       : '';
     const scoreTag = r.score ? ` (${(r.score * 100).toFixed(0)}%)` : '';
     const langTag = r.language === 'uz' ? ' [UZ]' : ' [RU]';
+    const maxChars = r.source_type === 'verified_qa' ? 2000 : MAX_CHUNK_CHARS;
+    const text = r.chunk_text.length > maxChars
+      ? r.chunk_text.substring(0, maxChars) + '...'
+      : r.chunk_text;
 
     return [
       `[${i + 1}] ${r.law_name}${verifiedBadge}${langTag}${scoreTag}`,
       arts ? (isUz ? `  Moddalar: ${arts}` : `  Статьи: ${arts}`) : '',
       r.chapter ? `  ${r.chapter}` : '',
-      r.chunk_text,
+      text,
       r.source_url ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.source_url})` : '',
     ].filter(Boolean).join('\n');
   }).join('\n\n');
