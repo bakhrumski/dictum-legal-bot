@@ -1557,7 +1557,7 @@ async function callGemini(messages, options = {}) {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) throw new Error('GEMINI_API_KEY sozlanmagan');
 
-  const model = 'gemini-2.5-flash-preview-04-17';
+  const model = 'gemini-2.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
 
   // Convert messages: first message with role 'system' becomes systemInstruction
