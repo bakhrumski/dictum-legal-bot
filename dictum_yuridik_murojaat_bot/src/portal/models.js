@@ -142,6 +142,27 @@ async function runPortalMigrations() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_portal_subs_user ON portal_subscriptions(user_id)`);
 
+    // ──── portal_feedback ────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS portal_feedback (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER DEFAULT 0,
+        message_id INTEGER,
+        conversation_id INTEGER,
+        rating VARCHAR(10) NOT NULL CHECK (rating IN ('good', 'bad')),
+        user_question TEXT,
+        ai_response TEXT,
+        topic VARCHAR(100),
+        source VARCHAR(20) DEFAULT 'dashboard',
+        reviewed BOOLEAN DEFAULT FALSE,
+        review_result VARCHAR(20) CHECK (review_result IN ('confirmed_good', 'confirmed_bad', 'corrected')),
+        reviewer_note TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_portal_feedback_user ON portal_feedback(user_id, created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_portal_feedback_rating ON portal_feedback(rating)`);
+
     console.log('[PORTAL] Database migrations completed');
   } catch (err) {
     console.error('[PORTAL] Migration error:', err.message);

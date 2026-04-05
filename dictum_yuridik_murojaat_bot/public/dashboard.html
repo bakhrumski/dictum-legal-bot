@@ -1646,6 +1646,91 @@
             font-size: 12px;
             color: var(--text-muted);
         }
+        /* AI Chat Message Actions (copy, download, thumbs) */
+        .ai-msg-actions {
+            display: flex; align-items: center; gap: 2px; margin-top: 8px; position: relative;
+        }
+        .ai-msg-act {
+            background: none; border: none; cursor: pointer;
+            width: 28px; height: 28px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted); transition: all 0.2s; position: relative;
+        }
+        .ai-msg-act:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .ai-msg-act.rated-good { color: #22c55e; }
+        .ai-msg-act.rated-bad { color: #ef4444; }
+        .ai-msg-act svg { width: 15px; height: 15px; }
+        .ai-msg-act[disabled] { opacity: 0.4; cursor: default; }
+        .ai-msg-act[disabled]:hover { background: none; }
+        .ai-msg-act::after {
+            content: attr(data-tip); position: absolute; bottom: 100%; left: 50%;
+            transform: translateX(-50%); padding: 3px 7px;
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: 5px; font-size: 10px; color: var(--text-secondary);
+            white-space: nowrap; pointer-events: none;
+            opacity: 0; transition: opacity 0.15s;
+        }
+        .ai-msg-act:hover::after { opacity: 1; }
+        .ai-msg-toast {
+            position: absolute; bottom: 100%; left: 0;
+            padding: 5px 10px; border-radius: 7px;
+            background: var(--bg-card); border: 1px solid #7C4DFF;
+            color: #7C4DFF; font-size: 11px; font-weight: 500;
+            white-space: nowrap; animation: aimsgToast 2s ease forwards;
+            pointer-events: none;
+        }
+        @keyframes aimsgToast {
+            0% { opacity: 0; transform: translateY(3px); }
+            15% { opacity: 1; transform: translateY(0); }
+            70% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-5px); }
+        }
+
+        /* Feedback Report Panel (master only) */
+        .fb-report-section { margin-top: 12px; }
+        .fb-report-toggle {
+            width: 100%; background: none; border: 1px solid #7C4DFF;
+            border-radius: 8px; padding: 8px 12px; font-size: 12px;
+            color: #7C4DFF; cursor: pointer; text-align: left;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .fb-report-panel { margin-top: 8px; display: none; }
+        .fb-report-panel.visible { display: block; }
+        .fb-stat-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;
+        }
+        .fb-stat-card {
+            padding: 8px 10px; border-radius: 8px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            font-size: 11px; color: var(--text-secondary);
+        }
+        .fb-stat-card .fb-val {
+            font-size: 18px; font-weight: 700; display: block;
+            color: var(--text-primary); margin-bottom: 2px;
+        }
+        .fb-stat-card.good .fb-val { color: #22c55e; }
+        .fb-stat-card.bad .fb-val { color: #ef4444; }
+        .fb-list-item {
+            padding: 8px 10px; border-radius: 8px; margin-bottom: 6px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            font-size: 11px; position: relative;
+        }
+        .fb-list-item .fb-q { color: var(--text-primary); font-weight: 600; margin-bottom: 3px; }
+        .fb-list-item .fb-a { color: var(--text-secondary); max-height: 60px; overflow: hidden; }
+        .fb-list-item .fb-badge {
+            position: absolute; top: 8px; right: 8px;
+            padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;
+        }
+        .fb-badge.good { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .fb-badge.bad { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .fb-review-btns { display: flex; gap: 4px; margin-top: 6px; }
+        .fb-review-btn {
+            padding: 3px 8px; border-radius: 4px; border: 1px solid var(--glass-border);
+            background: none; font-size: 10px; cursor: pointer; color: var(--text-secondary);
+        }
+        .fb-review-btn:hover { border-color: #7C4DFF; color: #7C4DFF; }
+        .fb-review-btn.done { background: rgba(81,45,168,0.1); color: #7C4DFF; border-color: #7C4DFF; }
+
         /* AI Action Buttons */
         .ai-action-buttons {
             display: flex;
@@ -4672,6 +4757,29 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Feedback Report (master only) -->
+                <div class="fb-report-section" id="fbReportSection" style="display:none">
+                    <button class="fb-report-toggle" onclick="toggleFbReport()">
+                        <span>📊 Feedback hisoboti</span>
+                        <span id="fbReportToggleIcon">&#9660;</span>
+                    </button>
+                    <div class="fb-report-panel" id="fbReportPanel">
+                        <div class="fb-stat-grid" id="fbStatGrid">
+                            <div class="fb-stat-card good"><span class="fb-val" id="fbGood">0</span>Yaxshi</div>
+                            <div class="fb-stat-card bad"><span class="fb-val" id="fbBad">0</span>Yomon</div>
+                            <div class="fb-stat-card"><span class="fb-val" id="fbReviewed">0</span>Ko'rib chiqilgan</div>
+                            <div class="fb-stat-card"><span class="fb-val" id="fbPending">0</span>Kutilmoqda</div>
+                        </div>
+                        <div style="display:flex;gap:4px;margin-bottom:8px">
+                            <button class="fb-review-btn" onclick="loadFbList('all')" style="flex:1">Hammasi</button>
+                            <button class="fb-review-btn" onclick="loadFbList('good')" style="flex:1">Yaxshi</button>
+                            <button class="fb-review-btn" onclick="loadFbList('bad')" style="flex:1">Yomon</button>
+                            <button class="fb-review-btn" onclick="loadFbList('pending')" style="flex:1">Kutilmoqda</button>
+                        </div>
+                        <div id="fbListContainer" style="max-height:350px;overflow-y:auto"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Sidebar backdrop for mobile -->
@@ -5276,6 +5384,12 @@
                 const legalChatEl = document.getElementById('legalChatSection');
                 if (legalChatEl) {
                     legalChatEl.style.display = data.role === 'master' ? '' : 'none';
+                }
+
+                // Show feedback report section for master only
+                const fbReport = document.getElementById('fbReportSection');
+                if (fbReport) {
+                    fbReport.style.display = data.role === 'master' ? '' : 'none';
                 }
 
                 // Show registration requests section for master only
@@ -7568,7 +7682,16 @@
                         '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
                         '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
                         '</div></div>';
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + ragBadge + verifyRow + '</div>';
+                    // ── Message action icons (copy, download, thumbs) ──
+                    var actId = 'aiact_' + Date.now();
+                    var actionsHtml = '<div class="ai-msg-actions" id="' + actId + '">' +
+                        '<button class="ai-msg-act" data-tip="Nusxalash" onclick="copyAiMsg(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
+                        '<button class="ai-msg-act" data-tip="Word yuklab olish" onclick="downloadAiMsg(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>' +
+                        '<button class="ai-msg-act" data-tip="Yaxshi javob" onclick="rateAiMsg(this,\'good\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>' +
+                        '<button class="ai-msg-act" data-tip="Yomon javob" onclick="rateAiMsg(this,\'bad\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>' +
+                        '</div>';
+
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai" data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + ragBadge + actionsHtml + verifyRow + '</div>';
                 } else {
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
                 }
@@ -7611,6 +7734,150 @@
             } catch (e) {
                 console.error('[AI] Save session error:', e);
             }
+        }
+
+        // ═══ AI MSG ACTIONS: copy, download, feedback ═══
+        function copyAiMsg(btn) {
+            var msgEl = btn.closest('.ai-chat-msg');
+            var text = msgEl.getAttribute('data-raw') || msgEl.querySelector('.ai-analysis-content').innerText;
+            navigator.clipboard.writeText(text).then(function() {
+                var orig = btn.innerHTML;
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                btn.setAttribute('data-tip', 'Nusxalandi!');
+                setTimeout(function() { btn.innerHTML = orig; btn.setAttribute('data-tip', 'Nusxalash'); }, 1500);
+            });
+        }
+
+        function downloadAiMsg(btn) {
+            var msgEl = btn.closest('.ai-chat-msg');
+            var text = msgEl.getAttribute('data-raw') || msgEl.querySelector('.ai-analysis-content').innerText;
+            var docHtml = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
+                '<head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:12pt;line-height:1.6;}</style></head>' +
+                '<body>' + simpleMarkdown(text) + '</body></html>';
+            var blob = new Blob([docHtml], { type: 'application/msword' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'JuristAI_javob_' + new Date().toISOString().slice(0,10) + '.doc';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function rateAiMsg(btn, rating, actId) {
+            var actionsDiv = document.getElementById(actId);
+            var thumbBtns = actionsDiv.querySelectorAll('.ai-msg-act:nth-child(n+3)');
+
+            if (btn.classList.contains('rated-good') || btn.classList.contains('rated-bad')) return;
+
+            thumbBtns.forEach(function(b) { b.disabled = true; b.classList.remove('rated-good', 'rated-bad'); });
+            btn.classList.add(rating === 'good' ? 'rated-good' : 'rated-bad');
+
+            var toast = document.createElement('div');
+            toast.className = 'ai-msg-toast';
+            toast.textContent = 'Rahmat! Fikringiz qayd etildi';
+            actionsDiv.appendChild(toast);
+            setTimeout(function() { if (toast.parentNode) toast.remove(); }, 2500);
+
+            var msgEl = btn.closest('.ai-chat-msg');
+            var question = msgEl.getAttribute('data-q') || '';
+            var answer = (msgEl.getAttribute('data-raw') || '').substring(0, 2000);
+
+            fetch('/api/jurist-feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ rating: rating, userQuestion: question, aiResponse: answer, topic: selectedTopic })
+            }).catch(function(err) { console.error('[FEEDBACK]', err); });
+        }
+
+        // ═══ FEEDBACK REPORT (master only) ═══
+        function toggleFbReport() {
+            var panel = document.getElementById('fbReportPanel');
+            var icon = document.getElementById('fbReportToggleIcon');
+            if (panel.classList.contains('visible')) {
+                panel.classList.remove('visible');
+                icon.innerHTML = '&#9660;';
+            } else {
+                panel.classList.add('visible');
+                icon.innerHTML = '&#9650;';
+                loadFbStats();
+                loadFbList('all');
+            }
+        }
+
+        async function loadFbStats() {
+            try {
+                var resp = await fetch('/api/jurist-feedback/stats', { credentials: 'same-origin' });
+                if (!resp.ok) return;
+                var d = await resp.json();
+                document.getElementById('fbGood').textContent = d.good || 0;
+                document.getElementById('fbBad').textContent = d.bad || 0;
+                document.getElementById('fbReviewed').textContent = d.reviewed || 0;
+                document.getElementById('fbPending').textContent = d.pending_review || 0;
+            } catch (e) { console.error('[FB]', e); }
+        }
+
+        async function loadFbList(filter) {
+            var container = document.getElementById('fbListContainer');
+            container.innerHTML = '<div style="text-align:center;padding:10px;color:var(--text-muted);font-size:11px">Yuklanmoqda...</div>';
+            try {
+                var url = '/api/jurist-feedback?limit=30';
+                if (filter === 'good') url += '&rating=good';
+                else if (filter === 'bad') url += '&rating=bad';
+                else if (filter === 'pending') url += '&reviewed=false';
+
+                var resp = await fetch(url, { credentials: 'same-origin' });
+                if (!resp.ok) { container.innerHTML = '<div style="padding:10px;color:#e74c3c;font-size:11px">Xatolik</div>'; return; }
+                var data = await resp.json();
+
+                if (!data.feedback || data.feedback.length === 0) {
+                    container.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:11px;text-align:center">Hali feedback yo\'q</div>';
+                    return;
+                }
+
+                var html = '';
+                data.feedback.forEach(function(fb) {
+                    var badge = fb.rating === 'good' ? '<span class="fb-badge good">Yaxshi</span>' : '<span class="fb-badge bad">Yomon</span>';
+                    var question = fb.user_question ? escapeHtml(fb.user_question).substring(0, 100) : '—';
+                    var answer = fb.ai_response ? escapeHtml(fb.ai_response).substring(0, 150) : '—';
+                    var reviewed = fb.reviewed ? '<span style="color:#7C4DFF;font-size:10px">(' + (fb.review_result || 'reviewed') + ')</span>' : '';
+                    var reviewBtns = '';
+                    if (!fb.reviewed) {
+                        reviewBtns = '<div class="fb-review-btns">' +
+                            '<button class="fb-review-btn" onclick="reviewFb(' + fb.id + ',\'confirmed_good\',this)">Tasdiqlash</button>' +
+                            '<button class="fb-review-btn" onclick="reviewFb(' + fb.id + ',\'confirmed_bad\',this)">Yomon</button>' +
+                            '<button class="fb-review-btn" onclick="reviewFb(' + fb.id + ',\'corrected\',this)">Tuzatildi</button>' +
+                            '</div>';
+                    }
+                    var date = new Date(fb.created_at).toLocaleDateString('uz', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+                    html += '<div class="fb-list-item">' + badge +
+                        '<div class="fb-q">' + question + '</div>' +
+                        '<div class="fb-a">' + answer + '</div>' +
+                        '<div style="margin-top:4px;font-size:10px;color:var(--text-muted)">' + (fb.user_name || '') + ' · ' + date + ' ' + reviewed + '</div>' +
+                        reviewBtns +
+                        '</div>';
+                });
+                container.innerHTML = html;
+            } catch (e) {
+                container.innerHTML = '<div style="padding:10px;color:#e74c3c;font-size:11px">Xatolik: ' + e.message + '</div>';
+            }
+        }
+
+        async function reviewFb(id, result, btn) {
+            try {
+                var resp = await fetch('/api/jurist-feedback/' + id, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ reviewResult: result })
+                });
+                if (resp.ok) {
+                    btn.parentElement.innerHTML = '<span class="fb-review-btn done">' + result + '</span>';
+                    loadFbStats();
+                }
+            } catch (e) { console.error('[FB Review]', e); }
         }
 
         async function loadAiChatHistory() {

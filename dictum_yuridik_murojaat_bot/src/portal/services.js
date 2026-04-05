@@ -117,11 +117,12 @@ async function processLegalChat(opts) {
         [conversationId, message]
       );
       // Store AI response
-      await pool.query(
+      const msgInsert = await pool.query(
         `INSERT INTO portal_messages (conversation_id, role, content, model_used, duration_ms)
-         VALUES ($1, 'assistant', $2, $3, $4)`,
+         VALUES ($1, 'assistant', $2, $3, $4) RETURNING id`,
         [conversationId, result.text, result.provider || 'unknown', duration]
       );
+      var messageId = msgInsert.rows[0]?.id;
       // Update conversation
       await pool.query(
         `UPDATE portal_conversations SET message_count = message_count + 2, updated_at = NOW() WHERE id = $1`,
@@ -137,7 +138,8 @@ async function processLegalChat(opts) {
     sources: [], // TODO: extract from ragContext
     model: result.provider || 'unknown',
     tokens: 0,
-    duration
+    duration,
+    messageId: messageId || null
   };
 }
 

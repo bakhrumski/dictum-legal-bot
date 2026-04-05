@@ -2835,6 +2835,91 @@ app.post('/api/ai-feedback', requireMasterAdmin, async (req, res) => {
 });
 
 
+// ========== JURIST AI FEEDBACK REPORT (master only) ==========
+
+// POST /api/jurist-feedback — submit feedback (any authenticated user)
+app.post('/api/jurist-feedback', requireAuth, async (req, res) => {
+  try {
+    const { rating, userQuestion, aiResponse, topic } = req.body;
+    if (!rating || !['good', 'bad'].includes(rating)) {
+      return res.status(400).json({ error: 'rating majburiy (good/bad)' });
+    }
+    await pool.query(
+      `INSERT INTO portal_feedback (user_id, rating, user_question, ai_response, topic)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.session.adminId || 0, rating, userQuestion || null, (aiResponse || '').substring(0, 2000), topic || null]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/jurist-feedback/stats — summary stats
+app.get('/api/jurist-feedback/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE rating = 'good') AS good,
+        COUNT(*) FILTER (WHERE rating = 'bad') AS bad,
+        COUNT(*) FILTER (WHERE reviewed = TRUE) AS reviewed,
+        COUNT(*) FILTER (WHERE reviewed = FALSE) AS pending_review,
+        COUNT(*) FILTER (WHERE review_result = 'confirmed_good') AS confirmed_good,
+        COUNT(*) FILTER (WHERE review_result = 'confirmed_bad') AS confirmed_bad,
+        COUNT(*) FILTER (WHERE review_result = 'corrected') AS corrected
+      FROM portal_feedback
+    `);
+    const byTopic = await pool.query(`
+      SELECT topic, rating, COUNT(*) AS count
+      FROM portal_feedback WHERE topic IS NOT NULL
+      GROUP BY topic, rating ORDER BY topic
+    `);
+    res.json({ ...stats.rows[0], byTopic: byTopic.rows });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/jurist-feedback — list feedback items
+app.get('/api/jurist-feedback', requireMasterAdmin, async (req, res) => {
+  try {
+    const { rating, reviewed, page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const conds = []; const params = []; let idx = 1;
+
+    if (rating) { conds.push(`f.rating = $${idx++}`); params.push(rating); }
+    if (reviewed === 'true') conds.push('f.reviewed = TRUE');
+    if (reviewed === 'false') conds.push('f.reviewed = FALSE');
+
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    const [rows, cnt] = await Promise.all([
+      pool.query(`SELECT f.*, u.full_name AS user_name FROM portal_feedback f LEFT JOIN portal_users u ON u.id = f.user_id ${where} ORDER BY f.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`, [...params, parseInt(limit), offset]),
+      pool.query(`SELECT COUNT(*) FROM portal_feedback f ${where}`, params)
+    ]);
+    res.json({ feedback: rows.rows, total: parseInt(cnt.rows[0].count), page: parseInt(page) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/jurist-feedback/:id — review a feedback item
+app.patch('/api/jurist-feedback/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { reviewResult, reviewerNote } = req.body;
+    if (!['confirmed_good', 'confirmed_bad', 'corrected'].includes(reviewResult)) {
+      return res.status(400).json({ error: 'reviewResult kerak' });
+    }
+    await pool.query(
+      'UPDATE portal_feedback SET reviewed = TRUE, review_result = $1, reviewer_note = $2 WHERE id = $3',
+      [reviewResult, reviewerNote || null, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ========== GOLDEN LEGAL DATASET ENDPOINTS ==========
 
 // GET /api/legal-dataset — list examples with pagination

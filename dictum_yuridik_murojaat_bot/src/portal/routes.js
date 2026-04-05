@@ -548,6 +548,119 @@ router.get('/admin/stats', authenticate, authorize('admin'), async (req, res) =>
 });
 
 // ════════════════════════════════════════
+// FEEDBACK
+// ════════════════════════════════════════
+
+// Submit feedback (any authenticated user)
+router.post('/feedback', authenticate, async (req, res) => {
+  try {
+    const { messageId, conversationId, rating, userQuestion, aiResponse, topic } = req.body;
+    if (!rating || !['good', 'bad'].includes(rating)) {
+      return res.status(400).json({ error: 'rating majburiy (good/bad)' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO portal_feedback (user_id, message_id, conversation_id, rating, user_question, ai_response, topic, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'portal') RETURNING id`,
+      [req.user.sub, messageId || null, conversationId || null, rating, userQuestion || null, aiResponse || null, topic || null]
+    );
+
+    res.json({ success: true, id: result.rows[0].id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Feedback report — admin only
+router.get('/admin/feedback', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { rating, reviewed, page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const conditions = [];
+    const params = [];
+    let idx = 1;
+
+    if (rating) { conditions.push(`f.rating = $${idx++}`); params.push(rating); }
+    if (reviewed === 'true') { conditions.push(`f.reviewed = TRUE`); }
+    if (reviewed === 'false') { conditions.push(`f.reviewed = FALSE`); }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const [rows, countResult] = await Promise.all([
+      pool.query(
+        `SELECT f.*, u.full_name AS user_name, u.email AS user_email
+         FROM portal_feedback f
+         LEFT JOIN portal_users u ON u.id = f.user_id
+         ${where}
+         ORDER BY f.created_at DESC
+         LIMIT $${idx++} OFFSET $${idx++}`,
+        [...params, parseInt(limit), offset]
+      ),
+      pool.query(`SELECT COUNT(*) FROM portal_feedback f ${where}`, params)
+    ]);
+
+    res.json({
+      feedback: rows.rows,
+      total: parseInt(countResult.rows[0].count),
+      page: parseInt(page),
+      totalPages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Feedback stats — admin only
+router.get('/admin/feedback/stats', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE rating = 'good') AS good,
+        COUNT(*) FILTER (WHERE rating = 'bad') AS bad,
+        COUNT(*) FILTER (WHERE reviewed = TRUE) AS reviewed,
+        COUNT(*) FILTER (WHERE reviewed = FALSE) AS pending_review,
+        COUNT(*) FILTER (WHERE review_result = 'confirmed_good') AS confirmed_good,
+        COUNT(*) FILTER (WHERE review_result = 'confirmed_bad') AS confirmed_bad,
+        COUNT(*) FILTER (WHERE review_result = 'corrected') AS corrected
+      FROM portal_feedback
+    `);
+
+    // Per-topic breakdown
+    const byTopic = await pool.query(`
+      SELECT topic, rating, COUNT(*) AS count
+      FROM portal_feedback
+      WHERE topic IS NOT NULL
+      GROUP BY topic, rating
+      ORDER BY topic
+    `);
+
+    res.json({ ...stats.rows[0], byTopic: byTopic.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Review a feedback item — admin only
+router.patch('/admin/feedback/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { reviewResult, reviewerNote } = req.body;
+    if (!reviewResult || !['confirmed_good', 'confirmed_bad', 'corrected'].includes(reviewResult)) {
+      return res.status(400).json({ error: 'reviewResult kerak (confirmed_good/confirmed_bad/corrected)' });
+    }
+
+    await pool.query(
+      `UPDATE portal_feedback SET reviewed = TRUE, review_result = $1, reviewer_note = $2 WHERE id = $3`,
+      [reviewResult, reviewerNote || null, req.params.id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ════════════════════════════════════════
 // REFERENCE DATA
 // ════════════════════════════════════════
 

@@ -260,6 +260,52 @@ body {
   margin-top: 6px; font-size: 11px; color: var(--text-muted);
 }
 
+/* Message action icons */
+.msg-actions {
+  display: flex; align-items: center; gap: 2px;
+  margin-top: 8px; position: relative;
+}
+.msg-action-btn {
+  background: none; border: none; cursor: pointer;
+  width: 30px; height: 30px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); transition: all 0.2s; position: relative;
+}
+.msg-action-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+.msg-action-btn.active-good { color: #22c55e; }
+.msg-action-btn.active-bad { color: #ef4444; }
+.msg-action-btn svg { width: 16px; height: 16px; }
+.msg-action-btn[disabled] { opacity: 0.5; cursor: default; }
+.msg-action-btn[disabled]:hover { background: none; }
+
+/* Tooltip */
+.msg-action-btn::after {
+  content: attr(data-tooltip);
+  position: absolute; bottom: 100%; left: 50%;
+  transform: translateX(-50%); padding: 4px 8px;
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: 6px; font-size: 11px; color: var(--text-secondary);
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity 0.15s;
+}
+.msg-action-btn:hover::after { opacity: 1; }
+
+/* Thank-you toast */
+.feedback-toast {
+  position: absolute; bottom: 100%; left: 0;
+  padding: 6px 12px; border-radius: 8px;
+  background: var(--bg-card); border: 1px solid var(--accent-teal);
+  color: var(--accent); font-size: 12px; font-weight: 500;
+  white-space: nowrap; animation: toastFade 2s ease forwards;
+  pointer-events: none;
+}
+@keyframes toastFade {
+  0% { opacity: 0; transform: translateY(4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
 /* Typing indicator */
 .typing-indicator { display: flex; gap: 4px; padding: 8px 0; }
 .typing-dot {
@@ -724,7 +770,7 @@ async function sendMessage() {
     } else {
       var data = await resp.json();
       var reply = data.reply || data.answer || 'Javob olinmadi';
-      appendMessage('assistant', reply, data.sources, data.model, data.duration);
+      appendMessage('assistant', reply, data.sources, data.model, data.duration, data.messageId);
       chatHistory.push({ role: 'assistant', content: reply });
 
       // Refresh usage
@@ -755,7 +801,9 @@ function askQuick(text) {
 // ═══════════════════════════════════════
 // MESSAGE RENDERING
 // ═══════════════════════════════════════
-function appendMessage(role, content, sources, model, duration) {
+var msgCounter = 0;
+
+function appendMessage(role, content, sources, model, duration, messageId) {
   var el = document.getElementById('chatMessages');
   var row = document.createElement('div');
   row.className = 'message-row ' + role;
@@ -765,6 +813,7 @@ function appendMessage(role, content, sources, model, duration) {
       '<div class="msg-bubble">' + escHtml(content) + '</div>' +
       '<div class="msg-avatar user-av">' + ((currentUser && currentUser.fullName) || 'U').charAt(0) + '</div>';
   } else {
+    var mid = 'msg-' + (++msgCounter);
     var html = '<div class="msg-avatar ai">AI</div><div class="msg-bubble">' + formatMarkdown(content);
 
     // Sources
@@ -786,12 +835,105 @@ function appendMessage(role, content, sources, model, duration) {
       html += '<div class="msg-meta">' + metaParts.join(' · ') + '</div>';
     }
 
+    // Action icons
+    html += '<div class="msg-actions" id="actions-' + mid + '">';
+    html += '<button class="msg-action-btn" data-tooltip="Nusxalash" onclick="copyMessage(this)">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>';
+    html += '<button class="msg-action-btn" data-tooltip="Word yuklab olish" onclick="downloadMessage(this)">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>';
+    html += '<button class="msg-action-btn" data-tooltip="Yaxshi javob" data-msgid="' + (messageId || '') + '" data-mid="' + mid + '" onclick="rateFeedback(this,\'good\')">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>';
+    html += '<button class="msg-action-btn" data-tooltip="Yomon javob" data-msgid="' + (messageId || '') + '" data-mid="' + mid + '" onclick="rateFeedback(this,\'bad\')">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>';
+    html += '</div>';
+
     html += '</div>';
     row.innerHTML = html;
+    row.setAttribute('data-content', content);
   }
 
   el.appendChild(row);
   scrollToBottom();
+}
+
+// ═══════════════════════════════════════
+// MESSAGE ACTIONS (copy, download, feedback)
+// ═══════════════════════════════════════
+
+function copyMessage(btn) {
+  var row = btn.closest('.message-row');
+  var text = row.getAttribute('data-content') || row.querySelector('.msg-bubble').innerText;
+  navigator.clipboard.writeText(text).then(function() {
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    btn.setAttribute('data-tooltip', 'Nusxalandi!');
+    setTimeout(function() { btn.innerHTML = orig; btn.setAttribute('data-tooltip', 'Nusxalash'); }, 1500);
+  });
+}
+
+function downloadMessage(btn) {
+  var row = btn.closest('.message-row');
+  var text = row.getAttribute('data-content') || row.querySelector('.msg-bubble').innerText;
+  // Build minimal .doc HTML (Word-compatible)
+  var docContent = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
+    '<head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:12pt;line-height:1.6;}</style></head>' +
+    '<body>' + formatMarkdown(text) + '</body></html>';
+  var blob = new Blob([docContent], { type: 'application/msword' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'JuristAI_javob_' + new Date().toISOString().slice(0,10) + '.doc';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function rateFeedback(btn, rating) {
+  var actionsDiv = btn.closest('.msg-actions');
+  var allBtns = actionsDiv.querySelectorAll('.msg-action-btn[data-msgid]');
+
+  // Prevent double rating
+  if (btn.classList.contains('active-good') || btn.classList.contains('active-bad')) return;
+
+  // Highlight selected, disable both
+  allBtns.forEach(function(b) {
+    b.disabled = true;
+    b.classList.remove('active-good', 'active-bad');
+  });
+  btn.classList.add(rating === 'good' ? 'active-good' : 'active-bad');
+
+  // Show thank-you toast
+  var toast = document.createElement('div');
+  toast.className = 'feedback-toast';
+  toast.textContent = 'Rahmat! Fikringiz qayd etildi';
+  actionsDiv.appendChild(toast);
+  setTimeout(function() { if (toast.parentNode) toast.remove(); }, 2500);
+
+  // Get context for the feedback
+  var row = btn.closest('.message-row');
+  var aiResponse = row.getAttribute('data-content') || '';
+  var userQuestion = '';
+  var prevRow = row.previousElementSibling;
+  if (prevRow && prevRow.classList.contains('user')) {
+    userQuestion = prevRow.querySelector('.msg-bubble').innerText || '';
+  }
+  var topic = document.getElementById('topicSelect').value || null;
+
+  // Send to server
+  apiFetch('/api/portal/feedback', {
+    method: 'POST',
+    body: JSON.stringify({
+      messageId: btn.getAttribute('data-msgid') ? parseInt(btn.getAttribute('data-msgid')) : null,
+      conversationId: activeConvId,
+      rating: rating,
+      userQuestion: userQuestion,
+      aiResponse: aiResponse.substring(0, 2000),
+      topic: topic
+    })
+  }).catch(function(err) {
+    console.error('[FEEDBACK] Error:', err);
+  });
 }
 
 function showTyping() {
