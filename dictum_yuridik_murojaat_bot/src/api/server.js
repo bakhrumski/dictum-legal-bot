@@ -2380,20 +2380,29 @@ ${ragContext ? '\n7. Quyidagi TASDIQLANGAN QONUN MATNI mavjud — BIRINCHI NAVBA
 ═══════════════════════════════════════
 MAJBURIY JAVOB TUZILMASI:
 ═══════════════════════════════════════
+Savolni avval tahlil qiling: bu NAZARIY savol (tushuncha, ta'rif, qonun mazmunini tushuntirish) yoki AMALIY savol (aniq holat, muammo, nima qilish kerak)?
+
 ## Huquqiy asos
-Tegishli qonun(lar), kodeks va moddalar ro'yxati — har biri uchun qisqacha mazmun
+Tegishli qonun(lar), kodeks va moddalar ro'yxati — har birining ANIQ mazmunini 1-2 jumlada izohlang. Bu bo'lim asosiy javob hisoblanadi — chuqur va to'liq tushuntiring.
 
-## Holat tahlili
-Savolni huquqiy nuqtai nazardan chuqur tahlil qiling — qaysi normalar qo'llaniladi va nima uchun
+## Muddatlar va jarimalar (agar qonunda ANIQ raqamlar bo'lsa)
+FAQAT qonunda belgilangan ANIQ muddatlar (kunlar, oylar, yillar) va ANIQ jarima miqdorlarini yozing. Agar qonunda aniq raqam bo'lmasa — bu bo'limni YOZMANG. "Qonunchilikda belgilangan" kabi umumiy gaplar YOZMANG — faqat aniq sonlar.
 
-## Amaliy qadamlar
-Foydalanuvchi HOZIR nima qilishi kerak — 1, 2, 3... tartibida aniq ko'rsatmalar
+## Yuridik maslahat
+FAQAT foydalanuvchi bilmasligi mumkin bo'lgan AMALIY va ANIQ maslahat. Quyidagilarni HECH QACHON yozmang:
+- "Qonunchilikni kuzatib boring" — bu har kimga ma'lum
+- "Yuristga murojaat qiling" — bu pastdagi ogohlantirish bandida bor
+- "Xabardor bo'ling" — bu foydali maslahat emas
+Buning o'rniga: aniq murojaat qilish joyi, kerakli hujjatlar ro'yxati, muhim nuanslar, kam ma'lum huquqiy mexanizmlar yozing.
 
-## Muddatlar va jarimallar (agar tegishli bo'lsa)
-Qonuniy muddatlar, buzilsa qanday oqibatlar
-
-## Maslahat
-Shu sohadagi xavf va imkoniyatlar — tajribali yurist sifatida amaliy fikr
+═══════════════════════════════════════
+TAQIQLANGAN NARSALAR:
+═══════════════════════════════════════
+- Bo'limlar bir-birini TAKRORLAMASIN. Har bir bo'lim YANGI ma'lumot berishi shart.
+- "Holat tahlili" bo'limini YOZMANG — u Huquqiy asosni takrorlaydi.
+- "Amaliy qadamlar" bo'limini YOZMANG — u ko'pincha umumiy va foydasiz maslahatlar bo'ladi.
+- "Maslahat" bo'limini YOZMANG — u yuqoridagi bo'limlarni qayta ifodalaydi.
+- Umumiy, har kimga ma'lum gaplar yozmang. Faqat ANIQ, FOYDALI, YANGI ma'lumot bering.
 
 ${ragContext ? ragContext + '\n' : ''}\n> ⚠️ Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
 }

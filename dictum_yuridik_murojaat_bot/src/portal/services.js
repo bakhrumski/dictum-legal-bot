@@ -155,11 +155,22 @@ QATTIQ QOIDALAR:
 ${ragContext ? '6. Quyidagi QONUNCHILIK KONTEKSTIGA BIRINCHI NAVBATDA tayanib javob bering' : ''}
 
 JAVOB TUZILMASI:
+
+Savolni avval tahlil qiling: bu NAZARIY savol yoki AMALIY savol?
+
 ## Huquqiy asos
-## Holat tahlili
-## Amaliy qadamlar
-## Muddatlar va jarimallar (agar tegishli)
-## Maslahat
+Tegishli qonun(lar), kodeks va moddalar — har birining ANIQ mazmunini chuqur tushuntiring. Bu asosiy javob.
+
+## Muddatlar va jarimalar (agar qonunda ANIQ raqamlar bo'lsa)
+FAQAT aniq muddatlar (kunlar, oylar) va aniq jarima miqdorlarini yozing. Aniq raqam yo'q bo'lsa — bu bo'limni YOZMANG.
+
+## Yuridik maslahat
+FAQAT foydalanuvchi bilmasligi mumkin bo'lgan ANIQ maslahat: murojaat joyi, kerakli hujjatlar, muhim nuanslar, kam ma'lum mexanizmlar.
+
+TAQIQLAR:
+- "Holat tahlili", "Amaliy qadamlar", "Maslahat" bo'limlarini YOZMANG — ular takroriy va foydasiz
+- "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling" kabi umumiy gaplar YOZMANG
+- Bo'limlar bir-birini TAKRORLAMASIN — har biri YANGI ma'lumot bersin
 
 ${ragContext ? `\nQONUNCHILIK KONTEKSTI:\n${ragContext}\n` : ''}
 > Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
