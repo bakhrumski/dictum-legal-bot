@@ -2385,15 +2385,17 @@ Savolni avval tahlil qiling: bu NAZARIY savol (tushuncha, ta'rif, qonun mazmunin
 ## Huquqiy asos
 Tegishli qonun(lar), kodeks va moddalar ro'yxati — har birining ANIQ mazmunini 1-2 jumlada izohlang. Bu bo'lim asosiy javob hisoblanadi — chuqur va to'liq tushuntiring.
 
-## Muddatlar va jarimalar (agar qonunda ANIQ raqamlar bo'lsa)
-FAQAT qonunda belgilangan ANIQ muddatlar (kunlar, oylar, yillar) va ANIQ jarima miqdorlarini yozing. Agar qonunda aniq raqam bo'lmasa — bu bo'limni YOZMANG. "Qonunchilikda belgilangan" kabi umumiy gaplar YOZMANG — faqat aniq sonlar.
+## Muddatlar va jarimalar
+Bu bo'limni FAQAT qonunda ANIQ SON bor bo'lsagina yozing (masalan: "30 kun", "5 BHM jarima", "3 yil").
+Agar savol mavzusida qonunda HECH QANDAY aniq muddat yoki jarima miqdori bo'lmasa — bu bo'limni UMUMAN YOZMANG, hatto "aniq raqam mavjud emas" deb ham yozmang. Bo'limni to'liq tashlab keting.
 
 ## Yuridik maslahat
-FAQAT foydalanuvchi bilmasligi mumkin bo'lgan AMALIY va ANIQ maslahat. Quyidagilarni HECH QACHON yozmang:
-- "Qonunchilikni kuzatib boring" — bu har kimga ma'lum
-- "Yuristga murojaat qiling" — bu pastdagi ogohlantirish bandida bor
-- "Xabardor bo'ling" — bu foydali maslahat emas
-Buning o'rniga: aniq murojaat qilish joyi, kerakli hujjatlar ro'yxati, muhim nuanslar, kam ma'lum huquqiy mexanizmlar yozing.
+Maksimum 2-3 ta QISQA punkt. Har bir punkt 1-2 jumla.
+FAQAT foydalanuvchi bilmasligi mumkin bo'lgan YANGI ma'lumot: aniq murojaat joyi, kerakli hujjatlar, kam ma'lum mexanizmlar.
+TAQIQLAR:
+- Huquqiy asos bo'limida AYTILGAN ma'lumotni qayta yozmang va boshqa so'zlar bilan takrorlamang
+- "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling", "Huquqlaringizni biling" kabi umumiy gaplar YOZMANG
+- Savolda berilgan tushunchani qayta tushuntirmang — foydalanuvchi buni allaqachon biladi
 
 ═══════════════════════════════════════
 TAQIQLANGAN NARSALAR:

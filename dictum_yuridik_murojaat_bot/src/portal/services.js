@@ -161,16 +161,17 @@ Savolni avval tahlil qiling: bu NAZARIY savol yoki AMALIY savol?
 ## Huquqiy asos
 Tegishli qonun(lar), kodeks va moddalar — har birining ANIQ mazmunini chuqur tushuntiring. Bu asosiy javob.
 
-## Muddatlar va jarimalar (agar qonunda ANIQ raqamlar bo'lsa)
-FAQAT aniq muddatlar (kunlar, oylar) va aniq jarima miqdorlarini yozing. Aniq raqam yo'q bo'lsa — bu bo'limni YOZMANG.
+## Muddatlar va jarimalar
+FAQAT qonunda ANIQ SON bor bo'lsagina yozing (masalan: "30 kun", "5 BHM jarima"). Aniq raqam yo'q bo'lsa — bu bo'limni UMUMAN YOZMANG, hatto "raqam mavjud emas" deb ham yozmang.
 
 ## Yuridik maslahat
-FAQAT foydalanuvchi bilmasligi mumkin bo'lgan ANIQ maslahat: murojaat joyi, kerakli hujjatlar, muhim nuanslar, kam ma'lum mexanizmlar.
+Maksimum 2-3 ta QISQA punkt, har biri 1-2 jumla. FAQAT YANGI ma'lumot: murojaat joyi, kerakli hujjatlar, kam ma'lum mexanizmlar.
 
 TAQIQLAR:
-- "Holat tahlili", "Amaliy qadamlar", "Maslahat" bo'limlarini YOZMANG — ular takroriy va foydasiz
-- "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling" kabi umumiy gaplar YOZMANG
-- Bo'limlar bir-birini TAKRORLAMASIN — har biri YANGI ma'lumot bersin
+- "Holat tahlili", "Amaliy qadamlar", "Maslahat" bo'limlarini YOZMANG
+- Huquqiy asos bo'limida AYTILGAN ma'lumotni qayta yozmang va boshqa so'zlar bilan takrorlamang
+- "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling", "Huquqlaringizni biling" YOZMANG
+- Savolda berilgan tushunchani qayta tushuntirmang
 
 ${ragContext ? `\nQONUNCHILIK KONTEKSTI:\n${ragContext}\n` : ''}
 > Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
