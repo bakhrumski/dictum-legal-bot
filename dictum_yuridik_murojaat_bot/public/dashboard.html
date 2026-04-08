@@ -8137,6 +8137,8 @@
                 currentAiSessionId = session.id;
                 aiChatHistory = session.messages || [];
                 selectedDatabases = session.databases || ['lex.uz'];
+                selectedTopic = session.topic || null;
+                if (selectedTopic) selectTopic(selectedTopic);
                 // Force-set topic without toggle (selectTopic toggles if same topic)
                 selectedTopic = null; // reset first so selectTopic won't toggle off
                 if (session.topic) selectTopic(session.topic);
