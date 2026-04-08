@@ -8137,8 +8137,9 @@
                 currentAiSessionId = session.id;
                 aiChatHistory = session.messages || [];
                 selectedDatabases = session.databases || ['lex.uz'];
-                selectedTopic = session.topic || null;
-                if (selectedTopic) selectTopic(selectedTopic);
+                // Force-set topic without toggle (selectTopic toggles if same topic)
+                selectedTopic = null; // reset first so selectTopic won't toggle off
+                if (session.topic) selectTopic(session.topic);
 
                 // Update header
                 document.getElementById('aiChatHeaderTitle').textContent = session.title || 'Suhbat';
@@ -8152,11 +8153,36 @@
                     welcome.style.display = 'none';
                 }
 
+                var lastUserText = '';
                 aiChatHistory.forEach(function(msg) {
                     if (msg.role === 'user') {
+                        lastUserText = msg.text;
                         messagesEl.innerHTML += '<div class="ai-chat-msg user">' + escapeHtml(msg.text) + '</div>';
                     } else {
-                        messagesEl.innerHTML += '<div class="ai-chat-msg ai"><div class="ai-analysis-content">' + simpleMarkdown(msg.text) + '</div></div>';
+                        // Action icons (copy, download, thumbs)
+                        var actId = 'aiact_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+                        var actionsHtml = '<div class="ai-msg-actions" id="' + actId + '">' +
+                            '<button class="ai-msg-act" data-tip="Nusxalash" onclick="copyAiMsg(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
+                            '<button class="ai-msg-act" data-tip="Word yuklab olish" onclick="downloadAiMsg(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>' +
+                            '<button class="ai-msg-act" data-tip="Yaxshi javob" onclick="rateAiMsg(this,\'good\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>' +
+                            '<button class="ai-msg-act" data-tip="Yomon javob" onclick="rateAiMsg(this,\'bad\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>' +
+                            '</div>';
+
+                        // Verify buttons (Korpusga qo'shish + Tahrirlash)
+                        var msgId = 'aimsg_hist_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+                        aiVerifyMap[msgId] = { question: lastUserText, answer: msg.text, topic: selectedTopic };
+                        var verifyRow = '<div class="ai-verify-row" id="vrow_' + msgId + '">' +
+                            '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
+                            '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
+                            '</div>' +
+                            '<div class="ai-verify-editor" id="veditor_' + msgId + '" style="display:none">' +
+                            '<textarea class="ai-verify-textarea" id="vtxt_' + msgId + '"></textarea>' +
+                            '<div class="ai-verify-editor-actions">' +
+                            '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
+                            '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
+                            '</div></div>';
+
+                        messagesEl.innerHTML += '<div class="ai-chat-msg ai" data-raw="' + escapeHtml(msg.text).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(lastUserText).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(msg.text) + '</div>' + actionsHtml + verifyRow + '</div>';
                     }
                 });
                 messagesEl.scrollTop = messagesEl.scrollHeight;
