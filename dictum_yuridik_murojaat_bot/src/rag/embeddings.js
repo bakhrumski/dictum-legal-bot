@@ -131,6 +131,8 @@ function addE5Prefix(text, isQuery = false) {
 async function hfEmbed(texts, apiKey, isQuery = false) {
   const inputs = texts.map(t => addE5Prefix(t, isQuery));
 
+  console.log(`[EMBEDDINGS] HF request: token=${apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING'}, texts=${texts.length}`);
+
   // router.huggingface.co uses plain { inputs } — no options wrapper
   const resp = await httpsPostJson(
     PROVIDERS.huggingface.endpoint,
