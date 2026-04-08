@@ -104,8 +104,8 @@ function parseLexHtml(html, sourceUrl) {
   let title = '';
   const metadata = { source_url: sourceUrl };
 
-  // Extract document title
-  const titleEl = $('div.ACT_TITLE a[id]');
+  // Extract document title — lex.uz uses <a id="..."> or <div id="..."> for content
+  const titleEl = $('div.ACT_TITLE a[id]').add($('div.ACT_TITLE > div[id]')).first();
   if (titleEl.length > 0) {
     title = cleanText(titleEl.text());
     lines.push(title);
@@ -113,7 +113,7 @@ function parseLexHtml(html, sourceUrl) {
   }
 
   // Extract publication origin (for metadata)
-  const pubEl = $('div.PUBLICATION_ORIGIN a[id]');
+  const pubEl = $('div.PUBLICATION_ORIGIN a[id]').add($('div.PUBLICATION_ORIGIN > div[id]')).first();
   if (pubEl.length > 0) {
     metadata.publication = cleanText(pubEl.text());
   }
@@ -135,8 +135,8 @@ function parseLexHtml(html, sourceUrl) {
       return;
     }
 
-    // Get the anchor element with the actual text
-    const anchor = $el.find('> a[id]');
+    // Get the content element — lex.uz uses <a id="..."> or <div id="...">
+    const anchor = $el.find('> a[id]').length ? $el.find('> a[id]') : $el.find('> div[id]');
     if (anchor.length === 0) return;
 
     const text = cleanText(anchor.text());
