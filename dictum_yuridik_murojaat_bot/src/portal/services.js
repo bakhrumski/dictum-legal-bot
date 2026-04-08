@@ -25,7 +25,8 @@ const LEGAL_TOPICS = {
   shartnoma: 'Shartnoma huquqi', soliq: 'Soliq huquqi', jinoyat: 'Jinoyat huquqi',
   mamuriy: "Ma'muriy javobgarlik", korporativ: 'Korporativ huquq',
   tadbirkorlik: 'Tadbirkorlik huquqi', 'uy-joy': 'Uy-joy oldi-sotdisi',
-  mulk: 'Mulk huquqi', notarius: 'Notarius xizmatlari', ijtimoiy: 'Ijtimoiy himoya'
+  mulk: 'Mulk huquqi', notarius: 'Notarius xizmatlari', ijtimoiy: 'Ijtimoiy himoya',
+  advokatura: 'Advokatura'
 };
 
 /**

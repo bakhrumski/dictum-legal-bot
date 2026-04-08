@@ -2199,7 +2199,8 @@ const LEGAL_TOPICS = {
   'uy-joy':       'Uy-joy oldi-sotdisi',
   'mulk':         'Mulk huquqi',
   'notarius':     'Notarius xizmatlari',
-  'ijtimoiy':     'Ijtimoiy himoya'
+  'ijtimoiy':     'Ijtimoiy himoya',
+  'advokatura':   'Advokatura'
 };
 
 /**
@@ -2358,7 +2359,8 @@ function buildTopicPrompt(topic, ragContext) {
     'uy-joy':       "Uy-joy kodeksi, ko'chmas mulkni sotish-sotib olish, ipoteka, ijara, ko'chmas mulkni ro'yxatga olish, kommunal xizmatlar, mulkdorlar uyushmasi.",
     'mulk':         "Fuqarolik kodeksining mulk huquqi bo'limlari, davlat mulki, xususiy mulk, umumiy mulk, servitut, gadov (zaklad), mulk himoyasi.",
     'notarius':     "Notariat to'g'risidagi qonun, notarial harakatlar, vasiyatnoma, ishonchnoma, meros rasmiylashtirish, shartnomalarni tasdiqlash.",
-    'ijtimoiy':     "Pensiya to'g'risidagi qonun, ijtimoiy sug'urta, nogironlik nafaqasi, ishsizlik nafaqasi, onalaik nafaqasi, ijtimoiy yordam turlari."
+    'ijtimoiy':     "Pensiya to'g'risidagi qonun, ijtimoiy sug'urta, nogironlik nafaqasi, ishsizlik nafaqasi, onalaik nafaqasi, ijtimoiy yordam turlari.",
+    'advokatura':   "Advokatura to'g'risidagi qonun, advokatlik faoliyati, advokat maqomi, advokat vakolatlari, yuridik yordam ko'rsatish, advokatura palatasi, bepul yuridik yordam."
   };
 
   const knowledgeBase = topicKnowledge[topic] || `${topicLabel} sohasiga oid O'zbekiston qonunlari`;
