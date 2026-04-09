@@ -2374,9 +2374,9 @@ QATTIQ QOIDALAR (buzsangiz, javob noto'g'ri hisoblanadi):
 1. Javob FAQAT O'zbek (lotin) tilida — hech qachon rus yoki ingliz tilida yozmang
 2. Modda raqamlarini FAQAT 100% ishonchli bo'lsangiz keltiring — noaniq bo'lsa "taxminan X-modda" deb belgilang
 3. To'qib chiqarishdan QATTIYAN SAQLANING — "bu modda mavjud emas" deyish "noto'g'ri modda keltirish" dan yaxshiroq
-4. Har bir huquqiy tasdiq uchun MANBA ko'rsating (qonun nomi + modda yoki lex.uz havolasi)
-5. Amaliy qadam ko'rsatmalarini bering — foydalanuvchi nima qilishi kerakligini aniq tushuntiring
-6. Javob chuqur va to'liq bo'lsin — sirtqi javob emas, huquqiy tahlil bering
+4. Har bir huquqiy tasdiq uchun MANBA ko'rsating: qonun nomi, QABUL QILINGAN SANASI, modda raqami va ANIQ QISM RAQAMI (masalan: "4¹-modda, 2-qism")
+5. Javob chuqur va to'liq bo'lsin — sirtqi javob emas, huquqiy tahlil bering
+6. MODDA RAQAMLARINI TO'G'RI YOZING: O'zbekiston qonunchiligida ko'p moddalar ustki belgili (prim) raqamlarga ega. Masalan: 4¹-modda (to'rt prim bir), 12²-modda (o'n ikki prim ikki), 3¹-modda (uch prim bir). Bu "41-modda" yoki "4-modda" EMAS. Agar kontekstda "4¹" yoki "4-1" ko'rsangiz — bu "4 prim 1 modda" degan ma'no. HECH QACHON prim raqamlarni oddiy raqam bilan adashtirmang
 ${ragContext ? '\n7. Quyidagi TASDIQLANGAN QONUN MATNI mavjud — BIRINCHI NAVBATDA shu matnlarga asoslaning' : ''}
 
 ═══════════════════════════════════════
@@ -2385,7 +2385,10 @@ MAJBURIY JAVOB TUZILMASI:
 Savolni avval tahlil qiling: bu NAZARIY savol (tushuncha, ta'rif, qonun mazmunini tushuntirish) yoki AMALIY savol (aniq holat, muammo, nima qilish kerak)?
 
 ## Huquqiy asos
-Tegishli qonun(lar), kodeks va moddalar ro'yxati — har birining ANIQ mazmunini 1-2 jumlada izohlang. Bu bo'lim asosiy javob hisoblanadi — chuqur va to'liq tushuntiring.
+Tegishli qonun(lar) ro'yxati — har birini quyidagi formatda keltiring:
+- Qonun nomi, qabul qilingan sanasi va raqami (masalan: "Advokatura to'g'risidagi Qonun, 1996-yil 27-dekabr, 349-I-son")
+- ANIQ modda raqami va QISM raqami (masalan: "4¹-modda, 1 va 2-qismlar"). Prim moddalarni to'g'ri yozing!
+- Har bir moddaning ANIQ mazmunini tushuntiring. Bu bo'lim asosiy javob — chuqur va to'liq bo'lsin.
 
 ## Muddatlar va jarimalar
 Bu bo'limni FAQAT qonunda ANIQ SON bor bo'lsagina yozing (masalan: "30 kun", "5 BHM jarima", "3 yil").
@@ -4324,10 +4327,21 @@ async function runMigrations() {
       const { mountPortal } = require('../portal');
       await mountPortal(app);
     } catch (e) { console.log('[PORTAL] Mount skipped:', e.message); }
+
+    // Mount Advanced RAG routes (QA bank, parent-child search, few-shot)
+    try {
+      const { mountAdvancedRoutes } = require('../rag/advanced-routes');
+      const { initAdvancedCorpus } = require('../rag/advanced-corpus');
+      await initAdvancedCorpus();
+      mountAdvancedRoutes(app, { requireAuth, requireMasterAdmin, callAI, pool });
+    } catch (e) { console.log('[ADV RAG] Mount skipped:', e.message); }
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }
 }
+
+// Export callAI and auth helpers for use by portal and advanced RAG modules
+module.exports = { callAI, requireAuth, requireMasterAdmin, retrieveLegalContext, buildTopicPrompt };
 
 // Diagnostic endpoint (no auth, safe info only)
 app.get('/api/health', async (req, res) => {

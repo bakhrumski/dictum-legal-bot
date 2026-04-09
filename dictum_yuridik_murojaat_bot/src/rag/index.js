@@ -15,6 +15,12 @@ const { chunkLegalDocument, parseDocument } = require('./chunker');
 const { fetchLexDocument } = require('./fetch-lex');
 const { LEX_REGISTRY, getLawsForCategory, getAllLaws } = require('./lex-registry');
 
+// v2: Advanced structural chunker + parent-child retrieval
+const { chunkLegalDocumentStructured, parseLexStructured } = require('./structural-chunker');
+const { initAdvancedCorpus, parentChildSearch, saveToQaBank, findSimilarQA, formatQaFewShot } = require('./advanced-corpus');
+const { buildAdvancedPrompt, formatAdvancedContext } = require('./system-prompt');
+const { generateWordHtml, markdownToHtml } = require('./word-export');
+
 module.exports = {
   // Corpus (table + retrieval)
   initLegalCorpus,
@@ -33,9 +39,28 @@ module.exports = {
   EMBED_MODEL,
   EMBED_DIMS,
 
-  // Chunker
+  // Chunker (legacy)
   chunkLegalDocument,
   parseDocument,
+
+  // Chunker v2 (structural)
+  chunkLegalDocumentStructured,
+  parseLexStructured,
+
+  // Advanced corpus (parent-child + QA bank)
+  initAdvancedCorpus,
+  parentChildSearch,
+  saveToQaBank,
+  findSimilarQA,
+  formatQaFewShot,
+
+  // System prompt
+  buildAdvancedPrompt,
+  formatAdvancedContext,
+
+  // Word export
+  generateWordHtml,
+  markdownToHtml,
 
   // Fetcher
   fetchLexDocument,
