@@ -1601,11 +1601,36 @@ async function callGemini(messages, options = {}) {
   }
 
   const data = await resp.json();
-  const text = (data.candidates?.[0]?.content?.parts || [])
-    .map(p => p.text || '')
+
+  // Gemini 2.5 Flash may return "thought" parts (internal reasoning) alongside "text" parts.
+  // Also check for blocked responses (safety filters) and log them.
+  const candidate = data.candidates?.[0];
+  if (!candidate) {
+    const blockReason = data.promptFeedback?.blockReason || data.blockReason || 'unknown';
+    console.error(`[Gemini] No candidates returned. Block reason: ${blockReason}`, JSON.stringify(data).substring(0, 500));
+    throw new Error(`Gemini blocked: ${blockReason}`);
+  }
+
+  // finishReason: SAFETY means content was filtered
+  if (candidate.finishReason === 'SAFETY') {
+    const ratings = (candidate.safetyRatings || []).map(r => `${r.category}:${r.probability}`).join(', ');
+    console.warn(`[Gemini] Safety-filtered response: ${ratings}`);
+    throw new Error(`Gemini safety filter: ${ratings}`);
+  }
+
+  const parts = candidate.content?.parts || [];
+  // Filter out "thought" parts (thinking mode) — only take text parts
+  const text = parts
+    .filter(p => p.text !== undefined && !p.thought)
+    .map(p => p.text)
     .join('');
 
-  if (!text) throw new Error('Gemini empty response');
+  if (!text) {
+    // Log what we actually got for debugging
+    const partTypes = parts.map(p => Object.keys(p).join('+')).join(', ');
+    console.error(`[Gemini] Empty text. Parts received: [${partTypes}], finishReason: ${candidate.finishReason}`);
+    throw new Error(`Gemini empty response (parts: ${partTypes || 'none'}, finish: ${candidate.finishReason || '?'})`);
+  }
   return { text, provider: 'Gemini' };
 }
 
@@ -1708,14 +1733,29 @@ async function callAI(messages, options = {}) {
     } catch (err) {
       console.warn(`[AI] Gemini failed: ${err.message}`);
       errors.push(`Gemini: ${err.message}`);
+
+      // Retry WITHOUT Google Search — search grounding can cause empty/blocked responses
+      if (options.useSearch) {
+        try {
+          console.log('[AI] Retrying Gemini WITHOUT Google Search...');
+          const result = await callGemini(messages, { ...options, useSearch: false });
+          console.log('[AI] Gemini succeeded (no search)');
+          return result;
+        } catch (err2) {
+          console.warn(`[AI] Gemini retry failed: ${err2.message}`);
+          errors.push(`Gemini (no-search): ${err2.message}`);
+        }
+      }
     }
   }
 
   // 2. Try Groq (free, fast, no search but good quality)
+  // Groq has strict token limits — trim messages if needed
   if (groqKey) {
     try {
       console.log('[AI] Calling Groq/Llama...');
-      const result = await callGroq(messages, options);
+      const trimmedMessages = trimMessagesForGroq(messages);
+      const result = await callGroq(trimmedMessages, { ...options, maxTokens: Math.min(options.maxTokens || 4096, 4096) });
       console.log('[AI] Groq succeeded');
       return result;
     } catch (err) {
@@ -1738,6 +1778,41 @@ async function callAI(messages, options = {}) {
   }
 
   throw new Error('Barcha AI provayderlar ishlamayapti: ' + errors.join(' | '));
+}
+
+/**
+ * Trim messages to fit within Groq's token limits (~6K input tokens safe).
+ * Strategy: keep system prompt (trimmed), keep last 4 history messages, keep current user message.
+ */
+function trimMessagesForGroq(messages) {
+  if (!messages || messages.length <= 3) return messages;
+
+  const MAX_CHARS = 20000; // ~5000 tokens, safe for Groq's 12K TPM with 4K output
+  let totalChars = messages.reduce((sum, m) => sum + (m.text || '').length, 0);
+
+  if (totalChars <= MAX_CHARS) return messages;
+
+  const trimmed = [];
+  const systemMsg = messages.find(m => m.role === 'system');
+  const userMsgs = messages.filter(m => m.role !== 'system');
+
+  // Trim system prompt to 8000 chars if too long
+  if (systemMsg) {
+    const maxSystem = 8000;
+    trimmed.push({
+      ...systemMsg,
+      text: systemMsg.text.length > maxSystem
+        ? systemMsg.text.substring(0, maxSystem) + '\n\n[Kontekst qisqartirildi...]'
+        : systemMsg.text
+    });
+  }
+
+  // Keep only last 4 non-system messages (2 Q&A pairs)
+  const recentMsgs = userMsgs.length > 4 ? userMsgs.slice(-4) : userMsgs;
+  trimmed.push(...recentMsgs);
+
+  console.log(`[AI] Trimmed for Groq: ${messages.length} → ${trimmed.length} messages, ${totalChars} → ${trimmed.reduce((s, m) => s + (m.text || '').length, 0)} chars`);
+  return trimmed;
 }
 
 // Initialize agent runner with callAI function
