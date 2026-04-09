@@ -505,14 +505,7 @@ async function textOnlySearch(query, opts = {}) {
 async function insertVerifiedAnswer({ question, answer, category, requestId, verifiedBy, verifiedByName }) {
   await initLegalCorpus();
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
-  if (!apiKey) throw new Error('Embedding uchun GEMINI_API_KEY yoki GPT_API_KEY kerak');
-
-  // Combine Q&A for embedding so semantic search finds this when similar questions arrive
   const chunkText = `Savol: ${question}\n\nJavob: ${answer}`;
-  const embedding = await getEmbedding(chunkText, apiKey);
-  const embStr = `[${embedding.join(',')}]`;
-
   const docId = `verified_qa_${requestId || Date.now()}`;
   const lawName = verifiedByName
     ? `Tasdiqlangan javob — ${verifiedByName}`
@@ -521,14 +514,35 @@ async function insertVerifiedAnswer({ question, answer, category, requestId, ver
   // Remove old version of this QA if it exists (re-approval)
   await pool.query(`DELETE FROM legal_chunks WHERE doc_id = $1`, [docId]);
 
-  await pool.query(`
-    INSERT INTO legal_chunks (
-      law_name, doc_id, category, chunk_text, chunk_index,
-      is_valid, embedding, source_type, quality_score, verified_by
-    ) VALUES ($1, $2, $3, $4, 0, TRUE, $5::vector, 'verified_qa', 1.0, $6)
-  `, [lawName, docId, category || 'boshqa', chunkText, embStr, verifiedBy || null]);
+  // Try to generate embedding (best-effort — save without if API fails)
+  let embStr = null;
+  try {
+    const apiKey = getApiKey();
+    if (apiKey) {
+      const embedding = await getEmbedding(chunkText, apiKey);
+      embStr = `[${embedding.join(',')}]`;
+    }
+  } catch (embErr) {
+    console.warn(`[LEGAL CORPUS] Embedding skipped: ${embErr.message}`);
+  }
 
-  console.log(`[LEGAL CORPUS] Verified QA added: request #${requestId} by ${verifiedByName}`);
+  if (embStr) {
+    await pool.query(`
+      INSERT INTO legal_chunks (
+        law_name, doc_id, category, chunk_text, chunk_index,
+        is_valid, embedding, source_type, quality_score, verified_by
+      ) VALUES ($1, $2, $3, $4, 0, TRUE, $5::vector, 'verified_qa', 1.0, $6)
+    `, [lawName, docId, category || 'boshqa', chunkText, embStr, verifiedBy || null]);
+  } else {
+    await pool.query(`
+      INSERT INTO legal_chunks (
+        law_name, doc_id, category, chunk_text, chunk_index,
+        is_valid, source_type, quality_score, verified_by
+      ) VALUES ($1, $2, $3, $4, 0, TRUE, 'verified_qa', 1.0, $5)
+    `, [lawName, docId, category || 'boshqa', chunkText, verifiedBy || null]);
+  }
+
+  console.log(`[LEGAL CORPUS] Verified QA added: request #${requestId} by ${verifiedByName} (embedding: ${embStr ? 'yes' : 'no'})`);
   return docId;
 }
 

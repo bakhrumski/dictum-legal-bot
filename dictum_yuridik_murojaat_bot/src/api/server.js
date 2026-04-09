@@ -2485,7 +2485,7 @@ app.get('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
 app.get('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, title, databases, messages, created_at, updated_at
+      `SELECT id, title, topic, databases, messages, created_at, updated_at
        FROM ai_chat_sessions
        WHERE id = $1 AND admin_id = $2`,
       [req.params.id, req.session.adminId]
@@ -2503,7 +2503,7 @@ app.get('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
 // Create or update session
 app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
   try {
-    const { id, title, databases, messages } = req.body;
+    const { id, title, databases, topic, messages } = req.body;
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages required' });
     }
@@ -2515,18 +2515,18 @@ app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
       // Update existing session
       const result = await pool.query(
         `UPDATE ai_chat_sessions
-         SET title = $1, databases = $2, messages = $3::jsonb, updated_at = NOW()
-         WHERE id = $4 AND admin_id = $5
+         SET title = $1, databases = $2, topic = $3, messages = $4::jsonb, updated_at = NOW()
+         WHERE id = $5 AND admin_id = $6
          RETURNING id`,
-        [sessionTitle, dbs, JSON.stringify(messages), id, req.session.adminId]
+        [sessionTitle, dbs, topic || null, JSON.stringify(messages), id, req.session.adminId]
       );
       if (result.rows.length === 0) {
         // Session not found — create new
         const newResult = await pool.query(
-          `INSERT INTO ai_chat_sessions (admin_id, title, databases, messages)
-           VALUES ($1, $2, $3, $4::jsonb)
+          `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages)
+           VALUES ($1, $2, $3, $4, $5::jsonb)
            RETURNING id`,
-          [req.session.adminId, sessionTitle, dbs, JSON.stringify(messages)]
+          [req.session.adminId, sessionTitle, dbs, topic || null, JSON.stringify(messages)]
         );
         return res.json({ id: newResult.rows[0].id });
       }
@@ -2534,10 +2534,10 @@ app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
     } else {
       // Create new session
       const result = await pool.query(
-        `INSERT INTO ai_chat_sessions (admin_id, title, databases, messages)
-         VALUES ($1, $2, $3, $4::jsonb)
+        `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages)
+         VALUES ($1, $2, $3, $4, $5::jsonb)
          RETURNING id`,
-        [req.session.adminId, sessionTitle, dbs, JSON.stringify(messages)]
+        [req.session.adminId, sessionTitle, dbs, topic || null, JSON.stringify(messages)]
       );
       res.json({ id: result.rows[0].id });
     }
@@ -4218,6 +4218,7 @@ async function runMigrations() {
         id SERIAL PRIMARY KEY,
         admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
         title TEXT,
+        topic VARCHAR(100),
         databases TEXT[] DEFAULT '{lex.uz}',
         messages JSONB DEFAULT '[]'::jsonb,
         created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -4225,6 +4226,8 @@ async function runMigrations() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_updated ON ai_chat_sessions(updated_at DESC)`);
+    // Add topic column if missing (existing installs)
+    await pool.query(`ALTER TABLE ai_chat_sessions ADD COLUMN IF NOT EXISTS topic VARCHAR(100)`).catch(() => {});
     await pool.query(`
       CREATE TABLE IF NOT EXISTS registration_requests (
         id SERIAL PRIMARY KEY,

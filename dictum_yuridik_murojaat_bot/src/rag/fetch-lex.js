@@ -139,6 +139,15 @@ function parseLexHtml(html, sourceUrl) {
     const anchor = $el.find('> a[id]').length ? $el.find('> a[id]') : $el.find('> div[id]');
     if (anchor.length === 0) return;
 
+    // Convert <sup> to prime notation before extracting text
+    // e.g. 3<sup>1</sup>-modda → 3¹-modda (superscript digits)
+    anchor.find('sup').each((_, sup) => {
+      const supText = $(sup).text().trim();
+      const superDigits = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹' };
+      const converted = supText.split('').map(c => superDigits[c] || c).join('');
+      $(sup).replaceWith(converted);
+    });
+
     const text = cleanText(anchor.text());
     if (!text) return;
 
