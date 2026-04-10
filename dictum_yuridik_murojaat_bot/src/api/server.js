@@ -2545,6 +2545,58 @@ TAQIQLANGAN NARSALAR:
 ${ragContext ? ragContext + '\n' : ''}\n> ⚠️ Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
 }
 
+// ── ONE-SHOT: backfill qa_bank from existing verified_qa rows in legal_chunks ──
+// Existing edits saved via /api/rag/verify-chat-answer only landed in legal_chunks.
+// This endpoint migrates them into qa_bank so the verbatim override works.
+app.post('/api/qa-bank/backfill', requireMasterAdmin, async (req, res) => {
+  try {
+    const { saveToQaBank } = require('../rag/advanced-corpus');
+    const rows = await pool.query(`
+      SELECT id, chunk_text, category, verified_by, doc_id
+      FROM legal_chunks
+      WHERE source_type = 'verified_qa' AND is_valid = TRUE
+      ORDER BY id DESC
+    `);
+
+    let migrated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const row of rows.rows) {
+      // chunk_text is "Savol: ...\n\nJavob: ..."
+      const m = row.chunk_text.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]*)$/);
+      if (!m) { skipped++; continue; }
+      const question = m[1].trim();
+      const answer = m[2].trim();
+
+      // Skip if already in qa_bank (by exact question match)
+      const existing = await pool.query('SELECT id FROM qa_bank WHERE question = $1 LIMIT 1', [question]);
+      if (existing.rows.length > 0) { skipped++; continue; }
+
+      try {
+        await saveToQaBank({
+          question,
+          answer,
+          originalAiAnswer: null,
+          category: row.category || 'boshqa',
+          topic: row.category || null,
+          sourceUrl: null,
+          articleRefs: [],
+          editedBy: row.verified_by || null,
+          editedByName: 'Migrated',
+        });
+        migrated++;
+      } catch (e) {
+        errors.push({ id: row.id, error: e.message });
+      }
+    }
+
+    res.json({ scanned: rows.rows.length, migrated, skipped, errors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── DIAGNOSTIC: inspect qa_bank state and similarity for a given question ──
 app.get('/api/qa-bank/debug', requireMasterAdmin, async (req, res) => {
   try {
@@ -3426,9 +3478,10 @@ app.get('/api/rag/verified-answers', requireMasterAdmin, async (req, res) => {
 // POST /api/rag/verify-chat-answer — lawyer verifies an AI chat answer and adds to corpus
 app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
   try {
-    const { question, answer, topic } = req.body;
+    const { question, answer, topic, originalAiAnswer } = req.body;
     if (!question || !answer) return res.status(400).json({ error: 'Savol va javob kerak' });
 
+    // 1. Insert into legal_chunks (RAG retrieval pool with verified_qa source_type)
     await insertVerifiedAnswer({
       question,
       answer,
@@ -3438,7 +3491,28 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
       verifiedByName: req.session.fullName
     });
 
-    res.json({ success: true });
+    // 2. ALSO save to qa_bank (dedicated similarity-search table used by /api/legal-chat
+    //    for verbatim override when a near-identical question is asked again).
+    //    This is what makes "Korpusga qo'shish" actually override hallucinations.
+    let qaBankId = null;
+    try {
+      const { saveToQaBank } = require('../rag/advanced-corpus');
+      qaBankId = await saveToQaBank({
+        question,
+        answer,
+        originalAiAnswer: originalAiAnswer || null,
+        category: topic || 'boshqa',
+        topic: topic || null,
+        sourceUrl: null,
+        articleRefs: [],
+        editedBy: req.session.adminId,
+        editedByName: req.session.fullName || req.session.adminUsername || 'Admin',
+      });
+    } catch (qaErr) {
+      console.warn('[RAG] qa_bank save failed (legal_chunks still updated):', qaErr.message);
+    }
+
+    res.json({ success: true, qaBankId });
   } catch (error) {
     console.error('[RAG] verify-chat-answer error:', error.message);
     res.status(500).json({ error: error.message });
