@@ -2552,6 +2552,64 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
 
+    // ── QA BANK lookup: did a lawyer already verify the answer to a similar question? ──
+    // If the top match is very similar (cosine ≥ 0.92), return it verbatim — this
+    // guarantees that admin edits saved to Korpus override AI hallucinations.
+    // Otherwise, inject the top matches as few-shot examples in the system prompt.
+    let qaBankOverride = null;     // verbatim answer to return
+    let qaFewShotBlock = '';        // few-shot examples for prompt injection
+    let qaMatchInfo = null;
+    try {
+      const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (apiKey) {
+        const { getEmbedding } = require('../rag/embeddings');
+        const qEmb = await getEmbedding(message, apiKey);
+        const qEmbStr = `[${qEmb.join(',')}]`;
+        const qaSql = `
+          SELECT id, question, answer, rating, article_refs, category,
+                 1 - (embedding <=> $1::vector) AS similarity
+          FROM qa_bank
+          WHERE rating >= 0
+            AND embedding IS NOT NULL
+            ${topic ? 'AND (category = $2 OR topic = $2)' : ''}
+          ORDER BY embedding <=> $1::vector
+          LIMIT 3
+        `;
+        const qaParams = topic ? [qEmbStr, topic] : [qEmbStr];
+        const qaResult = await pool.query(qaSql, qaParams);
+
+        if (qaResult.rows.length > 0) {
+          const top = qaResult.rows[0];
+          qaMatchInfo = { id: top.id, similarity: parseFloat(top.similarity), count: qaResult.rows.length };
+
+          if (top.similarity >= 0.92) {
+            // Near-identical question — return verified answer verbatim
+            qaBankOverride = top.answer;
+            console.log(`[Legal Chat] QA Bank HIT #${top.id} (sim=${top.similarity.toFixed(3)}) — returning verbatim`);
+          } else if (top.similarity >= 0.70) {
+            // Use as few-shot guidance
+            const { formatQaFewShot } = require('../rag/advanced-corpus');
+            qaFewShotBlock = formatQaFewShot(qaResult.rows.filter(r => r.similarity >= 0.70));
+            console.log(`[Legal Chat] QA Bank few-shot (top sim=${top.similarity.toFixed(3)}, ${qaResult.rows.length} examples)`);
+          }
+        }
+      }
+    } catch (qaErr) {
+      console.warn(`[Legal Chat] QA bank lookup failed: ${qaErr.message}`);
+    }
+
+    // ── Short-circuit: return verified answer directly ──
+    if (qaBankOverride) {
+      return res.json({
+        reply: qaBankOverride,
+        provider: 'qa-bank',
+        databases: ['Korpus (tasdiqlangan)'],
+        ragUsed: false,
+        rag: null,
+        qaBank: qaMatchInfo,
+      });
+    }
+
     // RAG retrieval: fetch relevant legal chunks for the user's query
     let ragContext = '';
     let ragMeta = null;
@@ -2561,7 +2619,10 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       ragMeta = ragResult.meta || null;
     }
 
-    const systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
+    let systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
+    if (qaFewShotBlock) {
+      systemPrompt = qaFewShotBlock + '\n\n' + systemPrompt;
+    }
 
     // Build messages array — system prompt as dedicated system role (works with Groq + Gemini)
     const aiMessages = [{ role: 'system', text: systemPrompt }];
@@ -2586,6 +2647,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       databases: usedDbs,
       ragUsed: !!ragContext,
       rag: ragMeta,
+      qaBank: qaMatchInfo,
     });
   } catch (error) {
     console.error('[Legal Chat] Error:', error);
