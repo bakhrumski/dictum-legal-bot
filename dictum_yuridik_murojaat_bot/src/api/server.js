@@ -2545,6 +2545,61 @@ TAQIQLANGAN NARSALAR:
 ${ragContext ? ragContext + '\n' : ''}\n> ⚠️ Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
 }
 
+// ── DIAGNOSTIC: inspect qa_bank state and similarity for a given question ──
+app.get('/api/qa-bank/debug', requireMasterAdmin, async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    const counts = await pool.query(`
+      SELECT COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE embedding IS NOT NULL) AS with_emb
+      FROM qa_bank
+    `);
+    const recent = await pool.query(`
+      SELECT id, question, category, topic, rating,
+             (embedding IS NOT NULL) AS has_embedding,
+             created_at
+      FROM qa_bank
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+
+    let topMatches = [];
+    if (q) {
+      const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (apiKey) {
+        const { getEmbedding } = require('../rag/embeddings');
+        const emb = await getEmbedding(q, apiKey);
+        const embStr = `[${emb.join(',')}]`;
+        const r = await pool.query(`
+          SELECT id, question, category, topic, rating,
+                 1 - (embedding <=> $1::vector) AS similarity
+          FROM qa_bank
+          WHERE embedding IS NOT NULL
+          ORDER BY embedding <=> $1::vector
+          LIMIT 5
+        `, [embStr]);
+        topMatches = r.rows.map(row => ({
+          id: row.id,
+          similarity: parseFloat(row.similarity).toFixed(4),
+          category: row.category,
+          topic: row.topic,
+          rating: row.rating,
+          question: row.question.substring(0, 120),
+        }));
+      }
+    }
+
+    res.json({
+      counts: counts.rows[0],
+      recent: recent.rows,
+      query: q || null,
+      topMatches,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
   try {
     const { message, history, databases, topic } = req.body;
@@ -2565,33 +2620,42 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
         const { getEmbedding } = require('../rag/embeddings');
         const qEmb = await getEmbedding(message, apiKey);
         const qEmbStr = `[${qEmb.join(',')}]`;
-        const qaSql = `
-          SELECT id, question, answer, rating, article_refs, category,
+        // No category filter — let cosine similarity decide. A near-identical
+        // question saved under a different category should still win.
+        const qaResult = await pool.query(`
+          SELECT id, question, answer, rating, article_refs, category, topic,
                  1 - (embedding <=> $1::vector) AS similarity
           FROM qa_bank
-          WHERE rating >= 0
-            AND embedding IS NOT NULL
-            ${topic ? 'AND (category = $2 OR topic = $2)' : ''}
+          WHERE rating >= 0 AND embedding IS NOT NULL
           ORDER BY embedding <=> $1::vector
-          LIMIT 3
-        `;
-        const qaParams = topic ? [qEmbStr, topic] : [qEmbStr];
-        const qaResult = await pool.query(qaSql, qaParams);
+          LIMIT 5
+        `, [qEmbStr]);
 
         if (qaResult.rows.length > 0) {
           const top = qaResult.rows[0];
-          qaMatchInfo = { id: top.id, similarity: parseFloat(top.similarity), count: qaResult.rows.length };
+          const topSim = parseFloat(top.similarity);
+          qaMatchInfo = {
+            id: top.id,
+            similarity: topSim,
+            count: qaResult.rows.length,
+            topQuestion: top.question.substring(0, 80),
+            topCategory: top.category,
+          };
+          console.log(`[Legal Chat] QA Bank top match: #${top.id} sim=${topSim.toFixed(3)} cat=${top.category} q="${top.question.substring(0, 60)}"`);
 
-          if (top.similarity >= 0.92) {
+          if (topSim >= 0.85) {
             // Near-identical question — return verified answer verbatim
             qaBankOverride = top.answer;
-            console.log(`[Legal Chat] QA Bank HIT #${top.id} (sim=${top.similarity.toFixed(3)}) — returning verbatim`);
-          } else if (top.similarity >= 0.70) {
+            console.log(`[Legal Chat] QA Bank OVERRIDE #${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
+          } else if (topSim >= 0.60) {
             // Use as few-shot guidance
             const { formatQaFewShot } = require('../rag/advanced-corpus');
-            qaFewShotBlock = formatQaFewShot(qaResult.rows.filter(r => r.similarity >= 0.70));
-            console.log(`[Legal Chat] QA Bank few-shot (top sim=${top.similarity.toFixed(3)}, ${qaResult.rows.length} examples)`);
+            const usable = qaResult.rows.filter(r => parseFloat(r.similarity) >= 0.60);
+            qaFewShotBlock = formatQaFewShot(usable);
+            console.log(`[Legal Chat] QA Bank few-shot: ${usable.length} examples (top sim=${topSim.toFixed(3)})`);
           }
+        } else {
+          console.log('[Legal Chat] QA Bank: no rows with embeddings found');
         }
       }
     } catch (qaErr) {
