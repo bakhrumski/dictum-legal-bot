@@ -102,7 +102,38 @@ function parseLexHtml(html, sourceUrl) {
   const $ = cheerio.load(html);
   const lines = [];
   let title = '';
-  const metadata = { source_url: sourceUrl };
+  const metadata = {
+    source_url: sourceUrl,
+    is_active: true,        // default: document is in force
+    status_label: null,     // raw status text from lex.uz
+    adoption_date: null,    // e.g. "1996-12-27"
+    document_number: null,  // e.g. "349-I"
+  };
+
+  // ── Status detection: check ENTIRE page for "Hujjat kuchini yo'qotgan" / similar ──
+  // lex.uz marks inactive documents with a header banner. We scan the full HTML
+  // text + known status containers. If ANY of these match, is_active=false.
+  const fullText = $('body').text();
+  const statusPatterns = [
+    /Hujjat\s+kuchini\s+yo['ʻ`']?qotgan/i,
+    /Hujjat\s+kuchi\s+yo['ʻ`']?qotgan/i,
+    /Документ\s+утратил\s+силу/i,
+    /(?:utratil|utrativ)\s+silu/i,
+    /Not\s+in\s+force/i,
+  ];
+  for (const pat of statusPatterns) {
+    const m = fullText.match(pat);
+    if (m) {
+      metadata.is_active = false;
+      metadata.status_label = m[0];
+      break;
+    }
+  }
+  // Also treat "Eski tahrir" (old edition) as inactive for our purposes
+  if (/Eski\s+tahrir/i.test(fullText)) {
+    metadata.is_active = false;
+    metadata.status_label = metadata.status_label || 'Eski tahrir';
+  }
 
   // Extract document title — lex.uz uses <a id="..."> or <div id="..."> for content
   const titleEl = $('div.ACT_TITLE a[id]').add($('div.ACT_TITLE > div[id]')).first();
@@ -116,6 +147,30 @@ function parseLexHtml(html, sourceUrl) {
   const pubEl = $('div.PUBLICATION_ORIGIN a[id]').add($('div.PUBLICATION_ORIGIN > div[id]')).first();
   if (pubEl.length > 0) {
     metadata.publication = cleanText(pubEl.text());
+  }
+
+  // ── Extract adoption date + document number from title ──
+  // Typical format: "... qonuni 1996 yil 27 dekabr 349-I-son"
+  //              or "... Qonuni (27.12.1996, № 349-I)"
+  if (title) {
+    // Date: "DD.MM.YYYY" or "YYYY yil D oy" (Uzbek month names)
+    const months = { yanvar:'01', fevral:'02', mart:'03', aprel:'04', may:'05', iyun:'06',
+                     iyul:'07', avgust:'08', sentabr:'09', oktabr:'10', noyabr:'11', dekabr:'12' };
+    let dateMatch = title.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    if (dateMatch) {
+      metadata.adoption_date = `${dateMatch[3]}-${dateMatch[2].padStart(2,'0')}-${dateMatch[1].padStart(2,'0')}`;
+    } else {
+      const uzMatch = title.match(/(\d{4})\s*yil[,\s]*(\d{1,2})[\s-]*([a-zа-я'ʻ]+)/i);
+      if (uzMatch) {
+        const monthKey = uzMatch[3].toLowerCase().replace(/[^a-z]/g, '');
+        if (months[monthKey]) {
+          metadata.adoption_date = `${uzMatch[1]}-${months[monthKey]}-${uzMatch[2].padStart(2,'0')}`;
+        }
+      }
+    }
+    // Document number: "349-I-son", "349-I", "№ 349-I", "PQ-4624" etc.
+    const numMatch = title.match(/(?:№\s*|N\s*|raqami\s+)?([A-ZА-Я]{0,4}-?\d+(?:-[IVX]+)?(?:-son)?)/);
+    if (numMatch) metadata.document_number = numMatch[1].replace(/-son$/i, '');
   }
 
   // Process all content elements in document order
@@ -184,7 +239,7 @@ function parseLexHtml(html, sourceUrl) {
     .replace(/\n{3,}/g, '\n\n')  // collapse multiple blank lines
     .trim();
 
-  console.log(`[FETCH-LEX] Extracted: "${title}" — ${body.length} chars, ~${Math.ceil(body.length / 4)} tokens`);
+  console.log(`[FETCH-LEX] Extracted: "${title}" — ${body.length} chars, ~${Math.ceil(body.length / 4)} tokens, active=${metadata.is_active}${metadata.adoption_date ? `, date=${metadata.adoption_date}` : ''}${metadata.document_number ? `, #${metadata.document_number}` : ''}`);
 
   return { title, body, metadata };
 }

@@ -133,6 +133,7 @@ async function insertStructuredChunks(chunks) {
           article_number_display, part_number, part_type,
           cross_references,
           enforcement_date, is_valid,
+          is_active, status_label, adoption_date, document_number,
           embedding
         ) VALUES (
           $1, $2, $3, $4,
@@ -142,7 +143,8 @@ async function insertStructuredChunks(chunks) {
           $12, $13, $14,
           $15,
           $16, TRUE,
-          $17::vector
+          $17, $18, $19, $20,
+          $21::vector
         )
       `, [
         m.law_name || '',
@@ -161,6 +163,10 @@ async function insertStructuredChunks(chunks) {
         m.partType || 'article',
         m.references && m.references.length > 0 ? m.references : null,
         m.enforcement_date || null,
+        m.is_active !== false,
+        m.status_label || null,
+        m.adoption_date || null,
+        m.document_number || null,
         embStr,
       ]);
 
@@ -257,7 +263,7 @@ async function parentChildSearch(query, opts = {}) {
       cross_references,
       1 - (embedding <=> $1::vector) AS score
     FROM legal_chunks
-    WHERE is_valid = TRUE
+    WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
       AND chunk_type = 'child'
       ${category ? 'AND category = $3' : ''}
       AND embedding IS NOT NULL
@@ -280,7 +286,7 @@ async function parentChildSearch(query, opts = {}) {
         cross_references,
         1 - (embedding <=> $1::vector) AS score
       FROM legal_chunks
-      WHERE is_valid = TRUE
+      WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
         AND chunk_type = 'parent'
         ${category ? 'AND category = $3' : ''}
         AND embedding IS NOT NULL
@@ -538,7 +544,7 @@ async function getAdvancedStats() {
       COUNT(*) AS cnt,
       COUNT(DISTINCT category) AS categories
     FROM legal_chunks
-    WHERE is_valid = TRUE
+    WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
     GROUP BY chunk_type
   `);
 

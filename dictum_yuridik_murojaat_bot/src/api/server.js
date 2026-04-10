@@ -2403,8 +2403,19 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   };
 
   // ── Build STRICT citation table from chunk metadata ──
-  // This is the AI's "allowed sources" cheat sheet — it can ONLY cite from here
-  const citationRows = [];
+  // This is the AI's "allowed sources" cheat sheet — it can ONLY cite from here.
+  // Format matches the mandatory citation structure from the spec:
+  //   O'zbekiston Respublikasining "<Qonun nomi>"gi Qonuni
+  //   (<sana>, № <raqam>), <modda> <qism/band>.
+  //   <URL>
+  const formatDate = (d) => {
+    if (!d) return null;
+    const dt = new Date(d);
+    if (isNaN(dt)) return null;
+    return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}.${dt.getFullYear()}`;
+  };
+
+  const citationBlocks = [];
   const seenCitations = new Set();
   for (const r of goodChunks) {
     if (!r.article_numbers || r.article_numbers.length === 0) continue;
@@ -2412,13 +2423,23 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
       const key = `${r.law_name}_${art}`;
       if (seenCitations.has(key)) continue;
       seenCitations.add(key);
-      citationRows.push(`  • ${art}-modda — ${r.law_name}${r.source_url ? ` (${r.source_url})` : ''}`);
+      const dateStr = formatDate(r.adoption_date);
+      const docNum = r.document_number;
+      const meta = [dateStr, docNum ? `№ ${docNum}` : null].filter(Boolean).join(', ');
+      const locator = `${art}-modda`;
+      const url = r.source_url || '';
+      citationBlocks.push(
+        `  • ${r.law_name}\n` +
+        (meta ? `    (${meta})\n` : '') +
+        `    ${locator}\n` +
+        (url ? `    ${url}` : '')
+      );
     }
   }
 
-  const citationTable = citationRows.length > 0
-    ? `\n┌─────────────────────────────────────────────┐\n│  RUXSAT ETILGAN MANBALAR (FAQAT shulardan!) │\n└─────────────────────────────────────────────┘\n${citationRows.join('\n')}\n\n⚠️ FAQAT yuqoridagi modda raqamlarini keltiring. BOSHQA modda raqami YOZMANG.\n`
-    : '\n⚠️ KONTEKSTDA modda raqamlari topilmadi. Modda raqami YOZMANG — faqat umumiy qonunchilik prinsiplarini ayting.\n';
+  const citationTable = citationBlocks.length > 0
+    ? `\n┌─────────────────────────────────────────────┐\n│  RUXSAT ETILGAN MANBALAR (FAQAT shulardan!) │\n└─────────────────────────────────────────────┘\n${citationBlocks.join('\n')}\n\n⚠️ FAQAT yuqoridagi modda raqamlarini keltiring. BOSHQA modda raqami YOZMANG.\n⚠️ Har bir iqtibos uchun to'liq formatda yozing: qonun nomi, sana, raqam, modda, URL.\n`
+    : '\n⚠️ KONTEKSTDA modda raqamlari topilmadi. Javob bering: "Ushbu savol bo\'yicha lex.uz ma\'lumotlar bazasida aniq ma\'lumot topilmadi."\n';
 
   let context;
   if (isUz) {
@@ -2454,27 +2475,9 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
 function buildTopicPrompt(topic, ragContext) {
   const topicLabel = LEGAL_TOPICS[topic] || topic;
 
-  const topicKnowledge = {
-    'mehnat':       "O'zbekiston Mehnat kodeksi (2022-yil yangi tahriri), mehnat shartnomalari, ishdan bo'shatish tartibi, ish haqi, ta'til, mehnat nizolari, kasaba uyushmalari, mehnat inspeksiyasi.",
-    'oila':         "O'zbekiston Oila kodeksi, nikoh va ajralish tartibi, nafaqa, bolalar huquqi, vasiylik, meros, ota-ona huquq va majburiyatlari.",
-    'fuqarolik':    "O'zbekiston Fuqarolik kodeksi (1-qism: umumiy qoidalar, 2-qism: mulkiy huquqlar, 3-qism: majburiyat huquqi), shartnomalar, zarar qoplash, da'vo muddatlari.",
-    'shartnoma':    "Fuqarolik kodeksining shartnomaviy bo'limlari, sotib olish-sotish, ijara, pudrat, xizmat ko'rsatish, qarz, kafolat, veksel, elektron shartnomalar.",
-    'soliq':        "O'zbekiston Soliq kodeksi, QQS (12%), daromad solig'i (fiz. shaxslar 12%, yuridik shaxslar 15%), mol-mulk solig'i, er solig'i, aktsiz, bojxona to'lovlari, soliq imtiyozlari, soliq nazorati.",
-    'jinoyat':      "O'zbekiston Jinoyat kodeksi, jinoyat tarkibi, jazo turlari, ozodlikdan mahrum qilish, jarima, jinoyatdan ozod qilish, recidiv, prescriptsiya muddatlari.",
-    'mamuriy':      "Ma'muriy javobgarlik to'g'risidagi kodeks, ma'muriy huquqbuzarliklar, jarima miqdorlari, tartib buzilishi, davlat organlariga shikoyat.",
-    'korporativ':   "Aksiyadorlik jamiyatlari to'g'risidagi qonun, MChJ, korporativ boshqaruv, ustav kapitali, ulushlar, aksiyadorlar huquqlari, bankrotlik.",
-    'tadbirkorlik': "Tadbirkorlik faoliyati to'g'risidagi qonun, ruxsatnomalar, litsenziyalar, soliq rejimlari (OYTT, QQS), tekshiruvlar, biznes registratsiya.",
-    'uy-joy':       "Uy-joy kodeksi, ko'chmas mulkni sotish-sotib olish, ipoteka, ijara, ko'chmas mulkni ro'yxatga olish, kommunal xizmatlar, mulkdorlar uyushmasi.",
-    'mulk':         "Fuqarolik kodeksining mulk huquqi bo'limlari, davlat mulki, xususiy mulk, umumiy mulk, servitut, gadov (zaklad), mulk himoyasi.",
-    'notarius':     "Notariat to'g'risidagi qonun, notarial harakatlar, vasiyatnoma, ishonchnoma, meros rasmiylashtirish, shartnomalarni tasdiqlash.",
-    'ijtimoiy':     "Pensiya to'g'risidagi qonun, ijtimoiy sug'urta, nogironlik nafaqasi, ishsizlik nafaqasi, onalaik nafaqasi, ijtimoiy yordam turlari.",
-    'advokatura':   "Advokatura to'g'risidagi qonun, advokatlik faoliyati, advokat maqomi, advokat vakolatlari, yuridik yordam ko'rsatish, advokatura palatasi, bepul yuridik yordam."
-  };
-
-  const knowledgeBase = topicKnowledge[topic] || `${topicLabel} sohasiga oid O'zbekiston qonunlari`;
-
   return `Siz O'zbekiston ${topicLabel} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
-Sizning bilim bazangiz: ${knowledgeBase}
+Sizning YAGONA huquqiy manbangiz — quyida berilgan KONTEKST (lex.uz dan olingan faol qonun matnlari).
+Kontekstdan tashqari HECH QANDAY bilimga tayanmang.
 
 ╔══════════════════════════════════════════════════════════╗
 ║  ENG ASOSIY QOIDA — RAG-FAQAT JAVOB (RAG-ONLY ANSWER)   ║
@@ -2510,16 +2513,28 @@ MAJBURIY JAVOB TUZILMASI:
 Savolni avval tahlil qiling: bu NAZARIY savol (tushuncha, ta'rif, qonun mazmunini tushuntirish) yoki AMALIY savol (aniq holat, muammo, nima qilish kerak)?
 
 ## Huquqiy asos
-Tegishli qonun(lar) ro'yxati — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan oling:
-- Qonun nomi (kontekstdagi "law_name" maydonidan)
-- Modda raqami va qism raqami (FAQAT kontekstdagi "Moddalar:" qatoridan — boshqa joydan EMAS!)
-- Har bir moddaning kontekstdagi ANIQ mazmunini tushuntiring (o'z so'zlaringiz bilan, lekin faktlar kontekstdan)
-- Prim moddalarni to'g'ri yozing (4¹, 12², 3¹)
+Tegishli qonun(lar) — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan oling.
 
-⚠️ AGAR kontekstda kerakli modda raqami YO'Q bo'lsa:
-- Modda raqami yozmang
-- "Aniq modda raqami uchun manba qonun matnini ko'ring: [qonun nomi]" deng
-- O'z xotirangizdan modda raqami TO'QIB CHIQARMANG
+MAJBURIY IQTIBOS FORMATI (har bir manba uchun to'liq yozing):
+
+    O'zbekiston Respublikasining "<Qonun nomi>"gi Qonuni
+    (<sana>, № <raqam>), <modda>-modda, <qism>-qism.
+    <URL>
+
+Misol:
+    O'zbekiston Respublikasining "Advokatura to'g'risida"gi Qonuni
+    (27.12.1996, № 349-I), 5-modda, 1-qism.
+    https://lex.uz/docs/58372
+
+Qoidalar:
+- Qonun nomi, sana, raqam va URL — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan olinadi
+- Modda raqami va qism raqami ham FAQAT kontekstdan olinadi
+- Prim moddalarni to'g'ri yozing (4¹, 12², 3¹)
+- Har bir moddaning kontekstdagi ANIQ mazmunini tushuntiring (o'z so'zlaringiz bilan, lekin faktlar kontekstdan)
+
+⚠️ AGAR kontekstda kerakli ma'lumot YO'Q bo'lsa, JAVOBNING BIRINCHI QATORI shu bo'lishi SHART:
+    "Ushbu savol bo'yicha lex.uz ma'lumotlar bazasida aniq ma'lumot topilmadi."
+Va keyin hech qanday modda raqami, sana yoki raqam YOZMANG. Xotirangizdan TO'QIB CHIQARMANG.
 
 ## Muddatlar va jarimalar
 Bu bo'limni FAQAT qonunda ANIQ SON bor bo'lsagina yozing (masalan: "30 kun", "5 BHM jarima", "3 yil").
@@ -2682,6 +2697,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
           FROM legal_chunks
           WHERE source_type = 'verified_qa'
             AND is_valid = TRUE
+            AND (is_active IS NULL OR is_active = TRUE)
             AND embedding IS NOT NULL
           ORDER BY embedding <=> $1::vector
           LIMIT 5

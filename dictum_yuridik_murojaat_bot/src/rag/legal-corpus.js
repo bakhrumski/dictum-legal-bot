@@ -74,6 +74,12 @@ async function initLegalCorpus() {
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS quality_score FLOAT DEFAULT 0.5`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS verified_by INTEGER`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS language VARCHAR(5) DEFAULT 'ru'`);
+    // Phase 1: document-level metadata for zero-hallucination grounding
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS status_label TEXT`);
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS adoption_date DATE`);
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS document_number VARCHAR(50)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_legal_chunks_active ON legal_chunks(is_active) WHERE is_active = TRUE AND is_valid = TRUE`);
 
     // Handle embedding dimension migration (e.g. switching from Gemini 3072d to HF 1024d)
     // atttypmod for vector(n) equals n directly in pgvector
@@ -219,8 +225,9 @@ async function insertChunks(chunks) {
           chunk_text, chunk_index,
           article_numbers, chapter,
           enforcement_date, is_valid,
+          is_active, status_label, adoption_date, document_number,
           embedding
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::vector)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::vector)
       `, [
         m.law_name || '',
         m.doc_id || null,
@@ -232,6 +239,10 @@ async function insertChunks(chunks) {
         m.chapter || null,
         m.enforcement_date || null,
         m.is_valid !== false,
+        m.is_active !== false,
+        m.status_label || null,
+        m.adoption_date || null,
+        m.document_number || null,
         embeddingStr
       ]);
 
@@ -308,7 +319,7 @@ async function hybridSearch(query, opts = {}) {
     WITH vector_scores AS (
       SELECT id, 1 - (embedding <=> $1::vector) AS vscore
       FROM legal_chunks
-      WHERE is_valid = TRUE
+      WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
         ${category ? 'AND category = $3' : ''}
         AND embedding IS NOT NULL
       ORDER BY embedding <=> $1::vector
@@ -317,7 +328,7 @@ async function hybridSearch(query, opts = {}) {
     text_scores AS (
       SELECT id, ts_rank_cd(tsv, plainto_tsquery('simple', $1::text)) AS tscore
       FROM legal_chunks
-      WHERE is_valid = TRUE
+      WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
         ${category ? 'AND category = $3' : ''}
         AND tsv @@ plainto_tsquery('simple', $1::text)
       LIMIT $2 * 3
@@ -353,7 +364,7 @@ async function hybridSearch(query, opts = {}) {
     WITH vector_scores AS (
       SELECT id, 1 - (embedding <=> $1::vector) AS vscore
       FROM legal_chunks
-      WHERE is_valid = TRUE
+      WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
         ${category ? 'AND category = $4' : ''}
         AND embedding IS NOT NULL
       ORDER BY embedding <=> $1::vector
@@ -362,7 +373,7 @@ async function hybridSearch(query, opts = {}) {
     text_scores AS (
       SELECT id, ts_rank_cd(tsv, plainto_tsquery('simple', $2)) AS tscore
       FROM legal_chunks
-      WHERE is_valid = TRUE
+      WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
         ${category ? 'AND category = $4' : ''}
         AND tsv @@ plainto_tsquery('simple', $2)
       LIMIT $3 * 3
@@ -429,7 +440,7 @@ async function textOnlySearch(query, opts = {}) {
            source_type, verified_by,
            ts_rank_cd(tsv, plainto_tsquery('simple', $1)) AS score
     FROM legal_chunks
-    WHERE is_valid = TRUE
+    WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
       AND source_type = 'verified_qa'
       AND tsv @@ plainto_tsquery('simple', $1)
       ${categoryClause}
@@ -448,7 +459,7 @@ async function textOnlySearch(query, opts = {}) {
            source_type, verified_by,
            ts_rank_cd(tsv, plainto_tsquery('simple', $1)) + CASE WHEN source_type = 'verified_qa' THEN 0.25 ELSE 0 END AS score
     FROM legal_chunks
-    WHERE is_valid = TRUE
+    WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
       AND tsv @@ plainto_tsquery('simple', $1)
       ${categoryClause}
     ORDER BY score DESC
@@ -473,7 +484,7 @@ async function textOnlySearch(query, opts = {}) {
       SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
              source_type, verified_by, 0.3 AS score
       FROM legal_chunks
-      WHERE is_valid = TRUE ${catFilter}
+      WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE) ${catFilter}
         AND (${ilikeConds.join(' OR ')})
       ORDER BY CASE WHEN source_type = 'verified_qa' THEN 0 ELSE 1 END,
                id
@@ -563,7 +574,7 @@ async function vectorSearch(query, opts = {}) {
       id, law_name, chunk_text, article_numbers, chapter, source_url, category,
       1 - (embedding <=> $1::vector) AS score
     FROM legal_chunks
-    WHERE is_valid = TRUE
+    WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
       ${category ? 'AND category = $3' : ''}
       AND embedding IS NOT NULL
     ORDER BY embedding <=> $1::vector
@@ -587,12 +598,12 @@ async function getCorpusStats() {
       COUNT(DISTINCT doc_id) AS doc_count,
       COUNT(*) FILTER (WHERE embedding IS NOT NULL) AS embedded_count
     FROM legal_chunks
-    WHERE is_valid = TRUE
+    WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
     GROUP BY category
     ORDER BY category
   `);
 
-  const total = await pool.query(`SELECT COUNT(*) FROM legal_chunks WHERE is_valid = TRUE`);
+  const total = await pool.query(`SELECT COUNT(*) FROM legal_chunks WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)`);
 
   return {
     total: parseInt(total.rows[0].count),
@@ -639,7 +650,7 @@ async function rrfSearch(query, opts = {}) {
   const queryEmbedding = await getEmbedding(query, apiKey);
   const embStr = `[${queryEmbedding.join(',')}]`;
 
-  const filters = ['is_valid = TRUE'];
+  const filters = ['is_valid = TRUE', '(is_active IS NULL OR is_active = TRUE)'];
   const params = [embStr, query, topN];
   let paramIdx = 4;
 
@@ -683,6 +694,7 @@ async function rrfSearch(query, opts = {}) {
       lc.id, lc.law_name, lc.chunk_text, lc.article_numbers,
       lc.chapter, lc.source_url, lc.category, lc.source_type,
       lc.language, lc.verified_by,
+      lc.adoption_date, lc.document_number, lc.article_number_display, lc.part_number,
       rrf.rrf_score + CASE WHEN lc.source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score
     FROM rrf
     JOIN legal_chunks lc ON lc.id = rrf.id
