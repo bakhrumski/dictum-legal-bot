@@ -2659,12 +2659,15 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
 
-    // ── QA BANK lookup: did a lawyer already verify the answer to a similar question? ──
-    // If the top match is very similar (cosine ≥ 0.92), return it verbatim — this
-    // guarantees that admin edits saved to Korpus override AI hallucinations.
-    // Otherwise, inject the top matches as few-shot examples in the system prompt.
-    let qaBankOverride = null;     // verbatim answer to return
-    let qaFewShotBlock = '';        // few-shot examples for prompt injection
+    // ── VERIFIED ANSWER OVERRIDE ──
+    // The lawyer's "Korpusga qo'shish" button writes corrected answers to
+    // legal_chunks with source_type='verified_qa' and an embedding. If the
+    // user's question is near-identical to a previously verified one, return
+    // that answer VERBATIM and skip the AI entirely. Passing verified chunks
+    // to the AI as context doesn't work — it still hedges ("7-modda (shuningdek
+    // 5-moddada ham)"). Only a short-circuit guarantees the correction wins.
+    let verifiedOverride = null;
+    let qaFewShotBlock = '';
     let qaMatchInfo = null;
     try {
       const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
@@ -2672,53 +2675,64 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
         const { getEmbedding } = require('../rag/embeddings');
         const qEmb = await getEmbedding(message, apiKey);
         const qEmbStr = `[${qEmb.join(',')}]`;
-        // No category filter — let cosine similarity decide. A near-identical
-        // question saved under a different category should still win.
-        const qaResult = await pool.query(`
-          SELECT id, question, answer, rating, article_refs, category, topic,
+
+        const r = await pool.query(`
+          SELECT id, chunk_text, category, doc_id, law_name,
                  1 - (embedding <=> $1::vector) AS similarity
-          FROM qa_bank
-          WHERE rating >= 0 AND embedding IS NOT NULL
+          FROM legal_chunks
+          WHERE source_type = 'verified_qa'
+            AND is_valid = TRUE
+            AND embedding IS NOT NULL
           ORDER BY embedding <=> $1::vector
           LIMIT 5
         `, [qEmbStr]);
 
-        if (qaResult.rows.length > 0) {
-          const top = qaResult.rows[0];
+        if (r.rows.length > 0) {
+          const top = r.rows[0];
           const topSim = parseFloat(top.similarity);
+          // chunk_text is "Savol: X\n\nJavob: Y" — extract just the answer
+          const parseQA = (txt) => {
+            const m = txt.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]+)$/);
+            return m ? { question: m[1].trim(), answer: m[2].trim() } : { question: '', answer: txt };
+          };
+          const topParsed = parseQA(top.chunk_text);
+
           qaMatchInfo = {
             id: top.id,
             similarity: topSim,
-            count: qaResult.rows.length,
-            topQuestion: top.question.substring(0, 80),
-            topCategory: top.category,
+            count: r.rows.length,
+            category: top.category,
+            source: 'verified_qa',
           };
-          console.log(`[Legal Chat] QA Bank top match: #${top.id} sim=${topSim.toFixed(3)} cat=${top.category} q="${top.question.substring(0, 60)}"`);
+          console.log(`[Legal Chat] verified_qa top match: id=${top.id} sim=${topSim.toFixed(3)} cat=${top.category}`);
 
-          if (topSim >= 0.78) {
-            // Near-identical question — return verified answer verbatim
-            qaBankOverride = top.answer;
-            console.log(`[Legal Chat] QA Bank OVERRIDE #${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
-          } else if (topSim >= 0.55) {
-            // Use as few-shot guidance
+          if (topSim >= 0.72) {
+            verifiedOverride = topParsed.answer;
+            console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
+          } else if (topSim >= 0.50) {
             const { formatQaFewShot } = require('../rag/advanced-corpus');
-            const usable = qaResult.rows.filter(r => parseFloat(r.similarity) >= 0.60);
+            const usable = r.rows
+              .filter(row => parseFloat(row.similarity) >= 0.50)
+              .map(row => {
+                const p = parseQA(row.chunk_text);
+                return { question: p.question, answer: p.answer, rating: 1 };
+              });
             qaFewShotBlock = formatQaFewShot(usable);
-            console.log(`[Legal Chat] QA Bank few-shot: ${usable.length} examples (top sim=${topSim.toFixed(3)})`);
+            console.log(`[Legal Chat] verified_qa few-shot: ${usable.length} examples (top sim=${topSim.toFixed(3)})`);
           }
         } else {
-          console.log('[Legal Chat] QA Bank: no rows with embeddings found');
+          console.log('[Legal Chat] verified_qa: no rows with embeddings found');
         }
       }
     } catch (qaErr) {
-      console.warn(`[Legal Chat] QA bank lookup failed: ${qaErr.message}`);
+      console.warn(`[Legal Chat] verified_qa lookup failed: ${qaErr.message}`);
     }
 
     // ── Short-circuit: return verified answer directly ──
-    if (qaBankOverride) {
+    if (verifiedOverride) {
       return res.json({
-        reply: qaBankOverride,
-        provider: 'qa-bank',
+        reply: verifiedOverride,
+        provider: 'verified-qa',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
         rag: null,
