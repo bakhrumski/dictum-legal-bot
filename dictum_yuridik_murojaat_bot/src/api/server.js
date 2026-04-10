@@ -2643,11 +2643,11 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
           };
           console.log(`[Legal Chat] QA Bank top match: #${top.id} sim=${topSim.toFixed(3)} cat=${top.category} q="${top.question.substring(0, 60)}"`);
 
-          if (topSim >= 0.85) {
+          if (topSim >= 0.78) {
             // Near-identical question — return verified answer verbatim
             qaBankOverride = top.answer;
             console.log(`[Legal Chat] QA Bank OVERRIDE #${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
-          } else if (topSim >= 0.60) {
+          } else if (topSim >= 0.55) {
             // Use as few-shot guidance
             const { formatQaFewShot } = require('../rag/advanced-corpus');
             const usable = qaResult.rows.filter(r => parseFloat(r.similarity) >= 0.60);

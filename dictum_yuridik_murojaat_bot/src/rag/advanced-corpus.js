@@ -500,16 +500,31 @@ function formatQaFewShot(qaMatches) {
   if (!qaMatches || qaMatches.length === 0) return '';
 
   const examples = qaMatches.map((qa, i) => {
-    return `═══ Namunaviy javob #${i + 1} (rating: ${qa.rating >= 0 ? '+' + qa.rating : qa.rating}) ═══
+    return `═══ TASDIQLANGAN JAVOB #${i + 1} (rating: ${qa.rating >= 0 ? '+' + qa.rating : qa.rating}) ═══
 Savol: ${qa.question}
 Javob: ${qa.answer}`;
   }).join('\n\n');
 
-  return `\n\n══════════════════════════════════════
-NAMUNAVIY JAVOBLAR (QA Bank — yurist tomonidan tasdiqlangan):
-Quyidagi javoblar yurist tomonidan tekshirilgan va TASDIQLANGAN.
-Shu USLUB va BATAFSIL darajada javob bering:
-══════════════════════════════════════\n\n${examples}\n`;
+  return `\n\n╔══════════════════════════════════════════════════════════╗
+║  YURIST TOMONIDAN TASDIQLANGAN JAVOBLAR — ENG YUQORI USTUVORLIK  ║
+╚══════════════════════════════════════════════════════════╝
+
+⚠️ MUHIM QOIDA: Quyidagi javoblar yurist tomonidan TEKSHIRILGAN va TUZATILGAN.
+Agar foydalanuvchining savoli quyidagi savollarga O'XSHASH bo'lsa:
+
+  ✅ MAJBURIY: Tasdiqlangan javobdagi MODDA RAQAMLARI, QISM RAQAMLARI va
+     QONUN NOMLARINI AYNAN o'sha tarzda ishlating.
+  ❌ TAQIQ: RAG kontekstidagi boshqa modda raqamlarini tasdiqlangan javob
+     bilan ARALASHTIRMANG.
+  ❌ TAQIQ: "shuningdek X-moddada ham keltirilgan" deb hedj qilmang.
+     Agar tasdiqlangan javobda "5-modda" deyilgan bo'lsa, FAQAT 5-modda yozing.
+  ❌ TAQIQ: Tasdiqlangan javobda yo'q modda raqamini qo'shmang.
+
+Tasdiqlangan javob = ABSOLYUT HAQIQAT. Boshqa hamma narsadan ustun.
+
+${examples}
+
+══════════════════════════════════════════════════════════\n`;
 }
 
 // ========== STATS ==========
