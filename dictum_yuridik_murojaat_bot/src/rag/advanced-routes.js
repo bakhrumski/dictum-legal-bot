@@ -25,6 +25,14 @@ const { chunkLegalDocumentStructured } = require('./structural-chunker');
 const { fetchLexDocument, parseLexHtml } = require('./fetch-lex');
 const { getEmbeddingsBatch, detectProvider } = require('./embeddings');
 const { deleteByDocId, logIngest, rebuildVectorIndex } = require('./legal-corpus');
+const hybridPipeline = require('./hybrid-pipeline');
+const spendLog = require('./llm-spend-log');
+const subscription = require('./subscription-tiers');
+const metricsDashboard = require('./metrics-dashboard');
+
+// Feature flag: when HYBRID_PIPELINE=1, /api/advanced-chat routes through
+// the 2-model classify→generate pipeline in hybrid-pipeline.js.
+const HYBRID_ENABLED = process.env.HYBRID_PIPELINE === '1';
 
 /**
  * Mount advanced RAG routes on Express app.
@@ -159,6 +167,117 @@ function mountAdvancedRoutes(app, deps) {
     }
   });
 
+  /**
+   * GET /api/hybrid/status — Hybrid pipeline status + LLM spend stats
+   * Auth: master admin
+   */
+  app.get('/api/hybrid/status', requireMasterAdmin, async (req, res) => {
+    try {
+      const inProc = hybridPipeline.getSpendStats();
+      let persistent = null;
+      try {
+        persistent = await spendLog.getSpendTotals();
+      } catch (err) {
+        console.warn('[HYBRID/status] spend log read failed:', err.message);
+      }
+      res.json({
+        enabled: HYBRID_ENABLED,
+        classifyChain: hybridPipeline.CLASSIFY_MODEL_CHAIN,
+        generateChain: hybridPipeline.GENERATE_MODEL_CHAIN,
+        spend: {
+          // DB-backed totals (authoritative, survive restarts)
+          today: persistent ? persistent.today : inProc.today,
+          month: persistent ? persistent.month : inProc.month,
+          dailyCeiling: inProc.dailyCeiling,
+          monthlyCeiling: inProc.monthlyCeiling,
+          source: persistent ? 'db' : 'in-process',
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/hybrid/spend-breakdown — per-model/per-stage spend breakdown
+   * Query: ?days=30
+   * Auth: master admin
+   */
+  app.get('/api/hybrid/spend-breakdown', requireMasterAdmin, async (req, res) => {
+    try {
+      const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+      const rows = await spendLog.getSpendBreakdown({ days });
+      res.json({ days, rows });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ══════════════════════════════════════
+  // SUBSCRIPTION TIERS (Phase 3)
+  // ══════════════════════════════════════
+
+  /**
+   * GET /api/subscription/me — current user's tier, limit, usage
+   * Auth: any authenticated user
+   */
+  app.get('/api/subscription/me', requireAuth, async (req, res) => {
+    try {
+      const userId = req.session?.adminId;
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      const q = await subscription.checkQuota(userId);
+      res.json(q);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/subscription/set-tier — admin: assign a tier to a user
+   * Body: { userId, tier, customLimit?, expiresAt? }
+   * Auth: master admin
+   */
+  app.post('/api/subscription/set-tier', requireMasterAdmin, async (req, res) => {
+    try {
+      const { userId, tier, customLimit, expiresAt } = req.body || {};
+      if (!userId || !tier) return res.status(400).json({ error: 'userId and tier required' });
+      if (!subscription.TIER_LIMITS[tier]) {
+        return res.status(400).json({ error: `Unknown tier: ${tier}. Valid: ${Object.keys(subscription.TIER_LIMITS).join(', ')}` });
+      }
+      await subscription.setTier(userId, tier, {
+        customLimit: customLimit != null ? Number(customLimit) : null,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      });
+      res.json({ success: true, userId, tier });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/subscription/tiers — list tier limits (public reference)
+   */
+  app.get('/api/subscription/tiers', (req, res) => {
+    res.json(subscription.TIER_LIMITS);
+  });
+
+  // ══════════════════════════════════════
+  // METRICS DASHBOARD (Phase 4)
+  // ══════════════════════════════════════
+
+  /**
+   * GET /api/metrics/dashboard — full JSON snapshot of RAG health + spend
+   * Auth: master admin
+   */
+  app.get('/api/metrics/dashboard', requireMasterAdmin, async (req, res) => {
+    try {
+      const dash = await metricsDashboard.getDashboard();
+      res.json(dash);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ══════════════════════════════════════
   // ADVANCED CHAT (with few-shot + parent-child)
   // ══════════════════════════════════════
@@ -174,15 +293,84 @@ function mountAdvancedRoutes(app, deps) {
    * Body: { message, history, topic, databases, sessionId }
    * Auth: master admin
    */
-  app.post('/api/advanced-chat', requireMasterAdmin, async (req, res) => {
+  app.post('/api/advanced-chat', requireMasterAdmin, subscription.enforceQuota('/api/advanced-chat'), async (req, res) => {
     try {
-      const { message, history = [], topic, databases, sessionId } = req.body;
+      const { message, history = [], topic } = req.body;
 
       if (!message || typeof message !== 'string') {
         return res.status(400).json({ error: 'Xabar matni topilmadi' });
       }
 
       const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+
+      // ═══════════════════════════════════════════════════════════════
+      // HYBRID PIPELINE PATH (opt-in via HYBRID_PIPELINE=1)
+      // Routes through classify → retrieve → generate with budget guard
+      // and zero-hallucination fallback.
+      // ═══════════════════════════════════════════════════════════════
+      if (HYBRID_ENABLED) {
+        try {
+          const LEGAL_TOPICS_H = {
+            'mehnat': 'Mehnat huquqi', 'oila': 'Oila huquqi', 'fuqarolik': 'Fuqarolik huquqi',
+            'shartnoma': 'Shartnoma huquqi', 'soliq': 'Soliq huquqi', 'jinoyat': 'Jinoyat huquqi',
+            'mamuriy': "Ma'muriy javobgarlik", 'korporativ': 'Korporativ huquq',
+            'tadbirkorlik': 'Tadbirkorlik huquqi', 'uy-joy': 'Uy-joy oldi-sotdisi',
+            'mulk': 'Mulk huquqi', 'notarius': 'Notarius xizmatlari',
+            'ijtimoiy': 'Ijtimoiy himoya', 'advokatura': 'Advokatura',
+          };
+
+          const result = await hybridPipeline.runPipeline({
+            query: message,
+            history: (Array.isArray(history) ? history.slice(-18) : []).map(m => ({
+              role: m.role === 'user' ? 'user' : 'model',
+              text: m.text || m.content || '',
+            })),
+            retrieve: async (classification) => {
+              // Caller-picked topic wins; fall back to classifier topic
+              const effectiveTopic = topic || classification.topic;
+              if (!effectiveTopic || !apiKey) return { ragContext: '', chunks: [] };
+              const chunks = await parentChildSearch(message, {
+                category: effectiveTopic,
+                limit: 6,
+                apiKey,
+              });
+              return {
+                ragContext: formatAdvancedContext(chunks),
+                chunks,
+              };
+            },
+            buildPrompt: (classification, { ragContext, chunks }) => {
+              const effectiveTopic = topic || classification.topic;
+              let fewShotBlock = '';
+              // Best-effort few-shot — don't block generation on failure
+              return buildAdvancedPrompt({
+                topic: effectiveTopic,
+                topicLabel: LEGAL_TOPICS_H[effectiveTopic] || effectiveTopic || 'huquq',
+                ragContext,
+                fewShotBlock,
+                retrievedChunks: chunks,
+              });
+            },
+          });
+
+          return res.json({
+            reply: result.text,
+            provider: result.provider,
+            ragUsed: (result.chunks || []).length > 0,
+            rag: {
+              searchMode: 'hybrid-pipeline',
+              chunks: (result.chunks || []).length,
+              sources: [...new Set((result.chunks || []).map(c => c.lawName))].slice(0, 3),
+            },
+            classification: result.classification,
+            timings: result.timings,
+            estimatedCostUsd: result.estimatedCostUsd,
+          });
+        } catch (hybridErr) {
+          console.warn(`[HYBRID] pipeline failed, falling through to legacy: ${hybridErr.message}`);
+          // Fall through to legacy path below
+        }
+      }
 
       // ── 1. QA Bank: Find similar verified answers for few-shot ──
       let fewShotBlock = '';

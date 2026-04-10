@@ -4696,6 +4696,22 @@ async function runMigrations() {
       await initAdvancedCorpus();
       mountAdvancedRoutes(app, { requireAuth, requireMasterAdmin, callAI, pool });
     } catch (e) { console.log('[ADV RAG] Mount skipped:', e.message); }
+
+    // Initialize persistent LLM spend log + wire it into hybrid pipeline
+    try {
+      const hybridPipeline = require('../rag/hybrid-pipeline');
+      const spendLog = require('../rag/llm-spend-log');
+      await spendLog.initSpendLog();
+      hybridPipeline.setSpendHook(spendLog.recordSpendRow);
+      await spendLog.loadSpendIntoPipeline(hybridPipeline);
+      console.log('[SPEND-LOG] Hybrid pipeline wired to persistent spend log');
+    } catch (e) { console.log('[SPEND-LOG] Init skipped:', e.message); }
+
+    // Initialize subscription tiers schema (Phase 3)
+    try {
+      const subscription = require('../rag/subscription-tiers');
+      await subscription.initSubscriptionSchema();
+    } catch (e) { console.log('[SUBSCRIPTION] Init skipped:', e.message); }
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }
