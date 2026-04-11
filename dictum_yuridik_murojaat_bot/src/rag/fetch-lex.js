@@ -150,45 +150,10 @@ function parseLexHtml(html, sourceUrl) {
   }
 
   // ── Extract adoption date + document number from title ──
-  // Typical format: "... qonuni 1996 yil 27 dekabr 349-I-son"
-  //              or "... Qonuni (27.12.1996, № 349-I)"
   if (title) {
-    // Date: "DD.MM.YYYY" or "YYYY yil D oy" (Uzbek month names)
-    const months = { yanvar:'01', fevral:'02', mart:'03', aprel:'04', may:'05', iyun:'06',
-                     iyul:'07', avgust:'08', sentabr:'09', oktabr:'10', noyabr:'11', dekabr:'12' };
-    let dateMatch = title.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-    if (dateMatch) {
-      metadata.adoption_date = `${dateMatch[3]}-${dateMatch[2].padStart(2,'0')}-${dateMatch[1].padStart(2,'0')}`;
-    } else {
-      const uzMatch = title.match(/(\d{4})\s*yil[,\s]*(\d{1,2})[\s-]*([a-zа-я'ʻ]+)/i);
-      if (uzMatch) {
-        const monthKey = uzMatch[3].toLowerCase().replace(/[^a-z]/g, '');
-        if (months[monthKey]) {
-          metadata.adoption_date = `${uzMatch[1]}-${months[monthKey]}-${uzMatch[2].padStart(2,'0')}`;
-        }
-      }
-    }
-    // Document number extraction — try patterns in priority order:
-    //   1. Explicit "№", "N ", or "raqami" prefix  → "№ 349-I" → "349-I"
-    //   2. Trailing "-son" suffix                  → "349-I-son" → "349-I"
-    //   3. Alpha-prefixed code (PQ-4624, ПП-123)   → "PQ-4624"  → "PQ-4624"
-    // A bare digit run (dates, years) must NOT match — the original single-
-    // regex approach made the prefix optional, so the leftmost digit
-    // sequence (day/year) won over the real document number.
-    // JS `\b` is ASCII-only, so we use an explicit non-letter left boundary
-    // for the Cyrillic-friendly alpha-prefix pattern.
-    const numPatterns = [
-      /(?:№\s*|\bN\s+|raqami\s+)([A-ZА-Я]{0,4}-?\d+(?:-[IVX]+)?(?:-son)?)/,
-      /\b(\d+(?:-[IVX]+)?)-son\b/,
-      /(?:^|[^A-ZА-Яa-zа-я0-9])([A-ZА-Я]{2,4}-\d+(?:-[IVX]+)?)(?![A-ZА-Яa-zа-я0-9])/,
-    ];
-    for (const pat of numPatterns) {
-      const m = title.match(pat);
-      if (m) {
-        metadata.document_number = m[1].replace(/-son$/i, '');
-        break;
-      }
-    }
+    const titleMeta = extractTitleMetadata(title);
+    if (titleMeta.adoption_date)   metadata.adoption_date = titleMeta.adoption_date;
+    if (titleMeta.document_number) metadata.document_number = titleMeta.document_number;
   }
 
   // Process all content elements in document order
@@ -273,6 +238,65 @@ function cleanText(text) {
 }
 
 /**
+ * Extract adoption_date and document_number from a law title.
+ *
+ * Pure function — no DOM, no I/O — shared between parseLexHtml (live ingest)
+ * and backfill-doc-metadata.js (one-shot repair of historical rows). Keeping
+ * this logic in one place guarantees the extractor on disk matches the
+ * extractor that produced the row.
+ *
+ * Returned shape:
+ *   { adoption_date: "YYYY-MM-DD"|null, document_number: string|null }
+ *
+ * Rules:
+ *   - adoption_date: prefer numeric "DD.MM.YYYY", fall back to Uzbek
+ *     "YYYY yil D <month>".
+ *   - document_number: priority-ordered patterns so a bare digit run
+ *     (date, year) can never win over the real number —
+ *       1. Explicit "№" / "N " / "raqami" prefix → "№ 349-I"  → "349-I"
+ *       2. Trailing "-son" suffix                 → "349-I-son" → "349-I"
+ *       3. Alpha-prefixed code (PQ-4624, ПП-123)  → "PQ-4624"   → "PQ-4624"
+ *     JS `\b` is ASCII-only, so the alpha-prefix pattern uses an explicit
+ *     non-letter left/right boundary to stay Cyrillic-friendly.
+ */
+function extractTitleMetadata(title) {
+  const result = { adoption_date: null, document_number: null };
+  if (!title) return result;
+
+  const months = {
+    yanvar: '01', fevral: '02', mart: '03', aprel: '04', may: '05', iyun: '06',
+    iyul: '07', avgust: '08', sentabr: '09', oktabr: '10', noyabr: '11', dekabr: '12',
+  };
+  const dateMatch = title.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (dateMatch) {
+    result.adoption_date = `${dateMatch[3]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
+  } else {
+    const uzMatch = title.match(/(\d{4})\s*yil[,\s]*(\d{1,2})[\s-]*([a-zа-я'ʻ]+)/i);
+    if (uzMatch) {
+      const monthKey = uzMatch[3].toLowerCase().replace(/[^a-z]/g, '');
+      if (months[monthKey]) {
+        result.adoption_date = `${uzMatch[1]}-${months[monthKey]}-${uzMatch[2].padStart(2, '0')}`;
+      }
+    }
+  }
+
+  const numPatterns = [
+    /(?:№\s*|\bN\s+|raqami\s+)([A-ZА-Я]{0,4}-?\d+(?:-[IVX]+)?(?:-son)?)/,
+    /\b(\d+(?:-[IVX]+)?)-son\b/,
+    /(?:^|[^A-ZА-Яa-zа-я0-9])([A-ZА-Я]{2,4}-\d+(?:-[IVX]+)?)(?![A-ZА-Яa-zа-я0-9])/,
+  ];
+  for (const pat of numPatterns) {
+    const m = title.match(pat);
+    if (m) {
+      result.document_number = m[1].replace(/-son$/i, '');
+      break;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Build a frontmatter + body string ready for ingestion or saving as .txt.
  *
  * @param {object} doc - { title, body, metadata }
@@ -293,4 +317,4 @@ function formatForIngestion(doc, opts = {}) {
   return `${header}\n\n${doc.body}`;
 }
 
-module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion };
+module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata };

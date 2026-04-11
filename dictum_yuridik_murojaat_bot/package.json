@@ -13,7 +13,9 @@
     "ingest:stats": "node src/rag/ingest-lex.js --stats",
     "ingest:registry": "node src/rag/ingest-lex.js --registry",
     "ingest:rebuild": "node src/rag/ingest-lex.js --rebuild-index",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "backfill:doc-meta": "node src/rag/backfill-doc-metadata.js",
+    "backfill:doc-meta:dry": "node src/rag/backfill-doc-metadata.js --dry-run",
+    "test": "node tests/phase1.test.js"
   },
   "keywords": [],
   "author": "",
