@@ -168,9 +168,27 @@ function parseLexHtml(html, sourceUrl) {
         }
       }
     }
-    // Document number: "349-I-son", "349-I", "№ 349-I", "PQ-4624" etc.
-    const numMatch = title.match(/(?:№\s*|N\s*|raqami\s+)?([A-ZА-Я]{0,4}-?\d+(?:-[IVX]+)?(?:-son)?)/);
-    if (numMatch) metadata.document_number = numMatch[1].replace(/-son$/i, '');
+    // Document number extraction — try patterns in priority order:
+    //   1. Explicit "№", "N ", or "raqami" prefix  → "№ 349-I" → "349-I"
+    //   2. Trailing "-son" suffix                  → "349-I-son" → "349-I"
+    //   3. Alpha-prefixed code (PQ-4624, ПП-123)   → "PQ-4624"  → "PQ-4624"
+    // A bare digit run (dates, years) must NOT match — the original single-
+    // regex approach made the prefix optional, so the leftmost digit
+    // sequence (day/year) won over the real document number.
+    // JS `\b` is ASCII-only, so we use an explicit non-letter left boundary
+    // for the Cyrillic-friendly alpha-prefix pattern.
+    const numPatterns = [
+      /(?:№\s*|\bN\s+|raqami\s+)([A-ZА-Я]{0,4}-?\d+(?:-[IVX]+)?(?:-son)?)/,
+      /\b(\d+(?:-[IVX]+)?)-son\b/,
+      /(?:^|[^A-ZА-Яa-zа-я0-9])([A-ZА-Я]{2,4}-\d+(?:-[IVX]+)?)(?![A-ZА-Яa-zа-я0-9])/,
+    ];
+    for (const pat of numPatterns) {
+      const m = title.match(pat);
+      if (m) {
+        metadata.document_number = m[1].replace(/-son$/i, '');
+        break;
+      }
+    }
   }
 
   // Process all content elements in document order

@@ -176,17 +176,40 @@ test('numeric date format wins over Uzbek month', () => {
   assertEq(metadata.adoption_date, '2020-01-01', 'numeric wins');
 });
 
-test('document_number extraction runs and returns a non-empty string', () => {
-  // NB: the regex is permissive; we only assert that _some_ number token was
-  // captured so a future tightening of the regex doesn't silently drop metadata.
+test('document_number: "№ 349-I" in full title wins over numeric date', () => {
+  // Regression: the original regex's optional prefix matched the first digit
+  // run ("27" from 27.12.1996) instead of the real document number.
   const html = buildHtml({
     title: 'O\'zbekiston Respublikasining "Advokatura to\'g\'risida"gi Qonuni (27.12.1996, № 349-I)',
   });
   const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/58372');
-  assertTrue(
-    typeof metadata.document_number === 'string' && metadata.document_number.length > 0,
-    `document_number populated (got ${JSON.stringify(metadata.document_number)})`
-  );
+  assertEq(metadata.document_number, '349-I', 'must prefer "№ 349-I" over the date');
+});
+
+test('document_number: Uzbek title with "349-I-son" trailing suffix', () => {
+  // Regression: original regex matched "1996" from the year.
+  const html = buildHtml({
+    title: 'O\'zbekiston Respublikasining advokatura to\'g\'risidagi qonuni 1996 yil 27 dekabr 349-I-son',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/58372');
+  assertEq(metadata.document_number, '349-I', 'must prefer "349-I-son" suffix over the year');
+});
+
+test('document_number: title with only a date has no document_number', () => {
+  // Regression: original regex returned "2022" (the year).
+  const html = buildHtml({
+    title: 'O\'zbekiston Respublikasining Mehnat kodeksi 2022 yil 28 oktabr',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/6257288');
+  assertEq(metadata.document_number, null, 'no marker, no alpha prefix → null');
+});
+
+test('document_number: two dates and no doc number → null', () => {
+  const html = buildHtml({
+    title: 'Qonun (01.01.2020) 2019 yil 31 dekabr',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/1');
+  assertEq(metadata.document_number, null, 'pure date title yields null');
 });
 
 test('document_number extracts "PQ-4624" prefix form', () => {
@@ -195,11 +218,30 @@ test('document_number extracts "PQ-4624" prefix form', () => {
   assertEq(metadata.document_number, 'PQ-4624', 'PQ prefix form');
 });
 
+test('document_number: "PQ-4624" wins even when a date precedes it', () => {
+  const html = buildHtml({
+    title: 'Prezident qarori 2023 yil 15 iyun PQ-4624',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/5');
+  assertEq(metadata.document_number, 'PQ-4624', 'alpha prefix must beat year');
+});
+
+test('document_number: Cyrillic "ПП-123" alpha prefix', () => {
+  const html = buildHtml({ title: 'Постановление Президента ПП-123' });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/5');
+  assertEq(metadata.document_number, 'ПП-123', 'Cyrillic alpha prefix');
+});
+
 test('document_number strips "-son" suffix', () => {
   const html = buildHtml({ title: 'Qaror 123-son' });
   const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/6');
-  // "-son" must not appear in the captured value
-  assertNoMatch(metadata.document_number || '', /-son$/i, '-son stripped');
+  assertEq(metadata.document_number, '123', '"-son" stripped');
+});
+
+test('document_number: "raqami 349-I" prefix form', () => {
+  const html = buildHtml({ title: 'Qonun raqami 349-I' });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/7');
+  assertEq(metadata.document_number, '349-I', '"raqami" prefix form');
 });
 
 test('title is still extracted alongside metadata', () => {
