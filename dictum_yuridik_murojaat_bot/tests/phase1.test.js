@@ -1,0 +1,398 @@
+#!/usr/bin/env node
+/**
+ * Phase 1 smoke test — no DB, no network.
+ *
+ * Verifies the three pillars introduced in commit d225e02:
+ *
+ *   1. fetch-lex.js  → active-doc detection + metadata enrichment
+ *                      (is_active, status_label, adoption_date, document_number)
+ *   2. legal-corpus.js / advanced-corpus.js → schema columns, partial index,
+ *                      and `is_active IS NULL OR is_active = TRUE` filter on
+ *                      every retrieval query.
+ *   3. server.js     → citation table full-spec format, no pretrained
+ *                      topicKnowledge leakage, zero-hallucination fallback.
+ *
+ * Run with:  node tests/phase1.test.js
+ */
+
+const path = require('path');
+const fs = require('fs');
+
+// parseLexHtml is a pure function over HTML → { title, body, metadata }.
+// We can call it directly without touching pg/embeddings.
+const { parseLexHtml } = require('../src/rag/fetch-lex');
+
+// ─── Test harness ────────────────────────────────────────────────────────────
+let passed = 0;
+let failed = 0;
+const failures = [];
+
+function test(name, fn) {
+  try {
+    fn();
+    passed++;
+    console.log(`  ✓ ${name}`);
+  } catch (err) {
+    failed++;
+    failures.push({ name, err });
+    console.log(`  ✗ ${name}`);
+    console.log(`      ${err.message}`);
+  }
+}
+
+function section(label) {
+  console.log(`\n━━━ ${label} ━━━`);
+}
+
+function assertEq(actual, expected, msg) {
+  if (actual !== expected) {
+    throw new Error(`${msg || 'assertEq'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+function assertTrue(cond, msg) {
+  if (!cond) throw new Error(msg || 'expected truthy');
+}
+function assertFalse(cond, msg) {
+  if (cond) throw new Error(msg || 'expected falsy');
+}
+function assertMatch(text, pattern, msg) {
+  if (!pattern.test(text)) {
+    throw new Error(`${msg || 'assertMatch'}: pattern ${pattern} did not match`);
+  }
+}
+function assertNoMatch(text, pattern, msg) {
+  if (pattern.test(text)) {
+    throw new Error(`${msg || 'assertNoMatch'}: pattern ${pattern} should NOT have matched`);
+  }
+}
+
+// ─── Minimal lex.uz HTML skeleton ────────────────────────────────────────────
+// Mirrors the selectors parseLexHtml queries: div.ACT_TITLE > a[id], #divCont,
+// div.lx_elem, div.PUBLICATION_ORIGIN. Anything outside those is decorative
+// and lives in the banner area (where "Hujjat kuchini yo'qotgan" would sit).
+function buildHtml({ title, bannerText = '', bodyLines = [] }) {
+  const banner = bannerText
+    ? `<div class="STATUS_BANNER"><span>${bannerText}</span></div>`
+    : '';
+  const body = bodyLines
+    .map((t, i) => `<div class="lx_elem ACT_TEXT"><a id="p${i}">${t}</a></div>`)
+    .join('');
+  return `
+    <html><body>
+      ${banner}
+      <div class="ACT_TITLE"><a id="title">${title}</a></div>
+      <div class="PUBLICATION_ORIGIN"><a id="pub">Qonun hujjatlari ma'lumotlari milliy bazasi</a></div>
+      <div id="divCont">${body}</div>
+    </body></html>
+  `;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  1. fetch-lex.js — parseLexHtml metadata enrichment
+// ═════════════════════════════════════════════════════════════════════════════
+section('1. fetch-lex.js · parseLexHtml');
+
+test('default document is_active=true, no status_label', () => {
+  const html = buildHtml({
+    title: `Fuqarolik kodeksi`,
+    bodyLines: ['1-modda. Umumiy qoidalar.'],
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/111');
+  assertEq(metadata.is_active, true, 'is_active default');
+  assertEq(metadata.status_label, null, 'status_label default');
+  assertEq(metadata.source_url, 'https://lex.uz/docs/111', 'source_url preserved');
+});
+
+test('detects "Hujjat kuchini yoʻqotgan" (U+02BB Uzbek ayn)', () => {
+  // lex.uz uses the Uzbek modifier-letter-turned-comma (U+02BB), not a
+  // typographic quote. The regex char class covers this + ASCII '.
+  const html = buildHtml({
+    title: 'Eski qonun',
+    bannerText: 'Hujjat kuchini yoʻqotgan',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/222');
+  assertFalse(metadata.is_active, 'is_active should be false');
+  assertMatch(metadata.status_label, /Hujjat\s+kuchini\s+yo/i, 'status_label stored');
+});
+
+test('detects "Hujjat kuchini yo\'qotgan" (straight apostrophe)', () => {
+  const html = buildHtml({
+    title: 'Eski qonun',
+    bannerText: "Hujjat kuchini yo'qotgan",
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/223');
+  assertFalse(metadata.is_active, 'is_active should be false');
+});
+
+test('detects Russian "Документ утратил силу"', () => {
+  const html = buildHtml({
+    title: 'Утративший закон',
+    bannerText: 'Документ утратил силу',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/224');
+  assertFalse(metadata.is_active, 'is_active should be false');
+  assertMatch(metadata.status_label, /Документ\s+утратил\s+силу/i, 'Russian status_label');
+});
+
+test('detects "Eski tahrir" → inactive', () => {
+  const html = buildHtml({
+    title: 'Yangilangan qonun',
+    bannerText: 'Eski tahrir',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/225');
+  assertFalse(metadata.is_active, 'Eski tahrir should mark inactive');
+  assertEq(metadata.status_label, 'Eski tahrir', 'Eski tahrir label');
+});
+
+test('extracts adoption_date from "27.12.1996" numeric title', () => {
+  const html = buildHtml({
+    title: 'O\'zbekiston Respublikasining "Advokatura to\'g\'risida"gi Qonuni (27.12.1996, № 349-I)',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/58372');
+  assertEq(metadata.adoption_date, '1996-12-27', 'adoption_date ISO format');
+});
+
+test('extracts adoption_date from Uzbek month "1996 yil 27 dekabr"', () => {
+  const html = buildHtml({
+    title: 'O\'zbekiston Respublikasining advokatura to\'g\'risidagi qonuni 1996 yil 27 dekabr',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/58372');
+  assertEq(metadata.adoption_date, '1996-12-27', 'Uzbek month parsing');
+});
+
+test('extracts adoption_date from "2022 yil 28 oktabr" (Mehnat kodeksi)', () => {
+  const html = buildHtml({
+    title: 'O\'zbekiston Respublikasining Mehnat kodeksi 2022 yil 28 oktabr',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/6257288');
+  assertEq(metadata.adoption_date, '2022-10-28', 'Mehnat kodeksi date');
+});
+
+test('numeric date format wins over Uzbek month', () => {
+  const html = buildHtml({
+    title: 'Qonun (01.01.2020) 2019 yil 31 dekabr',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/1');
+  assertEq(metadata.adoption_date, '2020-01-01', 'numeric wins');
+});
+
+test('document_number extraction runs and returns a non-empty string', () => {
+  // NB: the regex is permissive; we only assert that _some_ number token was
+  // captured so a future tightening of the regex doesn't silently drop metadata.
+  const html = buildHtml({
+    title: 'O\'zbekiston Respublikasining "Advokatura to\'g\'risida"gi Qonuni (27.12.1996, № 349-I)',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/58372');
+  assertTrue(
+    typeof metadata.document_number === 'string' && metadata.document_number.length > 0,
+    `document_number populated (got ${JSON.stringify(metadata.document_number)})`
+  );
+});
+
+test('document_number extracts "PQ-4624" prefix form', () => {
+  const html = buildHtml({ title: 'Prezident qarori PQ-4624' });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/5');
+  assertEq(metadata.document_number, 'PQ-4624', 'PQ prefix form');
+});
+
+test('document_number strips "-son" suffix', () => {
+  const html = buildHtml({ title: 'Qaror 123-son' });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/6');
+  // "-son" must not appear in the captured value
+  assertNoMatch(metadata.document_number || '', /-son$/i, '-son stripped');
+});
+
+test('title is still extracted alongside metadata', () => {
+  const html = buildHtml({
+    title: 'Fuqarolik kodeksi',
+    bodyLines: ['1-modda. Test.'],
+  });
+  const { title, body } = parseLexHtml(html, 'https://lex.uz/docs/7');
+  assertEq(title, 'Fuqarolik kodeksi', 'title preserved');
+  assertMatch(body, /1-modda/, 'body preserved');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  2. Schema + retrieval filter — static source checks
+// ═════════════════════════════════════════════════════════════════════════════
+section('2. Schema + retrieval · static source checks');
+
+const legalCorpusSrc = fs.readFileSync(
+  path.join(__dirname, '../src/rag/legal-corpus.js'), 'utf8'
+);
+const advancedCorpusSrc = fs.readFileSync(
+  path.join(__dirname, '../src/rag/advanced-corpus.js'), 'utf8'
+);
+
+test('legal-corpus: ALTER TABLE adds is_active column', () => {
+  assertMatch(legalCorpusSrc, /ADD COLUMN IF NOT EXISTS is_active BOOLEAN/i, 'is_active column');
+});
+test('legal-corpus: ALTER TABLE adds status_label column', () => {
+  assertMatch(legalCorpusSrc, /ADD COLUMN IF NOT EXISTS status_label TEXT/i, 'status_label column');
+});
+test('legal-corpus: ALTER TABLE adds adoption_date column', () => {
+  assertMatch(legalCorpusSrc, /ADD COLUMN IF NOT EXISTS adoption_date DATE/i, 'adoption_date column');
+});
+test('legal-corpus: ALTER TABLE adds document_number column', () => {
+  assertMatch(legalCorpusSrc, /ADD COLUMN IF NOT EXISTS document_number VARCHAR/i, 'document_number column');
+});
+test('legal-corpus: partial index on is_active=TRUE AND is_valid=TRUE', () => {
+  assertMatch(
+    legalCorpusSrc,
+    /CREATE INDEX IF NOT EXISTS idx_legal_chunks_active[\s\S]*WHERE is_active = TRUE AND is_valid = TRUE/i,
+    'partial index'
+  );
+});
+
+test('legal-corpus: insertChunks binds is_active / status_label / adoption_date / document_number', () => {
+  assertMatch(legalCorpusSrc, /is_active,\s*status_label,\s*adoption_date,\s*document_number/, 'insert columns');
+  assertMatch(legalCorpusSrc, /m\.is_active\s*!==\s*false/, 'is_active default-true binding');
+});
+
+// Utility: find lines that have `is_valid = TRUE` as part of an actual
+// retrieval WHERE clause (not a DDL index definition, not an existence count
+// used for v1/v2 routing, and not a JS array literal that assembles filters
+// elsewhere).
+function retrievalLinesWithIsValid(src) {
+  return src.split('\n')
+    .map((line, i) => ({ line, num: i + 1 }))
+    .filter(({ line }) => /is_valid\s*=\s*TRUE/i.test(line))
+    .filter(({ line }) => !/CREATE\s+INDEX/i.test(line))         // DDL
+    .filter(({ line }) => !/ON\s+legal_chunks\(/i.test(line))    // index ON clause
+    .filter(({ line }) => !/SELECT\s+COUNT\(\*\)[^`]*LIMIT\s+1/i.test(line)) // v1/v2 existence probe
+    .filter(({ line }) => !/const\s+filters\s*=\s*\[/.test(line)); // array-built filters (rrfSearch)
+}
+
+test('legal-corpus: every retrieval-path is_valid=TRUE is paired with is_active filter', () => {
+  const retrievalLines = retrievalLinesWithIsValid(legalCorpusSrc);
+  const unpaired = retrievalLines.filter(
+    ({ line }) => !/is_valid\s*=\s*TRUE\s+AND\s+\(is_active\s+IS\s+NULL\s+OR\s+is_active\s*=\s*TRUE\)/i.test(line)
+  );
+  if (unpaired.length > 0) {
+    const detail = unpaired.map(u => `line ${u.num}: ${u.line.trim()}`).join('\n      ');
+    throw new Error(`${unpaired.length} retrieval line(s) missing is_active filter:\n      ${detail}`);
+  }
+  // rrfSearch's array-built filter is counted separately — just make sure the
+  // array literal really does include both clauses.
+  assertMatch(
+    legalCorpusSrc,
+    /const\s+filters\s*=\s*\[\s*['"]is_valid\s*=\s*TRUE['"]\s*,\s*['"]\(is_active\s+IS\s+NULL\s+OR\s+is_active\s*=\s*TRUE\)['"]/,
+    'rrfSearch filters array includes is_active'
+  );
+  // Sanity: we expect at least the number of retrieval queries the commit message
+  // claims to have upgraded.
+  assertTrue(retrievalLines.length >= 8, `expected ≥8 retrieval queries in legal-corpus, got ${retrievalLines.length}`);
+});
+
+test('legal-corpus: rrfSearch SELECT exposes adoption_date, document_number, article_number_display, part_number', () => {
+  assertMatch(
+    legalCorpusSrc,
+    /lc\.adoption_date,\s*lc\.document_number,\s*lc\.article_number_display,\s*lc\.part_number/,
+    'rrfSearch SELECT new columns'
+  );
+});
+
+test('advanced-corpus: insertStructuredChunks binds is_active / status_label / adoption_date / document_number', () => {
+  assertMatch(advancedCorpusSrc, /is_active,\s*status_label,\s*adoption_date,\s*document_number/, 'insert columns');
+  assertMatch(advancedCorpusSrc, /m\.is_active\s*!==\s*false/, 'is_active default-true binding');
+});
+
+test('advanced-corpus: every retrieval-path is_valid=TRUE is paired with is_active filter', () => {
+  const retrievalLines = retrievalLinesWithIsValid(advancedCorpusSrc);
+  const unpaired = retrievalLines.filter(
+    ({ line }) => !/is_valid\s*=\s*TRUE\s+AND\s+\(is_active\s+IS\s+NULL\s+OR\s+is_active\s*=\s*TRUE\)/i.test(line)
+  );
+  if (unpaired.length > 0) {
+    const detail = unpaired.map(u => `line ${u.num}: ${u.line.trim()}`).join('\n      ');
+    throw new Error(`${unpaired.length} retrieval line(s) missing is_active filter:\n      ${detail}`);
+  }
+  assertTrue(retrievalLines.length >= 3, `expected ≥3 retrieval queries in advanced-corpus, got ${retrievalLines.length}`);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  3. Prompt / citation table — static source checks on server.js
+// ═════════════════════════════════════════════════════════════════════════════
+section('3. server.js · citation + fallback prompt');
+
+const serverSrc = fs.readFileSync(
+  path.join(__dirname, '../src/api/server.js'), 'utf8'
+);
+
+test('retrieveLegalContext builds citationBlocks with metadata (date, number, URL)', () => {
+  assertMatch(serverSrc, /citationBlocks\s*=\s*\[\]/, 'citationBlocks array declared');
+  assertMatch(serverSrc, /r\.adoption_date/, 'reads adoption_date from chunk');
+  assertMatch(serverSrc, /r\.document_number/, 'reads document_number from chunk');
+  assertMatch(serverSrc, /formatDate/, 'date formatter helper present');
+});
+
+test('citation table emits "modda" locator with metadata block', () => {
+  // The block builder joins law_name, optional (date, № num), the modda
+  // locator, and the source URL.
+  assertMatch(serverSrc, /\$\{locator\}/, 'uses `${locator}` in citation block');
+  assertMatch(serverSrc, /\$\{art\}-modda/, 'locator built from article + "-modda"');
+});
+
+test('citation table uses "RUXSAT ETILGAN MANBALAR" header', () => {
+  assertMatch(serverSrc, /RUXSAT ETILGAN MANBALAR/, 'allowed-sources header');
+});
+
+test('empty-context branch returns the zero-hallucination fallback sentence', () => {
+  assertMatch(
+    serverSrc,
+    /Ushbu savol bo['’]yicha lex\.uz ma['’]lumotlar bazasida aniq ma['’]lumot topilmadi/,
+    'fallback sentence present'
+  );
+});
+
+test('buildTopicPrompt MUST NOT contain pretrained topicKnowledge leakage', () => {
+  // The old `topicKnowledge` dict hard-coded tax rates, kodeks names etc.
+  // Phase 1 removed it — any mention of `topicKnowledge` or the hard-coded
+  // "QQS (12%)" rate is a regression.
+  assertNoMatch(serverSrc, /topicKnowledge/, 'topicKnowledge dict removed');
+  assertNoMatch(serverSrc, /QQS\s*\(12%\)/, 'hard-coded QQS rate removed');
+});
+
+test('buildTopicPrompt declares YAGONA (sole) source = RAG context', () => {
+  assertMatch(serverSrc, /YAGONA huquqiy manbangiz/, 'sole-source declaration');
+});
+
+test('MAJBURIY IQTIBOS FORMATI block is present and matches the spec shape', () => {
+  assertMatch(serverSrc, /MAJBURIY IQTIBOS FORMATI/, 'mandatory citation header');
+  assertMatch(serverSrc, /<Qonun nomi>/, 'law name placeholder');
+  assertMatch(serverSrc, /<sana>/, 'date placeholder');
+  assertMatch(serverSrc, /<raqam>/, 'number placeholder');
+  assertMatch(serverSrc, /<modda>-modda/, 'article placeholder');
+  assertMatch(serverSrc, /<qism>-qism/, 'part placeholder');
+  assertMatch(serverSrc, /<URL>/, 'URL placeholder');
+});
+
+test('concrete example in prompt uses the Advokatura law and 349-I doc number', () => {
+  assertMatch(serverSrc, /Advokatura to['’]g['’]risida/, 'Advokatura example law name');
+  assertMatch(serverSrc, /27\.12\.1996/, 'example date');
+  assertMatch(serverSrc, /349-I/, 'example document number');
+});
+
+test('/api/legal-chat QA-bank vector lookup also applies is_active filter', () => {
+  // Regression guard: phase 1 added an is_active clause inside the legal-chat
+  // endpoint's similarity lookup. If someone strips it the filter becomes
+  // inconsistent with the rest of the pipeline.
+  assertMatch(
+    serverSrc,
+    /source_type\s*=\s*'verified_qa'[\s\S]{0,200}?is_active\s+IS\s+NULL\s+OR\s+is_active\s*=\s*TRUE/,
+    'legal-chat lookup has is_active filter'
+  );
+});
+
+// ─── Summary ─────────────────────────────────────────────────────────────────
+console.log(`\n━━━ Summary ━━━`);
+console.log(`  passed: ${passed}`);
+console.log(`  failed: ${failed}`);
+if (failed > 0) {
+  console.log(`\nFailed tests:`);
+  for (const f of failures) {
+    console.log(`  ✗ ${f.name}`);
+    console.log(`      ${f.err.message}`);
+  }
+  process.exit(1);
+}
+process.exit(0);
