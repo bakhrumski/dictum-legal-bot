@@ -2292,7 +2292,8 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   const route = routeQuery(query);
   console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
 
-  // ── 2. RRF Hybrid Search ──
+  // ── STAGE 2: Hybrid Search (pgvector + BM25 with RRF) ──
+  // Fetch 15 candidates for subsequent re-ranking (Stage 3)
   let rawResults = [];
   let searchMode = 'text-only';
 
@@ -2300,14 +2301,14 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     try {
       rawResults = await rrfSearch(query, {
         category: topic || null,
-        limit: route.strategy === 'DIRECT' ? 4 : 8,
+        limit: 15,
         apiKey,
       });
       searchMode = 'rrf';
     } catch (err) {
       console.warn(`[RAG] RRF search failed (${err.message}), trying legacy hybrid`);
       try {
-        rawResults = await hybridSearch(query, { category: topic || null, limit: 6, apiKey });
+        rawResults = await hybridSearch(query, { category: topic || null, limit: 15, apiKey });
         searchMode = 'hybrid';
       } catch (err2) {
         console.warn(`[RAG] Hybrid also failed (${err2.message})`);
@@ -2318,14 +2319,27 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   // Text-only fallback (no embeddings)
   if (rawResults.length === 0) {
     try {
-      rawResults = await textOnlySearch(query, { category: topic || null, limit: 6 });
+      rawResults = await textOnlySearch(query, { category: topic || null, limit: 15 });
       searchMode = 'text-only';
     } catch (err) {
       console.error('[RAG] Text-only search failed:', err.message);
     }
   }
 
-  // ── 3. Corrective RAG: grade and filter ──
+  // ── STAGE 3: Cross-Encoder Re-Ranking ──
+  // Take the 15 candidates and re-rank with a cross-encoder to select the
+  // top 3 most relevant chunks. Falls back to keyword scoring if HF is unavailable.
+  if (rawResults.length > 3) {
+    try {
+      const { rerankChunks } = require('../rag/reranker');
+      rawResults = await rerankChunks(query, rawResults, { topK: 3 });
+    } catch (rerankErr) {
+      console.warn(`[RAG] Reranker failed (${rerankErr.message}), using top 3 from hybrid search`);
+      rawResults = rawResults.slice(0, 3);
+    }
+  }
+
+  // ── Corrective RAG: grade and filter (safety net) ──
   let goodChunks = rawResults;
   let needsWebSearch = rawResults.length < 2;
 
@@ -2674,87 +2688,57 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
 
-    // ── VERIFIED ANSWER OVERRIDE ──
-    // The lawyer's "Korpusga qo'shish" button writes corrected answers to
-    // legal_chunks with source_type='verified_qa' and an embedding. If the
-    // user's question is near-identical to a previously verified one, return
-    // that answer VERBATIM and skip the AI entirely. Passing verified chunks
-    // to the AI as context doesn't work — it still hedges ("7-modda (shuningdek
-    // 5-moddada ham)"). Only a short-circuit guarantees the correction wins.
-    let verifiedOverride = null;
-    let qaFewShotBlock = '';
+    // ══════════════════════════════════════════════════════════
+    // STAGE 1: QA KORPUS INTERCEPTOR (Semantic Cache)
+    // Expert-corrected answers take absolute priority.
+    //   sim >= 0.92 → return verbatim (no AI, deterministic)
+    //   sim >= 0.78 → inject as Absolute Ground Truth in prompt
+    // ══════════════════════════════════════════════════════════
+    let korpusOverride = null;
+    let korpusGroundTruth = '';
     let qaMatchInfo = null;
     try {
+      const { searchKorpus, formatKorpusGroundTruth } = require('../rag/qa-korpus');
       const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
       if (apiKey) {
-        const { getEmbedding } = require('../rag/embeddings');
-        const qEmb = await getEmbedding(message, apiKey);
-        const qEmbStr = `[${qEmb.join(',')}]`;
-
-        const r = await pool.query(`
-          SELECT id, chunk_text, category, doc_id, law_name,
-                 1 - (embedding <=> $1::vector) AS similarity
-          FROM legal_chunks
-          WHERE source_type = 'verified_qa'
-            AND is_valid = TRUE
-            AND (is_active IS NULL OR is_active = TRUE)
-            AND embedding IS NOT NULL
-          ORDER BY embedding <=> $1::vector
-          LIMIT 5
-        `, [qEmbStr]);
-
-        if (r.rows.length > 0) {
-          const top = r.rows[0];
-          const topSim = parseFloat(top.similarity);
-          // chunk_text is "Savol: X\n\nJavob: Y" — extract just the answer
-          const parseQA = (txt) => {
-            const m = txt.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]+)$/);
-            return m ? { question: m[1].trim(), answer: m[2].trim() } : { question: '', answer: txt };
-          };
-          const topParsed = parseQA(top.chunk_text);
-
+        const korpusResult = await searchKorpus(message, { apiKey, topic });
+        if (korpusResult) {
           qaMatchInfo = {
-            id: top.id,
-            similarity: topSim,
-            count: r.rows.length,
-            category: top.category,
-            source: 'verified_qa',
+            id: korpusResult.id,
+            similarity: korpusResult.similarity,
+            source: 'qa-korpus',
+            matchType: korpusResult.match,
           };
-          console.log(`[Legal Chat] verified_qa top match: id=${top.id} sim=${topSim.toFixed(3)} cat=${top.category}`);
-
-          if (topSim >= 0.72) {
-            verifiedOverride = topParsed.answer;
-            console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
-          } else if (topSim >= 0.50) {
-            const { formatQaFewShot } = require('../rag/advanced-corpus');
-            const usable = r.rows
-              .filter(row => parseFloat(row.similarity) >= 0.50)
-              .map(row => {
-                const p = parseQA(row.chunk_text);
-                return { question: p.question, answer: p.answer, rating: 1 };
-              });
-            qaFewShotBlock = formatQaFewShot(usable);
-            console.log(`[Legal Chat] verified_qa few-shot: ${usable.length} examples (top sim=${topSim.toFixed(3)})`);
+          if (korpusResult.match === 'verbatim') {
+            // sim >= 0.92: return corrected answer directly, no AI involved
+            korpusOverride = korpusResult.answer;
+            console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+          } else if (korpusResult.match === 'context') {
+            // sim >= 0.78: inject as absolute ground truth into the prompt
+            korpusGroundTruth = formatKorpusGroundTruth(korpusResult);
+            console.log(`[Legal Chat] KORPUS CONTEXT id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
           }
-        } else {
-          console.log('[Legal Chat] verified_qa: no rows with embeddings found');
         }
       }
-    } catch (qaErr) {
-      console.warn(`[Legal Chat] verified_qa lookup failed: ${qaErr.message}`);
+    } catch (korpusErr) {
+      console.warn(`[Legal Chat] qa_korpus lookup failed: ${korpusErr.message}`);
     }
 
-    // ── Short-circuit: return verified answer directly ──
-    if (verifiedOverride) {
+    // Short-circuit: return korpus answer verbatim
+    if (korpusOverride) {
       return res.json({
-        reply: verifiedOverride,
-        provider: 'verified-qa',
+        reply: korpusOverride,
+        provider: 'qa-korpus',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
         rag: null,
         qaBank: qaMatchInfo,
       });
     }
+
+    // ══════════════════════════════════════════════════════════
+    // STAGES 2-4: Hybrid Search → Re-Rank → Generate
+    // ══════════════════════════════════════════════════════════
 
     // RAG retrieval: fetch relevant legal chunks for the user's query
     let ragContext = '';
@@ -2766,8 +2750,9 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     }
 
     let systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
-    if (qaFewShotBlock) {
-      systemPrompt = qaFewShotBlock + '\n\n' + systemPrompt;
+    // Inject korpus ground truth (sim 0.78-0.92) ABOVE the normal prompt
+    if (korpusGroundTruth) {
+      systemPrompt = korpusGroundTruth + '\n\n' + systemPrompt;
     }
 
     // Build messages array — system prompt as dedicated system role (works with Groq + Gemini)
@@ -3542,7 +3527,27 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
       console.warn('[RAG] qa_bank save failed (legal_chunks still updated):', qaErr.message);
     }
 
-    res.json({ success: true, qaBankId });
+    // 3. ALSO save/update in qa_korpus (semantic cache — Stage 1 interceptor).
+    //    This is the PRIMARY ground truth table. UPSERT by question hash ensures
+    //    re-saving the same question always updates instead of creating duplicates.
+    let korpusId = null;
+    try {
+      const { upsertKorpus } = require('../rag/qa-korpus');
+      const result = await upsertKorpus({
+        question,
+        correctedAnswer: answer,
+        originalAiAnswer: originalAiAnswer || null,
+        topic: topic || 'boshqa',
+        articleRefs: [],
+        createdBy: req.session.adminId,
+        createdByName: req.session.fullName || req.session.adminUsername || 'Admin',
+      });
+      korpusId = result.id;
+    } catch (korpusErr) {
+      console.warn('[RAG] qa_korpus save failed:', korpusErr.message);
+    }
+
+    res.json({ success: true, qaBankId, korpusId });
   } catch (error) {
     console.error('[RAG] verify-chat-answer error:', error.message);
     res.status(500).json({ error: error.message });
@@ -4712,6 +4717,12 @@ async function runMigrations() {
       const subscription = require('../rag/subscription-tiers');
       await subscription.initSubscriptionSchema();
     } catch (e) { console.log('[SUBSCRIPTION] Init skipped:', e.message); }
+
+    // Initialize QA Korpus — expert-corrected answers semantic cache (Stage 1)
+    try {
+      const { initQaKorpus } = require('../rag/qa-korpus');
+      await initQaKorpus();
+    } catch (e) { console.log('[QA-KORPUS] Init skipped:', e.message); }
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }

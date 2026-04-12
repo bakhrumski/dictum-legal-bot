@@ -414,14 +414,18 @@ test('concrete example in prompt uses the Advokatura law and 349-I doc number', 
   assertMatch(serverSrc, /349-I/, 'example document number');
 });
 
-test('/api/legal-chat QA-bank vector lookup also applies is_active filter', () => {
-  // Regression guard: phase 1 added an is_active clause inside the legal-chat
-  // endpoint's similarity lookup. If someone strips it the filter becomes
-  // inconsistent with the rest of the pipeline.
+test('/api/legal-chat uses qa_korpus Stage 1 interceptor for expert-corrected answers', () => {
+  // The verified_qa SQL lookup was replaced by the qa_korpus semantic cache.
+  // Verify the new pipeline is wired in.
   assertMatch(
     serverSrc,
-    /source_type\s*=\s*'verified_qa'[\s\S]{0,200}?is_active\s+IS\s+NULL\s+OR\s+is_active\s*=\s*TRUE/,
-    'legal-chat lookup has is_active filter'
+    /searchKorpus/,
+    'legal-chat calls searchKorpus for Stage 1 interceptor'
+  );
+  assertMatch(
+    serverSrc,
+    /provider:\s*'qa-korpus'/,
+    'legal-chat returns provider=qa-korpus on verbatim match'
   );
 });
 

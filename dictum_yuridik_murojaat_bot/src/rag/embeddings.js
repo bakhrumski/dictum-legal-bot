@@ -291,6 +291,7 @@ module.exports = {
   getEmbedDims,
   detectProvider,
   PROVIDERS,
+  httpsPostJson,
   // Legacy compat
   get EMBED_MODEL() { return EMBED_MODEL(); },
   get EMBED_DIMS() { return getEmbedDims(); }
