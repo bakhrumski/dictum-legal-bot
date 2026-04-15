@@ -7517,10 +7517,21 @@
                         ? '<span style="background:#e0f2fe;color:#0369a1;border-radius:3px;padding:1px 4px">UZ</span>'
                         : '<span style="background:#f3f4f6;color:#6b7280;border-radius:3px;padding:1px 4px">RU</span>';
 
-                    return '<div style="padding:6px 8px;border-bottom:1px solid #f0ebff;display:flex;flex-direction:column;gap:2px">' +
-                        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-                            '<span>' + icon + ' ' + label + '</span>' +
-                            '<span>' + statusBadge + '</span>' +
+                    // Delete button — key = ingest log id (used by the backend to locate
+                    // the chunks by source_url / file_name), plus a human label for the confirm dialog
+                    var deleteLabel = r.law_name || r.source_url || r.file_name || '—';
+                    var deleteBtn =
+                        '<button onclick="deleteIngestEntry(' + r.id + ', \'' +
+                            escapeHtml(deleteLabel).replace(/'/g, '&#39;') +
+                        '\')" ' +
+                            'title="Korpusdan o\'chirish" ' +
+                            'style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:14px;padding:0 4px;margin-left:4px">' +
+                        '🗑️</button>';
+
+                    return '<div id="ingestRow_' + r.id + '" style="padding:6px 8px;border-bottom:1px solid #f0ebff;display:flex;flex-direction:column;gap:2px">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">' +
+                            '<span style="flex:1;min-width:0">' + icon + ' ' + label + '</span>' +
+                            '<span style="display:flex;align-items:center;gap:2px">' + statusBadge + deleteBtn + '</span>' +
                         '</div>' +
                         '<div style="color:#888;display:flex;gap:6px;flex-wrap:wrap">' +
                             langBadge +
@@ -7535,6 +7546,30 @@
 
             } catch(e) {
                 list.innerHTML = '<div style="color:red;padding:8px">Tarmoq xatoligi</div>';
+            }
+        }
+
+        // Delete one ingest entry (removes all chunks for its source_url / file + log row)
+        async function deleteIngestEntry(logId, label) {
+            if (!confirm('Ushbu hujjatni Korpusdan butunlay o\'chirmoqchimisiz?\n\n' + (label || '—') + '\n\nBog\'liq barcha bo\'laklar (chunks) va yuklash tarixi o\'chiriladi. Buni qaytarib bo\'lmaydi.')) return;
+            var row = document.getElementById('ingestRow_' + logId);
+            if (row) row.style.opacity = '0.4';
+            try {
+                var resp = await fetch('/api/rag/ingest-log/' + logId, {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                });
+                var data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    alert('Xatolik: ' + (data.error || 'o\'chirish muvaffaqiyatsiz'));
+                    if (row) row.style.opacity = '1';
+                    return;
+                }
+                // Reload the list so stats counters stay accurate
+                await loadIngestLog();
+            } catch(e) {
+                alert('Tarmoq xatoligi: ' + e.message);
+                if (row) row.style.opacity = '1';
             }
         }
 

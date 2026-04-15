@@ -17,6 +17,7 @@ const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, forma
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
 const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
 const { webSearch, formatWebResults } = require('../rag/web-search');
@@ -2288,6 +2289,15 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   const isUz = language === 'uz';
 
+  // ── 0. Prim-notation query expansion ──
+  // Match "7 prim 1" / "7¹" / "7-prim-1" against each other so superscript
+  // article numbers are retrievable regardless of how they were typed.
+  const expandedQuery = expandQueryVariants(query);
+  if (expandedQuery !== query) {
+    console.log(`[RAG] Prim-expanded query: "${query}" → "${expandedQuery}"`);
+  }
+  query = expandedQuery;
+
   // ── 1. Router: choose search strategy ──
   const route = routeQuery(query);
   console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
@@ -2518,7 +2528,7 @@ QATTIQ QOIDALAR (buzsangiz, javob noto'g'ri hisoblanadi):
 3. Agar kerakli modda kontekstda yo'q bo'lsa — modda raqami umuman yozmang. Buning o'rniga: "Kontekstda aniq modda topilmadi, manba qonun matnini to'g'ridan-to'g'ri ko'ring" deng
 4. Har bir huquqiy tasdiq uchun MANBA ko'rsating: qonun nomi, modda raqami va ANIQ QISM RAQAMI (FAQAT kontekstdagi)
 5. Javob chuqur va to'liq bo'lsin — sirtqi javob emas, huquqiy tahlil bering
-6. MODDA RAQAMLARINI TO'G'RI YOZING: prim raqamlarini saqlang (4¹, 12², 3¹). HECH QACHON prim raqamlarni oddiy raqam bilan adashtirmang
+6. MODDA RAQAMLARINI TO'G'RI YOZING: prim (qo'shimcha) moddalarni AYNAN "N-modda prim M" shaklida yozing — masalan: "4-modda prim 1", "12-modda prim 2". HECH QACHON superskript (4¹) yoki qo'shma raqam (41-modda) ishlatmang
 ${ragContext ? '\n7. Quyidagi KONTEKST sizning YAGONA huquqiy manbangiz — pretrained bilimingizdan QO\'SHIMCHA ma\'lumot KIRITMANG' : ''}
 
 ═══════════════════════════════════════
@@ -2543,7 +2553,7 @@ Misol:
 Qoidalar:
 - Qonun nomi, sana, raqam va URL — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan olinadi
 - Modda raqami va qism raqami ham FAQAT kontekstdan olinadi
-- Prim moddalarni to'g'ri yozing (4¹, 12², 3¹)
+- Prim moddalarni AYNAN "N-modda prim M" shaklida yozing (masalan: "4-modda prim 1"), superskript ishlatmang
 - Har bir moddaning kontekstdagi ANIQ mazmunini tushuntiring (o'z so'zlaringiz bilan, lekin faktlar kontekstdan)
 
 ⚠️ AGAR kontekstda kerakli ma'lumot YO'Q bo'lsa, JAVOBNING BIRINCHI QATORI shu bo'lishi SHART:
@@ -2771,9 +2781,12 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     aiMessages.push({ role: 'user', text: message });
 
     const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
+    // Normalize superscript article numbers in the model reply to the
+    // human-readable "prim" notation (e.g. "7¹-modda" → "7-modda prim 1").
+    const displayReply = normalizeResponseForUser(aiResult.text);
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
     res.json({
-      reply: aiResult.text,
+      reply: displayReply,
       provider: aiResult.provider,
       databases: usedDbs,
       ragUsed: !!ragContext,
@@ -3883,17 +3896,111 @@ app.get('/api/rag/ingest-log', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/rag/uploaded-documents/:docId — remove uploaded document from corpus
+// DELETE /api/rag/uploaded-documents/:docId — remove uploaded document from corpus.
+// Accepts both 'uploaded_doc' (admin panel uploads) and 'law_text' (lex.uz fetch)
+// so a single endpoint covers every source_type that shows up in the UI list.
 app.delete('/api/rag/uploaded-documents/:docId', requireMasterAdmin, async (req, res) => {
   try {
-    const { docId } = req.params;
+    const decoded = decodeURIComponent(req.params.docId);
     const result = await pool.query(
-      `DELETE FROM legal_chunks WHERE doc_id = $1 AND source_type = 'uploaded_doc' RETURNING id`,
-      [decodeURIComponent(docId)]
+      `DELETE FROM legal_chunks
+       WHERE doc_id = $1
+         AND source_type IN ('uploaded_doc', 'law_text')
+       RETURNING id`,
+      [decoded]
     );
     res.json({ success: true, deleted: result.rowCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/rag/ingest-log/:logId — full removal: finds the document referenced
+// by a row in rag_ingest_log, deletes every chunk that matches the same
+// source_url (preferred) or law_name (fallback), and purges matching log rows
+// so the upload history no longer shows the entry.
+//
+// This is what powers the 🗑️ button next to each row in the Upload History panel.
+app.delete('/api/rag/ingest-log/:logId', requireMasterAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const logId = parseInt(req.params.logId, 10);
+    if (!Number.isFinite(logId)) {
+      return res.status(400).json({ error: 'Invalid log id' });
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Fetch the log row so we know WHICH document to delete.
+    const logRow = await client.query(
+      `SELECT source_type, source_url, law_name, file_name, category
+       FROM rag_ingest_log WHERE id = $1`,
+      [logId]
+    );
+    if (logRow.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Yuklash yozuvi topilmadi' });
+    }
+    const entry = logRow.rows[0];
+
+    // 2. Delete every legal_chunks row linked to this document.
+    //    Priority: source_url → law_name (uploaded files have no URL).
+    //    We match on any of these keys so both URL and file ingestions work.
+    let chunkResult;
+    if (entry.source_url) {
+      chunkResult = await client.query(
+        `DELETE FROM legal_chunks WHERE source_url = $1 RETURNING id`,
+        [entry.source_url]
+      );
+    } else if (entry.law_name) {
+      chunkResult = await client.query(
+        `DELETE FROM legal_chunks WHERE law_name = $1 RETURNING id`,
+        [entry.law_name]
+      );
+    } else {
+      chunkResult = { rowCount: 0 };
+    }
+
+    // 3. Also clean up every log row pointing at the same source so re-upload
+    //    history isn't littered with stale duplicates for this document.
+    let logDeleteResult = { rowCount: 0 };
+    if (entry.source_url) {
+      logDeleteResult = await client.query(
+        `DELETE FROM rag_ingest_log WHERE source_url = $1 RETURNING id`,
+        [entry.source_url]
+      );
+    } else if (entry.law_name) {
+      logDeleteResult = await client.query(
+        `DELETE FROM rag_ingest_log WHERE law_name = $1 AND source_url IS NULL RETURNING id`,
+        [entry.law_name]
+      );
+    } else {
+      logDeleteResult = await client.query(
+        `DELETE FROM rag_ingest_log WHERE id = $1 RETURNING id`,
+        [logId]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    console.log(`[CORPUS-DELETE] log=${logId} entry="${entry.law_name || entry.source_url || entry.file_name}" chunks=${chunkResult.rowCount} logs=${logDeleteResult.rowCount}`);
+
+    res.json({
+      success: true,
+      chunksDeleted: chunkResult.rowCount,
+      logEntriesDeleted: logDeleteResult.rowCount,
+      target: {
+        source_url: entry.source_url,
+        law_name: entry.law_name,
+        file_name: entry.file_name,
+      },
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[CORPUS-DELETE] error:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 });
 

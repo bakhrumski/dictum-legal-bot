@@ -15,6 +15,7 @@
  */
 
 const { pool } = require('../database/db');
+const { normalizeResponseForUser } = require('../rag/prim-notation');
 
 // ════════════════════════════════════════
 // LEGAL CHAT SERVICE
@@ -135,7 +136,7 @@ async function processLegalChat(opts) {
   }
 
   return {
-    reply: result.text,
+    reply: normalizeResponseForUser(result.text),
     sources: [], // TODO: extract from ragContext
     model: result.provider || 'unknown',
     tokens: 0,
@@ -153,7 +154,7 @@ QATTIQ QOIDALAR:
 3. To'qib chiqarishdan QATTIYAN SAQLANING
 4. Har bir huquqiy tasdiq uchun MANBA ko'rsating: qonun nomi, QABUL QILINGAN SANASI, modda va QISM raqami
 5. Javob chuqur va to'liq bo'lsin
-6. MODDA RAQAMLARINI TO'G'RI YOZING: O'zbekiston qonunchiligida prim moddalar mavjud. Masalan: 4¹-modda (to'rt prim bir), 3¹-modda, 12²-modda. Bu "41-modda" yoki "4-modda" EMAS. Prim raqamlarni oddiy raqam bilan adashtirmang
+6. MODDA RAQAMLARINI TO'G'RI YOZING: O'zbekiston qonunchiligida prim (qo'shimcha) moddalar mavjud. Ularni AYNAN "N-modda prim M" shaklida yozing. Masalan: "4-modda prim 1" (to'rt modda prim bir), "3-modda prim 1", "12-modda prim 2". Bu "41-modda", "4-modda" yoki "4¹-modda" EMAS. Superskript (¹²³) ishlatish MAN ETILGAN — faqat "prim" so'zi bilan yozing
 ${ragContext ? '7. Quyidagi QONUNCHILIK KONTEKSTIGA BIRINCHI NAVBATDA tayanib javob bering' : ''}
 
 JAVOB TUZILMASI:
@@ -163,7 +164,7 @@ Savolni avval tahlil qiling: bu NAZARIY savol yoki AMALIY savol?
 ## Huquqiy asos
 Tegishli qonun(lar) — har birini shu formatda keltiring:
 - Qonun nomi, qabul qilingan sanasi va raqami
-- ANIQ modda va QISM raqami (masalan: "4¹-modda, 1 va 2-qismlar"). Prim moddalarni to'g'ri yozing!
+- ANIQ modda va QISM raqami (masalan: "4-modda prim 1, 1 va 2-qismlar"). Prim moddalarni AYNAN shu shaklda yozing — superskript emas!
 - Har bir moddaning ANIQ mazmunini chuqur tushuntiring. Bu asosiy javob.
 
 ## Muddatlar va jarimalar

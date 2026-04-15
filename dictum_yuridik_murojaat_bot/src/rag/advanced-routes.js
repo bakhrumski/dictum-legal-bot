@@ -31,6 +31,7 @@ const subscription = require('./subscription-tiers');
 const metricsDashboard = require('./metrics-dashboard');
 const { searchKorpus, formatKorpusGroundTruth } = require('./qa-korpus');
 const { rerankChunks } = require('./reranker');
+const { expandQueryVariants, normalizeResponseForUser } = require('./prim-notation');
 
 // Feature flag: when HYBRID_PIPELINE=1, /api/advanced-chat routes through
 // the 2-model classify→generate pipeline in hybrid-pipeline.js.
@@ -379,7 +380,7 @@ function mountAdvancedRoutes(app, deps) {
           });
 
           return res.json({
-            reply: result.text,
+            reply: normalizeResponseForUser(result.text),
             provider: result.provider,
             ragUsed: (result.chunks || []).length > 0,
             rag: {
@@ -431,7 +432,9 @@ function mountAdvancedRoutes(app, deps) {
 
       if (topic && apiKey) {
         try {
-          searchResults = await parentChildSearch(message, {
+          // Prim-notation query expansion — ensures "7 prim 1" matches "7¹" etc.
+          const searchQuery = expandQueryVariants(message);
+          searchResults = await parentChildSearch(searchQuery, {
             category: topic,
             limit: 15,
             apiKey,
@@ -442,7 +445,7 @@ function mountAdvancedRoutes(app, deps) {
             try {
               // parentChildSearch returns objects with .childText — map to chunk_text for reranker
               const withChunkText = searchResults.map(r => ({ ...r, chunk_text: r.childText || r.parentText }));
-              const reranked = await rerankChunks(message, withChunkText, { topK: 3 });
+              const reranked = await rerankChunks(searchQuery, withChunkText, { topK: 3 });
               searchResults = reranked;
             } catch (rerankErr) {
               console.warn(`[ADV CHAT] Reranker failed (${rerankErr.message}), using top 3`);
@@ -518,7 +521,7 @@ function mountAdvancedRoutes(app, deps) {
       });
 
       res.json({
-        reply: aiResult.text,
+        reply: normalizeResponseForUser(aiResult.text),
         provider: aiResult.provider,
         ragUsed: !!ragContext,
         rag: ragMeta,
