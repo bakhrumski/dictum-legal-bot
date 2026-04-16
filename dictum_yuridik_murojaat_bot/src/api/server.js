@@ -16,9 +16,10 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
+const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 // ── Justify RAG (optional external service, kept as bonus fallback) ──
 const {
@@ -2293,14 +2294,16 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
 
   // ── 2. RRF Hybrid Search ──
+  const retrievalLimit = route.strategy === 'DIRECT' ? 4 : 8;
   let rawResults = [];
+  let guaranteedKeywordMatches = [];
   let searchMode = 'text-only';
 
   if (apiKey) {
     try {
       rawResults = await rrfSearch(query, {
         category: topic || null,
-        limit: route.strategy === 'DIRECT' ? 4 : 8,
+        limit: retrievalLimit,
         apiKey,
       });
       searchMode = 'rrf';
@@ -2326,6 +2329,30 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   }
 
   // ── 3. Corrective RAG: grade and filter ──
+  try {
+    const keywordCandidates = await keywordSearch(query, {
+      category: topic || null,
+      limit: 6,
+    });
+
+    guaranteedKeywordMatches = keywordCandidates
+      .filter(isHighConfidenceKeywordMatch)
+      .slice(0, 3);
+
+    if (guaranteedKeywordMatches.length > 0) {
+      rawResults = mergePrioritizedResults(
+        guaranteedKeywordMatches,
+        rawResults,
+        Math.max(rawResults.length, retrievalLimit, 6)
+      );
+      searchMode = searchMode === 'text-only' && rawResults.length === guaranteedKeywordMatches.length
+        ? 'keyword'
+        : `${searchMode}+keyword`;
+    }
+  } catch (err) {
+    console.warn(`[RAG] Keyword rescue failed (${err.message})`);
+  }
+
   let goodChunks = rawResults;
   let needsWebSearch = rawResults.length < 2;
 
@@ -2340,6 +2367,15 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   }
 
   // ── 4. Web Search fallback (Tavily) ──
+  // Keep strong keyword matches in the top prompt context even after corrective filtering.
+  if (guaranteedKeywordMatches.length > 0) {
+    goodChunks = mergePrioritizedResults(
+      guaranteedKeywordMatches,
+      goodChunks,
+      Math.max(goodChunks.length, 3)
+    );
+  }
+
   let webResults = [];
   if (needsWebSearch) {
     try {
@@ -3730,6 +3766,8 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     // Fetch and parse lex.uz document
     console.log(`[LEX INGEST] Fetching: ${cleanUrl}`);
     const doc = await fetchLexDocument(cleanUrl);
+    const lexMeta = doc.metadata || {};
+    const inferredLanguage = cleanUrl.includes('/uz/') ? 'uz' : 'ru';
 
     if (!doc.body || doc.body.trim().length < 100) {
       return res.status(400).json({ error: 'Hujjat matni topilmadi yoki bo\'sh. URL to\'g\'ri ekanligini tekshiring.' });
@@ -3740,10 +3778,17 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
 
     // Chunk using the legal-aware chunker
     const chunks = chunkLegalDocument(doc.body, {
+      ...lexMeta,
       law_name: finalLawName,
       doc_id: docId,
       source_url: cleanUrl,
-      category: topic
+      category: topic,
+      is_valid: true,
+      is_active: lexMeta.is_active !== false,
+      status_label: lexMeta.status_label || null,
+      adoption_date: lexMeta.adoption_date || null,
+      document_number: lexMeta.document_number || null,
+      language: lexMeta.language || inferredLanguage,
     });
 
     if (chunks.length === 0) {
@@ -3783,12 +3828,18 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
         const embStr = embeddings[i] ? `[${embeddings[i].join(',')}]` : null;
         await client.query(`
           INSERT INTO legal_chunks (law_name, doc_id, source_url, category, chunk_text, chunk_index,
-            article_numbers, chapter, is_valid, embedding, source_type, quality_score, verified_by)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9::vector,'uploaded_doc',0.8,$10)
+            article_numbers, chapter, is_valid, is_active, status_label, adoption_date, document_number,
+            language, embedding, source_type, quality_score, verified_by)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9,$10,$11,$12,$13,$14::vector,'uploaded_doc',0.8,$15)
         `, [
           finalLawName, docId, cleanUrl, topic, c.text, i,
           articleNums.length ? articleNums : null,
           m.chapter || null,
+          m.is_active !== false,
+          m.status_label || null,
+          m.adoption_date || null,
+          m.document_number || null,
+          m.language || inferredLanguage,
           embStr,
           req.session.adminId
         ]);
@@ -3821,7 +3872,7 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       category: topic,
       chunksTotal: chunks.length,
       embedded: embeddedCount,
-      language: cleanUrl.includes('/uz/') ? 'uz' : 'ru',
+      language: inferredLanguage,
       ingestBy: req.session?.adminId || null,
     });
 
