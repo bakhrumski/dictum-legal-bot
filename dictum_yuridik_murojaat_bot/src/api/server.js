@@ -16,7 +16,7 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
@@ -2336,6 +2336,37 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     }
   }
 
+  // ── STAGE 2.5: Failsafe exact keyword retrieval ──
+  // Guarantees that chunks containing exact query terms (as substrings) are
+  // in the rerank candidate pool, even if morphological mismatches in BM25
+  // caused them to be missed by the tsquery.
+  let exactResults = [];
+  let exactMatchIds = new Set();
+  try {
+    exactResults = await exactMatchSearch(query, { category: topic || null, limit: 5 });
+    if (exactResults.length > 0) {
+      const existingIds = new Set(rawResults.map(r => r.id));
+      let injected = 0;
+      for (const exact of exactResults) {
+        exactMatchIds.add(exact.id);
+        if (!existingIds.has(exact.id)) {
+          rawResults.push({ ...exact, _exactMatch: true });
+          existingIds.add(exact.id);
+          injected++;
+        } else {
+          // Mark existing result as exact match for downstream guarantee
+          const existing = rawResults.find(r => r.id === exact.id);
+          if (existing) existing._exactMatch = true;
+        }
+      }
+      if (injected > 0) {
+        console.log(`[RAG] Exact-match failsafe: injected ${injected} chunks into rerank pool`);
+      }
+    }
+  } catch (err) {
+    console.warn(`[RAG] Exact match failsafe failed: ${err.message}`);
+  }
+
   // ── STAGE 3: Cross-Encoder Re-Ranking ──
   // Take the 15 candidates and re-rank with a cross-encoder to select the
   // top 3 most relevant chunks. Falls back to keyword scoring if HF is unavailable.
@@ -2346,6 +2377,22 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     } catch (rerankErr) {
       console.warn(`[RAG] Reranker failed (${rerankErr.message}), using top 3 from hybrid search`);
       rawResults = rawResults.slice(0, 3);
+    }
+  }
+
+  // ── Guarantee exact matches in top results ──
+  // If reranking dropped all exact-match chunks, force at least one back in
+  // by replacing the lowest-scored result.
+  if (exactMatchIds.size > 0 && exactResults.length > 0) {
+    const hasExact = rawResults.some(r => exactMatchIds.has(r.id));
+    if (!hasExact) {
+      if (rawResults.length >= 3) {
+        rawResults[rawResults.length - 1] = exactResults[0];
+        console.log(`[RAG] Forced exact match into final results (replaced lowest-scored chunk)`);
+      } else {
+        rawResults.push(exactResults[0]);
+        console.log(`[RAG] Appended exact match to final results`);
+      }
     }
   }
 

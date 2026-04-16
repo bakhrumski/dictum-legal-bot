@@ -17,6 +17,120 @@
 const { pool } = require('../database/db');
 const { getEmbedding, getEmbedDims, detectProvider } = require('./embeddings');
 
+// ========== UZBEK TEXT NORMALIZATION (for search) ==========
+
+/**
+ * Lightweight Uzbek suffix stripper for search.
+ * Uzbek is agglutinative — "stajyorining" (genitive) and "stajyori" (possessive)
+ * share the stem "stajyor" but are different tokens under PostgreSQL 'simple' config.
+ * Stripping suffixes enables prefix matching across morphological variants.
+ *
+ * Examples:
+ *   "stajyorining" → "stajyor"    (poss + gen: -i + -ning)
+ *   "advokatlar"   → "advokat"    (plural: -lar)
+ *   "moddasiga"    → "modda"      (poss + dat: -si + -ga)
+ *   "maqomi"       → "maqom"      (poss: -i)
+ */
+const UZ_SUFFIXES = [
+  // Compound: plural + possessive + case (longest first for greedy match)
+  'larining', 'laridagi', 'larsizlik',
+  'larning', 'larini', 'lariga', 'larida', 'laridan', 'lardagi',
+  'laring', 'larni', 'larga', 'larda', 'lardan',
+  // Possessive + case
+  'sining', 'ining',
+  'ning', 'ini', 'iga', 'ida', 'idan', 'dagi',
+  // Plural
+  'lari', 'lar', 'ler',
+  // Possessive + case (short)
+  'sini', 'siga', 'sida', 'sidan',
+  'si', 'ni', 'ga', 'da', 'dan',
+  // Bare possessive (last, smallest)
+  'i',
+];
+
+function stripUzbekSuffix(word) {
+  if (!word || word.length < 5) return word;
+  for (const suf of UZ_SUFFIXES) {
+    if (word.endsWith(suf) && (word.length - suf.length) >= 3) {
+      return word.slice(0, -suf.length);
+    }
+  }
+  return word;
+}
+
+/**
+ * Build an OR-based prefix tsquery for flexible Uzbek text matching.
+ *
+ * plainto_tsquery uses AND logic:
+ *   "advokat stajyorining" → 'advokat' & 'stajyorining'  ← MISSES "stajyori"
+ *
+ * This builds OR + prefix:
+ *   "advokat stajyorining" → 'advokat':* | 'stajyor':*   ← MATCHES "stajyori"
+ *
+ * @param {string} text - user query
+ * @returns {string|null} - tsquery expression for to_tsquery('simple', ...)
+ */
+function buildUzbekTsquery(text) {
+  if (!text) return null;
+
+  const normalized = text
+    .replace(/['\u02BB\u02BC\u2018\u2019`]/g, '')   // strip apostrophes (tsvector parser splits on them)
+    .replace(/[?!.,:;(){}[\]"«»\u2014\u2013\-]/g, ' ');
+
+  const words = normalized
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length > 2 && /[\p{L}]/u.test(w));
+
+  if (words.length === 0) return null;
+
+  const stems = words
+    .map(w => stripUzbekSuffix(w))
+    .filter(s => s && s.length > 2)
+    .map(s => s.replace(/[^\p{L}\p{N}]/gu, ''))  // sanitize for tsquery syntax
+    .filter(s => s.length > 1);
+
+  if (stems.length === 0) return null;
+
+  const unique = [...new Set(stems)];
+  return unique.map(s => `${s}:*`).join(' | ');
+}
+
+/**
+ * Build ILIKE patterns from query for exact substring matching.
+ * Uses stem-based bigrams to catch morphological variants.
+ *
+ * "Advokat stajyorining huquqiy maqomi"
+ *   → ["%advokat%stajyor%", "%stajyor%huquqiy%", "%huquqiy%maqom%"]
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+function buildExactMatchPatterns(text) {
+  if (!text) return [];
+
+  const normalized = text
+    .replace(/['\u02BB\u02BC\u2018\u2019`]/g, "'")
+    .replace(/[?!.,:;(){}[\]"«»\u2014\u2013\-]/g, ' ');
+
+  const words = normalized
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length > 2 && /[\p{L}]/u.test(w));
+
+  const stems = words
+    .map(w => stripUzbekSuffix(w))
+    .filter(s => s && s.length > 2);
+
+  const patterns = [];
+  // Bigram patterns (adjacent stem pairs) — catches "advokat stajyor*"
+  for (let i = 0; i < stems.length - 1; i++) {
+    patterns.push(`%${stems[i]}%${stems[i + 1]}%`);
+  }
+
+  return patterns.slice(0, 4);
+}
+
 // ========== TABLE SETUP ==========
 
 let _initialized = false;
@@ -139,6 +253,12 @@ async function initLegalCorpus() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_legal_chunks_doc_id
       ON legal_chunks(doc_id)
+    `);
+
+    // 6. Trigram index for ILIKE exact-match queries (pg_trgm)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_legal_chunks_text_trgm
+      ON legal_chunks USING GIN (chunk_text gin_trgm_ops)
     `);
 
     // Trigger to auto-generate tsvector on insert/update
@@ -355,10 +475,10 @@ async function hybridSearch(query, opts = {}) {
     LIMIT $2
   `;
 
-  // For the text search part, we need the query text, not the embedding.
-  // The trick: $1 is the embedding string for vector, but plainto_tsquery expects text.
-  // We need to pass the query text separately.
-  // Let me restructure with proper params:
+  // Build Uzbek-aware flexible tsquery (OR + prefix matching)
+  const flexTsquery = buildUzbekTsquery(query);
+  const tsqValue = flexTsquery || query;
+  const tsqFn = flexTsquery ? 'to_tsquery' : 'plainto_tsquery';
 
   const sqlFixed = `
     WITH vector_scores AS (
@@ -371,11 +491,11 @@ async function hybridSearch(query, opts = {}) {
       LIMIT $3 * 3
     ),
     text_scores AS (
-      SELECT id, ts_rank_cd(tsv, plainto_tsquery('simple', $2)) AS tscore
+      SELECT id, ts_rank_cd(tsv, ${tsqFn}('simple', $2)) AS tscore
       FROM legal_chunks
       WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
         ${category ? 'AND category = $4' : ''}
-        AND tsv @@ plainto_tsquery('simple', $2)
+        AND tsv @@ ${tsqFn}('simple', $2)
       LIMIT $3 * 3
     ),
     combined AS (
@@ -404,8 +524,8 @@ async function hybridSearch(query, opts = {}) {
   `;
 
   const fixedParams = category
-    ? [embStr, query, limit, category]
-    : [embStr, query, limit];
+    ? [embStr, tsqValue, limit, category]
+    : [embStr, tsqValue, limit];
 
   const result = await pool.query(sqlFixed, fixedParams);
   return result.rows;
@@ -422,27 +542,24 @@ async function textOnlySearch(query, opts = {}) {
   await initLegalCorpus();
   const { category = null, limit = 5 } = opts;
 
-  // Normalize query: strip Uzbek apostrophes, extract key words for ILIKE fallback
-  const normalizedQuery = query.replace(/['ʼ''`]/g, "'");
-  const keywords = normalizedQuery
-    .toLowerCase()
-    .replace(/[^a-zA-Zа-яА-ЯёЁ\u0027\u02BC0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 3)
-    .slice(0, 6);
+  // ── Uzbek-aware flexible tsquery (OR + prefix matching) ──
+  const flexTsquery = buildUzbekTsquery(query);
+  const tsqValue = flexTsquery || query;
+  const tsqFn = flexTsquery ? 'to_tsquery' : 'plainto_tsquery';
+  const tsqExpr = `${tsqFn}('simple', $1)`;
 
   const categoryClause = category ? 'AND category = $3' : '';
-  const params = category ? [normalizedQuery, limit, category] : [normalizedQuery, limit];
+  const params = category ? [tsqValue, limit, category] : [tsqValue, limit];
 
   // 1. Full-text search (verified QA first)
   const verifiedSql = `
     SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
            source_type, verified_by,
-           ts_rank_cd(tsv, plainto_tsquery('simple', $1)) AS score
+           ts_rank_cd(tsv, ${tsqExpr}) AS score
     FROM legal_chunks
     WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
       AND source_type = 'verified_qa'
-      AND tsv @@ plainto_tsquery('simple', $1)
+      AND tsv @@ ${tsqExpr}
       ${categoryClause}
     ORDER BY score DESC
     LIMIT $2
@@ -457,10 +574,10 @@ async function textOnlySearch(query, opts = {}) {
   const ftsSql = `
     SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
            source_type, verified_by,
-           ts_rank_cd(tsv, plainto_tsquery('simple', $1)) + CASE WHEN source_type = 'verified_qa' THEN 0.25 ELSE 0 END AS score
+           ts_rank_cd(tsv, ${tsqExpr}) + CASE WHEN source_type = 'verified_qa' THEN 0.25 ELSE 0 END AS score
     FROM legal_chunks
     WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
-      AND tsv @@ plainto_tsquery('simple', $1)
+      AND tsv @@ ${tsqExpr}
       ${categoryClause}
     ORDER BY score DESC
     LIMIT $2
@@ -471,28 +588,57 @@ async function textOnlySearch(query, opts = {}) {
     return ftsResult.rows;
   }
 
-  // 3. ILIKE keyword fallback — when FTS fails (apostrophes, short queries, etc.)
-  if (keywords.length > 0) {
-    console.log(`[RAG] FTS returned 0, trying ILIKE with keywords: ${keywords.join(', ')}`);
-    const ilikeConds = keywords.slice(0, 4).map((_, i) => `chunk_text ILIKE $${i + 2 + (category ? 1 : 0)}`);
-    const ilikeParams = category
-      ? [limit, category, ...keywords.slice(0, 4).map(k => `%${k}%`)]
-      : [limit, ...keywords.slice(0, 4).map(k => `%${k}%`)];
+  // 3. ILIKE fallback using stem-based patterns (catches morphological variants)
+  const exactPatterns = buildExactMatchPatterns(query);
+  if (exactPatterns.length > 0) {
+    console.log(`[RAG] FTS returned 0, trying ILIKE with ${exactPatterns.length} stem patterns`);
+    const ilikeParams = [limit, exactPatterns];
+    const catFilter = category ? 'AND category = $3' : '';
+    if (category) ilikeParams.push(category);
 
-    const catFilter = category ? 'AND category = $2' : '';
     const ilikeSql = `
       SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
              source_type, verified_by, 0.3 AS score
       FROM legal_chunks
       WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE) ${catFilter}
-        AND (${ilikeConds.join(' OR ')})
+        AND chunk_text ILIKE ANY($2::text[])
       ORDER BY CASE WHEN source_type = 'verified_qa' THEN 0 ELSE 1 END,
-               id
+               length(chunk_text) DESC
       LIMIT $1
     `;
     const ilikeResult = await pool.query(ilikeSql, ilikeParams);
-    console.log(`[RAG] ILIKE fallback: ${ilikeResult.rows.length} matches`);
-    return ilikeResult.rows;
+    console.log(`[RAG] ILIKE stem fallback: ${ilikeResult.rows.length} matches`);
+    if (ilikeResult.rows.length > 0) return ilikeResult.rows;
+  }
+
+  // 4. Individual keyword ILIKE (last resort)
+  const keywords = query
+    .replace(/['\u02BB\u02BC\u2018\u2019`]/g, "'")
+    .toLowerCase()
+    .replace(/[^a-zA-Z\u0430-\u044F\u0410-\u042F\u0451\u0401\u0027\u02BC0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2)
+    .slice(0, 6);
+
+  if (keywords.length > 0) {
+    console.log(`[RAG] Trying individual keyword ILIKE: ${keywords.join(', ')}`);
+    const kwPatterns = keywords.slice(0, 4).map(k => `%${k}%`);
+    const kwParams = [limit, kwPatterns];
+    const catFilter = category ? 'AND category = $3' : '';
+    if (category) kwParams.push(category);
+
+    const kwSql = `
+      SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
+             source_type, verified_by, 0.2 AS score
+      FROM legal_chunks
+      WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE) ${catFilter}
+        AND chunk_text ILIKE ANY($2::text[])
+      ORDER BY CASE WHEN source_type = 'verified_qa' THEN 0 ELSE 1 END, id
+      LIMIT $1
+    `;
+    const kwResult = await pool.query(kwSql, kwParams);
+    console.log(`[RAG] Keyword ILIKE: ${kwResult.rows.length} matches`);
+    return kwResult.rows;
   }
 
   console.log(`[RAG] Text-only search: 0 matches for "${query.substring(0, 50)}"`);
@@ -640,9 +786,10 @@ async function rrfSearch(query, opts = {}) {
     category = null,
     language = null,
     limit = 8,
-    topN = limit * 3,  // candidates per source
+    topN = limit * 3,
     apiKey,
-    k = 60,            // RRF constant
+    k = 60,            // RRF constant for dense + BM25
+    kExact = 30,        // lower k = stronger boost for exact substring matches
   } = opts;
 
   if (!apiKey) throw new Error('API key required for RRF search');
@@ -650,20 +797,58 @@ async function rrfSearch(query, opts = {}) {
   const queryEmbedding = await getEmbedding(query, apiKey);
   const embStr = `[${queryEmbedding.join(',')}]`;
 
+  // ── Uzbek-aware flexible tsquery (OR + prefix matching) ──
+  // Fixes: "stajyorining" now matches "stajyori" via stem "stajyor:*"
+  const flexTsquery = buildUzbekTsquery(query);
+  const tsqValue = flexTsquery || query;
+  const tsqFn = flexTsquery ? 'to_tsquery' : 'plainto_tsquery';
+
+  // ── ILIKE exact-match patterns (stem bigrams) ──
+  const exactPatterns = buildExactMatchPatterns(query);
+
+  // ── Build parameterized query ──
   const filters = ['is_valid = TRUE', '(is_active IS NULL OR is_active = TRUE)'];
-  const params = [embStr, query, topN];
+  const params = [embStr, tsqValue, topN]; // $1=vector, $2=tsquery, $3=topN
   let paramIdx = 4;
 
+  let exactParamIdx = null;
+  if (exactPatterns.length > 0) {
+    exactParamIdx = paramIdx;
+    params.push(exactPatterns);            // $4=patterns
+    paramIdx++;
+  }
+
   if (category) {
-    filters.push(`category = $${paramIdx++}`);
+    filters.push(`category = $${paramIdx}`);
     params.push(category);
+    paramIdx++;
   }
   if (language) {
-    filters.push(`language = $${paramIdx++}`);
+    filters.push(`language = $${paramIdx}`);
     params.push(language);
+    paramIdx++;
   }
 
   const whereClause = filters.join(' AND ');
+  const tsqExpr = `${tsqFn}('simple', $2)`;
+
+  // ── Optional exact-match CTE (strong boost via lower k) ──
+  const exactCTE = exactPatterns.length > 0
+    ? `,
+    exact AS (
+      SELECT id,
+             ROW_NUMBER() OVER (ORDER BY length(chunk_text) DESC) AS rank
+      FROM legal_chunks
+      WHERE ${whereClause}
+        AND chunk_text ILIKE ANY($${exactParamIdx}::text[])
+      LIMIT 5
+    )`
+    : '';
+
+  const exactUnion = exactPatterns.length > 0
+    ? `UNION ALL
+        SELECT id, 1.0 / (${kExact} + rank) AS score FROM exact`
+    : '';
 
   const sql = `
     WITH dense AS (
@@ -676,19 +861,21 @@ async function rrfSearch(query, opts = {}) {
     ),
     bm25 AS (
       SELECT id,
-             ROW_NUMBER() OVER (ORDER BY ts_rank_cd(tsv, plainto_tsquery('simple', $2)) DESC) AS rank
+             ROW_NUMBER() OVER (ORDER BY ts_rank_cd(tsv, ${tsqExpr}) DESC) AS rank
       FROM legal_chunks
       WHERE ${whereClause}
-        AND tsv @@ plainto_tsquery('simple', $2)
+        AND tsv @@ ${tsqExpr}
       LIMIT $3
-    ),
+    )${exactCTE},
     rrf AS (
-      SELECT
-        COALESCE(d.id, b.id) AS id,
-        COALESCE(1.0 / (${k} + d.rank), 0) +
-        COALESCE(1.0 / (${k} + b.rank), 0) AS rrf_score
-      FROM dense d
-      FULL OUTER JOIN bm25 b ON d.id = b.id
+      SELECT id, SUM(score) AS rrf_score
+      FROM (
+        SELECT id, 1.0 / (${k} + rank) AS score FROM dense
+        UNION ALL
+        SELECT id, 1.0 / (${k} + rank) AS score FROM bm25
+        ${exactUnion}
+      ) sub
+      GROUP BY id
     )
     SELECT
       lc.id, lc.law_name, lc.chunk_text, lc.article_numbers,
@@ -833,6 +1020,56 @@ async function getIngestStats() {
   return result.rows[0];
 }
 
+// ========== EXACT MATCH SEARCH (failsafe) ==========
+
+/**
+ * Standalone exact substring match search.
+ * Used as a failsafe when flexible tsquery + RRF still miss chunks
+ * that contain the user's key terms as exact substrings.
+ *
+ * @param {string} query - user question
+ * @param {object} opts
+ * @param {string} opts.category - legal topic filter
+ * @param {number} opts.limit - max results (default 5)
+ * @returns {Promise<Array>}
+ */
+async function exactMatchSearch(query, opts = {}) {
+  await initLegalCorpus();
+  const { category = null, limit = 5 } = opts;
+
+  const patterns = buildExactMatchPatterns(query);
+  if (patterns.length === 0) return [];
+
+  const filters = ['is_valid = TRUE', '(is_active IS NULL OR is_active = TRUE)'];
+  const params = [limit, patterns]; // $1=limit, $2=patterns
+  let paramIdx = 3;
+
+  if (category) {
+    filters.push(`category = $${paramIdx}`);
+    params.push(category);
+    paramIdx++;
+  }
+
+  const whereClause = filters.join(' AND ');
+
+  const sql = `
+    SELECT id, law_name, chunk_text, article_numbers, chapter,
+           source_url, category, source_type, verified_by,
+           language, adoption_date, document_number,
+           0.8 AS score
+    FROM legal_chunks
+    WHERE ${whereClause}
+      AND chunk_text ILIKE ANY($2::text[])
+    ORDER BY CASE WHEN source_type = 'verified_qa' THEN 0 ELSE 1 END,
+             length(chunk_text) DESC
+    LIMIT $1
+  `;
+
+  const result = await pool.query(sql, params);
+  console.log(`[RAG] Exact match: ${result.rows.length} matches for ${patterns.length} patterns`);
+  return result.rows;
+}
+
 module.exports = {
   initLegalCorpus,
   insertChunks,
@@ -841,6 +1078,7 @@ module.exports = {
   rrfSearch,
   textOnlySearch,
   vectorSearch,
+  exactMatchSearch,
   getCorpusStats,
   rebuildVectorIndex,
   insertVerifiedAnswer,
