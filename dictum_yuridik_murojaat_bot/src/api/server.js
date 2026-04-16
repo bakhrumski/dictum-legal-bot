@@ -16,7 +16,8 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
@@ -2288,21 +2289,29 @@ const LEGAL_TOPICS = {
 async function retrieveLegalContext(query, topic, language = 'uz') {
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   const isUz = language === 'uz';
+  const expandedQuery = expandQueryVariants(query);
+  if (expandedQuery !== query) {
+    console.log(`[RAG] Prim-expanded query: "${query}" -> "${expandedQuery}"`);
+  }
+  query = expandedQuery;
 
   // ── 1. Router: choose search strategy ──
   const route = routeQuery(query);
   console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
 
   // ── 2. RRF Hybrid Search ──
-  const retrievalLimit = route.strategy === 'DIRECT' ? 4 : 8;
+  const retrievalLimit = 15;
   let rawResults = [];
   let guaranteedKeywordMatches = [];
+  let exactResults = [];
+  let exactMatchIds = new Set();
   let searchMode = 'text-only';
 
   if (apiKey) {
     try {
       rawResults = await rrfSearch(query, {
         category: topic || null,
+        language,
         limit: retrievalLimit,
         apiKey,
       });
@@ -2310,7 +2319,7 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     } catch (err) {
       console.warn(`[RAG] RRF search failed (${err.message}), trying legacy hybrid`);
       try {
-        rawResults = await hybridSearch(query, { category: topic || null, limit: 6, apiKey });
+        rawResults = await hybridSearch(query, { category: topic || null, language, limit: retrievalLimit, apiKey });
         searchMode = 'hybrid';
       } catch (err2) {
         console.warn(`[RAG] Hybrid also failed (${err2.message})`);
@@ -2321,7 +2330,7 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   // Text-only fallback (no embeddings)
   if (rawResults.length === 0) {
     try {
-      rawResults = await textOnlySearch(query, { category: topic || null, limit: 6 });
+      rawResults = await textOnlySearch(query, { category: topic || null, language, limit: retrievalLimit });
       searchMode = 'text-only';
     } catch (err) {
       console.error('[RAG] Text-only search failed:', err.message);
@@ -2332,6 +2341,7 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   try {
     const keywordCandidates = await keywordSearch(query, {
       category: topic || null,
+      language,
       limit: 6,
     });
 
@@ -2351,6 +2361,49 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     }
   } catch (err) {
     console.warn(`[RAG] Keyword rescue failed (${err.message})`);
+  }
+
+  try {
+    exactResults = await exactMatchSearch(query, {
+      category: topic || null,
+      language,
+      limit: 5,
+    });
+
+    if (exactResults.length > 0) {
+      const existingIds = new Set(rawResults.map((row) => row.id));
+
+      for (const exact of exactResults) {
+        exactMatchIds.add(exact.id);
+        if (existingIds.has(exact.id)) continue;
+        rawResults.push({ ...exact, _exactMatch: true });
+        existingIds.add(exact.id);
+      }
+    }
+  } catch (err) {
+    console.warn(`[RAG] Exact match failsafe failed: ${err.message}`);
+  }
+
+  if (rawResults.length > 3) {
+    try {
+      const { rerankChunks } = require('../rag/reranker');
+      rawResults = await rerankChunks(query, rawResults, { topK: 3 });
+      searchMode = `${searchMode}+rerank`;
+    } catch (rerankErr) {
+      console.warn(`[RAG] Reranker failed (${rerankErr.message}), using top 3 from hybrid search`);
+      rawResults = rawResults.slice(0, 3);
+    }
+  }
+
+  if (guaranteedKeywordMatches.length > 0) {
+    rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, 3);
+  }
+
+  if (exactMatchIds.size > 0 && exactResults.length > 0) {
+    const hasExact = rawResults.some((row) => exactMatchIds.has(row.id));
+    if (!hasExact) {
+      rawResults = mergePrioritizedResults([exactResults[0]], rawResults, 3);
+    }
   }
 
   let goodChunks = rawResults;
@@ -2374,6 +2427,17 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
       goodChunks,
       Math.max(goodChunks.length, 3)
     );
+  }
+
+  if (exactMatchIds.size > 0 && exactResults.length > 0) {
+    const hasExact = goodChunks.some((row) => exactMatchIds.has(row.id));
+    if (!hasExact) {
+      goodChunks = mergePrioritizedResults(
+        [exactResults[0]],
+        goodChunks,
+        Math.max(goodChunks.length, 3)
+      );
+    }
   }
 
   let webResults = [];
@@ -2717,9 +2781,49 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     // that answer VERBATIM and skip the AI entirely. Passing verified chunks
     // to the AI as context doesn't work — it still hedges ("7-modda (shuningdek
     // 5-moddada ham)"). Only a short-circuit guarantees the correction wins.
-    let verifiedOverride = null;
+    let korpusOverride = null;
+    let korpusGroundTruth = '';
     let qaFewShotBlock = '';
     let qaMatchInfo = null;
+    let verifiedOverride = null;
+
+    try {
+      const { searchKorpus, formatKorpusGroundTruth } = require('../rag/qa-korpus');
+      const stageOneApiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (stageOneApiKey) {
+        const korpusResult = await searchKorpus(message, { apiKey: stageOneApiKey, topic });
+        if (korpusResult) {
+          qaMatchInfo = {
+            id: korpusResult.id,
+            similarity: korpusResult.similarity,
+            source: 'qa-korpus',
+            matchType: korpusResult.match,
+          };
+
+          if (korpusResult.match === 'verbatim') {
+            korpusOverride = korpusResult.answer;
+            console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+          } else if (korpusResult.match === 'context') {
+            korpusGroundTruth = formatKorpusGroundTruth(korpusResult);
+            console.log(`[Legal Chat] KORPUS CONTEXT id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+          }
+        }
+      }
+    } catch (korpusErr) {
+      console.warn(`[Legal Chat] qa_korpus lookup failed: ${korpusErr.message}`);
+    }
+
+    if (korpusOverride) {
+      return res.json({
+        reply: korpusOverride,
+        provider: 'qa-korpus',
+        databases: ['Korpus (tasdiqlangan)'],
+        ragUsed: false,
+        rag: null,
+        qaBank: qaMatchInfo,
+      });
+    }
+
     try {
       const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
       if (apiKey) {
@@ -2802,6 +2906,9 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     }
 
     let systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
+    if (korpusGroundTruth) {
+      systemPrompt = korpusGroundTruth + '\n\n' + systemPrompt;
+    }
     if (qaFewShotBlock) {
       systemPrompt = qaFewShotBlock + '\n\n' + systemPrompt;
     }
@@ -2822,9 +2929,10 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     aiMessages.push({ role: 'user', text: message });
 
     const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
+    const displayReply = normalizeResponseForUser(aiResult.text);
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
     res.json({
-      reply: aiResult.text,
+      reply: displayReply,
       provider: aiResult.provider,
       databases: usedDbs,
       ragUsed: !!ragContext,
@@ -3578,7 +3686,24 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
       console.warn('[RAG] qa_bank save failed (legal_chunks still updated):', qaErr.message);
     }
 
-    res.json({ success: true, qaBankId });
+    let korpusId = null;
+    try {
+      const { upsertKorpus } = require('../rag/qa-korpus');
+      const result = await upsertKorpus({
+        question,
+        correctedAnswer: answer,
+        originalAiAnswer: originalAiAnswer || null,
+        topic: topic || 'boshqa',
+        articleRefs: [],
+        createdBy: req.session.adminId,
+        createdByName: req.session.fullName || req.session.adminUsername || 'Admin',
+      });
+      korpusId = result.id;
+    } catch (korpusErr) {
+      console.warn('[RAG] qa_korpus save failed:', korpusErr.message);
+    }
+
+    res.json({ success: true, qaBankId, korpusId });
   } catch (error) {
     console.error('[RAG] verify-chat-answer error:', error.message);
     res.status(500).json({ error: error.message });
@@ -4763,6 +4888,11 @@ async function runMigrations() {
       const subscription = require('../rag/subscription-tiers');
       await subscription.initSubscriptionSchema();
     } catch (e) { console.log('[SUBSCRIPTION] Init skipped:', e.message); }
+
+    try {
+      const { initQaKorpus } = require('../rag/qa-korpus');
+      await initQaKorpus();
+    } catch (e) { console.log('[QA-KORPUS] Init skipped:', e.message); }
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
   }

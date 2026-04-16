@@ -34,6 +34,7 @@ if (typeof globalThis.File === 'undefined') {
 const cheerio = require('cheerio');
 const https = require('https');
 const http = require('http');
+const { enrichForIngest } = require('./prim-notation');
 
 const LEX_BASE = 'https://lex.uz';
 
@@ -218,9 +219,13 @@ function parseLexHtml(html, sourceUrl) {
     }
   });
 
-  const body = lines.join('\n')
+  let body = lines.join('\n')
     .replace(/\n{3,}/g, '\n\n')  // collapse multiple blank lines
     .trim();
+
+  // Enrich superscript article numbers ("7¹-modda") with a spoken alias
+  // ("7-modda prim 1") so BM25 and embeddings match either form.
+  body = enrichForIngest(body);
 
   console.log(`[FETCH-LEX] Extracted: "${title}" — ${body.length} chars, ~${Math.ceil(body.length / 4)} tokens, active=${metadata.is_active}${metadata.adoption_date ? `, date=${metadata.adoption_date}` : ''}${metadata.document_number ? `, #${metadata.document_number}` : ''}`);
 

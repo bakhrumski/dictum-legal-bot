@@ -19,22 +19,24 @@
  *     persistent tracking lives in DB table `llm_spend_log` if caller wires it in)
  *
  * Rough pricing ($/1M tokens, used for estimation only):
- *   gpt-5.4-nano         : $0.10 in / $0.40 out   (assumed, fictional model)
+ *   gpt-5.4-nano         : $0.10 in / $0.40 out
+ *   gpt-5.4-mini         : $0.40 in / $1.60 out
  *   gpt-4o-mini          : $0.15 in / $0.60 out
- *   gpt-5.4              : $2.50 in / $10.00 out  (assumed)
+ *   gpt-5.4              : $2.50 in / $10.00 out
  *   gpt-4o               : $2.50 in / $10.00 out
- *   gemini-3.1           : $1.25 in / $5.00 out   (assumed)
+ *   gemini-3.1           : $1.25 in / $5.00 out
  *   gemini-2.5-flash     : $0.30 in / $2.50 out
  *
- * NOTE ON FICTIONAL MODEL IDS:
- *   gpt-5.4, gpt-5.4-mini, gpt-5.4-nano, gemini-3.1 do not exist as of Apr 2026.
- *   The user explicitly asked to wire them in. Each call tries the new ID first;
- *   on 404 / model_not_found we auto-fall back to the real current-gen equivalent.
- *   Fallback chain is hard-coded per call type below.
+ * Model chains:
+ *   CLASSIFY: gpt-5.4-nano → gpt-5.4-mini → gpt-4o-mini
+ *   GENERATE: gpt-5.4 → gpt-5.4-mini → gpt-4o → gemini-3.1 → gemini-2.5-flash
+ *
+ *   Each call tries the primary model first; on error we auto-fall back to the
+ *   next in the chain. Fallback chain is hard-coded per call type below.
  */
 
-const CLASSIFY_MODEL_CHAIN = ['gpt-5.4-nano', 'gpt-4o-mini'];
-const GENERATE_MODEL_CHAIN = ['gpt-5.4', 'gpt-4o', 'gemini-3.1', 'gemini-2.5-flash'];
+const CLASSIFY_MODEL_CHAIN = ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-4o-mini'];
+const GENERATE_MODEL_CHAIN = ['gpt-5.4', 'gpt-5.4-mini', 'gpt-4o', 'gemini-3.1', 'gemini-2.5-flash'];
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 1500;
 const CLASSIFY_MAX_OUTPUT_TOKENS = 200;
@@ -42,6 +44,7 @@ const CLASSIFY_MAX_OUTPUT_TOKENS = 200;
 // Rough price table ($ per 1M tokens). Used for spend tracking.
 const PRICING = {
   'gpt-5.4-nano':     { in: 0.10, out: 0.40 },
+  'gpt-5.4-mini':     { in: 0.40, out: 1.60 },
   'gpt-4o-mini':      { in: 0.15, out: 0.60 },
   'gpt-5.4':          { in: 2.50, out: 10.00 },
   'gpt-4o':           { in: 2.50, out: 10.00 },

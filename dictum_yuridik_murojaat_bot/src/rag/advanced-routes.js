@@ -29,6 +29,9 @@ const hybridPipeline = require('./hybrid-pipeline');
 const spendLog = require('./llm-spend-log');
 const subscription = require('./subscription-tiers');
 const metricsDashboard = require('./metrics-dashboard');
+const { searchKorpus, formatKorpusGroundTruth } = require('./qa-korpus');
+const { rerankChunks } = require('./reranker');
+const { expandQueryVariants, normalizeResponseForUser } = require('./prim-notation');
 
 // Feature flag: when HYBRID_PIPELINE=1, /api/advanced-chat routes through
 // the 2-model classify→generate pipeline in hybrid-pipeline.js.
@@ -304,6 +307,29 @@ function mountAdvancedRoutes(app, deps) {
       const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
 
       // ═══════════════════════════════════════════════════════════════
+      // STAGE 1: QA KORPUS INTERCEPTOR (Semantic Cache)
+      // Check for expert-corrected answers FIRST, before any AI call.
+      // ═══════════════════════════════════════════════════════════════
+      try {
+        if (apiKey) {
+          const korpusResult = await searchKorpus(message, { apiKey, topic });
+          if (korpusResult && korpusResult.match === 'verbatim') {
+            console.log(`[ADV CHAT] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+            return res.json({
+              reply: korpusResult.answer,
+              provider: 'qa-korpus',
+              ragUsed: false,
+              rag: null,
+              fewShotCount: 0,
+              qaKorpus: { id: korpusResult.id, similarity: korpusResult.similarity, match: 'verbatim' },
+            });
+          }
+        }
+      } catch (korpusErr) {
+        console.warn(`[ADV CHAT] qa_korpus lookup failed: ${korpusErr.message}`);
+      }
+
+      // ═══════════════════════════════════════════════════════════════
       // HYBRID PIPELINE PATH (opt-in via HYBRID_PIPELINE=1)
       // Routes through classify → retrieve → generate with budget guard
       // and zero-hallucination fallback.
@@ -354,7 +380,7 @@ function mountAdvancedRoutes(app, deps) {
           });
 
           return res.json({
-            reply: result.text,
+            reply: normalizeResponseForUser(result.text),
             provider: result.provider,
             ragUsed: (result.chunks || []).length > 0,
             rag: {
@@ -372,6 +398,20 @@ function mountAdvancedRoutes(app, deps) {
         }
       }
 
+      // ── 0.5. Korpus context injection (sim 0.78-0.92) ──
+      let korpusGroundTruth = '';
+      try {
+        if (apiKey) {
+          const korpusResult = await searchKorpus(message, { apiKey, topic });
+          if (korpusResult && korpusResult.match === 'context') {
+            korpusGroundTruth = formatKorpusGroundTruth(korpusResult);
+            console.log(`[ADV CHAT] KORPUS CONTEXT id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+          }
+        }
+      } catch (err) {
+        console.warn(`[ADV CHAT] korpus context lookup failed: ${err.message}`);
+      }
+
       // ── 1. QA Bank: Find similar verified answers for few-shot ──
       let fewShotBlock = '';
       let qaMatches = [];
@@ -385,29 +425,44 @@ function mountAdvancedRoutes(app, deps) {
         console.warn(`[ADV CHAT] QA bank lookup failed: ${err.message}`);
       }
 
-      // ── 2. Parent-child retrieval ──
+      // ── 2. Parent-child retrieval (Stage 2: fetch 15, then re-rank to top 3) ──
       let searchResults = [];
       let ragContext = '';
       let ragMeta = null;
 
       if (topic && apiKey) {
         try {
-          searchResults = await parentChildSearch(message, {
+          // Prim-notation query expansion — ensures "7 prim 1" matches "7¹" etc.
+          const searchQuery = expandQueryVariants(message);
+          searchResults = await parentChildSearch(searchQuery, {
             category: topic,
-            limit: 6,
+            limit: 15,
             apiKey,
           });
+
+          // Stage 3: Re-rank with cross-encoder and keep top 3
+          if (searchResults.length > 3) {
+            try {
+              // parentChildSearch returns objects with .childText — map to chunk_text for reranker
+              const withChunkText = searchResults.map(r => ({ ...r, chunk_text: r.childText || r.parentText }));
+              const reranked = await rerankChunks(searchQuery, withChunkText, { topK: 3 });
+              searchResults = reranked;
+            } catch (rerankErr) {
+              console.warn(`[ADV CHAT] Reranker failed (${rerankErr.message}), using top 3`);
+              searchResults = searchResults.slice(0, 3);
+            }
+          }
 
           ragContext = formatAdvancedContext(searchResults);
 
           ragMeta = {
-            searchMode: searchResults.some(r => r.legacy) ? 'legacy-rrf' : 'parent-child',
+            searchMode: searchResults.some(r => r.legacy) ? 'legacy-rrf' : 'parent-child+rerank',
             chunks: searchResults.length,
             sources: [...new Set(searchResults.map(r => r.lawName))].slice(0, 3),
           };
         } catch (err) {
           console.warn(`[ADV CHAT] Parent-child search failed: ${err.message}`);
-          // Fall back to legacy RAG
+          // Fall back to legacy RAG (which now includes re-ranking internally)
           try {
             const { retrieveLegalContext } = require('../api/server');
             if (typeof retrieveLegalContext === 'function') {
@@ -431,13 +486,17 @@ function mountAdvancedRoutes(app, deps) {
         'ijtimoiy': 'Ijtimoiy himoya', 'advokatura': 'Advokatura',
       };
 
-      const systemPrompt = buildAdvancedPrompt({
+      let systemPrompt = buildAdvancedPrompt({
         topic,
         topicLabel: LEGAL_TOPICS[topic] || topic || 'huquq',
         ragContext,
         fewShotBlock,
         retrievedChunks: searchResults,
       });
+      // Inject korpus ground truth (sim 0.78-0.92) ABOVE the normal prompt
+      if (korpusGroundTruth) {
+        systemPrompt = korpusGroundTruth + '\n\n' + systemPrompt;
+      }
 
       // ── 4. Build message array ──
       const aiMessages = [{ role: 'system', text: systemPrompt }];
@@ -462,7 +521,7 @@ function mountAdvancedRoutes(app, deps) {
       });
 
       res.json({
-        reply: aiResult.text,
+        reply: normalizeResponseForUser(aiResult.text),
         provider: aiResult.provider,
         ragUsed: !!ragContext,
         rag: ragMeta,

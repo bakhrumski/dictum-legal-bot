@@ -128,6 +128,10 @@ async function initLegalCorpus() {
       CREATE INDEX IF NOT EXISTS idx_legal_chunks_search_text_trgm
       ON legal_chunks USING GIN (search_text gin_trgm_ops)
     `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_legal_chunks_text_trgm
+      ON legal_chunks USING GIN (chunk_text gin_trgm_ops)
+    `);
 
     // 3. Category filter index
     await pool.query(`
@@ -1090,6 +1094,69 @@ async function getIngestLog({ limit = 50, category = null, sourceType = null } =
 }
 
 /**
+ * Standalone exact substring match search.
+ * Used as a last-resort failsafe when keyword/vector ranking still under-ranks
+ * a chunk that clearly contains the user's exact terms.
+ */
+async function exactMatchSearch(query, opts = {}) {
+  await initLegalCorpus();
+
+  const {
+    category = null,
+    language = null,
+    limit = 5,
+  } = opts;
+
+  const search = buildKeywordArtifacts(query);
+  const patterns = Array.from(new Set([
+    ...search.phrases.slice(0, 4),
+    ...search.searchTokens.slice(0, 4),
+  ]))
+    .filter(Boolean)
+    .map((value) => `%${value}%`);
+
+  if (patterns.length === 0) {
+    return [];
+  }
+
+  const { whereClause, params: filterParams } = buildRetrievalFilters({
+    category,
+    language,
+    startIndex: 3,
+  });
+
+  const result = await pool.query(`
+    SELECT
+      id,
+      law_name,
+      chunk_text,
+      article_numbers,
+      chapter,
+      source_url,
+      category,
+      source_type,
+      language,
+      verified_by,
+      adoption_date,
+      document_number,
+      article_number_display,
+      part_number,
+      0.8 + CASE WHEN source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score
+    FROM legal_chunks
+    WHERE ${whereClause}
+      AND (
+        search_text ILIKE ANY($2::text[])
+        OR chunk_text ILIKE ANY($2::text[])
+      )
+    ORDER BY score DESC, length(chunk_text) DESC, id
+    LIMIT $1
+  `, [limit, patterns, ...filterParams]);
+
+  console.log(`[RAG] Exact match: ${result.rows.length} matches for ${patterns.length} patterns`);
+  return result.rows;
+}
+
+/**
  * Summary stats for ingest log.
  */
 async function getIngestStats() {
@@ -1116,6 +1183,7 @@ module.exports = {
   rrfSearch,
   textOnlySearch,
   keywordSearch,
+  exactMatchSearch,
   vectorSearch,
   getCorpusStats,
   rebuildVectorIndex,
