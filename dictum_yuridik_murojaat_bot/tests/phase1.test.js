@@ -311,6 +311,9 @@ const portalServicesSrc = fs.readFileSync(
 const systemPromptSrc = fs.readFileSync(
   path.join(__dirname, '../src/rag/system-prompt.js'), 'utf8'
 );
+const advancedRoutesSrc = fs.readFileSync(
+  path.join(__dirname, '../src/rag/advanced-routes.js'), 'utf8'
+);
 
 test('legal-corpus: ALTER TABLE adds is_active column', () => {
   assertMatch(legalCorpusSrc, /ADD COLUMN IF NOT EXISTS is_active BOOLEAN/i, 'is_active column');
@@ -496,6 +499,37 @@ test('portal prompt source includes intent-aware definition instructions', () =>
 test('advanced prompt source includes intent-aware definition instructions', () => {
   assertMatch(systemPromptSrc, /userQuestion = ''/, 'advanced prompt accepts user question');
   assertMatch(systemPromptSrc, /const definitionPromptAddendum = getDefinitionPromptAddendum\(userQuestion\)/, 'advanced prompt computes definition addendum');
+});
+
+test('retrieveLegalContext retries without category filter when topic-scoped retrieval underflows', () => {
+  assertMatch(
+    serverSrc,
+    /if \(topic && rawResults.length < 2 && guaranteedKeywordMatches.length === 0 && exactResults.length === 0\)/,
+    'server fallback condition present'
+  );
+  assertMatch(
+    serverSrc,
+    /await retrieveLegalContext\(query, null, language\)/,
+    'server reruns retrieval without category'
+  );
+});
+
+test('portal legal chat reuses retrieveLegalContext fallback logic from server when available', () => {
+  assertMatch(portalServicesSrc, /retrieveLegalContext = serverModule\.retrieveLegalContext/, 'portal imports shared retrieveLegalContext');
+  assertMatch(portalServicesSrc, /if \(typeof retrieveLegalContext === 'function'\)/, 'portal prefers shared retrieval');
+});
+
+test('advanced chat retries parent-child retrieval without category filter on underflow', () => {
+  assertMatch(
+    advancedRoutesSrc,
+    /Topic-scoped parent-child retrieval underflow/,
+    'advanced routes log unscoped fallback'
+  );
+  assertMatch(
+    advancedRoutesSrc,
+    /category: null/,
+    'advanced routes rerun parent-child search without category'
+  );
 });
 
 test('buildAdvancedPrompt switches off the blanket no-redefinition rule for definition queries', () => {

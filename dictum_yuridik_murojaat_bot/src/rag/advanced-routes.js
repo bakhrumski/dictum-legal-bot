@@ -355,11 +355,22 @@ function mountAdvancedRoutes(app, deps) {
               // Caller-picked topic wins; fall back to classifier topic
               const effectiveTopic = topic || classification.topic;
               if (!effectiveTopic || !apiKey) return { ragContext: '', chunks: [] };
-              const chunks = await parentChildSearch(message, {
+              let chunks = await parentChildSearch(message, {
                 category: effectiveTopic,
                 limit: 6,
                 apiKey,
               });
+              if (chunks.length === 0) {
+                console.warn(`[ADV CHAT] Topic-scoped parent-child retrieval underflow for "${effectiveTopic}", retrying without category filter`);
+                const broadChunks = await parentChildSearch(message, {
+                  category: null,
+                  limit: 6,
+                  apiKey,
+                });
+                if (broadChunks.length > chunks.length) {
+                  chunks = broadChunks;
+                }
+              }
               return {
                 ragContext: formatAdvancedContext(chunks),
                 chunks,
@@ -440,6 +451,17 @@ function mountAdvancedRoutes(app, deps) {
             limit: 15,
             apiKey,
           });
+          if (searchResults.length < 2) {
+            console.warn(`[ADV CHAT] Topic-scoped parent-child retrieval underflow for "${topic}", retrying without category filter`);
+            const broadResults = await parentChildSearch(searchQuery, {
+              category: null,
+              limit: 15,
+              apiKey,
+            });
+            if (broadResults.length > searchResults.length) {
+              searchResults = broadResults;
+            }
+          }
 
           // Stage 3: Re-rank with cross-encoder and keep top 3
           if (searchResults.length > 3) {
