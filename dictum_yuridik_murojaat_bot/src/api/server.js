@@ -2386,6 +2386,24 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     console.warn(`[RAG] Exact match failsafe failed: ${err.message}`);
   }
 
+  if (topic && rawResults.length < 2 && guaranteedKeywordMatches.length === 0 && exactResults.length === 0) {
+    console.warn(`[RAG] Topic-scoped retrieval underflow for "${topic}", retrying without category filter`);
+    const fallbackResult = await retrieveLegalContext(query, null, language);
+    const fallbackCount = Array.isArray(fallbackResult?.chunks)
+      ? fallbackResult.chunks.length
+      : Number(fallbackResult?.meta?.chunks || 0);
+
+    if (fallbackCount > rawResults.length) {
+      if (fallbackResult?.meta) {
+        fallbackResult.meta = {
+          ...fallbackResult.meta,
+          searchMode: `topic-fallback(${topic})->${fallbackResult.meta.searchMode || 'unscoped'}`,
+        };
+      }
+      return fallbackResult;
+    }
+  }
+
   if (rawResults.length > 3) {
     try {
       const { rerankChunks } = require('../rag/reranker');
