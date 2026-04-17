@@ -2573,10 +2573,10 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   const citationTable = citationBlocks.length > 0
     ? `\n┌─────────────────────────────────────────────┐\n│  RUXSAT ETILGAN MANBALAR (FAQAT shulardan!) │\n└─────────────────────────────────────────────┘\n${citationBlocks.join('\n')}\n\n⚠️ FAQAT yuqoridagi modda raqamlarini keltiring. BOSHQA modda raqami YOZMANG.\n⚠️ Har bir iqtibos uchun to'liq formatda yozing: qonun nomi, sana, raqam, modda, URL.\n`
     : (goodChunks.length > 0
-      ? ‘\n⚠️ Kontekstdagi ayrim bo\’laklarda modda raqami metadata ko\’rinmadi. Agar modda raqami matndan aniq ko\’rinsa, o\’sha modda bilan javob bering; aks holda "modda raqami kontekstdan aniq ko\’rinmadi" deb yozing. "Ma\’lumot topilmadi" deb yozmang.\n’
+      ? `\n⚠️ Kontekstdagi ayrim bo’laklarda modda raqami metadata ko’rinmadi. Agar modda raqami matndan aniq ko’rinsa, o’sha modda bilan javob bering; aks holda "modda raqami kontekstdan aniq ko’rinmadi" deb yozing. "Ma’lumot topilmadi" deb yozmang.\n`
       : lexLiveResults.length > 0
-        ? ‘\n⚠️ Mahalliy bazada modda topilmadi, lekin lex.uz dan jonli qidiruv natijalari topildi. Quyidagi LEX.UZ ma\’lumotlariga asoslanib javob bering.\n’
-        : ‘\n⚠️ KONTEKSTDA tegishli qonun bo\’lagi topilmadi. Javob bering: "Ushbu savol bo\’yicha lex.uz ma\’lumotlar bazasida aniq ma\’lumot topilmadi."\n’);
+        ? `\n⚠️ Mahalliy bazada modda topilmadi, lekin lex.uz dan jonli qidiruv natijalari topildi. Quyidagi LEX.UZ ma’lumotlariga asoslanib javob bering.\n`
+        : `\n⚠️ KONTEKSTDA tegishli qonun bo’lagi topilmadi. Javob bering: "Ushbu savol bo’yicha lex.uz ma’lumotlar bazasida aniq ma’lumot topilmadi."\n`);
 
   let context;
   if (isUz) {
