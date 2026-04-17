@@ -18,6 +18,7 @@ const { classifyLegalField, formatClassificationForPrompt } = require('../agents
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
 const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
+const { getChunkArticleRefs } = require('../rag/citation-utils');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
@@ -2455,7 +2456,7 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   // Max chars per chunk: verified_qa gets more space, law text is trimmed
   const MAX_CHUNK_CHARS = 1200;
   const chunksText = goodChunks.map((r, i) => {
-    const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
+    const arts = getChunkArticleRefs(r).join(', ');
     const verifiedBadge = r.source_type === 'verified_qa'
       ? (isUz ? ' ✅ [Yurist tomonidan tasdiqlangan]' : ' ✅ [Проверено юристом]')
       : '';
@@ -2518,8 +2519,9 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   const citationBlocks = [];
   const seenCitations = new Set();
   for (const r of goodChunks) {
-    if (!r.article_numbers || r.article_numbers.length === 0) continue;
-    for (const art of r.article_numbers) {
+    const articleRefs = getChunkArticleRefs(r);
+    if (articleRefs.length === 0) continue;
+    for (const art of articleRefs) {
       const key = `${r.law_name}_${art}`;
       if (seenCitations.has(key)) continue;
       seenCitations.add(key);
@@ -2539,7 +2541,9 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
 
   const citationTable = citationBlocks.length > 0
     ? `\n┌─────────────────────────────────────────────┐\n│  RUXSAT ETILGAN MANBALAR (FAQAT shulardan!) │\n└─────────────────────────────────────────────┘\n${citationBlocks.join('\n')}\n\n⚠️ FAQAT yuqoridagi modda raqamlarini keltiring. BOSHQA modda raqami YOZMANG.\n⚠️ Har bir iqtibos uchun to'liq formatda yozing: qonun nomi, sana, raqam, modda, URL.\n`
-    : '\n⚠️ KONTEKSTDA modda raqamlari topilmadi. Javob bering: "Ushbu savol bo\'yicha lex.uz ma\'lumotlar bazasida aniq ma\'lumot topilmadi."\n';
+    : (goodChunks.length > 0
+      ? '\n⚠️ Kontekstdagi ayrim bo‘laklarda modda raqami metadata ko‘rinmadi. Agar modda raqami matndan aniq ko‘rinsa, o‘sha modda bilan javob bering; aks holda "modda raqami kontekstdan aniq ko‘rinmadi" deb yozing. "Ma’lumot topilmadi" deb yozmang.\n'
+      : '\n⚠️ KONTEKSTDA tegishli qonun bo‘lagi topilmadi. Javob bering: "Ushbu savol bo\'yicha lex.uz ma\'lumotlar bazasida aniq ma\'lumot topilmadi."\n');
 
   let context;
   if (isUz) {

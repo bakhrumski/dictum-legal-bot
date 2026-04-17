@@ -1,5 +1,7 @@
 'use strict';
 
+const { getChunkArticleRefs } = require('./citation-utils');
+
 /**
  * Advanced System Prompt Builder for JuristAI
  *
@@ -150,7 +152,7 @@ function buildCitationTable(chunks) {
   const seen = new Set();
 
   for (const chunk of chunks) {
-    const art = chunk.articleNumber || (chunk.article_numbers ? chunk.article_numbers[0] : '');
+    const art = getChunkArticleRefs(chunk)[0] || '';
     const law = chunk.lawName || chunk.law_name || '';
     const part = chunk.partNumber || chunk.part_number || '';
     const url = chunk.sourceUrl || chunk.source_url || '';
