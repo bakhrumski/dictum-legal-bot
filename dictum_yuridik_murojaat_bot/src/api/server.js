@@ -16,10 +16,13 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
+const { getChunkArticleRefs } = require('../rag/citation-utils');
+const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
+const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 // ── Justify RAG (optional external service, kept as bonus fallback) ──
@@ -2289,13 +2292,9 @@ const LEGAL_TOPICS = {
 async function retrieveLegalContext(query, topic, language = 'uz') {
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   const isUz = language === 'uz';
-
-  // ── 0. Prim-notation query expansion ──
-  // Match "7 prim 1" / "7¹" / "7-prim-1" against each other so superscript
-  // article numbers are retrievable regardless of how they were typed.
   const expandedQuery = expandQueryVariants(query);
   if (expandedQuery !== query) {
-    console.log(`[RAG] Prim-expanded query: "${query}" → "${expandedQuery}"`);
+    console.log(`[RAG] Prim-expanded query: "${query}" -> "${expandedQuery}"`);
   }
   query = expandedQuery;
 
@@ -2303,23 +2302,27 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   const route = routeQuery(query);
   console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
 
-  // ── STAGE 2: Hybrid Search (pgvector + BM25 with RRF) ──
-  // Fetch 15 candidates for subsequent re-ranking (Stage 3)
+  // ── 2. RRF Hybrid Search ──
+  const retrievalLimit = 15;
   let rawResults = [];
+  let guaranteedKeywordMatches = [];
+  let exactResults = [];
+  let exactMatchIds = new Set();
   let searchMode = 'text-only';
 
   if (apiKey) {
     try {
       rawResults = await rrfSearch(query, {
         category: topic || null,
-        limit: 15,
+        language,
+        limit: retrievalLimit,
         apiKey,
       });
       searchMode = 'rrf';
     } catch (err) {
       console.warn(`[RAG] RRF search failed (${err.message}), trying legacy hybrid`);
       try {
-        rawResults = await hybridSearch(query, { category: topic || null, limit: 15, apiKey });
+        rawResults = await hybridSearch(query, { category: topic || null, language, limit: retrievalLimit, apiKey });
         searchMode = 'hybrid';
       } catch (err2) {
         console.warn(`[RAG] Hybrid also failed (${err2.message})`);
@@ -2330,74 +2333,100 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   // Text-only fallback (no embeddings)
   if (rawResults.length === 0) {
     try {
-      rawResults = await textOnlySearch(query, { category: topic || null, limit: 15 });
+      rawResults = await textOnlySearch(query, { category: topic || null, language, limit: retrievalLimit });
       searchMode = 'text-only';
     } catch (err) {
       console.error('[RAG] Text-only search failed:', err.message);
     }
   }
 
-  // ── STAGE 2.5: Failsafe exact keyword retrieval ──
-  // Guarantees that chunks containing exact query terms (as substrings) are
-  // in the rerank candidate pool, even if morphological mismatches in BM25
-  // caused them to be missed by the tsquery.
-  let exactResults = [];
-  let exactMatchIds = new Set();
+  // ── 3. Corrective RAG: grade and filter ──
   try {
-    exactResults = await exactMatchSearch(query, { category: topic || null, limit: 5 });
+    const keywordCandidates = await keywordSearch(query, {
+      category: topic || null,
+      language,
+      limit: 6,
+    });
+
+    guaranteedKeywordMatches = keywordCandidates
+      .filter(isHighConfidenceKeywordMatch)
+      .slice(0, 3);
+
+    if (guaranteedKeywordMatches.length > 0) {
+      rawResults = mergePrioritizedResults(
+        guaranteedKeywordMatches,
+        rawResults,
+        Math.max(rawResults.length, retrievalLimit, 6)
+      );
+      searchMode = searchMode === 'text-only' && rawResults.length === guaranteedKeywordMatches.length
+        ? 'keyword'
+        : `${searchMode}+keyword`;
+    }
+  } catch (err) {
+    console.warn(`[RAG] Keyword rescue failed (${err.message})`);
+  }
+
+  try {
+    exactResults = await exactMatchSearch(query, {
+      category: topic || null,
+      language,
+      limit: 5,
+    });
+
     if (exactResults.length > 0) {
-      const existingIds = new Set(rawResults.map(r => r.id));
-      let injected = 0;
+      const existingIds = new Set(rawResults.map((row) => row.id));
+
       for (const exact of exactResults) {
         exactMatchIds.add(exact.id);
-        if (!existingIds.has(exact.id)) {
-          rawResults.push({ ...exact, _exactMatch: true });
-          existingIds.add(exact.id);
-          injected++;
-        } else {
-          // Mark existing result as exact match for downstream guarantee
-          const existing = rawResults.find(r => r.id === exact.id);
-          if (existing) existing._exactMatch = true;
-        }
-      }
-      if (injected > 0) {
-        console.log(`[RAG] Exact-match failsafe: injected ${injected} chunks into rerank pool`);
+        if (existingIds.has(exact.id)) continue;
+        rawResults.push({ ...exact, _exactMatch: true });
+        existingIds.add(exact.id);
       }
     }
   } catch (err) {
     console.warn(`[RAG] Exact match failsafe failed: ${err.message}`);
   }
 
-  // ── STAGE 3: Cross-Encoder Re-Ranking ──
-  // Take the 15 candidates and re-rank with a cross-encoder to select the
-  // top 3 most relevant chunks. Falls back to keyword scoring if HF is unavailable.
+  if (topic && rawResults.length < 2 && guaranteedKeywordMatches.length === 0 && exactResults.length === 0) {
+    console.warn(`[RAG] Topic-scoped retrieval underflow for "${topic}", retrying without category filter`);
+    const fallbackResult = await retrieveLegalContext(query, null, language);
+    const fallbackCount = Array.isArray(fallbackResult?.chunks)
+      ? fallbackResult.chunks.length
+      : Number(fallbackResult?.meta?.chunks || 0);
+
+    if (fallbackCount > rawResults.length) {
+      if (fallbackResult?.meta) {
+        fallbackResult.meta = {
+          ...fallbackResult.meta,
+          searchMode: `topic-fallback(${topic})->${fallbackResult.meta.searchMode || 'unscoped'}`,
+        };
+      }
+      return fallbackResult;
+    }
+  }
+
   if (rawResults.length > 3) {
     try {
       const { rerankChunks } = require('../rag/reranker');
       rawResults = await rerankChunks(query, rawResults, { topK: 3 });
+      searchMode = `${searchMode}+rerank`;
     } catch (rerankErr) {
       console.warn(`[RAG] Reranker failed (${rerankErr.message}), using top 3 from hybrid search`);
       rawResults = rawResults.slice(0, 3);
     }
   }
 
-  // ── Guarantee exact matches in top results ──
-  // If reranking dropped all exact-match chunks, force at least one back in
-  // by replacing the lowest-scored result.
+  if (guaranteedKeywordMatches.length > 0) {
+    rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, 3);
+  }
+
   if (exactMatchIds.size > 0 && exactResults.length > 0) {
-    const hasExact = rawResults.some(r => exactMatchIds.has(r.id));
+    const hasExact = rawResults.some((row) => exactMatchIds.has(row.id));
     if (!hasExact) {
-      if (rawResults.length >= 3) {
-        rawResults[rawResults.length - 1] = exactResults[0];
-        console.log(`[RAG] Forced exact match into final results (replaced lowest-scored chunk)`);
-      } else {
-        rawResults.push(exactResults[0]);
-        console.log(`[RAG] Appended exact match to final results`);
-      }
+      rawResults = mergePrioritizedResults([exactResults[0]], rawResults, 3);
     }
   }
 
-  // ── Corrective RAG: grade and filter (safety net) ──
   let goodChunks = rawResults;
   let needsWebSearch = rawResults.length < 2;
 
@@ -2408,6 +2437,26 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
       needsWebSearch = corrective.needsWebSearch;
     } catch (err) {
       console.warn(`[RAG] Corrective filter failed (${err.message}), using raw results`);
+    }
+  }
+
+  // Keep strong keyword matches in the top prompt context even after corrective filtering.
+  if (guaranteedKeywordMatches.length > 0) {
+    goodChunks = mergePrioritizedResults(
+      guaranteedKeywordMatches,
+      goodChunks,
+      Math.max(goodChunks.length, 3)
+    );
+  }
+
+  if (exactMatchIds.size > 0 && exactResults.length > 0) {
+    const hasExact = goodChunks.some((row) => exactMatchIds.has(row.id));
+    if (!hasExact) {
+      goodChunks = mergePrioritizedResults(
+        [exactResults[0]],
+        goodChunks,
+        Math.max(goodChunks.length, 3)
+      );
     }
   }
 
@@ -2427,13 +2476,14 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     }
   }
 
+
   if (goodChunks.length === 0 && webResults.length === 0 && lexLiveResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, lexLiveResults: 0, sources: [] } };
 
   // ── 5. Format context for prompt ──
   // Max chars per chunk: verified_qa gets more space, law text is trimmed
   const MAX_CHUNK_CHARS = 1200;
   const chunksText = goodChunks.map((r, i) => {
-    const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
+    const arts = getChunkArticleRefs(r).join(', ');
     const verifiedBadge = r.source_type === 'verified_qa'
       ? (isUz ? ' ✅ [Yurist tomonidan tasdiqlangan]' : ' ✅ [Проверено юристом]')
       : '';
@@ -2501,8 +2551,9 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   const citationBlocks = [];
   const seenCitations = new Set();
   for (const r of goodChunks) {
-    if (!r.article_numbers || r.article_numbers.length === 0) continue;
-    for (const art of r.article_numbers) {
+    const articleRefs = getChunkArticleRefs(r);
+    if (articleRefs.length === 0) continue;
+    for (const art of articleRefs) {
       const key = `${r.law_name}_${art}`;
       if (seenCitations.has(key)) continue;
       seenCitations.add(key);
@@ -2522,9 +2573,11 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
 
   const citationTable = citationBlocks.length > 0
     ? `\n┌─────────────────────────────────────────────┐\n│  RUXSAT ETILGAN MANBALAR (FAQAT shulardan!) │\n└─────────────────────────────────────────────┘\n${citationBlocks.join('\n')}\n\n⚠️ FAQAT yuqoridagi modda raqamlarini keltiring. BOSHQA modda raqami YOZMANG.\n⚠️ Har bir iqtibos uchun to'liq formatda yozing: qonun nomi, sana, raqam, modda, URL.\n`
-    : lexLiveResults.length > 0
-      ? '\n⚠️ Mahalliy bazada modda topilmadi, lekin lex.uz dan jonli qidiruv natijalari topildi. Quyidagi LEX.UZ ma\'lumotlariga asoslanib javob bering.\n'
-      : '\n⚠️ KONTEKSTDA modda raqamlari topilmadi. Javob bering: "Ushbu savol bo\'yicha lex.uz ma\'lumotlar bazasida aniq ma\'lumot topilmadi."\n';
+    : (goodChunks.length > 0
+      ? "\n\u26a0\ufe0f Kontekstdagi ayrim bo’laklarda modda raqami metadata ko’rinmadi. Agar modda raqami matndan aniq ko’rinsa, o’sha modda bilan javob bering; aks holda \"modda raqami kontekstdan aniq ko’rinmadi\" deb yozing. \"Ma’lumot topilmadi\" deb yozmang.\n"
+      : lexLiveResults.length > 0
+        ? "\n\u26a0\ufe0f Mahalliy bazada modda topilmadi, lekin lex.uz dan jonli qidiruv natijalari topildi. Quyidagi LEX.UZ ma’lumotlariga asoslanib javob bering.\n"
+        : "\n\u26a0\ufe0f KONTEKSTDA tegishli qonun bo’lagi topilmadi. Javob bering: \"Ushbu savol bo’yicha lex.uz ma’lumotlar bazasida aniq ma’lumot topilmadi.\"\n");
 
   let context;
   if (isUz) {
@@ -2557,8 +2610,10 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   return { context, meta, chunks: goodChunks };
 }
 
-function buildTopicPrompt(topic, ragContext) {
+function buildTopicPrompt(topic, ragContext, userQuestion = '') {
   const topicLabel = LEGAL_TOPICS[topic] || topic;
+  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+  const termExplanationRule = getTermExplanationRule(userQuestion);
 
   return `Siz O'zbekiston ${topicLabel} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
 Sizning YAGONA huquqiy manbangiz — quyida berilgan KONTEKST (lex.uz dan olingan faol qonun matnlari).
@@ -2589,13 +2644,15 @@ QATTIQ QOIDALAR (buzsangiz, javob noto'g'ri hisoblanadi):
 3. Agar kerakli modda kontekstda yo'q bo'lsa — modda raqami umuman yozmang. Buning o'rniga: "Kontekstda aniq modda topilmadi, manba qonun matnini to'g'ridan-to'g'ri ko'ring" deng
 4. Har bir huquqiy tasdiq uchun MANBA ko'rsating: qonun nomi, modda raqami va ANIQ QISM RAQAMI (FAQAT kontekstdagi)
 5. Javob chuqur va to'liq bo'lsin — sirtqi javob emas, huquqiy tahlil bering
-6. MODDA RAQAMLARINI TO'G'RI YOZING: prim (qo'shimcha) moddalarni AYNAN "N-modda prim M" shaklida yozing — masalan: "4-modda prim 1", "12-modda prim 2". HECH QACHON superskript (4¹) yoki qo'shma raqam (41-modda) ishlatmang
+6. MODDA RAQAMLARINI TO'G'RI YOZING: prim raqamlarini saqlang (4¹, 12², 3¹). HECH QACHON prim raqamlarni oddiy raqam bilan adashtirmang
 ${ragContext ? '\n7. Quyidagi KONTEKST sizning YAGONA huquqiy manbangiz — pretrained bilimingizdan QO\'SHIMCHA ma\'lumot KIRITMANG' : ''}
 
 ═══════════════════════════════════════
 MAJBURIY JAVOB TUZILMASI:
 ═══════════════════════════════════════
 Savolni avval tahlil qiling: bu NAZARIY savol (tushuncha, ta'rif, qonun mazmunini tushuntirish) yoki AMALIY savol (aniq holat, muammo, nima qilish kerak)?
+
+${definitionPromptAddendum}
 
 ## Huquqiy asos
 Tegishli qonun(lar) — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan oling.
@@ -2614,7 +2671,7 @@ Misol:
 Qoidalar:
 - Qonun nomi, sana, raqam va URL — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan olinadi
 - Modda raqami va qism raqami ham FAQAT kontekstdan olinadi
-- Prim moddalarni AYNAN "N-modda prim M" shaklida yozing (masalan: "4-modda prim 1"), superskript ishlatmang
+- Prim moddalarni to'g'ri yozing (4¹, 12², 3¹)
 - Har bir moddaning kontekstdagi ANIQ mazmunini tushuntiring (o'z so'zlaringiz bilan, lekin faktlar kontekstdan)
 
 ⚠️ AGAR kontekstda kerakli ma'lumot YO'Q bo'lsa, JAVOBNING BIRINCHI QATORI shu bo'lishi SHART:
@@ -2631,7 +2688,7 @@ FAQAT foydalanuvchi bilmasligi mumkin bo'lgan YANGI ma'lumot: aniq murojaat joyi
 TAQIQLAR:
 - Huquqiy asos bo'limida AYTILGAN ma'lumotni qayta yozmang va boshqa so'zlar bilan takrorlamang
 - "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling", "Huquqlaringizni biling" kabi umumiy gaplar YOZMANG
-- Savolda berilgan tushunchani qayta tushuntirmang — foydalanuvchi buni allaqachon biladi
+${termExplanationRule}
 
 ═══════════════════════════════════════
 TAQIQLANGAN NARSALAR:
@@ -2759,20 +2816,24 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
 
-    // ══════════════════════════════════════════════════════════
-    // STAGE 1: QA KORPUS INTERCEPTOR (Semantic Cache)
-    // Expert-corrected answers take absolute priority.
-    //   sim >= 0.92 → return verbatim (no AI, deterministic)
-    //   sim >= 0.78 → inject as Absolute Ground Truth in prompt
-    // ══════════════════════════════════════════════════════════
+    // ── VERIFIED ANSWER OVERRIDE ──
+    // The lawyer's "Korpusga qo'shish" button writes corrected answers to
+    // legal_chunks with source_type='verified_qa' and an embedding. If the
+    // user's question is near-identical to a previously verified one, return
+    // that answer VERBATIM and skip the AI entirely. Passing verified chunks
+    // to the AI as context doesn't work — it still hedges ("7-modda (shuningdek
+    // 5-moddada ham)"). Only a short-circuit guarantees the correction wins.
     let korpusOverride = null;
     let korpusGroundTruth = '';
+    let qaFewShotBlock = '';
     let qaMatchInfo = null;
+    let verifiedOverride = null;
+
     try {
       const { searchKorpus, formatKorpusGroundTruth } = require('../rag/qa-korpus');
-      const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
-      if (apiKey) {
-        const korpusResult = await searchKorpus(message, { apiKey, topic });
+      const stageOneApiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (stageOneApiKey) {
+        const korpusResult = await searchKorpus(message, { apiKey: stageOneApiKey, topic });
         if (korpusResult) {
           qaMatchInfo = {
             id: korpusResult.id,
@@ -2780,12 +2841,11 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
             source: 'qa-korpus',
             matchType: korpusResult.match,
           };
+
           if (korpusResult.match === 'verbatim') {
-            // sim >= 0.92: return corrected answer directly, no AI involved
             korpusOverride = korpusResult.answer;
             console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
           } else if (korpusResult.match === 'context') {
-            // sim >= 0.78: inject as absolute ground truth into the prompt
             korpusGroundTruth = formatKorpusGroundTruth(korpusResult);
             console.log(`[Legal Chat] KORPUS CONTEXT id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
           }
@@ -2795,7 +2855,6 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       console.warn(`[Legal Chat] qa_korpus lookup failed: ${korpusErr.message}`);
     }
 
-    // Short-circuit: return korpus answer verbatim
     if (korpusOverride) {
       return res.json({
         reply: korpusOverride,
@@ -2807,9 +2866,77 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       });
     }
 
-    // ══════════════════════════════════════════════════════════
-    // STAGES 2-4: Hybrid Search → Re-Rank → Generate
-    // ══════════════════════════════════════════════════════════
+    try {
+      const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (apiKey) {
+        const { getEmbedding } = require('../rag/embeddings');
+        const qEmb = await getEmbedding(message, apiKey);
+        const qEmbStr = `[${qEmb.join(',')}]`;
+
+        const r = await pool.query(`
+          SELECT id, chunk_text, category, doc_id, law_name,
+                 1 - (embedding <=> $1::vector) AS similarity
+          FROM legal_chunks
+          WHERE source_type = 'verified_qa'
+            AND is_valid = TRUE
+            AND (is_active IS NULL OR is_active = TRUE)
+            AND embedding IS NOT NULL
+          ORDER BY embedding <=> $1::vector
+          LIMIT 5
+        `, [qEmbStr]);
+
+        if (r.rows.length > 0) {
+          const top = r.rows[0];
+          const topSim = parseFloat(top.similarity);
+          // chunk_text is "Savol: X\n\nJavob: Y" — extract just the answer
+          const parseQA = (txt) => {
+            const m = txt.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]+)$/);
+            return m ? { question: m[1].trim(), answer: m[2].trim() } : { question: '', answer: txt };
+          };
+          const topParsed = parseQA(top.chunk_text);
+
+          qaMatchInfo = {
+            id: top.id,
+            similarity: topSim,
+            count: r.rows.length,
+            category: top.category,
+            source: 'verified_qa',
+          };
+          console.log(`[Legal Chat] verified_qa top match: id=${top.id} sim=${topSim.toFixed(3)} cat=${top.category}`);
+
+          if (topSim >= 0.72) {
+            verifiedOverride = topParsed.answer;
+            console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
+          } else if (topSim >= 0.50) {
+            const { formatQaFewShot } = require('../rag/advanced-corpus');
+            const usable = r.rows
+              .filter(row => parseFloat(row.similarity) >= 0.50)
+              .map(row => {
+                const p = parseQA(row.chunk_text);
+                return { question: p.question, answer: p.answer, rating: 1 };
+              });
+            qaFewShotBlock = formatQaFewShot(usable);
+            console.log(`[Legal Chat] verified_qa few-shot: ${usable.length} examples (top sim=${topSim.toFixed(3)})`);
+          }
+        } else {
+          console.log('[Legal Chat] verified_qa: no rows with embeddings found');
+        }
+      }
+    } catch (qaErr) {
+      console.warn(`[Legal Chat] verified_qa lookup failed: ${qaErr.message}`);
+    }
+
+    // ── Short-circuit: return verified answer directly ──
+    if (verifiedOverride) {
+      return res.json({
+        reply: verifiedOverride,
+        provider: 'verified-qa',
+        databases: ['Korpus (tasdiqlangan)'],
+        ragUsed: false,
+        rag: null,
+        qaBank: qaMatchInfo,
+      });
+    }
 
     // RAG retrieval: fetch relevant legal chunks for the user's query
     let ragContext = '';
@@ -2820,10 +2947,12 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       ragMeta = ragResult.meta || null;
     }
 
-    let systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
-    // Inject korpus ground truth (sim 0.78-0.92) ABOVE the normal prompt
+    let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases);
     if (korpusGroundTruth) {
       systemPrompt = korpusGroundTruth + '\n\n' + systemPrompt;
+    }
+    if (qaFewShotBlock) {
+      systemPrompt = qaFewShotBlock + '\n\n' + systemPrompt;
     }
 
     // Build messages array — system prompt as dedicated system role (works with Groq + Gemini)
@@ -2842,8 +2971,6 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     aiMessages.push({ role: 'user', text: message });
 
     const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
-    // Normalize superscript article numbers in the model reply to the
-    // human-readable "prim" notation (e.g. "7¹-modda" → "7-modda prim 1").
     const displayReply = normalizeResponseForUser(aiResult.text);
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
     res.json({
@@ -3601,9 +3728,6 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
       console.warn('[RAG] qa_bank save failed (legal_chunks still updated):', qaErr.message);
     }
 
-    // 3. ALSO save/update in qa_korpus (semantic cache — Stage 1 interceptor).
-    //    This is the PRIMARY ground truth table. UPSERT by question hash ensures
-    //    re-saving the same question always updates instead of creating duplicates.
     let korpusId = null;
     try {
       const { upsertKorpus } = require('../rag/qa-korpus');
@@ -3803,26 +3927,43 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     const cleanUrl = url.split('#')[0];
 
     const { fetchLexDocument } = require('../rag/fetch-lex');
-    const { chunkLegalDocument } = require('../rag/chunker');
+    const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
+    const { insertStructuredChunks } = require('../rag/advanced-corpus');
     const { getEmbeddingsBatch } = require('../rag/embeddings');
 
     // Fetch and parse lex.uz document
     console.log(`[LEX INGEST] Fetching: ${cleanUrl}`);
     const doc = await fetchLexDocument(cleanUrl);
+    const lexMeta = doc.metadata || {};
+    const inferredLanguage = cleanUrl.includes('/uz/') ? 'uz' : 'ru';
 
     if (!doc.body || doc.body.trim().length < 100) {
       return res.status(400).json({ error: 'Hujjat matni topilmadi yoki bo\'sh. URL to\'g\'ri ekanligini tekshiring.' });
     }
 
     const finalLawName = law_name || doc.title || cleanUrl;
-    const docId = `lex_${topic}_${Date.now()}`;
+    const lexDocSuffix = cleanUrl.split('/').filter(Boolean).pop() || Date.now();
+    const docId = `lex_${topic}_${lexDocSuffix}`;
+    const rawHtml = doc.rawHtml || '';
 
-    // Chunk using the legal-aware chunker
-    const chunks = chunkLegalDocument(doc.body, {
+    // Chunk Lex HTML structurally so prim articles become first-class rows.
+    const chunks = chunkLegalDocumentStructured(rawHtml || doc.body, {
+      ...lexMeta,
       law_name: finalLawName,
       doc_id: docId,
       source_url: cleanUrl,
-      category: topic
+      category: topic,
+      is_valid: true,
+      is_active: lexMeta.is_active !== false,
+      status_label: lexMeta.status_label || null,
+      adoption_date: lexMeta.adoption_date || null,
+      document_number: lexMeta.document_number || null,
+      language: lexMeta.language || inferredLanguage,
+      source_type: 'uploaded_doc',
+      quality_score: 0.8,
+      verified_by: req.session.adminId,
+    }, {
+      isHtml: Boolean(rawHtml),
     });
 
     if (chunks.length === 0) {
@@ -3848,37 +3989,13 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       }
     }
 
-    // Insert into corpus
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      // Remove previous version of this URL if re-ingesting
-      await client.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
-
-      for (let i = 0; i < chunks.length; i++) {
-        const c = chunks[i];
-        const m = c.metadata || {};
-        const articleNums = (m.articles || []).map(a => a.number).filter(Boolean);
-        const embStr = embeddings[i] ? `[${embeddings[i].join(',')}]` : null;
-        await client.query(`
-          INSERT INTO legal_chunks (law_name, doc_id, source_url, category, chunk_text, chunk_index,
-            article_numbers, chapter, is_valid, embedding, source_type, quality_score, verified_by)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9::vector,'uploaded_doc',0.8,$10)
-        `, [
-          finalLawName, docId, cleanUrl, topic, c.text, i,
-          articleNums.length ? articleNums : null,
-          m.chapter || null,
-          embStr,
-          req.session.adminId
-        ]);
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+    // Replace any previous ingest for this Lex URL, then store structured rows.
+    await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
+    for (let i = 0; i < chunks.length; i++) {
+      chunks[i].chunkIndex = i;
+      chunks[i].embedding = embeddings[i] || null;
     }
+    await insertStructuredChunks(chunks);
 
     // Also index in Justify RAG (fire-and-forget, non-blocking)
     let justifyResult = null;
@@ -3900,7 +4017,7 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       category: topic,
       chunksTotal: chunks.length,
       embedded: embeddedCount,
-      language: cleanUrl.includes('/uz/') ? 'uz' : 'ru',
+      language: inferredLanguage,
       ingestBy: req.session?.adminId || null,
     });
 
@@ -3957,111 +4074,76 @@ app.get('/api/rag/ingest-log', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/rag/uploaded-documents/:docId — remove uploaded document from corpus.
-// Accepts both 'uploaded_doc' (admin panel uploads) and 'law_text' (lex.uz fetch)
-// so a single endpoint covers every source_type that shows up in the UI list.
-app.delete('/api/rag/uploaded-documents/:docId', requireMasterAdmin, async (req, res) => {
-  try {
-    const decoded = decodeURIComponent(req.params.docId);
-    const result = await pool.query(
-      `DELETE FROM legal_chunks
-       WHERE doc_id = $1
-         AND source_type IN ('uploaded_doc', 'law_text')
-       RETURNING id`,
-      [decoded]
-    );
-    res.json({ success: true, deleted: result.rowCount });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// DELETE /api/rag/ingest-log/:logId — full removal: finds the document referenced
-// by a row in rag_ingest_log, deletes every chunk that matches the same
-// source_url (preferred) or law_name (fallback), and purges matching log rows
-// so the upload history no longer shows the entry.
-//
-// This is what powers the 🗑️ button next to each row in the Upload History panel.
-app.delete('/api/rag/ingest-log/:logId', requireMasterAdmin, async (req, res) => {
+// DELETE /api/rag/ingest-log/:id — remove one ingest-log entry and its linked corpus rows
+app.delete('/api/rag/ingest-log/:id', requireMasterAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
-    const logId = parseInt(req.params.logId, 10);
-    if (!Number.isFinite(logId)) {
-      return res.status(400).json({ error: 'Invalid log id' });
+    const logId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(logId) || logId <= 0) {
+      return res.status(400).json({ error: 'Noto‘g‘ri ingest-log ID' });
     }
 
     await client.query('BEGIN');
 
-    // 1. Fetch the log row so we know WHICH document to delete.
-    const logRow = await client.query(
-      `SELECT source_type, source_url, law_name, file_name, category
-       FROM rag_ingest_log WHERE id = $1`,
-      [logId]
-    );
-    if (logRow.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Yuklash yozuvi topilmadi' });
-    }
-    const entry = logRow.rows[0];
+    const logResult = await client.query(`
+      SELECT id, source_type, source_url, file_name, law_name, category
+      FROM rag_ingest_log
+      WHERE id = $1
+      LIMIT 1
+    `, [logId]);
 
-    // 2. Delete every legal_chunks row linked to this document.
-    //    Priority: source_url → law_name (uploaded files have no URL).
-    //    We match on any of these keys so both URL and file ingestions work.
-    let chunkResult;
+    if (logResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Yuklash tarixi yozuvi topilmadi' });
+    }
+
+    const entry = logResult.rows[0];
+    let deletedChunks = 0;
+
     if (entry.source_url) {
-      chunkResult = await client.query(
+      const chunkResult = await client.query(
         `DELETE FROM legal_chunks WHERE source_url = $1 RETURNING id`,
         [entry.source_url]
       );
-    } else if (entry.law_name) {
-      chunkResult = await client.query(
-        `DELETE FROM legal_chunks WHERE law_name = $1 RETURNING id`,
-        [entry.law_name]
-      );
-    } else {
-      chunkResult = { rowCount: 0 };
+      deletedChunks += chunkResult.rowCount;
+    } else if (entry.source_type === 'file') {
+      const chunkResult = await client.query(`
+        DELETE FROM legal_chunks
+        WHERE source_type = 'uploaded_doc'
+          AND law_name = $1
+          AND ($2::varchar IS NULL OR category = $2)
+        RETURNING id
+      `, [entry.law_name || '', entry.category || null]);
+      deletedChunks += chunkResult.rowCount;
     }
 
-    // 3. Also clean up every log row pointing at the same source so re-upload
-    //    history isn't littered with stale duplicates for this document.
-    let logDeleteResult = { rowCount: 0 };
-    if (entry.source_url) {
-      logDeleteResult = await client.query(
-        `DELETE FROM rag_ingest_log WHERE source_url = $1 RETURNING id`,
-        [entry.source_url]
-      );
-    } else if (entry.law_name) {
-      logDeleteResult = await client.query(
-        `DELETE FROM rag_ingest_log WHERE law_name = $1 AND source_url IS NULL RETURNING id`,
-        [entry.law_name]
-      );
-    } else {
-      logDeleteResult = await client.query(
-        `DELETE FROM rag_ingest_log WHERE id = $1 RETURNING id`,
-        [logId]
-      );
-    }
-
+    await client.query(`DELETE FROM rag_ingest_log WHERE id = $1`, [logId]);
     await client.query('COMMIT');
-
-    console.log(`[CORPUS-DELETE] log=${logId} entry="${entry.law_name || entry.source_url || entry.file_name}" chunks=${chunkResult.rowCount} logs=${logDeleteResult.rowCount}`);
 
     res.json({
       success: true,
-      chunksDeleted: chunkResult.rowCount,
-      logEntriesDeleted: logDeleteResult.rowCount,
-      target: {
-        source_url: entry.source_url,
-        law_name: entry.law_name,
-        file_name: entry.file_name,
-      },
+      deletedChunks,
+      deletedLogId: logId,
     });
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
-    console.error('[CORPUS-DELETE] error:', error);
+    await client.query('ROLLBACK');
     res.status(500).json({ error: error.message });
   } finally {
     client.release();
+  }
+});
+
+// DELETE /api/rag/uploaded-documents/:docId — remove uploaded document from corpus
+app.delete('/api/rag/uploaded-documents/:docId', requireMasterAdmin, async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const result = await pool.query(
+      `DELETE FROM legal_chunks WHERE doc_id = $1 AND source_type IN ('uploaded_doc', 'law_text') RETURNING id`,
+      [decodeURIComponent(docId)]
+    );
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -4886,7 +4968,6 @@ async function runMigrations() {
       await subscription.initSubscriptionSchema();
     } catch (e) { console.log('[SUBSCRIPTION] Init skipped:', e.message); }
 
-    // Initialize QA Korpus — expert-corrected answers semantic cache (Stage 1)
     try {
       const { initQaKorpus } = require('../rag/qa-korpus');
       await initQaKorpus();

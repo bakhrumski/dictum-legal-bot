@@ -21,13 +21,15 @@ const CHARS_PER_TOKEN = 4;  // rough estimate for Uzbek/Russian legal text
 
 // ========== PATTERNS FOR LEGAL DOCUMENTS (UZBEK + RUSSIAN) ==========
 
-// Superscript digits used in prim (inserted) articles: 8¹-modda, 4²-modda
-const SUPER = '⁰¹²³⁴⁵⁶⁷⁸⁹';
-
-// Uzbek article: "123-modda." / "123¹-modda." / "Modda 123."
-// Russian article: "Статья 123." / "Статья 123¹."
+// Uzbek article: "123-modda." or "Modda 123."
+// Russian article: "Статья 123." or "Статья 123<sup>1</sup>."
+const SUPERSCRIPT_CLASS = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+const SUPER_DIGITS = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+  '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+};
 const ARTICLE_PATTERN = new RegExp(
-  `^(\\d+[${SUPER}]*[\\s-]*(?:-\\s*)?modda[\\s.:]|modda\\s+\\d+[${SUPER}]*[\\s.:]|Статья\\s+\\d+[${SUPER}]*)`,
+  `^(\\d+(?:[${SUPERSCRIPT_CLASS}]+)?[\\s-]*(?:-\\s*)?modda(?:\\s+prim\\s+\\d+)?[\\s.:]|modda\\s+\\d+(?:\\s+prim\\s+\\d+)?[\\s.:]|Статья\\s+\\d+(?:[${SUPERSCRIPT_CLASS}]+)?)`,
   'im'
 );
 
@@ -41,6 +43,38 @@ const SECTION_PATTERN = /^(\d+[\s-]*(?:-\s*)?bo['']lim[\s.:]|bo['']lim\s+\d+[\s.
 
 // Match paragraph numbering within articles
 const PARAGRAPH_PATTERN = /^\d+\)\s/m;
+
+function toSuperscriptDigits(value = '') {
+  return String(value || '')
+    .split('')
+    .map((digit) => SUPER_DIGITS[digit] || digit)
+    .join('');
+}
+
+function extractArticleNumber(text = '') {
+  const uzPrimMatch = text.match(/^(\d+)[\s-]*(?:-\s*)?modda\s+prim\s+(\d+)/i);
+  if (uzPrimMatch) {
+    return `${uzPrimMatch[1]}${toSuperscriptDigits(uzPrimMatch[2])}`;
+  }
+
+  const uzSupMatch = text.match(new RegExp(`^(\\d+)([${SUPERSCRIPT_CLASS}]+)?[\\s-]*(?:-\\s*)?modda`, 'i'));
+  if (uzSupMatch) {
+    return `${uzSupMatch[1]}${uzSupMatch[2] || ''}`;
+  }
+
+  const moddaFirstMatch = text.match(/^modda\s+(\d+)(?:\s+prim\s+(\d+))?/i);
+  if (moddaFirstMatch) {
+    return `${moddaFirstMatch[1]}${moddaFirstMatch[2] ? toSuperscriptDigits(moddaFirstMatch[2]) : ''}`;
+  }
+
+  const ruMatch = text.match(new RegExp(`^Статья\\s+(\\d+)([${SUPERSCRIPT_CLASS}]+)?`, 'i'));
+  if (ruMatch) {
+    return `${ruMatch[1]}${ruMatch[2] || ''}`;
+  }
+
+  const fallback = text.match(/(\d+)/);
+  return fallback ? fallback[1] : null;
+}
 
 /**
  * Parse a legal document into structured sections.
@@ -90,11 +124,9 @@ function parseDocument(text) {
     // Check for article header
     if (ARTICLE_PATTERN.test(trimmed)) {
       flushArticle();
-      // Extract article number
-      const numMatch = trimmed.match(new RegExp(`(\\d+[${SUPER}]*)`));
       currentArticle = {
         type: 'article',
-        number: numMatch ? numMatch[1] : null,
+        number: extractArticleNumber(trimmed),
         title: trimmed,
         body: '',
         chapter: currentChapter,

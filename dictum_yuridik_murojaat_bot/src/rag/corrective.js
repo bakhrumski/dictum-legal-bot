@@ -11,6 +11,7 @@
  */
 
 const RELEVANCE_THRESHOLD = 0.5;
+const { buildKeywordArtifacts, normalizeUzbekForSearch } = require('./search-utils');
 
 /**
  * Grade chunks using Claude (single batch call).
@@ -79,15 +80,25 @@ ${chunksText}
  * Keyword-based fallback grading (no LLM needed).
  */
 function gradeByKeywords(query, chunks) {
-  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  const search = buildKeywordArtifacts(query);
+  const normalizedQuery = normalizeUzbekForSearch(query);
 
   return chunks
     .map(chunk => {
-      const content = (chunk.chunk_text || '').toLowerCase();
-      const matches = queryWords.length
-        ? queryWords.filter(w => content.includes(w)).length / queryWords.length
+      const content = normalizeUzbekForSearch(chunk.chunk_text || '');
+      const termHits = search.searchTokens.length
+        ? search.searchTokens.filter((token) => content.includes(token)).length
+        : 0;
+      const phraseMatch = search.phrases.some((phrase) => content.includes(phrase));
+      const exactQueryMatch = normalizedQuery.length >= 4 && content.includes(normalizedQuery);
+      let relevance = search.searchTokens.length > 0
+        ? termHits / search.searchTokens.length
         : 0.3;
-      return { ...chunk, relevance: matches };
+
+      if (phraseMatch) relevance += 0.25;
+      if (exactQueryMatch) relevance += 0.2;
+
+      return { ...chunk, relevance: Math.min(1, relevance) };
     })
     .sort((a, b) => b.relevance - a.relevance);
 }

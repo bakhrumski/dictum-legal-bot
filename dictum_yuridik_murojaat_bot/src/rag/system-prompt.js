@@ -1,5 +1,8 @@
 'use strict';
 
+const { getChunkArticleRefs } = require('./citation-utils');
+const { getDefinitionPromptAddendum, getTermExplanationRule } = require('./query-intent');
+
 /**
  * Advanced System Prompt Builder for JuristAI
  *
@@ -28,6 +31,7 @@
  * @param {string} opts.ragContext - formatted RAG chunks with metadata
  * @param {string} opts.fewShotBlock - formatted QA bank examples
  * @param {Object[]} opts.retrievedChunks - raw chunk objects for citation metadata
+ * @param {string} opts.userQuestion - raw user question for intent-aware prompt rules
  * @returns {string}
  */
 function buildAdvancedPrompt(opts = {}) {
@@ -37,10 +41,13 @@ function buildAdvancedPrompt(opts = {}) {
     ragContext = '',
     fewShotBlock = '',
     retrievedChunks = [],
+    userQuestion = '',
   } = opts;
 
   // Build citation reference table from retrieved chunks
   const citationTable = buildCitationTable(retrievedChunks);
+  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+  const termExplanationRule = getTermExplanationRule(userQuestion);
 
   return `Siz O'zbekiston ${topicLabel || "huquqi"} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
 Sizning javoblaringiz aniq, to'liq va FAQAT manba bilan asoslangan bo'lishi SHART.
@@ -81,6 +88,8 @@ MAJBURIY 4-QISMLI JAVOB TUZILMASI:
 ══════════════════════════════════════
 
 Javobingizni QATTIYAN quyidagi 4 bo'limda yozing. Har bir bo'lim "##" sarlavha bilan boshlanishi SHART:
+
+${definitionPromptAddendum}
 
 ## 1. Bevosita javob
 Foydalanuvchi savoliga TO'G'RIDAN-TO'G'RI, ANIQ javob bering — 2-4 gapda.
@@ -129,7 +138,7 @@ TAQIQLANGAN NARSALAR:
 - Bo'limlarni TAKRORLAMASLIK. Har bir bo'lim YANGI ma'lumot berishi shart.
 - "Holat tahlili", "Maslahat", "Amaliy qadamlar" nomli ortiqcha bo'limlar YOZMANG.
 - Javob FAQAT O'zbek (lotin) tilida — hech qachon rus yoki ingliz tilida.
-- Savolda berilgan tushunchani qayta tushuntirmang.
+- ${termExplanationRule.slice(2)}
 - Umumiy, har kimga ma'lum gaplar yozmang.
 
 ${citationTable ? `\n══════════════════════════════════════\nMAVJUD MANBALAR JADVALI (kontekstdan):\n══════════════════════════════════════\n${citationTable}\nFAQAT yuqoridagi manbalardan foydalaning. Yangi manba TO'QIB CHIQARMANG.\n` : ''}
@@ -150,7 +159,7 @@ function buildCitationTable(chunks) {
   const seen = new Set();
 
   for (const chunk of chunks) {
-    const art = chunk.articleNumber || (chunk.article_numbers ? chunk.article_numbers[0] : '');
+    const art = getChunkArticleRefs(chunk)[0] || '';
     const law = chunk.lawName || chunk.law_name || '';
     const part = chunk.partNumber || chunk.part_number || '';
     const url = chunk.sourceUrl || chunk.source_url || '';

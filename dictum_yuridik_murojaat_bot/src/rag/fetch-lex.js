@@ -93,7 +93,11 @@ async function fetchLexDocument(urlOrId) {
   const html = await httpGet(url);
   console.log(`[FETCH-LEX] Downloaded ${(html.length / 1024).toFixed(0)} KB`);
 
-  return parseLexHtml(html, url);
+  const parsed = parseLexHtml(html, url);
+  return {
+    ...parsed,
+    rawHtml: html,
+  };
 }
 
 /**

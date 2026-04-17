@@ -16,6 +16,8 @@
 
 const { pool } = require('../database/db');
 const { normalizeResponseForUser } = require('../rag/prim-notation');
+const { getChunkArticleRefs } = require('../rag/citation-utils');
+const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 
 // ════════════════════════════════════════
 // LEGAL CHAT SERVICE
@@ -53,6 +55,7 @@ async function processLegalChat(opts) {
     const serverModule = require('../api/server');
     // If server doesn't export these, we use our own lightweight versions below
     callAI = serverModule.callAI;
+    retrieveLegalContext = serverModule.retrieveLegalContext;
   } catch {
     // Fallback: call Groq directly if server module not available
     callAI = callGroqDirect;
@@ -61,26 +64,40 @@ async function processLegalChat(opts) {
   // RAG retrieval
   let ragContext = '';
   try {
-    const { hybridSearch, textOnlySearch } = require('../rag/legal-corpus');
-    const { getEmbedding } = require('../rag/embeddings');
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    if (typeof retrieveLegalContext === 'function') {
+      const ragResult = await retrieveLegalContext(message, topic || null, 'uz');
+      const results = Array.isArray(ragResult?.chunks) ? ragResult.chunks : [];
 
-    let results = [];
-    if (apiKey) {
-      try {
-        results = await hybridSearch(message, { category: topic, limit: 6, apiKey });
-      } catch { /* fall through to text-only */ }
-    }
-    if (!results || results.length === 0) {
-      results = await textOnlySearch(message, { category: topic, limit: 6 });
-    }
+      if (ragResult?.context) {
+        ragContext = ragResult.context;
+      } else if (results.length > 0) {
+        ragContext = results.map((r, i) => {
+          const arts = getChunkArticleRefs(r).join(', ');
+          const badge = r.source_type === 'verified_qa' ? ' [TASDIQLANGAN]' : '';
+          return `[${i + 1}] ${r.law_name}${badge}${arts ? ` (${arts}-moddalar)` : ''}\n${r.chunk_text}`;
+        }).join('\n\n');
+      }
+    } else {
+      const { hybridSearch, textOnlySearch } = require('../rag/legal-corpus');
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
 
-    if (results && results.length > 0) {
-      ragContext = results.map((r, i) => {
-        const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
-        const badge = r.source_type === 'verified_qa' ? ' [TASDIQLANGAN]' : '';
-        return `[${i + 1}] ${r.law_name}${badge}${arts ? ` (${arts}-moddalar)` : ''}\n${r.chunk_text}`;
-      }).join('\n\n');
+      let results = [];
+      if (apiKey) {
+        try {
+          results = await hybridSearch(message, { category: topic, limit: 6, apiKey });
+        } catch { /* fall through to text-only */ }
+      }
+      if (!results || results.length === 0) {
+        results = await textOnlySearch(message, { category: topic, limit: 6 });
+      }
+
+      if (results && results.length > 0) {
+        ragContext = results.map((r, i) => {
+          const arts = getChunkArticleRefs(r).join(', ');
+          const badge = r.source_type === 'verified_qa' ? ' [TASDIQLANGAN]' : '';
+          return `[${i + 1}] ${r.law_name}${badge}${arts ? ` (${arts}-moddalar)` : ''}\n${r.chunk_text}`;
+        }).join('\n\n');
+      }
     }
   } catch (ragErr) {
     console.warn('[PORTAL] RAG retrieval failed:', ragErr.message);
@@ -88,7 +105,7 @@ async function processLegalChat(opts) {
 
   // Build system prompt
   const topicLabel = LEGAL_TOPICS[topic] || topic || 'Umumiy huquq';
-  const systemPrompt = buildLegalSystemPrompt(topicLabel, ragContext);
+  const systemPrompt = buildLegalSystemPrompt(topicLabel, ragContext, message);
 
   // Build messages array
   const aiMessages = [{ role: 'system', text: systemPrompt }];
@@ -145,7 +162,10 @@ async function processLegalChat(opts) {
   };
 }
 
-function buildLegalSystemPrompt(topicLabel, ragContext) {
+function buildLegalSystemPrompt(topicLabel, ragContext, userQuestion = '') {
+  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+  const termExplanationRule = getTermExplanationRule(userQuestion);
+
   return `Siz O'zbekiston ${topicLabel} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
 
 QATTIQ QOIDALAR:
@@ -160,6 +180,8 @@ ${ragContext ? '7. Quyidagi QONUNCHILIK KONTEKSTIGA BIRINCHI NAVBATDA tayanib ja
 JAVOB TUZILMASI:
 
 Savolni avval tahlil qiling: bu NAZARIY savol yoki AMALIY savol?
+
+${definitionPromptAddendum}
 
 ## Huquqiy asos
 Tegishli qonun(lar) — har birini shu formatda keltiring:
@@ -177,7 +199,7 @@ TAQIQLAR:
 - "Holat tahlili", "Amaliy qadamlar", "Maslahat" bo'limlarini YOZMANG
 - Huquqiy asos bo'limida AYTILGAN ma'lumotni qayta yozmang va boshqa so'zlar bilan takrorlamang
 - "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling", "Huquqlaringizni biling" YOZMANG
-- Savolda berilgan tushunchani qayta tushuntirmang
+${termExplanationRule}
 
 ${ragContext ? `\nQONUNCHILIK KONTEKSTI:\n${ragContext}\n` : ''}
 > Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;

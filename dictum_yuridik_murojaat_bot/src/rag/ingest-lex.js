@@ -28,8 +28,10 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { chunkLegalDocument } = require('./chunker');
+const { chunkLegalDocumentStructured } = require('./structural-chunker');
 const { getEmbeddingsBatch, detectProvider } = require('./embeddings');
 const { insertChunks, deleteByDocId, getCorpusStats, rebuildVectorIndex, initLegalCorpus } = require('./legal-corpus');
+const { insertStructuredChunks } = require('./advanced-corpus');
 const { fetchLexDocument } = require('./fetch-lex');
 const { getLawsForCategory, getAllLaws, getRegistryStats } = require('./lex-registry');
 
@@ -119,6 +121,45 @@ async function ingestText(body, docMeta) {
   return inserted;
 }
 
+async function ingestStructuredHtml(rawHtml, docMeta) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.error('ERROR: Set GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
+    process.exit(1);
+  }
+
+  const provider = detectProvider();
+  console.log(`\n=== Ingesting (structured): ${docMeta.law_name} (${provider}) ===`);
+  console.log(`  Category: ${docMeta.category}`);
+  console.log(`  Doc ID:   ${docMeta.doc_id}`);
+  console.log(`  Source:   ${docMeta.source_url || 'lex.uz html'}`);
+
+  const chunks = chunkLegalDocumentStructured(rawHtml, docMeta, { isHtml: true });
+  if (chunks.length === 0) {
+    console.log('  WARNING: No structured chunks generated. Check document format.');
+    return 0;
+  }
+
+  console.log(`  Chunks:   ${chunks.length}`);
+  console.log('  Generating embeddings...');
+
+  const texts = chunks.map((chunk) => chunk.text);
+  const embeddings = await getEmbeddingsBatch(texts, apiKey);
+
+  for (let i = 0; i < chunks.length; i++) {
+    chunks[i].embedding = embeddings[i];
+    chunks[i].chunkIndex = i;
+  }
+
+  await deleteByDocId(docMeta.doc_id);
+
+  const inserted = await insertStructuredChunks(chunks);
+  const totalInserted = inserted.parents + inserted.children;
+  console.log(`  DONE: ${totalInserted} structured chunks inserted (${inserted.parents} parents, ${inserted.children} children)\n`);
+
+  return totalInserted;
+}
+
 // ========== INGEST FROM FILE ==========
 
 async function ingestFile(filePath, opts = {}) {
@@ -140,6 +181,11 @@ async function ingestFile(filePath, opts = {}) {
     source_url: opts.sourceUrl || fileMeta.source_url || null,
     category,
     enforcement_date: fileMeta.enforcement_date || null,
+    adoption_date: fileMeta.adoption_date || null,
+    document_number: fileMeta.document_number || null,
+    status_label: fileMeta.status_label || null,
+    is_active: fileMeta.is_active !== 'false',
+    language: fileMeta.language || 'ru',
     is_valid: true
   };
 
@@ -156,25 +202,51 @@ async function ingestFromUrl(url, opts = {}) {
   }
 
   const doc = await fetchLexDocument(url);
+  const lexMeta = doc.metadata || {};
+  const inferredLanguage = url.includes('/uz/') ? 'uz' : 'ru';
 
   const docMeta = {
+    ...lexMeta,
     law_name: opts.lawName || doc.title,
     doc_id: opts.docId || url.split('/').pop(),
     source_url: url,
     category,
-    enforcement_date: opts.enforcementDate || null,
-    is_valid: true
+    enforcement_date: opts.enforcementDate || lexMeta.enforcement_date || null,
+    adoption_date: opts.adoptionDate || lexMeta.adoption_date || null,
+    document_number: opts.documentNumber || lexMeta.document_number || null,
+    status_label: lexMeta.status_label || null,
+    is_active: lexMeta.is_active !== false,
+    language: opts.language || lexMeta.language || inferredLanguage,
+    is_valid: true,
   };
 
   // Optionally save the raw text to legal-docs/ for backup
   const saveDir = path.join(__dirname, '..', '..', 'legal-docs', category);
   if (!fs.existsSync(saveDir)) fs.mkdirSync(saveDir, { recursive: true });
   const savePath = path.join(saveDir, `${docMeta.doc_id}.txt`);
-  const header = `---\nlaw_name: ${docMeta.law_name}\ndoc_id: ${docMeta.doc_id}\nsource_url: ${url}\ncategory: ${category}\n---\n\n`;
+  const header = [
+    '---',
+    `law_name: ${docMeta.law_name}`,
+    `doc_id: ${docMeta.doc_id}`,
+    `source_url: ${url}`,
+    `category: ${category}`,
+    `language: ${docMeta.language || inferredLanguage}`,
+    docMeta.adoption_date ? `adoption_date: ${docMeta.adoption_date}` : null,
+    docMeta.document_number ? `document_number: ${docMeta.document_number}` : null,
+    docMeta.status_label ? `status_label: ${docMeta.status_label}` : null,
+    docMeta.is_active === false ? 'is_active: false' : 'is_active: true',
+    '---',
+    '',
+  ].filter(Boolean).join('\n');
   fs.writeFileSync(savePath, header + doc.body, 'utf-8');
   console.log(`  Saved raw text: ${savePath}`);
 
-  return ingestText(doc.body, docMeta);
+  return ingestStructuredHtml(doc.rawHtml || doc.body, {
+    ...docMeta,
+    source_type: 'law_text',
+    quality_score: 0.5,
+    verified_by: null,
+  });
 }
 
 // ========== INGEST FROM REGISTRY ==========
