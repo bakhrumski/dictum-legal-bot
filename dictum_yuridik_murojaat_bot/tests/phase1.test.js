@@ -23,6 +23,8 @@ const fs = require('fs');
 const { parseLexHtml } = require('../src/rag/fetch-lex');
 const { parseDocument } = require('../src/rag/chunker');
 const { extractArticleRefsFromText, getChunkArticleRefs } = require('../src/rag/citation-utils');
+const { buildAdvancedPrompt } = require('../src/rag/system-prompt');
+const { getDefinitionPromptAddendum, getTermExplanationRule, isDefinitionQuery } = require('../src/rag/query-intent');
 
 // ─── Test harness ────────────────────────────────────────────────────────────
 let passed = 0;
@@ -303,6 +305,12 @@ const advancedCorpusSrc = fs.readFileSync(
 const ingestLexSrc = fs.readFileSync(
   path.join(__dirname, '../src/rag/ingest-lex.js'), 'utf8'
 );
+const portalServicesSrc = fs.readFileSync(
+  path.join(__dirname, '../src/portal/services.js'), 'utf8'
+);
+const systemPromptSrc = fs.readFileSync(
+  path.join(__dirname, '../src/rag/system-prompt.js'), 'utf8'
+);
 
 test('legal-corpus: ALTER TABLE adds is_active column', () => {
   assertMatch(legalCorpusSrc, /ADD COLUMN IF NOT EXISTS is_active BOOLEAN/i, 'is_active column');
@@ -450,6 +458,56 @@ test('buildTopicPrompt MUST NOT contain pretrained topicKnowledge leakage', () =
 
 test('buildTopicPrompt declares YAGONA (sole) source = RAG context', () => {
   assertMatch(serverSrc, /YAGONA huquqiy manbangiz/, 'sole-source declaration');
+});
+
+test('query-intent detects true definition questions without matching action queries', () => {
+  assertTrue(isDefinitionQuery('Advokatlik siri nima?'), 'nima? definition detected');
+  assertTrue(isDefinitionQuery('Advokat stajyori kim?'), 'kim? definition detected');
+  assertTrue(isDefinitionQuery("Advokat stajyorining huquqiy maqomi?"), 'huquqiy maqomi detected');
+  assertFalse(isDefinitionQuery("Advokatlik siri buzilganda nima qilish kerak?"), 'action query must not be treated as definition');
+});
+
+test('definition prompt addendum explicitly requires direct legal definition first', () => {
+  const addendum = getDefinitionPromptAddendum('Advokatlik siri nima?');
+  assertMatch(addendum, /DEFINITSIYA SAVOLI ANIQLANDI/, 'definition marker present');
+  assertMatch(addendum, /BIRINCHI 1-2 gapida aynan shu tushunchaning bevosita ta'rifini bering/, 'direct-definition rule present');
+});
+
+test('non-definition queries keep the anti-repetition rule', () => {
+  assertMatch(
+    getTermExplanationRule("Advokatlik siri buzilganda nima qilish kerak?"),
+    /qayta tushuntirmang/i,
+    'anti-repetition rule preserved for action queries'
+  );
+});
+
+test('buildTopicPrompt source includes intent-aware definition instructions', () => {
+  assertMatch(serverSrc, /getDefinitionPromptAddendum/, 'server prompt imports definition addendum');
+  assertMatch(serverSrc, /buildTopicPrompt\(topic, ragContext, userQuestion = ''\)/, 'buildTopicPrompt accepts user question');
+  assertMatch(serverSrc, /const definitionPromptAddendum = getDefinitionPromptAddendum\(userQuestion\)/, 'server prompt computes definition addendum');
+  assertMatch(serverSrc, /const termExplanationRule = getTermExplanationRule\(userQuestion\)/, 'server prompt computes explanation rule');
+});
+
+test('portal prompt source includes intent-aware definition instructions', () => {
+  assertMatch(portalServicesSrc, /buildLegalSystemPrompt\(topicLabel, ragContext, userQuestion = ''\)/, 'portal prompt accepts user question');
+  assertMatch(portalServicesSrc, /const definitionPromptAddendum = getDefinitionPromptAddendum\(userQuestion\)/, 'portal prompt computes definition addendum');
+});
+
+test('advanced prompt source includes intent-aware definition instructions', () => {
+  assertMatch(systemPromptSrc, /userQuestion = ''/, 'advanced prompt accepts user question');
+  assertMatch(systemPromptSrc, /const definitionPromptAddendum = getDefinitionPromptAddendum\(userQuestion\)/, 'advanced prompt computes definition addendum');
+});
+
+test('buildAdvancedPrompt switches off the blanket no-redefinition rule for definition queries', () => {
+  const prompt = buildAdvancedPrompt({
+    topicLabel: 'Advokatura',
+    userQuestion: 'Advokatlik siri nima?',
+    ragContext: 'QONUNCHILIK KONTEKSTI',
+    retrievedChunks: [],
+  });
+  assertMatch(prompt, /DEFINITSIYA SAVOLI ANIQLANDI/, 'definition addendum rendered');
+  assertMatch(prompt, /bevosita ta'rifini bering/, 'definition-first instruction rendered');
+  assertMatch(prompt, /Bu definitsiya savoli: savoldagi tushunchani aynan kontekstdagi huquqiy mazmuni bilan bevosita tushuntiring\./, 'definition rule overrides blanket ban');
 });
 
 test('MAJBURIY IQTIBOS FORMATI block is present and matches the spec shape', () => {
