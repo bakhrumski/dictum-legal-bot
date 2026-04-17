@@ -375,6 +375,7 @@ function mountAdvancedRoutes(app, deps) {
                 ragContext,
                 fewShotBlock,
                 retrievedChunks: chunks,
+                userQuestion: message,
               });
             },
           });
@@ -492,6 +493,7 @@ function mountAdvancedRoutes(app, deps) {
         ragContext,
         fewShotBlock,
         retrievedChunks: searchResults,
+        userQuestion: message,
       });
       // Inject korpus ground truth (sim 0.78-0.92) ABOVE the normal prompt
       if (korpusGroundTruth) {

@@ -19,6 +19,7 @@ const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase,
 const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
 const { getChunkArticleRefs } = require('../rag/citation-utils');
+const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
@@ -2576,8 +2577,10 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   return { context, meta, chunks: goodChunks };
 }
 
-function buildTopicPrompt(topic, ragContext) {
+function buildTopicPrompt(topic, ragContext, userQuestion = '') {
   const topicLabel = LEGAL_TOPICS[topic] || topic;
+  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+  const termExplanationRule = getTermExplanationRule(userQuestion);
 
   return `Siz O'zbekiston ${topicLabel} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
 Sizning YAGONA huquqiy manbangiz — quyida berilgan KONTEKST (lex.uz dan olingan faol qonun matnlari).
@@ -2616,6 +2619,8 @@ MAJBURIY JAVOB TUZILMASI:
 ═══════════════════════════════════════
 Savolni avval tahlil qiling: bu NAZARIY savol (tushuncha, ta'rif, qonun mazmunini tushuntirish) yoki AMALIY savol (aniq holat, muammo, nima qilish kerak)?
 
+${definitionPromptAddendum}
+
 ## Huquqiy asos
 Tegishli qonun(lar) — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan oling.
 
@@ -2650,7 +2655,7 @@ FAQAT foydalanuvchi bilmasligi mumkin bo'lgan YANGI ma'lumot: aniq murojaat joyi
 TAQIQLAR:
 - Huquqiy asos bo'limida AYTILGAN ma'lumotni qayta yozmang va boshqa so'zlar bilan takrorlamang
 - "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling", "Huquqlaringizni biling" kabi umumiy gaplar YOZMANG
-- Savolda berilgan tushunchani qayta tushuntirmang — foydalanuvchi buni allaqachon biladi
+${termExplanationRule}
 
 ═══════════════════════════════════════
 TAQIQLANGAN NARSALAR:
@@ -2909,7 +2914,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
       ragMeta = ragResult.meta || null;
     }
 
-    let systemPrompt = topic ? buildTopicPrompt(topic, ragContext) : buildLegalSearchPrompt(databases);
+    let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases);
     if (korpusGroundTruth) {
       systemPrompt = korpusGroundTruth + '\n\n' + systemPrompt;
     }

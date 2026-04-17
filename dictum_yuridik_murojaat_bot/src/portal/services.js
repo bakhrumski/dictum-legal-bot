@@ -17,6 +17,7 @@
 const { pool } = require('../database/db');
 const { normalizeResponseForUser } = require('../rag/prim-notation');
 const { getChunkArticleRefs } = require('../rag/citation-utils');
+const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 
 // ════════════════════════════════════════
 // LEGAL CHAT SERVICE
@@ -89,7 +90,7 @@ async function processLegalChat(opts) {
 
   // Build system prompt
   const topicLabel = LEGAL_TOPICS[topic] || topic || 'Umumiy huquq';
-  const systemPrompt = buildLegalSystemPrompt(topicLabel, ragContext);
+  const systemPrompt = buildLegalSystemPrompt(topicLabel, ragContext, message);
 
   // Build messages array
   const aiMessages = [{ role: 'system', text: systemPrompt }];
@@ -146,7 +147,10 @@ async function processLegalChat(opts) {
   };
 }
 
-function buildLegalSystemPrompt(topicLabel, ragContext) {
+function buildLegalSystemPrompt(topicLabel, ragContext, userQuestion = '') {
+  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+  const termExplanationRule = getTermExplanationRule(userQuestion);
+
   return `Siz O'zbekiston ${topicLabel} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
 
 QATTIQ QOIDALAR:
@@ -161,6 +165,8 @@ ${ragContext ? '7. Quyidagi QONUNCHILIK KONTEKSTIGA BIRINCHI NAVBATDA tayanib ja
 JAVOB TUZILMASI:
 
 Savolni avval tahlil qiling: bu NAZARIY savol yoki AMALIY savol?
+
+${definitionPromptAddendum}
 
 ## Huquqiy asos
 Tegishli qonun(lar) — har birini shu formatda keltiring:
@@ -178,7 +184,7 @@ TAQIQLAR:
 - "Holat tahlili", "Amaliy qadamlar", "Maslahat" bo'limlarini YOZMANG
 - Huquqiy asos bo'limida AYTILGAN ma'lumotni qayta yozmang va boshqa so'zlar bilan takrorlamang
 - "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling", "Huquqlaringizni biling" YOZMANG
-- Savolda berilgan tushunchani qayta tushuntirmang
+${termExplanationRule}
 
 ${ragContext ? `\nQONUNCHILIK KONTEKSTI:\n${ragContext}\n` : ''}
 > Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
