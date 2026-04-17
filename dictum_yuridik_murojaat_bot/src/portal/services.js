@@ -16,6 +16,7 @@
 
 const { pool } = require('../database/db');
 const { normalizeResponseForUser } = require('../rag/prim-notation');
+const { getChunkArticleRefs } = require('../rag/citation-utils');
 
 // ════════════════════════════════════════
 // LEGAL CHAT SERVICE
@@ -77,7 +78,7 @@ async function processLegalChat(opts) {
 
     if (results && results.length > 0) {
       ragContext = results.map((r, i) => {
-        const arts = r.article_numbers ? r.article_numbers.join(', ') : '';
+        const arts = getChunkArticleRefs(r).join(', ');
         const badge = r.source_type === 'verified_qa' ? ' [TASDIQLANGAN]' : '';
         return `[${i + 1}] ${r.law_name}${badge}${arts ? ` (${arts}-moddalar)` : ''}\n${r.chunk_text}`;
       }).join('\n\n');

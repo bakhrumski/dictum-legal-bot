@@ -22,6 +22,7 @@ const fs = require('fs');
 // We can call it directly without touching pg/embeddings.
 const { parseLexHtml } = require('../src/rag/fetch-lex');
 const { parseDocument } = require('../src/rag/chunker');
+const { extractArticleRefsFromText, getChunkArticleRefs } = require('../src/rag/citation-utils');
 
 // ─── Test harness ────────────────────────────────────────────────────────────
 let passed = 0;
@@ -271,6 +272,23 @@ test('legacy chunker recognizes spoken prim notation in plain text', () => {
   assertEq(sections[0].number, '8¹', 'spoken prim notation normalized to superscript article number');
 });
 
+test('citation-utils extracts article numbers from retrieved chunk text', () => {
+  const refs = extractArticleRefsFromText([
+    '9-modda. Advokatlik siri',
+    'Advokatlik siri advokat tomonidan kasb faoliyatini amalga oshirish munosabati bilan olingan ma’lumotlardir.',
+  ].join('\n'));
+  assertEq(refs[0], '9', 'article number recovered from chunk text');
+});
+
+test('citation-utils falls back to chunk text when article metadata is missing', () => {
+  const refs = getChunkArticleRefs({
+    chunk_text: '9-modda. Advokatlik siri\nAdvokatlik siri qonun bilan himoya qilinadi.',
+    article_numbers: null,
+    article_number_display: null,
+  });
+  assertEq(refs[0], '9', 'chunk text fallback recovers article number');
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  2. Schema + retrieval filter — static source checks
 // ═════════════════════════════════════════════════════════════════════════════
@@ -411,6 +429,14 @@ test('empty-context branch returns the zero-hallucination fallback sentence', ()
     serverSrc,
     /Ushbu savol bo['’]yicha lex\.uz ma['’]lumotlar bazasida aniq ma['’]lumot topilmadi/,
     'fallback sentence present'
+  );
+});
+
+test('retrieveLegalContext does not force "topilmadi" when chunks exist but article metadata is missing', () => {
+  assertMatch(
+    serverSrc,
+    /Kontekstdagi ayrim bo‘laklarda modda raqami metadata ko‘rinmadi/,
+    'soft fallback for missing article metadata is present'
   );
 });
 
