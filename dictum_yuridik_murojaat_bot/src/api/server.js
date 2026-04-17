@@ -3885,7 +3885,8 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     const cleanUrl = url.split('#')[0];
 
     const { fetchLexDocument } = require('../rag/fetch-lex');
-    const { chunkLegalDocument } = require('../rag/chunker');
+    const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
+    const { insertStructuredChunks } = require('../rag/advanced-corpus');
     const { getEmbeddingsBatch } = require('../rag/embeddings');
 
     // Fetch and parse lex.uz document
@@ -3899,10 +3900,12 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     }
 
     const finalLawName = law_name || doc.title || cleanUrl;
-    const docId = `lex_${topic}_${Date.now()}`;
+    const lexDocSuffix = cleanUrl.split('/').filter(Boolean).pop() || Date.now();
+    const docId = `lex_${topic}_${lexDocSuffix}`;
+    const rawHtml = doc.rawHtml || '';
 
-    // Chunk using the legal-aware chunker
-    const chunks = chunkLegalDocument(doc.body, {
+    // Chunk Lex HTML structurally so prim articles become first-class rows.
+    const chunks = chunkLegalDocumentStructured(rawHtml || doc.body, {
       ...lexMeta,
       law_name: finalLawName,
       doc_id: docId,
@@ -3914,6 +3917,11 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       adoption_date: lexMeta.adoption_date || null,
       document_number: lexMeta.document_number || null,
       language: lexMeta.language || inferredLanguage,
+      source_type: 'uploaded_doc',
+      quality_score: 0.8,
+      verified_by: req.session.adminId,
+    }, {
+      isHtml: Boolean(rawHtml),
     });
 
     if (chunks.length === 0) {
@@ -3939,43 +3947,13 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
       }
     }
 
-    // Insert into corpus
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      // Remove previous version of this URL if re-ingesting
-      await client.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
-
-      for (let i = 0; i < chunks.length; i++) {
-        const c = chunks[i];
-        const m = c.metadata || {};
-        const articleNums = (m.articles || []).map(a => a.number).filter(Boolean);
-        const embStr = embeddings[i] ? `[${embeddings[i].join(',')}]` : null;
-        await client.query(`
-          INSERT INTO legal_chunks (law_name, doc_id, source_url, category, chunk_text, chunk_index,
-            article_numbers, chapter, is_valid, is_active, status_label, adoption_date, document_number,
-            language, embedding, source_type, quality_score, verified_by)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9,$10,$11,$12,$13,$14::vector,'uploaded_doc',0.8,$15)
-        `, [
-          finalLawName, docId, cleanUrl, topic, c.text, i,
-          articleNums.length ? articleNums : null,
-          m.chapter || null,
-          m.is_active !== false,
-          m.status_label || null,
-          m.adoption_date || null,
-          m.document_number || null,
-          m.language || inferredLanguage,
-          embStr,
-          req.session.adminId
-        ]);
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+    // Replace any previous ingest for this Lex URL, then store structured rows.
+    await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
+    for (let i = 0; i < chunks.length; i++) {
+      chunks[i].chunkIndex = i;
+      chunks[i].embedding = embeddings[i] || null;
     }
+    await insertStructuredChunks(chunks);
 
     // Also index in Justify RAG (fire-and-forget, non-blocking)
     let justifyResult = null;
@@ -4054,12 +4032,71 @@ app.get('/api/rag/ingest-log', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// DELETE /api/rag/ingest-log/:id — remove one ingest-log entry and its linked corpus rows
+app.delete('/api/rag/ingest-log/:id', requireMasterAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const logId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(logId) || logId <= 0) {
+      return res.status(400).json({ error: 'Noto‘g‘ri ingest-log ID' });
+    }
+
+    await client.query('BEGIN');
+
+    const logResult = await client.query(`
+      SELECT id, source_type, source_url, file_name, law_name, category
+      FROM rag_ingest_log
+      WHERE id = $1
+      LIMIT 1
+    `, [logId]);
+
+    if (logResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Yuklash tarixi yozuvi topilmadi' });
+    }
+
+    const entry = logResult.rows[0];
+    let deletedChunks = 0;
+
+    if (entry.source_url) {
+      const chunkResult = await client.query(
+        `DELETE FROM legal_chunks WHERE source_url = $1 RETURNING id`,
+        [entry.source_url]
+      );
+      deletedChunks += chunkResult.rowCount;
+    } else if (entry.source_type === 'file') {
+      const chunkResult = await client.query(`
+        DELETE FROM legal_chunks
+        WHERE source_type = 'uploaded_doc'
+          AND law_name = $1
+          AND ($2::varchar IS NULL OR category = $2)
+        RETURNING id
+      `, [entry.law_name || '', entry.category || null]);
+      deletedChunks += chunkResult.rowCount;
+    }
+
+    await client.query(`DELETE FROM rag_ingest_log WHERE id = $1`, [logId]);
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      deletedChunks,
+      deletedLogId: logId,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
 // DELETE /api/rag/uploaded-documents/:docId — remove uploaded document from corpus
 app.delete('/api/rag/uploaded-documents/:docId', requireMasterAdmin, async (req, res) => {
   try {
     const { docId } = req.params;
     const result = await pool.query(
-      `DELETE FROM legal_chunks WHERE doc_id = $1 AND source_type = 'uploaded_doc' RETURNING id`,
+      `DELETE FROM legal_chunks WHERE doc_id = $1 AND source_type IN ('uploaded_doc', 'law_text') RETURNING id`,
       [decodeURIComponent(docId)]
     );
     res.json({ success: true, deleted: result.rowCount });

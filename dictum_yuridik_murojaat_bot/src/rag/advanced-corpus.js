@@ -121,7 +121,9 @@ async function insertStructuredChunks(chunks) {
 
     for (const chunk of chunks) {
       const m = chunk.metadata || {};
-      const articleNums = m.articleNumber ? [m.articleNumber] : [];
+      const articleNums = m.articleNumber
+        ? [m.articleNumber]
+        : (m.articles || []).map((article) => article.number).filter(Boolean);
       const embStr = chunk.embedding ? `[${chunk.embedding.join(',')}]` : null;
 
       await client.query(`
@@ -134,6 +136,7 @@ async function insertStructuredChunks(chunks) {
           cross_references,
           enforcement_date, is_valid,
           is_active, status_label, adoption_date, document_number,
+          language, source_type, quality_score, verified_by,
           embedding
         ) VALUES (
           $1, $2, $3, $4,
@@ -144,7 +147,8 @@ async function insertStructuredChunks(chunks) {
           $15,
           $16, TRUE,
           $17, $18, $19, $20,
-          $21::vector
+          $21, $22, $23, $24,
+          $25::vector
         )
       `, [
         m.law_name || '',
@@ -158,7 +162,7 @@ async function insertStructuredChunks(chunks) {
         chunk.chunkType || 'parent',
         m.chunkId || null,
         chunk.parentId || null,
-        m.articleNumber || null,
+        m.articleNumber || articleNums[0] || null,
         m.partNumber || null,
         m.partType || 'article',
         m.references && m.references.length > 0 ? m.references : null,
@@ -167,6 +171,10 @@ async function insertStructuredChunks(chunks) {
         m.status_label || null,
         m.adoption_date || null,
         m.document_number || null,
+        m.language || 'ru',
+        m.source_type || 'law_text',
+        m.quality_score == null ? 0.5 : m.quality_score,
+        m.verified_by || null,
         embStr,
       ]);
 
