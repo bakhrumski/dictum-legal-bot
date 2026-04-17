@@ -28,8 +28,10 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { chunkLegalDocument } = require('./chunker');
+const { chunkLegalDocumentStructured } = require('./structural-chunker');
 const { getEmbeddingsBatch, detectProvider } = require('./embeddings');
 const { insertChunks, deleteByDocId, getCorpusStats, rebuildVectorIndex, initLegalCorpus } = require('./legal-corpus');
+const { insertStructuredChunks } = require('./advanced-corpus');
 const { fetchLexDocument } = require('./fetch-lex');
 const { getLawsForCategory, getAllLaws, getRegistryStats } = require('./lex-registry');
 
@@ -119,6 +121,45 @@ async function ingestText(body, docMeta) {
   return inserted;
 }
 
+async function ingestStructuredHtml(rawHtml, docMeta) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.error('ERROR: Set GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
+    process.exit(1);
+  }
+
+  const provider = detectProvider();
+  console.log(`\n=== Ingesting (structured): ${docMeta.law_name} (${provider}) ===`);
+  console.log(`  Category: ${docMeta.category}`);
+  console.log(`  Doc ID:   ${docMeta.doc_id}`);
+  console.log(`  Source:   ${docMeta.source_url || 'lex.uz html'}`);
+
+  const chunks = chunkLegalDocumentStructured(rawHtml, docMeta, { isHtml: true });
+  if (chunks.length === 0) {
+    console.log('  WARNING: No structured chunks generated. Check document format.');
+    return 0;
+  }
+
+  console.log(`  Chunks:   ${chunks.length}`);
+  console.log('  Generating embeddings...');
+
+  const texts = chunks.map((chunk) => chunk.text);
+  const embeddings = await getEmbeddingsBatch(texts, apiKey);
+
+  for (let i = 0; i < chunks.length; i++) {
+    chunks[i].embedding = embeddings[i];
+    chunks[i].chunkIndex = i;
+  }
+
+  await deleteByDocId(docMeta.doc_id);
+
+  const inserted = await insertStructuredChunks(chunks);
+  const totalInserted = inserted.parents + inserted.children;
+  console.log(`  DONE: ${totalInserted} structured chunks inserted (${inserted.parents} parents, ${inserted.children} children)\n`);
+
+  return totalInserted;
+}
+
 // ========== INGEST FROM FILE ==========
 
 async function ingestFile(filePath, opts = {}) {
@@ -200,7 +241,12 @@ async function ingestFromUrl(url, opts = {}) {
   fs.writeFileSync(savePath, header + doc.body, 'utf-8');
   console.log(`  Saved raw text: ${savePath}`);
 
-  return ingestText(doc.body, docMeta);
+  return ingestStructuredHtml(doc.rawHtml || doc.body, {
+    ...docMeta,
+    source_type: 'law_text',
+    quality_score: 0.5,
+    verified_by: null,
+  });
 }
 
 // ========== INGEST FROM REGISTRY ==========

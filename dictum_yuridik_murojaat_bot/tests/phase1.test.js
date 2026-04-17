@@ -21,6 +21,7 @@ const fs = require('fs');
 // parseLexHtml is a pure function over HTML → { title, body, metadata }.
 // We can call it directly without touching pg/embeddings.
 const { parseLexHtml } = require('../src/rag/fetch-lex');
+const { parseDocument } = require('../src/rag/chunker');
 
 // ─── Test harness ────────────────────────────────────────────────────────────
 let passed = 0;
@@ -254,6 +255,22 @@ test('title is still extracted alongside metadata', () => {
   assertMatch(body, /1-modda/, 'body preserved');
 });
 
+test('legacy chunker still recognizes superscript prim articles in plain text', () => {
+  const sections = parseDocument([
+    '8¹-modda.',
+    'Advokat stajyori advokatning topshirig‘iga ko‘ra faoliyat yuritadi.',
+  ].join('\n'));
+  assertEq(sections[0].number, '8¹', 'superscript article number preserved');
+});
+
+test('legacy chunker recognizes spoken prim notation in plain text', () => {
+  const sections = parseDocument([
+    '8-modda prim 1.',
+    'Advokat stajyori advokatlik tuzilmasida stajirovka o‘taydi.',
+  ].join('\n'));
+  assertEq(sections[0].number, '8¹', 'spoken prim notation normalized to superscript article number');
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  2. Schema + retrieval filter — static source checks
 // ═════════════════════════════════════════════════════════════════════════════
@@ -264,6 +281,9 @@ const legalCorpusSrc = fs.readFileSync(
 );
 const advancedCorpusSrc = fs.readFileSync(
   path.join(__dirname, '../src/rag/advanced-corpus.js'), 'utf8'
+);
+const ingestLexSrc = fs.readFileSync(
+  path.join(__dirname, '../src/rag/ingest-lex.js'), 'utf8'
 );
 
 test('legal-corpus: ALTER TABLE adds is_active column', () => {
@@ -340,6 +360,11 @@ test('legal-corpus: rrfSearch SELECT exposes adoption_date, document_number, art
 test('advanced-corpus: insertStructuredChunks binds is_active / status_label / adoption_date / document_number', () => {
   assertMatch(advancedCorpusSrc, /is_active,\s*status_label,\s*adoption_date,\s*document_number/, 'insert columns');
   assertMatch(advancedCorpusSrc, /m\.is_active\s*!==\s*false/, 'is_active default-true binding');
+});
+
+test('advanced-corpus: insertStructuredChunks preserves language/source_type/quality_score/verified_by', () => {
+  assertMatch(advancedCorpusSrc, /language,\s*source_type,\s*quality_score,\s*verified_by/, 'structured metadata columns');
+  assertMatch(advancedCorpusSrc, /m\.source_type\s*\|\|\s*'law_text'/, 'source_type binding');
 });
 
 test('advanced-corpus: every retrieval-path is_valid=TRUE is paired with is_active filter', () => {
@@ -429,6 +454,31 @@ test('/api/legal-chat uses qa_korpus Stage 1 interceptor for expert-corrected an
     serverSrc,
     /provider:\s*'qa-korpus'/,
     'legal-chat returns provider=qa-korpus on verbatim match'
+  );
+});
+
+test('server ingest-url uses structural chunking + structured insertion for lex.uz HTML', () => {
+  assertMatch(serverSrc, /chunkLegalDocumentStructured/, 'ingest-url uses structural chunker');
+  assertMatch(serverSrc, /insertStructuredChunks/, 'ingest-url stores structured rows');
+});
+
+test('CLI ingest-from-url uses structural chunking + structured insertion for lex.uz HTML', () => {
+  assertMatch(ingestLexSrc, /chunkLegalDocumentStructured/, 'CLI ingest uses structural chunker');
+  assertMatch(ingestLexSrc, /insertStructuredChunks/, 'CLI ingest stores structured rows');
+  assertMatch(ingestLexSrc, /doc\.rawHtml/, 'CLI ingest consumes raw HTML from fetch-lex');
+});
+
+test('server exposes DELETE /api/rag/ingest-log/:id for dashboard cleanup', () => {
+  assertMatch(serverSrc, /app\.delete\('\/api\/rag\/ingest-log\/:id'/, 'ingest-log delete route exists');
+  assertMatch(serverSrc, /DELETE FROM rag_ingest_log WHERE id = \$1/, 'ingest-log delete removes log row');
+  assertMatch(serverSrc, /DELETE FROM legal_chunks WHERE source_url = \$1 RETURNING id/, 'ingest-log delete removes URL-linked chunks');
+});
+
+test('uploaded-documents delete route removes legacy law_text rows too', () => {
+  assertMatch(
+    serverSrc,
+    /DELETE FROM legal_chunks WHERE doc_id = \$1 AND source_type IN \('uploaded_doc', 'law_text'\) RETURNING id/,
+    'uploaded-documents delete covers uploaded_doc and law_text'
   );
 });
 
