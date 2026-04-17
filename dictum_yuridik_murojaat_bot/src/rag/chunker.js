@@ -21,9 +21,15 @@ const CHARS_PER_TOKEN = 4;  // rough estimate for Uzbek/Russian legal text
 
 // ========== PATTERNS FOR LEGAL DOCUMENTS (UZBEK + RUSSIAN) ==========
 
-// Uzbek article: "123-modda." or "Modda 123."
-// Russian article: "Статья 123." or "Статья 123<sup>1</sup>."
-const ARTICLE_PATTERN = /^(\d+[\s-]*(?:-\s*)?modda[\s.:]|modda\s+\d+[\s.:]|Статья\s+\d+)/im;
+// Superscript digits used in prim (inserted) articles: 8¹-modda, 4²-modda
+const SUPER = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+
+// Uzbek article: "123-modda." / "123¹-modda." / "Modda 123."
+// Russian article: "Статья 123." / "Статья 123¹."
+const ARTICLE_PATTERN = new RegExp(
+  `^(\\d+[${SUPER}]*[\\s-]*(?:-\\s*)?modda[\\s.:]|modda\\s+\\d+[${SUPER}]*[\\s.:]|Статья\\s+\\d+[${SUPER}]*)`,
+  'im'
+);
 
 // Uzbek chapter: "1-bob." or "I bob." or "BOB 1."
 // Russian chapter: "ГЛАВА I." or "ГЛАВА 1." or "Глава I."
@@ -85,7 +91,7 @@ function parseDocument(text) {
     if (ARTICLE_PATTERN.test(trimmed)) {
       flushArticle();
       // Extract article number
-      const numMatch = trimmed.match(/(\d+)/);
+      const numMatch = trimmed.match(new RegExp(`(\\d+[${SUPER}]*)`));
       currentArticle = {
         type: 'article',
         number: numMatch ? numMatch[1] : null,

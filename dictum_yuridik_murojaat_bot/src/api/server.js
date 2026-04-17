@@ -21,6 +21,7 @@ const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-n
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
 const { webSearch, formatWebResults } = require('../rag/web-search');
+const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 // ── Justify RAG (optional external service, kept as bonus fallback) ──
 const {
   isJustifyAvailable,
@@ -2410,17 +2411,23 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     }
   }
 
-  // ── 4. Web Search fallback (Tavily) ──
+  // ── 4. Web Search fallback (Tavily) + Lex.uz Live Search ──
   let webResults = [];
+  let lexLiveResults = [];
   if (needsWebSearch) {
-    try {
-      webResults = await webSearch(query);
-    } catch (_) {
-      webResults = [];
+    // Run Tavily and lex.uz live search in parallel
+    const [tavilyRes, lexRes] = await Promise.all([
+      webSearch(query).catch(() => []),
+      searchLexUz(query, { maxDocs: 2, maxChars: 4000 }).catch(() => []),
+    ]);
+    webResults = tavilyRes;
+    lexLiveResults = lexRes;
+    if (lexLiveResults.length > 0) {
+      console.log(`[RAG] Lex.uz live search returned ${lexLiveResults.length} documents`);
     }
   }
 
-  if (goodChunks.length === 0 && webResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, sources: [] } };
+  if (goodChunks.length === 0 && webResults.length === 0 && lexLiveResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, lexLiveResults: 0, sources: [] } };
 
   // ── 5. Format context for prompt ──
   // Max chars per chunk: verified_qa gets more space, law text is trimmed
@@ -2447,8 +2454,9 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
   }).join('\n\n');
 
   const webText = formatWebResults(webResults, language);
+  const lexLiveText = formatLexSearchResults(lexLiveResults, language);
 
-  console.log(`[RAG] ${searchMode}: ${goodChunks.length} chunks + ${webResults.length} web results for "${query.substring(0, 50)}"`);
+  console.log(`[RAG] ${searchMode}: ${goodChunks.length} chunks + ${webResults.length} web + ${lexLiveResults.length} lex-live for "${query.substring(0, 50)}"`);
 
   // Collect source metadata for the frontend
   const sourcesSet = new Map();
@@ -2461,6 +2469,9 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     s.count++;
     if (r.law_name) s.laws.add(r.law_name.substring(0, 60));
   });
+  if (lexLiveResults.length > 0) {
+    sourcesSet.set('lex_live', { type: 'lex_live', count: lexLiveResults.length, laws: new Set(lexLiveResults.map(r => r.title.substring(0, 60))) });
+  }
   const sources = Array.from(sourcesSet.values()).map(s => ({
     type: s.type, count: s.count, laws: Array.from(s.laws).slice(0, 3)
   }));
@@ -2469,6 +2480,7 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     searchMode,
     chunks: goodChunks.length,
     webResults: webResults.length,
+    lexLiveResults: lexLiveResults.length,
     sources,
     strategy: route.strategy,
   };
@@ -2510,14 +2522,16 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
 
   const citationTable = citationBlocks.length > 0
     ? `\n┌─────────────────────────────────────────────┐\n│  RUXSAT ETILGAN MANBALAR (FAQAT shulardan!) │\n└─────────────────────────────────────────────┘\n${citationBlocks.join('\n')}\n\n⚠️ FAQAT yuqoridagi modda raqamlarini keltiring. BOSHQA modda raqami YOZMANG.\n⚠️ Har bir iqtibos uchun to'liq formatda yozing: qonun nomi, sana, raqam, modda, URL.\n`
-    : '\n⚠️ KONTEKSTDA modda raqamlari topilmadi. Javob bering: "Ushbu savol bo\'yicha lex.uz ma\'lumotlar bazasida aniq ma\'lumot topilmadi."\n';
+    : lexLiveResults.length > 0
+      ? '\n⚠️ Mahalliy bazada modda topilmadi, lekin lex.uz dan jonli qidiruv natijalari topildi. Quyidagi LEX.UZ ma\'lumotlariga asoslanib javob bering.\n'
+      : '\n⚠️ KONTEKSTDA modda raqamlari topilmadi. Javob bering: "Ushbu savol bo\'yicha lex.uz ma\'lumotlar bazasida aniq ma\'lumot topilmadi."\n';
 
   let context;
   if (isUz) {
     context = `\n\nQONUNCHILIK KONTEKSTI (${searchMode}, ${goodChunks.length} natija):\n`
       + citationTable
       + `\nQuyidagi qonun matnlariga BIRINCHI NAVBATDA asoslaning.\n\n`
-      + chunksText + webText + `\n\n`
+      + chunksText + webText + lexLiveText + `\n\n`
       + `╔══════════════════════════════════════════╗\n`
       + `║  QATTIQ TAQIQ (BUZSANGIZ — XATO JAVOB):  ║\n`
       + `╠══════════════════════════════════════════╣\n`
@@ -2536,7 +2550,7 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     context = `\n\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${searchMode}, ${goodChunks.length} результатов):\n`
       + citationTable
       + `\nОсновывайся ПРЕЖДЕ ВСЕГО на следующих материалах.\n\n`
-      + chunksText + webText + `\n\n`
+      + chunksText + webText + lexLiveText + `\n\n`
       + `ВАЖНО: Цитируй ТОЛЬКО статьи из таблицы выше. Не придумывай номера статей.`;
   }
 

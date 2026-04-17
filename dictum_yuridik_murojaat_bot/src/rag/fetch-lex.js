@@ -322,4 +322,4 @@ function formatForIngestion(doc, opts = {}) {
   return `${header}\n\n${doc.body}`;
 }
 
-module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata };
+module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet };
