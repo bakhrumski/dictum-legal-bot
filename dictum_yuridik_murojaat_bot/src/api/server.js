@@ -2547,63 +2547,44 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}.${dt.getFullYear()}`;
   };
 
-  const citationBlocks = [];
-  const seenCitations = new Set();
+  // ── Build a clean source reference list (no box-drawings, no instructions) ──
+  const sourceRefLines = [];
+  const seenSourceRefs = new Set();
   for (const r of goodChunks) {
     const articleRefs = getChunkArticleRefs(r);
     if (articleRefs.length === 0) continue;
     for (const art of articleRefs) {
       const key = `${r.law_name}_${art}`;
-      if (seenCitations.has(key)) continue;
-      seenCitations.add(key);
+      if (seenSourceRefs.has(key)) continue;
+      seenSourceRefs.add(key);
       const dateStr = formatDate(r.adoption_date);
       const docNum = r.document_number;
-      const meta = [dateStr, docNum ? `№ ${docNum}` : null].filter(Boolean).join(', ');
-      const locator = `${art}-modda`;
-      const url = r.source_url || '';
-      citationBlocks.push(
-        `  • ${r.law_name}\n` +
-        (meta ? `    (${meta})\n` : '') +
-        `    ${locator}\n` +
-        (url ? `    ${url}` : '')
+      const meta = [dateStr, docNum ? `\u2116 ${docNum}` : null].filter(Boolean).join(', ');
+      sourceRefLines.push(
+        `- ${r.law_name}` +
+        (meta ? ` (${meta})` : '') +
+        `, ${art}-modda` +
+        (r.source_url ? ` | ${r.source_url}` : '')
       );
     }
   }
 
-  const citationTable = citationBlocks.length > 0
-    ? `\n┌─────────────────────────────────────────────┐\n│  RUXSAT ETILGAN MANBALAR (FAQAT shulardan!) │\n└─────────────────────────────────────────────┘\n${citationBlocks.join('\n')}\n\n⚠️ FAQAT yuqoridagi modda raqamlarini keltiring. BOSHQA modda raqami YOZMANG.\n⚠️ Har bir iqtibos uchun to'liq formatda yozing: qonun nomi, sana, raqam, modda, URL.\n`
-    : (goodChunks.length > 0
-      ? `\n⚠️ Kontekstdagi ayrim bo’laklarda modda raqami metadata ko’rinmadi. Agar modda raqami matndan aniq ko’rinsa, o’sha modda bilan javob bering; aks holda "modda raqami kontekstdan aniq ko’rinmadi" deb yozing. "Ma’lumot topilmadi" deb yozmang.\n`
-      : lexLiveResults.length > 0
-        ? `\n⚠️ Mahalliy bazada modda topilmadi, lekin lex.uz dan jonli qidiruv natijalari topildi. Quyidagi LEX.UZ ma’lumotlariga asoslanib javob bering.\n`
-        : `\n⚠️ KONTEKSTDA tegishli qonun bo’lagi topilmadi. Javob bering: "Ushbu savol bo’yicha lex.uz ma’lumotlar bazasida aniq ma’lumot topilmadi."\n`);
+  const sourceBlock = sourceRefLines.length > 0
+    ? `\nMANBALAR:\n${sourceRefLines.join('\n')}\n`
+    : '';
 
+  // ── Build clean data-only context (no instructions, no box-drawings) ──
   let context;
   if (isUz) {
-    context = `\n\nQONUNCHILIK KONTEKSTI (${searchMode}, ${goodChunks.length} natija):\n`
-      + citationTable
-      + `\nQuyidagi qonun matnlariga BIRINCHI NAVBATDA asoslaning.\n\n`
-      + chunksText + webText + lexLiveText + `\n\n`
-      + `╔══════════════════════════════════════════╗\n`
-      + `║  QATTIQ TAQIQ (BUZSANGIZ — XATO JAVOB):  ║\n`
-      + `╠══════════════════════════════════════════╣\n`
-      + `║ • FAQAT yuqoridagi "RUXSAT ETILGAN       ║\n`
-      + `║   MANBALAR" jadvalidagi modda raqamlarini║\n`
-      + `║   keltiring.                              ║\n`
-      + `║ • Boshqa modda raqamini (jadvalda yo'q)  ║\n`
-      + `║   keltirish — TO'QIB CHIQARISH.           ║\n`
-      + `║ • Pretrained bilimingizdan modda raqami  ║\n`
-      + `║   olmang. FAQAT kontekstdan.              ║\n`
-      + `║ • Agar kerakli modda kontekstda yo'q     ║\n`
-      + `║   bo'lsa: "Aniq modda raqami uchun       ║\n`
-      + `║   manba qonun matnini ko'ring" deng.     ║\n`
-      + `╚══════════════════════════════════════════╝`;
+    context = `\nQONUNCHILIK KONTEKSTI (${goodChunks.length} natija):\n`
+      + sourceBlock
+      + `\n` + chunksText + webText + lexLiveText
+      + `\n\n--- JAVOB SHU YERDAN BOSHLANSIN ---`;
   } else {
-    context = `\n\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${searchMode}, ${goodChunks.length} результатов):\n`
-      + citationTable
-      + `\nОсновывайся ПРЕЖДЕ ВСЕГО на следующих материалах.\n\n`
-      + chunksText + webText + lexLiveText + `\n\n`
-      + `ВАЖНО: Цитируй ТОЛЬКО статьи из таблицы выше. Не придумывай номера статей.`;
+    context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${goodChunks.length} результатов):\n`
+      + sourceBlock
+      + `\n` + chunksText + webText + lexLiveText
+      + `\n\n--- ОТВЕТ НАЧИНАЕТСЯ ЗДЕСЬ ---`;
   }
 
   return { context, meta, chunks: goodChunks };
@@ -2614,91 +2595,38 @@ function buildTopicPrompt(topic, ragContext, userQuestion = '') {
   const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
   const termExplanationRule = getTermExplanationRule(userQuestion);
 
-  return `Siz O'zbekiston ${topicLabel} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
-Sizning YAGONA huquqiy manbangiz — quyida berilgan KONTEKST (lex.uz dan olingan faol qonun matnlari).
-Kontekstdan tashqari HECH QANDAY bilimga tayanmang.
+  const hasContext = !!ragContext;
+  const noDataFallback = hasContext ? '' : `\nAgar kontekstda tegishli ma'lumot topilmasa, javobni "Ushbu savol bo'yicha lex.uz ma'lumotlar bazasida aniq ma'lumot topilmadi." deb boshlang va xotirangizdan modda raqami to'qib chiqarmang.\n`;
 
-╔══════════════════════════════════════════════════════════╗
-║  ENG ASOSIY QOIDA — RAG-FAQAT JAVOB (RAG-ONLY ANSWER)   ║
-╠══════════════════════════════════════════════════════════╣
-║ Sizning javoblaringiz FAQAT quyida berilgan KONTEKST    ║
-║ matniga asoslangan bo'lishi SHART. Siz qaysi modda      ║
-║ raqamida nima yozilganini "bilasiz" deb hisoblamang —   ║
-║ sizning pretrained xotirangiz NOTO'G'RI bo'lishi mumkin.║
-║                                                          ║
-║ ❌ TAQIQ: Kontekstda berilmagan modda raqamini keltirish║
-║ ❌ TAQIQ: O'z xotirangizdan modda raqami olish          ║
-║ ❌ TAQIQ: "Bilaman, bu 7-modda" deb taxmin qilish       ║
-║                                                          ║
-║ ✅ TO'G'RI: "Kontekstdagi 5-modda bo'yicha..."          ║
-║ ✅ TO'G'RI: "Aniq modda raqami kontekstda topilmadi —   ║
-║   manba qonun matnini ko'ring"                           ║
-╚══════════════════════════════════════════════════════════╝
+  // ── SYSTEM INSTRUCTIONS (ichki qoidalar — foydalanuvchiga ko'rsatilMAYDI) ──
+  const systemRules = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
 
-═══════════════════════════════════════
-QATTIQ QOIDALAR (buzsangiz, javob noto'g'ri hisoblanadi):
-═══════════════════════════════════════
-1. Javob FAQAT O'zbek (lotin) tilida — hech qachon rus yoki ingliz tilida yozmang
-2. Modda raqamlarini FAQAT KONTEKSTDAGI "RUXSAT ETILGAN MANBALAR" jadvalidan oling — boshqa joydan EMAS
-3. Agar kerakli modda kontekstda yo'q bo'lsa — modda raqami umuman yozmang. Buning o'rniga: "Kontekstda aniq modda topilmadi, manba qonun matnini to'g'ridan-to'g'ri ko'ring" deng
-4. Har bir huquqiy tasdiq uchun MANBA ko'rsating: qonun nomi, modda raqami va ANIQ QISM RAQAMI (FAQAT kontekstdagi)
-5. Javob chuqur va to'liq bo'lsin — sirtqi javob emas, huquqiy tahlil bering
-6. MODDA RAQAMLARINI TO'G'RI YOZING: prim raqamlarini saqlang (4¹, 12², 3¹). HECH QACHON prim raqamlarni oddiy raqam bilan adashtirmang
-${ragContext ? '\n7. Quyidagi KONTEKST sizning YAGONA huquqiy manbangiz — pretrained bilimingizdan QO\'SHIMCHA ma\'lumot KIRITMANG' : ''}
+ICHKI QOIDALAR (bu qoidalarni javobda YOZMANG, faqat ularga amal qiling):
+1. Javob FAQAT o'zbek (lotin) tilida yozing.
+2. FAQAT quyidagi KONTEKST ma'lumotlariga asoslaning. Pretrained xotirangizdan modda raqami olmang.
+3. Modda raqamlarini FAQAT kontekstdagi MANBALAR ro'yxatidan oling.
+4. Agar kerakli modda kontekstda yo'q bo'lsa, modda raqami yozmang.
+5. Prim moddalarni to'g'ri yozing: "N-modda prim M" (masalan: "8-modda prim 1").
+6. Har bir huquqiy tasdiq uchun manba ko'rsating: qonun nomi, modda, qism raqami, URL.
+${termExplanationRule ? `7. ${termExplanationRule}` : ''}
+${noDataFallback}`;
 
-═══════════════════════════════════════
-MAJBURIY JAVOB TUZILMASI:
-═══════════════════════════════════════
-Savolni avval tahlil qiling: bu NAZARIY savol (tushuncha, ta'rif, qonun mazmunini tushuntirish) yoki AMALIY savol (aniq holat, muammo, nima qilish kerak)?
-
+  // ── OUTPUT FORMAT (javob tuzilmasi) ──
+  const outputFormat = `
+JAVOB TUZILMASI (faqat quyidagi bo'limlarni yozing, boshqa bo'lim qo'shmang):
 ${definitionPromptAddendum}
-
 ## Huquqiy asos
-Tegishli qonun(lar) — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan oling.
-
-MAJBURIY IQTIBOS FORMATI (har bir manba uchun to'liq yozing):
-
-    O'zbekiston Respublikasining "<Qonun nomi>"gi Qonuni
-    (<sana>, № <raqam>), <modda>-modda, <qism>-qism.
-    <URL>
-
-Misol:
-    O'zbekiston Respublikasining "Advokatura to'g'risida"gi Qonuni
-    (27.12.1996, № 349-I), 5-modda, 1-qism.
-    https://lex.uz/docs/58372
-
-Qoidalar:
-- Qonun nomi, sana, raqam va URL — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan olinadi
-- Modda raqami va qism raqami ham FAQAT kontekstdan olinadi
-- Prim moddalarni to'g'ri yozing (4¹, 12², 3¹)
-- Har bir moddaning kontekstdagi ANIQ mazmunini tushuntiring (o'z so'zlaringiz bilan, lekin faktlar kontekstdan)
-
-⚠️ AGAR kontekstda kerakli ma'lumot YO'Q bo'lsa, JAVOBNING BIRINCHI QATORI shu bo'lishi SHART:
-    "Ushbu savol bo'yicha lex.uz ma'lumotlar bazasida aniq ma'lumot topilmadi."
-Va keyin hech qanday modda raqami, sana yoki raqam YOZMANG. Xotirangizdan TO'QIB CHIQARMANG.
+Kontekstdagi tegishli moddalarning mazmunini tushuntiring. Har bir modda uchun manba ko'rsating:
+Qonun nomi (sana, raqam), modda-raqam, qism. URL
 
 ## Muddatlar va jarimalar
-Bu bo'limni FAQAT qonunda ANIQ SON bor bo'lsagina yozing (masalan: "30 kun", "5 BHM jarima", "3 yil").
-Agar savol mavzusida qonunda HECH QANDAY aniq muddat yoki jarima miqdori bo'lmasa — bu bo'limni UMUMAN YOZMANG, hatto "aniq raqam mavjud emas" deb ham yozmang. Bo'limni to'liq tashlab keting.
+Bu bo'limni FAQAT qonunda aniq son bo'lsagina yozing. Aks holda bu bo'limni tashlab keting.
 
 ## Yuridik maslahat
-Maksimum 2-3 ta QISQA punkt. Har bir punkt 1-2 jumla.
-FAQAT foydalanuvchi bilmasligi mumkin bo'lgan YANGI ma'lumot: aniq murojaat joyi, kerakli hujjatlar, kam ma'lum mexanizmlar.
-TAQIQLAR:
-- Huquqiy asos bo'limida AYTILGAN ma'lumotni qayta yozmang va boshqa so'zlar bilan takrorlamang
-- "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling", "Huquqlaringizni biling" kabi umumiy gaplar YOZMANG
-${termExplanationRule}
+2-3 ta qisqa, YANGI va FOYDALI punkt. Oldingi bo'limlarda aytilgan ma'lumotni TAKRORLAMANG.`;
 
-═══════════════════════════════════════
-TAQIQLANGAN NARSALAR:
-═══════════════════════════════════════
-- Bo'limlar bir-birini TAKRORLAMASIN. Har bir bo'lim YANGI ma'lumot berishi shart.
-- "Holat tahlili" bo'limini YOZMANG — u Huquqiy asosni takrorlaydi.
-- "Amaliy qadamlar" bo'limini YOZMANG — u ko'pincha umumiy va foydasiz maslahatlar bo'ladi.
-- "Maslahat" bo'limini YOZMANG — u yuqoridagi bo'limlarni qayta ifodalaydi.
-- Umumiy, har kimga ma'lum gaplar yozmang. Faqat ANIQ, FOYDALI, YANGI ma'lumot bering.
-
-${ragContext ? ragContext + '\n' : ''}\n> ⚠️ Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
+  // ── ASSEMBLE: system rules + output format + context data ──
+  return systemRules + '\n' + outputFormat + '\n' + (ragContext ? ragContext + '\n' : '');
 }
 
 // ── ONE-SHOT: backfill qa_bank from existing verified_qa rows in legal_chunks ──
@@ -4079,7 +4007,7 @@ app.delete('/api/rag/ingest-log/:id', requireMasterAdmin, async (req, res) => {
   try {
     const logId = parseInt(req.params.id, 10);
     if (!Number.isInteger(logId) || logId <= 0) {
-      return res.status(400).json({ error: 'Noto‘g‘ri ingest-log ID' });
+      return res.status(400).json({ error: `Noto'g'ri ingest-log ID` });
     }
 
     await client.query('BEGIN');
