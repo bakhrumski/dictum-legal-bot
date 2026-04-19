@@ -504,13 +504,13 @@ test('advanced prompt source includes intent-aware definition instructions', () 
 test('retrieveLegalContext retries without category filter when topic-scoped retrieval underflows', () => {
   assertMatch(
     serverSrc,
-    /if \(topic && rawResults.length < 2 && guaranteedKeywordMatches.length === 0 && exactResults.length === 0\)/,
+    /if \(topic && totalFound < 2\)/,
     'server fallback condition present'
   );
   assertMatch(
     serverSrc,
-    /await retrieveLegalContext\(query, null, language\)/,
-    'server reruns retrieval without category'
+    /await retrieveLegalContext\(query, null, null\)/,
+    'server reruns retrieval without category or language'
   );
 });
 
