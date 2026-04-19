@@ -2266,6 +2266,19 @@ ${validDbs.indexOf('lex.uz') > -1 ? '1. **Tegishli qonunlar:** (lex.uz dan)\n   
 }
 
 // Topic labels for RAG-based legal chat
+const FAILED_ANSWER_PATTERNS = [
+  /topilmadi/i,
+  /ma'lumot\s+topilmadi/i,
+  /mavjud\s+emas/i,
+  /imkoni?\s+cheklangan/i,
+  /aniq\s+ma'lumot\s+yo'q/i,
+];
+
+function isFailedAnswer(text = '') {
+  if (!text || text.trim().length < 30) return true;
+  return FAILED_ANSWER_PATTERNS.some(p => p.test(text));
+}
+
 const LEGAL_TOPICS = {
   'mehnat':       'Mehnat huquqi',
   'oila':         'Oila huquqi',
@@ -2632,20 +2645,58 @@ ${termExplanationRule ? `8. ${termExplanationRule}` : ''}`;
 
   // ── OUTPUT FORMAT (javob tuzilmasi) ──
   const outputFormat = `
-JAVOB TUZILMASI (faqat quyidagi bo'limlarni yozing, boshqa bo'lim qo'shmang):
+JAVOB TUZILMASI (quyidagi bo'limlarni yozing):
 ${definitionPromptAddendum}
 ## Huquqiy asos
-Kontekst matnidagi tegishli moddalarning mazmunini tushuntiring.
-Har bir modda uchun manba: qonun nomi, modda-raqam, qism.
+Kontekst matnidagi tegishli moddalarning mazmunini BATAFSIL tushuntiring.
+Har bir moddani alohida ko'rsating: qonun nomi, modda-raqam, qism.
+Sodda tilda — foydalanuvchi huquqshunos bo'lmasligi mumkin.
+
+## Kimlar va shartlar
+Qonunda belgilangan shartlar, talablar yoki cheklovlarni sanab o'ting.
+Bu bo'limni FAQAT kontekstda tegishli ma'lumot bo'lsagina yozing.
 
 ## Muddatlar va jarimalar
 Bu bo'limni FAQAT qonunda aniq son bo'lsagina yozing. Aks holda bu bo'limni tashlab keting.
 
 ## Yuridik maslahat
-2-3 ta qisqa, YANGI va FOYDALI punkt. Oldingi bo'limlarda aytilgan ma'lumotni TAKRORLAMANG.`;
+2-3 ta ANIQ va FOYDALI punkt. Oldingi bo'limlarda aytilgan ma'lumotni TAKRORLAMANG.`;
 
   // ── ASSEMBLE: system rules + output format + context data ──
   return systemRules + '\n' + outputFormat + '\n' + (ragContext ? ragContext + '\n' : '');
+}
+
+function buildGeminiFallbackPrompt(topicLabel, userQuestion = '') {
+  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+
+  return `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: Foydalanuvchi savoliga O'zbekiston qonunchiligi asosida BATAFSIL, ANIQ va TUSHUNARLI javob bering.
+
+QOIDALAR:
+1. Javob FAQAT o'zbek (lotin) tilida yozing.
+2. O'zbekiston Respublikasi qonunlari, kodekslari va me'yoriy hujjatlariga asoslaning.
+3. Har bir huquqiy tasdiq uchun manba ko'rsating: qonun nomi va modda raqami.
+4. Javob BATAFSIL bo'lsin — sodda tilda, amaliy misollar bilan.
+5. Prim moddalarni to'g'ri yozing: "N-modda prim M".
+
+JAVOB TUZILMASI:
+${definitionPromptAddendum}
+## Huquqiy asos
+Tegishli qonun moddalari va ularning mazmunini batafsil tushuntiring.
+Har bir moddani alohida ko'rsating: qonun nomi, modda-raqam, qism.
+
+## Kimlar (yoki nima) va shartlar
+Qonunda belgilangan shartlar, talablar yoki cheklovlarni sanab o'ting.
+Har bir shartni alohida punkt sifatida yozing.
+
+## Amaliy tushuntirish
+Oddiy tilda, sodda misol bilan tushuntiring — foydalanuvchi huquqshunos bo'lmasligi mumkin.
+
+## Muhim cheklovlar
+Qonundagi taqiqlar yoki cheklovlarni ko'rsating (agar mavjud bo'lsa).
+
+> Eslatma: Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
 }
 
 // ── ONE-SHOT: backfill qa_bank from existing verified_qa rows in legal_chunks ──
@@ -2789,8 +2840,12 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
           };
 
           if (korpusResult.match === 'verbatim') {
-            korpusOverride = korpusResult.answer;
-            console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+            if (isFailedAnswer(korpusResult.answer)) {
+              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — answer contains failure phrase`);
+            } else {
+              korpusOverride = korpusResult.answer;
+              console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+            }
           } else if (korpusResult.match === 'context') {
             korpusGroundTruth = formatKorpusGroundTruth(korpusResult);
             console.log(`[Legal Chat] KORPUS CONTEXT id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
@@ -2851,8 +2906,12 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
           console.log(`[Legal Chat] verified_qa top match: id=${top.id} sim=${topSim.toFixed(3)} cat=${top.category}`);
 
           if (topSim >= 0.72) {
-            verifiedOverride = topParsed.answer;
-            console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
+            if (isFailedAnswer(topParsed.answer)) {
+              console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — answer contains failure phrase`);
+            } else {
+              verifiedOverride = topParsed.answer;
+              console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
+            }
           } else if (topSim >= 0.50) {
             const { formatQaFewShot } = require('../rag/advanced-corpus');
             const usable = r.rows
@@ -2916,12 +2975,36 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 
     aiMessages.push({ role: 'user', text: message });
 
-    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
-    const displayReply = normalizeResponseForUser(aiResult.text);
+    let aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
+    let displayReply = normalizeResponseForUser(aiResult.text);
+    let finalProvider = aiResult.provider;
+
+    // ── GEMINI FALLBACK: if RAG-constrained answer failed, let Gemini answer freely ──
+    if (isFailedAnswer(displayReply)) {
+      console.warn(`[Legal Chat] RAG answer failed ("topilmadi"), retrying with Gemini pretrained knowledge...`);
+      try {
+        const topicLabel = LEGAL_TOPICS[topic] || topic || 'huquq';
+        const geminiPrompt = buildGeminiFallbackPrompt(topicLabel, message);
+        const fallbackMessages = [
+          { role: 'system', text: geminiPrompt },
+          { role: 'user', text: message },
+        ];
+        const fallbackResult = await callAI(fallbackMessages, { useSearch: true, maxTokens: 8192 });
+        const fallbackReply = normalizeResponseForUser(fallbackResult.text);
+        if (!isFailedAnswer(fallbackReply)) {
+          displayReply = fallbackReply;
+          finalProvider = `${fallbackResult.provider} (fallback)`;
+          console.log(`[Legal Chat] Gemini fallback succeeded — using pretrained answer`);
+        }
+      } catch (fallbackErr) {
+        console.warn(`[Legal Chat] Gemini fallback failed: ${fallbackErr.message}`);
+      }
+    }
+
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
     res.json({
       reply: displayReply,
-      provider: aiResult.provider,
+      provider: finalProvider,
       databases: usedDbs,
       ragUsed: !!ragContext,
       rag: ragMeta,
