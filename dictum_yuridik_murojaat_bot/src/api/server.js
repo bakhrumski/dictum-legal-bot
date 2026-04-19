@@ -2289,9 +2289,9 @@ const LEGAL_TOPICS = {
  *
  * Falls back to text-only search if no embedding API key is configured.
  */
-async function retrieveLegalContext(query, topic, language = 'uz') {
+async function retrieveLegalContext(query, topic, language = null) {
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
-  const isUz = language === 'uz';
+  const isUz = language !== 'ru';
   const expandedQuery = expandQueryVariants(query);
   if (expandedQuery !== query) {
     console.log(`[RAG] Prim-expanded query: "${query}" -> "${expandedQuery}"`);
@@ -2387,9 +2387,10 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
     console.warn(`[RAG] Exact match failsafe failed: ${err.message}`);
   }
 
-  if (topic && rawResults.length < 2 && guaranteedKeywordMatches.length === 0 && exactResults.length === 0) {
-    console.warn(`[RAG] Topic-scoped retrieval underflow for "${topic}", retrying without category filter`);
-    const fallbackResult = await retrieveLegalContext(query, null, language);
+  const totalFound = rawResults.length + guaranteedKeywordMatches.length + exactResults.length;
+  if (topic && totalFound < 2) {
+    console.warn(`[RAG] Topic-scoped retrieval underflow (${totalFound} results) for "${topic}", retrying without category filter`);
+    const fallbackResult = await retrieveLegalContext(query, null, null);
     const fallbackCount = Array.isArray(fallbackResult?.chunks)
       ? fallbackResult.chunks.length
       : Number(fallbackResult?.meta?.chunks || 0);
@@ -2457,6 +2458,25 @@ async function retrieveLegalContext(query, topic, language = 'uz') {
         goodChunks,
         Math.max(goodChunks.length, 3)
       );
+    }
+  }
+
+  // ── 3b. Nuclear fallback: unscoped chunk_text ILIKE when all searches returned 0 ──
+  if (goodChunks.length === 0) {
+    try {
+      const nuclearResults = await exactMatchSearch(query, {
+        category: null,
+        language: null,
+        limit: 5,
+      });
+      if (nuclearResults.length > 0) {
+        console.log(`[RAG] Nuclear fallback: ${nuclearResults.length} unscoped exact matches`);
+        goodChunks = nuclearResults;
+        needsWebSearch = false;
+        searchMode = `${searchMode}+nuclear`;
+      }
+    } catch (err) {
+      console.warn(`[RAG] Nuclear fallback failed: ${err.message}`);
     }
   }
 
@@ -3935,7 +3955,10 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
     console.log(`[LEX INGEST] Fetching: ${cleanUrl}`);
     const doc = await fetchLexDocument(cleanUrl);
     const lexMeta = doc.metadata || {};
-    const inferredLanguage = cleanUrl.includes('/uz/') ? 'uz' : 'ru';
+    const urlHint = cleanUrl.includes('/uz/') ? 'uz' : null;
+    const bodySnippet = (doc.body || '').substring(0, 2000);
+    const hasUzbekMarkers = /\b(modda|bob|qism|huquq|qonun)\b/i.test(bodySnippet);
+    const inferredLanguage = urlHint || (hasUzbekMarkers ? 'uz' : 'ru');
 
     if (!doc.body || doc.body.trim().length < 100) {
       return res.status(400).json({ error: 'Hujjat matni topilmadi yoki bo\'sh. URL to\'g\'ri ekanligini tekshiring.' });

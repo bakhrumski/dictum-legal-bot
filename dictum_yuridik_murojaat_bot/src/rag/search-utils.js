@@ -57,6 +57,7 @@ function canonicalizeUzbekToken(token = '') {
     [/sidan$/u, 'si'],
     [/siga$/u, 'si'],
     [/sini$/u, 'si'],
+    [/si$/u, ''],
     [/ning$/u, ''],
     [/dan$/u, ''],
     [/tan$/u, ''],
