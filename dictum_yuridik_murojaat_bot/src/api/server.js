@@ -2751,6 +2751,191 @@ app.post('/api/qa-bank/backfill', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// ── ENRICH: use Gemini to expand existing qa-korpus answers into detailed format ──
+app.post('/api/qa-korpus/enrich', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id, dryRun } = req.body;
+    const whereClause = id ? 'AND k.id = $1' : '';
+    const params = id ? [id] : [];
+
+    const rows = await pool.query(`
+      SELECT k.id, k.question, k.corrected_answer, k.topic
+      FROM qa_korpus k
+      WHERE k.corrected_answer IS NOT NULL
+        ${whereClause}
+      ORDER BY k.id
+    `, params);
+
+    if (rows.rows.length === 0) {
+      return res.json({ message: 'No qa-korpus entries found', enriched: 0 });
+    }
+
+    const results = [];
+    for (const row of rows.rows) {
+      if (isFailedAnswer(row.corrected_answer)) {
+        results.push({ id: row.id, status: 'skipped', reason: 'failed answer' });
+        continue;
+      }
+
+      const topicLabel = LEGAL_TOPICS[row.topic] || row.topic || 'huquq';
+      const enrichPrompt = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: Quyidagi yurist tomonidan tasdiqlangan javobni BOYITIB, BATAFSIL va TUSHUNARLI shaklda qayta yozing.
+
+QOIDALAR:
+1. Javob FAQAT o'zbek (lotin) tilida yozing.
+2. Asl javobdagi barcha FAKTLAR, MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda raqamlari yoki qonun nomlari QO'SHMANG — faqat mavjud ma'lumotni boyiting.
+4. Har bir huquqiy tushunchani SODDA TILDA tushuntiring.
+5. Amaliy misollar va izohlar qo'shing.
+
+JAVOB TUZILMASI:
+## Huquqiy asos
+Asl javobdagi qonun manbalarini saqlab, har bir moddaning mazmunini BATAFSIL tushuntiring.
+
+## Batafsil tushuntirish
+Sodda tilda — foydalanuvchi huquqshunos bo'lmasligi mumkin. Har bir punktni alohida izohlab bering.
+
+## Amaliy ahamiyati
+Bu ma'lumot amalda nima degani? Qanday holatlarda muhim? Buzilsa nima bo'ladi?
+
+## Muhim eslatmalar
+Istisnolar, cheklovlar yoki qo'shimcha ma'lumotlar (agar mavjud bo'lsa).
+
+> Eslatma: Bu javob AI tahlili asosida boyitilgan. Asl javob yurist tomonidan tasdiqlangan.
+
+SAVOL: ${row.question}
+
+YURIST TASDIQLAGAN ASL JAVOB:
+${row.corrected_answer}
+
+BOYITILGAN JAVOBNI YOZING:`;
+
+      if (dryRun) {
+        results.push({ id: row.id, status: 'dry-run', question: row.question.substring(0, 80), originalLength: row.corrected_answer.length });
+        continue;
+      }
+
+      try {
+        const aiMessages = [
+          { role: 'system', text: enrichPrompt },
+          { role: 'user', text: row.question },
+        ];
+        const aiResult = await callAI(aiMessages, { useSearch: false, maxTokens: 8192 });
+        const enrichedAnswer = normalizeResponseForUser(aiResult.text);
+
+        if (enrichedAnswer && enrichedAnswer.length > row.corrected_answer.length && !isFailedAnswer(enrichedAnswer)) {
+          await pool.query(`
+            UPDATE qa_korpus
+            SET corrected_answer = $1, original_ai_answer = $2, updated_at = NOW()
+            WHERE id = $3
+          `, [enrichedAnswer, row.corrected_answer, row.id]);
+
+          results.push({
+            id: row.id,
+            status: 'enriched',
+            question: row.question.substring(0, 80),
+            oldLength: row.corrected_answer.length,
+            newLength: enrichedAnswer.length,
+          });
+          console.log(`[QA-KORPUS ENRICH] #${row.id} enriched: ${row.corrected_answer.length} → ${enrichedAnswer.length} chars`);
+        } else {
+          results.push({ id: row.id, status: 'skipped', reason: 'enriched answer too short or failed' });
+        }
+      } catch (aiErr) {
+        results.push({ id: row.id, status: 'error', error: aiErr.message });
+        console.warn(`[QA-KORPUS ENRICH] #${row.id} failed: ${aiErr.message}`);
+      }
+    }
+
+    const enriched = results.filter(r => r.status === 'enriched').length;
+    res.json({ total: rows.rows.length, enriched, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── ENRICH verified_qa entries in legal_chunks too ──
+app.post('/api/verified-qa/enrich', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id, dryRun } = req.body;
+    const whereClause = id ? 'AND id = $1' : '';
+    const params = id ? [id] : [];
+
+    const rows = await pool.query(`
+      SELECT id, chunk_text, category
+      FROM legal_chunks
+      WHERE source_type = 'verified_qa' AND is_valid = TRUE
+        ${whereClause}
+      ORDER BY id
+    `, params);
+
+    const parseQA = (txt) => {
+      const m = txt.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]+)$/);
+      return m ? { question: m[1].trim(), answer: m[2].trim() } : null;
+    };
+
+    const results = [];
+    for (const row of rows.rows) {
+      const parsed = parseQA(row.chunk_text);
+      if (!parsed) {
+        results.push({ id: row.id, status: 'skipped', reason: 'cannot parse Q/A format' });
+        continue;
+      }
+      if (isFailedAnswer(parsed.answer)) {
+        results.push({ id: row.id, status: 'skipped', reason: 'failed answer' });
+        continue;
+      }
+
+      if (dryRun) {
+        results.push({ id: row.id, status: 'dry-run', question: parsed.question.substring(0, 80), answerLength: parsed.answer.length });
+        continue;
+      }
+
+      try {
+        const topicLabel = LEGAL_TOPICS[row.category] || row.category || 'huquq';
+        const enrichPrompt = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: Quyidagi yurist tomonidan tasdiqlangan javobni BOYITIB, BATAFSIL va TUSHUNARLI shaklda qayta yozing.
+
+QOIDALAR:
+1. Javob FAQAT o'zbek (lotin) tilida yozing.
+2. Asl javobdagi barcha FAKTLAR, MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda raqamlari yoki qonun nomlari QO'SHMANG — faqat mavjud ma'lumotni boyiting.
+4. Har bir huquqiy tushunchani SODDA TILDA tushuntiring.
+
+SAVOL: ${parsed.question}
+ASL JAVOB: ${parsed.answer}
+
+BOYITILGAN JAVOBNI YOZING:`;
+
+        const aiMessages = [
+          { role: 'system', text: enrichPrompt },
+          { role: 'user', text: parsed.question },
+        ];
+        const aiResult = await callAI(aiMessages, { useSearch: false, maxTokens: 8192 });
+        const enriched = normalizeResponseForUser(aiResult.text);
+
+        if (enriched && enriched.length > parsed.answer.length && !isFailedAnswer(enriched)) {
+          const newChunkText = `Savol: ${parsed.question}\n\nJavob: ${enriched}`;
+          await pool.query(`UPDATE legal_chunks SET chunk_text = $1, updated_at = NOW() WHERE id = $2`, [newChunkText, row.id]);
+          results.push({ id: row.id, status: 'enriched', question: parsed.question.substring(0, 80), oldLength: parsed.answer.length, newLength: enriched.length });
+          console.log(`[VERIFIED-QA ENRICH] #${row.id} enriched: ${parsed.answer.length} → ${enriched.length} chars`);
+        } else {
+          results.push({ id: row.id, status: 'skipped', reason: 'enriched answer too short or failed' });
+        }
+      } catch (aiErr) {
+        results.push({ id: row.id, status: 'error', error: aiErr.message });
+      }
+    }
+
+    const enriched = results.filter(r => r.status === 'enriched').length;
+    res.json({ total: rows.rows.length, enriched, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── DIAGNOSTIC: inspect qa_bank state and similarity for a given question ──
 app.get('/api/qa-bank/debug', requireMasterAdmin, async (req, res) => {
   try {
