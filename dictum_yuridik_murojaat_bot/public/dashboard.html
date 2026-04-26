@@ -2535,6 +2535,15 @@
             background: rgba(107, 114, 128, 0.15);
             color: #9CA3AF;
         }
+        .ai-disclaimer {
+            margin-top: 8px;
+            padding: 6px 10px;
+            font-size: 11.5px;
+            color: #6B7280;
+            line-height: 1.5;
+        }
+        .ai-disclaimer em { font-style: italic; }
+        [data-theme="dark"] .ai-disclaimer { color: #9CA3AF; }
         .ai-provider-badge {
             font-size: 10px; font-weight: 500;
             padding: 2px 8px; border-radius: 4px;
@@ -7822,28 +7831,34 @@
                 var data = await response.json();
                 if (response.ok) {
                     aiChatHistory.push({ role: 'model', text: data.reply });
-                    // ── RAG source info badge ──
+                    // ── RAG source info badge — ONLY visible to Master Admin ──
                     var ragBadge = '';
-                    if (data.rag && data.rag.chunks > 0) {
-                        var srcLabels = {
-                            'verified_qa': '✅ Tasdiqlangan',
-                            'uploaded_doc': '📄 Yuklangan hujjat',
-                            'law_text': '📜 Qonun matni',
-                            'fetched': '🌐 Lex.uz'
-                        };
-                        var srcParts = (data.rag.sources || []).map(function(s) {
-                            var label = srcLabels[s.type] || s.type;
-                            var lawList = s.laws && s.laws.length ? ' (' + s.laws.join(', ') + ')' : '';
-                            return '<span class="ai-rag-src">' + label + ' × ' + s.count + lawList + '</span>';
-                        }).join('');
-                        var webPart = data.rag.webResults > 0 ? '<span class="ai-rag-src">🌐 Internet × ' + data.rag.webResults + '</span>' : '';
-                        ragBadge = '<div class="ai-rag-info">'
-                            + '<span class="ai-rag-mode" title="RAG search mode">📊 ' + (data.rag.searchMode || 'text') + ' | ' + data.rag.chunks + ' chunk</span>'
-                            + srcParts + webPart
-                            + '</div>';
-                    } else if (data.ragUsed === false) {
-                        ragBadge = '<div class="ai-rag-info"><span class="ai-rag-mode ai-rag-no">🤖 RAG ishlatilmadi — faqat ' + escapeHtml(data.provider || 'AI') + '</span></div>';
+                    var isMasterAdmin = (typeof currentUser !== 'undefined' && currentUser.role === 'master');
+                    if (isMasterAdmin) {
+                        if (data.rag && data.rag.chunks > 0) {
+                            var srcLabels = {
+                                'verified_qa': '✅ Tasdiqlangan',
+                                'uploaded_doc': '📄 Yuklangan hujjat',
+                                'law_text': '📜 Qonun matni',
+                                'fetched': '🌐 Lex.uz'
+                            };
+                            var srcParts = (data.rag.sources || []).map(function(s) {
+                                var label = srcLabels[s.type] || s.type;
+                                var lawList = s.laws && s.laws.length ? ' (' + s.laws.join(', ') + ')' : '';
+                                return '<span class="ai-rag-src">' + label + ' × ' + s.count + lawList + '</span>';
+                            }).join('');
+                            var webPart = data.rag.webResults > 0 ? '<span class="ai-rag-src">🌐 Internet × ' + data.rag.webResults + '</span>' : '';
+                            ragBadge = '<div class="ai-rag-info">'
+                                + '<span class="ai-rag-mode" title="RAG search mode">📊 ' + (data.rag.searchMode || 'text') + ' | ' + data.rag.chunks + ' chunk</span>'
+                                + srcParts + webPart
+                                + '</div>';
+                        } else if (data.ragUsed === false) {
+                            ragBadge = '<div class="ai-rag-info"><span class="ai-rag-mode ai-rag-no">🤖 RAG ishlatilmadi — faqat ' + escapeHtml(data.provider || 'AI') + '</span></div>';
+                        }
                     }
+                    // ── Italic disclaimer — visible to ALL users ──
+                    var aiDisclaimer = '<div class="ai-disclaimer"><em>Javob AI yordamida tayyorlandi. Professional huquqiy maslahat uchun professional yuristlarga murojaat qiling!</em></div>';
+                    ragBadge = ragBadge + aiDisclaimer;
 
                     // ── Provider badge ──
                     var providerBadge = data.provider ? '<span class="ai-provider-badge">' + escapeHtml(data.provider) + '</span>' : '';

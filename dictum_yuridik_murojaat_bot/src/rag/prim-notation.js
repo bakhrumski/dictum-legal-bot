@@ -166,10 +166,24 @@ function stripLeakedInstructions(text) {
   // Strip lines that are pure internal instruction headers
   cleaned = cleaned.replace(/^[\s*_>]*DEFINITSIYA\s+SAVOLI[^\n]*\n?/gim, '');
   cleaned = cleaned.replace(/^[\s*_>]*ICHKI\s+QOIDALAR[^\n]*\n?/gim, '');
-  cleaned = cleaned.replace(/^[\s*_>]*JAVOB\s+(TUZILMASI|FORMATI)[^\n]*\n?/gim, '');
+  cleaned = cleaned.replace(/^[\s*_>]*JAVOB\s+(TUZILMASI|FORMATI|SIFATI)[^\n]*\n?/gim, '');
   cleaned = cleaned.replace(/^[\s*_>]*JIDDIY\s+TAQIQLAR[^\n]*\n?/gim, '');
   // Strip bracketed internal hints like "[Definitsiya rejimi: ...]" if echoed
   cleaned = cleaned.replace(/\[Definitsiya\s+rejimi:[^\]]*\]/gi, '');
+
+  // Strip forbidden header lines while keeping the content beneath them.
+  // Matches: "## Yuridik maslahat", "**Yuridik maslahat**", "Yuridik maslahat:" etc.
+  const forbiddenHeaders = ['Yuridik\\s+maslahat', 'Xulosa', 'Eslatma'];
+  for (const h of forbiddenHeaders) {
+    cleaned = cleaned.replace(new RegExp(`^\\s*#{1,6}\\s*${h}\\s*:?\\s*$`, 'gim'), '');
+    cleaned = cleaned.replace(new RegExp(`^\\s*\\*\\*${h}\\*\\*\\s*:?\\s*$`, 'gim'), '');
+    cleaned = cleaned.replace(new RegExp(`^\\s*${h}\\s*:\\s*$`, 'gim'), '');
+  }
+
+  // Convert bullet characters (*, •, ·) at the start of a list item to a hyphen.
+  // Markdown bullets only — inline ** for bold are untouched.
+  cleaned = cleaned.replace(/^([ \t]*)[*•·](\s+)/gm, '$1-$2');
+
   // Collapse triple-blank-lines created by the stripping
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
   return cleaned.trim();
