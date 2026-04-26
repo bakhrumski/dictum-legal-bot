@@ -2266,6 +2266,19 @@ ${validDbs.indexOf('lex.uz') > -1 ? '1. **Tegishli qonunlar:** (lex.uz dan)\n   
 }
 
 // Topic labels for RAG-based legal chat
+const FAILED_ANSWER_PATTERNS = [
+  /topilmadi/i,
+  /ma'lumot\s+topilmadi/i,
+  /mavjud\s+emas/i,
+  /imkoni?\s+cheklangan/i,
+  /aniq\s+ma'lumot\s+yo'q/i,
+];
+
+function isFailedAnswer(text = '') {
+  if (!text || text.trim().length < 30) return true;
+  return FAILED_ANSWER_PATTERNS.some(p => p.test(text));
+}
+
 const LEGAL_TOPICS = {
   'mehnat':       'Mehnat huquqi',
   'oila':         'Oila huquqi',
@@ -2406,6 +2419,46 @@ async function retrieveLegalContext(query, topic, language = null) {
     }
   }
 
+  // ── 3a. Cross-field augmentation: pull high-relevance chunks from OTHER categories ──
+  // When user picked a topic but the question may span multiple legal fields,
+  // include the top 1-2 chunks from outside the topic if they score high enough.
+  let crossFieldResults = [];
+  if (topic && totalFound >= 1) {
+    try {
+      const existingIds = new Set(rawResults.map(r => r.id));
+      const unscopedExact = await exactMatchSearch(query, {
+        category: null,
+        language: null,
+        limit: 6,
+      });
+      const unscopedKeyword = apiKey
+        ? await keywordSearch(query, { category: null, language: null, limit: 6 })
+        : [];
+
+      const candidates = [...unscopedExact, ...unscopedKeyword]
+        .filter(c => c && c.category && c.category !== topic && !existingIds.has(c.id));
+
+      const seen = new Set();
+      for (const c of candidates) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        const isHighSignal = c._exactMatch
+          || isHighConfidenceKeywordMatch(c)
+          || Number(c.score || 0) >= 0.5;
+        if (isHighSignal) {
+          crossFieldResults.push({ ...c, _crossField: true });
+          if (crossFieldResults.length >= 2) break;
+        }
+      }
+
+      if (crossFieldResults.length > 0) {
+        console.log(`[RAG] Cross-field augmentation: ${crossFieldResults.length} chunks from outside "${topic}"`);
+      }
+    } catch (err) {
+      console.warn(`[RAG] Cross-field augmentation failed: ${err.message}`);
+    }
+  }
+
   if (rawResults.length > 3) {
     try {
       const { rerankChunks } = require('../rag/reranker');
@@ -2461,6 +2514,18 @@ async function retrieveLegalContext(query, topic, language = null) {
     }
   }
 
+  // ── Append cross-field chunks (from outside the user's topic) at the end of the list ──
+  if (crossFieldResults.length > 0) {
+    const existingIds = new Set(goodChunks.map(r => r.id));
+    for (const cf of crossFieldResults) {
+      if (!existingIds.has(cf.id)) {
+        goodChunks.push(cf);
+        existingIds.add(cf.id);
+      }
+    }
+    searchMode = `${searchMode}+cross-field`;
+  }
+
   // ── 3b. Nuclear fallback: unscoped chunk_text ILIKE when all searches returned 0 ──
   if (goodChunks.length === 0) {
     try {
@@ -2507,15 +2572,19 @@ async function retrieveLegalContext(query, topic, language = null) {
     const verifiedBadge = r.source_type === 'verified_qa'
       ? (isUz ? ' ✅ [Yurist tomonidan tasdiqlangan]' : ' ✅ [Проверено юристом]')
       : '';
+    const crossFieldBadge = r._crossField
+      ? (isUz ? ' 🔀 [Boshqa soha]' : ' 🔀 [Другая отрасль]')
+      : '';
     const scoreTag = r.score ? ` (${(r.score * 100).toFixed(0)}%)` : '';
     const langTag = r.language === 'uz' ? ' [UZ]' : ' [RU]';
+    const categoryTag = r.category ? ` [${LEGAL_TOPICS[r.category] || r.category}]` : '';
     const maxChars = r.source_type === 'verified_qa' ? 2000 : MAX_CHUNK_CHARS;
     const text = r.chunk_text.length > maxChars
       ? r.chunk_text.substring(0, maxChars) + '...'
       : r.chunk_text;
 
     return [
-      `[${i + 1}] ${r.law_name}${verifiedBadge}${langTag}${scoreTag}`,
+      `[${i + 1}] ${r.law_name}${verifiedBadge}${crossFieldBadge}${categoryTag}${langTag}${scoreTag}`,
       arts ? (isUz ? `  Moddalar: ${arts}` : `  Статьи: ${arts}`) : '',
       r.chapter ? `  ${r.chapter}` : '',
       text,
@@ -2568,63 +2637,44 @@ async function retrieveLegalContext(query, topic, language = null) {
     return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}.${dt.getFullYear()}`;
   };
 
-  const citationBlocks = [];
-  const seenCitations = new Set();
+  // ── Build a clean source reference list (no box-drawings, no instructions) ──
+  const sourceRefLines = [];
+  const seenSourceRefs = new Set();
   for (const r of goodChunks) {
     const articleRefs = getChunkArticleRefs(r);
     if (articleRefs.length === 0) continue;
     for (const art of articleRefs) {
       const key = `${r.law_name}_${art}`;
-      if (seenCitations.has(key)) continue;
-      seenCitations.add(key);
+      if (seenSourceRefs.has(key)) continue;
+      seenSourceRefs.add(key);
       const dateStr = formatDate(r.adoption_date);
       const docNum = r.document_number;
-      const meta = [dateStr, docNum ? `№ ${docNum}` : null].filter(Boolean).join(', ');
-      const locator = `${art}-modda`;
-      const url = r.source_url || '';
-      citationBlocks.push(
-        `  • ${r.law_name}\n` +
-        (meta ? `    (${meta})\n` : '') +
-        `    ${locator}\n` +
-        (url ? `    ${url}` : '')
+      const meta = [dateStr, docNum ? `\u2116 ${docNum}` : null].filter(Boolean).join(', ');
+      sourceRefLines.push(
+        `- ${r.law_name}` +
+        (meta ? ` (${meta})` : '') +
+        `, ${art}-modda` +
+        (r.source_url ? ` | ${r.source_url}` : '')
       );
     }
   }
 
-  const citationTable = citationBlocks.length > 0
-    ? `\n┌─────────────────────────────────────────────┐\n│  RUXSAT ETILGAN MANBALAR (FAQAT shulardan!) │\n└─────────────────────────────────────────────┘\n${citationBlocks.join('\n')}\n\n⚠️ FAQAT yuqoridagi modda raqamlarini keltiring. BOSHQA modda raqami YOZMANG.\n⚠️ Har bir iqtibos uchun to'liq formatda yozing: qonun nomi, sana, raqam, modda, URL.\n`
-    : (goodChunks.length > 0
-      ? "\n\u26a0\ufe0f Kontekstdagi ayrim bo’laklarda modda raqami metadata ko’rinmadi. Agar modda raqami matndan aniq ko’rinsa, o’sha modda bilan javob bering; aks holda \"modda raqami kontekstdan aniq ko’rinmadi\" deb yozing. \"Ma’lumot topilmadi\" deb yozmang.\n"
-      : lexLiveResults.length > 0
-        ? "\n\u26a0\ufe0f Mahalliy bazada modda topilmadi, lekin lex.uz dan jonli qidiruv natijalari topildi. Quyidagi LEX.UZ ma’lumotlariga asoslanib javob bering.\n"
-        : "\n\u26a0\ufe0f KONTEKSTDA tegishli qonun bo’lagi topilmadi. Javob bering: \"Ushbu savol bo’yicha lex.uz ma’lumotlar bazasida aniq ma’lumot topilmadi.\"\n");
+  const sourceBlock = sourceRefLines.length > 0
+    ? `\nMANBALAR:\n${sourceRefLines.join('\n')}\n`
+    : '';
 
+  // ── Build clean data-only context (no instructions, no box-drawings) ──
   let context;
   if (isUz) {
-    context = `\n\nQONUNCHILIK KONTEKSTI (${searchMode}, ${goodChunks.length} natija):\n`
-      + citationTable
-      + `\nQuyidagi qonun matnlariga BIRINCHI NAVBATDA asoslaning.\n\n`
-      + chunksText + webText + lexLiveText + `\n\n`
-      + `╔══════════════════════════════════════════╗\n`
-      + `║  QATTIQ TAQIQ (BUZSANGIZ — XATO JAVOB):  ║\n`
-      + `╠══════════════════════════════════════════╣\n`
-      + `║ • FAQAT yuqoridagi "RUXSAT ETILGAN       ║\n`
-      + `║   MANBALAR" jadvalidagi modda raqamlarini║\n`
-      + `║   keltiring.                              ║\n`
-      + `║ • Boshqa modda raqamini (jadvalda yo'q)  ║\n`
-      + `║   keltirish — TO'QIB CHIQARISH.           ║\n`
-      + `║ • Pretrained bilimingizdan modda raqami  ║\n`
-      + `║   olmang. FAQAT kontekstdan.              ║\n`
-      + `║ • Agar kerakli modda kontekstda yo'q     ║\n`
-      + `║   bo'lsa: "Aniq modda raqami uchun       ║\n`
-      + `║   manba qonun matnini ko'ring" deng.     ║\n`
-      + `╚══════════════════════════════════════════╝`;
+    context = `\nQONUNCHILIK KONTEKSTI (${goodChunks.length} natija):\n`
+      + sourceBlock
+      + `\n` + chunksText + webText + lexLiveText
+      + `\n\n--- JAVOB SHU YERDAN BOSHLANSIN ---`;
   } else {
-    context = `\n\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${searchMode}, ${goodChunks.length} результатов):\n`
-      + citationTable
-      + `\nОсновывайся ПРЕЖДЕ ВСЕГО на следующих материалах.\n\n`
-      + chunksText + webText + lexLiveText + `\n\n`
-      + `ВАЖНО: Цитируй ТОЛЬКО статьи из таблицы выше. Не придумывай номера статей.`;
+    context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${goodChunks.length} результатов):\n`
+      + sourceBlock
+      + `\n` + chunksText + webText + lexLiveText
+      + `\n\n--- ОТВЕТ НАЧИНАЕТСЯ ЗДЕСЬ ---`;
   }
 
   return { context, meta, chunks: goodChunks };
@@ -2632,94 +2682,88 @@ async function retrieveLegalContext(query, topic, language = null) {
 
 function buildTopicPrompt(topic, ragContext, userQuestion = '') {
   const topicLabel = LEGAL_TOPICS[topic] || topic;
-  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+  const definitionHint = getDefinitionPromptAddendum(userQuestion);
   const termExplanationRule = getTermExplanationRule(userQuestion);
 
-  return `Siz O'zbekiston ${topicLabel} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
-Sizning YAGONA huquqiy manbangiz — quyida berilgan KONTEKST (lex.uz dan olingan faol qonun matnlari).
-Kontekstdan tashqari HECH QANDAY bilimga tayanmang.
+  // ── SYSTEM INSTRUCTIONS (ichki qoidalar — foydalanuvchiga ko'rsatilMAYDI) ──
+  const systemRules = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
 
-╔══════════════════════════════════════════════════════════╗
-║  ENG ASOSIY QOIDA — RAG-FAQAT JAVOB (RAG-ONLY ANSWER)   ║
-╠══════════════════════════════════════════════════════════╣
-║ Sizning javoblaringiz FAQAT quyida berilgan KONTEKST    ║
-║ matniga asoslangan bo'lishi SHART. Siz qaysi modda      ║
-║ raqamida nima yozilganini "bilasiz" deb hisoblamang —   ║
-║ sizning pretrained xotirangiz NOTO'G'RI bo'lishi mumkin.║
-║                                                          ║
-║ ❌ TAQIQ: Kontekstda berilmagan modda raqamini keltirish║
-║ ❌ TAQIQ: O'z xotirangizdan modda raqami olish          ║
-║ ❌ TAQIQ: "Bilaman, bu 7-modda" deb taxmin qilish       ║
-║                                                          ║
-║ ✅ TO'G'RI: "Kontekstdagi 5-modda bo'yicha..."          ║
-║ ✅ TO'G'RI: "Aniq modda raqami kontekstda topilmadi —   ║
-║   manba qonun matnini ko'ring"                           ║
-╚══════════════════════════════════════════════════════════╝
+ICHKI QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
 
-═══════════════════════════════════════
-QATTIQ QOIDALAR (buzsangiz, javob noto'g'ri hisoblanadi):
-═══════════════════════════════════════
-1. Javob FAQAT O'zbek (lotin) tilida — hech qachon rus yoki ingliz tilida yozmang
-2. Modda raqamlarini FAQAT KONTEKSTDAGI "RUXSAT ETILGAN MANBALAR" jadvalidan oling — boshqa joydan EMAS
-3. Agar kerakli modda kontekstda yo'q bo'lsa — modda raqami umuman yozmang. Buning o'rniga: "Kontekstda aniq modda topilmadi, manba qonun matnini to'g'ridan-to'g'ri ko'ring" deng
-4. Har bir huquqiy tasdiq uchun MANBA ko'rsating: qonun nomi, modda raqami va ANIQ QISM RAQAMI (FAQAT kontekstdagi)
-5. Javob chuqur va to'liq bo'lsin — sirtqi javob emas, huquqiy tahlil bering
-6. MODDA RAQAMLARINI TO'G'RI YOZING: prim raqamlarini saqlang (4¹, 12², 3¹). HECH QACHON prim raqamlarni oddiy raqam bilan adashtirmang
-${ragContext ? '\n7. Quyidagi KONTEKST sizning YAGONA huquqiy manbangiz — pretrained bilimingizdan QO\'SHIMCHA ma\'lumot KIRITMANG' : ''}
+ANIQLIK:
+- Modda raqamlarini FAQAT KONTEKSTdan oling. Pretrained xotirangizdan raqam to'qib chiqarmang.
+- Agar kontekstda modda raqami aniq ko'rsatilmagan bo'lsa, "kontekstda aniq modda raqami ko'rsatilmagan" deb yozing — taxmin qilmang.
+- Prim moddalarni shunday yozing: "N-modda prim M" (masalan: "8-modda prim 1").
+- Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami + qism.
 
-═══════════════════════════════════════
-MAJBURIY JAVOB TUZILMASI:
-═══════════════════════════════════════
-Savolni avval tahlil qiling: bu NAZARIY savol (tushuncha, ta'rif, qonun mazmunini tushuntirish) yoki AMALIY savol (aniq holat, muammo, nima qilish kerak)?
+JAVOB SIFATI:
+- Javob YAXLIT, oqib turuvchi matn bo'lsin — qonun matnini KO'CHIRIB-CHIQARMANG.
+- O'z so'zlaringiz bilan, sodda tilda yozing. Foydalanuvchi huquqshunos emas.
+- Subheader ostidagi matnlar bir-birini TAKRORLAMASIN. Har bir bo'lim YANGI ma'lumot bersin.
+- Apologetik gaplar yozmang ("uzr so'rayman", "tushuntirib bera olmadim" — TAQIQLANGAN).
+- Foydalanuvchi tuzatish bergan bo'lsa, tuzatishni JIM va to'g'ridan-to'g'ri integratsiya qiling — uzr so'ramang, oldingi javobni eslatmang. Yangi to'g'ri javobni boshidan beriб.
 
-${definitionPromptAddendum}
+KROSS-SOHA:
+- Kontekstda boshqa huquq sohasidagi moddalar ham bo'lishi mumkin — agar savolga aloqador bo'lsa, ulardan foydalaning va manba sifatida qonun nomini aniq ko'rsating.
 
-## Huquqiy asos
-Tegishli qonun(lar) — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan oling.
+QO'LLANISH:
+- Kontekstda javob bor bo'lsa — ALBATTA javob bering. "Ma'lumot topilmadi" demang.
+- Faqat HECH QANDAY aloqador kontekst topilmagan bo'lsagina, qisqacha aytib o'ting va qaysi qonunda qarash kerakligini ko'rsating.
+${termExplanationRule ? `- ${termExplanationRule}` : ''}`;
 
-MAJBURIY IQTIBOS FORMATI (har bir manba uchun to'liq yozing):
+  // ── OUTPUT FORMAT — minimal, flowing, non-repetitive ──
+  const outputFormat = `
+JAVOB FORMATI:
+${definitionHint}
+Javob ikki qismdan iborat bo'lsin:
 
-    O'zbekiston Respublikasining "<Qonun nomi>"gi Qonuni
-    (<sana>, № <raqam>), <modda>-modda, <qism>-qism.
-    <URL>
+**1. Qisqa javob** (1-3 gap):
+Foydalanuvchi savoliga to'g'ridan-to'g'ri, aniq javob. Asosiy modda(lar) va qonun nomini ham aniq ko'rsating.
 
-Misol:
-    O'zbekiston Respublikasining "Advokatura to'g'risida"gi Qonuni
-    (27.12.1996, № 349-I), 5-modda, 1-qism.
-    https://lex.uz/docs/58372
+**2. Batafsil tushuntirish** (mavzuga qarab):
+Sodda tilda, mantiqiy tartibda — bir oqimda yozing. Kerak bo'lsa, ro'yxat (- yoki 1.) ishlating, lekin SARLAVHA QO'SHMANG. Subheader takrorlanmasin.
+Har bir huquqiy tasdiqdan keyin manba: (Qonun nomi, N-modda).
 
-Qoidalar:
-- Qonun nomi, sana, raqam va URL — FAQAT kontekstdagi "RUXSAT ETILGAN MANBALAR" jadvalidan olinadi
-- Modda raqami va qism raqami ham FAQAT kontekstdan olinadi
-- Prim moddalarni to'g'ri yozing (4¹, 12², 3¹)
-- Har bir moddaning kontekstdagi ANIQ mazmunini tushuntiring (o'z so'zlaringiz bilan, lekin faktlar kontekstdan)
+JIDDIY TAQIQLAR:
+- Kontekstdagi modda matnlarini KO'CHIRIB QO'YMANG.
+- "Yuridik maslahat", "Xulosa", "Eslatma" kabi ortiqcha sarlavhalar QO'SHMANG.
+- Ma'lumotni bir necha sarlavha ostida TAKRORLAMANG.
+- "DEFINITSIYA SAVOLI" yoki ichki ko'rsatmalarning matnini javobga YOZMANG.`;
 
-⚠️ AGAR kontekstda kerakli ma'lumot YO'Q bo'lsa, JAVOBNING BIRINCHI QATORI shu bo'lishi SHART:
-    "Ushbu savol bo'yicha lex.uz ma'lumotlar bazasida aniq ma'lumot topilmadi."
-Va keyin hech qanday modda raqami, sana yoki raqam YOZMANG. Xotirangizdan TO'QIB CHIQARMANG.
+  // ── ASSEMBLE: system rules + output format + context data ──
+  return systemRules + '\n' + outputFormat + '\n' + (ragContext ? ragContext + '\n' : '');
+}
 
-## Muddatlar va jarimalar
-Bu bo'limni FAQAT qonunda ANIQ SON bor bo'lsagina yozing (masalan: "30 kun", "5 BHM jarima", "3 yil").
-Agar savol mavzusida qonunda HECH QANDAY aniq muddat yoki jarima miqdori bo'lmasa — bu bo'limni UMUMAN YOZMANG, hatto "aniq raqam mavjud emas" deb ham yozmang. Bo'limni to'liq tashlab keting.
+function buildGeminiFallbackPrompt(topicLabel, userQuestion = '') {
+  const definitionHint = getDefinitionPromptAddendum(userQuestion);
 
-## Yuridik maslahat
-Maksimum 2-3 ta QISQA punkt. Har bir punkt 1-2 jumla.
-FAQAT foydalanuvchi bilmasligi mumkin bo'lgan YANGI ma'lumot: aniq murojaat joyi, kerakli hujjatlar, kam ma'lum mexanizmlar.
-TAQIQLAR:
-- Huquqiy asos bo'limida AYTILGAN ma'lumotni qayta yozmang va boshqa so'zlar bilan takrorlamang
-- "Qonunchilikni kuzating", "Yuristga murojaat qiling", "Xabardor bo'ling", "Huquqlaringizni biling" kabi umumiy gaplar YOZMANG
-${termExplanationRule}
+  return `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
 
-═══════════════════════════════════════
-TAQIQLANGAN NARSALAR:
-═══════════════════════════════════════
-- Bo'limlar bir-birini TAKRORLAMASIN. Har bir bo'lim YANGI ma'lumot berishi shart.
-- "Holat tahlili" bo'limini YOZMANG — u Huquqiy asosni takrorlaydi.
-- "Amaliy qadamlar" bo'limini YOZMANG — u ko'pincha umumiy va foydasiz maslahatlar bo'ladi.
-- "Maslahat" bo'limini YOZMANG — u yuqoridagi bo'limlarni qayta ifodalaydi.
-- Umumiy, har kimga ma'lum gaplar yozmang. Faqat ANIQ, FOYDALI, YANGI ma'lumot bering.
+VAZIFA: O'zbekiston qonunchiligi asosida BATAFSIL, ANIQ va TUSHUNARLI javob bering.
 
-${ragContext ? ragContext + '\n' : ''}\n> ⚠️ Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
+QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
+- FAQAT o'zbek (lotin) tilida yozing.
+- O'zbekiston Respublikasi qonun va kodekslariga asoslaning.
+- Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami.
+- Modda raqamlariga ISHONCHINGIZ KOMIL bo'lsa keltiring; ishonchingiz yo'q bo'lsa, faqat qonun nomini ayting va "aniq modda raqamini lex.uz dan tekshirish tavsiya etiladi" deb qo'shing.
+- Prim moddalarni to'g'ri yozing: "N-modda prim M".
+- Foydalanuvchi tuzatish bergan bo'lsa, jim integratsiya qiling — uzr so'ramang, qayta-qayta xato eslatmang.
+
+JAVOB FORMATI:
+${definitionHint}
+**1. Qisqa javob** (1-3 gap):
+Savolga to'g'ridan-to'g'ri javob. Asosiy qonun nomi va modda(lar)ni keltiring.
+
+**2. Batafsil tushuntirish**:
+Sodda tilda, oqib turuvchi matn — qonun matnini ko'chirib qo'ymang, o'z so'zlaringiz bilan tushuntiring.
+Kerak bo'lsa, ro'yxat ishlating, lekin SARLAVHA QO'SHMANG.
+Har bir tasdiqdan keyin manba: (Qonun nomi, N-modda).
+
+JIDDIY TAQIQLAR:
+- "Yuridik maslahat", "Xulosa", "Eslatma" kabi sarlavhalar QO'SHMANG.
+- Bir xil ma'lumotni bir necha bo'limda TAKRORLAMANG.
+
+> Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
 }
 
 // ── ONE-SHOT: backfill qa_bank from existing verified_qa rows in legal_chunks ──
@@ -2769,6 +2813,191 @@ app.post('/api/qa-bank/backfill', requireMasterAdmin, async (req, res) => {
     }
 
     res.json({ scanned: rows.rows.length, migrated, skipped, errors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── ENRICH: use Gemini to expand existing qa-korpus answers into detailed format ──
+app.post('/api/qa-korpus/enrich', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id, dryRun } = req.body;
+    const whereClause = id ? 'AND k.id = $1' : '';
+    const params = id ? [id] : [];
+
+    const rows = await pool.query(`
+      SELECT k.id, k.question, k.corrected_answer, k.topic
+      FROM qa_korpus k
+      WHERE k.corrected_answer IS NOT NULL
+        ${whereClause}
+      ORDER BY k.id
+    `, params);
+
+    if (rows.rows.length === 0) {
+      return res.json({ message: 'No qa-korpus entries found', enriched: 0 });
+    }
+
+    const results = [];
+    for (const row of rows.rows) {
+      if (isFailedAnswer(row.corrected_answer)) {
+        results.push({ id: row.id, status: 'skipped', reason: 'failed answer' });
+        continue;
+      }
+
+      const topicLabel = LEGAL_TOPICS[row.topic] || row.topic || 'huquq';
+      const enrichPrompt = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: Quyidagi yurist tomonidan tasdiqlangan javobni BOYITIB, BATAFSIL va TUSHUNARLI shaklda qayta yozing.
+
+QOIDALAR:
+1. Javob FAQAT o'zbek (lotin) tilida yozing.
+2. Asl javobdagi barcha FAKTLAR, MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda raqamlari yoki qonun nomlari QO'SHMANG — faqat mavjud ma'lumotni boyiting.
+4. Har bir huquqiy tushunchani SODDA TILDA tushuntiring.
+5. Amaliy misollar va izohlar qo'shing.
+
+JAVOB TUZILMASI:
+## Huquqiy asos
+Asl javobdagi qonun manbalarini saqlab, har bir moddaning mazmunini BATAFSIL tushuntiring.
+
+## Batafsil tushuntirish
+Sodda tilda — foydalanuvchi huquqshunos bo'lmasligi mumkin. Har bir punktni alohida izohlab bering.
+
+## Amaliy ahamiyati
+Bu ma'lumot amalda nima degani? Qanday holatlarda muhim? Buzilsa nima bo'ladi?
+
+## Muhim eslatmalar
+Istisnolar, cheklovlar yoki qo'shimcha ma'lumotlar (agar mavjud bo'lsa).
+
+> Eslatma: Bu javob AI tahlili asosida boyitilgan. Asl javob yurist tomonidan tasdiqlangan.
+
+SAVOL: ${row.question}
+
+YURIST TASDIQLAGAN ASL JAVOB:
+${row.corrected_answer}
+
+BOYITILGAN JAVOBNI YOZING:`;
+
+      if (dryRun) {
+        results.push({ id: row.id, status: 'dry-run', question: row.question.substring(0, 80), originalLength: row.corrected_answer.length });
+        continue;
+      }
+
+      try {
+        const aiMessages = [
+          { role: 'system', text: enrichPrompt },
+          { role: 'user', text: row.question },
+        ];
+        const aiResult = await callAI(aiMessages, { useSearch: false, maxTokens: 8192 });
+        const enrichedAnswer = normalizeResponseForUser(aiResult.text);
+
+        if (enrichedAnswer && enrichedAnswer.length > row.corrected_answer.length && !isFailedAnswer(enrichedAnswer)) {
+          await pool.query(`
+            UPDATE qa_korpus
+            SET corrected_answer = $1, original_ai_answer = $2, updated_at = NOW()
+            WHERE id = $3
+          `, [enrichedAnswer, row.corrected_answer, row.id]);
+
+          results.push({
+            id: row.id,
+            status: 'enriched',
+            question: row.question.substring(0, 80),
+            oldLength: row.corrected_answer.length,
+            newLength: enrichedAnswer.length,
+          });
+          console.log(`[QA-KORPUS ENRICH] #${row.id} enriched: ${row.corrected_answer.length} → ${enrichedAnswer.length} chars`);
+        } else {
+          results.push({ id: row.id, status: 'skipped', reason: 'enriched answer too short or failed' });
+        }
+      } catch (aiErr) {
+        results.push({ id: row.id, status: 'error', error: aiErr.message });
+        console.warn(`[QA-KORPUS ENRICH] #${row.id} failed: ${aiErr.message}`);
+      }
+    }
+
+    const enriched = results.filter(r => r.status === 'enriched').length;
+    res.json({ total: rows.rows.length, enriched, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── ENRICH verified_qa entries in legal_chunks too ──
+app.post('/api/verified-qa/enrich', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id, dryRun } = req.body;
+    const whereClause = id ? 'AND id = $1' : '';
+    const params = id ? [id] : [];
+
+    const rows = await pool.query(`
+      SELECT id, chunk_text, category
+      FROM legal_chunks
+      WHERE source_type = 'verified_qa' AND is_valid = TRUE
+        ${whereClause}
+      ORDER BY id
+    `, params);
+
+    const parseQA = (txt) => {
+      const m = txt.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]+)$/);
+      return m ? { question: m[1].trim(), answer: m[2].trim() } : null;
+    };
+
+    const results = [];
+    for (const row of rows.rows) {
+      const parsed = parseQA(row.chunk_text);
+      if (!parsed) {
+        results.push({ id: row.id, status: 'skipped', reason: 'cannot parse Q/A format' });
+        continue;
+      }
+      if (isFailedAnswer(parsed.answer)) {
+        results.push({ id: row.id, status: 'skipped', reason: 'failed answer' });
+        continue;
+      }
+
+      if (dryRun) {
+        results.push({ id: row.id, status: 'dry-run', question: parsed.question.substring(0, 80), answerLength: parsed.answer.length });
+        continue;
+      }
+
+      try {
+        const topicLabel = LEGAL_TOPICS[row.category] || row.category || 'huquq';
+        const enrichPrompt = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: Quyidagi yurist tomonidan tasdiqlangan javobni BOYITIB, BATAFSIL va TUSHUNARLI shaklda qayta yozing.
+
+QOIDALAR:
+1. Javob FAQAT o'zbek (lotin) tilida yozing.
+2. Asl javobdagi barcha FAKTLAR, MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda raqamlari yoki qonun nomlari QO'SHMANG — faqat mavjud ma'lumotni boyiting.
+4. Har bir huquqiy tushunchani SODDA TILDA tushuntiring.
+
+SAVOL: ${parsed.question}
+ASL JAVOB: ${parsed.answer}
+
+BOYITILGAN JAVOBNI YOZING:`;
+
+        const aiMessages = [
+          { role: 'system', text: enrichPrompt },
+          { role: 'user', text: parsed.question },
+        ];
+        const aiResult = await callAI(aiMessages, { useSearch: false, maxTokens: 8192 });
+        const enriched = normalizeResponseForUser(aiResult.text);
+
+        if (enriched && enriched.length > parsed.answer.length && !isFailedAnswer(enriched)) {
+          const newChunkText = `Savol: ${parsed.question}\n\nJavob: ${enriched}`;
+          await pool.query(`UPDATE legal_chunks SET chunk_text = $1, updated_at = NOW() WHERE id = $2`, [newChunkText, row.id]);
+          results.push({ id: row.id, status: 'enriched', question: parsed.question.substring(0, 80), oldLength: parsed.answer.length, newLength: enriched.length });
+          console.log(`[VERIFIED-QA ENRICH] #${row.id} enriched: ${parsed.answer.length} → ${enriched.length} chars`);
+        } else {
+          results.push({ id: row.id, status: 'skipped', reason: 'enriched answer too short or failed' });
+        }
+      } catch (aiErr) {
+        results.push({ id: row.id, status: 'error', error: aiErr.message });
+      }
+    }
+
+    const enriched = results.filter(r => r.status === 'enriched').length;
+    res.json({ total: rows.rows.length, enriched, results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2863,8 +3092,12 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
           };
 
           if (korpusResult.match === 'verbatim') {
-            korpusOverride = korpusResult.answer;
-            console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+            if (isFailedAnswer(korpusResult.answer)) {
+              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — answer contains failure phrase`);
+            } else {
+              korpusOverride = korpusResult.answer;
+              console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+            }
           } else if (korpusResult.match === 'context') {
             korpusGroundTruth = formatKorpusGroundTruth(korpusResult);
             console.log(`[Legal Chat] KORPUS CONTEXT id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
@@ -2925,8 +3158,12 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
           console.log(`[Legal Chat] verified_qa top match: id=${top.id} sim=${topSim.toFixed(3)} cat=${top.category}`);
 
           if (topSim >= 0.72) {
-            verifiedOverride = topParsed.answer;
-            console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
+            if (isFailedAnswer(topParsed.answer)) {
+              console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — answer contains failure phrase`);
+            } else {
+              verifiedOverride = topParsed.answer;
+              console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
+            }
           } else if (topSim >= 0.50) {
             const { formatQaFewShot } = require('../rag/advanced-corpus');
             const usable = r.rows
@@ -2990,12 +3227,36 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 
     aiMessages.push({ role: 'user', text: message });
 
-    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
-    const displayReply = normalizeResponseForUser(aiResult.text);
+    let aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
+    let displayReply = normalizeResponseForUser(aiResult.text);
+    let finalProvider = aiResult.provider;
+
+    // ── GEMINI FALLBACK: if RAG-constrained answer failed, let Gemini answer freely ──
+    if (isFailedAnswer(displayReply)) {
+      console.warn(`[Legal Chat] RAG answer failed ("topilmadi"), retrying with Gemini pretrained knowledge...`);
+      try {
+        const topicLabel = LEGAL_TOPICS[topic] || topic || 'huquq';
+        const geminiPrompt = buildGeminiFallbackPrompt(topicLabel, message);
+        const fallbackMessages = [
+          { role: 'system', text: geminiPrompt },
+          { role: 'user', text: message },
+        ];
+        const fallbackResult = await callAI(fallbackMessages, { useSearch: true, maxTokens: 8192 });
+        const fallbackReply = normalizeResponseForUser(fallbackResult.text);
+        if (!isFailedAnswer(fallbackReply)) {
+          displayReply = fallbackReply;
+          finalProvider = `${fallbackResult.provider} (fallback)`;
+          console.log(`[Legal Chat] Gemini fallback succeeded — using pretrained answer`);
+        }
+      } catch (fallbackErr) {
+        console.warn(`[Legal Chat] Gemini fallback failed: ${fallbackErr.message}`);
+      }
+    }
+
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
     res.json({
       reply: displayReply,
-      provider: aiResult.provider,
+      provider: finalProvider,
       databases: usedDbs,
       ragUsed: !!ragContext,
       rag: ragMeta,
@@ -4103,7 +4364,7 @@ app.delete('/api/rag/ingest-log/:id', requireMasterAdmin, async (req, res) => {
   try {
     const logId = parseInt(req.params.id, 10);
     if (!Number.isInteger(logId) || logId <= 0) {
-      return res.status(400).json({ error: 'Noto‘g‘ri ingest-log ID' });
+      return res.status(400).json({ error: `Noto'g'ri ingest-log ID` });
     }
 
     await client.query('BEGIN');

@@ -34,13 +34,7 @@ function isDefinitionQuery(text = '') {
 function getDefinitionPromptAddendum(text = '') {
   if (!isDefinitionQuery(text)) return '';
 
-  return `
-DEFINITSIYA SAVOLI ANIQLANDI:
-- Foydalanuvchi atamaning bevosita huquqiy ta'rifi yoki kimligini so'rayapti.
-- Javobning BIRINCHI 1-2 gapida aynan shu tushunchaning bevosita ta'rifini bering.
-- Agar kontekstda ta'rif berilgan modda bo'lsa, birinchi xatboshida o'sha moddaning mazmunini sodda va aniq bayon qiling.
-- Bu holatda savoldagi tushunchani tushuntirish TAQIQLANMAYDI; aksincha bu javobning markaziy qismi bo'lishi shart.
-`;
+  return `[Definitsiya rejimi: Javobning birinchi 1-2 gapida tushunchaning bevosita huquqiy ta'rifini bering. Agar kontekstda ta'rif berilgan modda bo'lsa, birinchi xatboshida shu moddaning mazmunini sodda va aniq bayon qiling. Bu sarlavha emas — javobda ko'rsatmang.]`;
 }
 
 function getTermExplanationRule(text = '') {
