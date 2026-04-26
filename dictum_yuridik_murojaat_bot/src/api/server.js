@@ -2419,6 +2419,46 @@ async function retrieveLegalContext(query, topic, language = null) {
     }
   }
 
+  // ── 3a. Cross-field augmentation: pull high-relevance chunks from OTHER categories ──
+  // When user picked a topic but the question may span multiple legal fields,
+  // include the top 1-2 chunks from outside the topic if they score high enough.
+  let crossFieldResults = [];
+  if (topic && totalFound >= 1) {
+    try {
+      const existingIds = new Set(rawResults.map(r => r.id));
+      const unscopedExact = await exactMatchSearch(query, {
+        category: null,
+        language: null,
+        limit: 6,
+      });
+      const unscopedKeyword = apiKey
+        ? await keywordSearch(query, { category: null, language: null, limit: 6 })
+        : [];
+
+      const candidates = [...unscopedExact, ...unscopedKeyword]
+        .filter(c => c && c.category && c.category !== topic && !existingIds.has(c.id));
+
+      const seen = new Set();
+      for (const c of candidates) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        const isHighSignal = c._exactMatch
+          || isHighConfidenceKeywordMatch(c)
+          || Number(c.score || 0) >= 0.5;
+        if (isHighSignal) {
+          crossFieldResults.push({ ...c, _crossField: true });
+          if (crossFieldResults.length >= 2) break;
+        }
+      }
+
+      if (crossFieldResults.length > 0) {
+        console.log(`[RAG] Cross-field augmentation: ${crossFieldResults.length} chunks from outside "${topic}"`);
+      }
+    } catch (err) {
+      console.warn(`[RAG] Cross-field augmentation failed: ${err.message}`);
+    }
+  }
+
   if (rawResults.length > 3) {
     try {
       const { rerankChunks } = require('../rag/reranker');
@@ -2474,6 +2514,18 @@ async function retrieveLegalContext(query, topic, language = null) {
     }
   }
 
+  // ── Append cross-field chunks (from outside the user's topic) at the end of the list ──
+  if (crossFieldResults.length > 0) {
+    const existingIds = new Set(goodChunks.map(r => r.id));
+    for (const cf of crossFieldResults) {
+      if (!existingIds.has(cf.id)) {
+        goodChunks.push(cf);
+        existingIds.add(cf.id);
+      }
+    }
+    searchMode = `${searchMode}+cross-field`;
+  }
+
   // ── 3b. Nuclear fallback: unscoped chunk_text ILIKE when all searches returned 0 ──
   if (goodChunks.length === 0) {
     try {
@@ -2519,15 +2571,19 @@ async function retrieveLegalContext(query, topic, language = null) {
     const verifiedBadge = r.source_type === 'verified_qa'
       ? (isUz ? ' ✅ [Yurist tomonidan tasdiqlangan]' : ' ✅ [Проверено юристом]')
       : '';
+    const crossFieldBadge = r._crossField
+      ? (isUz ? ' 🔀 [Boshqa soha]' : ' 🔀 [Другая отрасль]')
+      : '';
     const scoreTag = r.score ? ` (${(r.score * 100).toFixed(0)}%)` : '';
     const langTag = r.language === 'uz' ? ' [UZ]' : ' [RU]';
+    const categoryTag = r.category ? ` [${LEGAL_TOPICS[r.category] || r.category}]` : '';
     const maxChars = r.source_type === 'verified_qa' ? 2000 : MAX_CHUNK_CHARS;
     const text = r.chunk_text.length > maxChars
       ? r.chunk_text.substring(0, maxChars) + '...'
       : r.chunk_text;
 
     return [
-      `[${i + 1}] ${r.law_name}${verifiedBadge}${langTag}${scoreTag}`,
+      `[${i + 1}] ${r.law_name}${verifiedBadge}${crossFieldBadge}${categoryTag}${langTag}${scoreTag}`,
       arts ? (isUz ? `  Moddalar: ${arts}` : `  Статьи: ${arts}`) : '',
       r.chapter ? `  ${r.chapter}` : '',
       text,
@@ -2625,78 +2681,88 @@ async function retrieveLegalContext(query, topic, language = null) {
 
 function buildTopicPrompt(topic, ragContext, userQuestion = '') {
   const topicLabel = LEGAL_TOPICS[topic] || topic;
-  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+  const definitionHint = getDefinitionPromptAddendum(userQuestion);
   const termExplanationRule = getTermExplanationRule(userQuestion);
-
-  const hasContext = !!ragContext;
 
   // ── SYSTEM INSTRUCTIONS (ichki qoidalar — foydalanuvchiga ko'rsatilMAYDI) ──
   const systemRules = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
 
-ICHKI QOIDALAR (bu qoidalarni javobda YOZMANG, faqat ularga amal qiling):
-1. Javob FAQAT o'zbek (lotin) tilida yozing.
-2. FAQAT quyidagi KONTEKST ma'lumotlariga asoslaning. Pretrained xotirangizdan modda raqami olmang.
-3. Kontekst matnida modda raqamlari va qonun mazmuni bor — ulardan foydalaning. Agar MANBALAR ro'yxati bo'sh bo'lsa ham, kontekst matnidagi modda raqamlarini ishlatishingiz mumkin.
-4. Prim moddalarni to'g'ri yozing: "N-modda prim M" (masalan: "8-modda prim 1").
-5. Har bir huquqiy tasdiq uchun manba ko'rsating: qonun nomi, modda, qism raqami.
-6. Agar kontekstda savol mavzusiga OID HECH QANDAY ma'lumot bo'lmasa, "Ushbu savol bo'yicha kontekstda ma'lumot topilmadi" deb yozing.
-7. MUHIM: Agar kontekstda javob bor bo'lsa — ALBATTA javob bering. "Ma'lumot topilmadi" deb yozmang.
-${termExplanationRule ? `8. ${termExplanationRule}` : ''}`;
+ICHKI QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
 
-  // ── OUTPUT FORMAT (javob tuzilmasi) ──
+ANIQLIK:
+- Modda raqamlarini FAQAT KONTEKSTdan oling. Pretrained xotirangizdan raqam to'qib chiqarmang.
+- Agar kontekstda modda raqami aniq ko'rsatilmagan bo'lsa, "kontekstda aniq modda raqami ko'rsatilmagan" deb yozing — taxmin qilmang.
+- Prim moddalarni shunday yozing: "N-modda prim M" (masalan: "8-modda prim 1").
+- Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami + qism.
+
+JAVOB SIFATI:
+- Javob YAXLIT, oqib turuvchi matn bo'lsin — qonun matnini KO'CHIRIB-CHIQARMANG.
+- O'z so'zlaringiz bilan, sodda tilda yozing. Foydalanuvchi huquqshunos emas.
+- Subheader ostidagi matnlar bir-birini TAKRORLAMASIN. Har bir bo'lim YANGI ma'lumot bersin.
+- Apologetik gaplar yozmang ("uzr so'rayman", "tushuntirib bera olmadim" — TAQIQLANGAN).
+- Foydalanuvchi tuzatish bergan bo'lsa, tuzatishni JIM va to'g'ridan-to'g'ri integratsiya qiling — uzr so'ramang, oldingi javobni eslatmang. Yangi to'g'ri javobni boshidan beriб.
+
+KROSS-SOHA:
+- Kontekstda boshqa huquq sohasidagi moddalar ham bo'lishi mumkin — agar savolga aloqador bo'lsa, ulardan foydalaning va manba sifatida qonun nomini aniq ko'rsating.
+
+QO'LLANISH:
+- Kontekstda javob bor bo'lsa — ALBATTA javob bering. "Ma'lumot topilmadi" demang.
+- Faqat HECH QANDAY aloqador kontekst topilmagan bo'lsagina, qisqacha aytib o'ting va qaysi qonunda qarash kerakligini ko'rsating.
+${termExplanationRule ? `- ${termExplanationRule}` : ''}`;
+
+  // ── OUTPUT FORMAT — minimal, flowing, non-repetitive ──
   const outputFormat = `
-JAVOB TUZILMASI (quyidagi bo'limlarni yozing):
-${definitionPromptAddendum}
-## Huquqiy asos
-Kontekst matnidagi tegishli moddalarning mazmunini BATAFSIL tushuntiring.
-Har bir moddani alohida ko'rsating: qonun nomi, modda-raqam, qism.
-Sodda tilda — foydalanuvchi huquqshunos bo'lmasligi mumkin.
+JAVOB FORMATI:
+${definitionHint}
+Javob ikki qismdan iborat bo'lsin:
 
-## Kimlar va shartlar
-Qonunda belgilangan shartlar, talablar yoki cheklovlarni sanab o'ting.
-Bu bo'limni FAQAT kontekstda tegishli ma'lumot bo'lsagina yozing.
+**1. Qisqa javob** (1-3 gap):
+Foydalanuvchi savoliga to'g'ridan-to'g'ri, aniq javob. Asosiy modda(lar) va qonun nomini ham aniq ko'rsating.
 
-## Muddatlar va jarimalar
-Bu bo'limni FAQAT qonunda aniq son bo'lsagina yozing. Aks holda bu bo'limni tashlab keting.
+**2. Batafsil tushuntirish** (mavzuga qarab):
+Sodda tilda, mantiqiy tartibda — bir oqimda yozing. Kerak bo'lsa, ro'yxat (- yoki 1.) ishlating, lekin SARLAVHA QO'SHMANG. Subheader takrorlanmasin.
+Har bir huquqiy tasdiqdan keyin manba: (Qonun nomi, N-modda).
 
-## Yuridik maslahat
-2-3 ta ANIQ va FOYDALI punkt. Oldingi bo'limlarda aytilgan ma'lumotni TAKRORLAMANG.`;
+JIDDIY TAQIQLAR:
+- Kontekstdagi modda matnlarini KO'CHIRIB QO'YMANG.
+- "Yuridik maslahat", "Xulosa", "Eslatma" kabi ortiqcha sarlavhalar QO'SHMANG.
+- Ma'lumotni bir necha sarlavha ostida TAKRORLAMANG.
+- "DEFINITSIYA SAVOLI" yoki ichki ko'rsatmalarning matnini javobga YOZMANG.`;
 
   // ── ASSEMBLE: system rules + output format + context data ──
   return systemRules + '\n' + outputFormat + '\n' + (ragContext ? ragContext + '\n' : '');
 }
 
 function buildGeminiFallbackPrompt(topicLabel, userQuestion = '') {
-  const definitionPromptAddendum = getDefinitionPromptAddendum(userQuestion);
+  const definitionHint = getDefinitionPromptAddendum(userQuestion);
 
   return `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
 
-VAZIFA: Foydalanuvchi savoliga O'zbekiston qonunchiligi asosida BATAFSIL, ANIQ va TUSHUNARLI javob bering.
+VAZIFA: O'zbekiston qonunchiligi asosida BATAFSIL, ANIQ va TUSHUNARLI javob bering.
 
-QOIDALAR:
-1. Javob FAQAT o'zbek (lotin) tilida yozing.
-2. O'zbekiston Respublikasi qonunlari, kodekslari va me'yoriy hujjatlariga asoslaning.
-3. Har bir huquqiy tasdiq uchun manba ko'rsating: qonun nomi va modda raqami.
-4. Javob BATAFSIL bo'lsin — sodda tilda, amaliy misollar bilan.
-5. Prim moddalarni to'g'ri yozing: "N-modda prim M".
+QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
+- FAQAT o'zbek (lotin) tilida yozing.
+- O'zbekiston Respublikasi qonun va kodekslariga asoslaning.
+- Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami.
+- Modda raqamlariga ISHONCHINGIZ KOMIL bo'lsa keltiring; ishonchingiz yo'q bo'lsa, faqat qonun nomini ayting va "aniq modda raqamini lex.uz dan tekshirish tavsiya etiladi" deb qo'shing.
+- Prim moddalarni to'g'ri yozing: "N-modda prim M".
+- Foydalanuvchi tuzatish bergan bo'lsa, jim integratsiya qiling — uzr so'ramang, qayta-qayta xato eslatmang.
 
-JAVOB TUZILMASI:
-${definitionPromptAddendum}
-## Huquqiy asos
-Tegishli qonun moddalari va ularning mazmunini batafsil tushuntiring.
-Har bir moddani alohida ko'rsating: qonun nomi, modda-raqam, qism.
+JAVOB FORMATI:
+${definitionHint}
+**1. Qisqa javob** (1-3 gap):
+Savolga to'g'ridan-to'g'ri javob. Asosiy qonun nomi va modda(lar)ni keltiring.
 
-## Kimlar (yoki nima) va shartlar
-Qonunda belgilangan shartlar, talablar yoki cheklovlarni sanab o'ting.
-Har bir shartni alohida punkt sifatida yozing.
+**2. Batafsil tushuntirish**:
+Sodda tilda, oqib turuvchi matn — qonun matnini ko'chirib qo'ymang, o'z so'zlaringiz bilan tushuntiring.
+Kerak bo'lsa, ro'yxat ishlating, lekin SARLAVHA QO'SHMANG.
+Har bir tasdiqdan keyin manba: (Qonun nomi, N-modda).
 
-## Amaliy tushuntirish
-Oddiy tilda, sodda misol bilan tushuntiring — foydalanuvchi huquqshunos bo'lmasligi mumkin.
+JIDDIY TAQIQLAR:
+- "Yuridik maslahat", "Xulosa", "Eslatma" kabi sarlavhalar QO'SHMANG.
+- Bir xil ma'lumotni bir necha bo'limda TAKRORLAMANG.
 
-## Muhim cheklovlar
-Qonundagi taqiqlar yoki cheklovlarni ko'rsating (agar mavjud bo'lsa).
-
-> Eslatma: Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
+> Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
 }
 
 // ── ONE-SHOT: backfill qa_bank from existing verified_qa rows in legal_chunks ──

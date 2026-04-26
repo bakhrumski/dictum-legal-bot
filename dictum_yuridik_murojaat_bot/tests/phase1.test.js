@@ -472,8 +472,9 @@ test('query-intent detects true definition questions without matching action que
 
 test('definition prompt addendum explicitly requires direct legal definition first', () => {
   const addendum = getDefinitionPromptAddendum('Advokatlik siri nima?');
-  assertMatch(addendum, /DEFINITSIYA SAVOLI ANIQLANDI/, 'definition marker present');
-  assertMatch(addendum, /BIRINCHI 1-2 gapida aynan shu tushunchaning bevosita ta'rifini bering/, 'direct-definition rule present');
+  assertMatch(addendum, /Definitsiya rejimi/, 'definition marker present');
+  assertMatch(addendum, /birinchi 1-2 gapida tushunchaning bevosita huquqiy ta'rifini bering/i, 'direct-definition rule present');
+  assertMatch(addendum, /Bu sarlavha emas — javobda ko'rsatmang/, 'addendum is internal — must not surface to user');
 });
 
 test('non-definition queries keep the anti-repetition rule', () => {
@@ -487,7 +488,7 @@ test('non-definition queries keep the anti-repetition rule', () => {
 test('buildTopicPrompt source includes intent-aware definition instructions', () => {
   assertMatch(serverSrc, /getDefinitionPromptAddendum/, 'server prompt imports definition addendum');
   assertMatch(serverSrc, /buildTopicPrompt\(topic, ragContext, userQuestion = ''\)/, 'buildTopicPrompt accepts user question');
-  assertMatch(serverSrc, /const definitionPromptAddendum = getDefinitionPromptAddendum\(userQuestion\)/, 'server prompt computes definition addendum');
+  assertMatch(serverSrc, /const definitionHint = getDefinitionPromptAddendum\(userQuestion\)/, 'server prompt computes definition addendum');
   assertMatch(serverSrc, /const termExplanationRule = getTermExplanationRule\(userQuestion\)/, 'server prompt computes explanation rule');
 });
 
@@ -539,8 +540,8 @@ test('buildAdvancedPrompt switches off the blanket no-redefinition rule for defi
     ragContext: 'QONUNCHILIK KONTEKSTI',
     retrievedChunks: [],
   });
-  assertMatch(prompt, /DEFINITSIYA SAVOLI ANIQLANDI/, 'definition addendum rendered');
-  assertMatch(prompt, /bevosita ta'rifini bering/, 'definition-first instruction rendered');
+  assertMatch(prompt, /Definitsiya rejimi/, 'definition addendum rendered');
+  assertMatch(prompt, /bevosita huquqiy ta'rifini bering/i, 'definition-first instruction rendered');
   assertMatch(prompt, /Bu definitsiya savoli: savoldagi tushunchani aynan kontekstdagi huquqiy mazmuni bilan bevosita tushuntiring\./, 'definition rule overrides blanket ban');
 });
 

@@ -159,8 +159,24 @@ function expandQueryVariants(query) {
  * Safe for Markdown — we only replace digit+superscript runs; links and
  * structure are untouched.
  */
+function stripLeakedInstructions(text) {
+  if (!text) return text;
+  let cleaned = text;
+
+  // Strip lines that are pure internal instruction headers
+  cleaned = cleaned.replace(/^[\s*_>]*DEFINITSIYA\s+SAVOLI[^\n]*\n?/gim, '');
+  cleaned = cleaned.replace(/^[\s*_>]*ICHKI\s+QOIDALAR[^\n]*\n?/gim, '');
+  cleaned = cleaned.replace(/^[\s*_>]*JAVOB\s+(TUZILMASI|FORMATI)[^\n]*\n?/gim, '');
+  cleaned = cleaned.replace(/^[\s*_>]*JIDDIY\s+TAQIQLAR[^\n]*\n?/gim, '');
+  // Strip bracketed internal hints like "[Definitsiya rejimi: ...]" if echoed
+  cleaned = cleaned.replace(/\[Definitsiya\s+rejimi:[^\]]*\]/gi, '');
+  // Collapse triple-blank-lines created by the stripping
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  return cleaned.trim();
+}
+
 function normalizeResponseForUser(text) {
-  return toPrimNotation(text || '');
+  return toPrimNotation(stripLeakedInstructions(text || ''));
 }
 
 module.exports = {
