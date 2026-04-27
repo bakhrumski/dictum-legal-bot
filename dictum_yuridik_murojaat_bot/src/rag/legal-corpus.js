@@ -375,6 +375,7 @@ async function denseSearchByEmbedding(embeddingStr, opts = {}) {
       document_number,
       article_number_display,
       part_number,
+      is_active,
       1 - (embedding <=> $1::vector) AS vector_score
     FROM legal_chunks
     WHERE ${whereClause}
@@ -427,6 +428,7 @@ async function keywordSearch(query, opts = {}) {
         lc.document_number,
         lc.article_number_display,
         lc.part_number,
+        lc.is_active,
         COALESCE(ts_rank_cd(lc.tsv, to_tsquery('simple', $1)), 0) AS keyword_score,
         CASE
           WHEN $2 = '' THEN FALSE
@@ -722,6 +724,7 @@ async function textOnlySearch(query, opts = {}) {
         document_number,
         article_number_display,
         part_number,
+        is_active,
         0.15 + CASE WHEN source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score,
         0 AS keyword_score,
         0 AS keyword_term_hits,
@@ -757,7 +760,7 @@ async function textOnlySearch(query, opts = {}) {
   // 1. Full-text search (verified QA first)
   const verifiedSql = `
     SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
-           source_type, verified_by,
+           source_type, verified_by, is_active,
            ts_rank_cd(tsv, plainto_tsquery('simple', $1)) AS score
     FROM legal_chunks
     WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
@@ -776,7 +779,7 @@ async function textOnlySearch(query, opts = {}) {
   // 2. Full-text search (all law text)
   const ftsSql = `
     SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
-           source_type, verified_by,
+           source_type, verified_by, is_active,
            ts_rank_cd(tsv, plainto_tsquery('simple', $1)) + CASE WHEN source_type = 'verified_qa' THEN 0.25 ELSE 0 END AS score
     FROM legal_chunks
     WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
@@ -802,7 +805,7 @@ async function textOnlySearch(query, opts = {}) {
     const catFilter = category ? 'AND category = $2' : '';
     const ilikeSql = `
       SELECT id, law_name, chunk_text, article_numbers, chapter, source_url, category,
-             source_type, verified_by, 0.3 AS score
+             source_type, verified_by, is_active, 0.3 AS score
       FROM legal_chunks
       WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE) ${catFilter}
         AND (${ilikeConds.join(' OR ')})
@@ -1141,6 +1144,7 @@ async function exactMatchSearch(query, opts = {}) {
       document_number,
       article_number_display,
       part_number,
+      is_active,
       0.8 + CASE WHEN source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score
     FROM legal_chunks
     WHERE ${whereClause}
