@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_base.css">
+<style>
+.nav{display:flex;flex-direction:column;width:240px;background:var(--parchment-50);border:1px solid var(--border-1);border-radius:14px;padding:10px}
+.item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;font:500 13px/1 var(--font-sans);color:var(--fg-2);cursor:pointer;transition:background .15s}
+.item:hover{background:var(--parchment-100);color:var(--fg-1)}
+.item.active{background:var(--ink-700);color:var(--parchment-50)}
+.item .ic{width:14px;height:14px;border:1.5px solid currentColor;border-radius:3px;flex-shrink:0;opacity:.85}
+.item.active .ic{border-color:var(--brass-300)}
+.section{font:700 10px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.08em;color:var(--fg-3);padding:14px 12px 6px}
+</style></head><body><div class="card"><div class="type-eyebrow" style="margin-bottom:14px">Sidebar Nav</div>
+<div class="nav">
+<div class="section">Ish maydoni</div>
+<div class="item active"><span class="ic"></span>Boshqaruv paneli</div>
+<div class="item"><span class="ic"></span>Hujjatlarim</div>
+<div class="item"><span class="ic"></span>Mijozlar</div>
+<div class="item"><span class="ic"></span>AI Suhbat</div>
+<div class="section">Qonunchilik</div>
+<div class="item"><span class="ic"></span>Mehnat kodeksi</div>
+<div class="item"><span class="ic"></span>Fuqarolik kodeksi</div>
+</div></div></body></html>

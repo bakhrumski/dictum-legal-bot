@@ -1,0 +1,15 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_base.css">
+<style>
+.field{display:flex;flex-direction:column;gap:6px;width:280px}
+.field label{font-size:12px;font-weight:600;color:var(--fg-2);letter-spacing:.02em;text-transform:uppercase}
+.field input,.field textarea{padding:10px 12px;border:1px solid var(--border-2);background:#fff;border-radius:8px;font:400 14px/1.4 var(--font-sans);color:var(--fg-1);outline:none;transition:border-color .15s, box-shadow .15s}
+.field input:focus{border-color:var(--brass-500);box-shadow:0 0 0 3px rgba(176,132,66,.18)}
+.field .hint{font-size:11px;color:var(--fg-3)}
+.field.error input{border-color:var(--burgundy-500)}
+.field.error .hint{color:var(--burgundy-500)}
+</style></head><body><div class="card"><div class="type-eyebrow" style="margin-bottom:14px">Form Fields</div>
+<div style="display:flex;gap:18px;flex-wrap:wrap">
+<div class="field"><label>Mijoz nomi</label><input value="Akmal Karimov"><span class="hint">Avtomatik to'ldirildi</span></div>
+<div class="field"><label>STIR raqami</label><input placeholder="9 raqamli kod"><span class="hint">Faqat raqamlar</span></div>
+<div class="field error"><label>Sana</label><input value="32.13.2024"><span class="hint">⚠ Sana noto'g'ri formatda</span></div>
+</div></div></body></html>
