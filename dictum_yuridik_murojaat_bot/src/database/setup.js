@@ -39,6 +39,13 @@ async function setupDatabase() {
     `);
     console.log('✅ Admins table created');
 
+    // Add duty hours and activity tracking columns to admins
+    await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_start TIME DEFAULT NULL`);
+    await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_end TIME DEFAULT NULL`);
+    await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP DEFAULT NULL`);
+    await client.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT DEFAULT NULL`);
+    console.log('✅ Admins table columns updated (duty_start, duty_end, last_active_at, telegram_chat_id)');
+
     // Create requests table
     await client.query(`
       CREATE TABLE IF NOT EXISTS requests (
@@ -84,11 +91,16 @@ async function setupDatabase() {
         admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
         message TEXT NOT NULL,
         mentions JSONB DEFAULT '[]',
+        reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)
+    `);
+    // Migration: add reply_to_id if table already exists without it
+    await client.query(`
+      ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL
     `);
     console.log('✅ Chat_messages table created');
 

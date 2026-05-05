@@ -2,21 +2,222 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const os = require('os');
+const fs = require('fs');
 const { pool } = require('../database/db');
-const TelegramBot = require('node-telegram-bot-api');
+
+// Shared in-memory store for Telegram verification codes (used by bot.js too)
+const { verificationTokens } = require('../verification-store');
+const crypto = require('crypto');
+const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addExample, updateExample, deleteExample, getAllExamples, getDatasetStats } = require('../dataset/legal-dataset');
+const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
+const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
+const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
+const { getChunkArticleRefs } = require('../rag/citation-utils');
+const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
+const { routeQuery } = require('../rag/router');
+const { correctiveFilter } = require('../rag/corrective');
+const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
+const { webSearch, formatWebResults } = require('../rag/web-search');
+const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
+// ── Justify RAG (optional external service, kept as bonus fallback) ──
+const {
+  isJustifyAvailable,
+  askJustify,
+  scrapeAndIndex: justifyScrape,
+  getJustifyStats,
+} = require('../rag/justify-client');
+let _justifyAvailable = false;
+isJustifyAvailable().then(ok => {
+  _justifyAvailable = ok;
+  if (ok) console.log(`[JUSTIFY] External RAG service available at ${process.env.JUSTIFY_URL || 'http://localhost:8000'}`);
+}).catch(() => { _justifyAvailable = false; });
+
+// Multer config for registration document uploads
+const regUpload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype);
+    cb(ok ? null : new Error('Faqat JPG, PNG, WebP yoki PDF'), ok);
+  }
+});
+
+// Legal document upload — accepts PDF, TXT, DOCX (text extraction)
+const docUpload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'text/plain',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword'
+    ];
+    const ok = allowed.includes(file.mimetype) ||
+      file.originalname.match(/\.(pdf|txt|docx|doc)$/i);
+    cb(ok ? null : new Error('Faqat PDF, TXT yoki DOCX formatlar qabul qilinadi'), ok);
+  }
+});
+
+// yurxizmat.uz document template catalog (verified URLs)
+const YURXIZMAT_CATALOG = [
+  { cat: 'Shartnomalar', url: '/uz/category/contracts', subs: [
+    { name: 'Yuridik shaxslarga oid shartnomalar', url: '/uz/category/for-juridical-contracts' },
+    { name: "Ko'chmas mulkka oid shartnomalar", url: '/uz/category/real-estate-contracts' },
+    { name: 'Avtotransportlarga oid shartnomalar', url: '/uz/category/contracts-for-auto' },
+    { name: "Mahsulot sotish, xizmat ko'rsatish", url: '/uz/category/services-contract' },
+    { name: 'Boshqa turdagi shartnomalar', url: '/uz/category/other-types-of-contracts' },
+    { name: 'Kelishuvlar', url: '/uz/category/agreements' },
+    { name: 'Bitimlar', url: '/uz/category/deals' },
+    { name: 'Ishonchnomalar', url: '/uz/category/power-of-attorneys' }
+  ]},
+  { cat: 'Arizalar', url: '/uz/category/statements', subs: [
+    { name: 'Yuridik shaxslarga oid arizalar', url: '/uz/category/applications-for-legal' },
+    { name: 'Jismoniy shaxslarga oid arizalar', url: '/uz/category/applications-for-individuals' },
+    { name: 'Bolalarga oid arizalar', url: '/uz/category/for-kids' },
+    { name: 'Iltimosnomalar', url: '/uz/category/petitions' }
+  ]},
+  { cat: 'Shaxsiy tarkibga oid hujjatlar', url: '/uz/category/personal-documents', subs: [
+    { name: 'Arizalar', url: '/uz/category/personal-applications' },
+    { name: 'Bildirishnomalar', url: '/uz/category/notifications' },
+    { name: 'Buyruqlar', url: '/uz/category/commands' },
+    { name: 'Dalolatnamalar', url: '/uz/category/acts' },
+    { name: 'Kelishuvlar va shartnomalar', url: '/uz/category/personal-agreements' },
+    { name: 'Boshqa hujjatlar', url: '/uz/category/other-documents' }
+  ]},
+  { cat: 'Notarial hujjatlar', url: '/uz/category/notarial', subs: [
+    { name: 'Meros va vasiyatnoma arizalari', url: '/uz/category/notarial-inheritance' },
+    { name: "Ko'chmas mulk rasmiylash.", url: '/uz/category/notarial-registration' },
+    { name: 'Avtotransport rasmiylash.', url: '/uz/category/notarial-auto' },
+    { name: 'Nikoh va oila masalalari', url: '/uz/category/notarial-wedding' },
+    { name: 'Boshqa notarial arizalar', url: '/uz/category/notarial-others' },
+    { name: 'Vasiyatnamalar', url: '/uz/category/wills' },
+    { name: 'Notarial ishonchnomalar', url: '/uz/category/notarial-credentials' },
+    { name: 'Ayirboshlash shartnomasi', url: '/uz/category/contracts-con' },
+    { name: 'Garov shartnomasi', url: '/uz/category/contracts-bail' },
+    { name: 'Ijara shartnomasi', url: '/uz/category/contracts-rent' },
+    { name: 'Ipoteka shartnomasi', url: '/uz/category/contracts-mortgage' },
+    { name: 'Qarz shartnomasi', url: '/uz/category/contracts-debt' },
+    { name: 'Merosga oid shartnomalar', url: '/uz/category/contracts-heritage' },
+    { name: 'Renta shartnomasi', url: '/uz/category/contracts-rent-agreement' },
+    { name: 'Hadya shartnomasi', url: '/uz/category/contracts-gift-agreement' },
+    { name: 'Oilaviy munosabatlar', url: '/uz/category/contracts-family' },
+    { name: 'Oldi-sotdi shartnomasi', url: '/uz/category/contracts-buy' },
+    { name: 'Boshqa notarial shartnomalar', url: '/uz/category/contracts-other-documents' }
+  ]},
+  { cat: 'Sudga oid hujjatlar', url: '/uz/category/court', subs: [
+    { name: "Da'vo arizalari (mehnat)", url: '/uz/category/claims-t' },
+    { name: "Da'vo arizalari (uy-joy)", url: '/uz/category/claims-home' },
+    { name: "Da'vo arizalari (oilaviy)", url: '/uz/category/claims-family' },
+    { name: "Da'vo arizalari (zarar)", url: '/uz/category/claims-harm' },
+    { name: "Da'vo arizalari (meros)", url: '/uz/category/claims-testament' },
+    { name: "Da'vo arizalari (avto)", url: '/uz/category/claims-auto' },
+    { name: "Da'vo arizalari (boshqa)", url: '/uz/category/claims-others' },
+    { name: 'Sud hujjatlaridan nusxa', url: '/uz/category/apply-court-copy' },
+    { name: 'Talablarga aniqlik kiritish', url: '/uz/category/apply-court-update' },
+    { name: "Ta'minlash choralari", url: '/uz/category/claims-note' },
+    { name: "Ishlarni qayta ko'rib chiqish", url: '/uz/category/court-back' },
+    { name: 'Sud qarorining ijrosi', url: '/uz/category/court-decree' },
+    { name: 'Boshqa sud arizalari', url: '/uz/category/court-others' },
+    { name: 'Apellyatsiya, kassatsiya', url: '/uz/category/appeals-cassation-complaints' },
+    { name: 'Bayonnomalar', url: '/uz/category/corporate-protocols' },
+    { name: 'Sud iltimosnomalar', url: '/uz/category/court-petitions' }
+  ]},
+  { cat: 'Korporativ hujjatlar', url: '/uz/category/corporate-documents', subs: [
+    { name: 'Talablar', url: '/uz/category/corporate-demands' },
+    { name: 'Nizomlar', url: '/uz/category/corporate-u' },
+    { name: 'Dalolatnamalar va bayonnomalar', url: '/uz/category/corporate-acts' },
+    { name: 'Boshqa korporativ hujjatlar', url: '/uz/category/corporate-other-documents' }
+  ]}
+];
+
+function getYurxizmatCatalogText() {
+  return YURXIZMAT_CATALOG.map(c =>
+    `${c.cat} (${c.url}):\n` + c.subs.map(s => `  - ${s.name}: ${s.url}`).join('\n')
+  ).join('\n');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize Telegram bot
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+// Prevent process crashes from unhandled errors
+process.on('unhandledRejection', (err) => {
+  console.error('[PROCESS] Unhandled rejection:', err.message || err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[PROCESS] Uncaught exception:', err.message || err);
+});
+
+// Import bot from bot.js (created with polling: false)
+const { bot } = require('../bot/bot');
+
+// Catch ALL bot errors to prevent crashes
+bot.on('error', (err) => {
+  console.error('[BOT] Bot error:', err.message || err);
+});
+bot.on('polling_error', (err) => {
+  console.error('[BOT] Polling error:', err.message || err);
+});
+bot.on('webhook_error', (err) => {
+  console.error('[BOT] Webhook error:', err.message || err);
+});
+
+// Detect environment
+const WEBHOOK_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBHOOK_DOMAIN;
+const IS_RAILWAY = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_SERVICE_NAME || process.env.PORT === '8080');
+
+console.log('[BOT] Environment:', IS_RAILWAY ? 'Railway' : 'Local');
+console.log('[BOT] RAILWAY_PUBLIC_DOMAIN:', process.env.RAILWAY_PUBLIC_DOMAIN || 'NOT SET');
+console.log('[BOT] WEBHOOK_DOMAIN:', WEBHOOK_DOMAIN || 'NOT SET');
+console.log('[BOT] PORT:', PORT);
+
+if (WEBHOOK_DOMAIN) {
+  // Production: webhook mode — no polling at all
+  const secretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+  app.post(secretPath, express.json(), (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+  });
+  bot.deleteWebHook().then(() => {
+    return bot.setWebHook(`https://${WEBHOOK_DOMAIN}${secretPath}`);
+  }).then(() => {
+    console.log('[BOT] Webhook active:', WEBHOOK_DOMAIN);
+  }).catch(err => {
+    console.error('[BOT] Webhook setup failed:', err.message);
+  });
+} else if (IS_RAILWAY) {
+  // On Railway but no public domain — do NOT poll
+  console.error('[BOT] WARNING: On Railway but no WEBHOOK_DOMAIN set!');
+  console.error('[BOT] Bot messages will not work until domain is configured.');
+  console.error('[BOT] Set WEBHOOK_DOMAIN env var to your Railway domain.');
+} else {
+  // Local development only — safe to poll
+  bot.startPolling();
+  console.log('[BOT] Polling mode (local dev)');
+}
+
+// Health check endpoint for Railway
+app.get('/health', (req, res) => res.status(200).send('OK'));
+
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+try { app.use(require('cookie-parser')()); } catch { console.log('[WARN] cookie-parser not installed, refresh tokens via cookie disabled'); }
 
-// Session configuration
+// Session configuration — PostgreSQL store survives server restarts
 app.use(session({
+  store: new pgSession({
+    pool,
+    tableName: 'user_sessions',
+    createTableIfMissing: true
+  }),
   secret: process.env.JWT_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -43,14 +244,59 @@ function requireMasterAdmin(req, res, next) {
   }
 }
 
+// Format anonymous ID: #userOrdinal_MM_YY_seq
+function anonId(userId, dateStr, seq) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  const seqStr = String(seq || 1).padStart(2, '0');
+  return `#${userId}_${mm}_${yy}_${seqStr}`;
+}
+
+// Short anonymous label (without seq): #userOrdinal_MM_YY
+function anonLabel(userId, dateStr) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `#${userId}_${mm}_${yy}`;
+}
+
+// Anonymize applicant personal info for non-master users
+function anonymizeRequest(row, role) {
+  if (role === 'master') return row;
+  return {
+    ...row,
+    first_name: `Murojaatchi ${anonId(row.user_id, row.created_at, row.user_request_seq)}`,
+    username: null,
+    telegram_id: null,
+    blocked: false,
+    blocked_at: null,
+    block_reason: null
+  };
+}
+
+// Activity tracking middleware - updates last_active_at on every authenticated request
+function trackActivity(req, res, next) {
+  if (req.session && req.session.isAuthenticated && req.session.adminId) {
+    pool.query(
+      'UPDATE admins SET last_active_at = NOW() WHERE id = $1',
+      [req.session.adminId]
+    ).catch(err => console.error('Activity tracking error:', err));
+  }
+  next();
+}
+app.use(trackActivity);
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
   try {
+    // Strip @ prefix and make case-insensitive (users may enter Telegram-style username)
+    const cleanUsername = (username || '').replace(/^@/, '').trim();
     const result = await pool.query(
-      'SELECT * FROM admins WHERE username = $1',
-      [username]
+      'SELECT * FROM admins WHERE LOWER(username) = LOWER($1)',
+      [cleanUsername]
     );
 
     if (result.rows.length > 0) {
@@ -108,11 +354,38 @@ app.get('/', (req, res) => {
   }
 });
 
+// Get request stats
+app.get('/api/stats', requireAuth, async (req, res) => {
+  try {
+    const role = req.session.role;
+    const aid = parseInt(req.session.adminId);
+    const assignedFilter = (role === 'student' || role === 'lawyer') ? `WHERE assigned_to = ${aid}` : '';
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+        COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
+        COUNT(*) FILTER (WHERE status = 'student_responded') AS student_responded,
+        COUNT(*) FILTER (WHERE status = 'answered') AS answered
+      FROM requests
+      ${assignedFilter}
+    `);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Get all requests
 app.get('/api/requests', requireAuth, async (req, res) => {
   try {
+    // Lawyers and students only see requests assigned to them
+    const role = req.session.role;
+    const aid = parseInt(req.session.adminId);
+    const assignedFilter = (role === 'student' || role === 'lawyer') ? `WHERE (r.assigned_to = ${aid} OR EXISTS (SELECT 1 FROM request_students rs2 WHERE rs2.request_id = r.id AND rs2.student_id = ${aid}))` : '';
     const result = await pool.query(`
-      SELECT 
+      SELECT
         r.id,
         r.user_id,
         r.category,
@@ -136,14 +409,25 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         u.blocked,
         u.blocked_at,
         u.block_reason,
-        a.full_name as assigned_lawyer_name
+        a.full_name as assigned_lawyer_name,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', adm.id, 'full_name', adm.full_name, 'assigned_at', rs.assigned_at))
+           FROM request_students rs JOIN admins adm ON rs.student_id = adm.id WHERE rs.request_id = r.id),
+          '[]'::json
+        ) as assigned_students,
+        r.triage_result,
+        r.verification_result,
+        ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq,
+        (SELECT aa.id FROM ai_analyses aa WHERE aa.request_id = r.id ORDER BY aa.created_at DESC LIMIT 1) as ai_analysis_id
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
-      ORDER BY r.created_at DESC
+      ${assignedFilter}
+      ORDER BY r.created_at ASC
     `);
-    
-    res.json(result.rows);
+
+    const rows = result.rows.map(r => anonymizeRequest(r, req.session.role));
+    res.json(rows);
   } catch (error) {
     console.error('Error fetching requests:', error);
     res.status(500).json({ error: 'Database error' });
@@ -155,7 +439,7 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(`
-      SELECT 
+      SELECT
         r.id,
         r.user_id,
         r.category,
@@ -179,7 +463,16 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         u.blocked,
         u.blocked_at,
         u.block_reason,
-        a.full_name as assigned_lawyer_name
+        a.full_name as assigned_lawyer_name,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', adm.id, 'full_name', adm.full_name, 'assigned_at', rs.assigned_at))
+           FROM request_students rs JOIN admins adm ON rs.student_id = adm.id WHERE rs.request_id = r.id),
+          '[]'::json
+        ) as assigned_students,
+        r.triage_result,
+        r.verification_result,
+        (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq,
+        (SELECT aa.id FROM ai_analyses aa WHERE aa.request_id = r.id ORDER BY aa.created_at DESC LIMIT 1) as ai_analysis_id
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
@@ -190,7 +483,7 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
     
-    res.json(result.rows[0]);
+    res.json(anonymizeRequest(result.rows[0], req.session.role));
   } catch (error) {
     console.error('Error fetching request:', error);
     res.status(500).json({ error: 'Database error' });
@@ -269,7 +562,7 @@ Tasdiqlash uchun dashboardga kiring!
 // Master admin approves response (sends to client)
 app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
   try {
-    const { requestId } = req.body;
+    const { requestId, feedbackType, correctedAnswer, correctedReasoning, correctedArticles, addToCorpus } = req.body;
     
     // Get request details
     const requestResult = await pool.query(`
@@ -277,7 +570,10 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
         u.telegram_id, 
         u.username,
         u.first_name, 
-        r.student_response
+        r.student_response,
+        r.request_text,
+        r.category,
+        r.response_text as ai_response
       FROM requests r
       JOIN users u ON r.user_id = u.id
       WHERE r.id = $1
@@ -287,32 +583,72 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
     
-    const { telegram_id, username, first_name, student_response } = requestResult.rows[0];
+    const { telegram_id, first_name, student_response, request_text, category, ai_response } = requestResult.rows[0];
+    
+    // Use corrected answer if provided, otherwise use student response
+    const finalResponse = (feedbackType && feedbackType !== 'correct' && correctedAnswer) ? correctedAnswer : student_response;
     
     // Update database
     await pool.query(`
       UPDATE requests 
-      SET response_text = student_response,
+      SET response_text = $2,
           status = 'answered',
           master_approved = TRUE,
-          answered_at = NOW()
+          answered_at = NOW(),
+          responded_by = $3
       WHERE id = $1
-    `, [requestId]);
+    `, [requestId, finalResponse, req.session.fullName]);
     
+    // Save mentor feedback to learning dataset
+    if (feedbackType) {
+      try {
+        await saveMentorFeedback({
+          request_id: requestId,
+          question: request_text,
+          ai_answer: ai_response || student_response,
+          mentor_feedback_type: feedbackType,
+          corrected_answer: correctedAnswer || '',
+          corrected_legal_reasoning: correctedReasoning || '',
+          corrected_law_articles: correctedArticles || '',
+          legal_field: category || 'Umumiy',
+          mentor_id: req.session.adminId,
+          mentor_name: req.session.fullName
+        });
+      } catch (fbErr) {
+        console.error('[FEEDBACK] Save error (non-critical):', fbErr.message);
+      }
+    }
+    
+    // Add to RAG corpus if lawyer chose to (human-in-the-loop corpus improvement)
+    let corpusAdded = false;
+    if (addToCorpus && request_text && finalResponse) {
+      try {
+        await insertVerifiedAnswer({
+          question: request_text,
+          answer: finalResponse,
+          category: category || 'boshqa',
+          requestId,
+          verifiedBy: req.session.adminId,
+          verifiedByName: req.session.fullName
+        });
+        corpusAdded = true;
+        console.log(`[RAG] Verified QA added to corpus for request #${requestId}`);
+      } catch (corpusErr) {
+        console.error('[RAG] Corpus insert error (non-critical):', corpusErr.message);
+      }
+    }
+
     // Send to client
-    const message = `
-✅ Yuristdan javob keldi!
+    const message = `✅ Yuristdan javob keldi!
 
 Hurmatli ${first_name},
 
-${student_response}
+${finalResponse}
 
-Dictum advokatlik firmasi
-    `;
-    
+Dictum advokatlik firmasi`;
     await bot.sendMessage(telegram_id, message);
-    
-    res.json({ success: true, message: 'Response approved and sent to client' });
+
+    res.json({ success: true, message: 'Response approved and sent to client', corpusAdded });
     
   } catch (error) {
     console.error('Error approving response:', error);
@@ -389,15 +725,21 @@ Dictum advokatlik firmasi
   }
 });
 
-// Get all admins (for assignment dropdown)
+// Get all admins (for assignment dropdown + admin management)
 app.get('/api/admins', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, username, full_name, role
+      SELECT id, username, full_name, role, telegram_username, duty_start, duty_end, last_active_at, created_at,
+        CASE
+          WHEN last_active_at IS NOT NULL
+               AND last_active_at > NOW() - INTERVAL '15 minutes'
+          THEN true
+          ELSE false
+        END AS is_active
       FROM admins
       ORDER BY role DESC, full_name
     `);
-    
+
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching admins:', error);
@@ -405,29 +747,337 @@ app.get('/api/admins', requireAuth, async (req, res) => {
   }
 });
 
+// Update admin timeslot (duty hours)
+app.put('/api/admins/:id/timeslot', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { duty_start, duty_end } = req.body;
+
+    // Authorization: admin can only update their own, master can update anyone
+    if (req.session.role !== 'master' && req.session.adminId !== parseInt(id)) {
+      return res.status(403).json({ error: 'Faqat o\'z smenangizni o\'zgartira olasiz' });
+    }
+
+    // Validate time format (HH:MM)
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    if (duty_start && !timeRegex.test(duty_start)) {
+      return res.status(400).json({ error: 'duty_start formati noto\'g\'ri (HH:MM)' });
+    }
+    if (duty_end && !timeRegex.test(duty_end)) {
+      return res.status(400).json({ error: 'duty_end formati noto\'g\'ri (HH:MM)' });
+    }
+
+    await pool.query(
+      'UPDATE admins SET duty_start = $1, duty_end = $2 WHERE id = $3',
+      [duty_start || null, duty_end || null, id]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating timeslot:', error);
+    res.status(500).json({ error: 'Ish vaqtini yangilab bo\'lmadi' });
+  }
+});
+
+// Create new admin (master only)
+app.post('/api/admins', requireMasterAdmin, async (req, res) => {
+  try {
+    const { username, password, full_name, role } = req.body;
+    if (!username || !password || !full_name || !role) {
+      return res.status(400).json({ error: 'Barcha maydonlar to\'ldirilishi shart' });
+    }
+    if (!['master', 'student'].includes(role)) {
+      return res.status(400).json({ error: 'Rol faqat master yoki student bo\'lishi mumkin' });
+    }
+    const existing = await pool.query('SELECT id FROM admins WHERE username = $1', [username]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Bu username allaqachon mavjud' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO admins (username, password, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, full_name, role, created_at',
+      [username, hashedPassword, full_name, role]
+    );
+    res.json({ success: true, admin: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating admin:', error);
+    res.status(500).json({ error: 'Admin yaratib bo\'lmadi' });
+  }
+});
+
+// Update admin (master only)
+app.put('/api/admins/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { full_name, username, password, role } = req.body;
+    if (!full_name || !username || !role) {
+      return res.status(400).json({ error: 'Ism, username va rol to\'ldirilishi shart' });
+    }
+    if (!['master', 'student'].includes(role)) {
+      return res.status(400).json({ error: 'Rol faqat master yoki student bo\'lishi mumkin' });
+    }
+    // Check username uniqueness (excluding current admin)
+    const existing = await pool.query('SELECT id FROM admins WHERE username = $1 AND id != $2', [username, id]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Bu username allaqachon mavjud' });
+    }
+    if (password && password.length > 0) {
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Parol kamida 6 ta belgidan iborat bo\'lishi kerak' });
+      }
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await pool.query(
+        'UPDATE admins SET full_name = $1, username = $2, password = $3, role = $4 WHERE id = $5',
+        [full_name, username, hashedPassword, role, id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE admins SET full_name = $1, username = $2, role = $3 WHERE id = $4',
+        [full_name, username, role, id]
+      );
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating admin:', error);
+    res.status(500).json({ error: 'Admin yangilab bo\'lmadi' });
+  }
+});
+
+// Delete admin (master only)
+app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = parseInt(id);
+    // Prevent deleting yourself
+    if (adminId === req.session.adminId) {
+      return res.status(400).json({ error: 'O\'zingizni o\'chira olmaysiz' });
+    }
+    // Check if admin exists
+    const adminCheck = await pool.query('SELECT id, full_name FROM admins WHERE id = $1', [adminId]);
+    if (adminCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin topilmadi' });
+    }
+    // Delete the admin (FK constraints have ON DELETE SET NULL/CASCADE)
+    await pool.query('DELETE FROM admins WHERE id = $1', [adminId]);
+    res.json({ success: true, deleted: adminCheck.rows[0].full_name });
+  } catch (error) {
+    console.error('Error deleting admin:', error.message, error.detail || '');
+    res.status(500).json({ error: 'Admin o\'chirib bo\'lmadi: ' + error.message });
+  }
+});
+
+// Get rankings data
+app.get('/api/rankings', requireAuth, async (req, res) => {
+  try {
+    // Lawyer rankings: admins with role='master', count answered requests
+    const lawyerResult = await pool.query(`
+      SELECT a.id, a.full_name, a.username,
+        COUNT(CASE WHEN r.status = 'answered' AND r.responded_by = a.full_name THEN 1 END) AS answered_count,
+        COUNT(CASE WHEN r.assigned_to = a.id THEN 1 END) AS assigned_count,
+        AVG(CASE WHEN r.status = 'answered' AND r.responded_by = a.full_name AND r.answered_at IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (r.answered_at - r.created_at)) / 3600.0 END) AS avg_hours
+      FROM admins a
+      LEFT JOIN requests r ON r.assigned_to = a.id OR r.responded_by = a.full_name
+      WHERE a.role = 'master'
+      GROUP BY a.id, a.full_name, a.username
+      ORDER BY answered_count DESC, avg_hours ASC
+    `);
+
+    // Student rankings
+    const studentResult = await pool.query(`
+      SELECT a.id, a.full_name, a.username,
+        COUNT(CASE WHEN r.student_admin_id = a.id THEN 1 END) AS response_count,
+        COUNT(CASE WHEN r.status = 'answered' AND r.responded_by = a.full_name THEN 1 END) AS approved_count,
+        AVG(CASE WHEN r.student_admin_id = a.id AND r.answered_at IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (r.answered_at - r.created_at)) / 3600.0 END) AS avg_hours
+      FROM admins a
+      LEFT JOIN requests r ON r.student_admin_id = a.id OR r.responded_by = a.full_name
+      WHERE a.role = 'student'
+      GROUP BY a.id, a.full_name, a.username
+      ORDER BY response_count DESC, avg_hours ASC
+    `);
+
+    // Compute star ratings (scale 1-5 relative to team max)
+    const computeStars = (rows, countField) => {
+      const maxCount = Math.max(...rows.map(r => parseInt(r[countField]) || 0), 1);
+      return rows.map(r => ({
+        ...r,
+        stars: Math.max(1, Math.round((parseInt(r[countField]) || 0) / maxCount * 5))
+      }));
+    };
+
+    res.json({
+      lawyers: computeStars(lawyerResult.rows, 'answered_count'),
+      students: computeStars(studentResult.rows, 'response_count')
+    });
+  } catch (error) {
+    console.error('Error fetching rankings:', error);
+    res.status(500).json({ error: 'Reyting ma\'lumotlarini olishda xatolik' });
+  }
+});
+
+// Get request stats for a specific admin
+app.get('/api/admin-stats/:id', requireAuth, async (req, res) => {
+  try {
+    const adminId = parseInt(req.params.id);
+    const result = await pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM requests WHERE assigned_to = $1) AS assigned_count,
+        (SELECT COUNT(*) FROM requests WHERE assigned_to = $1 AND status = 'answered') AS answered_count,
+        (SELECT COUNT(*) FROM requests WHERE student_admin_id = $1) AS student_response_count,
+        (SELECT COUNT(*) FROM requests WHERE responded_by = (SELECT full_name FROM admins WHERE id = $1) AND status = 'answered') AS responded_count
+    `, [adminId]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching admin stats:', error);
+    res.status(500).json({ error: 'Statistika olishda xatolik' });
+  }
+});
+
+// Monte Carlo simulation data
+app.get('/api/monte-carlo', requireAuth, async (req, res) => {
+  try {
+    // Daily request counts for past 60 days
+    const dailyResult = await pool.query(`
+      SELECT DATE(created_at) as day, COUNT(*) as count
+      FROM requests
+      WHERE created_at >= NOW() - INTERVAL '60 days'
+      GROUP BY DATE(created_at)
+      ORDER BY day
+    `);
+
+    // Resolution times for answered requests
+    const resolutionResult = await pool.query(`
+      SELECT EXTRACT(EPOCH FROM (answered_at - created_at)) / 3600.0 AS hours
+      FROM requests
+      WHERE status = 'answered' AND answered_at IS NOT NULL AND created_at IS NOT NULL
+    `);
+
+    // Compute stats for daily requests
+    const dailyCounts = dailyResult.rows.map(r => parseInt(r.count));
+    const dailyMean = dailyCounts.length > 0 ? dailyCounts.reduce((a, b) => a + b, 0) / dailyCounts.length : 0;
+    const dailyStd = dailyCounts.length > 1
+      ? Math.sqrt(dailyCounts.reduce((sum, v) => sum + Math.pow(v - dailyMean, 2), 0) / (dailyCounts.length - 1))
+      : dailyMean * 0.3;
+
+    // Compute stats for resolution times
+    const resTimes = resolutionResult.rows.map(r => parseFloat(r.hours)).filter(h => h > 0 && h < 720);
+    const resMean = resTimes.length > 0 ? resTimes.reduce((a, b) => a + b, 0) / resTimes.length : 0;
+    const resStd = resTimes.length > 1
+      ? Math.sqrt(resTimes.reduce((sum, v) => sum + Math.pow(v - resMean, 2), 0) / (resTimes.length - 1))
+      : resMean * 0.3;
+
+    // Sort resolution times for percentiles
+    const sortedRes = [...resTimes].sort((a, b) => a - b);
+    const percentile = (arr, p) => arr.length > 0 ? arr[Math.floor(arr.length * p / 100)] : 0;
+
+    res.json({
+      volume: {
+        daily_history: dailyResult.rows,
+        mean: Math.round(dailyMean * 10) / 10,
+        std: Math.round(dailyStd * 10) / 10,
+        sample_size: dailyCounts.length
+      },
+      resolution: {
+        mean_hours: Math.round(resMean * 10) / 10,
+        std_hours: Math.round(resStd * 10) / 10,
+        p10_hours: Math.round(percentile(sortedRes, 10) * 10) / 10,
+        p50_hours: Math.round(percentile(sortedRes, 50) * 10) / 10,
+        p90_hours: Math.round(percentile(sortedRes, 90) * 10) / 10,
+        sample_size: resTimes.length
+      }
+    });
+  } catch (error) {
+    console.error('Error computing Monte Carlo:', error);
+    res.status(500).json({ error: 'Monte Carlo hisoblashda xatolik' });
+  }
+});
+
 // Assign request to lawyer
 app.post('/api/assign-request', requireAuth, async (req, res) => {
   try {
     const { requestId, lawyerId } = req.body;
-    
+
     await pool.query(`
-      UPDATE requests 
+      UPDATE requests
       SET assigned_to = $1, assigned_at = NOW()
       WHERE id = $2
     `, [lawyerId, requestId]);
-    
-    // Get lawyer name for notification
+
+    // Get lawyer info for notification
     const lawyerResult = await pool.query(
-      'SELECT full_name FROM admins WHERE id = $1',
+      'SELECT full_name, telegram_chat_id FROM admins WHERE id = $1',
       [lawyerId]
     );
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Request assigned successfully',
-      lawyerName: lawyerResult.rows[0]?.full_name 
+      lawyerName: lawyerResult.rows[0]?.full_name
     });
-    
+
+    // Send Telegram notification to assigned admin (async, don't block response)
+    const lawyer = lawyerResult.rows[0];
+    if (lawyer && lawyer.telegram_chat_id) {
+      (async () => {
+        try {
+          const reqResult = await pool.query(
+            `SELECT r.id, r.user_id, r.request_text, r.request_type, r.file_id, r.created_at,
+                    u.first_name, u.username, u.telegram_id,
+                    (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
+             FROM requests r JOIN users u ON r.user_id = u.id
+             WHERE r.id = $1`,
+            [requestId]
+          );
+
+          if (reqResult.rows.length > 0) {
+            const req = reqResult.rows[0];
+            const typeLabels = { text: 'Matn', voice: 'Ovozli xabar', video: 'Video', video_note: 'Video xabar', document: 'Fayl', photo: 'Rasm' };
+            const typeLabel = typeLabels[req.request_type] || req.request_type;
+            const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
+
+            let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojaatchi: Murojaatchi ${anonId(req.user_id, req.created_at, req.user_request_seq)}`;
+            notifText += `\n📝 Turi: ${typeLabel}`;
+            notifText += `\n🔢 Murojaat #${req.id}`;
+
+            if (req.request_type === 'text' && req.request_text) {
+              const preview = req.request_text.length > 300 ? req.request_text.substring(0, 300) + '...' : req.request_text;
+              notifText += `\n\n📄 Murojaat:\n${preview}`;
+            }
+
+            // Send notification with inline keyboard
+            const keyboard = {
+              inline_keyboard: [[
+                { text: '✏️ Javob berish', callback_data: `respond_${requestId}` },
+                { text: '📊 Dashboard', url: dashboardUrl }
+              ]]
+            };
+
+            await bot.sendMessage(lawyer.telegram_chat_id, notifText, { reply_markup: keyboard });
+
+            // For non-text requests, also forward the file
+            if (req.file_id && req.request_type !== 'text') {
+              try {
+                if (req.request_type === 'voice') {
+                  await bot.sendVoice(lawyer.telegram_chat_id, req.file_id);
+                } else if (req.request_type === 'video' || req.request_type === 'video_note') {
+                  await bot.sendVideo(lawyer.telegram_chat_id, req.file_id);
+                } else if (req.request_type === 'document') {
+                  await bot.sendDocument(lawyer.telegram_chat_id, req.file_id);
+                } else if (req.request_type === 'photo') {
+                  await bot.sendPhoto(lawyer.telegram_chat_id, req.file_id);
+                }
+              } catch (fileErr) {
+                console.error('Failed to forward file to admin:', fileErr);
+              }
+            }
+          }
+        } catch (notifErr) {
+          console.error('Assignment Telegram notification error:', notifErr);
+        }
+      })();
+    }
+
   } catch (error) {
     console.error('Error assigning request:', error);
     res.status(500).json({ error: 'Failed to assign request' });
@@ -471,14 +1121,83 @@ app.post('/api/unassign-request', requireAuth, async (req, res) => {
   }
 });
 
+// Assign student to request
+app.post('/api/assign-student', requireAuth, async (req, res) => {
+  try {
+    const { requestId, studentId } = req.body;
+
+    await pool.query(`
+      INSERT INTO request_students (request_id, student_id) VALUES ($1, $2)
+      ON CONFLICT (request_id, student_id) DO NOTHING
+    `, [requestId, studentId]);
+
+    const studentResult = await pool.query(
+      'SELECT full_name, telegram_chat_id FROM admins WHERE id = $1',
+      [studentId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Student assigned successfully',
+      studentName: studentResult.rows[0]?.full_name
+    });
+
+    // Telegram notification to assigned student
+    const student = studentResult.rows[0];
+    if (student && student.telegram_chat_id) {
+      (async () => {
+        try {
+          const reqResult = await pool.query(
+            `SELECT r.id, r.request_text, r.request_type, r.category FROM requests r WHERE r.id = $1`,
+            [requestId]
+          );
+          if (reqResult.rows.length > 0) {
+            const r = reqResult.rows[0];
+            const preview = (r.request_text || '').substring(0, 100);
+            await bot.sendMessage(student.telegram_chat_id,
+              `📋 Sizga yangi murojaat tayinlandi!\n\n` +
+              `🆔 Murojaat #${r.id}\n` +
+              `📂 ${r.category || 'Boshqa'}\n` +
+              `📝 ${preview}${preview.length >= 100 ? '...' : ''}\n\n` +
+              `Dashboard orqali javob bering.`
+            );
+          }
+        } catch (e) {
+          console.error('[ASSIGN STUDENT] Telegram notify error:', e.message);
+        }
+      })();
+    }
+  } catch (error) {
+    console.error('Error assigning student:', error);
+    res.status(500).json({ error: 'Failed to assign student' });
+  }
+});
+
+// Unassign student from request
+app.post('/api/unassign-student', requireAuth, async (req, res) => {
+  try {
+    const { requestId, studentId } = req.body;
+
+    await pool.query(`
+      DELETE FROM request_students WHERE request_id = $1 AND student_id = $2
+    `, [requestId, studentId]);
+
+    res.json({ success: true, message: 'Student assignment removed' });
+  } catch (error) {
+    console.error('Error unassigning student:', error);
+    res.status(500).json({ error: 'Failed to unassign student' });
+  }
+});
+
 // Export to Excel
 app.get('/api/export-excel', requireAuth, async (req, res) => {
   try {
     const XLSX = require('xlsx');
     
     const result = await pool.query(`
-      SELECT 
+      SELECT
         r.id,
+        r.user_id,
         u.username,
         u.first_name,
         r.category,
@@ -488,16 +1207,20 @@ app.get('/api/export-excel', requireAuth, async (req, res) => {
         r.response_text,
         r.responded_by,
         r.created_at,
-        r.answered_at
+        r.answered_at,
+        (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
       FROM requests r
       JOIN users u ON r.user_id = u.id
       ORDER BY r.created_at DESC
     `);
     
+    // Anonymize for non-master users
+    const rows = result.rows.map(r => anonymizeRequest(r, req.session.role));
+
     // Format data for Excel
-    const excelData = result.rows.map(row => ({
+    const excelData = rows.map(row => ({
       'ID': row.id,
-      'Username': row.username,
+      'Username': row.username || '',
       'Ism': row.first_name,
       'Yo\'nalish': row.category,
       'Murojaat': row.request_text,
@@ -644,11 +1367,31 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
 
     let query, params;
     if (sinceId > 0) {
+      // Check if since_id still exists (messages may have been deleted)
+      const check = await pool.query('SELECT COUNT(*)::int as cnt FROM chat_messages WHERE id <= $1', [sinceId]);
+      if (check.rows[0].cnt === 0) {
+        // All messages up to since_id were deleted — signal full reset
+        const fresh = await pool.query(`
+          SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
+                 a.id as admin_id, a.username, a.full_name, a.role,
+                 rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
+          FROM chat_messages cm
+          JOIN admins a ON cm.admin_id = a.id
+          LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
+          LEFT JOIN admins ra ON rm.admin_id = ra.id
+          ORDER BY cm.id DESC
+          LIMIT $1
+        `, [limit]);
+        return res.json({ messages: fresh.rows.reverse(), reset: true });
+      }
       query = `
-        SELECT cm.id, cm.message, cm.mentions, cm.created_at,
-               a.id as admin_id, a.username, a.full_name, a.role
+        SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
+               a.id as admin_id, a.username, a.full_name, a.role,
+               rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
         FROM chat_messages cm
         JOIN admins a ON cm.admin_id = a.id
+        LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
+        LEFT JOIN admins ra ON rm.admin_id = ra.id
         WHERE cm.id > $1
         ORDER BY cm.id ASC
         LIMIT $2
@@ -656,10 +1399,13 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
       params = [sinceId, limit];
     } else {
       query = `
-        SELECT cm.id, cm.message, cm.mentions, cm.created_at,
-               a.id as admin_id, a.username, a.full_name, a.role
+        SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
+               a.id as admin_id, a.username, a.full_name, a.role,
+               rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
         FROM chat_messages cm
         JOIN admins a ON cm.admin_id = a.id
+        LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
+        LEFT JOIN admins ra ON rm.admin_id = ra.id
         ORDER BY cm.id DESC
         LIMIT $1
       `;
@@ -668,7 +1414,9 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
 
     const result = await pool.query(query, params);
     const messages = sinceId > 0 ? result.rows : result.rows.reverse();
-    res.json({ messages });
+    // Include total count so client can detect individual deletions
+    const totalResult = await pool.query('SELECT COUNT(*)::int as total FROM chat_messages');
+    res.json({ messages, total: totalResult.rows[0].total });
   } catch (error) {
     console.error('Error fetching chat messages:', error);
     res.status(500).json({ error: 'Failed to fetch messages' });
@@ -678,7 +1426,7 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
 // Send a chat message
 app.post('/api/chat/messages', requireAuth, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, reply_to_id } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message cannot be empty' });
@@ -694,33 +1442,3873 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
       mentions.push(match[1].toLowerCase());
     }
 
+    const replyId = reply_to_id ? parseInt(reply_to_id) : null;
+
     const result = await pool.query(
-      `INSERT INTO chat_messages (admin_id, message, mentions)
-       VALUES ($1, $2, $3)
-       RETURNING id, message, mentions, created_at`,
-      [req.session.adminId, message.trim(), JSON.stringify(mentions)]
+      `INSERT INTO chat_messages (admin_id, message, mentions, reply_to_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, message, mentions, reply_to_id, created_at`,
+      [req.session.adminId, message.trim(), JSON.stringify(mentions), replyId]
     );
 
     const newMsg = result.rows[0];
+    let replyData = {};
+    if (replyId) {
+      const replyResult = await pool.query(
+        `SELECT cm.message, a.full_name as reply_sender, a.role as reply_role
+         FROM chat_messages cm JOIN admins a ON cm.admin_id = a.id WHERE cm.id = $1`,
+        [replyId]
+      );
+      if (replyResult.rows.length > 0) {
+        replyData = {
+          reply_to_id: replyId,
+          reply_message: replyResult.rows[0].message,
+          reply_sender: replyResult.rows[0].reply_sender,
+          reply_role: replyResult.rows[0].reply_role
+        };
+      }
+    }
+
     res.json({
       success: true,
       message: {
         id: newMsg.id,
         message: newMsg.message,
         mentions: newMsg.mentions,
+        reply_to_id: newMsg.reply_to_id,
         created_at: newMsg.created_at,
         admin_id: req.session.adminId,
         username: req.session.username,
         full_name: req.session.fullName,
-        role: req.session.role
+        role: req.session.role,
+        ...replyData
       }
     });
+
+    // Send Telegram DM notifications to mentioned admins (async, don't block response)
+    if (mentions.length > 0) {
+      const senderName = req.session.fullName;
+      const msgPreview = message.trim().length > 200 ? message.trim().substring(0, 200) + '...' : message.trim();
+      const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
+
+      (async () => {
+        try {
+          const notifiedIds = new Set();
+          for (const uname of mentions) {
+            if (uname === 'all') {
+              const allResult = await pool.query(
+                'SELECT telegram_chat_id FROM admins WHERE telegram_chat_id IS NOT NULL AND id != $1',
+                [req.session.adminId]
+              );
+              for (const row of allResult.rows) {
+                if (!notifiedIds.has(String(row.telegram_chat_id))) {
+                  notifiedIds.add(String(row.telegram_chat_id));
+                  const notifText = `💬 Guruh Chat - ${senderName} hammani eslatdi:\n\n"${msgPreview}"\n\nDashboard: ${dashboardUrl}`;
+                  bot.sendMessage(row.telegram_chat_id, notifText).catch(() => {});
+                }
+              }
+            } else {
+              const adminResult = await pool.query(
+                'SELECT telegram_chat_id FROM admins WHERE LOWER(username) = $1 AND telegram_chat_id IS NOT NULL AND id != $2',
+                [uname, req.session.adminId]
+              );
+              if (adminResult.rows.length > 0 && !notifiedIds.has(String(adminResult.rows[0].telegram_chat_id))) {
+                notifiedIds.add(String(adminResult.rows[0].telegram_chat_id));
+                const notifText = `💬 Guruh Chat - ${senderName} sizni eslatdi:\n\n"${msgPreview}"\n\nDashboard: ${dashboardUrl}`;
+                bot.sendMessage(adminResult.rows[0].telegram_chat_id, notifText).catch(() => {});
+              }
+            }
+          }
+        } catch (notifErr) {
+          console.error('Chat mention Telegram notification error:', notifErr);
+        }
+      })();
+    }
+
   } catch (error) {
     console.error('Error sending chat message:', error);
     res.status(500).json({ error: 'Failed to send message' });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Dashboard server running on http://localhost:${PORT}`);
+// Delete single chat message (master admin only)
+app.delete('/api/chat/messages/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const msgId = parseInt(req.params.id);
+    if (!msgId) return res.status(400).json({ error: 'Invalid message ID' });
+    await pool.query('DELETE FROM chat_messages WHERE id = $1', [msgId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting chat message:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// Delete all chat messages (master admin only)
+app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM chat_messages');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting all chat messages:', error);
+    res.status(500).json({ error: 'Failed to delete messages' });
+  }
+});
+
+// ========== AI PROVIDER: Gemini (primary) + OpenAI GPT-4o (fallback) ==========
+
+async function callGemini(messages, options = {}) {
+  const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) throw new Error('GEMINI_API_KEY sozlanmagan');
+
+  const model = 'gemini-2.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+
+  // Convert messages: first message with role 'system' becomes systemInstruction
+  let systemInstruction = null;
+  const chatMessages = [];
+  for (const m of messages) {
+    if (m.role === 'system') {
+      systemInstruction = { parts: [{ text: m.text }] };
+    } else {
+      chatMessages.push({
+        role: m.role === 'model' ? 'model' : 'user',
+        parts: [{ text: m.text }]
+      });
+    }
+  }
+
+  const body = {
+    contents: chatMessages,
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens
+    }
+  };
+
+  if (systemInstruction) body.systemInstruction = systemInstruction;
+
+  // Enable Google Search grounding for legal research queries
+  if (useSearch) {
+    body.tools = [{ googleSearch: {} }];
+  }
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`Gemini ${resp.status}: ${errBody.substring(0, 300)}`);
+  }
+
+  const data = await resp.json();
+
+  // Gemini 2.5 Flash may return "thought" parts (internal reasoning) alongside "text" parts.
+  // Also check for blocked responses (safety filters) and log them.
+  const candidate = data.candidates?.[0];
+  if (!candidate) {
+    const blockReason = data.promptFeedback?.blockReason || data.blockReason || 'unknown';
+    console.error(`[Gemini] No candidates returned. Block reason: ${blockReason}`, JSON.stringify(data).substring(0, 500));
+    throw new Error(`Gemini blocked: ${blockReason}`);
+  }
+
+  // finishReason: SAFETY means content was filtered
+  if (candidate.finishReason === 'SAFETY') {
+    const ratings = (candidate.safetyRatings || []).map(r => `${r.category}:${r.probability}`).join(', ');
+    console.warn(`[Gemini] Safety-filtered response: ${ratings}`);
+    throw new Error(`Gemini safety filter: ${ratings}`);
+  }
+
+  const parts = candidate.content?.parts || [];
+  // Filter out "thought" parts (thinking mode) — only take text parts
+  const text = parts
+    .filter(p => p.text !== undefined && !p.thought)
+    .map(p => p.text)
+    .join('');
+
+  if (!text) {
+    // Log what we actually got for debugging
+    const partTypes = parts.map(p => Object.keys(p).join('+')).join(', ');
+    console.error(`[Gemini] Empty text. Parts received: [${partTypes}], finishReason: ${candidate.finishReason}`);
+    throw new Error(`Gemini empty response (parts: ${partTypes || 'none'}, finish: ${candidate.finishReason || '?'})`);
+  }
+  return { text, provider: 'Gemini' };
+}
+
+async function callOpenAI(messages, options = {}) {
+  const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
+  const gptKey = process.env.GPT_API_KEY;
+  if (!gptKey) throw new Error('GPT_API_KEY sozlanmagan');
+
+  const input = messages.map(m => ({
+    role: m.role === 'model' ? 'assistant' : (m.role === 'user' ? 'user' : 'assistant'),
+    content: m.text
+  }));
+
+  const body = {
+    model: 'gpt-4o',
+    input,
+    temperature,
+    max_output_tokens: maxTokens
+  };
+
+  if (useSearch) {
+    body.tools = [{ type: 'web_search_preview' }];
+  }
+
+  const resp = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${gptKey}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`GPT-4o ${resp.status}: ${errBody.substring(0, 200)}`);
+  }
+
+  const data = await resp.json();
+  const text = (data.output || [])
+    .filter(o => o.type === 'message')
+    .flatMap(o => o.content || [])
+    .filter(c => c.type === 'output_text')
+    .map(c => c.text)
+    .join('');
+
+  if (!text) throw new Error('GPT-4o empty response');
+  return { text, provider: 'GPT-4o' };
+}
+
+async function callGroq(messages, options = {}) {
+  const { temperature = 0.2, maxTokens = 8192 } = options;
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) throw new Error('GROQ_API_KEY sozlanmagan');
+
+  const input = messages.map(m => ({
+    role: m.role === 'model' ? 'assistant' : (m.role === 'system' ? 'system' : 'user'),
+    content: m.text
+  }));
+
+  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${groqKey}`
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: input,
+      temperature,
+      max_tokens: maxTokens
+    })
+  });
+
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`Groq ${resp.status}: ${errBody.substring(0, 200)}`);
+  }
+
+  const data = await resp.json();
+  const text = data.choices?.[0]?.message?.content || '';
+  if (!text) throw new Error('Groq empty response');
+  return { text, provider: 'Groq/Llama' };
+}
+
+async function callAI(messages, options = {}) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
+  const gptKey = process.env.GPT_API_KEY;
+
+  const errors = [];
+
+  // 1. Try Gemini first (Google Search grounding support)
+  if (geminiKey) {
+    try {
+      console.log(`[AI] Calling Gemini${options.useSearch ? ' with Google Search' : ''}...`);
+      const result = await callGemini(messages, options);
+      console.log('[AI] Gemini succeeded');
+      return result;
+    } catch (err) {
+      console.warn(`[AI] Gemini failed: ${err.message}`);
+      errors.push(`Gemini: ${err.message}`);
+
+      // Retry WITHOUT Google Search — search grounding can cause empty/blocked responses
+      if (options.useSearch) {
+        try {
+          console.log('[AI] Retrying Gemini WITHOUT Google Search...');
+          const result = await callGemini(messages, { ...options, useSearch: false });
+          console.log('[AI] Gemini succeeded (no search)');
+          return result;
+        } catch (err2) {
+          console.warn(`[AI] Gemini retry failed: ${err2.message}`);
+          errors.push(`Gemini (no-search): ${err2.message}`);
+        }
+      }
+    }
+  }
+
+  // 2. Try Groq (free, fast, no search but good quality)
+  // Groq has strict token limits — trim messages if needed
+  if (groqKey) {
+    try {
+      console.log('[AI] Calling Groq/Llama...');
+      const trimmedMessages = trimMessagesForGroq(messages);
+      const result = await callGroq(trimmedMessages, { ...options, maxTokens: Math.min(options.maxTokens || 4096, 4096) });
+      console.log('[AI] Groq succeeded');
+      return result;
+    } catch (err) {
+      console.warn(`[AI] Groq failed: ${err.message}`);
+      errors.push(`Groq: ${err.message}`);
+    }
+  }
+
+  // 3. Try OpenAI GPT-4o
+  if (gptKey) {
+    try {
+      console.log(`[AI] Calling GPT-4o${options.useSearch ? ' with web search' : ''}...`);
+      const result = await callOpenAI(messages, options);
+      console.log('[AI] GPT-4o succeeded');
+      return result;
+    } catch (err) {
+      console.warn(`[AI] GPT-4o failed: ${err.message}`);
+      errors.push(`GPT-4o: ${err.message}`);
+    }
+  }
+
+  throw new Error('Barcha AI provayderlar ishlamayapti: ' + errors.join(' | '));
+}
+
+/**
+ * Trim messages to fit within Groq's token limits (~6K input tokens safe).
+ * Strategy: keep system prompt (trimmed), keep last 4 history messages, keep current user message.
+ */
+function trimMessagesForGroq(messages) {
+  if (!messages || messages.length <= 3) return messages;
+
+  const MAX_CHARS = 20000; // ~5000 tokens, safe for Groq's 12K TPM with 4K output
+  let totalChars = messages.reduce((sum, m) => sum + (m.text || '').length, 0);
+
+  if (totalChars <= MAX_CHARS) return messages;
+
+  const trimmed = [];
+  const systemMsg = messages.find(m => m.role === 'system');
+  const userMsgs = messages.filter(m => m.role !== 'system');
+
+  // Trim system prompt to 8000 chars if too long
+  if (systemMsg) {
+    const maxSystem = 8000;
+    trimmed.push({
+      ...systemMsg,
+      text: systemMsg.text.length > maxSystem
+        ? systemMsg.text.substring(0, maxSystem) + '\n\n[Kontekst qisqartirildi...]'
+        : systemMsg.text
+    });
+  }
+
+  // Keep only last 4 non-system messages (2 Q&A pairs)
+  const recentMsgs = userMsgs.length > 4 ? userMsgs.slice(-4) : userMsgs;
+  trimmed.push(...recentMsgs);
+
+  console.log(`[AI] Trimmed for Groq: ${messages.length} → ${trimmed.length} messages, ${totalChars} → ${trimmed.reduce((s, m) => s + (m.text || '').length, 0)} chars`);
+  return trimmed;
+}
+
+// Initialize agent runner with callAI function
+const { initRunner } = require('../agents/runner');
+initRunner(callAI);
+
+// AI Analysis endpoint — Legal GPT (RAG-based)
+app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
+  try {
+    const { requestText, category, requestId } = req.body;
+    if (!requestText) {
+      return res.status(400).json({ error: 'Murojaat matni topilmadi' });
+    }
+
+    // Check recent feedback for quality adjustment
+    let feedbackNote = '';
+    try {
+      const fbResult = await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE rating = 1)::int AS pos,
+          COUNT(*) FILTER (WHERE rating = -1)::int AS neg
+        FROM ai_feedback
+        WHERE created_at > NOW() - INTERVAL '30 days'
+      `);
+      const { pos, neg } = fbResult.rows[0];
+      const total = pos + neg;
+      if (total > 5) {
+        const satisfaction = Math.round(pos / total * 100);
+        if (satisfaction < 70) {
+          feedbackNote = `\n\nEslatma: So'nggi 30 kunda foydalanuvchilar ${satisfaction}% qoniqish bildirdi. Tahlilni yanada batafsil va aniq qiling.`;
+        }
+      }
+    } catch (e) { /* non-critical */ }
+
+    // ========== LEGAL FIELD CLASSIFICATION ==========
+    let classificationBlock = '';
+    let detectedField = category; // fallback to user-provided category
+    try {
+      const classification = await classifyLegalField(requestText, requestId || null);
+      classificationBlock = formatClassificationForPrompt(classification);
+      if (classification.legal_field !== 'Boshqa') {
+        detectedField = classification.legal_field;
+        console.log(`[AI] Classified as: ${classification.legal_field} (${classification.confidence}%)`);
+      }
+    } catch (e) {
+      console.error('[AI] Classification error:', e.message);
+    }
+
+    // ========== GOLDEN DATASET: RETRIEVE SIMILAR EXAMPLES ==========
+    let similarExamplesBlock = '';
+    try {
+      const similarExamples = await retrieveSimilarExamples(requestText, detectedField);
+      similarExamplesBlock = formatExamplesForPrompt(similarExamples);
+      if (similarExamples.length > 0) {
+        console.log(`[AI] Injecting ${similarExamples.length} golden dataset examples into prompt`);
+      }
+    } catch (e) {
+      console.error('[AI] Golden dataset retrieval error:', e.message);
+    }
+
+    // ========== FEEDBACK DATASET: RETRIEVE MENTOR CORRECTIONS ==========
+    let feedbackExamplesBlock = '';
+    try {
+      const feedbackExamples = await retrieveFeedbackExamples(requestText, detectedField);
+      feedbackExamplesBlock = formatFeedbackForPrompt(feedbackExamples);
+      if (feedbackExamples.length > 0) {
+        console.log(`[AI] Injecting ${feedbackExamples.length} mentor feedback corrections into prompt`);
+      }
+    } catch (e) {
+      console.error('[AI] Feedback dataset retrieval error:', e.message);
+    }
+
+    // ========== CASE-LAW DATASET: RETRIEVE SIMILAR COURT DECISIONS ==========
+    let caseLawBlock = '';
+    try {
+      const similarCases = await retrieveSimilarCases(requestText, detectedField, 3);
+      caseLawBlock = formatCasesForPrompt(similarCases);
+      if (similarCases.length > 0) {
+        console.log(`[AI] Injecting ${similarCases.length} court cases into prompt`);
+      }
+    } catch (e) {
+      console.error('[AI] Case-law retrieval error:', e.message);
+    }
+
+    // ========== RAG CORPUS: RETRIEVE RELEVANT LAW TEXT ==========
+    let ragCorpusBlock = '';
+    let ragMeta = null;
+    try {
+      const ragResult = await retrieveLegalContext(requestText, detectedField !== 'Boshqa' ? detectedField : null);
+      if (typeof ragResult === 'string') {
+        ragCorpusBlock = ragResult;
+      } else {
+        ragCorpusBlock = ragResult.context || '';
+        ragMeta = ragResult.meta || null;
+      }
+      if (ragCorpusBlock) {
+        console.log(`[AI] RAG: ${ragMeta?.strategy || '?'} / ${ragMeta?.searchMode || '?'} — ${ragMeta?.chunks || 0} chunks`);
+      }
+    } catch (e) {
+      console.error('[AI] RAG corpus retrieval error:', e.message);
+    }
+
+    // ========== LEGAL REASONING ENGINE — SYSTEM PROMPT ==========
+    const systemPrompt = `You are a professional legal assistant specialized in the legislation of the Republic of Uzbekistan.
+
+Your task is to analyze legal requests submitted by users and provide precise, well-structured legal answers.
+
+You must base your analysis on:
+1. Official legal documents from lex.uz (legislation)
+2. Court practice from my.sud.uz / public.sud.uz (judicial decisions)
+
+When answering legal questions, you MUST:
+- Identify the legal issue
+- Cite relevant legislation from lex.uz
+- Reference similar court decisions from my.sud.uz if available in context
+- Analyze how courts interpret the law in similar situations
+- Provide a structured legal conclusion
+
+Use clear professional legal language suitable for lawyers and law students.
+All answers MUST be in O'zbek (lotin) tilida.
+
+LEGAL REASONING PROTOCOL (ICHKI TAHLIL — MAJBURIY):
+Javob yozishdan OLDIN, quyidagi 5 bosqichli ichki tahlilni o'tkazing:
+
+1-BOSQICH: MASALANI ANIQLASH
+- Foydalanuvchi nimani so'rayapti? Aniq huquqiy masala nima?
+- Qaysi huquqiy munosabat ko'zda tutilgan?
+
+2-BOSQICH: QONUN IZLASH
+- Web search orqali "site:lex.uz [kodeks nomi] [mavzu]" qidiring
+- Topilgan har bir norma uchun: AMALDAMI yoki O'Z KUCHINI YO'QOTGANMI tekshiring
+- Faqat AMALDAGI (hozirgi kuchga ega) normalarni qabul qiling
+- O'zgartirishlar (amendments) borligini tekshiring
+
+3-BOSQICH: SUD AMALIYOTINI TEKSHIRISH
+- Kontekstda berilgan sud ishlarini ko'rib chiqing — foydalanuvchi masalasiga tegishlimi?
+- Sudlar qonunni QANDAY talqin qilgan — shu talqinni tahlilga kiritish kerakmi?
+- "site:public.sud.uz [mavzu]" dan ham qo'shimcha sud qarorlarini izlang
+- Sud ishlariga murojaat qilganda: ish raqami, sud nomi, sanasi MAJBURIY
+
+4-BOSQICH: MANTIQIY TEKSHIRISH
+- Topilgan normalar va sud amaliyoti foydalanuvchi vaziyatiga TO'G'RIDAN-TO'G'RI tegishlimi?
+- Biror norma bilan javob berish uchun YETARLI asosmi? Agar YO'Q — ochiq ayting.
+
+5-BOSQICH: GALLYUTSINATSIYA FILTRI
+- Har bir da'voni tekshiring: manba bormi? Web searchda tasdiqlandimi?
+- Agar biror modda raqamini tasdiqlash imkoni bo'lmasa — UNI KELTIRMANG.
+- Sud qarorlarini to'qima qilmang — faqat kontekstda berilgan yoki web search orqali topilgan ishlarni keltiring.
+- Agar huquqiy javob to'liq tasdiqlanmasa, quyidagi iborani ishlating:
+  "Mavjud huquqiy ma'lumotlarga asosan aniq javob berish imkoni cheklangan. Qo'shimcha huquqiy ekspertiza talab qilinadi."
+
+Bu ichki tahlilni <!--REASONING--> va <!--/REASONING--> teglari orasida yozing.
+Bu qism foydalanuvchiga KO'RSATILMAYDI — faqat sifat nazorati uchun.
+
+PRIMARY LEGAL SOURCES:
+1. Lex.uz — official database of legislation of Uzbekistan
+2. My.sud.uz / Public.sud.uz — court decisions and judicial practice
+
+CITATION FORMAT (MAJBURIY):
+Har bir huquqiy da'vo uchun quyidagi formatda manba keltiring:
+[Qonun nomi], [raqam]-modda (Manba: lex.uz)
+
+Misollar:
+- Mehnat kodeksi, 100-modda (Manba: lex.uz)
+- Fuqarolik kodeksi, 354-modda (Manba: lex.uz)
+- Oila kodeksi, 38-modda (Manba: lex.uz)
+
+MANBASIZ BAYONOT QILISH QATTIYAN TAQIQLANADI.
+Agar qonun normasi web search orqali topilmasa — uni keltirmang.
+
+If the law is unclear or missing, explicitly state:
+"Qonunchilikda to'g'ridan-to'g'ri tartibga solish aniq belgilanmagan. Malakali yuristga murojaat qilish tavsiya etiladi."
+
+UZBEKISTAN LEGAL CODE CATALOG:
+KODEKSLAR:
+- Konstitutsiya: https://lex.uz/docs/35869
+- Fuqarolik kodeksi (FK): https://lex.uz/docs/111189
+- Mehnat kodeksi (MK): https://lex.uz/docs/145261
+- Jinoyat kodeksi (JK): https://lex.uz/docs/111457
+- Oila kodeksi (OK): https://lex.uz/docs/104723
+- Soliq kodeksi (SK): https://lex.uz/docs/4674893
+- Ma'muriy javobgarlik to'g'risida kodeks (MJK): https://lex.uz/docs/97661
+- Iqtisodiy protsessual kodeks (IPK): https://lex.uz/docs/112168
+- Fuqarolik protsessual kodeks (FPK): https://lex.uz/docs/111325
+- Jinoyat-protsessual kodeks (JPK): https://lex.uz/docs/111463
+- Ma'muriy sudlov kodeksi: https://lex.uz/docs/3523895
+- Uy-joy kodeksi: https://lex.uz/docs/97012
+- Yer kodeksi: https://lex.uz/docs/149946
+- Budjet kodeksi: https://lex.uz/docs/3523816
+- Bojxona kodeksi: https://lex.uz/docs/4102378
+
+ASOSIY QONUNLAR:
+- Tadbirkorlik faoliyati erkinligi kafolatlari: https://lex.uz/docs/4538291
+- Aksiyadorlik jamiyatlari: https://lex.uz/docs/5765400
+- MChJ to'g'risida: https://lex.uz/docs/5765406
+- Iste'molchilar huquqlarini himoya qilish: https://lex.uz/docs/89690
+- Ijro va sud qarorlari ijrosi: https://lex.uz/docs/5765444
+- Bankrotlik: https://lex.uz/docs/5767454
+- Davlat xaridlari: https://lex.uz/docs/5759393
+- Litsenziyalash: https://lex.uz/docs/6006025
+- Korrupsiyaga qarshi kurashish: https://lex.uz/docs/5765442
+- Advokatlik faoliyati: https://lex.uz/docs/5765396
+- Notariat: https://lex.uz/docs/5765430
+- Sudlar to'g'risida: https://lex.uz/docs/5965818
+- Bolalar huquqlari kafolatlari: https://lex.uz/docs/49560
+- Genderli tenglik: https://lex.uz/docs/5765412
+- Xalqaro arbitraj: https://lex.uz/docs/6555446`;
+
+    // ========== REQUEST CLASSIFICATION ==========
+    const classificationPrompt = `MUROJAAT KLASSIFIKATSIYASI:
+Quyidagi murojaat turini aniqlang:
+1. Huquqiy maslahat (Legal consultation)
+2. Huquqiy tadqiqot (Legal research)
+3. Sud ishi tahlili (Court case analysis)
+4. Huquqiy hujjat tayyorlash (Legal document drafting)
+5. Shartnoma tahlili (Contract analysis)
+
+Javob strukturasini murojaat turiga moslang.`;
+
+    // ========== STRUCTURED RESPONSE FORMAT ==========
+    const responseFormat = `JAVOB TUZILISHI (QATTIYAN RIOYA QILING):
+
+BIRINCHI: Ichki tahlilni <!--REASONING--> teglari orasida yozing (foydalanuvchiga ko'rsatilmaydi):
+<!--REASONING-->
+1. Masala: [huquqiy masalaning mohiyati]
+2. Tegishli normalar: [web search natijasida topilgan normalar]
+3. Normalar amaldami: [ha/yo'q har biri uchun]
+4. Gallyutsinatsiya tekshiruvi: [tasdiqlanmagan da'volar bormi?]
+5. Xulosa ishonchliligi: [yuqori/o'rta/past]
+<!--/REASONING-->
+
+KEYIN: Javobni quyidagi 6 bo'limda yozing:
+
+## HUQUQIY MASALA
+Foydalanuvchi savolidan kelib chiqadigan aniq huquqiy masalani aniqlang.
+Qaysi huquqiy munosabat ko'zda tutilgan — 1-2 gapda yozing.
+
+## QONUNCHILIK ASOSI
+Tegishli qonunchilik normalarini keltiring. HAR BIR NORMA UCHUN:
+- Qonun nomi va modda raqami (Manba: lex.uz)
+- Modda mazmunining qisqa bayoni
+- Web search orqali "site:lex.uz [kodeks nomi] [mavzu]" qidirib TASDIQLANGAN moddalarni keltiring
+MANBASIZ MODDA KELTIRISH TAQIQLANADI.
+
+## SUD AMALIYOTI
+Kontekstda berilgan o'xshash sud ishlarini tahlil qiling. Har bir ish uchun:
+- Sud: [sud nomi]
+- Qaror sanasi: [kun oy yil]
+- Huquqiy masala: [qisqacha]
+- Sud mushohada: [sudlar qonunni qanday talqin qilgan]
+- Manba: my.sud.uz
+
+Agar kontekstda sud ishlari bo'lmasa — web search orqali "site:public.sud.uz [mavzu]" qidirib toping.
+Agar aniq ish topilmasa, shu sohada umumiy sud amaliyoti tendensiyasini yozing.
+SUD QARORLARINI TO'QIMA QILISH TAQIQLANADI.
+
+## HUQUQIY TAHLIL
+Qonunchilik VA sud amaliyotini foydalanuvchi vaziyatiga BATAFSIL qo'llang:
+- Qonun normasi nima deydi?
+- Sudlar shu masalani QANDAY hal qilgan?
+- Bu normaga ko'ra foydalanuvchi vaziyati qanday baholanadi?
+- Qanday huquqiy oqibatlar kutiladi?
+
+## XULOSA
+Aniq huquqiy javob — 2-3 gapda.
+Da'vo/murojaat muvaffaqiyat ehtimoli (foizda) va noaniqlik darajasi (past/o'rta/yuqori).
+
+Agar aniq javob berish imkoni bo'lmasa:
+"Mavjud huquqiy ma'lumotlarga asosan aniq javob berish imkoni cheklangan. Qo'shimcha huquqiy ekspertiza talab qilinadi."
+
+## TAVSIYA ETILADIGAN HARAKATLAR
+Amaliy huquqiy maslahat — raqamlangan ro'yxat shaklida:
+1. Birinchi qadam
+2. Ikkinchi qadam
+3. ...
+
+> "Ushbu tahlil sun'iy intellekt asosida shakllantirilgan va sud qarori hisoblanmaydi. Barcha ma'lumotlarni lex.uz va public.sud.uz saytlaridan tekshiring."`;
+
+    // ========== YURXIZMAT CATALOG ==========
+    const yurxizmatBlock = `## YURXIZMAT.UZ HUJJAT NAMUNALARI
+Quyidagi katalogdan murojaatga eng mos 2-4 ta toifani tanlang.
+
+Katalog:
+${getYurxizmatCatalogText()}
+
+Javobingiz eng oxirida quyidagi blokni yozing:
+
+<!--YURXIZMAT-->
+[{"name":"Toifa nomi","url":"/uz/category/..."}]
+<!--/YURXIZMAT-->
+
+Faqat yuqoridagi katalogdagi URLlardan foydalaning. Agar mos namuna topilmasa: []`;
+
+    // ========== COMBINE FULL PROMPT ==========
+    const fullPrompt = `${systemPrompt}
+
+${classificationPrompt}
+
+${classificationBlock}
+
+${detectedField && detectedField !== 'Boshqa' ? `Murojaat yo'nalishi: ${detectedField}` : ''}
+
+MUROJAAT MATNI:
+"${requestText}"
+
+${similarExamplesBlock}
+
+${caseLawBlock}
+
+${ragCorpusBlock}
+
+${feedbackExamplesBlock}
+
+${responseFormat}
+
+${yurxizmatBlock}
+${feedbackNote}`;
+
+    const aiResult = await callAI([{ role: 'user', text: fullPrompt }], { useSearch: true, maxTokens: 8192, temperature: 0.2 });
+    const rawAnalysis = aiResult.text;
+    const aiProvider = aiResult.provider;
+
+    // Extract hidden reasoning block (internal chain-of-thought, not shown to user)
+    let internalReasoning = null;
+    let analysisWithoutReasoning = rawAnalysis;
+    const reasoningMatch = rawAnalysis.match(/<!--REASONING-->\s*([\s\S]*?)\s*<!--\/REASONING-->/);
+    if (reasoningMatch) {
+      internalReasoning = reasoningMatch[1].trim();
+      analysisWithoutReasoning = rawAnalysis.replace(/<!--REASONING-->[\s\S]*?<!--\/REASONING-->\s*/, '').trim();
+      console.log(`[AI] Internal reasoning extracted (${internalReasoning.length} chars)`);
+    }
+
+    // Extract yurxizmat.uz template suggestions from response
+    let templateSuggestions = [];
+    let analysis = analysisWithoutReasoning;
+    const suggestionsMatch = rawAnalysis.match(/<!--YURXIZMAT-->\s*([\s\S]*?)\s*<!--\/YURXIZMAT-->/);
+    if (suggestionsMatch) {
+      analysis = rawAnalysis.replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->/, '').trim();
+      try {
+        const parsed = JSON.parse(suggestionsMatch[1].trim());
+        if (Array.isArray(parsed)) {
+          templateSuggestions = parsed
+            .filter(s => s.name && s.url && s.url.startsWith('/uz/category/'))
+            .map(s => ({ name: s.name, url: 'https://yurxizmat.uz' + s.url }))
+            .slice(0, 5);
+        }
+      } catch (e) {
+        console.error('[AI] Failed to parse yurxizmat suggestions:', e.message);
+      }
+    }
+
+    // Archive the analysis (including internal reasoning for audit)
+    let archiveId = null;
+    try {
+      const archiveResult = await pool.query(
+        `INSERT INTO ai_analyses (request_id, admin_id, category, request_text, analysis_text, internal_reasoning)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [requestId || null, req.session.adminId, detectedField || category, requestText, analysis, internalReasoning]
+      );
+      archiveId = archiveResult.rows[0].id;
+    } catch (archiveErr) {
+      console.error('[AI] Archive save error:', archiveErr.message);
+    }
+
+    res.json({ analysis, archiveId, templateSuggestions, provider: aiProvider, detectedField, ragMeta });
+  } catch (error) {
+    console.error('[AI] Analysis error:', error);
+    res.status(500).json({ error: 'AI tahlil xatoligi: ' + error.message });
+  }
+});
+
+// ========== LEGAL SEARCH CHAT (Multi-DB) ==========
+
+// Database configurations for RAG search
+const LEGAL_DATABASES = {
+  'lex.uz': {
+    site: 'lex.uz',
+    name: 'Lex.uz — Qonunchilik bazasi',
+    description: 'O\'zbekiston Respublikasi qonunchilik ma\'lumotlar bazasi. Kodekslar, qonunlar, farmonlar, qarorlar.',
+    searchHint: 'site:lex.uz'
+  },
+  'public.sud.uz': {
+    site: 'public.sud.uz',
+    name: 'Public.sud.uz — Sud qarorlari',
+    description: 'O\'zbekiston sudlari qarorlari va amaliyoti. Sud ishlari, hukmlar, ajrimlar.',
+    searchHint: 'site:public.sud.uz'
+  },
+  'my.sud.uz': {
+    site: 'my.sud.uz',
+    name: 'My.sud.uz — Sud ishi holati',
+    description: 'Sud ishlarining holati, jarayoni, qabul qilingan qarorlar.',
+    searchHint: 'site:my.sud.uz'
+  },
+  'mib.uz': {
+    site: 'mib.uz',
+    name: 'Mib.uz — Ijro byurosi',
+    description: 'Ijro hujjatlari, undirish jarayoni, ijro ishlarining holati.',
+    searchHint: 'site:mib.uz'
+  },
+  'soliq.uz': {
+    site: 'soliq.uz',
+    name: 'Soliq.uz — Soliq qo\'mitasi',
+    description: 'Soliq qonunchilik, soliq imtiyozlari, soliq hisobotlari, soliq to\'lovlari.',
+    searchHint: 'site:soliq.uz'
+  },
+  'ihamkor.uz': {
+    site: 'ihamkor.uz',
+    name: 'Ihamkor.uz — Ijtimoiy hamkorlik',
+    description: 'Ijtimoiy himoya, pensiya, nafaqa, mehnat munosabatlari.',
+    searchHint: 'site:ihamkor.uz'
+  }
+};
+
+function buildLegalSearchPrompt(databases) {
+  const dbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
+  const validDbs = dbs.filter(db => LEGAL_DATABASES[db]);
+  if (validDbs.length === 0) validDbs.push('lex.uz');
+
+  const dbDescriptions = validDbs.map(db => {
+    const info = LEGAL_DATABASES[db];
+    return `- **${info.name}**: ${info.description} (Qidiruv: "${info.searchHint} [savol]")`;
+  }).join('\n');
+
+  const searchSites = validDbs.map(db => LEGAL_DATABASES[db].searchHint).join(' OR ');
+
+  return `Siz O'zbekiston huquqi bo'yicha qonun qidirish yordamchisisiz.
+
+VAZIFANGIZ:
+Foydalanuvchi savoliga quyidagi ma'lumot bazalari asosida javob bering:
+${dbDescriptions}
+
+QOIDALAR:
+- Google Search yordamida yuqoridagi bazalardan tegishli ma'lumotlarni qidiring
+- Har bir baza uchun alohida "site:[domain] [savol]" qidiring
+- Har bir topilgan natija uchun TO'G'RIDAN-TO'G'RI havola bering
+- Havola to'qib chiqarish QATTIYAN TAQIQLANADI! Faqat Google Search natijalarida ko'ringan havolalarni bering
+- Agar aniq havola topa olmasangiz, "[sayt] dan qidiring" deb yozing
+- Javob FAQAT O'zbek (lotin) tilida bo'lishi shart
+- Javob qisqa, aniq va strukturali bo'lsin
+
+JAVOB FORMATI:
+${validDbs.indexOf('lex.uz') > -1 ? '1. **Tegishli qonunlar:** (lex.uz dan)\n   - Qonun/kodeks nomi, modda raqami, qisqa mazmun, havola\n' : ''}${validDbs.indexOf('public.sud.uz') > -1 ? '2. **Sud amaliyoti:** (public.sud.uz dan)\n   - Sud ishi, qaror, mohiyat, havola\n' : ''}${validDbs.indexOf('my.sud.uz') > -1 ? '3. **Sud ishi holati:** (my.sud.uz dan)\n   - Ish holati, ma\'lumot\n' : ''}${validDbs.indexOf('mib.uz') > -1 ? '4. **Ijro ma\'lumotlari:** (mib.uz dan)\n   - Ijro hujjati, holat, ma\'lumot\n' : ''}${validDbs.indexOf('soliq.uz') > -1 ? '5. **Soliq ma\'lumotlari:** (soliq.uz dan)\n   - Soliq qoidasi, ma\'lumot, havola\n' : ''}${validDbs.indexOf('ihamkor.uz') > -1 ? '6. **Ijtimoiy himoya:** (ihamkor.uz dan)\n   - Ma\'lumot, havola\n' : ''}
+**Xulosa:** Qisqa huquqiy fikr
+
+> "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun tegishli saytlardan tekshiring."`;
+}
+
+// Topic labels for RAG-based legal chat
+const FAILED_ANSWER_PATTERNS = [
+  /topilmadi/i,
+  /ma'lumot\s+topilmadi/i,
+  /mavjud\s+emas/i,
+  /imkoni?\s+cheklangan/i,
+  /aniq\s+ma'lumot\s+yo'q/i,
+];
+
+function isFailedAnswer(text = '') {
+  if (!text || text.trim().length < 30) return true;
+  return FAILED_ANSWER_PATTERNS.some(p => p.test(text));
+}
+
+const LEGAL_TOPICS = {
+  'mehnat':       'Mehnat huquqi',
+  'oila':         'Oila huquqi',
+  'fuqarolik':    'Fuqarolik huquqi',
+  'shartnoma':    'Shartnoma huquqi',
+  'soliq':        'Soliq huquqi',
+  'jinoyat':      'Jinoyat huquqi',
+  'mamuriy':      "Ma'muriy javobgarlik",
+  'korporativ':   'Korporativ huquq',
+  'tadbirkorlik': 'Tadbirkorlik huquqi',
+  'uy-joy':       'Uy-joy oldi-sotdisi',
+  'mulk':         'Mulk huquqi',
+  'notarius':     'Notarius xizmatlari',
+  'ijtimoiy':     'Ijtimoiy himoya',
+  'advokatura':   'Advokatura'
+};
+
+/**
+ * Retrieve relevant legal chunks using the full RAG pipeline:
+ *   Router → RRF Hybrid Search → Corrective Grading → Web Search fallback
+ *
+ * Falls back to text-only search if no embedding API key is configured.
+ */
+async function retrieveLegalContext(query, topic, language = null) {
+  const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+  const isUz = language !== 'ru';
+  const expandedQuery = expandQueryVariants(query);
+  if (expandedQuery !== query) {
+    console.log(`[RAG] Prim-expanded query: "${query}" -> "${expandedQuery}"`);
+  }
+  query = expandedQuery;
+
+  // ── 1. Router: choose search strategy ──
+  const route = routeQuery(query);
+  console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
+
+  // ── 2. RRF Hybrid Search ──
+  const retrievalLimit = 15;
+  let rawResults = [];
+  let guaranteedKeywordMatches = [];
+  let exactResults = [];
+  let exactMatchIds = new Set();
+  let searchMode = 'text-only';
+
+  if (apiKey) {
+    try {
+      rawResults = await rrfSearch(query, {
+        category: topic || null,
+        language,
+        limit: retrievalLimit,
+        apiKey,
+      });
+      searchMode = 'rrf';
+    } catch (err) {
+      console.warn(`[RAG] RRF search failed (${err.message}), trying legacy hybrid`);
+      try {
+        rawResults = await hybridSearch(query, { category: topic || null, language, limit: retrievalLimit, apiKey });
+        searchMode = 'hybrid';
+      } catch (err2) {
+        console.warn(`[RAG] Hybrid also failed (${err2.message})`);
+      }
+    }
+  }
+
+  // Text-only fallback (no embeddings)
+  if (rawResults.length === 0) {
+    try {
+      rawResults = await textOnlySearch(query, { category: topic || null, language, limit: retrievalLimit });
+      searchMode = 'text-only';
+    } catch (err) {
+      console.error('[RAG] Text-only search failed:', err.message);
+    }
+  }
+
+  // ── 3. Corrective RAG: grade and filter ──
+  try {
+    const keywordCandidates = await keywordSearch(query, {
+      category: topic || null,
+      language,
+      limit: 6,
+    });
+
+    guaranteedKeywordMatches = keywordCandidates
+      .filter(isHighConfidenceKeywordMatch)
+      .slice(0, 3);
+
+    if (guaranteedKeywordMatches.length > 0) {
+      rawResults = mergePrioritizedResults(
+        guaranteedKeywordMatches,
+        rawResults,
+        Math.max(rawResults.length, retrievalLimit, 6)
+      );
+      searchMode = searchMode === 'text-only' && rawResults.length === guaranteedKeywordMatches.length
+        ? 'keyword'
+        : `${searchMode}+keyword`;
+    }
+  } catch (err) {
+    console.warn(`[RAG] Keyword rescue failed (${err.message})`);
+  }
+
+  try {
+    exactResults = await exactMatchSearch(query, {
+      category: topic || null,
+      language,
+      limit: 5,
+    });
+
+    if (exactResults.length > 0) {
+      const existingIds = new Set(rawResults.map((row) => row.id));
+
+      for (const exact of exactResults) {
+        exactMatchIds.add(exact.id);
+        if (existingIds.has(exact.id)) continue;
+        rawResults.push({ ...exact, _exactMatch: true });
+        existingIds.add(exact.id);
+      }
+    }
+  } catch (err) {
+    console.warn(`[RAG] Exact match failsafe failed: ${err.message}`);
+  }
+
+  const totalFound = rawResults.length + guaranteedKeywordMatches.length + exactResults.length;
+  if (topic && totalFound < 2) {
+    console.warn(`[RAG] Topic-scoped retrieval underflow (${totalFound} results) for "${topic}", retrying without category filter`);
+    const fallbackResult = await retrieveLegalContext(query, null, null);
+    const fallbackCount = Array.isArray(fallbackResult?.chunks)
+      ? fallbackResult.chunks.length
+      : Number(fallbackResult?.meta?.chunks || 0);
+
+    if (fallbackCount > rawResults.length) {
+      if (fallbackResult?.meta) {
+        fallbackResult.meta = {
+          ...fallbackResult.meta,
+          searchMode: `topic-fallback(${topic})->${fallbackResult.meta.searchMode || 'unscoped'}`,
+        };
+      }
+      return fallbackResult;
+    }
+  }
+
+  // ── 3a. Cross-field augmentation: pull high-relevance chunks from OTHER categories ──
+  // When user picked a topic but the question may span multiple legal fields,
+  // include the top 1-2 chunks from outside the topic if they score high enough.
+  let crossFieldResults = [];
+  if (topic && totalFound >= 1) {
+    try {
+      const existingIds = new Set(rawResults.map(r => r.id));
+      const unscopedExact = await exactMatchSearch(query, {
+        category: null,
+        language: null,
+        limit: 6,
+      });
+      const unscopedKeyword = apiKey
+        ? await keywordSearch(query, { category: null, language: null, limit: 6 })
+        : [];
+
+      const candidates = [...unscopedExact, ...unscopedKeyword]
+        .filter(c => c && c.category && c.category !== topic && !existingIds.has(c.id));
+
+      const seen = new Set();
+      for (const c of candidates) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        const isHighSignal = c._exactMatch
+          || isHighConfidenceKeywordMatch(c)
+          || Number(c.score || 0) >= 0.5;
+        if (isHighSignal) {
+          crossFieldResults.push({ ...c, _crossField: true });
+          if (crossFieldResults.length >= 2) break;
+        }
+      }
+
+      if (crossFieldResults.length > 0) {
+        console.log(`[RAG] Cross-field augmentation: ${crossFieldResults.length} chunks from outside "${topic}"`);
+      }
+    } catch (err) {
+      console.warn(`[RAG] Cross-field augmentation failed: ${err.message}`);
+    }
+  }
+
+  if (rawResults.length > 3) {
+    try {
+      const { rerankChunks } = require('../rag/reranker');
+      rawResults = await rerankChunks(query, rawResults, { topK: 3 });
+      searchMode = `${searchMode}+rerank`;
+    } catch (rerankErr) {
+      console.warn(`[RAG] Reranker failed (${rerankErr.message}), using top 3 from hybrid search`);
+      rawResults = rawResults.slice(0, 3);
+    }
+  }
+
+  if (guaranteedKeywordMatches.length > 0) {
+    rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, 3);
+  }
+
+  if (exactMatchIds.size > 0 && exactResults.length > 0) {
+    const hasExact = rawResults.some((row) => exactMatchIds.has(row.id));
+    if (!hasExact) {
+      rawResults = mergePrioritizedResults([exactResults[0]], rawResults, 3);
+    }
+  }
+
+  let goodChunks = rawResults;
+  let needsWebSearch = rawResults.length < 2;
+
+  if (rawResults.length > 0 && typeof callAI === 'function') {
+    try {
+      const corrective = await correctiveFilter(query, rawResults, callAI);
+      goodChunks = corrective.good.length > 0 ? corrective.good : rawResults.slice(0, 3);
+      needsWebSearch = corrective.needsWebSearch;
+    } catch (err) {
+      console.warn(`[RAG] Corrective filter failed (${err.message}), using raw results`);
+    }
+  }
+
+  // Keep strong keyword matches in the top prompt context even after corrective filtering.
+  if (guaranteedKeywordMatches.length > 0) {
+    goodChunks = mergePrioritizedResults(
+      guaranteedKeywordMatches,
+      goodChunks,
+      Math.max(goodChunks.length, 3)
+    );
+  }
+
+  if (exactMatchIds.size > 0 && exactResults.length > 0) {
+    const hasExact = goodChunks.some((row) => exactMatchIds.has(row.id));
+    if (!hasExact) {
+      goodChunks = mergePrioritizedResults(
+        [exactResults[0]],
+        goodChunks,
+        Math.max(goodChunks.length, 3)
+      );
+    }
+  }
+
+  // ── Append cross-field chunks (from outside the user's topic) at the end of the list ──
+  if (crossFieldResults.length > 0) {
+    const existingIds = new Set(goodChunks.map(r => r.id));
+    for (const cf of crossFieldResults) {
+      if (!existingIds.has(cf.id)) {
+        goodChunks.push(cf);
+        existingIds.add(cf.id);
+      }
+    }
+    searchMode = `${searchMode}+cross-field`;
+  }
+
+  // ── 3b. Nuclear fallback: unscoped chunk_text ILIKE when all searches returned 0 ──
+  if (goodChunks.length === 0) {
+    try {
+      const nuclearResults = await exactMatchSearch(query, {
+        category: null,
+        language: null,
+        limit: 5,
+      });
+      if (nuclearResults.length > 0) {
+        console.log(`[RAG] Nuclear fallback: ${nuclearResults.length} unscoped exact matches`);
+        goodChunks = nuclearResults;
+        needsWebSearch = false;
+        searchMode = `${searchMode}+nuclear`;
+      }
+    } catch (err) {
+      console.warn(`[RAG] Nuclear fallback failed: ${err.message}`);
+    }
+  }
+
+  // ── 4. Web Search fallback (Tavily) + Lex.uz Live Search ──
+  let webResults = [];
+  let lexLiveResults = [];
+  if (needsWebSearch) {
+    // Run Tavily and lex.uz live search in parallel
+    const [tavilyRes, lexRes] = await Promise.all([
+      webSearch(query).catch(() => []),
+      searchLexUz(query, { maxDocs: 2, maxChars: 4000 }).catch(() => []),
+    ]);
+    webResults = tavilyRes;
+    lexLiveResults = lexRes;
+    if (lexLiveResults.length > 0) {
+      console.log(`[RAG] Lex.uz live search returned ${lexLiveResults.length} documents`);
+    }
+  }
+
+
+  if (goodChunks.length === 0 && webResults.length === 0 && lexLiveResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, lexLiveResults: 0, sources: [] } };
+
+  // ── 5. Format context for prompt ──
+  // Max chars per chunk: verified_qa gets more space, law text is trimmed
+  const MAX_CHUNK_CHARS = 1200;
+  const chunksText = goodChunks.map((r, i) => {
+    const arts = getChunkArticleRefs(r).join(', ');
+    const verifiedBadge = r.source_type === 'verified_qa'
+      ? (isUz ? ' ✅ [Yurist tomonidan tasdiqlangan]' : ' ✅ [Проверено юристом]')
+      : '';
+    const crossFieldBadge = r._crossField
+      ? (isUz ? ' 🔀 [Boshqa soha]' : ' 🔀 [Другая отрасль]')
+      : '';
+    const scoreTag = r.score ? ` (${(r.score * 100).toFixed(0)}%)` : '';
+    const langTag = r.language === 'uz' ? ' [UZ]' : ' [RU]';
+    const categoryTag = r.category ? ` [${LEGAL_TOPICS[r.category] || r.category}]` : '';
+    const maxChars = r.source_type === 'verified_qa' ? 2000 : MAX_CHUNK_CHARS;
+    const text = r.chunk_text.length > maxChars
+      ? r.chunk_text.substring(0, maxChars) + '...'
+      : r.chunk_text;
+
+    return [
+      `[${i + 1}] ${r.law_name}${verifiedBadge}${crossFieldBadge}${categoryTag}${langTag}${scoreTag}`,
+      arts ? (isUz ? `  Moddalar: ${arts}` : `  Статьи: ${arts}`) : '',
+      r.chapter ? `  ${r.chapter}` : '',
+      text,
+      r.source_url ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.source_url})` : '',
+    ].filter(Boolean).join('\n');
+  }).join('\n\n');
+
+  const webText = formatWebResults(webResults, language);
+  const lexLiveText = formatLexSearchResults(lexLiveResults, language);
+
+  console.log(`[RAG] ${searchMode}: ${goodChunks.length} chunks + ${webResults.length} web + ${lexLiveResults.length} lex-live for "${query.substring(0, 50)}"`);
+
+  // Collect source metadata for the frontend
+  const sourcesSet = new Map();
+  goodChunks.forEach(r => {
+    const key = r.source_type || 'law_text';
+    if (!sourcesSet.has(key)) {
+      sourcesSet.set(key, { type: key, count: 0, laws: new Set() });
+    }
+    const s = sourcesSet.get(key);
+    s.count++;
+    if (r.law_name) s.laws.add(r.law_name.substring(0, 60));
+  });
+  if (lexLiveResults.length > 0) {
+    sourcesSet.set('lex_live', { type: 'lex_live', count: lexLiveResults.length, laws: new Set(lexLiveResults.map(r => r.title.substring(0, 60))) });
+  }
+  const sources = Array.from(sourcesSet.values()).map(s => ({
+    type: s.type, count: s.count, laws: Array.from(s.laws).slice(0, 3)
+  }));
+
+  const meta = {
+    searchMode,
+    chunks: goodChunks.length,
+    webResults: webResults.length,
+    lexLiveResults: lexLiveResults.length,
+    sources,
+    strategy: route.strategy,
+  };
+
+  // ── Build STRICT citation table from chunk metadata ──
+  // This is the AI's "allowed sources" cheat sheet — it can ONLY cite from here.
+  // Format matches the mandatory citation structure from the spec:
+  //   O'zbekiston Respublikasining "<Qonun nomi>"gi Qonuni
+  //   (<sana>, № <raqam>), <modda> <qism/band>.
+  //   <URL>
+  const formatDate = (d) => {
+    if (!d) return null;
+    const dt = new Date(d);
+    if (isNaN(dt)) return null;
+    return `${String(dt.getDate()).padStart(2,'0')}.${String(dt.getMonth()+1).padStart(2,'0')}.${dt.getFullYear()}`;
+  };
+
+  // ── Build a clean source reference list (no box-drawings, no instructions) ──
+  const sourceRefLines = [];
+  const seenSourceRefs = new Set();
+  for (const r of goodChunks) {
+    const articleRefs = getChunkArticleRefs(r);
+    if (articleRefs.length === 0) continue;
+    for (const art of articleRefs) {
+      const key = `${r.law_name}_${art}`;
+      if (seenSourceRefs.has(key)) continue;
+      seenSourceRefs.add(key);
+      const dateStr = formatDate(r.adoption_date);
+      const docNum = r.document_number;
+      const meta = [dateStr, docNum ? `\u2116 ${docNum}` : null].filter(Boolean).join(', ');
+      sourceRefLines.push(
+        `- ${r.law_name}` +
+        (meta ? ` (${meta})` : '') +
+        `, ${art}-modda` +
+        (r.source_url ? ` | ${r.source_url}` : '')
+      );
+    }
+  }
+
+  const sourceBlock = sourceRefLines.length > 0
+    ? `\nMANBALAR:\n${sourceRefLines.join('\n')}\n`
+    : '';
+
+  // ── Build clean data-only context (no instructions, no box-drawings) ──
+  let context;
+  if (isUz) {
+    context = `\nQONUNCHILIK KONTEKSTI (${goodChunks.length} natija):\n`
+      + sourceBlock
+      + `\n` + chunksText + webText + lexLiveText
+      + `\n\n--- JAVOB SHU YERDAN BOSHLANSIN ---`;
+  } else {
+    context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${goodChunks.length} результатов):\n`
+      + sourceBlock
+      + `\n` + chunksText + webText + lexLiveText
+      + `\n\n--- ОТВЕТ НАЧИНАЕТСЯ ЗДЕСЬ ---`;
+  }
+
+  return { context, meta, chunks: goodChunks };
+}
+
+function buildTopicPrompt(topic, ragContext, userQuestion = '') {
+  const topicLabel = LEGAL_TOPICS[topic] || topic;
+  const definitionHint = getDefinitionPromptAddendum(userQuestion);
+  const termExplanationRule = getTermExplanationRule(userQuestion);
+
+  // ── SYSTEM INSTRUCTIONS (ichki qoidalar — foydalanuvchiga ko'rsatilMAYDI) ──
+  const systemRules = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+ICHKI QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
+
+ANIQLIK:
+- Modda raqamlarini FAQAT KONTEKSTdan oling. Pretrained xotirangizdan raqam to'qib chiqarmang.
+- Agar kontekstda modda raqami aniq ko'rsatilmagan bo'lsa, "kontekstda aniq modda raqami ko'rsatilmagan" deb yozing — taxmin qilmang.
+- Prim moddalarni shunday yozing: "N-modda prim M" (masalan: "8-modda prim 1").
+- DEFINITSIYA savollarida (Qisqa javob qismida) ham albatta MANBA modda raqamini ichki qavsda yozing — masalan: "Mehnat nizosi — bu... (MK, 541-modda)". Definitsiya manbasiz BO'LMAYDI.
+- Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami + qism.
+- FAQAT KONTEKSTdagi MANBALAR ro'yxatida ko'rsatilgan URL'larni keltiring — ular faol hujjatlardir. Boshqa URL TO'QIB CHIQARMANG.
+
+JAVOB SIFATI:
+- Javob YAXLIT, oqib turuvchi matn bo'lsin — qonun matnini KO'CHIRIB-CHIQARMANG.
+- O'z so'zlaringiz bilan, sodda tilda yozing. Foydalanuvchi huquqshunos emas.
+- Subheader ostidagi matnlar bir-birini TAKRORLAMASIN. Har bir bo'lim YANGI ma'lumot bersin.
+- Apologetik gaplar yozmang ("uzr so'rayman", "tushuntirib bera olmadim" — TAQIQLANGAN).
+- Foydalanuvchi tuzatish bergan bo'lsa, tuzatishni JIM va to'g'ridan-to'g'ri integratsiya qiling — uzr so'ramang, oldingi javobni eslatmang. Yangi to'g'ri javobni boshidan bering.
+
+RO'YXAT USLUBI:
+- Ro'yxatda BULLET nuqta (•, ·, *) ISHLATMANG — buning o'rniga raqam (1., 2., 3.), harf (a), b), c)) yoki tire (-) ishlating.
+
+KROSS-SOHA:
+- Kontekstda boshqa huquq sohasidagi moddalar ham bo'lishi mumkin — agar savolga aloqador bo'lsa, ulardan foydalaning va manba sifatida qonun nomini aniq ko'rsating.
+
+QO'LLANISH:
+- Kontekstda javob bor bo'lsa — ALBATTA javob bering. "Ma'lumot topilmadi" demang.
+- Faqat HECH QANDAY aloqador kontekst topilmagan bo'lsagina, qisqacha aytib o'ting va qaysi qonunda qarash kerakligini ko'rsating.
+${termExplanationRule ? `- ${termExplanationRule}` : ''}`;
+
+  // ── OUTPUT FORMAT — minimal, flowing, non-repetitive ──
+  const outputFormat = `
+JAVOB FORMATI:
+${definitionHint}
+Javob ikki qismdan iborat bo'lsin:
+
+**1. Qisqa javob** (1-3 gap):
+Foydalanuvchi savoliga to'g'ridan-to'g'ri, aniq javob. Asosiy modda(lar) va qonun nomini ALBATTA aniq ko'rsating — definitsiya bo'lsa ham, masalan: "(MK, 541-modda)".
+
+**2. Batafsil tushuntirish** (mavzuga qarab):
+Sodda tilda, mantiqiy tartibda — bir oqimda yozing. Kerak bo'lsa raqamli ro'yxat (1., 2., 3.) yoki tire (-) ishlating, lekin SARLAVHA QO'SHMANG. Subheader takrorlanmasin.
+Har bir huquqiy tasdiqdan keyin manba: (Qonun nomi, N-modda).
+
+JIDDIY TAQIQLAR:
+- Kontekstdagi modda matnlarini KO'CHIRIB QO'YMANG.
+- "Yuridik maslahat", "Xulosa", "Eslatma" kabi ortiqcha sarlavhalar QO'SHMANG.
+- Ma'lumotni bir necha sarlavha ostida TAKRORLAMANG.
+- BULLET nuqta (•, ·, *) ISHLATMANG — raqam, harf yoki tire ishlating.
+- KONTEKSTdagi MANBALAR ro'yxatidan TASHQARI URL TO'QIB CHIQARMANG — eskirgan hujjatga havola qilmang.
+- "DEFINITSIYA SAVOLI" yoki ichki ko'rsatmalarning matnini javobga YOZMANG.`;
+
+  // ── ASSEMBLE: system rules + output format + context data ──
+  return systemRules + '\n' + outputFormat + '\n' + (ragContext ? ragContext + '\n' : '');
+}
+
+function buildGeminiFallbackPrompt(topicLabel, userQuestion = '') {
+  const definitionHint = getDefinitionPromptAddendum(userQuestion);
+
+  return `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: O'zbekiston qonunchiligi asosida BATAFSIL, ANIQ va TUSHUNARLI javob bering.
+
+QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
+- FAQAT o'zbek (lotin) tilida yozing.
+- O'zbekiston Respublikasi HOZIRGI AMAL QILUVCHI qonun va kodekslariga asoslaning. Bekor qilingan yoki eskirgan hujjatlardan iqtibos keltirmang.
+- Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami.
+- DEFINITSIYA savollarida ham albatta manba modda raqamini ichki qavsda yozing — masalan: "Mehnat nizosi — bu ... (MK, 541-modda)". Manbasiz definitsiya BO'LMAYDI.
+- Modda raqamlariga ISHONCHINGIZ KOMIL bo'lsa keltiring; ishonchingiz yo'q bo'lsa, faqat qonun nomini ayting va "aniq modda raqamini lex.uz dan tekshirish tavsiya etiladi" deb qo'shing.
+- URL keltirmang — agar manba kerak bo'lsa, faqat "lex.uz dan ko'ring" deb yozing. To'qib chiqarilgan eskirgan link berishdan ko'ra umumiy ko'rsatma yaxshiroq.
+- Prim moddalarni to'g'ri yozing: "N-modda prim M".
+- Foydalanuvchi tuzatish bergan bo'lsa, jim integratsiya qiling — uzr so'ramang, qayta-qayta xato eslatmang.
+
+RO'YXAT USLUBI:
+- Ro'yxatda BULLET nuqta (•, ·, *) ISHLATMANG — buning o'rniga raqam (1., 2., 3.), harf (a), b), c)) yoki tire (-) ishlating.
+
+JAVOB FORMATI:
+${definitionHint}
+**1. Qisqa javob** (1-3 gap):
+Savolga to'g'ridan-to'g'ri javob. Asosiy qonun nomi va modda(lar)ni ALBATTA keltiring (definitsiya bo'lsa ham).
+
+**2. Batafsil tushuntirish**:
+Sodda tilda, oqib turuvchi matn — qonun matnini ko'chirib qo'ymang, o'z so'zlaringiz bilan tushuntiring.
+Kerak bo'lsa raqamli ro'yxat (1., 2., 3.) yoki tire (-) ishlating, lekin SARLAVHA QO'SHMANG.
+Har bir tasdiqdan keyin manba: (Qonun nomi, N-modda).
+
+JIDDIY TAQIQLAR:
+- "Yuridik maslahat", "Xulosa", "Eslatma" kabi sarlavhalar QO'SHMANG.
+- BULLET nuqta (•, ·, *) ISHLATMANG — raqam, harf yoki tire ishlating.
+- Bir xil ma'lumotni bir necha bo'limda TAKRORLAMANG.
+
+> Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
+}
+
+// ── ONE-SHOT: backfill qa_bank from existing verified_qa rows in legal_chunks ──
+// Existing edits saved via /api/rag/verify-chat-answer only landed in legal_chunks.
+// This endpoint migrates them into qa_bank so the verbatim override works.
+app.post('/api/qa-bank/backfill', requireMasterAdmin, async (req, res) => {
+  try {
+    const { saveToQaBank } = require('../rag/advanced-corpus');
+    const rows = await pool.query(`
+      SELECT id, chunk_text, category, verified_by, doc_id
+      FROM legal_chunks
+      WHERE source_type = 'verified_qa' AND is_valid = TRUE
+      ORDER BY id DESC
+    `);
+
+    let migrated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const row of rows.rows) {
+      // chunk_text is "Savol: ...\n\nJavob: ..."
+      const m = row.chunk_text.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]*)$/);
+      if (!m) { skipped++; continue; }
+      const question = m[1].trim();
+      const answer = m[2].trim();
+
+      // Skip if already in qa_bank (by exact question match)
+      const existing = await pool.query('SELECT id FROM qa_bank WHERE question = $1 LIMIT 1', [question]);
+      if (existing.rows.length > 0) { skipped++; continue; }
+
+      try {
+        await saveToQaBank({
+          question,
+          answer,
+          originalAiAnswer: null,
+          category: row.category || 'boshqa',
+          topic: row.category || null,
+          sourceUrl: null,
+          articleRefs: [],
+          editedBy: row.verified_by || null,
+          editedByName: 'Migrated',
+        });
+        migrated++;
+      } catch (e) {
+        errors.push({ id: row.id, error: e.message });
+      }
+    }
+
+    res.json({ scanned: rows.rows.length, migrated, skipped, errors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── ENRICH: use Gemini to expand existing qa-korpus answers into detailed format ──
+app.post('/api/qa-korpus/enrich', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id, dryRun } = req.body;
+    const whereClause = id ? 'AND k.id = $1' : '';
+    const params = id ? [id] : [];
+
+    const rows = await pool.query(`
+      SELECT k.id, k.question, k.corrected_answer, k.topic
+      FROM qa_korpus k
+      WHERE k.corrected_answer IS NOT NULL
+        ${whereClause}
+      ORDER BY k.id
+    `, params);
+
+    if (rows.rows.length === 0) {
+      return res.json({ message: 'No qa-korpus entries found', enriched: 0 });
+    }
+
+    const results = [];
+    for (const row of rows.rows) {
+      if (isFailedAnswer(row.corrected_answer)) {
+        results.push({ id: row.id, status: 'skipped', reason: 'failed answer' });
+        continue;
+      }
+
+      const topicLabel = LEGAL_TOPICS[row.topic] || row.topic || 'huquq';
+      const enrichPrompt = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: Quyidagi yurist tomonidan tasdiqlangan javobni BOYITIB, BATAFSIL va TUSHUNARLI shaklda qayta yozing.
+
+QOIDALAR:
+1. Javob FAQAT o'zbek (lotin) tilida yozing.
+2. Asl javobdagi barcha FAKTLAR, MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda raqamlari yoki qonun nomlari QO'SHMANG — faqat mavjud ma'lumotni boyiting.
+4. Har bir huquqiy tushunchani SODDA TILDA tushuntiring.
+5. Amaliy misollar va izohlar qo'shing.
+
+JAVOB TUZILMASI:
+## Huquqiy asos
+Asl javobdagi qonun manbalarini saqlab, har bir moddaning mazmunini BATAFSIL tushuntiring.
+
+## Batafsil tushuntirish
+Sodda tilda — foydalanuvchi huquqshunos bo'lmasligi mumkin. Har bir punktni alohida izohlab bering.
+
+## Amaliy ahamiyati
+Bu ma'lumot amalda nima degani? Qanday holatlarda muhim? Buzilsa nima bo'ladi?
+
+## Muhim eslatmalar
+Istisnolar, cheklovlar yoki qo'shimcha ma'lumotlar (agar mavjud bo'lsa).
+
+> Eslatma: Bu javob AI tahlili asosida boyitilgan. Asl javob yurist tomonidan tasdiqlangan.
+
+SAVOL: ${row.question}
+
+YURIST TASDIQLAGAN ASL JAVOB:
+${row.corrected_answer}
+
+BOYITILGAN JAVOBNI YOZING:`;
+
+      if (dryRun) {
+        results.push({ id: row.id, status: 'dry-run', question: row.question.substring(0, 80), originalLength: row.corrected_answer.length });
+        continue;
+      }
+
+      try {
+        const aiMessages = [
+          { role: 'system', text: enrichPrompt },
+          { role: 'user', text: row.question },
+        ];
+        const aiResult = await callAI(aiMessages, { useSearch: false, maxTokens: 8192 });
+        const enrichedAnswer = normalizeResponseForUser(aiResult.text);
+
+        if (enrichedAnswer && enrichedAnswer.length > row.corrected_answer.length && !isFailedAnswer(enrichedAnswer)) {
+          await pool.query(`
+            UPDATE qa_korpus
+            SET corrected_answer = $1, original_ai_answer = $2, updated_at = NOW()
+            WHERE id = $3
+          `, [enrichedAnswer, row.corrected_answer, row.id]);
+
+          results.push({
+            id: row.id,
+            status: 'enriched',
+            question: row.question.substring(0, 80),
+            oldLength: row.corrected_answer.length,
+            newLength: enrichedAnswer.length,
+          });
+          console.log(`[QA-KORPUS ENRICH] #${row.id} enriched: ${row.corrected_answer.length} → ${enrichedAnswer.length} chars`);
+        } else {
+          results.push({ id: row.id, status: 'skipped', reason: 'enriched answer too short or failed' });
+        }
+      } catch (aiErr) {
+        results.push({ id: row.id, status: 'error', error: aiErr.message });
+        console.warn(`[QA-KORPUS ENRICH] #${row.id} failed: ${aiErr.message}`);
+      }
+    }
+
+    const enriched = results.filter(r => r.status === 'enriched').length;
+    res.json({ total: rows.rows.length, enriched, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── ENRICH verified_qa entries in legal_chunks too ──
+app.post('/api/verified-qa/enrich', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id, dryRun } = req.body;
+    const whereClause = id ? 'AND id = $1' : '';
+    const params = id ? [id] : [];
+
+    const rows = await pool.query(`
+      SELECT id, chunk_text, category
+      FROM legal_chunks
+      WHERE source_type = 'verified_qa' AND is_valid = TRUE
+        ${whereClause}
+      ORDER BY id
+    `, params);
+
+    const parseQA = (txt) => {
+      const m = txt.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]+)$/);
+      return m ? { question: m[1].trim(), answer: m[2].trim() } : null;
+    };
+
+    const results = [];
+    for (const row of rows.rows) {
+      const parsed = parseQA(row.chunk_text);
+      if (!parsed) {
+        results.push({ id: row.id, status: 'skipped', reason: 'cannot parse Q/A format' });
+        continue;
+      }
+      if (isFailedAnswer(parsed.answer)) {
+        results.push({ id: row.id, status: 'skipped', reason: 'failed answer' });
+        continue;
+      }
+
+      if (dryRun) {
+        results.push({ id: row.id, status: 'dry-run', question: parsed.question.substring(0, 80), answerLength: parsed.answer.length });
+        continue;
+      }
+
+      try {
+        const topicLabel = LEGAL_TOPICS[row.category] || row.category || 'huquq';
+        const enrichPrompt = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: Quyidagi yurist tomonidan tasdiqlangan javobni BOYITIB, BATAFSIL va TUSHUNARLI shaklda qayta yozing.
+
+QOIDALAR:
+1. Javob FAQAT o'zbek (lotin) tilida yozing.
+2. Asl javobdagi barcha FAKTLAR, MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda raqamlari yoki qonun nomlari QO'SHMANG — faqat mavjud ma'lumotni boyiting.
+4. Har bir huquqiy tushunchani SODDA TILDA tushuntiring.
+
+SAVOL: ${parsed.question}
+ASL JAVOB: ${parsed.answer}
+
+BOYITILGAN JAVOBNI YOZING:`;
+
+        const aiMessages = [
+          { role: 'system', text: enrichPrompt },
+          { role: 'user', text: parsed.question },
+        ];
+        const aiResult = await callAI(aiMessages, { useSearch: false, maxTokens: 8192 });
+        const enriched = normalizeResponseForUser(aiResult.text);
+
+        if (enriched && enriched.length > parsed.answer.length && !isFailedAnswer(enriched)) {
+          const newChunkText = `Savol: ${parsed.question}\n\nJavob: ${enriched}`;
+          await pool.query(`UPDATE legal_chunks SET chunk_text = $1, updated_at = NOW() WHERE id = $2`, [newChunkText, row.id]);
+          results.push({ id: row.id, status: 'enriched', question: parsed.question.substring(0, 80), oldLength: parsed.answer.length, newLength: enriched.length });
+          console.log(`[VERIFIED-QA ENRICH] #${row.id} enriched: ${parsed.answer.length} → ${enriched.length} chars`);
+        } else {
+          results.push({ id: row.id, status: 'skipped', reason: 'enriched answer too short or failed' });
+        }
+      } catch (aiErr) {
+        results.push({ id: row.id, status: 'error', error: aiErr.message });
+      }
+    }
+
+    const enriched = results.filter(r => r.status === 'enriched').length;
+    res.json({ total: rows.rows.length, enriched, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DIAGNOSTIC: inspect qa_bank state and similarity for a given question ──
+app.get('/api/qa-bank/debug', requireMasterAdmin, async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    const counts = await pool.query(`
+      SELECT COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE embedding IS NOT NULL) AS with_emb
+      FROM qa_bank
+    `);
+    const recent = await pool.query(`
+      SELECT id, question, category, topic, rating,
+             (embedding IS NOT NULL) AS has_embedding,
+             created_at
+      FROM qa_bank
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+
+    let topMatches = [];
+    if (q) {
+      const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (apiKey) {
+        const { getEmbedding } = require('../rag/embeddings');
+        const emb = await getEmbedding(q, apiKey);
+        const embStr = `[${emb.join(',')}]`;
+        const r = await pool.query(`
+          SELECT id, question, category, topic, rating,
+                 1 - (embedding <=> $1::vector) AS similarity
+          FROM qa_bank
+          WHERE embedding IS NOT NULL
+          ORDER BY embedding <=> $1::vector
+          LIMIT 5
+        `, [embStr]);
+        topMatches = r.rows.map(row => ({
+          id: row.id,
+          similarity: parseFloat(row.similarity).toFixed(4),
+          category: row.category,
+          topic: row.topic,
+          rating: row.rating,
+          question: row.question.substring(0, 120),
+        }));
+      }
+    }
+
+    res.json({
+      counts: counts.rows[0],
+      recent: recent.rows,
+      query: q || null,
+      topMatches,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
+  try {
+    const { message, history, databases, topic } = req.body;
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Xabar matni topilmadi' });
+    }
+
+    // ── VERIFIED ANSWER OVERRIDE ──
+    // The lawyer's "Korpusga qo'shish" button writes corrected answers to
+    // legal_chunks with source_type='verified_qa' and an embedding. If the
+    // user's question is near-identical to a previously verified one, return
+    // that answer VERBATIM and skip the AI entirely. Passing verified chunks
+    // to the AI as context doesn't work — it still hedges ("7-modda (shuningdek
+    // 5-moddada ham)"). Only a short-circuit guarantees the correction wins.
+    let korpusOverride = null;
+    let korpusGroundTruth = '';
+    let qaFewShotBlock = '';
+    let qaMatchInfo = null;
+    let verifiedOverride = null;
+
+    try {
+      const { searchKorpus, formatKorpusGroundTruth } = require('../rag/qa-korpus');
+      const stageOneApiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (stageOneApiKey) {
+        const korpusResult = await searchKorpus(message, { apiKey: stageOneApiKey, topic });
+        if (korpusResult) {
+          qaMatchInfo = {
+            id: korpusResult.id,
+            similarity: korpusResult.similarity,
+            source: 'qa-korpus',
+            matchType: korpusResult.match,
+          };
+
+          if (korpusResult.match === 'verbatim') {
+            if (isFailedAnswer(korpusResult.answer)) {
+              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — answer contains failure phrase`);
+            } else {
+              korpusOverride = korpusResult.answer;
+              console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+            }
+          } else if (korpusResult.match === 'context') {
+            korpusGroundTruth = formatKorpusGroundTruth(korpusResult);
+            console.log(`[Legal Chat] KORPUS CONTEXT id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
+          }
+        }
+      }
+    } catch (korpusErr) {
+      console.warn(`[Legal Chat] qa_korpus lookup failed: ${korpusErr.message}`);
+    }
+
+    if (korpusOverride) {
+      return res.json({
+        reply: korpusOverride,
+        provider: 'qa-korpus',
+        databases: ['Korpus (tasdiqlangan)'],
+        ragUsed: false,
+        rag: null,
+        qaBank: qaMatchInfo,
+      });
+    }
+
+    try {
+      const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (apiKey) {
+        const { getEmbedding } = require('../rag/embeddings');
+        const qEmb = await getEmbedding(message, apiKey);
+        const qEmbStr = `[${qEmb.join(',')}]`;
+
+        const r = await pool.query(`
+          SELECT id, chunk_text, category, doc_id, law_name,
+                 1 - (embedding <=> $1::vector) AS similarity
+          FROM legal_chunks
+          WHERE source_type = 'verified_qa'
+            AND is_valid = TRUE
+            AND (is_active IS NULL OR is_active = TRUE)
+            AND embedding IS NOT NULL
+          ORDER BY embedding <=> $1::vector
+          LIMIT 5
+        `, [qEmbStr]);
+
+        if (r.rows.length > 0) {
+          const top = r.rows[0];
+          const topSim = parseFloat(top.similarity);
+          // chunk_text is "Savol: X\n\nJavob: Y" — extract just the answer
+          const parseQA = (txt) => {
+            const m = txt.match(/^Savol:\s*([\s\S]*?)\n\nJavob:\s*([\s\S]+)$/);
+            return m ? { question: m[1].trim(), answer: m[2].trim() } : { question: '', answer: txt };
+          };
+          const topParsed = parseQA(top.chunk_text);
+
+          qaMatchInfo = {
+            id: top.id,
+            similarity: topSim,
+            count: r.rows.length,
+            category: top.category,
+            source: 'verified_qa',
+          };
+          console.log(`[Legal Chat] verified_qa top match: id=${top.id} sim=${topSim.toFixed(3)} cat=${top.category}`);
+
+          if (topSim >= 0.72) {
+            if (isFailedAnswer(topParsed.answer)) {
+              console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — answer contains failure phrase`);
+            } else {
+              verifiedOverride = topParsed.answer;
+              console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
+            }
+          } else if (topSim >= 0.50) {
+            const { formatQaFewShot } = require('../rag/advanced-corpus');
+            const usable = r.rows
+              .filter(row => parseFloat(row.similarity) >= 0.50)
+              .map(row => {
+                const p = parseQA(row.chunk_text);
+                return { question: p.question, answer: p.answer, rating: 1 };
+              });
+            qaFewShotBlock = formatQaFewShot(usable);
+            console.log(`[Legal Chat] verified_qa few-shot: ${usable.length} examples (top sim=${topSim.toFixed(3)})`);
+          }
+        } else {
+          console.log('[Legal Chat] verified_qa: no rows with embeddings found');
+        }
+      }
+    } catch (qaErr) {
+      console.warn(`[Legal Chat] verified_qa lookup failed: ${qaErr.message}`);
+    }
+
+    // ── Short-circuit: return verified answer directly ──
+    if (verifiedOverride) {
+      return res.json({
+        reply: verifiedOverride,
+        provider: 'verified-qa',
+        databases: ['Korpus (tasdiqlangan)'],
+        ragUsed: false,
+        rag: null,
+        qaBank: qaMatchInfo,
+      });
+    }
+
+    // RAG retrieval: fetch relevant legal chunks for the user's query
+    let ragContext = '';
+    let ragMeta = null;
+    if (topic) {
+      const ragResult = await retrieveLegalContext(message, topic);
+      ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
+      ragMeta = ragResult.meta || null;
+    }
+
+    let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases);
+    if (korpusGroundTruth) {
+      systemPrompt = korpusGroundTruth + '\n\n' + systemPrompt;
+    }
+    if (qaFewShotBlock) {
+      systemPrompt = qaFewShotBlock + '\n\n' + systemPrompt;
+    }
+
+    // Build messages array — system prompt as dedicated system role (works with Groq + Gemini)
+    const aiMessages = [{ role: 'system', text: systemPrompt }];
+
+    if (Array.isArray(history) && history.length > 0) {
+      const recentHistory = history.length > 18 ? history.slice(-18) : history;
+      recentHistory.forEach(msg => {
+        aiMessages.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          text: msg.text
+        });
+      });
+    }
+
+    aiMessages.push({ role: 'user', text: message });
+
+    let aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
+    let displayReply = normalizeResponseForUser(aiResult.text);
+    let finalProvider = aiResult.provider;
+
+    // ── GEMINI FALLBACK: if RAG-constrained answer failed, let Gemini answer freely ──
+    if (isFailedAnswer(displayReply)) {
+      console.warn(`[Legal Chat] RAG answer failed ("topilmadi"), retrying with Gemini pretrained knowledge...`);
+      try {
+        const topicLabel = LEGAL_TOPICS[topic] || topic || 'huquq';
+        const geminiPrompt = buildGeminiFallbackPrompt(topicLabel, message);
+        const fallbackMessages = [
+          { role: 'system', text: geminiPrompt },
+          { role: 'user', text: message },
+        ];
+        const fallbackResult = await callAI(fallbackMessages, { useSearch: true, maxTokens: 8192 });
+        const fallbackReply = normalizeResponseForUser(fallbackResult.text);
+        if (!isFailedAnswer(fallbackReply)) {
+          displayReply = fallbackReply;
+          finalProvider = `${fallbackResult.provider} (fallback)`;
+          console.log(`[Legal Chat] Gemini fallback succeeded — using pretrained answer`);
+        }
+      } catch (fallbackErr) {
+        console.warn(`[Legal Chat] Gemini fallback failed: ${fallbackErr.message}`);
+      }
+    }
+
+    const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
+    res.json({
+      reply: displayReply,
+      provider: finalProvider,
+      databases: usedDbs,
+      ragUsed: !!ragContext,
+      rag: ragMeta,
+      qaBank: qaMatchInfo,
+    });
+  } catch (error) {
+    console.error('[Legal Chat] Error:', error);
+    res.status(500).json({ error: 'Qonun qidirish xatoligi: ' + error.message });
+  }
+});
+
+// ========== AI CHAT SESSIONS CRUD ==========
+
+// List sessions
+app.get('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, title, databases, messages->0->>'text' as first_message,
+              jsonb_array_length(messages) as message_count,
+              created_at, updated_at
+       FROM ai_chat_sessions
+       WHERE admin_id = $1
+       ORDER BY updated_at DESC
+       LIMIT 50`,
+      [req.session.adminId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('[AI Sessions] List error:', error);
+    res.status(500).json({ error: 'Suhbatlar yuklanmadi' });
+  }
+});
+
+// Get single session with messages
+app.get('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, title, topic, databases, messages, created_at, updated_at
+       FROM ai_chat_sessions
+       WHERE id = $1 AND admin_id = $2`,
+      [req.params.id, req.session.adminId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Suhbat topilmadi' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('[AI Sessions] Get error:', error);
+    res.status(500).json({ error: 'Suhbat yuklanmadi' });
+  }
+});
+
+// Create or update session
+app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id, title, databases, topic, messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'Messages required' });
+    }
+
+    const dbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
+    const sessionTitle = title || (messages[0] && messages[0].text ? messages[0].text.substring(0, 60) : 'Nomsiz suhbat');
+
+    if (id) {
+      // Update existing session
+      const result = await pool.query(
+        `UPDATE ai_chat_sessions
+         SET title = $1, databases = $2, topic = $3, messages = $4::jsonb, updated_at = NOW()
+         WHERE id = $5 AND admin_id = $6
+         RETURNING id`,
+        [sessionTitle, dbs, topic || null, JSON.stringify(messages), id, req.session.adminId]
+      );
+      if (result.rows.length === 0) {
+        // Session not found — create new
+        const newResult = await pool.query(
+          `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages)
+           VALUES ($1, $2, $3, $4, $5::jsonb)
+           RETURNING id`,
+          [req.session.adminId, sessionTitle, dbs, topic || null, JSON.stringify(messages)]
+        );
+        return res.json({ id: newResult.rows[0].id });
+      }
+      res.json({ id: result.rows[0].id });
+    } else {
+      // Create new session
+      const result = await pool.query(
+        `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages)
+         VALUES ($1, $2, $3, $4, $5::jsonb)
+         RETURNING id`,
+        [req.session.adminId, sessionTitle, dbs, topic || null, JSON.stringify(messages)]
+      );
+      res.json({ id: result.rows[0].id });
+    }
+  } catch (error) {
+    console.error('[AI Sessions] Save error:', error);
+    res.status(500).json({ error: 'Suhbat saqlanmadi' });
+  }
+});
+
+// Delete session
+app.delete('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM ai_chat_sessions WHERE id = $1 AND admin_id = $2`,
+      [req.params.id, req.session.adminId]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[AI Sessions] Delete error:', error);
+    res.status(500).json({ error: 'Suhbat o\'chirilmadi' });
+  }
+});
+
+// Get archived AI analyses (with filters)
+app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
+  try {
+    const { category, adminId, dateFrom, dateTo, search } = req.query;
+    let query = `
+      SELECT aa.id, aa.request_id, aa.category, aa.request_text,
+             aa.analysis_text, aa.created_at,
+             a.full_name as admin_name,
+             r.user_id,
+             (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
+      FROM ai_analyses aa
+      LEFT JOIN admins a ON aa.admin_id = a.id
+      LEFT JOIN requests r ON aa.request_id = r.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramIdx = 1;
+
+    if (category) {
+      query += ` AND aa.category = $${paramIdx++}`;
+      params.push(category);
+    }
+    if (adminId) {
+      query += ` AND aa.admin_id = $${paramIdx++}`;
+      params.push(adminId);
+    }
+    if (dateFrom) {
+      query += ` AND aa.created_at >= $${paramIdx++}`;
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      query += ` AND aa.created_at < ($${paramIdx++})::date + 1`;
+      params.push(dateTo);
+    }
+    if (search) {
+      query += ` AND aa.request_text ILIKE $${paramIdx++}`;
+      params.push(`%${search}%`);
+    }
+
+    query += ` ORDER BY aa.created_at DESC LIMIT 100`;
+
+    const result = await pool.query(query, params);
+
+    // Add anonymous label to each row
+    const rows = result.rows.map(row => ({
+      ...row,
+      anon_name: row.user_id ? `Murojaatchi ${anonId(row.user_id, row.created_at, row.user_request_seq)}` : `Murojaatchi #${row.id}`
+    }));
+
+    res.json(rows);
+  } catch (error) {
+    console.error('[AI Archive] Error:', error);
+    res.status(500).json({ error: 'Arxiv yuklashda xatolik' });
+  }
+});
+
+// Get single archived AI analysis
+app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT aa.id, aa.request_id, aa.category, aa.request_text,
+             aa.analysis_text, aa.created_at,
+             a.full_name as admin_name,
+             r.user_id,
+             (SELECT COUNT(*) FROM requests r2 WHERE r2.user_id = r.user_id AND r2.id <= r.id) as user_request_seq
+      FROM ai_analyses aa
+      LEFT JOIN admins a ON aa.admin_id = a.id
+      LEFT JOIN requests r ON aa.request_id = r.id
+      WHERE aa.id = $1
+    `, [req.params.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tahlil topilmadi' });
+    }
+
+    const row = result.rows[0];
+    if (req.session.role !== 'master') {
+      row.request_text = `Murojaatchi ${anonId(row.user_id || row.id, row.created_at, row.user_request_seq)}`;
+    }
+
+    res.json(row);
+  } catch (error) {
+    console.error('[AI Archive] Error:', error);
+    res.status(500).json({ error: 'Tahlil yuklashda xatolik' });
+  }
+});
+
+// Archive grouped by month → sender (all answered requests)
+app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT r.id, r.category, r.created_at, r.answered_at,
+             r.responded_by, r.user_id,
+             LEFT(r.request_text, 120) as topic,
+             ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq,
+             aa.id as ai_analysis_id
+      FROM requests r
+      LEFT JOIN ai_analyses aa ON aa.request_id = r.id
+      WHERE r.status = 'answered'
+      ORDER BY r.answered_at DESC
+    `);
+
+    const uzMonths = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+
+    // Group by month/year → user_id
+    const monthMap = new Map();
+    for (const row of result.rows) {
+      const d = new Date(row.answered_at || row.created_at);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yy = String(d.getFullYear()).slice(-2);
+      const monthKey = `${mm}_${yy}`;
+      const monthLabel = `${uzMonths[d.getMonth()]} 20${yy}`;
+
+      if (!monthMap.has(monthKey)) {
+        monthMap.set(monthKey, { month: monthKey, label: monthLabel, senderMap: new Map() });
+      }
+      const monthData = monthMap.get(monthKey);
+
+      const userId = row.user_id || 0;
+      if (!monthData.senderMap.has(userId)) {
+        monthData.senderMap.set(userId, {
+          user_id: userId,
+          anon_name: userId ? `Murojaatchi ${anonLabel(userId, row.created_at)}` : `Murojaatchi #${row.id}`,
+          items: []
+        });
+      }
+      monthData.senderMap.get(userId).items.push({
+        id: row.id,
+        category: row.category,
+        created_at: row.created_at,
+        answered_at: row.answered_at,
+        anon_id: userId ? anonId(userId, row.created_at, row.user_request_seq) : `#${row.id}`,
+        topic: row.topic || '',
+        has_ai: !!row.ai_analysis_id,
+        ai_analysis_id: row.ai_analysis_id,
+        responded_by: row.responded_by
+      });
+    }
+
+    // Convert to array
+    const grouped = [];
+    for (const [, monthData] of monthMap) {
+      const senders = [];
+      for (const [, sender] of monthData.senderMap) {
+        senders.push({
+          user_id: sender.user_id,
+          anon_name: sender.anon_name,
+          total_requests: sender.items.length,
+          items: sender.items
+        });
+      }
+      grouped.push({
+        month: monthData.month,
+        label: monthData.label,
+        senders
+      });
+    }
+
+    // Sort by date descending (newest months first)
+    grouped.sort((a, b) => {
+      const [am, ay] = a.month.split('_').map(Number);
+      const [bm, by] = b.month.split('_').map(Number);
+      return by !== ay ? by - ay : bm - am;
+    });
+
+    res.json(grouped);
+  } catch (error) {
+    console.error('[Archive Grouped] Error:', error);
+    res.status(500).json({ error: 'Arxiv yuklashda xatolik' });
+  }
+});
+
+// AI Chat follow-up endpoint
+app.post('/api/ai-chat', requireMasterAdmin, async (req, res) => {
+  try {
+    const { messages, requestText, category } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Xabarlar topilmadi' });
+    }
+
+    const systemContext = `Siz O'zbekiston huquqi bo'yicha AI yordamchisiz.
+Quyidagi murojaat haqida savollarga javob bering.
+${category && category !== 'Boshqa' ? `Yo'nalish: ${category}` : ''}
+Murojaat matni: "${requestText}"
+Javoblaringiz O'zbek (lotin) tilida, qisqa va aniq bo'lsin.
+Huquqiy normalar va lex.uz havolalari bilan javob bering.`;
+
+    const aiMessages = messages.map((msg, i) => ({
+      role: msg.role,
+      text: i === 0 && msg.role === 'user' ? systemContext + '\n\n' + msg.text : msg.text
+    }));
+
+    const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
+
+    res.json({ reply: aiResult.text });
+  } catch (error) {
+    console.error('[AI Chat] Error:', error);
+    res.status(500).json({ error: 'AI chat xatoligi: ' + error.message });
+  }
+});
+
+// AI Legal Document Template Generation
+app.post('/api/ai-generate-template', requireMasterAdmin, async (req, res) => {
+  try {
+    const { requestText, category, analysisText, templateType } = req.body;
+
+    if (!requestText || !analysisText) {
+      return res.status(400).json({ error: 'Ma\'lumotlar yetarli emas' });
+    }
+
+    const templateTypes = {
+      'ariza': 'Ariza (sud, prokuratura, yoki boshqa organga)',
+      'shikoyat': 'Shikoyat (apellyatsiya yoki kassatsiya)',
+      'davo': 'Da\'vo arizasi',
+      'shartnoma': 'Shartnoma yoki kelishuv',
+      'ishonchnoma': 'Ishonchnoma',
+      'bayonnoma': 'Bayonnoma',
+      'iltimos': 'Iltimosnoma (petition)',
+      'auto': 'Murojaat mazmuniga eng mos hujjat turini aniqlang'
+    };
+
+    const selectedType = templateTypes[templateType] || templateTypes['auto'];
+
+    const prompt = `Siz O'zbekiston Respublikasi qonunchiligi bo'yicha huquqiy hujjat tayyorlovchi AI yordamchisiz.
+
+MUROJAAT MATNI:
+"${requestText}"
+${category && category !== 'Boshqa' ? `Yo'nalish: ${category}` : ''}
+
+AI TAHLIL XULOSASI:
+${analysisText.substring(0, 3000)}
+
+VAZIFA: ${selectedType}
+
+HUJJAT TURIGA QARAB KERAKLI MA'LUMOTLAR:
+
+Da'vo arizasi / Ariza / Shikoyat uchun:
+- Sud/organ nomi: [ORGAN_NOMI]
+- Da'vogar: [DA'VOGAR_ISMI]
+- Javobgar: [JAVOBGAR_ISMI]
+- Nizo predmeti: murojaat matnidan aniqlang
+- Huquqiy asoslar: AI tahlildan oling
+- Da'vo miqdori: [SUMMA] (agar tegishli bo'lsa)
+- Dalillar: [DALILLAR_ROYXATI]
+
+Shartnoma uchun:
+- Shartnoma turi: murojaat matnidan aniqlang
+- Tomonlar: [1-TOMON], [2-TOMON]
+- Majburiyatlar: murojaat matnidan aniqlang
+- To'lov shartlari: [TO'LOV_SHARTLARI]
+- Javobgarlik: tegishli qonunchilikka asosan
+- Nizolarni hal etish: arbitraj yoki sud tartibi
+
+QOIDALAR:
+1. Hujjat O'zbekiston qonunchiligiga TO'LIQ mos bo'lishi shart
+2. Rasmiy huquqiy til ishlatilsin (O'zbekiston amaliyotida qo'llaniladigan)
+3. To'g'ri tuzilma: sarlavha, kirish, asosiy qism, so'rov/iltimos, imzo
+4. [SHAXS_ISMI], [MANZIL], [SANA], [ORGAN_NOMI] kabi to'ldirish joylari qoldiring
+5. Tegishli qonun moddalariga aniq havola qiling (Mehnat kodeksi, 100-modda formatida)
+6. Faqat O'zbek (lotin) tilida yozing
+7. Oxirida: qaysi organga topshirish, nusxa soni, ilova hujjatlar ro'yxati
+8. Hujjat to'qib chiqarilgan modda yoki qonunlarga tayanmasin
+
+Hujjatni to'liq professional formatda yozing:`;
+
+    const aiResult = await callAI([{ role: 'user', text: prompt }], { maxTokens: 8192 });
+
+    res.json({ template: aiResult.text });
+  } catch (error) {
+    console.error('[AI Template] Error:', error);
+    res.status(500).json({ error: 'Hujjat yaratish xatoligi: ' + error.message });
+  }
+});
+
+// Submit AI feedback
+app.post('/api/ai-feedback', requireMasterAdmin, async (req, res) => {
+  try {
+    const { requestId, rating, comment } = req.body;
+
+    if (!requestId || ![1, -1].includes(rating)) {
+      return res.status(400).json({ error: 'Noto\'g\'ri ma\'lumot' });
+    }
+
+    await pool.query(`
+      INSERT INTO ai_feedback (request_id, admin_id, rating, comment)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (request_id, admin_id)
+      DO UPDATE SET rating = $3, comment = $4, created_at = NOW()
+    `, [requestId, req.session.adminId, rating, comment || null]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[AI Feedback] Error:', error);
+    res.status(500).json({ error: 'Fikr-mulohaza saqlashda xatolik' });
+  }
+});
+
+
+// ========== JURIST AI FEEDBACK REPORT (master only) ==========
+
+// POST /api/jurist-feedback — submit feedback (any authenticated user)
+app.post('/api/jurist-feedback', requireAuth, async (req, res) => {
+  try {
+    const { rating, userQuestion, aiResponse, topic } = req.body;
+    if (!rating || !['good', 'bad'].includes(rating)) {
+      return res.status(400).json({ error: 'rating majburiy (good/bad)' });
+    }
+    await pool.query(
+      `INSERT INTO portal_feedback (user_id, rating, user_question, ai_response, topic)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.session.adminId || 0, rating, userQuestion || null, (aiResponse || '').substring(0, 2000), topic || null]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/jurist-feedback/stats — summary stats
+app.get('/api/jurist-feedback/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE rating = 'good') AS good,
+        COUNT(*) FILTER (WHERE rating = 'bad') AS bad,
+        COUNT(*) FILTER (WHERE reviewed = TRUE) AS reviewed,
+        COUNT(*) FILTER (WHERE reviewed = FALSE) AS pending_review,
+        COUNT(*) FILTER (WHERE review_result = 'confirmed_good') AS confirmed_good,
+        COUNT(*) FILTER (WHERE review_result = 'confirmed_bad') AS confirmed_bad,
+        COUNT(*) FILTER (WHERE review_result = 'corrected') AS corrected
+      FROM portal_feedback
+    `);
+    const byTopic = await pool.query(`
+      SELECT topic, rating, COUNT(*) AS count
+      FROM portal_feedback WHERE topic IS NOT NULL
+      GROUP BY topic, rating ORDER BY topic
+    `);
+    res.json({ ...stats.rows[0], byTopic: byTopic.rows });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/jurist-feedback — list feedback items
+app.get('/api/jurist-feedback', requireMasterAdmin, async (req, res) => {
+  try {
+    const { rating, reviewed, page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const conds = []; const params = []; let idx = 1;
+
+    if (rating) { conds.push(`f.rating = $${idx++}`); params.push(rating); }
+    if (reviewed === 'true') conds.push('f.reviewed = TRUE');
+    if (reviewed === 'false') conds.push('f.reviewed = FALSE');
+
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    const [rows, cnt] = await Promise.all([
+      pool.query(`SELECT f.*, u.full_name AS user_name FROM portal_feedback f LEFT JOIN portal_users u ON u.id = f.user_id ${where} ORDER BY f.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`, [...params, parseInt(limit), offset]),
+      pool.query(`SELECT COUNT(*) FROM portal_feedback f ${where}`, params)
+    ]);
+    res.json({ feedback: rows.rows, total: parseInt(cnt.rows[0].count), page: parseInt(page) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/jurist-feedback/:id — review a feedback item
+app.patch('/api/jurist-feedback/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { reviewResult, reviewerNote } = req.body;
+    if (!['confirmed_good', 'confirmed_bad', 'corrected'].includes(reviewResult)) {
+      return res.status(400).json({ error: 'reviewResult kerak' });
+    }
+    await pool.query(
+      'UPDATE portal_feedback SET reviewed = TRUE, review_result = $1, reviewer_note = $2 WHERE id = $3',
+      [reviewResult, reviewerNote || null, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== GOLDEN LEGAL DATASET ENDPOINTS ==========
+
+// GET /api/legal-dataset — list examples with pagination
+app.get('/api/legal-dataset', requireMasterAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    const data = await getAllExamples(limit, offset);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Dataset yuklashda xatolik' });
+  }
+});
+
+// GET /api/legal-dataset/stats — dataset statistics
+app.get('/api/legal-dataset/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await getDatasetStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// POST /api/legal-dataset — add new example
+app.post('/api/legal-dataset', requireMasterAdmin, async (req, res) => {
+  try {
+    const { question, legal_field, legal_issue, applicable_law, court_practice, analysis, correct_answer, source, keywords } = req.body;
+    if (!question || !legal_field || !legal_issue || !applicable_law || !analysis || !correct_answer) {
+      return res.status(400).json({ error: 'Barcha majburiy maydonlar to\'ldirilishi shart' });
+    }
+    const example = await addExample(req.body);
+    res.json({ success: true, example });
+  } catch (error) {
+    res.status(500).json({ error: 'Namuna qo\'shishda xatolik' });
+  }
+});
+
+// PUT /api/legal-dataset/:id — update example
+app.put('/api/legal-dataset/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const example = await updateExample(parseInt(req.params.id), req.body);
+    if (!example) return res.status(404).json({ error: 'Namuna topilmadi' });
+    res.json({ success: true, example });
+  } catch (error) {
+    res.status(500).json({ error: 'Yangilashda xatolik' });
+  }
+});
+
+// DELETE /api/legal-dataset/:id — delete example
+app.delete('/api/legal-dataset/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    await deleteExample(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'O\'chirishda xatolik' });
+  }
+});
+
+// POST /api/legal-dataset/search — test similarity search
+app.post('/api/legal-dataset/search', requireMasterAdmin, async (req, res) => {
+  try {
+    const { question, legal_field } = req.body;
+    if (!question) return res.status(400).json({ error: 'Savol kerak' });
+    const results = await retrieveSimilarExamples(question, legal_field);
+    res.json({ results, count: results.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Qidirishda xatolik' });
+  }
+});
+
+// POST /api/legal-dataset/from-analysis — create dataset entry from approved AI analysis
+app.post('/api/legal-dataset/from-analysis', requireMasterAdmin, async (req, res) => {
+  try {
+    const { requestId } = req.body;
+    if (!requestId) return res.status(400).json({ error: 'requestId kerak' });
+
+    // Get the request and its analysis
+    const reqResult = await pool.query(`SELECT r.request_text, r.category, aa.analysis_text
+      FROM requests r
+      LEFT JOIN ai_analyses aa ON aa.request_id = r.id
+      WHERE r.id = $1
+      ORDER BY aa.created_at DESC LIMIT 1`, [requestId]);
+
+    if (reqResult.rows.length === 0) return res.status(404).json({ error: 'Murojaat topilmadi' });
+    const { request_text, category, analysis_text } = reqResult.rows[0];
+    if (!analysis_text) return res.status(400).json({ error: 'AI tahlil topilmadi' });
+
+    const example = await addExample({
+      question: request_text,
+      legal_field: category || 'Umumiy',
+      legal_issue: request_text.substring(0, 200),
+      applicable_law: 'AI tahlildan olingan — tekshiring',
+      analysis: analysis_text.substring(0, 2000),
+      correct_answer: analysis_text.substring(0, 1000),
+      source: 'ai_analysis_approved',
+      keywords: []
+    });
+
+    res.json({ success: true, example, note: 'Namuna yaratildi — iltimos, maydonlarni tekshirib tahrirlang.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Namuna yaratishda xatolik' });
+  }
+});
+
+// ========== LAWYER FEEDBACK DATASET ENDPOINTS ==========
+
+// GET /api/lawyer-feedback — list feedback with pagination
+app.get('/api/lawyer-feedback', requireMasterAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    const data = await getAllFeedback(limit, offset);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Feedback yuklashda xatolik' });
+  }
+});
+
+// GET /api/lawyer-feedback/stats — feedback statistics
+app.get('/api/lawyer-feedback/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await getFeedbackStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// POST /api/lawyer-feedback — manual feedback submission
+app.post('/api/lawyer-feedback', requireMasterAdmin, async (req, res) => {
+  try {
+    const { request_id, question, ai_answer, mentor_feedback_type, corrected_answer,
+            corrected_legal_reasoning, corrected_law_articles, legal_field } = req.body;
+    if (!question || !mentor_feedback_type) {
+      return res.status(400).json({ error: 'Savol va baholash turi kerak' });
+    }
+    const feedback = await saveMentorFeedback({
+      ...req.body,
+      mentor_id: req.session.adminId,
+      mentor_name: req.session.fullName
+    });
+    res.json({ success: true, feedback });
+  } catch (error) {
+    res.status(500).json({ error: 'Feedback saqlashda xatolik' });
+  }
+});
+
+// ========== CASE-LAW DATASET ENDPOINTS ==========
+
+// GET /api/case-law — list court cases with pagination
+app.get('/api/case-law', requireMasterAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    const data = await getAllCases(limit, offset);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Sud ishlari yuklashda xatolik' });
+  }
+});
+
+// GET /api/case-law/stats — case-law statistics
+app.get('/api/case-law/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const stats = await getCaseLawStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// GET /api/rag/stats — RAG corpus statistics (pgvector + Justify)
+app.get('/api/rag/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const [pgStats, justifyStats] = await Promise.allSettled([
+      getCorpusStats(),
+      getJustifyStats(),
+    ]);
+    res.json({
+      pgvector: pgStats.status === 'fulfilled' ? pgStats.value : { error: pgStats.reason?.message },
+      justify: justifyStats.status === 'fulfilled' ? justifyStats.value : { error: 'Justify unavailable' },
+      justify_available: _justifyAvailable,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'RAG statistika xatolik: ' + error.message });
+  }
+});
+
+// POST /api/rag/justify-ask — прямой вопрос к Justify RAG (для тестирования)
+app.post('/api/rag/justify-ask', requireMasterAdmin, async (req, res) => {
+  try {
+    const { question, strategy } = req.body;
+    if (!question) return res.status(400).json({ error: 'question required' });
+    if (!_justifyAvailable) return res.status(503).json({ error: 'Justify RAG service unavailable' });
+    const result = await askJustify(question, { strategy });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/rag/verified-answers — list all human-verified Q&A corpus entries
+app.get('/api/rag/verified-answers', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, law_name, category, chunk_text, quality_score, verified_by, created_at
+      FROM legal_chunks
+      WHERE source_type = 'verified_qa' AND is_valid = TRUE
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
+    res.json({ answers: result.rows, total: result.rowCount });
+  } catch (error) {
+    res.status(500).json({ error: 'Tasdiqlanagan javoblar xatolik: ' + error.message });
+  }
+});
+
+// POST /api/rag/verify-chat-answer — lawyer verifies an AI chat answer and adds to corpus
+app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
+  try {
+    const { question, answer, topic, originalAiAnswer } = req.body;
+    if (!question || !answer) return res.status(400).json({ error: 'Savol va javob kerak' });
+
+    // 1. Insert into legal_chunks (RAG retrieval pool with verified_qa source_type)
+    await insertVerifiedAnswer({
+      question,
+      answer,
+      category: topic || 'boshqa',
+      requestId: null,
+      verifiedBy: req.session.adminId,
+      verifiedByName: req.session.fullName
+    });
+
+    // 2. ALSO save to qa_bank (dedicated similarity-search table used by /api/legal-chat
+    //    for verbatim override when a near-identical question is asked again).
+    //    This is what makes "Korpusga qo'shish" actually override hallucinations.
+    let qaBankId = null;
+    try {
+      const { saveToQaBank } = require('../rag/advanced-corpus');
+      qaBankId = await saveToQaBank({
+        question,
+        answer,
+        originalAiAnswer: originalAiAnswer || null,
+        category: topic || 'boshqa',
+        topic: topic || null,
+        sourceUrl: null,
+        articleRefs: [],
+        editedBy: req.session.adminId,
+        editedByName: req.session.fullName || req.session.adminUsername || 'Admin',
+      });
+    } catch (qaErr) {
+      console.warn('[RAG] qa_bank save failed (legal_chunks still updated):', qaErr.message);
+    }
+
+    let korpusId = null;
+    try {
+      const { upsertKorpus } = require('../rag/qa-korpus');
+      const result = await upsertKorpus({
+        question,
+        correctedAnswer: answer,
+        originalAiAnswer: originalAiAnswer || null,
+        topic: topic || 'boshqa',
+        articleRefs: [],
+        createdBy: req.session.adminId,
+        createdByName: req.session.fullName || req.session.adminUsername || 'Admin',
+      });
+      korpusId = result.id;
+    } catch (korpusErr) {
+      console.warn('[RAG] qa_korpus save failed:', korpusErr.message);
+    }
+
+    res.json({ success: true, qaBankId, korpusId });
+  } catch (error) {
+    console.error('[RAG] verify-chat-answer error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/rag/verified-answers/:id — remove a verified QA from corpus
+app.delete('/api/rag/verified-answers/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM legal_chunks WHERE id = $1 AND source_type = 'verified_qa'`, [id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/rag/upload-document — upload a legal document to RAG corpus
+app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('document'), async (req, res) => {
+  const fs = require('fs');
+  const filePath = req.file ? req.file.path : null;
+
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
+
+    const { topic, doc_name, law_name } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Soha (topic) tanlanmadi' });
+
+    const { chunkLegalDocument } = require('../rag/chunker');
+    const { getEmbeddingsBatch } = require('../rag/embeddings');
+    const { insertChunks } = require('../rag/legal-corpus');
+
+    // ── Extract text ──────────────────────────────────────────
+    let rawText = '';
+    const mime = req.file.mimetype;
+    const origName = req.file.originalname.toLowerCase();
+
+    if (mime === 'application/pdf' || origName.endsWith('.pdf')) {
+      const pdfParse = require('pdf-parse');
+      const buffer = fs.readFileSync(filePath);
+      const parsed = await pdfParse(buffer);
+      rawText = parsed.text;
+    } else if (mime === 'text/plain' || origName.endsWith('.txt')) {
+      rawText = fs.readFileSync(filePath, 'utf-8');
+    } else if (origName.endsWith('.docx') || origName.endsWith('.doc')) {
+      // Extract text from docx using mammoth if available, else raw buffer
+      try {
+        const mammoth = require('mammoth');
+        const result = await mammoth.extractRawText({ path: filePath });
+        rawText = result.value;
+      } catch {
+        // mammoth not installed — read as utf-8 (works for some .doc files)
+        rawText = fs.readFileSync(filePath, 'utf-8');
+      }
+    }
+
+    if (!rawText || rawText.trim().length < 50) {
+      return res.status(400).json({ error: 'Fayldan matn ajratib olib bo\'lmadi yoki fayl bo\'sh' });
+    }
+
+    // ── Chunk ─────────────────────────────────────────────────
+    const docId = `upload_${topic}_${Date.now()}`;
+    const finalLawName = law_name || doc_name || req.file.originalname.replace(/\.[^.]+$/, '');
+
+    const chunks = chunkLegalDocument(rawText, {
+      law_name: finalLawName,
+      doc_id: docId,
+      source_url: null,
+      category: topic
+    });
+
+    if (chunks.length === 0) {
+      return res.status(400).json({ error: 'Hujjat bo\'sh yoki o\'qib bo\'lmadi' });
+    }
+
+    // ── Embed ─────────────────────────────────────────────────
+    const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    let embeddings = [];
+    let embeddedCount = 0;
+    let embedError = null;
+
+    if (!apiKey) {
+      embedError = 'Embedding API key not set (HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)';
+      console.warn('[DOC UPLOAD]', embedError);
+    } else {
+      try {
+        embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
+        embeddedCount = embeddings.length;
+      } catch (embErr) {
+        embedError = embErr.message;
+        console.warn('[DOC UPLOAD] Embedding failed, saving without vectors:', embErr.message);
+      }
+    }
+
+    // ── Insert ────────────────────────────────────────────────
+    const chunksToInsert = chunks.map((c, i) => ({
+      text: c.text,
+      embedding: embeddings[i] || null,
+      chunkIndex: i,
+      metadata: {
+        ...(c.metadata || {}),
+        law_name: finalLawName,
+        doc_id: docId,
+        category: topic,
+        source_type: 'uploaded_doc'
+      }
+    }));
+
+    // Mark source_type as uploaded_doc (quality between law_text and verified_qa)
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const chunk of chunksToInsert) {
+        const m = chunk.metadata;
+        const articleNums = (m.articles || []).map(a => a.number).filter(Boolean);
+        const embStr = chunk.embedding ? `[${chunk.embedding.join(',')}]` : null;
+        await client.query(`
+          INSERT INTO legal_chunks (law_name, doc_id, category, chunk_text, chunk_index,
+            article_numbers, chapter, is_valid, embedding, source_type, quality_score, verified_by)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8::vector,$9,0.8,$10)
+        `, [
+          m.law_name, m.doc_id, m.category, chunk.text, chunk.chunkIndex,
+          articleNums.length ? articleNums : null,
+          m.chapter || null,
+          embStr,
+          'uploaded_doc',
+          req.session.adminId
+        ]);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    console.log(`[DOC UPLOAD] ${finalLawName}: ${chunks.length} chunks, ${embeddedCount} embedded, topic=${topic}`);
+
+    await logIngest({
+      sourceType: 'file',
+      fileName: req.file.originalname,
+      lawName: finalLawName,
+      category: topic,
+      chunksTotal: chunks.length,
+      embedded: embeddedCount,
+      ingestBy: req.session?.adminId || null,
+    });
+
+    res.json({
+      success: true,
+      doc_name: finalLawName,
+      doc_id: docId,
+      chunks: chunks.length,
+      embedded: embeddedCount,
+      topic,
+      ...(embedError ? { embed_warning: embedError } : {}),
+    });
+
+  } catch (error) {
+    console.error('[DOC UPLOAD] Error:', error.message);
+    await logIngest({ sourceType: 'file', fileName: req.file?.originalname, lawName: req.body?.law_name || '', chunksTotal: 0, status: 'error', errorMsg: error.message });
+    res.status(500).json({ error: 'Hujjat yuklashda xatolik: ' + error.message });
+  } finally {
+    if (filePath) fs.unlink(filePath, () => {});
+  }
+});
+
+// POST /api/rag/ingest-url — fetch a lex.uz URL and add to RAG corpus
+app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
+  try {
+    const { url, topic, law_name } = req.body;
+    if (!url || !url.includes('lex.uz')) {
+      return res.status(400).json({ error: 'Faqat lex.uz havolalari qabul qilinadi' });
+    }
+    if (!topic) return res.status(400).json({ error: 'Soha (topic) tanlanmadi' });
+
+    // Strip URL fragment (#...) — it's a browser anchor, not sent to server
+    const cleanUrl = url.split('#')[0];
+
+    const { fetchLexDocument } = require('../rag/fetch-lex');
+    const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
+    const { insertStructuredChunks } = require('../rag/advanced-corpus');
+    const { getEmbeddingsBatch } = require('../rag/embeddings');
+
+    // Fetch and parse lex.uz document
+    console.log(`[LEX INGEST] Fetching: ${cleanUrl}`);
+    const doc = await fetchLexDocument(cleanUrl);
+    const lexMeta = doc.metadata || {};
+    const urlHint = cleanUrl.includes('/uz/') ? 'uz' : null;
+    const bodySnippet = (doc.body || '').substring(0, 2000);
+    const hasUzbekMarkers = /\b(modda|bob|qism|huquq|qonun)\b/i.test(bodySnippet);
+    const inferredLanguage = urlHint || (hasUzbekMarkers ? 'uz' : 'ru');
+
+    if (!doc.body || doc.body.trim().length < 100) {
+      return res.status(400).json({ error: 'Hujjat matni topilmadi yoki bo\'sh. URL to\'g\'ri ekanligini tekshiring.' });
+    }
+
+    const finalLawName = law_name || doc.title || cleanUrl;
+    const lexDocSuffix = cleanUrl.split('/').filter(Boolean).pop() || Date.now();
+    const docId = `lex_${topic}_${lexDocSuffix}`;
+    const rawHtml = doc.rawHtml || '';
+
+    // Chunk Lex HTML structurally so prim articles become first-class rows.
+    const chunks = chunkLegalDocumentStructured(rawHtml || doc.body, {
+      ...lexMeta,
+      law_name: finalLawName,
+      doc_id: docId,
+      source_url: cleanUrl,
+      category: topic,
+      is_valid: true,
+      is_active: lexMeta.is_active !== false,
+      status_label: lexMeta.status_label || null,
+      adoption_date: lexMeta.adoption_date || null,
+      document_number: lexMeta.document_number || null,
+      language: lexMeta.language || inferredLanguage,
+      source_type: 'uploaded_doc',
+      quality_score: 0.8,
+      verified_by: req.session.adminId,
+    }, {
+      isHtml: Boolean(rawHtml),
+    });
+
+    if (chunks.length === 0) {
+      return res.status(400).json({ error: 'Hujjatdan bo\'lak ajratib bo\'lmadi' });
+    }
+
+    // Embed (best-effort — skip if quota exhausted)
+    const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    let embeddings = [];
+    let embeddedCount = 0;
+    let embedError = null;
+
+    if (!apiKey) {
+      embedError = 'Embedding API key not set (HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)';
+      console.warn('[LEX INGEST]', embedError);
+    } else {
+      try {
+        embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
+        embeddedCount = embeddings.length;
+      } catch (embErr) {
+        embedError = embErr.message;
+        console.warn('[LEX INGEST] Embedding failed, saving text-only:', embErr.message);
+      }
+    }
+
+    // Replace any previous ingest for this Lex URL, then store structured rows.
+    await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
+    for (let i = 0; i < chunks.length; i++) {
+      chunks[i].chunkIndex = i;
+      chunks[i].embedding = embeddings[i] || null;
+    }
+    await insertStructuredChunks(chunks);
+
+    // Also index in Justify RAG (fire-and-forget, non-blocking)
+    let justifyResult = null;
+    try {
+      if (await isJustifyAvailable()) {
+        justifyResult = await justifyScrape(cleanUrl);
+        console.log(`[LEX INGEST] Justify indexed: ${justifyResult?.title || cleanUrl} (${justifyResult?.chunks || '?'} chunks)`);
+      }
+    } catch (justifyErr) {
+      console.warn('[LEX INGEST] Justify indexing failed (non-fatal):', justifyErr.message);
+    }
+
+    console.log(`[LEX INGEST] Done: "${finalLawName}" — ${chunks.length} chunks, ${embeddedCount} embedded`);
+
+    await logIngest({
+      sourceType: 'url',
+      sourceUrl: cleanUrl,
+      lawName: finalLawName,
+      category: topic,
+      chunksTotal: chunks.length,
+      embedded: embeddedCount,
+      language: inferredLanguage,
+      ingestBy: req.session?.adminId || null,
+    });
+
+    res.json({
+      success: true,
+      doc_name: finalLawName,
+      doc_id: docId,
+      chunks: chunks.length,
+      embedded: embeddedCount,
+      topic,
+      source_url: cleanUrl,
+      justify: justifyResult ? { indexed: true, chunks: justifyResult.chunks } : { indexed: false },
+      ...(embedError ? { embed_warning: embedError } : {}),
+    });
+
+  } catch (error) {
+    console.error('[LEX INGEST] Error:', error.message, '\nStack:', error.stack);
+    await logIngest({ sourceType: 'url', sourceUrl: req.body?.url, lawName: req.body?.law_name || '', chunksTotal: 0, status: 'error', errorMsg: error.message }).catch(() => {});
+    res.status(500).json({ error: 'Lex.uz dan yuklashda xatolik: ' + error.message, stack: (error.stack || '').split('\n').slice(0, 5) });
+  }
+});
+
+// GET /api/rag/uploaded-documents — list all uploaded documents
+app.get('/api/rag/uploaded-documents', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT doc_id, law_name, category, source_type,
+             COUNT(*) AS chunk_count,
+             COUNT(*) FILTER (WHERE embedding IS NOT NULL) AS embedded_count,
+             MIN(created_at) AS uploaded_at
+      FROM legal_chunks
+      WHERE source_type IN ('uploaded_doc', 'law_text')
+      GROUP BY doc_id, law_name, category, source_type
+      ORDER BY MIN(created_at) DESC
+      LIMIT 100
+    `);
+    res.json({ documents: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/rag/ingest-log — history of URL and file ingestions
+app.get('/api/rag/ingest-log', requireMasterAdmin, async (req, res) => {
+  try {
+    const { limit = 50, category, source_type } = req.query;
+    const [rows, stats] = await Promise.all([
+      getIngestLog({ limit: parseInt(limit), category, sourceType: source_type }),
+      getIngestStats(),
+    ]);
+    res.json({ log: rows, stats });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/rag/ingest-log/:id — remove one ingest-log entry and its linked corpus rows
+app.delete('/api/rag/ingest-log/:id', requireMasterAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const logId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(logId) || logId <= 0) {
+      return res.status(400).json({ error: `Noto'g'ri ingest-log ID` });
+    }
+
+    await client.query('BEGIN');
+
+    const logResult = await client.query(`
+      SELECT id, source_type, source_url, file_name, law_name, category
+      FROM rag_ingest_log
+      WHERE id = $1
+      LIMIT 1
+    `, [logId]);
+
+    if (logResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Yuklash tarixi yozuvi topilmadi' });
+    }
+
+    const entry = logResult.rows[0];
+    let deletedChunks = 0;
+
+    if (entry.source_url) {
+      const chunkResult = await client.query(
+        `DELETE FROM legal_chunks WHERE source_url = $1 RETURNING id`,
+        [entry.source_url]
+      );
+      deletedChunks += chunkResult.rowCount;
+    } else if (entry.source_type === 'file') {
+      const chunkResult = await client.query(`
+        DELETE FROM legal_chunks
+        WHERE source_type = 'uploaded_doc'
+          AND law_name = $1
+          AND ($2::varchar IS NULL OR category = $2)
+        RETURNING id
+      `, [entry.law_name || '', entry.category || null]);
+      deletedChunks += chunkResult.rowCount;
+    }
+
+    await client.query(`DELETE FROM rag_ingest_log WHERE id = $1`, [logId]);
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      deletedChunks,
+      deletedLogId: logId,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/rag/uploaded-documents/:docId — remove uploaded document from corpus
+app.delete('/api/rag/uploaded-documents/:docId', requireMasterAdmin, async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const result = await pool.query(
+      `DELETE FROM legal_chunks WHERE doc_id = $1 AND source_type IN ('uploaded_doc', 'law_text') RETURNING id`,
+      [decodeURIComponent(docId)]
+    );
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/case-law — add new court case
+app.post('/api/case-law', requireMasterAdmin, async (req, res) => {
+  try {
+    const { case_id, court_name, case_category, legal_issue, facts_summary, applied_laws, court_reasoning, final_decision } = req.body;
+    if (!case_id || !court_name || !legal_issue || !facts_summary || !applied_laws || !court_reasoning || !final_decision) {
+      return res.status(400).json({ error: 'Barcha majburiy maydonlar to\'ldirilishi shart' });
+    }
+    const courtCase = await addCase(req.body);
+    res.json({ success: true, courtCase });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'Bu ish raqami allaqachon mavjud' });
+    res.status(500).json({ error: 'Sud ishi qo\'shishda xatolik' });
+  }
+});
+
+// PUT /api/case-law/:id — update court case
+app.put('/api/case-law/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const courtCase = await updateCase(parseInt(req.params.id), req.body);
+    if (!courtCase) return res.status(404).json({ error: 'Sud ishi topilmadi' });
+    res.json({ success: true, courtCase });
+  } catch (error) {
+    res.status(500).json({ error: 'Yangilashda xatolik' });
+  }
+});
+
+// DELETE /api/case-law/:id — delete court case
+app.delete('/api/case-law/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    await deleteCase(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'O\'chirishda xatolik' });
+  }
+});
+
+// POST /api/case-law/search — test case similarity search
+app.post('/api/case-law/search', requireMasterAdmin, async (req, res) => {
+  try {
+    const { question, legal_field } = req.body;
+    if (!question) return res.status(400).json({ error: 'Savol kerak' });
+    const results = await retrieveSimilarCases(question, legal_field, 3);
+    res.json({ results, count: results.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Qidirishda xatolik' });
+  }
+});
+
+// ========== AGENT ENDPOINTS ==========
+
+const { triageRequest } = require('../agents/triage');
+const { getTraces, getLatestTrace } = require('../agents/runner');
+
+// Re-run triage on a request (master admin only)
+app.post('/api/requests/:id/triage', requireMasterAdmin, async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    const request = await pool.query('SELECT request_text, request_type FROM requests WHERE id = $1', [requestId]);
+    if (request.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
+
+    const { request_text, request_type } = request.rows[0];
+    const result = await triageRequest(requestId, request_text, request_type);
+    if (!result) return res.status(500).json({ error: 'Triage agent xatolik berdi' });
+
+    res.json({ success: true, triage: result });
+  } catch (error) {
+    console.error('[API] Triage error:', error);
+    res.status(500).json({ error: 'Triage xatolik' });
+  }
+});
+
+// Classify legal field for a request
+app.post('/api/requests/:id/classify', requireAuth, async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    const request = await pool.query('SELECT request_text FROM requests WHERE id = $1', [requestId]);
+    if (request.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
+
+    const result = await classifyLegalField(request.rows[0].request_text, requestId);
+    res.json({ success: true, classification: result });
+  } catch (error) {
+    console.error('[API] Classification error:', error);
+    res.status(500).json({ error: 'Klassifikatsiya xatolik' });
+  }
+});
+
+// Get agent traces for a request
+app.get('/api/requests/:id/traces', requireAuth, async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    const traces = await getTraces(requestId);
+    res.json(traces);
+  } catch (error) {
+    console.error('[API] Traces error:', error);
+    res.status(500).json({ error: 'Traces xatolik' });
+  }
+});
+
+// ========== SELF-REGISTRATION ==========
+
+// AI Screening using GPT-4o
+async function triggerAiScreening(regId, regData) {
+  const apiKey = process.env.GPT_API_KEY;
+  if (!apiKey) return;
+
+  try {
+    let docBase64 = null;
+    let docMimeType = null;
+    let docFetched = false;
+
+    // If document uploaded, fetch and include as vision input
+    if (regData.document_file_id && regData.document_file_id !== 'upload_failed') {
+      try {
+        const fileLink = await bot.getFileLink(regData.document_file_id);
+        const resp = await fetch(fileLink);
+        const buffer = await resp.arrayBuffer();
+        docBase64 = Buffer.from(buffer).toString('base64');
+        const ext = fileLink.toLowerCase();
+        docMimeType = ext.includes('.png') ? 'image/png' : ext.includes('.webp') ? 'image/webp' : 'image/jpeg';
+        docFetched = true;
+      } catch (e) {
+        console.error('[AI SCREENING] Could not fetch document from Telegram:', e.message);
+      }
+    }
+
+    // Fallback: use DB-stored base64 document
+    if (!docFetched) {
+      try {
+        const dbDoc = await pool.query('SELECT document_base64, document_mimetype FROM registration_requests WHERE id = $1', [regId]);
+        if (dbDoc.rows.length > 0 && dbDoc.rows[0].document_base64) {
+          docBase64 = dbDoc.rows[0].document_base64;
+          docMimeType = dbDoc.rows[0].document_mimetype;
+          // GPT-4o vision supports images only, skip PDFs
+          if (docMimeType && !docMimeType.startsWith('image/')) {
+            docBase64 = null;
+            docMimeType = null;
+          } else {
+            docFetched = true;
+          }
+        }
+      } catch (e) {
+        console.error('[AI SCREENING] Could not fetch document from DB:', e.message);
+      }
+    }
+
+    const isLawyer = regData.type === 'lawyer';
+    const infoBlock = isLawyer
+      ? `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Advokat\nMutaxassislik: ${regData.specialization || '-'}\nTajriba: ${regData.experience_years || '-'} yil\nTelegram: @${regData.telegram_username}`
+      : `Ism: ${regData.first_name}\nFamiliya: ${regData.last_name}\nTuri: Student\nBosqich: ${regData.level || '-'}\nTelegram: @${regData.telegram_username}`;
+
+    const docNote = docFetched
+      ? 'Yuklangan hujjatni ko\'ring va tekshiring.'
+      : 'Hujjat yuklangan, lekin texnik sabablarga ko\'ra olinmadi. Faqat boshqa ma\'lumotlar asosida baholang. document_authentic ni true deb belgilang.';
+
+    const today = new Date().toISOString().split('T')[0];
+    const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nBugungi sana: ${today}\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${docNote}\n\nTekshiring:\n1. ${docFetched ? 'Hujjatdagi ism-familiya ariza beruvchi kiritgan ma\'lumotlarga mosmi?' : 'Ism-familiya to\'g\'ri formatdami?'}\n2. ${docFetched ? 'Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?' : 'Ma\'lumotlar to\'liqmi?'}\n3. Barcha ma'lumotlar to'liqmi?\n4. ${docFetched ? 'Hujjat haqiqiymi yoki shubhalimi? Bugungi sana ' + today + ' — hujjat sanasi bugungi yoki undan oldingi bo\'lsa, bu normal.' : 'Hujjat texnik sabablarga ko\'ra ko\'rib bo\'lmadi — true deb belgilang.'}\n${isLawyer ? '5. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
+
+    // Build GPT-4o Chat Completions request with vision
+    const content = [];
+    if (docBase64 && docMimeType) {
+      content.push({ type: 'image_url', image_url: { url: `data:${docMimeType};base64,${docBase64}` } });
+    }
+    content.push({ type: 'text', text: screenPrompt });
+
+    const gptBody = {
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content }],
+      temperature: 0.2,
+      max_tokens: 1024,
+      response_format: { type: 'json_object' }
+    };
+
+    let gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(gptBody)
+    });
+
+    // Retry once after 3s if rate-limited (429)
+    if (gptResp.status === 429) {
+      console.log('[AI SCREENING] Rate limited, retrying in 3s...');
+      await new Promise(r => setTimeout(r, 3000));
+      gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(gptBody)
+      });
+    }
+
+    if (!gptResp.ok) {
+      console.error('[AI SCREENING] GPT-4o API error:', gptResp.status);
+      return;
+    }
+
+    const data = await gptResp.json();
+    const resultText = data.choices?.[0]?.message?.content;
+    if (!resultText) return;
+
+    let screeningResult;
+    try {
+      const cleaned = resultText.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      screeningResult = jsonMatch ? JSON.parse(jsonMatch[0]) : { status: 'passed', notes: 'AI javob berdi, lekin JSON formatda emas. Qo\'lda tekshiring.' };
+    } catch (e) {
+      screeningResult = { status: 'passed', notes: 'AI javobini parse qilib bo\'lmadi. Qo\'lda tekshiring.', raw: resultText.substring(0, 500) };
+    }
+
+    const aiStatus = screeningResult.status === 'passed' ? 'passed' : 'flagged';
+    await pool.query(
+      `UPDATE registration_requests SET ai_screening_result = $1, ai_screening_status = $2 WHERE id = $3`,
+      [JSON.stringify(screeningResult), aiStatus, regId]
+    );
+    console.log(`[AI SCREENING] Request #${regId}: ${aiStatus}`);
+  } catch (error) {
+    console.error('[AI SCREENING] Error:', error);
+  }
+}
+
+// POST /api/send-verification-code — generate code + deep link token
+app.post('/api/send-verification-code', async (req, res) => {
+  try {
+    // Generate 4-digit code + unique deep link token
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const token = crypto.randomBytes(8).toString('hex');
+
+    verificationTokens.set(token, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+
+    console.log(`[VERIFY] Code generated, token: ${token}`);
+
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('[VERIFY CODE] Error:', error);
+    res.status(500).json({ error: 'Kod yuborishda xatolik yuz berdi' });
+  }
+});
+
+// POST /api/register — public self-registration
+app.post('/api/register', regUpload.single('document'), async (req, res) => {
+  try {
+    const { first_name, last_name, type, level, specialization, experience_years, license_number, telegram_username, password, verification_code, verification_token } = req.body;
+
+    if (!first_name || !last_name || !type) {
+      return res.status(400).json({ error: 'Barcha maydonlar to\'ldirilishi shart' });
+    }
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
+    }
+
+    const regType = type === 'lawyer' ? 'lawyer' : 'student';
+    if (regType === 'student' && !level) {
+      return res.status(400).json({ error: 'Bosqichni tanlang' });
+    }
+    if (regType === 'lawyer' && !specialization) {
+      return res.status(400).json({ error: 'Mutaxassislikni tanlang' });
+    }
+
+    const cleanUsername = telegram_username ? telegram_username.replace(/@/g, '').trim() : '';
+
+    // Verify Telegram code via token
+    if (!verification_token || !verification_code) {
+      return res.status(400).json({ error: 'Telegram tasdiqlash kodini kiriting' });
+    }
+    const storedCode = verificationTokens.get(verification_token);
+    if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
+      return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta kod yuboring.' });
+    }
+    const applicantChatId = storedCode.chatId || null;
+
+    // Check duplicate pending (by name since telegram username is optional)
+    const existing = await pool.query(
+      `SELECT id FROM registration_requests WHERE first_name = $1 AND last_name = $2 AND status = 'pending'`,
+      [first_name.trim(), last_name.trim()]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Sizning ismingiz bilan allaqachon so\'rov yuborilgan. Admin javobini kuting.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Iltimos, isbotlovchi hujjatni yuklang' });
+    }
+
+    // Read file into base64 for DB storage (reliable fallback)
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const documentBase64 = fileBuffer.toString('base64');
+    const documentMimetype = req.file.mimetype;
+
+    // Try uploading to Telegram for persistent storage
+    let documentFileId = null;
+    let documentFileName = req.file.originalname;
+    try {
+      const tgInfo = cleanUsername ? `\n📱 @${cleanUsername}` : '';
+      const caption = regType === 'lawyer'
+        ? `📋 Yangi advokat ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📜 ${specialization}${tgInfo}`
+        : `📋 Yangi student ro'yxatdan o'tish\n👤 ${first_name} ${last_name}\n📚 ${level}${tgInfo}`;
+      const sentDoc = await bot.sendDocument(process.env.ADMIN_TELEGRAM_ID, req.file.path, { caption }, { filename: req.file.originalname, contentType: req.file.mimetype });
+      documentFileId = sentDoc.document.file_id;
+    } catch (uploadErr) {
+      console.error('[REGISTER] Telegram upload error:', uploadErr.message);
+      documentFileId = 'upload_failed';
+    } finally {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      `INSERT INTO registration_requests (type, first_name, last_name, level, specialization, experience_years, license_number, telegram_username, document_file_id, document_file_name, password_hash, document_base64, document_mimetype, telegram_chat_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+      [regType, first_name.trim(), last_name.trim(), level || null, specialization || null, experience_years ? parseInt(experience_years) : null, license_number || null, cleanUsername || null, documentFileId, documentFileName, passwordHash, documentBase64, documentMimetype, applicantChatId]
+    );
+
+    // Registration succeeded — now safe to delete the verification token
+    verificationTokens.delete(verification_token);
+
+    // Trigger AI screening asynchronously
+    triggerAiScreening(result.rows[0].id, { type: regType, first_name, last_name, level, specialization, experience_years, license_number, telegram_username: cleanUsername, document_file_id: documentFileId }).catch(e => console.error('[AI SCREENING]', e));
+
+    res.json({ success: true, message: 'Tabriklaymiz, Sizning so\'rovingiz muvaffaqiyatli yuborildi! Admin javobini kuting!' });
+  } catch (error) {
+    if (req.file) { try { fs.unlinkSync(req.file.path); } catch (e) {} }
+    console.error('[REGISTER] Error:', error);
+    res.status(500).json({ error: 'Ro\'yxatdan o\'tishda xatolik' });
+  }
+});
+
+// ========== PASSWORD RECOVERY ==========
+
+// POST /api/password-recovery/request — check telegram username exists, generate code
+app.post('/api/password-recovery/request', async (req, res) => {
+  try {
+    const { telegram_username } = req.body;
+    if (!telegram_username) {
+      return res.status(400).json({ error: 'Telegram username kiriting' });
+    }
+    const cleanUsername = telegram_username.replace('@', '').trim().toLowerCase();
+
+    // Check if this telegram username exists in admins table
+    const adminResult = await pool.query(
+      'SELECT id, username, full_name FROM admins WHERE LOWER(telegram_username) = $1',
+      [cleanUsername]
+    );
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Bu Telegram username bilan ro\'yxatdan o\'tgan foydalanuvchi topilmadi. Ro\'yxatdan o\'ting.' });
+    }
+
+    // Generate 4-digit code + token
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const token = crypto.randomBytes(8).toString('hex');
+
+    verificationTokens.set('recovery_' + token, {
+      code,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      adminId: adminResult.rows[0].id,
+      telegramUsername: cleanUsername,
+      verified: false
+    });
+
+    console.log(`[RECOVERY] Code generated for ${cleanUsername}, token: ${token}`);
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('[RECOVERY REQUEST] Error:', error);
+    res.status(500).json({ error: 'Xatolik yuz berdi' });
+  }
+});
+
+// POST /api/password-recovery/verify — verify the 4-digit code
+app.post('/api/password-recovery/verify', async (req, res) => {
+  try {
+    const { token, code } = req.body;
+    if (!token || !code) {
+      return res.status(400).json({ error: 'Token va kod kerak' });
+    }
+
+    const pending = verificationTokens.get('recovery_' + token);
+    if (!pending || Date.now() > pending.expiresAt) {
+      return res.status(400).json({ error: 'Kod muddati o\'tgan. Qayta urinib ko\'ring.' });
+    }
+    if (pending.code !== code) {
+      return res.status(400).json({ error: 'Kod noto\'g\'ri' });
+    }
+
+    // Mark as verified
+    pending.verified = true;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[RECOVERY VERIFY] Error:', error);
+    res.status(500).json({ error: 'Xatolik yuz berdi' });
+  }
+});
+
+// POST /api/password-recovery/reset — set new password
+app.post('/api/password-recovery/reset', async (req, res) => {
+  try {
+    const { token, code, new_password } = req.body;
+    if (!token || !code || !new_password) {
+      return res.status(400).json({ error: 'Barcha maydonlarni to\'ldiring' });
+    }
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
+    }
+
+    const pending = verificationTokens.get('recovery_' + token);
+    if (!pending || Date.now() > pending.expiresAt) {
+      return res.status(400).json({ error: 'Sessiya muddati o\'tgan. Qayta urinib ko\'ring.' });
+    }
+    if (pending.code !== code || !pending.verified) {
+      return res.status(400).json({ error: 'Tasdiqlash xatosi' });
+    }
+
+    // Hash new password and update
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+    await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hashedPassword, pending.adminId]);
+
+    // Clean up token
+    verificationTokens.delete('recovery_' + token);
+
+    console.log(`[RECOVERY] Password reset for admin ID: ${pending.adminId}`);
+    res.json({ success: true, message: 'Parol muvaffaqiyatli yangilandi' });
+  } catch (error) {
+    console.error('[RECOVERY RESET] Error:', error);
+    res.status(500).json({ error: 'Parolni yangilashda xatolik' });
+  }
+});
+
+// GET /api/registration-requests — master only
+app.get('/api/registration-requests', requireMasterAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = `SELECT rr.*, a.full_name as reviewer_name FROM registration_requests rr LEFT JOIN admins a ON rr.reviewed_by = a.id`;
+    const params = [];
+    if (status) { query += ' WHERE rr.status = $1'; params.push(status); }
+    query += ' ORDER BY rr.created_at DESC';
+    const result = await pool.query(query, params);
+    // Strip large base64 data from list response, send flag instead
+    const rows = result.rows.map(r => {
+      const { document_base64, ...rest } = r;
+      rest.has_document_base64 = !!document_base64;
+      return rest;
+    });
+    res.json(rows);
+  } catch (error) {
+    console.error('[REG REQUESTS] Error:', error);
+    res.status(500).json({ error: 'So\'rovlar yuklashda xatolik' });
+  }
+});
+
+// GET /api/registration-requests/stats
+app.get('/api/registration-requests/stats', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+             COUNT(*) FILTER (WHERE status = 'approved') AS approved,
+             COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
+      FROM registration_requests
+    `);
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Statistika xatolik' });
+  }
+});
+
+// POST /api/registration-requests/:id/approve — master only
+app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (req, res) => {
+  try {
+    const regResult = await pool.query('SELECT * FROM registration_requests WHERE id = $1 AND status = $2', [req.params.id, 'pending']);
+    if (regResult.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi yoki allaqachon ko\'rib chiqilgan' });
+
+    const reg = regResult.rows[0];
+
+    // Use Telegram username as login username, fall back to name-based
+    const rawUsername = reg.telegram_username || `${reg.first_name}_${reg.last_name}`;
+    let baseUsername = rawUsername.toLowerCase().replace(/[^a-z0-9_]/g, '').substring(0, 30);
+    if (!baseUsername) baseUsername = 'user';
+    let finalUsername = baseUsername;
+    let suffix = 0;
+    while ((await pool.query('SELECT id FROM admins WHERE LOWER(username) = $1', [finalUsername.toLowerCase()])).rows.length > 0) {
+      suffix++;
+      finalUsername = baseUsername + suffix;
+    }
+
+    // Use password from registration or generate fallback
+    let finalHashedPassword;
+    if (reg.password_hash) {
+      finalHashedPassword = reg.password_hash;
+    } else {
+      // Fallback for old registrations without password
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+      let tempPwd = '';
+      for (let i = 0; i < 8; i++) tempPwd += chars.charAt(Math.floor(Math.random() * chars.length));
+      finalHashedPassword = await bcrypt.hash(tempPwd, 10);
+    }
+
+    const fullName = `${reg.last_name} ${reg.first_name}`;
+    const role = reg.type === 'lawyer' ? 'lawyer' : 'student';
+
+    await pool.query('INSERT INTO admins (username, password, full_name, role, telegram_username) VALUES ($1, $2, $3, $4, $5)', [finalUsername, finalHashedPassword, fullName, role, reg.telegram_username]);
+    await pool.query('UPDATE registration_requests SET status = $1, reviewed_at = NOW(), reviewed_by = $2 WHERE id = $3', ['approved', req.session.adminId, req.params.id]);
+
+    // Notify via Telegram using stored chat_id from verification
+    const parolText = reg.password_hash ? "Siz ro'yxatdan o'tishda yaratgan parol" : '(Admin tomonidan beriladi)';
+    const approvalMsg = `✅ Tabriklaymiz! Ro'yxatdan o'tish so'rovingiz tasdiqlandi!\n\n🔑 Kirish ma'lumotlari:\n👤 Username: ${finalUsername}\n🔒 Parol: ${parolText}\n\n🌐 Dashboard: ${process.env.DASHBOARD_URL || 'https://' + (process.env.WEBHOOK_DOMAIN || 'localhost:3000')}\n\nDictum advokatlik firmasi`;
+    let telegramSent = false;
+    try {
+      const chatId = reg.telegram_chat_id;
+      if (chatId) {
+        await bot.sendMessage(chatId, approvalMsg);
+        telegramSent = true;
+      }
+    } catch (e) { console.error('[APPROVE] Telegram error:', e.message); }
+
+    res.json({ success: true, credentials: { username: finalUsername, telegram: reg.telegram_username, fullName, userSetPassword: !!reg.password_hash }, telegramSent, telegramMessage: approvalMsg });
+  } catch (error) {
+    console.error('[APPROVE] Error:', error);
+    res.status(500).json({ error: 'Tasdiqlashda xatolik' });
+  }
+});
+
+// POST /api/registration-requests/:id/reject — master only
+app.post('/api/registration-requests/:id/reject', requireMasterAdmin, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    if (!reason) return res.status(400).json({ error: 'Rad etish sababi ko\'rsatilishi shart' });
+
+    const regResult = await pool.query('SELECT * FROM registration_requests WHERE id = $1 AND status = $2', [req.params.id, 'pending']);
+    if (regResult.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
+
+    const reg = regResult.rows[0];
+    await pool.query('UPDATE registration_requests SET status = $1, rejection_reason = $2, reviewed_at = NOW(), reviewed_by = $3 WHERE id = $4', ['rejected', reason, req.session.adminId, req.params.id]);
+
+    // Notify via Telegram using stored chat_id from verification
+    const rejectMsg = `❌ Ro'yxatdan o'tish so'rovingiz rad etildi.\n\nSabab: ${reason}\n\nDictum advokatlik firmasi`;
+    let telegramSent = false;
+    try {
+      const chatId = reg.telegram_chat_id;
+      if (chatId) {
+        await bot.sendMessage(chatId, rejectMsg);
+        telegramSent = true;
+      }
+    } catch (e) { console.error('[REJECT] Telegram error:', e.message); }
+
+    res.json({ success: true, telegramSent, telegramMessage: rejectMsg });
+  } catch (error) {
+    console.error('[REJECT] Error:', error);
+    res.status(500).json({ error: 'Rad etishda xatolik' });
+  }
+});
+
+// GET /api/registration-document/:fileId — master only
+app.get('/api/registration-document/:fileId', requireMasterAdmin, async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    // If Telegram file_id is valid, use Telegram
+    if (fileId && fileId !== 'upload_failed') {
+      try {
+        const fileLink = await bot.getFileLink(fileId);
+        return res.json({ fileLink });
+      } catch (e) {
+        console.error('[REG DOC] Telegram getFileLink failed:', e.message);
+      }
+    }
+    // Fallback: serve from DB base64
+    const regId = req.query.regId;
+    if (regId) {
+      const dbDoc = await pool.query('SELECT document_base64, document_mimetype, document_file_name FROM registration_requests WHERE id = $1', [regId]);
+      if (dbDoc.rows.length > 0 && dbDoc.rows[0].document_base64) {
+        const row = dbDoc.rows[0];
+        return res.json({ base64: row.document_base64, mimetype: row.document_mimetype, fileName: row.document_file_name });
+      }
+    }
+    res.status(404).json({ error: 'Hujjat topilmadi' });
+  } catch (error) {
+    res.status(500).json({ error: 'Hujjatni olishda xatolik' });
+  }
+});
+
+// Auto-migrate database on startup (add missing columns)
+async function runMigrations() {
+  try {
+    // Admins table migrations
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT DEFAULT NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_start TIME DEFAULT NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS duty_end TIME DEFAULT NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP DEFAULT NULL`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100) DEFAULT NULL`);
+
+    // Users table migrations (ensure all columns exist)
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_by INTEGER`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS block_reason TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP DEFAULT NOW()`);
+
+    // Drop ALL FK constraints referencing admins, re-add with ON DELETE SET NULL
+    try {
+      const fks = await pool.query(`
+        SELECT con.conname, rel.relname AS table_name
+        FROM pg_constraint con
+        JOIN pg_class rel ON con.conrelid = rel.oid
+        JOIN pg_class ref ON con.confrelid = ref.oid
+        WHERE con.contype = 'f' AND ref.relname = 'admins'
+      `);
+      for (const fk of fks.rows) {
+        const action = fk.table_name === 'chat_messages' ? 'CASCADE' : 'SET NULL';
+        // Find the column(s) for this constraint
+        const colResult = await pool.query(`
+          SELECT a.attname FROM pg_constraint c
+          JOIN pg_attribute a ON a.attnum = ANY(c.conkey) AND a.attrelid = c.conrelid
+          WHERE c.conname = $1
+        `, [fk.conname]);
+        const col = colResult.rows[0]?.attname;
+        if (!col) continue;
+        await pool.query(`ALTER TABLE ${fk.table_name} DROP CONSTRAINT ${fk.conname}`);
+        await pool.query(`ALTER TABLE ${fk.table_name} ADD CONSTRAINT ${fk.conname} FOREIGN KEY (${col}) REFERENCES admins(id) ON DELETE ${action}`);
+        console.log(`[DB] Fixed FK: ${fk.table_name}.${col} -> ON DELETE ${action}`);
+      }
+    } catch(e) { console.log('[DB] FK constraint migration:', e.message); }
+
+    // Requests table migrations (ensure all columns exist)
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS category VARCHAR(255) DEFAULT 'Boshqa'`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS student_response TEXT`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS student_admin_id INTEGER`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_to INTEGER`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_student_id INTEGER`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS assigned_student_at TIMESTAMP`);
+
+    // Multi-student assignment junction table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS request_students (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
+        student_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+        assigned_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(request_id, student_id)
+      )
+    `);
+    // Migrate existing single-student assignments into junction table
+    try {
+      await pool.query(`
+        INSERT INTO request_students (request_id, student_id, assigned_at)
+        SELECT id, assigned_student_id, COALESCE(assigned_student_at, NOW())
+        FROM requests WHERE assigned_student_id IS NOT NULL
+        ON CONFLICT (request_id, student_id) DO NOTHING
+      `);
+    } catch(e) { console.log('[DB] Student migration note:', e.message); }
+
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS answered_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS master_approved BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS responded_by VARCHAR(255)`);
+    // Widen file_id to TEXT in case Telegram IDs exceed 255 chars
+    await pool.query(`ALTER TABLE requests ALTER COLUMN file_id TYPE TEXT`);
+
+    // Chat messages migration
+    await pool.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_feedback (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+        admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+        rating SMALLINT NOT NULL CHECK (rating IN (-1, 1)),
+        comment TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(request_id, admin_id)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_analyses (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+        admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+        category VARCHAR(255),
+        request_text TEXT,
+        analysis_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_analyses_created ON ai_analyses(created_at DESC)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_chat_sessions (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+        title TEXT,
+        topic VARCHAR(100),
+        databases TEXT[] DEFAULT '{lex.uz}',
+        messages JSONB DEFAULT '[]'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_updated ON ai_chat_sessions(updated_at DESC)`);
+    // Add topic column if missing (existing installs)
+    await pool.query(`ALTER TABLE ai_chat_sessions ADD COLUMN IF NOT EXISTS topic VARCHAR(100)`).catch(() => {});
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS registration_requests (
+        id SERIAL PRIMARY KEY,
+        type VARCHAR(10) NOT NULL DEFAULT 'student',
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        level VARCHAR(20),
+        specialization VARCHAR(255),
+        experience_years INTEGER,
+        license_number VARCHAR(100),
+        telegram_username VARCHAR(100),
+        document_file_id TEXT,
+        document_file_name VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'pending',
+        ai_screening_result JSONB,
+        ai_screening_status VARCHAR(20) DEFAULT 'pending',
+        rejection_reason TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        reviewed_at TIMESTAMP,
+        reviewed_by INTEGER REFERENCES admins(id) ON DELETE SET NULL
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_reg_requests_status ON registration_requests(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_reg_requests_created ON registration_requests(created_at DESC)`);
+    await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS password_hash TEXT`);
+    await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_base64 TEXT`);
+    await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_mimetype VARCHAR(100)`);
+    await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT`);
+    await pool.query(`ALTER TABLE registration_requests ALTER COLUMN telegram_username DROP NOT NULL`);
+    // Ensure 'admin' account is always master role
+    await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
+
+    // Agent traces table — audit log for all AI agent runs
+    await pool.query(`CREATE TABLE IF NOT EXISTS agent_traces (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+      agent_type VARCHAR(50) NOT NULL,
+      input_summary TEXT,
+      output JSONB NOT NULL DEFAULT '{}',
+      sources JSONB DEFAULT '[]',
+      model_used VARCHAR(100),
+      tokens_used INTEGER DEFAULT 0,
+      duration_ms INTEGER DEFAULT 0,
+      error TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_traces_request ON agent_traces(request_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_traces_type ON agent_traces(agent_type)`);
+
+    // New columns on requests for agent results
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS triage_result JSONB`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS verification_result JSONB`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS ai_draft TEXT`);
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS ai_research_brief JSONB`);
+
+    // Legal field classifier column
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS detected_legal_field VARCHAR(100)`);
+
+    // Internal reasoning storage for audit
+    await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS internal_reasoning TEXT`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_legal_field ON requests(detected_legal_field)`);
+
+    // Fix vector dimension mismatch — if embedding column exists with wrong dims, recreate it
+    try {
+      const { getEmbedDims } = require('../rag/embeddings');
+      const correctDims = getEmbedDims();
+      const dimCheck = await pool.query(`
+        SELECT atttypmod FROM pg_attribute
+        JOIN pg_class ON pg_class.oid = pg_attribute.attrelid
+        WHERE pg_class.relname = 'legal_chunks' AND pg_attribute.attname = 'embedding'
+      `);
+      if (dimCheck.rows.length > 0) {
+        const currentDims = dimCheck.rows[0].atttypmod;
+        // atttypmod for vector(n) = n + 4 (internal pg encoding), or -1 if no modifier
+        const storedDims = currentDims > 0 ? currentDims - 4 : 0;
+        if (storedDims > 0 && storedDims !== correctDims) {
+          console.log(`[DB] Fixing vector dims: ${storedDims} → ${correctDims}`);
+          await pool.query(`ALTER TABLE legal_chunks DROP COLUMN IF EXISTS embedding`);
+          await pool.query(`ALTER TABLE legal_chunks ADD COLUMN embedding vector(${correctDims})`);
+          await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
+          console.log(`[DB] Vector column recreated at ${correctDims}d`);
+        }
+      }
+    } catch(e) { console.log('[DB] Vector dim check skipped:', e.message); }
+
+    console.log('[DB] Migrations completed successfully');
+    await initLegalDataset();
+    await initFeedbackDataset();
+    await initCaseLawDataset();
+    await initLegalCorpus().catch(e => console.log('[RAG] Legal corpus init skipped:', e.message));
+
+    // Mount AI Portal API
+    try {
+      const { mountPortal } = require('../portal');
+      await mountPortal(app);
+    } catch (e) { console.log('[PORTAL] Mount skipped:', e.message); }
+
+    // Mount Advanced RAG routes (QA bank, parent-child search, few-shot)
+    try {
+      const { mountAdvancedRoutes } = require('../rag/advanced-routes');
+      const { initAdvancedCorpus } = require('../rag/advanced-corpus');
+      await initAdvancedCorpus();
+      mountAdvancedRoutes(app, { requireAuth, requireMasterAdmin, callAI, pool });
+    } catch (e) { console.log('[ADV RAG] Mount skipped:', e.message); }
+
+    // Initialize persistent LLM spend log + wire it into hybrid pipeline
+    try {
+      const hybridPipeline = require('../rag/hybrid-pipeline');
+      const spendLog = require('../rag/llm-spend-log');
+      await spendLog.initSpendLog();
+      hybridPipeline.setSpendHook(spendLog.recordSpendRow);
+      await spendLog.loadSpendIntoPipeline(hybridPipeline);
+      console.log('[SPEND-LOG] Hybrid pipeline wired to persistent spend log');
+    } catch (e) { console.log('[SPEND-LOG] Init skipped:', e.message); }
+
+    // Initialize subscription tiers schema (Phase 3)
+    try {
+      const subscription = require('../rag/subscription-tiers');
+      await subscription.initSubscriptionSchema();
+    } catch (e) { console.log('[SUBSCRIPTION] Init skipped:', e.message); }
+
+    try {
+      const { initQaKorpus } = require('../rag/qa-korpus');
+      await initQaKorpus();
+    } catch (e) { console.log('[QA-KORPUS] Init skipped:', e.message); }
+  } catch (err) {
+    console.error('[DB] Migration error:', err.message);
+  }
+}
+
+// Export callAI and auth helpers for use by portal and advanced RAG modules
+module.exports = { callAI, requireAuth, requireMasterAdmin, retrieveLegalContext, buildTopicPrompt };
+
+// Diagnostic endpoint (no auth, safe info only)
+app.get('/api/health', async (req, res) => {
+  let corpusInfo = {};
+  try {
+    const r = await pool.query(`
+      SELECT count(*) AS total,
+             count(*) FILTER (WHERE embedding IS NOT NULL) AS with_embeddings,
+             count(*) FILTER (WHERE tsv IS NOT NULL) AS with_tsv,
+             count(DISTINCT category) AS categories,
+             count(DISTINCT law_name) AS laws,
+             array_agg(DISTINCT category) AS category_list
+      FROM legal_chunks WHERE is_valid = TRUE
+    `);
+    corpusInfo = r.rows[0];
+  } catch (e) { corpusInfo = { error: e.message }; }
+
+  res.json({
+    status: 'ok',
+    node: process.version,
+    uptime: Math.round(process.uptime()),
+    mem: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+    hasFetch: typeof fetch === 'function',
+    hasFile: typeof File === 'function',
+    embedding_provider: process.env.HF_TOKEN ? 'huggingface' : process.env.GEMINI_API_KEY ? 'gemini' : process.env.GPT_API_KEY ? 'openai' : 'none',
+    hf_token_prefix: process.env.HF_TOKEN ? process.env.HF_TOKEN.substring(0, 8) + '...' : 'NOT SET',
+    tavily: !!process.env.TAVILY_API_KEY,
+    corpus: corpusInfo,
+  });
+});
+
+runMigrations().then(() => {
+  app.listen(PORT, () => {
+    console.log(`[SERVER] Dashboard running on port ${PORT} | Node ${process.version}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
+  });
 });

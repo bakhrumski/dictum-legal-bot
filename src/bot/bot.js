@@ -16,19 +16,19 @@ bot.on('message', async (msg) => {
 
   // Handle /start command
   if (msg.text && msg.text.startsWith('/start')) {
-    const welcomeMessage = `
-Assalomu aleykum, ${msg.from.first_name}! 👋
+    const welcomeMessage = `Assalomu aleykum, ${msg.from.first_name}! 👋
 
 Dictum advokatlik firmasi murojaatlar bo'limiga xush kelibsiz!
 
-📝 Yuridik masalangizni yuboring:
+📝 Muammoyingizni yuboring:
 • Matn shaklida
 • Ovozli xabar
 • Video xabar
 • Fayl (max 5MB)
 
-Yuristlarimiz tez orada javob berishadi.
-    `;
+❗️Iltimos, tezroq va sifatliroq javob berishimiz uchun murojaatingizni to'liq, bitta xabar bilan yuborishga harakat qiling.
+
+Yuristlarimiz tez orada javob berishadi.`;
     bot.sendMessage(chatId, welcomeMessage);
     return;
   }
@@ -131,10 +131,38 @@ Qo'shimcha savol bo'lsa: /start ni qayta bosing
     return;
   }
   
+  // Check if user is blocked
+  try {
+    const blockedCheck = await pool.query('SELECT blocked FROM users WHERE telegram_id = $1', [chatId]);
+    if (blockedCheck.rows.length > 0 && blockedCheck.rows[0].blocked) {
+      bot.sendMessage(chatId, '⛔ Sizning hisobingiz bloklangan. Murojaat yuborishingiz mumkin emas.');
+      return;
+    }
+  } catch (error) {
+    console.error('Error checking block status:', error);
+  }
+
+  // Check if user has 3+ unanswered requests
+  try {
+    const userRow = await pool.query('SELECT id FROM users WHERE telegram_id = $1', [chatId]);
+    if (userRow.rows.length > 0) {
+      const pending = await pool.query(
+        "SELECT COUNT(*) as cnt FROM requests WHERE user_id = $1 AND status NOT IN ('answered')",
+        [userRow.rows[0].id]
+      );
+      if (parseInt(pending.rows[0].cnt) >= 3) {
+        bot.sendMessage(chatId, '⏳ Sizda javob berilmagan 3 ta murojaat mavjud. Iltimos, avvalgi murojaatlaringizga javob berilishini kuting.');
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('Error checking pending requests:', error);
+  }
+
   // Save to database
   try {
     const result = await saveRequest(requestData);
-    
+
     if (result.success) {
       const confirmation = `
 ✅ Murojaat qabul qilindi!
@@ -241,6 +269,51 @@ function getRequestTypeLabel(type) {
   };
   return labels[type] || 'Noma\'lum';
 }
+
+// Handle rating callback from inline keyboard
+bot.on('callback_query', async (query) => {
+  const data = query.data;
+  if (!data.startsWith('rate_')) return;
+
+  const parts = data.split('_');
+  const requestId = parseInt(parts[1]);
+  const rating = parseInt(parts[2]);
+  const telegramId = query.from.id;
+
+  try {
+    // Get the lawyer assigned to this request
+    const reqResult = await pool.query('SELECT assigned_to FROM requests WHERE id = $1', [requestId]);
+    if (reqResult.rows.length === 0) {
+      await bot.answerCallbackQuery(query.id, { text: 'Murojaat topilmadi' });
+      return;
+    }
+
+    const lawyerId = reqResult.rows[0].assigned_to;
+
+    // Check if already rated
+    const existing = await pool.query('SELECT id FROM lawyer_ratings WHERE request_id = $1', [requestId]);
+    if (existing.rows.length > 0) {
+      await bot.answerCallbackQuery(query.id, { text: 'Siz allaqachon baholagan ekansiz!' });
+      return;
+    }
+
+    // Save rating
+    await pool.query(
+      'INSERT INTO lawyer_ratings (request_id, lawyer_id, telegram_id, rating) VALUES ($1, $2, $3, $4)',
+      [requestId, lawyerId, telegramId, rating]
+    );
+
+    const stars = '⭐'.repeat(rating);
+    await bot.answerCallbackQuery(query.id, { text: `Rahmat! Siz ${rating} ball berdingiz` });
+    await bot.editMessageText(`✅ Baholandi: ${stars}\nRahmat, fikringiz muhim!`, {
+      chat_id: query.message.chat.id,
+      message_id: query.message.message_id
+    });
+  } catch (error) {
+    console.error('Error saving rating:', error);
+    await bot.answerCallbackQuery(query.id, { text: 'Xatolik yuz berdi' });
+  }
+});
 
 // Export bot for use in other modules
 module.exports = { bot };

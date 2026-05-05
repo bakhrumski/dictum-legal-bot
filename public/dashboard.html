@@ -1,9 +1,18 @@
 <!DOCTYPE html>
+<!-- v2.1 - chat moved to header -->
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dictum - Murojaatlar Dashboard</title>
+    <!-- PDF & Chart Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,7 +21,7 @@
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: #f5f5f5;
             padding: 20px;
         }
@@ -36,46 +45,266 @@
         .header-left h1 {
             color: #2c3e50;
             margin-bottom: 5px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            letter-spacing: 3px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header-left .logo-scales {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
         }
         
+        .header-center {
+            display: flex;
+            align-items: center;
+        }
         .header-right {
-            text-align: right;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
-        
-        .user-info {
-            color: #7f8c8d;
-            font-size: 14px;
-            margin-bottom: 10px;
+        .header-chat-btn {
+            position: relative;
+            background: #ecf0f1;
+            border: none;
+            border-radius: 10px;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, box-shadow 0.2s;
         }
-        
-        .role-badge {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-left: 10px;
+        .header-chat-btn:hover {
+            background: #dfe6e9;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-        
-        .role-master {
-            background: #3498db;
-            color: white;
+        .header-chat-btn:active {
+            transform: scale(0.95);
         }
-        
-        .role-student {
-            background: #9b59b6;
-            color: white;
+        .header-chat-dots {
+            display: flex;
+            gap: 3px;
         }
-        
-        .logout-btn {
+        .header-chat-dots span {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #7f8c8d;
+        }
+        .header-chat-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
             background: #e74c3c;
             color: white;
-            padding: 8px 20px;
-            border: none;
-            border-radius: 5px;
+            font-size: 10px;
+            font-weight: 800;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(231,76,60,0.4);
+            animation: pulse-badge 2s infinite;
+            line-height: 1;
+        }
+        .profile-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            padding: 6px 10px 6px 6px;
+            border-radius: 14px;
+            border: 2px solid transparent;
+            background: linear-gradient(135deg, #f8f9fa, #ecf0f1);
+            transition: all 0.25s ease;
+            position: relative;
+        }
+        .profile-toggle:hover {
+            border-color: #d5dbdb;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            transform: translateY(-1px);
+        }
+        .profile-toggle:active {
+            transform: translateY(0);
+        }
+        .profile-avatar {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            font-weight: 800;
+            color: white;
+            letter-spacing: 1px;
+            position: relative;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+        }
+        .profile-avatar.role-master {
+            background: linear-gradient(135deg, #1a5276, #2e86c1);
+        }
+        .profile-avatar.role-lawyer {
+            background: linear-gradient(135deg, #1e8449, #27ae60);
+        }
+        .profile-avatar.role-student {
+            background: linear-gradient(135deg, #6c3483, #a569bd);
+        }
+        .profile-avatar::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #27ae60;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .profile-role-label {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 3px;
+        }
+        .profile-role-tag {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 6px;
+            letter-spacing: 0.3px;
+        }
+        .profile-role-tag.master-tag {
+            background: linear-gradient(135deg, #1a5276, #2e86c1);
+            color: white;
+            box-shadow: 0 2px 6px rgba(26,82,118,0.3);
+        }
+        .profile-role-tag.lawyer-tag {
+            background: linear-gradient(135deg, #1e8449, #27ae60);
+            color: white;
+            box-shadow: 0 2px 6px rgba(30,132,73,0.3);
+        }
+        .profile-role-tag.student-tag {
+            background: linear-gradient(135deg, #6c3483, #a569bd);
+            color: white;
+            box-shadow: 0 2px 6px rgba(108,52,131,0.3);
+        }
+        .profile-admin-tag {
+            font-size: 9px;
+            font-weight: 700;
+            color: #5d6d7e;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding-left: 2px;
+        }
+        .profile-chevron {
+            color: #95a5a6;
+            font-size: 10px;
+            transition: transform 0.2s;
+            margin-left: -4px;
+        }
+        .profile-toggle.open .profile-chevron {
+            transform: rotate(180deg);
+        }
+        .profile-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            min-width: 220px;
+            z-index: 999;
+            overflow: hidden;
+        }
+        .profile-dropdown.open { display: block; }
+        .profile-dropdown-header {
+            padding: 16px;
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            text-align: center;
+        }
+        .profile-dropdown-header .dd-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            margin: 0 auto 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            border: 2px solid rgba(255,255,255,0.25);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .profile-dropdown-header .dd-avatar.role-master { background: linear-gradient(135deg, #1a5276, #2e86c1); }
+        .profile-dropdown-header .dd-avatar.role-lawyer { background: linear-gradient(135deg, #1e8449, #27ae60); }
+        .profile-dropdown-header .dd-avatar.role-student { background: linear-gradient(135deg, #6c3483, #a569bd); }
+        .profile-dropdown-header .dd-name {
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .profile-dropdown-header .dd-role {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+        .profile-dropdown-menu {
+            padding: 8px 0;
+        }
+        .profile-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
             cursor: pointer;
             font-size: 14px;
+            color: #2c3e50;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            transition: background 0.15s;
         }
+        .profile-dropdown-item:hover {
+            background: #f8f9fa;
+        }
+        .profile-dropdown-item .dd-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+        .profile-dropdown-item.logout-item {
+            color: #e74c3c;
+            border-top: 1px solid #ecf0f1;
+            margin-top: 4px;
+            padding-top: 12px;
+        }
+        .profile-dropdown-item.logout-item:hover {
+            background: #fdf0f0;
+        }
+
+        .role-badge {
+            display: inline-block;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .role-master { color: #2c3e50; }
+        .role-lawyer { color: #2c3e50; }
+        .role-student { color: #2c3e50; }
         
         .logout-btn:hover {
             background: #c0392b;
@@ -84,44 +313,117 @@
         .subtitle {
             color: #7f8c8d;
             font-size: 14px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-style: italic;
         }
         
         .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            display: flex;
+            gap: 10px;
             margin-bottom: 20px;
         }
-        
+
         .stat-card {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
             background: white;
-            padding: 20px;
+            padding: 10px 16px;
             border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            border-left: 3px solid #3498db;
+            transition: transform 0.15s, box-shadow 0.15s;
+            cursor: pointer;
         }
-        
-        .stat-card h3 {
-            color: #7f8c8d;
-            font-size: 14px;
-            margin-bottom: 10px;
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
         }
-        
-        .stat-card .number {
-            font-size: 32px;
-            font-weight: bold;
+        .stat-card.card-pending { border-left-color: #f39c12; }
+        .stat-card.card-student { border-left-color: #9b59b6; }
+        .stat-card.card-answered { border-left-color: #27ae60; }
+
+        .stat-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .stat-card .stat-icon { background: #ebf5fb; }
+        .stat-card.card-pending .stat-icon { background: #fef9e7; }
+        .stat-card.card-student .stat-icon { background: #f5eef8; }
+        .stat-card.card-answered .stat-icon { background: #eafaf1; }
+
+        .stat-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .stat-info .number {
+            font-size: 22px;
+            font-weight: 800;
+            line-height: 1.1;
             color: #2c3e50;
         }
-        
+        .stat-info h3 {
+            color: #95a5a6;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin: 0;
+            white-space: nowrap;
+        }
+
         .pending { color: #f39c12; }
         .student-responded { color: #9b59b6; }
         .answered { color: #27ae60; }
         .rejected { color: #e74c3c; }
+
+        .stat-badges {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .stat-badge-combined,
+        .badge-combined,
+        .date-badge-combined {
+            display: inline-flex;
+            border-radius: 12px;
+            overflow: hidden;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.3;
+            white-space: nowrap;
+        }
+        .seg-pending {
+            padding: 3px 8px;
+            background: #fef9e7;
+            color: #b7950b;
+        }
+        .seg-rejected {
+            padding: 3px 8px;
+            background: #fdedec;
+            color: #c0392b;
+        }
         
         .requests-container {
             background: white;
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .requests-container #requestsList {
+            height: 70vh;
+            overflow-y: auto;
+            flex: 1;
         }
         
         .controls {
@@ -266,6 +568,83 @@
             color: #2c3e50;
         }
         
+        .ai-tahlil-btn {
+            background: #8e44ad !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-tahlil-btn:hover {
+            background: #7d3c98 !important;
+        }
+        .ai-tahlil-btn:disabled {
+            background: #bdc3c7 !important;
+            cursor: not-allowed;
+        }
+        .ai-tahlil-btn .ai-icon {
+            font-size: 16px;
+        }
+        .ai-analysis-container {
+            margin-top: 15px;
+        }
+        .ai-analysis-content {
+            background: #f8f4fc;
+            border: 1px solid #d5b8e8;
+            border-radius: 8px;
+            padding: 20px;
+            font-size: 14px;
+            line-height: 1.7;
+            color: #2c3e50;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .ai-analysis-content h1, .ai-analysis-content h2, .ai-analysis-content h3 {
+            color: #6c3483;
+            margin-top: 15px;
+            margin-bottom: 8px;
+        }
+        .ai-analysis-content h1 { font-size: 18px; }
+        .ai-analysis-content h2 { font-size: 16px; }
+        .ai-analysis-content h3 { font-size: 14px; border: none; }
+        .ai-analysis-content ul, .ai-analysis-content ol {
+            padding-left: 20px;
+            margin-bottom: 10px;
+        }
+        .ai-analysis-content li {
+            margin-bottom: 4px;
+        }
+        .ai-analysis-content strong {
+            color: #4a235a;
+        }
+        .ai-analysis-content a {
+            color: #8e44ad;
+            text-decoration: underline;
+        }
+        .ai-analysis-content code {
+            background: #e8daef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        .ai-loading {
+            text-align: center;
+            padding: 30px;
+            color: #8e44ad;
+        }
+        .ai-loading .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #d5b8e8;
+            border-top-color: #8e44ad;
+            border-radius: 50%;
+            animation: ai-spin 0.8s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes ai-spin {
+            to { transform: rotate(360deg); }
+        }
         .detail-section {
             margin-bottom: 20px;
         }
@@ -479,111 +858,1266 @@
             margin-bottom: 10px;
             color: #95a5a6;
         }
+
+        /* User Folder Styles */
+        .user-folder {
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            overflow: hidden;
+            transition: box-shadow 0.3s;
+        }
+
+        .user-folder:hover {
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        .user-folder-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .user-folder-header:hover {
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        }
+
+        .user-folder-header.has-unanswered {
+            border-left: 4px solid #e74c3c;
+        }
+
+        .user-folder-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .folder-toggle {
+            font-size: 14px;
+            color: #7f8c8d;
+            transition: transform 0.3s;
+            width: 20px;
+            text-align: center;
+        }
+
+        .folder-toggle.open {
+            transform: rotate(90deg);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #3498db;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .user-avatar.blocked {
+            background: #e74c3c;
+        }
+
+        .user-folder-info h3 {
+            color: #2c3e50;
+            font-size: 16px;
+            margin-bottom: 2px;
+        }
+
+        .user-folder-info .user-meta {
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+
+        .user-folder-badges {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .folder-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .badge-total {
+            background: #eaf2f8;
+            color: #2980b9;
+            border: 1px solid #aed6f1;
+        }
+
+        .badge-combined {
+            padding: 0;
+        }
+
+        .badge-answered {
+            background: #eafaf1;
+            color: #1e8449;
+            border: 1px solid #a9dfbf;
+        }
+
+        .badge-blocked {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .user-folder-content {
+            display: none;
+            padding: 0;
+        }
+
+        .user-folder-content.open {
+            display: block;
+        }
+
+        /* Date Group Styles */
+        .date-group {
+            border-top: 1px solid #ecf0f1;
+        }
+
+        .date-group-header {
+            padding: 10px 20px;
+            background: #fafbfc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .date-group-header:hover {
+            background: #f0f2f5;
+        }
+
+        .date-group-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #546e7a;
+        }
+
+        .date-group-left .date-icon {
+            font-size: 16px;
+        }
+
+        .date-group-badges {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .date-badge-combined {
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .date-badge-count {
+            background: #ecf0f1;
+            color: #7f8c8d;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .date-group-content {
+            display: none;
+        }
+
+        .date-group-content.open {
+            display: block;
+        }
+
+        .date-group-content .request-item {
+            margin: 0;
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+            border-top: none;
+            border-bottom: 1px solid #f0f0f0;
+            padding: 12px 20px 12px 40px;
+        }
+
+        .date-group-content .request-item:last-child {
+            border-bottom: none;
+        }
+
+        .date-group-content .request-item:hover {
+            background: #f0f7ff;
+        }
+
+        .date-group-content .request-item .client-name {
+            font-size: 15px;
+        }
+
+        /* ========== COMMUNITY CHAT ========== */
+        body.chat-open { padding-right: 370px; transition: padding-right 0.3s ease; }
+
+        .chat-toggle-btn {
+            background: #3498db; color: white; border: none; padding: 8px 16px;
+            border-radius: 5px; cursor: pointer; font-size: 14px; margin-right: 10px;
+            position: relative; transition: background 0.3s;
+        }
+        .chat-toggle-btn:hover { background: #2980b9; }
+        .chat-toggle-btn .unread-badge {
+            position: absolute; top: -6px; right: -6px; background: #e74c3c; color: white;
+            font-size: 11px; font-weight: bold; width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            animation: pulse-badge 2s infinite;
+        }
+
+        /* Chat notifications */
+        .chat-notification-container {
+            position: fixed; top: 20px; right: 20px; z-index: 10000;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+        }
+        .chat-notification {
+            pointer-events: auto;
+            background: white; border-radius: 12px; padding: 14px 18px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.18); border-left: 4px solid #3498db;
+            max-width: 340px; min-width: 280px; cursor: pointer;
+            transform: translateX(400px); opacity: 0;
+            animation: notif-slide-in 0.4s ease forwards;
+        }
+        .chat-notification.mention-all { border-left-color: #f39c12; }
+        .chat-notification.mention-me { border-left-color: #e74c3c; }
+        .chat-notification.removing {
+            animation: notif-slide-out 0.3s ease forwards;
+        }
+        .chat-notification-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+        }
+        .chat-notification-sender {
+            font-weight: 600; font-size: 13px; color: #2c3e50;
+        }
+        .chat-notification-time {
+            font-size: 11px; color: #95a5a6;
+        }
+        .chat-notification-text {
+            font-size: 13px; color: #555; line-height: 1.4;
+            overflow: hidden; text-overflow: ellipsis;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
+        .chat-notification-text .mention-all {
+            background: #fef3cd; color: #856404; padding: 1px 4px; border-radius: 3px; font-weight: 600;
+        }
+        .chat-notification-text .mention {
+            background: #d4effd; color: #1a6fb5; padding: 1px 4px; border-radius: 3px; font-weight: 600;
+        }
+        .chat-notification-tag {
+            display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px;
+            border-radius: 4px; margin-left: 8px;
+        }
+        .chat-notification-tag.all { background: #fef3cd; color: #856404; }
+        .chat-notification-tag.me { background: #fde8e8; color: #c0392b; }
+        @keyframes notif-slide-in {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes notif-slide-out {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+
+        .chat-panel {
+            position: fixed; top: 0; right: -370px; width: 360px; height: 100vh;
+            background: white; box-shadow: -3px 0 15px rgba(0,0,0,0.15); z-index: 999;
+            display: flex; flex-direction: column; transition: right 0.3s ease;
+        }
+        .chat-panel.open { right: 0; }
+
+        .chat-header {
+            padding: 15px 20px; background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+        }
+        .chat-header h3 { font-size: 16px; margin: 0; }
+        .chat-header-info { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+        .chat-close-btn {
+            background: none; border: none; color: white; font-size: 22px;
+            cursor: pointer; padding: 0 5px; opacity: 0.8;
+        }
+        .chat-close-btn:hover { opacity: 1; }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 15px; background: #ecf0f1;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+
+        .chat-msg {
+            max-width: 85%; padding: 8px 12px; border-radius: 12px;
+            font-size: 13px; line-height: 1.4; word-wrap: break-word;
+        }
+        .chat-msg.own {
+            align-self: flex-end; background: #d4effd; border-bottom-right-radius: 4px;
+        }
+        .chat-msg.other {
+            align-self: flex-start; background: white; border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+        .chat-msg-sender { font-weight: bold; font-size: 12px; margin-bottom: 3px; }
+        .chat-msg-sender.role-master { color: #2980b9; }
+        .chat-msg-sender.role-lawyer { color: #27ae60; }
+        .chat-msg-sender.role-student { color: #8e44ad; }
+        .chat-msg-text { color: #2c3e50; }
+        .chat-msg-text .mention {
+            background: #dbeafe; color: #1e40af; padding: 1px 4px;
+            border-radius: 3px; font-weight: 600;
+        }
+        .chat-msg-text .mention-all {
+            background: #fef3c7; color: #92400e; padding: 1px 4px;
+            border-radius: 3px; font-weight: 600;
+        }
+        .chat-msg-time { font-size: 10px; color: #95a5a6; text-align: right; margin-top: 3px; }
+        .chat-msg-reply-btn {
+            display: none; position: absolute; top: 4px; right: 6px;
+            background: rgba(0,0,0,0.06); border: none; cursor: pointer;
+            font-size: 13px; padding: 2px 6px; border-radius: 6px; color: #7f8c8d;
+            transition: background 0.15s;
+        }
+        .chat-msg:hover .chat-msg-reply-btn { display: block; }
+        .chat-msg-reply-btn:hover { background: rgba(0,0,0,0.12); color: #2c3e50; }
+        .chat-msg { position: relative; }
+        .chat-reply-quote {
+            background: rgba(0,0,0,0.05); border-left: 3px solid #3498db;
+            border-radius: 4px; padding: 4px 8px; margin-bottom: 5px;
+            font-size: 11px; cursor: pointer; overflow: hidden;
+            max-height: 36px;
+        }
+        .chat-reply-quote-sender { font-weight: 700; color: #2980b9; margin-bottom: 1px; }
+        .chat-reply-quote-text { color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-reply-preview {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #f0f4f8; border-left: 3px solid #3498db;
+            border-radius: 6px; padding: 8px 12px; margin-bottom: 8px;
+            animation: notif-slide-in 0.2s ease;
+        }
+        .chat-reply-preview-info { flex: 1; overflow: hidden; }
+        .chat-reply-preview-sender { font-size: 12px; font-weight: 700; color: #2980b9; }
+        .chat-reply-preview-text { font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-reply-preview-close {
+            background: none; border: none; font-size: 18px; color: #95a5a6;
+            cursor: pointer; padding: 0 4px; margin-left: 8px; line-height: 1;
+        }
+        .chat-reply-preview-close:hover { color: #e74c3c; }
+        .chat-notification-tag.reply { background: #e8f4fd; color: #2980b9; }
+
+        .chat-date-separator { text-align: center; font-size: 11px; color: #7f8c8d; padding: 5px 0; }
+        .chat-date-separator span {
+            background: #dfe6e9; padding: 2px 12px; border-radius: 10px; font-weight: 600;
+        }
+
+        .chat-input-area {
+            padding: 10px 15px; background: white; border-top: 1px solid #e0e0e0;
+            flex-shrink: 0; position: relative;
+        }
+        .chat-input-wrapper { display: flex; gap: 8px; align-items: flex-end; }
+        .chat-input {
+            flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 20px;
+            font-family: inherit; font-size: 13px; resize: none;
+            max-height: 100px; min-height: 38px; outline: none; line-height: 1.3;
+        }
+        .chat-input:focus { border-color: #3498db; }
+        .chat-send-btn {
+            background: #3498db; color: white; border: none; width: 38px; height: 38px;
+            border-radius: 50%; cursor: pointer; font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: background 0.2s;
+        }
+        .chat-send-btn:hover { background: #2980b9; }
+        .chat-send-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+        .mention-dropdown {
+            position: absolute; bottom: 100%; left: 15px; right: 15px;
+            background: white; border: 1px solid #ddd; border-radius: 8px;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.15); max-height: 200px;
+            overflow-y: auto; display: none; z-index: 1001;
+        }
+        .mention-dropdown.visible { display: block; }
+        .mention-item {
+            padding: 8px 12px; cursor: pointer; display: flex;
+            justify-content: space-between; align-items: center;
+            font-size: 13px; transition: background 0.15s;
+        }
+        .mention-item:hover, .mention-item.active { background: #eaf2f8; }
+        .mention-item-name { font-weight: 600; color: #2c3e50; }
+        .mention-item-username { color: #7f8c8d; font-size: 12px; }
+        .mention-item-role {
+            font-size: 11px; padding: 2px 8px; border-radius: 10px;
+        }
+        .mention-item-role.master { background: #dbeafe; color: #2980b9; }
+        .mention-item-role.lawyer { background: #d5f5e3; color: #27ae60; }
+        .mention-item-role.student { background: #f3e8ff; color: #8e44ad; }
+        .mention-item-role.all-role { background: #fef3c7; color: #92400e; }
+
+        /* Admin Management Section */
+        .admin-management {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        .admin-management-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .admin-management-header h2 {
+            color: #2c3e50;
+            margin: 0;
+        }
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .admin-table th,
+        .admin-table td {
+            padding: 12px 15px;
+            text-align: left;
+            vertical-align: middle;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        .admin-table th {
+            background: #2c3e50;
+            color: white;
+            font-weight: bold;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        .admin-table tr:hover {
+            background: #f8f9fa;
+        }
+        .admin-table tr.own-row {
+            background: #eaf6ff;
+        }
+        .admin-table tr.own-row:hover {
+            background: #d5ecfa;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-indicator.active {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-indicator.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.active {
+            background: #28a745;
+            animation: pulse-dot 2s infinite;
+        }
+        .status-dot.inactive {
+            background: #dc3545;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        @keyframes pulse-badge {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .timeslot-cell-inner {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .timeslot-display {
+            display: inline-block;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 6px;
+            min-width: 110px;
+            text-align: center;
+        }
+        .timeslot-display.not-set {
+            color: #95a5a6;
+            font-style: italic;
+            font-weight: normal;
+            background: #f8f9fa;
+        }
+        .timeslot-display.on-duty-time {
+            background: #d4edda;
+            color: #155724;
+        }
+        .timeslot-display.off-duty-time {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .duty-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 6px;
+        }
+        .duty-badge.on-duty {
+            background: #d4edda;
+            color: #155724;
+        }
+        .duty-badge.off-duty {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .timeslot-edit-btn {
+            background: none;
+            border: 1px solid #3498db;
+            color: #3498db;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .timeslot-edit-btn:hover {
+            background: #3498db;
+            color: white;
+        }
+        .timeslot-form {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .timeslot-form input[type="time"] {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 110px;
+        }
+        .timeslot-form button {
+            padding: 4px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .timeslot-save-btn {
+            background: #27ae60;
+            color: white;
+        }
+        .timeslot-save-btn:hover {
+            background: #219a52;
+        }
+        .timeslot-cancel-btn {
+            background: #95a5a6;
+            color: white;
+        }
+        .timeslot-cancel-btn:hover {
+            background: #7f8c8d;
+        }
+        .last-active-text {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        .actions-cell {
+            text-align: center;
+            white-space: nowrap;
+        }
+        .action-btn {
+            border: none;
+            background: none;
+            cursor: pointer;
+            padding: 5px 8px;
+            border-radius: 6px;
+            font-size: 15px;
+            transition: background 0.2s, transform 0.15s;
+        }
+        .action-btn:hover {
+            transform: scale(1.15);
+        }
+        .action-btn.edit-btn {
+            color: #2980b9;
+        }
+        .action-btn.edit-btn:hover {
+            background: #ebf5fb;
+        }
+        .action-btn.delete-btn {
+            color: #e74c3c;
+        }
+        .action-btn.delete-btn:hover {
+            background: #fdedec;
+        }
+
+        /* Two-column layout: requests + rankings sidebar */
+        .main-content-area {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: stretch;
+        }
+        .main-content-area .requests-container {
+            flex: 1;
+            min-width: 0;
+            margin-bottom: 0;
+        }
+        .rankings-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .rankings-sidebar .ranking-card:last-child {
+            flex: 1;
+        }
+        .ranking-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .ranking-card h3 {
+            font-size: 15px;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #3498db;
+        }
+        .ranking-card h3.student-title {
+            border-bottom-color: #8e44ad;
+        }
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .ranking-item:last-child { border-bottom: none; }
+        .rank-medal {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .rank-medal.gold { background: linear-gradient(135deg, #f7dc6f, #f1c40f); color: #7d6608; }
+        .rank-medal.silver { background: linear-gradient(135deg, #d5dbdb, #95a5a6); color: #2c3e50; }
+        .rank-medal.bronze { background: linear-gradient(135deg, #e59866, #d35400); color: white; }
+        .rank-medal.default { background: #ecf0f1; color: #7f8c8d; }
+        .ranking-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .ranking-info .name {
+            font-weight: 600;
+            font-size: 13px;
+            color: #2c3e50;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ranking-info .stats-line {
+            font-size: 11px;
+            color: #95a5a6;
+        }
+        .ranking-stars {
+            color: #f39c12;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        /* Admin creation modal */
+        .admin-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .admin-modal-overlay.active { display: flex; }
+        .admin-modal {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            width: 400px;
+            max-width: 90vw;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .admin-modal h3 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-size: 18px;
+        }
+        .admin-modal .form-group {
+            margin-bottom: 15px;
+        }
+        .admin-modal label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #34495e;
+        }
+        .admin-modal input,
+        .admin-modal select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .admin-modal input:focus,
+        .admin-modal select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52,152,219,0.15);
+        }
+        .admin-modal-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .admin-modal-btns button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .admin-modal-btns .save-btn {
+            background: #27ae60;
+            color: white;
+        }
+        .admin-modal-btns .save-btn:hover { background: #219a52; }
+        .admin-modal-btns .cancel-btn {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+        .admin-modal-btns .cancel-btn:hover { background: #ddd; }
+        .add-member-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .add-member-btn:hover { background: #219a52; }
+
+        /* Monte Carlo Section */
+        .monte-carlo-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .mc-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .mc-card h3 {
+            color: #2c3e50;
+            font-size: 16px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #2c3e50;
+        }
+        .mc-card h3 .mc-icon { margin-right: 6px; }
+        .forecast-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            height: 140px;
+            padding-top: 10px;
+        }
+        .forecast-bar-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+        }
+        .forecast-bar {
+            width: 100%;
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            min-height: 8px;
+        }
+        .forecast-bar .range-bar {
+            width: 100%;
+            background: linear-gradient(180deg, #85c1e9, #3498db);
+            border-radius: 4px 4px 0 0;
+            position: relative;
+        }
+        .forecast-bar .p50-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: #e74c3c;
+            left: 0;
+        }
+        .forecast-bar-label {
+            font-size: 10px;
+            color: #7f8c8d;
+            margin-top: 4px;
+            text-align: center;
+        }
+        .forecast-bar-value {
+            font-size: 10px;
+            color: #2c3e50;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        .mc-summary {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        .mc-summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+        }
+        .mc-summary-row .label { color: #7f8c8d; }
+        .mc-summary-row .value { font-weight: bold; color: #2c3e50; }
+        .mc-percentile-bar {
+            height: 20px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            position: relative;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+        .mc-percentile-fill {
+            height: 100%;
+            border-radius: 10px;
+            position: absolute;
+            top: 0;
+        }
+        .mc-percentile-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #7f8c8d;
+        }
+        .mc-resolution-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .mc-res-stat {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .mc-res-stat .stat-val {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .mc-res-stat .stat-label {
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-top: 2px;
+        }
+        .mc-res-stat.best .stat-val { color: #27ae60; }
+        .mc-res-stat.typical .stat-val { color: #f39c12; }
+        .mc-res-stat.worst .stat-val { color: #e74c3c; }
+
+        @media (max-width: 1024px) {
+            .main-content-area { flex-direction: column; }
+            .rankings-sidebar { width: 100%; flex-direction: row; }
+            .ranking-card { flex: 1; }
+            .monte-carlo-section { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 768px) {
+            .chat-panel { width: 100%; right: -100%; }
+            .chat-panel.open { right: 0; }
+            body.chat-open { padding-right: 0; overflow: hidden; }
+            .admin-table th, .admin-table td { padding: 8px 10px; font-size: 12px; }
+            .admin-management-header { flex-direction: column; gap: 10px; }
+            .rankings-sidebar { flex-direction: column; }
+            .stats { flex-wrap: wrap; }
+            .stat-card { flex: 1 1 45%; min-width: 140px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <div class="header-left">
-                <h1>🏛️ Dictum Advokatlik Firmasi</h1>
-                <p class="subtitle">Murojaatlar boshqaruv tizimi</p>
+                <h1>DICTUM <svg class="logo-scales" viewBox="0 0 80 96" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="5" r="3.5"/><rect x="38" y="8" width="4" height="72" rx="1"/><rect x="5" y="14" width="70" height="3" rx="1.5"/><rect x="24" y="80" width="32" height="4" rx="2"/><line x1="9" y1="17" x2="1" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><line x1="9" y1="17" x2="17" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M0.5 52 C1 58 5 62 9 62 C13 62 17 58 17.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><line x1="71" y1="17" x2="63" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><line x1="71" y1="17" x2="79" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M62.5 52 C63 58 67 62 71 62 C75 62 79 58 79.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></h1>
+                <p class="subtitle">Yuristlar yordamchi tizimi</p>
+            </div>
+            <div class="header-center">
+                <button class="btn btn-success" onclick="exportToPDF()" style="padding: 10px 22px; font-size: 14px;">
+                    📊 PDF Hisobot
+                </button>
             </div>
             <div class="header-right">
-                <div class="user-info">
-                    <span id="userName"></span>
-                    <span id="userRole" class="role-badge"></span>
+                <button class="header-chat-btn" onclick="toggleChat()" title="Guruh chat">
+                    <div class="header-chat-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <span class="header-chat-badge" id="headerChatBadge" style="display:none;">0</span>
+                </button>
+                <button class="profile-toggle" id="profileToggle" onclick="toggleProfileDropdown(event)">
+                    <div class="profile-avatar" id="profileAvatar">A</div>
+                    <span class="profile-role-label" id="profileRoleLabel">...</span>
+                    <span class="profile-chevron">&#9660;</span>
+                </button>
+                <div class="profile-dropdown" id="profileDropdown">
+                    <div class="profile-dropdown-header">
+                        <div class="dd-avatar" id="ddAvatar">A</div>
+                        <div class="dd-name" id="ddName"></div>
+                        <div class="dd-role" id="ddRole"></div>
+                    </div>
+                    <div class="profile-dropdown-menu">
+                        <button class="profile-dropdown-item logout-item" onclick="logout()">
+                            <span class="dd-icon">🚪</span> Chiqish
+                        </button>
+                    </div>
                 </div>
-                <button class="logout-btn" onclick="logout()">Chiqish</button>
+                <!-- Hidden spans for backward compatibility -->
+                <span id="userName" style="display:none;"></span>
+                <span id="userRole" style="display:none;"></span>
             </div>
         </header>
         
         <div class="stats">
-            <div class="stat-card">
-                <h3>Jami Murojaatlar</h3>
-                <div class="number" id="totalRequests">0</div>
+            <div class="stat-card" onclick="scrollToRequests('')">
+                <div class="stat-icon">&#128203;</div>
+                <div class="stat-info">
+                    <div class="number" id="totalRequests">0</div>
+                    <h3>Jami</h3>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Kutilmoqda</h3>
-                <div class="number pending" id="pendingRequests">0</div>
+            <div class="stat-card card-pending" onclick="scrollToRequests('pending')">
+                <div class="stat-icon">&#9203;</div>
+                <div class="stat-info">
+                    <div class="stat-badges">
+                        <span class="stat-badge-combined"><span class="seg-pending">+<span id="pendingRequests">0</span> kutilmoqda</span><span class="seg-rejected">+<span id="rejectedRequests">0</span> rad etilgan</span></span>
+                    </div>
+                    <h3>Jarayonda</h3>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Student javobi</h3>
-                <div class="number student-responded" id="studentResponded">0</div>
+            <div class="stat-card card-student" onclick="scrollToRequests('student_responded')">
+                <div class="stat-icon">&#127891;</div>
+                <div class="stat-info">
+                    <div class="number student-responded" id="studentResponded">0</div>
+                    <h3>Student javobi</h3>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Javob Berilgan</h3>
-                <div class="number answered" id="answeredRequests">0</div>
+            <div class="stat-card card-answered" onclick="scrollToRequests('answered')">
+                <div class="stat-icon">&#9989;</div>
+                <div class="stat-info">
+                    <div class="number answered" id="answeredRequests">0</div>
+                    <h3>Javob berilgan</h3>
+                </div>
             </div>
         </div>
         
-        <div class="requests-container">
-            <div class="controls">
-                <div class="controls-header">
-                    <h2>Murojaatlar ro'yxati</h2>
-                    <button class="btn btn-success" onclick="exportToExcel()">
-                        📊 Excel ga eksport qilish
-                    </button>
-                </div>
-                <div class="filter-section">
-                    <select id="categoryFilter" onchange="filterRequests()">
-                        <option value="">Barcha yo'nalishlar</option>
-                        <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
-                        <option value="Jinoyat huquqi">Jinoyat huquqi</option>
-                        <option value="Mehnat huquqi">Mehnat huquqi</option>
-                        <option value="Oila huquqi">Oila huquqi</option>
-                        <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
-                        <option value="Ko'chmas mulk">Ko'chmas mulk</option>
-                        <option value="Soliq huquqi">Soliq huquqi</option>
-                        <option value="Ma'muriy huquq">Ma'muriy huquq</option>
-                        <option value="Boshqa">Boshqa</option>
-                    </select>
-                    
-                    <select id="assigneeFilter" onchange="filterRequests()">
-                        <option value="">Barcha javob beruvchilar</option>
-                        <option value="Master Admin">Master Admin</option>
-                        <option value="Student Admin 1">Student Admin 1</option>
-                    </select>
-                    
-                    <select id="statusFilter" onchange="filterRequests()">
-                        <option value="">Barcha statuslar</option>
-                        <option value="pending">Kutilmoqda</option>
-                        <option value="student_responded">Student javobi</option>
-                        <option value="answered">Javob berilgan</option>
-                        <option value="rejected">Rad etilgan</option>
-                    </select>
-                    
-                    <select id="assignedFilter" onchange="filterRequests()">
-                        <option value="">Barcha tayinlovlar</option>
-                        <option value="unassigned">Tayinlanmagan</option>
-                        <option value="assigned">Tayinlangan</option>
-                    </select>
-                    
-                    <button class="btn" onclick="clearFilters()" style="background: #95a5a6; padding: 8px 15px;">
-                        ↺ Tozalash
-                    </button>
+        <!-- Admin Management Section -->
+        <div class="admin-management" id="adminManagementSection">
+            <div class="admin-management-header">
+                <h2>Jamoa holati</h2>
+                <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="openAddMemberModal()">+ Yangi a'zo qo'shish</button>
+            </div>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ism</th>
+                        <th>Username</th>
+                        <th>Rol</th>
+                        <th>Ish vaqti (Smena)</th>
+                        <th>Holati</th>
+                        <th>Oxirgi faollik</th>
+                        <th id="actionsColHeader" style="display:none; text-align:center;">Amallar</th>
+                    </tr>
+                </thead>
+                <tbody id="adminTableBody">
+                    <tr><td colspan="8" style="text-align:center; color:#7f8c8d;">Yuklanmoqda...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Monte Carlo Simulation Section -->
+        <div class="monte-carlo-section" id="monteCarloSection">
+            <div class="mc-card">
+                <h3><span class="mc-icon">📈</span> Murojaatlar prognozi (Monte Carlo)</h3>
+                <div id="mcForecast">
+                    <div class="forecast-bars" id="forecastBars"></div>
+                    <div class="mc-summary" id="forecastSummary"></div>
                 </div>
             </div>
-            <div id="requestsList">
-                <div class="loading">Yuklanmoqda...</div>
+            <div class="mc-card">
+                <h3><span class="mc-icon">⏱️</span> Hal qilish vaqti tahlili</h3>
+                <div id="mcResolution">
+                    <div class="mc-percentile-bar" id="resolutionBar"></div>
+                    <div class="mc-percentile-labels" id="resolutionLabels"></div>
+                    <div class="mc-resolution-stats" id="resolutionStats"></div>
+                    <div class="mc-summary" id="resolutionSummary"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content-area">
+            <div class="requests-container" id="requestsSection">
+                <div class="controls">
+                    <div class="controls-header">
+                        <h2>Murojaatlar ro'yxati</h2>
+                    </div>
+                    <div class="filter-section">
+                        <select id="categoryFilter" onchange="filterRequests()">
+                            <option value="">Barcha yo'nalishlar</option>
+                            <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
+                            <option value="Jinoyat huquqi">Jinoyat huquqi</option>
+                            <option value="Mehnat huquqi">Mehnat huquqi</option>
+                            <option value="Oila huquqi">Oila huquqi</option>
+                            <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
+                            <option value="Ko'chmas mulk">Ko'chmas mulk</option>
+                            <option value="Soliq huquqi">Soliq huquqi</option>
+                            <option value="Ma'muriy huquq">Ma'muriy huquq</option>
+                            <option value="Boshqa">Boshqa</option>
+                        </select>
+
+                        <select id="assigneeFilter" onchange="filterRequests()">
+                            <option value="">Barcha javob beruvchilar</option>
+                            <option value="Master Admin">Master Admin</option>
+                            <option value="Student Admin 1">Student Admin 1</option>
+                        </select>
+
+                        <select id="statusFilter" onchange="filterRequests()">
+                            <option value="">Barcha statuslar</option>
+                            <option value="pending">Kutilmoqda</option>
+                            <option value="student_responded">Student javobi</option>
+                            <option value="answered">Javob berilgan</option>
+                        </select>
+
+                        <select id="assignedFilter" onchange="filterRequests()">
+                            <option value="">Barcha tayinlovlar</option>
+                            <option value="unassigned">Tayinlanmagan</option>
+                            <option value="assigned">Tayinlangan</option>
+                        </select>
+
+                        <button class="btn" onclick="clearFilters()" style="background: #95a5a6; padding: 8px 15px;">
+                            ↺ Tozalash
+                        </button>
+                    </div>
+                </div>
+                <div id="requestsList">
+                    <div class="loading">Yuklanmoqda...</div>
+                </div>
+            </div>
+
+            <!-- Rankings Sidebar -->
+            <div class="rankings-sidebar">
+                <div class="ranking-card">
+                    <h3>Yuristlar reytingi</h3>
+                    <div id="lawyerRankings"><div style="color:#95a5a6; font-size:12px;">Yuklanmoqda...</div></div>
+                </div>
+                <div class="ranking-card">
+                    <h3 class="student-title">Studentlar reytingi</h3>
+                    <div id="studentRankings"><div style="color:#95a5a6; font-size:12px;">Yuklanmoqda...</div></div>
+                </div>
             </div>
         </div>
     </div>
-    
+
+    <!-- Admin Creation Modal -->
+    <div class="admin-modal-overlay" id="addMemberModal">
+        <div class="admin-modal">
+            <h3>Yangi a'zo qo'shish</h3>
+            <div class="form-group">
+                <label>To'liq ism</label>
+                <input type="text" id="newAdminName" placeholder="Familiya Ism">
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="newAdminUsername" placeholder="username">
+            </div>
+            <div class="form-group">
+                <label>Parol</label>
+                <input type="password" id="newAdminPassword" placeholder="Kamida 6 ta belgi">
+            </div>
+            <div class="form-group">
+                <label>Rol</label>
+                <select id="newAdminRole">
+                    <option value="student">Student</option>
+                    <option value="lawyer">Yurist</option>
+                    <option value="master">Admin</option>
+                </select>
+            </div>
+            <div class="admin-modal-btns">
+                <button class="cancel-btn" onclick="closeAddMemberModal()">Bekor qilish</button>
+                <button class="save-btn" onclick="createNewAdmin()">Saqlash</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Member Modal -->
+    <div class="admin-modal-overlay" id="editMemberModal">
+        <div class="admin-modal">
+            <h3>A'zoni tahrirlash</h3>
+            <input type="hidden" id="editAdminId">
+            <div class="form-group">
+                <label>To'liq ism</label>
+                <input type="text" id="editAdminName" placeholder="Familiya Ism">
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="editAdminUsername" placeholder="username">
+            </div>
+            <div class="form-group">
+                <label>Yangi parol <small style="color:#95a5a6;">(bo'sh qoldiring o'zgartirmaslik uchun)</small></label>
+                <input type="password" id="editAdminPassword" placeholder="Yangi parol (ixtiyoriy)">
+            </div>
+            <div class="form-group">
+                <label>Rol</label>
+                <select id="editAdminRole">
+                    <option value="student">Student</option>
+                    <option value="lawyer">Yurist</option>
+                    <option value="master">Admin</option>
+                </select>
+            </div>
+            <div class="admin-modal-btns">
+                <button class="cancel-btn" onclick="closeEditMemberModal()">Bekor qilish</button>
+                <button class="save-btn" onclick="saveEditAdmin()">Saqlash</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="admin-modal-overlay" id="deleteConfirmModal">
+        <div class="admin-modal" style="max-width: 400px;">
+            <h3 style="color: #e74c3c;">A'zoni o'chirish</h3>
+            <p id="deleteConfirmText" style="color: #555; margin: 15px 0; font-size: 14px; line-height: 1.5;"></p>
+            <input type="hidden" id="deleteAdminId">
+            <div class="admin-modal-btns">
+                <button class="cancel-btn" onclick="closeDeleteConfirmModal()">Bekor qilish</button>
+                <button class="save-btn" style="background: #e74c3c;" onclick="deleteAdmin()" onmouseover="this.style.background='#c0392b'" onmouseout="this.style.background='#e74c3c'">O'chirish</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden chart canvases for PDF export (high-res) -->
+    <div id="chartContainer" style="position: absolute; left: -9999px; top: -9999px;">
+        <canvas id="statusChart" width="900" height="600"></canvas>
+        <canvas id="categoryChart" width="900" height="600"></canvas>
+        <canvas id="monthlyChart" width="1200" height="500"></canvas>
+        <canvas id="typeChart" width="900" height="600"></canvas>
+    </div>
+
     <div id="requestModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal()">&times;</span>
             <div id="modalContent"></div>
         </div>
     </div>
-    
+
+    <!-- Chat Notification Container -->
+    <div class="chat-notification-container" id="chatNotifContainer"></div>
+
+    <!-- Community Chat Panel -->
+    <div class="chat-panel" id="chatPanel">
+        <div class="chat-header">
+            <div>
+                <h3>Guruh Chat</h3>
+                <div class="chat-header-info">Yuristlar va studentlar uchun</div>
+            </div>
+            <button class="chat-close-btn" onclick="toggleChat()">&times;</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div style="padding:40px 20px; text-align:center; color:#7f8c8d;">Xabarlar yuklanmoqda...</div>
+        </div>
+        <div class="chat-input-area">
+            <div id="chatReplyPreview" style="display:none;" class="chat-reply-preview">
+                <div class="chat-reply-preview-info">
+                    <div class="chat-reply-preview-sender" id="replyPreviewSender"></div>
+                    <div class="chat-reply-preview-text" id="replyPreviewText"></div>
+                </div>
+                <button class="chat-reply-preview-close" onclick="cancelReply()">&times;</button>
+            </div>
+            <div class="mention-dropdown" id="mentionDropdown"></div>
+            <div class="chat-input-wrapper">
+                <textarea class="chat-input" id="chatInput"
+                    placeholder="Xabar yozing... (@ bilan mention)"
+                    rows="1"
+                    onkeydown="handleChatKeydown(event)"
+                    oninput="handleChatInput(event)"></textarea>
+                <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()" title="Yuborish">&#10148;</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Fetch interceptor for single-session forced logout
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+            const response = await originalFetch.apply(this, args);
+            if (response.status === 401) {
+                try {
+                    const clone = response.clone();
+                    const data = await clone.json();
+                    if (data.error && data.error.includes('Boshqa qurilmadan')) {
+                        alert('Boshqa qurilmadan kirilgan. Iltimos, qayta kiring.');
+                        window.location.href = '/login.html';
+                        return response;
+                    }
+                } catch (e) {}
+            }
+            return response;
+        };
+
         let requests = [];
         let currentUser = {};
         let allAdmins = [];
+        let openFolders = new Set();
+        let openDateGroups = new Set();
         let currentFilters = {
             category: '',
             assignee: '',
-            status: '',
+            status: 'pending',
             assigned: ''
         };
         
@@ -592,25 +2126,484 @@
                 const response = await fetch('/api/user-info');
                 const data = await response.json();
                 currentUser = data;
-                
-                document.getElementById('userName').textContent = data.fullName || data.username;
+
+                const name = data.fullName || data.username;
+                const initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+                const roleNames = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
+                const roleText = roleNames[data.role] || data.role;
+                const roleClass = 'role-' + data.role;
+
+                // Profile toggle (closed state)
+                const avatar = document.getElementById('profileAvatar');
+                avatar.textContent = initials;
+                avatar.className = 'profile-avatar ' + roleClass;
+                const roleLabel = document.getElementById('profileRoleLabel');
+                roleLabel.innerHTML = `<span class="profile-role-tag ${data.role}-tag">${roleText}</span>`;
+
+                // Dropdown header
+                const ddAvatar = document.getElementById('ddAvatar');
+                ddAvatar.textContent = initials;
+                ddAvatar.className = 'dd-avatar ' + roleClass;
+                document.getElementById('ddName').textContent = name;
+                document.getElementById('ddRole').textContent = roleText;
+
+                // Hidden spans for backward compatibility
+                document.getElementById('userName').textContent = name;
                 const roleBadge = document.getElementById('userRole');
                 roleBadge.textContent = data.role === 'master' ? 'Master Admin' : 'Student Admin';
-                roleBadge.className = 'role-badge role-' + data.role;
+                roleBadge.className = 'role-badge ' + roleClass;
             } catch (error) {
                 console.error('Error loading user info:', error);
             }
+        }
+
+        function toggleProfileDropdown(e) {
+            e.stopPropagation();
+            document.getElementById('profileDropdown').classList.toggle('open');
+            document.getElementById('profileToggle').classList.toggle('open');
+        }
+        function closeProfileDropdown() {
+            document.getElementById('profileDropdown').classList.remove('open');
+            document.getElementById('profileToggle').classList.remove('open');
         }
         
         async function loadAdmins() {
             try {
                 const response = await fetch('/api/admins');
                 allAdmins = await response.json();
+                renderAdminTable();
             } catch (error) {
                 console.error('Error loading admins:', error);
             }
         }
-        
+
+        function formatTimeslot(timeStr) {
+            if (!timeStr) return '';
+            return timeStr.substring(0, 5);
+        }
+
+        function checkIsOnDuty(dutyStart, dutyEnd) {
+            if (!dutyStart || !dutyEnd) return false;
+            const now = new Date();
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+            const [startH, startM] = dutyStart.split(':').map(Number);
+            const [endH, endM] = dutyEnd.split(':').map(Number);
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+            if (startMinutes <= endMinutes) {
+                return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+            } else {
+                return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+            }
+        }
+
+        function formatTimeAgo(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 1) return 'Hozir';
+            if (diffMins < 60) return `${diffMins} daqiqa oldin`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours} soat oldin`;
+            const diffDays = Math.floor(diffHours / 24);
+            return `${diffDays} kun oldin`;
+        }
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('adminTableBody');
+            if (!tbody || allAdmins.length === 0) return;
+
+            const isMaster = currentUser.role === 'master';
+            const roleLabels = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
+            const roleBadgeColors = { 'master': '#2c3e50', 'lawyer': '#2c3e50', 'student': '#2c3e50' };
+
+            // Show/hide actions column based on role
+            const actionsHeader = document.getElementById('actionsColHeader');
+            if (actionsHeader) actionsHeader.style.display = isMaster ? '' : 'none';
+
+            tbody.innerHTML = allAdmins.map((admin, i) => {
+                const isOwnRow = admin.id === currentUser.adminId;
+                const canEdit = isOwnRow || isMaster;
+
+                // Timeslot display
+                let timeslotInner;
+                if (admin.duty_start && admin.duty_end) {
+                    const isOnDuty = checkIsOnDuty(admin.duty_start, admin.duty_end);
+                    timeslotInner = `<span class="timeslot-display ${isOnDuty ? 'on-duty-time' : 'off-duty-time'}">${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}</span>`;
+                } else {
+                    timeslotInner = '<span class="timeslot-display not-set">Belgilanmagan</span>';
+                }
+                const editBtn = canEdit ? `<button class="timeslot-edit-btn" onclick="editTimeslot(${admin.id}, '${admin.duty_start || ''}', '${admin.duty_end || ''}')">&#9998;</button>` : '';
+                const timeslotHtml = `<div class="timeslot-cell-inner">${timeslotInner}${editBtn}</div>`;
+
+                // Status display
+                const statusHtml = admin.is_active
+                    ? '<span class="status-indicator active"><span class="status-dot active"></span>Aktiv</span>'
+                    : '<span class="status-indicator inactive"><span class="status-dot inactive"></span>Nofaol</span>';
+
+                // Last active display
+                let lastActiveHtml = '<span class="last-active-text">Hech qachon</span>';
+                if (admin.last_active_at) {
+                    lastActiveHtml = `<span class="last-active-text">${formatTimeAgo(admin.last_active_at)}</span>`;
+                }
+
+                // Actions column (master only)
+                let actionsHtml = '';
+                if (isMaster) {
+                    actionsHtml = `<td class="actions-cell">
+                        <button class="action-btn edit-btn" onclick="openEditMemberModal(${admin.id})" title="Tahrirlash">&#9998;</button>
+                        ${!isOwnRow ? `<button class="action-btn delete-btn" onclick="confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish">&#128465;</button>` : ''}
+                    </td>`;
+                }
+
+                return `<tr class="${isOwnRow ? 'own-row' : ''}">
+                    <td>${i + 1}</td>
+                    <td><strong>${admin.full_name}</strong>${isOwnRow ? ' <small style="color:#3498db;">(siz)</small>' : ''}</td>
+                    <td>@${admin.username}</td>
+                    <td><span class="role-badge role-${admin.role}">${roleLabels[admin.role] || admin.role}</span></td>
+                    <td id="timeslot-cell-${admin.id}">${timeslotHtml}</td>
+                    <td>${statusHtml}</td>
+                    <td>${lastActiveHtml}</td>
+                    ${actionsHtml}
+                </tr>`;
+            }).join('');
+        }
+
+        function editTimeslot(adminId, currentStart, currentEnd) {
+            const cell = document.getElementById(`timeslot-cell-${adminId}`);
+            if (!cell) return;
+            cell.innerHTML = `
+                <div class="timeslot-form">
+                    <input type="time" id="dutyStart-${adminId}" value="${formatTimeslot(currentStart)}" />
+                    <span>-</span>
+                    <input type="time" id="dutyEnd-${adminId}" value="${formatTimeslot(currentEnd)}" />
+                    <button class="timeslot-save-btn" onclick="saveTimeslot(${adminId})">&#10003;</button>
+                    <button class="timeslot-cancel-btn" onclick="loadAdmins()">&#10005;</button>
+                </div>`;
+        }
+
+        async function saveTimeslot(adminId) {
+            const dutyStart = document.getElementById(`dutyStart-${adminId}`).value;
+            const dutyEnd = document.getElementById(`dutyEnd-${adminId}`).value;
+            if (!dutyStart || !dutyEnd) {
+                alert('Iltimos, ish vaqti boshlanish va tugashini kiriting');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/admins/${adminId}/timeslot`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ duty_start: dutyStart, duty_end: dutyEnd })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    loadAdmins();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (error) {
+                console.error('Error saving timeslot:', error);
+                alert('Serverga ulanib bo\'lmadi');
+            }
+        }
+
+        // ========== RANKINGS ==========
+        async function loadRankings() {
+            try {
+                const response = await fetch('/api/rankings');
+                const data = await response.json();
+                renderRankings('lawyerRankings', data.lawyers, 'answered_count', 'javob');
+                renderRankings('studentRankings', data.students, 'response_count', 'javob');
+            } catch (error) {
+                console.error('Error loading rankings:', error);
+            }
+        }
+
+        function renderRankings(containerId, items, countField, countLabel) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            if (!items || items.length === 0) {
+                container.innerHTML = '<div style="color:#95a5a6; font-size:12px; text-align:center; padding:10px;">Ma\'lumot yo\'q</div>';
+                return;
+            }
+            container.innerHTML = items.map((item, i) => {
+                const medalClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default';
+                const count = parseInt(item[countField]) || 0;
+                const avgHours = item.avg_hours ? parseFloat(item.avg_hours).toFixed(1) : '-';
+                const stars = item.stars || 1;
+                const starsHtml = '<span style="color:#f39c12;">' + '&#9733;'.repeat(stars) + '</span>' +
+                    '<span style="color:#ddd;">' + '&#9733;'.repeat(5 - stars) + '</span>';
+                return `<div class="ranking-item">
+                    <div class="rank-medal ${medalClass}">${i + 1}</div>
+                    <div class="ranking-info">
+                        <div class="name">${item.full_name}</div>
+                        <div class="stats-line">${count} ${countLabel} &middot; ${avgHours} soat</div>
+                    </div>
+                    <div class="ranking-stars">${starsHtml}</div>
+                </div>`;
+            }).join('');
+        }
+
+        // ========== ADMIN CREATION ==========
+        function openAddMemberModal() {
+            document.getElementById('addMemberModal').classList.add('active');
+            document.getElementById('newAdminName').value = '';
+            document.getElementById('newAdminUsername').value = '';
+            document.getElementById('newAdminPassword').value = '';
+            document.getElementById('newAdminRole').value = 'student';
+        }
+
+        function closeAddMemberModal() {
+            document.getElementById('addMemberModal').classList.remove('active');
+        }
+
+        async function createNewAdmin() {
+            const full_name = document.getElementById('newAdminName').value.trim();
+            const username = document.getElementById('newAdminUsername').value.trim();
+            const password = document.getElementById('newAdminPassword').value;
+            const role = document.getElementById('newAdminRole').value;
+
+            if (!full_name || !username || !password) {
+                alert('Iltimos, barcha maydonlarni to\'ldiring');
+                return;
+            }
+            if (password.length < 6) {
+                alert('Parol kamida 6 ta belgidan iborat bo\'lishi kerak');
+                return;
+            }
+            try {
+                const response = await fetch('/api/admins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ full_name, username, password, role })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    closeAddMemberModal();
+                    loadAdmins();
+                    loadRankings();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (error) {
+                console.error('Error creating admin:', error);
+                alert('Serverga ulanib bo\'lmadi');
+            }
+        }
+
+        // ========== EDIT/DELETE ADMIN ==========
+        function openEditMemberModal(adminId) {
+            const admin = allAdmins.find(a => a.id === adminId);
+            if (!admin) return;
+            document.getElementById('editAdminId').value = admin.id;
+            document.getElementById('editAdminName').value = admin.full_name;
+            document.getElementById('editAdminUsername').value = admin.username;
+            document.getElementById('editAdminPassword').value = '';
+            document.getElementById('editAdminRole').value = admin.role;
+            document.getElementById('editMemberModal').classList.add('active');
+        }
+
+        function closeEditMemberModal() {
+            document.getElementById('editMemberModal').classList.remove('active');
+        }
+
+        async function saveEditAdmin() {
+            const id = document.getElementById('editAdminId').value;
+            const full_name = document.getElementById('editAdminName').value.trim();
+            const username = document.getElementById('editAdminUsername').value.trim();
+            const password = document.getElementById('editAdminPassword').value;
+            const role = document.getElementById('editAdminRole').value;
+
+            if (!full_name || !username) {
+                alert('Iltimos, ism va username to\'ldiring');
+                return;
+            }
+            try {
+                const body = { full_name, username, role };
+                if (password) body.password = password;
+                const response = await fetch(`/api/admins/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    closeEditMemberModal();
+                    loadAdmins();
+                    loadRankings();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (error) {
+                console.error('Error updating admin:', error);
+                alert('Serverga ulanib bo\'lmadi');
+            }
+        }
+
+        function confirmDeleteAdmin(adminId, adminName) {
+            document.getElementById('deleteAdminId').value = adminId;
+            document.getElementById('deleteConfirmText').textContent = `"${adminName}" a'zosini o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.`;
+            document.getElementById('deleteConfirmModal').classList.add('active');
+        }
+
+        function closeDeleteConfirmModal() {
+            document.getElementById('deleteConfirmModal').classList.remove('active');
+        }
+
+        async function deleteAdmin() {
+            const id = document.getElementById('deleteAdminId').value;
+            try {
+                const response = await fetch(`/api/admins/${id}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (response.ok) {
+                    closeDeleteConfirmModal();
+                    loadAdmins();
+                    loadRankings();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (error) {
+                console.error('Error deleting admin:', error);
+                alert('Serverga ulanib bo\'lmadi');
+            }
+        }
+
+        // ========== MONTE CARLO ==========
+        async function loadMonteCarlo() {
+            try {
+                const response = await fetch('/api/monte-carlo');
+                const data = await response.json();
+                renderForecast(data.volume);
+                renderResolution(data.resolution);
+            } catch (error) {
+                console.error('Error loading Monte Carlo:', error);
+            }
+        }
+
+        function runMonteCarloSim(mean, std, days, simCount) {
+            // Box-Muller transform for normal distribution
+            function randNormal(m, s) {
+                let u = 0, v = 0;
+                while (u === 0) u = Math.random();
+                while (v === 0) v = Math.random();
+                return m + s * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+            }
+            const results = [];
+            for (let d = 0; d < days; d++) {
+                const dayResults = [];
+                for (let s = 0; s < simCount; s++) {
+                    dayResults.push(Math.max(0, Math.round(randNormal(mean, std))));
+                }
+                dayResults.sort((a, b) => a - b);
+                results.push({
+                    p10: dayResults[Math.floor(simCount * 0.1)],
+                    p50: dayResults[Math.floor(simCount * 0.5)],
+                    p90: dayResults[Math.floor(simCount * 0.9)]
+                });
+            }
+            return results;
+        }
+
+        function renderForecast(volume) {
+            const barsContainer = document.getElementById('forecastBars');
+            const summaryContainer = document.getElementById('forecastSummary');
+            if (!barsContainer) return;
+
+            if (volume.sample_size < 3) {
+                barsContainer.innerHTML = '<div style="color:#95a5a6; text-align:center; padding:40px 0;">Yetarli ma\'lumot yo\'q (kamida 3 kun kerak)</div>';
+                summaryContainer.innerHTML = '';
+                return;
+            }
+
+            const sim = runMonteCarloSim(volume.mean, volume.std, 7, 1000);
+            const maxVal = Math.max(...sim.map(s => s.p90), 1);
+            const dayNames = ['Yak', 'Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan'];
+            const today = new Date();
+
+            barsContainer.innerHTML = sim.map((s, i) => {
+                const date = new Date(today);
+                date.setDate(date.getDate() + i + 1);
+                const dayName = dayNames[date.getDay()];
+                const barHeight = Math.max(8, (s.p90 / maxVal) * 120);
+                const p50Pos = s.p90 > 0 ? ((s.p90 - s.p50) / s.p90) * barHeight : 0;
+                return `<div class="forecast-bar-group">
+                    <div class="forecast-bar-value">${s.p50}</div>
+                    <div class="forecast-bar" style="height:${barHeight}px;">
+                        <div class="range-bar" style="height:100%; opacity:0.6;"></div>
+                        <div class="p50-line" style="bottom:${barHeight - p50Pos}px;"></div>
+                    </div>
+                    <div class="forecast-bar-label">${dayName}</div>
+                </div>`;
+            }).join('');
+
+            const weeklyMin = sim.reduce((s, d) => s + d.p10, 0);
+            const weeklyMax = sim.reduce((s, d) => s + d.p90, 0);
+            const weeklyExpected = sim.reduce((s, d) => s + d.p50, 0);
+
+            summaryContainer.innerHTML = `
+                <div class="mc-summary-row"><span class="label">Kunlik o'rtacha:</span><span class="value">${volume.mean} ta murojaat</span></div>
+                <div class="mc-summary-row"><span class="label">Kelgusi hafta (kutilayotgan):</span><span class="value">${weeklyExpected} ta</span></div>
+                <div class="mc-summary-row"><span class="label">Oraliq (80% ishonch):</span><span class="value">${weeklyMin} - ${weeklyMax} ta</span></div>
+                <div class="mc-summary-row"><span class="label">Tahlil qilingan kunlar:</span><span class="value">${volume.sample_size} kun</span></div>`;
+        }
+
+        function renderResolution(resolution) {
+            const barEl = document.getElementById('resolutionBar');
+            const labelsEl = document.getElementById('resolutionLabels');
+            const statsEl = document.getElementById('resolutionStats');
+            const summaryEl = document.getElementById('resolutionSummary');
+            if (!barEl) return;
+
+            if (resolution.sample_size < 2) {
+                statsEl.innerHTML = '<div style="color:#95a5a6; text-align:center; padding:20px; grid-column:1/-1;">Yetarli ma\'lumot yo\'q</div>';
+                barEl.innerHTML = '';
+                labelsEl.innerHTML = '';
+                summaryEl.innerHTML = '';
+                return;
+            }
+
+            const maxH = Math.max(resolution.p90_hours, 1);
+            const p10Pct = (resolution.p10_hours / maxH) * 100;
+            const p50Pct = (resolution.p50_hours / maxH) * 100;
+
+            barEl.innerHTML = `
+                <div class="mc-percentile-fill" style="left:0; width:${p10Pct}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
+                <div class="mc-percentile-fill" style="left:${p10Pct}%; width:${p50Pct - p10Pct}%; background: linear-gradient(90deg, #f39c12, #e67e22);"></div>
+                <div class="mc-percentile-fill" style="left:${p50Pct}%; width:${100 - p50Pct}%; background: linear-gradient(90deg, #e74c3c, #c0392b);"></div>`;
+
+            labelsEl.innerHTML = `
+                <span>0 soat</span>
+                <span>P10: ${resolution.p10_hours}s</span>
+                <span>P50: ${resolution.p50_hours}s</span>
+                <span>P90: ${resolution.p90_hours}s</span>`;
+
+            function formatHours(h) {
+                if (h < 1) return Math.round(h * 60) + ' daq';
+                if (h < 24) return h.toFixed(1) + ' soat';
+                return (h / 24).toFixed(1) + ' kun';
+            }
+
+            statsEl.innerHTML = `
+                <div class="mc-res-stat best">
+                    <div class="stat-val">${formatHours(resolution.p10_hours)}</div>
+                    <div class="stat-label">Eng tez (P10)</div>
+                </div>
+                <div class="mc-res-stat typical">
+                    <div class="stat-val">${formatHours(resolution.p50_hours)}</div>
+                    <div class="stat-label">Odatiy (P50)</div>
+                </div>
+                <div class="mc-res-stat worst">
+                    <div class="stat-val">${formatHours(resolution.p90_hours)}</div>
+                    <div class="stat-label">Eng sekin (P90)</div>
+                </div>`;
+
+            summaryEl.innerHTML = `
+                <div class="mc-summary-row"><span class="label">O'rtacha hal qilish vaqti:</span><span class="value">${formatHours(resolution.mean_hours)}</span></div>
+                <div class="mc-summary-row"><span class="label">80% hollarda:</span><span class="value">${formatHours(resolution.p10_hours)} - ${formatHours(resolution.p90_hours)} ichida</span></div>
+                <div class="mc-summary-row"><span class="label">Tahlil qilingan murojaatlar:</span><span class="value">${resolution.sample_size} ta</span></div>`;
+        }
+
         async function loadRequests() {
             try {
                 const response = await fetch('/api/requests');
@@ -644,6 +2637,12 @@
             );
         }
         
+        function scrollToRequests(statusValue) {
+            document.getElementById('statusFilter').value = statusValue;
+            filterRequests();
+            document.getElementById('requestsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
         function clearFilters() {
             document.getElementById('categoryFilter').value = '';
             document.getElementById('assigneeFilter').value = '';
@@ -660,11 +2659,45 @@
             displayRequests();
         }
         
+        function isUnanswered(req) {
+            return req.status === 'pending' || req.status === 'rejected' || req.status === 'student_responded' || req.status === 'lawyer_approved';
+        }
+
+        function getDatePeriod(dateStr) {
+            const now = new Date();
+            const date = new Date(dateStr);
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const yesterdayStart = new Date(todayStart);
+            yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+            const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
+            const weekStart = new Date(todayStart);
+            weekStart.setDate(weekStart.getDate() - dayOfWeek + 1);
+
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+            if (date >= todayStart) return 'today';
+            if (date >= yesterdayStart) return 'yesterday';
+            if (date >= weekStart) return 'this_week';
+            if (date >= monthStart) return 'this_month';
+            return 'older';
+        }
+
+        const datePeriodLabels = {
+            'today': { label: 'Bugun', icon: '📅' },
+            'yesterday': { label: 'Kecha', icon: '📆' },
+            'this_week': { label: 'Shu hafta', icon: '🗓️' },
+            'this_month': { label: 'Shu oy', icon: '📋' },
+            'older': { label: 'Oldingi', icon: '📦' }
+        };
+
+        const datePeriodOrder = ['today', 'yesterday', 'this_week', 'this_month', 'older'];
+
         function displayRequests(filterCategory = '', filterAssignee = '', filterStatus = '', filterAssigned = '') {
             const container = document.getElementById('requestsList');
-            
+
             let filteredRequests = requests;
-            
+
             if (filterCategory) {
                 filteredRequests = filteredRequests.filter(r => r.category === filterCategory);
             }
@@ -672,63 +2705,229 @@
                 filteredRequests = filteredRequests.filter(r => r.responded_by === filterAssignee);
             }
             if (filterStatus) {
-                filteredRequests = filteredRequests.filter(r => r.status === filterStatus);
+                if (filterStatus === 'pending') {
+                    filteredRequests = filteredRequests.filter(r => r.status === 'pending' || r.status === 'rejected');
+                } else {
+                    filteredRequests = filteredRequests.filter(r => r.status === filterStatus);
+                }
             }
             if (filterAssigned === 'unassigned') {
                 filteredRequests = filteredRequests.filter(r => !r.assigned_to);
             } else if (filterAssigned === 'assigned') {
                 filteredRequests = filteredRequests.filter(r => r.assigned_to);
             }
-            
+
+            // For students/lawyers: assigned to me first, then unassigned, then others
+            if (currentUser.role === 'student' || currentUser.role === 'lawyer') {
+                const myId = currentUser.adminId;
+                filteredRequests = [...filteredRequests].sort((a, b) => {
+                    const aIsMe = (a.assigned_to === myId || a.assigned_student_id === myId) ? 0 : 1;
+                    const bIsMe = (b.assigned_to === myId || b.assigned_student_id === myId) ? 0 : 1;
+                    if (aIsMe !== bIsMe) return aIsMe - bIsMe;
+                    if (aIsMe === 1 && bIsMe === 1) {
+                        const aUnassigned = (!a.assigned_to && !a.assigned_student_id) ? 0 : 1;
+                        const bUnassigned = (!b.assigned_to && !b.assigned_student_id) ? 0 : 1;
+                        if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned;
+                    }
+                    const aPending = a.status === 'pending' ? 0 : 1;
+                    const bPending = b.status === 'pending' ? 0 : 1;
+                    if (aPending !== bPending) return aPending - bPending;
+                    return new Date(b.created_at) - new Date(a.created_at);
+                });
+            }
+
             if (filteredRequests.length === 0) {
-                container.innerHTML = 
+                container.innerHTML =
                     '<div class="empty-state"><h2>Hech qanday murojaat topilmadi</h2></div>';
                 return;
             }
-            
-            container.innerHTML = filteredRequests.map(req => {
-                const needsApproval = req.status === 'student_responded' && currentUser.role === 'master';
-                const statusText = {
-                    'pending': 'Kutilmoqda',
-                    'student_responded': 'Student javobi (Tasdiq kutilmoqda)',
-                    'answered': 'Javob berilgan',
-                    'rejected': 'Rad etilgan'
-                };
-                
-                return `
-                <div class="request-item ${needsApproval ? 'needs-approval' : ''}" onclick="showRequestDetail(${req.id})">
-                    <div class="request-header">
-                        <div class="client-name">${req.first_name || req.name || 'N/A'} (@${req.username || 'N/A'})</div>
-                        <span class="status-badge status-${req.status}">
-                            ${statusText[req.status] || req.status}
-                        </span>
+
+            // Group by user (telegram_id)
+            const userGroups = {};
+            filteredRequests.forEach(req => {
+                const key = req.telegram_id;
+                if (!userGroups[key]) {
+                    userGroups[key] = {
+                        telegram_id: req.telegram_id,
+                        username: req.username,
+                        first_name: req.first_name || req.name || 'N/A',
+                        blocked: req.blocked,
+                        requests: []
+                    };
+                }
+                userGroups[key].requests.push(req);
+            });
+
+            // Sort users: assigned-to-me first, then unanswered, then by most recent
+            const myId = currentUser.adminId;
+            const sortedUsers = Object.values(userGroups).sort((a, b) => {
+                // Assigned to me first
+                const aHasMine = a.requests.some(r => r.assigned_to === myId || r.assigned_student_id === myId) ? 0 : 1;
+                const bHasMine = b.requests.some(r => r.assigned_to === myId || r.assigned_student_id === myId) ? 0 : 1;
+                if (aHasMine !== bHasMine) return aHasMine - bHasMine;
+                // Then unassigned before assigned-to-others
+                if (aHasMine === 1 && bHasMine === 1) {
+                    const aUnassigned = a.requests.some(r => !r.assigned_to && !r.assigned_student_id) ? 0 : 1;
+                    const bUnassigned = b.requests.some(r => !r.assigned_to && !r.assigned_student_id) ? 0 : 1;
+                    if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned;
+                }
+                const aUnanswered = a.requests.filter(isUnanswered).length;
+                const bUnanswered = b.requests.filter(isUnanswered).length;
+                if (aUnanswered > 0 && bUnanswered === 0) return -1;
+                if (bUnanswered > 0 && aUnanswered === 0) return 1;
+                const aLatest = new Date(a.requests[0].created_at);
+                const bLatest = new Date(b.requests[0].created_at);
+                return bLatest - aLatest;
+            });
+
+            const statusText = {
+                'pending': 'Kutilmoqda',
+                'student_responded': 'Student javobi',
+                'lawyer_approved': 'Yurist tasdiqladi',
+                'answered': 'Javob berilgan',
+                'rejected': 'Rad etilgan'
+            };
+
+            let html = '';
+
+            sortedUsers.forEach((user) => {
+                const totalReqs = user.requests.length;
+                const pendingCount = user.requests.filter(r => r.status === 'pending').length;
+                const rejectedCount = user.requests.filter(r => r.status === 'rejected').length;
+                const unansweredCount = pendingCount + rejectedCount + user.requests.filter(r => r.status === 'student_responded').length;
+                const answeredCount = user.requests.filter(r => r.status === 'answered').length;
+                const initial = (user.first_name || '?')[0].toUpperCase();
+                const folderId = `folder_${user.telegram_id}`;
+                const isFolderOpen = openFolders.has(folderId);
+
+                // Group requests by date period
+                const dateGroups = {};
+                user.requests.forEach(req => {
+                    const period = getDatePeriod(req.created_at);
+                    if (!dateGroups[period]) dateGroups[period] = [];
+                    dateGroups[period].push(req);
+                });
+
+                html += `
+                <div class="user-folder">
+                    <div class="user-folder-header ${unansweredCount > 0 ? 'has-unanswered' : ''}" onclick="toggleFolder('${folderId}')">
+                        <div class="user-folder-left">
+                            <span class="folder-toggle ${isFolderOpen ? 'open' : ''}" id="toggle_${folderId}">▶</span>
+                            <div class="user-avatar ${user.blocked ? 'blocked' : ''}">${user.blocked ? '🚫' : initial}</div>
+                            <div class="user-folder-info">
+                                <h3>${user.first_name} ${user.blocked ? '<span style="color:#e74c3c;font-size:12px;">BLOKLANGAN</span>' : ''}</h3>
+                                <div class="user-meta">@${user.username || 'N/A'}</div>
+                            </div>
+                        </div>
+                        <div class="user-folder-badges">
+                            ${(pendingCount > 0 || rejectedCount > 0) ? `<span class="folder-badge badge-combined">${pendingCount > 0 ? `<span class="seg-pending">+${pendingCount} kutilmoqda</span>` : ''}${rejectedCount > 0 ? `<span class="seg-rejected">+${rejectedCount} rad etilgan</span>` : ''}</span>` : ''}
+                            <span class="folder-badge badge-answered">${answeredCount} javob</span>
+                            <span class="folder-badge badge-total">${totalReqs} jami</span>
+                        </div>
                     </div>
-                    <div class="request-preview">
-                        ${req.request_text.substring(0, 150)}${req.request_text.length > 150 ? '...' : ''}
+                    <div class="user-folder-content ${isFolderOpen ? 'open' : ''}" id="${folderId}">
+                `;
+
+                // Render date groups in order
+                datePeriodOrder.forEach(period => {
+                    if (!dateGroups[period]) return;
+                    const periodReqs = dateGroups[period];
+                    const periodPending = periodReqs.filter(r => r.status === 'pending').length;
+                    const periodRejected = periodReqs.filter(r => r.status === 'rejected').length;
+                    const periodInfo = datePeriodLabels[period];
+                    const dateGroupId = `dg_${user.telegram_id}_${period}`;
+
+                    const isDateGroupOpen = openDateGroups.has(dateGroupId);
+                    html += `
+                    <div class="date-group">
+                        <div class="date-group-header" onclick="event.stopPropagation(); toggleDateGroup('${dateGroupId}')">
+                            <div class="date-group-left">
+                                <span class="date-icon">${periodInfo.icon}</span>
+                                ${periodInfo.label}
+                            </div>
+                            <div class="date-group-badges">
+                                ${(periodPending > 0 || periodRejected > 0) ? `<span class="date-badge-combined">${periodPending > 0 ? `<span class="seg-pending">+${periodPending}</span>` : ''}${periodRejected > 0 ? `<span class="seg-rejected">+${periodRejected}</span>` : ''}</span>` : ''}
+                                <span class="date-badge-count">${periodReqs.length} ta</span>
+                            </div>
+                        </div>
+                        <div class="date-group-content ${isDateGroupOpen ? 'open' : ''}" id="${dateGroupId}">
+                    `;
+
+                    periodReqs.forEach(req => {
+                        const needsApproval = req.status === 'student_responded' && currentUser.role === 'master';
+                        html += `
+                        <div class="request-item ${needsApproval ? 'needs-approval' : ''}" onclick="event.stopPropagation(); showRequestDetail(${req.id})">
+                            <div class="request-header">
+                                <div class="client-name">
+                                    ${req.request_text.substring(0, 80)}${req.request_text.length > 80 ? '...' : ''}
+                                </div>
+                                <span class="status-badge status-${req.status}">
+                                    ${statusText[req.status] || req.status}
+                                </span>
+                            </div>
+                            <div class="request-meta">
+                                ${req.file_id ? `<span>${getFileIcon(req.request_type)} ${req.request_type}</span>` : ''}
+                                <span>📂 ${req.category || 'N/A'}</span>
+                                ${req.assigned_lawyer_name ? `<span>👤 ${req.assigned_lawyer_name}</span>` : '<span style="color: #e67e22;">⚠️ Tayinlanmagan</span>'}
+                                <span>🕐 ${new Date(req.created_at).toLocaleString('uz-UZ')}</span>
+                                ${req.responded_by ? `<span>✍️ ${req.responded_by}</span>` : ''}
+                            </div>
+                        </div>
+                        `;
+                    });
+
+                    html += `
+                        </div>
                     </div>
-                    <div class="request-meta">
-                        <span>👤 @${req.username || 'N/A'}</span>
-                        ${req.file_id ? `<span>${getFileIcon(req.request_type)} ${req.request_type}</span>` : ''}
-                        <span>📂 ${req.category || 'N/A'}</span>
-                        ${req.assigned_lawyer_name ? `<span>👤 ${req.assigned_lawyer_name}</span>` : '<span style="color: #e67e22;">⚠️ Tayinlanmagan</span>'}
-                        <span>🕐 ${new Date(req.created_at).toLocaleString('uz-UZ')}</span>
-                        ${req.responded_by ? `<span>✍️ ${req.responded_by}</span>` : ''}
+                    `;
+                });
+
+                html += `
                     </div>
                 </div>
-            `;
-            }).join('');
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function toggleFolder(folderId) {
+            const content = document.getElementById(folderId);
+            const toggle = document.getElementById('toggle_' + folderId);
+            if (content.classList.contains('open')) {
+                content.classList.remove('open');
+                toggle.classList.remove('open');
+                openFolders.delete(folderId);
+            } else {
+                content.classList.add('open');
+                toggle.classList.add('open');
+                openFolders.add(folderId);
+            }
+        }
+
+        function toggleDateGroup(groupId) {
+            const content = document.getElementById(groupId);
+            if (content.classList.contains('open')) {
+                content.classList.remove('open');
+                openDateGroups.delete(groupId);
+            } else {
+                content.classList.add('open');
+                openDateGroups.add(groupId);
+            }
         }
         
-        function updateStats() {
-            const total = requests.length;
-            const pending = requests.filter(r => r.status === 'pending' || r.status === 'rejected').length;
-            const studentResponded = requests.filter(r => r.status === 'student_responded').length;
-            const answered = requests.filter(r => r.status === 'answered').length;
-            
-            document.getElementById('totalRequests').textContent = total;
-            document.getElementById('pendingRequests').textContent = pending;
-            document.getElementById('studentResponded').textContent = studentResponded;
-            document.getElementById('answeredRequests').textContent = answered;
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                document.getElementById('totalRequests').textContent = data.total || 0;
+                document.getElementById('pendingRequests').textContent = data.pending || 0;
+                document.getElementById('rejectedRequests').textContent = data.rejected || 0;
+                document.getElementById('studentResponded').textContent = data.student_responded || 0;
+                document.getElementById('answeredRequests').textContent = data.answered || 0;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
         }
         
         function getFileIcon(type) {
@@ -743,18 +2942,6 @@
             return icons[type] || '📎';
         }
         
-        function getCategoryOptions(currentCategory) {
-            const categories = [
-                'Fuqarolik huquqi', 'Jinoyat huquqi', 'Mehnat huquqi',
-                'Oila huquqi', 'Biznes/Korporativ huquq', "Ko'chmas mulk",
-                'Soliq huquqi', "Ma'muriy huquq", 'Boshqa'
-            ];
-            return categories.map(function(cat) {
-                var selected = currentCategory === cat ? ' selected' : '';
-                return '<option value="' + cat + '"' + selected + '>' + cat + '</option>';
-            }).join('');
-        }
-
         function formatFileSize(bytes) {
             if (!bytes) return 'N/A';
             if (bytes < 1024) return bytes + ' B';
@@ -878,6 +3065,53 @@
             }
         }
         
+        async function updateCategory(requestId, category) {
+            try {
+                const response = await fetch('/api/update-category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, category })
+                });
+
+                if (response.ok) {
+                    // Update local data
+                    const req = requests.find(r => r.id === requestId);
+                    if (req) req.category = category;
+
+                    // Update dropdown styling
+                    const select = document.getElementById('categorySelect');
+                    if (select) {
+                        const isDefault = category === 'Boshqa';
+                        select.style.border = `1px solid ${isDefault ? '#e74c3c' : '#27ae60'}`;
+                        select.style.background = isDefault ? '#fff5f5' : '#f0fff0';
+                        const hint = select.nextElementSibling;
+                        if (hint) {
+                            hint.innerHTML = isDefault
+                                ? '⚠️ Javob berishdan oldin tanlang!'
+                                : '✅';
+                            hint.style.color = isDefault ? '#e74c3c' : '#27ae60';
+                        }
+                    }
+
+                    // No displayRequests here - modal stays open, list refreshes on close
+                }
+            } catch (error) {
+                console.error('Error updating category:', error);
+            }
+        }
+
+        function checkCategoryBeforeResponse() {
+            const select = document.getElementById('categorySelect');
+            if (select && select.value === 'Boshqa') {
+                alert("⚠️ Iltimos, avval murojaatning yo'nalishini tanlang!\n\nJavob yuborishdan oldin yo'nalish belgilanishi shart.");
+                select.focus();
+                select.style.border = '2px solid #e74c3c';
+                select.style.animation = 'pulse-badge 0.5s 3';
+                return false;
+            }
+            return true;
+        }
+
         function showRequestDetail(id) {
             const request = requests.find(r => r.id === id);
             if (!request) return;
@@ -900,7 +3134,22 @@
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Yo\'nalish:</div>
-                        <div class="detail-value">${request.category || 'N/A'}</div>
+                        <div class="detail-value">
+                            ${currentUser.role === 'master' || request.status !== 'answered' ? `
+                            <select id="categorySelect" onchange="updateCategory(${request.id}, this.value)" style="padding: 8px 12px; border-radius: 5px; border: 1px solid ${request.category === 'Boshqa' ? '#e74c3c' : '#27ae60'}; font-size: 14px; min-width: 220px; background: ${request.category === 'Boshqa' ? '#fff5f5' : '#f0fff0'};">
+                                <option value="Boshqa" ${request.category === 'Boshqa' ? 'selected' : ''}>-- Yo'nalishni tanlang --</option>
+                                <option value="Fuqarolik huquqi" ${request.category === 'Fuqarolik huquqi' ? 'selected' : ''}>Fuqarolik huquqi</option>
+                                <option value="Jinoyat huquqi" ${request.category === 'Jinoyat huquqi' ? 'selected' : ''}>Jinoyat huquqi</option>
+                                <option value="Mehnat huquqi" ${request.category === 'Mehnat huquqi' ? 'selected' : ''}>Mehnat huquqi</option>
+                                <option value="Oila huquqi" ${request.category === 'Oila huquqi' ? 'selected' : ''}>Oila huquqi</option>
+                                <option value="Biznes/Korporativ huquq" ${request.category === 'Biznes/Korporativ huquq' ? 'selected' : ''}>Biznes/Korporativ huquq</option>
+                                <option value="Ko'chmas mulk" ${request.category === "Ko'chmas mulk" ? 'selected' : ''}>Ko'chmas mulk</option>
+                                <option value="Soliq huquqi" ${request.category === 'Soliq huquqi' ? 'selected' : ''}>Soliq huquqi</option>
+                                <option value="Ma'muriy huquq" ${request.category === "Ma'muriy huquq" ? 'selected' : ''}>Ma'muriy huquq</option>
+                            </select>
+                            ${request.category === 'Boshqa' && request.status !== 'answered' ? '<span style="color: #e74c3c; font-size: 12px; margin-left: 8px;">⚠️ Javob berishdan oldin tanlang!</span>' : '<span style="color: #27ae60; font-size: 12px; margin-left: 8px;">✅</span>'}
+                            ` : `${request.category || 'N/A'}`}
+                        </div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Sana:</div>
@@ -923,10 +3172,10 @@
                     </div>
                     ` : ''}
                     ${currentUser.role === 'master' ? `
-                    <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                        <select id="lawyerSelect" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
+                    <div style="margin-top: 10px;">
+                        <select id="lawyerSelect" style="padding: 8px; margin-right: 10px; border-radius: 5px; border: 1px solid #ddd;">
                             <option value="">-- Yuristni tanlang --</option>
-                            ${allAdmins.filter(a => a.role === 'master').map(admin =>
+                            ${allAdmins.filter(a => a.role === 'master').map(admin => 
                                 `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
                             ).join('')}
                         </select>
@@ -938,15 +3187,6 @@
                             Tayinlovni bekor qilish
                         </button>
                         ` : ''}
-                    </div>
-                    <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
-                        <select id="categorySelect" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
-                            <option value="">-- Yo'nalishni tanlang --</option>
-                            ${getCategoryOptions(request.category)}
-                        </select>
-                        <button class="btn" onclick="updateCategory(${request.id})" style="padding: 8px 20px; background: #27ae60;">
-                            Yo'nalishni saqlash
-                        </button>
                     </div>
                     ` : ''}
                 </div>
@@ -1072,8 +3312,17 @@
                         </button>
                     `;
                 }
-                
+
                 modalContent += `
+                        <button class="btn ai-tahlil-btn" onclick="runAiAnalysis(${request.id})" data-request-text="${(request.request_text || '').replace(/"/g, '&quot;')}" data-category="${(request.category || '').replace(/"/g, '&quot;')}" style="background: #8e44ad; margin-left: 10px;">
+                            &#10024; AI tahlil
+                        </button>
+                        </div>
+                    </div>
+                    <div id="aiAnalysisResult-${request.id}" class="ai-analysis-container" style="display:none;">
+                        <div class="detail-section">
+                            <h3>&#10024; AI huquqiy tahlil</h3>
+                            <div id="aiAnalysisContent-${request.id}" class="ai-analysis-content"></div>
                         </div>
                     </div>
                 `;
@@ -1083,7 +3332,57 @@
             document.getElementById('requestModal').style.display = 'block';
         }
         
+        function simpleMarkdown(text) {
+            return text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/`(.+?)`/g, '<code>$1</code>')
+                .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>')
+                .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+                .replace(/\n{2,}/g, '<br><br>')
+                .replace(/\n/g, '<br>');
+        }
+
+        async function runAiAnalysis(requestId) {
+            const container = document.getElementById('aiAnalysisResult-' + requestId);
+            const content = document.getElementById('aiAnalysisContent-' + requestId);
+            const btn = event.target.closest('.ai-tahlil-btn');
+            const requestText = btn.getAttribute('data-request-text');
+            const category = btn.getAttribute('data-category');
+
+            container.style.display = 'block';
+            content.innerHTML = '<div class="ai-loading"><span class="spinner"></span>AI tahlil qilinmoqda... Biroz kuting.</div>';
+            if (btn) { btn.disabled = true; btn.innerHTML = '&#10024; Tahlil qilinmoqda...'; }
+
+            try {
+                const response = await fetch('/api/ai-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestText, category })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    content.innerHTML = simpleMarkdown(data.analysis);
+                } else {
+                    content.innerHTML = '<div style="color: #e74c3c; padding: 15px;">Xatolik: ' + (data.error || 'AI tahlil amalga oshmadi') + '</div>';
+                }
+            } catch (error) {
+                content.innerHTML = '<div style="color: #e74c3c; padding: 15px;">Tarmoq xatoligi: ' + error.message + '</div>';
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '&#10024; AI tahlil'; }
+            }
+        }
+
         async function submitStudentResponse(requestId) {
+            if (!checkCategoryBeforeResponse()) return;
+
             const responseText = document.getElementById('responseText').value.trim();
             if (!responseText) {
                 alert('Iltimos javob matnini kiriting!');
@@ -1111,6 +3410,8 @@
         }
         
         async function approveResponse(requestId) {
+            if (!checkCategoryBeforeResponse()) return;
+
             if (!confirm('Javobni tasdiqlaysizmi? Bu javob darhol mijozga yuboriladi.')) {
                 return;
             }
@@ -1159,6 +3460,8 @@
         }
         
         async function sendMasterResponse(requestId) {
+            if (!checkCategoryBeforeResponse()) return;
+
             const responseText = document.getElementById('responseText').value.trim();
             if (!responseText) {
                 alert('Iltimos javob matnini kiriting!');
@@ -1204,8 +3507,8 @@
                 
                 if (response.ok) {
                     alert(`✅ Murojaat ${data.lawyerName}ga tayinlandi!`);
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -1214,23 +3517,23 @@
                 alert('❌ Xatolik yuz berdi.');
             }
         }
-        
+
         async function unassignRequest(requestId) {
             if (!confirm('Tayinlovni bekor qilishni xohlaysizmi?')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/unassign-request', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId })
                 });
-                
+
                 if (response.ok) {
                     alert('✅ Tayinlov bekor qilindi!');
-                    closeModal();
-                    loadRequests();
+                    await loadRequests();
+                    showRequestDetail(requestId);
                 } else {
                     alert('❌ Xatolik yuz berdi.');
                 }
@@ -1240,33 +3543,6 @@
             }
         }
         
-        async function updateCategory(requestId) {
-            const category = document.getElementById('categorySelect').value;
-            if (!category) {
-                alert('Iltimos, yo\'nalishni tanlang!');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/update-category', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ requestId, category })
-                });
-
-                if (response.ok) {
-                    alert('✅ Yo\'nalish saqlandi!');
-                    closeModal();
-                    loadRequests();
-                } else {
-                    alert('❌ Xatolik yuz berdi.');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('❌ Xatolik yuz berdi.');
-            }
-        }
-
         async function deleteRequest(requestId) {
             const confirmation = prompt('O\'chirish uchun "DELETE" deb yozing:');
             
@@ -1422,27 +3698,588 @@
             }
         }
         
-        async function exportToExcel() {
-            try {
-                const response = await fetch('/api/export-excel');
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `dictum_murojaatlar_${new Date().toISOString().split('T')[0]}.xlsx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                } else {
-                    alert('❌ Eksport xatolik bilan yakunlandi.');
-                }
-            } catch (error) {
-                console.error('Export error:', error);
-                alert('❌ Eksport xatolik bilan yakunlandi.');
+        // ========== 3D CHART PLUGINS ==========
+        const shadow3DPlugin = {
+            id: 'shadow3d',
+            beforeDatasetsDraw: (chart) => {
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+                ctx.shadowBlur = 12;
+                ctx.shadowOffsetX = 3;
+                ctx.shadowOffsetY = 3;
+            },
+            afterDatasetsDraw: (chart) => {
+                chart.ctx.restore();
             }
+        };
+
+        const doughnut3DPlugin = {
+            id: 'doughnut3d',
+            beforeDraw: (chart) => {
+                if (chart.config.type !== 'doughnut' && chart.config.type !== 'pie') return;
+                const ctx = chart.ctx;
+                const meta = chart.getDatasetMeta(0);
+                if (!meta || !meta.data || meta.data.length === 0) return;
+                const depth = 6;
+                ctx.save();
+                for (let layer = depth; layer > 0; layer--) {
+                    meta.data.forEach((arc, i) => {
+                        const bgColor = chart.data.datasets[0].backgroundColor[i];
+                        ctx.beginPath();
+                        ctx.arc(arc.x, arc.y + layer, arc.outerRadius, arc.startAngle, arc.endAngle);
+                        if (chart.config.type === 'doughnut') {
+                            ctx.arc(arc.x, arc.y + layer, arc.innerRadius, arc.endAngle, arc.startAngle, true);
+                        } else {
+                            ctx.lineTo(arc.x, arc.y + layer);
+                        }
+                        ctx.closePath();
+                        ctx.fillStyle = darkenColor(bgColor, 0.35);
+                        ctx.fill();
+                    });
+                }
+                ctx.restore();
+            }
+        };
+
+        function darkenColor(hex, amount) {
+            hex = hex.replace('#', '');
+            const r = Math.max(0, Math.floor(parseInt(hex.substring(0, 2), 16) * (1 - amount)));
+            const g = Math.max(0, Math.floor(parseInt(hex.substring(2, 4), 16) * (1 - amount)));
+            const b = Math.max(0, Math.floor(parseInt(hex.substring(4, 6), 16) * (1 - amount)));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        function lightenColor(hex, amount) {
+            hex = hex.replace('#', '');
+            const r = Math.min(255, Math.floor(parseInt(hex.substring(0, 2), 16) + (255 - parseInt(hex.substring(0, 2), 16)) * amount));
+            const g = Math.min(255, Math.floor(parseInt(hex.substring(2, 4), 16) + (255 - parseInt(hex.substring(2, 4), 16)) * amount));
+            const b = Math.min(255, Math.floor(parseInt(hex.substring(4, 6), 16) + (255 - parseInt(hex.substring(4, 6), 16)) * amount));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        const gradientBarPlugin = {
+            id: 'gradientBar',
+            beforeDatasetsDraw: (chart) => {
+                if (chart.config.type !== 'bar') return;
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    const baseColor = dataset.baseColor || dataset.borderColor || '#3498db';
+                    meta.data.forEach((bar) => {
+                        const gradient = ctx.createLinearGradient(bar.x - bar.width / 2, bar.y, bar.x + bar.width / 2, bar.base);
+                        gradient.addColorStop(0, lightenColor(baseColor, 0.3));
+                        gradient.addColorStop(0.5, baseColor);
+                        gradient.addColorStop(1, darkenColor(baseColor, 0.2));
+                        bar.options.backgroundColor = gradient;
+                    });
+                });
+            }
+        };
+
+        // ========== FONT LOADING FOR CYRILLIC SUPPORT ==========
+        async function loadPdfFonts(doc) {
+            try {
+                const [regularResp, boldResp] = await Promise.all([
+                    fetch('/fonts/Roboto-Regular.ttf'),
+                    fetch('/fonts/Roboto-Bold.ttf')
+                ]);
+                if (!regularResp.ok || !boldResp.ok) throw new Error('Font fetch failed');
+                const [regularBuf, boldBuf] = await Promise.all([
+                    regularResp.arrayBuffer(),
+                    boldResp.arrayBuffer()
+                ]);
+
+                function arrayBufferToBase64(buffer) {
+                    let binary = '';
+                    const bytes = new Uint8Array(buffer);
+                    for (let i = 0; i < bytes.byteLength; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    return btoa(binary);
+                }
+
+                doc.addFileToVFS('Roboto-Regular.ttf', arrayBufferToBase64(regularBuf));
+                doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
+                doc.addFileToVFS('Roboto-Bold.ttf', arrayBufferToBase64(boldBuf));
+                doc.addFont('Roboto-Bold.ttf', 'Roboto', 'bold');
+                doc.setFont('Roboto', 'normal');
+                return true;
+            } catch (e) {
+                console.warn('Could not load Cyrillic fonts, using default:', e);
+                return false;
+            }
+        }
+
+        // ========== PDF EXPORT ==========
+        async function exportToPDF() {
+            // Refresh data before export
+            await Promise.all([loadRequests(), loadAdmins()]);
+            if (requests.length === 0) { alert('Eksport qilish uchun murojaatlar mavjud emas!'); return; }
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pw = doc.internal.pageSize.getWidth();
+                const ph = doc.internal.pageSize.getHeight();
+                const m = 14;
+                const cw = pw - m * 2;
+                const now = new Date();
+
+                // Load Cyrillic fonts
+                const hasCyrillic = await loadPdfFonts(doc);
+                const fontName = hasCyrillic ? 'Roboto' : 'helvetica';
+
+                // Stats
+                const totalReqs = requests.length;
+                const pendingReqs = requests.filter(r => r.status === 'pending').length;
+                const studentReqs = requests.filter(r => r.status === 'student_responded').length;
+                const answeredReqs = requests.filter(r => r.status === 'answered').length;
+                const rejectedReqs = requests.filter(r => r.status === 'rejected').length;
+                const uniqueUsers = new Set(requests.map(r => r.telegram_id)).size;
+                const responseRate = totalReqs > 0 ? ((answeredReqs / totalReqs) * 100).toFixed(1) : '0';
+                const avgResponseTime = (() => {
+                    const ans = requests.filter(r => r.answered_at && r.created_at);
+                    if (!ans.length) return 'N/A';
+                    const hrs = ans.reduce((s, r) => s + (new Date(r.answered_at) - new Date(r.created_at)) / 3600000, 0) / ans.length;
+                    if (hrs < 1) return `${Math.round(hrs * 60)} daqiqa`;
+                    if (hrs < 24) return `${hrs.toFixed(1)} soat`;
+                    return `${(hrs / 24).toFixed(1)} kun`;
+                })();
+
+                // Category data
+                const categoryData = {};
+                requests.forEach(r => { categoryData[r.category || 'Boshqa'] = (categoryData[r.category || 'Boshqa'] || 0) + 1; });
+                const catEntries = Object.entries(categoryData).sort((a, b) => b[1] - a[1]);
+                const catBarColors = ['#2980b9', '#c0392b', '#27ae60', '#f39c12', '#8e44ad', '#16a085', '#d35400', '#2c3e50', '#7f8c8d'];
+
+                // ===== HELPERS =====
+                function setFont(style) { doc.setFont(fontName, style || 'normal'); }
+                function drawGradientRect(x, y, w, h, r1, g1, b1, r2, g2, b2) {
+                    const steps = 40, stepH = h / steps;
+                    for (let i = 0; i < steps; i++) {
+                        const t = i / steps;
+                        doc.setFillColor(Math.round(r1+(r2-r1)*t), Math.round(g1+(g2-g1)*t), Math.round(b1+(b2-b1)*t));
+                        doc.rect(x, y + i * stepH, w, stepH + 0.5, 'F');
+                    }
+                }
+                function addPageHeader(title) {
+                    drawGradientRect(0, 0, pw, 22, 30, 45, 65, 45, 70, 100);
+                    doc.setFillColor(41, 128, 185); doc.rect(0, 22, pw, 1.5, 'F');
+                    doc.setTextColor(255); setFont('bold'); doc.setFontSize(13);
+                    doc.text(title, pw / 2, 14, { align: 'center' }); setFont('normal');
+                }
+                function addPageFooter(n) {
+                    doc.setDrawColor(200); doc.line(m, ph - 14, pw - m, ph - 14);
+                    setFont('normal'); doc.setFontSize(7); doc.setTextColor(140);
+                    doc.text('DICTUM Advokatlik Firmasi | Maxfiy hujjat', m, ph - 9);
+                    doc.text(now.toLocaleDateString('uz-UZ'), pw / 2, ph - 9, { align: 'center' });
+                    doc.text(`${n}-sahifa`, pw - m, ph - 9, { align: 'right' });
+                }
+                function drawStatCard(x, y, w, h, value, label, r, g, b) {
+                    doc.setFillColor(215, 215, 215); doc.roundedRect(x + 1, y + 1, w, h, 3, 3, 'F');
+                    doc.setFillColor(255, 255, 255); doc.roundedRect(x, y, w, h, 3, 3, 'F');
+                    setFont('bold'); doc.setTextColor(r, g, b); doc.setFontSize(20);
+                    doc.text(String(value), x + w / 2, y + 13, { align: 'center' });
+                    setFont('normal'); doc.setTextColor(100); doc.setFontSize(6);
+                    doc.text(label, x + w / 2, y + 21, { align: 'center' });
+                }
+                function drawMetricBox(x, y, w, h, label, value, r, g, b) {
+                    doc.setFillColor(230, 230, 230); doc.roundedRect(x + 1, y + 1, w, h, 3, 3, 'F');
+                    doc.setFillColor(250, 250, 252); doc.roundedRect(x, y, w, h, 3, 3, 'F');
+                    setFont('normal'); doc.setTextColor(120); doc.setFontSize(7); doc.text(label, x + 8, y + 9);
+                    setFont('bold'); doc.setTextColor(r, g, b); doc.setFontSize(14); doc.text(String(value), x + 8, y + 19);
+                }
+
+                // ===== PAGE 1: COVER =====
+                drawGradientRect(0, 0, pw, 52, 25, 40, 60, 50, 75, 110);
+
+                setFont('bold'); doc.setTextColor(218, 165, 32); doc.setFontSize(28);
+                doc.text('DICTUM', pw / 2, 16, { align: 'center' });
+                setFont('normal'); doc.setTextColor(200, 210, 220); doc.setFontSize(9);
+                doc.text('ADVOKATLIK FIRMASI', pw / 2, 24, { align: 'center' });
+                doc.setDrawColor(100, 130, 170); doc.setLineWidth(0.3);
+                doc.line(pw / 2 - 35, 28, pw / 2 + 35, 28);
+                setFont('bold'); doc.setTextColor(255); doc.setFontSize(13);
+                doc.text('MUROJAATLAR HISOBOTI', pw / 2, 36, { align: 'center' });
+                setFont('normal'); doc.setFontSize(8); doc.setTextColor(180, 195, 215);
+                doc.text(`Hisobot sanasi: ${now.toLocaleDateString('uz-UZ')}  |  Tayyorlagan: ${currentUser.fullName || currentUser.username}`, pw / 2, 46, { align: 'center' });
+
+                // Stat cards - compact
+                const cardW = (cw - 24) / 5, cardG = 6, cardY = 57, cardH = 26;
+                drawStatCard(m, cardY, cardW, cardH, totalReqs, 'JAMI MUROJAATLAR', 44, 62, 80);
+                drawStatCard(m + (cardW + cardG), cardY, cardW, cardH, pendingReqs, 'KUTILMOQDA', 230, 126, 34);
+                drawStatCard(m + (cardW + cardG) * 2, cardY, cardW, cardH, rejectedReqs, 'RAD ETILGAN', 231, 76, 60);
+                drawStatCard(m + (cardW + cardG) * 3, cardY, cardW, cardH, studentReqs, 'STUDENT JAVOBI', 142, 68, 173);
+                drawStatCard(m + (cardW + cardG) * 4, cardY, cardW, cardH, answeredReqs, 'JAVOB BERILGAN', 39, 174, 96);
+
+                // Metrics - compact
+                const metW = (cw - 9) / 3, metY = 89;
+                drawMetricBox(m, metY, metW, 24, 'FOYDALANUVCHILAR SONI', uniqueUsers, 52, 152, 219);
+                drawMetricBox(m + metW + 4.5, metY, metW, 24, "O'RTACHA JAVOB VAQTI", avgResponseTime, 230, 126, 34);
+                drawMetricBox(m + (metW + 4.5) * 2, metY, metW, 24, 'JAVOB DARAJASI', `${responseRate}%`, 39, 174, 96);
+
+                // Category bars
+                const catSumY = 120;
+                doc.setFillColor(240, 242, 245); doc.roundedRect(m, catSumY, cw, 8, 2, 2, 'F');
+                setFont('bold'); doc.setTextColor(60); doc.setFontSize(9);
+                doc.text("YO'NALISHLAR TAQSIMOTI", m + 5, catSumY + 6);
+                setFont('normal');
+
+                let catItemY = catSumY + 13;
+                catEntries.forEach((entry, i) => {
+                    const [cat, count] = entry;
+                    const pct = ((count / totalReqs) * 100).toFixed(0);
+                    const barMaxW = cw - 60, barW = (count / totalReqs) * barMaxW;
+                    const hex = catBarColors[i % catBarColors.length];
+                    const rgb = [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+                    doc.setFontSize(7); doc.setTextColor(80); doc.text(cat, m + 3, catItemY + 3.5);
+                    doc.setFillColor(230, 230, 230); doc.roundedRect(m + 52, catItemY, barMaxW, 5, 2, 2, 'F');
+                    if (barW > 0) { doc.setFillColor(...rgb); doc.roundedRect(m + 52, catItemY, Math.max(barW, 4), 5, 2, 2, 'F'); }
+                    doc.setTextColor(...rgb); doc.setFontSize(7); doc.text(`${count} (${pct}%)`, m + 52 + barMaxW + 2, catItemY + 4);
+                    catItemY += 8;
+                });
+                addPageFooter(1);
+
+                // ===== CLEAN HELPERS =====
+                function hexToRgb(hex) {
+                    return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+                }
+
+                function drawChartTitle(cx, y, title) {
+                    setFont('bold'); doc.setTextColor(30, 45, 65); doc.setFontSize(11);
+                    doc.text(title, cx, y, { align: 'center' });
+                    return y + 8;
+                }
+
+                function drawPdfLegend(x, y, labels, colors) {
+                    setFont('normal'); doc.setFontSize(7.5);
+                    const dotR = 1.5;
+                    const gap = 2.5;
+                    const lineH = 4.5;
+                    labels.forEach((lbl, i) => {
+                        const ly = y + i * lineH;
+                        const rgb = hexToRgb(colors[i]);
+                        doc.setFillColor(...rgb);
+                        doc.circle(x + dotR, ly, dotR, 'F');
+                        doc.setTextColor(60, 60, 60);
+                        doc.text(lbl, x + dotR * 2 + gap, ly + 1.5);
+                    });
+                    return y + labels.length * lineH;
+                }
+
+                // ===== PAGE 2: CHARTS =====
+                doc.addPage();
+                addPageHeader('INFOGRAFIKA - MUROJAATLAR TAHLILI');
+
+                const chartW = (cw - 10) / 2;
+                const chartH = chartW * 0.65;
+
+                // Datalabels config
+                const pctLabels = {
+                    datalabels: {
+                        color: '#fff', font: { size: 28, weight: 'bold' },
+                        formatter: (val, ctx) => {
+                            const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = ((val / sum) * 100).toFixed(0);
+                            return val > 0 ? `${pct}%` : '';
+                        },
+                        textShadowColor: 'rgba(0,0,0,0.5)', textShadowBlur: 6
+                    }
+                };
+                const barLabels = {
+                    datalabels: {
+                        anchor: 'end', align: 'top', color: '#333', font: { size: 22, weight: 'bold' },
+                        formatter: (val) => val > 0 ? val : ''
+                    }
+                };
+
+                // --- Status Doughnut (left) ---
+                let curY = drawChartTitle(m + chartW / 2, 30, 'MUROJAATLAR HOLATI');
+                const statusColors = ['#e67e22', '#8e44ad', '#27ae60', '#c0392b'];
+                const statusLabelsArr = ['Kutilmoqda', 'Student javobi', 'Javob berilgan', 'Rad etilgan'];
+                const statusChart = await renderChart('statusChart', {
+                    type: 'doughnut',
+                    data: { labels: statusLabelsArr,
+                        datasets: [{ data: [pendingReqs, studentReqs, answeredReqs, rejectedReqs], backgroundColor: statusColors, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
+                    options: { responsive: false, cutout: '55%', layout: { padding: 6 },
+                        plugins: { ...pctLabels, title: { display: false }, legend: { display: false } } },
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
+                });
+                doc.addImage(statusChart.toDataURL('image/png'), 'PNG', m, curY, chartW, chartH);
+                const statusLegEnd = drawPdfLegend(m + 2, curY + chartH + 3, statusLabelsArr, statusColors);
+
+                // --- Category Doughnut (right) ---
+                const rightX = m + chartW + 10;
+                drawChartTitle(rightX + chartW / 2, 30, "YO'NALISHLAR BO'YICHA");
+                const catLabelsArr = catEntries.map(e => e[0]);
+                const catColorsArr = catBarColors.slice(0, catEntries.length);
+                const categoryChart = await renderChart('categoryChart', {
+                    type: 'doughnut',
+                    data: { labels: catLabelsArr,
+                        datasets: [{ data: catEntries.map(e => e[1]), backgroundColor: catColorsArr, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
+                    options: { responsive: false, cutout: '50%', layout: { padding: 6 },
+                        plugins: { datalabels: { color: '#fff', font: { size: 24, weight: 'bold' }, textShadowColor: 'rgba(0,0,0,0.5)', textShadowBlur: 6,
+                                formatter: (val, ctx) => { const sum = ctx.dataset.data.reduce((a,b) => a+b, 0); const p = ((val/sum)*100).toFixed(0); return val > 0 && p >= 5 ? `${p}%` : ''; } },
+                            title: { display: false }, legend: { display: false } } },
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
+                });
+                doc.addImage(categoryChart.toDataURL('image/png'), 'PNG', rightX, curY, chartW, chartH);
+                const catLegEnd = drawPdfLegend(rightX + 2, curY + chartH + 3, catLabelsArr, catColorsArr);
+
+                // --- Monthly Bar Chart ---
+                const barStartY = Math.max(statusLegEnd, catLegEnd) + 6;
+                curY = drawChartTitle(pw / 2, barStartY, 'OYLIK DINAMIKA');
+                const monthlyData = {};
+                requests.forEach(r => {
+                    const d = new Date(r.created_at);
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    if (!monthlyData[key]) monthlyData[key] = { answered: 0, pending: 0 };
+                    if (r.status === 'answered') monthlyData[key].answered++; else monthlyData[key].pending++;
+                });
+                const sortedMonths = Object.keys(monthlyData).sort();
+                const monthNames = ['Yan','Fev','Mar','Apr','May','Iyn','Iyl','Avg','Sen','Okt','Noy','Dek'];
+                const monthLabels = sortedMonths.map(k => { const [y,mo] = k.split('-'); return `${monthNames[parseInt(mo)-1]} ${y}`; });
+
+                const barChartH = 52;
+                const barLegLabels = ['Javob berilgan', 'Kutilmoqda'];
+                const barLegColors = ['#27ae60', '#e67e22'];
+                const monthlyChart = await renderChart('monthlyChart', {
+                    type: 'bar',
+                    data: { labels: monthLabels, datasets: [
+                        { label: barLegLabels[0], data: sortedMonths.map(k => monthlyData[k].answered), backgroundColor: '#27ae60', borderColor: '#1e8449', baseColor: '#27ae60', borderWidth: 1, borderRadius: 6, borderSkipped: false },
+                        { label: barLegLabels[1], data: sortedMonths.map(k => monthlyData[k].pending), backgroundColor: '#e67e22', borderColor: '#d35400', baseColor: '#e67e22', borderWidth: 1, borderRadius: 6, borderSkipped: false }
+                    ] },
+                    options: { responsive: false,
+                        plugins: { ...barLabels, title: { display: false }, legend: { display: false } },
+                        layout: { padding: { top: 30 } },
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 20 }, color: '#555' }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                            x: { ticks: { font: { size: 20 }, color: '#555' }, grid: { display: false } } } },
+                    plugins: [shadow3DPlugin, gradientBarPlugin, ChartDataLabels]
+                });
+                doc.addImage(monthlyChart.toDataURL('image/png'), 'PNG', m, curY, cw, barChartH);
+                const barLegEnd = drawPdfLegend(m + 2, curY + barChartH + 3, barLegLabels, barLegColors);
+
+                // --- Type Doughnut ---
+                const pieStartY = barLegEnd + 6;
+                curY = drawChartTitle(pw / 2, pieStartY, 'MUROJAAT TURLARI');
+                const typeData = {};
+                const typeLabelsMap = { 'text': 'Matn', 'voice': 'Ovozli', 'video': 'Video', 'video_note': 'Video xabar', 'document': 'Fayl', 'photo': 'Rasm' };
+                requests.forEach(r => { const t = typeLabelsMap[r.request_type] || r.request_type; typeData[t] = (typeData[t] || 0) + 1; });
+
+                const typeLabelsArr = Object.keys(typeData);
+                const typeColorsArr = ['#2980b9','#c0392b','#27ae60','#f39c12','#8e44ad','#16a085'].slice(0, typeLabelsArr.length);
+                const typePieW = chartW;
+                const typePieH = chartH;
+                const typeChart = await renderChart('typeChart', {
+                    type: 'doughnut',
+                    data: { labels: typeLabelsArr,
+                        datasets: [{ data: Object.values(typeData), backgroundColor: typeColorsArr, borderWidth: 3, borderColor: '#fff', offset: 2 }] },
+                    options: { responsive: false, cutout: '50%', layout: { padding: 6 },
+                        plugins: { ...pctLabels, title: { display: false }, legend: { display: false } } },
+                    plugins: [shadow3DPlugin, doughnut3DPlugin, ChartDataLabels]
+                });
+                // Chart on right half, legend on left half
+                const typeChartX = m + chartW + 10;
+                doc.addImage(typeChart.toDataURL('image/png'), 'PNG', typeChartX, curY, typePieW, typePieH);
+                // Legend vertically centered to the left of the chart
+                const typeLegStartY = curY + (typePieH - typeLabelsArr.length * 4.5) / 2;
+                drawPdfLegend(m + 5, typeLegStartY, typeLabelsArr, typeColorsArr);
+                addPageFooter(2);
+
+                // ===== PAGE 3: LAWYERS & STUDENTS STATS + TOP PETITIONERS =====
+                doc.addPage();
+                addPageHeader('YURISTLAR VA STUDENTLAR STATISTIKASI');
+
+                // Build admin answer stats from responded_by field
+                const adminAnswerCounts = {};
+                requests.forEach(r => {
+                    if (r.responded_by) {
+                        adminAnswerCounts[r.responded_by] = (adminAnswerCounts[r.responded_by] || 0) + 1;
+                    }
+                });
+                // Build assigned counts from assigned_to field
+                const adminAssignedCounts = {};
+                requests.forEach(r => {
+                    if (r.assigned_to) {
+                        adminAssignedCounts[r.assigned_to] = (adminAssignedCounts[r.assigned_to] || 0) + 1;
+                    }
+                });
+
+                const roleLabels = { 'master': 'Admin', 'lawyer': 'Yurist', 'student': 'Student' };
+                const adminTableData = allAdmins.map((admin, i) => [
+                    String(i + 1),
+                    admin.full_name,
+                    `@${admin.username}`,
+                    roleLabels[admin.role] || admin.role,
+                    adminAssignedCounts[admin.id] || 0,
+                    adminAnswerCounts[admin.full_name] || 0
+                ]);
+
+                doc.autoTable({
+                    startY: 30,
+                    head: [['#', 'Ism', 'Username', 'Lavozimi', 'Tayinlangan', 'Javob bergan']],
+                    body: adminTableData,
+                    theme: 'striped',
+                    headStyles: { fillColor: [30, 45, 65], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
+                    bodyStyles: { fontSize: 9, halign: 'center', cellPadding: 3.5, font: fontName },
+                    columnStyles: {
+                        0: { cellWidth: 12, halign: 'center' },
+                        1: { halign: 'left' },
+                        2: { cellWidth: 35, halign: 'left' },
+                        3: { cellWidth: 28, halign: 'center' },
+                        4: { cellWidth: 28, halign: 'center' },
+                        5: { cellWidth: 28, halign: 'center' }
+                    },
+                    alternateRowStyles: { fillColor: [240, 245, 250] },
+                    styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
+                    didParseCell: function(data) {
+                        if (data.section === 'body' && data.column.index === 3) {
+                            if (data.cell.raw === 'Admin') { data.cell.styles.textColor = [41, 128, 185]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Yurist') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Student') { data.cell.styles.textColor = [142, 68, 173]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                    }
+                });
+
+                // --- TOP MUROJAATCHILAR (Top Petitioners) ---
+                const petitionerEndY = doc.lastAutoTable.finalY + 12;
+                setFont('bold'); doc.setTextColor(30, 45, 65); doc.setFontSize(13);
+                doc.text('TOP MUROJAATCHILAR', pw / 2, petitionerEndY, { align: 'center' });
+
+                const petitionerStats = {};
+                requests.forEach(r => {
+                    const uid = r.telegram_id;
+                    if (!petitionerStats[uid]) {
+                        petitionerStats[uid] = {
+                            name: r.first_name || 'N/A',
+                            username: r.username || 'N/A',
+                            total: 0,
+                            answered: 0,
+                            pending: 0,
+                            blocked: r.blocked
+                        };
+                    }
+                    petitionerStats[uid].total++;
+                    if (r.status === 'answered') petitionerStats[uid].answered++; else petitionerStats[uid].pending++;
+                });
+                const petitionerTableData = Object.values(petitionerStats)
+                    .sort((a, b) => b.total - a.total)
+                    .map((u, i) => [
+                        String(i + 1), u.name, `@${u.username}`, u.total, u.answered, u.pending, u.blocked ? 'BLOKLANGAN' : 'Aktiv'
+                    ]);
+
+                doc.autoTable({
+                    startY: petitionerEndY + 6,
+                    head: [['#', 'Ism', 'Username', 'Jami', 'Javob', 'Kutilmoqda', 'Holat']],
+                    body: petitionerTableData,
+                    theme: 'striped',
+                    headStyles: { fillColor: [44, 62, 80], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
+                    bodyStyles: { fontSize: 9, halign: 'center', cellPadding: 3.5, font: fontName },
+                    columnStyles: {
+                        0: { cellWidth: 12, halign: 'center' },
+                        1: { halign: 'left' },
+                        2: { cellWidth: 35, halign: 'left' },
+                        3: { cellWidth: 20, halign: 'center' },
+                        4: { cellWidth: 20, halign: 'center' },
+                        5: { cellWidth: 25, halign: 'center' },
+                        6: { cellWidth: 28, halign: 'center' }
+                    },
+                    alternateRowStyles: { fillColor: [245, 248, 252] },
+                    styles: { lineColor: [200, 210, 220], lineWidth: 0.3, font: fontName },
+                    didParseCell: function(data) {
+                        if (data.section === 'body' && data.column.index === 6) {
+                            if (data.cell.raw === 'BLOKLANGAN') { data.cell.styles.textColor = [192, 57, 43]; data.cell.styles.fontStyle = 'bold'; }
+                            if (data.cell.raw === 'Aktiv') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                        // Highlight top 3 rows
+                        if (data.section === 'body' && data.row.index < 3 && data.column.index === 0) {
+                            data.cell.styles.textColor = [230, 126, 34]; data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                });
+                addPageFooter(3);
+
+                // ===== PAGE 4+: ALL REQUESTS =====
+                doc.addPage();
+                addPageHeader("BARCHA MUROJAATLAR RO'YXATI");
+
+                const statusLabels = { 'pending': 'Kutilmoqda', 'student_responded': 'Student javobi', 'answered': 'Javob berilgan', 'rejected': 'Rad etilgan' };
+                const tableData = requests.map((r, i) => [
+                    String(i + 1),
+                    r.first_name || 'N/A',
+                    `@${r.username || 'N/A'}`,
+                    r.category || 'Boshqa',
+                    statusLabels[r.status] || r.status,
+                    new Date(r.created_at).toLocaleDateString('uz-UZ'),
+                    r.responded_by || '-'
+                ]);
+
+                let currentPage = 4;
+                doc.autoTable({
+                    startY: 30,
+                    head: [['#', 'Ism', 'Username', "Yo'nalish", 'Status', 'Sana', 'Javob berdi']],
+                    body: tableData,
+                    theme: 'striped',
+                    headStyles: { fillColor: [30, 45, 65], fontSize: 9, halign: 'center', cellPadding: 4, fontStyle: 'bold', font: fontName },
+                    bodyStyles: { fontSize: 8.5, cellPadding: 3.5, font: fontName },
+                    columnStyles: {
+                        0: { cellWidth: 12, halign: 'center' },
+                        1: { cellWidth: 30, halign: 'left' },
+                        2: { cellWidth: 30, halign: 'left' },
+                        3: { halign: 'left' },
+                        4: { cellWidth: 28, halign: 'center' },
+                        5: { cellWidth: 22, halign: 'center' },
+                        6: { cellWidth: 30, halign: 'left' }
+                    },
+                    alternateRowStyles: { fillColor: [245, 248, 252] },
+                    styles: { lineColor: [200, 210, 220], lineWidth: 0.2, font: fontName },
+                    didParseCell: function(data) {
+                        if (data.section === 'body' && data.column.index === 4) {
+                            const v = data.cell.raw;
+                            if (v === 'Kutilmoqda') { data.cell.styles.textColor = [230, 126, 34]; data.cell.styles.fontStyle = 'bold'; }
+                            else if (v === 'Student javobi') { data.cell.styles.textColor = [142, 68, 173]; data.cell.styles.fontStyle = 'bold'; }
+                            else if (v === 'Javob berilgan') { data.cell.styles.textColor = [39, 174, 96]; data.cell.styles.fontStyle = 'bold'; }
+                            else if (v === 'Rad etilgan') { data.cell.styles.textColor = [192, 57, 43]; data.cell.styles.fontStyle = 'bold'; }
+                        }
+                    },
+                    didDrawPage: function() { addPageFooter(currentPage); currentPage++; },
+                    margin: { top: 30 }
+                });
+
+                doc.save(`Dictum_Hisobot_${now.toISOString().split('T')[0]}.pdf`);
+            } catch (error) {
+                console.error('PDF export error:', error);
+                alert('PDF eksport xatolik bilan yakunlandi: ' + error.message);
+            }
+        }
+
+        // Render Chart.js chart with optional plugins
+        async function renderChart(canvasId, config) {
+            // Ensure Roboto font is loaded for canvas rendering
+            if (!window._chartFontLoaded) {
+                try {
+                    await document.fonts.load('16px Roboto');
+                    await document.fonts.load('bold 16px Roboto');
+                } catch(e) { /* fallback to system fonts */ }
+                Chart.defaults.font.family = "'Roboto', 'Segoe UI', Arial, sans-serif";
+                window._chartFontLoaded = true;
+            }
+            return new Promise((resolve) => {
+                const canvas = document.getElementById(canvasId);
+                const ctx = canvas.getContext('2d');
+                const existingChart = Chart.getChart(canvas);
+                if (existingChart) existingChart.destroy();
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                config.options = config.options || {};
+                config.options.animation = false;
+                config.options.devicePixelRatio = 2;
+                const extraPlugins = config.plugins || [];
+                delete config.plugins;
+                new Chart(ctx, { ...config, plugins: extraPlugins });
+                setTimeout(() => resolve(canvas), 600);
+            });
         }
         
         async function logout() {
@@ -1456,19 +4293,413 @@
         
         function closeModal() {
             document.getElementById('requestModal').style.display = 'none';
+            loadRequests();
         }
-        
+
+        // ========== COMMUNITY CHAT ==========
+        let chatMessages = [];
+        let chatLastId = 0;
+        let chatPollInterval = null;
+        let chatIsOpen = false;
+        let chatUnreadCount = 0;
+        let mentionDropdownVisible = false;
+        let mentionSelectedIndex = 0;
+        let mentionFilteredAdmins = [];
+        let mentionCursorStart = -1;
+        let replyToMsg = null; // { id, full_name, message, admin_id }
+
+        function toggleChat() {
+            chatIsOpen = !chatIsOpen;
+            const panel = document.getElementById('chatPanel');
+            if (chatIsOpen) {
+                panel.classList.add('open');
+                document.body.classList.add('chat-open');
+                chatUnreadCount = 0;
+                updateUnreadBadge();
+                if (chatMessages.length === 0) loadChatMessages();
+                startChatPolling();
+                scrollChatToBottom();
+                setTimeout(() => document.getElementById('chatInput').focus(), 350);
+            } else {
+                panel.classList.remove('open');
+                document.body.classList.remove('chat-open');
+                stopChatPolling();
+            }
+        }
+
+        async function loadChatMessages() {
+            try {
+                const url = chatLastId > 0
+                    ? `/api/chat/messages?since_id=${chatLastId}`
+                    : '/api/chat/messages?limit=50';
+                const response = await fetch(url);
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.messages && data.messages.length > 0) {
+                    if (chatLastId === 0) {
+                        chatMessages = data.messages;
+                    } else {
+                        chatMessages.push(...data.messages);
+                        checkAndNotify(data.messages);
+                        if (!chatIsOpen) {
+                            const newFromOthers = data.messages.filter(m => m.admin_id !== currentUser.adminId);
+                            chatUnreadCount += newFromOthers.length;
+                            updateUnreadBadge();
+                        }
+                    }
+                    chatLastId = data.messages[data.messages.length - 1].id;
+                    renderChatMessages();
+                }
+            } catch (error) {
+                console.error('Chat load error:', error);
+            }
+        }
+
+        function startChatPolling() {
+            if (chatPollInterval) return;
+            chatPollInterval = setInterval(loadChatMessages, 3000);
+        }
+
+        function stopChatPolling() {
+            if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
+        }
+
+        // Background poll for unread badge + notifications (started after init)
+        let bgPollStarted = false;
+        function startBackgroundPoll() {
+            if (bgPollStarted) return;
+            bgPollStarted = true;
+            // Do an initial silent load to set chatLastId cursor
+            loadChatMessages().then(() => {
+                setInterval(() => { if (!chatIsOpen) loadChatMessages(); }, 5000);
+            });
+        }
+
+        function renderChatMessages() {
+            const container = document.getElementById('chatMessages');
+            if (chatMessages.length === 0) {
+                container.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#7f8c8d;"><p style="font-size:16px;font-weight:bold;">Hali xabar yo\'q</p><p>Birinchi xabaringizni yozing!</p></div>';
+                return;
+            }
+            let html = '';
+            let lastDate = '';
+            chatMessages.forEach(msg => {
+                const msgDate = new Date(msg.created_at).toLocaleDateString('uz-UZ');
+                if (msgDate !== lastDate) {
+                    lastDate = msgDate;
+                    const today = new Date().toLocaleDateString('uz-UZ');
+                    const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('uz-UZ');
+                    let dateLabel = msgDate;
+                    if (msgDate === today) dateLabel = 'Bugun';
+                    else if (msgDate === yesterday) dateLabel = 'Kecha';
+                    html += `<div class="chat-date-separator"><span>${dateLabel}</span></div>`;
+                }
+                const isOwn = msg.admin_id === currentUser.adminId;
+                const timeStr = new Date(msg.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+                let replyHtml = '';
+                if (msg.reply_to_id && msg.reply_sender_name) {
+                    const replyText = (msg.reply_message || '').substring(0, 80);
+                    replyHtml = `<div class="chat-reply-quote" onclick="scrollToMsg(${msg.reply_to_id})">
+                        <div class="chat-reply-quote-sender">${msg.reply_sender_name}</div>
+                        <div class="chat-reply-quote-text">${replyText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+                    </div>`;
+                }
+                html += `<div class="chat-msg ${isOwn ? 'own' : 'other'}" data-msg-id="${msg.id}">
+                    <button class="chat-msg-reply-btn" onclick="setReply(${msg.id})" title="Javob berish">&#8617;</button>
+                    ${!isOwn ? `<div class="chat-msg-sender role-${msg.role}">${msg.full_name}</div>` : ''}
+                    ${replyHtml}
+                    <div class="chat-msg-text">${renderMsgText(msg.message)}</div>
+                    <div class="chat-msg-time">${timeStr}</div>
+                </div>`;
+            });
+            container.innerHTML = html;
+            scrollChatToBottom();
+        }
+
+        function renderMsgText(text) {
+            let s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            s = s.replace(/@all\b/gi, '<span class="mention-all">@Hammaga</span>');
+            s = s.replace(/@(\w+)/g, (match, uname) => {
+                if (uname.toLowerCase() === 'all') return match;
+                const admin = allAdmins.find(a => a.username.toLowerCase() === uname.toLowerCase());
+                if (admin) return `<span class="mention" title="@${admin.username}">@${admin.full_name}</span>`;
+                return match;
+            });
+            return s.replace(/\n/g, '<br>');
+        }
+
+        function scrollChatToBottom() {
+            requestAnimationFrame(() => {
+                const c = document.getElementById('chatMessages');
+                c.scrollTop = c.scrollHeight;
+            });
+        }
+
+        function updateUnreadBadge() {
+            const headerBadge = document.getElementById('headerChatBadge');
+            const countText = chatUnreadCount > 99 ? '99+' : chatUnreadCount;
+            if (chatUnreadCount > 0) {
+                headerBadge.textContent = countText;
+                headerBadge.style.display = 'flex';
+            } else {
+                headerBadge.style.display = 'none';
+            }
+        }
+
+        // ---- Chat Notifications ----
+        function playNotifSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.3);
+            } catch (e) { /* ignore if audio blocked */ }
+        }
+
+        function showChatNotification(msg, type) {
+            const container = document.getElementById('chatNotifContainer');
+            const notif = document.createElement('div');
+            notif.className = 'chat-notification' + (type === 'all' ? ' mention-all' : ' mention-me');
+            const timeStr = new Date(msg.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+            let tagHtml;
+            if (type === 'all') {
+                tagHtml = '<span class="chat-notification-tag all">@all</span>';
+            } else if (type === 'reply') {
+                tagHtml = '<span class="chat-notification-tag reply">javob berdi</span>';
+            } else {
+                tagHtml = '<span class="chat-notification-tag me">@' + currentUser.username + '</span>';
+            }
+            notif.innerHTML = `
+                <div class="chat-notification-header">
+                    <span class="chat-notification-sender">${msg.full_name}${tagHtml}</span>
+                    <span class="chat-notification-time">${timeStr}</span>
+                </div>
+                <div class="chat-notification-text">${renderMsgText(msg.message)}</div>`;
+            notif.onclick = () => {
+                notif.classList.add('removing');
+                setTimeout(() => notif.remove(), 300);
+                if (!chatIsOpen) toggleChat();
+            };
+            container.appendChild(notif);
+            playNotifSound();
+            setTimeout(() => {
+                if (notif.parentNode) {
+                    notif.classList.add('removing');
+                    setTimeout(() => notif.remove(), 300);
+                }
+            }, 6000);
+        }
+
+        function checkAndNotify(newMessages) {
+            if (!currentUser.adminId) return;
+            const myName = currentUser.username.toLowerCase();
+            newMessages.forEach(msg => {
+                if (msg.admin_id === currentUser.adminId) return;
+                const mentions = msg.mentions || [];
+                const mentionsLower = mentions.map(m => m.toLowerCase());
+                if (mentionsLower.includes('all')) {
+                    showChatNotification(msg, 'all');
+                } else if (mentionsLower.includes(myName)) {
+                    showChatNotification(msg, 'me');
+                } else if (msg.reply_sender_id === currentUser.adminId) {
+                    showChatNotification(msg, 'reply');
+                }
+            });
+        }
+
+        function setReply(msgId) {
+            const msg = chatMessages.find(m => m.id === msgId);
+            if (!msg) return;
+            replyToMsg = { id: msg.id, full_name: msg.full_name, message: msg.message, admin_id: msg.admin_id };
+            document.getElementById('replyPreviewSender').textContent = msg.full_name;
+            document.getElementById('replyPreviewText').textContent = msg.message.substring(0, 100);
+            document.getElementById('chatReplyPreview').style.display = 'flex';
+            document.getElementById('chatInput').focus();
+        }
+
+        function cancelReply() {
+            replyToMsg = null;
+            document.getElementById('chatReplyPreview').style.display = 'none';
+        }
+
+        function scrollToMsg(msgId) {
+            const el = document.querySelector(`.chat-msg[data-msg-id="${msgId}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.style.transition = 'background 0.3s';
+                el.style.background = '#fef9c3';
+                setTimeout(() => { el.style.background = ''; }, 1500);
+            }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            const sendBtn = document.getElementById('chatSendBtn');
+            sendBtn.disabled = true;
+            try {
+                const body = { message };
+                if (replyToMsg) body.reply_to_id = replyToMsg.id;
+                const response = await fetch('/api/chat/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    chatMessages.push(data.message);
+                    chatLastId = data.message.id;
+                    renderChatMessages();
+                    input.value = '';
+                    input.style.height = '38px';
+                    cancelReply();
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+            } finally {
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        }
+
+        function handleChatKeydown(event) {
+            if (mentionDropdownVisible) {
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    mentionSelectedIndex = Math.min(mentionSelectedIndex + 1, mentionFilteredAdmins.length - 1);
+                    renderMentionDropdown(); return;
+                }
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    mentionSelectedIndex = Math.max(mentionSelectedIndex - 1, 0);
+                    renderMentionDropdown(); return;
+                }
+                if (event.key === 'Enter' || event.key === 'Tab') {
+                    event.preventDefault();
+                    selectMention(mentionSelectedIndex); return;
+                }
+                if (event.key === 'Escape') { closeMentionDropdown(); return; }
+            }
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendChatMessage();
+            }
+        }
+
+        function handleChatInput(event) {
+            const input = event.target;
+            input.style.height = '38px';
+            input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+            const cursorPos = input.selectionStart;
+            const textBefore = input.value.substring(0, cursorPos);
+            const mentionMatch = textBefore.match(/(^|[\s])@(\w*)$/);
+            if (mentionMatch) {
+                const query = mentionMatch[2].toLowerCase();
+                mentionCursorStart = cursorPos - mentionMatch[2].length - 1;
+                mentionFilteredAdmins = [];
+                if ('all'.startsWith(query)) {
+                    mentionFilteredAdmins.push({ username: 'all', full_name: 'Hamma', role: 'all', isAll: true });
+                }
+                allAdmins.forEach(admin => {
+                    if (admin.username.toLowerCase().startsWith(query) || admin.full_name.toLowerCase().includes(query)) {
+                        mentionFilteredAdmins.push(admin);
+                    }
+                });
+                if (mentionFilteredAdmins.length > 0) {
+                    mentionSelectedIndex = 0;
+                    mentionDropdownVisible = true;
+                    renderMentionDropdown();
+                } else { closeMentionDropdown(); }
+            } else { closeMentionDropdown(); }
+        }
+
+        function renderMentionDropdown() {
+            const dropdown = document.getElementById('mentionDropdown');
+            let html = '';
+            mentionFilteredAdmins.forEach((admin, i) => {
+                const active = i === mentionSelectedIndex ? 'active' : '';
+                if (admin.isAll) {
+                    html += `<div class="mention-item ${active}" onclick="selectMention(${i})">
+                        <div><span class="mention-item-name">@all</span>
+                        <span class="mention-item-username"> - Hammaga xabar</span></div>
+                        <span class="mention-item-role all-role">Barchaga</span></div>`;
+                } else {
+                    html += `<div class="mention-item ${active}" onclick="selectMention(${i})">
+                        <div><span class="mention-item-name">${admin.full_name}</span>
+                        <span class="mention-item-username">@${admin.username}</span></div>
+                        <span class="mention-item-role ${admin.role}">${{'master':'Admin','lawyer':'Yurist','student':'Student'}[admin.role] || admin.role}</span></div>`;
+                }
+            });
+            dropdown.innerHTML = html;
+            dropdown.classList.add('visible');
+        }
+
+        function selectMention(index) {
+            const admin = mentionFilteredAdmins[index];
+            if (!admin) return;
+            const input = document.getElementById('chatInput');
+            const before = input.value.substring(0, mentionCursorStart);
+            const after = input.value.substring(input.selectionStart);
+            const mentionText = `@${admin.username} `;
+            input.value = before + mentionText + after;
+            const newPos = before.length + mentionText.length;
+            input.selectionStart = newPos;
+            input.selectionEnd = newPos;
+            closeMentionDropdown();
+            input.focus();
+        }
+
+        function closeMentionDropdown() {
+            mentionDropdownVisible = false;
+            document.getElementById('mentionDropdown').classList.remove('visible');
+        }
+        // ========== END CHAT ==========
+
         window.onclick = function(event) {
             const modal = document.getElementById('requestModal');
             if (event.target === modal) {
                 closeModal();
             }
+            const adminModal = document.getElementById('addMemberModal');
+            if (event.target === adminModal) {
+                closeAddMemberModal();
+            }
+            if (!event.target.closest('.header-right')) {
+                closeProfileDropdown();
+            }
+            if (!event.target.closest('.chat-input-area')) {
+                closeMentionDropdown();
+            }
         }
-        
-        loadUserInfo();
-        loadAdmins();
+
+        // Set default filter to "Kutilmoqda"
+        document.getElementById('statusFilter').value = 'pending';
+
+        loadUserInfo().then(() => {
+            startBackgroundPoll();
+            loadAdmins();
+            loadRankings();
+            loadMonteCarlo();
+            // Show add-member button for master admins
+            if (currentUser.role === 'master') {
+                const addBtn = document.getElementById('addMemberBtn');
+                if (addBtn) addBtn.style.display = 'inline-block';
+            }
+        });
         loadRequests();
         setInterval(loadRequests, 30000);
+        setInterval(loadAdmins, 60000);
+        setInterval(loadRankings, 120000);
+        setInterval(loadMonteCarlo, 300000);
     </script>
 </body>
 </html>

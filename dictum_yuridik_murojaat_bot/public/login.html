@@ -3,130 +3,1436 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kirish - Dictum Dashboard</title>
+    <title>Kirish - JuristAI Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg: #f0f0f5;
+            --card-bg: #ffffff;
+            --card-border: rgba(0,0,0,0.06);
+            --card-shadow: 0 8px 40px rgba(0,0,0,0.08);
+            --text: #1a1a2e;
+            --text-secondary: #6b7280;
+            --input-bg: #ffffff;
+            --input-border: #e0e0e6;
+            --input-focus: #6c5ce7;
+            --accent: #6d3df9;
+            --accent-hover: #5a4bd1;
+            --accent-gradient: linear-gradient(135deg, #6c5ce7 0%, #a855f7 100%);
+            --hero-gradient: linear-gradient(160deg, #a855f7 0%, #6c5ce7 40%, #4f46e5 70%, #818cf8 100%);
+            --error-bg: #fef2f2;
+            --error-text: #dc2626;
+            --error-border: #fecaca;
+            --success-bg: #f0fdf4;
+            --success-text: #16a34a;
         }
+        [data-theme="dark"] {
+            --bg: #0d1117;
+            --card-bg: #161b22;
+            --card-border: rgba(255,255,255,0.06);
+            --card-shadow: 0 8px 40px rgba(0,0,0,0.4);
+            --text: #e6edf3;
+            --text-secondary: #8b949e;
+            --input-bg: #0d1117;
+            --input-border: rgba(255,255,255,0.1);
+            --input-focus: #a78bfa;
+            --accent: #a78bfa;
+            --accent-hover: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            --hero-gradient: linear-gradient(160deg, #7c3aed 0%, #4f46e5 40%, #3730a3 70%, #6366f1 100%);
+            --error-bg: rgba(220,38,38,0.1);
+            --error-text: #f87171;
+            --error-border: rgba(220,38,38,0.2);
+            --success-bg: rgba(22,163,74,0.1);
+            --success-text: #4ade80;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
             display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* ========== MAIN CARD ========== */
+        .login-card {
+            display: flex;
+            width: 100%;
+            max-width: 960px;
+            min-height: 580px;
+            position: relative;
+            z-index: 2;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            animation: cardAppear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.3);
+            z-index: 1;
+        }
+        @keyframes cardAppear {
+            from { opacity: 0; transform: translateY(20px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* ========== LEFT HERO PANEL ========== */
+        .hero-panel {
+            width: 42%;
+            background: var(--hero-gradient);
+            padding: 40px 36px;
+            display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
+            position: relative;
+            overflow: hidden;
         }
-        .login-container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            width: 100%;
-            max-width: 400px;
+        .hero-panel::before {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.05));
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 50%;
+            top: -80px;
+            right: -80px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.2);
+            animation: float 16s ease-in-out infinite;
         }
-        .logo {
-            text-align: center;
-            margin-bottom: 30px;
+        .hero-panel::after {
+            content: '';
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.04));
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            bottom: 60px;
+            left: -60px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.15);
+            animation: breathe 12s ease-in-out infinite;
         }
-        .logo h1 {
-            color: #2c3e50;
-            font-size: 28px;
-            margin-bottom: 5px;
+        @keyframes float {
+            0% { transform: translate(0px, 0px); }
+            25% { transform: translate(-20px, 20px); }
+            50% { transform: translate(20px, 40px); }
+            75% { transform: translate(-15px, 25px); }
+            100% { transform: translate(0px, 0px); }
         }
-        .logo p {
-            color: #7f8c8d;
-            font-size: 14px;
+        @keyframes breathe {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.4); }
+            100% { transform: scale(1); }
         }
-        .form-group {
-            margin-bottom: 20px;
+        .hero-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            z-index: 1;
         }
-        label {
-            display: block;
-            color: #2c3e50;
-            font-weight: bold;
+        .hero-logo img {
+            height: 56px;
+            width: auto;
+        }
+
+        /* ========== RIGHT FORM PANEL ========== */
+        .form-panel {
+            flex: 1;
+            padding: 40px 44px;
+            overflow-y: auto;
+            position: relative;
+        }
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 6px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .theme-toggle:hover { background: rgba(108,92,231,0.08); }
+        [data-theme="dark"] .icon-sun { display: none; }
+        .icon-moon { display: none; }
+        [data-theme="dark"] .icon-moon { display: block; }
+
+        .form-logo {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             margin-bottom: 8px;
         }
-        input {
+        .form-logo svg { color: var(--accent); }
+        .form-heading {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 6px;
+        }
+        .form-subtitle {
+            color: var(--accent);
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 28px;
+        }
+
+        /* ========== FORM ELEMENTS ========== */
+        .form-group { margin-bottom: 18px; position: relative; }
+        .form-group .input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            color: var(--text-secondary);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .form-group.has-icon input { padding-left: 42px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+        .label-hint { font-weight: 400; color: var(--text-secondary); font-size: 11px; }
+        .form-group input,
+        .form-group select {
             width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            padding: 12px 14px;
+            border: 1.5px solid var(--input-border);
+            border-radius: 12px;
             font-size: 14px;
-        }
-        input:focus {
+            font-family: inherit;
+            background: var(--input-bg);
+            color: var(--text);
+            transition: border-color 0.2s, box-shadow 0.2s;
             outline: none;
-            border-color: #667eea;
         }
+        .form-group select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            padding-right: 38px;
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: var(--input-focus);
+            box-shadow: 0 0 0 3px rgba(108,92,231,0.12);
+        }
+        .form-group input::placeholder { color: var(--text-secondary); opacity: 0.6; }
+        .form-options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+            font-size: 13px;
+        }
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--accent);
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .remember-me input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+        .forgot-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+        .forgot-link:hover { opacity: 0.8; }
+        .input-invalid {
+            border-color: var(--error-text) !important;
+            box-shadow: 0 0 0 3px rgba(220,38,38,0.1) !important;
+            animation: shake 0.4s ease;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+
+        /* ========== BUTTONS ========== */
         .btn {
             width: 100%;
-            background: #667eea;
-            color: white;
-            padding: 12px;
+            padding: 13px;
             border: none;
-            border-radius: 5px;
-            font-size: 16px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
-            transition: background 0.3s;
+            background: var(--accent-gradient);
+            color: #fff;
+            transition: opacity 0.2s, transform 0.15s;
+            margin-top: 6px;
         }
-        .btn:hover {
-            background: #5568d3;
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-row { display: flex; gap: 10px; }
+        .btn-row .btn { flex: 1; }
+        .btn-outline {
+            background: transparent !important;
+            border: 2px solid var(--accent) !important;
+            color: var(--accent) !important;
         }
+        .btn-outline:hover { background: rgba(108,92,231,0.08) !important; }
+
+        /* ========== DIVIDER ========== */
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 22px 0;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--input-border);
+        }
+
+        /* ========== TELEGRAM BUTTON ========== */
+        .telegram-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 12px;
+            border: 1.5px solid var(--input-border);
+            border-radius: 12px;
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            text-decoration: none;
+        }
+        .telegram-btn:hover {
+            border-color: #0088cc;
+            background: rgba(0,136,204,0.06);
+        }
+        .telegram-btn svg { flex-shrink: 0; }
+
+        /* ========== SWITCH LINK ========== */
+        .switch-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .switch-link a {
+            color: var(--accent);
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .switch-link a:hover { text-decoration: underline; }
+
+        /* ========== ERROR / SUCCESS ========== */
         .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
+            background: var(--error-bg);
+            color: var(--error-text);
+            border: 1px solid var(--error-border);
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+            animation: fadeSlide 0.3s ease;
+        }
+        .error-message.show { display: block; }
+        .agreement-error {
+            color: var(--error-text);
+            font-size: 12px;
+            margin-top: 4px;
             display: none;
         }
-        .error-message.show {
-            display: block;
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .verify-success {
+            font-size: 13px;
+            color: var(--success-text);
+            margin-top: 8px;
+            display: none;
+        }
+        .verify-success.show { display: block; }
+
+        /* ========== TYPE TOGGLE ========== */
+        .type-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 10px;
+            padding: 3px;
+            margin-bottom: 20px;
+        }
+        .type-toggle button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .type-toggle button.active {
+            background: var(--accent-gradient);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(108,92,231,0.25);
+        }
+
+        /* ========== SEND CODE BUTTON ========== */
+        .send-code-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            background: var(--input-bg);
+            color: var(--accent);
+            border: 1.5px solid var(--accent);
+            transition: all 0.2s;
+        }
+        .send-code-btn:hover:not(:disabled) { background: rgba(109,61,249,0.08); }
+        .send-code-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ========== FILE ZONE ========== */
+        .file-zone {
+            border: 2px dashed var(--input-border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .file-zone:hover, .file-zone.dragover { border-color: var(--accent); background: rgba(108,92,231,0.04); }
+        .file-zone.has-file { border-color: var(--success-text); border-style: solid; }
+        .file-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-zone-text { color: var(--text-secondary); font-size: 13px; }
+        .file-icon { font-size: 18px; margin-right: 4px; }
+        .file-zone-name { color: var(--success-text); font-size: 12px; margin-top: 4px; font-weight: 500; }
+
+        /* ========== AGREEMENTS ========== */
+        .agreement-section { margin: 18px 0 8px; }
+        .agreement-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .agreement-item input { display: none; }
+        .check-icon {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--input-border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+            color: transparent;
+        }
+        .agreement-item input:checked + .check-icon {
+            background: var(--accent-gradient);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .check-icon svg { width: 12px; height: 12px; }
+        .agreement-item a { color: var(--accent); font-weight: 500; }
+
+        /* ========== VERIFY GROUP ========== */
+        .verify-group { display: none; }
+        .verify-group.show { display: block; }
+
+        /* ========== VIEW MANAGEMENT ========== */
+        .login-container .register-form,
+        .login-container .success-view,
+        .login-container .recovery-form { display: none; }
+        .login-container[data-view="register"] .login-form { display: none; }
+        .login-container[data-view="register"] .register-form { display: block; }
+        .login-container[data-view="success"] .login-form { display: none; }
+        .login-container[data-view="success"] .success-view { display: block; }
+        .login-container[data-view="recovery"] .login-form { display: none; }
+        .login-container[data-view="recovery"] .recovery-form { display: block; }
+        .recovery-step { display: none; }
+        .recovery-step.active { display: block; }
+
+        /* Register type fields */
+        .register-form .lawyer-fields { display: none; }
+        .register-form[data-type="lawyer"] .student-fields { display: none; }
+        .register-form[data-type="lawyer"] .lawyer-fields { display: block; }
+
+        /* ========== SUCCESS VIEW ========== */
+        .success-view {
+            text-align: center;
+            padding: 40px 0;
+        }
+        .success-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--accent-gradient);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 16px;
+        }
+        .success-text {
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        /* ========== POLICY MODAL ========== */
+        .policy-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .policy-overlay.active { display: flex; }
+        .policy-box {
+            background: var(--card-bg);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 520px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .policy-box-title {
+            padding: 20px 24px;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            border-bottom: 1px solid var(--input-border);
+        }
+        .policy-box-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            font-size: 14px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+        }
+        .policy-box-body h3 {
+            color: var(--text);
+            font-size: 15px;
+            margin: 16px 0 6px;
+        }
+        .policy-box-body h3:first-child { margin-top: 0; }
+        .policy-box-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--input-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .policy-scroll-hint { font-size: 12px; color: var(--text-secondary); }
+        .policy-confirm-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            background: var(--accent-gradient);
+            color: #fff;
+            transition: opacity 0.2s;
+        }
+        .policy-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 768px) {
+            body { padding: 0; align-items: stretch; }
+            .login-card {
+                flex-direction: column;
+                max-width: 100%;
+                min-height: 100vh;
+                border-radius: 0;
+                border: none;
+            }
+            .hero-panel {
+                width: 100%;
+                padding: 24px 28px;
+                min-height: auto;
+                flex-direction: row;
+                align-items: center;
+                justify-content: center;
+            }
+            .form-panel { padding: 28px 24px; }
+        }
+        @media (min-width: 769px) {
+            .form-panel { max-height: 90vh; }
         }
     </style>
+    <script>
+        (function() {
+            const saved = localStorage.getItem('dictum-theme');
+            if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        })();
+    </script>
 </head>
 <body>
-    <div class="login-container">
-        <div class="logo">
-            <h1>🏛️ Dictum</h1>
-            <p>Murojaatlar boshqaruv tizimi</p>
+    <div class="login-card">
+        <!-- LEFT HERO PANEL -->
+        <div class="hero-panel">
+            <div class="hero-logo">
+                <img src="/jurist_logo.png" alt="JuristAI" style="height: 56px; width: auto;">
+            </div>
         </div>
-        <div id="errorMessage" class="error-message"></div>
-        <form id="loginForm">
-            <div class="form-group">
-                <label>Foydalanuvchi nomi</label>
-                <input type="text" id="username" required autofocus>
+
+        <!-- RIGHT FORM PANEL -->
+        <div class="form-panel">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish">
+                <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-secondary)" stroke="none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/></svg></span>
+                <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-secondary)" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg></span>
+            </button>
+
+            <div class="login-container" data-view="login">
+                <!-- LOGIN FORM -->
+                <div class="login-form">
+                    <h1 class="form-heading">Xush kelibsiz</h1>
+                    <p class="form-subtitle">Davom etish uchun <strong>JuristAI</strong> hisobingizga kiring!</p>
+
+                    <div id="loginError" class="error-message"></div>
+                    <form id="loginForm">
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
+                            <input type="text" id="username" placeholder="foydalanuvchi nomi" required autofocus>
+                        </div>
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                            <input type="password" id="password" placeholder="parol" required>
+                        </div>
+                        <div class="form-options">
+                            <label class="remember-me"><input type="checkbox" id="rememberMe"> Eslab qolish</label>
+                            <a href="#" class="forgot-link" onclick="event.preventDefault(); showView('recovery')">Parolni unutdingizmi?</a>
+                        </div>
+                        <div class="btn-row">
+                            <button type="submit" class="btn">Kirish</button>
+                            <button type="button" class="btn btn-outline" onclick="showView('register')">Ro'yxatdan o'tish</button>
+                        </div>
+                    </form>
+
+                    <p class="form-subtitle" style="margin-top:66px;">Yuristga savolingiz bo'lsa yoki hisobingizga kirishda xatolik yuz bergan bo'lsa</p>
+                    <a class="telegram-btn" href="https://t.me/yuristga_savolbot" target="_blank">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#0088cc"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                        Telegram bot orqali murojaat qiling!
+                    </a>
+                </div>
+
+                <!-- REGISTER FORM -->
+                <div class="register-form" data-type="student">
+                    <h1 class="form-heading">Ro'yxatdan o'tish</h1>
+                    <p class="form-subtitle"><strong>JuristAI</strong> jamoasiga qo'shiling</p>
+
+                    <div id="regError" class="error-message"></div>
+
+                    <div class="type-toggle">
+                        <button class="active" onclick="setRegType('student')">Student</button>
+                        <button onclick="setRegType('lawyer')">Yurist</button>
+                    </div>
+
+                    <form id="registerForm" novalidate>
+                        <div class="form-group">
+                            <label>Familiya <span class="label-hint">(F.I.O. yuklanadigan hujjat bilan bir xil bo'lishi kerak)</span></label>
+                            <input type="text" id="regLastName" placeholder="Familiya" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Ism</label>
+                            <input type="text" id="regFirstName" placeholder="Ism" required>
+                        </div>
+
+                        <!-- Student fields -->
+                        <div class="student-fields">
+                            <div class="form-group">
+                                <label>Bosqich</label>
+                                <select id="regLevel" required>
+                                    <option value="">Tanlang...</option>
+                                    <option value="1-bosqich">1-bosqich</option>
+                                    <option value="2-bosqich">2-bosqich</option>
+                                    <option value="3-bosqich">3-bosqich</option>
+                                    <option value="4-bosqich">4-bosqich</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Lawyer fields -->
+                        <div class="lawyer-fields">
+                            <div class="form-group">
+                                <label>Mutaxassislik</label>
+                                <select id="regSpecialization" required>
+                                    <option value="">Tanlang...</option>
+                                    <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
+                                    <option value="Jinoyat huquqi">Jinoyat huquqi</option>
+                                    <option value="Mehnat huquqi">Mehnat huquqi</option>
+                                    <option value="Oila huquqi">Oila huquqi</option>
+                                    <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
+                                    <option value="Ko'chmas mulk">Ko'chmas mulk</option>
+                                    <option value="Soliq huquqi">Soliq huquqi</option>
+                                    <option value="Ma'muriy huquq">Ma'muriy huquq</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Tajriba (yil)</label>
+                                <input type="text" id="regExperience" inputmode="numeric" pattern="[0-9]*" placeholder="Masalan: 5" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Telegram username <span class="label-hint">(ixtiyoriy)</span></label>
+                            <input type="text" id="regTelegram" placeholder="@username">
+                        </div>
+                        <div class="form-group">
+                            <label>Telegram tasdiqlash</label>
+                            <button type="button" class="send-code-btn" id="sendCodeBtn" onclick="sendVerificationCode()">Kod yuborish</button>
+                            <div class="verify-success" id="codeSentMsg"></div>
+                            <div class="agreement-error" id="codeError" style="display:none"></div>
+                        </div>
+                        <div class="form-group verify-group" id="verifyGroup">
+                            <label>Tasdiqlash kodi <span class="label-hint">(Telegramga yuborilgan 4 raqamli kod)</span></label>
+                            <input type="text" id="regVerifyCode" placeholder="1234" maxlength="4" inputmode="numeric" pattern="[0-9]*" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Parol <span class="label-hint">(kamida 6 ta belgi)</span></label>
+                            <input type="password" id="regPassword" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" minlength="6" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Parolni tasdiqlang</label>
+                            <input type="password" id="regPasswordConfirm" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" required>
+                            <div class="agreement-error" id="passwordMatchError" style="display:none">Parollar mos kelmaydi!</div>
+                            <div class="agreement-error" id="passwordLengthError" style="display:none">Parol kamida 6 ta belgi bo'lishi kerak!</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="student-fields">Tasdiqlovchi hujjat <span class="label-hint">(mygov.uz yoki HEMISdan ma'lumotnoma)</span></label>
+                            <label class="lawyer-fields">Tasdiqlovchi hujjat <span class="label-hint">(mygov.uzdan ish joyidan ma'lumotnoma)</span></label>
+                            <div class="file-zone" id="fileZone">
+                                <input type="file" id="regDocument" accept=".jpg,.jpeg,.png,.webp,.pdf" onchange="handleFile(this)">
+                                <div class="file-zone-text">
+                                    <span class="file-icon">📎</span>
+                                    JPG, PNG yoki PDF yuklang
+                                </div>
+                                <div class="file-zone-name" id="fileName"></div>
+                            </div>
+                        </div>
+
+                        <!-- Agreements -->
+                        <div class="agreement-section">
+                            <div class="agreement-item" onclick="openPolicy('privacy')">
+                                <input type="checkbox" id="privacyCheck">
+                                <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                                <span><a>Maxfiylik siyosati</a>ni o'qing va tasdiqlang</span>
+                            </div>
+                            <div class="agreement-error" id="privacyError">Maxfiylik siyosatini tasdiqlang!</div>
+                            <div class="agreement-item" onclick="openPolicy('oferta')">
+                                <input type="checkbox" id="ofertaCheck">
+                                <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                                <span><a>Ommaviy oferta</a>ni o'qing va tasdiqlang</span>
+                            </div>
+                            <div class="agreement-error" id="ofertaError">Ommaviy ofertani tasdiqlang!</div>
+                        </div>
+
+                        <button type="submit" class="btn" id="registerBtn" disabled>Ro'yxatdan o'tish</button>
+                    </form>
+                    <div class="switch-link">
+                        Hisobingiz bormi? <a onclick="showView('login')">Kirish</a>
+                    </div>
+                </div>
+
+                <!-- SUCCESS VIEW -->
+                <div class="success-view">
+                    <div class="success-icon">&#10004;</div>
+                    <div class="success-text" id="successText">Tabriklaymiz, Sizning so'rovingiz muvaffaqiyatli yuborildi! Admin javobini kuting!</div>
+                    <div class="switch-link"><a onclick="showView('login')">Kirish sahifasiga qaytish</a></div>
+                </div>
+
+                <!-- PASSWORD RECOVERY VIEW -->
+                <div class="recovery-form">
+                    <h1 class="form-heading">Parolni tiklash</h1>
+                    <p class="form-subtitle">Ro'yxatdan o'tgan Telegram username orqali parolingizni tiklang</p>
+
+                    <div id="recoveryError" class="error-message"></div>
+
+                    <!-- STEP 1: Enter telegram username & get code -->
+                    <div class="recovery-step active" id="recoveryStep1">
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+                            <input type="text" id="recoveryTelegram" placeholder="telegram username" required>
+                        </div>
+                        <button type="button" class="btn" id="recoveryCodeBtn" onclick="sendRecoveryCode()">Kod olish</button>
+                        <div class="verify-success" id="recoveryCodeMsg"></div>
+                        <div class="agreement-error" id="recoveryCodeError" style="display:none"></div>
+                    </div>
+
+                    <!-- STEP 2: Enter code from telegram -->
+                    <div class="recovery-step" id="recoveryStep2">
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                            <input type="text" id="recoveryCode" placeholder="4 raqamli kod" maxlength="4" inputmode="numeric" pattern="[0-9]*" required>
+                        </div>
+                        <button type="button" class="btn" id="recoveryVerifyBtn" onclick="verifyRecoveryCode()">Tasdiqlash</button>
+                        <div class="agreement-error" id="recoveryVerifyError" style="display:none"></div>
+                    </div>
+
+                    <!-- STEP 3: New password -->
+                    <div class="recovery-step" id="recoveryStep3">
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                            <input type="password" id="recoveryNewPassword" placeholder="yangi parol (kamida 6 belgi)" minlength="6" required>
+                        </div>
+                        <div class="form-group has-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                            <input type="password" id="recoveryConfirmPassword" placeholder="parolni tasdiqlang" required>
+                        </div>
+                        <div class="agreement-error" id="recoveryPasswordError" style="display:none"></div>
+                        <button type="button" class="btn" onclick="submitNewPassword()">Parolni yangilash</button>
+                    </div>
+
+                    <div class="switch-link">
+                        <a onclick="showView('login')">Kirish sahifasiga qaytish</a> | <a onclick="showView('register')">Ro'yxatdan o'tish</a>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Parol</label>
-                <input type="password" id="password" required>
-            </div>
-            <button type="submit" class="btn">Kirish</button>
-        </form>
+        </div>
     </div>
+
+    <!-- Policy modal -->
+    <div class="policy-overlay" id="policyOverlay">
+        <div class="policy-box">
+            <div class="policy-box-title" id="policyTitle">Maxfiylik siyosati</div>
+            <div class="policy-box-body" id="policyBody" onscroll="checkPolicyScroll()"></div>
+            <div class="policy-box-footer">
+                <span class="policy-scroll-hint" id="policyScrollHint">Pastga aylantiring</span>
+                <button class="policy-confirm-btn" id="policyConfirmBtn" disabled onclick="confirmPolicy()">Tasdiqlayman</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Theme toggle
+        function toggleTheme() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            if (isDark) {
+                document.documentElement.removeAttribute('data-theme');
+                localStorage.removeItem('dictum-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('dictum-theme', 'dark');
+            }
+        }
+
+        // View management
+        function showView(view) {
+            document.querySelector('.login-container').setAttribute('data-view', view);
+            if (view === 'login') document.getElementById('username').focus();
+        }
+
+        // Registration type toggle
+        function setRegType(type) {
+            document.querySelector('.register-form').setAttribute('data-type', type);
+            document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('privacyCheck').checked = false;
+            document.getElementById('ofertaCheck').checked = false;
+            document.getElementById('privacyError').style.display = 'none';
+            document.getElementById('ofertaError').style.display = 'none';
+            updateRegBtn();
+        }
+
+        // File handling
+        function handleFile(input) {
+            const zone = document.getElementById('fileZone');
+            const nameEl = document.getElementById('fileName');
+            if (input.files.length > 0) {
+                nameEl.textContent = input.files[0].name;
+                zone.classList.add('has-file');
+            } else {
+                nameEl.textContent = '';
+                zone.classList.remove('has-file');
+            }
+        }
+
+        // Drag and drop
+        const fileZone = document.getElementById('fileZone');
+        fileZone.addEventListener('dragover', e => { e.preventDefault(); fileZone.classList.add('dragover'); });
+        fileZone.addEventListener('dragleave', () => fileZone.classList.remove('dragover'));
+        fileZone.addEventListener('drop', e => {
+            e.preventDefault();
+            fileZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                document.getElementById('regDocument').files = e.dataTransfer.files;
+                handleFile(document.getElementById('regDocument'));
+            }
+        });
+
+        // Policy system
+        let currentPolicyType = null;
+
+        const PRIVACY_TEXT = `<h3>1. Umumiy qoidalar</h3>
+<p>Ushbu Maxfiylik siyosati Dictum advokatlik firmasi ("Tashkilot") tomonidan qabul qilingan bo'lib, foydalanuvchilarning shaxsiy ma'lumotlarini yig'ish, saqlash va qayta ishlash tartibini belgilaydi.</p>
+
+<h3>2. Yig'iladigan ma'lumotlar</h3>
+<p>Ro'yxatdan o'tish jarayonida quyidagi ma'lumotlar yig'iladi: ism, familiya, ta'lim bosqichi yoki kasbiy ma'lumotlar, Telegram username, hamda yuklangan hujjat nusxasi.</p>
+
+<h3>3. Ma'lumotlardan foydalanish</h3>
+<p>Yig'ilgan ma'lumotlar faqat quyidagi maqsadlarda ishlatiladi: foydalanuvchi hisobini yaratish, shaxsni tasdiqlash, va tizim ichidagi muloqot uchun.</p>
+
+<h3>4. Ma'lumotlarni saqlash</h3>
+<p>Shaxsiy ma'lumotlar xavfsiz serverlarda saqlanadi. Tashkilot ma'lumotlarning ruxsatsiz kirishdan himoyalanishi uchun barcha zarur texnik va tashkiliy choralarni ko'radi.</p>
+
+<h3>5. Uchinchi tomonlarga oshkor qilish</h3>
+<p>Foydalanuvchilarning shaxsiy ma'lumotlari foydalanuvchining roziligi yoki qonun hujjatlari talabi bo'lmasa uchinchi tomonlarga oshkor qilinmaydi.</p>
+
+<h3>6. Foydalanuvchi huquqlari</h3>
+<p>Foydalanuvchi istalgan vaqtda o'z shaxsiy ma'lumotlariga kirish, ularni tahrirlash yoki o'chirish huquqiga ega. Buning uchun administratorga murojaat qilish kifoya.</p>
+
+<h3>7. O'zgarishlar</h3>
+<p>Tashkilot ushbu Maxfiylik siyosatiga istalgan vaqtda o'zgartirish kiritish huquqini o'zida saqlab qoladi. O'zgarishlar tizimda e'lon qilinadi.</p>
+
+<h3>8. Bog'lanish</h3>
+<p>Maxfiylik siyosati bo'yicha savollar uchun Dictum advokatlik firmasi bilan bog'lanishingiz mumkin.</p>`;
+
+        const OFERTA_TEXT = `<h3>1. Umumiy shartlar</h3>
+<p>Ushbu Ommaviy oferta Dictum advokatlik firmasi ("Tashkilot") tomonidan taqdim etilayotgan "Dictum Dashboard" tizimidan foydalanish shartlarini belgilaydi.</p>
+
+<h3>2. Oferta predmeti</h3>
+<p>Tashkilot foydalanuvchilarga murojaatlarni boshqarish, huquqiy tahlil va maslahat olish imkoniyatini beruvchi onlayn tizimdan foydalanish huquqini taqdim etadi.</p>
+
+<h3>3. Foydalanuvchi majburiyatlari</h3>
+<p>Foydalanuvchi quyidagilarga rioya qilishni o'z zimmasiga oladi: haqiqiy ma'lumotlar kiritish, tizimdan qonuniy maqsadlarda foydalanish, boshqa foydalanuvchilar huquqlarini hurmat qilish.</p>
+
+<h3>4. Tashkilot majburiyatlari</h3>
+<p>Tashkilot tizimning uzluksiz ishlashini ta'minlash, foydalanuvchi ma'lumotlarining xavfsizligini saqlash va texnik qo'llab-quvvatlash ko'rsatish majburiyatlarini oladi.</p>
+
+<h3>5. Foydalanish cheklovlari</h3>
+<p>Tizimdan noqonuniy maqsadlarda foydalanish, boshqa foydalanuvchilarning ma'lumotlariga ruxsatsiz kirish yoki tizim ishlashiga zarar yetkazish qat'iyan taqiqlanadi.</p>
+
+<h3>6. Javobgarlik</h3>
+<p>Tashkilot tizimda berilgan huquqiy maslahatlar aniqligiga kafolat bermaydi. Barcha maslahatlar faqat ma'lumot berish maqsadida taqdim etiladi va professional yuridik xizmat o'rnini bosmaydi.</p>
+
+<h3>7. Ofertaning amal qilish muddati</h3>
+<p>Ushbu oferta foydalanuvchi ro'yxatdan o'tgan paytdan boshlab amal qiladi va foydalanuvchi hisobi faol bo'lgan davomda kuchda qoladi.</p>
+
+<h3>8. Nizolarni hal qilish</h3>
+<p>Ushbu ofertadan kelib chiqadigan barcha nizolar muzokara yo'li bilan, muzokara natija bermagan taqdirda — O'zbekiston Respublikasi qonunchiligiga muvofiq hal qilinadi.</p>`;
+
+        function openPolicy(type) {
+            currentPolicyType = type;
+            const overlay = document.getElementById('policyOverlay');
+            const title = document.getElementById('policyTitle');
+            const body = document.getElementById('policyBody');
+            const hint = document.getElementById('policyScrollHint');
+            const btn = document.getElementById('policyConfirmBtn');
+
+            title.textContent = type === 'privacy' ? 'Maxfiylik siyosati' : 'Ommaviy oferta';
+            body.innerHTML = type === 'privacy' ? PRIVACY_TEXT : OFERTA_TEXT;
+            btn.disabled = true;
+            hint.textContent = 'Pastga aylantiring';
+            overlay.classList.add('active');
+            requestAnimationFrame(function() {
+                body.scrollTop = 0;
+                if (body.scrollHeight <= body.clientHeight + 5) {
+                    btn.disabled = false;
+                    hint.textContent = '';
+                }
+            });
+        }
+
+        function checkPolicyScroll() {
+            const body = document.getElementById('policyBody');
+            const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+            if (atBottom) {
+                document.getElementById('policyConfirmBtn').disabled = false;
+                document.getElementById('policyScrollHint').textContent = '';
+            }
+        }
+
+        function confirmPolicy() {
+            const overlay = document.getElementById('policyOverlay');
+            if (currentPolicyType === 'privacy') {
+                document.getElementById('privacyCheck').checked = true;
+                document.getElementById('privacyError').style.display = 'none';
+            } else {
+                document.getElementById('ofertaCheck').checked = true;
+                document.getElementById('ofertaError').style.display = 'none';
+            }
+            overlay.classList.remove('active');
+            updateRegBtn();
+        }
+
+        document.getElementById('policyOverlay').addEventListener('click', function(e) {
+            if (e.target === this) this.classList.remove('active');
+        });
+
+        function updateRegBtn() {
+            const ok = document.getElementById('privacyCheck').checked && document.getElementById('ofertaCheck').checked;
+            document.getElementById('registerBtn').disabled = !ok;
+        }
+
+        // Login form
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('errorMessage');
+            const errorDiv = document.getElementById('loginError');
             try {
-                const response = await fetch('http://localhost:3000/api/login', {
+                const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: username, password: password })
+                    body: JSON.stringify({
+                        username: document.getElementById('username').value,
+                        password: document.getElementById('password').value
+                    })
                 });
                 const data = await response.json();
                 if (response.ok) {
+                    // Remember me
+                    if (document.getElementById('rememberMe').checked) {
+                        localStorage.setItem('juristai_remember', JSON.stringify({
+                            username: document.getElementById('username').value,
+                            password: document.getElementById('password').value
+                        }));
+                    } else {
+                        localStorage.removeItem('juristai_remember');
+                    }
                     window.location.href = '/dashboard.html';
                 } else {
                     errorDiv.textContent = data.error || 'Kirish xato';
-                    errorDiv.classList.add('show');
+                    errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
                 }
             } catch (error) {
                 errorDiv.textContent = 'Xatolik: ' + error.message;
-                errorDiv.classList.add('show');
+                errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
+            }
+        });
+
+        // Tajriba: allow only numbers
+        document.getElementById('regExperience').addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // Remove red border on input
+        document.querySelectorAll('#registerForm input, #registerForm select').forEach(function(el) {
+            el.addEventListener('input', function() { this.classList.remove('input-invalid'); });
+            el.addEventListener('change', function() { this.classList.remove('input-invalid'); });
+        });
+
+        // Verification code: allow only numbers
+        document.getElementById('regVerifyCode').addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // Remember me: restore saved credentials
+        (function() {
+            const saved = localStorage.getItem('juristai_remember');
+            if (saved) {
+                try {
+                    const { username, password } = JSON.parse(saved);
+                    document.getElementById('username').value = username || '';
+                    document.getElementById('password').value = password || '';
+                    document.getElementById('rememberMe').checked = true;
+                } catch(e) {}
+            }
+        })();
+
+        // Password recovery state
+        let recoveryToken = '';
+        let recoveryUsername = '';
+
+        async function sendRecoveryCode() {
+            const btn = document.getElementById('recoveryCodeBtn');
+            const errorEl = document.getElementById('recoveryCodeError');
+            const msgEl = document.getElementById('recoveryCodeMsg');
+            const mainError = document.getElementById('recoveryError');
+            const telegramInput = document.getElementById('recoveryTelegram').value.trim().replace('@', '');
+
+            errorEl.style.display = 'none';
+            msgEl.classList.remove('show');
+            mainError.textContent = '';
+            mainError.classList.remove('show');
+
+            if (!telegramInput) {
+                errorEl.textContent = 'Telegram username kiriting';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Tekshirilmoqda...';
+
+            try {
+                const resp = await fetch('/api/password-recovery/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_username: telegramInput })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    recoveryToken = data.token;
+                    recoveryUsername = telegramInput;
+                    const deepLink = 'https://t.me/yuristga_savolbot?start=recover_' + data.token;
+                    msgEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:var(--accent);font-weight:700;text-decoration:underline;">Kodni olish uchun shu yerni bosing</a> — Telegram ochiladi va kod keladi';
+                    msgEl.classList.add('show');
+                    // Show step 2
+                    document.getElementById('recoveryStep1').classList.remove('active');
+                    document.getElementById('recoveryStep2').classList.add('active');
+                    document.getElementById('recoveryCode').focus();
+                    // Countdown
+                    let seconds = 120;
+                    btn.textContent = seconds + 's';
+                    const timer = setInterval(() => {
+                        seconds--;
+                        btn.textContent = seconds + 's';
+                        if (seconds <= 0) {
+                            clearInterval(timer);
+                            btn.disabled = false;
+                            btn.textContent = 'Qayta yuborish';
+                        }
+                    }, 1000);
+                } else {
+                    errorEl.textContent = data.error || 'Xatolik yuz berdi';
+                    errorEl.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Kod olish';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Serverga ulanib bo\'lmadi';
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Kod olish';
+            }
+        }
+
+        async function verifyRecoveryCode() {
+            const btn = document.getElementById('recoveryVerifyBtn');
+            const errorEl = document.getElementById('recoveryVerifyError');
+            const code = document.getElementById('recoveryCode').value.trim();
+
+            errorEl.style.display = 'none';
+
+            if (!code || code.length !== 4) {
+                errorEl.textContent = '4 raqamli kodni kiriting';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Tekshirilmoqda...';
+
+            try {
+                const resp = await fetch('/api/password-recovery/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: recoveryToken, code: code })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    // Show step 3
+                    document.getElementById('recoveryStep2').classList.remove('active');
+                    document.getElementById('recoveryStep3').classList.add('active');
+                    document.getElementById('recoveryNewPassword').focus();
+                } else {
+                    errorEl.textContent = data.error || 'Kod noto\'g\'ri';
+                    errorEl.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Tasdiqlash';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Serverga ulanib bo\'lmadi';
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Tasdiqlash';
+            }
+        }
+
+        async function submitNewPassword() {
+            const errorEl = document.getElementById('recoveryPasswordError');
+            const mainError = document.getElementById('recoveryError');
+            const newPass = document.getElementById('recoveryNewPassword').value;
+            const confirmPass = document.getElementById('recoveryConfirmPassword').value;
+
+            errorEl.style.display = 'none';
+            mainError.textContent = '';
+            mainError.classList.remove('show');
+
+            if (newPass.length < 6) {
+                errorEl.textContent = 'Parol kamida 6 ta belgi bo\'lishi kerak';
+                errorEl.style.display = 'block';
+                return;
+            }
+            if (newPass !== confirmPass) {
+                errorEl.textContent = 'Parollar mos kelmaydi';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/password-recovery/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: recoveryToken, code: document.getElementById('recoveryCode').value.trim(), new_password: newPass })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    // Show success and go to login
+                    document.getElementById('successText').textContent = 'Parolingiz muvaffaqiyatli yangilandi! Endi yangi parol bilan kiring.';
+                    showView('success');
+                } else {
+                    errorEl.textContent = data.error || 'Xatolik yuz berdi';
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Serverga ulanib bo\'lmadi';
+                errorEl.style.display = 'block';
+            }
+        }
+
+        // Recovery code: only numbers
+        document.getElementById('recoveryCode').addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // Send verification code
+        let codeVerified = false;
+        let verifyToken = '';
+        async function sendVerificationCode() {
+            const btn = document.getElementById('sendCodeBtn');
+            const errorEl = document.getElementById('codeError');
+            const successEl = document.getElementById('codeSentMsg');
+            const verifyGroup = document.getElementById('verifyGroup');
+
+            errorEl.style.display = 'none';
+            successEl.classList.remove('show');
+
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+
+            try {
+                const resp = await fetch('/api/send-verification-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    verifyToken = data.token;
+                    const deepLink = 'https://t.me/yuristga_savolbot?start=verify_' + data.token;
+                    successEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:var(--accent);font-weight:700;text-decoration:underline;">Kodni olish uchun shu yerni bosing</a> — Telegram ochiladi va kod keladi';
+                    successEl.classList.add('show');
+                    verifyGroup.classList.add('show');
+                    document.getElementById('regVerifyCode').focus();
+                    codeVerified = true;
+                    let seconds = 120;
+                    btn.textContent = `${seconds}s`;
+                    const timer = setInterval(() => {
+                        seconds--;
+                        btn.textContent = `${seconds}s`;
+                        if (seconds <= 0) {
+                            clearInterval(timer);
+                            btn.disabled = false;
+                            btn.textContent = 'Qayta yuborish';
+                        }
+                    }, 1000);
+                } else {
+                    errorEl.textContent = data.error || 'Kod yuborib bo\'lmadi';
+                    errorEl.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Kod yuborish';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Xatolik: ' + err.message;
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Kod yuborish';
+            }
+        }
+
+        // Register form
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const errorDiv = document.getElementById('regError');
+            errorDiv.classList.remove('show');
+
+            const telegramInput = document.getElementById('regTelegram');
+            const tgVal = telegramInput.value.trim();
+            if (tgVal && !tgVal.startsWith('@')) {
+                telegramInput.value = '@' + tgVal;
+            }
+
+            const regType = document.querySelector('.register-form').getAttribute('data-type');
+            const requiredFields = this.querySelectorAll('input[required], select[required]');
+            let firstInvalid = null;
+            requiredFields.forEach(function(field) {
+                const parent = field.closest('.student-fields, .lawyer-fields');
+                if (parent) {
+                    if (parent.classList.contains('student-fields') && regType !== 'student') return;
+                    if (parent.classList.contains('lawyer-fields') && regType !== 'lawyer') return;
+                }
+                if (field.id === 'regVerifyCode') return;
+                field.classList.remove('input-invalid');
+                if (!field.value.trim() || (field.tagName === 'SELECT' && !field.value)) {
+                    void field.offsetWidth;
+                    field.classList.add('input-invalid');
+                    if (!firstInvalid) firstInvalid = field;
+                }
+            });
+            if (firstInvalid) {
+                firstInvalid.focus();
+                return;
+            }
+
+            var regPwd = document.getElementById('regPassword');
+            var regPwdConfirm = document.getElementById('regPasswordConfirm');
+            document.getElementById('passwordMatchError').style.display = 'none';
+            document.getElementById('passwordLengthError').style.display = 'none';
+            if (regPwd.value.length < 6) {
+                document.getElementById('passwordLengthError').style.display = 'block';
+                regPwd.focus();
+                return;
+            }
+            if (regPwd.value !== regPwdConfirm.value) {
+                document.getElementById('passwordMatchError').style.display = 'block';
+                regPwdConfirm.focus();
+                return;
+            }
+
+            var verifyCode = document.getElementById('regVerifyCode');
+            if (!codeVerified || !verifyCode.value.trim() || verifyCode.value.trim().length !== 4) {
+                if (!codeVerified) {
+                    var codeErr = document.getElementById('codeError');
+                    codeErr.textContent = 'Avval tasdiqlash kodini yuboring!';
+                    codeErr.style.display = 'block';
+                } else {
+                    verifyCode.classList.add('input-invalid');
+                    verifyCode.focus();
+                }
+                return;
+            }
+
+            if (!document.getElementById('privacyCheck').checked) {
+                document.getElementById('privacyError').style.display = 'block';
+                return;
+            }
+            if (!document.getElementById('ofertaCheck').checked) {
+                document.getElementById('ofertaError').style.display = 'block';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('type', regType);
+            formData.append('first_name', document.getElementById('regFirstName').value.trim());
+            formData.append('last_name', document.getElementById('regLastName').value.trim());
+            formData.append('telegram_username', document.getElementById('regTelegram').value.trim());
+            formData.append('password', regPwd.value);
+            formData.append('verification_code', document.getElementById('regVerifyCode').value.trim());
+            formData.append('verification_token', verifyToken);
+
+            if (regType === 'student') {
+                formData.append('level', document.getElementById('regLevel').value);
+            } else {
+                formData.append('specialization', document.getElementById('regSpecialization').value);
+                formData.append('experience_years', document.getElementById('regExperience').value);
+            }
+
+            const fileInput = document.getElementById('regDocument');
+            if (fileInput.files.length > 0) {
+                formData.append('document', fileInput.files[0]);
+            }
+
+            const btn = document.getElementById('registerBtn');
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+
+            try {
+                const response = await fetch('/api/register', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('successText').textContent = data.message;
+                    showView('success');
+                } else {
+                    errorDiv.textContent = data.error || 'Xatolik yuz berdi';
+                    errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
+                    btn.disabled = false;
+                    btn.textContent = 'Ro\'yxatdan o\'tish';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Xatolik: ' + error.message;
+                errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
+                btn.disabled = false;
+                btn.textContent = 'Ro\'yxatdan o\'tish';
             }
         });
     </script>

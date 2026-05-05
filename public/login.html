@@ -30,14 +30,36 @@
             text-align: center;
             margin-bottom: 30px;
         }
+        .logo-block {
+            display: inline-block;
+            text-align: left;
+        }
+        .logo-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
         .logo h1 {
             color: #2c3e50;
-            font-size: 28px;
-            margin-bottom: 5px;
+            font-size: 36px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            letter-spacing: 4px;
+            margin: 0;
+        }
+        .logo-scales {
+            width: 40px;
+            height: 40px;
+            flex-shrink: 0;
+            color: #2c3e50;
         }
         .logo p {
             color: #7f8c8d;
-            font-size: 14px;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 4px;
         }
         .form-group {
             margin-bottom: 20px;
@@ -88,40 +110,54 @@
             position: relative;
         }
         .password-wrapper input {
-            padding-right: 45px;
+            padding-right: 42px;
         }
-        .toggle-password {
+        .eye-btn {
             position: absolute;
-            right: 12px;
+            right: 10px;
             top: 50%;
             transform: translateY(-50%);
             background: none;
             border: none;
             cursor: pointer;
-            padding: 0;
+            padding: 4px;
+            color: #999;
+            font-size: 18px;
             line-height: 1;
-            display: flex;
-            align-items: center;
+            user-select: none;
+            -webkit-user-select: none;
         }
-        .toggle-password svg {
+        .eye-btn:hover {
+            color: #667eea;
+        }
+        .eye-btn svg {
             width: 20px;
             height: 20px;
-            fill: none;
-            stroke: #999;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-        }
-        .toggle-password.active svg {
-            stroke: #667eea;
+            display: block;
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="logo">
-            <h1>🏛️ Dictum</h1>
-            <p>Murojaatlar boshqaruv tizimi</p>
+            <div class="logo-block">
+                <div class="logo-row">
+                    <h1>DICTUM</h1>
+                    <svg class="logo-scales" viewBox="0 0 80 96" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="40" cy="5" r="3.5"/>
+                        <rect x="38" y="8" width="4" height="72" rx="1"/>
+                        <rect x="5" y="14" width="70" height="3" rx="1.5"/>
+                        <rect x="24" y="80" width="32" height="4" rx="2"/>
+                        <line x1="9" y1="17" x2="1" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                        <line x1="9" y1="17" x2="17" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                        <path d="M0.5 52 C1 58 5 62 9 62 C13 62 17 58 17.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                        <line x1="71" y1="17" x2="63" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                        <line x1="71" y1="17" x2="79" y2="52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                        <path d="M62.5 52 C63 58 67 62 71 62 C75 62 79 58 79.5 52" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <p>Yuristlar yordamchi tizimi</p>
+            </div>
         </div>
         <div id="errorMessage" class="error-message"></div>
         <form id="loginForm">
@@ -133,11 +169,10 @@
                 <label>Parol</label>
                 <div class="password-wrapper">
                     <input type="password" id="password" required>
-                    <button type="button" class="toggle-password" id="toggleBtn" onclick="togglePassword()">
-                        <svg id="eyeIcon" viewBox="0 0 24 24">
-                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                            <line x1="1" y1="1" x2="23" y2="23"/>
+                    <button type="button" class="eye-btn" id="eyeBtn">
+                        <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
                         </svg>
                     </button>
                 </div>
@@ -146,20 +181,16 @@
         </form>
     </div>
     <script>
-        function togglePassword() {
-            const input = document.getElementById('password');
-            const btn = document.getElementById('toggleBtn');
-            const icon = document.getElementById('eyeIcon');
-            if (input.type === 'password') {
-                input.type = 'text';
-                btn.classList.add('active');
-                icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
-            } else {
-                input.type = 'password';
-                btn.classList.remove('active');
-                icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
-            }
-        }
+        // Eye icon - show password on press & hold
+        const eyeBtn = document.getElementById('eyeBtn');
+        const passwordInput = document.getElementById('password');
+        function showPassword() { passwordInput.type = 'text'; }
+        function hidePassword() { passwordInput.type = 'password'; }
+        eyeBtn.addEventListener('mousedown', showPassword);
+        eyeBtn.addEventListener('mouseup', hidePassword);
+        eyeBtn.addEventListener('mouseleave', hidePassword);
+        eyeBtn.addEventListener('touchstart', function(e) { e.preventDefault(); showPassword(); });
+        eyeBtn.addEventListener('touchend', hidePassword);
 
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
