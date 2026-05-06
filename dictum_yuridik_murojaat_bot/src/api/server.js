@@ -2588,7 +2588,7 @@ async function retrieveLegalContext(query, topic, language = null) {
       arts ? (isUz ? `  Moddalar: ${arts}` : `  Статьи: ${arts}`) : '',
       r.chapter ? `  ${r.chapter}` : '',
       text,
-      r.source_url ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.source_url})` : '',
+      (r.is_active === true && r.source_url) ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.source_url})` : '',
     ].filter(Boolean).join('\n');
   }).join('\n\n');
 
@@ -2650,11 +2650,12 @@ async function retrieveLegalContext(query, topic, language = null) {
       const dateStr = formatDate(r.adoption_date);
       const docNum = r.document_number;
       const meta = [dateStr, docNum ? `\u2116 ${docNum}` : null].filter(Boolean).join(', ');
+      const safeUrl = (r.is_active === true && r.source_url) ? r.source_url : null;
       sourceRefLines.push(
         `- ${r.law_name}` +
         (meta ? ` (${meta})` : '') +
         `, ${art}-modda` +
-        (r.source_url ? ` | ${r.source_url}` : '')
+        (safeUrl ? ` | ${safeUrl}` : '')
       );
     }
   }
