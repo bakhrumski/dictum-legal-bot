@@ -1,14 +1,14 @@
-# Node modules
+# Dependencies
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Environment variables
 .env
 .env.local
 .env.*.local
-
-# Logs
-*.log
-npm-debug.log*
+.env.txt
 
 # OS files
 .DS_Store
@@ -17,11 +17,23 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
 
 # Temporary files
 *.tmp
 *.temp
-test-db.js
+.cache/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
 
 # Database files
 *.sql.backup
@@ -29,7 +41,7 @@ test-db.js
 # Local Windows files
 *.bat
 *.vbs
-.env.txt
+test-db.js
 test-api.js
 nul
 
