@@ -163,6 +163,34 @@ function stripLeakedInstructions(text) {
   if (!text) return text;
   let cleaned = text;
 
+  // ── Strip Gemini agent-mode leakage ──
+  // Some Gemini code-paths (tool-use / search-grounding) leak their internal
+  // scaffolding into the response: "tool_code\nprint(...)\nthought\n<english
+  // meta-reasoning>\n<actual answer>". None of this is meant for end users.
+
+  // 1. Fenced tool_code blocks: ```tool_code … ```
+  cleaned = cleaned.replace(/```\s*tool_code[\s\S]*?```/gi, '');
+
+  // 2. Bare leading "tool_code\n<code>" up to the next "thought" / blank line
+  cleaned = cleaned.replace(
+    /^[\s]*tool_code\s*\n[\s\S]*?(?=\n\s*thought\s*\n|\n\s*\n|$)/i,
+    ''
+  );
+
+  // 3. Bare leading "thought\n<english reasoning>" — the actual Uzbek answer
+  //    starts after this block. Strip until a paragraph that begins with a
+  //    typical answer opener (Uzbek noun, markdown header, or bold).
+  cleaned = cleaned.replace(
+    /^[\s]*thought\s*\n[\s\S]*?(?=\n\s*(?:O['ʻ`]?zbekiston|Advokat|Mehnat|Fuqarolik|Soliq|Jinoyat|Oila|Shartnoma|Korporativ|##\s|\*\*[A-ZÒOʻ]))/i,
+    ''
+  );
+
+  // 4. Gemini grounding citations that bleed through: "[cite: 1, 2, WEB-1]"
+  cleaned = cleaned.replace(/\[cite:\s*[^\]]+\]/gi, '');
+
+  // 5. Stray "& Tasdiqlangan javob — <name>" inline tags from context bundling
+  cleaned = cleaned.replace(/&\s*Tasdiqlangan\s+javob\s*—[^\n]*/gi, '');
+
   // Strip lines that are pure internal instruction headers
   cleaned = cleaned.replace(/^[\s*_>]*DEFINITSIYA\s+SAVOLI[^\n]*\n?/gim, '');
   cleaned = cleaned.replace(/^[\s*_>]*ICHKI\s+QOIDALAR[^\n]*\n?/gim, '');
