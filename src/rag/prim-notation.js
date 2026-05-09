@@ -180,9 +180,14 @@ function stripLeakedInstructions(text) {
     cleaned = cleaned.replace(new RegExp(`^\\s*${h}\\s*:\\s*$`, 'gim'), '');
   }
 
-  // Convert bullet characters (*, •, ·) at the start of a list item to a hyphen.
-  // Markdown bullets only — inline ** for bold are untouched.
-  cleaned = cleaned.replace(/^([ \t]*)[*•·](\s+)/gm, '$1-$2');
+  // Remove bullet prefixes entirely — no dots, no dashes-as-bullets.
+  // Matches "* text", "• text", "· text" at line start (indent preserved).
+  cleaned = cleaned.replace(/^([ \t]*)[*•·]\s+/gm, '$1');
+
+  // Strip standalone section-header bold lines (e.g. "**Batafsil tushuntirish**")
+  // that appear on their own line — keeps the following content, removes the label.
+  // Does NOT strip bold within a normal sentence.
+  cleaned = cleaned.replace(/^[ \t]*\*\*[^*\n]{2,60}\*\*\s*:?\s*$/gm, '');
 
   // Collapse triple-blank-lines created by the stripping
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');

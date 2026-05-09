@@ -2279,6 +2279,18 @@ function isFailedAnswer(text = '') {
   return FAILED_ANSWER_PATTERNS.some(p => p.test(text));
 }
 
+// Returns true when the corpus question has distinctive long words (>5 chars)
+// that are absent from the user question — signals an entity mismatch
+// (e.g. user asked "Advokat kim?" but corpus Q is "Advokat stajyori kim?").
+function hasCriticalTermMismatch(userQuestion, corpusQuestion) {
+  if (!corpusQuestion) return false;
+  const userLower = userQuestion.toLowerCase();
+  const corpusWords = corpusQuestion.toLowerCase().split(/[\s,.?!]+/).filter(w => w.length > 5);
+  if (corpusWords.length === 0) return false;
+  const missing = corpusWords.filter(w => !userLower.includes(w));
+  return missing.length / corpusWords.length > 0.40;
+}
+
 const LEGAL_TOPICS = {
   'mehnat':       'Mehnat huquqi',
   'oila':         'Oila huquqi',
@@ -2706,8 +2718,12 @@ JAVOB SIFATI:
 - Apologetik gaplar yozmang ("uzr so'rayman", "tushuntirib bera olmadim" — TAQIQLANGAN).
 - Foydalanuvchi tuzatish bergan bo'lsa, tuzatishni JIM va to'g'ridan-to'g'ri integratsiya qiling — uzr so'ramang, oldingi javobni eslatmang. Yangi to'g'ri javobni boshidan bering.
 
-RO'YXAT USLUBI:
-- Ro'yxatda BULLET nuqta (•, ·, *) ISHLATMANG — buning o'rniga raqam (1., 2., 3.), harf (a), b), c)) yoki tire (-) ishlating.
+YOZISH USLUBI — JUDA MUHIM:
+- Javobni YAXLIT PARAGRAFLAR sifatida yozing — ro'yxat formatida EMAS.
+- BULLET nuqta (•, ·, *) va tire (-) ro'yxat sifatida MUTLAQO TAQIQLANGAN.
+- Alohida sarlavha va bo'limlar QO'YMANG ("Huquqiy asos:", "Batafsil tushuntirish:", "Amaliy ahamiyati:" kabilar TAQIQLANGAN).
+- Har bir fikr oldingisiga bog'liq, oqimli gap sifatida yozing.
+- Ma'lumotni bir nechta joyda TAKRORLAMANG — har bir gap yangi ma'lumot bersin.
 
 KROSS-SOHA:
 - Kontekstda boshqa huquq sohasidagi moddalar ham bo'lishi mumkin — agar savolga aloqador bo'lsa, ulardan foydalaning va manba sifatida qonun nomini aniq ko'rsating.
@@ -2724,18 +2740,18 @@ ${definitionHint}
 Javob ikki qismdan iborat bo'lsin:
 
 **1. Qisqa javob** (1-3 gap):
-Foydalanuvchi savoliga to'g'ridan-to'g'ri, aniq javob. Asosiy modda(lar) va qonun nomini ALBATTA aniq ko'rsating — definitsiya bo'lsa ham, masalan: "(MK, 541-modda)".
+Foydalanuvchi savoliga to'g'ridan-to'g'ri, aniq javob. Asosiy modda(lar) va qonun nomini ALBATTA aniq ko'rsating — masalan: "(MK, 541-modda)".
 
 **2. Batafsil tushuntirish** (mavzuga qarab):
-Sodda tilda, mantiqiy tartibda — bir oqimda yozing. Kerak bo'lsa raqamli ro'yxat (1., 2., 3.) yoki tire (-) ishlating, lekin SARLAVHA QO'SHMANG. Subheader takrorlanmasin.
-Har bir huquqiy tasdiqdan keyin manba: (Qonun nomi, N-modda).
+Uzluksiz, oqimli paragraflar bilan yozing — SARLAVHA, ro'yxat, tire yoki nuqtali ro'yxat QO'YMANG.
+Har bir gap oldingisiga mantiqiy bog'liq bo'lsin. Har bir huquqiy tasdiqdan keyin manba: (Qonun nomi, N-modda).
 
 JIDDIY TAQIQLAR:
 - Kontekstdagi modda matnlarini KO'CHIRIB QO'YMANG.
-- "Yuridik maslahat", "Xulosa", "Eslatma" kabi ortiqcha sarlavhalar QO'SHMANG.
-- Ma'lumotni bir necha sarlavha ostida TAKRORLAMANG.
-- BULLET nuqta (•, ·, *) ISHLATMANG — raqam, harf yoki tire ishlating.
-- KONTEKSTdagi MANBALAR ro'yxatidan TASHQARI URL TO'QIB CHIQARMANG — eskirgan hujjatga havola qilmang.
+- Alohida sarlavha ("Huquqiy asos:", "Batafsil:", "Amaliy ahamiyat:" va shunga o'xshash) QO'YMANG.
+- BULLET nuqta (•, ·, *), tire (-) yoki raqamli ro'yxat (1., 2., 3.) ISHLATMANG — yaxlit paragraf yozing.
+- Ma'lumotni ikki joyda TAKRORLAMANG.
+- KONTEKSTdagi MANBALAR ro'yxatidan TASHQARI URL TO'QIB CHIQARMANG.
 - "DEFINITSIYA SAVOLI" yoki ichki ko'rsatmalarning matnini javobga YOZMANG.`;
 
   // ── ASSEMBLE: system rules + output format + context data ──
@@ -2759,8 +2775,11 @@ QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
 - Prim moddalarni to'g'ri yozing: "N-modda prim M".
 - Foydalanuvchi tuzatish bergan bo'lsa, jim integratsiya qiling — uzr so'ramang, qayta-qayta xato eslatmang.
 
-RO'YXAT USLUBI:
-- Ro'yxatda BULLET nuqta (•, ·, *) ISHLATMANG — buning o'rniga raqam (1., 2., 3.), harf (a), b), c)) yoki tire (-) ishlating.
+YOZISH USLUBI — JUDA MUHIM:
+- Javobni YAXLIT PARAGRAFLAR sifatida yozing — ro'yxat formatida EMAS.
+- BULLET nuqta (•, ·, *) va tire (-) ro'yxat sifatida MUTLAQO TAQIQLANGAN.
+- Alohida sarlavha va bo'limlar ("Huquqiy asos:", "Amaliy ahamiyat:" kabilar) QO'YMANG.
+- Har bir fikr oqimli, bog'liq gaplar bilan ifodalansin. Ma'lumotni TAKRORLAMANG.
 
 JAVOB FORMATI:
 ${definitionHint}
@@ -3147,6 +3166,8 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
           if (korpusResult.match === 'verbatim') {
             if (isFailedAnswer(korpusResult.answer)) {
               console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — answer contains failure phrase`);
+            } else if (hasCriticalTermMismatch(message, korpusResult.question)) {
+              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — entity mismatch (user: "${message}" vs corpus: "${korpusResult.question}")`);
             } else {
               korpusOverride = korpusResult.answer;
               console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
@@ -3163,7 +3184,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 
     if (korpusOverride) {
       return res.json({
-        reply: korpusOverride,
+        reply: normalizeResponseForUser(korpusOverride),
         provider: 'qa-korpus',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
@@ -3210,9 +3231,11 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
           };
           console.log(`[Legal Chat] verified_qa top match: id=${top.id} sim=${topSim.toFixed(3)} cat=${top.category}`);
 
-          if (topSim >= 0.72) {
+          if (topSim >= 0.85) {
             if (isFailedAnswer(topParsed.answer)) {
               console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — answer contains failure phrase`);
+            } else if (hasCriticalTermMismatch(message, topParsed.question)) {
+              console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — entity mismatch (sim=${topSim.toFixed(3)})`);
             } else {
               verifiedOverride = topParsed.answer;
               console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
@@ -3239,7 +3262,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     // ── Short-circuit: return verified answer directly ──
     if (verifiedOverride) {
       return res.json({
-        reply: verifiedOverride,
+        reply: normalizeResponseForUser(verifiedOverride),
         provider: 'verified-qa',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
