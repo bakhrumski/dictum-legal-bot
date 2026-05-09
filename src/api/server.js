@@ -2856,6 +2856,47 @@ app.post('/api/qa-bank/backfill', requireMasterAdmin, async (req, res) => {
 });
 
 // ── ENRICH: use Gemini to expand existing qa-korpus answers into detailed format ──
+// ── DIAGNOSTIC: list qa_korpus entries, optionally filtered by question text ──
+app.get('/api/qa-korpus/list', requireMasterAdmin, async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const params = [];
+    let where = '';
+    if (q) {
+      params.push(`%${q}%`);
+      where = 'WHERE question ILIKE $1 OR corrected_answer ILIKE $1';
+    }
+    const rows = await pool.query(`
+      SELECT id, topic, LEFT(question, 200) AS question,
+             LEFT(corrected_answer, 300) AS answer_preview,
+             LENGTH(corrected_answer) AS answer_length,
+             updated_at
+      FROM qa_korpus
+      ${where}
+      ORDER BY id DESC
+      LIMIT ${limit}
+    `, params);
+    res.json({ count: rows.rows.length, rows: rows.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE a corrupted qa_korpus entry by id ──
+app.delete('/api/qa-korpus/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid id' });
+    const r = await pool.query('DELETE FROM qa_korpus WHERE id = $1 RETURNING id, question', [id]);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'not found' });
+    console.log(`[QA-KORPUS] deleted #${id} — "${(r.rows[0].question || '').substring(0, 80)}"`);
+    res.json({ deleted: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/qa-korpus/enrich', requireMasterAdmin, async (req, res) => {
   try {
     const { id, dryRun } = req.body;
