@@ -2883,6 +2883,72 @@ app.get('/api/qa-korpus/list', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// ── PATCH a qa_korpus entry: update question (re-embed) and/or answer ──
+// Use when the stored question/answer pair is mismatched but the answer is
+// still useful for a different question (e.g. answer about "Advokat so'rovi"
+// stored under a "Advokat stajyori" question — fix by setting the real
+// question text, embeddings get regenerated so future matches go to the
+// right entry).
+app.patch('/api/qa-korpus/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid id' });
+
+    const { question, corrected_answer, topic } = req.body || {};
+    if (!question && !corrected_answer && !topic) {
+      return res.status(400).json({ error: 'provide at least one of: question, corrected_answer, topic' });
+    }
+
+    const sets = [];
+    const params = [];
+    let p = 1;
+
+    if (question && typeof question === 'string') {
+      const trimmed = question.trim();
+      if (!trimmed) return res.status(400).json({ error: 'question is empty' });
+      const normalized = trimmed
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      sets.push(`question = $${p++}`);  params.push(trimmed);
+      sets.push(`question_hash = $${p++}`); params.push(normalized);
+
+      // Re-embed the new question so qa_korpus search matches the right text.
+      const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+      if (apiKey) {
+        try {
+          const { getEmbedding } = require('../rag/embeddings');
+          const emb = await getEmbedding(trimmed, apiKey);
+          sets.push(`embedding = $${p++}::vector`);
+          params.push(`[${emb.join(',')}]`);
+        } catch (embErr) {
+          console.warn(`[QA-KORPUS PATCH #${id}] embedding failed: ${embErr.message}`);
+        }
+      }
+    }
+    if (corrected_answer && typeof corrected_answer === 'string') {
+      sets.push(`corrected_answer = $${p++}`);
+      params.push(corrected_answer);
+    }
+    if (topic && typeof topic === 'string') {
+      sets.push(`topic = $${p++}`);
+      params.push(topic);
+    }
+    sets.push(`updated_at = NOW()`);
+
+    params.push(id);
+    const sql = `UPDATE qa_korpus SET ${sets.join(', ')} WHERE id = $${p} RETURNING id, question, topic, LEFT(corrected_answer, 200) AS answer_preview`;
+    const r = await pool.query(sql, params);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'not found' });
+    console.log(`[QA-KORPUS] patched #${id} — "${(r.rows[0].question || '').substring(0, 80)}"`);
+    res.json({ updated: r.rows[0] });
+  } catch (err) {
+    console.error('[QA-KORPUS PATCH] failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── DELETE a corrupted qa_korpus entry by id ──
 app.delete('/api/qa-korpus/:id', requireMasterAdmin, async (req, res) => {
   try {
