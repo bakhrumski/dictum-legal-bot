@@ -3072,11 +3072,50 @@ app.get('/api/qa-bank/debug', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// Classify a user question into one of the LEGAL_TOPICS keys, or return null
+// if the model cannot confidently pick one. Used when the client sends
+// `autoDetect: true` ("Bilmayman" in the topic picker).
+async function classifyLegalTopic(message) {
+  const keys = Object.keys(LEGAL_TOPICS);
+  const list = keys.map(k => `${k} — ${LEGAL_TOPICS[k]}`).join('\n');
+  const sys = `Siz huquqiy savollarni tasniflovchi yordamchisiz. Quyidagi ro'yxatdan savolga eng mos sohaning KALITINI faqat bitta so'z bilan qaytaring. Agar aniq tasniflash mumkin bo'lmasa, faqat "unknown" deb yozing. Hech qanday tushuntirish bermang.\n\nMavjud sohalar:\n${list}`;
+  try {
+    const result = await callAI(
+      [{ role: 'system', text: sys }, { role: 'user', text: message }],
+      { useSearch: false, maxTokens: 8 }
+    );
+    const raw = (result.text || '').trim().toLowerCase().replace(/[^a-z\-]/g, '');
+    if (keys.includes(raw)) return raw;
+    return null;
+  } catch (err) {
+    console.warn(`[Legal Chat] auto-classify failed: ${err.message}`);
+    return null;
+  }
+}
+
 app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
   try {
-    const { message, history, databases, topic } = req.body;
+    const { message, history, databases, topic: rawTopic, topics, autoDetect } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
+    }
+
+    // Resolve the effective topic:
+    //   • autoDetect=true  → run the lightweight classifier; null if it can't pick (RAG searches all).
+    //   • topics[]         → first item is the primary; remaining items are priority hints.
+    //   • topic (legacy)   → unchanged single-topic behavior.
+    let topic = rawTopic || null;
+    let priorityTopics = [];
+    if (autoDetect === true) {
+      const detected = await classifyLegalTopic(message);
+      console.log(`[Legal Chat] autoDetect: classifier picked ${detected || 'null (search all)'}`);
+      topic = detected;
+    } else if (Array.isArray(topics) && topics.length > 0) {
+      const valid = topics.filter(t => typeof t === 'string' && LEGAL_TOPICS[t]);
+      if (valid.length > 0) {
+        topic = valid[0];
+        priorityTopics = valid.slice(1);
+      }
     }
 
     // ── VERIFIED ANSWER OVERRIDE ──
@@ -3219,6 +3258,12 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     }
 
     let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases);
+    if (priorityTopics.length > 0) {
+      const labels = priorityTopics.map(t => LEGAL_TOPICS[t]).filter(Boolean);
+      if (labels.length > 0) {
+        systemPrompt = `MUHIM: Foydalanuvchi quyidagi qo'shimcha sohalarni ham tanladi (asosiy soha bilan birga ustuvor hisoblang): ${labels.join(', ')}.\n\n` + systemPrompt;
+      }
+    }
     if (korpusGroundTruth) {
       systemPrompt = korpusGroundTruth + '\n\n' + systemPrompt;
     }
