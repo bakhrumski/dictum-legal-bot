@@ -2884,36 +2884,24 @@ app.post('/api/qa-korpus/enrich', requireMasterAdmin, async (req, res) => {
       const topicLabel = LEGAL_TOPICS[row.topic] || row.topic || 'huquq';
       const enrichPrompt = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
 
-VAZIFA: Quyidagi yurist tomonidan tasdiqlangan javobni BOYITIB, BATAFSIL va TUSHUNARLI shaklda qayta yozing.
+VAZIFA: Quyidagi savolga berilgan yurist tasdiqlagan javobni QAYTA YOZING — sodda, inson tomonidan yozilgandek.
 
-QOIDALAR:
-1. Javob FAQAT o'zbek (lotin) tilida yozing.
-2. Asl javobdagi barcha FAKTLAR, MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
-3. Yangi modda raqamlari yoki qonun nomlari QO'SHMANG — faqat mavjud ma'lumotni boyiting.
-4. Har bir huquqiy tushunchani SODDA TILDA tushuntiring.
-5. Amaliy misollar va izohlar qo'shing.
-
-JAVOB TUZILMASI:
-## Huquqiy asos
-Asl javobdagi qonun manbalarini saqlab, har bir moddaning mazmunini BATAFSIL tushuntiring.
-
-## Batafsil tushuntirish
-Sodda tilda — foydalanuvchi huquqshunos bo'lmasligi mumkin. Har bir punktni alohida izohlab bering.
-
-## Amaliy ahamiyati
-Bu ma'lumot amalda nima degani? Qanday holatlarda muhim? Buzilsa nima bo'ladi?
-
-## Muhim eslatmalar
-Istisnolar, cheklovlar yoki qo'shimcha ma'lumotlar (agar mavjud bo'lsa).
-
-> Eslatma: Bu javob AI tahlili asosida boyitilgan. Asl javob yurist tomonidan tasdiqlangan.
+QATTIQ QOIDALAR (birortasini buzmaslik):
+1. Javob FAQAT quyidagi savol haqida bo'lsin: "${row.question}" — boshqa mavzu kiritilmasin.
+2. Asl javobdagi barcha MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda raqamlari yoki qonun nomlari QO'SHMA.
+4. Javob hajmi: maksimum 200 so'z.
+5. Yozish uslubi: inson tomonidan yozilgandek, oqimli paragraflar. Takror yo'q.
+6. TAQIQLAR: ## sarlavhalar, • · * belgilar, raqamli ro'yxat (1. 2. 3.), bo'lim sarlavhalari.
+7. Faqat chinakam sanab o'tish uchun "- " ishlating.
+8. Faqat qonun nomi va modda raqamlarini **qalin** yozing. "- **Sarlavha:**" kabi pattern TAQIQLANGAN.
 
 SAVOL: ${row.question}
 
 YURIST TASDIQLAGAN ASL JAVOB:
 ${row.corrected_answer}
 
-BOYITILGAN JAVOBNI YOZING:`;
+QAYTA YOZILGAN JAVOB (faqat javob matni, sarlavhasiz):`;
 
       if (dryRun) {
         results.push({ id: row.id, status: 'dry-run', question: row.question.substring(0, 80), originalLength: row.corrected_answer.length });
@@ -3000,18 +2988,22 @@ app.post('/api/verified-qa/enrich', requireMasterAdmin, async (req, res) => {
         const topicLabel = LEGAL_TOPICS[row.category] || row.category || 'huquq';
         const enrichPrompt = `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
 
-VAZIFA: Quyidagi yurist tomonidan tasdiqlangan javobni BOYITIB, BATAFSIL va TUSHUNARLI shaklda qayta yozing.
+VAZIFA: Quyidagi savolga berilgan yurist tasdiqlagan javobni QAYTA YOZING — sodda, inson tomonidan yozilgandek.
 
-QOIDALAR:
-1. Javob FAQAT o'zbek (lotin) tilida yozing.
-2. Asl javobdagi barcha FAKTLAR, MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
-3. Yangi modda raqamlari yoki qonun nomlari QO'SHMANG — faqat mavjud ma'lumotni boyiting.
-4. Har bir huquqiy tushunchani SODDA TILDA tushuntiring.
+QATTIQ QOIDALAR:
+1. Javob FAQAT quyidagi savol haqida: "${parsed.question}" — boshqa mavzu kiritilmasin.
+2. Asl javobdagi barcha MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda yoki qonun QO'SHMA.
+4. Maksimum 200 so'z.
+5. Oqimli paragraflar. Takror yo'q. Inson tomonidan yozilgandek.
+6. TAQIQLAR: ## sarlavhalar, • · * belgilar, raqamli ro'yxat, bo'lim sarlavhalari.
+7. Faqat chinakam sanab o'tish uchun "- " ishlating.
+8. Faqat qonun nomi va modda raqamlarini **qalin** yozing.
 
 SAVOL: ${parsed.question}
 ASL JAVOB: ${parsed.answer}
 
-BOYITILGAN JAVOBNI YOZING:`;
+QAYTA YOZILGAN JAVOB:`;
 
         const aiMessages = [
           { role: 'system', text: enrichPrompt },
@@ -3040,62 +3032,125 @@ BOYITILGAN JAVOBNI YOZING:`;
   }
 });
 
-// ── STYLE AUDIT: re-normalize stored qa-korpus + verified_qa answers ──
-// Strips bullet glyphs, removes leaked instruction headers, converts • · ●
-// to "- " markers so the dashboard renders consistent em-dash lists.
-// Pure text cleanup — no AI calls, no embedding regeneration.
+// ── STYLE AUDIT: rewrite stored qa-korpus + verified_qa answers ──
+// aiRewrite:true (default) — calls AI to condense, fix style, fix wrong-topic answers.
+// aiRewrite:false          — text-only: normalizer cleanup only, no AI.
+// dryRun:true              — preview counts without saving.
+// id: N                    — rewrite only one specific qa_korpus row.
 app.post('/api/answers/style-audit', requireMasterAdmin, async (req, res) => {
   try {
     const dryRun = req.body && req.body.dryRun === true;
-    const out = { qaKorpus: { scanned: 0, updated: 0, samples: [] }, verifiedQa: { scanned: 0, updated: 0, samples: [] } };
+    const aiRewrite = req.body && req.body.aiRewrite !== false; // default true
+    const targetId = req.body && req.body.id ? parseInt(req.body.id, 10) : null;
+    const out = { qaKorpus: { scanned: 0, updated: 0, samples: [] }, verifiedQa: { scanned: 0, updated: 0, samples: [] }, dryRun, aiRewrite };
+
+    const buildRewritePrompt = (topic, question, answer) => {
+      const label = LEGAL_TOPICS[topic] || topic || 'huquq';
+      return `Siz O'zbekiston ${label} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
+
+VAZIFA: Quyidagi savolga berilgan javobni QAYTA YOZING — sodda, inson tomonidan yozilgandek, ixcham.
+
+QATTIQ QOIDALAR:
+1. Javob FAQAT ushbu savol haqida: "${question}" — boshqa mavzu kiritilmasin, HECH QANDAY chegirma yo'q.
+2. Asl javobdagi MODDA RAQAMLARI va QONUN NOMLARI saqlanishi SHART.
+3. Yangi modda yoki qonun QO'SHMA.
+4. Maksimum 180 so'z. Takroriy gaplar TAQIQLANGAN.
+5. Oqimli paragraflar. Alohida bo'lim sarlavhalari (Huquqiy asos:, Batafsil:, ##) TAQIQLANGAN.
+6. Bullet nuqtalar (• · * ●) va raqamli ro'yxat (1. 2. 3.) TAQIQLANGAN.
+7. Faqat chinakam sanab o'tish uchun "- " ishlating.
+8. Faqat qonun nomi va modda raqamlarini **qalin** yozing. "- **Sarlavha:**" pattern TAQIQLANGAN.
+9. Javob matni bilan boshlang — sarlavha, preamble, "Albatta" kabi kirish gaplarsiz.
+
+SAVOL: ${question}
+ASL JAVOB:
+${answer}
+
+QAYTA YOZILGAN JAVOB:`;
+    };
 
     // ── qa_korpus.corrected_answer ──
+    const whereClause = targetId ? 'AND id = $1' : '';
+    const params = targetId ? [targetId] : [];
     const kRows = await pool.query(`
-      SELECT id, question, corrected_answer
+      SELECT id, question, corrected_answer, topic
       FROM qa_korpus
-      WHERE corrected_answer IS NOT NULL
+      WHERE corrected_answer IS NOT NULL ${whereClause}
       ORDER BY id
-    `);
+    `, params);
     out.qaKorpus.scanned = kRows.rows.length;
+
     for (const row of kRows.rows) {
-      const cleaned = normalizeResponseForUser(row.corrected_answer);
-      if (cleaned && cleaned !== row.corrected_answer) {
+      if (isFailedAnswer(row.corrected_answer)) continue;
+      let newAnswer = normalizeResponseForUser(row.corrected_answer);
+
+      if (aiRewrite && !dryRun) {
+        try {
+          const prompt = buildRewritePrompt(row.topic, row.question, row.corrected_answer);
+          const aiResult = await callAI([{ role: 'system', text: prompt }, { role: 'user', text: row.question }], { useSearch: false, maxTokens: 1500 });
+          const aiAnswer = normalizeResponseForUser(aiResult.text);
+          if (aiAnswer && aiAnswer.length >= 60 && !isFailedAnswer(aiAnswer)) {
+            newAnswer = aiAnswer;
+          }
+        } catch (aiErr) {
+          console.warn(`[Style Audit] qa_korpus #${row.id} AI rewrite failed: ${aiErr.message}`);
+        }
+      }
+
+      if (newAnswer && newAnswer !== row.corrected_answer) {
         if (!dryRun) {
-          await pool.query(`UPDATE qa_korpus SET corrected_answer = $1, updated_at = NOW() WHERE id = $2`, [cleaned, row.id]);
+          await pool.query(`UPDATE qa_korpus SET corrected_answer = $1, updated_at = NOW() WHERE id = $2`, [newAnswer, row.id]);
         }
         out.qaKorpus.updated++;
         if (out.qaKorpus.samples.length < 5) {
-          out.qaKorpus.samples.push({ id: row.id, beforeLen: row.corrected_answer.length, afterLen: cleaned.length, question: row.question.substring(0, 80) });
+          out.qaKorpus.samples.push({ id: row.id, question: row.question.substring(0, 80), beforeLen: row.corrected_answer.length, afterLen: newAnswer.length });
         }
+        console.log(`[Style Audit] qa_korpus #${row.id}: ${row.corrected_answer.length} → ${newAnswer.length} chars`);
       }
     }
 
     // ── legal_chunks (source_type = 'verified_qa') ──
     const vRows = await pool.query(`
-      SELECT id, chunk_text
+      SELECT id, chunk_text, category
       FROM legal_chunks
       WHERE source_type = 'verified_qa' AND is_valid = TRUE
       ORDER BY id
     `);
     out.verifiedQa.scanned = vRows.rows.length;
+
     for (const row of vRows.rows) {
-      // chunk_text is "Savol: ...\n\nJavob: ..." — only normalize the answer half
-      const m = row.chunk_text.match(/^(Savol:\s*[\s\S]*?\n\nJavob:\s*)([\s\S]+)$/);
+      const m = row.chunk_text.match(/^(Savol:\s*)([\s\S]*?)\n\n(Javob:\s*)([\s\S]+)$/);
       if (!m) continue;
-      const cleanedAnswer = normalizeResponseForUser(m[2]);
-      if (cleanedAnswer && cleanedAnswer !== m[2].trim()) {
-        const newText = m[1] + cleanedAnswer;
+      const question = m[2].trim();
+      const origAnswer = m[4].trim();
+      if (isFailedAnswer(origAnswer)) continue;
+
+      let newAnswer = normalizeResponseForUser(origAnswer);
+
+      if (aiRewrite && !dryRun) {
+        try {
+          const prompt = buildRewritePrompt(row.category, question, origAnswer);
+          const aiResult = await callAI([{ role: 'system', text: prompt }, { role: 'user', text: question }], { useSearch: false, maxTokens: 1500 });
+          const aiAnswer = normalizeResponseForUser(aiResult.text);
+          if (aiAnswer && aiAnswer.length >= 60 && !isFailedAnswer(aiAnswer)) {
+            newAnswer = aiAnswer;
+          }
+        } catch (aiErr) {
+          console.warn(`[Style Audit] verified_qa #${row.id} AI rewrite failed: ${aiErr.message}`);
+        }
+      }
+
+      if (newAnswer && newAnswer !== origAnswer) {
+        const newChunkText = `Savol: ${question}\n\nJavob: ${newAnswer}`;
         if (!dryRun) {
-          await pool.query(`UPDATE legal_chunks SET chunk_text = $1, updated_at = NOW() WHERE id = $2`, [newText, row.id]);
+          await pool.query(`UPDATE legal_chunks SET chunk_text = $1, updated_at = NOW() WHERE id = $2`, [newChunkText, row.id]);
         }
         out.verifiedQa.updated++;
         if (out.verifiedQa.samples.length < 5) {
-          out.verifiedQa.samples.push({ id: row.id, beforeLen: m[2].length, afterLen: cleanedAnswer.length });
+          out.verifiedQa.samples.push({ id: row.id, beforeLen: origAnswer.length, afterLen: newAnswer.length });
         }
       }
     }
 
-    out.dryRun = dryRun;
     res.json(out);
   } catch (err) {
     console.error('[Style Audit] failed:', err);
