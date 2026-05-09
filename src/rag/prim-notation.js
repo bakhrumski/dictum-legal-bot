@@ -180,9 +180,14 @@ function stripLeakedInstructions(text) {
     cleaned = cleaned.replace(new RegExp(`^\\s*${h}\\s*:\\s*$`, 'gim'), '');
   }
 
-  // Remove bullet prefixes entirely — no dots, no dashes-as-bullets.
-  // Matches "* text", "• text", "· text" at line start (indent preserved).
-  cleaned = cleaned.replace(/^([ \t]*)[*•·]\s+/gm, '$1');
+  // Convert bullet-character lists to markdown "- " so the renderer turns them
+  // into <ul><li>, which the dashboard CSS styles with an em-dash marker.
+  // Matches "* text", "• text", "· text", "● text" at line start (indent preserved).
+  cleaned = cleaned.replace(/^([ \t]*)[*•·●]\s+/gm, '$1- ');
+
+  // Remove inline bullet glyphs that appear mid-sentence (artifacts from
+  // pasted Word/HTML answers) — keep the surrounding text, drop the bullet.
+  cleaned = cleaned.replace(/[•·●]\s+/g, '');
 
   // Strip standalone section-header bold lines (e.g. "**Batafsil tushuntirish**")
   // that appear on their own line — keeps the following content, removes the label.
