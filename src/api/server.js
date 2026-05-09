@@ -2291,6 +2291,38 @@ function hasCriticalTermMismatch(userQuestion, corpusQuestion) {
   return missing.length / corpusWords.length > 0.40;
 }
 
+// Detects when the stored ANSWER clearly is not about the user's question,
+// regardless of how the stored QUESTION text reads. Catches data corruption
+// where a qa_korpus or verified_qa row has a mismatched question/answer pair
+// (e.g. question="Advokat stajyori" but answer is about "Advokat so'rovi").
+//
+// Heuristic: extract distinctive words from the user question (>=5 chars,
+// not a Uzbek stopword). If MORE than half of them never appear anywhere in
+// the answer text — including the single longest one being absent — the
+// answer is on a different topic.
+function hasAnswerTopicMismatch(userQuestion, answerText) {
+  if (!userQuestion || !answerText) return false;
+  const STOP = new Set([
+    'haqida','menga','ber','bering','nima','qanday','qaysi','kim','nechta',
+    'bo\'lsa','bo\'ladi','bo\'lgan','o\'zi','shunday','shu','bilan','uchun',
+    'lekin','ammo','agar','keyin','oldin','ushbu','ayting','tushuntiring',
+  ]);
+  const tokenize = s => (s.toLowerCase().match(/[\p{L}\p{N}'’]+/gu) || []);
+  const userWords = Array.from(new Set(tokenize(userQuestion)
+    .filter(w => w.length >= 5 && !STOP.has(w))));
+  if (userWords.length === 0) return false;
+
+  const answerLower = answerText.toLowerCase();
+  const missing = userWords.filter(w => !answerLower.includes(w));
+
+  // The longest distinctive word is the most likely main subject — if it's
+  // entirely absent from the answer, that's a strong mismatch signal.
+  const longest = userWords.reduce((a, b) => (b.length > a.length ? b : a), '');
+  const longestMissing = longest.length >= 6 && !answerLower.includes(longest);
+
+  return longestMissing || (missing.length / userWords.length) > 0.5;
+}
+
 const LEGAL_TOPICS = {
   'mehnat':       'Mehnat huquqi',
   'oila':         'Oila huquqi',
@@ -3396,9 +3428,11 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
             if (isFailedAnswer(korpusResult.answer)) {
               console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — answer contains failure phrase`);
             } else if (hasCriticalTermMismatch(message, korpusResult.question)) {
-              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — entity mismatch (user: "${message}" vs corpus: "${korpusResult.question}")`);
+              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — question entity mismatch (user: "${message}" vs corpus: "${korpusResult.question}")`);
+            } else if (hasAnswerTopicMismatch(message, korpusResult.answer)) {
+              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — stored answer is on a different topic than the user question`);
             } else {
-              korpusOverride = korpusResult.answer;
+              korpusOverride = normalizeResponseForUser(korpusResult.answer);
               console.log(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} (sim=${korpusResult.similarity.toFixed(3)})`);
             }
           } else if (korpusResult.match === 'context') {
@@ -3464,9 +3498,11 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
             if (isFailedAnswer(topParsed.answer)) {
               console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — answer contains failure phrase`);
             } else if (hasCriticalTermMismatch(message, topParsed.question)) {
-              console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — entity mismatch (sim=${topSim.toFixed(3)})`);
+              console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — question entity mismatch (sim=${topSim.toFixed(3)})`);
+            } else if (hasAnswerTopicMismatch(message, topParsed.answer)) {
+              console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — stored answer is on a different topic than the user question`);
             } else {
-              verifiedOverride = topParsed.answer;
+              verifiedOverride = normalizeResponseForUser(topParsed.answer);
               console.log(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} (sim=${topSim.toFixed(3)}) — returning verbatim`);
             }
           } else if (topSim >= 0.50) {
