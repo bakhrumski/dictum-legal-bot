@@ -173,6 +173,8 @@ function stripLeakedInstructions(text) {
 
   // Strip AI-enrich generated section headers (## Huquqiy asos, etc.)
   // and the Eslatma disclaimer blockquote line at the bottom.
+  // Also matches plain-text headers (just the words on their own line),
+  // since some saved answers leaked the headers without ## or ** wrapping.
   const forbiddenHeaders = [
     'Yuridik\\s+maslahat', 'Xulosa', 'Eslatma',
     'Huquqiy\\s+asos', 'Batafsil\\s+tushuntirish',
@@ -181,11 +183,16 @@ function stripLeakedInstructions(text) {
   for (const h of forbiddenHeaders) {
     cleaned = cleaned.replace(new RegExp(`^\\s*#{1,6}\\s*${h}\\s*:?\\s*$`, 'gim'), '');
     cleaned = cleaned.replace(new RegExp(`^\\s*\\*\\*${h}\\*\\*\\s*:?\\s*$`, 'gim'), '');
-    cleaned = cleaned.replace(new RegExp(`^\\s*${h}\\s*:\\s*$`, 'gim'), '');
+    cleaned = cleaned.replace(new RegExp(`^\\s*${h}\\s*:?\\s*$`, 'gim'), '');
   }
   // Strip blockquote disclaimer lines  ("> Eslatma: Bu javob AI tahlili...")
   cleaned = cleaned.replace(/^>[ \t]*Eslatma:[^\n]*/gim, '');
   cleaned = cleaned.replace(/^>[ \t]*Bu javob AI[^\n]*/gim, '');
+
+  // Strip the AI preamble that leaked from the enrich prompt:
+  // "Siz O'zbekiston ... AI sifatida, ... taqdim etaman:" or similar.
+  cleaned = cleaned.replace(/^Siz\s+O'?zbekiston[^.\n]{0,200}AI\s+sifatida[^\n]*\n?/gim, '');
+  cleaned = cleaned.replace(/^[ \t]*---+[ \t]*$/gm, '');
 
   // Convert bullet-character lists to markdown "- " so the renderer turns them
   // into <ul><li>, which the dashboard CSS styles with an em-dash marker.
