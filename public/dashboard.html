@@ -1392,14 +1392,13 @@
             position: relative;
         }
         .ai-analysis-content ul > li::before {
-            content: "—";
+            content: "-";
             position: absolute;
             left: 0;
-            color: var(--navy-500);
-            font-weight: 600;
+            color: var(--text-secondary);
         }
         [data-theme="dark"] .ai-analysis-content ul > li::before {
-            color: var(--brass-300);
+            color: var(--text-secondary);
         }
         .ai-analysis-content ol {
             counter-reset: olc;
@@ -1411,11 +1410,7 @@
             content: counter(olc) ".";
             position: absolute;
             left: 0;
-            color: var(--navy-500);
-            font-weight: 600;
-        }
-        [data-theme="dark"] .ai-analysis-content ol > li::before {
-            color: var(--brass-300);
+            color: var(--text-secondary);
         }
         .ai-analysis-content strong, .ai-analysis-content b {
             color: var(--navy-700);

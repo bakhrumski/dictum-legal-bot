@@ -171,14 +171,21 @@ function stripLeakedInstructions(text) {
   // Strip bracketed internal hints like "[Definitsiya rejimi: ...]" if echoed
   cleaned = cleaned.replace(/\[Definitsiya\s+rejimi:[^\]]*\]/gi, '');
 
-  // Strip forbidden header lines while keeping the content beneath them.
-  // Matches: "## Yuridik maslahat", "**Yuridik maslahat**", "Yuridik maslahat:" etc.
-  const forbiddenHeaders = ['Yuridik\\s+maslahat', 'Xulosa', 'Eslatma'];
+  // Strip AI-enrich generated section headers (## Huquqiy asos, etc.)
+  // and the Eslatma disclaimer blockquote line at the bottom.
+  const forbiddenHeaders = [
+    'Yuridik\\s+maslahat', 'Xulosa', 'Eslatma',
+    'Huquqiy\\s+asos', 'Batafsil\\s+tushuntirish',
+    'Amaliy\\s+ahamiyat(?:i)?', 'Muhim\\s+eslatmalar?',
+  ];
   for (const h of forbiddenHeaders) {
     cleaned = cleaned.replace(new RegExp(`^\\s*#{1,6}\\s*${h}\\s*:?\\s*$`, 'gim'), '');
     cleaned = cleaned.replace(new RegExp(`^\\s*\\*\\*${h}\\*\\*\\s*:?\\s*$`, 'gim'), '');
     cleaned = cleaned.replace(new RegExp(`^\\s*${h}\\s*:\\s*$`, 'gim'), '');
   }
+  // Strip blockquote disclaimer lines  ("> Eslatma: Bu javob AI tahlili...")
+  cleaned = cleaned.replace(/^>[ \t]*Eslatma:[^\n]*/gim, '');
+  cleaned = cleaned.replace(/^>[ \t]*Bu javob AI[^\n]*/gim, '');
 
   // Convert bullet-character lists to markdown "- " so the renderer turns them
   // into <ul><li>, which the dashboard CSS styles with an em-dash marker.
