@@ -203,10 +203,9 @@ function stripLeakedInstructions(text) {
   // pasted Word/HTML answers) — keep the surrounding text, drop the bullet.
   cleaned = cleaned.replace(/[•·●]\s+/g, '');
 
-  // Strip standalone section-header bold lines (e.g. "**Batafsil tushuntirish**")
-  // that appear on their own line — keeps the following content, removes the label.
-  // Does NOT strip bold within a normal sentence.
-  cleaned = cleaned.replace(/^[ \t]*\*\*[^*\n]{2,60}\*\*\s*:?\s*$/gm, '');
+  // NOTE: We intentionally do NOT strip all standalone bold lines here.
+  // The forbiddenHeaders loop above already removes known AI-leaked headers.
+  // Stripping every **bold-on-its-own-line** would delete user-authored headings.
 
   // Collapse triple-blank-lines created by the stripping
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');

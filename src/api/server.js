@@ -2313,12 +2313,15 @@ function hasAnswerTopicMismatch(userQuestion, answerText) {
   if (userWords.length === 0) return false;
 
   const answerLower = answerText.toLowerCase();
-  const missing = userWords.filter(w => !answerLower.includes(w));
+  // Use a 6-char stem to handle Uzbek morphological suffixes:
+  // "stajyori" (query) should match "stajyor", "stajyorlik", "stajyorga" in the answer.
+  const stem = w => w.slice(0, Math.max(5, w.length - 2));
+  const missing = userWords.filter(w => !answerLower.includes(stem(w)));
 
-  // The longest distinctive word is the most likely main subject — if it's
+  // The longest distinctive word is the most likely main subject — if its stem is
   // entirely absent from the answer, that's a strong mismatch signal.
   const longest = userWords.reduce((a, b) => (b.length > a.length ? b : a), '');
-  const longestMissing = longest.length >= 6 && !answerLower.includes(longest);
+  const longestMissing = longest.length >= 6 && !answerLower.includes(stem(longest));
 
   return longestMissing || (missing.length / userWords.length) > 0.5;
 }
@@ -3447,7 +3450,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 
     if (korpusOverride) {
       return res.json({
-        reply: normalizeResponseForUser(korpusOverride),
+        reply: korpusOverride,
         provider: 'qa-korpus',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
@@ -3527,7 +3530,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
     // ── Short-circuit: return verified answer directly ──
     if (verifiedOverride) {
       return res.json({
-        reply: normalizeResponseForUser(verifiedOverride),
+        reply: verifiedOverride,
         provider: 'verified-qa',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
