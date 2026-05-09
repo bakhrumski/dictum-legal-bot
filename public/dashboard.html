@@ -4627,6 +4627,233 @@
             }
             .admin-table th, .admin-table td { padding: 8px 10px; font-size: 12px; }
         }
+
+        /* ============================================================
+           Topic Picker Modal — glass-morphism field selection
+           Triggered when user sends a chat message without a chosen topic.
+           ============================================================ */
+        .topic-modal-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            background: rgba(26, 20, 16, 0.42);
+            backdrop-filter: blur(14px) saturate(140%);
+            -webkit-backdrop-filter: blur(14px) saturate(140%);
+            padding: 20px;
+            animation: tmFade var(--t-med) var(--ease-out);
+        }
+        [data-theme="dark"] .topic-modal-overlay {
+            background: rgba(0, 0, 0, 0.55);
+        }
+        .topic-modal-overlay.active { display: flex; }
+        @keyframes tmFade {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        .topic-modal-card {
+            width: 100%;
+            max-width: 560px;
+            background: rgba(255, 255, 255, 0.78);
+            backdrop-filter: blur(28px) saturate(160%);
+            -webkit-backdrop-filter: blur(28px) saturate(160%);
+            border: 1px solid var(--parchment-200);
+            border-radius: var(--r-xl);
+            box-shadow: var(--shadow-3), 0 0 0 1px var(--brass-300) inset;
+            padding: 28px 28px 22px;
+            text-align: center;
+            animation: tmRise var(--t-med) var(--ease-out);
+        }
+        [data-theme="dark"] .topic-modal-card {
+            background: rgba(34, 26, 18, 0.82);
+            border-color: var(--dark-border);
+            box-shadow: var(--shadow-3), 0 0 0 1px var(--brass-500) inset;
+        }
+        @keyframes tmRise {
+            from { transform: translateY(12px) scale(0.98); opacity: 0; }
+            to   { transform: translateY(0) scale(1);     opacity: 1; }
+        }
+        .topic-modal-icon {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 14px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--brass-100);
+            box-shadow: var(--shadow-seal);
+            color: var(--brass-600);
+        }
+        [data-theme="dark"] .topic-modal-icon {
+            background: rgba(214, 179, 121, 0.12);
+            color: var(--brass-300);
+        }
+        .topic-modal-title {
+            font-family: var(--font-serif);
+            font-size: var(--t-h3);
+            font-weight: 600;
+            color: var(--fg-1);
+            margin: 0 0 6px;
+            letter-spacing: var(--ls-tight);
+        }
+        .topic-modal-subtitle {
+            font-family: var(--font-sans);
+            font-size: var(--t-small);
+            color: var(--fg-3);
+            margin: 0 0 18px;
+            line-height: var(--lh-snug);
+        }
+        .topic-modal-chips {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+        .topic-modal-chip {
+            font-family: var(--font-sans);
+            font-size: var(--t-small);
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: var(--r-pill);
+            border: 1px solid var(--parchment-300);
+            background: rgba(255, 255, 255, 0.6);
+            color: var(--fg-2);
+            cursor: pointer;
+            transition: all var(--t-fast) var(--ease-out);
+            user-select: none;
+        }
+        .topic-modal-chip:hover {
+            border-color: var(--navy-500);
+            color: var(--navy-700);
+            background: var(--parchment-50);
+        }
+        .topic-modal-chip.selected {
+            background: var(--navy-700);
+            color: #fff;
+            border-color: var(--navy-700);
+            box-shadow: 0 2px 8px rgba(14, 34, 54, 0.25);
+        }
+        [data-theme="dark"] .topic-modal-chip {
+            background: rgba(245, 239, 227, 0.04);
+            border-color: var(--dark-border);
+            color: var(--dark-fg-2);
+        }
+        [data-theme="dark"] .topic-modal-chip:hover {
+            border-color: var(--brass-300);
+            color: var(--brass-300);
+        }
+        [data-theme="dark"] .topic-modal-chip.selected {
+            background: var(--brass-500);
+            color: var(--ink-900);
+            border-color: var(--brass-500);
+        }
+        .topic-modal-divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 6px auto 14px;
+            color: var(--fg-3);
+            font-size: var(--t-micro);
+            font-family: var(--font-sans);
+            text-transform: uppercase;
+            letter-spacing: var(--ls-cap);
+            max-width: 340px;
+        }
+        .topic-modal-divider::before,
+        .topic-modal-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: var(--parchment-200);
+        }
+        [data-theme="dark"] .topic-modal-divider::before,
+        [data-theme="dark"] .topic-modal-divider::after {
+            background: var(--dark-border);
+        }
+        .topic-modal-unknown {
+            font-family: var(--font-sans);
+            font-size: var(--t-small);
+            font-weight: 500;
+            padding: 9px 18px;
+            border-radius: var(--r-pill);
+            border: 1px dashed var(--brass-500);
+            background: transparent;
+            color: var(--brass-600);
+            cursor: pointer;
+            transition: all var(--t-fast) var(--ease-out);
+            margin-bottom: 18px;
+        }
+        .topic-modal-unknown:hover {
+            background: var(--brass-100);
+        }
+        .topic-modal-unknown.selected {
+            background: var(--brass-500);
+            color: #fff;
+            border-style: solid;
+            border-color: var(--brass-500);
+        }
+        [data-theme="dark"] .topic-modal-unknown {
+            color: var(--brass-300);
+            border-color: var(--brass-300);
+        }
+        [data-theme="dark"] .topic-modal-unknown:hover {
+            background: rgba(214, 179, 121, 0.12);
+        }
+        [data-theme="dark"] .topic-modal-unknown.selected {
+            background: var(--brass-500);
+            color: var(--ink-900);
+            border-color: var(--brass-500);
+        }
+        .topic-modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 6px;
+        }
+        .topic-modal-btn {
+            font-family: var(--font-sans);
+            font-size: var(--t-small);
+            font-weight: 600;
+            padding: 10px 22px;
+            border-radius: var(--r-md);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all var(--t-fast) var(--ease-out);
+        }
+        .topic-modal-btn.primary {
+            background: var(--navy-700);
+            color: #fff;
+        }
+        .topic-modal-btn.primary:hover { background: var(--navy-600); }
+        .topic-modal-btn.primary:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .topic-modal-btn.ghost {
+            background: transparent;
+            color: var(--fg-3);
+            border-color: var(--parchment-300);
+        }
+        .topic-modal-btn.ghost:hover {
+            background: var(--parchment-100);
+            color: var(--fg-2);
+        }
+        [data-theme="dark"] .topic-modal-btn.primary {
+            background: var(--brass-500);
+            color: var(--ink-900);
+        }
+        [data-theme="dark"] .topic-modal-btn.primary:hover { background: var(--brass-600); }
+        [data-theme="dark"] .topic-modal-btn.ghost {
+            border-color: var(--dark-border);
+            color: var(--dark-fg-2);
+        }
+        [data-theme="dark"] .topic-modal-btn.ghost:hover {
+            background: var(--dark-bg-3);
+        }
     </style>
 </head>
 <body>
@@ -7349,6 +7576,9 @@
         // ===== AI WORKSPACE — Chat + Topic-based RAG =====
         var selectedDatabases = ['lex.uz'];
         var selectedTopic = null;
+        var selectedTopics = [];      // multi-select via topic picker modal
+        var topicAutoDetect = false;  // user chose "Bilmayman" — backend auto-classifies
+        var pendingChatText = '';     // message held while topic picker is open
         var aiChatHistory = [];
         var aiVerifyMap = {};
 
@@ -7721,6 +7951,9 @@
         }
 
         function selectTopic(topic) {
+            // Single-select via welcome chips clears any multi-select / auto-detect state
+            selectedTopics = [];
+            topicAutoDetect = false;
             // Toggle: if already selected, unselect
             if (selectedTopic === topic) {
                 selectedTopic = null;
@@ -7745,10 +7978,103 @@
             if (input) setTimeout(function() { input.focus(); }, 100);
         }
 
+        // ── Topic Picker Modal ───────────────────────────────────────
+        function openTopicPicker() {
+            var modal = document.getElementById('topicPickerModal');
+            if (!modal) return;
+            // Reset chip and unknown state every open
+            document.querySelectorAll('#topicPickerChips .topic-modal-chip').forEach(function(b) {
+                b.classList.remove('selected');
+            });
+            var unknown = document.getElementById('topicPickerUnknown');
+            if (unknown) unknown.classList.remove('selected');
+            updateTopicPickerConfirm();
+            modal.classList.add('active');
+        }
+
+        function closeTopicPicker() {
+            var modal = document.getElementById('topicPickerModal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function toggleTopicPickerChip(btn) {
+            // Selecting a topic clears the "Bilmayman" choice
+            var unknown = document.getElementById('topicPickerUnknown');
+            if (unknown) unknown.classList.remove('selected');
+            btn.classList.toggle('selected');
+            updateTopicPickerConfirm();
+        }
+
+        function toggleTopicPickerUnknown() {
+            var unknown = document.getElementById('topicPickerUnknown');
+            if (!unknown) return;
+            var willSelect = !unknown.classList.contains('selected');
+            unknown.classList.toggle('selected');
+            // Selecting "Bilmayman" clears any chip selection
+            if (willSelect) {
+                document.querySelectorAll('#topicPickerChips .topic-modal-chip').forEach(function(b) {
+                    b.classList.remove('selected');
+                });
+            }
+            updateTopicPickerConfirm();
+        }
+
+        function updateTopicPickerConfirm() {
+            var anyChip = document.querySelectorAll('#topicPickerChips .topic-modal-chip.selected').length > 0;
+            var unknown = document.getElementById('topicPickerUnknown');
+            var unknownOn = unknown && unknown.classList.contains('selected');
+            var btn = document.getElementById('topicPickerConfirm');
+            if (btn) btn.disabled = !(anyChip || unknownOn);
+        }
+
+        function confirmTopicPicker() {
+            var unknown = document.getElementById('topicPickerUnknown');
+            var unknownOn = unknown && unknown.classList.contains('selected');
+            var picked = Array.from(document.querySelectorAll('#topicPickerChips .topic-modal-chip.selected'))
+                .map(function(b) { return b.getAttribute('data-topic'); });
+
+            if (unknownOn) {
+                topicAutoDetect = true;
+                selectedTopic = null;
+                selectedTopics = [];
+            } else if (picked.length === 1) {
+                topicAutoDetect = false;
+                selectedTopic = picked[0];
+                selectedTopics = [];
+                // Mirror the choice on the welcome chips so UI reflects it
+                document.querySelectorAll('.ai-topic-btn').forEach(function(b) {
+                    if (b.getAttribute('data-topic') === picked[0]) b.classList.add('active');
+                    else b.classList.remove('active');
+                });
+                var topicInfo = (typeof AI_TOPICS !== 'undefined' && AI_TOPICS[picked[0]]) ? AI_TOPICS[picked[0]] : null;
+                if (topicInfo) document.getElementById('aiChatHeaderTitle').textContent = topicInfo.label;
+            } else if (picked.length > 1) {
+                topicAutoDetect = false;
+                selectedTopic = null;
+                selectedTopics = picked;
+                document.getElementById('aiChatHeaderTitle').textContent = picked.length + ' soha tanlandi';
+            } else {
+                return; // nothing selected — guarded by disabled button
+            }
+
+            closeTopicPicker();
+
+            // If a chat send was waiting on field selection, dispatch it now
+            if (pendingChatText) {
+                var input = document.getElementById('aiChatInput');
+                if (input) input.value = pendingChatText;
+                pendingChatText = '';
+                sendAiChat();
+            }
+        }
+
         function createNewAiChat() {
             aiChatHistory = [];
             currentAiSessionId = null;
             selectedTopic = null;
+            selectedTopics = [];
+            topicAutoDetect = false;
+            pendingChatText = '';
             var msgs = document.getElementById('aiChatMessages');
             var welcome = document.getElementById('aiChatWelcome');
             msgs.innerHTML = '';
@@ -7784,8 +8110,9 @@
             var input = document.getElementById('aiChatInput');
             var text = input.value.trim();
             if (!text) return;
-            if (!selectedTopic) {
-                alert('Iltimos, avval sohani tanlang!');
+            if (!selectedTopic && !(selectedTopics.length > 0) && !topicAutoDetect) {
+                pendingChatText = text;
+                openTopicPicker();
                 return;
             }
 
@@ -7824,7 +8151,9 @@
                         message: text,
                         history: aiChatHistory.slice(0, -1),
                         databases: selectedDatabases,
-                        topic: selectedTopic
+                        topic: selectedTopic || (selectedTopics[0] || null),
+                        topics: selectedTopics.length > 0 ? selectedTopics : null,
+                        autoDetect: topicAutoDetect === true
                     })
                 });
 
@@ -10416,5 +10745,38 @@
         setInterval(loadRankings, 120000);
         setInterval(loadMonteCarlo, 300000);
     </script>
+
+    <!-- Topic Picker Modal — opens when user sends AI chat without selecting a soha -->
+    <div class="topic-modal-overlay" id="topicPickerModal" onclick="if(event.target===this) closeTopicPicker()">
+        <div class="topic-modal-card" role="dialog" aria-modal="true" aria-labelledby="topicPickerTitle">
+            <div class="topic-modal-icon" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <h3 class="topic-modal-title" id="topicPickerTitle">Savolingiz qaysi sohaga tegishli?</h3>
+            <p class="topic-modal-subtitle">Bir yoki bir nechta sohani tanlang. Bir nechta tanlasangiz, AI tanlangan sohalarga ustuvorlik beradi.</p>
+            <div class="topic-modal-chips" id="topicPickerChips">
+                <button type="button" class="topic-modal-chip" data-topic="mehnat" onclick="toggleTopicPickerChip(this)">Mehnat</button>
+                <button type="button" class="topic-modal-chip" data-topic="oila" onclick="toggleTopicPickerChip(this)">Oila</button>
+                <button type="button" class="topic-modal-chip" data-topic="fuqarolik" onclick="toggleTopicPickerChip(this)">Fuqarolik</button>
+                <button type="button" class="topic-modal-chip" data-topic="shartnoma" onclick="toggleTopicPickerChip(this)">Shartnoma</button>
+                <button type="button" class="topic-modal-chip" data-topic="soliq" onclick="toggleTopicPickerChip(this)">Soliq</button>
+                <button type="button" class="topic-modal-chip" data-topic="jinoyat" onclick="toggleTopicPickerChip(this)">Jinoyat</button>
+                <button type="button" class="topic-modal-chip" data-topic="mamuriy" onclick="toggleTopicPickerChip(this)">Ma'muriy javobgarlik</button>
+                <button type="button" class="topic-modal-chip" data-topic="korporativ" onclick="toggleTopicPickerChip(this)">Korporativ</button>
+                <button type="button" class="topic-modal-chip" data-topic="tadbirkorlik" onclick="toggleTopicPickerChip(this)">Tadbirkorlik</button>
+                <button type="button" class="topic-modal-chip" data-topic="uy-joy" onclick="toggleTopicPickerChip(this)">Uy-joy oldi-sotdisi</button>
+                <button type="button" class="topic-modal-chip" data-topic="mulk" onclick="toggleTopicPickerChip(this)">Mulk huquqi</button>
+                <button type="button" class="topic-modal-chip" data-topic="notarius" onclick="toggleTopicPickerChip(this)">Notarius</button>
+                <button type="button" class="topic-modal-chip" data-topic="ijtimoiy" onclick="toggleTopicPickerChip(this)">Ijtimoiy</button>
+                <button type="button" class="topic-modal-chip" data-topic="advokatura" onclick="toggleTopicPickerChip(this)">Advokatura</button>
+            </div>
+            <div class="topic-modal-divider">yoki</div>
+            <button type="button" class="topic-modal-unknown" id="topicPickerUnknown" onclick="toggleTopicPickerUnknown()">Bilmayman</button>
+            <div class="topic-modal-actions">
+                <button type="button" class="topic-modal-btn ghost" onclick="closeTopicPicker()">Bekor qilish</button>
+                <button type="button" class="topic-modal-btn primary" id="topicPickerConfirm" onclick="confirmTopicPicker()" disabled>Davom etish</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
