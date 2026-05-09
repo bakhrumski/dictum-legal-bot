@@ -2719,8 +2719,10 @@ JAVOB SIFATI:
 - Foydalanuvchi tuzatish bergan bo'lsa, tuzatishni JIM va to'g'ridan-to'g'ri integratsiya qiling — uzr so'ramang, oldingi javobni eslatmang. Yangi to'g'ri javobni boshidan bering.
 
 YOZISH USLUBI — JUDA MUHIM:
-- Javobni YAXLIT PARAGRAFLAR sifatida yozing — ro'yxat formatida EMAS.
-- BULLET nuqta (•, ·, *) va tire (-) ro'yxat sifatida MUTLAQO TAQIQLANGAN.
+- Javobni asosan YAXLIT PARAGRAFLAR sifatida yozing.
+- BULLET nuqta (•, ·, *) MUTLAQO TAQIQLANGAN. Raqamli ro'yxat (1., 2., 3.) ham TAQIQLANGAN.
+- Faqat haqiqiy sanab o'tish (hujjatlar, talablar, shartlar to'plami) uchungina "- " (tire-probel) bilan ro'yxat ishlating.
+- Asosiy huquqiy tushunchalar, modda raqamlari, qonun nomlari **qalin** (markdown bold) yozilsin — masalan: "**Mehnat kodeksi 7-moddasi**". Bu eng muhim ma'lumotni ajratib turadi.
 - Alohida sarlavha va bo'limlar QO'YMANG ("Huquqiy asos:", "Batafsil tushuntirish:", "Amaliy ahamiyati:" kabilar TAQIQLANGAN).
 - Har bir fikr oldingisiga bog'liq, oqimli gap sifatida yozing.
 - Ma'lumotni bir nechta joyda TAKRORLAMANG — har bir gap yangi ma'lumot bersin.
@@ -2743,14 +2745,15 @@ Javob ikki qismdan iborat bo'lsin:
 Foydalanuvchi savoliga to'g'ridan-to'g'ri, aniq javob. Asosiy modda(lar) va qonun nomini ALBATTA aniq ko'rsating — masalan: "(MK, 541-modda)".
 
 **2. Batafsil tushuntirish** (mavzuga qarab):
-Uzluksiz, oqimli paragraflar bilan yozing — SARLAVHA, ro'yxat, tire yoki nuqtali ro'yxat QO'YMANG.
+Asosan oqimli paragraflar bilan yozing. Faqat haqiqiy sanab o'tish kerak bo'lgan elementlar (masalan: hujjatlar ro'yxati, talablar to'plami) uchun "- " (tire va probel) bilan ro'yxat ishlating — boshqa hech qanday belgi (•, ·, *, 1., a)) ishlatilmaydi.
+Asosiy huquqiy tushunchalarni, modda raqamlarini va qonun nomlarini **qalin** (bold) ko'rinishda ajrating — masalan: "**Mehnat kodeksi 7-moddasi**" yoki "**advokat stajyori**". Bu eng muhim ma'lumotlarni o'qishni osonlashtiradi.
 Har bir gap oldingisiga mantiqiy bog'liq bo'lsin. Har bir huquqiy tasdiqdan keyin manba: (Qonun nomi, N-modda).
 
 JIDDIY TAQIQLAR:
 - Kontekstdagi modda matnlarini KO'CHIRIB QO'YMANG.
 - Alohida sarlavha ("Huquqiy asos:", "Batafsil:", "Amaliy ahamiyat:" va shunga o'xshash) QO'YMANG.
-- BULLET nuqta (•, ·, *), tire (-) yoki raqamli ro'yxat (1., 2., 3.) ISHLATMANG — yaxlit paragraf yozing.
-- Ma'lumotni ikki joyda TAKRORLAMANG.
+- BULLET nuqta (•, ·, *) MUTLAQO ISHLATILMAYDI. Raqamli ro'yxat (1., 2., 3.) ham ISHLATILMAYDI. Faqat zarur bo'lganda "- " (tire) bilan ro'yxat.
+- Ma'lumotni ikki joyda TAKRORLAMANG. Bir xil fikrni qayta aytish TAQIQLANADI.
 - KONTEKSTdagi MANBALAR ro'yxatidan TASHQARI URL TO'QIB CHIQARMANG.
 - "DEFINITSIYA SAVOLI" yoki ichki ko'rsatmalarning matnini javobga YOZMANG.`;
 
@@ -2776,24 +2779,25 @@ QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
 - Foydalanuvchi tuzatish bergan bo'lsa, jim integratsiya qiling — uzr so'ramang, qayta-qayta xato eslatmang.
 
 YOZISH USLUBI — JUDA MUHIM:
-- Javobni YAXLIT PARAGRAFLAR sifatida yozing — ro'yxat formatida EMAS.
-- BULLET nuqta (•, ·, *) va tire (-) ro'yxat sifatida MUTLAQO TAQIQLANGAN.
+- Javobni asosan YAXLIT PARAGRAFLAR sifatida yozing.
+- Faqat haqiqiy sanab o'tish (hujjatlar ro'yxati, talablar to'plami) zarur bo'lganda "- " (tire va probel) bilan ro'yxat ishlating. Boshqa belgilar (•, ·, *, 1., a)) ISHLATILMAYDI.
+- Asosiy tushunchalar, modda raqamlari, qonun nomlari **qalin** (bold) yozilsin — masalan: "**Mehnat kodeksi 7-moddasi**". Bu o'qishni osonlashtiradi.
 - Alohida sarlavha va bo'limlar ("Huquqiy asos:", "Amaliy ahamiyat:" kabilar) QO'YMANG.
 - Har bir fikr oqimli, bog'liq gaplar bilan ifodalansin. Ma'lumotni TAKRORLAMANG.
 
 JAVOB FORMATI:
 ${definitionHint}
 **1. Qisqa javob** (1-3 gap):
-Savolga to'g'ridan-to'g'ri javob. Asosiy qonun nomi va modda(lar)ni ALBATTA keltiring (definitsiya bo'lsa ham).
+Savolga to'g'ridan-to'g'ri javob. Asosiy **qonun nomi** va **modda(lar)ni** qalin yozib ALBATTA keltiring (definitsiya bo'lsa ham).
 
 **2. Batafsil tushuntirish**:
 Sodda tilda, oqib turuvchi matn — qonun matnini ko'chirib qo'ymang, o'z so'zlaringiz bilan tushuntiring.
-Kerak bo'lsa raqamli ro'yxat (1., 2., 3.) yoki tire (-) ishlating, lekin SARLAVHA QO'SHMANG.
-Har bir tasdiqdan keyin manba: (Qonun nomi, N-modda).
+Sanab o'tish zarur bo'lsa "- " (tire) bilan ro'yxat, lekin SARLAVHA QO'SHMANG.
+Har bir tasdiqdan keyin manba: (**Qonun nomi**, **N-modda**).
 
 JIDDIY TAQIQLAR:
 - "Yuridik maslahat", "Xulosa", "Eslatma" kabi sarlavhalar QO'SHMANG.
-- BULLET nuqta (•, ·, *) ISHLATMANG — raqam, harf yoki tire ishlating.
+- BULLET nuqta (•, ·, *) yoki raqamli ro'yxat (1., 2., 3.) ISHLATMANG — faqat oqimli paragraf yoki "- " ro'yxati.
 - Bir xil ma'lumotni bir necha bo'limda TAKRORLAMANG.
 
 > Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
@@ -3032,6 +3036,69 @@ BOYITILGAN JAVOBNI YOZING:`;
     const enriched = results.filter(r => r.status === 'enriched').length;
     res.json({ total: rows.rows.length, enriched, results });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── STYLE AUDIT: re-normalize stored qa-korpus + verified_qa answers ──
+// Strips bullet glyphs, removes leaked instruction headers, converts • · ●
+// to "- " markers so the dashboard renders consistent em-dash lists.
+// Pure text cleanup — no AI calls, no embedding regeneration.
+app.post('/api/answers/style-audit', requireMasterAdmin, async (req, res) => {
+  try {
+    const dryRun = req.body && req.body.dryRun === true;
+    const out = { qaKorpus: { scanned: 0, updated: 0, samples: [] }, verifiedQa: { scanned: 0, updated: 0, samples: [] } };
+
+    // ── qa_korpus.corrected_answer ──
+    const kRows = await pool.query(`
+      SELECT id, question, corrected_answer
+      FROM qa_korpus
+      WHERE corrected_answer IS NOT NULL
+      ORDER BY id
+    `);
+    out.qaKorpus.scanned = kRows.rows.length;
+    for (const row of kRows.rows) {
+      const cleaned = normalizeResponseForUser(row.corrected_answer);
+      if (cleaned && cleaned !== row.corrected_answer) {
+        if (!dryRun) {
+          await pool.query(`UPDATE qa_korpus SET corrected_answer = $1, updated_at = NOW() WHERE id = $2`, [cleaned, row.id]);
+        }
+        out.qaKorpus.updated++;
+        if (out.qaKorpus.samples.length < 5) {
+          out.qaKorpus.samples.push({ id: row.id, beforeLen: row.corrected_answer.length, afterLen: cleaned.length, question: row.question.substring(0, 80) });
+        }
+      }
+    }
+
+    // ── legal_chunks (source_type = 'verified_qa') ──
+    const vRows = await pool.query(`
+      SELECT id, chunk_text
+      FROM legal_chunks
+      WHERE source_type = 'verified_qa' AND is_valid = TRUE
+      ORDER BY id
+    `);
+    out.verifiedQa.scanned = vRows.rows.length;
+    for (const row of vRows.rows) {
+      // chunk_text is "Savol: ...\n\nJavob: ..." — only normalize the answer half
+      const m = row.chunk_text.match(/^(Savol:\s*[\s\S]*?\n\nJavob:\s*)([\s\S]+)$/);
+      if (!m) continue;
+      const cleanedAnswer = normalizeResponseForUser(m[2]);
+      if (cleanedAnswer && cleanedAnswer !== m[2].trim()) {
+        const newText = m[1] + cleanedAnswer;
+        if (!dryRun) {
+          await pool.query(`UPDATE legal_chunks SET chunk_text = $1, updated_at = NOW() WHERE id = $2`, [newText, row.id]);
+        }
+        out.verifiedQa.updated++;
+        if (out.verifiedQa.samples.length < 5) {
+          out.verifiedQa.samples.push({ id: row.id, beforeLen: m[2].length, afterLen: cleanedAnswer.length });
+        }
+      }
+    }
+
+    out.dryRun = dryRun;
+    res.json(out);
+  } catch (err) {
+    console.error('[Style Audit] failed:', err);
     res.status(500).json({ error: err.message });
   }
 });
