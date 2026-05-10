@@ -124,8 +124,25 @@
             line-height: 1.5;
             max-width: 240px;
             margin-top: 4px;
+            white-space: nowrap;
         }
         [data-theme="dark"] .hero-tagline { color: var(--dark-fg-2); }
+        .type-cursor {
+            display: inline-block;
+            font-style: normal;
+            font-weight: 300;
+            color: var(--ink-500);
+            margin-left: 1px;
+            opacity: 1;
+        }
+        [data-theme="dark"] .type-cursor { color: var(--dark-fg-2); }
+        .type-cursor.blinking {
+            animation: typeCursorBlink 0.5s step-end infinite;
+        }
+        @keyframes typeCursorBlink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0; }
+        }
         .hero-seal {
             display: none;
             margin-top: 32px;
@@ -687,7 +704,7 @@
             <div class="hero-logo">
                 <img class="img-light" src="/jurist_logo.png" alt="JuristAI">
                 <img class="img-dark" src="/jurist_logo_white.png" alt="JuristAI">
-                <div class="hero-tagline">Sizning shaxsiy AI yordamchingiz</div>
+                <div class="hero-tagline" id="heroTagline"><span id="typeText"></span><span class="type-cursor blinking" id="typeCursor">|</span></div>
                 <div class="hero-seal">O'zbekiston huquqi</div>
             </div>
         </div>
@@ -1471,6 +1488,38 @@
                 btn.textContent = 'Ro\'yxatdan o\'tish';
             }
         });
+    </script>
+    <script>
+        // Typewriter animation for hero tagline
+        (function () {
+            const FULL_TEXT = 'Sizning shaxsiy AI yordamchingiz';
+            const textEl   = document.getElementById('typeText');
+            const cursor   = document.getElementById('typeCursor');
+            if (!textEl || !cursor) return;
+
+            // Phase 1: cursor blinks 3 times (3 × 500 ms = 1 500 ms), text invisible
+            // cursor already has class "blinking" from HTML
+
+            setTimeout(function () {
+                // Phase 2: stop blinking, start typing
+                cursor.classList.remove('blinking');
+                cursor.style.opacity = '1';
+
+                let i = 0;
+                const SPEED = 55; // ms per character
+
+                function typeNext() {
+                    if (i < FULL_TEXT.length) {
+                        textEl.textContent += FULL_TEXT[i++];
+                        setTimeout(typeNext, SPEED);
+                    } else {
+                        // Typing finished — resume cursor blink
+                        cursor.classList.add('blinking');
+                    }
+                }
+                typeNext();
+            }, 1500); // wait for 3 blinks
+        })();
     </script>
 </body>
 </html>
