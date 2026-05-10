@@ -8196,12 +8196,15 @@
             closeMobileSidebar();
         }
 
-        async function deleteAiConversation(sessionId) {
+        async function deleteAiConversation(sessionId, btn) {
             const lang = (navigator.language || 'uz').startsWith('ru') ? 'ru' : 'uz';
             const msg = lang === 'ru'
                 ? 'Этот чат будет удалён. Вы уверены?'
                 : 'Bu suhbat o\'chiriladi. Ishonchingiz komilmi?';
             if (!confirm(msg)) return;
+            // Remove from DOM immediately — no waiting for API round-trip
+            const item = btn && btn.closest('.ai-history-item');
+            if (item) item.remove();
             try {
                 const resp = await fetch('/api/ai-chat-sessions/' + sessionId, {
                     method: 'DELETE',
@@ -8217,7 +8220,6 @@
                     msgs.innerHTML = '';
                     if (welcome) { msgs.appendChild(welcome); welcome.style.display = ''; }
                 }
-                await loadAiHistory();
             } catch (e) {
                 console.error('[AI] Delete session error:', e);
             }
@@ -8644,7 +8646,7 @@
                         + '<div class="ai-history-item-title">' + escapeHtml(s.title || 'Nomsiz suhbat') + '</div>'
                         + '<div class="ai-history-item-meta">' + dbs + '<span>' + timeAgo + '</span></div>'
                         + '</div>'
-                        + '<button class="ai-history-delete-btn" onclick="event.stopPropagation(); deleteAiConversation(' + s.id + ')" title="O\'chirish">'
+                        + '<button class="ai-history-delete-btn" onclick="event.stopPropagation(); deleteAiConversation(' + s.id + ', this)" title="O\'chirish">'
                         + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
                         + '</button>'
                         + '</div>';
