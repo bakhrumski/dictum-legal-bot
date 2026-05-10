@@ -5104,6 +5104,60 @@
                     </div>
                 </div>
 
+            </div>
+
+            <!-- Sidebar backdrop for mobile -->
+            <div class="ai-sidebar-backdrop" id="aiSidebarBackdrop" onclick="toggleAiSidebar()"></div>
+
+            <!-- Main Chat Area -->
+            <div class="ai-chat-main">
+                <!-- Chat header -->
+                <div class="ai-chat-header">
+                    <div class="ai-chat-header-left">
+                        <button class="ai-sidebar-toggle" onclick="toggleAiSidebar()" title="Menyu">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                        </button>
+                        <span class="ai-chat-header-title" id="aiChatHeaderTitle"></span>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div class="ai-chat-messages" id="aiChatMessages">
+                    <div class="ai-chat-welcome" id="aiChatWelcome">
+                        <div class="ai-chat-welcome-icon" onclick="toggleWelcomeCategories()">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--navy-500)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        </div>
+                        <p class="ai-chat-welcome-text">Quyidagi sohalardan keraklisini tanlang!</p>
+                        <div class="ai-chat-suggestions">
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mehnat" onclick="selectTopic('mehnat')">Mehnat</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="oila" onclick="selectTopic('oila')">Oila</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="fuqarolik" onclick="selectTopic('fuqarolik')">Fuqarolik</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="shartnoma" onclick="selectTopic('shartnoma')">Shartnoma</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="soliq" onclick="selectTopic('soliq')">Soliq</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="jinoyat" onclick="selectTopic('jinoyat')">Jinoyat</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mamuriy" onclick="selectTopic('mamuriy')">Ma'muriy javobgarlik</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="korporativ" onclick="selectTopic('korporativ')">Korporativ</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="tadbirkorlik" onclick="selectTopic('tadbirkorlik')">Tadbirkorlik</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="uy-joy" onclick="selectTopic('uy-joy')">Uy-joy oldi-sotdisi</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mulk" onclick="selectTopic('mulk')">Mulk huquqi</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="notarius" onclick="selectTopic('notarius')">Notarius</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="ijtimoiy" onclick="selectTopic('ijtimoiy')">Ijtimoiy</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="advokatura" onclick="selectTopic('advokatura')">Advokatura</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input bar -->
+                <div class="ai-chat-input-bar">
+                    <div class="ai-chat-input-wrapper">
+                        <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
+                        <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()">&#10148;</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right sidebar: R&D tools (master admin only) -->
+            <div class="ai-sidebar-right" id="aiSidebarRight">
                 <!-- Document Upload -->
                 <div class="ai-doc-upload-section">
                     <div class="ai-history-title">Korpusga qo'shish</div>
@@ -5168,8 +5222,8 @@
                     </div>
                 </div>
 
-                <!-- Feedback Report (master only) -->
-                <div class="fb-report-section" id="fbReportSection" style="display:none">
+                <!-- Feedback Report -->
+                <div class="fb-report-section-wrap" id="fbReportSection" style="display:none">
                     <button class="fb-report-toggle" onclick="toggleFbReport()">
                         <span>Feedback hisoboti</span>
                         <span id="fbReportToggleIcon">&#9660;</span>
@@ -5188,61 +5242,6 @@
                             <button class="fb-review-btn" onclick="loadFbList('pending')" style="flex:1">Kutilmoqda</button>
                         </div>
                         <div id="fbListContainer" style="max-height:350px;overflow-y:auto"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sidebar backdrop for mobile -->
-            <div class="ai-sidebar-backdrop" id="aiSidebarBackdrop" onclick="toggleAiSidebar()"></div>
-
-            <!-- Main Chat Area -->
-            <div class="ai-chat-main">
-                <!-- Chat header -->
-                <div class="ai-chat-header">
-                    <div class="ai-chat-header-left">
-                        <button class="ai-sidebar-toggle" onclick="toggleAiSidebar()" title="Menyu">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-                        </button>
-                        <span class="ai-chat-header-title" id="aiChatHeaderTitle"></span>
-                    </div>
-                    <div class="ai-chat-header-actions">
-                        <button class="ai-chat-header-btn" onclick="clearAiChat()" title="Tozalash">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Messages -->
-                <div class="ai-chat-messages" id="aiChatMessages">
-                    <div class="ai-chat-welcome" id="aiChatWelcome">
-                        <div class="ai-chat-welcome-icon" onclick="toggleWelcomeCategories()">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--navy-500)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                        </div>
-                        <p class="ai-chat-welcome-text">Quyidagi sohalardan keraklisini tanlang!</p>
-                        <div class="ai-chat-suggestions">
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mehnat" onclick="selectTopic('mehnat')">Mehnat</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="oila" onclick="selectTopic('oila')">Oila</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="fuqarolik" onclick="selectTopic('fuqarolik')">Fuqarolik</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="shartnoma" onclick="selectTopic('shartnoma')">Shartnoma</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="soliq" onclick="selectTopic('soliq')">Soliq</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="jinoyat" onclick="selectTopic('jinoyat')">Jinoyat</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mamuriy" onclick="selectTopic('mamuriy')">Ma'muriy javobgarlik</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="korporativ" onclick="selectTopic('korporativ')">Korporativ</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="tadbirkorlik" onclick="selectTopic('tadbirkorlik')">Tadbirkorlik</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="uy-joy" onclick="selectTopic('uy-joy')">Uy-joy oldi-sotdisi</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mulk" onclick="selectTopic('mulk')">Mulk huquqi</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="notarius" onclick="selectTopic('notarius')">Notarius</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="ijtimoiy" onclick="selectTopic('ijtimoiy')">Ijtimoiy</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="advokatura" onclick="selectTopic('advokatura')">Advokatura</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Input bar -->
-                <div class="ai-chat-input-bar">
-                    <div class="ai-chat-input-wrapper">
-                        <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
-                        <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()">&#10148;</button>
                     </div>
                 </div>
             </div>
@@ -5831,7 +5830,15 @@
                     legalChatEl.style.display = data.role === 'master' ? '' : 'none';
                 }
 
-                // Show feedback report section for master only
+                // Show right sidebar (doc upload + feedback) for master only
+                const aiSidebarRight = document.getElementById('aiSidebarRight');
+                if (aiSidebarRight) {
+                    if (data.role === 'master') {
+                        aiSidebarRight.classList.add('master-visible');
+                    } else {
+                        aiSidebarRight.classList.remove('master-visible');
+                    }
+                }
                 const fbReport = document.getElementById('fbReportSection');
                 if (fbReport) {
                     fbReport.style.display = data.role === 'master' ? '' : 'none';
@@ -8189,6 +8196,33 @@
             closeMobileSidebar();
         }
 
+        async function deleteAiConversation(sessionId) {
+            const lang = (navigator.language || 'uz').startsWith('ru') ? 'ru' : 'uz';
+            const msg = lang === 'ru'
+                ? 'Этот чат будет удалён. Вы уверены?'
+                : 'Bu suhbat o\'chiriladi. Ishonchingiz komilmi?';
+            if (!confirm(msg)) return;
+            try {
+                const resp = await fetch('/api/ai-chat-sessions/' + sessionId, {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                if (!resp.ok) throw new Error('Delete failed');
+                if (currentAiSessionId === sessionId) {
+                    currentAiSessionId = null;
+                    aiChatHistory = [];
+                    document.getElementById('aiChatHeaderTitle').textContent = '';
+                    const welcome = document.getElementById('aiChatWelcome');
+                    const msgs = document.getElementById('aiChatMessages');
+                    msgs.innerHTML = '';
+                    if (welcome) { msgs.appendChild(welcome); welcome.style.display = ''; }
+                }
+                await loadAiHistory();
+            } catch (e) {
+                console.error('[AI] Delete session error:', e);
+            }
+        }
+
         function clearAiChat() {
             createNewAiChat();
         }
@@ -8606,8 +8640,13 @@
                     }
                     var isActive = currentAiSessionId === s.id ? ' active' : '';
                     html += '<div class="ai-history-item' + isActive + '" onclick="openAiChatSession(' + s.id + ')">'
+                        + '<div class="ai-history-item-content">'
                         + '<div class="ai-history-item-title">' + escapeHtml(s.title || 'Nomsiz suhbat') + '</div>'
                         + '<div class="ai-history-item-meta">' + dbs + '<span>' + timeAgo + '</span></div>'
+                        + '</div>'
+                        + '<button class="ai-history-delete-btn" onclick="event.stopPropagation(); deleteAiConversation(' + s.id + ')" title="O\'chirish">'
+                        + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+                        + '</button>'
                         + '</div>';
                 });
                 list.innerHTML = html;
