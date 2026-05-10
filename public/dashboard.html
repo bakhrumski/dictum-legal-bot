@@ -433,7 +433,7 @@
             background: var(--glass-bg);
             backdrop-filter: blur(var(--glass-blur-strong));
             -webkit-backdrop-filter: blur(var(--glass-blur-strong));
-            border: 1px solid var(--glass-border);
+            border: none;
             padding: 12px 20px;
             border-radius: var(--ios-radius-lg);
             margin-bottom: 16px;
@@ -470,6 +470,7 @@
             position: relative;
         }
         .header-icon-btn {
+            display: none; /* master admin only — shown via JS */
             background: none;
             border: none;
             width: 44px;
@@ -1348,8 +1349,8 @@
             padding: 24px;
         }
         .ai-analysis-content {
-            background: rgba(0, 185, 242, 0.04);
-            border: 1px solid rgba(14, 34, 54, 0.15);
+            background: none;
+            border: none;
             border-radius: 12px;
             padding: 24px;
             font-size: 14px;
@@ -1363,8 +1364,7 @@
             margin: 0 0 6px 0;
         }
         [data-theme="dark"] .ai-analysis-content {
-            background: rgba(44, 92, 146, 0.08);
-            border-color: rgba(14, 34, 54, 0.15);
+            background: none;
         }
         .ai-analysis-content h1, .ai-analysis-content h2, .ai-analysis-content h3 {
             color: var(--navy-700);
@@ -5820,9 +5820,10 @@
                     aiArchive.style.display = 'none';
                 }
 
-                // Hide PDF button for non-master users
-                var pdfBtn = document.querySelector('.header-icon-btn[title="PDF"]');
-                if (pdfBtn && data.role !== 'master') pdfBtn.style.display = 'none';
+                // Show header-icon-btn (PDF export etc.) for master only
+                document.querySelectorAll('.header-icon-btn').forEach(function(btn) {
+                    btn.style.display = data.role === 'master' ? '' : 'none';
+                });
 
                 // Show legal search chat for master only
                 const legalChatEl = document.getElementById('legalChatSection');
@@ -8326,10 +8327,11 @@
                     // ── Provider badge ──
                     var providerBadge = data.provider ? '<span class="ai-provider-badge">' + escapeHtml(data.provider) + '</span>' : '';
 
-                    // Store Q&A for verification
+                    // Store Q&A for verification (master admin only)
                     var msgId = 'aimsg_' + Date.now();
                     aiVerifyMap[msgId] = { question: currentQuestion, answer: data.reply, topic: selectedTopic };
-                    var verifyRow = '<div class="ai-verify-row" id="vrow_' + msgId + '">' +
+                    var isMasterUser = typeof currentUser !== 'undefined' && currentUser.role === 'master';
+                    var verifyRow = isMasterUser ? ('<div class="ai-verify-row" id="vrow_' + msgId + '">' +
                         '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
                         '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
                         providerBadge +
@@ -8339,7 +8341,7 @@
                         '<div class="ai-verify-editor-actions">' +
                         '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
                         '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
-                        '</div></div>';
+                        '</div></div>') : '';
                     // ── Message action icons (copy, download, thumbs) ──
                     var actId = 'aiact_' + Date.now();
                     var actionsHtml = '<div class="ai-msg-actions" id="' + actId + '">' +
@@ -8697,10 +8699,11 @@
                             '<button class="ai-msg-act" data-tip="Yomon javob" onclick="rateAiMsg(this,\'bad\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>' +
                             '</div>';
 
-                        // Verify buttons (Korpusga qo'shish + Tahrirlash)
+                        // Verify buttons (Korpusga qo'shish + Tahrirlash) — master admin only
                         var msgId = 'aimsg_hist_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
                         aiVerifyMap[msgId] = { question: lastUserText, answer: msg.text, topic: selectedTopic };
-                        var verifyRow = '<div class="ai-verify-row" id="vrow_' + msgId + '">' +
+                        var isMasterUser = typeof currentUser !== 'undefined' && currentUser.role === 'master';
+                        var verifyRow = isMasterUser ? ('<div class="ai-verify-row" id="vrow_' + msgId + '">' +
                             '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
                             '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
                             '</div>' +
@@ -8709,7 +8712,7 @@
                             '<div class="ai-verify-editor-actions">' +
                             '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
                             '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
-                            '</div></div>';
+                            '</div></div>') : '';
 
                         messagesEl.innerHTML += '<div class="ai-chat-msg ai" data-raw="' + escapeHtml(msg.text).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(lastUserText).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(msg.text) + '</div>' + actionsHtml + verifyRow + '</div>';
                     }
