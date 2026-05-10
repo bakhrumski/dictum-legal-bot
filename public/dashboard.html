@@ -260,7 +260,6 @@
             background: var(--glass-bg-strong);
             backdrop-filter: blur(var(--glass-blur-strong));
             -webkit-backdrop-filter: blur(var(--glass-blur-strong));
-            border-top: 1px solid var(--glass-border);
             display: flex;
             justify-content: space-around;
             align-items: center;
@@ -271,7 +270,6 @@
         }
         [data-theme="dark"] .bottom-tab-bar {
             background: rgba(13, 17, 23, 0.95);
-            border-top-color: rgba(255, 255, 255, 0.06);
             box-shadow: 0 -2px 20px rgba(0,0,0,0.3);
         }
         .tab-bar-item {
@@ -1565,7 +1563,7 @@
         .feedback-actions .btn { flex: 1; }
         .corpus-checkbox-label { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 13px; color: var(--navy-600); cursor: pointer; background: var(--parchment-50); border: 1px solid var(--brass-100); border-radius: 8px; padding: 8px 12px; margin-bottom: 4px; }
         .corpus-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--navy-600); cursor: pointer; }
-        .ai-doc-upload-section { padding: 12px; border-top: 1px solid var(--border-color, #e5e7eb); margin-top: auto; }
+        .ai-doc-upload-section { padding: 12px; margin-top: auto; }
         .ai-doc-upload-hint { font-size: 11px; color: #888; margin: 4px 0 8px; line-height: 1.4; }
         .ai-doc-topic-select, .ai-doc-name-input { width: 100%; padding: 7px 9px; border: 1px solid var(--brass-100); border-radius: 8px; font-size: 12px; margin-bottom: 6px; background: var(--bg-secondary, #fff); color: var(--text-primary, #1a1a2e); box-sizing: border-box; }
         .ai-doc-file-label { display: block; padding: 7px 10px; background: var(--parchment-50); border: 1px dashed var(--brass-100); border-radius: 8px; font-size: 12px; color: var(--navy-600); cursor: pointer; text-align: center; margin-bottom: 6px; transition: background 0.2s; }
@@ -2055,7 +2053,6 @@
             height: calc(100vh - 190px - env(safe-area-inset-bottom, 0px));
             border-radius: var(--ios-radius-lg);
             overflow: hidden;
-            border: 1px solid var(--glass-border);
             background: var(--glass-bg);
         }
 
@@ -2065,7 +2062,6 @@
             min-width: 280px;
             display: flex;
             flex-direction: column;
-            border-right: 1px solid var(--glass-border);
             background: var(--glass-bg);
             overflow-x: hidden;
             overflow-y: auto;
@@ -2075,7 +2071,6 @@
         .ai-sidebar::-webkit-scrollbar { display: none; }
         .ai-sidebar-header {
             padding: 16px;
-            border-bottom: 1px solid var(--glass-border);
             flex-shrink: 0;
             min-height: 71px;
             box-sizing: border-box;
@@ -2244,7 +2239,6 @@
             align-items: center;
             justify-content: space-between;
             padding: 16px 20px;
-            border-bottom: 1px solid var(--glass-border);
             flex-shrink: 0;
             background: var(--glass-bg);
             min-height: 71px;
@@ -2296,6 +2290,81 @@
             padding: 0;
         }
         .ai-chat-header-btn:hover { background: var(--bg-card-hover); color: var(--text-secondary); }
+
+        /* Right sidebar (master admin only: document upload + feedback) */
+        .ai-sidebar-right {
+            width: 280px;
+            min-width: 280px;
+            display: none;
+            flex-direction: column;
+            border-left: none;
+            background: var(--glass-bg);
+            overflow-x: hidden;
+            overflow-y: hidden;
+        }
+        .ai-sidebar-right.master-visible {
+            display: flex;
+        }
+        .ai-doc-upload-section {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            box-sizing: border-box;
+            scrollbar-width: none;
+        }
+        .ai-doc-upload-section::-webkit-scrollbar { display: none; }
+        .fb-report-section-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            box-sizing: border-box;
+            border-top: none;
+            scrollbar-width: none;
+        }
+        .fb-report-section-wrap::-webkit-scrollbar { display: none; }
+        /* Delete button on history items */
+        .ai-history-item {
+            flex-direction: row !important;
+            align-items: center;
+            gap: 0 !important;
+        }
+        .ai-history-item-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .ai-history-delete-btn {
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.15s, color 0.15s;
+        }
+        .ai-history-item:hover .ai-history-delete-btn {
+            opacity: 1;
+        }
+        .ai-history-delete-btn:hover {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.08);
+        }
+        /* Custom dropdown arrow for topic select — matches ▼ in ingest log toggle */
+        .ai-doc-topic-select {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 9px center;
+            padding-right: 28px;
+        }
 
         /* Active DB badges in header */
         .ai-chat-db-badges {
@@ -2443,6 +2512,9 @@
             cursor: pointer;
             transition: all 0.2s;
         }
+        .ai-chat-suggestion.ai-topic-btn {
+            border: 0px solid #ECE3CF;
+        }
         .ai-chat-suggestion:hover {
             border-color: rgba(14, 34, 54, 0.3);
             background: rgba(14, 34, 54, 0.04);
@@ -2587,7 +2659,6 @@
         /* Input bar */
         .ai-chat-input-bar {
             padding: 12px 20px 16px;
-            border-top: 1px solid var(--glass-border);
             flex-shrink: 0;
             background: var(--glass-bg);
         }
@@ -2605,7 +2676,7 @@
         .ai-chat-textarea {
             flex: 1;
             padding: 10px 16px;
-            border: 1px solid var(--glass-border);
+            border: none;
             border-radius: 12px;
             font-family: inherit;
             font-size: 14px;
@@ -2619,7 +2690,6 @@
             transition: border-color 0.2s;
         }
         .ai-chat-textarea:focus {
-            border-color: rgba(14, 34, 54, 0.4);
             box-shadow: 0 0 0 3px rgba(14, 34, 54, 0.08);
         }
         .ai-chat-textarea::placeholder { color: var(--text-muted); }
@@ -5034,92 +5104,6 @@
                     </div>
                 </div>
 
-                <!-- Document Upload -->
-                <div class="ai-doc-upload-section">
-                    <div class="ai-history-title">📂 Korpusga qo'shish</div>
-                    <select id="docUploadTopic" class="ai-doc-topic-select">
-                        <option value="">— Soha tanlang —</option>
-                        <option value="mehnat">Mehnat huquqi</option>
-                        <option value="oila">Oila huquqi</option>
-                        <option value="fuqarolik">Fuqarolik huquqi</option>
-                        <option value="shartnoma">Shartnoma huquqi</option>
-                        <option value="soliq">Soliq huquqi</option>
-                        <option value="jinoyat">Jinoyat huquqi</option>
-                        <option value="mamuriy">Ma'muriy javobgarlik</option>
-                        <option value="korporativ">Korporativ huquq</option>
-                        <option value="tadbirkorlik">Tadbirkorlik huquqi</option>
-                        <option value="uy-joy">Uy-joy oldi-sotdisi</option>
-                        <option value="mulk">Mulk huquqi</option>
-                        <option value="notarius">Notarius xizmatlari</option>
-                        <option value="ijtimoiy">Ijtimoiy himoya</option>
-                        <option value="advokatura">Advokatura</option>
-                    </select>
-                    <input type="text" id="docUploadName" class="ai-doc-name-input" placeholder="Hujjat nomi (ixtiyoriy)">
-
-                    <!-- Tab switcher: URL vs File -->
-                    <div class="ai-doc-tabs">
-                        <button class="ai-doc-tab active" id="tabUrlBtn" onclick="switchDocTab('url')">🔗 lex.uz URL</button>
-                        <button class="ai-doc-tab" id="tabFileBtn" onclick="switchDocTab('file')">📄 Fayl</button>
-                    </div>
-
-                    <!-- URL input -->
-                    <div id="docUrlPanel">
-                        <input type="url" id="docLexUrl" class="ai-doc-name-input"
-                            placeholder="https://lex.uz/uz/docs/..." style="margin-bottom:6px">
-                        <button class="ai-doc-upload-btn" id="docUrlBtn" onclick="ingestLexUrl()">
-                            ⬇ Lex.uz dan yuklash
-                        </button>
-                    </div>
-
-                    <!-- File input -->
-                    <div id="docFilePanel" style="display:none">
-                        <label class="ai-doc-file-label">
-                            <input type="file" id="docFileInput" accept=".pdf,.txt,.docx,.doc" onchange="onDocFileSelected(this)">
-                            📄 Fayl tanlash (PDF / TXT / DOCX)
-                        </label>
-                        <div id="docSelectedFile" class="ai-doc-selected-file" style="display:none"></div>
-                        <button class="ai-doc-upload-btn" id="docUploadBtn" onclick="uploadLegalDocument()" disabled>
-                            ⬆ Korpusga yuklash
-                        </button>
-                    </div>
-
-                    <div id="docUploadStatus" class="ai-doc-upload-status" style="display:none"></div>
-
-                    <!-- Ingest Log -->
-                    <div style="margin-top:10px">
-                        <button onclick="toggleIngestLog()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
-                            <span>📊 Yuklash tarixi</span>
-                            <span id="ingestLogToggleIcon">▼</span>
-                        </button>
-                        <div id="ingestLogPanel" style="display:none;margin-top:6px">
-                            <div id="ingestLogStats" style="font-size:11px;color:#888;padding:6px 8px;background:#f9f7ff;border-radius:6px;margin-bottom:6px"></div>
-                            <div id="ingestLogList" style="max-height:280px;overflow-y:auto;font-size:11px"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Feedback Report (master only) -->
-                <div class="fb-report-section" id="fbReportSection" style="display:none">
-                    <button class="fb-report-toggle" onclick="toggleFbReport()">
-                        <span>📊 Feedback hisoboti</span>
-                        <span id="fbReportToggleIcon">&#9660;</span>
-                    </button>
-                    <div class="fb-report-panel" id="fbReportPanel">
-                        <div class="fb-stat-grid" id="fbStatGrid">
-                            <div class="fb-stat-card good"><span class="fb-val" id="fbGood">0</span>Yaxshi</div>
-                            <div class="fb-stat-card bad"><span class="fb-val" id="fbBad">0</span>Yomon</div>
-                            <div class="fb-stat-card"><span class="fb-val" id="fbReviewed">0</span>Ko'rib chiqilgan</div>
-                            <div class="fb-stat-card"><span class="fb-val" id="fbPending">0</span>Kutilmoqda</div>
-                        </div>
-                        <div style="display:flex;gap:4px;margin-bottom:8px">
-                            <button class="fb-review-btn" onclick="loadFbList('all')" style="flex:1">Hammasi</button>
-                            <button class="fb-review-btn" onclick="loadFbList('good')" style="flex:1">Yaxshi</button>
-                            <button class="fb-review-btn" onclick="loadFbList('bad')" style="flex:1">Yomon</button>
-                            <button class="fb-review-btn" onclick="loadFbList('pending')" style="flex:1">Kutilmoqda</button>
-                        </div>
-                        <div id="fbListContainer" style="max-height:350px;overflow-y:auto"></div>
-                    </div>
-                </div>
             </div>
 
             <!-- Sidebar backdrop for mobile -->
@@ -5134,11 +5118,6 @@
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                         </button>
                         <span class="ai-chat-header-title" id="aiChatHeaderTitle"></span>
-                    </div>
-                    <div class="ai-chat-header-actions">
-                        <button class="ai-chat-header-btn" onclick="clearAiChat()" title="Tozalash">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </button>
                     </div>
                 </div>
 
@@ -5173,6 +5152,96 @@
                     <div class="ai-chat-input-wrapper">
                         <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
                         <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()">&#10148;</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right sidebar: R&D tools (master admin only) -->
+            <div class="ai-sidebar-right" id="aiSidebarRight">
+                <!-- Document Upload -->
+                <div class="ai-doc-upload-section">
+                    <div class="ai-history-title">Korpusga qo'shish</div>
+                    <select id="docUploadTopic" class="ai-doc-topic-select">
+                        <option value="">— Soha tanlang —</option>
+                        <option value="mehnat">Mehnat huquqi</option>
+                        <option value="oila">Oila huquqi</option>
+                        <option value="fuqarolik">Fuqarolik huquqi</option>
+                        <option value="shartnoma">Shartnoma huquqi</option>
+                        <option value="soliq">Soliq huquqi</option>
+                        <option value="jinoyat">Jinoyat huquqi</option>
+                        <option value="mamuriy">Ma'muriy javobgarlik</option>
+                        <option value="korporativ">Korporativ huquq</option>
+                        <option value="tadbirkorlik">Tadbirkorlik huquqi</option>
+                        <option value="uy-joy">Uy-joy oldi-sotdisi</option>
+                        <option value="mulk">Mulk huquqi</option>
+                        <option value="notarius">Notarius xizmatlari</option>
+                        <option value="ijtimoiy">Ijtimoiy himoya</option>
+                        <option value="advokatura">Advokatura</option>
+                    </select>
+                    <input type="text" id="docUploadName" class="ai-doc-name-input" placeholder="Hujjat nomi (ixtiyoriy)">
+
+                    <!-- Tab switcher: URL vs File -->
+                    <div class="ai-doc-tabs">
+                        <button class="ai-doc-tab active" id="tabUrlBtn" onclick="switchDocTab('url')">lex.uz URL</button>
+                        <button class="ai-doc-tab" id="tabFileBtn" onclick="switchDocTab('file')">Fayl</button>
+                    </div>
+
+                    <!-- URL input -->
+                    <div id="docUrlPanel">
+                        <input type="url" id="docLexUrl" class="ai-doc-name-input"
+                            placeholder="https://lex.uz/uz/docs/..." style="margin-bottom:6px">
+                        <button class="ai-doc-upload-btn" id="docUrlBtn" onclick="ingestLexUrl()">
+                            Lex.uz dan yuklash
+                        </button>
+                    </div>
+
+                    <!-- File input -->
+                    <div id="docFilePanel" style="display:none">
+                        <label class="ai-doc-file-label">
+                            <input type="file" id="docFileInput" accept=".pdf,.txt,.docx,.doc" onchange="onDocFileSelected(this)">
+                            Fayl tanlash (PDF / TXT / DOCX)
+                        </label>
+                        <div id="docSelectedFile" class="ai-doc-selected-file" style="display:none"></div>
+                        <button class="ai-doc-upload-btn" id="docUploadBtn" onclick="uploadLegalDocument()" disabled>
+                            Korpusga yuklash
+                        </button>
+                    </div>
+
+                    <div id="docUploadStatus" class="ai-doc-upload-status" style="display:none"></div>
+
+                    <!-- Ingest Log -->
+                    <div style="margin-top:10px">
+                        <button onclick="toggleIngestLog()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
+                            <span>Yuklash tarixi</span>
+                            <span id="ingestLogToggleIcon">▼</span>
+                        </button>
+                        <div id="ingestLogPanel" style="display:none;margin-top:6px">
+                            <div id="ingestLogStats" style="font-size:11px;color:#888;padding:6px 8px;background:#f9f7ff;border-radius:6px;margin-bottom:6px"></div>
+                            <div id="ingestLogList" style="max-height:280px;overflow-y:auto;font-size:11px"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feedback Report -->
+                <div class="fb-report-section-wrap" id="fbReportSection" style="display:none">
+                    <button class="fb-report-toggle" onclick="toggleFbReport()">
+                        <span>Feedback hisoboti</span>
+                        <span id="fbReportToggleIcon">&#9660;</span>
+                    </button>
+                    <div class="fb-report-panel" id="fbReportPanel">
+                        <div class="fb-stat-grid" id="fbStatGrid">
+                            <div class="fb-stat-card good"><span class="fb-val" id="fbGood">0</span>Yaxshi</div>
+                            <div class="fb-stat-card bad"><span class="fb-val" id="fbBad">0</span>Yomon</div>
+                            <div class="fb-stat-card"><span class="fb-val" id="fbReviewed">0</span>Ko'rib chiqilgan</div>
+                            <div class="fb-stat-card"><span class="fb-val" id="fbPending">0</span>Kutilmoqda</div>
+                        </div>
+                        <div style="display:flex;gap:4px;margin-bottom:8px">
+                            <button class="fb-review-btn" onclick="loadFbList('all')" style="flex:1">Hammasi</button>
+                            <button class="fb-review-btn" onclick="loadFbList('good')" style="flex:1">Yaxshi</button>
+                            <button class="fb-review-btn" onclick="loadFbList('bad')" style="flex:1">Yomon</button>
+                            <button class="fb-review-btn" onclick="loadFbList('pending')" style="flex:1">Kutilmoqda</button>
+                        </div>
+                        <div id="fbListContainer" style="max-height:350px;overflow-y:auto"></div>
                     </div>
                 </div>
             </div>
@@ -5761,7 +5830,15 @@
                     legalChatEl.style.display = data.role === 'master' ? '' : 'none';
                 }
 
-                // Show feedback report section for master only
+                // Show right sidebar (doc upload + feedback) for master only
+                const aiSidebarRight = document.getElementById('aiSidebarRight');
+                if (aiSidebarRight) {
+                    if (data.role === 'master') {
+                        aiSidebarRight.classList.add('master-visible');
+                    } else {
+                        aiSidebarRight.classList.remove('master-visible');
+                    }
+                }
                 const fbReport = document.getElementById('fbReportSection');
                 if (fbReport) {
                     fbReport.style.display = data.role === 'master' ? '' : 'none';
@@ -8119,6 +8196,33 @@
             closeMobileSidebar();
         }
 
+        async function deleteAiConversation(sessionId) {
+            const lang = (navigator.language || 'uz').startsWith('ru') ? 'ru' : 'uz';
+            const msg = lang === 'ru'
+                ? 'Этот чат будет удалён. Вы уверены?'
+                : 'Bu suhbat o\'chiriladi. Ishonchingiz komilmi?';
+            if (!confirm(msg)) return;
+            try {
+                const resp = await fetch('/api/ai-chat-sessions/' + sessionId, {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                if (!resp.ok) throw new Error('Delete failed');
+                if (currentAiSessionId === sessionId) {
+                    currentAiSessionId = null;
+                    aiChatHistory = [];
+                    document.getElementById('aiChatHeaderTitle').textContent = '';
+                    const welcome = document.getElementById('aiChatWelcome');
+                    const msgs = document.getElementById('aiChatMessages');
+                    msgs.innerHTML = '';
+                    if (welcome) { msgs.appendChild(welcome); welcome.style.display = ''; }
+                }
+                await loadAiHistory();
+            } catch (e) {
+                console.error('[AI] Delete session error:', e);
+            }
+        }
+
         function clearAiChat() {
             createNewAiChat();
         }
@@ -8536,8 +8640,13 @@
                     }
                     var isActive = currentAiSessionId === s.id ? ' active' : '';
                     html += '<div class="ai-history-item' + isActive + '" onclick="openAiChatSession(' + s.id + ')">'
+                        + '<div class="ai-history-item-content">'
                         + '<div class="ai-history-item-title">' + escapeHtml(s.title || 'Nomsiz suhbat') + '</div>'
                         + '<div class="ai-history-item-meta">' + dbs + '<span>' + timeAgo + '</span></div>'
+                        + '</div>'
+                        + '<button class="ai-history-delete-btn" onclick="event.stopPropagation(); deleteAiConversation(' + s.id + ')" title="O\'chirish">'
+                        + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+                        + '</button>'
                         + '</div>';
                 });
                 list.innerHTML = html;
