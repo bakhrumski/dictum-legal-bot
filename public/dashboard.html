@@ -2250,7 +2250,8 @@
             gap: 10px;
             min-width: 0;
         }
-        .ai-sidebar-toggle {
+        .ai-sidebar-toggle,
+        .ai-sidebar-right-toggle {
             display: none;
             background: none;
             border: none;
@@ -2260,7 +2261,8 @@
             border-radius: 8px;
             flex-shrink: 0;
         }
-        .ai-sidebar-toggle:hover { background: var(--bg-card-hover); }
+        .ai-sidebar-toggle:hover,
+        .ai-sidebar-right-toggle:hover { background: var(--bg-card-hover); }
         .ai-chat-header-title {
             font-size: 15px;
             font-weight: 600;
@@ -2749,6 +2751,35 @@
                 box-shadow: 4px 0 20px rgba(0,0,0,0.15);
             }
             .ai-sidebar-toggle {
+                display: flex;
+            }
+            /* Right sidebar: slides in from the right */
+            .ai-sidebar-right.master-visible {
+                display: none; /* hidden by default on mobile too */
+            }
+            .ai-sidebar-right {
+                position: fixed;
+                right: 0;
+                top: 0;
+                bottom: 0;
+                width: 280px;
+                min-width: 0;
+                z-index: 1000;
+                transform: translateX(100%);
+                visibility: hidden;
+                transition: transform 0.3s ease, visibility 0.3s;
+                box-shadow: none;
+                border-left: none;
+                background: var(--glass-bg-strong, var(--glass-bg));
+                display: flex;
+                flex-direction: column;
+            }
+            .ai-sidebar-right.open {
+                transform: translateX(0);
+                visibility: visible;
+                box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+            }
+            .ai-sidebar-right-toggle {
                 display: flex;
             }
             .ai-chat-msg { max-width: 92%; font-size: 13px; }
@@ -5106,8 +5137,8 @@
 
             </div>
 
-            <!-- Sidebar backdrop for mobile -->
-            <div class="ai-sidebar-backdrop" id="aiSidebarBackdrop" onclick="toggleAiSidebar()"></div>
+            <!-- Sidebar backdrop for mobile (shared by both sidebars) -->
+            <div class="ai-sidebar-backdrop" id="aiSidebarBackdrop" onclick="closeBothSidebars()"></div>
 
             <!-- Main Chat Area -->
             <div class="ai-chat-main">
@@ -5119,6 +5150,9 @@
                         </button>
                         <span class="ai-chat-header-title" id="aiChatHeaderTitle"></span>
                     </div>
+                    <button class="ai-sidebar-right-toggle" id="aiSidebarRightToggle" onclick="toggleAiSidebarRight()" title="R&D panel" style="display:none">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
                 </div>
 
                 <!-- Messages -->
@@ -5839,6 +5873,11 @@
                     } else {
                         aiSidebarRight.classList.remove('master-visible');
                     }
+                }
+                // Show right burger toggle for master only
+                const rightToggle = document.getElementById('aiSidebarRightToggle');
+                if (rightToggle) {
+                    rightToggle.style.display = data.role === 'master' ? '' : 'none';
                 }
                 const fbReport = document.getElementById('fbReportSection');
                 if (fbReport) {
@@ -8736,18 +8775,36 @@
             }
         }
 
-        // Mobile sidebar toggle
+        // Mobile sidebar toggles
         function toggleAiSidebar() {
-            var sidebar = document.getElementById('aiSidebar');
+            var sidebar  = document.getElementById('aiSidebar');
             var backdrop = document.getElementById('aiSidebarBackdrop');
+            var rightOpen = document.getElementById('aiSidebarRight')?.classList.contains('open');
+            if (rightOpen) toggleAiSidebarRight(); // close right first
             sidebar.classList.toggle('open');
             backdrop.classList.toggle('active');
         }
-        function closeMobileSidebar() {
-            var sidebar = document.getElementById('aiSidebar');
+        function toggleAiSidebarRight() {
+            var sidebar  = document.getElementById('aiSidebarRight');
             var backdrop = document.getElementById('aiSidebarBackdrop');
-            if (sidebar) sidebar.classList.remove('open');
+            if (!sidebar) return;
+            var leftOpen = document.getElementById('aiSidebar')?.classList.contains('open');
+            if (leftOpen) {
+                document.getElementById('aiSidebar').classList.remove('open');
+            }
+            sidebar.classList.toggle('open');
+            backdrop.classList.toggle('active');
+        }
+        function closeBothSidebars() {
+            var left     = document.getElementById('aiSidebar');
+            var right    = document.getElementById('aiSidebarRight');
+            var backdrop = document.getElementById('aiSidebarBackdrop');
+            if (left)     left.classList.remove('open');
+            if (right)    right.classList.remove('open');
             if (backdrop) backdrop.classList.remove('active');
+        }
+        function closeMobileSidebar() {
+            closeBothSidebars();
         }
 
         // --- AI Legal Template (kept for analysis modal) ---
