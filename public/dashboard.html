@@ -2309,6 +2309,7 @@
         }
         .ai-doc-upload-section {
             flex: 1;
+            min-height: 0;
             overflow-y: auto;
             padding: 12px;
             box-sizing: border-box;
@@ -2316,12 +2317,17 @@
         }
         .ai-doc-upload-section::-webkit-scrollbar { display: none; }
         .fb-report-section-wrap {
-            flex: 1;
-            overflow-y: auto;
+            flex: 0 0 auto;
+            overflow: hidden;
             padding: 12px;
             box-sizing: border-box;
             border-top: none;
             scrollbar-width: none;
+        }
+        .fb-report-section-wrap.fb-expanded {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
         }
         .fb-report-section-wrap::-webkit-scrollbar { display: none; }
         /* Delete button on history items */
@@ -7868,7 +7874,18 @@
             var icon  = document.getElementById('ingestLogToggleIcon');
             panel.style.display = _ingestLogOpen ? 'block' : 'none';
             icon.textContent = _ingestLogOpen ? '▲' : '▼';
-            if (_ingestLogOpen) await loadIngestLog();
+            // Collapse feedback section when upload history opens
+            if (_ingestLogOpen) {
+                var fbPanel = document.getElementById('fbReportPanel');
+                var fbWrap  = document.getElementById('fbReportSection');
+                var fbIcon  = document.getElementById('fbReportToggleIcon');
+                if (fbPanel && fbPanel.classList.contains('visible')) {
+                    fbPanel.classList.remove('visible');
+                    fbWrap.classList.remove('fb-expanded');
+                    if (fbIcon) fbIcon.innerHTML = '&#9660;';
+                }
+                await loadIngestLog();
+            }
         }
 
         async function loadIngestLog() {
@@ -8494,12 +8511,23 @@
         // ═══ FEEDBACK REPORT (master only) ═══
         function toggleFbReport() {
             var panel = document.getElementById('fbReportPanel');
+            var wrap = document.getElementById('fbReportSection');
             var icon = document.getElementById('fbReportToggleIcon');
             if (panel.classList.contains('visible')) {
                 panel.classList.remove('visible');
+                wrap.classList.remove('fb-expanded');
                 icon.innerHTML = '&#9660;';
             } else {
+                // Collapse ingest log when feedback expands
+                var ingestPanel = document.getElementById('ingestLogPanel');
+                var ingestIcon = document.getElementById('ingestLogToggleIcon');
+                if (ingestPanel && ingestPanel.style.display !== 'none') {
+                    ingestPanel.style.display = 'none';
+                    if (ingestIcon) ingestIcon.textContent = '▼';
+                    _ingestLogOpen = false;
+                }
                 panel.classList.add('visible');
+                wrap.classList.add('fb-expanded');
                 icon.innerHTML = '&#9650;';
                 loadFbStats();
                 loadFbList('all');
