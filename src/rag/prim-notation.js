@@ -203,9 +203,11 @@ function stripLeakedInstructions(text) {
   // and the Eslatma disclaimer blockquote line at the bottom.
   // Also matches plain-text headers (just the words on their own line),
   // since some saved answers leaked the headers without ## or ** wrapping.
+  // "Huquqiy asos", "Tahlil", "Xulosa" are now valid IRAC section labels — keep them.
+  // Only strip headers that are leaked AI boilerplate or old-format artifacts.
   const forbiddenHeaders = [
-    'Yuridik\\s+maslahat', 'Xulosa', 'Eslatma',
-    'Huquqiy\\s+asos', 'Batafsil\\s+tushuntirish',
+    'Yuridik\\s+maslahat', 'Eslatma',
+    'Batafsil\\s+tushuntirish',
     'Amaliy\\s+ahamiyat(?:i)?', 'Muhim\\s+eslatmalar?',
   ];
   for (const h of forbiddenHeaders) {
@@ -237,6 +239,10 @@ function stripLeakedInstructions(text) {
 
   // Collapse triple-blank-lines created by the stripping
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+
+  // Normalize "bazaviy hisoblash miqdori" → "BHM" (with Uzbek suffixes preserved)
+  cleaned = cleaned.replace(/bazaviy\s+hisoblash\s+miqdori(\w*)/gi, 'BHM$1');
+
   return cleaned.trim();
 }
 
