@@ -3669,7 +3669,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
 // ========== AI CHAT SESSIONS CRUD ==========
 
 // List sessions
-app.get('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
+app.get('/api/ai-chat-sessions', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, title, databases, messages->0->>'text' as first_message,
@@ -3689,7 +3689,7 @@ app.get('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
 });
 
 // Get single session with messages
-app.get('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
+app.get('/api/ai-chat-sessions/:id', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, title, topic, databases, messages, created_at, updated_at
@@ -3708,7 +3708,7 @@ app.get('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
 });
 
 // Create or update session
-app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
+app.post('/api/ai-chat-sessions', requireAuth, async (req, res) => {
   try {
     const { id, title, databases, topic, messages } = req.body;
     if (!messages || !Array.isArray(messages)) {
@@ -3755,7 +3755,7 @@ app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
 });
 
 // Delete session
-app.delete('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
+app.delete('/api/ai-chat-sessions/:id', requireAuth, async (req, res) => {
   try {
     await pool.query(
       `DELETE FROM ai_chat_sessions WHERE id = $1 AND admin_id = $2`,
