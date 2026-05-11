@@ -1,40 +1,60 @@
 'use strict';
 
 /**
- * Subscription Tiers + Rate Limiter — JuristAI (Phase 3)
+ * JuristAI tariff plans — for common users (role = 'user').
  *
- * Tiers (monthly AI chat requests):
- *   free     :  20   (default for new users)
- *   basic    : 300
- *   pro      : 1000
- *   business : custom (per-user override, typically 5000+)
+ * Plans:
+ *   sinov    : 3 requests/day,  valid 7 days,  ONCE per user, free
+ *   silver   : 300 requests/month,   299,000 so'm/oy
+ *   gold     : 750 requests/month,   599,000 so'm/oy
+ *   platinum : 1,500 requests/month, 1,199,000 so'm/oy
  *
- * Rate-limit window = 30 rolling days. We count rows in ai_chat_usage
- * in the last 30 days for the caller.
+ * Daily quotas (sinov) reset at 00:00 Asia/Tashkent (UTC+5, no DST).
+ * Monthly quotas roll on the day of tariff start.
  *
- * NOTE: Payment integration (Stripe / Click / Payme / Paynet) is intentionally
- * deferred. Tier assignment is done by master admin via /api/subscription/set-tier.
+ * Schema additions (admins table):
+ *   tariff_plan       VARCHAR(20)   -- 'sinov'|'silver'|'gold'|'platinum'|NULL
+ *   tariff_starts_at  TIMESTAMPTZ
+ *   tariff_expires_at TIMESTAMPTZ
+ *   bepul_used        BOOLEAN       -- true once user has consumed their one sinov
+ *   phone             VARCHAR(30)
+ *   email             VARCHAR(255)
+ *   email_verified    BOOLEAN
  *
- * Schema:
- *   users.subscription_tier   VARCHAR(20) DEFAULT 'free'
- *   users.subscription_limit  INTEGER                (override; NULL → use tier default)
- *   users.subscription_expires_at TIMESTAMPTZ        (NULL → no expiry)
- *
- *   ai_chat_usage(
- *     id         SERIAL PRIMARY KEY,
- *     user_id    INTEGER NOT NULL,
- *     endpoint   VARCHAR(50),
- *     ts         TIMESTAMPTZ DEFAULT NOW()
- *   )
+ * Usage table: tariff_usage(id, admin_id, endpoint, ts)
  */
 
 const { pool } = require('../database/db');
 
-const TIER_LIMITS = {
-  free:     20,
-  basic:    300,
-  pro:      1000,
-  business: 5000,
+const PLANS = {
+  sinov: {
+    label: 'Sinov',
+    dailyLimit: 3,
+    monthlyLimit: null,
+    durationDays: 7,
+    priceUzs: 0,
+  },
+  silver: {
+    label: 'Silver',
+    dailyLimit: null,
+    monthlyLimit: 300,
+    durationDays: 30,
+    priceUzs: 299000,
+  },
+  gold: {
+    label: 'Gold',
+    dailyLimit: null,
+    monthlyLimit: 750,
+    durationDays: 30,
+    priceUzs: 599000,
+  },
+  platinum: {
+    label: 'Platinum',
+    dailyLimit: null,
+    monthlyLimit: 1500,
+    durationDays: 30,
+    priceUzs: 1199000,
+  },
 };
 
 let _initialized = false;
@@ -42,161 +62,194 @@ let _initialized = false;
 async function initSubscriptionSchema() {
   if (_initialized) return;
   try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(20) DEFAULT 'free'`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_limit INTEGER`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS tariff_plan VARCHAR(20)`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS tariff_starts_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS tariff_expires_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS bepul_used BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email VARCHAR(255)`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_admins_email ON admins(email) WHERE email IS NOT NULL`);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS ai_chat_usage (
+      CREATE TABLE IF NOT EXISTS tariff_usage (
         id       SERIAL PRIMARY KEY,
-        user_id  INTEGER NOT NULL,
+        admin_id INTEGER NOT NULL,
         endpoint VARCHAR(50),
         ts       TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_chat_usage_user_ts ON ai_chat_usage(user_id, ts DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tariff_usage_admin_ts ON tariff_usage(admin_id, ts DESC)`);
 
     _initialized = true;
-    console.log('[SUBSCRIPTION] schema ready (tiers + ai_chat_usage)');
+    console.log('[TARIFF] schema ready (admins + tariff_usage)');
   } catch (err) {
-    console.error('[SUBSCRIPTION] init failed:', err.message);
+    console.error('[TARIFF] init failed:', err.message);
   }
 }
 
-/**
- * Get a user's effective monthly limit.
- * Honors per-user override, falls back to tier default, falls back to 'free'.
- */
-async function getUserQuota(userId) {
-  if (!_initialized) await initSubscriptionSchema();
-  const r = await pool.query(
-    `SELECT subscription_tier, subscription_limit, subscription_expires_at
-       FROM users WHERE id = $1`,
-    [userId]
-  );
-  if (r.rows.length === 0) return { tier: 'free', limit: TIER_LIMITS.free, expiresAt: null };
-
-  let { subscription_tier: tier, subscription_limit: override, subscription_expires_at: expiresAt } = r.rows[0];
-  // Expired paid subscriptions revert to free
-  if (expiresAt && new Date(expiresAt) < new Date()) {
-    tier = 'free';
-    override = null;
-  }
-  tier = tier || 'free';
-  const limit = (override != null && override > 0) ? override : (TIER_LIMITS[tier] || TIER_LIMITS.free);
-  return { tier, limit, expiresAt };
+// Return today's 00:00 Asia/Tashkent as a Date (UTC+5, no DST)
+function tashkentMidnight() {
+  const nowMs = Date.now();
+  const tashkentMs = nowMs + 5 * 3600 * 1000;
+  const d = new Date(tashkentMs);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return new Date(`${y}-${m}-${day}T00:00:00+05:00`);
 }
 
-/**
- * Count rolling-30-day chat calls for this user.
- */
-async function getUsage30d(userId) {
+async function getUserPlan(adminId) {
   if (!_initialized) await initSubscriptionSchema();
   const r = await pool.query(
-    `SELECT COUNT(*)::int AS used
-       FROM ai_chat_usage
-      WHERE user_id = $1 AND ts > NOW() - INTERVAL '30 days'`,
-    [userId]
+    `SELECT tariff_plan, tariff_starts_at, tariff_expires_at, bepul_used, role
+       FROM admins WHERE id = $1`,
+    [adminId]
   );
-  return r.rows[0].used;
-}
+  if (r.rows.length === 0) return null;
+  const row = r.rows[0];
+  if (row.role === 'master') return { plan: 'master', role: 'master' };
 
-/**
- * Check quota. Returns { allowed, tier, limit, used, remaining }.
- * Does NOT record usage — call `recordUsage()` after a successful response.
- */
-async function checkQuota(userId) {
-  const [{ tier, limit, expiresAt }, used] = await Promise.all([
-    getUserQuota(userId),
-    getUsage30d(userId),
-  ]);
+  let plan = row.tariff_plan;
+  const expired = row.tariff_expires_at && new Date(row.tariff_expires_at) < new Date();
+  if (plan && expired) plan = null;
   return {
-    allowed: used < limit,
-    tier,
-    limit,
-    used,
-    remaining: Math.max(0, limit - used),
-    expiresAt,
+    plan,
+    role: row.role,
+    startsAt: row.tariff_starts_at,
+    expiresAt: row.tariff_expires_at,
+    bepulUsed: !!row.bepul_used,
+    expired,
   };
 }
 
-async function recordUsage(userId, endpoint) {
+async function checkQuota(adminId) {
+  const u = await getUserPlan(adminId);
+  if (!u) return { allowed: false, reason: 'unknown_user' };
+  if (u.plan === 'master') return { allowed: true, plan: 'master', remaining: Infinity };
+  // Non-common roles (student, lawyer) bypass tariff system
+  if (u.role && u.role !== 'user') return { allowed: true, plan: u.role, remaining: Infinity };
+  if (!u.plan) return { allowed: false, reason: 'no_plan' };
+
+  const cfg = PLANS[u.plan];
+  if (!cfg) return { allowed: false, reason: 'unknown_plan' };
+
+  if (u.plan === 'sinov') {
+    const midnight = tashkentMidnight();
+    const r = await pool.query(
+      `SELECT COUNT(*)::int AS used FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+      [adminId, midnight]
+    );
+    const used = r.rows[0].used;
+    return {
+      allowed: used < cfg.dailyLimit,
+      plan: 'sinov',
+      limit: cfg.dailyLimit,
+      used,
+      remaining: Math.max(0, cfg.dailyLimit - used),
+      period: 'day',
+      expiresAt: u.expiresAt,
+    };
+  }
+
+  const since = u.startsAt ? new Date(u.startsAt) : null;
+  if (!since) return { allowed: false, reason: 'no_start_date' };
+  const r = await pool.query(
+    `SELECT COUNT(*)::int AS used FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+    [adminId, since]
+  );
+  const used = r.rows[0].used;
+  return {
+    allowed: used < cfg.monthlyLimit,
+    plan: u.plan,
+    limit: cfg.monthlyLimit,
+    used,
+    remaining: Math.max(0, cfg.monthlyLimit - used),
+    period: 'month',
+    expiresAt: u.expiresAt,
+  };
+}
+
+async function recordUsage(adminId, endpoint) {
   if (!_initialized) await initSubscriptionSchema();
   try {
     await pool.query(
-      `INSERT INTO ai_chat_usage (user_id, endpoint) VALUES ($1, $2)`,
-      [userId, endpoint || null]
+      `INSERT INTO tariff_usage (admin_id, endpoint) VALUES ($1, $2)`,
+      [adminId, endpoint || null]
     );
   } catch (err) {
-    console.warn('[SUBSCRIPTION] usage log failed:', err.message);
+    console.warn('[TARIFF] usage log failed:', err.message);
   }
 }
 
-/**
- * Set a user's subscription tier (admin action).
- * @param {number} userId
- * @param {string} tier - 'free' | 'basic' | 'pro' | 'business'
- * @param {Object} opts - { customLimit, expiresAt }
- */
-async function setTier(userId, tier, { customLimit = null, expiresAt = null } = {}) {
+async function selectPlan(adminId, plan) {
   if (!_initialized) await initSubscriptionSchema();
-  if (!TIER_LIMITS[tier]) throw new Error(`Unknown tier: ${tier}`);
+  if (!PLANS[plan]) throw new Error(`Unknown plan: ${plan}`);
+  const cfg = PLANS[plan];
+
+  if (plan === 'sinov') {
+    const r = await pool.query(`SELECT bepul_used FROM admins WHERE id = $1`, [adminId]);
+    if (r.rows[0]?.bepul_used) throw new Error('bepul_already_used');
+  }
+
+  const now = new Date();
+  const expires = new Date(now.getTime() + cfg.durationDays * 24 * 3600 * 1000);
   await pool.query(
-    `UPDATE users
-        SET subscription_tier = $1,
-            subscription_limit = $2,
-            subscription_expires_at = $3
-      WHERE id = $4`,
-    [tier, customLimit, expiresAt, userId]
+    `UPDATE admins
+        SET tariff_plan = $1,
+            tariff_starts_at = $2,
+            tariff_expires_at = $3,
+            bepul_used = bepul_used OR $4
+      WHERE id = $5`,
+    [plan, now, expires, plan === 'sinov', adminId]
   );
+  return { plan, startsAt: now, expiresAt: expires };
 }
 
 /**
- * Express middleware that enforces the user's quota.
- * Requires req.user.id to be set by the upstream auth middleware.
- * On quota exceeded: 429 with a structured body.
- *
- * Usage:
- *   app.post('/api/advanced-chat', requireAuth, enforceQuota('/api/advanced-chat'), handler)
+ * Express middleware: enforces the caller's tariff quota.
+ * - Master admins bypass entirely.
+ * - Student/lawyer roles bypass (legacy admin users).
+ * - Common users (role='user') without a plan get 429.
+ * - Common users with a plan over their limit get 429.
  */
 function enforceQuota(endpoint) {
   return async (req, res, next) => {
     try {
-      const userId = req.session?.adminId || req.session?.userId || req.user?.id || req.userId;
-      if (!userId) return next(); // upstream auth will reject; don't double-fail
-      // Master admins bypass quotas entirely
+      const adminId = req.session?.adminId;
+      if (!adminId) return next();
       if (req.session?.role === 'master') return next();
-      const q = await checkQuota(userId);
+      if (req.session?.role && req.session.role !== 'user') return next();
+
+      const q = await checkQuota(adminId);
       if (!q.allowed) {
         return res.status(429).json({
           error: 'quota_exceeded',
-          message: `Oylik limit tugadi (${q.used}/${q.limit}). Tarifni yangilang.`,
-          tier: q.tier,
+          reason: q.reason || 'limit_reached',
+          message: q.reason === 'no_plan'
+            ? 'Tarif rejasi tanlanmagan. Iltimos, tarifni tanlang.'
+            : `Limit tugadi (${q.used}/${q.limit}). Yangi tarif tanlang.`,
+          plan: q.plan,
           limit: q.limit,
           used: q.used,
-          remaining: 0,
         });
       }
-      // Record usage OPTIMISTICALLY (counts attempts). Switch to post-response
-      // hook if you want to only count successful calls.
-      await recordUsage(userId, endpoint);
-      // Expose to downstream handlers
+      await recordUsage(adminId, endpoint);
       res.locals.quota = q;
       next();
     } catch (err) {
-      console.error('[SUBSCRIPTION] enforceQuota error:', err.message);
-      next(); // fail-open — do NOT lock users out on quota system errors
+      console.error('[TARIFF] enforceQuota error:', err.message);
+      next(); // fail-open
     }
   };
 }
 
 module.exports = {
-  TIER_LIMITS,
+  PLANS,
   initSubscriptionSchema,
-  getUserQuota,
-  getUsage30d,
+  getUserPlan,
   checkQuota,
   recordUsage,
-  setTier,
+  selectPlan,
   enforceQuota,
 };
