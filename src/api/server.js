@@ -18,6 +18,8 @@ const { classifyLegalField, formatClassificationForPrompt } = require('../agents
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
 const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
+const tariffModule = require('../rag/subscription-tiers');
+const { sendEmailCode } = require('../auth/email-code');
 const { getChunkArticleRefs } = require('../rag/citation-utils');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
@@ -3416,7 +3418,7 @@ async function classifyLegalTopic(message) {
   }
 }
 
-app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
+app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-chat'), async (req, res) => {
   try {
     const { message, history, databases, topic: rawTopic, topics, autoDetect } = req.body;
     if (!message || typeof message !== 'string') {
@@ -3667,7 +3669,7 @@ app.post('/api/legal-chat', requireMasterAdmin, async (req, res) => {
 // ========== AI CHAT SESSIONS CRUD ==========
 
 // List sessions
-app.get('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
+app.get('/api/ai-chat-sessions', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, title, databases, messages->0->>'text' as first_message,
@@ -3687,7 +3689,7 @@ app.get('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
 });
 
 // Get single session with messages
-app.get('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
+app.get('/api/ai-chat-sessions/:id', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, title, topic, databases, messages, created_at, updated_at
@@ -3706,7 +3708,7 @@ app.get('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
 });
 
 // Create or update session
-app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
+app.post('/api/ai-chat-sessions', requireAuth, async (req, res) => {
   try {
     const { id, title, databases, topic, messages } = req.body;
     if (!messages || !Array.isArray(messages)) {
@@ -3753,7 +3755,7 @@ app.post('/api/ai-chat-sessions', requireMasterAdmin, async (req, res) => {
 });
 
 // Delete session
-app.delete('/api/ai-chat-sessions/:id', requireMasterAdmin, async (req, res) => {
+app.delete('/api/ai-chat-sessions/:id', requireAuth, async (req, res) => {
   try {
     await pool.query(
       `DELETE FROM ai_chat_sessions WHERE id = $1 AND admin_id = $2`,
@@ -5156,6 +5158,180 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     if (req.file) { try { fs.unlinkSync(req.file.path); } catch (e) {} }
     console.error('[REGISTER] Error:', error);
     res.status(500).json({ error: 'Ro\'yxatdan o\'tishda xatolik' });
+  }
+});
+
+// ========== COMMON USER REGISTRATION (auto-approval, no master needed) ==========
+
+// POST /api/send-email-code — generate 4-digit code and (stub-)email it
+app.post('/api/send-email-code', async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'To\'g\'ri email manzilini kiriting' });
+    }
+    const { token } = await sendEmailCode(email);
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('[EMAIL CODE] Error:', error);
+    res.status(500).json({ error: 'Email kod yuborishda xatolik' });
+  }
+});
+
+// POST /api/register/common — common user self-registration (NO master approval)
+// Accepts EITHER telegram_username + telegram-verified code, OR email + email-verified code.
+app.post('/api/register/common', async (req, res) => {
+  try {
+    const {
+      first_name, last_name, phone, telegram_username, email,
+      password, password_confirm,
+      verification_code, verification_token,
+      accept_offer, accept_privacy,
+    } = req.body || {};
+
+    if (!first_name || !last_name) {
+      return res.status(400).json({ error: 'Ism va familiyani kiriting' });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
+    }
+    if (password !== password_confirm) {
+      return res.status(400).json({ error: 'Parollar mos kelmaydi' });
+    }
+    if (!accept_offer || !accept_privacy) {
+      return res.status(400).json({ error: 'Ommaviy oferta va maxfiylik siyosatini qabul qiling' });
+    }
+
+    const cleanTg = telegram_username ? telegram_username.replace(/^@/, '').trim().toLowerCase() : '';
+    const cleanEmail = email ? email.trim().toLowerCase() : '';
+    const cleanPhone = phone ? phone.trim() : '';
+
+    if (!cleanTg && !cleanEmail) {
+      return res.status(400).json({ error: 'Telegram username yoki email kiriting' });
+    }
+
+    if (!verification_token || !verification_code) {
+      return res.status(400).json({ error: 'Tasdiqlash kodini kiriting' });
+    }
+    const storedCode = verificationTokens.get(verification_token);
+    if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
+      return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan' });
+    }
+    // If email channel: storedCode.email must match the email submitted
+    if (storedCode.channel === 'email' && storedCode.email !== cleanEmail) {
+      return res.status(400).json({ error: 'Tasdiqlash kodi boshqa email uchun yuborilgan' });
+    }
+
+    // Build a unique username: prefer telegram handle, else email local-part, else random
+    let baseUsername = cleanTg || (cleanEmail ? cleanEmail.split('@')[0] : `user${Date.now()}`);
+    baseUsername = baseUsername.replace(/[^a-z0-9._-]/gi, '').toLowerCase() || `user${Date.now()}`;
+    let username = baseUsername;
+    let suffix = 0;
+    while (true) {
+      const dup = await pool.query('SELECT id FROM admins WHERE LOWER(username) = $1', [username]);
+      if (dup.rows.length === 0) break;
+      suffix += 1;
+      username = `${baseUsername}${suffix}`;
+      if (suffix > 200) return res.status(500).json({ error: 'Username ajratishda xatolik' });
+    }
+
+    // Duplicate contact check
+    if (cleanEmail) {
+      const dupEmail = await pool.query('SELECT id FROM admins WHERE LOWER(email) = $1', [cleanEmail]);
+      if (dupEmail.rows.length > 0) {
+        return res.status(400).json({ error: 'Bu email allaqachon ro\'yxatdan o\'tgan' });
+      }
+    }
+    if (cleanTg) {
+      const dupTg = await pool.query('SELECT id FROM admins WHERE LOWER(telegram_username) = $1', [cleanTg]);
+      if (dupTg.rows.length > 0) {
+        return res.status(400).json({ error: 'Bu Telegram username allaqachon ro\'yxatdan o\'tgan' });
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const fullName = `${first_name.trim()} ${last_name.trim()}`.trim();
+    const applicantChatId = storedCode.chatId || null;
+
+    const insert = await pool.query(
+      `INSERT INTO admins
+         (username, password, full_name, role,
+          telegram_username, telegram_chat_id, email, email_verified, phone)
+       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8)
+       RETURNING id, username, full_name, role`,
+      [
+        username, passwordHash, fullName,
+        cleanTg || null,
+        applicantChatId,
+        cleanEmail || null,
+        storedCode.channel === 'email',
+        cleanPhone || null,
+      ]
+    );
+    const admin = insert.rows[0];
+
+    // Code consumed
+    verificationTokens.delete(verification_token);
+
+    // Auto-login the new user
+    req.session.isAuthenticated = true;
+    req.session.role = admin.role;
+    req.session.adminId = admin.id;
+    req.session.username = admin.username;
+    req.session.fullName = admin.full_name;
+
+    res.json({
+      success: true,
+      role: admin.role,
+      fullName: admin.full_name,
+      username: admin.username,
+      redirect: '/tariff.html',
+    });
+  } catch (error) {
+    console.error('[REGISTER COMMON] Error:', error);
+    res.status(500).json({ error: 'Ro\'yxatdan o\'tishda xatolik: ' + error.message });
+  }
+});
+
+// ========== TARIFF SELECTION ==========
+
+// GET /api/tariff/plans — public plan catalog (used by tariff.html)
+app.get('/api/tariff/plans', (req, res) => {
+  res.json({ plans: tariffModule.PLANS });
+});
+
+// GET /api/tariff/me — current user's plan + remaining quota
+app.get('/api/tariff/me', requireAuth, async (req, res) => {
+  try {
+    const userPlan = await tariffModule.getUserPlan(req.session.adminId);
+    if (!userPlan) return res.status(404).json({ error: 'User not found' });
+    const quota = await tariffModule.checkQuota(req.session.adminId);
+    res.json({ ...userPlan, quota });
+  } catch (err) {
+    console.error('[TARIFF ME] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tariff/select — user picks a plan (sinov is once-per-user)
+app.post('/api/tariff/select', requireAuth, async (req, res) => {
+  try {
+    const { plan } = req.body || {};
+    if (!plan || !tariffModule.PLANS[plan]) {
+      return res.status(400).json({ error: 'Noto\'g\'ri tarif tanlandi' });
+    }
+    // Paid plans: this endpoint just sets the plan AS IF paid. Payment integration is deferred.
+    const result = await tariffModule.selectPlan(req.session.adminId, plan);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    if (err.message === 'bepul_already_used') {
+      return res.status(400).json({
+        error: 'bepul_already_used',
+        message: 'Bepul Sinov rejasi faqat bir marta ishlatiladi. Pullik rejani tanlang.',
+      });
+    }
+    console.error('[TARIFF SELECT] Error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

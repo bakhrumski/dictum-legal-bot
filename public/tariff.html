@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarif rejasi — JuristAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <style>
+        :root {
+            --bg-page: var(--parchment-50);
+            --bg-card: #FFFFFF;
+            --bg-card-hover: var(--parchment-100);
+            --text-1: var(--ink-900);
+            --text-2: var(--ink-700);
+            --text-3: var(--ink-500);
+            --border: var(--parchment-300);
+            --accent: var(--navy-600);
+            --accent-soft: var(--navy-100);
+            --gold: var(--brass-500);
+            --success: var(--success-700);
+        }
+        [data-theme="dark"] {
+            --bg-page: var(--dark-bg-1);
+            --bg-card: var(--dark-bg-2);
+            --bg-card-hover: var(--dark-bg-3);
+            --text-1: var(--dark-fg-1);
+            --text-2: var(--dark-fg-2);
+            --text-3: var(--dark-fg-3);
+            --border: var(--dark-border);
+            --accent: var(--dark-accent);
+            --accent-soft: rgba(214, 179, 121, 0.12);
+            --gold: var(--brass-300);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-page); color: var(--text-1);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        .page-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 24px 40px; max-width: 1320px; margin: 0 auto;
+        }
+        .brand {
+            display: flex; align-items: center; gap: 12px;
+            font-weight: 700; font-size: 18px; color: var(--text-1);
+        }
+        .brand img { height: 32px; }
+        .theme-toggle {
+            background: none; border: 1px solid var(--border); color: var(--text-1);
+            border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 13px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .theme-toggle:hover { background: var(--bg-card-hover); }
+
+        .container {
+            max-width: 1320px; margin: 0 auto; padding: 20px 40px 60px;
+        }
+        h1 {
+            text-align: center; font-size: 16px; font-weight: 500;
+            color: var(--text-2); margin: 8px 0 28px;
+        }
+        .duration-toggle {
+            display: flex; justify-content: center; gap: 6px;
+            margin-bottom: 36px;
+        }
+        .duration-toggle button {
+            background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-2); padding: 10px 22px; border-radius: 999px;
+            cursor: pointer; font-size: 14px; font-weight: 500;
+            transition: all 0.15s;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .duration-toggle button:hover { background: var(--bg-card-hover); }
+        .duration-toggle button.active {
+            background: var(--success); color: #fff; border-color: var(--success);
+        }
+        .duration-toggle .badge {
+            display: inline-block; font-size: 11px; padding: 1px 6px;
+            background: rgba(47, 107, 67, 0.18); color: var(--success);
+            border-radius: 4px; font-weight: 600;
+        }
+        .duration-toggle button.active .badge { background: rgba(255,255,255,0.22); color: #fff; }
+
+        .plans-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
+        }
+        @media (max-width: 1024px) { .plans-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 600px)  { .plans-grid { grid-template-columns: 1fr; } }
+
+        .plan-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 28px 24px; position: relative;
+            display: flex; flex-direction: column;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+        .plan-card:hover { transform: translateY(-2px); }
+        .plan-card.featured { border-color: var(--success); border-width: 1.5px; }
+        .plan-card .badge-top {
+            position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+            background: var(--success); color: #fff;
+            font-size: 12px; font-weight: 600; padding: 4px 14px; border-radius: 999px;
+        }
+        .plan-name {
+            font-size: 12px; font-weight: 600; letter-spacing: 1.5px;
+            color: var(--text-3); text-transform: uppercase; margin-bottom: 16px;
+        }
+        .plan-price {
+            font-size: 36px; font-weight: 800; line-height: 1.1; color: var(--text-1);
+            margin-bottom: 4px;
+        }
+        .plan-price small { font-size: 14px; font-weight: 500; color: var(--text-3); margin-left: 4px; }
+        .plan-period {
+            font-size: 13px; color: var(--text-3); margin-bottom: 22px;
+        }
+        .plan-meter-label {
+            display: flex; justify-content: space-between; font-size: 11px;
+            color: var(--text-3); margin-bottom: 6px;
+        }
+        .plan-meter {
+            height: 4px; background: var(--bg-card-hover); border-radius: 2px;
+            margin-bottom: 24px; overflow: hidden;
+        }
+        .plan-meter span { display: block; height: 100%; border-radius: 2px; }
+        .plan-card[data-plan="sinov"]    .plan-meter span { width: 25%;  background: var(--success); }
+        .plan-card[data-plan="silver"]   .plan-meter span { width: 40%;  background: var(--success); }
+        .plan-card[data-plan="gold"]     .plan-meter span { width: 65%;  background: var(--navy-500); }
+        .plan-card[data-plan="platinum"] .plan-meter span {
+            width: 100%; background: linear-gradient(90deg, var(--plum-500), var(--brass-500), var(--success));
+        }
+
+        .features {
+            list-style: none; padding: 0; margin: 0 0 24px; flex: 1;
+        }
+        .features li {
+            display: flex; gap: 10px; padding: 6px 0;
+            font-size: 14px; color: var(--text-2); line-height: 1.45;
+        }
+        .features li::before {
+            content: ""; flex: 0 0 16px; height: 16px; margin-top: 2px;
+            background: var(--success); border-radius: 50%;
+            -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='white' d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/></svg>") center/14px no-repeat;
+                    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='white' d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/></svg>") center/14px no-repeat;
+        }
+
+        .plan-btn {
+            width: 100%; padding: 12px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--bg-card);
+            color: var(--text-1); font-weight: 600; font-size: 14px;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .plan-btn:hover { background: var(--bg-card-hover); }
+        .plan-btn.primary {
+            background: var(--success); border-color: var(--success); color: #fff;
+        }
+        .plan-btn.primary:hover { filter: brightness(1.08); }
+        .plan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Payment modal */
+        .modal-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+            padding: 20px;
+        }
+        .modal-backdrop.show { display: flex; }
+        .modal {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 16px; max-width: 480px; width: 100%;
+            padding: 28px; max-height: 90vh; overflow-y: auto;
+        }
+        .modal h2 { margin: 0 0 6px; font-size: 20px; color: var(--text-1); }
+        .modal .modal-sub { color: var(--text-3); font-size: 14px; margin-bottom: 22px; }
+        .pay-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+            margin-bottom: 18px;
+        }
+        .pay-option {
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 12px; cursor: pointer; background: var(--bg-card);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 600; color: var(--text-1); transition: all 0.15s;
+            min-height: 56px;
+        }
+        .pay-option:hover { background: var(--bg-card-hover); border-color: var(--accent); }
+        .pay-option.selected { border-color: var(--success); background: rgba(47, 107, 67, 0.06); }
+        .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+        .modal-actions button { flex: 1; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .btn-cancel { background: var(--bg-card-hover); border: 1px solid var(--border); color: var(--text-1); }
+        .btn-confirm { background: var(--success); border: 1px solid var(--success); color: #fff; }
+        .btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: var(--text-1); color: var(--bg-page);
+            padding: 12px 22px; border-radius: 10px; font-size: 14px;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+            z-index: 2000;
+        }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+    <header class="page-header">
+        <div class="brand">
+            <img src="/juristAI_logo.png" alt="JuristAI" onerror="this.style.display='none'">
+            <span>JuristAI</span>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()">
+            <span id="themeLabel">Tungi rejim</span>
+        </button>
+    </header>
+
+    <main class="container">
+        <h1>Ehtiyojingizga mos rejani tanlang</h1>
+
+        <div class="duration-toggle">
+            <button class="active" data-mult="1">1 oy</button>
+            <button data-mult="3">3 oy <span class="badge">-10%</span></button>
+            <button data-mult="6">6 oy <span class="badge">-15%</span></button>
+        </div>
+
+        <section class="plans-grid">
+            <!-- SINOV (Bepul) -->
+            <article class="plan-card" data-plan="sinov">
+                <div class="plan-name">Sinov</div>
+                <div class="plan-price">Bepul</div>
+                <div class="plan-period">1 kunda 3 ta so'rov</div>
+                <div class="plan-meter-label"><span>1 hafta davomida</span><span>Trial</span></div>
+                <div class="plan-meter"><span></span></div>
+                <ul class="features">
+                    <li>AI chat — asosiy rejim</li>
+                    <li>1 kunda 3 ta so'rov</li>
+                    <li>RAG qidiruv (cheklangan)</li>
+                    <li>Asosiy huquqiy sohalar</li>
+                </ul>
+                <button class="plan-btn" data-plan="sinov" onclick="selectPlan('sinov')">Sinab ko'rish</button>
+            </article>
+
+            <!-- SILVER -->
+            <article class="plan-card" data-plan="silver">
+                <div class="plan-name">Silver</div>
+                <div class="plan-price"><span data-price="299000">299,000</span><small>so'm</small></div>
+                <div class="plan-period">oyiga</div>
+                <div class="plan-meter-label"><span>So'rov limiti</span><span>Standart</span></div>
+                <div class="plan-meter"><span></span></div>
+                <ul class="features">
+                    <li>Professional AI yordamchi</li>
+                    <li>Oyiga 300 ta so'rov</li>
+                    <li>RAG to'liq qidiruv</li>
+                    <li>13 ta huquqiy soha</li>
+                </ul>
+                <button class="plan-btn" data-plan="silver" onclick="selectPlan('silver')">Tanlash</button>
+            </article>
+
+            <!-- GOLD (featured) -->
+            <article class="plan-card featured" data-plan="gold">
+                <span class="badge-top">Mashhur</span>
+                <div class="plan-name">Gold</div>
+                <div class="plan-price"><span data-price="599000">599,000</span><small>so'm</small></div>
+                <div class="plan-period">oyiga</div>
+                <div class="plan-meter-label"><span>So'rov limiti</span><span>2.5x Silver</span></div>
+                <div class="plan-meter"><span></span></div>
+                <ul class="features">
+                    <li>Oyiga 750 ta so'rov</li>
+                    <li>Ustuvor navbat</li>
+                    <li>Hujjat tahlili (OCR)</li>
+                    <li>RAG + web qidiruv</li>
+                    <li>Chuqur huquqiy tahlil</li>
+                </ul>
+                <button class="plan-btn primary" data-plan="gold" onclick="selectPlan('gold')">Tanlash</button>
+            </article>
+
+            <!-- PLATINUM -->
+            <article class="plan-card" data-plan="platinum">
+                <div class="plan-name">Platinum</div>
+                <div class="plan-price"><span data-price="1199000">1,199,000</span><small>so'm</small></div>
+                <div class="plan-period">oyiga</div>
+                <div class="plan-meter-label"><span>So'rov limiti</span><span>5x Silver</span></div>
+                <div class="plan-meter"><span></span></div>
+                <ul class="features">
+                    <li>Oyiga 1,500 ta so'rov</li>
+                    <li>Ultra-yuqori kontekst</li>
+                    <li>Lex.uz yangilanishlar — birinchi</li>
+                    <li>Shaxsiy konsierj</li>
+                    <li>API integratsiya</li>
+                </ul>
+                <button class="plan-btn" data-plan="platinum" onclick="selectPlan('platinum')">Tanlash</button>
+            </article>
+        </section>
+    </main>
+
+    <!-- Payment modal (for paid plans) -->
+    <div class="modal-backdrop" id="payModal">
+        <div class="modal">
+            <h2 id="payTitle">To'lov usulini tanlang</h2>
+            <p class="modal-sub" id="paySub">Tariff: <strong></strong></p>
+            <div class="pay-grid">
+                <div class="pay-option" data-pm="click">Click</div>
+                <div class="pay-option" data-pm="payme">Payme</div>
+                <div class="pay-option" data-pm="paynet">Paynet</div>
+                <div class="pay-option" data-pm="alifpay">Alifpay</div>
+                <div class="pay-option" data-pm="oson" style="grid-column: span 2">Oson</div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closePayModal()">Bekor qilish</button>
+                <button class="btn-confirm" id="payConfirmBtn" disabled onclick="confirmPayment()">To'lash</button>
+            </div>
+            <p style="font-size:11px;color:var(--text-3);margin-top:14px;text-align:center">
+                To'lov xizmatlari hozircha test rejimida — to'g'ridan-to'g'ri aktivatsiya
+            </p>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ── Theme toggle (matches dashboard) ──
+        (function () {
+            const saved = localStorage.getItem('dictum-theme');
+            if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+            updateThemeLabel();
+        })();
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            if (next === 'dark') {
+                html.setAttribute('data-theme', 'dark');
+                localStorage.setItem('dictum-theme', 'dark');
+            } else {
+                html.removeAttribute('data-theme');
+                localStorage.setItem('dictum-theme', 'light');
+            }
+            updateThemeLabel();
+        }
+        function updateThemeLabel() {
+            const lbl = document.getElementById('themeLabel');
+            lbl.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? "Yorug' rejim" : 'Tungi rejim';
+        }
+
+        // ── Duration multiplier (1 oy / 3 oy / 6 oy) ──
+        const BASE_PRICES = { silver: 299000, gold: 599000, platinum: 1199000 };
+        const DISCOUNT = { 1: 1, 3: 0.9, 6: 0.85 };
+        let currentMult = 1;
+        document.querySelectorAll('.duration-toggle button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.duration-toggle button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMult = parseInt(btn.dataset.mult, 10);
+                document.querySelectorAll('.plan-card').forEach(card => {
+                    const plan = card.dataset.plan;
+                    if (BASE_PRICES[plan]) {
+                        const total = Math.round(BASE_PRICES[plan] * currentMult * DISCOUNT[currentMult]);
+                        const span = card.querySelector('[data-price]');
+                        span.textContent = total.toLocaleString('uz-UZ').replace(/ /g, ',');
+                    }
+                });
+            });
+        });
+
+        // ── Plan selection ──
+        let selectedPlan = null;
+        let selectedPaymentMethod = null;
+
+        async function selectPlan(plan) {
+            if (plan === 'sinov') {
+                // Free trial — activate immediately
+                try {
+                    const r = await fetch('/api/tariff/select', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ plan: 'sinov' }),
+                    });
+                    const data = await r.json();
+                    if (r.ok) {
+                        toast('Bepul Sinov rejasi faollashtirildi. Dashboardga o\'tilmoqda...');
+                        setTimeout(() => { window.location.href = '/dashboard.html'; }, 1200);
+                    } else {
+                        toast(data.message || data.error || 'Xatolik');
+                    }
+                } catch (err) { toast('Xatolik: ' + err.message); }
+                return;
+            }
+            // Paid plan — open payment modal
+            selectedPlan = plan;
+            selectedPaymentMethod = null;
+            document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
+            document.getElementById('payConfirmBtn').disabled = true;
+            document.querySelector('#paySub strong').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+            document.getElementById('payModal').classList.add('show');
+        }
+        function closePayModal() {
+            document.getElementById('payModal').classList.remove('show');
+        }
+        document.querySelectorAll('.pay-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                selectedPaymentMethod = opt.dataset.pm;
+                document.getElementById('payConfirmBtn').disabled = false;
+            });
+        });
+        async function confirmPayment() {
+            if (!selectedPlan || !selectedPaymentMethod) return;
+            const btn = document.getElementById('payConfirmBtn');
+            btn.disabled = true; btn.textContent = "To'lanmoqda...";
+            try {
+                // Real payment integration deferred — endpoint just activates the plan.
+                const r = await fetch('/api/tariff/select', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plan: selectedPlan, payment_method: selectedPaymentMethod }),
+                });
+                const data = await r.json();
+                if (r.ok) {
+                    toast(selectedPlan.toUpperCase() + ' rejasi faollashtirildi!');
+                    setTimeout(() => { window.location.href = '/dashboard.html'; }, 1200);
+                } else {
+                    toast(data.message || data.error || 'Xatolik');
+                    btn.disabled = false; btn.textContent = "To'lash";
+                }
+            } catch (err) {
+                toast('Xatolik: ' + err.message);
+                btn.disabled = false; btn.textContent = "To'lash";
+            }
+        }
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2800);
+        }
+
+        // ── Auth check + Bepul-used check ──
+        (async function init() {
+            try {
+                const r = await fetch('/api/user-info', { credentials: 'same-origin' });
+                if (!r.ok) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                // Disable Sinov if already used
+                const mine = await fetch('/api/tariff/me').then(x => x.json()).catch(() => null);
+                if (mine && mine.bepulUsed) {
+                    const btn = document.querySelector('.plan-btn[data-plan="sinov"]');
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.textContent = "Ishlatilgan";
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        })();
+    </script>
+</body>
+</html>

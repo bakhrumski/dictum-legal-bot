@@ -5857,7 +5857,14 @@
                 const un = document.getElementById('userName');
                 if (un) un.textContent = name;
                 const roleBadge = document.getElementById('userRole');
-                if (roleBadge) { roleBadge.textContent = data.role === 'master' ? 'Master Admin' : 'Student Admin'; roleBadge.className = 'role-badge ' + roleClass; }
+                if (roleBadge) {
+                    var roleText = 'Student Admin';
+                    if (data.role === 'master') roleText = 'Master Admin';
+                    else if (data.role === 'user') roleText = 'Foydalanuvchi';
+                    else if (data.role === 'lawyer') roleText = 'Yurist';
+                    roleBadge.textContent = roleText;
+                    roleBadge.className = 'role-badge ' + roleClass;
+                }
 
                 // Hide AI archive section for non-master users
                 const aiArchive = document.getElementById('aiArchiveSection');
@@ -5908,9 +5915,25 @@
 
                 // Show/hide master-only tabs in bottom tab bar
                 var tabBarAi = document.getElementById('tabBarAi');
-                if (tabBarAi) tabBarAi.style.display = data.role === 'master' ? '' : 'none';
+                if (tabBarAi) tabBarAi.style.display = (data.role === 'master' || data.role === 'user') ? '' : 'none';
                 var tabBarSorov = document.getElementById('tabBarSorov');
                 if (tabBarSorov) tabBarSorov.style.display = data.role === 'master' ? '' : 'none';
+
+                // Common users (role='user'): hide entire bottom-tab-bar, force AI tab
+                if (data.role === 'user') {
+                    var bar = document.getElementById('bottomTabBar');
+                    if (bar) bar.style.display = 'none';
+                    // Force-switch to AI tab so they see the chat workspace
+                    if (typeof switchTab === 'function') switchTab('ai');
+                    // Redirect to /tariff.html if no plan selected yet
+                    try {
+                        const r = await fetch('/api/tariff/me', { credentials: 'same-origin' });
+                        if (r.ok) {
+                            const m = await r.json();
+                            if (!m.plan) window.location.href = '/tariff.html';
+                        }
+                    } catch (e) { /* ignore */ }
+                }
             } catch (error) {
                 console.error('Error loading user info:', error);
             }
