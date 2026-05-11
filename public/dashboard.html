@@ -2316,6 +2316,11 @@
             scrollbar-width: none;
         }
         .ai-doc-upload-section::-webkit-scrollbar { display: none; }
+        /* When feedback panel is open, doc-upload shrinks to its content */
+        .ai-sidebar-right.fb-open .ai-doc-upload-section {
+            flex: 0 0 auto;
+            overflow-y: auto;
+        }
         .fb-report-section-wrap {
             flex: 0 0 auto;
             overflow: hidden;
@@ -7876,12 +7881,14 @@
             icon.textContent = _ingestLogOpen ? '▲' : '▼';
             // Collapse feedback section when upload history opens
             if (_ingestLogOpen) {
-                var fbPanel = document.getElementById('fbReportPanel');
-                var fbWrap  = document.getElementById('fbReportSection');
-                var fbIcon  = document.getElementById('fbReportToggleIcon');
+                var fbPanel   = document.getElementById('fbReportPanel');
+                var fbWrap    = document.getElementById('fbReportSection');
+                var fbSidebar = document.getElementById('aiSidebarRight');
+                var fbIcon    = document.getElementById('fbReportToggleIcon');
                 if (fbPanel && fbPanel.classList.contains('visible')) {
                     fbPanel.classList.remove('visible');
                     fbWrap.classList.remove('fb-expanded');
+                    fbSidebar.classList.remove('fb-open');
                     if (fbIcon) fbIcon.innerHTML = '&#9660;';
                 }
                 await loadIngestLog();
@@ -8510,17 +8517,19 @@
 
         // ═══ FEEDBACK REPORT (master only) ═══
         function toggleFbReport() {
-            var panel = document.getElementById('fbReportPanel');
-            var wrap = document.getElementById('fbReportSection');
-            var icon = document.getElementById('fbReportToggleIcon');
+            var panel   = document.getElementById('fbReportPanel');
+            var wrap    = document.getElementById('fbReportSection');
+            var sidebar = document.getElementById('aiSidebarRight');
+            var icon    = document.getElementById('fbReportToggleIcon');
             if (panel.classList.contains('visible')) {
                 panel.classList.remove('visible');
                 wrap.classList.remove('fb-expanded');
+                sidebar.classList.remove('fb-open');
                 icon.innerHTML = '&#9660;';
             } else {
                 // Collapse ingest log when feedback expands
                 var ingestPanel = document.getElementById('ingestLogPanel');
-                var ingestIcon = document.getElementById('ingestLogToggleIcon');
+                var ingestIcon  = document.getElementById('ingestLogToggleIcon');
                 if (ingestPanel && ingestPanel.style.display !== 'none') {
                     ingestPanel.style.display = 'none';
                     if (ingestIcon) ingestIcon.textContent = '▼';
@@ -8528,6 +8537,7 @@
                 }
                 panel.classList.add('visible');
                 wrap.classList.add('fb-expanded');
+                sidebar.classList.add('fb-open');
                 icon.innerHTML = '&#9650;';
                 loadFbStats();
                 loadFbList('all');
