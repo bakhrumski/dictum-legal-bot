@@ -5734,6 +5734,15 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE registration_requests ALTER COLUMN telegram_username DROP NOT NULL`);
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
+    // Seed masteradmin account (idempotent — does nothing if already exists)
+    {
+      const masterPwd = await bcrypt.hash('juristAI', 10);
+      await pool.query(`
+        INSERT INTO admins (username, password, full_name, role)
+        VALUES ('masteradmin', $1, 'Master Admin', 'master')
+        ON CONFLICT (username) DO NOTHING
+      `, [masterPwd]);
+    }
 
     // Agent traces table — audit log for all AI agent runs
     await pool.query(`CREATE TABLE IF NOT EXISTS agent_traces (
