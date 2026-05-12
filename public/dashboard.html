@@ -5915,9 +5915,9 @@
 
                 // Show/hide master-only tabs in bottom tab bar
                 var tabBarAi = document.getElementById('tabBarAi');
-                if (tabBarAi) tabBarAi.style.display = (data.role === 'master' || data.role === 'user') ? '' : 'none';
+                if (tabBarAi) tabBarAi.style.display = (data.role === 'master' || data.role === 'user') ? 'flex' : 'none';
                 var tabBarSorov = document.getElementById('tabBarSorov');
-                if (tabBarSorov) tabBarSorov.style.display = data.role === 'master' ? '' : 'none';
+                if (tabBarSorov) tabBarSorov.style.display = data.role === 'master' ? 'flex' : 'none';
 
                 // Common users (role='user'): hide entire bottom-tab-bar, force AI tab
                 if (data.role === 'user') {
