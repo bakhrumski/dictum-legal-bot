@@ -5489,11 +5489,11 @@
             <span class="tab-label">Chat</span>
             <span class="tab-badge" id="tabChatBadge" style="display:none;">0</span>
         </button>
-        <button class="tab-bar-item" data-tab="ai" id="tabBarAi" onclick="switchTab('ai')" style="display:none;">
+        <button class="tab-bar-item" data-tab="ai" id="tabBarAi" onclick="switchTab('ai')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/></svg>
             <span class="tab-label">AI</span>
         </button>
-        <button class="tab-bar-item" data-tab="sorov" id="tabBarSorov" onclick="switchTab('sorov')" style="display:none;">
+        <button class="tab-bar-item" data-tab="sorov" id="tabBarSorov" onclick="switchTab('sorov')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>
             <span class="tab-label">So'rovlar</span>
             <span class="tab-badge" id="tabSorovBadge" style="display:none;">0</span>
@@ -5914,10 +5914,17 @@
                 }
 
                 // Show/hide master-only tabs in bottom tab bar
+                // (Default: visible. Hide for student/lawyer; keep visible for master/user.)
                 var tabBarAi = document.getElementById('tabBarAi');
                 if (tabBarAi) tabBarAi.style.display = (data.role === 'master' || data.role === 'user') ? 'flex' : 'none';
                 var tabBarSorov = document.getElementById('tabBarSorov');
                 if (tabBarSorov) tabBarSorov.style.display = data.role === 'master' ? 'flex' : 'none';
+
+                // Belt-and-braces: also ensure regSection visible for master (Murojaatlar)
+                if (data.role === 'master') {
+                    var rs = document.getElementById('regSection');
+                    if (rs) rs.style.display = '';
+                }
 
                 // Common users (role='user'): hide entire bottom-tab-bar, force AI tab
                 if (data.role === 'user') {
