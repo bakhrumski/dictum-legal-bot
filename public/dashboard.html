@@ -5858,11 +5858,11 @@
                 if (un) un.textContent = name;
                 const roleBadge = document.getElementById('userRole');
                 if (roleBadge) {
-                    var roleText = 'Student Admin';
-                    if (data.role === 'master') roleText = 'Master Admin';
-                    else if (data.role === 'user') roleText = 'Foydalanuvchi';
-                    else if (data.role === 'lawyer') roleText = 'Yurist';
-                    roleBadge.textContent = roleText;
+                    var badgeText = 'Student Admin';
+                    if (data.role === 'master') badgeText = 'Master Admin';
+                    else if (data.role === 'user') badgeText = 'Foydalanuvchi';
+                    else if (data.role === 'lawyer') badgeText = 'Yurist';
+                    roleBadge.textContent = badgeText;
                     roleBadge.className = 'role-badge ' + roleClass;
                 }
 
