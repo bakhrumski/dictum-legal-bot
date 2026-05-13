@@ -160,8 +160,8 @@ const LEGAL_FIELD_MAP = {
   },
   'Ma\'muriy huquq': {
     primary: [
-      'Ma\'muriy javobgarlik to\'g\'risida kodeks (MJK): https://lex.uz/docs/97661',
-      'Ma\'muriy sudlov kodeksi: https://lex.uz/docs/3523895'
+      'Ma\'muriy javobgarlik to\'g\'risidagi kodeks (MJTK): https://lex.uz/docs/97661',
+      'Ma\'muriy sud ishlarini yuritish to\'g\'risidagi kodeks (MSIK): https://lex.uz/docs/3523895'
     ],
     secondary: [
       'Litsenziyalash: https://lex.uz/docs/6006025',
