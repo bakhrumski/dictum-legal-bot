@@ -2047,63 +2047,19 @@ Quyidagi murojaat turini aniqlang:
 Javob strukturasini murojaat turiga moslang.`;
 
     // ========== STRUCTURED RESPONSE FORMAT ==========
-    const responseFormat = `JAVOB TUZILISHI (QATTIYAN RIOYA QILING):
+    const responseFormat = `JAVOB FORMATI (3 bo'lim, MAJBURIY — boshqa sarlavha qo'shmang):
 
-BIRINCHI: Ichki tahlilni <!--REASONING--> teglari orasida yozing (foydalanuvchiga ko'rsatilmaydi):
-<!--REASONING-->
-1. Masala: [huquqiy masalaning mohiyati]
-2. Tegishli normalar: [web search natijasida topilgan normalar]
-3. Normalar amaldami: [ha/yo'q har biri uchun]
-4. Gallyutsinatsiya tekshiruvi: [tasdiqlanmagan da'volar bormi?]
-5. Xulosa ishonchliligi: [yuqori/o'rta/past]
-<!--/REASONING-->
+**Huquqiy asos** — Qaysi qonun, qaysi modda qo'llanadi? Faqat AMALDAGI normalarni keltiring. Qonun nomi va modda raqamini **qalin** yozing. Modda raqamini FAQAT kontekst yoki web search tasdiqlasa keltiring — taxmin qilmang.
 
-KEYIN: Javobni quyidagi 6 bo'limda yozing:
+**Tahlil** — Norma foydalanuvchi vaziyatiga qanday tatbiq etiladi? Jismoniy / mansabdor / yuridik shaxs uchun farq bo'lsa — har birini alohida ko'rsating. Aniq BHM ko'paytmasi, aniq muddatlar, aniq foizlar — noaniq iboralar TAQIQLANGAN.
 
-## HUQUQIY MASALA
-Foydalanuvchi savolidan kelib chiqadigan aniq huquqiy masalani aniqlang.
-Qaysi huquqiy munosabat ko'zda tutilgan — 1-2 gapda yozing.
+**Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
 
-## QONUNCHILIK ASOSI
-Tegishli qonunchilik normalarini keltiring. HAR BIR NORMA UCHUN:
-- Qonun nomi va modda raqami (Manba: lex.uz)
-- Modda mazmunining qisqa bayoni
-- Web search orqali "site:lex.uz [kodeks nomi] [mavzu]" qidirib TASDIQLANGAN moddalarni keltiring
-MANBASIZ MODDA KELTIRISH TAQIQLANADI.
-
-## SUD AMALIYOTI
-Kontekstda berilgan o'xshash sud ishlarini tahlil qiling. Har bir ish uchun:
-- Sud: [sud nomi]
-- Qaror sanasi: [kun oy yil]
-- Huquqiy masala: [qisqacha]
-- Sud mushohada: [sudlar qonunni qanday talqin qilgan]
-- Manba: my.sud.uz
-
-Agar kontekstda sud ishlari bo'lmasa — web search orqali "site:public.sud.uz [mavzu]" qidirib toping.
-Agar aniq ish topilmasa, shu sohada umumiy sud amaliyoti tendensiyasini yozing.
-SUD QARORLARINI TO'QIMA QILISH TAQIQLANADI.
-
-## HUQUQIY TAHLIL
-Qonunchilik VA sud amaliyotini foydalanuvchi vaziyatiga BATAFSIL qo'llang:
-- Qonun normasi nima deydi?
-- Sudlar shu masalani QANDAY hal qilgan?
-- Bu normaga ko'ra foydalanuvchi vaziyati qanday baholanadi?
-- Qanday huquqiy oqibatlar kutiladi?
-
-## XULOSA
-Aniq huquqiy javob — 2-3 gapda.
-Da'vo/murojaat muvaffaqiyat ehtimoli (foizda) va noaniqlik darajasi (past/o'rta/yuqori).
-
-Agar aniq javob berish imkoni bo'lmasa:
-"Mavjud huquqiy ma'lumotlarga asosan aniq javob berish imkoni cheklangan. Qo'shimcha huquqiy ekspertiza talab qilinadi."
-
-## TAVSIYA ETILADIGAN HARAKATLAR
-Amaliy huquqiy maslahat — raqamlangan ro'yxat shaklida:
-1. Birinchi qadam
-2. Ikkinchi qadam
-3. ...
-
-> "Ushbu tahlil sun'iy intellekt asosida shakllantirilgan va sud qarori hisoblanmaydi. Barcha ma'lumotlarni lex.uz va public.sud.uz saytlaridan tekshiring."`;
+JIDDIY TAQIQLAR:
+- Modda matnini so'zma-so'z ko'chirib chiqarmang.
+- Bir xil ma'lumotni ikki bo'limda takrorlamang.
+- "Yuridik maslahat", "Eslatma", "Tavsiya etiladigan harakatlar" kabi qo'shimcha sarlavhalar QO'SHMANG.
+- Noaniq iboralar ("yuqori jarima", "uzoq muddat", "ma'lum foiz") MUTLAQO TAQIQLANGAN.`;
 
     // ========== YURXIZMAT CATALOG ==========
     const yurxizmatBlock = `## YURXIZMAT.UZ HUJJAT NAMUNALARI
@@ -2164,7 +2120,8 @@ ${feedbackNote}`;
     let analysis = analysisWithoutReasoning;
     const suggestionsMatch = rawAnalysis.match(/<!--YURXIZMAT-->\s*([\s\S]*?)\s*<!--\/YURXIZMAT-->/);
     if (suggestionsMatch) {
-      analysis = rawAnalysis.replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->/, '').trim();
+      // Strip YURXIZMAT from the already-REASONING-stripped text, not from rawAnalysis
+      analysis = analysisWithoutReasoning.replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->/, '').trim();
       try {
         const parsed = JSON.parse(suggestionsMatch[1].trim());
         if (Array.isArray(parsed)) {

@@ -7448,6 +7448,9 @@
         }
 
         function simpleMarkdown(text) {
+            // Strip hidden reasoning blocks that may have leaked through (old archived results)
+            text = text.replace(/<!--REASONING-->[\s\S]*?<!--\/REASONING-->\s*/g, '');
+            text = text.replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->\s*/g, '');
             // Section mapping for Legal GPT structured response
             const sectionMap = {
                 'HUQUQIY MASALA': 'section-issue',
