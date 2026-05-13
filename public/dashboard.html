@@ -7558,11 +7558,18 @@
             if (btn) { btn.disabled = true; btn.innerHTML = '&#10024; Tahlil qilinmoqda...'; }
 
             try {
-                const response = await fetch('/api/ai-analysis', {
+                const response = await fetch('/api/legal-chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
-                    body: JSON.stringify({ requestText, category, requestId: aiCurrentRequestId })
+                    body: JSON.stringify({
+                        message: requestText,
+                        history: [],
+                        databases: selectedDatabases && selectedDatabases.length ? selectedDatabases : ['lex.uz'],
+                        topic: null,
+                        topics: null,
+                        autoDetect: true
+                    })
                 });
 
                 if (response.status === 401) {
@@ -7578,9 +7585,9 @@
                     if (aiBadgeEl && data.provider) {
                         aiBadgeEl.textContent = data.provider || 'GPT-4o';
                     }
-                    content.innerHTML = simpleMarkdown(data.analysis);
+                    content.innerHTML = simpleMarkdown(data.reply);
 
-                    // RAG meta badge
+                    // RAG meta badge (same as ai-chat-send-btn)
                     var ragInfoEl = document.getElementById('aiRagMetaBadge');
                     if (!ragInfoEl) {
                         ragInfoEl = document.createElement('div');
@@ -7588,44 +7595,26 @@
                         ragInfoEl.style.cssText = 'margin:8px 0 4px;display:flex;flex-wrap:wrap;gap:6px;font-size:11px;';
                         content.parentNode.insertBefore(ragInfoEl, content);
                     }
-                    if (data.ragMeta && data.ragMeta.chunks > 0) {
-                        var m = data.ragMeta;
+                    if (data.rag && data.rag.chunks > 0) {
+                        var m = data.rag;
                         var strategyColor = m.strategy === 'DIRECT' ? '#0369a1' : m.strategy === 'GRAPH' ? '#7c3aed' : '#166534';
                         var strategyBg   = m.strategy === 'DIRECT' ? '#e0f2fe' : m.strategy === 'GRAPH' ? '#f3e8ff' : '#dcfce7';
                         ragInfoEl.innerHTML =
-                            '<span style="background:' + strategyBg + ';color:' + strategyColor + ';border-radius:5px;padding:2px 8px;font-weight:600">📚 RAG: ' + (m.strategy || 'HYBRID') + '</span>' +
-                            '<span style="background:#f3f4f6;color:#374151;border-radius:5px;padding:2px 8px">🔍 ' + (m.searchMode || 'rrf') + '</span>' +
+                            '<span style="background:' + strategyBg + ';color:' + strategyColor + ';border-radius:5px;padding:2px 8px;font-weight:600">📚 RAG: ' + (m.searchMode || 'HYBRID') + '</span>' +
                             '<span style="background:#f3f4f6;color:#374151;border-radius:5px;padding:2px 8px">🧩 ' + m.chunks + ' bo\'lak</span>' +
-                            (m.webResults > 0 ? '<span style="background:#fef3c7;color:#92400e;border-radius:5px;padding:2px 8px">🌐 ' + m.webResults + ' veb natija</span>' : '') +
-                            (m.webResults === 0 && m.chunks > 0 ? '' : '');
-                    } else {
+                            (m.webResults > 0 ? '<span style="background:#fef3c7;color:#92400e;border-radius:5px;padding:2px 8px">🌐 ' + m.webResults + ' veb natija</span>' : '');
+                    } else if (data.ragUsed === false) {
                         ragInfoEl.innerHTML = '<span style="background:#f3f4f6;color:#9ca3af;border-radius:5px;padding:2px 8px">📭 RAG ishlatilmadi</span>';
+                    } else {
+                        ragInfoEl.innerHTML = '';
                     }
 
-                    // Store conversation history
+                    // Store conversation history for follow-up chat in modal
                     aiConversationHistory = [
                         { role: 'user', text: requestText },
-                        { role: 'model', text: data.analysis }
+                        { role: 'model', text: data.reply }
                     ];
                     aiAnalysisComplete = true;
-
-                    // Save archiveId to the request object so AI javob button works
-                    if (data.archiveId && aiCurrentRequestId) {
-                        const req = requests.find(r => r.id === aiCurrentRequestId);
-                        if (req) req.ai_analysis_id = data.archiveId;
-                    }
-
-                    // Show yurxizmat.uz template suggestions
-                    const yxSection = document.getElementById('aiYurxizmatSection');
-                    const yxLinks = document.getElementById('aiYurxizmatLinks');
-                    if (data.templateSuggestions && data.templateSuggestions.length > 0) {
-                        yxLinks.innerHTML = data.templateSuggestions.map(s =>
-                            `<a href="${s.url}" target="_blank" rel="noopener noreferrer" class="ai-yurxizmat-link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${s.name}</a>`
-                        ).join('');
-                        yxSection.style.display = 'block';
-                    } else {
-                        yxSection.style.display = 'none';
-                    }
 
                     // Show chat, actions, feedback
                     document.getElementById('aiChatInputArea').style.display = 'block';
