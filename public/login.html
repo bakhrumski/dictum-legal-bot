@@ -589,17 +589,14 @@
             content: ''; flex: 1; height: 1px; background: var(--border, rgba(255,255,255,0.1));
         }
         .google-reg-toggle {
-            width: 100%; padding: 11px 14px;
-            background: transparent; border: 1px solid var(--border, rgba(255,255,255,0.15));
+            width: 100%; padding: 11px 16px;
+            background: rgba(255,255,255,0.04); border: 1px solid var(--border, rgba(255,255,255,0.15));
             color: var(--text, #fff); border-radius: 10px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 500; font-size: 14px; position: relative;
+            display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+            font-weight: 500; font-size: 14px; transition: background 0.15s;
         }
-        .google-reg-toggle:hover { background: var(--bg-card-hover, rgba(255,255,255,0.04)); }
-        .google-reg-toggle svg {
-            width: 18px; height: 18px; flex-shrink: 0; display: block;
-            position: absolute; left: 14px;
-        }
+        .google-reg-toggle:hover { background: rgba(255,255,255,0.09); }
+        .google-reg-toggle svg { width: 18px; height: 18px; flex-shrink: 0; display: block; }
         .email-reg-panel { display: none; margin-top: 10px; }
         .email-reg-panel.show { display: block; }
 
