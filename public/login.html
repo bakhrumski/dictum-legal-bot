@@ -591,10 +591,11 @@
         .google-reg-toggle {
             width: 100%; padding: 11px 16px;
             background: rgba(255,255,255,0.04); border: 1px solid var(--border, rgba(255,255,255,0.15));
-            color: var(--text, #fff); border-radius: 10px; cursor: pointer;
+            color: #111; border-radius: 10px; cursor: pointer;
             display: inline-flex; align-items: center; justify-content: center; gap: 10px;
             font-weight: 500; font-size: 14px; transition: background 0.15s;
         }
+        [data-theme="dark"] .google-reg-toggle { color: #fff; }
         .google-reg-toggle:hover { background: rgba(255,255,255,0.09); }
         .google-reg-toggle svg { width: 18px; height: 18px; flex-shrink: 0; display: block; }
         .email-reg-panel { display: none; margin-top: 10px; }
