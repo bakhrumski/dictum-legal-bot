@@ -7413,8 +7413,9 @@
             'ok': { url: 'https://lex.uz/docs/104723', name: 'OK' },
             'soliq kodeksi': { url: 'https://lex.uz/docs/4674893', name: 'Soliq kodeksi' },
             'sk': { url: 'https://lex.uz/docs/4674893', name: 'SK' },
-            'ma\'muriy javobgarlik': { url: 'https://lex.uz/docs/97661', name: 'MJK' },
-            'mjk': { url: 'https://lex.uz/docs/97661', name: 'MJK' },
+            'ma\'muriy javobgarlik': { url: 'https://lex.uz/docs/97661', name: 'MJTK' },
+            'mjtk': { url: 'https://lex.uz/docs/97661', name: 'MJTK' },
+            'mjk': { url: 'https://lex.uz/docs/97661', name: 'MJTK' },
             'iqtisodiy protsessual kodeks': { url: 'https://lex.uz/docs/112168', name: 'IPK' },
             'ipk': { url: 'https://lex.uz/docs/112168', name: 'IPK' },
             'fuqarolik protsessual kodeks': { url: 'https://lex.uz/docs/111325', name: 'FPK' },
@@ -7434,7 +7435,7 @@
          */
         function autoLinkCitations(html) {
             // Pattern: [Law Name][,]? [number]-modda (or moddasi)
-            const citationRegex = /(?:^|\b)((?:Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Ma'muriy javobgarlik|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma'muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJK|IPK|FPK|JPK|MSK))(?:\s*,?\s*)(\d+)(?:\s*-\s*modda(?:si)?)/gi;
+            const citationRegex = /(?:^|\b)((?:Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Ma'muriy javobgarlik|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma'muriy sud ishlarini yuritish|Ma'muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJTK|MJK|IPK|FPK|JPK|MSIK|MSK))(?:\s*,?\s*)(\d+)(?:\s*-\s*modda(?:si)?)/gi;
 
             return html.replace(citationRegex, function(match, lawName, articleNum) {
                 const key = lawName.toLowerCase().trim();
@@ -8112,7 +8113,7 @@
             'shartnoma':      { label: 'Shartnoma',             desc: 'Shartnoma huquqi' },
             'soliq':          { label: 'Soliq',                 desc: 'Soliq huquqi' },
             'jinoyat':        { label: 'Jinoyat',               desc: 'Jinoyat huquqi' },
-            'mamuriy':        { label: "Ma'muriy javobgarlik",   desc: "Ma'muriy javobgarlik (MJK — jarimalar, huquqbuzarliklar)" },
+            'mamuriy':        { label: "Ma'muriy javobgarlik",   desc: "Ma'muriy javobgarlik (MJTK — jarimalar, huquqbuzarliklar)" },
             'mamuriy_huquq':  { label: "Ma'muriy huquq",         desc: "Ma'muriy huquq (ruxsatnomalar, davlat organlari, protseduralar)" },
             'korporativ':     { label: 'Korporativ',             desc: 'Korporativ huquq' },
             'tadbirkorlik':   { label: 'Tadbirkorlik',           desc: 'Tadbirkorlik huquqi' },

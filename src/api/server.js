@@ -2008,11 +2008,11 @@ KODEKSLAR:
 - Jinoyat kodeksi (JK): https://lex.uz/docs/111457
 - Oila kodeksi (OK): https://lex.uz/docs/104723
 - Soliq kodeksi (SK): https://lex.uz/docs/4674893
-- Ma'muriy javobgarlik to'g'risida kodeks (MJK): https://lex.uz/docs/97661
+- Ma'muriy javobgarlik to'g'risidagi kodeks (MJTK): https://lex.uz/docs/97661
 - Iqtisodiy protsessual kodeks (IPK): https://lex.uz/docs/112168
 - Fuqarolik protsessual kodeks (FPK): https://lex.uz/docs/111325
 - Jinoyat-protsessual kodeks (JPK): https://lex.uz/docs/111463
-- Ma'muriy sudlov kodeksi: https://lex.uz/docs/3523895
+- Ma'muriy sud ishlarini yuritish to'g'risidagi kodeks (MSIK): https://lex.uz/docs/3523895
 - Uy-joy kodeksi: https://lex.uz/docs/97012
 - Yer kodeksi: https://lex.uz/docs/149946
 - Budjet kodeksi: https://lex.uz/docs/3523816
@@ -2342,7 +2342,7 @@ const LEGAL_TOPICS = {
   'shartnoma':      'Shartnoma huquqi',
   'soliq':          'Soliq huquqi',
   'jinoyat':        'Jinoyat huquqi',
-  'mamuriy':        "Ma'muriy javobgarlik",   // MJK — fines, offenses, penalties
+  'mamuriy':        "Ma'muriy javobgarlik",   // MJTK — fines, offenses, penalties
   'mamuriy_huquq':  "Ma'muriy huquq",         // Administrative law — procedures, permits, state bodies
   'korporativ':     'Korporativ huquq',
   'tadbirkorlik':   'Tadbirkorlik huquqi',
@@ -2785,8 +2785,8 @@ QO'LLANISH:
 ${termExplanationRule ? `- ${termExplanationRule}` : ''}
 ${topic === 'mamuriy' ? `
 SOHA: MA'MURIY JAVOBGARLIK (punitive/jazolash)
-- Bu soha MA'MURIY HUQUQDAN farq qiladi: u JAZOLOVCHI bo'lib, davlat boshqaruv tartibini EMASe, QOIDABUZARLIKNI tartibga soladi.
-- Birlamchi manba: Ma'muriy javobgarlik to'g'risida kodeks (MJK, https://lex.uz/docs/97661).
+- Bu soha MA'MURIY HUQUQDAN farq qiladi: u JAZOLOVCHI bo'lib, davlat boshqaruv tartibini EMAS, QOIDABUZARLIKNI tartibga soladi.
+- Birlamchi manba: Ma'muriy javobgarlik to'g'risidagi kodeks (MJTK, https://lex.uz/docs/97661).
 - Jarima HAR DOIM ANIQ BHM ko'paytmasida: "5 BHM", "20 BHM", "50 BHM" — "yuqori jarima" TAQIQLANGAN.
 - Har bir subyekt uchun ALOHIDA jadval: jismoniy shaxs / mansabdor shaxs / yuridik shaxs.
 - Agar aloqador bo'lsa: protokol tuzish → qaror chiqarish → ixtiyoriy to'lash muddati → sud bosqichlari.
@@ -2794,10 +2794,10 @@ SOHA: MA'MURIY JAVOBGARLIK (punitive/jazolash)
 ${topic === 'mamuriy_huquq' ? `
 SOHA: MA'MURIY HUQUQ (regulatory/tartibga soluvchi)
 - Bu soha MA'MURIY JAVOBGARLIKDAN farq qiladi: u JAZOLOVCHI emas, TARTIBGA SOLUVCHI — davlat organlarining faoliyat tartibi va fuqarolar bilan munosabatini belgilaydi.
-- Birlamchi manbalar: Ma'muriy protsessual kodeks (https://lex.uz/docs/3523895), Litsenziyalash qonuni (https://lex.uz/docs/6006025), Davlat xizmatlari to'g'risidagi qonun.
+- Birlamchi manbalar: Ma'muriy sud ishlarini yuritish to'g'risidagi kodeks (MSIK, https://lex.uz/docs/3523895), Litsenziyalash qonuni (https://lex.uz/docs/6006025), Davlat xizmatlari to'g'risidagi qonun.
 - Ruxsatnoma/litsenziya/sertifikat olish uchun ANIQ PROTSEDURA qadam-baqadam va MUDDATLARNI ko'rsating (kun/ish kuni bilan).
 - Davlat organi qarorini SHIKOYAT QILISH tartibi (hudud organi → yuqori organ → ma'muriy sud) ko'rsating.
-- MJK (Ma'muriy javobgarlik kodeksi) faqat protsedura BUZILISHI natijasida jarima masalasi kelib chiqsa ishlatilsin.
+- MJTK (Ma'muriy javobgarlik to'g'risidagi kodeks) faqat protsedura BUZILISHI natijasida jarima masalasi kelib chiqsa ishlatilsin.
 - Hujjat turlari: ma'muriy akt, qaror, ko'rsatma, buyruq — ularning huquqiy kuchi va e'tiroz qilish muddatlari.` : ''}`;
 
   // ── OUTPUT FORMAT — IRAC structure for lawyers ──
