@@ -170,12 +170,20 @@ bot.on('webhook_error', (err) => {
   console.error('[BOT] Webhook error:', err.message || err);
 });
 
-// Detect environment
-const WEBHOOK_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBHOOK_DOMAIN;
-const IS_RAILWAY = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_SERVICE_NAME || process.env.PORT === '8080');
+// Detect environment — support Railway, Render, and manual WEBHOOK_DOMAIN
+const WEBHOOK_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN
+  || process.env.RENDER_EXTERNAL_HOSTNAME  // Render sets this automatically
+  || process.env.WEBHOOK_DOMAIN;
 
-console.log('[BOT] Environment:', IS_RAILWAY ? 'Railway' : 'Local');
-console.log('[BOT] RAILWAY_PUBLIC_DOMAIN:', process.env.RAILWAY_PUBLIC_DOMAIN || 'NOT SET');
+const IS_MANAGED = !!(
+  process.env.RAILWAY_ENVIRONMENT
+  || process.env.RAILWAY_PUBLIC_DOMAIN
+  || process.env.RAILWAY_SERVICE_NAME
+  || process.env.RENDER_EXTERNAL_HOSTNAME  // Render
+  || process.env.RENDER_SERVICE_ID         // Render (alternative)
+);
+
+console.log('[BOT] Environment:', IS_MANAGED ? 'Managed (Railway/Render)' : 'Local');
 console.log('[BOT] WEBHOOK_DOMAIN:', WEBHOOK_DOMAIN || 'NOT SET');
 console.log('[BOT] PORT:', PORT);
 
@@ -189,15 +197,14 @@ if (WEBHOOK_DOMAIN) {
   bot.deleteWebHook().then(() => {
     return bot.setWebHook(`https://${WEBHOOK_DOMAIN}${secretPath}`);
   }).then(() => {
-    console.log('[BOT] Webhook active:', WEBHOOK_DOMAIN);
+    console.log('[BOT] Webhook active:', `https://${WEBHOOK_DOMAIN}${secretPath}`);
   }).catch(err => {
     console.error('[BOT] Webhook setup failed:', err.message);
   });
-} else if (IS_RAILWAY) {
-  // On Railway but no public domain — do NOT poll
-  console.error('[BOT] WARNING: On Railway but no WEBHOOK_DOMAIN set!');
-  console.error('[BOT] Bot messages will not work until domain is configured.');
-  console.error('[BOT] Set WEBHOOK_DOMAIN env var to your Railway domain.');
+} else if (IS_MANAGED) {
+  // On managed platform but no public domain — do NOT poll
+  console.error('[BOT] WARNING: Managed platform detected but no domain set!');
+  console.error('[BOT] Bot messages will not work. Set WEBHOOK_DOMAIN env var.');
 } else {
   // Local development only — safe to poll
   bot.startPolling();
