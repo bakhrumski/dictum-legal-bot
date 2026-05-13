@@ -2336,20 +2336,21 @@ function hasAnswerTopicMismatch(userQuestion, answerText) {
 }
 
 const LEGAL_TOPICS = {
-  'mehnat':       'Mehnat huquqi',
-  'oila':         'Oila huquqi',
-  'fuqarolik':    'Fuqarolik huquqi',
-  'shartnoma':    'Shartnoma huquqi',
-  'soliq':        'Soliq huquqi',
-  'jinoyat':      'Jinoyat huquqi',
-  'mamuriy':      "Ma'muriy javobgarlik",
-  'korporativ':   'Korporativ huquq',
-  'tadbirkorlik': 'Tadbirkorlik huquqi',
-  'uy-joy':       'Uy-joy oldi-sotdisi',
-  'mulk':         'Mulk huquqi',
-  'notarius':     'Notarius xizmatlari',
-  'ijtimoiy':     'Ijtimoiy himoya',
-  'advokatura':   'Advokatura'
+  'mehnat':         'Mehnat huquqi',
+  'oila':           'Oila huquqi',
+  'fuqarolik':      'Fuqarolik huquqi',
+  'shartnoma':      'Shartnoma huquqi',
+  'soliq':          'Soliq huquqi',
+  'jinoyat':        'Jinoyat huquqi',
+  'mamuriy':        "Ma'muriy javobgarlik",   // MJK — fines, offenses, penalties
+  'mamuriy_huquq':  "Ma'muriy huquq",         // Administrative law — procedures, permits, state bodies
+  'korporativ':     'Korporativ huquq',
+  'tadbirkorlik':   'Tadbirkorlik huquqi',
+  'uy-joy':         'Uy-joy oldi-sotdisi',
+  'mulk':           'Mulk huquqi',
+  'notarius':       'Notarius xizmatlari',
+  'ijtimoiy':       'Ijtimoiy himoya',
+  'advokatura':     'Advokatura'
 };
 
 /**
@@ -2781,7 +2782,23 @@ KROSS-SOHA:
 QO'LLANISH:
 - Kontekstda javob bor bo'lsa — ALBATTA javob bering.
 - Faqat HECH QANDAY aloqador kontekst yo'q bo'lsagina, qaysi qonunda qarash kerakligini ko'rsating.
-${termExplanationRule ? `- ${termExplanationRule}` : ''}`;
+${termExplanationRule ? `- ${termExplanationRule}` : ''}
+${topic === 'mamuriy' ? `
+SOHA: MA'MURIY JAVOBGARLIK (punitive/jazolash)
+- Bu soha MA'MURIY HUQUQDAN farq qiladi: u JAZOLOVCHI bo'lib, davlat boshqaruv tartibini EMASe, QOIDABUZARLIKNI tartibga soladi.
+- Birlamchi manba: Ma'muriy javobgarlik to'g'risida kodeks (MJK, https://lex.uz/docs/97661).
+- Jarima HAR DOIM ANIQ BHM ko'paytmasida: "5 BHM", "20 BHM", "50 BHM" — "yuqori jarima" TAQIQLANGAN.
+- Har bir subyekt uchun ALOHIDA jadval: jismoniy shaxs / mansabdor shaxs / yuridik shaxs.
+- Agar aloqador bo'lsa: protokol tuzish → qaror chiqarish → ixtiyoriy to'lash muddati → sud bosqichlari.
+- Takroriy qoidabuzarlik uchun og'irlashtiruvchi holatlar mavjud bo'lsa, ularni ham ko'rsating.` : ''}
+${topic === 'mamuriy_huquq' ? `
+SOHA: MA'MURIY HUQUQ (regulatory/tartibga soluvchi)
+- Bu soha MA'MURIY JAVOBGARLIKDAN farq qiladi: u JAZOLOVCHI emas, TARTIBGA SOLUVCHI — davlat organlarining faoliyat tartibi va fuqarolar bilan munosabatini belgilaydi.
+- Birlamchi manbalar: Ma'muriy protsessual kodeks (https://lex.uz/docs/3523895), Litsenziyalash qonuni (https://lex.uz/docs/6006025), Davlat xizmatlari to'g'risidagi qonun.
+- Ruxsatnoma/litsenziya/sertifikat olish uchun ANIQ PROTSEDURA qadam-baqadam va MUDDATLARNI ko'rsating (kun/ish kuni bilan).
+- Davlat organi qarorini SHIKOYAT QILISH tartibi (hudud organi → yuqori organ → ma'muriy sud) ko'rsating.
+- MJK (Ma'muriy javobgarlik kodeksi) faqat protsedura BUZILISHI natijasida jarima masalasi kelib chiqsa ishlatilsin.
+- Hujjat turlari: ma'muriy akt, qaror, ko'rsatma, buyruq — ularning huquqiy kuchi va e'tiroz qilish muddatlari.` : ''}`;
 
   // ── OUTPUT FORMAT — IRAC structure for lawyers ──
   const outputFormat = `

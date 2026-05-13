@@ -5181,6 +5181,7 @@
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="soliq" onclick="selectTopic('soliq')">Soliq</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="jinoyat" onclick="selectTopic('jinoyat')">Jinoyat</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="mamuriy" onclick="selectTopic('mamuriy')">Ma'muriy javobgarlik</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mamuriy_huquq" onclick="selectTopic('mamuriy_huquq')">Ma'muriy huquq</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="korporativ" onclick="selectTopic('korporativ')">Korporativ</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="tadbirkorlik" onclick="selectTopic('tadbirkorlik')">Tadbirkorlik</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="uy-joy" onclick="selectTopic('uy-joy')">Uy-joy oldi-sotdisi</button>
@@ -5215,6 +5216,7 @@
                         <option value="soliq">Soliq huquqi</option>
                         <option value="jinoyat">Jinoyat huquqi</option>
                         <option value="mamuriy">Ma'muriy javobgarlik</option>
+                        <option value="mamuriy_huquq">Ma'muriy huquq</option>
                         <option value="korporativ">Korporativ huquq</option>
                         <option value="tadbirkorlik">Tadbirkorlik huquqi</option>
                         <option value="uy-joy">Uy-joy oldi-sotdisi</option>
@@ -5315,6 +5317,7 @@
                             <option value="Ko'chmas mulk">Ko'chmas mulk</option>
                             <option value="Soliq huquqi">Soliq huquqi</option>
                             <option value="Ma'muriy huquq">Ma'muriy huquq</option>
+                            <option value="Ma'muriy javobgarlik">Ma'muriy javobgarlik</option>
                             <option value="Boshqa">Boshqa</option>
                         </select>
 
@@ -7133,6 +7136,7 @@
                                 <option value="Ko'chmas mulk" ${request.category === "Ko'chmas mulk" ? 'selected' : ''}>Ko'chmas mulk</option>
                                 <option value="Soliq huquqi" ${request.category === 'Soliq huquqi' ? 'selected' : ''}>Soliq huquqi</option>
                                 <option value="Ma'muriy huquq" ${request.category === "Ma'muriy huquq" ? 'selected' : ''}>Ma'muriy huquq</option>
+                                <option value="Ma'muriy javobgarlik" ${request.category === "Ma'muriy javobgarlik" ? 'selected' : ''}>Ma'muriy javobgarlik</option>
                             </select>
                             ${request.category === 'Boshqa' && request.status !== 'answered' ? '<span style="color: #e74c3c; font-size: 12px; margin-left: 8px;">⚠️ Javob berishdan oldin tanlang!</span>' : '<span style="color: #27ae60; font-size: 12px; margin-left: 8px;">✅</span>'}
                             ` : `${request.category || 'N/A'}`}
@@ -8102,20 +8106,21 @@
         };
 
         var AI_TOPICS = {
-            'mehnat':       { label: 'Mehnat',              desc: 'Mehnat huquqi' },
-            'oila':         { label: 'Oila',                desc: 'Oila huquqi' },
-            'fuqarolik':    { label: 'Fuqarolik',           desc: 'Fuqarolik huquqi' },
-            'shartnoma':    { label: 'Shartnoma',           desc: 'Shartnoma huquqi' },
-            'soliq':        { label: 'Soliq',               desc: 'Soliq huquqi' },
-            'jinoyat':      { label: 'Jinoyat',             desc: 'Jinoyat huquqi' },
-            'mamuriy':      { label: "Ma'muriy javobgarlik", desc: "Ma'muriy javobgarlik" },
-            'korporativ':   { label: 'Korporativ',          desc: 'Korporativ huquq' },
-            'tadbirkorlik': { label: 'Tadbirkorlik',         desc: 'Tadbirkorlik huquqi' },
-            'uy-joy':       { label: 'Uy-joy oldi-sotdisi', desc: 'Uy-joy oldi-sotdisi' },
-            'mulk':         { label: 'Mulk huquqi',         desc: 'Mulk huquqi' },
-            'notarius':     { label: 'Notarius',            desc: 'Notarius xizmatlari' },
-            'ijtimoiy':     { label: 'Ijtimoiy',            desc: 'Ijtimoiy himoya' },
-            'advokatura':   { label: 'Advokatura',          desc: 'Advokatura' }
+            'mehnat':         { label: 'Mehnat',                desc: 'Mehnat huquqi' },
+            'oila':           { label: 'Oila',                  desc: 'Oila huquqi' },
+            'fuqarolik':      { label: 'Fuqarolik',             desc: 'Fuqarolik huquqi' },
+            'shartnoma':      { label: 'Shartnoma',             desc: 'Shartnoma huquqi' },
+            'soliq':          { label: 'Soliq',                 desc: 'Soliq huquqi' },
+            'jinoyat':        { label: 'Jinoyat',               desc: 'Jinoyat huquqi' },
+            'mamuriy':        { label: "Ma'muriy javobgarlik",   desc: "Ma'muriy javobgarlik (MJK — jarimalar, huquqbuzarliklar)" },
+            'mamuriy_huquq':  { label: "Ma'muriy huquq",         desc: "Ma'muriy huquq (ruxsatnomalar, davlat organlari, protseduralar)" },
+            'korporativ':     { label: 'Korporativ',             desc: 'Korporativ huquq' },
+            'tadbirkorlik':   { label: 'Tadbirkorlik',           desc: 'Tadbirkorlik huquqi' },
+            'uy-joy':         { label: 'Uy-joy oldi-sotdisi',   desc: 'Uy-joy oldi-sotdisi' },
+            'mulk':           { label: 'Mulk huquqi',           desc: 'Mulk huquqi' },
+            'notarius':       { label: 'Notarius',              desc: 'Notarius xizmatlari' },
+            'ijtimoiy':       { label: 'Ijtimoiy',              desc: 'Ijtimoiy himoya' },
+            'advokatura':     { label: 'Advokatura',            desc: 'Advokatura' }
         };
 
         function toggleWelcomeCategories() {
@@ -11015,6 +11020,7 @@
                 <button type="button" class="topic-modal-chip" data-topic="soliq" onclick="toggleTopicPickerChip(this)">Soliq</button>
                 <button type="button" class="topic-modal-chip" data-topic="jinoyat" onclick="toggleTopicPickerChip(this)">Jinoyat</button>
                 <button type="button" class="topic-modal-chip" data-topic="mamuriy" onclick="toggleTopicPickerChip(this)">Ma'muriy javobgarlik</button>
+                <button type="button" class="topic-modal-chip" data-topic="mamuriy_huquq" onclick="toggleTopicPickerChip(this)">Ma'muriy huquq</button>
                 <button type="button" class="topic-modal-chip" data-topic="korporativ" onclick="toggleTopicPickerChip(this)">Korporativ</button>
                 <button type="button" class="topic-modal-chip" data-topic="tadbirkorlik" onclick="toggleTopicPickerChip(this)">Tadbirkorlik</button>
                 <button type="button" class="topic-modal-chip" data-topic="uy-joy" onclick="toggleTopicPickerChip(this)">Uy-joy oldi-sotdisi</button>
