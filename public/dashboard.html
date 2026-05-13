@@ -7722,14 +7722,17 @@
             document.getElementById('aiModalChatSendBtn').disabled = true;
 
             try {
-                const response = await fetch('/api/ai-chat', {
+                const response = await fetch('/api/legal-chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
                     body: JSON.stringify({
-                        messages: messagesToSend,
-                        requestText: aiCurrentRequestText,
-                        category: aiCurrentCategory
+                        message: text,
+                        history: messagesToSend.slice(0, -1),
+                        databases: ['lex.uz'],
+                        topic: null,
+                        topics: null,
+                        autoDetect: true
                     })
                 });
 
