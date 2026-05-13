@@ -2869,9 +2869,13 @@ JIDDIY TAQIQLAR:
 
 // ── Build Manbalar footer with lex.uz Text Fragment links ──
 // Appended to AI answer so lawyers can click through and verify citations directly.
-function buildManbalarFooter(chunks = []) {
+// Only includes sources whose article number actually appears in the reply text —
+// prevents irrelevant or stale RAG chunks (e.g. Labor Code in a traffic-fine answer)
+// from being shown as authoritative sources.
+function buildManbalarFooter(chunks = [], replyText = '') {
   if (!chunks || chunks.length === 0) return '';
 
+  const reply = String(replyText || '');
   const seen = new Set();
   const lines = [];
 
@@ -2883,6 +2887,14 @@ function buildManbalarFooter(chunks = []) {
     for (const art of articleRefs) {
       const key = `${r.doc_id || r.law_name}_${art}`;
       if (seen.has(key)) continue;
+
+      // Only include if the article number is actually cited in the AI's reply.
+      // Matches "128-modda", "128-4-modda", "128-moddasi", "128 modda", etc.
+      if (reply) {
+        const artNum = String(art).split('-')[0];
+        const articleCited = new RegExp(`\\b${artNum}[-\\s]?(?:\\d+[-\\s]?)?modda`, 'i').test(reply);
+        if (!articleCited) continue;
+      }
       seen.add(key);
 
       // Build Text Fragment from first meaningful clause of the chunk
@@ -3672,7 +3684,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     }
 
     // Append Manbalar footer with lex.uz Text Fragment links for lawyer citation verification
-    const manbalarFooter = buildManbalarFooter(ragChunks);
+    const manbalarFooter = buildManbalarFooter(ragChunks, displayReply);
     if (manbalarFooter) displayReply += manbalarFooter;
 
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
