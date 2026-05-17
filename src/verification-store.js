@@ -3,4 +3,8 @@
 // Key: token (random hex), Value: { code, expiresAt, sentAt }
 const verificationTokens = new Map();
 
-module.exports = { verificationTokens };
+// Registration sessions for Telegram OTP flow
+// Key: token (random hex), Value: { verified, telegramUserId, createdAt }
+const regSessions = new Map();
+
+module.exports = { verificationTokens, regSessions };

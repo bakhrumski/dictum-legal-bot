@@ -9,7 +9,7 @@ const fs = require('fs');
 const https = require('https');
 const path = require('path');
 
-const { verificationTokens } = require('../verification-store');
+const { verificationTokens, regSessions } = require('../verification-store');
 const {
   isJustifyAvailable,
   askJustify,
@@ -229,6 +229,20 @@ bot.onText(/\/start(.*)/, (msg, match) => {
       return;
     }
     bot.sendMessage(chatId, '⏳ Tasdiqlash kodi topilmadi yoki muddati o\'tgan.\nIltimos, ro\'yxatdan o\'tish sahifasida qayta "Kod yuborish" tugmasini bosing.');
+    return;
+  }
+
+  // Deep link: /start reg_TOKEN — Telegram OTP for registration
+  if (param.startsWith('reg_')) {
+    const token = param.replace('reg_', '').trim();
+    const session = regSessions.get(token);
+    if (session && !session.verified) {
+      session.verified = true;
+      session.telegramUserId = String(msg.from.id);
+      bot.sendMessage(chatId, '✅ Telegram muvaffaqiyatli tasdiqlandi! Saytga qayting va ro\'yxatdan o\'tishni davom eting.');
+    } else {
+      bot.sendMessage(chatId, 'Token topilmadi yoki muddati o\'tgan.');
+    }
     return;
   }
 
@@ -699,6 +713,6 @@ function getRequestTypeLabel(type) {
 }
 
 // Export bot for use in other modules
-module.exports = { bot };
+module.exports = { bot, getBot: () => bot };
 
 console.log('Bot ishlamoqda...');
