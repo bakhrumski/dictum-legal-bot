@@ -5154,6 +5154,113 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
   }
 });
 
+// ========== TELEGRAM OTP REGISTRATION SESSIONS ==========
+
+app.post('/api/reg-session', (req, res) => {
+  const token = crypto.randomBytes(12).toString('hex');
+  regSessions.set(token, { verified: false, telegramUserId: null, createdAt: Date.now() });
+  setTimeout(() => regSessions.delete(token), 10 * 60 * 1000);
+  const botUsername = process.env.REG_BOT_USERNAME || process.env.BOT_USERNAME || 'juristAI_registration_bot';
+  res.json({ token, botUsername });
+});
+
+app.get('/api/reg-session/:token', (req, res) => {
+  const s = regSessions.get(req.params.token);
+  if (!s) return res.json({ verified: false, expired: true });
+  res.json({ verified: s.verified, telegramUserId: s.telegramUserId || null });
+});
+
+// ========== GOOGLE OAUTH ==========
+
+app.get('/auth/google', (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) return res.status(503).send('Google OAuth not configured');
+  const mode = req.query.mode || 'login';
+  const state = Buffer.from(JSON.stringify({ mode, ts: Date.now() })).toString('base64url');
+  const redirectUri = `${process.env.APP_URL || 'https://' + (process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:3000')}/auth/google/callback`;
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'offline',
+    prompt: 'select_account',
+  });
+  res.redirect('https://accounts.google.com/o/oauth2/v2/auth?' + params);
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const { code, state } = req.query;
+  if (!code) return res.redirect('/login.html?error=google_failed');
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = `${process.env.APP_URL || 'https://' + (process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:3000')}/auth/google/callback`;
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) return res.redirect('/login.html?error=google_failed');
+
+    const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const profile = await userRes.json();
+    const { sub: googleId, email, name, given_name, family_name } = profile;
+    if (!googleId || !email) return res.redirect('/login.html?error=google_failed');
+
+    let user = (await pool.query('SELECT * FROM admins WHERE google_id = $1 OR (email = $2 AND email IS NOT NULL)', [googleId, email])).rows[0];
+    if (!user) {
+      const randomPwd = await bcrypt.hash(Math.random().toString(36), 10);
+      const fullName = name || `${given_name || ''} ${family_name || ''}`.trim() || email;
+      const ins = await pool.query(
+        `INSERT INTO admins (username, password, full_name, role, email, email_verified, google_id)
+         VALUES ($1, $2, $3, 'user', $4, TRUE, $5) RETURNING *`,
+        [email.split('@')[0] + '_g' + Date.now().toString(36), randomPwd, fullName, email, googleId]
+      );
+      user = ins.rows[0];
+    } else if (!user.google_id) {
+      await pool.query('UPDATE admins SET google_id = $1, email_verified = TRUE WHERE id = $2', [googleId, user.id]);
+    }
+
+    req.session.adminId = user.id;
+    req.session.role = user.role;
+    req.session.adminName = user.full_name;
+    await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
+    res.redirect('/dashboard.html');
+  } catch (err) {
+    console.error('[Google OAuth]', err.message);
+    res.redirect('/login.html?error=google_failed');
+  }
+});
+
+// ========== ACCOUNT RECOVERY VIA BOT ==========
+
+app.post('/api/recover/init', async (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username kerak' });
+  try {
+    const row = (await pool.query('SELECT id, telegram_user_id FROM admins WHERE username = $1 OR email = $1', [username.replace(/^@/, '')])).rows[0];
+    if (!row || !row.telegram_user_id) return res.json({ sent: false, reason: 'not_found' });
+    const token = crypto.randomBytes(16).toString('hex');
+    verificationTokens.set('recover_' + token, { adminId: row.id, expiresAt: Date.now() + 10 * 60 * 1000 });
+    const TelegramBot = require('node-telegram-bot-api');
+    const regBot = process.env.REG_BOT_TOKEN
+      ? new TelegramBot(process.env.REG_BOT_TOKEN, { polling: false })
+      : require('../bot/bot').getBot();
+    const recoverLink = `${process.env.APP_URL || 'https://' + process.env.RENDER_EXTERNAL_HOSTNAME}/login.html?recover=${token}`;
+    await regBot.sendMessage(row.telegram_user_id, `🔑 Hisobni tiklash havolasi:\n${recoverLink}\n\nHavola 10 daqiqa amal qiladi.`);
+    res.json({ sent: true });
+  } catch (err) {
+    console.error('[Recover]', err);
+    res.json({ sent: false, reason: 'error' });
+  }
+});
+
 // ========== COMMON USER REGISTRATION (auto-approval, no master needed) ==========
 
 // POST /api/send-email-code — generate 4-digit code and (stub-)email it
@@ -5172,13 +5279,14 @@ app.post('/api/send-email-code', async (req, res) => {
 });
 
 // POST /api/register/common — common user self-registration (NO master approval)
-// Accepts EITHER telegram_username + telegram-verified code, OR email + email-verified code.
+// Accepts telegram_user_id from Telegram OTP flow.
 app.post('/api/register/common', async (req, res) => {
   try {
     const {
       first_name, last_name, phone, telegram_username, email,
       password, password_confirm,
       verification_code, verification_token,
+      telegram_user_id,
       accept_offer, accept_privacy,
     } = req.body || {};
 
@@ -5198,24 +5306,40 @@ app.post('/api/register/common', async (req, res) => {
     const cleanTg = telegram_username ? telegram_username.replace(/^@/, '').trim().toLowerCase() : '';
     const cleanEmail = email ? email.trim().toLowerCase() : '';
     const cleanPhone = phone ? phone.trim() : '';
+    const tgUserId = telegram_user_id ? String(telegram_user_id) : null;
 
-    if (!cleanTg && !cleanEmail) {
-      return res.status(400).json({ error: 'Telegram username yoki email kiriting' });
+    // Telegram OTP path (new) — requires verified telegramUserId
+    let applicantChatId = null;
+    if (tgUserId) {
+      // Check sinov abuse: if this Telegram user already used bepul plan
+      const existing = await pool.query('SELECT id, bepul_used FROM admins WHERE telegram_user_id = $1', [tgUserId]);
+      if (existing.rows.length > 0) {
+        if (existing.rows[0].bepul_used) {
+          return res.status(409).json({ error: 'sinov_used' });
+        }
+        return res.status(400).json({ error: 'Bu Telegram hisob allaqachon ro\'yxatdan o\'tgan' });
+      }
+      applicantChatId = parseInt(tgUserId, 10) || null;
+    } else {
+      // Legacy path: verification code required
+      if (!cleanTg && !cleanEmail) {
+        return res.status(400).json({ error: 'Telegram username yoki email kiriting' });
+      }
+      if (!verification_token || !verification_code) {
+        return res.status(400).json({ error: 'Tasdiqlash kodini kiriting' });
+      }
+      const storedCode = verificationTokens.get(verification_token);
+      if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
+        return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan' });
+      }
+      if (storedCode.channel === 'email' && storedCode.email !== cleanEmail) {
+        return res.status(400).json({ error: 'Tasdiqlash kodi boshqa email uchun yuborilgan' });
+      }
+      applicantChatId = storedCode.chatId || null;
+      verificationTokens.delete(verification_token);
     }
 
-    if (!verification_token || !verification_code) {
-      return res.status(400).json({ error: 'Tasdiqlash kodini kiriting' });
-    }
-    const storedCode = verificationTokens.get(verification_token);
-    if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
-      return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan' });
-    }
-    // If email channel: storedCode.email must match the email submitted
-    if (storedCode.channel === 'email' && storedCode.email !== cleanEmail) {
-      return res.status(400).json({ error: 'Tasdiqlash kodi boshqa email uchun yuborilgan' });
-    }
-
-    // Build a unique username: prefer telegram handle, else email local-part, else random
+    // Build a unique username
     let baseUsername = cleanTg || (cleanEmail ? cleanEmail.split('@')[0] : `user${Date.now()}`);
     baseUsername = baseUsername.replace(/[^a-z0-9._-]/gi, '').toLowerCase() || `user${Date.now()}`;
     let username = baseUsername;
@@ -5244,27 +5368,24 @@ app.post('/api/register/common', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const fullName = `${first_name.trim()} ${last_name.trim()}`.trim();
-    const applicantChatId = storedCode.chatId || null;
 
     const insert = await pool.query(
       `INSERT INTO admins
          (username, password, full_name, role,
-          telegram_username, telegram_chat_id, email, email_verified, phone)
-       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8)
+          telegram_username, telegram_chat_id, telegram_user_id, email, email_verified, phone)
+       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8, $9)
        RETURNING id, username, full_name, role`,
       [
         username, passwordHash, fullName,
         cleanTg || null,
         applicantChatId,
+        tgUserId ? BigInt(tgUserId) : null,
         cleanEmail || null,
-        storedCode.channel === 'email',
+        !!(cleanEmail),
         cleanPhone || null,
       ]
     );
     const admin = insert.rows[0];
-
-    // Code consumed
-    verificationTokens.delete(verification_token);
 
     // Auto-login the new user
     req.session.isAuthenticated = true;
@@ -5725,6 +5846,12 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS document_mimetype VARCHAR(100)`);
     await pool.query(`ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT`);
     await pool.query(`ALTER TABLE registration_requests ALTER COLUMN telegram_username DROP NOT NULL`);
+    // Telegram user ID and Google ID columns
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_user_id BIGINT`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS google_id VARCHAR(100)`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_telegram_user_id ON admins(telegram_user_id) WHERE telegram_user_id IS NOT NULL`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_google_id ON admins(google_id) WHERE google_id IS NOT NULL`);
+
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
     // Seed masteradmin account (idempotent — does nothing if already exists)

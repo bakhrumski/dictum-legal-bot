@@ -9169,6 +9169,10 @@
                 <div class="reg-detail-row"><span class="reg-detail-label">Rol</span><span class="reg-detail-value">${roleLabels[admin.role] || admin.role}</span></div>
                 <div class="reg-detail-row"><span class="reg-detail-label">Username</span><span class="reg-detail-value"><code>${escapeHtml(admin.username)}</code></span></div>
                 ${admin.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(admin.telegram_username)}</span></div>` : ''}
+                ${admin.telegram_user_id ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram ID</span><span class="reg-detail-value"><code>${escapeHtml(String(admin.telegram_user_id))}</code></span></div>` : ''}
+                ${admin.google_id ? `<div class="reg-detail-row"><span class="reg-detail-label">Google</span><span class="reg-detail-value"><code>${escapeHtml(String(admin.google_id))}</code></span></div>` : ''}
+                ${admin.email ? `<div class="reg-detail-row"><span class="reg-detail-label">Email</span><span class="reg-detail-value">${escapeHtml(admin.email)}</span></div>` : ''}
+                ${admin.phone ? `<div class="reg-detail-row"><span class="reg-detail-label">Telefon</span><span class="reg-detail-value">${escapeHtml(admin.phone)}</span></div>` : ''}
                 ${admin.duty_start && admin.duty_end ? `<div class="reg-detail-row"><span class="reg-detail-label">Ish vaqti</span><span class="reg-detail-value">${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}</span></div>` : ''}
                 <div class="reg-detail-row"><span class="reg-detail-label">Holati</span><span class="reg-detail-value">${admin.is_active ? '<span style="color:#27ae60;">Aktiv</span>' : '<span style="color:#999;">Aktiv emas</span>'}</span></div>
                 <div style="text-align:center;padding:20px;color:var(--text-muted);">Ro'yxatdan o'tish ma'lumotlari yuklanmoqda...</div>
@@ -9253,6 +9257,10 @@
                         <div class="reg-detail-row"><span class="reg-detail-label">Rol</span><span class="reg-detail-value">${roleLabels[admin.role] || admin.role}</span></div>
                         <div class="reg-detail-row"><span class="reg-detail-label">Username</span><span class="reg-detail-value"><code>${escapeHtml(admin.username)}</code></span></div>
                         ${admin.telegram_username ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram</span><span class="reg-detail-value">@${escapeHtml(admin.telegram_username)}</span></div>` : ''}
+                        ${admin.telegram_user_id ? `<div class="reg-detail-row"><span class="reg-detail-label">Telegram ID</span><span class="reg-detail-value"><code>${escapeHtml(String(admin.telegram_user_id))}</code></span></div>` : ''}
+                        ${admin.google_id ? `<div class="reg-detail-row"><span class="reg-detail-label">Google</span><span class="reg-detail-value"><code>${escapeHtml(String(admin.google_id))}</code></span></div>` : ''}
+                        ${admin.email ? `<div class="reg-detail-row"><span class="reg-detail-label">Email</span><span class="reg-detail-value">${escapeHtml(admin.email)}</span></div>` : ''}
+                        ${admin.phone ? `<div class="reg-detail-row"><span class="reg-detail-label">Telefon</span><span class="reg-detail-value">${escapeHtml(admin.phone)}</span></div>` : ''}
                         ${admin.duty_start && admin.duty_end ? `<div class="reg-detail-row"><span class="reg-detail-label">Ish vaqti</span><span class="reg-detail-value">${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}</span></div>` : ''}
                         <div class="reg-detail-row"><span class="reg-detail-label">Holati</span><span class="reg-detail-value">${admin.is_active ? '<span style="color:#27ae60;">Aktiv</span>' : '<span style="color:#999;">Aktiv emas</span>'}</span></div>
                         ${stats ? `<div class="reg-detail-row"><span class="reg-detail-label">Tayinlangan</span><span class="reg-detail-value"><strong>${stats.assigned_count || 0}</strong> ta murojaat</span></div>
