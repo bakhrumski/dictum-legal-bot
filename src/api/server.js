@@ -10,7 +10,7 @@ const fs = require('fs');
 const { pool } = require('../database/db');
 
 // Shared in-memory store for Telegram verification codes (used by bot.js too)
-const { verificationTokens } = require('../verification-store');
+const { verificationTokens, regSessions } = require('../verification-store');
 const crypto = require('crypto');
 const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addExample, updateExample, deleteExample, getAllExamples, getDatasetStats } = require('../dataset/legal-dataset');
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
