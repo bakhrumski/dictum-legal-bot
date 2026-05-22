@@ -5229,19 +5229,29 @@ app.get('/auth/google/callback', async (req, res) => {
     }
 
     if (!user) {
-      // ── Strict Sinov abuse: block Google accounts that already used the trial ──
+      // ── Strict Sinov abuse: block by google_id/email ──
       const abuseCheck = await pool.query(
         `SELECT id FROM admins WHERE (google_id = $1 OR (email = $2 AND email IS NOT NULL)) AND bepul_used = TRUE`,
         [googleId, email]
       );
       if (abuseCheck.rows.length > 0) return res.redirect('/login.html?error=sinov_used');
 
+      // ── Strict Sinov abuse: block by device fingerprint (cross-account detection) ──
+      const gDfp = typeof req.cookies?.dfp === 'string' ? req.cookies.dfp.slice(0, 64) : null;
+      if (gDfp) {
+        const fpAbuse = await pool.query(
+          'SELECT id FROM admins WHERE device_fingerprint = $1 AND bepul_used = TRUE',
+          [gDfp]
+        );
+        if (fpAbuse.rows.length > 0) return res.redirect('/login.html?error=sinov_used');
+      }
+
       const randomPwd = await bcrypt.hash(Math.random().toString(36), 10);
       const fullName = name || `${given_name || ''} ${family_name || ''}`.trim() || email;
       const ins = await pool.query(
-        `INSERT INTO admins (username, password, full_name, role, email, email_verified, google_id)
-         VALUES ($1, $2, $3, 'user', $4, TRUE, $5) RETURNING *`,
-        [email.split('@')[0] + '_g' + Date.now().toString(36), randomPwd, fullName, email, googleId]
+        `INSERT INTO admins (username, password, full_name, role, email, email_verified, google_id, device_fingerprint)
+         VALUES ($1, $2, $3, 'user', $4, TRUE, $5, $6) RETURNING *`,
+        [email.split('@')[0] + '_g' + Date.now().toString(36), randomPwd, fullName, email, googleId, gDfp || null]
       );
       user = ins.rows[0];
     } else if (!user.google_id) {
@@ -5330,7 +5340,9 @@ app.post('/api/register/common', async (req, res) => {
       verification_code, verification_token,
       telegram_user_id,
       accept_offer, accept_privacy,
+      device_fingerprint,
     } = req.body || {};
+    const dfp = typeof device_fingerprint === 'string' ? device_fingerprint.slice(0, 64) : null;
 
     if (!first_name || !last_name) {
       return res.status(400).json({ error: 'Ism va familiyani kiriting' });
@@ -5349,6 +5361,15 @@ app.post('/api/register/common', async (req, res) => {
     const cleanEmail = email ? email.trim().toLowerCase() : '';
     const cleanPhone = phone ? phone.trim() : '';
     const tgUserId = telegram_user_id ? String(telegram_user_id) : null;
+
+    // Device fingerprint abuse check (cross-method: catches same device switching accounts)
+    if (dfp) {
+      const fpAbuse = await pool.query(
+        'SELECT id FROM admins WHERE device_fingerprint = $1 AND bepul_used = TRUE',
+        [dfp]
+      );
+      if (fpAbuse.rows.length > 0) return res.status(409).json({ error: 'sinov_used' });
+    }
 
     // Telegram OTP path (new) — requires verified telegramUserId
     let applicantChatId = null;
@@ -5414,8 +5435,8 @@ app.post('/api/register/common', async (req, res) => {
     const insert = await pool.query(
       `INSERT INTO admins
          (username, password, full_name, role,
-          telegram_username, telegram_chat_id, telegram_user_id, email, email_verified, phone)
-       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8, $9)
+          telegram_username, telegram_chat_id, telegram_user_id, email, email_verified, phone, device_fingerprint)
+       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8, $9, $10)
        RETURNING id, username, full_name, role`,
       [
         username, passwordHash, fullName,
@@ -5425,6 +5446,7 @@ app.post('/api/register/common', async (req, res) => {
         cleanEmail || null,
         !!(cleanEmail),
         cleanPhone || null,
+        dfp || null,
       ]
     );
     const admin = insert.rows[0];
@@ -5906,8 +5928,10 @@ async function runMigrations() {
     // Telegram user ID and Google ID columns
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_user_id BIGINT`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS google_id VARCHAR(100)`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS device_fingerprint VARCHAR(64)`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_telegram_user_id ON admins(telegram_user_id) WHERE telegram_user_id IS NOT NULL`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_google_id ON admins(google_id) WHERE google_id IS NOT NULL`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_admins_device_fingerprint ON admins(device_fingerprint) WHERE device_fingerprint IS NOT NULL`);
 
     // Ensure 'admin' account is always master role
     await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
