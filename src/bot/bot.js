@@ -232,16 +232,29 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     return;
   }
 
-  // Deep link: /start reg_TOKEN — Telegram OTP for registration
+  // Deep link: /start reg_TOKEN — generate 4-digit OTP and send to user
   if (param.startsWith('reg_')) {
     const token = param.replace('reg_', '').trim();
     const session = regSessions.get(token);
-    if (session && !session.verified) {
-      session.verified = true;
+    if (session && !session.otp) {
+      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      session.otp = otp;
       session.telegramUserId = String(msg.from.id);
-      bot.sendMessage(chatId, '✅ Telegram muvaffaqiyatli tasdiqlandi! Saytga qayting va ro\'yxatdan o\'tishni davom eting.');
+      session.firstName = msg.from.first_name || '';
+      session.lastName = msg.from.last_name || '';
+      session.username = msg.from.username || '';
+      session.otpSentAt = Date.now();
+      bot.sendMessage(chatId,
+        `🔐 *JuristAI ro'yxatdan o'tish kodi:*\n\n` +
+        `*${otp}*\n\n` +
+        `Ushbu 4 raqamli kodni saytdagi maydoniga kiriting.\n` +
+        `Kod 10 daqiqa amal qiladi.`,
+        { parse_mode: 'Markdown' }
+      );
+    } else if (session && session.otp) {
+      bot.sendMessage(chatId, `⚠️ Kod allaqachon yuborilgan. Saytga qayting va kodni kiriting.\n\nAgar muammo bo'lsa, sahifani yangilab qayta urinib ko'ring.`);
     } else {
-      bot.sendMessage(chatId, 'Token topilmadi yoki muddati o\'tgan.');
+      bot.sendMessage(chatId, '⏳ Sessiya topilmadi yoki muddati o\'tgan.\nIltimos, saytda qayta ro\'yxatdan o\'tishni boshlang.');
     }
     return;
   }

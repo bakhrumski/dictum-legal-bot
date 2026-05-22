@@ -5167,7 +5167,84 @@ app.post('/api/reg-session', (req, res) => {
 app.get('/api/reg-session/:token', (req, res) => {
   const s = regSessions.get(req.params.token);
   if (!s) return res.json({ verified: false, expired: true });
-  res.json({ verified: s.verified, telegramUserId: s.telegramUserId || null });
+  res.json({ verified: !!s.otp, telegramUserId: s.telegramUserId || null });
+});
+
+// POST /api/register/telegram-otp — verify OTP sent by bot and create account
+app.post('/api/register/telegram-otp', async (req, res) => {
+  try {
+    const { token, otp_code, device_fingerprint } = req.body || {};
+    const dfp = typeof device_fingerprint === 'string' ? device_fingerprint.slice(0, 64) : null;
+
+    const session = regSessions.get(token);
+    if (!session || !session.otp || !session.otpSentAt) {
+      return res.status(400).json({ error: 'Sessiya topilmadi. Telegram tugmasini qayta bosing.' });
+    }
+    if (Date.now() > session.otpSentAt + 10 * 60 * 1000) {
+      regSessions.delete(token);
+      return res.status(400).json({ error: 'OTP muddati o\'tgan. Qayta urinib ko\'ring.' });
+    }
+    if (String(otp_code).trim() !== session.otp) {
+      return res.status(400).json({ error: 'OTP noto\'g\'ri. Qayta tekshirib kiriting.' });
+    }
+
+    const tgUserId = session.telegramUserId;
+    if (!tgUserId) return res.status(400).json({ error: 'Telegram hisob aniqlanmadi.' });
+
+    // Sinov abuse: same Telegram user_id
+    const existing = await pool.query('SELECT id, bepul_used, role, full_name FROM admins WHERE telegram_user_id = $1', [tgUserId]);
+    if (existing.rows.length > 0) {
+      if (existing.rows[0].bepul_used) return res.status(409).json({ error: 'sinov_used' });
+      // Account exists but trial not used — just log them in
+      const u = existing.rows[0];
+      req.session.isAuthenticated = true;
+      req.session.role = u.role;
+      req.session.adminId = u.id;
+      req.session.fullName = u.full_name;
+      await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
+      regSessions.delete(token);
+      return res.json({ success: true, redirect: '/dashboard.html' });
+    }
+
+    // Sinov abuse: same device fingerprint
+    if (dfp) {
+      const fpAbuse = await pool.query('SELECT id FROM admins WHERE device_fingerprint = $1 AND bepul_used = TRUE', [dfp]);
+      if (fpAbuse.rows.length > 0) return res.status(409).json({ error: 'sinov_used' });
+    }
+
+    // Build unique username
+    const baseName = session.username || `tg${tgUserId}`;
+    const safeBase = baseName.replace(/[^a-z0-9._-]/gi, '').toLowerCase() || `tg${tgUserId}`;
+    let username = safeBase;
+    for (let i = 1; i <= 200; i++) {
+      const dup = await pool.query('SELECT id FROM admins WHERE LOWER(username) = $1', [username]);
+      if (dup.rows.length === 0) break;
+      username = `${safeBase}${i}`;
+    }
+
+    const fullName = `${session.firstName || ''} ${session.lastName || ''}`.trim() || baseName;
+    const randomPwd = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+    const insert = await pool.query(
+      `INSERT INTO admins (username, password, full_name, role, telegram_username, telegram_chat_id, telegram_user_id, device_fingerprint)
+       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7) RETURNING id, username, full_name, role`,
+      [username, randomPwd, fullName, session.username || null,
+       parseInt(tgUserId, 10), BigInt(tgUserId), dfp || null]
+    );
+    const admin = insert.rows[0];
+
+    req.session.isAuthenticated = true;
+    req.session.role = admin.role;
+    req.session.adminId = admin.id;
+    req.session.username = admin.username;
+    req.session.fullName = admin.full_name;
+    await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
+    regSessions.delete(token);
+
+    res.json({ success: true, role: admin.role, fullName: admin.full_name, redirect: '/tariff.html' });
+  } catch (err) {
+    console.error('[register/telegram-otp]', err.message);
+    res.status(500).json({ error: 'Ro\'yxatdan o\'tishda xatolik: ' + err.message });
+  }
 });
 
 // ========== GOOGLE OAUTH ==========

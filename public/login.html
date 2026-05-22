@@ -588,6 +588,23 @@
         .reg-divider::before, .reg-divider::after {
             content: ''; flex: 1; height: 1px; background: var(--border, rgba(255,255,255,0.1));
         }
+        .reg-social-btn {
+            width: 100%; padding: 15px 20px;
+            border-radius: 12px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            font-weight: 600; font-size: 16px; transition: all 0.15s;
+            border: none;
+        }
+        .reg-social-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+        .tg-social-btn { background: #2AABEE; color: #fff; }
+        .tg-social-btn:not(:disabled):hover { background: #1a96d4; }
+        .google-social-btn {
+            background: rgba(255,255,255,0.04); color: #111;
+            border: 1.5px solid var(--border, rgba(0,0,0,0.18));
+        }
+        [data-theme="dark"] .google-social-btn { color: #fff; border-color: rgba(255,255,255,0.2); }
+        .google-social-btn:not(:disabled):hover { background: rgba(0,0,0,0.05); }
+        [data-theme="dark"] .google-social-btn:not(:disabled):hover { background: rgba(255,255,255,0.09); }
         .google-reg-toggle {
             width: 100%; padding: 11px 16px;
             background: rgba(255,255,255,0.04); border: 1px solid var(--border, rgba(255,255,255,0.15));
@@ -803,96 +820,17 @@
                         <button onclick="setRegType('lawyer')">Yurist</button>
                     </div>
 
-                    <form id="registerForm" novalidate>
-                        <div class="form-group">
-                            <label>Familiya</label>
-                            <input type="text" id="regLastName" placeholder="Familiya" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Ism</label>
-                            <input type="text" id="regFirstName" placeholder="Ism" required>
-                        </div>
-
-                        <!-- Telegram OTP verification — common-user only -->
-                        <div class="form-group common-only" id="tgVerifyBlock">
-                          <label>Telegram orqali tasdiqlash</label>
-                          <button type="button" class="send-code-btn" id="tgVerifyBtn" onclick="startTgVerify()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 14.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.496.969z"/></svg>
-                            Telegram bot orqali tasdiqlang
-                          </button>
-                          <div id="tgVerifyStatus" style="margin-top:8px;font-size:13px;display:none;"></div>
-                        </div>
-
-                        <!-- Student fields -->
-                        <div class="student-fields">
-                            <div class="form-group">
-                                <label>Bosqich</label>
-                                <select id="regLevel" required>
-                                    <option value="">Tanlang...</option>
-                                    <option value="1-bosqich">1-bosqich</option>
-                                    <option value="2-bosqich">2-bosqich</option>
-                                    <option value="3-bosqich">3-bosqich</option>
-                                    <option value="4-bosqich">4-bosqich</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Lawyer fields -->
-                        <div class="lawyer-fields">
-                            <div class="form-group">
-                                <label>Mutaxassislik</label>
-                                <select id="regSpecialization" required>
-                                    <option value="">Tanlang...</option>
-                                    <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
-                                    <option value="Jinoyat huquqi">Jinoyat huquqi</option>
-                                    <option value="Mehnat huquqi">Mehnat huquqi</option>
-                                    <option value="Oila huquqi">Oila huquqi</option>
-                                    <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
-                                    <option value="Ko'chmas mulk">Ko'chmas mulk</option>
-                                    <option value="Soliq huquqi">Soliq huquqi</option>
-                                    <option value="Ma'muriy huquq">Ma'muriy huquq</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Tajriba (yil)</label>
-                                <input type="text" id="regExperience" inputmode="numeric" pattern="[0-9]*" placeholder="Masalan: 5" required>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Parol <span class="label-hint">(kamida 6 ta belgi)</span></label>
-                            <input type="password" id="regPassword" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" minlength="6" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Parolni tasdiqlang</label>
-                            <input type="password" id="regPasswordConfirm" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" required>
-                            <div class="agreement-error" id="passwordMatchError" style="display:none">Parollar mos kelmaydi!</div>
-                            <div class="agreement-error" id="passwordLengthError" style="display:none">Parol kamida 6 ta belgi bo'lishi kerak!</div>
-                        </div>
-
-                        <div class="form-group reg-doc-section">
-                            <label class="student-fields">Tasdiqlovchi hujjat <span class="label-hint">(mygov.uz yoki HEMISdan ma'lumotnoma)</span></label>
-                            <label class="lawyer-fields">Tasdiqlovchi hujjat <span class="label-hint">(mygov.uzdan ish joyidan ma'lumotnoma)</span></label>
-                            <div class="file-zone" id="fileZone">
-                                <input type="file" id="regDocument" accept=".jpg,.jpeg,.png,.webp,.pdf" onchange="handleFile(this)">
-                                <div class="file-zone-text">
-                                    <span class="file-icon">📎</span>
-                                    JPG, PNG yoki PDF yuklang
-                                </div>
-                                <div class="file-zone-name" id="fileName"></div>
-                            </div>
-                        </div>
-
+                    <form id="registerForm" novalidate onsubmit="return false">
                         <!-- Agreements -->
-                        <div class="agreement-section" style="display:flex;flex-direction:column;gap:6px;">
+                        <div class="agreement-section" style="display:flex;flex-direction:column;gap:6px;margin-bottom:28px;">
                           <div style="display:flex;gap:16px;align-items:flex-start;">
                             <div class="agreement-item" onclick="openPolicy('privacy')" style="flex:1;margin:0">
-                              <input type="checkbox" id="privacyCheck">
+                              <input type="checkbox" id="privacyCheck" onchange="updateRegBtn()">
                               <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                               <span><a>Shartlar</a></span>
                             </div>
                             <div class="agreement-item" onclick="openPolicy('oferta')" style="flex:1;margin:0">
-                              <input type="checkbox" id="ofertaCheck">
+                              <input type="checkbox" id="ofertaCheck" onchange="updateRegBtn()">
                               <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                               <span><a>Oferta</a></span>
                             </div>
@@ -901,16 +839,31 @@
                           <div class="agreement-error" id="ofertaError" style="display:none">Ofertani tasdiqlang!</div>
                         </div>
 
-                        <button type="submit" class="btn" id="registerBtn" disabled>Ro'yxatdan o'tish</button>
+                        <!-- Telegram button -->
+                        <button type="button" id="tgRegBtn" class="reg-social-btn tg-social-btn" disabled onclick="startTelegramReg()">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 14.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.496.969z"/></svg>
+                            Telegram bilan davom eting
+                        </button>
 
-                        <!-- Common-user only: Google one-click -->
-                        <div class="common-only">
-                            <div class="reg-divider">yoki</div>
-                            <button type="button" class="google-reg-toggle" onclick="startGoogleAuth()">
-                                <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.6 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4-4.1 5.3l6.2 5.2C41.4 35.6 44 30.3 44 24c0-1.3-.1-2.6-.4-3.5z"/></svg>
-                                <span>Google bilan davom eting</span>
-                            </button>
+                        <!-- OTP input — appears after bot sends code -->
+                        <div id="otpBlock" style="display:none;margin-top:14px;">
+                            <div id="otpStatus" style="font-size:13px;color:var(--text-muted);margin-bottom:10px;text-align:center;"></div>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <input type="text" id="otpInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0 0 0 0"
+                                    style="flex:1;font-size:26px;text-align:center;letter-spacing:12px;padding:12px 10px;border:2px solid var(--border,rgba(0,0,0,0.15));border-radius:10px;background:var(--input-bg,#fff);color:var(--text-main,#111);outline:none;"
+                                    onkeydown="if(event.key==='Enter')verifyTelegramOtp()">
+                                <button type="button" id="otpVerifyBtn" class="btn" style="padding:13px 22px;font-size:18px;" onclick="verifyTelegramOtp()">✓</button>
+                            </div>
+                            <div id="otpError" style="color:#d9534f;font-size:13px;margin-top:6px;display:none;text-align:center;"></div>
                         </div>
+
+                        <div class="reg-divider" style="margin:22px 0 18px;">yoki</div>
+
+                        <!-- Google button -->
+                        <button type="button" id="googleRegBtn" class="reg-social-btn google-social-btn" disabled onclick="startGoogleAuth()">
+                            <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.6 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4-4.1 5.3l6.2 5.2C41.4 35.6 44 30.3 44 24c0-1.3-.1-2.6-.4-3.5z"/></svg>
+                            Google bilan davom eting
+                        </button>
                     </form>
                     <div class="switch-link">
                         Hisobingiz bormi? <a onclick="showView('login')">Kirish</a>
@@ -1149,12 +1102,14 @@
         });
 
         function updateRegBtn() {
-            const ok = document.getElementById('privacyCheck').checked && document.getElementById('ofertaCheck').checked;
-            document.getElementById('registerBtn').disabled = !ok;
-            const gBtn = document.querySelector('.google-reg-toggle');
-            if (gBtn) { gBtn.disabled = !ok; gBtn.style.opacity = ok ? '1' : '0.45'; gBtn.style.cursor = ok ? 'pointer' : 'not-allowed'; }
+            const privEl = document.getElementById('privacyCheck');
+            const ofertaEl = document.getElementById('ofertaCheck');
+            const ok = privEl && ofertaEl && privEl.checked && ofertaEl.checked;
+            const tgBtn = document.getElementById('tgRegBtn');
+            const gBtn = document.getElementById('googleRegBtn');
+            if (tgBtn) tgBtn.disabled = !ok;
+            if (gBtn) gBtn.disabled = !ok;
         }
-        // Disable Google button initially (requires agreements)
         document.addEventListener('DOMContentLoaded', () => updateRegBtn());
 
         // Login form
@@ -1431,206 +1386,86 @@
             this.value = this.value.replace(/[^0-9]/g, '');
         });
 
-        // Telegram OTP registration flow
-        var REG_BOT_USERNAME = 'juristAI_registration_bot'; // set via env or hardcoded fallback
-        var verifiedTelegramId = null;
-        var _tgPollInterval = null;
-        var _tgPollTimeout = null;
+        // Registration via social accounts
+        var _regToken = null;
 
         function startGoogleAuth() {
             if (deviceFingerprint) document.cookie = 'dfp=' + deviceFingerprint + '; path=/; SameSite=Lax; max-age=300';
             window.location.href = '/auth/google?mode=register';
         }
 
-        async function startTgVerify() {
-            const btn = document.getElementById('tgVerifyBtn');
-            const statusEl = document.getElementById('tgVerifyStatus');
+        async function startTelegramReg() {
+            const btn = document.getElementById('tgRegBtn');
+            const otpBlock = document.getElementById('otpBlock');
+            const otpStatus = document.getElementById('otpStatus');
+            const otpError = document.getElementById('otpError');
+            const origHTML = btn.innerHTML;
             btn.disabled = true;
-            btn.textContent = 'Yuklanmoqda...';
-            statusEl.style.display = 'none';
+            btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 14.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.496.969z"/></svg> Yuklanmoqda...';
+            otpError.style.display = 'none';
             try {
                 const resp = await fetch('/api/reg-session', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
                 const data = await resp.json();
                 if (!resp.ok || !data.token) throw new Error(data.error || 'Xatolik');
-                const token = data.token;
-                const botUsername = data.botUsername || REG_BOT_USERNAME;
-                const deepLink = 'https://t.me/' + botUsername + '?start=reg_' + token;
-                statusEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:var(--accent);font-weight:700;text-decoration:underline;">Botni oching va /start bosing</a>';
-                statusEl.style.display = 'block';
-                btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 14.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.496.969z"/></svg>Kutilmoqda...';
-
-                // Polling
-                let elapsed = 0;
-                const maxMs = 120000;
-                const intervalMs = 2500;
-                if (_tgPollInterval) clearInterval(_tgPollInterval);
-                if (_tgPollTimeout) clearTimeout(_tgPollTimeout);
-                _tgPollInterval = setInterval(async () => {
-                    elapsed += intervalMs;
-                    try {
-                        const pr = await fetch('/api/reg-session/' + token);
-                        const pd = await pr.json();
-                        if (pd.verified && pd.telegramUserId) {
-                            clearInterval(_tgPollInterval);
-                            clearTimeout(_tgPollTimeout);
-                            verifiedTelegramId = pd.telegramUserId;
-                            btn.innerHTML = '<span style="color:#27ae60;">&#10004; Telegram tasdiqlandi!</span>';
-                            btn.disabled = false;
-                            statusEl.style.display = 'none';
-                        }
-                    } catch(e) {}
-                }, intervalMs);
-                _tgPollTimeout = setTimeout(() => {
-                    clearInterval(_tgPollInterval);
-                    btn.disabled = false;
-                    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 14.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.496.969z"/></svg>Telegram bot orqali tasdiqlang';
-                    statusEl.innerHTML = '<span style="color:#d9534f;">Vaqt tugadi. Qayta urinib ko\'ring.</span>';
-                    statusEl.style.display = 'block';
-                }, maxMs);
-            } catch(err) {
+                _regToken = data.token;
+                const botUsername = data.botUsername || 'juristAI_registration_bot';
+                const deepLink = 'https://t.me/' + botUsername + '?start=reg_' + _regToken;
+                window.open(deepLink, '_blank');
+                otpStatus.innerHTML = '<b>' + botUsername + '</b> botidan kelgan 4 raqamli kodni kiriting:';
+                document.getElementById('otpInput').value = '';
+                otpBlock.style.display = 'block';
+                setTimeout(() => document.getElementById('otpInput').focus(), 100);
+                btn.innerHTML = origHTML;
                 btn.disabled = false;
-                btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 14.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.496.969z"/></svg>Telegram bot orqali tasdiqlang';
-                statusEl.innerHTML = '<span style="color:#d9534f;">' + (err.message || 'Xatolik') + '</span>';
-                statusEl.style.display = 'block';
+            } catch(err) {
+                btn.innerHTML = origHTML;
+                btn.disabled = false;
+                otpStatus.innerHTML = '<span style="color:#d9534f;">' + (err.message || 'Xatolik') + '</span>';
+                otpBlock.style.display = 'block';
             }
         }
 
-        // Register form
-        document.getElementById('registerForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const errorDiv = document.getElementById('regError');
-            errorDiv.classList.remove('show');
-
-            const regType = document.querySelector('.register-form').getAttribute('data-type');
-            const requiredFields = this.querySelectorAll('input[required], select[required]');
-            let firstInvalid = null;
-            requiredFields.forEach(function(field) {
-                const parent = field.closest('.student-fields, .lawyer-fields');
-                if (parent) {
-                    if (parent.classList.contains('student-fields') && regType !== 'student') return;
-                    if (parent.classList.contains('lawyer-fields') && regType !== 'lawyer') return;
-                }
-                field.classList.remove('input-invalid');
-                if (!field.value.trim() || (field.tagName === 'SELECT' && !field.value)) {
-                    void field.offsetWidth;
-                    field.classList.add('input-invalid');
-                    if (!firstInvalid) firstInvalid = field;
-                }
-            });
-            if (firstInvalid) {
-                firstInvalid.focus();
+        async function verifyTelegramOtp() {
+            const code = document.getElementById('otpInput').value.trim();
+            const otpError = document.getElementById('otpError');
+            const verifyBtn = document.getElementById('otpVerifyBtn');
+            otpError.style.display = 'none';
+            if (!code || code.length !== 4) {
+                otpError.textContent = '4 raqamli kodni to\'liq kiriting';
+                otpError.style.display = 'block';
                 return;
             }
-
-            var regPwd = document.getElementById('regPassword');
-            var regPwdConfirm = document.getElementById('regPasswordConfirm');
-            document.getElementById('passwordMatchError').style.display = 'none';
-            document.getElementById('passwordLengthError').style.display = 'none';
-            if (regPwd.value.length < 6) {
-                document.getElementById('passwordLengthError').style.display = 'block';
-                regPwd.focus();
+            if (!_regToken) {
+                otpError.textContent = 'Sessiya topilmadi. Telegram tugmasini qayta bosing.';
+                otpError.style.display = 'block';
                 return;
             }
-            if (regPwd.value !== regPwdConfirm.value) {
-                document.getElementById('passwordMatchError').style.display = 'block';
-                regPwdConfirm.focus();
-                return;
-            }
-
-            if (!document.getElementById('privacyCheck').checked) {
-                document.getElementById('privacyError').style.display = 'block';
-                return;
-            }
-            if (!document.getElementById('ofertaCheck').checked) {
-                document.getElementById('ofertaError').style.display = 'block';
-                return;
-            }
-            const btn = document.getElementById('registerBtn');
-            btn.disabled = true;
-            btn.textContent = 'Yuborilmoqda...';
-
-            // ── COMMON USER PATH: JSON body, auto-login, redirect to tariff ──
-            if (regType === 'common') {
-                if (!verifiedTelegramId) {
-                    errorDiv.textContent = 'Telegram orqali tasdiqlang!';
-                    errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
-                    btn.disabled = false;
-                    btn.textContent = 'Ro\'yxatdan o\'tish';
-                    return;
-                }
-                const payload = {
-                    first_name: document.getElementById('regFirstName').value.trim(),
-                    last_name:  document.getElementById('regLastName').value.trim(),
-                    password:        regPwd.value,
-                    password_confirm: regPwdConfirm.value,
-                    telegram_user_id: verifiedTelegramId,
-                    accept_offer:   document.getElementById('ofertaCheck').checked,
-                    accept_privacy: document.getElementById('privacyCheck').checked,
-                    device_fingerprint: deviceFingerprint || null,
-                };
-                try {
-                    const response = await fetch('/api/register/common', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                    });
-                    const data = await response.json();
-                    if (response.ok) {
-                        window.location.href = data.redirect || '/tariff.html';
-                        return;
-                    } else {
-                        errorDiv.textContent = data.error || 'Xatolik yuz berdi';
-                        errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
-                        btn.disabled = false;
-                        btn.textContent = 'Ro\'yxatdan o\'tish';
-                    }
-                } catch (error) {
-                    errorDiv.textContent = 'Xatolik: ' + error.message;
-                    errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
-                    btn.disabled = false;
-                    btn.textContent = 'Ro\'yxatdan o\'tish';
-                }
-                return;
-            }
-
-            // ── STUDENT/LAWYER PATH (legacy, currently hidden) ──
-            const formData = new FormData();
-            formData.append('type', regType);
-            formData.append('first_name', document.getElementById('regFirstName').value.trim());
-            formData.append('last_name', document.getElementById('regLastName').value.trim());
-            formData.append('password', regPwd.value);
-
-            if (regType === 'student') {
-                formData.append('level', document.getElementById('regLevel').value);
-            } else {
-                formData.append('specialization', document.getElementById('regSpecialization').value);
-                formData.append('experience_years', document.getElementById('regExperience').value);
-            }
-
-            const fileInput = document.getElementById('regDocument');
-            if (fileInput.files.length > 0) {
-                formData.append('document', fileInput.files[0]);
-            }
-
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = '...';
             try {
-                const response = await fetch('/api/register', { method: 'POST', body: formData });
-                const data = await response.json();
-                if (response.ok) {
-                    document.getElementById('successText').textContent = data.message;
-                    showView('success');
+                const resp = await fetch('/api/register/telegram-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: _regToken, otp_code: code, device_fingerprint: deviceFingerprint || null }),
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    window.location.href = data.redirect || '/tariff.html';
                 } else {
-                    errorDiv.textContent = data.error || 'Xatolik yuz berdi';
-                    errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
-                    btn.disabled = false;
-                    btn.textContent = 'Ro\'yxatdan o\'tish';
+                    otpError.textContent = data.error === 'sinov_used'
+                        ? 'Bu qurilmada yoki Telegram hisobda Sinov tarifi allaqachon ishlatilgan.'
+                        : (data.error || 'Xatolik yuz berdi');
+                    otpError.style.display = 'block';
+                    verifyBtn.disabled = false;
+                    verifyBtn.textContent = '✓';
                 }
-            } catch (error) {
-                errorDiv.textContent = 'Xatolik: ' + error.message;
-                errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
-                btn.disabled = false;
-                btn.textContent = 'Ro\'yxatdan o\'tish';
+            } catch(err) {
+                otpError.textContent = 'Xatolik: ' + err.message;
+                otpError.style.display = 'block';
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = '✓';
             }
-        });
+        }
     </script>
     <script>
         // Typewriter animation for hero tagline
