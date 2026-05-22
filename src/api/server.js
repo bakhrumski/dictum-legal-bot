@@ -5213,8 +5213,29 @@ app.get('/auth/google/callback', async (req, res) => {
     const { sub: googleId, email, name, given_name, family_name } = profile;
     if (!googleId || !email) return res.redirect('/login.html?error=google_failed');
 
+    let stateData = {};
+    try { stateData = JSON.parse(Buffer.from(state || '', 'base64url').toString()); } catch(e) {}
+    const mode = stateData.mode || 'login';
+
     let user = (await pool.query('SELECT * FROM admins WHERE google_id = $1 OR (email = $2 AND email IS NOT NULL)', [googleId, email])).rows[0];
+
+    // ── RECOVER mode: find account and issue reset token, never create ──
+    if (mode === 'recover') {
+      if (!user) return res.redirect('/login.html?error=google_account_not_found');
+      const resetToken = require('crypto').randomBytes(20).toString('hex');
+      const { verificationTokens } = require('../verification-store');
+      verificationTokens.set('pwreset_' + resetToken, { adminId: user.id, expiresAt: Date.now() + 15 * 60 * 1000 });
+      return res.redirect('/login.html?recover=' + resetToken);
+    }
+
     if (!user) {
+      // ── Strict Sinov abuse: block Google accounts that already used the trial ──
+      const abuseCheck = await pool.query(
+        `SELECT id FROM admins WHERE (google_id = $1 OR (email = $2 AND email IS NOT NULL)) AND bepul_used = TRUE`,
+        [googleId, email]
+      );
+      if (abuseCheck.rows.length > 0) return res.redirect('/login.html?error=sinov_used');
+
       const randomPwd = await bcrypt.hash(Math.random().toString(36), 10);
       const fullName = name || `${given_name || ''} ${family_name || ''}`.trim() || email;
       const ins = await pool.query(
@@ -5259,6 +5280,27 @@ app.post('/api/recover/init', async (req, res) => {
     console.error('[Recover]', err);
     res.json({ sent: false, reason: 'error' });
   }
+});
+
+// POST /api/recover/bot-init — anonymous Telegram recovery (no username needed)
+// Bot identifies user by their permanent telegram_user_id when they open the bot.
+app.post('/api/recover/bot-init', (req, res) => {
+  const { botRecoverSessions } = require('../verification-store');
+  const token = require('crypto').randomBytes(14).toString('hex');
+  botRecoverSessions.set(token, { confirmed: false, resetToken: null, createdAt: Date.now() });
+  setTimeout(() => botRecoverSessions.delete(token), 10 * 60 * 1000);
+  // Also store under botinit_ key so bot.js can signal back via verificationTokens
+  const { verificationTokens: vt } = require('../verification-store');
+  vt.set('botinit_' + token, { confirmed: false, resetToken: null, expiresAt: Date.now() + 10 * 60 * 1000 });
+  const botUsername = process.env.REG_BOT_USERNAME || process.env.BOT_USERNAME || 'juristAI_registration_bot';
+  res.json({ token, botUsername });
+});
+
+app.get('/api/recover/status/:token', (req, res) => {
+  const { verificationTokens: vt } = require('../verification-store');
+  const s = vt.get('botinit_' + req.params.token);
+  if (!s) return res.json({ confirmed: false, expired: true });
+  res.json({ confirmed: s.confirmed, resetToken: s.resetToken || null });
 });
 
 // ========== COMMON USER REGISTRATION (auto-approval, no master needed) ==========
@@ -5515,16 +5557,31 @@ app.post('/api/password-recovery/verify', async (req, res) => {
 });
 
 // POST /api/password-recovery/reset — set new password
+// Accepts both legacy code-verified tokens and new direct pwreset_ tokens
 app.post('/api/password-recovery/reset', async (req, res) => {
   try {
     const { token, code, new_password } = req.body;
-    if (!token || !code || !new_password) {
+    if (!token || !new_password) {
       return res.status(400).json({ error: 'Barcha maydonlarni to\'ldiring' });
     }
     if (new_password.length < 6) {
       return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
     }
 
+    // New flow: direct token from Google OAuth or bot recovery (no code)
+    const directPending = verificationTokens.get('pwreset_' + token);
+    if (directPending) {
+      if (Date.now() > directPending.expiresAt) {
+        return res.status(400).json({ error: 'Sessiya muddati o\'tgan. Qayta urinib ko\'ring.' });
+      }
+      const hashedPassword = await bcrypt.hash(new_password, 10);
+      await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hashedPassword, directPending.adminId]);
+      verificationTokens.delete('pwreset_' + token);
+      return res.json({ success: true });
+    }
+
+    // Legacy flow: code-verified token
+    if (!code) return res.status(400).json({ error: 'Tasdiqlash kodi kerak' });
     const pending = verificationTokens.get('recovery_' + token);
     if (!pending || Date.now() > pending.expiresAt) {
       return res.status(400).json({ error: 'Sessiya muddati o\'tgan. Qayta urinib ko\'ring.' });

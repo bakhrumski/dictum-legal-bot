@@ -246,9 +246,42 @@ bot.onText(/\/start(.*)/, (msg, match) => {
     return;
   }
 
-  // Deep link: /start recover_TOKEN — deliver password recovery code
+  // Deep link: /start recover_TOKEN — anonymous recovery (identify by telegram_user_id)
   if (param.startsWith('recover_')) {
     const deepToken = param.replace('recover_', '');
+    const crypto = require('crypto');
+    const appUrl = process.env.APP_URL || ('https://' + (process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:3000'));
+
+    // Look up the user by their permanent telegram_user_id (no username needed)
+    const tgId = String(msg.from.id);
+    try {
+      const row = (await pool.query('SELECT id FROM admins WHERE telegram_user_id = $1', [tgId])).rows[0];
+      if (row) {
+        const resetToken = crypto.randomBytes(20).toString('hex');
+        verificationTokens.set('pwreset_' + resetToken, { adminId: row.id, expiresAt: Date.now() + 15 * 60 * 1000 });
+        const recoverLink = `${appUrl}/login.html?recover=${resetToken}`;
+        await bot.sendMessage(chatId, `🔑 Parolni tiklash havolasi:\n${recoverLink}\n\nHavola 15 daqiqa amal qiladi.`);
+        // Signal the browser poller via the shared store
+        const botInitKey = 'botinit_' + deepToken;
+        if (verificationTokens.has(botInitKey)) {
+          const s = verificationTokens.get(botInitKey);
+          s.confirmed = true;
+          s.resetToken = resetToken;
+        }
+        return;
+      }
+      bot.sendMessage(chatId, '❌ Bu Telegram hisobi bilan ro\'yxatdan o\'tilmagan. Iltimos, avval ro\'yxatdan o\'ting.');
+      return;
+    } catch(e) {
+      console.error('[Bot recovery]', e.message);
+      bot.sendMessage(chatId, '⚠️ Xatolik yuz berdi. Iltimos, keyinroq urinib ko\'ring.');
+      return;
+    }
+  }
+
+  // Legacy recover_ with old code-based flow (kept for backward compat)
+  if (param.startsWith('legacy_recover_')) {
+    const deepToken = param.replace('legacy_recover_', '');
     const pending = verificationTokens.get('recovery_' + deepToken);
     if (pending && Date.now() < pending.expiresAt) {
       pending.chatId = chatId;
