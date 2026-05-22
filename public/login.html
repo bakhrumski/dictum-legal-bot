@@ -773,10 +773,15 @@
                             <button type="submit" class="btn">Kirish</button>
                             <button type="button" class="btn btn-outline" onclick="showView('register')">Ro'yxatdan o'tish</button>
                         </div>
-                        <div style="text-align:center;margin-top:10px;">
-                            <a href="#" class="forgot-link" onclick="event.preventDefault();showView('recovery')">Hisobni tiklash</a>
-                        </div>
                     </form>
+
+                    <div style="margin-top:16px;">
+                        <div class="reg-divider" style="margin:0 0 12px">yoki</div>
+                        <button type="button" class="google-reg-toggle" style="width:100%" onclick="window.location.href='/auth/google?mode=login'">
+                            <svg viewBox="0 0 48 48" style="width:18px;height:18px;flex-shrink:0"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.6 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4-4.1 5.3l6.2 5.2C41.4 35.6 44 30.3 44 24c0-1.3-.1-2.6-.4-3.5z"/></svg>
+                            <span>Google bilan kirish</span>
+                        </button>
+                    </div>
 
                     <p class="form-subtitle" style="margin-top:66px;">Yuristga savolingiz bo'lsa yoki hisobingizga kirishda xatolik yuz bergan bo'lsa</p>
                     <a class="telegram-btn" href="https://t.me/yuristga_savolbot" target="_blank">
@@ -921,18 +926,24 @@
 
                 <!-- PASSWORD RECOVERY VIEW -->
                 <div class="recovery-form">
-                    <h1 class="form-heading">Hisobni tiklash</h1>
-                    <p class="form-subtitle">Hisobingizni tiklash uchun ro'yxatdan o'tgan Telegram botga /start yuboring</p>
+                    <h1 class="form-heading">Parolni tiklash</h1>
+                    <p class="form-subtitle">Hisobingizni tasdiqlash uchun ro'yxatdan o'tgan usulni tanlang</p>
 
                     <div id="recoveryError" class="error-message"></div>
 
-                    <!-- STEP 1: Enter telegram username & get code -->
+                    <!-- STEP 1: Choose recovery method -->
                     <div class="recovery-step active" id="recoveryStep1">
-                        <div class="form-group has-icon">
-                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
-                            <input type="text" id="recoveryTelegram" placeholder="telegram username" required>
+                        <div style="display:flex;gap:12px;margin-bottom:12px;">
+                            <button type="button" id="recoveryTgBtn" onclick="startTgRecovery()" style="flex:1;padding:14px;border:1px solid var(--border);background:var(--bg-card);border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--fg-1);transition:background 0.15s;">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="#0088cc"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                                Telegram orqali
+                            </button>
+                            <button type="button" onclick="window.location.href='/auth/google?mode=recover'" style="flex:1;padding:14px;border:1px solid var(--border);background:var(--bg-card);border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--fg-1);transition:background 0.15s;">
+                                <svg width="32" height="32" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.6 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4-4.1 5.3l6.2 5.2C41.4 35.6 44 30.3 44 24c0-1.3-.1-2.6-.4-3.5z"/></svg>
+                                Google orqali
+                            </button>
                         </div>
-                        <button type="button" class="btn" id="recoveryCodeBtn" onclick="sendRecoveryCode()">Kod olish</button>
+                        <div id="recoveryTgStatus" style="font-size:13px;display:none;margin-top:8px;"></div>
                         <div class="verify-success" id="recoveryCodeMsg"></div>
                         <div class="agreement-error" id="recoveryCodeError" style="display:none"></div>
                     </div>
@@ -1140,7 +1151,11 @@
         function updateRegBtn() {
             const ok = document.getElementById('privacyCheck').checked && document.getElementById('ofertaCheck').checked;
             document.getElementById('registerBtn').disabled = !ok;
+            const gBtn = document.querySelector('.google-reg-toggle');
+            if (gBtn) { gBtn.disabled = !ok; gBtn.style.opacity = ok ? '1' : '0.45'; gBtn.style.cursor = ok ? 'pointer' : 'not-allowed'; }
         }
+        // Disable Google button initially (requires agreements)
+        document.addEventListener('DOMContentLoaded', () => updateRegBtn());
 
         // Login form
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
@@ -1201,9 +1216,67 @@
             }
         })();
 
+        // Handle ?recover=TOKEN and ?error= in URL on page load
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const recoverToken = params.get('recover');
+            const err = params.get('error');
+            if (recoverToken) {
+                recoveryToken = recoverToken;
+                showView('recovery');
+                document.querySelectorAll('.recovery-step').forEach(s => s.classList.remove('active'));
+                document.getElementById('recoveryStep3').classList.add('active');
+                history.replaceState({}, '', '/login.html');
+            }
+            if (err === 'google_account_not_found') {
+                showView('recovery');
+                document.getElementById('recoveryError').textContent = 'Bu Google hisobi bilan ro\'yxatdan o\'tilmagan.';
+            } else if (err === 'google_failed') {
+                document.getElementById('loginError') && (document.getElementById('loginError').textContent = 'Google orqali kirishda xatolik yuz berdi.');
+            }
+        })();
+
         // Password recovery state
         let recoveryToken = '';
         let recoveryUsername = '';
+
+        // Telegram-based recovery (no username needed — bot identifies by telegram_user_id)
+        let _tgRecovPollInterval = null;
+        async function startTgRecovery() {
+            const btn = document.getElementById('recoveryTgBtn');
+            const statusEl = document.getElementById('recoveryTgStatus');
+            const errorEl = document.getElementById('recoveryCodeError');
+            btn.disabled = true;
+            errorEl.style.display = 'none';
+            try {
+                const resp = await fetch('/api/recover/bot-init', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await resp.json();
+                if (!resp.ok || !data.token) throw new Error(data.error || 'Xatolik');
+                const botUsername = data.botUsername || REG_BOT_USERNAME;
+                const deepLink = 'https://t.me/' + botUsername + '?start=recover_' + data.token;
+                statusEl.innerHTML = '<a href="' + deepLink + '" target="_blank" style="color:var(--accent);font-weight:700;text-decoration:underline;">Botni oching</a> — Telegram ochiladi, havola shu yerga yuboriladi.';
+                statusEl.style.display = 'block';
+                if (_tgRecovPollInterval) clearInterval(_tgRecovPollInterval);
+                let elapsed = 0;
+                _tgRecovPollInterval = setInterval(async () => {
+                    elapsed += 2500;
+                    if (elapsed > 120000) { clearInterval(_tgRecovPollInterval); btn.disabled = false; statusEl.textContent = 'Vaqt tugadi. Qayta urinib ko\'ring.'; return; }
+                    try {
+                        const r = await fetch('/api/recover/status/' + data.token);
+                        const d = await r.json();
+                        if (d.resetToken) {
+                            clearInterval(_tgRecovPollInterval);
+                            recoveryToken = d.resetToken;
+                            document.querySelectorAll('.recovery-step').forEach(s => s.classList.remove('active'));
+                            document.getElementById('recoveryStep3').classList.add('active');
+                            statusEl.style.display = 'none';
+                        }
+                    } catch(e) {}
+                }, 2500);
+            } catch(e) {
+                errorEl.textContent = e.message; errorEl.style.display = 'block'; btn.disabled = false;
+            }
+        }
 
         async function sendRecoveryCode() {
             const btn = document.getElementById('recoveryCodeBtn');

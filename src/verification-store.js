@@ -7,4 +7,8 @@ const verificationTokens = new Map();
 // Key: token (random hex), Value: { verified, telegramUserId, createdAt }
 const regSessions = new Map();
 
-module.exports = { verificationTokens, regSessions };
+// Bot-initiated recovery sessions (no username needed — bot identifies by telegram_user_id)
+// Key: token (random hex), Value: { confirmed, resetToken, createdAt }
+const botRecoverSessions = new Map();
+
+module.exports = { verificationTokens, regSessions, botRecoverSessions };
