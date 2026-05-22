@@ -1438,6 +1438,7 @@
         var _tgPollTimeout = null;
 
         function startGoogleAuth() {
+            if (deviceFingerprint) document.cookie = 'dfp=' + deviceFingerprint + '; path=/; SameSite=Lax; max-age=300';
             window.location.href = '/auth/google?mode=register';
         }
 
@@ -1565,6 +1566,7 @@
                     telegram_user_id: verifiedTelegramId,
                     accept_offer:   document.getElementById('ofertaCheck').checked,
                     accept_privacy: document.getElementById('privacyCheck').checked,
+                    device_fingerprint: deviceFingerprint || null,
                 };
                 try {
                     const response = await fetch('/api/register/common', {
@@ -1662,5 +1664,19 @@
             }, 1500); // wait for 3 blinks
         })();
     </script>
+<script>
+    // FingerprintJS — lightweight browser fingerprint for Sinov abuse prevention
+    let deviceFingerprint = null;
+    (function() {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js';
+        script.onload = function() {
+            FingerprintJS.load().then(fp => fp.get()).then(result => {
+                deviceFingerprint = result.visitorId;
+            }).catch(() => {});
+        };
+        document.head.appendChild(script);
+    })();
+</script>
 </body>
 </html>
