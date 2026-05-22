@@ -213,7 +213,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
 // ========== START & HELP COMMANDS ==========
 
-bot.onText(/\/start(.*)/, (msg, match) => {
+bot.onText(/\/start(.*)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const username = msg.from.username || '';
   const param = (match[1] || '').trim();
