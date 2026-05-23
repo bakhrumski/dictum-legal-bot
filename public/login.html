@@ -976,10 +976,11 @@
             updateRegBtn();
         }
 
-        // File handling
+        // File handling (legacy — kept for non-common reg paths)
         function handleFile(input) {
             const zone = document.getElementById('fileZone');
             const nameEl = document.getElementById('fileName');
+            if (!zone || !nameEl) return;
             if (input.files.length > 0) {
                 nameEl.textContent = input.files[0].name;
                 zone.classList.add('has-file');
@@ -989,18 +990,20 @@
             }
         }
 
-        // Drag and drop
+        // Drag and drop (only if fileZone exists)
         const fileZone = document.getElementById('fileZone');
-        fileZone.addEventListener('dragover', e => { e.preventDefault(); fileZone.classList.add('dragover'); });
-        fileZone.addEventListener('dragleave', () => fileZone.classList.remove('dragover'));
-        fileZone.addEventListener('drop', e => {
-            e.preventDefault();
-            fileZone.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) {
-                document.getElementById('regDocument').files = e.dataTransfer.files;
-                handleFile(document.getElementById('regDocument'));
-            }
-        });
+        if (fileZone) {
+            fileZone.addEventListener('dragover', e => { e.preventDefault(); fileZone.classList.add('dragover'); });
+            fileZone.addEventListener('dragleave', () => fileZone.classList.remove('dragover'));
+            fileZone.addEventListener('drop', e => {
+                e.preventDefault();
+                fileZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    document.getElementById('regDocument').files = e.dataTransfer.files;
+                    handleFile(document.getElementById('regDocument'));
+                }
+            });
+        }
 
         // Policy system
         let currentPolicyType = null;
