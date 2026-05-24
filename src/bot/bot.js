@@ -326,6 +326,58 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     return;
   }
 
+  // Fallback for bare /start (Telegram sometimes strips the start parameter on
+  // existing chats). Find the most recently created pending session and attach
+  // this user to it, then send the OTP code as if the deep link had worked.
+  if (!param) {
+    const WINDOW_MS = 120000; // 2 minutes
+    const now = Date.now();
+    let bestReg = null, bestRegTime = 0;
+    for (const [token, s] of regSessions.entries()) {
+      if (!s.otp && (now - s.createdAt) < WINDOW_MS && s.createdAt > bestRegTime) {
+        bestReg = { token, s }; bestRegTime = s.createdAt;
+      }
+    }
+    let bestLogin = null, bestLoginTime = 0;
+    for (const [token, s] of loginSessions.entries()) {
+      if (!s.otp && (now - s.createdAt) < WINDOW_MS && s.createdAt > bestLoginTime) {
+        bestLogin = { token, s }; bestLoginTime = s.createdAt;
+      }
+    }
+
+    // Prefer whichever is more recent
+    if (bestReg && bestRegTime >= bestLoginTime) {
+      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      bestReg.s.otp = otp;
+      bestReg.s.telegramUserId = String(msg.from.id);
+      bestReg.s.firstName = msg.from.first_name || '';
+      bestReg.s.lastName = msg.from.last_name || '';
+      bestReg.s.username = msg.from.username || '';
+      bestReg.s.otpSentAt = now;
+      return bot.sendMessage(chatId,
+        `🔐 *JuristAI ro'yxatdan o'tish kodi:*\n\n*${otp}*\n\nUshbu 4 raqamli kodni saytdagi maydoniga kiriting.\nKod 10 daqiqa amal qiladi.`,
+        { parse_mode: 'Markdown' });
+    }
+    if (bestLogin) {
+      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      bestLogin.s.otp = otp;
+      bestLogin.s.telegramUserId = String(msg.from.id);
+      bestLogin.s.otpSentAt = now;
+      return bot.sendMessage(chatId,
+        `🔑 *JuristAI kirish kodi:*\n\n*${otp}*\n\nUshbu 4 raqamli kodni saytdagi maydoniga kiriting.\nKod 10 daqiqa amal qiladi.`,
+        { parse_mode: 'Markdown' });
+    }
+
+    // No pending session — also try recovery
+    try {
+      const tgId = String(msg.from.id);
+      const row = (await pool.query('SELECT id FROM admins WHERE telegram_user_id = $1', [tgId])).rows[0];
+      if (row) {
+        // Existing user with no pending session — show welcome
+      }
+    } catch(e) { console.error('[Bot bare-start]', e.message); }
+  }
+
   const welcomeMessage = `
 Assalomu aleykum, ${msg.from.first_name}! 👋
 
