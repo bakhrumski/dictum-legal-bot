@@ -254,8 +254,10 @@
         .bottom-tab-bar {
             position: fixed;
             bottom: 0;
-            left: 0;
-            right: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 32px);
+            max-width: calc(1400px - 32px);
             height: 64px;
             background: var(--glass-bg-strong);
             backdrop-filter: blur(var(--glass-blur-strong));
@@ -267,6 +269,7 @@
             padding-bottom: env(safe-area-inset-bottom, 0px);
             z-index: 900;
             box-shadow: 0 -2px 20px rgba(0,0,0,0.06);
+            border-radius: 20px 20px 0 0;
         }
         [data-theme="dark"] .bottom-tab-bar {
             background: rgba(13, 17, 23, 0.95);
