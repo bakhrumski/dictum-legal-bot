@@ -4,11 +4,15 @@
 const verificationTokens = new Map();
 
 // Registration sessions for Telegram OTP flow
-// Key: token (random hex), Value: { verified, telegramUserId, createdAt }
+// Key: token (random hex), Value: { otp, telegramUserId, firstName, lastName, username, otpSentAt }
 const regSessions = new Map();
+
+// Login sessions for Telegram OTP flow
+// Key: token (random hex), Value: { otp, telegramUserId, otpSentAt }
+const loginSessions = new Map();
 
 // Bot-initiated recovery sessions (no username needed — bot identifies by telegram_user_id)
 // Key: token (random hex), Value: { confirmed, resetToken, createdAt }
 const botRecoverSessions = new Map();
 
-module.exports = { verificationTokens, regSessions, botRecoverSessions };
+module.exports = { verificationTokens, regSessions, loginSessions, botRecoverSessions };

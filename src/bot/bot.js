@@ -9,7 +9,7 @@ const fs = require('fs');
 const https = require('https');
 const path = require('path');
 
-const { verificationTokens, regSessions } = require('../verification-store');
+const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
 const {
   isJustifyAvailable,
   askJustify,
@@ -229,6 +229,27 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       return;
     }
     bot.sendMessage(chatId, '⏳ Tasdiqlash kodi topilmadi yoki muddati o\'tgan.\nIltimos, ro\'yxatdan o\'tish sahifasida qayta "Kod yuborish" tugmasini bosing.');
+    return;
+  }
+
+  // Deep link: /start login_TOKEN — generate 4-digit OTP for login
+  if (param.startsWith('login_')) {
+    const token = param.replace('login_', '').trim();
+    const session = loginSessions.get(token);
+    if (session && !session.otp) {
+      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      session.otp = otp;
+      session.telegramUserId = String(msg.from.id);
+      session.otpSentAt = Date.now();
+      bot.sendMessage(chatId,
+        `🔑 *JuristAI kirish kodi:*\n\n*${otp}*\n\nUshbu 4 raqamli kodni saytdagi maydoniga kiriting.\nKod 10 daqiqa amal qiladi.`,
+        { parse_mode: 'Markdown' }
+      );
+    } else if (session && session.otp) {
+      bot.sendMessage(chatId, `⚠️ Kirish kodi allaqachon yuborilgan. Saytga qayting va kodni kiriting.`);
+    } else {
+      bot.sendMessage(chatId, '⏳ Sessiya topilmadi yoki muddati o\'tgan.\nIltimos, saytda qayta urinib ko\'ring.');
+    }
     return;
   }
 
