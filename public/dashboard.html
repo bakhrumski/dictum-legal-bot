@@ -340,6 +340,7 @@
             overflow: hidden;
             /* 86px header + 16px header-mb + 20px body-pt + 64px tab-bar + 4px buffer */
             height: calc(100vh - 190px - env(safe-area-inset-bottom, 0px));
+            height: calc(100dvh - 190px - env(safe-area-inset-bottom, 0px));
         }
         .chat-tab-wrapper {
             display: grid;
@@ -2054,6 +2055,7 @@
             padding: 0;
             display: flex;
             height: calc(100vh - 190px - env(safe-area-inset-bottom, 0px));
+            height: calc(100dvh - 190px - env(safe-area-inset-bottom, 0px));
             border-radius: var(--ios-radius-lg);
             overflow: hidden;
             background: var(--glass-bg);
@@ -2743,6 +2745,7 @@
         @media (max-width: 768px) {
             .ai-workspace {
                 height: calc(100vh - 166px - env(safe-area-inset-bottom, 0px));
+                height: calc(100dvh - 166px - env(safe-area-inset-bottom, 0px));
             }
             .ai-sidebar {
                 position: fixed;
@@ -2802,6 +2805,7 @@
         @media (max-width: 480px) {
             .ai-workspace {
                 height: calc(100vh - 147px - env(safe-area-inset-bottom, 0px));
+                height: calc(100dvh - 147px - env(safe-area-inset-bottom, 0px));
                 border-radius: 0;
                 border: none;
             }
@@ -4683,7 +4687,7 @@
             .tab-bar-item { min-width: 48px; padding: 6px 8px; }
             body { padding-bottom: calc(56px + 12px + env(safe-area-inset-bottom, 0px)) !important; }
             /* 70px header + 16px header-mb + 20px body-pt + 56px tab-bar + 16px buffer */
-            #tabChat.tab-view.active { height: calc(100vh - 178px - env(safe-area-inset-bottom, 0px)); }
+            #tabChat.tab-view.active { height: calc(100vh - 178px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 178px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius); }
 
             /* --- Mobile header --- */
@@ -4731,7 +4735,7 @@
             .bottom-tab-bar { height: 50px; }
             body { padding-bottom: calc(50px + 8px + env(safe-area-inset-bottom, 0px)) !important; }
             /* 57px header + 16px header-mb + 20px body-pt + 50px tab-bar + 16px buffer */
-            #tabChat.tab-view.active { height: calc(100vh - 159px - env(safe-area-inset-bottom, 0px)); }
+            #tabChat.tab-view.active { height: calc(100vh - 159px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 159px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius-sm); }
 
             header { height: 57px; max-height: 57px; padding: 6px 8px; }
