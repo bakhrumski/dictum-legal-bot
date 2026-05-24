@@ -794,16 +794,33 @@
 
                     <div style="margin-top:16px;">
                         <div class="reg-divider" style="margin:0 0 12px">yoki</div>
-                        <button type="button" class="google-reg-toggle" style="width:100%" onclick="window.location.href='/auth/google?mode=login'">
-                            <svg viewBox="0 0 48 48" style="width:18px;height:18px;flex-shrink:0"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.6 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4-4.1 5.3l6.2 5.2C41.4 35.6 44 30.3 44 24c0-1.3-.1-2.6-.4-3.5z"/></svg>
-                            <span>Google bilan kirish</span>
-                        </button>
+                        <div style="display:flex;gap:10px;">
+                            <button type="button" class="google-reg-toggle" style="flex:1" onclick="startTelegramLogin()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 14.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.496.969z"/></svg>
+                                <span>Telegram bilan kirish</span>
+                            </button>
+                            <button type="button" class="google-reg-toggle" style="flex:1" onclick="window.location.href='/auth/google?mode=login'">
+                                <svg viewBox="0 0 48 48" style="width:18px;height:18px;flex-shrink:0"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.7 1.1 7.8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.6 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4-4.1 5.3l6.2 5.2C41.4 35.6 44 30.3 44 24c0-1.3-.1-2.6-.4-3.5z"/></svg>
+                                <span>Google bilan kirish</span>
+                            </button>
+                        </div>
+                        <!-- Telegram login OTP block -->
+                        <div id="loginOtpBlock" style="display:none;margin-top:12px;">
+                            <div id="loginOtpStatus" style="font-size:13px;color:var(--text-muted);margin-bottom:8px;text-align:center;"></div>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <input type="text" id="loginOtpInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0 0 0 0"
+                                    style="flex:1;font-size:22px;text-align:center;letter-spacing:10px;padding:10px;border:2px solid var(--border,rgba(0,0,0,0.15));border-radius:10px;background:var(--input-bg,#fff);color:var(--text-main,#111);outline:none;"
+                                    onkeydown="if(event.key==='Enter')verifyLoginOtp()">
+                                <button type="button" id="loginOtpVerifyBtn" class="btn" style="padding:11px 18px;font-size:17px;" onclick="verifyLoginOtp()">✓</button>
+                            </div>
+                            <div id="loginOtpError" style="color:#d9534f;font-size:13px;margin-top:5px;display:none;text-align:center;"></div>
+                        </div>
                     </div>
 
-                    <p class="form-subtitle" style="margin-top:66px;">Yuristga savolingiz bo'lsa yoki hisobingizga kirishda xatolik yuz bergan bo'lsa</p>
+                    <p class="form-subtitle" style="margin-top:36px;">Huquqiy maslahat kerak bo'lsa quyidagi Telegram bot orqali murojaat qiling</p>
                     <a class="telegram-btn" href="https://t.me/yuristga_savolbot" target="_blank">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="#0088cc"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                        Telegram bot orqali murojaat qiling!
+                        @yuristga_savolbot
                     </a>
                 </div>
 
@@ -1388,6 +1405,72 @@
         document.getElementById('recoveryCode').addEventListener('input', function() {
             this.value = this.value.replace(/[^0-9]/g, '');
         });
+
+        // Telegram login (OTP via juristAI_registration_bot)
+        var _loginToken = null;
+
+        async function startTelegramLogin() {
+            const otpBlock = document.getElementById('loginOtpBlock');
+            const otpStatus = document.getElementById('loginOtpStatus');
+            const otpError = document.getElementById('loginOtpError');
+            otpError.style.display = 'none';
+            otpStatus.textContent = 'Yuklanmoqda...';
+            otpBlock.style.display = 'block';
+            try {
+                const resp = await fetch('/api/login-session', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await resp.json();
+                if (!resp.ok || !data.token) throw new Error(data.error || 'Xatolik');
+                _loginToken = data.token;
+                const botUsername = data.botUsername || 'juristAI_registration_bot';
+                const deepLink = 'https://t.me/' + botUsername + '?start=login_' + _loginToken;
+                window.open(deepLink, '_blank');
+                otpStatus.innerHTML = '<b>' + botUsername + '</b> botidan kelgan 4 raqamli kodni kiriting:';
+                document.getElementById('loginOtpInput').value = '';
+                setTimeout(() => document.getElementById('loginOtpInput').focus(), 100);
+            } catch(err) {
+                otpStatus.innerHTML = '<span style="color:#d9534f;">' + (err.message || 'Xatolik') + '</span>';
+            }
+        }
+
+        async function verifyLoginOtp() {
+            const code = document.getElementById('loginOtpInput').value.trim();
+            const otpError = document.getElementById('loginOtpError');
+            const verifyBtn = document.getElementById('loginOtpVerifyBtn');
+            otpError.style.display = 'none';
+            if (!code || code.length !== 4) {
+                otpError.textContent = '4 raqamli kodni to\'liq kiriting';
+                otpError.style.display = 'block';
+                return;
+            }
+            if (!_loginToken) {
+                otpError.textContent = 'Sessiya topilmadi. Telegram tugmasini qayta bosing.';
+                otpError.style.display = 'block';
+                return;
+            }
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = '...';
+            try {
+                const resp = await fetch('/api/login/telegram-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: _loginToken, otp_code: code }),
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    window.location.href = data.redirect || '/dashboard.html';
+                } else {
+                    otpError.textContent = data.error || 'Xatolik yuz berdi';
+                    otpError.style.display = 'block';
+                    verifyBtn.disabled = false;
+                    verifyBtn.textContent = '✓';
+                }
+            } catch(err) {
+                otpError.textContent = 'Xatolik: ' + err.message;
+                otpError.style.display = 'block';
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = '✓';
+            }
+        }
 
         // Registration via social accounts
         var _regToken = null;

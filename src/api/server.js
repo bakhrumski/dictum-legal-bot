@@ -10,7 +10,7 @@ const fs = require('fs');
 const { pool } = require('../database/db');
 
 // Shared in-memory store for Telegram verification codes (used by bot.js too)
-const { verificationTokens, regSessions } = require('../verification-store');
+const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
 const crypto = require('crypto');
 const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addExample, updateExample, deleteExample, getAllExamples, getDatasetStats } = require('../dataset/legal-dataset');
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
@@ -5162,6 +5162,51 @@ app.post('/api/reg-session', (req, res) => {
   setTimeout(() => regSessions.delete(token), 10 * 60 * 1000);
   const botUsername = process.env.REG_BOT_USERNAME || process.env.BOT_USERNAME || 'juristAI_registration_bot';
   res.json({ token, botUsername });
+});
+
+// POST /api/login-session — create a Telegram login OTP session
+app.post('/api/login-session', (req, res) => {
+  const token = crypto.randomBytes(12).toString('hex');
+  loginSessions.set(token, { otp: null, telegramUserId: null, createdAt: Date.now() });
+  setTimeout(() => loginSessions.delete(token), 10 * 60 * 1000);
+  const botUsername = process.env.REG_BOT_USERNAME || process.env.BOT_USERNAME || 'juristAI_registration_bot';
+  res.json({ token, botUsername });
+});
+
+// POST /api/login/telegram-otp — verify OTP and log user in
+app.post('/api/login/telegram-otp', async (req, res) => {
+  try {
+    const { token, otp_code } = req.body || {};
+    const session = loginSessions.get(token);
+    if (!session || !session.otp || !session.otpSentAt) {
+      return res.status(400).json({ error: 'Sessiya topilmadi. Telegram tugmasini qayta bosing.' });
+    }
+    if (Date.now() > session.otpSentAt + 10 * 60 * 1000) {
+      loginSessions.delete(token);
+      return res.status(400).json({ error: 'OTP muddati o\'tgan. Qayta urinib ko\'ring.' });
+    }
+    if (String(otp_code).trim() !== session.otp) {
+      return res.status(400).json({ error: 'OTP noto\'g\'ri. Qayta tekshirib kiriting.' });
+    }
+    const tgUserId = session.telegramUserId;
+    if (!tgUserId) return res.status(400).json({ error: 'Telegram hisob aniqlanmadi.' });
+
+    const row = (await pool.query('SELECT id, role, full_name FROM admins WHERE telegram_user_id = $1', [tgUserId])).rows[0];
+    if (!row) {
+      return res.status(404).json({ error: 'Bu Telegram hisob bilan ro\'yxatdan o\'tilmagan. Iltimos, avval ro\'yxatdan o\'ting.' });
+    }
+
+    req.session.isAuthenticated = true;
+    req.session.role = row.role;
+    req.session.adminId = row.id;
+    req.session.fullName = row.full_name;
+    await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
+    loginSessions.delete(token);
+    res.json({ success: true, redirect: '/dashboard.html' });
+  } catch (err) {
+    console.error('[login/telegram-otp]', err.message);
+    res.status(500).json({ error: 'Kirishda xatolik: ' + err.message });
+  }
 });
 
 app.get('/api/reg-session/:token', (req, res) => {
