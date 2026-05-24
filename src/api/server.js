@@ -159,6 +159,10 @@ process.on('uncaughtException', (err) => {
 // Import bot from bot.js (created with polling: false)
 const { bot } = require('../bot/bot');
 
+// Start the separate registration bot (juristAI_registration_bot) — always polls
+const { startRegBot } = require('../bot/reg-bot');
+startRegBot();
+
 // Catch ALL bot errors to prevent crashes
 bot.on('error', (err) => {
   console.error('[BOT] Bot error:', err.message || err);
@@ -5401,10 +5405,8 @@ app.post('/api/recover/init', async (req, res) => {
     if (!row || !row.telegram_user_id) return res.json({ sent: false, reason: 'not_found' });
     const token = crypto.randomBytes(16).toString('hex');
     verificationTokens.set('recover_' + token, { adminId: row.id, expiresAt: Date.now() + 10 * 60 * 1000 });
-    const TelegramBot = require('node-telegram-bot-api');
-    const regBot = process.env.REG_BOT_TOKEN
-      ? new TelegramBot(process.env.REG_BOT_TOKEN, { polling: false })
-      : require('../bot/bot').getBot();
+    const { getRegBot } = require('../bot/reg-bot');
+    const regBot = getRegBot() || require('../bot/bot').getBot();
     const recoverLink = `${process.env.APP_URL || 'https://' + process.env.RENDER_EXTERNAL_HOSTNAME}/login.html?recover=${token}`;
     await regBot.sendMessage(row.telegram_user_id, `🔑 Hisobni tiklash havolasi:\n${recoverLink}\n\nHavola 10 daqiqa amal qiladi.`);
     res.json({ sent: true });
