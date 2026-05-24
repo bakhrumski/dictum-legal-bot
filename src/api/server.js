@@ -5195,7 +5195,7 @@ app.post('/api/login/telegram-otp', async (req, res) => {
     const tgUserId = session.telegramUserId;
     if (!tgUserId) return res.status(400).json({ error: 'Telegram hisob aniqlanmadi.' });
 
-    const row = (await pool.query('SELECT id, role, full_name FROM admins WHERE telegram_user_id = $1', [tgUserId])).rows[0];
+    const row = (await pool.query('SELECT id, role, full_name, username FROM admins WHERE telegram_user_id = $1', [tgUserId])).rows[0];
     if (!row) {
       return res.status(404).json({ error: 'Bu Telegram hisob bilan ro\'yxatdan o\'tilmagan. Iltimos, avval ro\'yxatdan o\'ting.' });
     }
@@ -5203,6 +5203,7 @@ app.post('/api/login/telegram-otp', async (req, res) => {
     req.session.isAuthenticated = true;
     req.session.role = row.role;
     req.session.adminId = row.id;
+    req.session.username = row.username;
     req.session.fullName = row.full_name;
     await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
     loginSessions.delete(token);
@@ -5384,9 +5385,11 @@ app.get('/auth/google/callback', async (req, res) => {
       await pool.query('UPDATE admins SET google_id = $1, email_verified = TRUE WHERE id = $2', [googleId, user.id]);
     }
 
+    req.session.isAuthenticated = true;
     req.session.adminId = user.id;
     req.session.role = user.role;
-    req.session.adminName = user.full_name;
+    req.session.username = user.username;
+    req.session.fullName = user.full_name;
     await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
     res.redirect('/dashboard.html');
   } catch (err) {
