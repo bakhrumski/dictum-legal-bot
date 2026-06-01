@@ -8512,10 +8512,23 @@
         function downloadAiMsg(btn) {
             var msgEl = btn.closest('.ai-chat-msg');
             var text = msgEl.getAttribute('data-raw') || msgEl.querySelector('.ai-analysis-content').innerText;
+            var styleBlock =
+                '<style>' +
+                '@font-face{font-family:Calibri;panose-1:2 15 5 2 2 2 4 3 2 4;}' +
+                // Word default paragraph + table styles (Normal style) — forces Calibri
+                '/* Default Word styles */' +
+                'p.MsoNormal,li.MsoNormal,div.MsoNormal{font-family:Calibri,sans-serif;font-size:12.0pt;}' +
+                // Explicit selectors — Word honours element-level rules reliably
+                'body,p,li,td,th,span,div,a,h1,h2,h3,h4,h5,h6,em,strong,b,i,ul,ol,table{' +
+                'font-family:Calibri,sans-serif !important;font-style:normal !important;}' +
+                'body{font-size:12pt;line-height:1.6;}' +
+                'h1,h2,h3,h4{font-weight:bold;}' +
+                'em{font-style:normal !important;}' +
+                '</style>';
             var docHtml = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
-                '<head><meta charset="utf-8"><style>*{font-family:Calibri,sans-serif !important;font-style:normal !important;}body{font-size:12pt;line-height:1.6;}h1,h2,h3,h4{font-weight:bold;}em{font-style:normal !important;}</style></head>' +
+                '<head><meta charset="utf-8">' + styleBlock + '</head>' +
                 '<body>' + simpleMarkdown(text) + '</body></html>';
-            var blob = new Blob([docHtml], { type: 'application/msword' });
+            var blob = new Blob(['﻿' + docHtml], { type: 'application/msword' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
