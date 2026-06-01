@@ -4719,7 +4719,99 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// GET /api/rag/uploaded-documents — list all uploaded documents
+// POST /api/rag/reingest-registry — refresh all core codes from their CURRENT
+// lex.uz versions. fetchLexDocument() auto-follows historical-version banners
+// (see PR #57), and each law's old chunks are replaced by source_url, so this
+// brings the entire corpus up to the latest published text in one click.
+app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
+  const { fetchLexDocument } = require('../rag/fetch-lex');
+  const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
+  const { insertStructuredChunks } = require('../rag/advanced-corpus');
+  const { getEmbeddingsBatch } = require('../rag/embeddings');
+  const { getAllLaws, getLawsForCategory } = require('../rag/lex-registry');
+
+  const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+  const onlyCategory = (req.body && req.body.category) || null;
+  const laws = onlyCategory ? getLawsForCategory(onlyCategory) : getAllLaws();
+  if (laws.length === 0) return res.status(400).json({ error: 'Registrda qonun topilmadi' });
+
+  const results = [];
+  for (const law of laws) {
+    const cat = law.category || onlyCategory;
+    const cleanUrl = law.lex_url.split('#')[0];
+    try {
+      const doc = await fetchLexDocument(cleanUrl);
+      const lexMeta = doc.metadata || {};
+      if (!doc.body || doc.body.trim().length < 100) {
+        results.push({ law: law.law_name, ok: false, error: 'bo\'sh hujjat' });
+        continue;
+      }
+      const urlHint = cleanUrl.includes('/uz/') ? 'uz' : null;
+      const hasUzbekMarkers = /\b(modda|bob|qism|huquq|qonun)\b/i.test((doc.body || '').substring(0, 2000));
+      const inferredLanguage = urlHint || (hasUzbekMarkers ? 'uz' : 'ru');
+      const rawHtml = doc.rawHtml || '';
+
+      const chunks = chunkLegalDocumentStructured(rawHtml || doc.body, {
+        ...lexMeta,
+        law_name: law.law_name,
+        doc_id: law.doc_id,
+        source_url: cleanUrl,
+        category: cat,
+        is_valid: true,
+        is_active: lexMeta.is_active !== false,
+        status_label: lexMeta.status_label || null,
+        adoption_date: lexMeta.adoption_date || law.enforcement_date || null,
+        document_number: lexMeta.document_number || null,
+        language: lexMeta.language || inferredLanguage,
+        source_type: 'law_text',
+        quality_score: 0.8,
+        verified_by: req.session.adminId,
+      }, { isHtml: Boolean(rawHtml) });
+
+      if (chunks.length === 0) {
+        results.push({ law: law.law_name, ok: false, error: 'bo\'lak ajratilmadi' });
+        continue;
+      }
+
+      let embeddings = [];
+      let embeddedCount = 0;
+      if (apiKey) {
+        try {
+          embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
+          embeddedCount = embeddings.length;
+        } catch (embErr) {
+          console.warn('[REINGEST] Embedding failed for', law.law_name, '-', embErr.message);
+        }
+      }
+
+      // Replace old chunks for both the registry doc_id and the source URL
+      await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1 OR doc_id = $2`, [cleanUrl, law.doc_id]);
+      for (let i = 0; i < chunks.length; i++) {
+        chunks[i].chunkIndex = i;
+        chunks[i].embedding = embeddings[i] || null;
+      }
+      await insertStructuredChunks(chunks);
+      await logIngest({
+        sourceType: 'url', sourceUrl: cleanUrl, lawName: law.law_name, category: cat,
+        chunksTotal: chunks.length, embedded: embeddedCount, language: inferredLanguage,
+        ingestBy: req.session?.adminId || null,
+      }).catch(() => {});
+
+      results.push({ law: law.law_name, ok: true, chunks: chunks.length, embedded: embeddedCount });
+      console.log(`[REINGEST] ${law.law_name}: ${chunks.length} chunks, ${embeddedCount} embedded`);
+    } catch (err) {
+      console.error('[REINGEST] Failed:', law.law_name, err.message);
+      results.push({ law: law.law_name, ok: false, error: err.message });
+    }
+    // Gentle rate-limit between lex.uz fetches
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  const ok = results.filter(r => r.ok).length;
+  res.json({ success: true, total: laws.length, succeeded: ok, failed: laws.length - ok, results });
+});
+
+
 app.get('/api/rag/uploaded-documents', requireMasterAdmin, async (req, res) => {
   try {
     const result = await pool.query(`

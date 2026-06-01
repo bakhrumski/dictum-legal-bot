@@ -5263,6 +5263,14 @@
 
                     <div id="docUploadStatus" class="ai-doc-upload-status" style="display:none"></div>
 
+                    <!-- Refresh all core codes to their current lex.uz versions -->
+                    <button class="ai-doc-upload-btn" id="reingestRegistryBtn" onclick="reingestRegistry()"
+                        style="margin-top:8px;background:var(--navy-600);"
+                        title="Barcha asosiy kodekslarni lex.uz dagi eng so'nggi versiyasiga yangilash">
+                        ♻️ Barcha kodekslarni yangilash
+                    </button>
+                    <div id="reingestStatus" class="ai-doc-upload-status" style="display:none"></div>
+
                     <!-- Ingest Log -->
                     <div style="margin-top:10px">
                         <button onclick="toggleIngestLog()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
@@ -7830,6 +7838,47 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = '⬇ Lex.uz dan yuklash';
+            }
+        }
+
+        async function reingestRegistry() {
+            var btn = document.getElementById('reingestRegistryBtn');
+            var statusEl = document.getElementById('reingestStatus');
+            if (!confirm("Barcha asosiy kodekslar lex.uz dagi eng so'nggi versiyasiga yangilanadi. Bu bir necha daqiqa olishi mumkin. Davom etilsinmi?")) return;
+
+            btn.disabled = true;
+            btn.textContent = 'Yangilanmoqda... (kuting)';
+            statusEl.style.display = 'none';
+
+            try {
+                var resp = await fetch('/api/rag/reingest-registry', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({})
+                });
+                var data = await resp.json();
+                if (resp.ok && data.success) {
+                    statusEl.className = 'ai-doc-upload-status success';
+                    var lines = (data.results || []).map(function(r) {
+                        return (r.ok ? '✅ ' : '❌ ') + escapeHtml(r.law) +
+                            (r.ok ? ' — ' + r.chunks + ' bo\'lak' : ' — ' + escapeHtml(r.error || ''));
+                    }).join('<br>');
+                    statusEl.innerHTML = '<b>Yangilandi: ' + data.succeeded + '/' + data.total + '</b><br>' + lines;
+                    statusEl.style.display = 'block';
+                    if (_ingestLogOpen) loadIngestLog();
+                } else {
+                    statusEl.className = 'ai-doc-upload-status error';
+                    statusEl.textContent = '❌ ' + (data.error || 'Xatolik yuz berdi');
+                    statusEl.style.display = 'block';
+                }
+            } catch(e) {
+                statusEl.className = 'ai-doc-upload-status error';
+                statusEl.textContent = '❌ Tarmoq xatoligi: ' + e.message;
+                statusEl.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '♻️ Barcha kodekslarni yangilash';
             }
         }
 
