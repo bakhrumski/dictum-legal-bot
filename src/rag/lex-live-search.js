@@ -60,6 +60,13 @@ async function searchLexUz(query, opts = {}) {
       const doc = await fetchLexDocument(docUrl);
       if (!doc.body || doc.body.trim().length === 0) continue;
 
+      // Skip if still a historical version after the auto-follow attempt
+      // (fetchLexDocument already tried to follow current_version_url)
+      if (doc.metadata.current_version_url) {
+        console.warn(`[LEX-LIVE] Skipping historical version: ${docUrl}`);
+        continue;
+      }
+
       const excerpt = extractRelevantSections(doc.body, query, maxChars);
       results.push({
         title: doc.title || 'Nomsiz hujjat',

@@ -94,6 +94,23 @@ async function fetchLexDocument(urlOrId) {
   console.log(`[FETCH-LEX] Downloaded ${(html.length / 1024).toFixed(0)} KB`);
 
   const parsed = parseLexHtml(html, url);
+
+  // ── Auto-follow to current version if lex.uz is showing a date-locked snapshot ──
+  // lex.uz shows "Hujjat DD.MM.YYYY sanasi holatiga" banner with
+  // an "Amaldagi versiyaga o'tish" link when the fetched URL is a
+  // historical version rather than the live document.
+  if (parsed.metadata.current_version_url) {
+    const currentUrl = parsed.metadata.current_version_url;
+    console.log(`[FETCH-LEX] Historical version detected at ${url} → fetching current: ${currentUrl}`);
+    try {
+      const currentHtml = await httpGet(currentUrl);
+      const currentParsed = parseLexHtml(currentHtml, currentUrl);
+      return { ...currentParsed, rawHtml: currentHtml };
+    } catch (err) {
+      console.warn(`[FETCH-LEX] Could not fetch current version (${err.message}), using historical`);
+    }
+  }
+
   return {
     ...parsed,
     rawHtml: html,
@@ -139,6 +156,37 @@ function parseLexHtml(html, sourceUrl) {
     metadata.is_active = false;
     metadata.status_label = metadata.status_label || 'Eski tahrir';
   }
+
+  // ── Historical-version detection ──────────────────────────────────────────
+  // lex.uz shows a banner "Hujjat DD.MM.YYYY sanasi holatiga" when the page
+  // is a date-locked snapshot (not the current live version). The banner also
+  // contains an "Amaldagi versiyaga o'tish" link to the current version.
+  // We capture that link so fetchLexDocument() can re-fetch the current doc.
+  metadata.current_version_url = null;
+  if (/sanasi\s+holatiga/i.test(fullText)) {
+    $('a').each((_, el) => {
+      const linkText = $(el).text().trim();
+      if (/Amaldagi\s+versiyaga\s+o['ʻ`']?tish/i.test(linkText)) {
+        const href = $(el).attr('href') || '';
+        if (href) {
+          metadata.current_version_url = href.startsWith('http')
+            ? href
+            : `https://lex.uz${href.startsWith('/') ? '' : '/'}${href}`;
+        }
+      }
+    });
+    // If no explicit link found, strip any date/version query params and retry base URL
+    if (!metadata.current_version_url && sourceUrl) {
+      try {
+        const u = new URL(sourceUrl);
+        u.search = '';
+        u.hash = '';
+        // Only use the stripped URL if it differs from the original (had params)
+        if (u.href !== sourceUrl) metadata.current_version_url = u.href;
+      } catch { /* invalid URL, ignore */ }
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   // Extract document title — lex.uz uses <a id="..."> or <div id="..."> for content
   const titleEl = $('div.ACT_TITLE a[id]').add($('div.ACT_TITLE > div[id]')).first();
