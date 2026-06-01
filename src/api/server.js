@@ -363,7 +363,8 @@ app.get('/', (req, res) => {
   if (req.session.isAuthenticated) {
     res.redirect('/dashboard.html');
   } else {
-    res.redirect('/login.html');
+    // Public landing page for visitors (CTAs lead to /login.html)
+    res.sendFile('index.html', { root: 'public' });
   }
 });
 

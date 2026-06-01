@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuristAI — Sun'iy intellekt asosidagi huquqiy yordamchi</title>
+<meta name="description" content="JuristAI — O'zbekiston qonunchiligi bo'yicha sun'iy intellekt yordamchisi. Lex.uz dagi eng so'nggi qonunlar asosida, manbalar bilan aniq javoblar.">
+<link rel="icon" href="/juristAI_logo.png">
+<link rel="stylesheet" href="/css/design-tokens.css">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --ink:#0B1A2B; --navy:#0E2236; --navy2:#16365A; --navy3:#1E4878;
+    --blue:#2C7BE5; --cyan:#00B9F2; --gold:#D6B379; --brass:#B08442;
+    --paper:#FBF8F2; --paper2:#F5EFE3; --line:rgba(255,255,255,.10);
+    --txt:#1A1410; --txt2:#5b5044; --radius:22px;
+    --grad:linear-gradient(120deg,#00B9F2 0%,#2C7BE5 45%,#6E3CC9 100%);
+    --grad-gold:linear-gradient(120deg,#D6B379,#B08442);
+  }
+  html{scroll-behavior:smooth}
+  body{
+    font-family:-apple-system,'Inter','Roboto','Segoe UI',sans-serif;
+    background:var(--paper); color:var(--txt);
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  a{text-decoration:none;color:inherit}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 22px}
+  .grad-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* ---------- NAV ---------- */
+  header{position:fixed;top:0;left:0;right:0;z-index:100;transition:.35s}
+  header.scrolled{background:rgba(11,26,43,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 1px 0 var(--line)}
+  nav{display:flex;align-items:center;justify-content:space-between;height:72px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:21px;color:#fff;letter-spacing:-.5px}
+  .brand img{height:34px}
+  .brand .ai{color:var(--cyan)}
+  .nav-links{display:flex;gap:30px}
+  .nav-links a{color:rgba(255,255,255,.82);font-size:15px;font-weight:500;transition:.2s}
+  .nav-links a:hover{color:#fff}
+  .nav-cta{display:flex;gap:12px;align-items:center}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px;border:none;cursor:pointer;border-radius:999px;transition:transform .2s,box-shadow .2s,background .2s;white-space:nowrap}
+  .btn-ghost{background:transparent;color:#fff;padding:10px 18px;border:1px solid rgba(255,255,255,.22)}
+  .btn-ghost:hover{background:rgba(255,255,255,.10)}
+  .btn-primary{background:var(--grad);color:#fff;padding:12px 24px;box-shadow:0 8px 26px rgba(0,185,242,.34)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 36px rgba(0,185,242,.46)}
+  .btn-lg{padding:16px 32px;font-size:17px}
+  .nav-toggle{display:none;background:none;border:none;cursor:pointer;flex-direction:column;gap:5px}
+  .nav-toggle span{width:24px;height:2px;background:#fff;border-radius:2px;transition:.3s}
+
+  /* ---------- HERO ---------- */
+  .hero{position:relative;padding:160px 0 110px;background:
+    radial-gradient(1100px 600px at 78% -8%,rgba(0,185,242,.20),transparent 60%),
+    radial-gradient(900px 600px at 10% 30%,rgba(110,60,201,.18),transparent 55%),
+    linear-gradient(160deg,#0B1A2B 0%,#0E2236 55%,#102844 100%);
+    overflow:hidden}
+  .orb{position:absolute;border-radius:50%;filter:blur(60px);opacity:.55;animation:float 14s ease-in-out infinite}
+  .orb1{width:380px;height:380px;background:radial-gradient(circle,#00B9F2,transparent 70%);top:-60px;right:6%}
+  .orb2{width:320px;height:320px;background:radial-gradient(circle,#6E3CC9,transparent 70%);bottom:-40px;left:-40px;animation-delay:-5s}
+  .orb3{width:260px;height:260px;background:radial-gradient(circle,#D6B379,transparent 70%);top:40%;right:32%;opacity:.32;animation-delay:-9s}
+  @keyframes float{0%,100%{transform:translateY(0) translateX(0)}50%{transform:translateY(-34px) translateX(18px)}}
+  .grid-overlay{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:54px 54px;mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 75%)}
+  .hero-inner{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr .95fr;gap:50px;align-items:center}
+  .pill{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid var(--line);color:#cfe6ff;padding:8px 16px;border-radius:999px;font-size:13.5px;font-weight:500;margin-bottom:26px}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+  h1.hero-title{font-size:clamp(36px,5vw,60px);line-height:1.05;font-weight:800;color:#fff;letter-spacing:-1.5px;margin-bottom:22px}
+  .hero p.sub{font-size:19px;line-height:1.6;color:rgba(255,255,255,.78);max-width:540px;margin-bottom:34px}
+  .hero-actions{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:30px}
+  .hero-trust{display:flex;gap:26px;flex-wrap:wrap;color:rgba(255,255,255,.62);font-size:14px}
+  .hero-trust b{color:#fff}
+
+  /* chat mockup */
+  .mock{position:relative;z-index:2}
+  .mock-card{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:var(--radius);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 30px 80px rgba(0,0,0,.45);overflow:hidden;animation:rise 1s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(30px) scale(.98)}to{opacity:1;transform:none}}
+  .mock-top{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .mock-top .d{width:11px;height:11px;border-radius:50%}
+  .mock-top .d:nth-child(1){background:#ff5f57}.mock-top .d:nth-child(2){background:#febc2e}.mock-top .d:nth-child(3){background:#28c840}
+  .mock-top .t{margin-left:10px;color:rgba(255,255,255,.6);font-size:13px}
+  .mock-body{padding:20px;display:flex;flex-direction:column;gap:14px}
+  .bubble{max-width:86%;padding:13px 16px;border-radius:16px;font-size:14.5px;line-height:1.55;opacity:0;animation:pop .5s ease forwards}
+  .bubble.user{align-self:flex-end;background:var(--grad);color:#fff;border-bottom-right-radius:5px}
+  .bubble.ai{align-self:flex-start;background:rgba(255,255,255,.92);color:#16243a;border-bottom-left-radius:5px}
+  .bubble.ai b{color:var(--navy3)}
+  .src{display:inline-block;margin-top:8px;font-size:12px;color:#2C7BE5;background:#eaf2fe;padding:4px 9px;border-radius:7px;font-weight:600}
+  @keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .typing{align-self:flex-start;display:flex;gap:5px;padding:14px 16px;background:rgba(255,255,255,.92);border-radius:16px}
+  .typing span{width:7px;height:7px;border-radius:50%;background:#9bb0c9;animation:blink 1.2s infinite}
+  .typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+
+  /* ---------- LOGOS / MARQUEE ---------- */
+  .marquee{background:var(--navy);padding:18px 0;overflow:hidden;white-space:nowrap;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)}
+  .marquee-track{display:inline-flex;gap:48px;animation:scroll 28s linear infinite}
+  .marquee-track span{color:rgba(255,255,255,.55);font-weight:600;font-size:15px;display:inline-flex;align-items:center;gap:10px}
+  .marquee-track span::before{content:"⚖️";font-size:14px}
+  @keyframes scroll{to{transform:translateX(-50%)}}
+
+  /* ---------- SECTIONS ---------- */
+  section.block{padding:96px 0}
+  .eyebrow{text-align:center;color:var(--brass);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-size:13px;margin-bottom:14px}
+  h2.sec{text-align:center;font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-1px;line-height:1.1;margin-bottom:16px}
+  .sec-sub{text-align:center;color:var(--txt2);font-size:18px;max-width:620px;margin:0 auto 56px;line-height:1.6}
+
+  /* stats */
+  .stats{background:linear-gradient(160deg,#0E2236,#102844);color:#fff;padding:64px 0}
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:30px;text-align:center}
+  .stat .num{font-size:46px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-1px}
+  .stat .lbl{color:rgba(255,255,255,.7);margin-top:6px;font-size:15px}
+
+  /* features */
+  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  .feat{background:#fff;border:1px solid var(--paper2);border-radius:var(--radius);padding:30px;transition:transform .3s,box-shadow .3s,border-color .3s}
+  .feat:hover{transform:translateY(-6px);box-shadow:0 22px 50px rgba(14,34,54,.12);border-color:transparent}
+  .feat .ic{width:54px;height:54px;border-radius:15px;display:grid;place-items:center;margin-bottom:18px;background:linear-gradient(135deg,#eaf6ff,#e7eefb)}
+  .feat .ic svg{width:26px;height:26px;stroke:var(--navy3)}
+  .feat h3{font-size:19px;font-weight:700;margin-bottom:9px}
+  .feat p{color:var(--txt2);font-size:15px;line-height:1.6}
+
+  /* how it works */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;counter-reset:s}
+  .step{position:relative;background:#fff;border:1px solid var(--paper2);border-radius:var(--radius);padding:34px 28px}
+  .step::before{counter-increment:s;content:counter(s);position:absolute;top:-20px;left:28px;width:42px;height:42px;border-radius:12px;background:var(--grad);color:#fff;font-weight:800;font-size:19px;display:grid;place-items:center;box-shadow:0 8px 20px rgba(0,185,242,.32)}
+  .step h3{margin:14px 0 8px;font-size:19px}
+  .step p{color:var(--txt2);line-height:1.6;font-size:15px}
+
+  /* showcase split */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:54px;align-items:center}
+  .split h2{text-align:left;font-size:clamp(26px,3.4vw,38px);font-weight:800;letter-spacing:-.8px;margin-bottom:18px;line-height:1.15}
+  .split ul{list-style:none;display:flex;flex-direction:column;gap:16px;margin-top:8px}
+  .split li{display:flex;gap:13px;font-size:16px;color:var(--txt2);line-height:1.5}
+  .split li svg{flex:0 0 24px;width:24px;height:24px;stroke:#28a745;margin-top:1px}
+  .showcase-card{background:linear-gradient(160deg,#0E2236,#143153);border-radius:var(--radius);padding:8px;box-shadow:0 30px 70px rgba(14,34,54,.3)}
+
+  /* pricing */
+  .pricing{background:var(--paper2)}
+  .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;align-items:stretch}
+  .plan{background:#fff;border:1px solid #e7ddca;border-radius:var(--radius);padding:30px 24px;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s}
+  .plan:hover{transform:translateY(-6px);box-shadow:0 22px 50px rgba(14,34,54,.12)}
+  .plan.featured{border:2px solid transparent;background:linear-gradient(#fff,#fff) padding-box,var(--grad) border-box;position:relative;box-shadow:0 22px 50px rgba(0,185,242,.18)}
+  .plan .ptag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--grad);color:#fff;font-size:12px;font-weight:700;padding:5px 14px;border-radius:999px}
+  .plan .pname{font-weight:700;font-size:17px;color:var(--navy2)}
+  .plan .pprice{font-size:34px;font-weight:800;margin:10px 0 2px;letter-spacing:-1px}
+  .plan .pprice small{font-size:15px;font-weight:600;color:var(--txt2)}
+  .plan .pper{color:var(--txt2);font-size:14px;margin-bottom:18px}
+  .plan ul{list-style:none;display:flex;flex-direction:column;gap:11px;margin-bottom:24px;flex:1}
+  .plan li{font-size:14.5px;color:var(--txt2);display:flex;gap:9px}
+  .plan li::before{content:"✓";color:#28a745;font-weight:800}
+  .plan .btn{justify-content:center;width:100%;padding:13px}
+  .btn-outline{background:#fff;border:1px solid #d8cdb6;color:var(--navy2)}
+  .btn-outline:hover{background:var(--paper)}
+
+  /* faq */
+  .faq{max-width:780px;margin:0 auto}
+  .q{background:#fff;border:1px solid var(--paper2);border-radius:14px;margin-bottom:12px;overflow:hidden}
+  .q button{width:100%;text-align:left;background:none;border:none;padding:20px 22px;font-size:16.5px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:14px;color:var(--txt)}
+  .q .ans{max-height:0;overflow:hidden;transition:max-height .35s ease;color:var(--txt2);line-height:1.65}
+  .q .ans p{padding:0 22px 20px}
+  .q .chev{transition:.3s;flex:0 0 auto}
+  .q.open .chev{transform:rotate(180deg)}
+
+  /* cta band */
+  .cta{position:relative;overflow:hidden;background:linear-gradient(135deg,#0E2236,#1E4878);border-radius:30px;padding:70px 40px;text-align:center;color:#fff;margin:0 auto;max-width:1000px}
+  .cta .orb{opacity:.4}
+  .cta h2{font-size:clamp(28px,4vw,40px);font-weight:800;letter-spacing:-1px;margin-bottom:14px;position:relative;z-index:2}
+  .cta p{color:rgba(255,255,255,.8);font-size:18px;margin-bottom:28px;position:relative;z-index:2}
+  .cta .hero-actions{justify-content:center;position:relative;z-index:2}
+
+  /* footer */
+  footer{background:var(--navy);color:rgba(255,255,255,.7);padding:60px 0 30px;margin-top:90px}
+  .foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:34px;margin-bottom:40px}
+  .foot-grid h4{color:#fff;font-size:15px;margin-bottom:16px}
+  .foot-grid a{display:block;color:rgba(255,255,255,.62);font-size:14.5px;margin-bottom:10px;transition:.2s}
+  .foot-grid a:hover{color:var(--cyan)}
+  .foot-brand p{font-size:14.5px;line-height:1.6;margin-top:14px;max-width:300px}
+  .foot-bottom{border-top:1px solid rgba(255,255,255,.08);padding-top:24px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-size:13.5px}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  /* ---------- RESPONSIVE ---------- */
+  @media(max-width:920px){
+    .hero-inner,.split,.foot-grid{grid-template-columns:1fr}
+    .stats-grid,.feat-grid,.steps,.plans{grid-template-columns:1fr 1fr}
+    .nav-links{display:none}
+    .mock{order:-1;max-width:460px;margin:0 auto 10px}
+    .split h2{text-align:center}
+  }
+  @media(max-width:560px){
+    .stats-grid,.feat-grid,.steps,.plans{grid-template-columns:1fr}
+    nav{height:64px}
+    .hero{padding:120px 0 80px}
+    .btn-ghost.hide-sm{display:none}
+    .foot-bottom{flex-direction:column}
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header id="hdr">
+  <div class="wrap">
+    <nav>
+      <a href="#" class="brand"><img src="/jurist_logo_white.png" alt="" onerror="this.style.display='none'">Jurist<span class="ai">AI</span></a>
+      <div class="nav-links">
+        <a href="#features">Imkoniyatlar</a>
+        <a href="#how">Qanday ishlaydi</a>
+        <a href="#pricing">Tariflar</a>
+        <a href="#faq">Savollar</a>
+      </div>
+      <div class="nav-cta">
+        <a href="/login.html" class="btn btn-ghost hide-sm">Kirish</a>
+        <a href="/login.html" class="btn btn-primary">Bepul boshlash</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
+  <div class="grid-overlay"></div>
+  <div class="wrap hero-inner">
+    <div>
+      <span class="pill"><span class="dot"></span> Lex.uz dagi eng so'nggi qonunlar asosida</span>
+      <h1 class="hero-title">O'zbekiston qonunchiligi bo'yicha <span class="grad-text">sun'iy intellekt</span> yuristingiz</h1>
+      <p class="sub">Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan aniq, manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.</p>
+      <div class="hero-actions">
+        <a href="/login.html" class="btn btn-primary btn-lg">Bepul sinab ko'rish →</a>
+        <a href="#how" class="btn btn-ghost btn-lg">Qanday ishlaydi?</a>
+      </div>
+      <div class="hero-trust">
+        <span><b>13+</b> huquqiy soha</span>
+        <span><b>Manbalar</b> bilan javob</span>
+        <span><b>Telegram</b> orqali kirish</span>
+      </div>
+    </div>
+
+    <div class="mock">
+      <div class="mock-card">
+        <div class="mock-top"><i class="d"></i><i class="d"></i><i class="d"></i><span class="t">JuristAI — suhbat</span></div>
+        <div class="mock-body" id="mockBody">
+          <div class="bubble user" style="animation-delay:.2s">Qizil chiroqda o'tib ketsam qancha jarima to'layman?</div>
+          <div class="typing" id="typing" style="animation-delay:.6s"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee">
+  <div class="marquee-track">
+    <span>Mehnat huquqi</span><span>Oila huquqi</span><span>Fuqarolik huquqi</span><span>Soliq</span><span>Jinoyat</span><span>Ma'muriy javobgarlik</span><span>Korporativ</span><span>Tadbirkorlik</span><span>Uy-joy</span><span>Mulk huquqi</span><span>Notariat</span>
+    <span>Mehnat huquqi</span><span>Oila huquqi</span><span>Fuqarolik huquqi</span><span>Soliq</span><span>Jinoyat</span><span>Ma'muriy javobgarlik</span><span>Korporativ</span><span>Tadbirkorlik</span><span>Uy-joy</span><span>Mulk huquqi</span><span>Notariat</span>
+  </div>
+</div>
+
+<!-- STATS -->
+<section class="stats">
+  <div class="wrap stats-grid">
+    <div class="stat"><div class="num" data-count="13" data-suffix="+">0</div><div class="lbl">Huquqiy soha</div></div>
+    <div class="stat"><div class="num" data-count="24" data-suffix="/7">0</div><div class="lbl">Doimo ulangan</div></div>
+    <div class="stat"><div class="num" data-count="100" data-suffix="%">0</div><div class="lbl">Manbaga asoslangan</div></div>
+    <div class="stat"><div class="num" data-count="1" data-suffix=" soniya">0</div><div class="lbl">O'rtacha javob</div></div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="block" id="features">
+  <div class="wrap">
+    <p class="eyebrow reveal">Nima uchun JuristAI</p>
+    <h2 class="sec reveal">Oddiy chatbot emas — <span class="grad-text">huquqiy aniqlik</span></h2>
+    <p class="sec-sub reveal">Har bir javob amaldagi qonun matniga bog'lanadi. To'qib chiqarilgan havolalar yo'q.</p>
+    <div class="feat-grid">
+      <div class="feat reveal">
+        <div class="ic"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></div>
+        <h3>AI huquqiy tahlil</h3><p>Murakkab savollarni tushunadi, qonun normalarini tahlil qilib, tushunarli xulosa beradi.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"/></svg></div>
+        <h3>Lex.uz RAG qidiruv</h3><p>Javoblar bevosita lex.uz dagi amaldagi qonunlardan. Eski tahrirlar avtomatik chetlab o'tiladi.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg></div>
+        <h3>Manbalar bilan</h3><p>Har bir javob ostida tegishli modda va lex.uz havolasi — o'zingiz tekshira olasiz.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></div>
+        <h3>Hujjat tahlili</h3><p>Shartnoma yoki hujjatni yuklang — JuristAI uni o'qib, xavfli nuqtalarni ko'rsatadi.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5a8.4 8.4 0 1 1 16.1-4.5Z"/></svg></div>
+        <h3>Telegram orqali</h3><p>Ro'yxatdan o'tish va kirish Telegram orqali — parol kerak emas, bir necha soniyada.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg></div>
+        <h3>Maxfiy va xavfsiz</h3><p>Savollaringiz himoyalangan. Ma'lumotlaringiz uchinchi shaxslarga berilmaydi.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="block" id="how" style="background:var(--paper2)">
+  <div class="wrap">
+    <p class="eyebrow reveal">3 oddiy qadam</p>
+    <h2 class="sec reveal">Daqiqada javob oling</h2>
+    <p class="sec-sub reveal">Yurist qabuliga yozilish shart emas.</p>
+    <div class="steps">
+      <div class="step reveal"><h3>Savolingizni yozing</h3><p>Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas.</p></div>
+      <div class="step reveal"><h3>AI qonunni qidiradi</h3><p>JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi va tahlil qiladi.</p></div>
+      <div class="step reveal"><h3>Manbali javob</h3><p>Aniq xulosa, tegishli moddalar va havolalar bilan — bir soniyada qo'lingizda.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- SHOWCASE -->
+<section class="block">
+  <div class="wrap split">
+    <div class="reveal">
+      <h2>Har bir javob <span class="grad-text">tekshiriladigan</span> manbaga ega</h2>
+      <p style="color:var(--txt2);font-size:17px;line-height:1.6">Boshqa AI lar havolani to'qib chiqarishi mumkin. JuristAI esa faqat lex.uz dagi haqiqiy qonun matnidan foydalanadi.</p>
+      <ul>
+        <li><svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>Faqat amaldagi (eng so'nggi) qonun tahriri</li>
+        <li><svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>Aniq modda va band ko'rsatiladi</li>
+        <li><svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>To'g'ridan-to'g'ri lex.uz havolasi</li>
+        <li><svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>O'zbek va rus tillarida</li>
+      </ul>
+    </div>
+    <div class="showcase-card reveal">
+      <div class="mock-card" style="box-shadow:none;animation:none;background:rgba(255,255,255,.04)">
+        <div class="mock-top"><i class="d"></i><i class="d"></i><i class="d"></i><span class="t">Namuna javob</span></div>
+        <div class="mock-body">
+          <div class="bubble user" style="opacity:1;animation:none">Ish haqi kechiktirilsa nima qilaman?</div>
+          <div class="bubble ai" style="opacity:1;animation:none">Ish beruvchi ish haqini o'z vaqtida to'lashi shart. <b>Mehnat kodeksi</b>ga ko'ra kechiktirilgan har bir kun uchun kompensatsiya talab qilishingiz mumkin.
+            <span class="src">📎 Mehnat kodeksi, 165-modda</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="block pricing" id="pricing">
+  <div class="wrap">
+    <p class="eyebrow reveal">Tariflar</p>
+    <h2 class="sec reveal">Sizga mos rejani tanlang</h2>
+    <p class="sec-sub reveal">Bepul sinovdan boshlang — karta kerak emas.</p>
+    <div class="plans">
+      <div class="plan reveal">
+        <div class="pname">Sinov</div>
+        <div class="pprice">Bepul</div>
+        <div class="pper">1 kunda 3 ta so'rov</div>
+        <ul><li>AI chat — asosiy</li><li>Kuniga 3 so'rov</li><li>RAG qidiruv (cheklangan)</li><li>Asosiy sohalar</li></ul>
+        <a href="/login.html" class="btn btn-outline">Sinab ko'rish</a>
+      </div>
+      <div class="plan reveal">
+        <div class="pname">Silver</div>
+        <div class="pprice">299,000<small> so'm</small></div>
+        <div class="pper">oyiga</div>
+        <ul><li>Professional AI</li><li>Oyiga 300 so'rov</li><li>To'liq RAG qidiruv</li><li>13 ta soha</li></ul>
+        <a href="/login.html" class="btn btn-outline">Tanlash</a>
+      </div>
+      <div class="plan featured reveal">
+        <span class="ptag">Mashhur</span>
+        <div class="pname">Gold</div>
+        <div class="pprice">599,000<small> so'm</small></div>
+        <div class="pper">oyiga</div>
+        <ul><li>Oyiga 750 so'rov</li><li>Ustuvor navbat</li><li>Hujjat tahlili (OCR)</li><li>RAG + web qidiruv</li><li>Chuqur tahlil</li></ul>
+        <a href="/login.html" class="btn btn-primary">Tanlash</a>
+      </div>
+      <div class="plan reveal">
+        <div class="pname">Platinum</div>
+        <div class="pprice">1,199,000<small> so'm</small></div>
+        <div class="pper">oyiga</div>
+        <ul><li>Oyiga 1,500 so'rov</li><li>Ultra kontekst</li><li>Yangilanishlar — birinchi</li><li>Shaxsiy konsierj</li><li>API integratsiya</li></ul>
+        <a href="/login.html" class="btn btn-outline">Tanlash</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="block" id="faq">
+  <div class="wrap">
+    <p class="eyebrow reveal">Savol-javob</p>
+    <h2 class="sec reveal">Tez-tez beriladigan savollar</h2>
+    <div class="faq" style="margin-top:46px">
+      <div class="q reveal"><button>JuristAI yuristning o'rnini bosadimi?<svg class="chev" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="ans"><p>JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz. U sizni qonun bilan tanishtiradi va vaqtingizni tejaydi.</p></div></div>
+      <div class="q reveal"><button>Javoblar qanchalik ishonchli?<svg class="chev" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="ans"><p>Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi va tegishli modda havolasi bilan keladi. Siz manbani o'zingiz tekshirishingiz mumkin.</p></div></div>
+      <div class="q reveal"><button>Qanday ro'yxatdan o'taman?<svg class="chev" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="ans"><p>Telegram yoki Google orqali bir necha soniyada. Parol o'ylab topish shart emas — "Bepul boshlash" tugmasini bosing.</p></div></div>
+      <div class="q reveal"><button>Eski qonunga asoslangan javob bermaymi?<svg class="chev" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="ans"><p>Yo'q. Tizim lex.uz dagi eski tahrirlarni avtomatik aniqlab, har doim amaldagi (eng so'nggi) versiyaga o'tadi.</p></div></div>
+      <div class="q reveal"><button>Qaysi tillarda ishlaydi?<svg class="chev" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="ans"><p>O'zbek va rus tillarida savol berishingiz va javob olishingiz mumkin.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section style="padding:20px 22px 0">
+  <div class="cta">
+    <div class="orb orb1" style="top:-80px;right:-40px"></div>
+    <div class="orb orb2" style="bottom:-80px;left:-40px"></div>
+    <h2>Huquqiy savolingiz bormi?</h2>
+    <p>Hoziroq bepul sinab ko'ring — bir soniyada manbali javob oling.</p>
+    <div class="hero-actions">
+      <a href="/login.html" class="btn btn-primary btn-lg">Bepul boshlash →</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a href="#" class="brand">Jurist<span class="ai">AI</span></a>
+        <p>O'zbekiston qonunchiligi bo'yicha sun'iy intellekt asosidagi huquqiy yordamchi. Lex.uz dagi amaldagi qonunlar asosida.</p>
+      </div>
+      <div><h4>Mahsulot</h4><a href="#features">Imkoniyatlar</a><a href="#how">Qanday ishlaydi</a><a href="#pricing">Tariflar</a></div>
+      <div><h4>Kompaniya</h4><a href="#faq">Savollar</a><a href="/login.html">Kirish</a><a href="https://t.me/yuristga_savolbot" target="_blank">Telegram bot</a></div>
+      <div><h4>Huquqiy</h4><a href="#">Oferta</a><a href="#">Maxfiylik</a><a href="#">Shartlar</a></div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 JuristAI. Barcha huquqlar himoyalangan.</span>
+      <span>Eslatma: JuristAI javoblari ma'lumot xarakterida — rasmiy yuridik maslahat o'rnini bosmaydi.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // sticky nav
+  const hdr=document.getElementById('hdr');
+  const onScroll=()=>hdr.classList.toggle('scrolled',window.scrollY>20);
+  onScroll();window.addEventListener('scroll',onScroll,{passive:true});
+
+  // reveal on scroll
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{threshold:.14});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+  // animated counters
+  const animateCount=(el)=>{
+    const target=parseFloat(el.dataset.count),suf=el.dataset.suffix||'';
+    let cur=0;const step=Math.max(1,target/40);
+    const tick=()=>{cur+=step;if(cur>=target){el.textContent=target+suf;}else{el.textContent=Math.floor(cur)+suf;requestAnimationFrame(tick);}};
+    tick();
+  };
+  const sio=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){animateCount(e.target);sio.unobserve(e.target);}})},{threshold:.5});
+  document.querySelectorAll('.num').forEach(el=>sio.observe(el));
+
+  // hero chat: replace typing with AI answer
+  setTimeout(()=>{
+    const t=document.getElementById('typing');if(!t)return;
+    const ai=document.createElement('div');
+    ai.className='bubble ai';ai.style.animationDelay='0s';
+    ai.innerHTML="Svetoforning taqiqlovchi signalida o'tib ketish <b>ma'muriy huquqbuzarlik</b> hisoblanadi va jarima belgilangan. Aniq miqdor amaldagi tahrirga bog'liq.<span class='src'>📎 Ma'muriy javobgarlik kodeksi, 128⁴-modda</span>";
+    t.replaceWith(ai);
+  },2200);
+
+  // faq accordion
+  document.querySelectorAll('.q button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const q=b.parentElement,ans=q.querySelector('.ans'),open=q.classList.contains('open');
+      document.querySelectorAll('.q').forEach(x=>{x.classList.remove('open');x.querySelector('.ans').style.maxHeight=null;});
+      if(!open){q.classList.add('open');ans.style.maxHeight=ans.scrollHeight+'px';}
+    });
+  });
+</script>
+</body>
+</html>
