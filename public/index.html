@@ -57,11 +57,8 @@ img{max-width:100%;display:block}
 header{position:fixed;top:0;left:0;right:0;z-index:200;transition:background var(--ease),backdrop-filter var(--ease),box-shadow var(--ease)}
 header.sc{background:var(--nav-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 1px 0 var(--border)}
 nav{display:flex;align-items:center;height:68px;gap:20px}
-.brand{display:inline-flex;align-items:center;gap:1px;flex-shrink:0;color:#fff;line-height:1}
-[data-theme="light"] header.sc .brand{color:var(--txt)}
-.brand .b-j{height:25px;width:auto;display:block;margin-right:2px}
-.brand .b-word{font-size:21px;font-weight:800;letter-spacing:-.6px;color:inherit}
-.brand .b-ai{height:17px;width:auto;display:block;color:inherit;margin-left:3px}
+.brand{display:inline-flex;align-items:center;flex-shrink:0;line-height:1}
+.brand-img{height:36px;width:auto;display:block}
 .nav-links{display:flex;gap:22px;flex:1;justify-content:center}
 .nav-links a{color:rgba(255,255,255,.75);font-size:14.5px;font-weight:500;transition:color .2s}
 .nav-links a:hover{color:#fff}
@@ -320,18 +317,7 @@ footer{background:#040712;color:rgba(180,200,240,.55);padding:64px 0 32px;margin
   <div class="wrap">
     <nav>
       <a href="#" class="brand" aria-label="JuristAI">
-        <svg class="b-j" viewBox="0 0 24 40" fill="none" aria-hidden="true">
-          <defs><linearGradient id="jgN" x1="6" y1="2" x2="18" y2="38" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#4E83C7"/><stop offset="1" stop-color="#15315C"/>
-          </linearGradient></defs>
-          <circle cx="17" cy="5.4" r="3.3" fill="url(#jgN)"/>
-          <path d="M17 13 L17 27 C17 32.8 13 35.2 6.6 33.2" stroke="url(#jgN)" stroke-width="5.2" stroke-linecap="round"/>
-        </svg>
-        <span class="b-word">urist</span>
-        <svg class="b-ai" viewBox="0 0 40 28" fill="none" aria-hidden="true">
-          <path d="M3 25 L11 4 L19 25 M6.7 17.5 H15.3" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M32 4 L26 25" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-        </svg>
+        <img src="/juristAI_logo.png" alt="JuristAI" class="brand-img">
       </a>
       <div class="nav-links">
         <a href="#features" data-i18n="nav_features">Imkoniyatlar</a>
@@ -667,18 +653,7 @@ footer{background:#040712;color:rgba(180,200,240,.55);padding:64px 0 32px;margin
     <div class="foot-grid">
       <div class="foot-col">
         <div class="brand" style="margin-bottom:6px">
-          <svg class="b-j" viewBox="0 0 24 40" fill="none" aria-hidden="true">
-            <defs><linearGradient id="jgF" x1="6" y1="2" x2="18" y2="38" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#4E83C7"/><stop offset="1" stop-color="#1B3C6E"/>
-            </linearGradient></defs>
-            <circle cx="17" cy="5.4" r="3.3" fill="url(#jgF)"/>
-            <path d="M17 13 L17 27 C17 32.8 13 35.2 6.6 33.2" stroke="url(#jgF)" stroke-width="5.2" stroke-linecap="round"/>
-          </svg>
-          <span class="b-word">urist</span>
-          <svg class="b-ai" viewBox="0 0 40 28" fill="none" aria-hidden="true">
-            <path d="M3 25 L11 4 L19 25 M6.7 17.5 H15.3" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M32 4 L26 25" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-          </svg>
+          <img src="/juristAI_logo.png" alt="JuristAI" class="brand-img">
         </div>
         <p class="foot-brand-desc" data-i18n="foot_desc">O'zbekiston qonunchiligi bo'yicha sun'iy intellekt asosidagi huquqiy yordamchi. Lex.uz dagi amaldagi qonunlar asosida.</p>
       </div>
