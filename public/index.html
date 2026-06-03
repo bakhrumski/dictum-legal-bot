@@ -121,6 +121,9 @@ nav{display:flex;align-items:center;height:68px;gap:20px}
 [data-theme="light"] header.sc .btn-ghost{color:#1A1410;border-color:rgba(26,20,16,0.22)}
 [data-theme="light"] header.sc .btn-ghost:hover{background:rgba(26,20,16,0.06)}
 .nav-end{display:flex;align-items:center;gap:8px;flex-shrink:0}
+/* lock nav button widths to longest language text so nav-links never shift */
+.nav-end .btn-primary{min-width:196px;justify-content:center}
+.nav-end .btn-ghost{min-width:74px;justify-content:center}
 .ls{display:flex;align-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:3px 4px;gap:2px}
 [data-theme="light"] .ls{background:var(--bg2);border-color:var(--border)}
 .ls-b{background:none;border:none;color:rgba(255,255,255,.45);font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;cursor:pointer;transition:color .2s,background .2s;letter-spacing:.4px;font-family:inherit}
