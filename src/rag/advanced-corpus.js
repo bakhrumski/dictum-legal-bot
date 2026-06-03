@@ -432,14 +432,34 @@ async function saveToQaBank(opts) {
 
 /**
  * Record a thumbs up/down vote on a QA bank entry.
+ * Also propagates a quality_score update to the linked legal_chunks row so
+ * retrieval ranking reflects accumulated user feedback.
  */
 async function voteQaBankEntry(qaId, direction) {
   await initAdvancedCorpus();
 
   const col = direction === 'up' ? 'thumbs_up' : 'thumbs_down';
-  await pool.query(
-    `UPDATE qa_bank SET ${col} = ${col} + 1, rating = thumbs_up - thumbs_down, updated_at = NOW() WHERE id = $1`,
+  const { rows } = await pool.query(
+    `UPDATE qa_bank SET ${col} = ${col} + 1, rating = thumbs_up - thumbs_down, updated_at = NOW()
+     WHERE id = $1
+     RETURNING thumbs_up, thumbs_down, rating`,
     [qaId]
+  );
+
+  if (rows.length === 0) return;
+  const { thumbs_up, thumbs_down, rating } = rows[0];
+  const total = thumbs_up + thumbs_down;
+
+  // Map rating to quality_score in [0.1, 1.0]:
+  // neutral (0 votes) → 1.0, fully negative → 0.1, fully positive → 1.0
+  const ratio = total > 0 ? thumbs_up / total : 1;
+  const qualityScore = Math.max(0.1, Math.min(1.0, 0.1 + ratio * 0.9));
+
+  // Update the linked legal_chunks row (doc_id pattern set by saveToQaBank / insertVerifiedAnswer)
+  await pool.query(
+    `UPDATE legal_chunks SET quality_score = $1, updated_at = NOW()
+     WHERE doc_id = $2 AND source_type = 'verified_qa'`,
+    [qualityScore, `verified_qa_qa_bank_${qaId}`]
   );
 }
 
