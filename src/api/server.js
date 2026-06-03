@@ -6239,6 +6239,12 @@ async function runMigrations() {
       mountAdvancedRoutes(app, { requireAuth, requireMasterAdmin, callAI, pool });
     } catch (e) { console.log('[ADV RAG] Mount skipped:', e.message); }
 
+    // Mount Document Drafting routes (templates, AI field suggest, DOCX/PDF export)
+    try {
+      const { mountDraftingRoutes } = require('../drafting/routes');
+      mountDraftingRoutes(app, { requireAuth, callAI, tariffModule });
+    } catch (e) { console.log('[DRAFT] Mount skipped:', e.message); }
+
     // Initialize persistent LLM spend log + wire it into hybrid pipeline
     try {
       const hybridPipeline = require('../rag/hybrid-pipeline');
