@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Shablonlar — JuristAI</title>
+<link rel="icon" type="image/png" sizes="256x256" href="/favicon-256.png">
+<link rel="stylesheet" href="/css/design-tokens.css">
+<style>
+:root{
+  --gold:#B08442;--gold-lt:#D6B379;--navy:#0E2236;--navy2:#16365A;
+  --txt:#1A1410;--txt2:#5b5147;--card:#fff;--bg:#FBF8F2;
+  --border:rgba(26,20,16,.12);--red:#b3261e;--green:#1a7a4a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:11px 22px;background:var(--navy);color:#F5EFE3;flex-shrink:0}
+header .brand{display:flex;align-items:center;gap:14px;font-size:15px;font-weight:600}
+header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
+.hback{font-size:12px;color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.22);padding:5px 13px;border-radius:7px;text-decoration:none;transition:.2s}
+.hback:hover{background:rgba(255,255,255,.1)}
+
+.split{flex:1;display:flex;min-height:0}
+
+/* ── Left: template list ── */
+.list-pane{width:270px;min-width:220px;border-right:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;flex-shrink:0}
+.list-head{padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.list-head h2{font-size:14px;font-weight:700;color:var(--navy)}
+.btn-new{font-size:12px;font-weight:700;background:var(--navy);color:#F5EFE3;border:none;border-radius:8px;padding:6px 13px;cursor:pointer;transition:.15s}
+.btn-new:hover{background:var(--navy2)}
+.tpl-list{overflow-y:auto;flex:1;padding:8px 0}
+.tpl-item{padding:10px 16px;cursor:pointer;border-left:3px solid transparent;transition:.15s}
+.tpl-item:hover{background:rgba(176,132,66,.07)}
+.tpl-item.active{background:rgba(176,132,66,.12);border-left-color:var(--gold)}
+.tpl-item .ti-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.tpl-item .ti-meta{font-size:11px;color:var(--txt2)}
+
+/* ── Right: editor ── */
+.editor-pane{flex:1;overflow-y:auto;padding:24px 28px 60px;min-width:0}
+.editor-pane h1{font-family:'Source Serif 4',Georgia,serif;font-size:20px;color:var(--navy);margin-bottom:4px}
+.editor-pane .sub{font-size:13px;color:var(--txt2);margin-bottom:22px}
+
+.section{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:18px}
+.section h3{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld label{font-size:12px;font-weight:600;color:var(--txt2)}
+.fld input,.fld textarea,.fld select{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:var(--txt)}
+.fld input:focus,.fld textarea:focus,.fld select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(176,132,66,.15)}
+.fld textarea{resize:vertical;min-height:60px;line-height:1.5}
+.req{color:var(--red);margin-left:2px}
+
+/* Fields table */
+.fields-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px}
+.fields-table th{background:#f7f3ed;padding:7px 8px;text-align:left;font-weight:600;color:var(--txt2);border-bottom:1px solid var(--border)}
+.fields-table td{padding:5px 8px;border-bottom:1px solid rgba(26,20,16,.06);vertical-align:top}
+.fields-table td input,.fields-table td select,.fields-table td textarea{width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit}
+.fields-table td textarea{min-height:36px;resize:vertical}
+.fields-table td input[type="checkbox"]{width:auto;accent-color:var(--gold)}
+.del-field{background:none;border:none;cursor:pointer;color:var(--red);font-size:16px;line-height:1;padding:2px 4px;opacity:.7}
+.del-field:hover{opacity:1}
+.btn-add-field{font-size:12px;font-weight:600;background:rgba(176,132,66,.1);color:var(--gold);border:1px solid rgba(176,132,66,.3);border-radius:7px;padding:6px 14px;cursor:pointer;transition:.15s}
+.btn-add-field:hover{background:rgba(176,132,66,.2)}
+
+/* Body editor */
+.palette{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip{background:#e9f0f8;color:var(--navy2);font-size:11px;font-weight:600;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;transition:.15s}
+.chip:hover{background:#d0e2f5}
+.body-ta{width:100%;font-family:'Courier New',monospace;font-size:12px;min-height:220px;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.55;background:#fafafa}
+.body-ta:focus{outline:none;border-color:var(--gold)}
+
+/* Preview */
+.preview-wrap{border:1px solid var(--border);border-radius:8px;background:#e9e4da;padding:18px;min-height:300px;overflow:auto}
+.doc-page{background:#fff;padding:48px 56px;max-width:720px;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,.12);font-family:'Times New Roman',Georgia,serif;font-size:13.5px;line-height:1.6;color:#111}
+.doc-page h1{font-size:14px;font-weight:normal}
+.doc-page h2{font-size:15px}
+.doc-page table{width:100%;border-collapse:collapse}
+.doc-page td{padding:0;border:none}
+.doc-page p{margin:0 0 10px}
+.fld-ph{background:#FBEFD2;border-bottom:1px dashed #D6B379;border-radius:2px;padding:0 2px;color:#9a8f80;font-style:italic;font-size:.95em}
+
+/* Actions */
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.btn{padding:9px 20px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--txt);transition:.15s}
+.btn:hover{border-color:var(--gold)}
+.btn.primary{background:var(--navy);color:#F5EFE3;border-color:var(--navy)}
+.btn.primary:hover{background:var(--navy2)}
+.btn.danger{background:#fff;color:var(--red);border-color:rgba(179,38,30,.3)}
+.btn.danger:hover{background:rgba(179,38,30,.05)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.empty-state{text-align:center;padding:48px 24px;color:var(--txt2);font-size:14px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--navy);color:#F5EFE3;padding:10px 20px;border-radius:10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.22);opacity:0;transition:.3s;pointer-events:none;z-index:99}
+.toast.show{opacity:1}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:rgba(176,132,66,.15);color:var(--gold);margin-left:6px;text-transform:uppercase}
+
+/* Preview toggle */
+.preview-toggle{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.preview-toggle button{font-size:12px;font-weight:600;padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:#fff;cursor:pointer}
+.preview-toggle button.on{background:var(--navy);color:#F5EFE3;border-color:var(--navy)}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <a href="/dashboard.html" class="hback">← Dashboard</a>
+    <span>Shablon muharriri <b>JuristAI</b></span>
+  </div>
+  <span style="font-size:12px;color:rgba(255,255,255,.5)">Faqat master admin</span>
+</header>
+
+<div class="split">
+  <!-- List -->
+  <div class="list-pane">
+    <div class="list-head">
+      <h2>Shablonlar</h2>
+      <button class="btn-new" onclick="newTemplate()">+ Yangi</button>
+    </div>
+    <div class="tpl-list" id="tplList">
+      <div class="empty-state">Yuklanmoqda…</div>
+    </div>
+  </div>
+
+  <!-- Editor -->
+  <div class="editor-pane" id="editorPane">
+    <div class="empty-state" style="margin-top:60px">
+      <div style="font-size:32px;margin-bottom:12px">📄</div>
+      <div>Chap tomondagi shablonni tanlang yoki yangi shablon yarating.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let templates = [];
+let editing = null;   // current template obj being edited
+let fields = [];      // local array of field descriptors
+
+const CATEGORIES = ['fuqarolik','mehnat','oila','soliq','jinoyat','mamuriy','mulk','shartnoma','tadbirkorlik','xalqaro','boshqa'];
+const FIELD_TYPES = ['text','textarea','date','number','select'];
+
+function toast(msg, ok){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Auth & load ──
+async function init(){
+  const u = await fetch('/api/user-info',{credentials:'same-origin'});
+  if(!u.ok){ window.location.href='/login.html'; return; }
+  const user = await u.json();
+  if(user.role !== 'master'){ window.location.href='/dashboard.html'; return; }
+  await loadList();
+}
+
+async function loadList(){
+  const r = await fetch('/api/templates/full',{credentials:'same-origin'});
+  if(!r.ok){ toast('Yuklab bo\'lmadi'); return; }
+  const { templates: list } = await r.json();
+  templates = list;
+  renderList();
+}
+
+function renderList(){
+  const el = document.getElementById('tplList');
+  if(!templates.length){ el.innerHTML='<div class="empty-state">Hali shablon yo\'q</div>'; return; }
+  el.innerHTML = templates.map(t=>`
+    <div class="tpl-item${editing?.id===t.id?' active':''}" onclick="openTemplate(${t.id})">
+      <div class="ti-name">${esc(t.name?.uz||t.name?.ru||t.slug)}</div>
+      <div class="ti-meta">${esc(t.category)} · ${(t.fields||[]).length} maydon</div>
+    </div>`).join('');
+}
+
+// ── Open template for editing ──
+async function openTemplate(id){
+  const r = await fetch('/api/templates/'+id,{credentials:'same-origin'});
+  if(!r.ok){ toast('Yuklab bo\'lmadi'); return; }
+  editing = await r.json();
+  fields = JSON.parse(JSON.stringify(editing.fields||[]));
+  renderEditor();
+  renderList();
+}
+
+// ── New blank template ──
+function newTemplate(){
+  editing = { id: null, slug:'', name:{uz:'',ru:''}, description:{uz:'',ru:''}, category:'boshqa', lang:'uz', fields:[], body:'' };
+  fields = [];
+  renderEditor();
+  renderList();
+}
+
+// ── Render editor ──
+function renderEditor(){
+  const p = document.getElementById('editorPane');
+  const t = editing;
+  const isNew = !t.id;
+  p.innerHTML = `
+<h1>${isNew ? 'Yangi shablon' : esc(t.name?.uz||t.slug)}</h1>
+<p class="sub">${isNew ? 'Yangi huquqiy hujjat shabloni yaratilmoqda' : 'Shablonni tahrirlang va saqlang'}</p>
+
+<div class="section">
+  <h3>Asosiy ma'lumotlar</h3>
+  <div class="grid2">
+    <div class="fld"><label>Nomi (O'zbek)<span class="req">*</span></label><input id="nameUz" value="${esc(t.name?.uz||'')}"></div>
+    <div class="fld"><label>Nomi (Rus)</label><input id="nameRu" value="${esc(t.name?.ru||'')}"></div>
+  </div>
+  <div class="grid2" style="margin-top:12px">
+    <div class="fld"><label>Tavsif (O'zbek)</label><textarea id="descUz">${esc(t.description?.uz||'')}</textarea></div>
+    <div class="fld"><label>Tavsif (Rus)</label><textarea id="descRu">${esc(t.description?.ru||'')}</textarea></div>
+  </div>
+  <div class="grid3" style="margin-top:12px">
+    <div class="fld"><label>Kategoriya</label>
+      <select id="cat">${CATEGORIES.map(c=>`<option value="${c}"${c===t.category?' selected':''}>${c}</option>`).join('')}</select>
+    </div>
+    <div class="fld"><label>Hujjat tili</label>
+      <select id="lang">
+        <option value="uz"${t.lang==='uz'?' selected':''}>O'zbek</option>
+        <option value="ru"${t.lang==='ru'?' selected':''}>Русский</option>
+      </select>
+    </div>
+    <div class="fld"><label>Slug <span style="color:var(--txt2);font-weight:400">(avtomatik)</span></label>
+      <input id="slug" value="${esc(t.slug||'')}" style="background:#fafafa;color:var(--txt2)" readonly>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Maydonlar (to'ldiriladigan qatorlar)</h3>
+  <table class="fields-table" id="fieldsTable">
+    <thead><tr>
+      <th style="width:100px">Kalit</th>
+      <th>Label (UZ)</th>
+      <th>Label (RU)</th>
+      <th style="width:80px">Turi</th>
+      <th style="width:38px">Majb.</th>
+      <th>AI maslahat</th>
+      <th style="width:28px"></th>
+    </tr></thead>
+    <tbody id="fieldRows"></tbody>
+  </table>
+  <button class="btn-add-field" onclick="addField()">+ Maydon qo'shish</button>
+</div>
+
+<div class="section">
+  <h3>Hujjat tanasi (HTML)</h3>
+  <div style="margin-bottom:8px;font-size:12px;color:var(--txt2)">
+    Matnda <code>{{kalit}}</code> yozing — u to'ldirilgan qiymat bilan almashtiriladi. Pastdagi tugmachalarni bosib qo'shing:
+  </div>
+  <div class="palette" id="palette"></div>
+  <div class="preview-toggle">
+    <button id="btnEdit" class="on" onclick="showTab('edit')">✏️ Tahrirlash</button>
+    <button id="btnPreview" onclick="showTab('preview')">👁 Ko'rish</button>
+  </div>
+  <div id="editView">
+    <textarea class="body-ta" id="bodyTa" oninput="syncBody()">${esc(t.body||'')}</textarea>
+  </div>
+  <div id="previewView" style="display:none">
+    <div class="preview-wrap"><div class="doc-page" id="previewDoc"></div></div>
+  </div>
+</div>
+
+<div class="actions">
+  ${!isNew ? `<button class="btn danger" onclick="deleteTemplate()">🗑 O'chirish</button>` : ''}
+  <button class="btn" onclick="cancelEdit()">Bekor</button>
+  <button class="btn primary" id="saveBtn" onclick="saveTemplate()">💾 Saqlash</button>
+</div>
+`;
+  renderFieldRows();
+  renderPalette();
+}
+
+// ── Field rows ──
+function renderFieldRows(){
+  const tbody = document.getElementById('fieldRows');
+  if(!tbody) return;
+  if(!fields.length){ tbody.innerHTML='<tr><td colspan="7" style="color:var(--txt2);text-align:center;padding:12px">Hali maydon yo\'q</td></tr>'; return; }
+  tbody.innerHTML = fields.map((f,i)=>`
+<tr>
+  <td><input value="${esc(f.key||'')}" oninput="fields[${i}].key=this.value;renderPalette()" placeholder="masalan_nomi"></td>
+  <td><input value="${esc(f.label?.uz||'')}" oninput="fields[${i}].label=(fields[${i}].label||{});fields[${i}].label.uz=this.value" placeholder="O'zbek"></td>
+  <td><input value="${esc(f.label?.ru||'')}" oninput="fields[${i}].label=(fields[${i}].label||{});fields[${i}].label.ru=this.value" placeholder="Rus"></td>
+  <td><select onchange="fields[${i}].type=this.value">${FIELD_TYPES.map(tp=>`<option${tp===f.type?' selected':''}>${tp}</option>`).join('')}</select></td>
+  <td style="text-align:center"><input type="checkbox" ${f.required?'checked':''} onchange="fields[${i}].required=this.checked"></td>
+  <td><textarea style="min-height:32px" oninput="fields[${i}].aiHint=this.value" placeholder="AI maslahati (ixtiyoriy)">${esc(f.aiHint||'')}</textarea></td>
+  <td><button class="del-field" onclick="removeField(${i})" title="O'chirish">×</button></td>
+</tr>`).join('');
+}
+
+function addField(){
+  fields.push({ key:'', label:{uz:'',ru:''}, type:'text', required:false, placeholder:{uz:'',ru:''}, aiHint:'' });
+  renderFieldRows(); renderPalette();
+}
+function removeField(i){ fields.splice(i,1); renderFieldRows(); renderPalette(); }
+
+// ── Palette chips ──
+function renderPalette(){
+  const p = document.getElementById('palette'); if(!p) return;
+  const keys = fields.map(f=>f.key).filter(Boolean);
+  p.innerHTML = keys.length
+    ? keys.map(k=>`<button class="chip" onclick="insertKey('${k}')" title="{{${k}}} qo'shish">{{${k}}}</button>`).join('')
+    : '<span style="font-size:12px;color:var(--txt2)">Maydon qo\'shsangiz, bu yerda tugmachalar paydo bo\'ladi</span>';
+}
+
+function insertKey(key){
+  const ta = document.getElementById('bodyTa'); if(!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const txt = '{{'+key+'}}';
+  ta.value = ta.value.slice(0,s)+txt+ta.value.slice(e);
+  ta.selectionStart = ta.selectionEnd = s+txt.length;
+  ta.focus(); syncBody();
+}
+
+function syncBody(){ /* live sync is via direct access in saveTemplate */ }
+
+// ── Preview / edit tabs ──
+function showTab(t){
+  const edit = document.getElementById('editView');
+  const prev = document.getElementById('previewView');
+  const bE = document.getElementById('btnEdit');
+  const bP = document.getElementById('btnPreview');
+  if(t==='edit'){
+    edit.style.display=''; prev.style.display='none'; bE.classList.add('on'); bP.classList.remove('on');
+  } else {
+    edit.style.display='none'; prev.style.display=''; bE.classList.remove('on'); bP.classList.add('on');
+    renderPreview();
+  }
+}
+
+function renderPreview(){
+  const ta = document.getElementById('bodyTa'); if(!ta) return;
+  const body = ta.value;
+  // Replace {{key}} with labelled placeholder spans
+  const html = body.replace(/\{\{(\w+)\}\}/g,(_,k)=>{
+    const f = fields.find(x=>x.key===k);
+    const label = f?.label?.uz || k;
+    return `<span class="fld-ph">[ ${label} ]</span>`;
+  });
+  const pd = document.getElementById('previewDoc');
+  if(pd) pd.innerHTML = html;
+}
+
+// ── Collect form values ──
+function collect(){
+  const nameUz = document.getElementById('nameUz')?.value.trim()||'';
+  const nameRu = document.getElementById('nameRu')?.value.trim()||'';
+  const body = document.getElementById('bodyTa')?.value||'';
+  return {
+    name: { uz: nameUz, ru: nameRu },
+    description: { uz: document.getElementById('descUz')?.value.trim()||'', ru: document.getElementById('descRu')?.value.trim()||'' },
+    category: document.getElementById('cat')?.value||'boshqa',
+    lang: document.getElementById('lang')?.value||'uz',
+    fields,
+    body,
+  };
+}
+
+// ── Save ──
+async function saveTemplate(){
+  const data = collect();
+  if(!data.name.uz && !data.name.ru){ toast('Shablon nomini kiriting'); return; }
+  const btn = document.getElementById('saveBtn');
+  btn.disabled=true; btn.textContent='⏳ Saqlanmoqda…';
+  try{
+    const method = editing.id ? 'PUT' : 'POST';
+    const url = editing.id ? '/api/templates/'+editing.id : '/api/templates';
+    const r = await fetch(url,{ method, headers:{'Content-Type':'application/json'}, credentials:'same-origin', body: JSON.stringify(data) });
+    if(!r.ok){ const e=await r.json(); toast('Xato: '+(e.error||r.status)); return; }
+    const saved = await r.json();
+    editing = saved;
+    fields = JSON.parse(JSON.stringify(saved.fields||[]));
+    toast('✅ Saqlandi');
+    await loadList();
+    renderEditor();
+    renderList();
+  }catch(e){ toast('Xato: '+e.message); }
+  finally{ btn.disabled=false; btn.textContent='💾 Saqlash'; }
+}
+
+// ── Delete ──
+async function deleteTemplate(){
+  if(!editing?.id) return;
+  if(!confirm('Shablonni o\'chirasizmi? Bu amalni qaytarib bo\'lmaydi.')) return;
+  await fetch('/api/templates/'+editing.id,{ method:'DELETE', credentials:'same-origin' });
+  editing=null; fields=[];
+  toast('O\'chirildi');
+  await loadList();
+  document.getElementById('editorPane').innerHTML='<div class="empty-state" style="margin-top:60px"><div style="font-size:32px;margin-bottom:12px">📄</div><div>Shablon tanlang yoki yangi yarating.</div></div>';
+}
+
+function cancelEdit(){ editing=null; fields=[]; renderList(); document.getElementById('editorPane').innerHTML='<div class="empty-state" style="margin-top:60px">Shablon tanlang yoki yangi yarating.</div>'; }
+
+init();
+</script>
+</body>
+</html>
