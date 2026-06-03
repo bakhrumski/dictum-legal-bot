@@ -7536,6 +7536,7 @@
         }
 
         let aiCurrentRequestId = null;
+        let aiCurrentQaBankId = null;
         let aiConversationHistory = [];
         let aiCurrentRequestText = '';
         let aiCurrentCategory = '';
@@ -7568,6 +7569,7 @@
             document.getElementById('aiFeedbackUp').classList.remove('selected');
             document.getElementById('aiFeedbackDown').classList.remove('selected');
             document.getElementById('aiFeedbackStatus').textContent = '';
+            aiCurrentQaBankId = null;
 
             // Show request preview
             const preview = document.getElementById('aiRequestPreview');
@@ -7641,6 +7643,7 @@
                         { role: 'user', text: requestText },
                         { role: 'model', text: data.reply }
                     ];
+                    aiCurrentQaBankId = data.qaBank?.id || null;
                     aiAnalysisComplete = true;
 
                     // Show chat, actions, feedback
@@ -7692,16 +7695,25 @@
             downBtn.classList.toggle('selected', rating === -1);
 
             try {
-                const response = await fetch('/api/ai-feedback', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ requestId: aiCurrentRequestId, rating })
-                });
-                if (response.ok) {
-                    status.textContent = 'Rahmat!';
-                    setTimeout(() => { status.textContent = ''; }, 3000);
+                const calls = [
+                    fetch('/api/ai-feedback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ requestId: aiCurrentRequestId, rating })
+                    })
+                ];
+                if (aiCurrentQaBankId) {
+                    calls.push(fetch('/api/qa-bank/' + aiCurrentQaBankId + '/vote', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ direction: rating === 1 ? 'up' : 'down' })
+                    }));
                 }
+                await Promise.all(calls);
+                status.textContent = 'Rahmat!';
+                setTimeout(() => { status.textContent = ''; }, 3000);
             } catch (error) {
                 status.textContent = 'Xatolik';
             }

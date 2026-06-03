@@ -3507,14 +3507,15 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         const qEmbStr = `[${qEmb.join(',')}]`;
 
         const r = await pool.query(`
-          SELECT id, chunk_text, category, doc_id, law_name,
+          SELECT id, chunk_text, category, doc_id, law_name, quality_score,
                  1 - (embedding <=> $1::vector) AS similarity
           FROM legal_chunks
           WHERE source_type = 'verified_qa'
             AND is_valid = TRUE
             AND (is_active IS NULL OR is_active = TRUE)
             AND embedding IS NOT NULL
-          ORDER BY embedding <=> $1::vector
+            AND COALESCE(quality_score, 1.0) >= 0.25
+          ORDER BY (embedding <=> $1::vector) - (COALESCE(quality_score, 1.0) - 1.0) * 0.15
           LIMIT 5
         `, [qEmbStr]);
 
@@ -3554,7 +3555,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
               .filter(row => parseFloat(row.similarity) >= 0.50)
               .map(row => {
                 const p = parseQA(row.chunk_text);
-                return { question: p.question, answer: p.answer, rating: 1 };
+                return { question: p.question, answer: p.answer, rating: parseFloat(row.quality_score || 1) };
               });
             qaFewShotBlock = formatQaFewShot(usable);
             console.log(`[Legal Chat] verified_qa few-shot: ${usable.length} examples (top sim=${topSim.toFixed(3)})`);
