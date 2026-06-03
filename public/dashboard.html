@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JuristAI - Murojaatlar Dashboard</title>
+    <link rel="icon" type="image/png" sizes="256x256" href="/favicon-256.png">
+    <link rel="apple-touch-icon" href="/favicon-256.png">
     <!-- PDF & Chart Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
@@ -4999,6 +5001,8 @@
         [data-theme="dark"] .topic-modal-btn.ghost:hover {
             background: var(--dark-bg-3);
         }
+        .header-logo { animation: logo-reveal 0.3s ease both; }
+        @keyframes logo-reveal { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
