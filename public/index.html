@@ -106,11 +106,22 @@ header.sc{background:var(--nav-bg);backdrop-filter:blur(20px);-webkit-backdrop-f
 nav{display:flex;align-items:center;height:68px;gap:20px}
 .brand{display:inline-flex;align-items:center;flex-shrink:0;line-height:1}
 .brand-img{height:36px;width:auto;display:block}
+/* logo swap: light logo on dark bg (default), dark logo on parchment header */
+.logo-on-dark{display:block}
+.logo-on-light{display:none}
+[data-theme="light"] header.sc .logo-on-dark{display:none}
+[data-theme="light"] header.sc .logo-on-light{display:block}
 .nav-links{display:flex;gap:22px;flex:1;justify-content:center}
 .nav-links a{color:rgba(255,255,255,.75);font-size:14.5px;font-weight:500;transition:color .2s}
 .nav-links a:hover{color:#D6B379}
 [data-theme="light"] .nav-links a{color:var(--txt2)}
 [data-theme="light"] .nav-links a:hover{color:var(--gold)}
+/* requirement 2: dark mode nav links always white */
+[data-theme="dark"] .nav-links a{color:rgba(255,255,255,.75)}
+[data-theme="dark"] .nav-links a:hover{color:#D6B379}
+/* requirement 3: ghost btn ink-colored on parchment header */
+[data-theme="light"] header.sc .btn-ghost{color:#1A1410;border-color:rgba(26,20,16,0.22)}
+[data-theme="light"] header.sc .btn-ghost:hover{background:rgba(26,20,16,0.06)}
 .nav-end{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .ls{display:flex;align-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:3px 4px;gap:2px}
 [data-theme="light"] .ls{background:var(--bg2);border-color:var(--border)}
@@ -363,7 +374,8 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
   <div class="wrap">
     <nav>
       <a href="#" class="brand" aria-label="JuristAI">
-        <img src="/juristAI_logo.png" alt="JuristAI" class="brand-img">
+        <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img logo-on-dark">
+        <img src="/wordmark-primary-2048.png" alt="JuristAI" class="brand-img logo-on-light">
       </a>
       <div class="nav-links">
         <a href="#features" data-i18n="nav_features">Imkoniyatlar</a>
