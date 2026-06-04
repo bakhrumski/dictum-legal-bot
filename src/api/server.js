@@ -3508,6 +3508,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
 
         const r = await pool.query(`
           SELECT id, chunk_text, category, doc_id, law_name, quality_score,
+                 COALESCE(flagged_for_review, FALSE) AS flagged_for_review,
                  1 - (embedding <=> $1::vector) AS similarity
           FROM legal_chunks
           WHERE source_type = 'verified_qa'
@@ -3539,7 +3540,9 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
           console.log(`[Legal Chat] verified_qa top match: id=${top.id} sim=${topSim.toFixed(3)} cat=${top.category}`);
 
           if (topSim >= 0.85) {
-            if (isFailedAnswer(topParsed.answer)) {
+            if (top.flagged_for_review) {
+              console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — flagged for review (net-negative user feedback)`);
+            } else if (isFailedAnswer(topParsed.answer)) {
               console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — answer contains failure phrase`);
             } else if (hasCriticalTermMismatch(message, topParsed.question)) {
               console.warn(`[Legal Chat] VERIFIED OVERRIDE id=${top.id} SKIPPED — question entity mismatch (sim=${topSim.toFixed(3)})`);
@@ -6256,6 +6259,12 @@ async function runMigrations() {
       const { mountEnterpriseRoutes } = require('../enterprise/routes');
       mountEnterpriseRoutes(app, { requireAuth, callAI, tariffModule });
     } catch (e) { console.log('[ENTERPRISE] Mount skipped:', e.message); }
+
+    // Mount RAG usage feedback loop (end-user votes → retrieval self-correction)
+    try {
+      const { mountUsageFeedbackRoutes } = require('../rag/usage-feedback');
+      mountUsageFeedbackRoutes(app, { requireAuth, requireMasterAdmin });
+    } catch (e) { console.log('[USAGE-FB] Mount skipped:', e.message); }
 
     // Initialize persistent LLM spend log + wire it into hybrid pipeline
     try {

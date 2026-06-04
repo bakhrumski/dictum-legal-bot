@@ -8539,7 +8539,8 @@
                         '<button class="ai-msg-act" data-tip="Yomon javob" onclick="rateAiMsg(this,\'bad\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>' +
                         '</div>';
 
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai" data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + ragBadge + actionsHtml + verifyRow + '</div>';
+                    var qaIdAttr = (data.qaBank && data.qaBank.id) ? (' data-qa-id="' + data.qaBank.id + '"') : '';
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + ragBadge + actionsHtml + verifyRow + '</div>';
                 } else {
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
                 }
@@ -8644,13 +8645,25 @@
             var msgEl = btn.closest('.ai-chat-msg');
             var question = msgEl.getAttribute('data-q') || '';
             var answer = (msgEl.getAttribute('data-raw') || '').substring(0, 2000);
+            var qaId = msgEl.getAttribute('data-qa-id');
 
+            // Telemetry feedback (all answers)
             fetch('/api/jurist-feedback', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
                 body: JSON.stringify({ rating: rating, userQuestion: question, aiResponse: answer, topic: selectedTopic })
             }).catch(function(err) { console.error('[FEEDBACK]', err); });
+
+            // Self-improvement loop: attribute the vote to the served verified answer
+            if (qaId) {
+                fetch('/api/legal-chat/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ qaChunkId: qaId, helpful: rating === 'good' })
+                }).catch(function(err) { console.error('[USAGE-FB]', err); });
+            }
         }
 
         // ═══ FEEDBACK REPORT (master only) ═══
