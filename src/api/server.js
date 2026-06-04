@@ -6251,6 +6251,12 @@ async function runMigrations() {
       mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule });
     } catch (e) { console.log('[ANALYZE] Mount skipped:', e.message); }
 
+    // Mount Enterprise Uzbekistan / TIFC English-law routes
+    try {
+      const { mountEnterpriseRoutes } = require('../enterprise/routes');
+      mountEnterpriseRoutes(app, { requireAuth, callAI, tariffModule });
+    } catch (e) { console.log('[ENTERPRISE] Mount skipped:', e.message); }
+
     // Initialize persistent LLM spend log + wire it into hybrid pipeline
     try {
       const hybridPipeline = require('../rag/hybrid-pipeline');

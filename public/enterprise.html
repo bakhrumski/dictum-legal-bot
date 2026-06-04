@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Enterprise Uzbekistan — English Law · JuristAI</title>
+<link rel="icon" type="image/png" sizes="256x256" href="/favicon-256.png">
+<link rel="stylesheet" href="/css/design-tokens.css">
+<style>
+:root{
+  --gold:#B08442;--gold-lt:#D6B379;--navy:#0E2236;--navy2:#16365A;
+  --txt:#1A1410;--txt2:#5b5147;--card:#fff;--bg:#FBF8F2;--border:rgba(26,20,16,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:11px 22px;background:var(--navy);color:#F5EFE3;flex-shrink:0}
+header .brand{display:flex;align-items:center;gap:14px;font-size:15px;font-weight:600}
+header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
+.hback{font-size:12px;color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.22);padding:5px 13px;border-radius:7px;text-decoration:none}
+.hback:hover{background:rgba(255,255,255,.1)}
+.corpus-badge{font-size:11px;color:rgba(255,255,255,.65);display:flex;align-items:center;gap:6px}
+.corpus-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--gold-lt)}
+
+.banner{background:linear-gradient(135deg,#16365A,#0E2236);color:#F5EFE3;padding:14px 26px;font-size:12.5px;line-height:1.55;border-bottom:2px solid var(--gold);flex-shrink:0}
+.banner b{color:var(--gold-lt);font-family:'Source Serif 4',Georgia,serif}
+
+.chat-wrap{flex:1;display:flex;flex-direction:column;min-height:0;max-width:920px;width:100%;margin:0 auto}
+.messages{flex:1;overflow-y:auto;padding:24px 24px 8px;display:flex;flex-direction:column;gap:16px}
+.msg{max-width:88%;line-height:1.6;font-size:14px}
+.msg.user{align-self:flex-end;background:var(--navy);color:#F5EFE3;padding:11px 16px;border-radius:14px 14px 4px 14px}
+.msg.bot{align-self:flex-start;background:#fff;border:1px solid var(--border);padding:14px 18px;border-radius:14px 14px 14px 4px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.msg.bot h1,.msg.bot h2,.msg.bot h3{font-family:'Source Serif 4',Georgia,serif;color:var(--navy);font-size:15px;margin:10px 0 5px}
+.msg.bot strong{color:var(--navy)}
+.msg.bot em{font-style:italic}
+.msg.bot p{margin:0 0 9px}.msg.bot p:last-child{margin:0}
+.msg.bot ul,.msg.bot ol{margin:0 0 9px;padding-left:20px}
+.msg.bot a{color:var(--gold)}
+.msg .sources{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--txt2)}
+.msg .sources a{color:var(--gold);text-decoration:none}
+.welcome{margin:auto;text-align:center;color:var(--txt2);max-width:480px;padding:30px}
+.welcome .icon{font-size:38px;margin-bottom:14px}
+.welcome h2{font-family:'Source Serif 4',Georgia,serif;font-size:20px;color:var(--navy);margin-bottom:8px}
+.welcome p{font-size:13.5px;line-height:1.6;margin-bottom:18px}
+.suggest{display:flex;flex-direction:column;gap:8px}
+.suggest button{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;text-align:left;cursor:pointer;color:var(--txt);transition:.15s}
+.suggest button:hover{border-color:var(--gold);background:rgba(176,132,66,.05)}
+
+.composer{padding:14px 24px 20px;flex-shrink:0;display:flex;gap:10px;align-items:flex-end}
+.composer textarea{flex:1;border:1px solid var(--border);border-radius:12px;padding:11px 15px;font-size:14px;font-family:inherit;resize:none;max-height:140px;line-height:1.5;background:#fff}
+.composer textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(176,132,66,.12)}
+.send-btn{background:var(--navy);color:#F5EFE3;border:none;border-radius:12px;width:46px;height:46px;cursor:pointer;font-size:18px;flex-shrink:0;transition:.15s;display:flex;align-items:center;justify-content:center}
+.send-btn:hover{background:var(--navy2)}
+.send-btn:disabled{opacity:.5;cursor:not-allowed}
+.spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Master ingest panel */
+.ingest-fab{position:fixed;bottom:90px;right:24px;background:var(--gold);color:#1A1410;border:none;border-radius:50%;width:46px;height:46px;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;z-index:30}
+.ingest-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
+.ingest-modal.show{display:flex}
+.ingest-card{background:#fff;border-radius:14px;padding:24px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto}
+.ingest-card h3{font-family:'Source Serif 4',Georgia,serif;color:var(--navy);font-size:18px;margin-bottom:14px}
+.ingest-card label{font-size:12px;font-weight:600;color:var(--txt2);display:block;margin:12px 0 5px}
+.ingest-card input,.ingest-card textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit}
+.ingest-card textarea{min-height:160px;resize:vertical;line-height:1.5}
+.ingest-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.btn{padding:9px 18px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--txt)}
+.btn.primary{background:var(--navy);color:#F5EFE3;border-color:var(--navy)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--navy);color:#F5EFE3;padding:10px 20px;border-radius:10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.22);opacity:0;transition:.3s;pointer-events:none;z-index:99}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <a href="/dashboard.html" class="hback">← Dashboard</a>
+    <span>Enterprise Uzbekistan <b>English Law</b></span>
+  </div>
+  <div class="corpus-badge"><span class="dot"></span><span id="corpusBadge">…</span></div>
+</header>
+
+<div class="banner">
+  ⚖️ This assistant operates under the <b>common law of England &amp; Wales</b>, the legal regime of the
+  <b>Tashkent International Financial Center (TIFC)</b> and <b>Enterprise Uzbekistan</b>. Answers cover English
+  commercial, contract, company and financial-services law as applied within the TIFC framework. General information only — not formal legal advice.
+</div>
+
+<div class="chat-wrap">
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcome">
+      <div class="icon">⚖️</div>
+      <h2>TIFC / English-Law Assistant</h2>
+      <p>Ask about contracts, company formation, corporate governance, dispute resolution or financial regulation under the TIFC's English-law regime.</p>
+      <div class="suggest">
+        <button onclick="ask(this.textContent)">What are the essential elements of a valid contract under English law?</button>
+        <button onclick="ask(this.textContent)">How does the TIFC arbitration centre differ from Uzbek state courts?</button>
+        <button onclick="ask(this.textContent)">What are directors' fiduciary duties under the Companies Act 2006?</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Ask a question about English law within the TIFC framework…" onkeydown="onKey(event)" oninput="autoGrow(this)"></textarea>
+    <button class="send-btn" id="sendBtn" onclick="send()">➤</button>
+  </div>
+</div>
+
+<!-- Master-only: ingest English-law documents -->
+<button class="ingest-fab" id="ingestFab" onclick="openIngest()" title="Add English-law document">＋</button>
+<div class="ingest-modal" id="ingestModal" onclick="if(event.target===this)closeIngest()">
+  <div class="ingest-card">
+    <h3>Add English-law document</h3>
+    <label>Document / law name *</label>
+    <input id="ingLawName" placeholder="e.g. TIFC Companies Regulations 2025">
+    <label>Source URL (optional)</label>
+    <input id="ingUrl" placeholder="https://…">
+    <label>Document text *</label>
+    <textarea id="ingText" placeholder="Paste the document text. It will be chunked, embedded and added to the English-law corpus."></textarea>
+    <div class="ingest-actions">
+      <button class="btn" onclick="closeIngest()">Cancel</button>
+      <button class="btn primary" id="ingSave" onclick="saveIngest()">Add to corpus</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const history = [];
+let isMaster = false;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Minimal markdown → HTML (bold, italic, headings, lists, links, paragraphs)
+function md(t){
+  let h = esc(t)
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g,'<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/^[-*] (.+)$/gm,'<li>$1</li>')
+    .replace(/^\d+\.\s+(.+)$/gm,'<li>$1</li>')
+    .replace(/\n\n/g,'</p><p>')
+    .replace(/\n/g,'<br>');
+  h = h.replace(/(<li>.*?<\/li>(<br>)?)+/g,m=>'<ul>'+m.replace(/<br>/g,'')+'</ul>');
+  return '<p>'+h+'</p>';
+}
+
+(async()=>{
+  const r = await fetch('/api/user-info',{credentials:'same-origin'});
+  if(!r.ok){ window.location.href='/login.html'; return; }
+  const u = await r.json();
+  isMaster = u.role === 'master';
+  if(isMaster) document.getElementById('ingestFab').style.display='block';
+  loadStats();
+})();
+
+async function loadStats(){
+  try{
+    const r = await fetch('/api/enterprise/stats',{credentials:'same-origin'});
+    const s = await r.json();
+    document.getElementById('corpusBadge').textContent = s.chunks>0 ? `${s.chunks} sources · ${s.docs} docs` : 'Knowledge base empty';
+  }catch(_){ document.getElementById('corpusBadge').textContent=''; }
+}
+
+function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,140)+'px'; }
+function onKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } }
+function ask(text){ document.getElementById('input').value=text; send(); }
+
+function addMsg(role, html){
+  const w = document.getElementById('welcome'); if(w) w.remove();
+  const m = document.getElementById('messages');
+  const d = document.createElement('div');
+  d.className = 'msg '+role;
+  d.innerHTML = html;
+  m.appendChild(d); m.scrollTop = m.scrollHeight;
+  return d;
+}
+
+async function send(){
+  const inp = document.getElementById('input');
+  const text = inp.value.trim();
+  if(!text) return;
+  inp.value=''; autoGrow(inp);
+  addMsg('user', esc(text));
+  history.push({role:'user', text});
+
+  const btn = document.getElementById('sendBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
+  const thinking = addMsg('bot','<em style="color:var(--txt2)">Researching English law…</em>');
+
+  try{
+    const r = await fetch('/api/enterprise-chat',{
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({ message:text, history: history.slice(0,-1) })
+    });
+    if(r.status===401){ window.location.href='/login.html'; return; }
+    if(r.status===429){ thinking.innerHTML='<em>Daily limit reached.</em>'; return; }
+    const data = await r.json();
+    if(data.error){ thinking.innerHTML='<em>Error: '+esc(data.error)+'</em>'; return; }
+    let html = md(data.reply||'');
+    if(data.sources && data.sources.length){
+      html += '<div class="sources"><strong>Sources:</strong> ' +
+        data.sources.map(s=> s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)).join(' · ') +
+        '</div>';
+    }
+    thinking.innerHTML = html;
+    history.push({role:'model', text:data.reply||''});
+    document.getElementById('messages').scrollTop = 1e9;
+  }catch(e){ thinking.innerHTML='<em>Error: '+esc(e.message)+'</em>'; }
+  finally{ btn.disabled=false; btn.innerHTML='➤'; }
+}
+
+// ── Master ingest ──
+function openIngest(){ document.getElementById('ingestModal').classList.add('show'); }
+function closeIngest(){ document.getElementById('ingestModal').classList.remove('show'); }
+async function saveIngest(){
+  const lawName = document.getElementById('ingLawName').value.trim();
+  const sourceUrl = document.getElementById('ingUrl').value.trim();
+  const text = document.getElementById('ingText').value.trim();
+  if(!lawName || !text){ toast('Name and text are required'); return; }
+  const btn = document.getElementById('ingSave');
+  btn.disabled=true; btn.textContent='Adding…';
+  try{
+    const r = await fetch('/api/enterprise/ingest',{
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({ lawName, sourceUrl, text })
+    });
+    const data = await r.json();
+    if(data.error){ toast('Error: '+data.error); return; }
+    toast(`Added ${data.inserted} chunks`);
+    document.getElementById('ingLawName').value='';
+    document.getElementById('ingUrl').value='';
+    document.getElementById('ingText').value='';
+    closeIngest(); loadStats();
+  }catch(e){ toast('Error: '+e.message); }
+  finally{ btn.disabled=false; btn.textContent='Add to corpus'; }
+}
+</script>
+</body>
+</html>
