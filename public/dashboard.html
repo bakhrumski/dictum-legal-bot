@@ -462,9 +462,11 @@
             display: block;
             margin-bottom: 2px;
         }
-        .header-logo-dark { display: none; }
-        [data-theme="dark"] .header-logo-light { display: none; }
-        [data-theme="dark"] .header-logo-dark  { display: block; }
+        /* Desktop: show the wordmark (light/dark variant), hide the mono icon. */
+        .header-logo-mono { display: none; }
+        .header-logo-wordmark.header-logo-dark { display: none; }
+        [data-theme="dark"] .header-logo-wordmark.header-logo-light { display: none; }
+        [data-theme="dark"] .header-logo-wordmark.header-logo-dark  { display: block; }
 
         .header-center {
             position: absolute;
@@ -4832,6 +4834,12 @@
             header { height: 70px; max-height: 70px; padding: 8px 10px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; }
             .header-left { flex-shrink: 0; min-width: 0; }
             .header-logo { height: 32px; }
+            /* Mobile: swap the wide wordmark for the compact mono icon. */
+            .header-logo-wordmark { display: none !important; }
+            .header-logo-mono.header-logo-light { display: block; }
+            .header-logo-mono.header-logo-dark  { display: none; }
+            [data-theme="dark"] .header-logo-mono.header-logo-light { display: none !important; }
+            [data-theme="dark"] .header-logo-mono.header-logo-dark  { display: block !important; }
             .header-left .subtitle { font-size: 7px; letter-spacing: 1px; }
             .header-center {
                 position: static !important;
@@ -5152,8 +5160,10 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="switchTab('home')">
-                    <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-light">
-                    <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-dark">
+                    <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
+                    <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
+                    <img src="/icon-mono-navy.png"              alt="JuristAI" class="header-logo header-logo-mono header-logo-light">
+                    <img src="/icon-mono-cream.png"             alt="JuristAI" class="header-logo header-logo-mono header-logo-dark">
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">

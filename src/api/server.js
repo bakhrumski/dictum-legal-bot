@@ -5708,7 +5708,8 @@ app.get('/api/tariff/me', requireAuth, async (req, res) => {
     const userPlan = await tariffModule.getUserPlan(req.session.adminId);
     if (!userPlan) return res.status(404).json({ error: 'User not found' });
     const quota = await tariffModule.checkQuota(req.session.adminId);
-    res.json({ ...userPlan, quota });
+    const usage = await tariffModule.getUsageStats(req.session.adminId);
+    res.json({ ...userPlan, quota, usage });
   } catch (err) {
     console.error('[TARIFF ME] Error:', err);
     res.status(500).json({ error: err.message });
