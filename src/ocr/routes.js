@@ -33,6 +33,61 @@ const analyzeUpload = multer({
 // How many characters to feed to the AI (keeps token cost predictable)
 const MAX_ANALYSIS_CHARS = 9000;
 
+/**
+ * Best-effort extraction of a JSON object from a raw LLM response.
+ * Handles markdown code fences, leading/trailing prose, and — crucially —
+ * responses that were truncated mid-object (the model hit the token cap before
+ * closing its strings/brackets). Returns the parsed object or null.
+ */
+function salvageJson(rawText) {
+  if (!rawText) return null;
+  let s = String(rawText).trim();
+
+  // Strip markdown code fences anywhere (```json ... ``` or bare ```)
+  s = s.replace(/```(?:json)?/gi, '').trim();
+
+  // Narrow to the first '{' onward — drop any leading prose
+  const start = s.indexOf('{');
+  if (start === -1) return null;
+  s = s.slice(start);
+
+  // 1) Fast path: maybe it's already valid once trimmed to the last '}'
+  const lastBrace = s.lastIndexOf('}');
+  if (lastBrace !== -1) {
+    try { return JSON.parse(s.slice(0, lastBrace + 1)); } catch (_) { /* fall through */ }
+  }
+
+  // 2) Repair a truncated object: walk the string tracking structure, then
+  //    close any string still open and balance the remaining brackets.
+  let inStr = false, esc = false;
+  const stack = [];
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    out += c;
+    if (inStr) {
+      if (esc) { esc = false; }
+      else if (c === '\\') { esc = true; }
+      else if (c === '"') { inStr = false; }
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') stack.push(c);
+    else if (c === '}' || c === ']') stack.pop();
+  }
+
+  // Drop a dangling ",  key": fragment or trailing comma at the very end.
+  if (inStr) out += '"';
+  out = out.replace(/,\s*"[^"]*"\s*:?\s*$/s, '').replace(/,\s*$/s, '');
+
+  // Close whatever brackets are still open, innermost first.
+  for (let i = stack.length - 1; i >= 0; i--) {
+    out += stack[i] === '{' ? '}' : ']';
+  }
+
+  try { return JSON.parse(out); } catch (_) { return null; }
+}
+
 const SYSTEM_PROMPT = `You are a senior legal analyst specialising exclusively in the law of the Republic of Uzbekistan. You speak Uzbek and Russian fluently. You will receive the text of a legal document and must return ONLY a single valid JSON object — no markdown, no code fences, no explanation, no text before or after the JSON.
 
 JSON structure (follow exactly):
@@ -117,26 +172,28 @@ function mountAnalyzerRoutes(app, deps) {
       const result = await callAI([
         { role: 'system', text: SYSTEM_PROMPT },
         { role: 'user', text: `Analyze this legal document:${langNote}\n\n---\n${truncated}\n---` },
-      ], { temperature: 0.15, maxTokens: 3000 });
+      ], { temperature: 0.15, maxTokens: 4096 });
 
-      // Parse JSON — strip accidental markdown fences if present
-      let raw = (result.text || '').trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/```\s*$/i, '')
-        .trim();
+      // Robustly extract the JSON object — tolerant of code fences, leading
+      // prose and (most commonly) responses truncated mid-object.
+      let analysis = salvageJson(result.text);
 
-      // Find first { to last } (tolerant of leading/trailing garbage)
-      const start = raw.indexOf('{');
-      const end = raw.lastIndexOf('}');
-      if (start !== -1 && end !== -1) raw = raw.slice(start, end + 1);
+      // If salvage produced an object but it's missing the core fields, treat
+      // it as a parse failure so the client shows the raw text instead.
+      if (analysis && typeof analysis === 'object' && !analysis.summary && !analysis.docType) {
+        analysis = null;
+      }
 
-      let analysis;
-      try {
-        analysis = JSON.parse(raw);
-      } catch (_) {
-        // Return raw text so client can still show something useful
+      if (!analysis) {
+        console.warn('[ANALYZE] JSON salvage failed; returning raw. provider=' + result.provider);
         return res.json({ raw: result.text, parseError: true, provider: result.provider });
       }
+
+      // Guarantee the array fields exist so the client never crashes on them.
+      analysis.riskItems = Array.isArray(analysis.riskItems) ? analysis.riskItems : [];
+      analysis.missingClauses = Array.isArray(analysis.missingClauses) ? analysis.missingClauses : [];
+      analysis.complianceIssues = Array.isArray(analysis.complianceIssues) ? analysis.complianceIssues : [];
+      analysis.strengths = Array.isArray(analysis.strengths) ? analysis.strengths : [];
 
       res.json({ analysis, provider: result.provider, truncated: text.trim().length > MAX_ANALYSIS_CHARS });
     } catch (e) {
