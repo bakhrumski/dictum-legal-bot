@@ -4379,6 +4379,114 @@
         }
 
         /* Admin creation modal */
+        /* ── Flagged Answers Panel ── */
+        .flagged-overlay {
+            display: none; position: fixed; inset: 0;
+            background: var(--bg-modal-overlay);
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            z-index: 1100; justify-content: flex-end; align-items: stretch;
+        }
+        .flagged-overlay.active { display: flex; }
+        .flagged-panel {
+            width: 620px; max-width: 100vw;
+            background: var(--glass-bg-strong);
+            border-left: 1px solid var(--glass-border);
+            display: flex; flex-direction: column; overflow: hidden;
+            animation: slideInRight .3s cubic-bezier(.4,0,.2,1);
+        }
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+        }
+        .flagged-panel-hdr {
+            display: flex; align-items: center; gap: 12px;
+            padding: 18px 20px 14px;
+            border-bottom: 1px solid var(--glass-border);
+            background: var(--glass-bg-strong);
+        }
+        .flagged-panel-hdr h2 {
+            flex: 1; margin: 0; font-size: 17px; font-weight: 700;
+            color: var(--text-primary);
+        }
+        .flagged-panel-hdr .fp-count {
+            background: #c0392b; color: #fff;
+            font-size: 11px; font-weight: 700; border-radius: 20px;
+            padding: 2px 8px; white-space: nowrap;
+        }
+        .flagged-panel-close {
+            background: none; border: none; cursor: pointer;
+            padding: 4px; border-radius: 6px; color: var(--text-secondary);
+            transition: .15s;
+        }
+        .flagged-panel-close:hover { background: var(--bg-folder-header-hover); }
+        .flagged-panel-body {
+            flex: 1; overflow-y: auto; padding: 16px;
+            display: flex; flex-direction: column; gap: 14px;
+        }
+        .flagged-empty {
+            text-align: center; padding: 48px 20px;
+            color: var(--text-muted); font-size: 14px;
+        }
+        .flagged-card {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: var(--ios-radius); padding: 14px 16px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .flagged-card-meta {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 11px; color: var(--text-muted); flex-wrap: wrap;
+        }
+        .flagged-card-meta .fc-cat {
+            background: var(--badge-total-bg); border: 1px solid var(--badge-total-border);
+            border-radius: 20px; padding: 1px 8px; color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .flagged-card-meta .fc-votes {
+            display: flex; gap: 4px; align-items: center;
+        }
+        .flagged-card-meta .fc-up { color: #27ae60; font-weight: 700; }
+        .flagged-card-meta .fc-down { color: #c0392b; font-weight: 700; }
+        .flagged-card-meta .fc-net {
+            background: #fdecea; color: #c0392b;
+            border-radius: 20px; padding: 1px 7px; font-weight: 700;
+        }
+        .flagged-card-q {
+            font-size: 13px; font-weight: 600; color: var(--text-primary);
+            line-height: 1.45;
+        }
+        .flagged-card-q::before { content: 'S: '; color: var(--gold,#B08442); }
+        .flagged-card-a {
+            font-size: 13px; color: var(--text-secondary); line-height: 1.55;
+        }
+        .flagged-card-a::before { content: 'J: '; font-weight: 600; color: var(--text-secondary); }
+        .flagged-card-edit-area { display: none; flex-direction: column; gap: 8px; }
+        .flagged-card-edit-area textarea {
+            width: 100%; box-sizing: border-box;
+            border: 1px solid var(--border-input);
+            border-radius: 8px; padding: 8px 10px;
+            font: 13px/1.55 inherit; resize: vertical;
+            background: var(--bg-input); color: var(--text-primary);
+        }
+        .flagged-card-edit-area label {
+            font-size: 11px; font-weight: 600; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: .04em;
+        }
+        .flagged-card-actions {
+            display: flex; gap: 8px; flex-wrap: wrap;
+        }
+        .fc-btn {
+            font: 600 12px/1 inherit; border: none; border-radius: 8px;
+            padding: 6px 13px; cursor: pointer; transition: .15s;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .fc-btn-edit   { background: var(--navy-100,#ddeeff); color: var(--navy-700,#0E2236); }
+        .fc-btn-save   { background: #27ae60; color: #fff; }
+        .fc-btn-cancel { background: var(--bg-folder-header); color: var(--text-secondary); }
+        .fc-btn-clear  { background: var(--brass-100,#fff8e7); color: var(--brass-600,#8a6600); border: 1px solid var(--brass-300,#d4b06a); }
+        .fc-btn-del    { background: #fdecea; color: #c0392b; }
+        .fc-btn:hover  { filter: brightness(.92); }
+        /* ── End Flagged Answers Panel ── */
+
         .admin-modal-overlay {
             display: none;
             position: fixed;
@@ -5034,6 +5142,10 @@
                 <a href="/templates.html" id="templatesLaunchBtn" title="Shablonlar muharriri" style="display:none;align-items:center;justify-content:center;text-decoration:none;padding:6px;border-radius:8px;transition:.15s" onmouseover="this.style.background='rgba(128,128,128,.12)'" onmouseout="this.style.background=''">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                 </a>
+                <button id="flaggedAnswersBtn" onclick="openFlaggedPanel()" title="Tekshirilishi kerak javoblar" style="display:none;position:relative;align-items:center;justify-content:center;padding:6px;border-radius:8px;transition:.15s;background:none;border:none;cursor:pointer;" onmouseover="this.style.background='rgba(128,128,128,.12)'" onmouseout="this.style.background=''">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span id="flaggedAnswersBadge" style="display:none;position:absolute;top:2px;right:2px;background:#c0392b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center;">0</span>
+                </button>
                 <button class="header-icon-btn" onclick="exportToPDF()" title="PDF">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 </button>
@@ -5920,6 +6032,10 @@
                 // Template manager: master only
                 var tplBtn = document.getElementById('templatesLaunchBtn');
                 if (tplBtn) tplBtn.style.display = data.role === 'master' ? 'inline-flex' : 'none';
+                // Flagged answers panel: master only
+                var flBtn = document.getElementById('flaggedAnswersBtn');
+                if (flBtn) flBtn.style.display = data.role === 'master' ? 'inline-flex' : 'none';
+                if (data.role === 'master') loadFlaggedBadge();
 
                 // Show legal search chat for master only
                 const legalChatEl = document.getElementById('legalChatSection');
@@ -11138,6 +11254,200 @@
         setInterval(loadRankings, 120000);
         setInterval(loadMonteCarlo, 300000);
     </script>
+
+    <!-- ── Flagged Answers Panel JS ── -->
+    <script>
+    (function() {
+        var _flaggedData = [];
+
+        function esc(s) {
+            return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function relDate(d) {
+            if (!d) return '';
+            var diff = Date.now() - new Date(d).getTime();
+            var m = Math.floor(diff / 60000);
+            if (m < 2)  return 'hozirgina';
+            if (m < 60) return m + ' daq. oldin';
+            var h = Math.floor(m/60);
+            if (h < 24) return h + ' soat oldin';
+            return Math.floor(h/24) + ' kun oldin';
+        }
+
+        window.loadFlaggedBadge = function() {
+            fetch('/api/rag/flagged-answers').then(function(r){ return r.json(); }).then(function(d) {
+                var n = (d.flagged || []).length;
+                var badge = document.getElementById('flaggedAnswersBadge');
+                if (!badge) return;
+                if (n > 0) {
+                    badge.textContent = n > 99 ? '99+' : n;
+                    badge.style.display = 'block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }).catch(function(){});
+        };
+
+        window.openFlaggedPanel = function() {
+            var overlay = document.getElementById('flaggedOverlay');
+            if (overlay) overlay.classList.add('active');
+            renderFlaggedPanel([]);
+            var body = document.getElementById('flaggedPanelBody');
+            if (body) body.innerHTML = '<div class="flagged-empty">Yuklanmoqda…</div>';
+            fetch('/api/rag/flagged-answers').then(function(r){ return r.json(); }).then(function(d) {
+                _flaggedData = d.flagged || [];
+                renderFlaggedPanel(_flaggedData);
+            }).catch(function(e) {
+                var body2 = document.getElementById('flaggedPanelBody');
+                if (body2) body2.innerHTML = '<div class="flagged-empty">Xatolik: ' + esc(e.message) + '</div>';
+            });
+        };
+
+        window.closeFlaggedPanel = function() {
+            var overlay = document.getElementById('flaggedOverlay');
+            if (overlay) overlay.classList.remove('active');
+        };
+
+        function renderFlaggedPanel(items) {
+            var body = document.getElementById('flaggedPanelBody');
+            var countEl = document.getElementById('flaggedPanelCount');
+            if (!body) return;
+            if (countEl) {
+                if (items.length > 0) { countEl.textContent = items.length; countEl.style.display = ''; }
+                else countEl.style.display = 'none';
+            }
+            if (!items.length) {
+                body.innerHTML = '<div class="flagged-empty"><svg style="display:block;margin:0 auto 12px" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Hozircha tekshirilishi kerak javob yo\'q.</div>';
+                return;
+            }
+            body.innerHTML = items.map(function(item, i) {
+                var net = (item.unhelpful||0) - (item.helpful||0);
+                return '<div class="flagged-card" id="fcard-' + item.id + '">' +
+                    '<div class="flagged-card-meta">' +
+                        (item.category ? '<span class="fc-cat">' + esc(item.category) + '</span>' : '') +
+                        '<span class="fc-votes">' +
+                            '<span class="fc-up">&#128077; ' + (item.helpful||0) + '</span>' +
+                            '<span class="fc-down">&#128078; ' + (item.unhelpful||0) + '</span>' +
+                            '<span class="fc-net">net &minus;' + Math.abs(net) + '</span>' +
+                        '</span>' +
+                        (item.lawName ? '<span style="color:var(--text-muted)">' + esc(item.lawName) + '</span>' : '') +
+                        '<span style="margin-left:auto">' + relDate(item.updatedAt) + '</span>' +
+                    '</div>' +
+                    '<div class="flagged-card-q fcard-q-' + item.id + '">' + esc(item.question || '(savol mavjud emas)') + '</div>' +
+                    '<div class="flagged-card-a fcard-a-' + item.id + '">' + esc(item.answer || item.chunkText || '') + '</div>' +
+                    '<div class="flagged-card-edit-area" id="fedit-' + item.id + '">' +
+                        '<label>Savol</label>' +
+                        '<textarea id="fedit-q-' + item.id + '" rows="2">' + esc(item.question || '') + '</textarea>' +
+                        '<label>Javob</label>' +
+                        '<textarea id="fedit-a-' + item.id + '" rows="5">' + esc(item.answer || '') + '</textarea>' +
+                    '</div>' +
+                    '<div class="flagged-card-actions">' +
+                        '<button class="fc-btn fc-btn-edit" id="fcard-editbtn-' + item.id + '" onclick="fcStartEdit(' + item.id + ')">&#9998; Tahrirlash</button>' +
+                        '<button class="fc-btn fc-btn-save" id="fcard-savebtn-' + item.id + '" style="display:none" onclick="fcSaveEdit(' + item.id + ')">&#10003; Saqlash</button>' +
+                        '<button class="fc-btn fc-btn-cancel" id="fcard-cancelbtn-' + item.id + '" style="display:none" onclick="fcCancelEdit(' + item.id + ')">Bekor</button>' +
+                        '<button class="fc-btn fc-btn-clear" onclick="fcClearFlag(' + item.id + ')">&#10003; Belgi tozalash</button>' +
+                        '<button class="fc-btn fc-btn-del" onclick="fcDeleteAnswer(' + item.id + ')">&#128465; O\'chirish</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        window.fcStartEdit = function(id) {
+            document.getElementById('fedit-' + id).style.display = 'flex';
+            document.getElementById('fcard-editbtn-' + id).style.display = 'none';
+            document.getElementById('fcard-savebtn-' + id).style.display = '';
+            document.getElementById('fcard-cancelbtn-' + id).style.display = '';
+            document.querySelector('#fcard-' + id + ' .fcard-q-' + id).style.display = 'none';
+            document.querySelector('#fcard-' + id + ' .fcard-a-' + id).style.display = 'none';
+        };
+
+        window.fcCancelEdit = function(id) {
+            document.getElementById('fedit-' + id).style.display = 'none';
+            document.getElementById('fcard-editbtn-' + id).style.display = '';
+            document.getElementById('fcard-savebtn-' + id).style.display = 'none';
+            document.getElementById('fcard-cancelbtn-' + id).style.display = 'none';
+            document.querySelector('#fcard-' + id + ' .fcard-q-' + id).style.display = '';
+            document.querySelector('#fcard-' + id + ' .fcard-a-' + id).style.display = '';
+        };
+
+        window.fcSaveEdit = function(id) {
+            var q = (document.getElementById('fedit-q-' + id) || {}).value || '';
+            var a = (document.getElementById('fedit-a-' + id) || {}).value || '';
+            if (!q.trim() || !a.trim()) { alert('Savol va javob bo\'sh bo\'lishi mumkin emas'); return; }
+            var btn = document.getElementById('fcard-savebtn-' + id);
+            if (btn) { btn.disabled = true; btn.textContent = '…'; }
+            fetch('/api/rag/flagged-answers/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: q, answer: a })
+            }).then(function(r){ return r.json(); }).then(function(d) {
+                if (d.ok) {
+                    _flaggedData = _flaggedData.filter(function(x){ return x.id !== id; });
+                    renderFlaggedPanel(_flaggedData);
+                    loadFlaggedBadge();
+                } else {
+                    alert(d.error || 'Saqlashda xatolik');
+                    if (btn) { btn.disabled = false; btn.textContent = '✓ Saqlash'; }
+                }
+            }).catch(function(e) {
+                alert('Xatolik: ' + e.message);
+                if (btn) { btn.disabled = false; btn.textContent = '✓ Saqlash'; }
+            });
+        };
+
+        window.fcClearFlag = function(id) {
+            fetch('/api/rag/flagged-answers/' + id + '/clear', { method: 'POST' })
+                .then(function(r){ return r.json(); })
+                .then(function(d) {
+                    if (d.ok) {
+                        _flaggedData = _flaggedData.filter(function(x){ return x.id !== id; });
+                        renderFlaggedPanel(_flaggedData);
+                        loadFlaggedBadge();
+                    } else alert(d.error || 'Xatolik');
+                }).catch(function(e){ alert('Xatolik: ' + e.message); });
+        };
+
+        window.fcDeleteAnswer = function(id) {
+            if (!confirm('Bu tekshirilgan javobni o\'chirasizmi? (is_valid=FALSE, tiklash mumkin)')) return;
+            fetch('/api/rag/flagged-answers/' + id, { method: 'DELETE' })
+                .then(function(r){ return r.json(); })
+                .then(function(d) {
+                    if (d.ok) {
+                        _flaggedData = _flaggedData.filter(function(x){ return x.id !== id; });
+                        renderFlaggedPanel(_flaggedData);
+                        loadFlaggedBadge();
+                    } else alert(d.error || 'Xatolik');
+                }).catch(function(e){ alert('Xatolik: ' + e.message); });
+        };
+
+        // Keyboard: Escape closes panel
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                var o = document.getElementById('flaggedOverlay');
+                if (o && o.classList.contains('active')) closeFlaggedPanel();
+            }
+        });
+    })();
+    </script>
+
+    <!-- ── End Flagged Answers Panel JS ── -->
+
+    <!-- Flagged Answers Panel (master only) -->
+    <div class="flagged-overlay" id="flaggedOverlay" onclick="if(event.target===this) closeFlaggedPanel()">
+        <div class="flagged-panel" role="dialog" aria-modal="true" aria-label="Tekshirilishi kerak javoblar">
+            <div class="flagged-panel-hdr">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c0392b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <h2>Tekshirilishi kerak javoblar</h2>
+                <span class="fp-count" id="flaggedPanelCount" style="display:none;">0</span>
+                <button class="flagged-panel-close" onclick="closeFlaggedPanel()" title="Yopish">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="flagged-panel-body" id="flaggedPanelBody">
+                <div class="flagged-empty">Yuklanmoqda…</div>
+            </div>
+        </div>
+    </div>
 
     <!-- Topic Picker Modal — opens when user sends AI chat without selecting a soha -->
     <div class="topic-modal-overlay" id="topicPickerModal" onclick="if(event.target===this) closeTopicPicker()">

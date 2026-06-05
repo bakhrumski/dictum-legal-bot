@@ -95,6 +95,34 @@ async function clearFlag(chunkId) {
   );
 }
 
+/**
+ * Lawyer edits the chunk_text of a flagged verified answer, then clears the flag.
+ * @param {number} chunkId
+ * @param {string} question
+ * @param {string} answer
+ */
+async function editFlaggedAnswer(chunkId, question, answer) {
+  const newText = `Savol: ${question.trim()}\n\nJavob: ${answer.trim()}`;
+  await pool.query(
+    `UPDATE legal_chunks
+        SET chunk_text = $2,
+            flagged_for_review = FALSE,
+            helpful_count = 0,
+            unhelpful_count = 0,
+            updated_at = NOW()
+      WHERE id = $1 AND source_type = 'verified_qa'`,
+    [chunkId, newText]
+  );
+}
+
+/** Soft-delete: marks a verified answer as invalid so it stops being retrieved. */
+async function deleteFlaggedAnswer(chunkId) {
+  await pool.query(
+    `UPDATE legal_chunks SET is_valid = FALSE, flagged_for_review = FALSE WHERE id = $1`,
+    [chunkId]
+  );
+}
+
 /** Mount the feedback endpoints. */
 function mountUsageFeedbackRoutes(app, deps) {
   const { requireAuth, requireMasterAdmin } = deps;
@@ -131,6 +159,28 @@ function mountUsageFeedbackRoutes(app, deps) {
     }
   });
 
+  // Lawyer edits a flagged answer (rewrites question+answer, resets counts, clears flag)
+  app.put('/api/rag/flagged-answers/:id', requireMasterAdmin, async (req, res) => {
+    try {
+      const { question, answer } = req.body || {};
+      if (!question || !answer) return res.status(400).json({ error: 'question and answer required' });
+      await editFlaggedAnswer(parseInt(req.params.id), question, answer);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Lawyer soft-deletes a flagged answer (sets is_valid=FALSE, stops retrieval)
+  app.delete('/api/rag/flagged-answers/:id', requireMasterAdmin, async (req, res) => {
+    try {
+      await deleteFlaggedAnswer(parseInt(req.params.id));
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   console.log('[USAGE-FB] Usage feedback routes mounted');
 }
 
@@ -139,6 +189,8 @@ module.exports = {
   recordChunkFeedback,
   getFlaggedAnswers,
   clearFlag,
+  editFlaggedAnswer,
+  deleteFlaggedAnswer,
   mountUsageFeedbackRoutes,
   FLAG_THRESHOLD,
 };
