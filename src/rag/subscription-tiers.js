@@ -182,6 +182,31 @@ async function recordUsage(adminId, endpoint) {
   }
 }
 
+/**
+ * Per-user query counts across all three reporting periods, computed from the
+ * tariff_usage log in a single pass:
+ *   daily   — since 00:00 Asia/Tashkent today
+ *   weekly  — rolling last 7 days
+ *   monthly — rolling last 30 days
+ * Returned regardless of the user's plan so the platform can report and enforce
+ * limits on any period.
+ */
+async function getUsageStats(adminId) {
+  if (!_initialized) await initSubscriptionSchema();
+  const midnight = tashkentMidnight();
+  const r = await pool.query(
+    `SELECT
+        COUNT(*) FILTER (WHERE ts >= $2)::int                       AS daily,
+        COUNT(*) FILTER (WHERE ts >= NOW() - INTERVAL '7 days')::int  AS weekly,
+        COUNT(*) FILTER (WHERE ts >= NOW() - INTERVAL '30 days')::int AS monthly
+       FROM tariff_usage
+      WHERE admin_id = $1`,
+    [adminId, midnight]
+  );
+  const row = r.rows[0] || {};
+  return { daily: row.daily || 0, weekly: row.weekly || 0, monthly: row.monthly || 0 };
+}
+
 async function selectPlan(adminId, plan) {
   if (!_initialized) await initSubscriptionSchema();
   if (!PLANS[plan]) throw new Error(`Unknown plan: ${plan}`);
@@ -250,6 +275,7 @@ module.exports = {
   getUserPlan,
   checkQuota,
   recordUsage,
+  getUsageStats,
   selectPlan,
   enforceQuota,
 };

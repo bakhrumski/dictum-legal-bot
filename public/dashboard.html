@@ -462,6 +462,11 @@
             display: block;
             margin-bottom: 2px;
         }
+        /* Desktop: show the wordmark (light/dark variant), hide the mono icon. */
+        .header-logo-mono { display: none; }
+        .header-logo-wordmark.header-logo-dark { display: none; }
+        [data-theme="dark"] .header-logo-wordmark.header-logo-light { display: none; }
+        [data-theme="dark"] .header-logo-wordmark.header-logo-dark  { display: block; }
 
         .header-center {
             position: absolute;
@@ -2367,6 +2372,43 @@
             overflow-y: auto;
         }
         .fb-report-section-wrap::-webkit-scrollbar { display: none; }
+
+        /* ── Usage Report (master admin view of per-user query counts) ── */
+        .usage-report-wrap {
+            flex: 0 0 auto; overflow: hidden;
+            padding: 0 12px 12px; box-sizing: border-box;
+        }
+        .usage-report-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 11px; margin-top: 8px;
+        }
+        .usage-report-table thead th {
+            padding: 5px 6px; text-align: left;
+            background: var(--bg-table-header); color: var(--text-muted);
+            font-weight: 600; font-size: 10px; text-transform: uppercase;
+            letter-spacing: .04em; border-bottom: 1px solid var(--glass-border);
+            position: sticky; top: 0;
+        }
+        .usage-report-table tbody tr:nth-child(even) { background: var(--bg-table-row-even); }
+        .usage-report-table tbody tr:hover { background: var(--bg-table-row-hover); }
+        .usage-report-table td {
+            padding: 5px 6px; color: var(--text-secondary);
+            border-bottom: 1px solid var(--glass-border);
+            white-space: nowrap;
+        }
+        .usage-report-table td.ur-name { color: var(--text-primary); font-weight: 600; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+        .usage-report-table td.ur-num  { text-align: right; font-variant-numeric: tabular-nums; }
+        .usage-report-table td.ur-num.ur-hi { color: var(--navy-700,#0E2236); font-weight: 700; }
+        .usage-report-table .ur-plan {
+            font-size: 9px; font-weight: 700; border-radius: 10px; padding: 1px 5px;
+            background: var(--badge-total-bg); color: var(--text-secondary);
+        }
+        .usage-report-table .ur-plan.silver { background: #e8f5e9; color: #2e7d32; }
+        .usage-report-table .ur-plan.gold   { background: #fff8e1; color: #b08442; }
+        .usage-report-table .ur-plan.platinum { background: #e8eaf6; color: #3949ab; }
+        .usage-report-scroll { max-height: 300px; overflow-y: auto; }
+        .ur-meta { font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 4px; }
+        /* ── End Usage Report ── */
         /* Delete button on history items */
         .ai-history-item {
             flex-direction: row !important;
@@ -4829,6 +4871,12 @@
             header { height: 70px; max-height: 70px; padding: 8px 10px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; }
             .header-left { flex-shrink: 0; min-width: 0; }
             .header-logo { height: 32px; }
+            /* Mobile: swap the wide wordmark for the compact mono icon. */
+            .header-logo-wordmark { display: none !important; }
+            .header-logo-mono.header-logo-light { display: block; }
+            .header-logo-mono.header-logo-dark  { display: none; }
+            [data-theme="dark"] .header-logo-mono.header-logo-light { display: none !important; }
+            [data-theme="dark"] .header-logo-mono.header-logo-dark  { display: block !important; }
             .header-left .subtitle { font-size: 7px; letter-spacing: 1px; }
             .header-center {
                 position: static !important;
@@ -5149,7 +5197,10 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="switchTab('home')">
-                    <img src="/wordmark-primary-2048.png" alt="JuristAI" class="header-logo">
+                    <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
+                    <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
+                    <img src="/icon-mono-navy.png"              alt="JuristAI" class="header-logo header-logo-mono header-logo-light">
+                    <img src="/icon-mono-cream.png"             alt="JuristAI" class="header-logo header-logo-mono header-logo-dark">
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
@@ -5457,6 +5508,35 @@
                         <div id="fbListContainer" style="max-height:350px;overflow-y:auto"></div>
                     </div>
                 </div>
+
+                <!-- Usage Report — master admin only -->
+                <div class="usage-report-wrap" id="usageReportSection" style="display:none">
+                    <button class="fb-report-toggle" onclick="toggleUsageReport()">
+                        <span>Foydalanuvchilar faolligi</span>
+                        <span id="usageReportToggleIcon">&#9660;</span>
+                    </button>
+                    <div class="fb-report-panel" id="usageReportPanel">
+                        <div class="usage-report-scroll">
+                            <table class="usage-report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Foydalanuvchi</th>
+                                        <th>Tarif</th>
+                                        <th title="Bugun">Kun</th>
+                                        <th title="Oxirgi 7 kun">Hafta</th>
+                                        <th title="Oxirgi 30 kun">Oy</th>
+                                        <th title="Jami">Jami</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usageReportBody">
+                                    <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:12px">Yuklanmoqda…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="ur-meta" id="usageReportMeta"></div>
+                    </div>
+                </div>
+
             </div>
         </div>
         </div><!-- /tab-view ai -->
@@ -6083,6 +6163,10 @@
                 const fbReport = document.getElementById('fbReportSection');
                 if (fbReport) {
                     fbReport.style.display = data.role === 'master' ? '' : 'none';
+                }
+                const usageReport = document.getElementById('usageReportSection');
+                if (usageReport) {
+                    usageReport.style.display = data.role === 'master' ? '' : 'none';
                 }
 
                 // Show registration requests section for master only
@@ -8833,6 +8917,63 @@
                 loadFbList('all');
             }
         }
+
+        // ── Usage Report (master) ────────────────────────────────────────
+        function toggleUsageReport() {
+            var panel = document.getElementById('usageReportPanel');
+            var icon  = document.getElementById('usageReportToggleIcon');
+            if (panel.classList.contains('visible')) {
+                panel.classList.remove('visible');
+                icon.innerHTML = '&#9660;';
+            } else {
+                panel.classList.add('visible');
+                icon.innerHTML = '&#9650;';
+                loadUsageReport();
+            }
+        }
+
+        async function loadUsageReport() {
+            var tbody = document.getElementById('usageReportBody');
+            var meta  = document.getElementById('usageReportMeta');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:12px">Yuklanmoqda…</td></tr>';
+            try {
+                var r = await fetch('/api/tariff/usage-report', { credentials: 'same-origin' });
+                var d = await r.json();
+                if (!r.ok) { tbody.innerHTML = '<tr><td colspan="6" style="color:#c0392b;padding:10px">' + (d.error || 'Xatolik') + '</td></tr>'; return; }
+                var users = d.users || [];
+                if (!users.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:12px">Hali faol foydalanuvchi yo\'q</td></tr>';
+                } else {
+                    var planLabel = { sinov: 'Sinov', silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
+                    tbody.innerHTML = users.map(function(u) {
+                        var plan = u.tariff_plan || '';
+                        var planBadge = plan
+                            ? '<span class="ur-plan ' + plan + '">' + (planLabel[plan] || plan) + '</span>'
+                            : '<span style="color:var(--text-muted);font-size:10px">—</span>';
+                        var hiDay = u.daily  > 0 ? ' ur-hi' : '';
+                        var hiWk  = u.weekly > 0 ? ' ur-hi' : '';
+                        var hiMo  = u.monthly > 0 ? ' ur-hi' : '';
+                        var name  = u.full_name || u.username || ('ID ' + u.id);
+                        return '<tr>' +
+                            '<td class="ur-name" title="' + (u.username || '') + '">' + name + '</td>' +
+                            '<td>' + planBadge + '</td>' +
+                            '<td class="ur-num' + hiDay + '">' + u.daily   + '</td>' +
+                            '<td class="ur-num' + hiWk  + '">' + u.weekly  + '</td>' +
+                            '<td class="ur-num' + hiMo  + '">' + u.monthly + '</td>' +
+                            '<td class="ur-num">' + u.total + '</td>' +
+                        '</tr>';
+                    }).join('');
+                }
+                if (meta && d.generatedAt) {
+                    var dt = new Date(d.generatedAt);
+                    meta.textContent = 'Yangilandi: ' + dt.toLocaleTimeString('uz-UZ');
+                }
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="6" style="color:#c0392b;padding:10px">Xatolik: ' + e.message + '</td></tr>';
+            }
+        }
+        // ── End Usage Report ─────────────────────────────────────────────
 
         async function loadFbStats() {
             try {
