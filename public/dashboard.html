@@ -462,6 +462,9 @@
             display: block;
             margin-bottom: 2px;
         }
+        .header-logo-dark { display: none; }
+        [data-theme="dark"] .header-logo-light { display: none; }
+        [data-theme="dark"] .header-logo-dark  { display: block; }
 
         .header-center {
             position: absolute;
@@ -5149,7 +5152,8 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="switchTab('home')">
-                    <img src="/wordmark-primary-2048.png" alt="JuristAI" class="header-logo">
+                    <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-light">
+                    <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-dark">
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
