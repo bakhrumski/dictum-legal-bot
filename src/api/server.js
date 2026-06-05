@@ -5716,6 +5716,34 @@ app.get('/api/tariff/me', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/tariff/usage-report — master-only: per-user daily/weekly/monthly query counts
+app.get('/api/tariff/usage-report', requireMasterAdmin, async (req, res) => {
+  try {
+    const midnight = new Date(Date.now() + 5 * 3600000);
+    midnight.setUTCHours(0, 0, 0, 0);
+    midnight.setTime(midnight.getTime() - 5 * 3600000); // back to UTC
+    const { rows } = await pool.query(
+      `SELECT
+          a.id, a.full_name, a.username, a.role,
+          a.tariff_plan, a.tariff_expires_at,
+          COUNT(u.id) FILTER (WHERE u.ts >= $1)::int                         AS daily,
+          COUNT(u.id) FILTER (WHERE u.ts >= NOW() - INTERVAL '7 days')::int  AS weekly,
+          COUNT(u.id) FILTER (WHERE u.ts >= NOW() - INTERVAL '30 days')::int AS monthly,
+          COUNT(u.id)::int                                                    AS total
+         FROM admins a
+         LEFT JOIN tariff_usage u ON u.admin_id = a.id
+        WHERE a.role = 'user'
+        GROUP BY a.id, a.full_name, a.username, a.role, a.tariff_plan, a.tariff_expires_at
+        ORDER BY monthly DESC, a.full_name`,
+      [midnight]
+    );
+    res.json({ users: rows, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('[TARIFF REPORT] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/tariff/select — user picks a plan (sinov is once-per-user)
 app.post('/api/tariff/select', requireAuth, async (req, res) => {
   try {
