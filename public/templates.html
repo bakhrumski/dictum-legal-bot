@@ -100,6 +100,25 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 .preview-toggle{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .preview-toggle button{font-size:12px;font-weight:600;padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:#fff;cursor:pointer}
 .preview-toggle button.on{background:var(--navy);color:#F5EFE3;border-color:var(--navy)}
+
+/* ── Import file button ── */
+.btn-import{font-size:12px;font-weight:700;background:rgba(176,132,66,.12);color:var(--gold);border:1px solid rgba(176,132,66,.3);border-radius:8px;padding:6px 13px;cursor:pointer;transition:.15s;white-space:nowrap}
+.btn-import:hover{background:rgba(176,132,66,.22)}
+
+/* ── Import modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:#fff;border-radius:14px;padding:28px 30px;width:90%;max-width:500px;box-shadow:0 16px 56px rgba(0,0,0,.22)}
+.modal-box h3{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px}
+.modal-box p{font-size:12px;color:var(--txt2);margin-bottom:18px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.drop-zone{border:2px dashed rgba(176,132,66,.5);border-radius:10px;background:rgba(176,132,66,.04);text-align:center;padding:26px 16px;cursor:pointer;transition:.2s;margin-bottom:14px}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--gold);background:rgba(176,132,66,.09)}
+.drop-zone input[type=file]{display:none}
+.drop-zone .dz-icon{font-size:28px;margin-bottom:6px}
+.drop-zone .dz-label{font-size:13px;color:var(--txt2)}
+.drop-zone .dz-chosen{font-size:13px;font-weight:600;color:var(--navy);margin-top:6px}
+.import-progress{font-size:12px;color:var(--txt2);margin-top:10px;text-align:center;min-height:18px}
 </style>
 </head>
 <body>
@@ -116,7 +135,10 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
   <div class="list-pane">
     <div class="list-head">
       <h2>Shablonlar</h2>
-      <button class="btn-new" onclick="newTemplate()">+ Yangi</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn-import" onclick="openImportModal()" title="Word/PDF fayldan shablon yaratish yoki boyitish">📎 Fayl</button>
+        <button class="btn-new" onclick="newTemplate()">+ Yangi</button>
+      </div>
     </div>
     <div class="tpl-list" id="tplList">
       <div class="empty-state">Yuklanmoqda…</div>
@@ -128,6 +150,37 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
     <div class="empty-state" style="margin-top:60px">
       <div style="font-size:32px;margin-bottom:12px">📄</div>
       <div>Chap tomondagi shablonni tanlang yoki yangi shablon yarating.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Import File Modal ── -->
+<div class="modal-overlay" id="importModal" onclick="if(event.target===this)closeImportModal()">
+  <div class="modal-box">
+    <h3>📎 Fayldan shablon</h3>
+    <p>Word (.docx) yoki PDF fayl yuklang. AI fayldan shablonni avtomatik tuzadi.<br>
+       Agar hozir shablon tahrirlayotgan bo'lsangiz, AI uni boyitishga urinadi.</p>
+
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('importFileInput').click()"
+         ondragover="event.preventDefault();this.classList.add('drag')"
+         ondragleave="this.classList.remove('drag')"
+         ondrop="event.preventDefault();this.classList.remove('drag');handleImportDrop(event.dataTransfer.files)">
+      <input type="file" id="importFileInput" accept=".pdf,.docx,.doc" onchange="handleImportFile(this.files)">
+      <div class="dz-icon">📄</div>
+      <div class="dz-label">Bosing yoki faylni bu yerga tashlang<br><span style="font-size:11px">PDF, DOCX, DOC · maks 20 MB</span></div>
+      <div class="dz-chosen" id="dzChosen" style="display:none"></div>
+    </div>
+
+    <div class="fld" style="margin-bottom:0">
+      <label>Qo'shimcha ko'rsatma (ixtiyoriy)</label>
+      <textarea id="importHint" class="body-ta" style="min-height:48px;font-family:inherit;font-size:13px" placeholder="Masalan: xodim uchun tuzib, kafolat bandini kuchaytir…"></textarea>
+    </div>
+
+    <div class="import-progress" id="importProgress"></div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeImportModal()">Bekor</button>
+      <button class="btn primary" id="importRunBtn" onclick="runImport()" disabled>🤖 AI tahlil qilsin</button>
     </div>
   </div>
 </div>
@@ -393,6 +446,94 @@ async function deleteTemplate(){
 }
 
 function cancelEdit(){ editing=null; fields=[]; renderList(); document.getElementById('editorPane').innerHTML='<div class="empty-state" style="margin-top:60px">Shablon tanlang yoki yangi yarating.</div>'; }
+
+// ════════════════════════════════════════════
+// FILE IMPORT — Word / PDF → AI → Template
+// ════════════════════════════════════════════
+let importFile = null;
+
+function openImportModal(){
+  importFile = null;
+  document.getElementById('importFileInput').value = '';
+  document.getElementById('dzChosen').style.display = 'none';
+  document.getElementById('importHint').value = '';
+  document.getElementById('importProgress').textContent = '';
+  document.getElementById('importRunBtn').disabled = true;
+  document.getElementById('importModal').classList.add('open');
+}
+
+function closeImportModal(){
+  document.getElementById('importModal').classList.remove('open');
+}
+
+function handleImportFile(files){
+  if(!files || !files.length) return;
+  importFile = files[0];
+  const el = document.getElementById('dzChosen');
+  el.textContent = importFile.name + ' (' + (importFile.size/1024).toFixed(0) + ' KB)';
+  el.style.display = 'block';
+  document.getElementById('importRunBtn').disabled = false;
+}
+
+function handleImportDrop(files){ handleImportFile(files); }
+
+async function runImport(){
+  if(!importFile){ toast('Fayl tanlanmadi'); return; }
+  const btn = document.getElementById('importRunBtn');
+  const prog = document.getElementById('importProgress');
+  btn.disabled = true;
+  btn.textContent = '⏳ Tahlil qilinmoqda…';
+  prog.textContent = 'Fayl yuklanmoqda va AI tahlil qilmoqda…';
+
+  try{
+    const fd = new FormData();
+    fd.append('file', importFile);
+    fd.append('enrichHint', document.getElementById('importHint').value.trim());
+    // If a template is currently open, pass its body so AI can enrich it
+    if(editing && editing.body){
+      fd.append('existingTemplate', editing.body);
+    }
+
+    const r = await fetch('/api/templates/import-file', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: fd
+    });
+    const data = await r.json();
+    if(!r.ok){ prog.textContent = ''; toast('Xato: ' + (data.error || r.status)); return; }
+
+    // Load AI result into editor
+    const tpl = data.template;
+    editing = {
+      id: editing?.id || null,            // keep id if enriching existing
+      slug: editing?.slug || '',
+      name: tpl.name || { uz:'', ru:'' },
+      description: tpl.description || { uz:'', ru:'' },
+      category: tpl.category || 'boshqa',
+      lang: tpl.lang || 'uz',
+      body: tpl.body || '',
+    };
+    fields = (tpl.fields || []).map(f => ({
+      key: f.key || '',
+      label: f.label || { uz:'', ru:'' },
+      type: f.type || 'text',
+      required: !!f.required,
+      placeholder: f.placeholder || { uz:'', ru:'' },
+      aiHint: f.aiHint || '',
+    }));
+
+    closeImportModal();
+    renderEditor();
+    renderList();
+    toast('✅ AI shablon tuzdi — ko\'rib chiqing va saqlang');
+  } catch(e){
+    prog.textContent = '';
+    toast('Xato: ' + e.message);
+  } finally{
+    btn.disabled = false;
+    btn.textContent = '🤖 AI tahlil qilsin';
+  }
+}
 
 init();
 </script>

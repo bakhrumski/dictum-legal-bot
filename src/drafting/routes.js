@@ -1,7 +1,48 @@
 'use strict';
 
+const multer = require('multer');
+const os = require('os');
+const fs = require('fs');
 const { initTemplatesTable, dbListTemplates, dbGetTemplate, dbCreateTemplate, dbUpdateTemplate, dbDeleteTemplate } = require('./db');
 const { renderTemplate } = require('./templates');
+
+const importUpload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /\.(pdf|docx|doc)$/i.test(file.originalname) ||
+      file.mimetype === 'application/pdf' ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.mimetype === 'application/msword';
+    cb(ok ? null : new Error('Faqat PDF yoki Word (docx) fayl qabul qilinadi'), ok);
+  },
+});
+
+const IMPORT_SYSTEM_PROMPT = `You are a senior legal document analyst for Uzbekistan law. You receive extracted text from a Word or PDF legal document template. Your task is to produce a structured JuristAI template JSON.
+
+Output ONLY a single valid JSON object with this exact structure:
+{
+  "name": { "uz": "...", "ru": "..." },
+  "description": { "uz": "...", "ru": "..." },
+  "category": "one of: fuqarolik|mehnat|oila|soliq|jinoyat|mamuriy|mulk|shartnoma|tadbirkorlik|xalqaro|boshqa",
+  "lang": "uz or ru (dominant language of the document)",
+  "fields": [
+    {
+      "key": "snake_case_key",
+      "label": { "uz": "...", "ru": "..." },
+      "type": "text|textarea|date|number|select",
+      "required": true or false,
+      "aiHint": "brief hint for AI suggestion (optional, can be empty string)"
+    }
+  ],
+  "body": "HTML string using {{key}} placeholders for each field. Preserve formatting as close to the original as possible using basic HTML (p, table, h2, strong, etc). Replace blank lines/underscores where a value should be filled with {{key}}."
+}
+
+Rules:
+- Identify every blank, underline, or fill-in spot as a field with a descriptive key.
+- Keep the document structure faithful to the original.
+- name and description must be in both Uzbek and Russian.
+- Output ONLY the JSON — no markdown fences, no explanation.`;
 
 function buildDocumentHtml(template, values, lang) {
   const body = renderTemplate({ body: template.body, fields: template.fields }, values);
@@ -188,6 +229,82 @@ function mountDraftingRoutes(app, deps) {
     } catch (e) {
       console.error('[DRAFT] export error:', e.message);
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── POST /api/templates/import-file — extract text from Word/PDF, generate template via AI ──
+  app.post('/api/templates/import-file', requireAuth, masterOnly, importUpload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
+    const filePath = req.file.path;
+    try {
+      const isDoc = /\.(docx|doc)$/i.test(req.file.originalname) ||
+        req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        req.file.mimetype === 'application/msword';
+
+      let extractedText = '';
+
+      if (isDoc) {
+        const mammoth = require('mammoth');
+        const result = await mammoth.extractRawText({ path: filePath });
+        extractedText = (result.value || '').trim();
+      } else {
+        const pdfParse = require('pdf-parse');
+        const buf = fs.readFileSync(filePath);
+        const parsed = await pdfParse(buf);
+        extractedText = (parsed.text || '').trim();
+      }
+
+      if (!extractedText || extractedText.length < 30) {
+        return res.status(422).json({ error: 'Fayldan matn ajratib bo\'lmadi (skanerlangan yoki bo\'sh fayl)' });
+      }
+
+      const MAX_CHARS = 10000;
+      const snippet = extractedText.slice(0, MAX_CHARS);
+      const enrichNote = req.body.enrichHint ? `\nAdditional instruction from admin: ${req.body.enrichHint}` : '';
+      const existingNote = req.body.existingTemplate
+        ? `\nExisting template body for reference (enrich/improve it):\n${req.body.existingTemplate.slice(0, 4000)}`
+        : '';
+
+      const aiResult = await callAI([
+        { role: 'system', text: IMPORT_SYSTEM_PROMPT },
+        { role: 'user', text: `Document text:${enrichNote}${existingNote}\n\n---\n${snippet}\n---` },
+      ], { temperature: 0.2, maxTokens: 4096 });
+
+      // Salvage JSON from AI response
+      let raw = (aiResult.text || '').trim().replace(/```(?:json)?/gi, '').trim();
+      const start = raw.indexOf('{');
+      if (start > 0) raw = raw.slice(start);
+      let tplData = null;
+      try { tplData = JSON.parse(raw); } catch (_) {
+        // Repair truncated JSON
+        let inStr = false, esc = false;
+        const stack = [];
+        let out = '';
+        for (let i = 0; i < raw.length; i++) {
+          const c = raw[i]; out += c;
+          if (inStr) { if (esc) { esc = false; } else if (c === '\\') { esc = true; } else if (c === '"') { inStr = false; } continue; }
+          if (c === '"') inStr = true;
+          else if (c === '{' || c === '[') stack.push(c);
+          else if (c === '}' || c === ']') stack.pop();
+        }
+        if (inStr) out += '"';
+        out = out.replace(/,\s*"[^"]*"\s*:?\s*$/s, '').replace(/,\s*$/s, '');
+        for (let i = stack.length - 1; i >= 0; i--) out += stack[i] === '{' ? '}' : ']';
+        try { tplData = JSON.parse(out); } catch (_2) {}
+      }
+
+      if (!tplData || (!tplData.name?.uz && !tplData.name?.ru)) {
+        console.warn('[DRAFT] import-file: JSON salvage failed, provider=' + aiResult.provider);
+        return res.status(500).json({ error: 'AI shablonni tahlil qila olmadi. Faylni tekshiring va qayta urinib ko\'ring.' });
+      }
+
+      tplData.fields = Array.isArray(tplData.fields) ? tplData.fields : [];
+      res.json({ template: tplData, provider: aiResult.provider, charCount: extractedText.length });
+    } catch (err) {
+      console.error('[DRAFT] import-file error:', err.message);
+      res.status(500).json({ error: 'Import xatoligi: ' + err.message });
+    } finally {
+      fs.unlink(filePath, () => {});
     }
   });
 
