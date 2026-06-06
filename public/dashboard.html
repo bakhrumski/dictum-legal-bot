@@ -2095,6 +2095,11 @@
             overflow: hidden;
             background: var(--glass-bg);
         }
+        /* No tab bar (common users): reclaim the space the hidden bar reserved. */
+        body.no-tab-bar .ai-workspace {
+            height: calc(100vh - 126px - env(safe-area-inset-bottom, 0px));
+            height: calc(100dvh - 126px - env(safe-area-inset-bottom, 0px));
+        }
 
         /* --- Sidebar --- */
         .ai-sidebar {
@@ -2819,6 +2824,10 @@
                 height: calc(100vh - 166px - env(safe-area-inset-bottom, 0px));
                 height: calc(100dvh - 166px - env(safe-area-inset-bottom, 0px));
             }
+            body.no-tab-bar .ai-workspace {
+                height: calc(100vh - 110px - env(safe-area-inset-bottom, 0px));
+                height: calc(100dvh - 110px - env(safe-area-inset-bottom, 0px));
+            }
             .ai-sidebar {
                 position: fixed;
                 left: 0;
@@ -2880,6 +2889,10 @@
                 height: calc(100dvh - 147px - env(safe-area-inset-bottom, 0px));
                 border-radius: 0;
                 border: none;
+            }
+            body.no-tab-bar .ai-workspace {
+                height: calc(100vh - 97px - env(safe-area-inset-bottom, 0px));
+                height: calc(100dvh - 97px - env(safe-area-inset-bottom, 0px));
             }
             .ai-chat-input-bar { padding: 10px 12px 14px; }
             .ai-chat-msg.ai { max-width: 98%; }
