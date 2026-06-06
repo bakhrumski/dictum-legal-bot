@@ -115,8 +115,13 @@
         .hero-logo img { height: 64px; width: auto; }
         .hero-logo .img-light { display: block; }
         .hero-logo .img-dark { display: none; }
+        .hero-logo .img-icon { display: none; }
         [data-theme="dark"] .hero-logo .img-light { display: none; }
         [data-theme="dark"] .hero-logo .img-dark { display: block; }
+        @media (max-width: 768px) {
+            .hero-logo .img-light, .hero-logo .img-dark { display: none !important; }
+            .hero-logo .img-icon { display: block !important; }
+        }
         .hero-tagline {
             font-family: var(--font-mono);
             font-size: 10px;
@@ -757,6 +762,7 @@
         <!-- LEFT HERO PANEL -->
         <div class="hero-panel">
             <div class="hero-logo">
+                <img class="img-icon" src="/icon-1024.png" alt="JuristAI">
                 <img class="img-light" src="/wordmark-primary-2048.png" alt="JuristAI">
                 <img class="img-dark" src="/wordmark-primary-2048-light.png" alt="JuristAI">
                 <div class="hero-tagline" id="heroTagline"><span id="typeText"></span><span class="type-cursor blinking" id="typeCursor">|</span></div>

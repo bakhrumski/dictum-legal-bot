@@ -107,6 +107,7 @@ nav{display:flex;align-items:center;height:68px;gap:20px}
 .brand{display:inline-flex;align-items:center;flex-shrink:0;line-height:1}
 .brand-img{height:36px;width:auto;display:block}
 /* logo swap: light logo on dark bg (default), dark logo on parchment header */
+.brand-icon{display:none}
 .logo-on-dark{display:block}
 .logo-on-light{display:none}
 [data-theme="light"] header.sc .logo-on-dark{display:none}
@@ -353,6 +354,8 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
   .fb1,.fb2{display:none}
   .foot-bottom{flex-direction:column}
   .ls{display:none}
+  .brand-wordmark{display:none!important}
+  .brand-icon{display:block!important}
 }
 </style>
 </head>
@@ -377,8 +380,9 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
   <div class="wrap">
     <nav>
       <a href="#" class="brand" aria-label="JuristAI">
-        <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img logo-on-dark">
-        <img src="/wordmark-primary-2048.png" alt="JuristAI" class="brand-img logo-on-light">
+        <img src="/icon-1024.png"                   alt="JuristAI" class="brand-img brand-icon">
+        <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img logo-on-dark brand-wordmark">
+        <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="brand-img logo-on-light brand-wordmark">
       </a>
       <div class="nav-links">
         <a href="#features" data-i18n="nav_features">Imkoniyatlar</a>
