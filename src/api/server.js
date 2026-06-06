@@ -4724,10 +4724,9 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// POST /api/rag/reingest-registry — refresh all core codes from their CURRENT
-// lex.uz versions. fetchLexDocument() auto-follows historical-version banners
-// (see PR #57), and each law's old chunks are replaced by source_url, so this
-// brings the entire corpus up to the latest published text in one click.
+// POST /api/rag/reingest-registry — refresh only the codes already uploaded to
+// legal_chunks. Reads distinct (doc_id, source_url) from the DB, looks up each
+// in the registry for metadata, then re-fetches from the Uzbek-Latin lex.uz URLs.
 app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
   const { fetchLexDocument } = require('../rag/fetch-lex');
   const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
@@ -4737,8 +4736,35 @@ app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
 
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   const onlyCategory = (req.body && req.body.category) || null;
-  const laws = onlyCategory ? getLawsForCategory(onlyCategory) : getAllLaws();
-  if (laws.length === 0) return res.status(400).json({ error: 'Registrda qonun topilmadi' });
+
+  // Build a registry lookup map by doc_id for metadata enrichment
+  const allRegistryLaws = getAllLaws();
+  const registryByDocId = {};
+  for (const l of allRegistryLaws) registryByDocId[l.doc_id] = l;
+
+  let laws;
+  if (onlyCategory) {
+    laws = getLawsForCategory(onlyCategory).map(l => ({ ...l, category: onlyCategory }));
+  } else {
+    // Only re-fetch codes that are actually present in legal_chunks
+    const { rows } = await pool.query(
+      `SELECT DISTINCT doc_id, source_url, law_name, category FROM legal_chunks
+       WHERE doc_id IS NOT NULL AND source_url IS NOT NULL
+       GROUP BY doc_id, source_url, law_name, category`
+    );
+    laws = rows.map(r => {
+      const reg = registryByDocId[r.doc_id] || {};
+      // Prefer the updated registry URL (Uzbek-Latin) over the stored URL
+      return {
+        doc_id: r.doc_id,
+        law_name: r.law_name || reg.law_name || r.doc_id,
+        lex_url: reg.lex_url || r.source_url,
+        enforcement_date: reg.enforcement_date || null,
+        category: r.category || reg.category || null,
+      };
+    });
+  }
+  if (laws.length === 0) return res.status(400).json({ error: 'Ma\'lumotlar bazasida yuklangan qonun topilmadi' });
 
   const results = [];
   for (const law of laws) {

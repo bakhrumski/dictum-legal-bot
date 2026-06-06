@@ -3,23 +3,25 @@
 /**
  * OCR & AI Document Analyzer — API routes
  *
- * POST /api/analyze/extract  — PDF text extraction (server-side, pdf-parse)
- *                              Returns { text, pageCount, scanned }
- *                              scanned=true when < 80 chars extracted (image PDF)
+ * POST /api/analyze/extract    — PDF text extraction (server-side, pdf-parse)
+ *                                Returns { text, pageCount, scanned }
+ *                                scanned=true when < 80 chars extracted (image PDF)
  *
- * POST /api/analyze           — AI analysis of supplied text
- *                              Returns structured JSON:
- *                              { docType, language, summary, overallScore,
- *                                riskItems, missingClauses, complianceIssues, strengths }
+ * POST /api/analyze/ocr-image  — AI Vision OCR for images AND scanned PDFs
+ *                                Gemini 2.5 Flash Vision primary, GPT-4o Vision fallback.
+ *                                Returns { text, charCount, provider }
  *
- * Image OCR is intentionally done client-side via Tesseract.js CDN — no
- * server dependency needed and the language data is cached in the browser.
+ * POST /api/analyze            — AI analysis of supplied text
+ *                                Returns structured JSON:
+ *                                { docType, language, summary, overallScore,
+ *                                  riskItems, missingClauses, complianceIssues, strengths }
  */
 
 const multer = require('multer');
 const os = require('os');
 const fs = require('fs');
 
+// PDF-only upload (existing extract route)
 const analyzeUpload = multer({
   dest: os.tmpdir(),
   limits: { fileSize: 20 * 1024 * 1024 },
@@ -29,6 +31,99 @@ const analyzeUpload = multer({
     cb(ok ? null : new Error('Faqat PDF fayl qabul qilinadi'), ok);
   },
 });
+
+// Image + PDF upload (Vision OCR route)
+const visionUpload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /^image\/(jpeg|png|webp|gif)$/i.test(file.mimetype) ||
+      file.mimetype === 'application/pdf' ||
+      /\.(jpg|jpeg|png|webp|pdf)$/i.test(file.originalname || '');
+    cb(ok ? null : new Error('Rasm yoki PDF fayl kerak'), ok);
+  },
+});
+
+const LANG_HINTS = {
+  'uzb+rus':     'The document contains Uzbek (Latin script) and/or Russian (Cyrillic) text.',
+  'uzb':         'The document is in Uzbek (Latin script).',
+  'rus':         'The document is in Russian (Cyrillic script).',
+  'eng':         'The document is in English.',
+  'uzb+rus+eng': 'The document may be in Uzbek (Latin), Russian (Cyrillic), or English.',
+};
+
+const VISION_PROMPT = (langHint) =>
+  `${langHint ? langHint + ' ' : ''}Extract all text from this document image exactly as it appears. ` +
+  'Preserve the original text layout including line breaks and paragraph structure. ' +
+  'Return ONLY the extracted text — no commentary, no labels, no markdown formatting.';
+
+/**
+ * Vision OCR: Gemini 2.5 Flash Vision (primary) → GPT-4o Vision (fallback).
+ * Accepts images (JPEG/PNG/WebP) and PDFs (Gemini reads PDFs directly).
+ */
+async function callVisionOCR(buf, mimeType, langCode) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const gptKey = process.env.GPT_API_KEY;
+  const prompt = VISION_PROMPT(LANG_HINTS[langCode] || '');
+  const b64 = buf.toString('base64');
+
+  if (geminiKey) {
+    try {
+      const body = {
+        contents: [{ role: 'user', parts: [
+          { inlineData: { mimeType, data: b64 } },
+          { text: prompt },
+        ]}],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+      };
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
+        if (text) return { text, provider: 'Gemini Vision' };
+        console.warn('[OCR] Gemini Vision returned empty text, trying fallback');
+      } else {
+        const err = await resp.text().catch(() => '');
+        console.warn('[OCR] Gemini Vision HTTP', resp.status, err.substring(0, 200));
+      }
+    } catch (e) {
+      console.warn('[OCR] Gemini Vision error:', e.message);
+    }
+  }
+
+  if (gptKey) {
+    try {
+      const dataUrl = `data:${mimeType};base64,${b64}`;
+      const body = {
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: [
+          { type: 'image_url', image_url: { url: dataUrl } },
+          { type: 'text', text: prompt },
+        ]}],
+        max_tokens: 4096,
+        temperature: 0.1,
+      };
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gptKey}` },
+        body: JSON.stringify(body),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const text = (data.choices?.[0]?.message?.content || '').trim();
+        if (text) return { text, provider: 'GPT-4o Vision' };
+      }
+    } catch (e) {
+      console.warn('[OCR] GPT-4o Vision error:', e.message);
+    }
+  }
+
+  throw new Error('Vision OCR uchun AI kalit sozlanmagan (GEMINI_API_KEY yoki GPT_API_KEY kerak)');
+}
 
 // How many characters to feed to the AI (keeps token cost predictable)
 const MAX_ANALYSIS_CHARS = 9000;
@@ -43,22 +138,17 @@ function salvageJson(rawText) {
   if (!rawText) return null;
   let s = String(rawText).trim();
 
-  // Strip markdown code fences anywhere (```json ... ``` or bare ```)
   s = s.replace(/```(?:json)?/gi, '').trim();
 
-  // Narrow to the first '{' onward — drop any leading prose
   const start = s.indexOf('{');
   if (start === -1) return null;
   s = s.slice(start);
 
-  // 1) Fast path: maybe it's already valid once trimmed to the last '}'
   const lastBrace = s.lastIndexOf('}');
   if (lastBrace !== -1) {
     try { return JSON.parse(s.slice(0, lastBrace + 1)); } catch (_) { /* fall through */ }
   }
 
-  // 2) Repair a truncated object: walk the string tracking structure, then
-  //    close any string still open and balance the remaining brackets.
   let inStr = false, esc = false;
   const stack = [];
   let out = '';
@@ -76,11 +166,9 @@ function salvageJson(rawText) {
     else if (c === '}' || c === ']') stack.pop();
   }
 
-  // Drop a dangling ",  key": fragment or trailing comma at the very end.
   if (inStr) out += '"';
   out = out.replace(/,\s*"[^"]*"\s*:?\s*$/s, '').replace(/,\s*$/s, '');
 
-  // Close whatever brackets are still open, innermost first.
   for (let i = stack.length - 1; i >= 0; i--) {
     out += stack[i] === '{' ? '}' : ']';
   }
@@ -160,6 +248,24 @@ function mountAnalyzerRoutes(app, deps) {
     }
   });
 
+  // ── AI Vision OCR — images AND scanned PDFs ──
+  app.post('/api/analyze/ocr-image', requireAuth, visionUpload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
+    const filePath = req.file.path;
+    try {
+      const buf = fs.readFileSync(filePath);
+      const mimeType = req.file.mimetype || 'image/jpeg';
+      const langCode = req.body.lang || 'uzb+rus';
+      const result = await callVisionOCR(buf, mimeType, langCode);
+      res.json({ text: result.text, charCount: result.text.length, provider: result.provider });
+    } catch (e) {
+      console.error('[ANALYZE] Vision OCR error:', e.message);
+      res.status(500).json({ error: e.message });
+    } finally {
+      fs.unlink(filePath, () => {});
+    }
+  });
+
   // ── AI analysis ──
   app.post('/api/analyze', requireAuth, quota, async (req, res) => {
     try {
@@ -174,12 +280,8 @@ function mountAnalyzerRoutes(app, deps) {
         { role: 'user', text: `Analyze this legal document:${langNote}\n\n---\n${truncated}\n---` },
       ], { temperature: 0.15, maxTokens: 4096 });
 
-      // Robustly extract the JSON object — tolerant of code fences, leading
-      // prose and (most commonly) responses truncated mid-object.
       let analysis = salvageJson(result.text);
 
-      // If salvage produced an object but it's missing the core fields, treat
-      // it as a parse failure so the client shows the raw text instead.
       if (analysis && typeof analysis === 'object' && !analysis.summary && !analysis.docType) {
         analysis = null;
       }
@@ -189,7 +291,6 @@ function mountAnalyzerRoutes(app, deps) {
         return res.json({ raw: result.text, parseError: true, provider: result.provider });
       }
 
-      // Guarantee the array fields exist so the client never crashes on them.
       analysis.riskItems = Array.isArray(analysis.riskItems) ? analysis.riskItems : [];
       analysis.missingClauses = Array.isArray(analysis.missingClauses) ? analysis.missingClauses : [];
       analysis.complianceIssues = Array.isArray(analysis.complianceIssues) ? analysis.complianceIssues : [];

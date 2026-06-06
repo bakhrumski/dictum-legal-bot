@@ -7,7 +7,7 @@
  * These are the foundational codes and laws that cover each topic.
  *
  * doc_id format: short unique slug used for dedup in legal_chunks table.
- * lex_url: direct lex.uz link (Russian version; most complete).
+ * lex_url: direct lex.uz link (Uzbek-Latin version: /uz/docs/...).
  *
  * To add more laws: just append to the appropriate category array.
  * Then run: npm run ingest:fetch -- --category mehnat
@@ -18,7 +18,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mehnat-kodeks',
       law_name: "O'zbekiston Respublikasining Mehnat kodeksi",
-      lex_url: 'https://lex.uz/docs/145261',
+      lex_url: 'https://lex.uz/uz/docs/145261',
       enforcement_date: '1996-04-01'
     }
   ],
@@ -27,7 +27,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'oila-kodeks',
       law_name: "O'zbekiston Respublikasining Oila kodeksi",
-      lex_url: 'https://lex.uz/docs/104723',
+      lex_url: 'https://lex.uz/uz/docs/104723',
       enforcement_date: '1998-09-01'
     }
   ],
@@ -36,7 +36,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'fuqarolik-kodeks',
       law_name: "O'zbekiston Respublikasining Fuqarolik kodeksi",
-      lex_url: 'https://lex.uz/docs/111181',
+      lex_url: 'https://lex.uz/uz/docs/111181',
       enforcement_date: '1997-03-01'
     }
   ],
@@ -46,7 +46,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'fuqarolik-kodeks-shartnoma',
       law_name: "Fuqarolik kodeksi (Shartnoma qismi)",
-      lex_url: 'https://lex.uz/docs/180550',
+      lex_url: 'https://lex.uz/uz/docs/180550',
       enforcement_date: '1997-03-01'
     }
   ],
@@ -55,7 +55,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'soliq-kodeks',
       law_name: "O'zbekiston Respublikasining Soliq kodeksi",
-      lex_url: 'https://lex.uz/docs/4674902',
+      lex_url: 'https://lex.uz/uz/docs/4674902',
       enforcement_date: '2020-01-01'
     }
   ],
@@ -64,7 +64,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'jinoyat-kodeks',
       law_name: "O'zbekiston Respublikasining Jinoyat kodeksi",
-      lex_url: 'https://lex.uz/docs/111457',
+      lex_url: 'https://lex.uz/uz/docs/111457',
       enforcement_date: '1995-04-01'
     }
   ],
@@ -73,7 +73,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mamuriy-javobgarlik-kodeks',
       law_name: "Ma'muriy javobgarlik to'g'risidagi kodeks",
-      lex_url: 'https://lex.uz/docs/97661',
+      lex_url: 'https://lex.uz/uz/docs/97661',
       enforcement_date: '1995-04-01'
     }
   ],
@@ -82,7 +82,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'aksiyadorlik-jamiyatlari-qonun',
       law_name: "Aksiyadorlik jamiyatlari va aksiyadorlarning huquqlarini himoya qilish to'g'risida",
-      lex_url: 'https://lex.uz/docs/5765878',
+      lex_url: 'https://lex.uz/uz/docs/5765878',
       enforcement_date: '2014-05-07'
     }
   ],
@@ -91,7 +91,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'tadbirkorlik-erkinligi-qonun',
       law_name: "Tadbirkorlik erkinligi kafolatlari to'g'risida",
-      lex_url: 'https://lex.uz/docs/4538291',
+      lex_url: 'https://lex.uz/uz/docs/4538291',
       enforcement_date: '2000-05-25'
     }
   ],
@@ -100,7 +100,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'uy-joy-kodeks',
       law_name: "O'zbekiston Respublikasining Uy-joy kodeksi",
-      lex_url: 'https://lex.uz/docs/97791',
+      lex_url: 'https://lex.uz/uz/docs/97791',
       enforcement_date: '1999-01-01'
     }
   ],
@@ -110,7 +110,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mulkchilik-qonun',
       law_name: "Mulkchilik to'g'risida",
-      lex_url: 'https://lex.uz/docs/111189',
+      lex_url: 'https://lex.uz/uz/docs/111189',
       enforcement_date: '1990-02-01'
     }
   ],
@@ -119,7 +119,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'notariat-qonun',
       law_name: "Notariat to'g'risida",
-      lex_url: 'https://lex.uz/docs/98304',
+      lex_url: 'https://lex.uz/uz/docs/98304',
       enforcement_date: '1997-01-01'
     }
   ],
@@ -128,7 +128,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'fuqarolarni-ijtimoiy-himoya-qonun',
       law_name: "Fuqarolarning ijtimoiy himoyalanganligi to'g'risida",
-      lex_url: 'https://lex.uz/docs/112298',
+      lex_url: 'https://lex.uz/uz/docs/112298',
       enforcement_date: '1994-04-26'
     }
   ]
