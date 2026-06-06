@@ -467,8 +467,8 @@
             display: block;
             margin-bottom: 2px;
         }
-        /* Desktop: show the wordmark (light/dark variant), hide the mono icon. */
-        .header-logo-mono { display: none; }
+        /* Desktop: show wordmarks, hide square icon. */
+        .header-logo-icon { display: none; }
         .header-logo-wordmark.header-logo-dark { display: none; }
         [data-theme="dark"] .header-logo-wordmark.header-logo-light { display: none; }
         [data-theme="dark"] .header-logo-wordmark.header-logo-dark  { display: block; }
@@ -2056,10 +2056,10 @@
             resize: none;
             background: var(--glass-bg);
             color: var(--text-primary);
-            max-height: 80px;
             min-height: 42px;
             outline: none;
             line-height: 1.4;
+            overflow-y: hidden;
             transition: border-color 0.2s;
         }
         .ai-chat-input:focus {
@@ -2780,10 +2780,10 @@
             resize: none;
             background: var(--bg-input);
             color: var(--text-primary);
-            max-height: 120px;
             min-height: 42px;
             outline: none;
             line-height: 1.4;
+            overflow-y: hidden;
             transition: border-color 0.2s;
         }
         .ai-chat-textarea:focus {
@@ -4889,12 +4889,9 @@
             header { height: 70px; max-height: 70px; padding: 8px 10px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; }
             .header-left { flex-shrink: 0; min-width: 0; }
             .header-logo { height: 32px; }
-            /* Mobile: swap the wide wordmark for the compact mono icon. */
+            /* Mobile: hide wordmarks, show square icon-1024. */
             .header-logo-wordmark { display: none !important; }
-            .header-logo-mono.header-logo-light { display: block; }
-            .header-logo-mono.header-logo-dark  { display: none; }
-            [data-theme="dark"] .header-logo-mono.header-logo-light { display: none !important; }
-            [data-theme="dark"] .header-logo-mono.header-logo-dark  { display: block !important; }
+            .header-logo-icon { display: block !important; }
             .header-left .subtitle { font-size: 7px; letter-spacing: 1px; }
             .header-center {
                 position: static !important;
@@ -5216,10 +5213,9 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="switchTab('home')">
+                    <img src="/icon-1024.png"                   alt="JuristAI" class="header-logo header-logo-icon">
                     <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
                     <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
-                    <img src="/icon-mono-navy.png"              alt="JuristAI" class="header-logo header-logo-mono header-logo-light">
-                    <img src="/icon-mono-cream.png"             alt="JuristAI" class="header-logo header-logo-mono header-logo-dark">
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
@@ -5424,7 +5420,7 @@
                 <!-- Input bar -->
                 <div class="ai-chat-input-bar">
                     <div class="ai-chat-input-wrapper">
-                        <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
+                        <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" oninput="autoResizeAI(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
                         <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
                     </div>
                 </div>
@@ -5945,7 +5941,7 @@
             <!-- Chat input fixed at bottom (analysis modal) -->
             <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
                 <div class="ai-chat-input-wrapper">
-                    <textarea class="ai-chat-input" id="aiModalChatInput" placeholder="Qo'shimcha savol yozing..." rows="1" onkeydown="handleAiChatKeydown(event)"></textarea>
+                    <textarea class="ai-chat-input" id="aiModalChatInput" placeholder="Qo'shimcha savol yozing..." rows="1" oninput="autoResizeAI(this)" onkeydown="handleAiChatKeydown(event)"></textarea>
                     <button class="ai-chat-send-btn" id="aiModalChatSendBtn" onclick="sendAiChatMessage()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
                 </div>
             </div>
@@ -7803,6 +7799,39 @@
             return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
+        // ── Auto-resize textarea up to 3 rows ──
+        function autoResizeAI(el) {
+            el.style.height = 'auto';
+            var lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
+            var pt = parseFloat(getComputedStyle(el).paddingTop) || 10;
+            var pb = parseFloat(getComputedStyle(el).paddingBottom) || 10;
+            var maxH = lh * 3 + pt + pb;
+            var h = Math.min(el.scrollHeight, maxH);
+            el.style.height = h + 'px';
+            el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden';
+        }
+
+        // ── Typewriter render: reveal text char-by-char, then apply markdown ──
+        function typewriterRender(el, text, scrollEl, onDone) {
+            if (!text) { if (onDone) onDone(); return; }
+            var len = text.length;
+            var charsPerTick = Math.max(1, Math.ceil(len / 150));
+            var pos = 0;
+            function tick() {
+                pos = Math.min(pos + charsPerTick, len);
+                el.textContent = text.slice(0, pos);
+                if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+                if (pos < len) {
+                    setTimeout(tick, 20);
+                } else {
+                    el.innerHTML = simpleMarkdown(text);
+                    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+                    if (onDone) onDone();
+                }
+            }
+            tick();
+        }
+
         let aiCurrentRequestId = null;
         let aiCurrentQaBankId = null;
         let aiConversationHistory = [];
@@ -8005,6 +8034,7 @@
 
             chatMessages.innerHTML += `<div class="ai-chat-msg user">${escapeHtml(text)}</div>`;
             input.value = '';
+            input.style.height = 'auto';
 
             aiConversationHistory.push({ role: 'user', text });
 
@@ -8041,7 +8071,10 @@
                 const data = await response.json();
                 if (response.ok) {
                     aiConversationHistory.push({ role: 'model', text: data.reply });
-                    chatMessages.innerHTML += `<div class="ai-chat-msg model"><div class="ai-analysis-content">${simpleMarkdown(data.reply)}</div></div>`;
+                    const twId2 = 'tw_' + Date.now();
+                    chatMessages.innerHTML += `<div class="ai-chat-msg model"><div class="ai-analysis-content" id="${twId2}"></div></div>`;
+                    const twEl2 = document.getElementById(twId2);
+                    if (twEl2) { twEl2.removeAttribute('id'); typewriterRender(twEl2, data.reply, document.querySelector('.ai-modal-body'), null); }
                 } else {
                     chatMessages.innerHTML += `<div class="ai-chat-msg model" style="color:#e74c3c;">Xatolik: ${data.error}</div>`;
                 }
@@ -8786,7 +8819,10 @@
                         '</div>';
 
                     var qaIdAttr = (data.qaBank && data.qaBank.id) ? (' data-qa-id="' + data.qaBank.id + '"') : '';
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(data.reply) + '</div>' + ragBadge + actionsHtml + verifyRow + '</div>';
+                    var twId = 'tw_' + Date.now();
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + ragBadge + actionsHtml + verifyRow + '</div>';
+                    var twEl = document.getElementById(twId);
+                    if (twEl) { twEl.removeAttribute('id'); typewriterRender(twEl, data.reply, messagesEl, null); }
                 } else {
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
                 }
@@ -9344,7 +9380,10 @@
                         { role: 'user', text: 'Hujjat namunasi: ' + templateType },
                         { role: 'model', text: data.template }
                     );
-                    chatMessages.innerHTML += '<div class="ai-chat-msg model"><div class="ai-template-header"><span>Hujjat namunasi</span><button class="ai-copy-btn" onclick="copyTemplate(this)">Nusxa olish</button></div><div class="ai-analysis-content">' + simpleMarkdown(data.template) + '</div></div>';
+                    var twId3 = 'tw_' + Date.now();
+                    chatMessages.innerHTML += '<div class="ai-chat-msg model"><div class="ai-template-header"><span>Hujjat namunasi</span><button class="ai-copy-btn" onclick="copyTemplate(this)">Nusxa olish</button></div><div class="ai-analysis-content" id="' + twId3 + '"></div></div>';
+                    var twEl3 = document.getElementById(twId3);
+                    if (twEl3) { twEl3.removeAttribute('id'); typewriterRender(twEl3, data.template, document.querySelector('.ai-modal-body'), null); }
                 } else {
                     chatMessages.innerHTML += '<div class="ai-chat-msg model" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error) + '</div>';
                 }
