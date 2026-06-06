@@ -210,6 +210,9 @@
             min-height: 100vh;
             padding: 20px 0;
             padding-bottom: calc(64px + 20px + env(safe-area-inset-bottom, 0px));
+        }
+        body.no-tab-bar {
+            padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
             color: var(--text-primary);
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -4863,6 +4866,7 @@
             .tab-bar-item .tab-icon { width: 20px; height: 20px; }
             .tab-bar-item { min-width: 48px; padding: 6px 8px; }
             body { padding-bottom: calc(56px + 12px + env(safe-area-inset-bottom, 0px)) !important; }
+            body.no-tab-bar { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important; }
             /* 70px header + 16px header-mb + 20px body-pt + 56px tab-bar + 16px buffer */
             #tabChat.tab-view.active { height: calc(100vh - 178px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 178px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius); }
@@ -4916,6 +4920,7 @@
             .tab-bar-item { min-width: 44px; padding: 8px; }
             .bottom-tab-bar { height: 50px; }
             body { padding-bottom: calc(50px + 8px + env(safe-area-inset-bottom, 0px)) !important; }
+            body.no-tab-bar { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important; }
             /* 57px header + 16px header-mb + 20px body-pt + 50px tab-bar + 16px buffer */
             #tabChat.tab-view.active { height: calc(100vh - 159px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 159px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius-sm); }
@@ -6197,8 +6202,9 @@
                 if (data.role === 'user') {
                     var bar = document.getElementById('bottomTabBar');
                     if (bar) bar.style.display = 'none';
-                    // Collapse the body padding that is reserved for the fixed tab bar
-                    document.body.style.setProperty('padding-bottom', '20px', 'important');
+                    // Remove body padding reserved for the fixed tab bar.
+                    // Class-based !important beats all media-query !important rules.
+                    document.body.classList.add('no-tab-bar');
                     // Force-switch to AI tab so they see the chat workspace
                     if (typeof switchTab === 'function') switchTab('ai');
                     // Redirect to /tariff.html if no plan selected yet
