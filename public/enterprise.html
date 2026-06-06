@@ -157,7 +157,9 @@ function md(t){
   if(!r.ok){ window.location.href='/login.html'; return; }
   const u = await r.json();
   isMaster = u.role === 'master';
-  if(isMaster) document.getElementById('ingestFab').style.display='block';
+  // Enterprise (English-law) lane is master-only for now (R&D). Redirect others.
+  if(!isMaster){ window.location.href='/dashboard.html'; return; }
+  document.getElementById('ingestFab').style.display='block';
   loadStats();
 })();
 

@@ -76,8 +76,10 @@
             --monte-card-bg: #FFFFFF;
             --ranking-bg: #FFFFFF;
             --bg-card-hover: var(--parchment-100);
-            --ios-radius: var(--r-lg);
-            --ios-radius-lg: var(--r-xl);
+            /* Unified container radius: all card/panel corners = 10px (--r-md)
+               across every responsive size. */
+            --ios-radius: var(--r-md);
+            --ios-radius-lg: var(--r-md);
             --ios-radius-sm: var(--r-md);
         }
 
@@ -275,7 +277,7 @@
             padding-bottom: env(safe-area-inset-bottom, 0px);
             z-index: 900;
             box-shadow: 0 -2px 20px rgba(0,0,0,0.06);
-            border-radius: 20px 20px 0 0;
+            border-radius: var(--ios-radius-sm) var(--ios-radius-sm) 0 0;
         }
         [data-theme="dark"] .bottom-tab-bar {
             background: rgba(13, 17, 23, 0.95);
@@ -744,7 +746,7 @@
             -webkit-backdrop-filter: blur(var(--glass-blur));
             border: 1px solid var(--glass-border);
             padding: 18px 12px 14px;
-            border-radius: 16px;
+            border-radius: var(--ios-radius-sm);
             box-shadow: 0 4px 12px rgba(0,0,0,0.06);
             transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
             cursor: pointer;
@@ -774,7 +776,7 @@
         .stat-icon {
             width: 44px;
             height: 44px;
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -857,7 +859,7 @@
         .badge-combined,
         .date-badge-combined {
             display: inline-flex;
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             overflow: hidden;
             font-size: 12px;
             font-weight: 700;
@@ -935,7 +937,7 @@
         }
         .requests-preview-item {
             background: var(--glass-bg, #f0f2f5);
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             padding: 10px 14px;
             cursor: pointer;
             transition: transform 0.2s;
@@ -1050,7 +1052,7 @@
             background: rgba(81,45,168,0.08);
             color: var(--navy-700);
             border: 1px solid rgba(171,71,188,0.25);
-            border-radius: 16px;
+            border-radius: var(--ios-radius-sm);
             padding: 3px 10px;
             font-size: 13px;
             font-weight: 600;
@@ -1176,7 +1178,7 @@
         }
         .triage-section {
             background: var(--glass-bg-light, var(--glass-bg)); border: 1px solid var(--glass-border);
-            border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+            border-radius: var(--ios-radius-sm); padding: 14px 16px; margin-bottom: 12px;
         }
         .triage-section h4 { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600; }
         .triage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1390,7 +1392,7 @@
         .ai-analysis-content {
             background: none;
             border: none;
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             padding: 24px;
             font-size: 14px;
             line-height: 1.6;
@@ -1808,7 +1810,7 @@
         }
         .fb-edit-overlay.open { display: flex; }
         .fb-edit-modal {
-            background: var(--bg-card, #fff); border-radius: 16px;
+            background: var(--bg-card, #fff); border-radius: var(--ios-radius-sm);
             width: 90%; max-width: 680px; max-height: 90vh;
             overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             border: 1px solid var(--glass-border);
@@ -1904,7 +1906,7 @@
             padding: 14px 18px;
             background: rgba(0, 185, 242, 0.04);
             border: 1px solid rgba(14, 34, 54, 0.15);
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
         }
         [data-theme="dark"] .ai-yurxizmat-section {
             background: rgba(44, 92, 146, 0.08);
@@ -1986,7 +1988,7 @@
         }
         .ai-chat-msg {
             padding: 12px 16px;
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             font-size: 14px;
             line-height: 1.6;
             max-width: 85%;
@@ -2048,7 +2050,7 @@
             flex: 1;
             padding: 10px 16px;
             border: 1px solid var(--glass-border);
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             font-family: inherit;
             font-size: 14px;
             resize: none;
@@ -2509,7 +2511,7 @@
         .ai-chat-welcome-icon {
             width: 56px;
             height: 56px;
-            border-radius: 16px;
+            border-radius: var(--ios-radius-sm);
             background: rgba(14, 34, 54, 0.08);
             display: flex;
             align-items: center;
@@ -2626,7 +2628,7 @@
         .ai-chat-msg {
             max-width: 80%;
             padding: 12px 16px;
-            border-radius: 14px;
+            border-radius: var(--ios-radius-sm);
             font-size: 14px;
             line-height: 1.65;
             word-wrap: break-word;
@@ -2772,7 +2774,7 @@
             flex: 1;
             padding: 10px 16px;
             border: none;
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             font-family: inherit;
             font-size: 14px;
             resize: none;
@@ -2851,9 +2853,9 @@
             .ai-sidebar-toggle {
                 display: flex;
             }
-            /* Right sidebar: always rendered on mobile (fixed off-screen),
-               slides in from the right — master-visible class is desktop-only */
-            .ai-sidebar-right,
+            /* Right R&D sidebar on mobile: rendered off-canvas for master only.
+               Non-master users never get .master-visible, so the base
+               display:none applies and it occupies no space at all. */
             .ai-sidebar-right.master-visible {
                 display: flex;
                 position: fixed;
@@ -2869,7 +2871,6 @@
                 box-shadow: none;
                 border-left: none;
                 background: var(--glass-bg-strong, var(--glass-bg));
-                display: flex;
                 flex-direction: column;
             }
             .ai-sidebar-right.open {
@@ -2988,7 +2989,7 @@
         @media (max-width: 480px) { .reg-kanban-col-body { grid-template-columns: 1fr; } }
         .reg-card {
             background: var(--glass-bg); border: 1px solid var(--glass-border);
-            border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all 0.2s;
+            border-radius: var(--ios-radius-sm); padding: 12px 14px; cursor: pointer; transition: all 0.2s;
         }
         .reg-card:hover { border-color: rgba(14, 34, 54, 0.3); background: rgba(14, 34, 54, 0.04); }
         .reg-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -3021,21 +3022,21 @@
         .reg-detail-overlay.active { display: flex; }
         .reg-detail-box {
             background: var(--glass-bg); border: 1px solid var(--glass-border);
-            border-radius: 20px; width: 92%; max-width: 520px; max-height: 85vh;
+            border-radius: var(--ios-radius-sm); width: 92%; max-width: 520px; max-height: 85vh;
             overflow-y: auto; padding: 24px; box-shadow: var(--shadow-lg);
         }
         .reg-detail-box h3 { font-size: 18px; color: var(--text-primary); margin-bottom: 16px; }
         .reg-detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border); font-size: 13px; }
         .reg-detail-label { color: var(--text-muted); font-weight: 600; }
         .reg-detail-value { color: var(--text-primary); text-align: right; max-width: 60%; word-break: break-word; }
-        .reg-ai-section { margin-top: 16px; padding: 14px; border-radius: 12px; font-size: 13px; }
+        .reg-ai-section { margin-top: 16px; padding: 14px; border-radius: var(--ios-radius-sm); font-size: 13px; }
         .reg-ai-section.passed { background: rgba(39, 174, 96, 0.08); border: 1px solid rgba(39, 174, 96, 0.2); }
         .reg-ai-section.flagged { background: rgba(243, 156, 18, 0.08); border: 1px solid rgba(243, 156, 18, 0.2); }
         .reg-ai-section h4 { margin-bottom: 8px; font-size: 14px; }
         .reg-ai-section .ai-note { color: var(--text-secondary); line-height: 1.6; }
         .reg-detail-actions { display: flex; gap: 10px; margin-top: 20px; }
         .reg-detail-actions button {
-            flex: 1; padding: 12px; border: none; border-radius: 12px;
+            flex: 1; padding: 12px; border: none; border-radius: var(--ios-radius-sm);
             font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
             color: white;
         }
@@ -3045,7 +3046,7 @@
         .reg-detail-close:hover { background: #d0d0d0; }
         .reg-cred-box {
             margin-top: 16px; padding: 14px; background: rgba(39, 174, 96, 0.08);
-            border: 1px solid rgba(39, 174, 96, 0.2); border-radius: 12px; font-size: 13px; color: var(--text-primary);
+            border: 1px solid rgba(39, 174, 96, 0.2); border-radius: var(--ios-radius-sm); font-size: 13px; color: var(--text-primary);
         }
         .reg-cred-box code { background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
         [data-theme="dark"] .reg-cred-box code { background: rgba(255,255,255,0.08); }
@@ -3440,7 +3441,7 @@
 
         .folder-badge {
             padding: 3px 8px;
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             font-size: 12px;
             font-weight: 700;
         }
@@ -3523,7 +3524,7 @@
             background: var(--date-badge-bg);
             color: var(--date-badge-color);
             padding: 2px 10px;
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             font-size: 12px;
         }
 
@@ -3654,7 +3655,7 @@
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
             border: 1px solid rgba(255, 255, 255, 0.5);
-            border-radius: 16px;
+            border-radius: var(--ios-radius-sm);
             padding: 12px 16px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
             cursor: pointer;
@@ -3932,7 +3933,7 @@
         }
 
         .chat-msg {
-            max-width: 80%; padding: 8px 12px; border-radius: 16px;
+            max-width: 80%; padding: 8px 12px; border-radius: var(--ios-radius-sm);
             font-size: 14px; line-height: 1.5; word-wrap: break-word;
             position: relative;
         }
@@ -4095,7 +4096,7 @@
         .chat-input-wrapper { display: flex; gap: 10px; align-items: flex-end; }
         .chat-input {
             flex: 1; padding: 10px 16px; border: 1px solid var(--glass-border-light);
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             font-family: inherit; font-size: 14px; resize: none;
             background: var(--bg-input);
             color: var(--text-primary);
@@ -4731,7 +4732,7 @@
             padding: 12px 14px;
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
             box-shadow: 0 8px 24px rgba(0,0,0,0.12);
             font-size: 12px;
             font-weight: 400;
@@ -4832,7 +4833,7 @@
             padding: 14px 10px;
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
-            border-radius: 12px;
+            border-radius: var(--ios-radius-sm);
         }
         .mc-res-stat .stat-val {
             font-size: 20px;
@@ -5222,7 +5223,7 @@
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
-                <a href="/enterprise.html" id="enterpriseLaunchBtn" class="hicon" title="Enterprise Uzbekistan — English Law" style="display:inline-flex">
+                <a href="/enterprise.html" id="enterpriseLaunchBtn" class="hicon" title="Enterprise Uzbekistan — English Law" style="display:none">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9"/><line x1="9" y1="13" x2="9" y2="13"/><line x1="9" y1="17" x2="9" y2="17"/></svg>
                 </a>
                 <a href="/analyzer.html" id="analyzerLaunchBtn" class="hicon" title="Hujjat tahlili" style="display:inline-flex">
@@ -6148,8 +6149,9 @@
                 if (draftBtn) draftBtn.style.display = 'inline-flex';
                 var analyzerBtn = document.getElementById('analyzerLaunchBtn');
                 if (analyzerBtn) analyzerBtn.style.display = 'inline-flex';
+                // Enterprise (English-law) lane: master only for now (R&D)
                 var enterpriseBtn = document.getElementById('enterpriseLaunchBtn');
-                if (enterpriseBtn) enterpriseBtn.style.display = 'inline-flex';
+                if (enterpriseBtn) enterpriseBtn.style.display = data.role === 'master' ? 'inline-flex' : 'none';
                 // Template manager: master only
                 var tplBtn = document.getElementById('templatesLaunchBtn');
                 if (tplBtn) tplBtn.style.display = data.role === 'master' ? 'inline-flex' : 'none';
