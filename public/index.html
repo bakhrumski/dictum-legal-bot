@@ -104,10 +104,10 @@ h1,h2{font-family:'Source Serif 4',Georgia,serif}
 header{position:fixed;top:0;left:0;right:0;z-index:200;transition:background var(--ease),backdrop-filter var(--ease),box-shadow var(--ease)}
 header.sc{background:var(--nav-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 1px 0 rgba(176,132,66,0.14)}
 nav{display:flex;align-items:center;height:68px;gap:20px}
-.brand{display:inline-flex;align-items:center;flex-shrink:0;line-height:1}
+.brand{display:inline-flex;align-items:center;gap:8px;flex-shrink:0;line-height:1}
 .brand-img{height:36px;width:auto;display:block}
 /* logo swap: light logo on dark bg (default), dark logo on parchment header */
-.brand-icon{display:none}
+.brand-icon{display:block}
 .logo-on-dark{display:block}
 .logo-on-light{display:none}
 [data-theme="light"] header.sc .logo-on-dark{display:none}

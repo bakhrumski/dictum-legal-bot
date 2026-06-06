@@ -460,15 +460,15 @@
             max-height: 86px;
         }
 
-        .header-brand { cursor: pointer; }
+        .header-brand { cursor: pointer; display: flex; align-items: center; gap: 8px; }
         .header-logo {
             height: 42px;
             width: auto;
             display: block;
             margin-bottom: 2px;
         }
-        /* Desktop: show wordmarks, hide square icon. */
-        .header-logo-icon { display: none; }
+        /* Show icon-1024 at all sizes; wordmarks follow on desktop. */
+        .header-logo-icon { display: block; }
         .header-logo-wordmark.header-logo-dark { display: none; }
         [data-theme="dark"] .header-logo-wordmark.header-logo-light { display: none; }
         [data-theme="dark"] .header-logo-wordmark.header-logo-dark  { display: block; }
