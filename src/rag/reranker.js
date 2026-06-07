@@ -52,7 +52,16 @@ async function rerankChunks(query, chunks, opts = {}) {
   }
 
   try {
-    const scored = await crossEncoderRerank(query, chunks, model, apiKey);
+    // Bound total latency: the cross-encoder fires one HF request per chunk
+    // (each with a 60s socket timeout), so without an overall cap a slow API
+    // could stall the user's request. Race against RERANKER_TIMEOUT_MS and
+    // fall back to the keyword reranker if it doesn't finish in time.
+    const scored = await Promise.race([
+      crossEncoderRerank(query, chunks, model, apiKey),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`reranker timeout after ${RERANKER_TIMEOUT_MS}ms`)), RERANKER_TIMEOUT_MS)
+      ),
+    ]);
     // Sort descending by reranker score
     scored.sort((a, b) => b._rerankerScore - a._rerankerScore);
     const topChunks = scored.slice(0, topK);
