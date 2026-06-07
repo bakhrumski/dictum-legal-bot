@@ -16,17 +16,19 @@
  * The RAG system must:
  *   1. Understand ALL forms when a user types a question.
  *   2. Match documents regardless of the form used in the corpus.
- *   3. Render answers in the human-readable "prim" form (per product owner request)
- *      so lawyers and end-users see "7-modda prim 1", not "7¹-modda".
+ *   3. Render answers in the canonical superscript form (per product owner
+ *      request) so lawyers and end-users see "7¹-modda" — the standard
+ *      notation in Uzbek legal texts — not the spoken "7-modda prim 1".
+ *      NOTE: this is the inverse of the earlier "spoken prim" convention.
  *
  * This module provides:
- *   - toPrimNotation(text): superscript / HTML <sup> → " prim N "
+ *   - toPrimNotation(text): spoken "prim N" / HTML <sup> → superscript "N¹"
  *   - enrichForIngest(text): appends a "prim N" alias next to every superscript
  *     so BM25 and embedding models see both forms in the corpus.
  *   - expandQueryVariants(query): generates retrieval-friendly variants of a
  *     user query that mentions "prim N" or a plain bigram like "71".
  *   - normalizeResponseForUser(text): final post-processing for the answer
- *     shown to the user — converts every superscript to "prim N".
+ *     shown to the user — converts spoken "prim N" to canonical superscript.
  */
 
 const SUPER_DIGITS = '⁰¹²³⁴⁵⁶⁷⁸⁹';
@@ -39,47 +41,54 @@ function supToAscii(s) {
   return s.split('').map(c => SUPER_TO_ASCII[c] || c).join('');
 }
 
+function asciiToSup(s) {
+  return String(s).split('').map(c => {
+    const i = parseInt(c, 10);
+    return Number.isFinite(i) ? SUPER_DIGITS[i] : c;
+  }).join('');
+}
+
 /**
- * Convert every Unicode superscript run and every <sup>…</sup> HTML tag in
- * `text` to the plain-spoken "prim N" form.
+ * Convert spoken "prim N" forms and HTML <sup>…</sup> tags in `text` to the
+ * canonical superscript form. Existing superscripts are left untouched.
  *
- *   "7¹-modda"              → "7-modda prim 1"
- *   "12²-modda, 1-qism"     → "12-modda prim 2, 1-qism"
- *   "Статья 4¹"             → "Статья 4 prim 1"
- *   "4<sup>1</sup>-modda"   → "4-modda prim 1"
+ *   "7-modda prim 1"        → "7¹-modda"
+ *   "12-modda prim 2, 1-qism" → "12²-modda, 1-qism"
+ *   "Статья 4 prim 1"       → "Статья 4¹"
+ *   "4<sup>1</sup>-modda"   → "4¹-modda"
+ *   "7¹-modda"              → "7¹-modda"   (unchanged)
  *
- * Placement rule: the " prim N" token is inserted AFTER the word "modda"
- * (or "Статья"). If the article word cannot be located within a short
- * window, fall back to placing " prim N" right after the base digit.
+ * Placement rule: in the Uzbek form the spoken "prim N" trails the article
+ * word ("7-modda prim 1"), but the superscript must attach to the base digit
+ * BEFORE the article word ("7¹-modda"). Step 2a reattaches it. Remaining
+ * "<N> prim <M>" occurrences (Russian "Статья", bare refs) collapse in place.
+ *
+ * Note: "1-qism" (a paragraph within an article) is a distinct concept from
+ * prim and is never touched here.
  */
 function toPrimNotation(text) {
   if (!text) return text;
 
-  // Step 1: normalize HTML <sup>digit</sup> → Unicode superscript,
-  //         so step 2 can handle a single form.
-  text = text.replace(/<sup[^>]*>(\d+)<\/sup>/gi, (_, d) => {
-    return d.split('').map(c => {
-      const i = parseInt(c, 10);
-      return Number.isFinite(i) ? SUPER_DIGITS[i] : c;
-    }).join('');
+  // Step 1: normalize HTML <sup>digit</sup> → Unicode superscript.
+  //   "4<sup>1</sup>-modda" → "4¹-modda"
+  text = text.replace(/(\d+)<sup[^>]*>(\d+)<\/sup>/gi, (_m, base, d) => {
+    return `${base}${asciiToSup(d)}`;
   });
 
-  // Step 2a: Uzbek form "<N><super>[-]?<modda|moddasi|moddasida|moddaga>"
-  //   → "<N>-<articleWord> prim <M>"
-  //   e.g. "7¹-modda"    → "7-modda prim 1"
-  //        "4¹-moddaga"  → "4-moddaga prim 1"
-  const withWordUz = new RegExp(
-    `(\\d+)([${SUPER_DIGITS}]+)[\\s-]*(modda(?:si(?:da)?|ga|ning)?)`,
-    'giu'
-  );
-  text = text.replace(withWordUz, (_m, base, sup, articleWord) => {
-    return `${base}-${articleWord} prim ${supToAscii(sup)}`;
+  // Step 2a: Uzbek form "<N>-<modda…> prim <M>" → "<N><super>-<modda…>"
+  //   The "prim M" trails the article word, so move the superscript onto the
+  //   base digit and drop the spoken token.
+  //   e.g. "7-modda prim 1"   → "7¹-modda"
+  //        "4-moddaga prim 1" → "4¹-moddaga"
+  const withWordUz = /(\d+)[\s-]*(modda(?:si(?:da)?|ga|ning)?)\s*[-\s]*prim[\s-]*(\d+)/giu;
+  text = text.replace(withWordUz, (_m, base, articleWord, prim) => {
+    return `${base}${asciiToSup(prim)}-${articleWord}`;
   });
 
-  // Step 2b: any remaining "<N><super>" (Russian "Статья 7¹", bare refs)
-  //   → "<N> prim <M>"
-  const standalone = new RegExp(`(\\d+)([${SUPER_DIGITS}]+)`, 'gu');
-  text = text.replace(standalone, (_m, base, sup) => `${base} prim ${supToAscii(sup)}`);
+  // Step 2b: any remaining "<N> prim <M>" (Russian "Статья 4 prim 1",
+  //   bare refs) → "<N><super>" in place.
+  const standalone = /(\d+)[\s-]*prim[\s-]*(\d+)/giu;
+  text = text.replace(standalone, (_m, base, prim) => `${base}${asciiToSup(prim)}`);
 
   return text;
 }
@@ -154,9 +163,9 @@ function expandQueryVariants(query) {
 
 /**
  * Final post-processing for text shown to the end-user.
- * ALWAYS converts Unicode superscripts to the readable "prim N" form.
+ * ALWAYS converts spoken "prim N" forms to canonical superscript "N¹".
  *
- * Safe for Markdown — we only replace digit+superscript runs; links and
+ * Safe for Markdown — we only rewrite article-number tokens; links and
  * structure are untouched.
  */
 function stripLeakedInstructions(text) {
