@@ -15,7 +15,9 @@
     "ingest:rebuild": "node src/rag/ingest-lex.js --rebuild-index",
     "backfill:doc-meta": "node src/rag/backfill-doc-metadata.js",
     "backfill:doc-meta:dry": "node src/rag/backfill-doc-metadata.js --dry-run",
-    "test": "node tests/phase1.test.js && node tests/rag-search.test.js"
+    "test": "node tests/phase1.test.js && node tests/rag-search.test.js",
+    "eval": "node src/eval/eval-runner.js",
+    "eval:ci": "node src/eval/eval-runner.js --min-recall=0.70"
   },
   "keywords": [],
   "author": "",
