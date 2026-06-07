@@ -44,7 +44,14 @@ const VALID_CATEGORIES = [
 ];
 
 function getApiKey() {
-  return process.env.GEMINI_API_KEY || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY;
+  // Resolve the key for whichever provider detectProvider() will actually use,
+  // so the key matches the provider. HF_TOKEN takes priority in detectProvider,
+  // so it must be checked first here too — otherwise we'd send a Gemini key to
+  // the HuggingFace endpoint (401 Invalid username or password).
+  const provider = detectProvider();
+  if (provider === 'huggingface') return process.env.HF_TOKEN;
+  if (provider === 'gemini') return process.env.GEMINI_API_KEY;
+  return process.env.GPT_API_KEY || process.env.OPENAI_API_KEY;
 }
 
 // ========== FILE PARSING ==========
@@ -82,7 +89,7 @@ function parseFile(filePath) {
 async function ingestText(body, docMeta) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.error('ERROR: Set GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
+    console.error('ERROR: Set HF_TOKEN, GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
     process.exit(1);
   }
 
@@ -124,7 +131,7 @@ async function ingestText(body, docMeta) {
 async function ingestStructuredHtml(rawHtml, docMeta) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.error('ERROR: Set GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
+    console.error('ERROR: Set HF_TOKEN, GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
     process.exit(1);
   }
 
