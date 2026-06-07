@@ -1,0 +1,212 @@
+[
+  {
+    "id": "mehnat-001",
+    "question": "Ishchi ishdan asossiz bo'shatilgan. Qanday harakat qilishi kerak?",
+    "category": "mehnat",
+    "expected_articles": ["100", "161"],
+    "expected_law": "Mehnat kodeksi"
+  },
+  {
+    "id": "mehnat-002",
+    "question": "Ish haqi to'lanmayapti, ish beruvchi kechiktirmoqda. Qanday murojaat qilaman?",
+    "category": "mehnat",
+    "expected_articles": ["153", "154"],
+    "expected_law": "Mehnat kodeksi"
+  },
+  {
+    "id": "mehnat-003",
+    "question": "Yillik mehnat ta'tili necha kun va qanday olish kerak?",
+    "category": "mehnat",
+    "expected_articles": ["133", "134"],
+    "expected_law": "Mehnat kodeksi"
+  },
+  {
+    "id": "mehnat-004",
+    "question": "Homilador ayolni yoki uch yoshgacha bola tarbiyalab turgan onani ishdan bo'shatish mumkinmi?",
+    "category": "mehnat",
+    "expected_articles": ["102"],
+    "expected_law": "Mehnat kodeksi"
+  },
+  {
+    "id": "mehnat-005",
+    "question": "Haftalik ish vaqti normalari qancha? Ish kuni necha soat bo'lishi kerak?",
+    "category": "mehnat",
+    "expected_articles": ["112"],
+    "expected_law": "Mehnat kodeksi"
+  },
+  {
+    "id": "mehnat-006",
+    "question": "Mehnat shartnomasi yozma tuzilishi shart bo'lgan hollar qaysilar?",
+    "category": "mehnat",
+    "expected_articles": ["68", "69"],
+    "expected_law": "Mehnat kodeksi"
+  },
+  {
+    "id": "oila-001",
+    "question": "Er-xotin ajrashmoqchi. Voyaga yetmagan bolalar bo'lsa nikoh qanday bekor qilinadi?",
+    "category": "oila",
+    "expected_articles": ["38", "75"],
+    "expected_law": "Oila kodeksi"
+  },
+  {
+    "id": "oila-002",
+    "question": "Aliment to'lashdan bosh tortayotgan otadan aliment undirish tartibi qanday?",
+    "category": "oila",
+    "expected_articles": ["98", "99"],
+    "expected_law": "Oila kodeksi"
+  },
+  {
+    "id": "oila-003",
+    "question": "Nikoh ZAGS orqali ro'yxatdan o'tkazilishi uchun qanday talablar mavjud?",
+    "category": "oila",
+    "expected_articles": ["14", "16"],
+    "expected_law": "Oila kodeksi"
+  },
+  {
+    "id": "fuqarolik-001",
+    "question": "Kvartira sotib olish shartnomasi notarial tasdiqlash talab qiladimi va qanday rasmiylashtiriladi?",
+    "category": "fuqarolik",
+    "expected_articles": ["482", "109"],
+    "expected_law": "Fuqarolik kodeksi"
+  },
+  {
+    "id": "fuqarolik-002",
+    "question": "Qarz bergan pulim qaytarilmayapti. Tilxat bor, nima qilishim kerak?",
+    "category": "fuqarolik",
+    "expected_articles": ["732", "733"],
+    "expected_law": "Fuqarolik kodeksi"
+  },
+  {
+    "id": "fuqarolik-003",
+    "question": "Sotuv shartnomasi tuzilganidan keyin sotuvchi shartnomani bajarishdan bosh tortmoqda.",
+    "category": "fuqarolik",
+    "expected_articles": ["349", "354"],
+    "expected_law": "Fuqarolik kodeksi"
+  },
+  {
+    "id": "fuqarolik-004",
+    "question": "Mehmonxonada shaxsiy buyumlarim yo'qoldi. Mehmonxona javobgarmi?",
+    "category": "fuqarolik",
+    "expected_articles": ["819", "809"],
+    "expected_law": "Fuqarolik kodeksi"
+  },
+  {
+    "id": "fuqarolik-005",
+    "question": "Ijaraga olingan kvartirani uy egasi shartnoma muddati tugamay bo'shatishni talab qilmoqda.",
+    "category": "fuqarolik",
+    "expected_articles": ["535", "536"],
+    "expected_law": "Fuqarolik kodeksi"
+  },
+  {
+    "id": "fuqarolik-006",
+    "question": "Meros olish tartibi qanday? Vasiyatnoma bo'lmasa kim meros oladi?",
+    "category": "fuqarolik",
+    "expected_articles": ["1110", "1111"],
+    "expected_law": "Fuqarolik kodeksi"
+  },
+  {
+    "id": "fuqarolik-007",
+    "question": "Bank kreditini to'lay olmayapman. Garov olindi, uy sotib yuborilmoqchi. Huquqlarim?",
+    "category": "fuqarolik",
+    "expected_articles": ["264", "265"],
+    "expected_law": "Fuqarolik kodeksi"
+  },
+  {
+    "id": "fuqarolik-008",
+    "question": "Bitimni haqiqiy emas deb topish uchun asoslar qaysilar?",
+    "category": "fuqarolik",
+    "expected_articles": ["114", "116"],
+    "expected_law": "Fuqarolik kodeksi"
+  },
+  {
+    "id": "jinoyat-001",
+    "question": "O'g'irlik jinoyati uchun qanday jazo belgilangan?",
+    "category": "jinoyat",
+    "expected_articles": ["169"],
+    "expected_law": "Jinoyat kodeksi"
+  },
+  {
+    "id": "jinoyat-002",
+    "question": "Firibgarlik jinoyati — aldab pul olish uchun qanday jazo?",
+    "category": "jinoyat",
+    "expected_articles": ["168"],
+    "expected_law": "Jinoyat kodeksi"
+  },
+  {
+    "id": "jinoyat-003",
+    "question": "Ataylab og'ir tan jarohati yetkazganlik uchun jazo qanday?",
+    "category": "jinoyat",
+    "expected_articles": ["104"],
+    "expected_law": "Jinoyat kodeksi"
+  },
+  {
+    "id": "mamuriy-001",
+    "question": "Yo'l harakati qoidalarini buzganlik uchun jarima miqdori qancha?",
+    "category": "mamuriy",
+    "expected_articles": ["136"],
+    "expected_law": "Ma'muriy javobgarlik kodeksi"
+  },
+  {
+    "id": "mamuriy-002",
+    "question": "Tijorat korxonasida sanitariya qoidalarini buzganlik uchun ma'muriy jazo?",
+    "category": "mamuriy",
+    "expected_articles": ["55", "56"],
+    "expected_law": "Ma'muriy javobgarlik kodeksi"
+  },
+  {
+    "id": "tadbirkorlik-001",
+    "question": "Yakka tartibdagi tadbirkor bo'lib ro'yxatdan o'tish tartibi qanday?",
+    "category": "tadbirkorlik",
+    "expected_articles": ["15"],
+    "expected_law": "Tadbirkorlik erkinligi kafolatlari qonuni"
+  },
+  {
+    "id": "tadbirkorlik-002",
+    "question": "Tadbirkorlik tekshiruvlarini o'tkazish uchun qanday cheklovlar mavjud?",
+    "category": "tadbirkorlik",
+    "expected_articles": ["12", "13"],
+    "expected_law": "Tadbirkorlik erkinligi kafolatlari qonuni"
+  },
+  {
+    "id": "soliq-001",
+    "question": "QQS stavkasi qancha va qaysi tovar/xizmatlar QQSdan ozod?",
+    "category": "soliq",
+    "expected_articles": ["258", "259"],
+    "expected_law": "Soliq kodeksi"
+  },
+  {
+    "id": "soliq-002",
+    "question": "Jismoniy shaxslar daromad solig'i stavkasi qancha va qanday hisoblanadi?",
+    "category": "soliq",
+    "expected_articles": ["366", "367"],
+    "expected_law": "Soliq kodeksi"
+  },
+  {
+    "id": "uy-joy-001",
+    "question": "Uy egasi ijarachilarni shartnoma muddatidan oldin chiqarib yuborishga haqlimi?",
+    "category": "uy-joy",
+    "expected_articles": ["42"],
+    "expected_law": "Uy-joy kodeksi"
+  },
+  {
+    "id": "istemolchi-001",
+    "question": "Do'konda nuqsonli tovar sotib oldim. 14 kun ichida pulni qaytarib olsam bo'ladimi?",
+    "category": null,
+    "expected_articles": ["22", "26"],
+    "expected_law": "Iste'molchilar huquqlarini himoya qilish qonuni"
+  },
+  {
+    "id": "yer-001",
+    "question": "Qo'shni er uchastkamga o'z hududini kengaytirgan, chegara buzilgan. Nima qilaman?",
+    "category": null,
+    "expected_articles": ["36", "165"],
+    "expected_law": "Yer kodeksi"
+  },
+  {
+    "id": "fuqarolik-009",
+    "question": "Shaxsiy mulkni sovg'a qilish uchun qanday shartnoma tuziladi va notarius talab qiladimi?",
+    "category": "fuqarolik",
+    "expected_articles": ["500", "501"],
+    "expected_law": "Fuqarolik kodeksi"
+  }
+]
