@@ -1,0 +1,65 @@
+name: Corpus Ingest & Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'What to run'
+        required: true
+        default: 'ingest-then-eval'
+        type: choice
+        options:
+          - ingest-then-eval   # full re-ingest + eval (first time / after code changes)
+          - eval-only          # just measure recall, no re-ingest
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360      # ingest can take a while for large corpora
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Re-ingest corpus
+        if: ${{ github.event.inputs.mode == 'ingest-then-eval' }}
+        env:
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          HF_TOKEN:        ${{ secrets.HF_TOKEN }}
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
+          GPT_API_KEY:     ${{ secrets.GPT_API_KEY }}
+        run: npm run ingest:fetch-all
+
+      - name: Rebuild vector index
+        if: ${{ github.event.inputs.mode == 'ingest-then-eval' }}
+        env:
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          HF_TOKEN:        ${{ secrets.HF_TOKEN }}
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
+          GPT_API_KEY:     ${{ secrets.GPT_API_KEY }}
+        run: npm run ingest:rebuild
+
+      - name: Run eval harness
+        env:
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          HF_TOKEN:        ${{ secrets.HF_TOKEN }}
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
+          GPT_API_KEY:     ${{ secrets.GPT_API_KEY }}
+        run: npm run eval
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: src/eval/eval-report.json
+          retention-days: 30
