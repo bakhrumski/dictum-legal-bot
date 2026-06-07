@@ -27,6 +27,7 @@ const { correctiveFilter } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
+const { parentChildSearch } = require('../rag/advanced-corpus');
 // ── Justify RAG (optional external service, kept as bonus fallback) ──
 const {
   isJustifyAvailable,
@@ -2316,8 +2317,43 @@ const LEGAL_TOPICS = {
 };
 
 /**
+ * Normalize a parentChildSearch result into the flat chunk format used by
+ * the rest of the retrieval pipeline (corrective filter, reranker, formatter).
+ * Preserves new-format fields so getChunkArticleRefs and buildManbalarFooter
+ * continue to work without changes.
+ */
+function adaptParentChildChunk(r, idx, topic) {
+  const texts = [r.childText, r.parentText].filter(Boolean);
+  const unique = texts.filter((t, i, a) => a.indexOf(t) === i);
+  const chunk_text = unique.length === 2
+    ? `${unique[0]}\n\n[To'liq modda konteksti:]\n${unique[1]}`
+    : (unique[0] || '');
+
+  return {
+    id: `pc_${idx}_${(r.articleNumber || '').replace(/\W/g, '')}`,
+    chunk_text,
+    // preserve new-format fields for getChunkArticleRefs / buildManbalarFooter
+    articleNumber: r.articleNumber || '',
+    childText: r.childText || '',
+    parentText: r.parentText || '',
+    // old-format equivalents
+    law_name: r.lawName || '',
+    source_url: r.sourceUrl || null,
+    chapter: r.chapter || '',
+    article_numbers: r.articleNumber ? [r.articleNumber] : [],
+    article_number_display: r.articleNumber || '',
+    cross_references: r.references || [],
+    score: r.score || 0,
+    source_type: 'law_text',
+    category: topic || null,
+    is_active: true,
+    language: 'uz',
+  };
+}
+
+/**
  * Retrieve relevant legal chunks using the full RAG pipeline:
- *   Router → RRF Hybrid Search → Corrective Grading → Web Search fallback
+ *   Parent-Child Search → RRF Hybrid fallback → Corrective Grading → Web Search fallback
  *
  * Falls back to text-only search if no embedding API key is configured.
  */
@@ -2343,21 +2379,42 @@ async function retrieveLegalContext(query, topic, language = null) {
   let searchMode = 'text-only';
 
   if (apiKey) {
+    // ── Try parent-child first: gives the model the precise matching clause
+    //    (child) plus the full article context (parent) in a single chunk.
+    //    parentChildSearch falls back to RRF internally when no v2 child chunks
+    //    exist for the given category, so this is safe for any corpus state.
     try {
-      rawResults = await rrfSearch(query, {
+      const pcRaw = await parentChildSearch(query, {
         category: topic || null,
-        language,
         limit: retrievalLimit,
         apiKey,
       });
-      searchMode = 'rrf';
-    } catch (err) {
-      console.warn(`[RAG] RRF search failed (${err.message}), trying legacy hybrid`);
+      if (pcRaw.length > 0) {
+        rawResults = pcRaw.map((r, i) => adaptParentChildChunk(r, i, topic));
+        searchMode = pcRaw[0]?.legacy ? 'rrf' : 'parent-child';
+      }
+    } catch (pcErr) {
+      console.warn(`[RAG] Parent-child search failed (${pcErr.message}), falling back to RRF`);
+    }
+
+    // ── Fall back to flat RRF when parent-child returned nothing ──
+    if (rawResults.length === 0) {
       try {
-        rawResults = await hybridSearch(query, { category: topic || null, language, limit: retrievalLimit, apiKey });
-        searchMode = 'hybrid';
-      } catch (err2) {
-        console.warn(`[RAG] Hybrid also failed (${err2.message})`);
+        rawResults = await rrfSearch(query, {
+          category: topic || null,
+          language,
+          limit: retrievalLimit,
+          apiKey,
+        });
+        searchMode = 'rrf';
+      } catch (err) {
+        console.warn(`[RAG] RRF search failed (${err.message}), trying legacy hybrid`);
+        try {
+          rawResults = await hybridSearch(query, { category: topic || null, language, limit: retrievalLimit, apiKey });
+          searchMode = 'hybrid';
+        } catch (err2) {
+          console.warn(`[RAG] Hybrid also failed (${err2.message})`);
+        }
       }
     }
   }
