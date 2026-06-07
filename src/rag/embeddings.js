@@ -2,6 +2,11 @@
 
 const https = require('https');
 
+// Matches any apostrophe-like character BETWEEN two Unicode letters.
+// Covers all 7 variants found in Uzbek Latin text (', ʻ, `, ʼ, ', ', ′, etc.)
+// so that o'zbek, oʻzbek, o`zbek all normalize to the same token before embedding.
+const UZBEK_APOSTROPHE_RX = /(\p{L})['`ʹʻʼʽʾ՚‘’‛′´](?=\p{L})/gu;
+
 /**
  * POST JSON to HTTPS endpoint using Node built-in https (no global fetch needed).
  * Returns { status, body (parsed JSON) }.
@@ -229,6 +234,12 @@ async function getEmbedding(text, apiKey) {
   if (!key) throw new Error('No API key for embeddings (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
   if (!text || text.trim().length === 0) throw new Error('Empty text cannot be embedded');
 
+  // Normalize Uzbek apostrophe variants before embedding so that o'zbek,
+  // oʻzbek, o`zbek etc. all produce the same vector. Matches the BM25
+  // normalization already applied in search-utils.js, keeping retrieval
+  // consistent across the hybrid pipeline.
+  text = text.normalize('NFKC').replace(UZBEK_APOSTROPHE_RX, '$1');
+
   const provider = detectProvider();
   if (!provider) throw new Error('No embedding provider configured (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
 
@@ -250,6 +261,10 @@ async function getEmbeddingsBatch(texts, apiKey) {
   const key = apiKey || getApiKey();
   if (!key) throw new Error('No API key for embeddings (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
   if (!texts || texts.length === 0) return [];
+
+  // Same apostrophe normalization as getEmbedding — must be identical so
+  // query vectors and corpus vectors are in the same space.
+  texts = texts.map(t => (t || '').normalize('NFKC').replace(UZBEK_APOSTROPHE_RX, '$1'));
 
   const provider = detectProvider();
   if (!provider) throw new Error('No embedding provider configured (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
