@@ -17,7 +17,7 @@ const { getDefinitionPromptAddendum, getTermExplanationRule } = require('./query
  * Design principles:
  *   - EVERY claim must have a source from chunk metadata (article + part)
  *   - Citations use markdown links to lex.uz
- *   - Prim notation enforced in spoken form ("4-modda prim 1", not 41-modda or 4-modda)
+ *   - Prim notation enforced in superscript form ("4¹-modda", not "4-modda prim 1" or 41)
  *   - Hallucination guardrails: explicit "I don't know" triggers
  *   - Few-shot examples injected from QA bank when available
  */
@@ -71,13 +71,13 @@ Sizning javoblaringiz aniq, to'liq va FAQAT manba bilan asoslangan bo'lishi SHAR
 ║    MING MARTA yaxshiroq.                                 ║
 ║                                                          ║
 ║ 4. PRIM MODDA RAQAMLARI: O'zbekiston qonunchiligida     ║
-║    qo'shimcha (insert) moddalar "prim" bilan yoziladi:  ║
-║    MAJBURIY format: "4-modda prim 1" (to'rt modda       ║
-║    prim bir), "12-modda prim 2", "7-modda prim 1".      ║
-║    HECH QACHON superskript (4¹) yoki 41-modda deb       ║
-║    yozmang. Kontekstda superskript ko'rsangiz ham —      ║
-║    foydalanuvchiga "N-modda prim M" shaklida taqdim      ║
-║    eting.                                                ║
+║    qo'shimcha (insert) moddalar superskript bilan        ║
+║    yoziladi. MAJBURIY format: "4¹-modda", "12²-modda",   ║
+║    "7¹-modda". HECH QACHON "4-modda prim 1" (so'z bilan) ║
+║    yoki 41-modda deb yozmang. Superskript belgilardan    ║
+║    foydalaning: ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹.                       ║
+║    DIQQAT: "1-qism" — bu prim EMAS, balki modda ichidagi ║
+║    band/paragraf. Uni superskriptga aylantirmang.        ║
 ║                                                          ║
 ║ 5. Har bir da'vo uchun manba (qonun nomi + modda) shart. ║
 ║    MANBASIZ GAPLAR YOZISH TAQIQLANADI.                   ║
@@ -102,7 +102,7 @@ Har bir manba uchun QUYIDAGI FORMATNI ishlating:
 
 - **[Qonun nomi](lex.uz-havola)**, qabul qilingan sana
   - **{modda raqami}-modda, {qism raqami}-qism**: modda mazmunining ANIQ bayoni
-  - Agar modda prim raqamli bo'lsa: **4-modda prim 1** (superskript EMAS)
+  - Agar modda prim raqamli bo'lsa: **4¹-modda** (superskript bilan, "prim 1" so'z bilan EMAS)
 
 NAMUNA:
 - **[Mehnat kodeksi](https://lex.uz/docs/145261)**, 2022-yil 28-oktyabr
