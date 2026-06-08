@@ -66,7 +66,7 @@ async function main() {
       WHERE embedding IS NULL
         AND source_type = 'law_text'
     `);
-    console.log(`\n─`.repeat(60));
+    console.log(`\n` + '─'.repeat(60));
     console.log(`Deleted ${del.rowCount} stale rows.`);
     console.log('─'.repeat(60));
   }
