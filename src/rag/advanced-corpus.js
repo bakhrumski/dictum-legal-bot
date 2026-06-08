@@ -124,7 +124,19 @@ async function insertStructuredChunks(chunks) {
       const articleNums = m.articleNumber
         ? [m.articleNumber]
         : (m.articles || []).map((article) => article.number).filter(Boolean);
-      const embStr = chunk.embedding ? `[${chunk.embedding.join(',')}]` : null;
+
+      // Defense in depth: never persist a law chunk without a vector. A NULL
+      // embedding is invisible to search but still bloats the corpus and looks
+      // healthy in row counts — exactly how we ended up with thousands of
+      // unsearchable rows. Fail loudly here so the caller's transaction rolls
+      // back instead of silently storing dead rows.
+      if (!Array.isArray(chunk.embedding) || chunk.embedding.length === 0) {
+        throw new Error(
+          `Refusing to insert chunk without embedding ` +
+          `(law="${m.law_name || ''}", article="${m.articleNumber || ''}", type="${chunk.chunkType || '?'}").`
+        );
+      }
+      const embStr = `[${chunk.embedding.join(',')}]`;
 
       await client.query(`
         INSERT INTO legal_chunks (
