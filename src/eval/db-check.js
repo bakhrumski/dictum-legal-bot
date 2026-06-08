@@ -70,8 +70,8 @@ async function main() {
       category,
       COUNT(*)                                       AS rows,
       COUNT(*) FILTER (WHERE embedding IS NOT NULL)  AS embedded,
-      COUNT(*) FILTER (WHERE source_type = 'parent') AS parents,
-      COUNT(*) FILTER (WHERE source_type = 'child')  AS children
+      COUNT(*) FILTER (WHERE chunk_type = 'parent')  AS parents,
+      COUNT(*) FILTER (WHERE chunk_type = 'child')   AS children
     FROM legal_chunks
     GROUP BY law_name, category
     ORDER BY rows DESC
@@ -90,7 +90,7 @@ async function main() {
 
   // 5. Sample article numbers from a couple of laws (so we can compare to gold)
   const sample = await pool.query(`
-    SELECT law_name, article_number_display, source_type
+    SELECT law_name, article_number_display, chunk_type
     FROM legal_chunks
     WHERE article_number_display IS NOT NULL
     ORDER BY law_name, chunk_index
@@ -103,7 +103,7 @@ async function main() {
     console.log('  (none — article_number_display is empty everywhere)');
   } else {
     for (const r of sample.rows) {
-      console.log(`  ${(r.law_name || '').slice(0, 30).padEnd(32)} art="${r.article_number_display}"  [${r.source_type}]`);
+      console.log(`  ${(r.law_name || '').slice(0, 30).padEnd(32)} art="${r.article_number_display}"  [${r.chunk_type}]`);
     }
   }
 

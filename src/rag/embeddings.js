@@ -275,7 +275,15 @@ async function getEmbeddingsBatch(texts, apiKey) {
   console.log(`[EMBEDDINGS] Using ${provider} (${config.model}, ${config.dims}d)`);
 
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const batch = texts.slice(i, i + BATCH_SIZE).map(t => (t || '').trim()).filter(Boolean);
+    // Preserve 1:1 alignment with the input: do NOT drop empty strings, or the
+    // returned array would be shorter than `texts` and the caller's
+    // `chunks[i].embedding = embeddings[i]` would misalign (trailing chunks
+    // silently get undefined → stored as NULL). Replace blanks with a single
+    // space so the provider still returns one vector per input.
+    const batch = texts.slice(i, i + BATCH_SIZE).map(t => {
+      const trimmed = (t || '').trim();
+      return trimmed.length > 0 ? trimmed : ' ';
+    });
 
     let embeddings;
     if (provider === 'huggingface') {
@@ -284,6 +292,13 @@ async function getEmbeddingsBatch(texts, apiKey) {
       embeddings = await geminiEmbed(batch.map(t => t.substring(0, config.maxInput)), key);
     } else {
       embeddings = await openaiEmbed(batch.map(t => t.substring(0, config.maxInput)), key);
+    }
+
+    if (!Array.isArray(embeddings) || embeddings.length !== batch.length) {
+      throw new Error(
+        `[EMBEDDINGS] Provider ${provider} returned ${Array.isArray(embeddings) ? embeddings.length : 'non-array'} ` +
+        `embeddings for a batch of ${batch.length}. Refusing to continue with misaligned vectors.`
+      );
     }
 
     allEmbeddings.push(...embeddings);
@@ -295,6 +310,10 @@ async function getEmbeddingsBatch(texts, apiKey) {
     }
 
     console.log(`[EMBEDDINGS] Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(texts.length / BATCH_SIZE)} done (${allEmbeddings.length}/${texts.length})`);
+  }
+
+  if (allEmbeddings.length !== texts.length) {
+    throw new Error(`[EMBEDDINGS] Got ${allEmbeddings.length} embeddings for ${texts.length} texts — alignment broken.`);
   }
 
   return allEmbeddings;

@@ -54,6 +54,31 @@ function getApiKey() {
   return process.env.GPT_API_KEY || process.env.OPENAI_API_KEY;
 }
 
+/**
+ * Guard against silently storing NULL embeddings.
+ *
+ * The whole RAG pipeline is useless without vectors — a doc inserted with
+ * embedding=NULL is invisible to vector search but still occupies the corpus
+ * and passes naive row-count checks. Historically this is exactly how the
+ * corpus ended up with 5000+ rows and 0 embeddings. Fail the ingest loudly
+ * instead so the operator notices immediately.
+ */
+function assertEmbeddings(embeddings, chunks, docMeta) {
+  if (!Array.isArray(embeddings) || embeddings.length !== chunks.length) {
+    throw new Error(
+      `Embedding count mismatch for "${docMeta.law_name}": ` +
+      `${Array.isArray(embeddings) ? embeddings.length : 'non-array'} embeddings for ${chunks.length} chunks. Aborting insert.`
+    );
+  }
+  const bad = embeddings.findIndex(e => !Array.isArray(e) || e.length === 0);
+  if (bad !== -1) {
+    throw new Error(
+      `Empty/invalid embedding at index ${bad} for "${docMeta.law_name}". ` +
+      `Refusing to insert chunks without vectors.`
+    );
+  }
+}
+
 // ========== FILE PARSING ==========
 
 function parseFile(filePath) {
@@ -113,6 +138,8 @@ async function ingestText(body, docMeta) {
   const texts = chunks.map(c => c.text);
   const embeddings = await getEmbeddingsBatch(texts, apiKey);
 
+  assertEmbeddings(embeddings, chunks, docMeta);
+
   for (let i = 0; i < chunks.length; i++) {
     chunks[i].embedding = embeddings[i];
     chunks[i].chunkIndex = i;
@@ -152,6 +179,8 @@ async function ingestStructuredHtml(rawHtml, docMeta) {
 
   const texts = chunks.map((chunk) => chunk.text);
   const embeddings = await getEmbeddingsBatch(texts, apiKey);
+
+  assertEmbeddings(embeddings, chunks, docMeta);
 
   for (let i = 0; i < chunks.length; i++) {
     chunks[i].embedding = embeddings[i];

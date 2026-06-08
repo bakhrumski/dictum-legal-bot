@@ -18,7 +18,8 @@
     "test": "node tests/phase1.test.js && node tests/rag-search.test.js",
     "eval": "node src/eval/eval-runner.js",
     "eval:ci": "node src/eval/eval-runner.js --min-recall=0.70",
-    "db:check": "node src/eval/db-check.js"
+    "db:check": "node src/eval/db-check.js",
+    "embed:test": "node src/eval/embed-test.js"
   },
   "keywords": [],
   "author": "",
