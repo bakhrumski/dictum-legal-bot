@@ -18,8 +18,8 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mehnat-kodeks',
       law_name: "O'zbekiston Respublikasining Mehnat kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/145261',
-      enforcement_date: '1996-04-01'
+      lex_url: 'https://lex.uz/uz/docs/6257291',
+      enforcement_date: '2023-04-30'
     }
   ],
 
