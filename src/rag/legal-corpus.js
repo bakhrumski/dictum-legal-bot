@@ -248,63 +248,68 @@ async function insertChunks(chunks) {
   if (!chunks || chunks.length === 0) return 0;
   await initLegalCorpus();
 
-  const client = await pool.connect();
   let inserted = 0;
+  const BATCH_SIZE = 100; // commit every 100 rows to avoid long-running transactions on Supabase
 
-  try {
-    await client.query('BEGIN');
+  for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
+    const batch = chunks.slice(batchStart, batchStart + BATCH_SIZE);
+    const client = await pool.connect();
 
-    for (const chunk of chunks) {
-      const m = chunk.metadata || {};
-      const articleNums = (m.articles || []).map(a => a.number).filter(Boolean);
-      const embeddingStr = chunk.embedding
-        ? `[${chunk.embedding.join(',')}]`
-        : null;
+    try {
+      await client.query('BEGIN');
 
-      await client.query(`
-        INSERT INTO legal_chunks (
-          law_name, doc_id, source_url, category,
-          chunk_text, chunk_index,
-          article_numbers, chapter,
-          enforcement_date, is_valid,
-          is_active, status_label, adoption_date, document_number,
-          language,
-          source_type, quality_score, verified_by,
-          embedding
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::vector)
-      `, [
-        m.law_name || '',
-        m.doc_id || null,
-        m.source_url || null,
-        m.category || 'boshqa',
-        chunk.text,
-        chunk.chunkIndex || 0,
-        articleNums.length > 0 ? articleNums : null,
-        m.chapter || null,
-        m.enforcement_date || null,
-        m.is_valid !== false,
-        m.is_active !== false,
-        m.status_label || null,
-        m.adoption_date || null,
-        m.document_number || null,
-        m.language || 'ru',
-        m.source_type || 'law_text',
-        m.quality_score == null ? 0.5 : m.quality_score,
-        m.verified_by || null,
-        embeddingStr
-      ]);
+      for (const chunk of batch) {
+        const m = chunk.metadata || {};
+        const articleNums = (m.articles || []).map(a => a.number).filter(Boolean);
+        const embeddingStr = chunk.embedding
+          ? `[${chunk.embedding.join(',')}]`
+          : null;
 
-      inserted++;
+        await client.query(`
+          INSERT INTO legal_chunks (
+            law_name, doc_id, source_url, category,
+            chunk_text, chunk_index,
+            article_numbers, chapter,
+            enforcement_date, is_valid,
+            is_active, status_label, adoption_date, document_number,
+            language,
+            source_type, quality_score, verified_by,
+            embedding
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::vector)
+        `, [
+          m.law_name || '',
+          m.doc_id || null,
+          m.source_url || null,
+          m.category || 'boshqa',
+          chunk.text,
+          chunk.chunkIndex || 0,
+          articleNums.length > 0 ? articleNums : null,
+          m.chapter || null,
+          m.enforcement_date || null,
+          m.is_valid !== false,
+          m.is_active !== false,
+          m.status_label || null,
+          m.adoption_date || null,
+          m.document_number || null,
+          m.language || 'ru',
+          m.source_type || 'law_text',
+          m.quality_score == null ? 0.5 : m.quality_score,
+          m.verified_by || null,
+          embeddingStr
+        ]);
+
+        inserted++;
+      }
+
+      await client.query('COMMIT');
+      console.log(`[LEGAL CORPUS] Inserted ${inserted}/${chunks.length} chunks`);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('[LEGAL CORPUS] Insert error:', err.message);
+      throw err;
+    } finally {
+      client.release();
     }
-
-    await client.query('COMMIT');
-    console.log(`[LEGAL CORPUS] Inserted ${inserted} chunks`);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('[LEGAL CORPUS] Insert error:', err.message);
-    throw err;
-  } finally {
-    client.release();
   }
 
   return inserted;

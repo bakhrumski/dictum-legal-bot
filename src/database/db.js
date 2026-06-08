@@ -3,9 +3,11 @@ const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 30000,
+  idleTimeoutMillis: 300000, // 5 min — prevents socket drops during long ingest batches
   max: 10,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 module.exports = { pool };
