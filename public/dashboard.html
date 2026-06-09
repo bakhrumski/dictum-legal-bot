@@ -5399,11 +5399,14 @@
                         <p class="ai-chat-welcome-text">Quyidagi sohalardan keraklisini tanlang!</p>
                         <div class="ai-chat-suggestions">
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="konstitutsiya" onclick="selectTopic('konstitutsiya')">Konstitutsiyaviy tuzum</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="davlat-boshqaruvi" onclick="selectTopic('davlat-boshqaruvi')">Davlat boshqaruvi</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="fuqarolik" onclick="selectTopic('fuqarolik')">Fuqarolik qonunchiligi</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="oila" onclick="selectTopic('oila')">Oila qonunchiligi</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="mehnat" onclick="selectTopic('mehnat')">Mehnat va bandlik</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="ijtimoiy" onclick="selectTopic('ijtimoiy')">Ijtimoiy himoya</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="moliya" onclick="selectTopic('moliya')">Moliya va bank</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="moliya" onclick="selectTopic('moliya')">Moliya va kredit</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="soliq" onclick="selectTopic('soliq')">Soliq</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="bank" onclick="selectTopic('bank')">Bank</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="uy-joy" onclick="selectTopic('uy-joy')">Uy-joy qonunchiligi</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="tadbirkorlik" onclick="selectTopic('tadbirkorlik')">Tadbirkorlik</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="tashqi-iqtisod" onclick="selectTopic('tashqi-iqtisod')">Tashqi iqtisod. Bojxona</button>
@@ -5412,7 +5415,8 @@
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="talim" onclick="selectTopic('talim')">Ta'lim. Fan. Madaniyat</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="soglik" onclick="selectTopic('soglik')">Sog'liqni saqlash</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="mudofaa" onclick="selectTopic('mudofaa')">Mudofaa</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="xavfsizlik" onclick="selectTopic('xavfsizlik')">Xavfsizlik va huquq tartibot</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="jinoyat" onclick="selectTopic('jinoyat')">Jinoyat qonunchiligi</button>
+                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mamuriy" onclick="selectTopic('mamuriy')">Ma'muriy javobgarlik</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="sudlov" onclick="selectTopic('sudlov')">Odil sudlov</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="adliya" onclick="selectTopic('adliya')">Advokatura. Notariat. Adliya</button>
                             <button class="ai-chat-suggestion ai-topic-btn" data-topic="xalqaro" onclick="selectTopic('xalqaro')">Xalqaro huquq</button>
@@ -5438,11 +5442,14 @@
                     <select id="docUploadTopic" class="ai-doc-topic-select">
                         <option value="">— Soha tanlang —</option>
                         <option value="konstitutsiya">Konstitutsiyaviy tuzum</option>
+                        <option value="davlat-boshqaruvi">Davlat boshqaruvi</option>
                         <option value="fuqarolik">Fuqarolik qonunchiligi</option>
                         <option value="oila">Oila qonunchiligi</option>
                         <option value="mehnat">Mehnat va bandlik</option>
                         <option value="ijtimoiy">Ijtimoiy himoya</option>
-                        <option value="moliya">Moliya va bank</option>
+                        <option value="moliya">Moliya va kredit</option>
+                        <option value="soliq">Soliq</option>
+                        <option value="bank">Bank</option>
                         <option value="uy-joy">Uy-joy qonunchiligi</option>
                         <option value="tadbirkorlik">Tadbirkorlik</option>
                         <option value="tashqi-iqtisod">Tashqi iqtisod. Bojxona</option>
@@ -5451,7 +5458,8 @@
                         <option value="talim">Ta'lim. Fan. Madaniyat</option>
                         <option value="soglik">Sog'liqni saqlash</option>
                         <option value="mudofaa">Mudofaa</option>
-                        <option value="xavfsizlik">Xavfsizlik va huquq tartibot</option>
+                        <option value="jinoyat">Jinoyat qonunchiligi</option>
+                        <option value="mamuriy">Ma'muriy javobgarlik</option>
                         <option value="sudlov">Odil sudlov</option>
                         <option value="adliya">Advokatura. Notariat. Adliya</option>
                         <option value="xalqaro">Xalqaro huquq</option>
@@ -5579,11 +5587,14 @@
                         <select id="categoryFilter" onchange="filterRequests()">
                             <option value="">Barcha yo'nalishlar</option>
                             <option value="Konstitutsiyaviy tuzum">Konstitutsiyaviy tuzum</option>
+                            <option value="Davlat boshqaruvi">Davlat boshqaruvi</option>
                             <option value="Fuqarolik qonunchiligi">Fuqarolik qonunchiligi</option>
                             <option value="Oila qonunchiligi">Oila qonunchiligi</option>
                             <option value="Mehnat va bandlik">Mehnat va bandlik</option>
                             <option value="Ijtimoiy himoya">Ijtimoiy himoya</option>
-                            <option value="Moliya va bank">Moliya va bank</option>
+                            <option value="Moliya va kredit">Moliya va kredit</option>
+                            <option value="Soliq">Soliq</option>
+                            <option value="Bank">Bank</option>
                             <option value="Uy-joy qonunchiligi">Uy-joy qonunchiligi</option>
                             <option value="Tadbirkorlik">Tadbirkorlik</option>
                             <option value="Tashqi iqtisod. Bojxona">Tashqi iqtisod. Bojxona</option>
@@ -5592,7 +5603,8 @@
                             <option value="Ta'lim. Fan. Madaniyat">Ta'lim. Fan. Madaniyat</option>
                             <option value="Sog'liqni saqlash">Sog'liqni saqlash</option>
                             <option value="Mudofaa">Mudofaa</option>
-                            <option value="Xavfsizlik va huquq tartibot">Xavfsizlik va huquq tartibot</option>
+                            <option value="Jinoyat qonunchiligi">Jinoyat qonunchiligi</option>
+                            <option value="Ma'muriy javobgarlik">Ma'muriy javobgarlik</option>
                             <option value="Odil sudlov">Odil sudlov</option>
                             <option value="Advokatura. Notariat. Adliya">Advokatura. Notariat. Adliya</option>
                             <option value="Xalqaro huquq">Xalqaro huquq</option>
@@ -7430,11 +7442,14 @@
                             <select id="categorySelect" onchange="updateCategory(${request.id}, this.value)" class="detail-select ${request.category === 'Boshqa' ? 'select-warning' : 'select-success'}">
                                 <option value="Boshqa" ${request.category === 'Boshqa' ? 'selected' : ''}>-- Yo'nalishni tanlang --</option>
                                 <option value="Konstitutsiyaviy tuzum" ${request.category === 'Konstitutsiyaviy tuzum' ? 'selected' : ''}>Konstitutsiyaviy tuzum</option>
+                                <option value="Davlat boshqaruvi" ${request.category === 'Davlat boshqaruvi' ? 'selected' : ''}>Davlat boshqaruvi</option>
                                 <option value="Fuqarolik qonunchiligi" ${request.category === 'Fuqarolik qonunchiligi' ? 'selected' : ''}>Fuqarolik qonunchiligi</option>
                                 <option value="Oila qonunchiligi" ${request.category === 'Oila qonunchiligi' ? 'selected' : ''}>Oila qonunchiligi</option>
                                 <option value="Mehnat va bandlik" ${request.category === 'Mehnat va bandlik' ? 'selected' : ''}>Mehnat va bandlik</option>
                                 <option value="Ijtimoiy himoya" ${request.category === 'Ijtimoiy himoya' ? 'selected' : ''}>Ijtimoiy himoya</option>
-                                <option value="Moliya va bank" ${request.category === 'Moliya va bank' ? 'selected' : ''}>Moliya va bank</option>
+                                <option value="Moliya va kredit" ${request.category === 'Moliya va kredit' ? 'selected' : ''}>Moliya va kredit</option>
+                                <option value="Soliq" ${request.category === 'Soliq' ? 'selected' : ''}>Soliq</option>
+                                <option value="Bank" ${request.category === 'Bank' ? 'selected' : ''}>Bank</option>
                                 <option value="Uy-joy qonunchiligi" ${request.category === 'Uy-joy qonunchiligi' ? 'selected' : ''}>Uy-joy qonunchiligi</option>
                                 <option value="Tadbirkorlik" ${request.category === 'Tadbirkorlik' ? 'selected' : ''}>Tadbirkorlik</option>
                                 <option value="Tashqi iqtisod. Bojxona" ${request.category === 'Tashqi iqtisod. Bojxona' ? 'selected' : ''}>Tashqi iqtisod. Bojxona</option>
@@ -7443,7 +7458,8 @@
                                 <option value="Ta'lim. Fan. Madaniyat" ${request.category === "Ta'lim. Fan. Madaniyat" ? 'selected' : ''}>Ta'lim. Fan. Madaniyat</option>
                                 <option value="Sog'liqni saqlash" ${request.category === "Sog'liqni saqlash" ? 'selected' : ''}>Sog'liqni saqlash</option>
                                 <option value="Mudofaa" ${request.category === 'Mudofaa' ? 'selected' : ''}>Mudofaa</option>
-                                <option value="Xavfsizlik va huquq tartibot" ${request.category === 'Xavfsizlik va huquq tartibot' ? 'selected' : ''}>Xavfsizlik va huquq tartibot</option>
+                                <option value="Jinoyat qonunchiligi" ${request.category === 'Jinoyat qonunchiligi' ? 'selected' : ''}>Jinoyat qonunchiligi</option>
+                                <option value="Ma'muriy javobgarlik" ${request.category === "Ma'muriy javobgarlik" ? 'selected' : ''}>Ma'muriy javobgarlik</option>
                                 <option value="Odil sudlov" ${request.category === 'Odil sudlov' ? 'selected' : ''}>Odil sudlov</option>
                                 <option value="Advokatura. Notariat. Adliya" ${request.category === 'Advokatura. Notariat. Adliya' ? 'selected' : ''}>Advokatura. Notariat. Adliya</option>
                                 <option value="Xalqaro huquq" ${request.category === 'Xalqaro huquq' ? 'selected' : ''}>Xalqaro huquq</option>
@@ -8514,25 +8530,29 @@
         };
 
         var AI_TOPICS = {
-            'konstitutsiya':  { label: 'Konstitutsiyaviy tuzum',        desc: 'Konstitutsiyaviy tuzum' },
-            'fuqarolik':      { label: 'Fuqarolik qonunchiligi',         desc: 'Fuqarolik qonunchiligi' },
-            'oila':           { label: 'Oila qonunchiligi',              desc: 'Oila qonunchiligi' },
-            'mehnat':         { label: 'Mehnat va bandlik',              desc: 'Mehnat va bandlik' },
-            'ijtimoiy':       { label: 'Ijtimoiy himoya',                desc: 'Ijtimoiy himoya' },
-            'moliya':         { label: 'Moliya va bank',                 desc: 'Moliya va bank' },
-            'uy-joy':         { label: 'Uy-joy qonunchiligi',            desc: 'Uy-joy qonunchiligi' },
-            'tadbirkorlik':   { label: 'Tadbirkorlik',                   desc: 'Tadbirkorlik' },
-            'tashqi-iqtisod': { label: 'Tashqi iqtisod. Bojxona',       desc: 'Tashqi iqtisodiy faoliyat va bojxona' },
-            'ekologiya':      { label: 'Ekologiya',                      desc: 'Ekologiya va tabiat muhofazasi' },
-            'axborot':        { label: 'Axborot',                        desc: 'Axborot texnologiyalari va kommunikatsiya' },
-            'talim':          { label: "Ta'lim. Fan. Madaniyat",         desc: "Ta'lim, fan va madaniyat" },
-            'soglik':         { label: "Sog'liqni saqlash",              desc: "Sog'liqni saqlash" },
-            'mudofaa':        { label: 'Mudofaa',                        desc: 'Mudofaa va harbiy xizmat' },
-            'xavfsizlik':     { label: 'Xavfsizlik va huquq tartibot',   desc: 'Jinoyat va xavfsizlik' },
-            'sudlov':         { label: 'Odil sudlov',                    desc: 'Sudlov va odil sudlov' },
-            'adliya':         { label: 'Advokatura. Notariat. Adliya',   desc: 'Advokatura, notariat va adliya xizmatlari' },
-            'xalqaro':        { label: 'Xalqaro huquq',                  desc: 'Xalqaro munosabatlar va shartnomalar' },
-            'shaxsiy':        { label: 'Shaxsiy hujjatlar',              desc: 'Shaxsiy huquqlar va hujjatlar' }
+            'konstitutsiya':      { label: 'Konstitutsiyaviy tuzum',      desc: 'Konstitutsiyaviy tuzum' },
+            'davlat-boshqaruvi':  { label: 'Davlat boshqaruvi',           desc: 'Davlat boshqaruvi' },
+            'fuqarolik':          { label: 'Fuqarolik qonunchiligi',       desc: 'Fuqarolik qonunchiligi' },
+            'oila':               { label: 'Oila qonunchiligi',            desc: 'Oila qonunchiligi' },
+            'mehnat':             { label: 'Mehnat va bandlik',            desc: 'Mehnat va aholining bandligi' },
+            'ijtimoiy':           { label: 'Ijtimoiy himoya',              desc: "Ijtimoiy ta'minot va ijtimoiy himoya" },
+            'moliya':             { label: 'Moliya va kredit',             desc: 'Moliya va kredit' },
+            'soliq':              { label: 'Soliq',                        desc: 'Soliq qonunchiligi' },
+            'bank':               { label: 'Bank',                         desc: 'Bank faoliyati' },
+            'uy-joy':             { label: 'Uy-joy qonunchiligi',          desc: "Uy-joy qonunchiligi. Kommunal xo'jalik" },
+            'tadbirkorlik':       { label: 'Tadbirkorlik',                 desc: "Tadbirkorlik va xo'jalik faoliyati" },
+            'tashqi-iqtisod':     { label: 'Tashqi iqtisod. Bojxona',     desc: 'Tashqi iqtisodiy faoliyat. Bojxona ishi' },
+            'ekologiya':          { label: 'Ekologiya',                    desc: 'Atrof tabiiy muhit va tabiiy resurslar' },
+            'axborot':            { label: 'Axborot',                      desc: 'Axborot va axborotlashtirish' },
+            'talim':              { label: "Ta'lim. Fan. Madaniyat",       desc: "Ta'lim. Fan. Madaniyat" },
+            'soglik':             { label: "Sog'liqni saqlash",            desc: "Sog'liqni saqlash. Sport. Turizm" },
+            'mudofaa':            { label: 'Mudofaa',                      desc: 'Mudofaa' },
+            'jinoyat':            { label: 'Jinoyat qonunchiligi',         desc: 'Jinoyat qonunchiligi' },
+            'mamuriy':            { label: "Ma'muriy javobgarlik",         desc: "Ma'muriy javobgarlik" },
+            'sudlov':             { label: 'Odil sudlov',                  desc: 'Odil sudlov' },
+            'adliya':             { label: 'Advokatura. Notariat. Adliya', desc: 'Prokuratura. Advokatura. Notariat. Adliya organlari' },
+            'xalqaro':            { label: 'Xalqaro huquq',               desc: 'Xalqaro munosabatlar. Xalqaro huquq' },
+            'shaxsiy':            { label: 'Shaxsiy hujjatlar',           desc: 'Shaxsiy tusdagi hujjatlar' }
         };
 
         function toggleWelcomeCategories() {
@@ -11717,11 +11737,14 @@
             <p class="topic-modal-subtitle">Bir yoki bir nechta sohani tanlang. Bir nechta tanlasangiz, AI tanlangan sohalarga ustuvorlik beradi.</p>
             <div class="topic-modal-chips" id="topicPickerChips">
                 <button type="button" class="topic-modal-chip" data-topic="konstitutsiya" onclick="toggleTopicPickerChip(this)">Konstitutsiyaviy tuzum</button>
+                <button type="button" class="topic-modal-chip" data-topic="davlat-boshqaruvi" onclick="toggleTopicPickerChip(this)">Davlat boshqaruvi</button>
                 <button type="button" class="topic-modal-chip" data-topic="fuqarolik" onclick="toggleTopicPickerChip(this)">Fuqarolik qonunchiligi</button>
                 <button type="button" class="topic-modal-chip" data-topic="oila" onclick="toggleTopicPickerChip(this)">Oila qonunchiligi</button>
                 <button type="button" class="topic-modal-chip" data-topic="mehnat" onclick="toggleTopicPickerChip(this)">Mehnat va bandlik</button>
                 <button type="button" class="topic-modal-chip" data-topic="ijtimoiy" onclick="toggleTopicPickerChip(this)">Ijtimoiy himoya</button>
-                <button type="button" class="topic-modal-chip" data-topic="moliya" onclick="toggleTopicPickerChip(this)">Moliya va bank</button>
+                <button type="button" class="topic-modal-chip" data-topic="moliya" onclick="toggleTopicPickerChip(this)">Moliya va kredit</button>
+                <button type="button" class="topic-modal-chip" data-topic="soliq" onclick="toggleTopicPickerChip(this)">Soliq</button>
+                <button type="button" class="topic-modal-chip" data-topic="bank" onclick="toggleTopicPickerChip(this)">Bank</button>
                 <button type="button" class="topic-modal-chip" data-topic="uy-joy" onclick="toggleTopicPickerChip(this)">Uy-joy qonunchiligi</button>
                 <button type="button" class="topic-modal-chip" data-topic="tadbirkorlik" onclick="toggleTopicPickerChip(this)">Tadbirkorlik</button>
                 <button type="button" class="topic-modal-chip" data-topic="tashqi-iqtisod" onclick="toggleTopicPickerChip(this)">Tashqi iqtisod. Bojxona</button>
@@ -11730,7 +11753,8 @@
                 <button type="button" class="topic-modal-chip" data-topic="talim" onclick="toggleTopicPickerChip(this)">Ta'lim. Fan. Madaniyat</button>
                 <button type="button" class="topic-modal-chip" data-topic="soglik" onclick="toggleTopicPickerChip(this)">Sog'liqni saqlash</button>
                 <button type="button" class="topic-modal-chip" data-topic="mudofaa" onclick="toggleTopicPickerChip(this)">Mudofaa</button>
-                <button type="button" class="topic-modal-chip" data-topic="xavfsizlik" onclick="toggleTopicPickerChip(this)">Xavfsizlik va huquq tartibot</button>
+                <button type="button" class="topic-modal-chip" data-topic="jinoyat" onclick="toggleTopicPickerChip(this)">Jinoyat qonunchiligi</button>
+                <button type="button" class="topic-modal-chip" data-topic="mamuriy" onclick="toggleTopicPickerChip(this)">Ma'muriy javobgarlik</button>
                 <button type="button" class="topic-modal-chip" data-topic="sudlov" onclick="toggleTopicPickerChip(this)">Odil sudlov</button>
                 <button type="button" class="topic-modal-chip" data-topic="adliya" onclick="toggleTopicPickerChip(this)">Advokatura. Notariat. Adliya</button>
                 <button type="button" class="topic-modal-chip" data-topic="xalqaro" onclick="toggleTopicPickerChip(this)">Xalqaro huquq</button>
