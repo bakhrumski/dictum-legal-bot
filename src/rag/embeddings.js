@@ -138,29 +138,53 @@ async function hfEmbed(texts, apiKey, isQuery = false) {
 
   console.log(`[EMBEDDINGS] HF request: token=${apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING'}, texts=${texts.length}`);
 
-  // router.huggingface.co uses plain { inputs } — no options wrapper
-  const resp = await httpsPostJson(
-    PROVIDERS.huggingface.endpoint,
-    { inputs },
-    { 'Authorization': `Bearer ${apiKey}` }
-  );
-
-  if (resp.status !== 200) {
-    if (resp.status === 503) {
-      console.warn('[EMBEDDINGS] HuggingFace model loading, retrying in 20s...');
-      await new Promise(r => setTimeout(r, 20_000));
-      return hfEmbed(texts, apiKey, isQuery);
+  // Retry transient failures (network resets, 5xx, rate limits) with exponential
+  // backoff so a single blip doesn't lose a whole document during long ingests.
+  const MAX_ATTEMPTS = 5;
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let resp;
+    try {
+      // router.huggingface.co uses plain { inputs } — no options wrapper
+      resp = await httpsPostJson(
+        PROVIDERS.huggingface.endpoint,
+        { inputs },
+        { 'Authorization': `Bearer ${apiKey}` }
+      );
+    } catch (err) {
+      // Network-level errors (ECONNRESET, ETIMEDOUT, socket hang up) throw here.
+      lastErr = err;
+      if (attempt < MAX_ATTEMPTS) {
+        const wait = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s, 16s
+        console.warn(`[EMBEDDINGS] HF network error (${err.message}), retry ${attempt}/${MAX_ATTEMPTS - 1} in ${wait / 1000}s...`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      throw lastErr;
     }
+
+    if (resp.status === 200) {
+      const data = resp.body;
+      // router returns: array of embeddings (each embedding is a float array)
+      // Some models return nested arrays [[emb1], [emb2]] — flatten one level if needed
+      if (!Array.isArray(data)) {
+        throw new Error('HuggingFace: unexpected response format');
+      }
+      return Array.isArray(data[0]) ? data : data.map(d => Array.isArray(d) ? d : d.embedding || d);
+    }
+
+    // 503 = model loading; 429 = rate limit; 5xx = transient server error — all retriable.
+    if ((resp.status === 503 || resp.status === 429 || resp.status >= 500) && attempt < MAX_ATTEMPTS) {
+      const wait = resp.status === 503 ? 20_000 : 2000 * Math.pow(2, attempt - 1);
+      console.warn(`[EMBEDDINGS] HF ${resp.status}, retry ${attempt}/${MAX_ATTEMPTS - 1} in ${wait / 1000}s...`);
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+
     throw new Error(`HuggingFace Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
   }
 
-  const data = resp.body;
-  // router returns: array of embeddings (each embedding is a float array)
-  // Some models return nested arrays [[emb1], [emb2]] — flatten one level if needed
-  if (!Array.isArray(data)) {
-    throw new Error('HuggingFace: unexpected response format');
-  }
-  return Array.isArray(data[0]) ? data : data.map(d => Array.isArray(d) ? d : d.embedding || d);
+  throw lastErr || new Error('HuggingFace: exhausted retries');
 }
 
 // ========== GEMINI EMBEDDINGS ==========
