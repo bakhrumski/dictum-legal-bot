@@ -337,12 +337,25 @@ function mountAdvancedRoutes(app, deps) {
       if (HYBRID_ENABLED) {
         try {
           const LEGAL_TOPICS_H = {
-            'mehnat': 'Mehnat huquqi', 'oila': 'Oila huquqi', 'fuqarolik': 'Fuqarolik huquqi',
-            'shartnoma': 'Shartnoma huquqi', 'soliq': 'Soliq huquqi', 'jinoyat': 'Jinoyat huquqi',
-            'mamuriy': "Ma'muriy javobgarlik", 'korporativ': 'Korporativ huquq',
-            'tadbirkorlik': 'Tadbirkorlik huquqi', 'uy-joy': 'Uy-joy oldi-sotdisi',
-            'mulk': 'Mulk huquqi', 'notarius': 'Notarius xizmatlari',
-            'ijtimoiy': 'Ijtimoiy himoya', 'advokatura': 'Advokatura',
+            'konstitutsiya':  'Konstitutsiyaviy tuzum',
+            'fuqarolik':      'Fuqarolik qonunchiligi',
+            'oila':           'Oila qonunchiligi',
+            'mehnat':         "Mehnat va aholining bandligi",
+            'ijtimoiy':       "Ijtimoiy ta'minot va ijtimoiy himoya",
+            'moliya':         "Moliya va kredit. Bank faoliyati",
+            'uy-joy':         "Uy-joy qonunchiligi. Kommunal xo'jalik",
+            'tadbirkorlik':   "Tadbirkorlik va xo'jalik faoliyati",
+            'tashqi-iqtisod': "Tashqi iqtisodiy faoliyat. Bojxona ishi",
+            'ekologiya':      "Atrof tabiiy muhit va tabiiy resurslar",
+            'axborot':        "Axborot va axborotlashtirish",
+            'talim':          "Ta'lim. Fan. Madaniyat",
+            'soglik':         "Sog'liqni saqlash. Sport. Turizm",
+            'mudofaa':        'Mudofaa',
+            'xavfsizlik':     'Xavfsizlik va huquq tartibot muhofazasi',
+            'sudlov':         'Odil sudlov',
+            'adliya':         'Prokuratura. Advokatura. Notariat. Adliya organlari',
+            'xalqaro':        'Xalqaro munosabatlar. Xalqaro huquq',
+            'shaxsiy':        "Shaxsiy tusdagi hujjatlar",
           };
 
           const result = await hybridPipeline.runPipeline({
@@ -501,12 +514,25 @@ function mountAdvancedRoutes(app, deps) {
 
       // ── 3. Build advanced system prompt ──
       const LEGAL_TOPICS = {
-        'mehnat': 'Mehnat huquqi', 'oila': 'Oila huquqi', 'fuqarolik': 'Fuqarolik huquqi',
-        'shartnoma': 'Shartnoma huquqi', 'soliq': 'Soliq huquqi', 'jinoyat': 'Jinoyat huquqi',
-        'mamuriy': "Ma'muriy javobgarlik", 'korporativ': 'Korporativ huquq',
-        'tadbirkorlik': 'Tadbirkorlik huquqi', 'uy-joy': 'Uy-joy oldi-sotdisi',
-        'mulk': 'Mulk huquqi', 'notarius': 'Notarius xizmatlari',
-        'ijtimoiy': 'Ijtimoiy himoya', 'advokatura': 'Advokatura',
+        'konstitutsiya':  'Konstitutsiyaviy tuzum',
+        'fuqarolik':      'Fuqarolik qonunchiligi',
+        'oila':           'Oila qonunchiligi',
+        'mehnat':         "Mehnat va aholining bandligi",
+        'ijtimoiy':       "Ijtimoiy ta'minot va ijtimoiy himoya",
+        'moliya':         "Moliya va kredit. Bank faoliyati",
+        'uy-joy':         "Uy-joy qonunchiligi. Kommunal xo'jalik",
+        'tadbirkorlik':   "Tadbirkorlik va xo'jalik faoliyati",
+        'tashqi-iqtisod': "Tashqi iqtisodiy faoliyat. Bojxona ishi",
+        'ekologiya':      "Atrof tabiiy muhit va tabiiy resurslar",
+        'axborot':        "Axborot va axborotlashtirish",
+        'talim':          "Ta'lim. Fan. Madaniyat",
+        'soglik':         "Sog'liqni saqlash. Sport. Turizm",
+        'mudofaa':        'Mudofaa',
+        'xavfsizlik':     'Xavfsizlik va huquq tartibot muhofazasi',
+        'sudlov':         'Odil sudlov',
+        'adliya':         'Prokuratura. Advokatura. Notariat. Adliya organlari',
+        'xalqaro':        'Xalqaro munosabatlar. Xalqaro huquq',
+        'shaxsiy':        "Shaxsiy tusdagi hujjatlar",
       };
 
       let systemPrompt = buildAdvancedPrompt({

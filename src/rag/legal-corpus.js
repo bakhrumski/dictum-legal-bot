@@ -111,9 +111,18 @@ async function initLegalCorpus() {
       CREATE INDEX IF NOT EXISTS idx_legal_chunks_embedding
       ON legal_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)
     `).catch(async (err) => {
+      const msg = err.message || '';
       // IVFFlat requires at least some rows to build; skip if table empty
-      if (err.message.includes('could not create ivfflat index')) {
+      if (msg.includes('could not create ivfflat index')) {
         console.log('[LEGAL CORPUS] IVFFlat index deferred (table empty, will build after first ingest)');
+      } else if (err.code === '54000' || msg.includes('maintenance_work_mem')) {
+        // The k-means build needs more memory than the server allows
+        // (Supabase default maintenance_work_mem = 32MB, build wants ~40MB).
+        // The corpus is small, so a sequential vector scan is fast — skip the
+        // index rather than throwing on every init() call, which would break
+        // all legacy rrfSearch fallbacks.
+        console.warn('[LEGAL CORPUS] IVFFlat index skipped (insufficient maintenance_work_mem); using sequential scan');
+        await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`).catch(() => {});
       } else {
         throw err;
       }
@@ -1010,13 +1019,30 @@ async function rebuildVectorIndex() {
   // lists should be ~sqrt(n), minimum 10
   const lists = Math.max(10, Math.min(100, Math.floor(Math.sqrt(n))));
 
-  await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
-  await pool.query(`
-    CREATE INDEX idx_legal_chunks_embedding
-    ON legal_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = ${lists})
-  `);
-
-  console.log(`[LEGAL CORPUS] IVFFlat index rebuilt with ${lists} lists (${n} vectors)`);
+  // Build on a dedicated connection so we can raise maintenance_work_mem just
+  // for this session — Supabase's 32MB default is too small for the k-means
+  // step on 1024-dim vectors. If the bump is rejected and the build still runs
+  // out of memory, degrade to a sequential scan (fast at this corpus size)
+  // instead of crashing the whole ingest.
+  const client = await pool.connect();
+  try {
+    await client.query(`SET maintenance_work_mem = '128MB'`).catch(() => {});
+    await client.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
+    await client.query(`
+      CREATE INDEX idx_legal_chunks_embedding
+      ON legal_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = ${lists})
+    `);
+    console.log(`[LEGAL CORPUS] IVFFlat index rebuilt with ${lists} lists (${n} vectors)`);
+  } catch (err) {
+    if (err.code === '54000' || (err.message || '').includes('maintenance_work_mem')) {
+      console.warn(`[LEGAL CORPUS] IVFFlat build exceeds available memory; running without vector index (sequential scan). ${err.message}`);
+      await client.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`).catch(() => {});
+    } else {
+      throw err;
+    }
+  } finally {
+    client.release();
+  }
 }
 
 // ========== INGEST LOG ==========

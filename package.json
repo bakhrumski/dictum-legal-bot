@@ -17,7 +17,11 @@
     "backfill:doc-meta:dry": "node src/rag/backfill-doc-metadata.js --dry-run",
     "test": "node tests/phase1.test.js && node tests/rag-search.test.js",
     "eval": "node src/eval/eval-runner.js",
-    "eval:ci": "node src/eval/eval-runner.js --min-recall=0.70"
+    "eval:ci": "node src/eval/eval-runner.js --min-recall=0.70",
+    "db:check": "node src/eval/db-check.js",
+    "embed:test": "node src/eval/embed-test.js",
+    "db:purge": "node src/eval/db-purge.js",
+    "db:purge:confirm": "node src/eval/db-purge.js --confirm"
   },
   "keywords": [],
   "author": "",
