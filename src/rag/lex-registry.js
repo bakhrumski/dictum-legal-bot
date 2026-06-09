@@ -16,26 +16,30 @@
 /**
  * Category slugs follow the 19-field classification adopted from lex.uz:
  *
- *  konstitutsiya   — Konstitutsiyaviy tuzum
- *  fuqarolik       — Fuqarolik qonunchiligi
- *  oila            — Oila qonunchiligi
- *  mehnat          — Mehnat va aholining bandligi to'g'risidagi qonunchilik
- *  ijtimoiy        — Ijtimoiy ta'minot va ijtimoiy sug'urta. Ijtimoiy himoya
- *  moliya          — Moliya va kredit to'g'risidagi qonunchilik. Bank faoliyati
- *  uy-joy          — Uy-joy qonunchiligi. Kommunal xo'jalik
- *  tadbirkorlik    — Tadbirkorlik va xo'jalik faoliyati
- *  tashqi-iqtisod  — Tashqi iqtisodiy faoliyat. Bojxona ishi
- *  ekologiya       — Atrof tabiiy muhit va tabiiy resurslar
- *  axborot         — Axborot va axborotlashtirish
- *  talim           — Ta'lim. Fan. Madaniyat
- *  soglik          — Sog'liqni saqlash. Jismoniy tarbiya. Sport. Turizm
- *  mudofaa         — Mudofaa
- *  xavfsizlik      — Xavfsizlik va huquq tartibot muhofazasi
- *  sudlov          — Odil sudlov
- *  adliya          — Prokuratura. Advokatura. Notariat. Yuridik xizmat. Adliya organlari
- *  xalqaro         — Xalqaro munosabatlar. Xalqaro huquq
- *  shaxsiy         — Shaxsiy tusdagi hujjatlar
- *  boshqa          — (catch-all)
+ *  konstitutsiya      — Konstitutsiyaviy tuzum
+ *  davlat-boshqaruvi — Davlat boshqaruvi
+ *  fuqarolik          — Fuqarolik qonunchiligi
+ *  oila               — Oila qonunchiligi
+ *  mehnat             — Mehnat va aholining bandligi
+ *  ijtimoiy           — Ijtimoiy ta'minot va ijtimoiy himoya
+ *  moliya             — Moliya va kredit
+ *  soliq              — Soliq qonunchiligi
+ *  bank               — Bank faoliyati
+ *  uy-joy             — Uy-joy qonunchiligi. Kommunal xo'jalik
+ *  tadbirkorlik       — Tadbirkorlik va xo'jalik faoliyati
+ *  tashqi-iqtisod     — Tashqi iqtisodiy faoliyat. Bojxona ishi
+ *  ekologiya          — Atrof tabiiy muhit va tabiiy resurslar
+ *  axborot            — Axborot va axborotlashtirish
+ *  talim              — Ta'lim. Fan. Madaniyat
+ *  soglik             — Sog'liqni saqlash. Sport. Turizm
+ *  mudofaa            — Mudofaa
+ *  jinoyat            — Jinoyat qonunchiligi
+ *  mamuriy            — Ma'muriy javobgarlik
+ *  sudlov             — Odil sudlov
+ *  adliya             — Prokuratura. Advokatura. Notariat. Adliya organlari
+ *  xalqaro            — Xalqaro munosabatlar. Xalqaro huquq
+ *  shaxsiy            — Shaxsiy tusdagi hujjatlar
+ *  boshqa             — (catch-all)
  *
  * Add more laws per category freely — ingest:fetch-all iterates all entries.
  * Each doc_id must be unique (it is the dedup key in the DB).
@@ -54,7 +58,23 @@ const LEX_REGISTRY = {
     },
   ],
 
-  // ── 2. Fuqarolik qonunchiligi ────────────────────────────────────────────
+  // ── 2. Davlat boshqaruvi ─────────────────────────────────────────────────
+  'davlat-boshqaruvi': [
+    {
+      doc_id: 'xavo-kodeks',
+      law_name: "O'zbekiston Respublikasining Havo kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/55594',
+      enforcement_date: null
+    },
+    {
+      doc_id: 'mamuriy-sud-kodeks',
+      law_name: "Ma'muriy sud ishlarini yuritish to'g'risidagi kodeks",
+      lex_url: 'https://lex.uz/uz/docs/3527353',
+      enforcement_date: null
+    },
+  ],
+
+  // ── 3. Fuqarolik qonunchiligi ────────────────────────────────────────────
   fuqarolik: [
     {
       doc_id: 'fuqarolik-kodeks-1',
@@ -68,9 +88,21 @@ const LEX_REGISTRY = {
       lex_url: 'https://lex.uz/uz/docs/180552',
       enforcement_date: null
     },
+    {
+      doc_id: 'fuqarolik-protsessual-kodeks',
+      law_name: "O'zbekiston Respublikasining Fuqarolik protsessual kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/3517337',
+      enforcement_date: null
+    },
+    {
+      doc_id: 'iqtisodiy-protsessual-kodeks',
+      law_name: "O'zbekiston Respublikasining Iqtisodiy protsessual kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/3523891',
+      enforcement_date: null
+    },
   ],
 
-  // ── 3. Oila qonunchiligi ─────────────────────────────────────────────────
+  // ── 4. Oila qonunchiligi ─────────────────────────────────────────────────
   oila: [
     {
       doc_id: 'oila-kodeks',
@@ -80,7 +112,7 @@ const LEX_REGISTRY = {
     },
   ],
 
-  // ── 4. Mehnat va aholining bandligi ──────────────────────────────────────
+  // ── 5. Mehnat va aholining bandligi ──────────────────────────────────────
   mehnat: [
     {
       doc_id: 'mehnat-kodeks',
@@ -90,17 +122,11 @@ const LEX_REGISTRY = {
     },
   ],
 
-  // ── 5. Ijtimoiy ta'minot ─────────────────────────────────────────────────
-  ijtimoiy: [],   // add laws when URLs are ready
+  // ── 6. Ijtimoiy ta'minot va ijtimoiy himoya ──────────────────────────────
+  ijtimoiy: [],
 
-  // ── 6. Moliya va kredit. Bank faoliyati ──────────────────────────────────
+  // ── 7. Moliya va kredit ──────────────────────────────────────────────────
   moliya: [
-    {
-      doc_id: 'soliq-kodeks',
-      law_name: "O'zbekiston Respublikasining Soliq kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/4674902',
-      enforcement_date: null
-    },
     {
       doc_id: 'byudjet-kodeks',
       law_name: "O'zbekiston Respublikasining Byudjet kodeksi",
@@ -109,7 +135,20 @@ const LEX_REGISTRY = {
     },
   ],
 
-  // ── 7. Uy-joy qonunchiligi. Shaharsozlik ─────────────────────────────────
+  // ── 8. Soliq qonunchiligi ────────────────────────────────────────────────
+  soliq: [
+    {
+      doc_id: 'soliq-kodeks',
+      law_name: "O'zbekiston Respublikasining Soliq kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/4674902',
+      enforcement_date: null
+    },
+  ],
+
+  // ── 9. Bank faoliyati ────────────────────────────────────────────────────
+  bank: [],
+
+  // ── 10. Uy-joy qonunchiligi. Shaharsozlik ────────────────────────────────
   'uy-joy': [
     {
       doc_id: 'uy-joy-kodeks',
@@ -125,19 +164,10 @@ const LEX_REGISTRY = {
     },
   ],
 
-  // ── 8. Tadbirkorlik va xo'jalik faoliyati ────────────────────────────────
-  tadbirkorlik: [
-    {
-      // Havo (aviatsiya) kodeksi — no dedicated transport field in the
-      // 19-field taxonomy, so placed under xo'jalik faoliyati.
-      doc_id: 'xavo-kodeks',
-      law_name: "O'zbekiston Respublikasining Havo kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/55594',
-      enforcement_date: null
-    },
-  ],
+  // ── 11. Tadbirkorlik va xo'jalik faoliyati ───────────────────────────────
+  tadbirkorlik: [],
 
-  // ── 9. Tashqi iqtisodiy faoliyat. Bojxona ────────────────────────────────
+  // ── 12. Tashqi iqtisodiy faoliyat. Bojxona ───────────────────────────────
   'tashqi-iqtisod': [
     {
       doc_id: 'bojxona-kodeks',
@@ -147,7 +177,7 @@ const LEX_REGISTRY = {
     },
   ],
 
-  // ── 10. Atrof tabiiy muhit va tabiiy resurslar ───────────────────────────
+  // ── 13. Atrof tabiiy muhit va tabiiy resurslar ───────────────────────────
   ekologiya: [
     {
       doc_id: 'suv-kodeks',
@@ -163,20 +193,20 @@ const LEX_REGISTRY = {
     },
   ],
 
-  // ── 11. Axborot va axborotlashtirish ─────────────────────────────────────
+  // ── 14. Axborot va axborotlashtirish ─────────────────────────────────────
   axborot: [],
 
-  // ── 12. Ta'lim. Fan. Madaniyat ───────────────────────────────────────────
+  // ── 15. Ta'lim. Fan. Madaniyat ───────────────────────────────────────────
   talim: [],
 
-  // ── 13. Sog'liqni saqlash. Sport. Turizm ────────────────────────────────
+  // ── 16. Sog'liqni saqlash. Sport. Turizm ────────────────────────────────
   soglik: [],
 
-  // ── 14. Mudofaa ──────────────────────────────────────────────────────────
+  // ── 17. Mudofaa ──────────────────────────────────────────────────────────
   mudofaa: [],
 
-  // ── 15. Xavfsizlik va huquq tartibot muhofazasi ──────────────────────────
-  xavfsizlik: [
+  // ── 18. Jinoyat qonunchiligi ─────────────────────────────────────────────
+  jinoyat: [
     {
       doc_id: 'jinoyat-kodeks',
       law_name: "O'zbekiston Respublikasining Jinoyat kodeksi",
@@ -190,34 +220,6 @@ const LEX_REGISTRY = {
       enforcement_date: null
     },
     {
-      doc_id: 'mamuriy-javobgarlik-kodeks',
-      law_name: "Ma'muriy javobgarlik to'g'risidagi kodeks",
-      lex_url: 'https://lex.uz/uz/docs/97664',
-      enforcement_date: null
-    },
-  ],
-
-  // ── 16. Odil sudlov (protsessual kodekslar) ──────────────────────────────
-  sudlov: [
-    {
-      doc_id: 'fuqarolik-protsessual-kodeks',
-      law_name: "O'zbekiston Respublikasining Fuqarolik protsessual kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/3517337',
-      enforcement_date: null
-    },
-    {
-      doc_id: 'iqtisodiy-protsessual-kodeks',
-      law_name: "O'zbekiston Respublikasining Iqtisodiy protsessual kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/3523891',
-      enforcement_date: null
-    },
-    {
-      doc_id: 'mamuriy-sud-kodeks',
-      law_name: "Ma'muriy sud ishlarini yuritish to'g'risidagi kodeks",
-      lex_url: 'https://lex.uz/uz/docs/3527353',
-      enforcement_date: null
-    },
-    {
       doc_id: 'jinoyat-protsessual-kodeks',
       law_name: "O'zbekiston Respublikasining Jinoyat-protsessual kodeksi",
       lex_url: 'https://lex.uz/uz/docs/111460',
@@ -225,13 +227,26 @@ const LEX_REGISTRY = {
     },
   ],
 
-  // ── 17. Prokuratura. Advokatura. Notariat. Adliya ────────────────────────
+  // ── 19. Ma'muriy javobgarlik ─────────────────────────────────────────────
+  mamuriy: [
+    {
+      doc_id: 'mamuriy-javobgarlik-kodeks',
+      law_name: "Ma'muriy javobgarlik to'g'risidagi kodeks",
+      lex_url: 'https://lex.uz/uz/docs/97664',
+      enforcement_date: null
+    },
+  ],
+
+  // ── 20. Odil sudlov ──────────────────────────────────────────────────────
+  sudlov: [],
+
+  // ── 21. Prokuratura. Advokatura. Notariat. Adliya ────────────────────────
   adliya: [],
 
-  // ── 18. Xalqaro munosabatlar. Xalqaro huquq ──────────────────────────────
+  // ── 22. Xalqaro munosabatlar. Xalqaro huquq ──────────────────────────────
   xalqaro: [],
 
-  // ── 19. Shaxsiy tusdagi hujjatlar ────────────────────────────────────────
+  // ── 23. Shaxsiy tusdagi hujjatlar ────────────────────────────────────────
   shaxsiy: [],
 };
 
