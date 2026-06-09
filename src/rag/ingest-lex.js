@@ -33,16 +33,12 @@ const { getEmbeddingsBatch, detectProvider } = require('./embeddings');
 const { insertChunks, deleteByDocId, getCorpusStats, rebuildVectorIndex, initLegalCorpus } = require('./legal-corpus');
 const { insertStructuredChunks } = require('./advanced-corpus');
 const { fetchLexDocument } = require('./fetch-lex');
-const { getLawsForCategory, getAllLaws, getRegistryStats } = require('./lex-registry');
+const { getLawsForCategory, getAllLaws, getRegistryStats, LEX_REGISTRY } = require('./lex-registry');
 
 // ========== CONFIG ==========
 
-const VALID_CATEGORIES = [
-  'konstitutsiya', 'fuqarolik', 'oila', 'mehnat', 'ijtimoiy',
-  'moliya', 'uy-joy', 'tadbirkorlik', 'tashqi-iqtisod', 'ekologiya',
-  'axborot', 'talim', 'soglik', 'mudofaa', 'xavfsizlik',
-  'sudlov', 'adliya', 'xalqaro', 'shaxsiy', 'boshqa'
-];
+// Derived from the registry so it never drifts when categories are added/removed.
+const VALID_CATEGORIES = Object.keys(LEX_REGISTRY);
 
 function getApiKey() {
   // Resolve the key for whichever provider detectProvider() will actually use,
