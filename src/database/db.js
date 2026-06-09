@@ -14,10 +14,20 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: useSsl ? { rejectUnauthorized: false } : false,
   connectionTimeoutMillis: 30000,
-  idleTimeoutMillis: 300000, // 5 min — prevents socket drops during long ingest batches
-  max: 10,
+  // Supabase free tier drops idle connections; 30s idle timeout recycles them
+  // before the server-side RST arrives, preventing "Connection terminated unexpectedly".
+  idleTimeoutMillis: 30000,
+  // 3 clients is plenty for ingest; keeps well under the 60-connection free-tier limit.
+  max: 3,
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
+});
+
+// Without this listener, a backend-initiated connection drop emits an 'error'
+// event on the idle client inside the pool, which Node treats as an unhandled
+// error and crashes the process (even mid-ingest).
+pool.on('error', (err) => {
+  console.error('[DB] Pool idle client error (connection dropped):', err.message);
 });
 
 module.exports = { pool };
