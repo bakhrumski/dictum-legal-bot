@@ -5437,21 +5437,25 @@
                     <div class="ai-history-title">Korpusga qo'shish</div>
                     <select id="docUploadTopic" class="ai-doc-topic-select">
                         <option value="">— Soha tanlang —</option>
-                        <option value="mehnat">Mehnat huquqi</option>
-                        <option value="oila">Oila huquqi</option>
-                        <option value="fuqarolik">Fuqarolik huquqi</option>
-                        <option value="shartnoma">Shartnoma huquqi</option>
-                        <option value="soliq">Soliq huquqi</option>
-                        <option value="jinoyat">Jinoyat huquqi</option>
-                        <option value="mamuriy">Ma'muriy javobgarlik</option>
-                        <option value="mamuriy_huquq">Ma'muriy huquq</option>
-                        <option value="korporativ">Korporativ huquq</option>
-                        <option value="tadbirkorlik">Tadbirkorlik huquqi</option>
-                        <option value="uy-joy">Uy-joy oldi-sotdisi</option>
-                        <option value="mulk">Mulk huquqi</option>
-                        <option value="notarius">Notarius xizmatlari</option>
+                        <option value="konstitutsiya">Konstitutsiyaviy tuzum</option>
+                        <option value="fuqarolik">Fuqarolik qonunchiligi</option>
+                        <option value="oila">Oila qonunchiligi</option>
+                        <option value="mehnat">Mehnat va bandlik</option>
                         <option value="ijtimoiy">Ijtimoiy himoya</option>
-                        <option value="advokatura">Advokatura</option>
+                        <option value="moliya">Moliya va bank</option>
+                        <option value="uy-joy">Uy-joy qonunchiligi</option>
+                        <option value="tadbirkorlik">Tadbirkorlik</option>
+                        <option value="tashqi-iqtisod">Tashqi iqtisod. Bojxona</option>
+                        <option value="ekologiya">Ekologiya</option>
+                        <option value="axborot">Axborot</option>
+                        <option value="talim">Ta'lim. Fan. Madaniyat</option>
+                        <option value="soglik">Sog'liqni saqlash</option>
+                        <option value="mudofaa">Mudofaa</option>
+                        <option value="xavfsizlik">Xavfsizlik va huquq tartibot</option>
+                        <option value="sudlov">Odil sudlov</option>
+                        <option value="adliya">Advokatura. Notariat. Adliya</option>
+                        <option value="xalqaro">Xalqaro huquq</option>
+                        <option value="shaxsiy">Shaxsiy hujjatlar</option>
                     </select>
                     <input type="text" id="docUploadName" class="ai-doc-name-input" placeholder="Hujjat nomi (ixtiyoriy)">
 
@@ -5574,15 +5578,25 @@
                     <div class="filter-section">
                         <select id="categoryFilter" onchange="filterRequests()">
                             <option value="">Barcha yo'nalishlar</option>
-                            <option value="Fuqarolik huquqi">Fuqarolik huquqi</option>
-                            <option value="Jinoyat huquqi">Jinoyat huquqi</option>
-                            <option value="Mehnat huquqi">Mehnat huquqi</option>
-                            <option value="Oila huquqi">Oila huquqi</option>
-                            <option value="Biznes/Korporativ huquq">Biznes/Korporativ huquq</option>
-                            <option value="Ko'chmas mulk">Ko'chmas mulk</option>
-                            <option value="Soliq huquqi">Soliq huquqi</option>
-                            <option value="Ma'muriy huquq">Ma'muriy huquq</option>
-                            <option value="Ma'muriy javobgarlik">Ma'muriy javobgarlik</option>
+                            <option value="Konstitutsiyaviy tuzum">Konstitutsiyaviy tuzum</option>
+                            <option value="Fuqarolik qonunchiligi">Fuqarolik qonunchiligi</option>
+                            <option value="Oila qonunchiligi">Oila qonunchiligi</option>
+                            <option value="Mehnat va bandlik">Mehnat va bandlik</option>
+                            <option value="Ijtimoiy himoya">Ijtimoiy himoya</option>
+                            <option value="Moliya va bank">Moliya va bank</option>
+                            <option value="Uy-joy qonunchiligi">Uy-joy qonunchiligi</option>
+                            <option value="Tadbirkorlik">Tadbirkorlik</option>
+                            <option value="Tashqi iqtisod. Bojxona">Tashqi iqtisod. Bojxona</option>
+                            <option value="Ekologiya">Ekologiya</option>
+                            <option value="Axborot">Axborot</option>
+                            <option value="Ta'lim. Fan. Madaniyat">Ta'lim. Fan. Madaniyat</option>
+                            <option value="Sog'liqni saqlash">Sog'liqni saqlash</option>
+                            <option value="Mudofaa">Mudofaa</option>
+                            <option value="Xavfsizlik va huquq tartibot">Xavfsizlik va huquq tartibot</option>
+                            <option value="Odil sudlov">Odil sudlov</option>
+                            <option value="Advokatura. Notariat. Adliya">Advokatura. Notariat. Adliya</option>
+                            <option value="Xalqaro huquq">Xalqaro huquq</option>
+                            <option value="Shaxsiy hujjatlar">Shaxsiy hujjatlar</option>
                             <option value="Boshqa">Boshqa</option>
                         </select>
 
@@ -7415,15 +7429,25 @@
                             ${currentUser.role === 'master' || request.status !== 'answered' ? `
                             <select id="categorySelect" onchange="updateCategory(${request.id}, this.value)" class="detail-select ${request.category === 'Boshqa' ? 'select-warning' : 'select-success'}">
                                 <option value="Boshqa" ${request.category === 'Boshqa' ? 'selected' : ''}>-- Yo'nalishni tanlang --</option>
-                                <option value="Fuqarolik huquqi" ${request.category === 'Fuqarolik huquqi' ? 'selected' : ''}>Fuqarolik huquqi</option>
-                                <option value="Jinoyat huquqi" ${request.category === 'Jinoyat huquqi' ? 'selected' : ''}>Jinoyat huquqi</option>
-                                <option value="Mehnat huquqi" ${request.category === 'Mehnat huquqi' ? 'selected' : ''}>Mehnat huquqi</option>
-                                <option value="Oila huquqi" ${request.category === 'Oila huquqi' ? 'selected' : ''}>Oila huquqi</option>
-                                <option value="Biznes/Korporativ huquq" ${request.category === 'Biznes/Korporativ huquq' ? 'selected' : ''}>Biznes/Korporativ huquq</option>
-                                <option value="Ko'chmas mulk" ${request.category === "Ko'chmas mulk" ? 'selected' : ''}>Ko'chmas mulk</option>
-                                <option value="Soliq huquqi" ${request.category === 'Soliq huquqi' ? 'selected' : ''}>Soliq huquqi</option>
-                                <option value="Ma'muriy huquq" ${request.category === "Ma'muriy huquq" ? 'selected' : ''}>Ma'muriy huquq</option>
-                                <option value="Ma'muriy javobgarlik" ${request.category === "Ma'muriy javobgarlik" ? 'selected' : ''}>Ma'muriy javobgarlik</option>
+                                <option value="Konstitutsiyaviy tuzum" ${request.category === 'Konstitutsiyaviy tuzum' ? 'selected' : ''}>Konstitutsiyaviy tuzum</option>
+                                <option value="Fuqarolik qonunchiligi" ${request.category === 'Fuqarolik qonunchiligi' ? 'selected' : ''}>Fuqarolik qonunchiligi</option>
+                                <option value="Oila qonunchiligi" ${request.category === 'Oila qonunchiligi' ? 'selected' : ''}>Oila qonunchiligi</option>
+                                <option value="Mehnat va bandlik" ${request.category === 'Mehnat va bandlik' ? 'selected' : ''}>Mehnat va bandlik</option>
+                                <option value="Ijtimoiy himoya" ${request.category === 'Ijtimoiy himoya' ? 'selected' : ''}>Ijtimoiy himoya</option>
+                                <option value="Moliya va bank" ${request.category === 'Moliya va bank' ? 'selected' : ''}>Moliya va bank</option>
+                                <option value="Uy-joy qonunchiligi" ${request.category === 'Uy-joy qonunchiligi' ? 'selected' : ''}>Uy-joy qonunchiligi</option>
+                                <option value="Tadbirkorlik" ${request.category === 'Tadbirkorlik' ? 'selected' : ''}>Tadbirkorlik</option>
+                                <option value="Tashqi iqtisod. Bojxona" ${request.category === 'Tashqi iqtisod. Bojxona' ? 'selected' : ''}>Tashqi iqtisod. Bojxona</option>
+                                <option value="Ekologiya" ${request.category === 'Ekologiya' ? 'selected' : ''}>Ekologiya</option>
+                                <option value="Axborot" ${request.category === 'Axborot' ? 'selected' : ''}>Axborot</option>
+                                <option value="Ta'lim. Fan. Madaniyat" ${request.category === "Ta'lim. Fan. Madaniyat" ? 'selected' : ''}>Ta'lim. Fan. Madaniyat</option>
+                                <option value="Sog'liqni saqlash" ${request.category === "Sog'liqni saqlash" ? 'selected' : ''}>Sog'liqni saqlash</option>
+                                <option value="Mudofaa" ${request.category === 'Mudofaa' ? 'selected' : ''}>Mudofaa</option>
+                                <option value="Xavfsizlik va huquq tartibot" ${request.category === 'Xavfsizlik va huquq tartibot' ? 'selected' : ''}>Xavfsizlik va huquq tartibot</option>
+                                <option value="Odil sudlov" ${request.category === 'Odil sudlov' ? 'selected' : ''}>Odil sudlov</option>
+                                <option value="Advokatura. Notariat. Adliya" ${request.category === 'Advokatura. Notariat. Adliya' ? 'selected' : ''}>Advokatura. Notariat. Adliya</option>
+                                <option value="Xalqaro huquq" ${request.category === 'Xalqaro huquq' ? 'selected' : ''}>Xalqaro huquq</option>
+                                <option value="Shaxsiy hujjatlar" ${request.category === 'Shaxsiy hujjatlar' ? 'selected' : ''}>Shaxsiy hujjatlar</option>
                             </select>
                             ${request.category === 'Boshqa' && request.status !== 'answered' ? '<span style="color: #e74c3c; font-size: 12px; margin-left: 8px;">⚠️ Javob berishdan oldin tanlang!</span>' : '<span style="color: #27ae60; font-size: 12px; margin-left: 8px;">✅</span>'}
                             ` : `${request.category || 'N/A'}`}
@@ -8490,21 +8514,25 @@
         };
 
         var AI_TOPICS = {
-            'mehnat':         { label: 'Mehnat',                desc: 'Mehnat huquqi' },
-            'oila':           { label: 'Oila',                  desc: 'Oila huquqi' },
-            'fuqarolik':      { label: 'Fuqarolik',             desc: 'Fuqarolik huquqi' },
-            'shartnoma':      { label: 'Shartnoma',             desc: 'Shartnoma huquqi' },
-            'soliq':          { label: 'Soliq',                 desc: 'Soliq huquqi' },
-            'jinoyat':        { label: 'Jinoyat',               desc: 'Jinoyat huquqi' },
-            'mamuriy':        { label: "Ma'muriy javobgarlik",   desc: "Ma'muriy javobgarlik (MJTK — jarimalar, huquqbuzarliklar)" },
-            'mamuriy_huquq':  { label: "Ma'muriy huquq",         desc: "Ma'muriy huquq (ruxsatnomalar, davlat organlari, protseduralar)" },
-            'korporativ':     { label: 'Korporativ',             desc: 'Korporativ huquq' },
-            'tadbirkorlik':   { label: 'Tadbirkorlik',           desc: 'Tadbirkorlik huquqi' },
-            'uy-joy':         { label: 'Uy-joy oldi-sotdisi',   desc: 'Uy-joy oldi-sotdisi' },
-            'mulk':           { label: 'Mulk huquqi',           desc: 'Mulk huquqi' },
-            'notarius':       { label: 'Notarius',              desc: 'Notarius xizmatlari' },
-            'ijtimoiy':       { label: 'Ijtimoiy',              desc: 'Ijtimoiy himoya' },
-            'advokatura':     { label: 'Advokatura',            desc: 'Advokatura' }
+            'konstitutsiya':  { label: 'Konstitutsiyaviy tuzum',        desc: 'Konstitutsiyaviy tuzum' },
+            'fuqarolik':      { label: 'Fuqarolik qonunchiligi',         desc: 'Fuqarolik qonunchiligi' },
+            'oila':           { label: 'Oila qonunchiligi',              desc: 'Oila qonunchiligi' },
+            'mehnat':         { label: 'Mehnat va bandlik',              desc: 'Mehnat va bandlik' },
+            'ijtimoiy':       { label: 'Ijtimoiy himoya',                desc: 'Ijtimoiy himoya' },
+            'moliya':         { label: 'Moliya va bank',                 desc: 'Moliya va bank' },
+            'uy-joy':         { label: 'Uy-joy qonunchiligi',            desc: 'Uy-joy qonunchiligi' },
+            'tadbirkorlik':   { label: 'Tadbirkorlik',                   desc: 'Tadbirkorlik' },
+            'tashqi-iqtisod': { label: 'Tashqi iqtisod. Bojxona',       desc: 'Tashqi iqtisodiy faoliyat va bojxona' },
+            'ekologiya':      { label: 'Ekologiya',                      desc: 'Ekologiya va tabiat muhofazasi' },
+            'axborot':        { label: 'Axborot',                        desc: 'Axborot texnologiyalari va kommunikatsiya' },
+            'talim':          { label: "Ta'lim. Fan. Madaniyat",         desc: "Ta'lim, fan va madaniyat" },
+            'soglik':         { label: "Sog'liqni saqlash",              desc: "Sog'liqni saqlash" },
+            'mudofaa':        { label: 'Mudofaa',                        desc: 'Mudofaa va harbiy xizmat' },
+            'xavfsizlik':     { label: 'Xavfsizlik va huquq tartibot',   desc: 'Jinoyat va xavfsizlik' },
+            'sudlov':         { label: 'Odil sudlov',                    desc: 'Sudlov va odil sudlov' },
+            'adliya':         { label: 'Advokatura. Notariat. Adliya',   desc: 'Advokatura, notariat va adliya xizmatlari' },
+            'xalqaro':        { label: 'Xalqaro huquq',                  desc: 'Xalqaro munosabatlar va shartnomalar' },
+            'shaxsiy':        { label: 'Shaxsiy hujjatlar',              desc: 'Shaxsiy huquqlar va hujjatlar' }
         };
 
         function toggleWelcomeCategories() {

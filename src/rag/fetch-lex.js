@@ -135,10 +135,17 @@ function parseLexHtml(html, sourceUrl) {
   // ── Status detection: check ENTIRE page for "Hujjat kuchini yo'qotgan" / similar ──
   // lex.uz marks inactive documents with a header banner. We scan the full HTML
   // text + known status containers. If ANY of these match, is_active=false.
+  //
+  // The apostrophe class MUST cover every variant lex.uz renders, especially
+  // U+2018/U+2019 curly quotes ("yo'qotgan") — an earlier version omitted these
+  // and silently failed to flag repealed documents, which were then ingested as
+  // if in force. Variants: ' ' ' ʻ ʼ ` ´
+  const APO = "['\\u2018\\u2019\\u02BB\\u02BC\\u0060\\u00B4]";
   const fullText = $('body').text();
   const statusPatterns = [
-    /Hujjat\s+kuchini\s+yo['ʻ`']?qotgan/i,
-    /Hujjat\s+kuchi\s+yo['ʻ`']?qotgan/i,
+    new RegExp(`Hujjat\\s+kuchini\\s+yo${APO}?qotgan`, 'i'),
+    new RegExp(`Hujjat\\s+kuchi\\s+yo${APO}?qotgan`, 'i'),
+    new RegExp(`kuchini\\s+yo${APO}?qotgan`, 'i'),
     /Документ\s+утратил\s+силу/i,
     /(?:utratil|utrativ)\s+silu/i,
     /Not\s+in\s+force/i,
@@ -164,9 +171,10 @@ function parseLexHtml(html, sourceUrl) {
   // We capture that link so fetchLexDocument() can re-fetch the current doc.
   metadata.current_version_url = null;
   if (/sanasi\s+holatiga/i.test(fullText)) {
+    const amaldagiRx = new RegExp(`Amaldagi\\s+versiyaga\\s+o${APO}?tish`, 'i');
     $('a').each((_, el) => {
       const linkText = $(el).text().trim();
-      if (/Amaldagi\s+versiyaga\s+o['ʻ`']?tish/i.test(linkText)) {
+      if (amaldagiRx.test(linkText)) {
         const href = $(el).attr('href') || '';
         if (href) {
           metadata.current_version_url = href.startsWith('http')
