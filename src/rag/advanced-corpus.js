@@ -113,8 +113,18 @@ async function insertStructuredChunks(chunks) {
   await initAdvancedCorpus();
 
   const client = await pool.connect();
+  // Suppress unhandled 'error' events on checked-out clients. When the
+  // Supabase pooler drops the connection mid-transaction, pg emits an
+  // error event on the client directly (not through pool.on('error')).
+  // Without this listener Node crashes the process. The actual error is
+  // still surfaced via the rejected promise on the awaited client.query().
+  client.on('error', (err) => {
+    console.error('[ADV CORPUS] Client connection dropped:', err.message);
+  });
+
   let parents = 0;
   let children = 0;
+  let txErr = null;
 
   try {
     await client.query('BEGIN');
@@ -197,11 +207,15 @@ async function insertStructuredChunks(chunks) {
     await client.query('COMMIT');
     console.log(`[ADV CORPUS] Inserted ${parents} parents + ${children} children = ${parents + children} total`);
   } catch (err) {
-    await client.query('ROLLBACK');
+    txErr = err;
+    // ROLLBACK may also fail if the connection is already dead — swallow it.
+    try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('[ADV CORPUS] Insert error:', err.message);
     throw err;
   } finally {
-    client.release();
+    // Pass the error so the pool destroys the broken connection instead of
+    // recycling it back to the ready queue.
+    client.release(txErr);
   }
 
   return { parents, children };
