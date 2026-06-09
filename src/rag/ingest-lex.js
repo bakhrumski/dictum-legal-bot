@@ -38,9 +38,10 @@ const { getLawsForCategory, getAllLaws, getRegistryStats } = require('./lex-regi
 // ========== CONFIG ==========
 
 const VALID_CATEGORIES = [
-  'mehnat', 'oila', 'fuqarolik', 'shartnoma', 'soliq', 'jinoyat',
-  'mamuriy', 'korporativ', 'tadbirkorlik', 'uy-joy', 'mulk',
-  'notarius', 'ijtimoiy', 'boshqa'
+  'konstitutsiya', 'fuqarolik', 'oila', 'mehnat', 'ijtimoiy',
+  'moliya', 'uy-joy', 'tadbirkorlik', 'tashqi-iqtisod', 'ekologiya',
+  'axborot', 'talim', 'soglik', 'mudofaa', 'xavfsizlik',
+  'sudlov', 'adliya', 'xalqaro', 'shaxsiy', 'boshqa'
 ];
 
 function getApiKey() {

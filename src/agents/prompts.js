@@ -7,18 +7,25 @@
  */
 
 const LEGAL_CATEGORIES = [
-  'Fuqarolik huquqi',
-  'Jinoyat huquqi',
-  'Ma\'muriy huquq',
-  'Mehnat huquqi',
-  'Oila huquqi',
-  'Soliq huquqi',
-  'Yer huquqi',
-  'Tadbirkorlik huquqi',
-  'Konstitutsiyaviy huquq',
-  'Ijro huquqi',
-  'Intellektual mulk huquqi',
-  'Xalqaro huquq',
+  'Konstitutsiyaviy tuzum',
+  'Fuqarolik qonunchiligi',
+  'Oila qonunchiligi',
+  'Mehnat va aholining bandligi',
+  "Ijtimoiy ta'minot va ijtimoiy himoya",
+  'Moliya va kredit. Bank faoliyati',
+  "Uy-joy qonunchiligi. Kommunal xo'jalik",
+  "Tadbirkorlik va xo'jalik faoliyati",
+  'Tashqi iqtisodiy faoliyat. Bojxona ishi',
+  'Atrof tabiiy muhit va tabiiy resurslar',
+  'Axborot va axborotlashtirish',
+  "Ta'lim. Fan. Madaniyat",
+  "Sog'liqni saqlash. Sport. Turizm",
+  'Mudofaa',
+  'Xavfsizlik va huquq tartibot muhofazasi',
+  'Odil sudlov',
+  'Prokuratura. Advokatura. Notariat. Adliya organlari',
+  'Xalqaro munosabatlar. Xalqaro huquq',
+  'Shaxsiy tusdagi hujjatlar',
   'Boshqa'
 ];
 
