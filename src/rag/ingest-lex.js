@@ -119,6 +119,11 @@ async function ingestText(body, docMeta) {
     process.exit(1);
   }
 
+  if (docMeta.is_active === false) {
+    console.warn(`  SKIPPED (inactive): "${docMeta.law_name}" — ${docMeta.status_label || 'document not in force'}. Not ingesting stale text.`);
+    return 0;
+  }
+
   const provider = detectProvider();
   console.log(`\n=== Ingesting: ${docMeta.law_name} (${provider}) ===`);
   console.log(`  Category: ${docMeta.category}`);
@@ -161,6 +166,15 @@ async function ingestStructuredHtml(rawHtml, docMeta) {
   if (!apiKey) {
     console.error('ERROR: Set HF_TOKEN, GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
     process.exit(1);
+  }
+
+  // Refuse to ingest repealed / superseded documents. Storing stale law text
+  // is worse than missing it — the model cites it confidently and hallucinates
+  // (e.g. an "Hujjat kuchini yo'qotgan" decree described as if in force). The
+  // fetcher sets is_active=false when it sees that banner; honour it here.
+  if (docMeta.is_active === false) {
+    console.warn(`  SKIPPED (inactive): "${docMeta.law_name}" — ${docMeta.status_label || 'document not in force'}. Not ingesting stale text.`);
+    return 0;
   }
 
   const provider = detectProvider();
