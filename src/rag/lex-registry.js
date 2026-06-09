@@ -45,27 +45,28 @@
 const LEX_REGISTRY = {
 
   // ── 1. Konstitutsiyaviy tuzum ────────────────────────────────────────────
-  konstitutsiya: [],   // add constitution + related laws when URLs are ready
+  konstitutsiya: [
+    {
+      doc_id: 'saylov-kodeks',
+      law_name: "O'zbekiston Respublikasining Saylov kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/4386848',
+      enforcement_date: null
+    },
+  ],
 
   // ── 2. Fuqarolik qonunchiligi ────────────────────────────────────────────
   fuqarolik: [
     {
-      doc_id: 'fuqarolik-kodeks',
-      law_name: "O'zbekiston Respublikasining Fuqarolik kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/111181',
-      enforcement_date: '1997-03-01'
-    },
-    {
-      doc_id: 'fuqarolik-kodeks-shartnoma',
-      law_name: "Fuqarolik kodeksi (Shartnoma qismi)",
-      lex_url: 'https://lex.uz/uz/docs/180550',
-      enforcement_date: '1997-03-01'
-    },
-    {
-      doc_id: 'mulkchilik-qonun',
-      law_name: "Mulkchilik to'g'risida",
+      doc_id: 'fuqarolik-kodeks-1',
+      law_name: "O'zbekiston Respublikasining Fuqarolik kodeksi (1-qism)",
       lex_url: 'https://lex.uz/uz/docs/111189',
-      enforcement_date: '1990-02-01'
+      enforcement_date: null
+    },
+    {
+      doc_id: 'fuqarolik-kodeks-2',
+      law_name: "O'zbekiston Respublikasining Fuqarolik kodeksi (2-qism)",
+      lex_url: 'https://lex.uz/uz/docs/180552',
+      enforcement_date: null
     },
   ],
 
@@ -74,8 +75,8 @@ const LEX_REGISTRY = {
     {
       doc_id: 'oila-kodeks',
       law_name: "O'zbekiston Respublikasining Oila kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/104723',
-      enforcement_date: '1998-09-01'
+      lex_url: 'https://lex.uz/uz/docs/104720',
+      enforcement_date: null
     },
   ],
 
@@ -84,20 +85,13 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mehnat-kodeks',
       law_name: "O'zbekiston Respublikasining Mehnat kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/6257291',
-      enforcement_date: '2023-04-30'
+      lex_url: 'https://lex.uz/uz/docs/6257288',
+      enforcement_date: null
     },
   ],
 
   // ── 5. Ijtimoiy ta'minot ─────────────────────────────────────────────────
-  ijtimoiy: [
-    {
-      doc_id: 'fuqarolarni-ijtimoiy-himoya-qonun',
-      law_name: "Fuqarolarning ijtimoiy himoyalanganligi to'g'risida",
-      lex_url: 'https://lex.uz/uz/docs/112298',
-      enforcement_date: '1994-04-26'
-    },
-  ],
+  ijtimoiy: [],   // add laws when URLs are ready
 
   // ── 6. Moliya va kredit. Bank faoliyati ──────────────────────────────────
   moliya: [
@@ -105,41 +99,69 @@ const LEX_REGISTRY = {
       doc_id: 'soliq-kodeks',
       law_name: "O'zbekiston Respublikasining Soliq kodeksi",
       lex_url: 'https://lex.uz/uz/docs/4674902',
-      enforcement_date: '2020-01-01'
+      enforcement_date: null
+    },
+    {
+      doc_id: 'byudjet-kodeks',
+      law_name: "O'zbekiston Respublikasining Byudjet kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/2304138',
+      enforcement_date: null
     },
   ],
 
-  // ── 7. Uy-joy qonunchiligi ───────────────────────────────────────────────
+  // ── 7. Uy-joy qonunchiligi. Shaharsozlik ─────────────────────────────────
   'uy-joy': [
     {
       doc_id: 'uy-joy-kodeks',
       law_name: "O'zbekiston Respublikasining Uy-joy kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/97791',
-      enforcement_date: '1999-01-01'
+      lex_url: 'https://lex.uz/uz/docs/106136',
+      enforcement_date: null
+    },
+    {
+      doc_id: 'shaharsozlik-kodeks',
+      law_name: "O'zbekiston Respublikasining Shaharsozlik kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/5307951',
+      enforcement_date: null
     },
   ],
 
   // ── 8. Tadbirkorlik va xo'jalik faoliyati ────────────────────────────────
   tadbirkorlik: [
     {
-      doc_id: 'tadbirkorlik-erkinligi-qonun',
-      law_name: "Tadbirkorlik erkinligi kafolatlari to'g'risida",
-      lex_url: 'https://lex.uz/uz/docs/4538291',
-      enforcement_date: '2000-05-25'
-    },
-    {
-      doc_id: 'aksiyadorlik-jamiyatlari-qonun',
-      law_name: "Aksiyadorlik jamiyatlari va aksiyadorlarning huquqlarini himoya qilish to'g'risida",
-      lex_url: 'https://lex.uz/uz/docs/5765878',
-      enforcement_date: '2014-05-07'
+      // Havo (aviatsiya) kodeksi — no dedicated transport field in the
+      // 19-field taxonomy, so placed under xo'jalik faoliyati.
+      doc_id: 'xavo-kodeks',
+      law_name: "O'zbekiston Respublikasining Havo kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/55594',
+      enforcement_date: null
     },
   ],
 
   // ── 9. Tashqi iqtisodiy faoliyat. Bojxona ────────────────────────────────
-  'tashqi-iqtisod': [],  // add when URLs are ready
+  'tashqi-iqtisod': [
+    {
+      doc_id: 'bojxona-kodeks',
+      law_name: "O'zbekiston Respublikasining Bojxona kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/2876354',
+      enforcement_date: null
+    },
+  ],
 
-  // ── 10. Atrof tabiiy muhit ───────────────────────────────────────────────
-  ekologiya: [],
+  // ── 10. Atrof tabiiy muhit va tabiiy resurslar ───────────────────────────
+  ekologiya: [
+    {
+      doc_id: 'suv-kodeks',
+      law_name: "O'zbekiston Respublikasining Suv va suvdan foydalanish kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/7655343',
+      enforcement_date: null
+    },
+    {
+      doc_id: 'yer-kodeks',
+      law_name: "O'zbekiston Respublikasining Yer kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/152653',
+      enforcement_date: null
+    },
+  ],
 
   // ── 11. Axborot va axborotlashtirish ─────────────────────────────────────
   axborot: [],
@@ -158,29 +180,53 @@ const LEX_REGISTRY = {
     {
       doc_id: 'jinoyat-kodeks',
       law_name: "O'zbekiston Respublikasining Jinoyat kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/111457',
-      enforcement_date: '1995-04-01'
+      lex_url: 'https://lex.uz/uz/docs/111453',
+      enforcement_date: null
+    },
+    {
+      doc_id: 'jinoyat-ijroiya-kodeks',
+      law_name: "O'zbekiston Respublikasining Jinoyat-ijroiya kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/163629',
+      enforcement_date: null
     },
     {
       doc_id: 'mamuriy-javobgarlik-kodeks',
       law_name: "Ma'muriy javobgarlik to'g'risidagi kodeks",
-      lex_url: 'https://lex.uz/uz/docs/97661',
-      enforcement_date: '1995-04-01'
+      lex_url: 'https://lex.uz/uz/docs/97664',
+      enforcement_date: null
     },
   ],
 
-  // ── 16. Odil sudlov ──────────────────────────────────────────────────────
-  sudlov: [],
+  // ── 16. Odil sudlov (protsessual kodekslar) ──────────────────────────────
+  sudlov: [
+    {
+      doc_id: 'fuqarolik-protsessual-kodeks',
+      law_name: "O'zbekiston Respublikasining Fuqarolik protsessual kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/3517337',
+      enforcement_date: null
+    },
+    {
+      doc_id: 'iqtisodiy-protsessual-kodeks',
+      law_name: "O'zbekiston Respublikasining Iqtisodiy protsessual kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/3523891',
+      enforcement_date: null
+    },
+    {
+      doc_id: 'mamuriy-sud-kodeks',
+      law_name: "Ma'muriy sud ishlarini yuritish to'g'risidagi kodeks",
+      lex_url: 'https://lex.uz/uz/docs/3527353',
+      enforcement_date: null
+    },
+    {
+      doc_id: 'jinoyat-protsessual-kodeks',
+      law_name: "O'zbekiston Respublikasining Jinoyat-protsessual kodeksi",
+      lex_url: 'https://lex.uz/uz/docs/111460',
+      enforcement_date: null
+    },
+  ],
 
   // ── 17. Prokuratura. Advokatura. Notariat. Adliya ────────────────────────
-  adliya: [
-    {
-      doc_id: 'notariat-qonun',
-      law_name: "Notariat to'g'risida",
-      lex_url: 'https://lex.uz/uz/docs/98304',
-      enforcement_date: '1997-01-01'
-    },
-  ],
+  adliya: [],
 
   // ── 18. Xalqaro munosabatlar. Xalqaro huquq ──────────────────────────────
   xalqaro: [],
