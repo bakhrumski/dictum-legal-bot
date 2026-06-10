@@ -298,11 +298,42 @@ async function ingestFromUrl(url, opts = {}) {
 
 // ========== INGEST FROM REGISTRY ==========
 
+// High-use codes to ingest first (in this order), per product priority.
+// Each id must exist as a doc_id in lex-registry.js.
+const PRIORITY_DOC_IDS = [
+  'fuqarolik-kodeks-1',
+  'fuqarolik-kodeks-2',
+  'mehnat-kodeks',
+  'soliq-kodeks',
+  'iqtisodiy-protsessual-kodeks',
+  'fuqarolik-protsessual-kodeks',
+  'jinoyat-protsessual-kodeks',
+  'mamuriy-javobgarlik-kodeks',
+  'jinoyat-kodeks',
+  'mamuriy-sud-kodeks',
+  'oila-kodeks',
+];
+
 /**
- * Fetch and ingest all registered laws for a category (or all categories).
+ * Return registry laws matching PRIORITY_DOC_IDS, in priority order.
  */
-async function ingestFromRegistry(category) {
-  const laws = category ? getLawsForCategory(category) : getAllLaws();
+function getPriorityLaws() {
+  const byId = new Map(getAllLaws().map((law) => [law.doc_id, law]));
+  const laws = [];
+  for (const id of PRIORITY_DOC_IDS) {
+    const law = byId.get(id);
+    if (law) laws.push(law);
+    else console.warn(`  WARN: priority doc_id "${id}" not found in registry — skipping`);
+  }
+  return laws;
+}
+
+/**
+ * Fetch and ingest all registered laws for a category (or all categories),
+ * or an explicit pre-selected list of laws.
+ */
+async function ingestFromRegistry(category, explicitLaws) {
+  const laws = explicitLaws || (category ? getLawsForCategory(category) : getAllLaws());
 
   if (laws.length === 0) {
     console.error(`ERROR: No laws registered for category "${category}"`);
@@ -400,8 +431,11 @@ Usage:
   # Fetch all registered laws for a category:
   node src/rag/ingest-lex.js --fetch --category <cat>
 
-  # Fetch ALL registered laws (all 13 categories):
+  # Fetch ALL registered laws (every category):
   node src/rag/ingest-lex.js --fetch-all
+
+  # Fetch the high-use codes first (priority order):
+  node src/rag/ingest-lex.js --priority
 
   # From local .txt file:
   node src/rag/ingest-lex.js <file.txt> --category <cat>
@@ -468,6 +502,12 @@ Valid categories: ${VALID_CATEGORIES.join(', ')}
   const sourceUrl = getArg('--source-url');
   const url = getArg('--url');
   const dir = getArg('--dir');
+
+  // --priority: fetch the high-use codes first, in priority order
+  if (args.includes('--priority')) {
+    await ingestFromRegistry(null, getPriorityLaws());
+    process.exit(0);
+  }
 
   // --fetch-all: fetch all registered laws
   if (args.includes('--fetch-all')) {
