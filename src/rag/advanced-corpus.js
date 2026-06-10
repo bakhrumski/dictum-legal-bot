@@ -112,113 +112,139 @@ async function insertStructuredChunks(chunks) {
   if (!chunks || chunks.length === 0) return { parents: 0, children: 0 };
   await initAdvancedCorpus();
 
-  const client = await pool.connect();
-  // Suppress unhandled 'error' events on checked-out clients. When the
-  // Supabase pooler drops the connection mid-transaction, pg emits an
-  // error event on the client directly (not through pool.on('error')).
-  // Without this listener Node crashes the process. The actual error is
-  // still surfaced via the rejected promise on the awaited client.query().
-  client.on('error', (err) => {
-    console.error('[ADV CORPUS] Client connection dropped:', err.message);
-  });
-
-  let parents = 0;
-  let children = 0;
-  let txErr = null;
-
-  try {
-    await client.query('BEGIN');
-
-    for (const chunk of chunks) {
+  // Defense in depth: validate ALL embeddings up front, before any insert.
+  // A NULL embedding is invisible to search but still bloats the corpus and
+  // looks healthy in row counts — exactly how we ended up with thousands of
+  // unsearchable rows. Fail loudly before touching the DB.
+  for (const chunk of chunks) {
+    if (!Array.isArray(chunk.embedding) || chunk.embedding.length === 0) {
       const m = chunk.metadata || {};
-      const articleNums = m.articleNumber
-        ? [m.articleNumber]
-        : (m.articles || []).map((article) => article.number).filter(Boolean);
-
-      // Defense in depth: never persist a law chunk without a vector. A NULL
-      // embedding is invisible to search but still bloats the corpus and looks
-      // healthy in row counts — exactly how we ended up with thousands of
-      // unsearchable rows. Fail loudly here so the caller's transaction rolls
-      // back instead of silently storing dead rows.
-      if (!Array.isArray(chunk.embedding) || chunk.embedding.length === 0) {
-        throw new Error(
-          `Refusing to insert chunk without embedding ` +
-          `(law="${m.law_name || ''}", article="${m.articleNumber || ''}", type="${chunk.chunkType || '?'}").`
-        );
-      }
-      const embStr = `[${chunk.embedding.join(',')}]`;
-
-      await client.query(`
-        INSERT INTO legal_chunks (
-          law_name, doc_id, source_url, category,
-          chunk_text, chunk_index,
-          article_numbers, chapter,
-          chunk_type, chunk_id, parent_chunk_id,
-          article_number_display, part_number, part_type,
-          cross_references,
-          enforcement_date, is_valid,
-          is_active, status_label, adoption_date, document_number,
-          language, source_type, quality_score, verified_by,
-          embedding
-        ) VALUES (
-          $1, $2, $3, $4,
-          $5, $6,
-          $7, $8,
-          $9, $10, $11,
-          $12, $13, $14,
-          $15,
-          $16, TRUE,
-          $17, $18, $19, $20,
-          $21, $22, $23, $24,
-          $25::vector
-        )
-      `, [
-        m.law_name || '',
-        m.doc_id || null,
-        m.source_url || null,
-        m.category || 'boshqa',
-        chunk.text,
-        chunk.chunkIndex || 0,
-        articleNums.length > 0 ? articleNums : null,
-        m.chapter || null,
-        chunk.chunkType || 'parent',
-        m.chunkId || null,
-        chunk.parentId || null,
-        m.articleNumber || articleNums[0] || null,
-        m.partNumber || null,
-        m.partType || 'article',
-        m.references && m.references.length > 0 ? m.references : null,
-        m.enforcement_date || null,
-        m.is_active !== false,
-        m.status_label || null,
-        m.adoption_date || null,
-        m.document_number || null,
-        m.language || 'ru',
-        m.source_type || 'law_text',
-        m.quality_score == null ? 0.5 : m.quality_score,
-        m.verified_by || null,
-        embStr,
-      ]);
-
-      if (chunk.chunkType === 'parent') parents++;
-      else children++;
+      throw new Error(
+        `Refusing to insert chunk without embedding ` +
+        `(law="${m.law_name || ''}", article="${m.articleNumber || ''}", type="${chunk.chunkType || '?'}").`
+      );
     }
-
-    await client.query('COMMIT');
-    console.log(`[ADV CORPUS] Inserted ${parents} parents + ${children} children = ${parents + children} total`);
-  } catch (err) {
-    txErr = err;
-    // ROLLBACK may also fail if the connection is already dead — swallow it.
-    try { await client.query('ROLLBACK'); } catch (_) {}
-    console.error('[ADV CORPUS] Insert error:', err.message);
-    throw err;
-  } finally {
-    // Pass the error so the pool destroys the broken connection instead of
-    // recycling it back to the ready queue.
-    client.release(txErr);
   }
 
+  // Insert in small batches, each in its own short transaction. One giant
+  // 800-row transaction holds a pooler connection long enough for Supabase to
+  // drop it ("Connection terminated unexpectedly"). Short batches + per-batch
+  // retry make large codes ingest reliably.
+  const BATCH_SIZE = 50;
+  const MAX_ATTEMPTS = 4;
+  let parents = 0;
+  let children = 0;
+
+  for (let start = 0; start < chunks.length; start += BATCH_SIZE) {
+    const batch = chunks.slice(start, start + BATCH_SIZE);
+
+    let attempt = 0;
+    for (;;) {
+      attempt++;
+      const client = await pool.connect();
+      // When the pooler drops a checked-out client mid-transaction, pg emits
+      // 'error' directly on the client object (not via pool.on('error')).
+      // Without this listener Node crashes the process.
+      client.on('error', (err) => {
+        console.error('[ADV CORPUS] Client connection dropped:', err.message);
+      });
+
+      let txErr = null;
+      try {
+        await client.query('BEGIN');
+        for (const chunk of batch) {
+          await insertOneChunk(client, chunk);
+        }
+        await client.query('COMMIT');
+        // Tally only after a successful commit.
+        for (const chunk of batch) {
+          if (chunk.chunkType === 'parent') parents++;
+          else children++;
+        }
+        client.release();
+        break; // batch done
+      } catch (err) {
+        txErr = err;
+        try { await client.query('ROLLBACK'); } catch (_) {}
+        client.release(err); // destroy the broken connection
+        const retriable = /terminat|ECONNRESET|ETIMEDOUT|socket hang up|Connection/i.test(err.message);
+        if (retriable && attempt < MAX_ATTEMPTS) {
+          const wait = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+          console.warn(`[ADV CORPUS] Batch ${start}-${start + batch.length} failed (${err.message}), retry ${attempt}/${MAX_ATTEMPTS - 1} in ${wait / 1000}s...`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+        console.error('[ADV CORPUS] Insert error:', err.message);
+        throw err;
+      }
+    }
+  }
+
+  console.log(`[ADV CORPUS] Inserted ${parents} parents + ${children} children = ${parents + children} total`);
   return { parents, children };
+}
+
+/**
+ * Insert a single chunk row using an already-acquired client (inside a tx).
+ */
+async function insertOneChunk(client, chunk) {
+  const m = chunk.metadata || {};
+  const articleNums = m.articleNumber
+    ? [m.articleNumber]
+    : (m.articles || []).map((article) => article.number).filter(Boolean);
+  const embStr = `[${chunk.embedding.join(',')}]`;
+
+  await client.query(`
+    INSERT INTO legal_chunks (
+      law_name, doc_id, source_url, category,
+      chunk_text, chunk_index,
+      article_numbers, chapter,
+      chunk_type, chunk_id, parent_chunk_id,
+      article_number_display, part_number, part_type,
+      cross_references,
+      enforcement_date, is_valid,
+      is_active, status_label, adoption_date, document_number,
+      language, source_type, quality_score, verified_by,
+      embedding
+    ) VALUES (
+      $1, $2, $3, $4,
+      $5, $6,
+      $7, $8,
+      $9, $10, $11,
+      $12, $13, $14,
+      $15,
+      $16, TRUE,
+      $17, $18, $19, $20,
+      $21, $22, $23, $24,
+      $25::vector
+    )
+  `, [
+    m.law_name || '',
+    m.doc_id || null,
+    m.source_url || null,
+    m.category || 'boshqa',
+    chunk.text,
+    chunk.chunkIndex || 0,
+    articleNums.length > 0 ? articleNums : null,
+    m.chapter || null,
+    chunk.chunkType || 'parent',
+    m.chunkId || null,
+    chunk.parentId || null,
+    m.articleNumber || articleNums[0] || null,
+    m.partNumber || null,
+    m.partType || 'article',
+    m.references && m.references.length > 0 ? m.references : null,
+    m.enforcement_date || null,
+    m.is_active !== false,
+    m.status_label || null,
+    m.adoption_date || null,
+    m.document_number || null,
+    m.language || 'ru',
+    m.source_type || 'law_text',
+    m.quality_score == null ? 0.5 : m.quality_score,
+    m.verified_by || null,
+    embStr,
+  ]);
 }
 
 // ========== PARENT-CHILD RETRIEVAL ==========
