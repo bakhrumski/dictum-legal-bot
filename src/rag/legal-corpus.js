@@ -97,11 +97,31 @@ async function initLegalCorpus() {
       const currentDim = parseInt(dimCheck.rows[0].atttypmod, 10); // always parse to int
       const targetDim = getEmbedDims();
       if (!isNaN(currentDim) && currentDim > 0 && currentDim !== targetDim) {
-        console.log(`[LEGAL CORPUS] Embedding dim mismatch: table=${currentDim}d, provider=${targetDim}d. Rebuilding column...`);
-        await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
-        await pool.query(`ALTER TABLE legal_chunks DROP COLUMN embedding`);
-        await pool.query(`ALTER TABLE legal_chunks ADD COLUMN embedding vector(${targetDim})`);
-        console.log(`[LEGAL CORPUS] Embedding column rebuilt to ${targetDim}d. Re-ingest required.`);
+        // DANGER: dropping the embedding column nulls EVERY vector in the corpus.
+        // This used to run unconditionally, so any process whose embedding
+        // provider had a different dimension (e.g. a deployed app on Gemini/OpenAI
+        // vs. a local ingest on HuggingFace) would silently wipe the entire
+        // corpus on boot. Only rebuild when it's safe — i.e. there are no
+        // embeddings to lose — or when explicitly authorized via env flag.
+        const filled = await pool.query(`SELECT COUNT(*) AS n FROM legal_chunks WHERE embedding IS NOT NULL`);
+        const embeddedRows = parseInt(filled.rows[0].n, 10) || 0;
+        const force = process.env.ALLOW_EMBED_MIGRATION === 'true';
+
+        if (embeddedRows === 0 || force) {
+          console.log(`[LEGAL CORPUS] Embedding dim mismatch: table=${currentDim}d, provider=${targetDim}d. Rebuilding column (${embeddedRows} embedded rows${force ? ', forced' : ''})...`);
+          await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
+          await pool.query(`ALTER TABLE legal_chunks DROP COLUMN embedding`);
+          await pool.query(`ALTER TABLE legal_chunks ADD COLUMN embedding vector(${targetDim})`);
+          console.log(`[LEGAL CORPUS] Embedding column rebuilt to ${targetDim}d. Re-ingest required.`);
+        } else {
+          console.warn(
+            `[LEGAL CORPUS] ⚠ Embedding dim mismatch: table=${currentDim}d but this process's ` +
+            `provider=${targetDim}d. REFUSING to drop the column — it holds ${embeddedRows} ` +
+            `embedded rows that would be destroyed. This process is misconfigured for this DB. ` +
+            `Align the embedding provider (HF_TOKEN/GEMINI_API_KEY/GPT_API_KEY) with the corpus, ` +
+            `or set ALLOW_EMBED_MIGRATION=true to intentionally rebuild and re-ingest.`
+          );
+        }
       }
     }
 
