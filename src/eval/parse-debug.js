@@ -20,7 +20,7 @@ const { fetchLexDocument } = require('../rag/fetch-lex');
 
 // Mirror the patterns from structural-chunker.js — keep in sync manually;
 // duplicating here so this script tests the same logic without exporting internals.
-const ARTICLE_HEADER_RX = /^(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)?[\s-]*(?:-?\s*)?modda[\s.:]/im;
+const ARTICLE_HEADER_RX = /^(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)?[\s-]*(?:-?\s*)?(?:modda|модда)[\s.:]/im;
 const ARTICLE_HEADER_RU = /^Статья\s+(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)?/im;
 
 function cleanText(text) {
