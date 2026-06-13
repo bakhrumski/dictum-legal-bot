@@ -49,18 +49,21 @@ const SUPER_DIGITS = {
  *   group 2: prim/superscript (e.g. "¹" or "1" from <sup>)
  *   group 3: suffix text after "modda" or "Статья N"
  */
-const ARTICLE_HEADER_RX = /^(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)?[\s-]*(?:-?\s*)?modda[\s.:]/im;
+// lex.uz /uz/docs/ pages serve Uzbek in CYRILLIC script ("модда", not
+// "modda") — both scripts must be accepted or every article number comes
+// out empty and citations break corpus-wide.
+const ARTICLE_HEADER_RX = /^(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)?[\s-]*(?:-?\s*)?(?:modda|модда)[\s.:]/im;
 const ARTICLE_HEADER_RU = /^Статья\s+(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)?/im;
 
 /** Part/clause patterns within an article body */
-const PART_PATTERN = /^(\d+)[\s-]*(?:-?\s*)?(?:qism|часть)/im;
+const PART_PATTERN = /^(\d+)[\s-]*(?:-?\s*)?(?:qism|қисм|часть)/im;
 const CLAUSE_PATTERN = /^(\d+)\)\s/m;
 const BAND_PATTERN = /^([a-z\u0430-\u044F])\)\s/m;
 
 /** Chapter/section patterns */
-const CHAPTER_RX = /^(\d+|[IVXLC]+)[\s-]*(?:-?\s*)?bob[\s.:]/im;
+const CHAPTER_RX = /^(\d+|[IVXLC]+)[\s-]*(?:-?\s*)?(?:bob|боб)[\s.:]/im;
 const CHAPTER_RU = /^ГЛАВА\s+([IVXLC\d]+)/im;
-const SECTION_RX = /^(\d+|[IVXLC]+)[\s-]*(?:-?\s*)?bo['']lim[\s.:]/im;
+const SECTION_RX = /^(\d+|[IVXLC]+)[\s-]*(?:-?\s*)?(?:bo['']lim|бўлим)[\s.:]/im;
 const SECTION_RU = /^(?:РАЗДЕЛ|ЧАСТЬ)\s+([IVXLC\d]+)/im;
 
 // ========== HTML → STRUCTURED PARSE ==========
@@ -364,7 +367,7 @@ function splitIntoParts(bodyText) {
 function extractReferences(text) {
   const refs = new Set();
   const patterns = [
-    /(\d+[⁰¹²³⁴⁵⁶⁷⁸⁹]*)-modda/gi,
+    /(\d+[⁰¹²³⁴⁵⁶⁷⁸⁹]*)-(?:modda|модда)/gi,
     /Статья\s+(\d+[⁰¹²³⁴⁵⁶⁷⁸⁹]*)/gi,
   ];
 
@@ -499,6 +502,23 @@ function chunkLegalDocumentStructured(html, docMeta = {}, opts = {}) {
       console.warn('[STRUCT-CHUNKER] No articles found in HTML, falling back to legacy chunker');
       const { chunkLegalDocument } = require('./chunker');
       return chunkLegalDocument(extractPlainText(html), docMeta);
+    }
+
+    // Articles were detected by CSS class, but the number comes from a regex
+    // on the header text. If NONE matched, every chunk_id collapses to
+    // "<doc>_art_" and every citation column is NULL — an unciteable corpus
+    // that still looks like a successful ingest. Fail loudly instead.
+    // (This exact failure shipped once: Cyrillic "модда" vs Latin "modda".)
+    const numbered = parsed.articles.filter(a => a.articleNumber).length;
+    if (numbered === 0) {
+      throw new Error(
+        `[STRUCT-CHUNKER] Parsed ${parsed.articles.length} articles but extracted 0 article numbers ` +
+        `(doc_id="${docMeta.doc_id || '?'}"). Header format not recognized — first header: ` +
+        `"${(parsed.articles[0].articleTitle || '').slice(0, 80)}". Refusing to ingest uncitable chunks.`
+      );
+    }
+    if (numbered < parsed.articles.length) {
+      console.warn(`[STRUCT-CHUNKER] WARN: ${parsed.articles.length - numbered}/${parsed.articles.length} articles have no extractable number (doc_id="${docMeta.doc_id || '?'}")`);
     }
 
     // Enrich docMeta with parsed title

@@ -5007,6 +5007,12 @@
             padding: 28px 28px 22px;
             text-align: center;
             animation: tmRise var(--t-med) var(--ease-out);
+            /* Mobile: cap height so action buttons are never pushed off-screen */
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 40px);
+            max-height: calc(100dvh - 40px);
+            overflow: hidden;
         }
         [data-theme="dark"] .topic-modal-card {
             background: rgba(34, 26, 18, 0.82);
@@ -5028,6 +5034,7 @@
             background: var(--brass-100);
             box-shadow: var(--shadow-seal);
             color: var(--brass-600);
+            flex-shrink: 0;
         }
         [data-theme="dark"] .topic-modal-icon {
             background: rgba(214, 179, 121, 0.12);
@@ -5040,6 +5047,7 @@
             color: var(--fg-1);
             margin: 0 0 6px;
             letter-spacing: var(--ls-tight);
+            flex-shrink: 0;
         }
         .topic-modal-subtitle {
             font-family: var(--font-sans);
@@ -5047,6 +5055,7 @@
             color: var(--fg-3);
             margin: 0 0 18px;
             line-height: var(--lh-snug);
+            flex-shrink: 0;
         }
         .topic-modal-chips {
             display: flex;
@@ -5054,6 +5063,11 @@
             justify-content: center;
             gap: 8px;
             margin-bottom: 18px;
+            /* Scrollable on small screens; min-height:0 is required for flex overflow */
+            overflow-y: auto;
+            flex: 1 1 auto;
+            min-height: 0;
+            -webkit-overflow-scrolling: touch;
         }
         .topic-modal-chip {
             font-family: var(--font-sans);
@@ -5104,6 +5118,8 @@
             text-transform: uppercase;
             letter-spacing: var(--ls-cap);
             max-width: 340px;
+            flex-shrink: 0;
+            width: 100%;
         }
         .topic-modal-divider::before,
         .topic-modal-divider::after {
@@ -5128,6 +5144,7 @@
             cursor: pointer;
             transition: all var(--t-fast) var(--ease-out);
             margin-bottom: 18px;
+            flex-shrink: 0;
         }
         .topic-modal-unknown:hover {
             background: var(--brass-100);
@@ -5155,6 +5172,7 @@
             gap: 10px;
             justify-content: center;
             margin-top: 6px;
+            flex-shrink: 0;
         }
         .topic-modal-btn {
             font-family: var(--font-sans);
