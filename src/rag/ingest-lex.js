@@ -509,6 +509,22 @@ Valid categories: ${VALID_CATEGORIES.join(', ')}
     process.exit(0);
   }
 
+  // --docs fuqarolik-kodeks-1,mehnat-kodeks,...  ingest specific doc_ids only
+  const docsArg = getArg('--docs');
+  if (docsArg) {
+    const ids = docsArg.split(',').map(s => s.trim()).filter(Boolean);
+    const byId = new Map(getAllLaws().map((law) => [law.doc_id, law]));
+    const laws = [];
+    for (const id of ids) {
+      const law = byId.get(id);
+      if (law) laws.push(law);
+      else console.warn(`  WARN: doc_id "${id}" not found in registry — skipping`);
+    }
+    if (laws.length === 0) { console.error('ERROR: none of the requested doc_ids were found in registry'); process.exit(1); }
+    await ingestFromRegistry(null, laws);
+    process.exit(0);
+  }
+
   // --fetch-all: fetch all registered laws
   if (args.includes('--fetch-all')) {
     await ingestFromRegistry(null);
