@@ -6319,7 +6319,16 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS internal_reasoning TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_legal_field ON requests(detected_legal_field)`);
 
-    // Fix vector dimension mismatch — if embedding column exists with wrong dims, recreate it
+    // Fix vector dimension mismatch — if embedding column exists with wrong dims, recreate it.
+    //
+    // GUARDED: dropping this column nulls EVERY vector in the corpus. This path
+    // runs on every server boot; on Render free tier each cold-start triggered
+    // it and silently wiped embeddings mid-ingest. Two bugs caused that:
+    //   1. atttypmod for pgvector's vector(n) IS n directly — NOT n+4. The old
+    //      `- 4` produced a phantom 1020≠1024 mismatch on a correct 1024d column.
+    //   2. It dropped unconditionally, with no check for existing embeddings.
+    // Now mirrors the safe logic in legal-corpus.js: only rebuild when there's
+    // nothing to lose, or when explicitly authorized via ALLOW_EMBED_MIGRATION.
     try {
       const { getEmbedDims } = require('../rag/embeddings');
       const correctDims = getEmbedDims();
@@ -6327,17 +6336,27 @@ async function runMigrations() {
         SELECT atttypmod FROM pg_attribute
         JOIN pg_class ON pg_class.oid = pg_attribute.attrelid
         WHERE pg_class.relname = 'legal_chunks' AND pg_attribute.attname = 'embedding'
+          AND pg_attribute.attnum > 0
       `);
       if (dimCheck.rows.length > 0) {
-        const currentDims = dimCheck.rows[0].atttypmod;
-        // atttypmod for vector(n) = n + 4 (internal pg encoding), or -1 if no modifier
-        const storedDims = currentDims > 0 ? currentDims - 4 : 0;
-        if (storedDims > 0 && storedDims !== correctDims) {
-          console.log(`[DB] Fixing vector dims: ${storedDims} → ${correctDims}`);
-          await pool.query(`ALTER TABLE legal_chunks DROP COLUMN IF EXISTS embedding`);
-          await pool.query(`ALTER TABLE legal_chunks ADD COLUMN embedding vector(${correctDims})`);
-          await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
-          console.log(`[DB] Vector column recreated at ${correctDims}d`);
+        const storedDims = parseInt(dimCheck.rows[0].atttypmod, 10); // pgvector: typmod == dimension
+        if (!isNaN(storedDims) && storedDims > 0 && storedDims !== correctDims) {
+          const filled = await pool.query(`SELECT COUNT(*) AS n FROM legal_chunks WHERE embedding IS NOT NULL`);
+          const embeddedRows = parseInt(filled.rows[0].n, 10) || 0;
+          const force = process.env.ALLOW_EMBED_MIGRATION === 'true';
+          if (embeddedRows === 0 || force) {
+            console.log(`[DB] Fixing vector dims: ${storedDims} → ${correctDims} (${embeddedRows} embedded rows${force ? ', forced' : ''})`);
+            await pool.query(`DROP INDEX IF EXISTS idx_legal_chunks_embedding`);
+            await pool.query(`ALTER TABLE legal_chunks DROP COLUMN IF EXISTS embedding`);
+            await pool.query(`ALTER TABLE legal_chunks ADD COLUMN embedding vector(${correctDims})`);
+            console.log(`[DB] Vector column recreated at ${correctDims}d`);
+          } else {
+            console.warn(
+              `[DB] ⚠ Embedding dim mismatch: table=${storedDims}d but provider=${correctDims}d. ` +
+              `REFUSING to drop — column holds ${embeddedRows} embedded rows. Align this process's ` +
+              `embedding provider with the corpus, or set ALLOW_EMBED_MIGRATION=true to rebuild.`
+            );
+          }
         }
       }
     } catch(e) { console.log('[DB] Vector dim check skipped:', e.message); }
