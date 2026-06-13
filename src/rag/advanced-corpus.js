@@ -144,10 +144,13 @@ async function insertStructuredChunks(chunks) {
       const client = await pool.connect();
       // When the pooler drops a checked-out client mid-transaction, pg emits
       // 'error' directly on the client object (not via pool.on('error')).
-      // Without this listener Node crashes the process.
-      client.on('error', (err) => {
+      // Without this listener Node crashes the process. Pooled clients are
+      // REUSED across batches, so we must remove this listener before release
+      // or it accumulates (MaxListenersExceededWarning after ~10 batches).
+      const onClientError = (err) => {
         console.error('[ADV CORPUS] Client connection dropped:', err.message);
-      });
+      };
+      client.on('error', onClientError);
 
       let txErr = null;
       try {
@@ -161,11 +164,13 @@ async function insertStructuredChunks(chunks) {
           if (chunk.chunkType === 'parent') parents++;
           else children++;
         }
+        client.removeListener('error', onClientError);
         client.release();
         break; // batch done
       } catch (err) {
         txErr = err;
         try { await client.query('ROLLBACK'); } catch (_) {}
+        client.removeListener('error', onClientError);
         client.release(err); // destroy the broken connection
         const retriable = /terminat|ECONNRESET|ETIMEDOUT|socket hang up|Connection/i.test(err.message);
         if (retriable && attempt < MAX_ATTEMPTS) {
