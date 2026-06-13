@@ -6361,6 +6361,29 @@ async function runMigrations() {
       }
     } catch(e) { console.log('[DB] Vector dim check skipped:', e.message); }
 
+    // Corpus health snapshot — visible in Render logs on every boot.
+    // A sudden drop in embedded rows (e.g. 9806 → 0) immediately flags a
+    // corpus wipe without waiting for a user to report wrong answers.
+    try {
+      const snap = await pool.query(`
+        SELECT
+          COUNT(*)                                        AS total_rows,
+          COUNT(*) FILTER (WHERE embedding IS NOT NULL)   AS embedded_rows,
+          COUNT(DISTINCT doc_id)                          AS distinct_docs,
+          COUNT(*) FILTER (WHERE article_number_display IS NOT NULL) AS with_article_num
+        FROM legal_chunks
+        WHERE source_type = 'law_text'
+      `);
+      const s = snap.rows[0];
+      const pct = s.total_rows > 0 ? Math.round(100 * s.embedded_rows / s.total_rows) : 0;
+      const status = s.embedded_rows === 0 ? '🔴 CORPUS EMPTY' :
+                     pct < 50              ? '🟡 CORPUS PARTIAL' : '🟢 corpus OK';
+      console.log(
+        `[CORPUS] ${status} — ${s.embedded_rows}/${s.total_rows} embedded (${pct}%), ` +
+        `${s.with_article_num} with article_number, ${s.distinct_docs} docs`
+      );
+    } catch(e) { console.log('[CORPUS] Health snapshot skipped:', e.message); }
+
     console.log('[DB] Migrations completed successfully');
     await initLegalDataset();
     await initFeedbackDataset();
