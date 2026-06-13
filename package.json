@@ -11,6 +11,7 @@
     "ingest:fetch": "node src/rag/ingest-lex.js --fetch",
     "ingest:fetch-all": "node src/rag/ingest-lex.js --fetch-all",
     "ingest:priority": "node src/rag/ingest-lex.js --priority",
+    "ingest:docs": "node src/rag/ingest-lex.js --docs",
     "ingest:stats": "node src/rag/ingest-lex.js --stats",
     "ingest:registry": "node src/rag/ingest-lex.js --registry",
     "ingest:rebuild": "node src/rag/ingest-lex.js --rebuild-index",
