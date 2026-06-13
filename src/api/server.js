@@ -4874,13 +4874,21 @@ app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
       if (apiKey) {
         try {
           embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
-          embeddedCount = embeddings.length;
+          embeddedCount = embeddings.filter(Boolean).length;
         } catch (embErr) {
           console.warn('[REINGEST] Embedding failed for', law.law_name, '-', embErr.message);
+          results.push({ law: law.law_name, ok: false, error: `embedding failed: ${embErr.message}` });
+          continue; // leave old DB rows intact — do NOT delete
+        }
+        // Guard: if the API returned nothing, abort to preserve existing data
+        if (embeddedCount === 0) {
+          console.warn('[REINGEST] Embedding returned 0 vectors for', law.law_name, '— skipping to preserve existing data');
+          results.push({ law: law.law_name, ok: false, error: 'embedding returned 0 vectors' });
+          continue;
         }
       }
 
-      // Replace old chunks for both the registry doc_id and the source URL
+      // Safe to replace: embeddings validated above (or no apiKey — text-only ingest)
       await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1 OR doc_id = $2`, [cleanUrl, law.doc_id]);
       for (let i = 0; i < chunks.length; i++) {
         chunks[i].chunkIndex = i;
