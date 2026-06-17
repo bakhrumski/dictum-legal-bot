@@ -3463,10 +3463,26 @@ app.get('/api/qa-bank/debug', requireMasterAdmin, async (req, res) => {
 // Classify a user question into one of the LEGAL_TOPICS keys, or return null
 // if the model cannot confidently pick one. Used when the client sends
 // `autoDetect: true` ("Bilmayman" in the topic picker).
-async function classifyLegalTopic(message) {
+// Hard fallback when even a forced classification fails to yield a valid key.
+// Civil law (Fuqarolik kodeksi) is the broadest catch-all corpus, so an answer
+// grounded there is safer than the unconstrained web-search prompt.
+const DEFAULT_LEGAL_TOPIC = 'fuqarolik';
+
+// classifyLegalTopic(message, { forcePick })
+//   forcePick=false (default): returns the best-matching topic key, or null when
+//     the model cannot confidently classify (caller may then search broadly).
+//   forcePick=true: ALWAYS returns a valid topic key — the model is told to pick
+//     the single most relevant field and never answer "unknown". On any failure
+//     it falls back to DEFAULT_LEGAL_TOPIC. This guarantees the legal-chat path
+//     always runs the RAG-grounded, citation-constrained buildTopicPrompt rather
+//     than the web-search buildLegalSearchPrompt (which can hallucinate sources).
+async function classifyLegalTopic(message, opts = {}) {
+  const forcePick = opts.forcePick === true;
   const keys = Object.keys(LEGAL_TOPICS);
   const list = keys.map(k => `${k} — ${LEGAL_TOPICS[k]}`).join('\n');
-  const sys = `Siz huquqiy savollarni tasniflovchi yordamchisiz. Quyidagi ro'yxatdan savolga eng mos sohaning KALITINI faqat bitta so'z bilan qaytaring. Agar aniq tasniflash mumkin bo'lmasa, faqat "unknown" deb yozing. Hech qanday tushuntirish bermang.\n\nMavjud sohalar:\n${list}`;
+  const sys = forcePick
+    ? `Siz huquqiy savollarni tasniflovchi yordamchisiz. Quyidagi ro'yxatdan savolga ENG MOS sohaning KALITINI faqat bitta so'z bilan qaytaring. HAR DOIM bitta soha tanlang — "unknown" yoki bo'sh javob QAYTARMANG. Aniq mos kelmasa ham, eng yaqin sohani tanlang. Hech qanday tushuntirish bermang.\n\nMavjud sohalar:\n${list}`
+    : `Siz huquqiy savollarni tasniflovchi yordamchisiz. Quyidagi ro'yxatdan savolga eng mos sohaning KALITINI faqat bitta so'z bilan qaytaring. Agar aniq tasniflash mumkin bo'lmasa, faqat "unknown" deb yozing. Hech qanday tushuntirish bermang.\n\nMavjud sohalar:\n${list}`;
   try {
     const result = await callAI(
       [{ role: 'system', text: sys }, { role: 'user', text: message }],
@@ -3474,10 +3490,10 @@ async function classifyLegalTopic(message) {
     );
     const raw = (result.text || '').trim().toLowerCase().replace(/[^a-z\-]/g, '');
     if (keys.includes(raw)) return raw;
-    return null;
+    return forcePick ? DEFAULT_LEGAL_TOPIC : null;
   } catch (err) {
     console.warn(`[Legal Chat] auto-classify failed: ${err.message}`);
-    return null;
+    return forcePick ? DEFAULT_LEGAL_TOPIC : null;
   }
 }
 
@@ -3495,8 +3511,11 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     let topic = rawTopic || null;
     let priorityTopics = [];
     if (autoDetect === true) {
-      const detected = await classifyLegalTopic(message);
-      console.log(`[Legal Chat] autoDetect: classifier picked ${detected || 'null (search all)'}`);
+      // User chose "Bilmayman" (don't know) in the picker → the system must pick
+      // the single most relevant field automatically. Force a non-null result so
+      // we never fall through to the unconstrained web-search prompt.
+      const detected = await classifyLegalTopic(message, { forcePick: true });
+      console.log(`[Legal Chat] autoDetect: classifier force-picked ${detected}`);
       topic = detected;
     } else if (Array.isArray(topics) && topics.length > 0) {
       const valid = topics.filter(t => typeof t === 'string' && LEGAL_TOPICS[t]);
@@ -3504,6 +3523,15 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         topic = valid[0];
         priorityTopics = valid.slice(1);
       }
+    }
+
+    // SAFETY NET: legal-chat must ALWAYS run the RAG-grounded buildTopicPrompt,
+    // never the web-search buildLegalSearchPrompt (which can cite hallucinated
+    // lex.uz URLs). If no topic resolved above — user didn't select one and the
+    // frontend somehow dispatched anyway — force-classify the most relevant field.
+    if (!topic && priorityTopics.length === 0) {
+      topic = await classifyLegalTopic(message, { forcePick: true });
+      console.log(`[Legal Chat] no topic resolved — force-classified to ${topic}`);
     }
 
     // ── VERIFIED ANSWER OVERRIDE ──
