@@ -2318,6 +2318,7 @@ const LEGAL_TOPICS = {
   'mudofaa':            'Mudofaa',
   'jinoyat':            'Jinoyat qonunchiligi',
   'mamuriy':            "Ma'muriy javobgarlik",
+  'yol-harakati':       "Yo'l-harakati qoidalari",
   'sudlov':             'Odil sudlov',
   'adliya':             'Prokuratura. Advokatura. Notariat. Adliya organlari',
   'xalqaro':            'Xalqaro munosabatlar. Xalqaro huquq',
