@@ -2935,7 +2935,14 @@ function buildManbalarFooter(chunks = [], replyText = '') {
         }
       }
 
-      const url = r.source_url + fragment;
+      // Force Uzbek-Latin version: lex.uz/docs/... → lex.uz/uz/docs/...
+      // Chunks ingested before the Uzbek-URL switch have no /uz/ prefix and
+      // lex.uz serves Russian by default for bare /docs/ paths.
+      let rawUrl = r.source_url;
+      if (rawUrl && /lex\.uz\/docs\//.test(rawUrl)) {
+        rawUrl = rawUrl.replace('lex.uz/docs/', 'lex.uz/uz/docs/');
+      }
+      const url = rawUrl + fragment;
       lines.push(`- [${r.law_name}, ${art}-modda](${url})`);
     }
   }
