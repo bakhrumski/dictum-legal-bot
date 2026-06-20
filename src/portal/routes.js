@@ -51,6 +51,26 @@ const { processLegalChat, analyzeDocument, AGENT_TASK_TYPES, createAgentTask, ex
 
 const router = express.Router();
 
+// ════════════════════════════════════════
+// PER-USER CHAT RATE LIMITER (in-memory sliding window)
+// ════════════════════════════════════════
+
+const _chatWindows = new Map(); // userId → number[]  (request timestamps)
+const CHAT_RATE_WINDOW_MS = 60_000;
+const CHAT_RATE_MAX       = parseInt(process.env.CHAT_RATE_MAX || '20', 10);
+
+function checkChatRateLimit(userId) {
+  const now = Date.now();
+  const ts  = (_chatWindows.get(userId) || []).filter(t => now - t < CHAT_RATE_WINDOW_MS);
+  if (ts.length >= CHAT_RATE_MAX) {
+    const err = new Error(`So'rovlar juda tez yuborildi. 1 daqiqada maksimum ${CHAT_RATE_MAX} ta so'rov.`);
+    err.status = 429;
+    throw err;
+  }
+  ts.push(now);
+  _chatWindows.set(userId, ts);
+}
+
 // File upload config
 const docUpload = multer({
   dest: os.tmpdir(),
@@ -224,6 +244,7 @@ router.delete('/conversations/:id', authenticate, async (req, res) => {
 
 router.post('/chat', authenticate, async (req, res) => {
   try {
+    checkChatRateLimit(req.user.sub);
     await incrementQueryCount(req.user.sub);
 
     const { message, topic, conversationId, history } = req.body;
@@ -240,9 +261,16 @@ router.post('/chat', authenticate, async (req, res) => {
 });
 
 router.post('/chat/stream', authenticate, async (req, res) => {
+  // Rate-limit and quota checks must run before we switch to SSE headers,
+  // otherwise the 429/400 JSON response can't be sent after writeHead(200).
   try {
+    checkChatRateLimit(req.user.sub);
     await incrementQueryCount(req.user.sub);
+  } catch (preErr) {
+    return res.status(preErr.status || 500).json({ error: preErr.message });
+  }
 
+  try {
     const { message, topic, conversationId, history } = req.body;
     if (!message) return res.status(400).json({ error: 'Xabar kerak' });
 
@@ -264,7 +292,7 @@ router.post('/chat/stream', authenticate, async (req, res) => {
       }
     });
 
-    res.write(`data: ${JSON.stringify({ type: 'done', model: result.model, duration: result.duration })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'done', model: result.model, duration: result.duration, sources: result.sources || [] })}\n\n`);
     res.end();
   } catch (err) {
     res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);

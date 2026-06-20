@@ -1,5 +1,7 @@
 'use strict';
 
+const log = require('../utils/logger').createLogger('HYBRID');
+
 /**
  * Hybrid RAG Pipeline — JuristAI (Phase 2)
  *
@@ -51,6 +53,52 @@ const PRICING = {
   'gemini-3.1':       { in: 1.25, out: 5.00 },
   'gemini-2.5-flash': { in: 0.30, out: 2.50 },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Circuit breaker — prevents hammering providers that are repeatedly failing.
+// After CB_FAILURE_THRESHOLD consecutive errors within CB_WINDOW_MS, a model
+// is skipped for CB_RESET_MS before being retried.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CB_FAILURE_THRESHOLD = 3;
+const CB_WINDOW_MS  = 60_000;  // count failures within this window
+const CB_RESET_MS   = 60_000;  // stay open for this long after threshold
+
+const _cbState = new Map(); // model → { failures: [{ts}], openUntil: 0 }
+
+function _cbGet(model) {
+  if (!_cbState.has(model)) _cbState.set(model, { failures: [], openUntil: 0 });
+  return _cbState.get(model);
+}
+
+function isCircuitOpen(model) {
+  const state = _cbGet(model);
+  if (Date.now() < state.openUntil) return true;
+  // Prune old failures outside the window
+  const cutoff = Date.now() - CB_WINDOW_MS;
+  state.failures = state.failures.filter(f => f.ts > cutoff);
+  return false;
+}
+
+function recordCbFailure(model) {
+  const state = _cbGet(model);
+  state.failures.push({ ts: Date.now() });
+  const cutoff = Date.now() - CB_WINDOW_MS;
+  state.failures = state.failures.filter(f => f.ts > cutoff);
+  if (state.failures.length >= CB_FAILURE_THRESHOLD) {
+    state.openUntil = Date.now() + CB_RESET_MS;
+    log.warn('circuit opened', { model, failures: state.failures.length, resetInMs: CB_RESET_MS });
+  }
+}
+
+function recordCbSuccess(model) {
+  const state = _cbGet(model);
+  if (state.failures.length > 0 || state.openUntil > 0) {
+    log.info('circuit reset after success', { model });
+    state.failures = [];
+    state.openUntil = 0;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // In-process spend tracker. For persistent tracking, caller should call
@@ -240,10 +288,16 @@ async function callWithFallback(chain, messages, opts = {}) {
   checkBudget();
   const errors = [];
   for (const model of chain) {
+    if (isCircuitOpen(model)) {
+      errors.push(`${model}: circuit open`);
+      log.debug('skipping model (circuit open)', { model, stage: opts.stage });
+      continue;
+    }
     try {
       const result = await callModel(model, messages, opts);
       const cost = estimateCost(model, result.inTokens, result.outTokens);
       recordSpend(cost);
+      recordCbSuccess(model);
       if (_spendHook) {
         try {
           await _spendHook({
@@ -256,15 +310,15 @@ async function callWithFallback(chain, messages, opts = {}) {
             endpoint: opts.endpoint || null,
           });
         } catch (hookErr) {
-          console.warn('[HYBRID] spend hook failed:', hookErr.message);
+          log.warn('spend hook failed', { err: hookErr.message });
         }
       }
-      console.log(`[HYBRID] ${model} ok — ${result.inTokens}→${result.outTokens} tokens, $${cost.toFixed(4)}`);
+      log.info('model ok', { model, stage: opts.stage, inTokens: result.inTokens, outTokens: result.outTokens, costUsd: cost.toFixed(4) });
       return { ...result, estimatedCostUsd: cost };
     } catch (err) {
-      console.warn(`[HYBRID] ${model} failed: ${err.message}`);
+      recordCbFailure(model);
+      log.warn('model failed', { model, stage: opts.stage, err: err.message });
       errors.push(`${model}: ${err.message}`);
-      // On any error, try the next. The fictional-model 404 is the expected first hop.
       continue;
     }
   }
@@ -407,6 +461,18 @@ async function runPipeline({ query, retrieve, buildPrompt, history = [] }) {
   };
 }
 
+function getCircuitBreakerStats() {
+  const stats = {};
+  for (const [model, state] of _cbState.entries()) {
+    stats[model] = {
+      failures: state.failures.length,
+      open: Date.now() < state.openUntil,
+      openUntil: state.openUntil > 0 ? new Date(state.openUntil).toISOString() : null,
+    };
+  }
+  return stats;
+}
+
 module.exports = {
   // Main entry
   runPipeline,
@@ -418,6 +484,8 @@ module.exports = {
   getSpendStats,
   estimateCost,
   setSpendHook,
+  // Circuit breaker
+  getCircuitBreakerStats,
   // Configuration (exposed for tests / override)
   CLASSIFY_MODEL_CHAIN,
   GENERATE_MODEL_CHAIN,

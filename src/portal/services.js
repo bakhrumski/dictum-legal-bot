@@ -1,5 +1,7 @@
 'use strict';
 
+const log = require('../utils/logger').createLogger('PORTAL');
+
 /**
  * Portal AI Services — interfaces with RAG, LLM providers, and agent workflows
  *
@@ -80,15 +82,16 @@ async function processLegalChat(opts) {
 
   // RAG retrieval
   let ragContext = '';
+  let retrievedChunks = [];
   try {
     if (typeof retrieveLegalContext === 'function') {
       const ragResult = await retrieveLegalContext(message, topic || null, 'uz');
-      const results = Array.isArray(ragResult?.chunks) ? ragResult.chunks : [];
+      retrievedChunks = Array.isArray(ragResult?.chunks) ? ragResult.chunks : [];
 
       if (ragResult?.context) {
         ragContext = ragResult.context;
-      } else if (results.length > 0) {
-        ragContext = results.map((r, i) => {
+      } else if (retrievedChunks.length > 0) {
+        ragContext = retrievedChunks.map((r, i) => {
           const arts = getChunkArticleRefs(r).join(', ');
           const badge = r.source_type === 'verified_qa' ? ' [TASDIQLANGAN]' : '';
           return `[${i + 1}] ${r.law_name}${badge}${arts ? ` (${arts}-moddalar)` : ''}\n${r.chunk_text}`;
@@ -98,26 +101,26 @@ async function processLegalChat(opts) {
       const { hybridSearch, textOnlySearch } = require('../rag/legal-corpus');
       const apiKey = process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
 
-      let results = [];
       if (apiKey) {
         try {
-          results = await hybridSearch(message, { category: topic, limit: 6, apiKey });
+          retrievedChunks = await hybridSearch(message, { category: topic, limit: 6, apiKey });
         } catch { /* fall through to text-only */ }
       }
-      if (!results || results.length === 0) {
-        results = await textOnlySearch(message, { category: topic, limit: 6 });
+      if (!retrievedChunks || retrievedChunks.length === 0) {
+        retrievedChunks = await textOnlySearch(message, { category: topic, limit: 6 });
       }
 
-      if (results && results.length > 0) {
-        ragContext = results.map((r, i) => {
+      if (retrievedChunks && retrievedChunks.length > 0) {
+        ragContext = retrievedChunks.map((r, i) => {
           const arts = getChunkArticleRefs(r).join(', ');
           const badge = r.source_type === 'verified_qa' ? ' [TASDIQLANGAN]' : '';
           return `[${i + 1}] ${r.law_name}${badge}${arts ? ` (${arts}-moddalar)` : ''}\n${r.chunk_text}`;
         }).join('\n\n');
       }
     }
+    log.debug('RAG retrieval done', { chunks: retrievedChunks.length, topic });
   } catch (ragErr) {
-    console.warn('[PORTAL] RAG retrieval failed:', ragErr.message);
+    log.warn('RAG retrieval failed', { err: ragErr.message });
   }
 
   // Build system prompt
@@ -143,40 +146,62 @@ async function processLegalChat(opts) {
   }
 
   const duration = Date.now() - startTime;
+  const sources = extractSources(retrievedChunks);
 
   // Store messages in DB
+  let messageId = null;
   if (conversationId) {
     try {
-      // Store user message
       await pool.query(
         `INSERT INTO portal_messages (conversation_id, role, content) VALUES ($1, 'user', $2)`,
         [conversationId, message]
       );
-      // Store AI response
       const msgInsert = await pool.query(
-        `INSERT INTO portal_messages (conversation_id, role, content, model_used, duration_ms)
-         VALUES ($1, 'assistant', $2, $3, $4) RETURNING id`,
-        [conversationId, result.text, result.provider || 'unknown', duration]
+        `INSERT INTO portal_messages (conversation_id, role, content, model_used, duration_ms, sources)
+         VALUES ($1, 'assistant', $2, $3, $4, $5) RETURNING id`,
+        [conversationId, result.text, result.provider || 'unknown', duration, JSON.stringify(sources)]
       );
-      var messageId = msgInsert.rows[0]?.id;
-      // Update conversation
+      messageId = msgInsert.rows[0]?.id;
       await pool.query(
         `UPDATE portal_conversations SET message_count = message_count + 2, updated_at = NOW() WHERE id = $1`,
         [conversationId]
       );
     } catch (dbErr) {
-      console.error('[PORTAL] Message save error:', dbErr.message);
+      log.error('Message save failed', { err: dbErr.message, conversationId });
     }
   }
 
+  log.info('chat complete', { topic, model: result.provider, durationMs: duration, sources: sources.length });
+
   return {
     reply: normalizeResponseForUser(result.text),
-    sources: [], // TODO: extract from ragContext
+    sources,
     model: result.provider || 'unknown',
-    tokens: 0,
+    tokens: result.outTokens || 0,
     duration,
-    messageId: messageId || null
+    messageId,
   };
+}
+
+/**
+ * Deduplicate and shape RAG chunks into client-facing source objects.
+ */
+function extractSources(chunks = []) {
+  const seen = new Set();
+  const sources = [];
+  for (const chunk of chunks) {
+    const key = chunk.doc_id || chunk.law_name || '';
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    sources.push({
+      doc_id: chunk.doc_id || null,
+      law_name: chunk.law_name || null,
+      source_url: chunk.source_url || null,
+      article_refs: getChunkArticleRefs(chunk),
+      source_type: chunk.source_type || 'law',
+    });
+  }
+  return sources;
 }
 
 function buildLegalSystemPrompt(topicLabel, ragContext, userQuestion = '') {
