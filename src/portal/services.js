@@ -20,6 +20,7 @@ const { pool } = require('../database/db');
 const { normalizeResponseForUser } = require('../rag/prim-notation');
 const { getChunkArticleRefs } = require('../rag/citation-utils');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
+const { screenAnswer } = require('../rag/answer-verification');
 
 // ════════════════════════════════════════
 // LEGAL CHAT SERVICE
@@ -145,6 +146,12 @@ async function processLegalChat(opts) {
     result = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
   }
 
+  // Screen every cited document (in-corpus + ungrounded) against lex.uz
+  // "kuchini yo'qotgan" status. This catches decrees the LLM cited from
+  // training memory that were never ingested (e.g. repealed PQ-3126).
+  const screened = await screenAnswer(result.text, { pool });
+  result.text = screened.text;
+
   const duration = Date.now() - startTime;
   const sources = extractSources(retrievedChunks);
 
@@ -180,6 +187,10 @@ async function processLegalChat(opts) {
     tokens: result.outTokens || 0,
     duration,
     messageId,
+    verification: {
+      expired: screened.verification.expired.map(e => e.raw),
+      unverified: screened.verification.unverified.map(u => u.raw),
+    },
   };
 }
 

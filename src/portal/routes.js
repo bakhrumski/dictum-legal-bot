@@ -292,7 +292,7 @@ router.post('/chat/stream', authenticate, async (req, res) => {
       }
     });
 
-    res.write(`data: ${JSON.stringify({ type: 'done', model: result.model, duration: result.duration, sources: result.sources || [] })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'done', model: result.model, duration: result.duration, sources: result.sources || [], verification: result.verification || null })}\n\n`);
     res.end();
   } catch (err) {
     res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
