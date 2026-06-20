@@ -217,7 +217,8 @@ QATTIQ QOIDALAR:
 4. Har bir huquqiy tasdiq uchun MANBA ko'rsating: qonun nomi, QABUL QILINGAN SANASI, modda va QISM raqami
 5. Javob chuqur va to'liq bo'lsin
 6. MODDA RAQAMLARINI TO'G'RI YOZING: O'zbekiston qonunchiligida prim (qo'shimcha) moddalar mavjud. Ularni AYNAN "N-modda prim M" shaklida yozing. Masalan: "4-modda prim 1" (to'rt modda prim bir), "3-modda prim 1", "12-modda prim 2". Bu "41-modda", "4-modda" yoki "4¹-modda" EMAS. Superskript (¹²³) ishlatish MAN ETILGAN — faqat "prim" so'zi bilan yozing
-${ragContext ? '7. Quyidagi QONUNCHILIK KONTEKSTIGA BIRINCHI NAVBATDA tayanib javob bering' : ''}
+7. HUJJAT RAQAMLARI: Har qanday PF-XXXX, PQ-XXXX, VM-XXXX raqamini FAQAT quyidagi KONTEKSTDA ko'rsangiz yozing. O'quv ma'lumotlaringizda eslaydigan raqamni HECH QACHON ishlatmang — u KUCHINI YO'QOTGAN yoki o'zgartirilgan bo'lishi mumkin. Agar kontekstda tegishli hujjat yo'q bo'lsa: "Ushbu hujjat ma'lumotlar bazamizda topilmadi. Lex.uz orqali qidirishni tavsiya etamiz" deng.
+${ragContext ? '8. Quyidagi QONUNCHILIK KONTEKSTIGA BIRINCHI NAVBATDA tayanib javob bering' : ''}
 
 JAVOB TUZILMASI:
 
