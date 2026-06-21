@@ -2342,8 +2342,21 @@
 
         /* ── Master-admin header action dropdowns ── */
         .hdr-actions {
-            display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+            display: none; align-items: center; gap: 4px; flex-shrink: 0;
         }
+        .ai-chat-header.master-mode .hdr-actions { display: flex; }
+        /* Drawer chrome — only visible on mobile */
+        .hdr-drawer-head { display: none; }
+        .hdr-drawer-close {
+            background: none; border: none; font-size: 24px; line-height: 1;
+            color: var(--text-muted); cursor: pointer; padding: 0 4px;
+        }
+        .hdr-mobile-toggle {
+            display: none; background: none; border: none;
+            color: var(--text-secondary); cursor: pointer; padding: 6px;
+            border-radius: 8px; flex-shrink: 0;
+        }
+        .hdr-mobile-toggle:hover { background: var(--bg-card-hover); }
         .hdr-dd { position: relative; }
         .hdr-dd-btn {
             display: flex; align-items: center; gap: 5px;
@@ -2927,6 +2940,39 @@
             }
             .ai-chat-msg { max-width: 92%; font-size: 13px; }
             .ai-chat-messages { padding: 16px 14px; }
+
+            /* ── Admin header dropdowns become a right drawer on mobile (as before) ── */
+            .ai-chat-header.master-mode .hdr-mobile-toggle { display: flex; }
+            .ai-chat-header.master-mode .hdr-actions {
+                position: fixed; right: 0; top: 0; bottom: 0;
+                width: 300px; max-width: 85vw;
+                flex-direction: column; align-items: stretch; gap: 8px;
+                z-index: 1000; padding: 14px;
+                background: var(--glass-bg-strong, var(--glass-bg));
+                overflow-y: auto;
+                transform: translateX(100%); visibility: hidden;
+                transition: transform 0.3s ease, visibility 0.3s;
+                box-shadow: none;
+            }
+            .ai-chat-header.master-mode .hdr-actions.drawer-open {
+                transform: translateX(0); visibility: visible;
+                box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+            }
+            .hdr-drawer-head {
+                display: flex; justify-content: space-between; align-items: center;
+                font-size: 14px; font-weight: 700; color: var(--text-primary);
+                padding-bottom: 8px; border-bottom: 1px solid var(--glass-border);
+                margin-bottom: 4px;
+            }
+            /* Each dropdown becomes a full-width accordion section */
+            .hdr-dd { position: static; width: 100%; }
+            .hdr-dd-btn { width: 100%; justify-content: space-between; }
+            .hdr-dd-panel {
+                position: static !important; width: auto !important;
+                min-width: 0; max-height: none; right: auto; top: auto;
+                box-shadow: none; border: none; border-radius: 0;
+                padding: 8px 2px 4px; margin-top: 0;
+            }
         }
         @media (max-width: 480px) {
             .ai-workspace {
@@ -5440,15 +5486,19 @@
             <!-- Main Chat Area -->
             <div class="ai-chat-main">
                 <!-- Chat header -->
-                <div class="ai-chat-header">
+                <div class="ai-chat-header" id="aiChatHeader">
                     <div class="ai-chat-header-left">
                         <button class="ai-sidebar-toggle" onclick="toggleAiSidebar()" title="Menyu">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                         </button>
                         <span class="ai-chat-header-title" id="aiChatHeaderTitle"></span>
                     </div>
-                    <!-- Master-admin dropdown actions — shown only after role=master confirmed -->
-                    <div class="hdr-actions" id="masterHeaderActions" style="display:none">
+                    <!-- Master-admin dropdown actions — desktop: header dropdowns; mobile: right drawer -->
+                    <div class="hdr-actions" id="masterHeaderActions">
+                        <div class="hdr-drawer-head">
+                            <span>Admin paneli</span>
+                            <button class="hdr-drawer-close" onclick="closeHdrDrawer()" title="Yopish">&times;</button>
+                        </div>
 
                         <!-- ① Queue / update status -->
                         <div class="hdr-dd" id="ddQueue">
@@ -5604,6 +5654,10 @@
                         </div>
 
                     </div>
+                    <!-- Mobile-only: opens the admin actions as a right drawer (as before) -->
+                    <button class="hdr-mobile-toggle" id="hdrMobileToggle" onclick="toggleHdrDrawer()" title="Admin paneli">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
                 </div>
 
                 <!-- Messages -->
@@ -6283,10 +6337,13 @@
                     legalChatEl.style.display = data.role === 'master' ? '' : 'none';
                 }
 
-                // Show master-admin header dropdowns for master only
-                const masterActions = document.getElementById('masterHeaderActions');
-                if (masterActions) {
-                    masterActions.style.display = data.role === 'master' ? 'flex' : 'none';
+                // Show master-admin header dropdowns for master only.
+                // .master-mode on the header drives both the desktop dropdown
+                // row and the mobile right-drawer (CSS). No inline display so
+                // the media query can take over on mobile.
+                const aiChatHeader = document.getElementById('aiChatHeader');
+                if (aiChatHeader) {
+                    aiChatHeader.classList.toggle('master-mode', data.role === 'master');
                 }
                 // Initial queue status fetch for master
                 if (data.role === 'master') refreshQueueStatus();
@@ -9514,14 +9571,22 @@
         }
 
         // ═══ HEADER DROPDOWNS ═══
+        function isHdrMobile() { return window.matchMedia('(max-width: 768px)').matches; }
+
         function toggleHdrDd(id) {
             var dd = document.getElementById(id);
             if (!dd) return;
             var panel = dd.querySelector('.hdr-dd-panel');
             var btn   = dd.querySelector('.hdr-dd-btn');
             var wasOpen = panel && panel.classList.contains('dd-open');
-            closeAllHdrDds();
-            if (!wasOpen && panel) {
+            // On mobile (accordion drawer) allow multiple open; on desktop only one.
+            if (!isHdrMobile()) closeAllHdrDds();
+            if (wasOpen && panel) {
+                panel.classList.remove('dd-open');
+                if (btn) btn.classList.remove('dd-open');
+                return;
+            }
+            if (panel) {
                 panel.classList.add('dd-open');
                 if (btn) btn.classList.add('dd-open');
                 // Load data when opening specific panels
@@ -9536,15 +9601,34 @@
             document.querySelectorAll('.hdr-dd-btn.dd-open').forEach(function(b)   { b.classList.remove('dd-open'); });
         }
 
-        // Close on click outside any dropdown
+        // Mobile-only: open/close the admin actions as a right drawer
+        function toggleHdrDrawer() {
+            var actions  = document.getElementById('masterHeaderActions');
+            var backdrop = document.getElementById('aiSidebarBackdrop');
+            if (!actions) return;
+            var open = actions.classList.toggle('drawer-open');
+            if (backdrop) backdrop.classList.toggle('active', open);
+            if (open && typeof refreshQueueStatus === 'function') refreshQueueStatus();
+        }
+        function closeHdrDrawer() {
+            var actions  = document.getElementById('masterHeaderActions');
+            var backdrop = document.getElementById('aiSidebarBackdrop');
+            if (actions) actions.classList.remove('drawer-open');
+            if (backdrop) backdrop.classList.remove('active');
+        }
+
+        // Close dropdowns on click outside. On mobile, ignore clicks inside the
+        // drawer (the drawer itself is closed via its backdrop / × button).
         document.addEventListener('click', function(ev) {
-            if (!ev.target.closest('.hdr-dd')) closeAllHdrDds();
+            if (ev.target.closest('.hdr-actions') || ev.target.closest('.hdr-mobile-toggle')) return;
+            closeAllHdrDds();
         });
 
-        // Close on cursor leaving a dropdown wrapper (wired after DOM ready)
+        // Desktop only: close a dropdown when the cursor leaves it (no hover on touch).
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.hdr-dd').forEach(function(dd) {
                 dd.addEventListener('mouseleave', function() {
+                    if (isHdrMobile()) return;
                     var p = dd.querySelector('.hdr-dd-panel');
                     var b = dd.querySelector('.hdr-dd-btn');
                     if (p) p.classList.remove('dd-open');
@@ -9648,6 +9732,9 @@
             var backdrop = document.getElementById('aiSidebarBackdrop');
             var rightOpen = document.getElementById('aiSidebarRight')?.classList.contains('open');
             if (rightOpen) toggleAiSidebarRight(); // close right first
+            // Also close the master admin drawer if it's open
+            var actions = document.getElementById('masterHeaderActions');
+            if (actions && actions.classList.contains('drawer-open')) actions.classList.remove('drawer-open');
             sidebar.classList.toggle('open');
             backdrop.classList.toggle('active');
         }
@@ -9665,9 +9752,11 @@
         function closeBothSidebars() {
             var left     = document.getElementById('aiSidebar');
             var right    = document.getElementById('aiSidebarRight');
+            var actions  = document.getElementById('masterHeaderActions');
             var backdrop = document.getElementById('aiSidebarBackdrop');
             if (left)     left.classList.remove('open');
             if (right)    right.classList.remove('open');
+            if (actions)  actions.classList.remove('drawer-open'); // mobile admin drawer
             if (backdrop) backdrop.classList.remove('active');
         }
         function closeMobileSidebar() {
