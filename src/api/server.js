@@ -4951,6 +4951,65 @@ app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
   res.json({ success: true, total: laws.length, succeeded: ok, failed: laws.length - ok, results });
 });
 
+// POST /api/rag/update-category — queue a per-field corpus update (Master only).
+// Backs the dashboard "Yangilash" button. Runs asynchronously through the
+// sequential ingest queue; progress is streamed via /api/rag/update-stream.
+app.post('/api/rag/update-category', requireMasterAdmin, async (req, res) => {
+  try {
+    const { category } = req.body || {};
+    const { LEX_REGISTRY } = require('../rag/lex-registry');
+    if (!category || !Object.keys(LEX_REGISTRY).includes(category)) {
+      return res.status(400).json({ error: 'Yaroqsiz soha (category)' });
+    }
+    const { ingestQueue } = require('../rag/ingest-queue');
+    ingestQueue.enqueueCategory(category, req.session?.adminId || null);
+    res.json({ success: true, category, status: ingestQueue.getStatus() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/rag/queue-status — current ingest-queue snapshot (Master only).
+app.get('/api/rag/queue-status', requireMasterAdmin, (req, res) => {
+  try {
+    const { ingestQueue } = require('../rag/ingest-queue');
+    res.json(ingestQueue.getStatus());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/rag/update-stream — SSE feed of corpus update progress (Master only).
+// The dashboard side-notification panel subscribes to this.
+app.get('/api/rag/update-stream', requireMasterAdmin, (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  const { ingestQueue } = require('../rag/ingest-queue');
+
+  // Replay recent events so a freshly-opened panel shows in-flight progress.
+  res.write(`data: ${JSON.stringify({ type: 'snapshot', status: ingestQueue.getStatus() })}\n\n`);
+
+  const onProgress = (event) => {
+    try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* client gone */ }
+  };
+  ingestQueue.on('progress', onProgress);
+
+  // Heartbeat to keep the connection alive through proxies.
+  const heartbeat = setInterval(() => {
+    try { res.write(': keep-alive\n\n'); } catch { /* ignore */ }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    ingestQueue.removeListener('progress', onProgress);
+  });
+});
+
 
 app.get('/api/rag/uploaded-documents', requireMasterAdmin, async (req, res) => {
   try {

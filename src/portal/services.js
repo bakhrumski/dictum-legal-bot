@@ -21,6 +21,10 @@ const { normalizeResponseForUser } = require('../rag/prim-notation');
 const { getChunkArticleRefs } = require('../rag/citation-utils');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { screenAnswer } = require('../rag/answer-verification');
+const { LEX_REGISTRY } = require('../rag/lex-registry');
+
+// Valid corpus category fields — auto-enrichment only ingests into a known field.
+const VALID_CORPUS_CATEGORIES = new Set(Object.keys(LEX_REGISTRY));
 
 // ════════════════════════════════════════
 // LEGAL CHAT SERVICE
@@ -152,6 +156,11 @@ async function processLegalChat(opts) {
   const screened = await screenAnswer(result.text, { pool });
   result.text = screened.text;
 
+  // Auto-enrich the corpus: any ACTIVE document the answer cited that is not
+  // yet in our corpus gets queued for ingestion into the query's category.
+  // Expired documents are never ingested (the queue/ingest pipeline skip them).
+  enqueueAutoEnrichment(screened.verification, topic);
+
   const duration = Date.now() - startTime;
   const sources = extractSources(retrievedChunks);
 
@@ -192,6 +201,38 @@ async function processLegalChat(opts) {
       unverified: screened.verification.unverified.map(u => u.raw),
     },
   };
+}
+
+/**
+ * Queue ACTIVE, not-yet-ingested documents the answer cited for ingestion.
+ * Fire-and-forget — never blocks the user response, never throws.
+ *
+ * @param {object} verification - result from verifyAnswer()
+ * @param {string} topic        - the query's category (must be a valid corpus field)
+ */
+function enqueueAutoEnrichment(verification, topic) {
+  try {
+    if (!verification || !Array.isArray(verification.references)) return;
+    if (!topic || !VALID_CORPUS_CATEGORIES.has(topic)) return; // need a real corpus field
+
+    const { ingestQueue } = require('../rag/ingest-queue');
+    for (const ref of verification.references) {
+      if (ref.status === 'active_resolved' && ref.resolvedUrl) {
+        // A bare decree number resolved to an active lex.uz document.
+        ingestQueue.enqueueUrl({
+          url: ref.resolvedUrl, category: topic, lawName: ref.law_name || null,
+          reason: `auto-enrich:${ref.raw}`,
+        });
+      } else if (ref.status === 'active_live' && ref.kind === 'url') {
+        // An active lex.uz URL cited directly but not in the corpus.
+        ingestQueue.enqueueUrl({
+          url: ref.raw, category: topic, reason: `auto-enrich:${ref.raw}`,
+        });
+      }
+    }
+  } catch (err) {
+    log.warn('auto-enrichment enqueue failed', { err: err.message });
+  }
 }
 
 /**

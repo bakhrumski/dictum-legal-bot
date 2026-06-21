@@ -111,8 +111,7 @@ function parseFile(filePath) {
 async function ingestText(body, docMeta) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.error('ERROR: Set HF_TOKEN, GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
-    process.exit(1);
+    throw new Error('No embedding API key set (HF_TOKEN / GEMINI_API_KEY / GPT_API_KEY / OPENAI_API_KEY)');
   }
 
   if (docMeta.is_active === false) {
@@ -160,8 +159,7 @@ async function ingestText(body, docMeta) {
 async function ingestStructuredHtml(rawHtml, docMeta) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.error('ERROR: Set HF_TOKEN, GEMINI_API_KEY, GPT_API_KEY, or OPENAI_API_KEY environment variable');
-    process.exit(1);
+    throw new Error('No embedding API key set (HF_TOKEN / GEMINI_API_KEY / GPT_API_KEY / OPENAI_API_KEY)');
   }
 
   // Refuse to ingest repealed / superseded documents. Storing stale law text
@@ -244,8 +242,7 @@ async function ingestFile(filePath, opts = {}) {
 async function ingestFromUrl(url, opts = {}) {
   const category = opts.category;
   if (!category || !VALID_CATEGORIES.includes(category)) {
-    console.error(`ERROR: Invalid category "${category}". Valid: ${VALID_CATEGORIES.join(', ')}`);
-    process.exit(1);
+    throw new Error(`Invalid category "${category}". Valid: ${VALID_CATEGORIES.join(', ')}`);
   }
 
   const doc = await fetchLexDocument(url);
@@ -267,26 +264,31 @@ async function ingestFromUrl(url, opts = {}) {
     is_valid: true,
   };
 
-  // Optionally save the raw text to legal-docs/ for backup
-  const saveDir = path.join(__dirname, '..', '..', 'legal-docs', category);
-  if (!fs.existsSync(saveDir)) fs.mkdirSync(saveDir, { recursive: true });
-  const savePath = path.join(saveDir, `${docMeta.doc_id}.txt`);
-  const header = [
-    '---',
-    `law_name: ${docMeta.law_name}`,
-    `doc_id: ${docMeta.doc_id}`,
-    `source_url: ${url}`,
-    `category: ${category}`,
-    `language: ${docMeta.language || inferredLanguage}`,
-    docMeta.adoption_date ? `adoption_date: ${docMeta.adoption_date}` : null,
-    docMeta.document_number ? `document_number: ${docMeta.document_number}` : null,
-    docMeta.status_label ? `status_label: ${docMeta.status_label}` : null,
-    docMeta.is_active === false ? 'is_active: false' : 'is_active: true',
-    '---',
-    '',
-  ].filter(Boolean).join('\n');
-  fs.writeFileSync(savePath, header + doc.body, 'utf-8');
-  console.log(`  Saved raw text: ${savePath}`);
+  // Optionally save the raw text to legal-docs/ for backup. Best-effort: the
+  // runtime container may have a read-only FS, so never let this break ingest.
+  try {
+    const saveDir = path.join(__dirname, '..', '..', 'legal-docs', category);
+    if (!fs.existsSync(saveDir)) fs.mkdirSync(saveDir, { recursive: true });
+    const savePath = path.join(saveDir, `${docMeta.doc_id}.txt`);
+    const header = [
+      '---',
+      `law_name: ${docMeta.law_name}`,
+      `doc_id: ${docMeta.doc_id}`,
+      `source_url: ${url}`,
+      `category: ${category}`,
+      `language: ${docMeta.language || inferredLanguage}`,
+      docMeta.adoption_date ? `adoption_date: ${docMeta.adoption_date}` : null,
+      docMeta.document_number ? `document_number: ${docMeta.document_number}` : null,
+      docMeta.status_label ? `status_label: ${docMeta.status_label}` : null,
+      docMeta.is_active === false ? 'is_active: false' : 'is_active: true',
+      '---',
+      '',
+    ].filter(Boolean).join('\n');
+    fs.writeFileSync(savePath, header + doc.body, 'utf-8');
+    console.log(`  Saved raw text: ${savePath}`);
+  } catch (fsErr) {
+    console.warn(`  (backup skipped: ${fsErr.message})`);
+  }
 
   return ingestStructuredHtml(doc.rawHtml || doc.body, {
     ...docMeta,
@@ -573,7 +575,21 @@ Valid categories: ${VALID_CATEGORIES.join(', ')}
   process.exit(0);
 }
 
-main().catch(err => {
-  console.error('FATAL:', err);
-  process.exit(1);
-});
+// Only run the CLI when invoked directly (`node src/rag/ingest-lex.js ...`),
+// not when imported for programmatic ingestion (auto-enrich queue, server).
+if (require.main === module) {
+  main().catch(err => {
+    console.error('FATAL:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  ingestText,
+  ingestStructuredHtml,
+  ingestFromUrl,
+  ingestFromRegistry,
+  ingestFile,
+  getApiKey,
+  VALID_CATEGORIES,
+};

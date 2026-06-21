@@ -5523,6 +5523,18 @@
                     </button>
                     <div id="reingestStatus" class="ai-doc-upload-status" style="display:none"></div>
 
+                    <!-- Per-field corpus update (Master only): "Yangilash" per category -->
+                    <div style="margin-top:10px">
+                        <button onclick="toggleCategoryUpdate()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
+                            <span>Soha bo'yicha yangilash</span>
+                            <span id="categoryUpdateToggleIcon">▼</span>
+                        </button>
+                        <div id="categoryUpdatePanel" style="display:none;margin-top:6px">
+                            <div style="font-size:11px;color:#888;padding:0 2px 6px">Har bir soha hujjatlari lex.uz dagi joriy versiyaga yangilanadi. Eskirgan hujjatlar korpusga qo'shilmaydi.</div>
+                            <div id="categoryUpdateList" style="max-height:320px;overflow-y:auto"></div>
+                        </div>
+                    </div>
+
                     <!-- Ingest Log -->
                     <div style="margin-top:10px">
                         <button onclick="toggleIngestLog()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
@@ -6204,6 +6216,9 @@
                 var flBtn = document.getElementById('flaggedAnswersBtn');
                 if (flBtn) flBtn.style.display = data.role === 'master' ? 'inline-flex' : 'none';
                 if (data.role === 'master') loadFlaggedBadge();
+
+                // Master only: subscribe to corpus update progress (side notifications)
+                if (data.role === 'master') initCorpusUpdateStream();
 
                 // Show legal search chat for master only
                 const legalChatEl = document.getElementById('legalChatSection');
@@ -8260,6 +8275,130 @@
                 btn.disabled = false;
                 btn.textContent = '♻️ Barcha kodekslarni yangilash';
             }
+        }
+
+        // ── Per-field corpus update ("Yangilash" per category) ──────────────
+        var _categoryUpdateOpen = false;
+        function toggleCategoryUpdate() {
+            _categoryUpdateOpen = !_categoryUpdateOpen;
+            document.getElementById('categoryUpdatePanel').style.display = _categoryUpdateOpen ? 'block' : 'none';
+            document.getElementById('categoryUpdateToggleIcon').textContent = _categoryUpdateOpen ? '▲' : '▼';
+            if (_categoryUpdateOpen) buildCategoryUpdateList();
+        }
+
+        // Build one "Yangilash" row per category, sourced from the topic <select>.
+        function buildCategoryUpdateList() {
+            var list = document.getElementById('categoryUpdateList');
+            if (!list || list.dataset.built === '1') return;
+            var opts = document.querySelectorAll('#docUploadTopic option');
+            var html = '';
+            opts.forEach(function(opt) {
+                if (!opt.value) return; // skip placeholder
+                html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 6px;border-bottom:1px solid #f0ecf7">' +
+                    '<span style="font-size:12px;color:var(--navy-600)">' + escapeHtml(opt.textContent) + '</span>' +
+                    '<button class="cat-update-btn" data-cat="' + escapeHtml(opt.value) + '" onclick="updateCategory(this.getAttribute(\'data-cat\'), this)" ' +
+                    'style="font-size:11px;padding:4px 10px;border:1px solid var(--brass-100);border-radius:6px;background:none;color:var(--navy-600);cursor:pointer;white-space:nowrap">Yangilash</button>' +
+                    '</div>';
+            });
+            list.innerHTML = html;
+            list.dataset.built = '1';
+        }
+
+        async function updateCategory(category, btn) {
+            if (!category) return;
+            if (btn) { btn.disabled = true; btn.textContent = 'Navbatda...'; }
+            try {
+                var resp = await fetch('/api/rag/update-category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ category: category })
+                });
+                var data = await resp.json();
+                if (resp.ok && data.success) {
+                    showUpdateToast("\"" + category + "\" yangilanish navbatiga qo'shildi", 'info');
+                } else {
+                    showUpdateToast('❌ ' + (data.error || 'Xatolik'), 'error');
+                }
+            } catch (e) {
+                showUpdateToast('❌ Tarmoq xatoligi: ' + e.message, 'error');
+            } finally {
+                if (btn) { setTimeout(function(){ btn.disabled = false; btn.textContent = 'Yangilash'; }, 1500); }
+            }
+        }
+
+        // ── Side notifications: subscribe to the corpus update progress stream ──
+        var _updateStreamStarted = false;
+        function initCorpusUpdateStream() {
+            if (_updateStreamStarted || typeof EventSource === 'undefined') return;
+            _updateStreamStarted = true;
+            var es = new EventSource('/api/rag/update-stream', { withCredentials: true });
+            es.onmessage = function(ev) {
+                if (!ev.data) return;
+                var e;
+                try { e = JSON.parse(ev.data); } catch (_) { return; }
+                renderUpdateEvent(e);
+            };
+            es.onerror = function() { /* browser auto-reconnects */ };
+        }
+
+        function renderUpdateEvent(e) {
+            switch (e.type) {
+                case 'category-start':
+                    showUpdateToast('🔄 "' + e.category + '" yangilanmoqda (' + e.total + ' hujjat)', 'info');
+                    break;
+                case 'start':
+                    if (e.lawName) showUpdateToast('⏳ ' + truncate(e.lawName, 40), 'progress');
+                    break;
+                case 'done':
+                    if (e.skipped) {
+                        showUpdateToast('⏭️ ' + truncate(e.lawName || e.docId || '', 40) + (e.reason === 'inactive_or_empty' ? ' (eskirgan — qo\'shilmadi)' : ' (mavjud)'), 'muted');
+                    } else {
+                        showUpdateToast('✅ ' + truncate(e.lawName || e.docId || '', 40) + ' — ' + (e.chunks || 0) + ' bo\'lak', 'success');
+                    }
+                    break;
+                case 'error':
+                    showUpdateToast('❌ ' + truncate(e.lawName || e.docId || '', 40) + ': ' + truncate(e.error || '', 40), 'error');
+                    break;
+                case 'category-done':
+                    showUpdateToast('✔️ "' + e.category + '" tugadi — ' + e.succeeded + ' ta yangilandi, ' + e.failed + ' xato', 'success');
+                    break;
+                case 'idle':
+                    showUpdateToast('Korpus yangilanishi tugadi', 'muted');
+                    break;
+            }
+        }
+
+        function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; }
+
+        function _updateToastContainer() {
+            var c = document.getElementById('updateToastContainer');
+            if (!c) {
+                c = document.createElement('div');
+                c.id = 'updateToastContainer';
+                c.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:320px';
+                document.body.appendChild(c);
+            }
+            return c;
+        }
+
+        function showUpdateToast(text, kind) {
+            var colors = {
+                info:     '#e8f0ff', success: '#e6f7ec', error: '#fdecec',
+                progress: '#f5f0ff', muted: '#f4f4f6'
+            };
+            var border = {
+                info:'#4a78d6', success:'#2e9e5b', error:'#d64a4a', progress:'#7c5fd6', muted:'#bbb'
+            };
+            var c = _updateToastContainer();
+            var t = document.createElement('div');
+            t.style.cssText = 'background:' + (colors[kind] || '#f4f4f6') + ';border-left:3px solid ' + (border[kind] || '#bbb') +
+                ';border-radius:8px;padding:8px 11px;font-size:12px;color:#2a2a3a;box-shadow:0 2px 8px rgba(0,0,0,0.08);animation:fadeIn .2s';
+            t.textContent = text;
+            c.appendChild(t);
+            // Keep the panel from overflowing: cap at 6 visible toasts.
+            while (c.children.length > 6) c.removeChild(c.firstChild);
+            setTimeout(function(){ if (t.parentNode) { t.style.opacity = '0'; t.style.transition = 'opacity .4s'; setTimeout(function(){ if (t.parentNode) t.remove(); }, 400); } }, 6000);
         }
 
         function onDocFileSelected(input) {
