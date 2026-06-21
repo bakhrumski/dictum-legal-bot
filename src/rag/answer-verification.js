@@ -17,11 +17,17 @@
  *   1. In corpus + is_active = TRUE   → ok (grounded, in force)
  *   2. In corpus + is_active = FALSE  → EXPIRED (warn)
  *   3. Not in corpus, but a lex.uz URL → live-fetch, check banner
- *   4. Not in corpus, bare PF/PQ/VM #  → UNVERIFIED (warn — we cannot confirm
- *                                        it is in force; it may be repealed)
+ *   4. Not in corpus, bare PF/PQ/VM # → search lex.uz for the number, fetch
+ *                                        the first result, check banner:
+ *                                        - active  → pass (no warning)
+ *                                        - expired → EXPIRED warning with name
+ *                                        - not found on lex.uz → NOT_FOUND warn
  *
- * If any cited document is expired or unverified, a clear Uzbek notice is
- * appended to the answer so the user is never silently given a stale citation.
+ * Tier 4 is intentional: the platform verifies the status itself rather
+ * than delegating the check to the user.
+ *
+ * Live-check cache: corpus index 5 min, lex.uz fetches 6 h.
+ * Set ANSWER_VERIFICATION_LIVE_FETCH=false to disable network calls (tests).
  */
 
 const log = require('../utils/logger').createLogger('VERIFY');
@@ -196,6 +202,82 @@ async function liveCheckUrl(url) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Tier 4: Auto-resolve a bare decree number via lex.uz search
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Cyrillic search forms produce better results on lex.uz (site is primarily Cyrillic)
+const LATIN_TO_CYRILLIC_PREFIX = {
+  'PQ': 'ПҚ', 'PF': 'ПФ', 'VM': 'ВМ', 'ORQ': 'ЎРҚ', 'QR': 'ҚР',
+};
+
+// Cache: normalizedKey → { ts, url, law_name, is_active, status_label } | null
+const _resolveCache = new Map();
+
+/**
+ * Search lex.uz for a decree number, fetch the first result, and return its
+ * current in-force status. Returns null if no result is found on lex.uz.
+ *
+ * @param {string} normalizedKey  e.g. "PQ-3126" or "VM-758"
+ * @returns {Promise<{url, law_name, is_active, status_label}|null>}
+ */
+async function resolveDecreeNumber(normalizedKey) {
+  const cached = _resolveCache.get(normalizedKey);
+  if (cached && Date.now() - cached.ts < LIVE_CACHE_TTL_MS) {
+    return cached.value;
+  }
+
+  const [prefix, digits] = normalizedKey.split('-');
+  const cyrPrefix = LATIN_TO_CYRILLIC_PREFIX[prefix] || prefix;
+  const query = `${cyrPrefix}-${digits}-сон`;
+
+  const { httpGet: lexGet } = require('./fetch-lex');
+  const { fetchLexDocument }  = require('./fetch-lex');
+
+  // Step 1: search lex.uz for the decree number
+  const searchUrl = `https://lex.uz/search/nat?Query=${encodeURIComponent(query)}`;
+  let searchHtml;
+  try {
+    searchHtml = await Promise.race([
+      lexGet(searchUrl),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('search timeout')), LIVE_FETCH_TIMEOUT_MS)),
+    ]);
+  } catch (err) {
+    throw new Error(`lex.uz search failed for ${normalizedKey}: ${err.message}`);
+  }
+
+  // Step 2: extract first document URL from search results
+  const { parseSearchResults } = require('./lex-live-search');
+  const docUrls = parseSearchResults(searchHtml);
+  if (!docUrls || docUrls.length === 0) {
+    _resolveCache.set(normalizedKey, { ts: Date.now(), value: null });
+    return null;
+  }
+
+  // Step 3: fetch the first result and check its status banner
+  let doc;
+  try {
+    doc = await Promise.race([
+      fetchLexDocument(docUrls[0]),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('fetch timeout')), LIVE_FETCH_TIMEOUT_MS)),
+    ]);
+  } catch (err) {
+    throw new Error(`lex.uz fetch failed for ${docUrls[0]}: ${err.message}`);
+  }
+
+  const value = {
+    url: doc.metadata?.source_url || docUrls[0],
+    law_name: doc.title || null,
+    is_active: doc.metadata?.is_active !== false,
+    status_label: doc.metadata?.status_label || null,
+  };
+  _resolveCache.set(normalizedKey, { ts: Date.now(), value });
+  log.info('decree number resolved via lex.uz search', {
+    key: normalizedKey, url: value.url, is_active: value.is_active,
+  });
+  return value;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main verification entry
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -236,9 +318,14 @@ async function verifyAnswer(answerText, opts = {}) {
       continue;
     }
 
-    // Not in corpus.
-    if (ref.kind === 'url' && liveFetch) {
-      // Tier 3: live banner check
+    // Not in corpus — check live on lex.uz.
+    if (!liveFetch) {
+      result.references.push({ ...ref, status: 'unverified', reason: 'live_fetch_disabled' });
+      continue;
+    }
+
+    if (ref.kind === 'url') {
+      // Tier 3: lex.uz URL — direct banner check
       try {
         const live = await liveCheckUrl(ref.raw);
         if (live.is_active) {
@@ -249,17 +336,38 @@ async function verifyAnswer(answerText, opts = {}) {
           result.expired.push(item);
         }
       } catch (err) {
-        log.warn('live check failed, marking unverified', { url: ref.raw, err: err.message });
-        const item = { ...ref, status: 'unverified', reason: 'live_check_failed' };
-        result.references.push(item);
-        result.unverified.push(item);
+        log.warn('URL live check failed', { url: ref.raw, err: err.message });
+        result.references.push({ ...ref, status: 'unverified', reason: 'fetch_failed' });
       }
     } else {
-      // Tier 4: bare number (or URL with live-fetch disabled) not in corpus.
-      // We cannot confirm it is in force → flag as unverified.
-      const item = { ...ref, status: 'unverified', reason: ref.kind === 'number' ? 'not_in_corpus' : 'live_fetch_disabled' };
-      result.references.push(item);
-      result.unverified.push(item);
+      // Tier 4: bare decree number (PQ/PF/VM/...) — platform resolves it via lex.uz search.
+      // We search lex.uz, fetch the first result, and check the "kuchini yo'qotgan" banner.
+      // The platform determines the status; the user is never asked to check manually.
+      try {
+        const resolved = await resolveDecreeNumber(ref.key);
+        if (!resolved) {
+          // lex.uz search returned no results — likely a hallucinated or incorrect number
+          const item = { ...ref, status: 'not_found_on_lex' };
+          result.references.push(item);
+          result.unverified.push(item);
+          log.warn('decree number not found on lex.uz — may be hallucinated', { key: ref.key });
+        } else if (resolved.is_active) {
+          result.references.push({ ...ref, status: 'active_resolved', resolvedUrl: resolved.url, law_name: resolved.law_name });
+        } else {
+          const item = {
+            ...ref,
+            status: 'expired_resolved',
+            resolvedUrl: resolved.url,
+            law_name: resolved.law_name,
+            status_label: resolved.status_label,
+          };
+          result.references.push(item);
+          result.expired.push(item);
+        }
+      } catch (err) {
+        log.warn('decree resolve failed', { key: ref.key, err: err.message });
+        result.references.push({ ...ref, status: 'unverified', reason: 'resolve_failed' });
+      }
     }
   }
 
@@ -283,17 +391,22 @@ function applyVerificationNotice(answerText, verification) {
   const lines = ['\n\n---', "⚠️ **Hujjat holati ogohlantirishi**"];
 
   if (verification.expired.length > 0) {
-    const list = verification.expired.map(e => {
-      const label = e.status_label ? ` — ${e.status_label}` : " — kuchini yo'qotgan";
-      return `\`${e.raw}\`${label}`;
-    }).join('; ');
-    lines.push(`- Quyidagi hujjat(lar) **KUCHINI YO'QOTGAN**: ${list}. Ularga tayanmang.`);
+    for (const e of verification.expired) {
+      const name = e.law_name ? ` ("${e.law_name}")` : '';
+      const label = e.status_label || "Hujjat kuchini yo'qotgan";
+      const link = e.resolvedUrl ? ` [lex.uz](${e.resolvedUrl})` : '';
+      lines.push(`- \`${e.raw}\`${name} — **KUCHINI YO'QOTGAN** (${label}).${link} Bu hujjatga tayanmang.`);
+    }
   }
 
   if (verification.unverified.length > 0) {
-    const list = verification.unverified.map(u => `\`${u.raw}\``).join(', ');
-    lines.push(`- Quyidagi hujjat(lar) ma'lumotlar bazamizda **tasdiqlanmagan**: ${list}. ` +
-      `Ularning amaldagi holatini lex.uz dan tekshiring — eskirgan yoki o'zgartirilgan bo'lishi mumkin.`);
+    for (const u of verification.unverified) {
+      if (u.status === 'not_found_on_lex') {
+        lines.push(`- \`${u.raw}\` — lex.uz da **topilmadi**. Bu raqam noto'g'ri yoki mavjud emas bo'lishi mumkin. Mustaqil tekshiring.`);
+      } else {
+        lines.push(`- \`${u.raw}\` — holati tekshirilmadi (tarmoq xatosi). Lex.uz dan qo'lda tekshiring.`);
+      }
+    }
   }
 
   return answerText + lines.join('\n');
