@@ -42,6 +42,8 @@ class IngestQueue extends EventEmitter {
     this.recentLimit = 50;
     this._enqueuedKeys = new Set(); // dedupe by docId|url while pending
     this._dirty = false;        // whether anything was ingested since last index rebuild
+    this.paused = false;        // when true: finish nothing new; category jobs wait between docs
+    this._cancelCurrent = false; // when true: abort the in-flight category job's remaining docs
   }
 
   _emit(event) {
@@ -54,10 +56,61 @@ class IngestQueue extends EventEmitter {
   getStatus() {
     return {
       processing: this.processing,
+      paused: this.paused,
       current: this.current,
       queueLength: this.queue.length,
       recent: this.recent.slice(-20),
     };
+  }
+
+  /**
+   * Pause the queue. The currently-running document finishes, then the worker
+   * stops pulling new jobs (and a category job waits between its documents)
+   * until resume() is called.
+   */
+  pause() {
+    if (this.paused) return false;
+    this.paused = true;
+    this._emit({ type: 'paused', queueLength: this.queue.length });
+    log.info('queue paused', { queueLength: this.queue.length });
+    return true;
+  }
+
+  /** Resume a paused queue and kick the worker back into draining. */
+  resume() {
+    if (!this.paused) return false;
+    this.paused = false;
+    this._emit({ type: 'resumed', queueLength: this.queue.length });
+    log.info('queue resumed', { queueLength: this.queue.length });
+    this._drain();
+    return true;
+  }
+
+  /**
+   * Drop every pending job (does NOT touch the document currently being
+   * ingested — that completes). Returns how many were removed.
+   */
+  clearQueue() {
+    const removed = this.queue.length;
+    this.queue = [];
+    this._enqueuedKeys.clear();
+    if (removed > 0) this._emit({ type: 'cleared', removed });
+    log.info('queue cleared', { removed });
+    return removed;
+  }
+
+  /**
+   * Cancel everything: drop all pending jobs and abort the in-flight category
+   * job's remaining documents. The document mid-ingest still finishes (to avoid
+   * leaving partial chunks), then the worker drains to idle.
+   */
+  cancelAll() {
+    const removed = this.clearQueue();
+    this._cancelCurrent = true;
+    this.paused = false; // ensure the worker can drain to idle rather than stay paused
+    this._emit({ type: 'cancelled', removed });
+    log.info('queue cancel requested', { removed });
+    return removed;
   }
 
   /**
@@ -97,7 +150,15 @@ class IngestQueue extends EventEmitter {
     this.processing = true;
 
     while (this.queue.length > 0) {
+      // Honor a pause requested between jobs: stop here and let resume()
+      // restart the worker. Nothing is lost — pending jobs stay queued.
+      if (this.paused) {
+        this.current = null;
+        this.processing = false;
+        return;
+      }
       const job = this.queue.shift();
+      this._cancelCurrent = false;
       try {
         if (job.kind === 'category') {
           await this._processCategory(job);
@@ -172,6 +233,14 @@ class IngestQueue extends EventEmitter {
     let failed = 0;
 
     for (const law of laws) {
+      if (this._cancelCurrent) break;
+      // If paused mid-category, idle here (still the "current" job) until the
+      // operator resumes or cancels.
+      while (this.paused && !this._cancelCurrent) {
+        await new Promise(r => setTimeout(r, 400));
+      }
+      if (this._cancelCurrent) break;
+
       this.current = { docId: law.doc_id, lawName: law.law_name, category, url: law.lex_url };
       this._emit({ type: 'start', docId: law.doc_id, lawName: law.law_name, category });
       try {
@@ -194,7 +263,12 @@ class IngestQueue extends EventEmitter {
       await new Promise(r => setTimeout(r, 1500));
     }
 
-    this._emit({ type: 'category-done', category, succeeded, failed });
+    if (this._cancelCurrent) {
+      this._cancelCurrent = false;
+      this._emit({ type: 'category-cancelled', category, succeeded, failed });
+    } else {
+      this._emit({ type: 'category-done', category, succeeded, failed });
+    }
   }
 
   /**

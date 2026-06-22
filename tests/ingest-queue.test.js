@@ -367,6 +367,109 @@ function patchedDrain(processUrlImpl) {
     assertEq(captured[0].category, 'soliq');
   });
 
+  // ─── 9. pause / resume / cancel ────────────────────────────────────────────
+  section('9. pause / resume / cancel');
+
+  await test('pause() sets paused flag and emits paused event', async () => {
+    const q = new IngestQueue();
+    q._drain = async () => {};
+    const captured = [];
+    q.on('progress', e => captured.push(e));
+    const ok = q.pause();
+    assertTrue(ok, 'pause returns true');
+    assertTrue(q.paused, 'paused flag set');
+    assertTrue(captured.some(e => e.type === 'paused'), 'paused event emitted');
+    assertFalse(q.pause(), 'second pause is a no-op (returns false)');
+  });
+
+  await test('resume() clears paused flag and emits resumed event', async () => {
+    const q = new IngestQueue();
+    q._drain = async () => {};
+    q.pause();
+    const captured = [];
+    q.on('progress', e => captured.push(e));
+    const ok = q.resume();
+    assertTrue(ok, 'resume returns true');
+    assertFalse(q.paused, 'paused flag cleared');
+    assertTrue(captured.some(e => e.type === 'resumed'), 'resumed event emitted');
+    assertFalse(q.resume(), 'resume when not paused is a no-op');
+  });
+
+  await test('getStatus() reports paused state', async () => {
+    const q = new IngestQueue();
+    q._drain = async () => {};
+    assertEq(q.getStatus().paused, false, 'initially not paused');
+    q.pause();
+    assertEq(q.getStatus().paused, true, 'paused reflected in status');
+  });
+
+  await test('clearQueue() drops pending jobs and emits cleared', async () => {
+    const q = new IngestQueue();
+    q._drain = async () => {};
+    q.enqueueUrl({ url: 'https://lex.uz/docs/60', category: 'mehnat', docId: 'meh-60' });
+    q.enqueueUrl({ url: 'https://lex.uz/docs/61', category: 'mehnat', docId: 'meh-61' });
+    const captured = [];
+    q.on('progress', e => captured.push(e));
+    const removed = q.clearQueue();
+    assertEq(removed, 2, 'reports 2 removed');
+    assertEq(q.queue.length, 0, 'queue emptied');
+    assertEq(q._enqueuedKeys.size, 0, 'dedup keys cleared');
+    assertTrue(captured.some(e => e.type === 'cleared' && e.removed === 2), 'cleared event emitted');
+  });
+
+  await test('cancelAll() clears queue, sets cancel flag, unpauses', async () => {
+    const q = new IngestQueue();
+    q._drain = async () => {};
+    q.pause();
+    q.enqueueUrl({ url: 'https://lex.uz/docs/62', category: 'mehnat', docId: 'meh-62' });
+    const captured = [];
+    q.on('progress', e => captured.push(e));
+    const removed = q.cancelAll();
+    assertEq(removed, 1, 'one pending job removed');
+    assertEq(q.queue.length, 0, 'queue emptied');
+    assertTrue(q._cancelCurrent, 'cancel flag set for in-flight job');
+    assertFalse(q.paused, 'unpaused so the worker can drain to idle');
+    assertTrue(captured.some(e => e.type === 'cancelled'), 'cancelled event emitted');
+  });
+
+  await test('paused queue does not process new url jobs until resumed', async () => {
+    const q = new IngestQueue();
+    let processedCount = 0;
+
+    async function processUrlImpl(job) {
+      processedCount++;
+      this._emit({ type: 'start', docId: job.docId });
+      this._emit({ type: 'done', docId: job.docId, skipped: false, chunks: 1 });
+      this._enqueuedKeys.delete(job.docId || job.url);
+    }
+    q._processUrl = processUrlImpl;
+    // Real-ish drain that honors pause between jobs and finishes with idle.
+    q._drain = async function () {
+      if (this.processing) return;
+      this.processing = true;
+      while (this.queue.length > 0) {
+        if (this.paused) { this.current = null; this.processing = false; return; }
+        const job = this.queue.shift();
+        await this._processUrl(job);
+      }
+      this.current = null;
+      this.processing = false;
+      this._emit({ type: 'idle' });
+    };
+
+    q.pause();
+    q.enqueueUrl({ url: 'https://lex.uz/docs/70', category: 'mehnat', docId: 'meh-70' });
+    // Give any (incorrect) async processing a tick to run.
+    await new Promise(r => setTimeout(r, 50));
+    assertEq(processedCount, 0, 'nothing processed while paused');
+    assertEq(q.queue.length, 1, 'job still queued');
+
+    const events = collectUntilIdle(q);
+    q.resume();
+    await events;
+    assertEq(processedCount, 1, 'job processed after resume');
+  });
+
   // ─── Summary ───────────────────────────────────────────────────────────────
   console.log('\n' + '─'.repeat(50));
   if (failed === 0) {

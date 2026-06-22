@@ -4979,6 +4979,25 @@ app.get('/api/rag/queue-status', requireMasterAdmin, (req, res) => {
   }
 });
 
+// POST /api/rag/queue-control — pause / resume / cancel the ingest queue (Master only).
+// Backs the dashboard queue panel's Pause and Cancel controls.
+app.post('/api/rag/queue-control', requireMasterAdmin, (req, res) => {
+  try {
+    const { action } = req.body || {};
+    const { ingestQueue } = require('../rag/ingest-queue');
+    switch (action) {
+      case 'pause':  ingestQueue.pause();  break;
+      case 'resume': ingestQueue.resume(); break;
+      case 'cancel': ingestQueue.cancelAll(); break;
+      default:
+        return res.status(400).json({ error: "Yaroqsiz amal (action: 'pause' | 'resume' | 'cancel')" });
+    }
+    res.json({ success: true, action, status: ingestQueue.getStatus() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/rag/update-stream — SSE feed of corpus update progress (Master only).
 // The dashboard side-notification panel subscribes to this.
 app.get('/api/rag/update-stream', requireMasterAdmin, (req, res) => {
