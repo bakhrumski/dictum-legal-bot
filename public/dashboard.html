@@ -2340,6 +2340,63 @@
         }
         .ai-chat-header-btn:hover { background: var(--bg-card-hover); color: var(--text-secondary); }
 
+        /* ── Master-admin header action dropdowns ── */
+        .hdr-actions {
+            display: none; align-items: center; gap: 4px; flex-shrink: 0;
+        }
+        .ai-chat-header.master-mode .hdr-actions { display: flex; }
+        /* Drawer chrome — only visible on mobile */
+        .hdr-drawer-head { display: none; }
+        .hdr-drawer-close {
+            background: none; border: none; font-size: 24px; line-height: 1;
+            color: var(--text-muted); cursor: pointer; padding: 0 4px;
+        }
+        .hdr-mobile-toggle {
+            display: none; background: none; border: none;
+            color: var(--text-secondary); cursor: pointer; padding: 6px;
+            border-radius: 8px; flex-shrink: 0;
+        }
+        .hdr-mobile-toggle:hover { background: var(--bg-card-hover); }
+        .hdr-dd { position: relative; }
+        .hdr-dd-btn {
+            display: flex; align-items: center; gap: 5px;
+            padding: 5px 11px; background: none;
+            border: 1px solid var(--glass-border); border-radius: 8px;
+            color: var(--text-secondary); font-size: 12px; font-weight: 500;
+            cursor: pointer; white-space: nowrap; line-height: 1.5;
+            transition: background .15s, border-color .15s, color .15s;
+        }
+        .hdr-dd-btn:hover, .hdr-dd-btn.dd-open {
+            background: var(--parchment-100); border-color: var(--navy-300); color: var(--navy-700);
+        }
+        .hdr-dd-chevron { transition: transform .2s; flex-shrink: 0; }
+        .hdr-dd-btn.dd-open .hdr-dd-chevron { transform: rotate(180deg); }
+        .hdr-dd-panel {
+            position: absolute; top: calc(100% + 6px); right: 0;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: 10px; box-shadow: 0 8px 28px rgba(14,34,54,.13);
+            z-index: 2100; padding: 14px; display: none;
+            min-width: 260px; max-height: calc(100vh - 110px);
+            overflow-y: auto; scrollbar-width: thin; box-sizing: border-box;
+        }
+        .hdr-dd-panel.dd-open { display: block; }
+        .hdr-dd-panel-title {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .05em; color: var(--text-muted); margin-bottom: 10px;
+        }
+        /* Queue status elements */
+        .qs-statusbar {
+            display: flex; align-items: center; gap: 8px; font-size: 12px;
+            padding: 6px 9px; background: var(--parchment-100);
+            border-radius: 7px; margin-bottom: 8px;
+        }
+        .qs-log-row {
+            display: flex; align-items: flex-start; gap: 6px;
+            padding: 4px 0; font-size: 11px; color: var(--text-secondary);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .qs-log-row:last-child { border-bottom: none; }
+
         /* Right sidebar (master admin only: document upload + feedback) */
         .ai-sidebar-right {
             width: 280px;
@@ -2883,6 +2940,39 @@
             }
             .ai-chat-msg { max-width: 92%; font-size: 13px; }
             .ai-chat-messages { padding: 16px 14px; }
+
+            /* ── Admin header dropdowns become a right drawer on mobile (as before) ── */
+            .ai-chat-header.master-mode .hdr-mobile-toggle { display: flex; }
+            .ai-chat-header.master-mode .hdr-actions {
+                position: fixed; right: 0; top: 0; bottom: 0;
+                width: 300px; max-width: 85vw;
+                flex-direction: column; align-items: stretch; gap: 8px;
+                z-index: 1000; padding: 14px;
+                background: var(--glass-bg-strong, var(--glass-bg));
+                overflow-y: auto;
+                transform: translateX(100%); visibility: hidden;
+                transition: transform 0.3s ease, visibility 0.3s;
+                box-shadow: none;
+            }
+            .ai-chat-header.master-mode .hdr-actions.drawer-open {
+                transform: translateX(0); visibility: visible;
+                box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+            }
+            .hdr-drawer-head {
+                display: flex; justify-content: space-between; align-items: center;
+                font-size: 14px; font-weight: 700; color: var(--text-primary);
+                padding-bottom: 8px; border-bottom: 1px solid var(--glass-border);
+                margin-bottom: 4px;
+            }
+            /* Each dropdown becomes a full-width accordion section */
+            .hdr-dd { position: static; width: 100%; }
+            .hdr-dd-btn { width: 100%; justify-content: space-between; }
+            .hdr-dd-panel {
+                position: static !important; width: auto !important;
+                min-width: 0; max-height: none; right: auto; top: auto;
+                box-shadow: none; border: none; border-radius: 0;
+                padding: 8px 2px 4px; margin-top: 0;
+            }
         }
         @media (max-width: 480px) {
             .ai-workspace {
@@ -5396,14 +5486,176 @@
             <!-- Main Chat Area -->
             <div class="ai-chat-main">
                 <!-- Chat header -->
-                <div class="ai-chat-header">
+                <div class="ai-chat-header" id="aiChatHeader">
                     <div class="ai-chat-header-left">
                         <button class="ai-sidebar-toggle" onclick="toggleAiSidebar()" title="Menyu">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                         </button>
                         <span class="ai-chat-header-title" id="aiChatHeaderTitle"></span>
                     </div>
-                    <button class="ai-sidebar-right-toggle" id="aiSidebarRightToggle" onclick="toggleAiSidebarRight()" title="R&D panel" style="display:none">
+                    <!-- Master-admin dropdown actions — desktop: header dropdowns; mobile: right drawer -->
+                    <div class="hdr-actions" id="masterHeaderActions">
+                        <div class="hdr-drawer-head">
+                            <span>Admin paneli</span>
+                            <button class="hdr-drawer-close" onclick="closeHdrDrawer()" title="Yopish">&times;</button>
+                        </div>
+
+                        <!-- ① Queue / update status -->
+                        <div class="hdr-dd" id="ddQueue">
+                            <button class="hdr-dd-btn" onclick="toggleHdrDd('ddQueue')">
+                                Navbat
+                                <svg class="hdr-dd-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="hdr-dd-panel" id="ddQueuePanel" style="width:280px">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                                    <span class="hdr-dd-panel-title" style="margin:0">Yangilanish navbati</span>
+                                    <button onclick="refreshQueueStatus()" title="Yangilash" style="background:none;border:1px solid var(--glass-border);border-radius:6px;padding:2px 7px;font-size:11px;cursor:pointer;color:var(--text-muted)">🔄</button>
+                                </div>
+                                <div class="qs-statusbar">
+                                    <span id="qsStatusDot" style="color:#bbb">◎ Bo'sh</span>
+                                    <span id="qsQueueLen" style="margin-left:auto;font-size:11px;color:var(--text-muted)"></span>
+                                </div>
+                                <div id="qsCurrent" style="display:none;font-size:11px;color:var(--navy-600);padding:5px 8px;background:var(--parchment-100);border-radius:6px;margin-bottom:8px"></div>
+                                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:5px">So'nggi hodisalar</div>
+                                <div id="qsRecentLog" style="max-height:200px;overflow-y:auto">
+                                    <div style="color:#bbb;text-align:center;padding:12px 0;font-size:11px">Tarix yo'q</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ② Corpus management -->
+                        <div class="hdr-dd" id="ddCorpus">
+                            <button class="hdr-dd-btn" onclick="toggleHdrDd('ddCorpus')">
+                                Korpus
+                                <svg class="hdr-dd-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="hdr-dd-panel" id="ddCorpusPanel" style="width:290px">
+                                <div class="hdr-dd-panel-title">Korpusga qo'shish</div>
+                                <select id="docUploadTopic" class="ai-doc-topic-select">
+                                    <option value="">— Soha tanlang —</option>
+                                    <option value="konstitutsiya">Konstitutsiyaviy tuzum</option>
+                                    <option value="davlat-boshqaruvi">Davlat boshqaruvi</option>
+                                    <option value="fuqarolik">Fuqarolik qonunchiligi</option>
+                                    <option value="oila">Oila qonunchiligi</option>
+                                    <option value="mehnat">Mehnat va bandlik</option>
+                                    <option value="ijtimoiy">Ijtimoiy himoya</option>
+                                    <option value="moliya">Moliya va kredit</option>
+                                    <option value="soliq">Soliq</option>
+                                    <option value="bank">Bank</option>
+                                    <option value="uy-joy">Uy-joy qonunchiligi</option>
+                                    <option value="tadbirkorlik">Tadbirkorlik</option>
+                                    <option value="tashqi-iqtisod">Tashqi iqtisod. Bojxona</option>
+                                    <option value="ekologiya">Ekologiya</option>
+                                    <option value="axborot">Axborot</option>
+                                    <option value="talim">Ta'lim. Fan. Madaniyat</option>
+                                    <option value="soglik">Sog'liqni saqlash</option>
+                                    <option value="mudofaa">Mudofaa</option>
+                                    <option value="jinoyat">Jinoyat qonunchiligi</option>
+                                    <option value="mamuriy">Ma'muriy javobgarlik</option>
+                                    <option value="sudlov">Odil sudlov</option>
+                                    <option value="adliya">Advokatura. Notariat. Adliya</option>
+                                    <option value="xalqaro">Xalqaro huquq</option>
+                                    <option value="shaxsiy">Shaxsiy hujjatlar</option>
+                                </select>
+                                <input type="text" id="docUploadName" class="ai-doc-name-input" placeholder="Hujjat nomi (ixtiyoriy)">
+                                <div class="ai-doc-tabs">
+                                    <button class="ai-doc-tab active" id="tabUrlBtn" onclick="switchDocTab('url')">lex.uz URL</button>
+                                    <button class="ai-doc-tab" id="tabFileBtn" onclick="switchDocTab('file')">Fayl</button>
+                                </div>
+                                <div id="docUrlPanel">
+                                    <input type="url" id="docLexUrl" class="ai-doc-name-input" placeholder="https://lex.uz/uz/docs/..." style="margin-bottom:6px">
+                                    <button class="ai-doc-upload-btn" id="docUrlBtn" onclick="ingestLexUrl()">Lex.uz dan yuklash</button>
+                                </div>
+                                <div id="docFilePanel" style="display:none">
+                                    <label class="ai-doc-file-label">
+                                        <input type="file" id="docFileInput" accept=".pdf,.txt,.docx,.doc" onchange="onDocFileSelected(this)">
+                                        Fayl tanlash (PDF / TXT / DOCX)
+                                    </label>
+                                    <div id="docSelectedFile" class="ai-doc-selected-file" style="display:none"></div>
+                                    <button class="ai-doc-upload-btn" id="docUploadBtn" onclick="uploadLegalDocument()" disabled>Korpusga yuklash</button>
+                                </div>
+                                <div id="docUploadStatus" class="ai-doc-upload-status" style="display:none"></div>
+                                <button class="ai-doc-upload-btn" id="reingestRegistryBtn" onclick="reingestRegistry()" style="margin-top:8px;background:var(--navy-600)" title="Barcha asosiy kodekslarni lex.uz dagi eng so'nggi versiyasiga yangilash">♻️ Barcha kodekslarni yangilash</button>
+                                <div id="reingestStatus" class="ai-doc-upload-status" style="display:none"></div>
+                                <div style="margin-top:10px">
+                                    <button onclick="toggleCategoryUpdate()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
+                                        <span>Soha bo'yicha yangilash</span>
+                                        <span id="categoryUpdateToggleIcon">▼</span>
+                                    </button>
+                                    <div id="categoryUpdatePanel" style="display:none;margin-top:6px">
+                                        <div style="font-size:11px;color:#888;padding:0 2px 6px">Har bir soha hujjatlari lex.uz dagi joriy versiyaga yangilanadi. Eskirgan hujjatlar korpusga qo'shilmaydi.</div>
+                                        <div id="categoryUpdateList" style="max-height:220px;overflow-y:auto"></div>
+                                    </div>
+                                </div>
+                                <div style="margin-top:8px">
+                                    <button onclick="toggleIngestLog()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
+                                        <span>Yuklash tarixi</span>
+                                        <span id="ingestLogToggleIcon">▼</span>
+                                    </button>
+                                    <div id="ingestLogPanel" style="display:none;margin-top:6px">
+                                        <div id="ingestLogStats" style="font-size:11px;color:#888;padding:6px 8px;background:#f9f7ff;border-radius:6px;margin-bottom:6px"></div>
+                                        <div id="ingestLogList" style="max-height:220px;overflow-y:auto;font-size:11px"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ③ Feedback report -->
+                        <div class="hdr-dd" id="ddFeedback">
+                            <button class="hdr-dd-btn" onclick="toggleHdrDd('ddFeedback')">
+                                Feedback
+                                <svg class="hdr-dd-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="hdr-dd-panel" id="ddFeedbackPanel" style="width:340px">
+                                <div class="hdr-dd-panel-title">Feedback hisoboti</div>
+                                <div class="fb-stat-grid" id="fbStatGrid">
+                                    <div class="fb-stat-card good"><span class="fb-val" id="fbGood">0</span>Yaxshi</div>
+                                    <div class="fb-stat-card bad"><span class="fb-val" id="fbBad">0</span>Yomon</div>
+                                    <div class="fb-stat-card"><span class="fb-val" id="fbReviewed">0</span>Ko'rib chiqilgan</div>
+                                    <div class="fb-stat-card"><span class="fb-val" id="fbPending">0</span>Kutilmoqda</div>
+                                </div>
+                                <div style="display:flex;gap:4px;margin-bottom:8px">
+                                    <button class="fb-review-btn" onclick="loadFbList('all')" style="flex:1">Hammasi</button>
+                                    <button class="fb-review-btn" onclick="loadFbList('good')" style="flex:1">Yaxshi</button>
+                                    <button class="fb-review-btn" onclick="loadFbList('bad')" style="flex:1">Yomon</button>
+                                    <button class="fb-review-btn" onclick="loadFbList('pending')" style="flex:1">Kutilmoqda</button>
+                                </div>
+                                <div id="fbListContainer" style="max-height:320px;overflow-y:auto"></div>
+                            </div>
+                        </div>
+
+                        <!-- ④ User activity -->
+                        <div class="hdr-dd" id="ddUsage">
+                            <button class="hdr-dd-btn" onclick="toggleHdrDd('ddUsage')">
+                                Faollik
+                                <svg class="hdr-dd-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="hdr-dd-panel" id="ddUsagePanel" style="width:400px">
+                                <div class="hdr-dd-panel-title">Foydalanuvchilar faolligi</div>
+                                <div class="usage-report-scroll">
+                                    <table class="usage-report-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Foydalanuvchi</th>
+                                                <th>Tarif</th>
+                                                <th title="Bugun">Kun</th>
+                                                <th title="Oxirgi 7 kun">Hafta</th>
+                                                <th title="Oxirgi 30 kun">Oy</th>
+                                                <th title="Jami">Jami</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="usageReportBody">
+                                            <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:12px">Yuklanmoqda…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="ur-meta" id="usageReportMeta"></div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <!-- Mobile-only: opens the admin actions as a right drawer (as before) -->
+                    <button class="hdr-mobile-toggle" id="hdrMobileToggle" onclick="toggleHdrDrawer()" title="Admin paneli">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                     </button>
                 </div>
@@ -5453,152 +5705,11 @@
                 </div>
             </div>
 
-            <!-- Right sidebar: R&D tools (master admin only) -->
-            <div class="ai-sidebar-right" id="aiSidebarRight">
-                <!-- Document Upload -->
-                <div class="ai-doc-upload-section">
-                    <div class="ai-history-title">Korpusga qo'shish</div>
-                    <select id="docUploadTopic" class="ai-doc-topic-select">
-                        <option value="">— Soha tanlang —</option>
-                        <option value="konstitutsiya">Konstitutsiyaviy tuzum</option>
-                        <option value="davlat-boshqaruvi">Davlat boshqaruvi</option>
-                        <option value="fuqarolik">Fuqarolik qonunchiligi</option>
-                        <option value="oila">Oila qonunchiligi</option>
-                        <option value="mehnat">Mehnat va bandlik</option>
-                        <option value="ijtimoiy">Ijtimoiy himoya</option>
-                        <option value="moliya">Moliya va kredit</option>
-                        <option value="soliq">Soliq</option>
-                        <option value="bank">Bank</option>
-                        <option value="uy-joy">Uy-joy qonunchiligi</option>
-                        <option value="tadbirkorlik">Tadbirkorlik</option>
-                        <option value="tashqi-iqtisod">Tashqi iqtisod. Bojxona</option>
-                        <option value="ekologiya">Ekologiya</option>
-                        <option value="axborot">Axborot</option>
-                        <option value="talim">Ta'lim. Fan. Madaniyat</option>
-                        <option value="soglik">Sog'liqni saqlash</option>
-                        <option value="mudofaa">Mudofaa</option>
-                        <option value="jinoyat">Jinoyat qonunchiligi</option>
-                        <option value="mamuriy">Ma'muriy javobgarlik</option>
-                        <option value="sudlov">Odil sudlov</option>
-                        <option value="adliya">Advokatura. Notariat. Adliya</option>
-                        <option value="xalqaro">Xalqaro huquq</option>
-                        <option value="shaxsiy">Shaxsiy hujjatlar</option>
-                    </select>
-                    <input type="text" id="docUploadName" class="ai-doc-name-input" placeholder="Hujjat nomi (ixtiyoriy)">
-
-                    <!-- Tab switcher: URL vs File -->
-                    <div class="ai-doc-tabs">
-                        <button class="ai-doc-tab active" id="tabUrlBtn" onclick="switchDocTab('url')">lex.uz URL</button>
-                        <button class="ai-doc-tab" id="tabFileBtn" onclick="switchDocTab('file')">Fayl</button>
-                    </div>
-
-                    <!-- URL input -->
-                    <div id="docUrlPanel">
-                        <input type="url" id="docLexUrl" class="ai-doc-name-input"
-                            placeholder="https://lex.uz/uz/docs/..." style="margin-bottom:6px">
-                        <button class="ai-doc-upload-btn" id="docUrlBtn" onclick="ingestLexUrl()">
-                            Lex.uz dan yuklash
-                        </button>
-                    </div>
-
-                    <!-- File input -->
-                    <div id="docFilePanel" style="display:none">
-                        <label class="ai-doc-file-label">
-                            <input type="file" id="docFileInput" accept=".pdf,.txt,.docx,.doc" onchange="onDocFileSelected(this)">
-                            Fayl tanlash (PDF / TXT / DOCX)
-                        </label>
-                        <div id="docSelectedFile" class="ai-doc-selected-file" style="display:none"></div>
-                        <button class="ai-doc-upload-btn" id="docUploadBtn" onclick="uploadLegalDocument()" disabled>
-                            Korpusga yuklash
-                        </button>
-                    </div>
-
-                    <div id="docUploadStatus" class="ai-doc-upload-status" style="display:none"></div>
-
-                    <!-- Refresh all core codes to their current lex.uz versions -->
-                    <button class="ai-doc-upload-btn" id="reingestRegistryBtn" onclick="reingestRegistry()"
-                        style="margin-top:8px;background:var(--navy-600);"
-                        title="Barcha asosiy kodekslarni lex.uz dagi eng so'nggi versiyasiga yangilash">
-                        ♻️ Barcha kodekslarni yangilash
-                    </button>
-                    <div id="reingestStatus" class="ai-doc-upload-status" style="display:none"></div>
-
-                    <!-- Per-field corpus update (Master only): "Yangilash" per category -->
-                    <div style="margin-top:10px">
-                        <button onclick="toggleCategoryUpdate()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
-                            <span>Soha bo'yicha yangilash</span>
-                            <span id="categoryUpdateToggleIcon">▼</span>
-                        </button>
-                        <div id="categoryUpdatePanel" style="display:none;margin-top:6px">
-                            <div style="font-size:11px;color:#888;padding:0 2px 6px">Har bir soha hujjatlari lex.uz dagi joriy versiyaga yangilanadi. Eskirgan hujjatlar korpusga qo'shilmaydi.</div>
-                            <div id="categoryUpdateList" style="max-height:320px;overflow-y:auto"></div>
-                        </div>
-                    </div>
-
-                    <!-- Ingest Log -->
-                    <div style="margin-top:10px">
-                        <button onclick="toggleIngestLog()" style="width:100%;background:none;border:1px solid var(--brass-100);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--navy-600);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
-                            <span>Yuklash tarixi</span>
-                            <span id="ingestLogToggleIcon">▼</span>
-                        </button>
-                        <div id="ingestLogPanel" style="display:none;margin-top:6px">
-                            <div id="ingestLogStats" style="font-size:11px;color:#888;padding:6px 8px;background:#f9f7ff;border-radius:6px;margin-bottom:6px"></div>
-                            <div id="ingestLogList" style="max-height:280px;overflow-y:auto;font-size:11px"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Feedback Report -->
-                <div class="fb-report-section-wrap" id="fbReportSection" style="display:none">
-                    <button class="fb-report-toggle" onclick="toggleFbReport()">
-                        <span>Feedback hisoboti</span>
-                        <span id="fbReportToggleIcon">&#9660;</span>
-                    </button>
-                    <div class="fb-report-panel" id="fbReportPanel">
-                        <div class="fb-stat-grid" id="fbStatGrid">
-                            <div class="fb-stat-card good"><span class="fb-val" id="fbGood">0</span>Yaxshi</div>
-                            <div class="fb-stat-card bad"><span class="fb-val" id="fbBad">0</span>Yomon</div>
-                            <div class="fb-stat-card"><span class="fb-val" id="fbReviewed">0</span>Ko'rib chiqilgan</div>
-                            <div class="fb-stat-card"><span class="fb-val" id="fbPending">0</span>Kutilmoqda</div>
-                        </div>
-                        <div style="display:flex;gap:4px;margin-bottom:8px">
-                            <button class="fb-review-btn" onclick="loadFbList('all')" style="flex:1">Hammasi</button>
-                            <button class="fb-review-btn" onclick="loadFbList('good')" style="flex:1">Yaxshi</button>
-                            <button class="fb-review-btn" onclick="loadFbList('bad')" style="flex:1">Yomon</button>
-                            <button class="fb-review-btn" onclick="loadFbList('pending')" style="flex:1">Kutilmoqda</button>
-                        </div>
-                        <div id="fbListContainer" style="max-height:350px;overflow-y:auto"></div>
-                    </div>
-                </div>
-
-                <!-- Usage Report — master admin only -->
-                <div class="usage-report-wrap" id="usageReportSection" style="display:none">
-                    <button class="fb-report-toggle" onclick="toggleUsageReport()">
-                        <span>Foydalanuvchilar faolligi</span>
-                        <span id="usageReportToggleIcon">&#9660;</span>
-                    </button>
-                    <div class="fb-report-panel" id="usageReportPanel">
-                        <div class="usage-report-scroll">
-                            <table class="usage-report-table">
-                                <thead>
-                                    <tr>
-                                        <th>Foydalanuvchi</th>
-                                        <th>Tarif</th>
-                                        <th title="Bugun">Kun</th>
-                                        <th title="Oxirgi 7 kun">Hafta</th>
-                                        <th title="Oxirgi 30 kun">Oy</th>
-                                        <th title="Jami">Jami</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="usageReportBody">
-                                    <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:12px">Yuklanmoqda…</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="ur-meta" id="usageReportMeta"></div>
-                    </div>
-                </div>
-
+            <!-- Right sidebar: emptied — all panels moved to header dropdowns above -->
+            <div id="aiSidebarRight" style="display:none">
+                <!-- Stubs kept so old JS references don't crash -->
+                <div id="fbReportSection"><div class="fb-report-panel" id="fbReportPanel"></div></div>
+                <div id="usageReportSection"><div class="fb-report-panel" id="usageReportPanel"></div></div>
             </div>
         </div>
         </div><!-- /tab-view ai -->
@@ -6226,28 +6337,16 @@
                     legalChatEl.style.display = data.role === 'master' ? '' : 'none';
                 }
 
-                // Show right sidebar (doc upload + feedback) for master only
-                const aiSidebarRight = document.getElementById('aiSidebarRight');
-                if (aiSidebarRight) {
-                    if (data.role === 'master') {
-                        aiSidebarRight.classList.add('master-visible');
-                    } else {
-                        aiSidebarRight.classList.remove('master-visible');
-                    }
+                // Show master-admin header dropdowns for master only.
+                // .master-mode on the header drives both the desktop dropdown
+                // row and the mobile right-drawer (CSS). No inline display so
+                // the media query can take over on mobile.
+                const aiChatHeader = document.getElementById('aiChatHeader');
+                if (aiChatHeader) {
+                    aiChatHeader.classList.toggle('master-mode', data.role === 'master');
                 }
-                // Show right burger toggle for master only
-                const rightToggle = document.getElementById('aiSidebarRightToggle');
-                if (rightToggle) {
-                    rightToggle.style.display = data.role === 'master' ? '' : 'none';
-                }
-                const fbReport = document.getElementById('fbReportSection');
-                if (fbReport) {
-                    fbReport.style.display = data.role === 'master' ? '' : 'none';
-                }
-                const usageReport = document.getElementById('usageReportSection');
-                if (usageReport) {
-                    usageReport.style.display = data.role === 'master' ? '' : 'none';
-                }
+                // Initial queue status fetch for master
+                if (data.role === 'master') refreshQueueStatus();
 
                 // Show registration requests section for master only
                 const regSection = document.getElementById('regSection');
@@ -8367,6 +8466,8 @@
                     showUpdateToast('Korpus yangilanishi tugadi', 'muted');
                     break;
             }
+            // Live-push event into queue status panel if it's open
+            pushQueueStatusEvent(e);
         }
 
         function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; }
@@ -8484,20 +8585,7 @@
             var icon  = document.getElementById('ingestLogToggleIcon');
             panel.style.display = _ingestLogOpen ? 'block' : 'none';
             icon.textContent = _ingestLogOpen ? '▲' : '▼';
-            // Collapse feedback section when upload history opens
-            if (_ingestLogOpen) {
-                var fbPanel   = document.getElementById('fbReportPanel');
-                var fbWrap    = document.getElementById('fbReportSection');
-                var fbSidebar = document.getElementById('aiSidebarRight');
-                var fbIcon    = document.getElementById('fbReportToggleIcon');
-                if (fbPanel && fbPanel.classList.contains('visible')) {
-                    fbPanel.classList.remove('visible');
-                    fbWrap.classList.remove('fb-expanded');
-                    fbSidebar.classList.remove('fb-open');
-                    if (fbIcon) fbIcon.innerHTML = '&#9660;';
-                }
-                await loadIngestLog();
-            }
+            if (_ingestLogOpen) await loadIngestLog();
         }
 
         async function loadIngestLog() {
@@ -9159,47 +9247,15 @@
             }
         }
 
-        // ═══ FEEDBACK REPORT (master only) ═══
+        // ═══ FEEDBACK REPORT — now opened via header dropdown (ddFeedback) ═══
         function toggleFbReport() {
-            var panel   = document.getElementById('fbReportPanel');
-            var wrap    = document.getElementById('fbReportSection');
-            var sidebar = document.getElementById('aiSidebarRight');
-            var icon    = document.getElementById('fbReportToggleIcon');
-            if (panel.classList.contains('visible')) {
-                panel.classList.remove('visible');
-                wrap.classList.remove('fb-expanded');
-                sidebar.classList.remove('fb-open');
-                icon.innerHTML = '&#9660;';
-            } else {
-                // Collapse ingest log when feedback expands
-                var ingestPanel = document.getElementById('ingestLogPanel');
-                var ingestIcon  = document.getElementById('ingestLogToggleIcon');
-                if (ingestPanel && ingestPanel.style.display !== 'none') {
-                    ingestPanel.style.display = 'none';
-                    if (ingestIcon) ingestIcon.textContent = '▼';
-                    _ingestLogOpen = false;
-                }
-                panel.classList.add('visible');
-                wrap.classList.add('fb-expanded');
-                sidebar.classList.add('fb-open');
-                icon.innerHTML = '&#9650;';
-                loadFbStats();
-                loadFbList('all');
-            }
+            // Legacy stub — feedback is now in the header dropdown.
+            toggleHdrDd('ddFeedback');
         }
 
-        // ── Usage Report (master) ────────────────────────────────────────
+        // ── Usage Report — now opened via header dropdown (ddUsage) ─────
         function toggleUsageReport() {
-            var panel = document.getElementById('usageReportPanel');
-            var icon  = document.getElementById('usageReportToggleIcon');
-            if (panel.classList.contains('visible')) {
-                panel.classList.remove('visible');
-                icon.innerHTML = '&#9660;';
-            } else {
-                panel.classList.add('visible');
-                icon.innerHTML = '&#9650;';
-                loadUsageReport();
-            }
+            toggleHdrDd('ddUsage');
         }
 
         async function loadUsageReport() {
@@ -9514,12 +9570,171 @@
             }
         }
 
+        // ═══ HEADER DROPDOWNS ═══
+        function isHdrMobile() { return window.matchMedia('(max-width: 768px)').matches; }
+
+        function toggleHdrDd(id) {
+            var dd = document.getElementById(id);
+            if (!dd) return;
+            var panel = dd.querySelector('.hdr-dd-panel');
+            var btn   = dd.querySelector('.hdr-dd-btn');
+            var wasOpen = panel && panel.classList.contains('dd-open');
+            // On mobile (accordion drawer) allow multiple open; on desktop only one.
+            if (!isHdrMobile()) closeAllHdrDds();
+            if (wasOpen && panel) {
+                panel.classList.remove('dd-open');
+                if (btn) btn.classList.remove('dd-open');
+                return;
+            }
+            if (panel) {
+                panel.classList.add('dd-open');
+                if (btn) btn.classList.add('dd-open');
+                // Load data when opening specific panels
+                if (id === 'ddFeedback') { loadFbStats(); loadFbList('all'); }
+                if (id === 'ddUsage')    { loadUsageReport(); }
+                if (id === 'ddQueue')    { refreshQueueStatus(); }
+            }
+        }
+
+        function closeAllHdrDds() {
+            document.querySelectorAll('.hdr-dd-panel.dd-open').forEach(function(p) { p.classList.remove('dd-open'); });
+            document.querySelectorAll('.hdr-dd-btn.dd-open').forEach(function(b)   { b.classList.remove('dd-open'); });
+        }
+
+        // Mobile-only: open/close the admin actions as a right drawer
+        function toggleHdrDrawer() {
+            var actions  = document.getElementById('masterHeaderActions');
+            var backdrop = document.getElementById('aiSidebarBackdrop');
+            if (!actions) return;
+            var open = actions.classList.toggle('drawer-open');
+            if (backdrop) backdrop.classList.toggle('active', open);
+            if (open && typeof refreshQueueStatus === 'function') refreshQueueStatus();
+        }
+        function closeHdrDrawer() {
+            var actions  = document.getElementById('masterHeaderActions');
+            var backdrop = document.getElementById('aiSidebarBackdrop');
+            if (actions) actions.classList.remove('drawer-open');
+            if (backdrop) backdrop.classList.remove('active');
+        }
+
+        // Close dropdowns on click outside. On mobile, ignore clicks inside the
+        // drawer (the drawer itself is closed via its backdrop / × button).
+        document.addEventListener('click', function(ev) {
+            if (ev.target.closest('.hdr-actions') || ev.target.closest('.hdr-mobile-toggle')) return;
+            closeAllHdrDds();
+        });
+
+        // Desktop only: close a dropdown when the cursor leaves it (no hover on touch).
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.hdr-dd').forEach(function(dd) {
+                dd.addEventListener('mouseleave', function() {
+                    if (isHdrMobile()) return;
+                    var p = dd.querySelector('.hdr-dd-panel');
+                    var b = dd.querySelector('.hdr-dd-btn');
+                    if (p) p.classList.remove('dd-open');
+                    if (b) b.classList.remove('dd-open');
+                });
+            });
+        });
+
+        // ═══ QUEUE STATUS PANEL ═══
+        var _qsLogBuffer = []; // local ring of events received via SSE
+
+        async function refreshQueueStatus() {
+            try {
+                var resp = await fetch('/api/rag/queue-status', { credentials: 'same-origin' });
+                if (!resp.ok) return;
+                var data = await resp.json();
+                renderQueueStatus(data);
+            } catch (_) {}
+        }
+
+        function renderQueueStatus(data) {
+            var dot    = document.getElementById('qsStatusDot');
+            var lenEl  = document.getElementById('qsQueueLen');
+            var curEl  = document.getElementById('qsCurrent');
+            var logEl  = document.getElementById('qsRecentLog');
+
+            if (dot) {
+                dot.textContent = data.processing ? '● Ishlamoqda' : '◎ Bo\'sh';
+                dot.style.color = data.processing ? '#22c55e' : '#bbb';
+            }
+            if (lenEl) {
+                lenEl.textContent = data.queueLength > 0 ? 'Navbatda: ' + data.queueLength + ' ta' : '';
+            }
+            if (curEl) {
+                if (data.processing && data.current) {
+                    curEl.style.display = '';
+                    curEl.textContent = '⏳ ' + truncate(data.current.lawName || data.current.docId || data.current.url || 'Ishlamoqda…', 48);
+                } else {
+                    curEl.style.display = 'none';
+                }
+            }
+            // Merge server recent with local SSE buffer (latest first)
+            var combined = (data.recent || []).concat(_qsLogBuffer);
+            var seen = new Set();
+            var deduped = combined.filter(function(e) {
+                var key = e.ts + e.type;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            }).sort(function(a, b) { return b.ts > a.ts ? 1 : -1; }).slice(0, 15);
+            renderQsLog(logEl, deduped);
+        }
+
+        function pushQueueStatusEvent(e) {
+            _qsLogBuffer.unshift(e);
+            if (_qsLogBuffer.length > 30) _qsLogBuffer.length = 30;
+            // If queue panel is open, live-update it
+            var panel = document.getElementById('ddQueuePanel');
+            if (panel && panel.classList.contains('dd-open')) {
+                var dot   = document.getElementById('qsStatusDot');
+                var curEl = document.getElementById('qsCurrent');
+                var lenEl = document.getElementById('qsQueueLen');
+                var logEl = document.getElementById('qsRecentLog');
+                if (e.type === 'start' && dot) { dot.textContent = '● Ishlamoqda'; dot.style.color = '#22c55e'; }
+                if (e.type === 'idle'  && dot) { dot.textContent = '◎ Bo\'sh';     dot.style.color = '#bbb'; if (curEl) curEl.style.display = 'none'; if (lenEl) lenEl.textContent = ''; }
+                if (e.type === 'start' && curEl && e.lawName) { curEl.style.display = ''; curEl.textContent = '⏳ ' + truncate(e.lawName, 48); }
+                if (e.type === 'done'  && curEl) curEl.style.display = 'none';
+                var seen = new Set();
+                var deduped = _qsLogBuffer.filter(function(ev) {
+                    var k = ev.ts + ev.type; if (seen.has(k)) return false; seen.add(k); return true;
+                }).slice(0, 15);
+                renderQsLog(logEl, deduped);
+            }
+        }
+
+        function renderQsLog(container, events) {
+            if (!container) return;
+            if (!events || !events.length) {
+                container.innerHTML = '<div style="color:#bbb;text-align:center;padding:12px 0;font-size:11px">Tarix yo\'q</div>';
+                return;
+            }
+            var iconMap = {
+                'queued': '📥', 'start': '⏳', 'error': '❌',
+                'category-start': '🔄', 'category-done': '✔️', 'idle': '✔️'
+            };
+            container.innerHTML = events.map(function(e) {
+                var icon = e.type === 'done' ? (e.skipped ? '⏭️' : '✅') : (iconMap[e.type] || '·');
+                var label = e.lawName || e.category || e.docId || e.type;
+                var extra = '';
+                if (e.type === 'done' && !e.skipped && e.chunks) extra = ' <span style="color:#22c55e">+' + e.chunks + '</span>';
+                if (e.type === 'done' && e.skipped) extra = ' <span style="color:#bbb;font-size:10px">' + (e.reason === 'inactive_or_empty' ? 'eskirgan' : 'mavjud') + '</span>';
+                if (e.type === 'error') { label = e.lawName || e.docId || ''; extra = ' <span style="color:#ef4444">' + truncate(e.error || '', 30) + '</span>'; }
+                if (e.type === 'category-done') extra = ' <span style="color:#22c55e">' + (e.succeeded||0) + '✓</span>';
+                return '<div class="qs-log-row"><span style="flex-shrink:0">' + icon + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + truncate(label, 38) + extra + '</span></div>';
+            }).join('');
+        }
+
         // Mobile sidebar toggles
         function toggleAiSidebar() {
             var sidebar  = document.getElementById('aiSidebar');
             var backdrop = document.getElementById('aiSidebarBackdrop');
             var rightOpen = document.getElementById('aiSidebarRight')?.classList.contains('open');
             if (rightOpen) toggleAiSidebarRight(); // close right first
+            // Also close the master admin drawer if it's open
+            var actions = document.getElementById('masterHeaderActions');
+            if (actions && actions.classList.contains('drawer-open')) actions.classList.remove('drawer-open');
             sidebar.classList.toggle('open');
             backdrop.classList.toggle('active');
         }
@@ -9537,9 +9752,11 @@
         function closeBothSidebars() {
             var left     = document.getElementById('aiSidebar');
             var right    = document.getElementById('aiSidebarRight');
+            var actions  = document.getElementById('masterHeaderActions');
             var backdrop = document.getElementById('aiSidebarBackdrop');
             if (left)     left.classList.remove('open');
             if (right)    right.classList.remove('open');
+            if (actions)  actions.classList.remove('drawer-open'); // mobile admin drawer
             if (backdrop) backdrop.classList.remove('active');
         }
         function closeMobileSidebar() {
