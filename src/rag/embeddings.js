@@ -281,7 +281,8 @@ async function getEmbedding(text, apiKey) {
  * Get embeddings for multiple texts in batch (ingestion).
  * Uses document/passage prefix for indexing.
  */
-async function getEmbeddingsBatch(texts, apiKey) {
+async function getEmbeddingsBatch(texts, apiKey, opts = {}) {
+  const { signal } = opts;
   const key = apiKey || getApiKey();
   if (!key) throw new Error('No API key for embeddings (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
   if (!texts || texts.length === 0) return [];
@@ -299,6 +300,14 @@ async function getEmbeddingsBatch(texts, apiKey) {
   console.log(`[EMBEDDINGS] Using ${provider} (${config.model}, ${config.dims}d)`);
 
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    // Cancellation point: if the caller aborted (e.g. Master-Admin clicked
+    // "Bekor qilish" on the queue), stop between batches instead of embedding
+    // every remaining chunk of a large codex.
+    if (signal && signal.aborted) {
+      const e = new Error('Embedding aborted by user');
+      e.name = 'AbortError';
+      throw e;
+    }
     // Preserve 1:1 alignment with the input: do NOT drop empty strings, or the
     // returned array would be shorter than `texts` and the caller's
     // `chunks[i].embedding = embeddings[i]` would misalign (trailing chunks

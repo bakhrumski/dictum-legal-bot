@@ -4987,11 +4987,12 @@ app.post('/api/rag/queue-control', requireMasterAdmin, (req, res) => {
     const { action } = req.body || {};
     const { ingestQueue } = require('../rag/ingest-queue');
     switch (action) {
-      case 'pause':  ingestQueue.pause();  break;
-      case 'resume': ingestQueue.resume(); break;
-      case 'cancel': ingestQueue.cancelAll(); break;
+      case 'pause':     ingestQueue.pause();  break;
+      case 'resume':    ingestQueue.resume(); break;
+      case 'cancel':    ingestQueue.cancelAll(); break;
+      case 'clear-log': ingestQueue.clearLog(); break;
       default:
-        return res.status(400).json({ error: "Yaroqsiz amal (action: 'pause' | 'resume' | 'cancel')" });
+        return res.status(400).json({ error: "Yaroqsiz amal (action: 'pause' | 'resume' | 'cancel' | 'clear-log')" });
     }
     res.json({ success: true, action, status: ingestQueue.getStatus() });
   } catch (error) {

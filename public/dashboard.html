@@ -5556,7 +5556,10 @@
                                     <button id="qsPauseBtn" onclick="queueControl('pause')" style="flex:1;font-size:11px;padding:5px 8px;border:1px solid var(--brass-100);border-radius:6px;background:none;color:var(--navy-600);cursor:pointer;white-space:nowrap">⏸ Pauza</button>
                                     <button id="qsCancelBtn" onclick="queueControl('cancel')" style="flex:1;font-size:11px;padding:5px 8px;border:1px solid #f0c9c9;border-radius:6px;background:none;color:#c0392b;cursor:pointer;white-space:nowrap">✖ Bekor qilish</button>
                                 </div>
-                                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:5px">So'nggi hodisalar</div>
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                                    <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">So'nggi hodisalar</span>
+                                    <button id="qsClearLogBtn" onclick="clearQueueLog()" title="Tarixni tozalash" style="background:none;border:1px solid var(--glass-border);border-radius:6px;padding:2px 7px;font-size:10px;cursor:pointer;color:var(--text-muted)">🗑 Tozalash</button>
+                                </div>
                                 <div id="qsRecentLog" style="max-height:200px;overflow-y:auto">
                                     <div style="color:#bbb;text-align:center;padding:12px 0;font-size:11px">Tarix yo'q</div>
                                 </div>
@@ -9769,6 +9772,22 @@
             } catch (e) {
                 showUpdateToast('❌ Tarmoq xatoligi: ' + e.message, 'error');
             }
+        }
+
+        // Clear the snapshot event log (server ring buffer + local SSE buffer).
+        async function clearQueueLog() {
+            try {
+                await fetch('/api/rag/queue-control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: 'clear-log' })
+                });
+            } catch (_) { /* clear locally regardless */ }
+            _qsLogBuffer = [];
+            var logEl = document.getElementById('qsRecentLog');
+            if (logEl) logEl.innerHTML = '<div style="color:#bbb;text-align:center;padding:12px 0;font-size:11px">Tarix yo\'q</div>';
+            showUpdateToast('Tarix tozalandi', 'info');
         }
 
         // Reflect queue state on the pause/cancel controls.

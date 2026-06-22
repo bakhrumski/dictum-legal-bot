@@ -42,8 +42,11 @@ const LEX_BASE = 'https://lex.uz';
  * Make an HTTP(S) GET request using Node built-in modules (no global fetch needed).
  * Follows up to 5 redirects.
  */
-function httpGet(url, maxRedirects = 5) {
+function httpGet(url, maxRedirects = 5, signal = null) {
   return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) {
+      const e = new Error('Aborted'); e.name = 'AbortError'; return reject(e);
+    }
     const lib = url.startsWith('https') ? https : http;
     const req = lib.get(url, {
       headers: {
@@ -59,7 +62,7 @@ function httpGet(url, maxRedirects = 5) {
         const next = res.headers.location.startsWith('http')
           ? res.headers.location
           : new URL(res.headers.location, url).href;
-        return httpGet(next, maxRedirects - 1).then(resolve, reject);
+        return httpGet(next, maxRedirects - 1, signal).then(resolve, reject);
       }
 
       if (res.statusCode !== 200) {
@@ -74,6 +77,14 @@ function httpGet(url, maxRedirects = 5) {
     });
     req.on('error', reject);
     req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+    // Abort the in-flight request when the caller cancels (e.g. Master-Admin
+    // clicked "Bekor qilish" while a large codex was still downloading).
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        req.destroy();
+        const e = new Error('Aborted'); e.name = 'AbortError'; reject(e);
+      }, { once: true });
+    }
   });
 }
 
@@ -83,14 +94,15 @@ function httpGet(url, maxRedirects = 5) {
  * @param {string} urlOrId - full URL or numeric doc ID (e.g. "145261" or "https://lex.uz/docs/145261")
  * @returns {Promise<{ title: string, body: string, metadata: object }>}
  */
-async function fetchLexDocument(urlOrId) {
+async function fetchLexDocument(urlOrId, opts = {}) {
+  const { signal } = opts;
   const url = urlOrId.startsWith('http')
     ? urlOrId
     : `${LEX_BASE}/docs/${urlOrId}`;
 
   console.log(`[FETCH-LEX] Fetching: ${url}`);
 
-  const html = await httpGet(url);
+  const html = await httpGet(url, 5, signal);
   console.log(`[FETCH-LEX] Downloaded ${(html.length / 1024).toFixed(0)} KB`);
 
   const parsed = parseLexHtml(html, url);
@@ -103,7 +115,7 @@ async function fetchLexDocument(urlOrId) {
     const currentUrl = parsed.metadata.current_version_url;
     console.log(`[FETCH-LEX] Historical version detected at ${url} → fetching current: ${currentUrl}`);
     try {
-      const currentHtml = await httpGet(currentUrl);
+      const currentHtml = await httpGet(currentUrl, 5, signal);
       const currentParsed = parseLexHtml(currentHtml, currentUrl);
       return { ...currentParsed, rawHtml: currentHtml };
     } catch (err) {

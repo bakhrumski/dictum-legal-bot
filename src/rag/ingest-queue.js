@@ -44,6 +44,7 @@ class IngestQueue extends EventEmitter {
     this._dirty = false;        // whether anything was ingested since last index rebuild
     this.paused = false;        // when true: finish nothing new; category jobs wait between docs
     this._cancelCurrent = false; // when true: abort the in-flight category job's remaining docs
+    this._abortController = null; // aborts the in-flight document's fetch + embedding
   }
 
   _emit(event) {
@@ -100,16 +101,31 @@ class IngestQueue extends EventEmitter {
   }
 
   /**
-   * Cancel everything: drop all pending jobs and abort the in-flight category
-   * job's remaining documents. The document mid-ingest still finishes (to avoid
-   * leaving partial chunks), then the worker drains to idle.
+   * Cancel everything: drop all pending jobs AND interrupt the document
+   * currently being ingested (aborts its in-flight lex.uz fetch + embedding via
+   * AbortController). The worker then drains to idle. Because the abort happens
+   * before any DB write, a cancelled document leaves no partial chunks.
    */
   cancelAll() {
     const removed = this.clearQueue();
     this._cancelCurrent = true;
     this.paused = false; // ensure the worker can drain to idle rather than stay paused
+    if (this._abortController) {
+      try { this._abortController.abort(); } catch (_) { /* already aborted */ }
+    }
     this._emit({ type: 'cancelled', removed });
     log.info('queue cancel requested', { removed });
+    return removed;
+  }
+
+  /**
+   * Clear the recent-events ring buffer (the "So'nggi hodisalar" snapshot log).
+   * Does not touch the queue or any in-flight work. Returns how many were dropped.
+   */
+  clearLog() {
+    const removed = this.recent.length;
+    this.recent = [];
+    log.info('queue log cleared', { removed });
     return removed;
   }
 
@@ -207,7 +223,8 @@ class IngestQueue extends EventEmitter {
       }
 
       const { ingestFromUrl } = require('./ingest-lex');
-      const inserted = await ingestFromUrl(url, { category, docId, lawName });
+      this._abortController = new AbortController();
+      const inserted = await ingestFromUrl(url, { category, docId, lawName, signal: this._abortController.signal });
 
       if (inserted === 0) {
         // ingestFromUrl returns 0 when the document is inactive (repealed) —
@@ -218,8 +235,13 @@ class IngestQueue extends EventEmitter {
         this._emit({ type: 'done', docId, lawName, category, chunks: inserted, skipped: false });
       }
     } catch (err) {
-      this._emit({ type: 'error', docId, lawName, category, error: err.message });
+      if (err && err.name === 'AbortError') {
+        this._emit({ type: 'cancelled', docId, lawName, category });
+      } else {
+        this._emit({ type: 'error', docId, lawName, category, error: err.message });
+      }
     } finally {
+      this._abortController = null;
       this._enqueuedKeys.delete(key);
     }
   }
@@ -245,8 +267,10 @@ class IngestQueue extends EventEmitter {
       this._emit({ type: 'start', docId: law.doc_id, lawName: law.law_name, category });
       try {
         const { ingestFromUrl } = require('./ingest-lex');
+        this._abortController = new AbortController();
         const inserted = await ingestFromUrl(law.lex_url, {
           category, docId: law.doc_id, lawName: law.law_name,
+          signal: this._abortController.signal,
         });
         if (inserted === 0) {
           this._emit({ type: 'done', docId: law.doc_id, lawName: law.law_name, category, skipped: true, reason: 'inactive_or_empty' });
@@ -256,8 +280,15 @@ class IngestQueue extends EventEmitter {
           this._emit({ type: 'done', docId: law.doc_id, lawName: law.law_name, category, chunks: inserted, skipped: false });
         }
       } catch (err) {
+        if (err && err.name === 'AbortError') {
+          // Cancelled mid-document: stop the whole category immediately.
+          this._cancelCurrent = true;
+          break;
+        }
         failed++;
         this._emit({ type: 'error', docId: law.doc_id, lawName: law.law_name, category, error: err.message });
+      } finally {
+        this._abortController = null;
       }
       // Gentle rate-limit between lex.uz fetches
       await new Promise(r => setTimeout(r, 1500));
