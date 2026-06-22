@@ -5690,6 +5690,23 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin:12px 0 5px">
+                                    Foydalanuvchi bo'yicha (30 kun)
+                                </div>
+                                <div style="max-height:180px;overflow-y:auto">
+                                    <table style="width:100%;border-collapse:collapse;font-size:11px">
+                                        <thead>
+                                            <tr style="color:var(--text-muted);text-align:left">
+                                                <th style="padding:3px 4px;font-weight:600">Foydalanuvchi</th>
+                                                <th style="padding:3px 4px;font-weight:600;text-align:right">Chaqiruv</th>
+                                                <th style="padding:3px 4px;font-weight:600;text-align:right">Xarajat</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="spendByUserBody">
+                                            <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:12px">Yuklanmoqda…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 
@@ -9845,22 +9862,16 @@
 
         async function loadSpendReport() {
             var sumEl = document.getElementById('spendSummary');
-            var bodyEl = document.getElementById('spendBreakdownBody');
             try {
                 var results = await Promise.all([
                     fetch('/api/hybrid/status', { credentials: 'same-origin' }),
-                    fetch('/api/hybrid/spend-breakdown?days=30', { credentials: 'same-origin' })
+                    fetch('/api/hybrid/spend-breakdown?days=30', { credentials: 'same-origin' }),
+                    fetch('/api/hybrid/spend-by-user?days=30', { credentials: 'same-origin' })
                 ]);
-                var statusResp = results[0], breakdownResp = results[1];
-                if (statusResp.ok) {
-                    renderSpendSummary(await statusResp.json());
-                } else if (sumEl) {
-                    sumEl.innerHTML = '<div style="color:#c0392b;font-size:11px;padding:8px 0">Xarajat maʼlumotini olishda xatolik</div>';
-                }
-                if (breakdownResp.ok) {
-                    var bd = await breakdownResp.json();
-                    renderSpendBreakdown(bd.rows || []);
-                }
+                if (results[0].ok) renderSpendSummary(await results[0].json());
+                else if (sumEl) sumEl.innerHTML = '<div style="color:#c0392b;font-size:11px;padding:8px 0">Xarajat maʼlumotini olishda xatolik</div>';
+                if (results[1].ok) { var bd = await results[1].json(); renderSpendBreakdown(bd.rows || []); }
+                if (results[2].ok) { var ud = await results[2].json(); renderSpendByUser(ud.rows || []); }
             } catch (e) {
                 if (sumEl) sumEl.innerHTML = '<div style="color:#c0392b;font-size:11px;padding:8px 0">Tarmoq xatoligi</div>';
             }
@@ -9906,6 +9917,23 @@
                     '<td style="padding:4px;color:var(--navy-600)">' + escapeHtml(r.model || '') + '</td>' +
                     '<td style="padding:4px;color:var(--text-muted)">' + escapeHtml(r.stage || '') + '</td>' +
                     '<td style="padding:4px;text-align:right">' + (r.calls || 0) + '</td>' +
+                    '<td style="padding:4px;text-align:right;font-weight:600">' + fmtUsd(r.cost_usd) + '</td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        function renderSpendByUser(rows) {
+            var body = document.getElementById('spendByUserBody');
+            if (!body) return;
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:12px">Maʼlumot yoʻq</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(function(r) {
+                var name = r.user_id ? escapeHtml(r.display_name || ('#' + r.user_id)) : '<span style="color:#bbb">Nomaʼlum</span>';
+                return '<tr style="border-top:1px solid var(--glass-border)">' +
+                    '<td style="padding:4px;color:var(--navy-600)">' + name + '</td>' +
+                    '<td style="padding:4px;text-align:right;color:var(--text-muted)">' + (r.calls || 0) + '</td>' +
                     '<td style="padding:4px;text-align:right;font-weight:600">' + fmtUsd(r.cost_usd) + '</td>' +
                 '</tr>';
             }).join('');
