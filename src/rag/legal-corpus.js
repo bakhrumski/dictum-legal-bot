@@ -260,7 +260,10 @@ async function initLegalCorpus() {
     const provider = detectProvider();
     console.log(`[LEGAL CORPUS] Table and indexes ready (embeddings: ${provider || 'none'}, ${getEmbedDims()}d)`);
   } catch (err) {
-    console.error('[LEGAL CORPUS] Init error:', err.message);
+    // Print the FULL error — an empty err.message (e.g. some pg/connection
+    // errors) otherwise hides the real cause and surfaces as a blank "FAILED".
+    console.error('[LEGAL CORPUS] Init error:', err.message || err.code || err.detail || err);
+    if (err && err.stack) console.error(err.stack);
     // Don't throw — let the app start even if pgvector isn't available yet
   }
 }

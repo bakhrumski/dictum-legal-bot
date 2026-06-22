@@ -163,12 +163,17 @@ function parseLexHtml(html, sourceUrl) {
   const $statusScope = $('body').clone();
   $statusScope.find('#divCont').remove();
   const statusText = $statusScope.text();
+  // Match ONLY the document-level repeal banner, which lex.uz renders as
+  // "Hujjat kuchini yoʻqotgan" (Document has lost force). We must NOT match a
+  // bare "kuchini yoʻqotgan", because that phrase also appears in the header in
+  // benign cross-references — e.g. a code's transitional provisions that repeal
+  // OTHER acts ("... kuchini yoʻqotgan deb hisoblansin"), or amendment history.
+  // Those false-positives previously flagged active codes (Soliq, Jinoyat,
+  // Oila, etc.) as inactive. The status banner always carries the "Hujjat"
+  // (or Russian "Документ") subject — require it.
   const statusPatterns = [
-    new RegExp(`Hujjat\\s+kuchini\\s+yo${APO}?qotgan`, 'i'),
-    new RegExp(`Hujjat\\s+kuchi\\s+yo${APO}?qotgan`, 'i'),
-    new RegExp(`kuchini\\s+yo${APO}?qotgan`, 'i'),
+    new RegExp(`Hujjat(?:ning)?\\s+kuchi(?:ni)?\\s+yo${APO}?qotgan`, 'i'),
     /Документ\s+утратил\s+силу/i,
-    /(?:utratil|utrativ)\s+silu/i,
     /Not\s+in\s+force/i,
   ];
   for (const pat of statusPatterns) {
@@ -176,13 +181,22 @@ function parseLexHtml(html, sourceUrl) {
     if (m) {
       metadata.is_active = false;
       metadata.status_label = m[0];
+      // Log surrounding context so a misfire is diagnosable from logs alone.
+      const idx = m.index || 0;
+      const ctx = statusText.slice(Math.max(0, idx - 60), idx + 80).replace(/\s+/g, ' ').trim();
+      console.log(`[FETCH-LEX] Status banner matched → inactive. Context: "…${ctx}…"`);
       break;
     }
   }
-  // Also treat "Eski tahrir" (old edition) as inactive for our purposes
-  if (/Eski\s+tahrir/i.test(statusText)) {
+  // Treat an old edition as inactive ONLY when phrased as the document's own
+  // status ("Hujjatning eski tahriri"). A bare "Eski tahrir" also appears in
+  // the redaction-history widget on current-version pages, so matching it
+  // loosely would false-positive active codes. Genuine old-edition pages are
+  // already handled by the historical-version redirect below.
+  if (metadata.is_active && /Hujjat(?:ning)?\s+eski\s+tahrir/i.test(statusText)) {
     metadata.is_active = false;
     metadata.status_label = metadata.status_label || 'Eski tahrir';
+    console.log('[FETCH-LEX] Old-edition banner matched → inactive.');
   }
 
   // Full-body text is still used below for historical-version detection.
