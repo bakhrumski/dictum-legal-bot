@@ -5658,6 +5658,41 @@
                             </div>
                         </div>
 
+                        <!-- ⑤ API spend / cost -->
+                        <div class="hdr-dd" id="ddSpend">
+                            <button class="hdr-dd-btn" onclick="toggleHdrDd('ddSpend')">
+                                Xarajat
+                                <svg class="hdr-dd-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="hdr-dd-panel" id="ddSpendPanel" style="width:380px">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                                    <span class="hdr-dd-panel-title" style="margin:0">API xarajati (LLM)</span>
+                                    <button onclick="loadSpendReport()" title="Yangilash" style="background:none;border:1px solid var(--glass-border);border-radius:6px;padding:2px 7px;font-size:11px;cursor:pointer;color:var(--text-muted)">🔄</button>
+                                </div>
+                                <div id="spendSummary">
+                                    <div style="color:#bbb;text-align:center;padding:14px 0;font-size:11px">Yuklanmoqda…</div>
+                                </div>
+                                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin:12px 0 5px">
+                                    Model bo'yicha (30 kun)
+                                </div>
+                                <div class="spend-breakdown-scroll" style="max-height:220px;overflow-y:auto">
+                                    <table class="spend-table" style="width:100%;border-collapse:collapse;font-size:11px">
+                                        <thead>
+                                            <tr style="color:var(--text-muted);text-align:left">
+                                                <th style="padding:3px 4px;font-weight:600">Model</th>
+                                                <th style="padding:3px 4px;font-weight:600">Bosqich</th>
+                                                <th style="padding:3px 4px;font-weight:600;text-align:right">Chaqiruv</th>
+                                                <th style="padding:3px 4px;font-weight:600;text-align:right">Xarajat</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="spendBreakdownBody">
+                                            <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:12px">Yuklanmoqda…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                     <!-- Mobile-only: opens the admin actions as a right drawer (as before) -->
                     <button class="hdr-mobile-toggle" id="hdrMobileToggle" onclick="toggleHdrDrawer()" title="Admin paneli">
@@ -9598,6 +9633,7 @@
                 if (id === 'ddFeedback') { loadFbStats(); loadFbList('all'); }
                 if (id === 'ddUsage')    { loadUsageReport(); }
                 if (id === 'ddQueue')    { refreshQueueStatus(); }
+                if (id === 'ddSpend')    { loadSpendReport(); }
             }
         }
 
@@ -9798,6 +9834,80 @@
                 if (e.type === 'error') { label = e.lawName || e.docId || ''; extra = ' <span style="color:#ef4444">' + truncate(e.error || '', 30) + '</span>'; }
                 if (e.type === 'category-done') extra = ' <span style="color:#22c55e">' + (e.succeeded||0) + '✓</span>';
                 return '<div class="qs-log-row"><span style="flex-shrink:0">' + icon + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + truncate(label, 38) + extra + '</span></div>';
+            }).join('');
+        }
+
+        // ═══ API SPEND / COST PANEL ═══
+        function fmtUsd(n) {
+            n = Number(n) || 0;
+            return '$' + (n < 1 ? n.toFixed(4) : n.toFixed(2));
+        }
+
+        async function loadSpendReport() {
+            var sumEl = document.getElementById('spendSummary');
+            var bodyEl = document.getElementById('spendBreakdownBody');
+            try {
+                var results = await Promise.all([
+                    fetch('/api/hybrid/status', { credentials: 'same-origin' }),
+                    fetch('/api/hybrid/spend-breakdown?days=30', { credentials: 'same-origin' })
+                ]);
+                var statusResp = results[0], breakdownResp = results[1];
+                if (statusResp.ok) {
+                    renderSpendSummary(await statusResp.json());
+                } else if (sumEl) {
+                    sumEl.innerHTML = '<div style="color:#c0392b;font-size:11px;padding:8px 0">Xarajat maʼlumotini olishda xatolik</div>';
+                }
+                if (breakdownResp.ok) {
+                    var bd = await breakdownResp.json();
+                    renderSpendBreakdown(bd.rows || []);
+                }
+            } catch (e) {
+                if (sumEl) sumEl.innerHTML = '<div style="color:#c0392b;font-size:11px;padding:8px 0">Tarmoq xatoligi</div>';
+            }
+        }
+
+        function spendBar(spent, ceiling, label) {
+            spent = Number(spent) || 0;
+            ceiling = Number(ceiling) || 0;
+            var pct = ceiling > 0 ? Math.min(100, (spent / ceiling) * 100) : 0;
+            var color = pct >= 90 ? '#c0392b' : (pct >= 70 ? '#e0a000' : '#22c55e');
+            return '<div style="margin-bottom:10px">' +
+                '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">' +
+                    '<span style="color:var(--navy-600);font-weight:600">' + label + '</span>' +
+                    '<span style="color:var(--text-muted)">' + fmtUsd(spent) +
+                    (ceiling > 0 ? ' <span style="color:#bbb">/ ' + fmtUsd(ceiling) + '</span>' : '') + '</span>' +
+                '</div>' +
+                '<div style="height:6px;background:var(--parchment-100);border-radius:4px;overflow:hidden">' +
+                    '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + color + ';transition:width .3s"></div>' +
+                '</div>' +
+            '</div>';
+        }
+
+        function renderSpendSummary(data) {
+            var el = document.getElementById('spendSummary');
+            if (!el) return;
+            var s = data.spend || {};
+            var html = spendBar(s.today, s.dailyCeiling, 'Bugun') +
+                       spendBar(s.month, s.monthlyCeiling, 'Shu oy');
+            var srcLabel = s.source === 'db' ? 'doimiy (DB)' : 'jarayon ichida';
+            html += '<div style="font-size:10px;color:#bbb;text-align:right;margin-top:-2px">Manba: ' + srcLabel + '</div>';
+            el.innerHTML = html;
+        }
+
+        function renderSpendBreakdown(rows) {
+            var body = document.getElementById('spendBreakdownBody');
+            if (!body) return;
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:12px">Maʼlumot yoʻq</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(function(r) {
+                return '<tr style="border-top:1px solid var(--glass-border)">' +
+                    '<td style="padding:4px;color:var(--navy-600)">' + escapeHtml(r.model || '') + '</td>' +
+                    '<td style="padding:4px;color:var(--text-muted)">' + escapeHtml(r.stage || '') + '</td>' +
+                    '<td style="padding:4px;text-align:right">' + (r.calls || 0) + '</td>' +
+                    '<td style="padding:4px;text-align:right;font-weight:600">' + fmtUsd(r.cost_usd) + '</td>' +
+                '</tr>';
             }).join('');
         }
 
