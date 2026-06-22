@@ -9629,15 +9629,23 @@
             closeAllHdrDds();
         });
 
-        // Desktop only: close a dropdown when the cursor leaves it (no hover on touch).
+        // Desktop only: close a dropdown when the cursor leaves it.
+        // A 220 ms grace period lets the user move from the button down into
+        // the panel before the close fires; mouseenter cancels the timer.
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.hdr-dd').forEach(function(dd) {
+                var _closeTimer = null;
                 dd.addEventListener('mouseleave', function() {
                     if (isHdrMobile()) return;
-                    var p = dd.querySelector('.hdr-dd-panel');
-                    var b = dd.querySelector('.hdr-dd-btn');
-                    if (p) p.classList.remove('dd-open');
-                    if (b) b.classList.remove('dd-open');
+                    _closeTimer = setTimeout(function() {
+                        var p = dd.querySelector('.hdr-dd-panel');
+                        var b = dd.querySelector('.hdr-dd-btn');
+                        if (p) p.classList.remove('dd-open');
+                        if (b) b.classList.remove('dd-open');
+                    }, 220);
+                });
+                dd.addEventListener('mouseenter', function() {
+                    if (_closeTimer) { clearTimeout(_closeTimer); _closeTimer = null; }
                 });
             });
         });
