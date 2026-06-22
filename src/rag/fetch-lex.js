@@ -153,7 +153,16 @@ function parseLexHtml(html, sourceUrl) {
   // and silently failed to flag repealed documents, which were then ingested as
   // if in force. Variants: ' ' ' ʻ ʼ ` ´
   const APO = "['\\u2018\\u2019\\u02BB\\u02BC\\u0060\\u00B4]";
-  const fullText = $('body').text();
+  // IMPORTANT: scope status detection to the document HEADER region, NOT the
+  // whole page. Large codes (e.g. the Civil Code) contain many *individual*
+  // articles that were repealed over the years and are marked inline as
+  // "kuchini yo'qotgan" inside the article body (#divCont). Scanning the full
+  // body text would match one of those and wrongly flag the ENTIRE document as
+  // inactive. The document-level repeal banner lives in the header, outside
+  // #divCont — so we strip the content container before reading the status text.
+  const $statusScope = $('body').clone();
+  $statusScope.find('#divCont').remove();
+  const statusText = $statusScope.text();
   const statusPatterns = [
     new RegExp(`Hujjat\\s+kuchini\\s+yo${APO}?qotgan`, 'i'),
     new RegExp(`Hujjat\\s+kuchi\\s+yo${APO}?qotgan`, 'i'),
@@ -163,7 +172,7 @@ function parseLexHtml(html, sourceUrl) {
     /Not\s+in\s+force/i,
   ];
   for (const pat of statusPatterns) {
-    const m = fullText.match(pat);
+    const m = statusText.match(pat);
     if (m) {
       metadata.is_active = false;
       metadata.status_label = m[0];
@@ -171,10 +180,13 @@ function parseLexHtml(html, sourceUrl) {
     }
   }
   // Also treat "Eski tahrir" (old edition) as inactive for our purposes
-  if (/Eski\s+tahrir/i.test(fullText)) {
+  if (/Eski\s+tahrir/i.test(statusText)) {
     metadata.is_active = false;
     metadata.status_label = metadata.status_label || 'Eski tahrir';
   }
+
+  // Full-body text is still used below for historical-version detection.
+  const fullText = $('body').text();
 
   // ── Historical-version detection ──────────────────────────────────────────
   // lex.uz shows a banner "Hujjat DD.MM.YYYY sanasi holatiga" when the page
