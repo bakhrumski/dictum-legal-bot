@@ -135,10 +135,34 @@ async function getSpendBreakdown({ days = 30 } = {}) {
   return result.rows;
 }
 
+/**
+ * Per-user spend breakdown. JOINs admins table for display name.
+ * Rows with user_id = NULL are grouped under a synthetic "unknown" user.
+ */
+async function getSpendByUser({ days = 30 } = {}) {
+  if (!_initialized) await initSpendLog();
+  const result = await pool.query(`
+    SELECT
+      s.user_id,
+      COALESCE(a.full_name, a.username, 'Noma''lum foydalanuvchi') AS display_name,
+      COUNT(*)::int          AS calls,
+      SUM(s.in_tokens)::int  AS in_tokens,
+      SUM(s.out_tokens)::int AS out_tokens,
+      SUM(s.cost_usd)::float AS cost_usd
+    FROM llm_spend_log s
+    LEFT JOIN admins a ON a.id = s.user_id
+    WHERE s.ts > NOW() - ($1 || ' days')::INTERVAL
+    GROUP BY s.user_id, a.full_name, a.username
+    ORDER BY cost_usd DESC
+  `, [days]);
+  return result.rows;
+}
+
 module.exports = {
   initSpendLog,
   recordSpendRow,
   getSpendTotals,
   getSpendBreakdown,
+  getSpendByUser,
   loadSpendIntoPipeline,
 };

@@ -3724,7 +3724,8 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
 
     aiMessages.push({ role: 'user', text: message });
 
-    let aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192 });
+    const _chatUserId = req.session?.adminId || null;
+    let aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
     let displayReply = normalizeResponseForUser(aiResult.text);
     let finalProvider = aiResult.provider;
 
@@ -3738,7 +3739,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
           { role: 'system', text: geminiPrompt },
           { role: 'user', text: message },
         ];
-        const fallbackResult = await callAI(fallbackMessages, { useSearch: true, maxTokens: 8192 });
+        const fallbackResult = await callAI(fallbackMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat/fallback' });
         const fallbackReply = normalizeResponseForUser(fallbackResult.text);
         if (!isFailedAnswer(fallbackReply)) {
           displayReply = fallbackReply;

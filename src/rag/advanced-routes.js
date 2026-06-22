@@ -216,6 +216,20 @@ function mountAdvancedRoutes(app, deps) {
     }
   });
 
+  /**
+   * GET /api/hybrid/spend-by-user — per-user LLM spend (Master only).
+   * Query: ?days=30
+   */
+  app.get('/api/hybrid/spend-by-user', requireMasterAdmin, async (req, res) => {
+    try {
+      const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+      const rows = await spendLog.getSpendByUser({ days });
+      res.json({ days, rows });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ══════════════════════════════════════
   // SUBSCRIPTION TIERS (Phase 3)
   // ══════════════════════════════════════
