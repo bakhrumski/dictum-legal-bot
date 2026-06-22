@@ -5516,6 +5516,10 @@
                                     <span id="qsQueueLen" style="margin-left:auto;font-size:11px;color:var(--text-muted)"></span>
                                 </div>
                                 <div id="qsCurrent" style="display:none;font-size:11px;color:var(--navy-600);padding:5px 8px;background:var(--parchment-100);border-radius:6px;margin-bottom:8px"></div>
+                                <div id="qsControls" style="display:none;gap:6px;margin-bottom:10px">
+                                    <button id="qsPauseBtn" onclick="queueControl('pause')" style="flex:1;font-size:11px;padding:5px 8px;border:1px solid var(--brass-100);border-radius:6px;background:none;color:var(--navy-600);cursor:pointer;white-space:nowrap">⏸ Pauza</button>
+                                    <button id="qsCancelBtn" onclick="queueControl('cancel')" style="flex:1;font-size:11px;padding:5px 8px;border:1px solid #f0c9c9;border-radius:6px;background:none;color:#c0392b;cursor:pointer;white-space:nowrap">✖ Bekor qilish</button>
+                                </div>
                                 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:5px">So'nggi hodisalar</div>
                                 <div id="qsRecentLog" style="max-height:200px;overflow-y:auto">
                                     <div style="color:#bbb;text-align:center;padding:12px 0;font-size:11px">Tarix yo'q</div>
@@ -9650,6 +9654,48 @@
             } catch (_) {}
         }
 
+        // Pause / resume / cancel the ingest queue from the panel.
+        async function queueControl(action) {
+            try {
+                var resp = await fetch('/api/rag/queue-control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: action })
+                });
+                var data = await resp.json();
+                if (resp.ok && data.success) {
+                    if (data.status) renderQueueStatus(data.status);
+                    var msg = action === 'pause' ? 'Navbat to\'xtatildi'
+                            : action === 'resume' ? 'Navbat davom ettirildi'
+                            : 'Navbat bekor qilindi';
+                    showUpdateToast(msg, 'info');
+                } else {
+                    showUpdateToast('❌ ' + (data.error || 'Xatolik'), 'error');
+                }
+            } catch (e) {
+                showUpdateToast('❌ Tarmoq xatoligi: ' + e.message, 'error');
+            }
+        }
+
+        // Reflect queue state on the pause/cancel controls.
+        function renderQueueControls(data) {
+            var box   = document.getElementById('qsControls');
+            var pause = document.getElementById('qsPauseBtn');
+            if (!box) return;
+            var active = !!(data.processing || (data.queueLength || 0) > 0 || data.paused);
+            box.style.display = active ? 'flex' : 'none';
+            if (pause) {
+                if (data.paused) {
+                    pause.textContent = '▶ Davom ettirish';
+                    pause.setAttribute('onclick', "queueControl('resume')");
+                } else {
+                    pause.textContent = '⏸ Pauza';
+                    pause.setAttribute('onclick', "queueControl('pause')");
+                }
+            }
+        }
+
         function renderQueueStatus(data) {
             var dot    = document.getElementById('qsStatusDot');
             var lenEl  = document.getElementById('qsQueueLen');
@@ -9657,12 +9703,21 @@
             var logEl  = document.getElementById('qsRecentLog');
 
             if (dot) {
-                dot.textContent = data.processing ? '● Ishlamoqda' : '◎ Bo\'sh';
-                dot.style.color = data.processing ? '#22c55e' : '#bbb';
+                if (data.paused) {
+                    dot.textContent = '⏸ To\'xtatilgan';
+                    dot.style.color = '#e0a000';
+                } else if (data.processing) {
+                    dot.textContent = '● Ishlamoqda';
+                    dot.style.color = '#22c55e';
+                } else {
+                    dot.textContent = '◎ Bo\'sh';
+                    dot.style.color = '#bbb';
+                }
             }
             if (lenEl) {
                 lenEl.textContent = data.queueLength > 0 ? 'Navbatda: ' + data.queueLength + ' ta' : '';
             }
+            renderQueueControls(data);
             if (curEl) {
                 if (data.processing && data.current) {
                     curEl.style.display = '';
@@ -9689,6 +9744,11 @@
             // If queue panel is open, live-update it
             var panel = document.getElementById('ddQueuePanel');
             if (panel && panel.classList.contains('dd-open')) {
+                // Control-state changes are easiest to reflect with a full re-sync.
+                if (e.type === 'paused' || e.type === 'resumed' || e.type === 'cancelled' || e.type === 'cleared' || e.type === 'category-cancelled') {
+                    refreshQueueStatus();
+                    return;
+                }
                 var dot   = document.getElementById('qsStatusDot');
                 var curEl = document.getElementById('qsCurrent');
                 var lenEl = document.getElementById('qsQueueLen');
@@ -9713,11 +9773,17 @@
             }
             var iconMap = {
                 'queued': '📥', 'start': '⏳', 'error': '❌',
-                'category-start': '🔄', 'category-done': '✔️', 'idle': '✔️'
+                'category-start': '🔄', 'category-done': '✔️', 'idle': '✔️',
+                'paused': '⏸', 'resumed': '▶', 'cancelled': '✖', 'cleared': '🗑', 'category-cancelled': '✖'
             };
             container.innerHTML = events.map(function(e) {
                 var icon = e.type === 'done' ? (e.skipped ? '⏭️' : '✅') : (iconMap[e.type] || '·');
-                var label = e.lawName || e.category || e.docId || e.type;
+                var typeLabels = {
+                    'paused': 'To\'xtatildi', 'resumed': 'Davom ettirildi',
+                    'cancelled': 'Bekor qilindi', 'cleared': 'Navbat tozalandi',
+                    'category-cancelled': 'Soha bekor qilindi', 'idle': 'Tugadi'
+                };
+                var label = e.lawName || e.category || e.docId || typeLabels[e.type] || e.type;
                 var extra = '';
                 if (e.type === 'done' && !e.skipped && e.chunks) extra = ' <span style="color:#22c55e">+' + e.chunks + '</span>';
                 if (e.type === 'done' && e.skipped) extra = ' <span style="color:#bbb;font-size:10px">' + (e.reason === 'inactive_or_empty' ? 'eskirgan' : 'mavjud') + '</span>';
