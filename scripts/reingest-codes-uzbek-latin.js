@@ -53,7 +53,8 @@ async function main() {
       }
       ok++;
     } catch (err) {
-      console.error(`  ✗ FAILED: ${err.message}`);
+      console.error(`  ✗ FAILED: ${err.message || err.code || err.detail || '(no message)'}`);
+      if (err && err.stack) console.error(err.stack);
       fail++;
     }
     // Rate-limit between documents
