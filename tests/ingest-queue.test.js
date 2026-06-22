@@ -470,6 +470,31 @@ function patchedDrain(processUrlImpl) {
     assertEq(processedCount, 1, 'job processed after resume');
   });
 
+  await test('clearLog() empties the recent ring buffer', async () => {
+    const q = new IngestQueue();
+    q._drain = async () => {};
+    q._emit({ type: 'queued', docId: 'a' });
+    q._emit({ type: 'queued', docId: 'b' });
+    assertTrue(q.recent.length >= 2, 'recent has events before clear');
+    const removed = q.clearLog();
+    assertTrue(removed >= 2, 'reports how many were dropped');
+    assertEq(q.recent.length, 0, 'recent buffer emptied');
+    assertEq(q.getStatus().recent.length, 0, 'getStatus reflects empty log');
+  });
+
+  await test('cancelAll() aborts the in-flight document via AbortController', async () => {
+    const q = new IngestQueue();
+    q._drain = async () => {};
+    // Simulate a document mid-ingest holding the controller.
+    q._abortController = new AbortController();
+    const signal = q._abortController.signal;
+    let aborted = false;
+    signal.addEventListener('abort', () => { aborted = true; });
+    q.cancelAll();
+    assertTrue(aborted, 'in-flight signal was aborted');
+    assertTrue(signal.aborted, 'signal.aborted is true');
+  });
+
   // ─── Summary ───────────────────────────────────────────────────────────────
   console.log('\n' + '─'.repeat(50));
   if (failed === 0) {

@@ -83,7 +83,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mamuriy-sud-kodeks',
       law_name: "Ma'muriy sud ishlarini yuritish to'g'risidagi kodeks",
-      lex_url: 'https://lex.uz/uz/docs/3527353',      // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-3527353',         // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
@@ -105,25 +105,25 @@ const LEX_REGISTRY = {
     {
       doc_id: 'fuqarolik-kodeks-1',
       law_name: "O'zbekiston Respublikasining Fuqarolik kodeksi (1-qism)",
-      lex_url: 'https://lex.uz/uz/docs/111189',       // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-111189',          // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
       doc_id: 'fuqarolik-kodeks-2',
       law_name: "O'zbekiston Respublikasining Fuqarolik kodeksi (2-qism)",
-      lex_url: 'https://lex.uz/uz/docs/180552',       // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-180552',          // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
       doc_id: 'fuqarolik-protsessual-kodeks',
       law_name: "O'zbekiston Respublikasining Fuqarolik protsessual kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/3517337',      // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-3517337',         // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
       doc_id: 'iqtisodiy-protsessual-kodeks',
       law_name: "O'zbekiston Respublikasining Iqtisodiy protsessual kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/3523891',      // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-3523891',         // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
@@ -145,7 +145,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'oila-kodeks',
       law_name: "O'zbekiston Respublikasining Oila kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/104720',       // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-104720',          // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
@@ -167,7 +167,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mehnat-kodeks',
       law_name: "O'zbekiston Respublikasining Mehnat kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/6257288',      // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-6257288',         // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
@@ -239,7 +239,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'soliq-kodeks',
       law_name: "O'zbekiston Respublikasining Soliq kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/4674902',      // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-4674902',         // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
@@ -357,7 +357,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'bojxona-kodeks',
       law_name: "O'zbekiston Respublikasining Bojxona kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/2876354',      // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-2876354',         // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
@@ -385,7 +385,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'yer-kodeks',
       law_name: "O'zbekiston Respublikasining Yer kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/152653',       // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-152653',          // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
@@ -489,19 +489,19 @@ const LEX_REGISTRY = {
     {
       doc_id: 'jinoyat-kodeks',
       law_name: "O'zbekiston Respublikasining Jinoyat kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/111453',       // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-111453',          // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
       doc_id: 'jinoyat-ijroiya-kodeks',
       law_name: "O'zbekiston Respublikasining Jinoyat-ijroiya kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/163629',       // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-163629',          // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
     {
       doc_id: 'jinoyat-protsessual-kodeks',
       law_name: "O'zbekiston Respublikasining Jinoyat-protsessual kodeksi",
-      lex_url: 'https://lex.uz/uz/docs/111460',       // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-111460',          // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
   ],
@@ -511,7 +511,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mamuriy-javobgarlik-kodeks',
       law_name: "Ma'muriy javobgarlik to'g'risidagi kodeks",
-      lex_url: 'https://lex.uz/uz/docs/97664',        // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-97664',           // [KODEKS] Uzbek Latin
       enforcement_date: null
     },
   ],

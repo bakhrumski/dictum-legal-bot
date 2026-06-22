@@ -156,7 +156,8 @@ async function ingestText(body, docMeta) {
   return inserted;
 }
 
-async function ingestStructuredHtml(rawHtml, docMeta) {
+async function ingestStructuredHtml(rawHtml, docMeta, opts = {}) {
+  const { signal } = opts;
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error('No embedding API key set (HF_TOKEN / GEMINI_API_KEY / GPT_API_KEY / OPENAI_API_KEY)');
@@ -187,13 +188,19 @@ async function ingestStructuredHtml(rawHtml, docMeta) {
   console.log('  Generating embeddings...');
 
   const texts = chunks.map((chunk) => chunk.text);
-  const embeddings = await getEmbeddingsBatch(texts, apiKey);
+  const embeddings = await getEmbeddingsBatch(texts, apiKey, { signal });
 
   assertEmbeddings(embeddings, chunks, docMeta);
 
   for (let i = 0; i < chunks.length; i++) {
     chunks[i].embedding = embeddings[i];
     chunks[i].chunkIndex = i;
+  }
+
+  // Final cancellation point before we touch the DB: don't delete the existing
+  // doc's chunks if the operator cancelled while we were embedding.
+  if (signal && signal.aborted) {
+    const e = new Error('Ingest aborted by user'); e.name = 'AbortError'; throw e;
   }
 
   await deleteByDocId(docMeta.doc_id);
@@ -241,11 +248,12 @@ async function ingestFile(filePath, opts = {}) {
 
 async function ingestFromUrl(url, opts = {}) {
   const category = opts.category;
+  const signal = opts.signal || null;
   if (!category || !VALID_CATEGORIES.includes(category)) {
     throw new Error(`Invalid category "${category}". Valid: ${VALID_CATEGORIES.join(', ')}`);
   }
 
-  const doc = await fetchLexDocument(url);
+  const doc = await fetchLexDocument(url, { signal });
   const lexMeta = doc.metadata || {};
   const inferredLanguage = url.includes('/uz/') ? 'uz' : 'ru';
 
@@ -295,7 +303,7 @@ async function ingestFromUrl(url, opts = {}) {
     source_type: 'law_text',
     quality_score: 0.5,
     verified_by: null,
-  });
+  }, { signal });
 }
 
 // ========== INGEST FROM REGISTRY ==========
