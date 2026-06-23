@@ -8127,7 +8127,10 @@
                 banner.innerHTML =
                     '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
                     '<div style="flex:1;min-width:0"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--brass-500)">Murojaatni tahlil qilmoqdasiz' + (category && category !== 'Boshqa' ? ' — ' + escapeHtml(category) : '') + '</span><div style="font-size:12px;color:var(--fg-2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(preview) + '</div></div>' +
-                    '<button onclick="useLatestAiAsAnswer()" style="flex-shrink:0;padding:6px 12px;background:var(--navy-700);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Javob sifatida ishlatish</button>' +
+                    '<div style="display:flex;gap:6px;flex-shrink:0">' +
+                    '<button id="aiBannerSendBtn" onclick="useLatestAiAsAnswer()" style="padding:6px 12px;background:var(--navy-700);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap" title="AI javobini foydalanuvchiga to\'g\'ridan-to\'g\'ri yuboradi">📤 Foydalanuvchiga yuborish</button>' +
+                    '<button onclick="useLatestAiAsAnswerEdit()" style="padding:6px 10px;background:none;color:var(--navy-700);border:1px solid var(--navy-300);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap" title="Tahrirlash uchun ochadi">✏️</button>' +
+                    '</div>' +
                     '</div>';
                 banner.style.display = 'block';
             }
@@ -8149,7 +8152,51 @@
             }
         }
 
-        function useLatestAiAsAnswer() {
+        async function useLatestAiAsAnswer() {
+            if (!aiCurrentRequestId) return;
+            var lastAiMsg = null;
+            for (var i = aiChatHistory.length - 1; i >= 0; i--) {
+                if (aiChatHistory[i].role === 'model') { lastAiMsg = aiChatHistory[i].text; break; }
+            }
+            if (!lastAiMsg) { alert('Hali AI javobi yo\'q'); return; }
+
+            var sendBtn = document.getElementById('aiBannerSendBtn');
+            if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳ Yuborilmoqda...'; }
+
+            try {
+                // Students go to pending-approval flow; master/lawyer send directly
+                var isStudent = typeof currentUser !== 'undefined' && currentUser.role === 'student';
+                var endpoint = isStudent ? '/api/student-response' : '/api/master-response';
+                var resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ requestId: aiCurrentRequestId, responseText: lastAiMsg })
+                });
+                var data = await resp.json().catch(function() { return {}; });
+
+                if (resp.ok) {
+                    var banner = document.getElementById('aiReqContextBanner');
+                    if (banner) {
+                        banner.innerHTML = '<div style="color:#27ae60;font-weight:600;padding:2px 0">' +
+                            (isStudent ? '✅ Javob adminga yuborildi — tasdiqlash kutilmoqda' : '✅ Javob foydalanuvchiga yuborildi!') +
+                            '</div>';
+                        setTimeout(function() { if (banner) banner.style.display = 'none'; }, 3000);
+                    }
+                    aiOpenedFromRequest = false;
+                    aiCurrentRequestId = null;
+                    if (typeof loadRequests === 'function') loadRequests();
+                } else {
+                    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Foydalanuvchiga yuborish'; }
+                    alert('❌ ' + (data.error || 'Xatolik yuz berdi'));
+                }
+            } catch (err) {
+                if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Foydalanuvchiga yuborish'; }
+                alert('❌ Tarmoq xatoligi: ' + err.message);
+            }
+        }
+
+        function useLatestAiAsAnswerEdit() {
             if (!aiCurrentRequestId) return;
             var lastAiMsg = null;
             for (var i = aiChatHistory.length - 1; i >= 0; i--) {
