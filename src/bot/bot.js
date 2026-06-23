@@ -656,11 +656,11 @@ bot.on('message', async (msg) => {
         countParams = [uid];
       }
       const requestCount = await pool.query(countQuery, countParams);
-      if (parseInt(requestCount.rows[0].cnt) >= 3) {
+      if (parseInt(requestCount.rows[0].cnt) >= 1) {
         bot.sendMessage(chatId,
-          '⚠️ Sizda 3 ta murojaat yuborilgan.\n\n' +
-          'Yangi murojaat yuborish uchun avvalgi murojaatlaringizga javob kelishini kuting.\n\n' +
-          'Javob kelgandan so\'ng yana 3 ta murojaat yuborishingiz mumkin.'
+          '⏳ Savolingiz yuborilgan, javob kutilmoqda.\n\n' +
+          'Yangi savol yuborish uchun avvalgi savolingizga javob kelishini kuting.\n\n' +
+          'Javob kelgandan so\'ng yana savol yuborishingiz mumkin.'
         );
         return;
       }
