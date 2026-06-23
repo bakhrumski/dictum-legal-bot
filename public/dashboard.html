@@ -5753,6 +5753,7 @@
                 </div>
 
                 <!-- Messages -->
+                <div id="aiReqContextBanner" style="display:none;margin:0;padding:10px 16px;background:var(--parchment-100);border-bottom:1px solid var(--border-1);font-size:13px;color:var(--fg-1)"></div>
                 <div class="ai-chat-messages" id="aiChatMessages">
                     <div class="ai-chat-welcome" id="aiChatWelcome">
                         <div class="ai-chat-welcome-icon" onclick="toggleWelcomeCategories()">
@@ -7594,7 +7595,7 @@
             }
         }
         
-        async function updateCategory(requestId, category) {
+        async function updateRequestCategory(requestId, category) {
             try {
                 const response = await fetch('/api/update-category', {
                     method: 'POST',
@@ -7629,14 +7630,6 @@
         }
 
         function checkCategoryBeforeResponse() {
-            const select = document.getElementById('categorySelect');
-            if (select && select.value === 'Boshqa') {
-                alert("⚠️ Iltimos, avval murojaatning yo'nalishini tanlang!\n\nJavob yuborishdan oldin yo'nalish belgilanishi shart.");
-                select.focus();
-                select.style.border = '2px solid #e74c3c';
-                select.style.animation = 'pulse-badge 0.5s 3';
-                return false;
-            }
             return true;
         }
 
@@ -7664,7 +7657,7 @@
                         <div class="detail-label">Yo\'nalish:</div>
                         <div class="detail-value">
                             ${currentUser.role === 'master' || request.status !== 'answered' ? `
-                            <select id="categorySelect" onchange="updateCategory(${request.id}, this.value)" class="detail-select ${request.category === 'Boshqa' ? 'select-warning' : 'select-success'}">
+                            <select id="categorySelect" onchange="updateRequestCategory(${request.id}, this.value)" class="detail-select ${request.category === 'Boshqa' ? 'select-warning' : 'select-success'}">
                                 <option value="Boshqa" ${request.category === 'Boshqa' ? 'selected' : ''}>-- Yo'nalishni tanlang --</option>
                                 <option value="Konstitutsiyaviy tuzum" ${request.category === 'Konstitutsiyaviy tuzum' ? 'selected' : ''}>Konstitutsiyaviy tuzum</option>
                                 <option value="Davlat boshqaruvi" ${request.category === 'Davlat boshqaruvi' ? 'selected' : ''}>Davlat boshqaruvi</option>
@@ -8110,43 +8103,67 @@
         let aiOpenedFromRequest = false;
 
         function openAiAnalysis(requestId, btnEl) {
-            aiOpenedFromRequest = true;
             const btn = btnEl || event.target.closest('.ai-tahlil-btn');
             const requestText = btn.getAttribute('data-request-text');
             const category = btn.getAttribute('data-category');
+
             aiCurrentRequestId = requestId;
             aiCurrentRequestText = requestText;
             aiCurrentCategory = category;
             aiConversationHistory = [];
             aiAnalysisComplete = false;
+            aiOpenedFromRequest = true;
 
-            // Hide request modal, show AI modal
+            // Close request modal
             document.getElementById('requestModal').style.display = 'none';
-            document.getElementById('aiModal').style.display = 'block';
 
-            // Reset UI
-            document.getElementById('aiChatSection').style.display = 'none';
-            document.getElementById('aiChatInputArea').style.display = 'none';
-            document.getElementById('aiActionButtons').style.display = 'none';
-            document.getElementById('aiFeedbackSection').style.display = 'none';
-            document.getElementById('aiYurxizmatSection').style.display = 'none';
-            document.getElementById('aiYurxizmatLinks').innerHTML = '';
-            document.getElementById('aiChatMessages2').innerHTML = '';
-            document.getElementById('aiFeedbackUp').classList.remove('selected');
-            document.getElementById('aiFeedbackDown').classList.remove('selected');
-            document.getElementById('aiFeedbackStatus').textContent = '';
-            aiCurrentQaBankId = null;
+            // Switch to AI tab — this IS the AI workspace
+            switchTab('ai');
 
-            // Show request preview
-            const preview = document.getElementById('aiRequestPreview');
-            preview.innerHTML = `<strong>Murojaat matni${category && category !== 'Boshqa' ? ` — ${category}` : ''}</strong>${requestText.length > 300 ? requestText.substring(0, 300) + '...' : requestText}`;
+            // Show request context banner
+            var banner = document.getElementById('aiReqContextBanner');
+            if (banner) {
+                var preview = requestText.length > 200 ? requestText.substring(0, 200) + '...' : requestText;
+                banner.innerHTML =
+                    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+                    '<div style="flex:1;min-width:0"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--brass-500)">Murojaatni tahlil qilmoqdasiz' + (category && category !== 'Boshqa' ? ' — ' + escapeHtml(category) : '') + '</span><div style="font-size:12px;color:var(--fg-2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(preview) + '</div></div>' +
+                    '<button onclick="useLatestAiAsAnswer()" style="flex-shrink:0;padding:6px 12px;background:var(--navy-700);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Javob sifatida ishlatish</button>' +
+                    '</div>';
+                banner.style.display = 'block';
+            }
 
-            // Show loading state
-            const content = document.getElementById('aiAnalysisContent');
-            content.innerHTML = '<div class="ai-loading"><span class="spinner"></span><div class="ai-loading-text">AI tahlil qilinmoqda...</div><div class="ai-loading-sub">GPT-4o Legal RAG tahlil tayyorlamoqda</div></div>';
+            // Start a fresh chat session
+            createNewAiChat();
 
-            // Start analysis
-            runAiAnalysis(requestText, category, content, btn);
+            // Auto-detect topic and pre-fill question
+            topicAutoDetect = true;
+            selectedTopic = null;
+            selectedTopics = [];
+
+            var aiInput = document.getElementById('aiChatInput');
+            if (aiInput) {
+                aiInput.value = requestText;
+                autoResizeAI(aiInput);
+                // Small delay so the tab switch animation completes
+                setTimeout(sendAiChat, 120);
+            }
+        }
+
+        function useLatestAiAsAnswer() {
+            if (!aiCurrentRequestId) return;
+            var lastAiMsg = null;
+            for (var i = aiChatHistory.length - 1; i >= 0; i--) {
+                if (aiChatHistory[i].role === 'model') { lastAiMsg = aiChatHistory[i].text; break; }
+            }
+            if (!lastAiMsg) { alert('Hali AI javobi yo\'q'); return; }
+            var banner = document.getElementById('aiReqContextBanner');
+            if (banner) banner.style.display = 'none';
+            aiOpenedFromRequest = false;
+            showRequestDetail(aiCurrentRequestId);
+            setTimeout(function() {
+                var ta = document.getElementById('responseText');
+                if (ta) { ta.value = lastAiMsg; ta.dispatchEvent(new Event('input')); ta.focus(); }
+            }, 300);
         }
 
         async function runAiAnalysis(requestText, category, content, btn) {
@@ -9036,6 +9053,9 @@
             selectedTopics = [];
             topicAutoDetect = false;
             pendingChatText = '';
+            var banner = document.getElementById('aiReqContextBanner');
+            if (banner) banner.style.display = 'none';
+            aiOpenedFromRequest = false;
             var msgs = document.getElementById('aiChatMessages');
             var welcome = document.getElementById('aiChatWelcome');
             msgs.innerHTML = '';
