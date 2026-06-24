@@ -8935,14 +8935,15 @@
             var priorityId = (typeof aiCurrentRequestId !== 'undefined' && aiCurrentRequestId) ? parseInt(aiCurrentRequestId, 10) : null;
             pending = pending.slice().sort(function(a, b) {
                 if (priorityId) {
-                    if (a.id === priorityId) return -1;
-                    if (b.id === priorityId) return 1;
+                    var aid = parseInt(a.id, 10), bid = parseInt(b.id, 10);
+                    if (aid === priorityId) return -1;
+                    if (bid === priorityId) return 1;
                 }
                 return 0;
             });
 
             var rows = pending.map(function(r) {
-                var isPriority = priorityId && r.id === priorityId;
+                var isPriority = priorityId && parseInt(r.id, 10) === priorityId;
                 var name = escapeHtml(r.first_name || r.name || ('@' + (r.username || 'Noma\'lum')));
                 var preview = escapeHtml((r.request_text || '').substring(0, 70));
                 var dots = r.request_text && r.request_text.length > 70 ? '...' : '';
