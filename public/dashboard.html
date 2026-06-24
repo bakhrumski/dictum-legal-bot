@@ -8918,6 +8918,75 @@
                 if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '✅ Saqlash va korpusga qo\'shish'; }
             }
         }
+        // ── Send AI response to a Telegram user ──
+        function sendAiMsgToUser(msgId) {
+            var vrow = document.getElementById('vrow_' + msgId);
+            if (!vrow) return;
+            var msgEl = vrow.closest('.ai-chat-msg');
+            if (!msgEl) return;
+            var responseText = msgEl.getAttribute('data-raw');
+            if (!responseText) { alert('Javob topilmadi'); return; }
+            var pending = (typeof requests !== 'undefined' ? requests : []).filter(function(r) {
+                return r.status !== 'answered';
+            });
+            if (pending.length === 0) {
+                alert('Hozirda kutilayotgan murojaatlar yo\'q.');
+                return;
+            }
+            window._aiSendResponseText = responseText;
+            var rows = pending.map(function(r) {
+                var name = escapeHtml(r.first_name || r.name || ('@' + (r.username || 'Noma\'lum')));
+                var preview = escapeHtml((r.request_text || '').substring(0, 70));
+                var dots = r.request_text && r.request_text.length > 70 ? '...' : '';
+                return '<div onclick="confirmAiSend(' + r.id + ')" ' +
+                    'style="padding:10px 12px;border:1px solid var(--border-1);border-radius:8px;margin-bottom:8px;cursor:pointer" ' +
+                    'onmouseover="this.style.background=\'var(--parchment-100)\'" onmouseout="this.style.background=\'\'">' +
+                    '<div style="font-weight:600;font-size:13px">' + name + ' <span style="font-weight:400;color:var(--fg-3);font-size:11px">#' + r.id + '</span></div>' +
+                    '<div style="font-size:12px;color:var(--fg-2);margin-top:2px">' + preview + dots + '</div>' +
+                    '</div>';
+            }).join('');
+            var html = '<div id="aiSendPickerOverlay" onclick="if(event.target===this)closeAiSendPicker()" ' +
+                'style="position:fixed;inset:0;background:rgba(26,20,16,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">' +
+                '<div style="background:var(--bg-1);border-radius:14px;padding:20px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3)">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+                '<strong style="font-size:15px;color:var(--fg-1)">Qaysi foydalanuvchiga yuborish?</strong>' +
+                '<button onclick="closeAiSendPicker()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--fg-3);line-height:1">&times;</button>' +
+                '</div>' +
+                '<div style="font-size:12px;color:var(--fg-2);margin-bottom:12px;padding:8px 10px;background:var(--parchment-100);border-radius:6px;max-height:72px;overflow:hidden">' +
+                escapeHtml(responseText.substring(0, 180)) + (responseText.length > 180 ? '...' : '') +
+                '</div>' + rows + '</div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function closeAiSendPicker() {
+            var el = document.getElementById('aiSendPickerOverlay');
+            if (el) el.remove();
+            window._aiSendResponseText = null;
+        }
+
+        async function confirmAiSend(requestId) {
+            closeAiSendPicker();
+            var responseText = window._aiSendResponseText;
+            if (!responseText) return;
+            try {
+                var resp = await fetch('/api/master-response', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ requestId: requestId, responseText: responseText })
+                });
+                var data = await resp.json().catch(function() { return {}; });
+                if (resp.ok) {
+                    if (typeof showUpdateToast === 'function') showUpdateToast('✅ Javob foydalanuvchiga yuborildi!', 'success');
+                    if (typeof loadRequests === 'function') loadRequests();
+                } else {
+                    alert('❌ ' + (data.error || 'Xatolik yuz berdi'));
+                }
+            } catch (err) {
+                alert('❌ Tarmoq xatoligi: ' + err.message);
+            }
+        }
+
         var aiChatSessions = [];
         var currentAiSessionId = null;
         var aiHistoryLoaded = false;
@@ -9259,6 +9328,7 @@
                     var verifyRow = isMasterUser ? ('<div class="ai-verify-row" id="vrow_' + msgId + '">' +
                         '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
                         '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
+                        '<button class="ai-verify-btn" onclick="sendAiMsgToUser(\'' + msgId + '\')" title="AI javobini foydalanuvchiga Telegram orqali yuborish" style="background:var(--navy-700);color:#fff;border-color:var(--navy-700)">📤 Foydalanuvchiga yuborish</button>' +
                         providerBadge +
                         '</div>' +
                         '<div class="ai-verify-editor" id="veditor_' + msgId + '" style="display:none">' +
@@ -9699,6 +9769,7 @@
                         var verifyRow = isMasterUser ? ('<div class="ai-verify-row" id="vrow_' + msgId + '">' +
                             '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
                             '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
+                            '<button class="ai-verify-btn" onclick="sendAiMsgToUser(\'' + msgId + '\')" title="AI javobini foydalanuvchiga Telegram orqali yuborish" style="background:var(--navy-700);color:#fff;border-color:var(--navy-700)">📤 Foydalanuvchiga yuborish</button>' +
                             '</div>' +
                             '<div class="ai-verify-editor" id="veditor_' + msgId + '" style="display:none">' +
                             '<textarea class="ai-verify-textarea" id="vtxt_' + msgId + '"></textarea>' +
