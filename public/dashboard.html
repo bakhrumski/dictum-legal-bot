@@ -8930,28 +8930,50 @@
             }
             window._aiSendResponseText = responseText;
             window._aiSendQuestion = msgEl.getAttribute('data-q') || '';
+
+            // Priority sender = the request that opened this AI analysis (if any).
+            var priorityId = (typeof aiCurrentRequestId !== 'undefined' && aiCurrentRequestId) ? parseInt(aiCurrentRequestId, 10) : null;
+            pending = pending.slice().sort(function(a, b) {
+                if (priorityId) {
+                    if (a.id === priorityId) return -1;
+                    if (b.id === priorityId) return 1;
+                }
+                return 0;
+            });
+
             var rows = pending.map(function(r) {
+                var isPriority = priorityId && r.id === priorityId;
                 var name = escapeHtml(r.first_name || r.name || ('@' + (r.username || 'Noma\'lum')));
                 var preview = escapeHtml((r.request_text || '').substring(0, 70));
                 var dots = r.request_text && r.request_text.length > 70 ? '...' : '';
-                return '<div onclick="confirmAiSend(' + r.id + ')" ' +
-                    'style="padding:10px 12px;border:1px solid var(--border-1);border-radius:8px;margin-bottom:8px;cursor:pointer" ' +
-                    'onmouseover="this.style.background=\'var(--parchment-100)\'" onmouseout="this.style.background=\'\'">' +
-                    '<div style="font-weight:600;font-size:13px">' + name + ' <span style="font-weight:400;color:var(--fg-3);font-size:11px">#' + r.id + '</span></div>' +
-                    '<div style="font-size:12px;color:var(--fg-2);margin-top:2px">' + preview + dots + '</div>' +
-                    '</div>';
+                return '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid ' + (isPriority ? '#86c98e' : 'var(--border-1)') + ';border-radius:8px;margin-bottom:8px;cursor:pointer;background:' + (isPriority ? '#eafbec' : '') + '">' +
+                    '<input type="checkbox" class="ai-send-pick" value="' + r.id + '"' + (isPriority ? ' checked' : '') + ' style="margin-top:3px;width:16px;height:16px;cursor:pointer;flex:none">' +
+                    '<span style="flex:1">' +
+                    '<span style="font-weight:600;font-size:13px">' + name + ' <span style="font-weight:400;color:var(--fg-3);font-size:11px">#' + r.id + '</span>' + (isPriority ? ' <span style="color:#2e8b57;font-size:10px;font-weight:700">• SO\'ROV EGASI</span>' : '') + '</span>' +
+                    '<span style="display:block;font-size:12px;color:var(--fg-2);margin-top:2px">' + preview + dots + '</span>' +
+                    '</span></label>';
             }).join('');
             var html = '<div id="aiSendPickerOverlay" onclick="if(event.target===this)closeAiSendPicker()" ' +
                 'style="position:fixed;inset:0;background:rgba(26,20,16,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">' +
-                '<div style="background:var(--bg-1);border-radius:14px;padding:20px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3)">' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-                '<strong style="font-size:15px;color:var(--fg-1)">Qaysi foydalanuvchiga yuborish?</strong>' +
+                '<div style="background:var(--bg-1);border-radius:14px;padding:20px;max-width:460px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3)">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+                '<strong style="font-size:15px;color:var(--fg-1)">Kimga yuborish? <span style="font-weight:400;font-size:11px;color:var(--fg-3)">(bir nechta tanlash mumkin)</span></strong>' +
                 '<button onclick="closeAiSendPicker()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--fg-3);line-height:1">&times;</button>' +
                 '</div>' +
-                '<div style="font-size:12px;color:var(--fg-2);margin-bottom:12px;padding:8px 10px;background:var(--parchment-100);border-radius:6px;max-height:72px;overflow:hidden">' +
+                '<div style="font-size:12px;color:var(--fg-2);margin:6px 0 12px;padding:8px 10px;background:var(--parchment-100);border-radius:6px;max-height:72px;overflow:hidden">' +
                 escapeHtml(responseText.substring(0, 180)) + (responseText.length > 180 ? '...' : '') +
-                '</div>' + rows + '</div></div>';
+                '</div>' +
+                '<div style="flex:1;overflow-y:auto;min-height:0">' + rows + '</div>' +
+                '<button onclick="confirmAiSendSelected()" style="margin-top:12px;padding:11px;background:var(--navy-700);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;flex:none">📤 Tanlanganlarga yuborish</button>' +
+                '</div></div>';
             document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function confirmAiSendSelected() {
+            var checks = document.querySelectorAll('#aiSendPickerOverlay .ai-send-pick:checked');
+            if (!checks.length) { alert('Kamida bitta foydalanuvchini tanlang.'); return; }
+            var ids = Array.prototype.map.call(checks, function(c) { return parseInt(c.value, 10); });
+            confirmAiSend(ids);
         }
 
         function closeAiSendPicker() {
@@ -8961,11 +8983,16 @@
         }
 
         // Step 1: user picked → compact the answer, then show an editable preview.
-        async function confirmAiSend(requestId) {
-            closeAiSendPicker();
+        // requestIds may be a single id or an array of ids (multi-send).
+        async function confirmAiSend(requestIds) {
+            // Capture BEFORE closing the picker (closeAiSendPicker clears these globals).
             var fullText = window._aiSendResponseText;
             var question = window._aiSendQuestion || '';
+            closeAiSendPicker();
             if (!fullText) return;
+            var ids = Array.isArray(requestIds) ? requestIds : [requestIds];
+            ids = ids.filter(function(x) { return x != null && !isNaN(x); });
+            if (!ids.length) return;
 
             // Loading overlay while compacting
             var loadHtml = '<div id="aiCompactOverlay" style="position:fixed;inset:0;background:rgba(26,20,16,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">' +
@@ -8991,7 +9018,7 @@
             if (loadEl) loadEl.remove();
 
             window._aiSendFullText = fullText;
-            window._aiSendRequestId = requestId;
+            window._aiSendRequestIds = ids;
 
             // Step 2: editable preview of the compacted answer
             var html = '<div id="aiPreviewOverlay" onclick="if(event.target===this)closeAiPreview()" ' +
@@ -9001,7 +9028,7 @@
                 '<strong style="font-size:15px;color:var(--fg-1)">Foydalanuvchiga yuboriladigan javob</strong>' +
                 '<button onclick="closeAiPreview()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--fg-3);line-height:1">&times;</button>' +
                 '</div>' +
-                '<div style="font-size:11px;color:var(--fg-3);margin-bottom:10px">✨ AI qisqartirgan — yuborishdan oldin tekshiring va tahrirlang</div>' +
+                '<div style="font-size:11px;color:var(--fg-3);margin-bottom:10px">✨ AI qisqartirgan — yuborishdan oldin tekshiring va tahrirlang &nbsp;·&nbsp; <span style="color:#2e8b57;font-weight:600">' + ids.length + ' ta foydalanuvchiga</span></div>' +
                 '<textarea id="aiPreviewText" style="flex:1;min-height:220px;max-height:48vh;width:100%;padding:12px;border:1px solid var(--border-1);border-radius:10px;font:400 14px/1.6 var(--font-sans);color:var(--fg-1);resize:vertical">' + escapeHtml(compacted) + '</textarea>' +
                 '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
                 '<button onclick="doSendToUser()" style="flex:1;min-width:140px;padding:10px;background:var(--navy-700);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">📤 Shu javobni yuborish</button>' +
@@ -9015,7 +9042,7 @@
             var el = document.getElementById('aiPreviewOverlay');
             if (el) el.remove();
             window._aiSendFullText = null;
-            window._aiSendRequestId = null;
+            window._aiSendRequestIds = null;
         }
 
         function restoreFullAnswer() {
@@ -9025,30 +9052,41 @@
 
         async function doSendToUser() {
             var ta = document.getElementById('aiPreviewText');
-            var requestId = window._aiSendRequestId;
+            var ids = window._aiSendRequestIds || [];
             var responseText = ta ? ta.value.trim() : '';
             if (!responseText) { alert('Javob bo\'sh bo\'lmasin'); return; }
+            if (!ids.length) { alert('Foydalanuvchi tanlanmagan'); return; }
             var sendBtn = document.querySelector('#aiPreviewOverlay button');
             if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳ Yuborilmoqda...'; }
-            try {
-                var resp = await fetch('/api/master-response', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ requestId: requestId, responseText: responseText })
-                });
-                var data = await resp.json().catch(function() { return {}; });
-                if (resp.ok) {
-                    closeAiPreview();
-                    if (typeof showUpdateToast === 'function') showUpdateToast('✅ Javob foydalanuvchiga yuborildi!', 'success');
-                    if (typeof loadRequests === 'function') loadRequests();
-                } else {
-                    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Shu javobni yuborish'; }
-                    alert('❌ ' + (data.error || 'Xatolik yuz berdi'));
+            var ok = 0, fail = 0, lastErr = '';
+            for (var i = 0; i < ids.length; i++) {
+                try {
+                    var resp = await fetch('/api/master-response', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ requestId: ids[i], responseText: responseText })
+                    });
+                    if (resp.ok) {
+                        ok++;
+                    } else {
+                        fail++;
+                        var data = await resp.json().catch(function() { return {}; });
+                        lastErr = data.error || ('HTTP ' + resp.status);
+                    }
+                } catch (err) {
+                    fail++;
+                    lastErr = err.message;
                 }
-            } catch (err) {
-                if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Shu javobni yuborish'; }
-                alert('❌ Tarmoq xatoligi: ' + err.message);
+            }
+            if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Shu javobni yuborish'; }
+            if (ok > 0) {
+                closeAiPreview();
+                var msg = '✅ ' + ok + ' ta foydalanuvchiga yuborildi' + (fail ? ' (' + fail + ' ta xatolik)' : '');
+                if (typeof showUpdateToast === 'function') showUpdateToast(msg, fail ? 'error' : 'success');
+                if (typeof loadRequests === 'function') loadRequests();
+            } else {
+                alert('❌ Yuborilmadi: ' + (lastErr || 'Xatolik yuz berdi'));
             }
         }
 
