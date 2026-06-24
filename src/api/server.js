@@ -4147,6 +4147,51 @@ Hujjatni to'liq professional formatda yozing:`;
   }
 });
 
+// Compact a long AI legal answer into a short, plain-language message for the
+// end user (non-lawyer). Used by the dashboard "Foydalanuvchiga yuborish" flow
+// so the Telegram user gets a concise, understandable reply instead of the full
+// analysis. Keeps the legal substance (article numbers, amounts, deadlines).
+app.post('/api/ai-compact-answer', requireMasterAdmin, async (req, res) => {
+  try {
+    const { answer, question } = req.body;
+    if (!answer || !answer.trim()) {
+      return res.status(400).json({ error: 'Javob matni bo\'sh' });
+    }
+
+    const prompt = `Siz huquqiy javoblarni oddiy fuqaroga tushunarli qilib qisqartiruvchi yordamchisiz.
+
+${question ? `FOYDALANUVCHI SAVOLI:\n"${question}"\n\n` : ''}TO'LIQ HUQUQIY JAVOB:
+"""
+${answer.substring(0, 8000)}
+"""
+
+VAZIFA: Yuqoridagi javobni FOYDALANUVCHIGA (yurist bo'lmagan oddiy odamga) yuborish uchun qisqartiring.
+
+QOIDALAR:
+1. Asosiy ma'no va xulosani SAQLANG — nima qilish kerakligi aniq bo'lsin.
+2. Muhim huquqiy faktlarni qoldiring: aniq modda raqamlari, summalar, muddatlar, jarima miqdorlari.
+3. Ortiqcha tahlil, takror va kirish so'zlarini OLIB TASHLANG.
+4. Sodda, tushunarli tilda yozing — yuridik jargon minimallashtirilsin.
+5. Qisqa bo'lsin: 1-2 xatboshi yoki qisqa ro'yxat. Iloji boricha 600 so'zdan kam.
+6. Faqat O'zbek (lotin) tilida yozing.
+7. Hech qanday yangi modda yoki fakt TO'QIB CHIQARMANG — faqat matndagilarni ishlating.
+8. To'g'ridan-to'g'ri foydalanuvchiga murojaat qilgandek yozing (salomlashuvsiz, imzosiz).
+
+Qisqartirilgan javobni yozing:`;
+
+    const aiResult = await callAI([{ role: 'user', text: prompt }], {
+      maxTokens: 2048,
+      userId: req.session?.adminId,
+      endpoint: '/api/ai-compact-answer',
+    });
+
+    res.json({ success: true, compacted: (aiResult.text || '').trim() });
+  } catch (error) {
+    console.error('[AI Compact] Error:', error);
+    res.status(500).json({ error: 'Qisqartirish xatoligi: ' + error.message });
+  }
+});
+
 // Submit AI feedback
 app.post('/api/ai-feedback', requireMasterAdmin, async (req, res) => {
   try {

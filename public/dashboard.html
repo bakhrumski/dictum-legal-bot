@@ -8154,46 +8154,19 @@
 
         async function useLatestAiAsAnswer() {
             if (!aiCurrentRequestId) return;
-            var lastAiMsg = null;
+            var lastAiMsg = null, lastQuestion = '';
             for (var i = aiChatHistory.length - 1; i >= 0; i--) {
                 if (aiChatHistory[i].role === 'model') { lastAiMsg = aiChatHistory[i].text; break; }
             }
+            for (var j = 0; j < aiChatHistory.length; j++) {
+                if (aiChatHistory[j].role === 'user') { lastQuestion = aiChatHistory[j].text; break; }
+            }
             if (!lastAiMsg) { alert('Hali AI javobi yo\'q'); return; }
 
-            var sendBtn = document.getElementById('aiBannerSendBtn');
-            if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳ Yuborilmoqda...'; }
-
-            try {
-                // Students go to pending-approval flow; master/lawyer send directly
-                var isStudent = typeof currentUser !== 'undefined' && currentUser.role === 'student';
-                var endpoint = isStudent ? '/api/student-response' : '/api/master-response';
-                var resp = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ requestId: aiCurrentRequestId, responseText: lastAiMsg })
-                });
-                var data = await resp.json().catch(function() { return {}; });
-
-                if (resp.ok) {
-                    var banner = document.getElementById('aiReqContextBanner');
-                    if (banner) {
-                        banner.innerHTML = '<div style="color:#27ae60;font-weight:600;padding:2px 0">' +
-                            (isStudent ? '✅ Javob adminga yuborildi — tasdiqlash kutilmoqda' : '✅ Javob foydalanuvchiga yuborildi!') +
-                            '</div>';
-                        setTimeout(function() { if (banner) banner.style.display = 'none'; }, 3000);
-                    }
-                    aiOpenedFromRequest = false;
-                    aiCurrentRequestId = null;
-                    if (typeof loadRequests === 'function') loadRequests();
-                } else {
-                    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Foydalanuvchiga yuborish'; }
-                    alert('❌ ' + (data.error || 'Xatolik yuz berdi'));
-                }
-            } catch (err) {
-                if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Foydalanuvchiga yuborish'; }
-                alert('❌ Tarmoq xatoligi: ' + err.message);
-            }
+            // Route through the same compact → preview → send flow as the AI tab.
+            window._aiSendResponseText = lastAiMsg;
+            window._aiSendQuestion = lastQuestion;
+            confirmAiSend(aiCurrentRequestId);
         }
 
         function useLatestAiAsAnswerEdit() {
@@ -8887,6 +8860,28 @@
             if (editor) editor.style.display = 'none';
         }
 
+        // Apply the edited text to the displayed message WITHOUT saving to corpus.
+        // Used to trim/shorten an answer before sending it to the user.
+        function applyEditOnly(msgId) {
+            var entry = aiVerifyMap[msgId];
+            if (!entry) return;
+            var txt = document.getElementById('vtxt_' + msgId);
+            var newText = txt ? txt.value.trim() : '';
+            if (!newText) { alert('Javob bo\'sh bo\'lmasin'); return; }
+
+            // Update in-memory entry (used by send-to-user) and the rendered bubble
+            entry.answer = newText;
+            var vrow = document.getElementById('vrow_' + msgId);
+            var msgEl = vrow ? vrow.closest('.ai-chat-msg') : null;
+            if (msgEl) {
+                msgEl.setAttribute('data-raw', newText);
+                var content = msgEl.querySelector('.ai-analysis-content');
+                if (content) content.innerHTML = simpleMarkdown(newText);
+            }
+            closeVerifyEditor(msgId);
+            if (typeof showUpdateToast === 'function') showUpdateToast('💾 Matn yangilandi (korpusga qo\'shilmadi)', 'info');
+        }
+
         // Save improved answer to corpus
         async function saveVerifiedEdit(msgId) {
             var entry = aiVerifyMap[msgId];
@@ -8934,6 +8929,7 @@
                 return;
             }
             window._aiSendResponseText = responseText;
+            window._aiSendQuestion = msgEl.getAttribute('data-q') || '';
             var rows = pending.map(function(r) {
                 var name = escapeHtml(r.first_name || r.name || ('@' + (r.username || 'Noma\'lum')));
                 var preview = escapeHtml((r.request_text || '').substring(0, 70));
@@ -8964,10 +8960,76 @@
             window._aiSendResponseText = null;
         }
 
+        // Step 1: user picked → compact the answer, then show an editable preview.
         async function confirmAiSend(requestId) {
             closeAiSendPicker();
-            var responseText = window._aiSendResponseText;
-            if (!responseText) return;
+            var fullText = window._aiSendResponseText;
+            var question = window._aiSendQuestion || '';
+            if (!fullText) return;
+
+            // Loading overlay while compacting
+            var loadHtml = '<div id="aiCompactOverlay" style="position:fixed;inset:0;background:rgba(26,20,16,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">' +
+                '<div style="background:var(--bg-1);border-radius:14px;padding:24px 28px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.3)">' +
+                '<div class="spinner" style="margin:0 auto 12px"></div>' +
+                '<div style="font-size:13px;color:var(--fg-2)">Javob foydalanuvchi uchun qisqartirilmoqda...</div>' +
+                '</div></div>';
+            document.body.insertAdjacentHTML('beforeend', loadHtml);
+
+            var compacted = fullText;
+            try {
+                var cResp = await fetch('/api/ai-compact-answer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ answer: fullText, question: question })
+                });
+                var cData = await cResp.json().catch(function() { return {}; });
+                if (cResp.ok && cData.compacted) compacted = cData.compacted;
+            } catch (e) { /* fall back to full text */ }
+
+            var loadEl = document.getElementById('aiCompactOverlay');
+            if (loadEl) loadEl.remove();
+
+            window._aiSendFullText = fullText;
+            window._aiSendRequestId = requestId;
+
+            // Step 2: editable preview of the compacted answer
+            var html = '<div id="aiPreviewOverlay" onclick="if(event.target===this)closeAiPreview()" ' +
+                'style="position:fixed;inset:0;background:rgba(26,20,16,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">' +
+                '<div style="background:var(--bg-1);border-radius:14px;padding:20px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3)">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+                '<strong style="font-size:15px;color:var(--fg-1)">Foydalanuvchiga yuboriladigan javob</strong>' +
+                '<button onclick="closeAiPreview()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--fg-3);line-height:1">&times;</button>' +
+                '</div>' +
+                '<div style="font-size:11px;color:var(--fg-3);margin-bottom:10px">✨ AI qisqartirgan — yuborishdan oldin tekshiring va tahrirlang</div>' +
+                '<textarea id="aiPreviewText" style="flex:1;min-height:220px;max-height:48vh;width:100%;padding:12px;border:1px solid var(--border-1);border-radius:10px;font:400 14px/1.6 var(--font-sans);color:var(--fg-1);resize:vertical">' + escapeHtml(compacted) + '</textarea>' +
+                '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
+                '<button onclick="doSendToUser()" style="flex:1;min-width:140px;padding:10px;background:var(--navy-700);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">📤 Shu javobni yuborish</button>' +
+                '<button onclick="restoreFullAnswer()" style="padding:10px 14px;background:none;color:var(--navy-700);border:1px solid var(--navy-300);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer" title="To\'liq (asl) javobni qaytarish">↩️ To\'liq javob</button>' +
+                '<button onclick="closeAiPreview()" style="padding:10px 14px;background:none;color:var(--fg-3);border:1px solid var(--border-1);border-radius:8px;font-size:13px;cursor:pointer">Bekor qilish</button>' +
+                '</div></div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function closeAiPreview() {
+            var el = document.getElementById('aiPreviewOverlay');
+            if (el) el.remove();
+            window._aiSendFullText = null;
+            window._aiSendRequestId = null;
+        }
+
+        function restoreFullAnswer() {
+            var ta = document.getElementById('aiPreviewText');
+            if (ta && window._aiSendFullText) ta.value = window._aiSendFullText;
+        }
+
+        async function doSendToUser() {
+            var ta = document.getElementById('aiPreviewText');
+            var requestId = window._aiSendRequestId;
+            var responseText = ta ? ta.value.trim() : '';
+            if (!responseText) { alert('Javob bo\'sh bo\'lmasin'); return; }
+            var sendBtn = document.querySelector('#aiPreviewOverlay button');
+            if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳ Yuborilmoqda...'; }
             try {
                 var resp = await fetch('/api/master-response', {
                     method: 'POST',
@@ -8977,12 +9039,15 @@
                 });
                 var data = await resp.json().catch(function() { return {}; });
                 if (resp.ok) {
+                    closeAiPreview();
                     if (typeof showUpdateToast === 'function') showUpdateToast('✅ Javob foydalanuvchiga yuborildi!', 'success');
                     if (typeof loadRequests === 'function') loadRequests();
                 } else {
+                    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Shu javobni yuborish'; }
                     alert('❌ ' + (data.error || 'Xatolik yuz berdi'));
                 }
             } catch (err) {
+                if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Shu javobni yuborish'; }
                 alert('❌ Tarmoq xatoligi: ' + err.message);
             }
         }
@@ -9335,6 +9400,7 @@
                         '<textarea class="ai-verify-textarea" id="vtxt_' + msgId + '"></textarea>' +
                         '<div class="ai-verify-editor-actions">' +
                         '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
+                        '<button class="ai-verify-btn" onclick="applyEditOnly(\'' + msgId + '\')" title="Faqat matnni o\'zgartiradi (korpusga qo\'shilmaydi) — foydalanuvchiga yuborishdan oldin qisqartirish uchun">💾 Saqlash</button>' +
                         '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
                         '</div></div>') : '';
                     // ── Message action icons (copy, download, thumbs) ──
@@ -9775,6 +9841,7 @@
                             '<textarea class="ai-verify-textarea" id="vtxt_' + msgId + '"></textarea>' +
                             '<div class="ai-verify-editor-actions">' +
                             '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
+                            '<button class="ai-verify-btn" onclick="applyEditOnly(\'' + msgId + '\')" title="Faqat matnni o\'zgartiradi (korpusga qo\'shilmaydi) — foydalanuvchiga yuborishdan oldin qisqartirish uchun">💾 Saqlash</button>' +
                             '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
                             '</div></div>') : '';
 
