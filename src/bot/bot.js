@@ -42,6 +42,59 @@ let pendingRequests = {};
 // Store pending admin responses: chatId -> { requestId, adminId, role, fullName }
 const pendingResponses = new Map();
 
+// ========== REQUIRED CHANNEL SUBSCRIPTION ==========
+// Users must join this channel before they can send a legal request.
+// Set REQUIRED_CHANNEL='' to disable the gate. The bot MUST be an
+// administrator of the channel for membership checks to work.
+const REQUIRED_CHANNEL = process.env.REQUIRED_CHANNEL !== undefined
+  ? process.env.REQUIRED_CHANNEL
+  : '@eng_sara_huquqiy_yangiliklar';
+
+function channelLink() {
+  const c = (REQUIRED_CHANNEL || '').trim();
+  if (c.startsWith('@')) return 'https://t.me/' + c.slice(1);
+  return c; // already a URL, or empty
+}
+
+// Returns true if the user is a member of REQUIRED_CHANNEL.
+// Fails OPEN (returns true) on API/config errors so a misconfiguration
+// doesn't block every user — but logs loudly so it can be fixed.
+async function isChannelMember(userId) {
+  if (!REQUIRED_CHANNEL || !REQUIRED_CHANNEL.trim()) return true; // gate disabled
+  try {
+    const member = await bot.getChatMember(REQUIRED_CHANNEL, userId);
+    const status = member && member.status;
+    if (status === 'creator' || status === 'administrator' || status === 'member') return true;
+    if (status === 'restricted') return member.is_member === true;
+    return false; // 'left' or 'kicked'
+  } catch (error) {
+    console.error(
+      `[Channel gate] Could not check membership for ${REQUIRED_CHANNEL}. ` +
+      `Make sure the bot is an ADMINISTRATOR of the channel. Error: ${error.message}`
+    );
+    return true; // fail open
+  }
+}
+
+// Prompt shown to users who haven't joined yet.
+function sendJoinPrompt(chatId) {
+  const link = channelLink();
+  return bot.sendMessage(
+    chatId,
+    '📢 Murojaat yuborishdan oldin rasmiy kanalimizga obuna bo\'ling:\n\n' +
+    '👉 ' + (REQUIRED_CHANNEL || '') + '\n\n' +
+    'Obuna bo\'lgach, "✅ Tekshirish" tugmasini bosing va savolingizni yuboring.',
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📢 Kanalga obuna bo\'lish', url: link }],
+          [{ text: '✅ Tekshirish', callback_data: 'check_sub' }]
+        ]
+      }
+    }
+  );
+}
+
 // ========== ADMIN COMMANDS ==========
 
 // /link username password - Link Telegram account to admin
@@ -157,6 +210,25 @@ bot.onText(/\/me/, async (msg) => {
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
+
+  // Handle channel-subscription re-check
+  if (data === 'check_sub') {
+    try {
+      if (await isChannelMember(callbackQuery.from.id)) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Rahmat! Obuna tasdiqlandi.' });
+        bot.sendMessage(chatId, '✅ Obuna tasdiqlandi! Endi huquqiy savolingizni yuborishingiz mumkin.');
+      } else {
+        bot.answerCallbackQuery(callbackQuery.id, {
+          text: 'Hali obuna bo\'lmadingiz. Iltimos, kanalga obuna bo\'ling.',
+          show_alert: true
+        });
+      }
+    } catch (error) {
+      console.error('check_sub callback error:', error);
+      bot.answerCallbackQuery(callbackQuery.id, { text: 'Xatolik yuz berdi!' });
+    }
+    return;
+  }
 
   // Handle respond_REQUEST_ID
   if (data.startsWith('respond_')) {
@@ -551,6 +623,12 @@ bot.on('message', async (msg) => {
     }
   } catch (error) {
     console.error('Error checking user block status:', error);
+  }
+
+  // Require channel subscription before accepting a request
+  if (!(await isChannelMember(msg.from.id))) {
+    sendJoinPrompt(chatId);
+    return;
   }
 
   let requestData = {
