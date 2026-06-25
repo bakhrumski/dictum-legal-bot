@@ -8931,8 +8931,14 @@
             window._aiSendResponseText = responseText;
             window._aiSendQuestion = msgEl.getAttribute('data-q') || '';
 
-            // Priority sender = the request that opened this AI analysis (if any).
+            // Priority sender = the request that opened this AI analysis.
+            // First try the explicit modal context; fall back to matching question text.
             var priorityId = (typeof aiCurrentRequestId !== 'undefined' && aiCurrentRequestId) ? parseInt(aiCurrentRequestId, 10) : null;
+            if (!priorityId && window._aiSendQuestion) {
+                var q = window._aiSendQuestion.trim().toLowerCase();
+                var matched = pending.find(function(r) { return (r.request_text || '').trim().toLowerCase() === q; });
+                if (matched) priorityId = parseInt(matched.id, 10);
+            }
             pending = pending.slice().sort(function(a, b) {
                 if (priorityId) {
                     var aid = parseInt(a.id, 10), bid = parseInt(b.id, 10);
