@@ -733,9 +733,77 @@ Dictum advokatlik firmasi
     await bot.sendMessage(telegram_id, message);
     
     res.json({ success: true, message: 'Response sent successfully' });
-    
+
   } catch (error) {
     console.error('Error sending master response:', error);
+    res.status(500).json({ error: 'Failed to send response' });
+  }
+});
+
+// Master admin answers several of one user's questions with a single combined
+// reply. All requests must belong to the same user; the user receives ONE message.
+app.post('/api/master-response-bulk', requireMasterAdmin, async (req, res) => {
+  try {
+    const { requestIds, responseText } = req.body;
+
+    if (!Array.isArray(requestIds) || requestIds.length === 0) {
+      return res.status(400).json({ error: 'requestIds required' });
+    }
+    if (!responseText || !responseText.trim()) {
+      return res.status(400).json({ error: 'responseText required' });
+    }
+
+    const ids = [...new Set(requestIds.map(Number).filter(Number.isInteger))];
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'No valid requestIds' });
+    }
+
+    // Fetch the targeted requests with their owner so we can verify they all
+    // belong to a single user before sending one combined message.
+    const requestResult = await pool.query(`
+      SELECT r.id, u.telegram_id, u.first_name
+      FROM requests r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.id = ANY($1::int[])
+    `, [ids]);
+
+    if (requestResult.rows.length !== ids.length) {
+      return res.status(404).json({ error: 'Ba\'zi murojaatlar topilmadi' });
+    }
+
+    const telegramIds = [...new Set(requestResult.rows.map(r => String(r.telegram_id)))];
+    if (telegramIds.length > 1) {
+      return res.status(400).json({ error: 'Murojaatlar bitta foydalanuvchiga tegishli bo\'lishi kerak' });
+    }
+
+    const { telegram_id, first_name } = requestResult.rows[0];
+
+    await pool.query(`
+      UPDATE requests
+      SET response_text = $1,
+          status = 'answered',
+          master_approved = TRUE,
+          answered_at = NOW(),
+          responded_by = $3
+      WHERE id = ANY($2::int[])
+    `, [responseText, ids, req.session.fullName]);
+
+    const message = `
+✅ Yuristdan javob keldi!
+
+Hurmatli ${first_name},
+
+${responseText}
+
+Dictum advokatlik firmasi
+    `;
+
+    await bot.sendMessage(telegram_id, message);
+
+    res.json({ success: true, answered: ids.length });
+
+  } catch (error) {
+    console.error('Error sending bulk master response:', error);
     res.status(500).json({ error: 'Failed to send response' });
   }
 });

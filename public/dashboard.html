@@ -3360,6 +3360,28 @@
             color: var(--text-primary);
         }
 
+        .bundle-section {
+            background: var(--parchment-100, rgba(0,0,0,0.03));
+            border: 1px solid var(--border-1, rgba(0,0,0,0.1));
+            border-radius: var(--ios-radius-sm);
+            padding: 12px 14px;
+            margin-bottom: 14px;
+        }
+        .bundle-title { font-weight: 600; font-size: 13px; color: var(--text-primary); margin-bottom: 4px; }
+        .bundle-hint { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; }
+        .bundle-item {
+            display: flex; gap: 9px; align-items: flex-start;
+            padding: 8px 10px; margin-bottom: 6px;
+            background: var(--bg-1, #fff);
+            border: 1px solid var(--border-1, rgba(0,0,0,0.08));
+            border-radius: 7px; cursor: pointer; font-size: 13px;
+            color: var(--text-primary);
+        }
+        .bundle-item:last-child { margin-bottom: 0; }
+        .bundle-item input { margin-top: 2px; width: 15px; height: 15px; flex: none; cursor: pointer; }
+        .bundle-item-current { cursor: default; opacity: 0.85; background: var(--bg-student-response, rgba(46,139,87,0.08)); }
+        .bundle-status { font-style: normal; font-size: 11px; color: var(--text-secondary); margin-left: 6px; }
+
         .approval-section {
             background: var(--bg-approval);
             padding: 20px;
@@ -7902,9 +7924,35 @@
                     `;
                 }
                 
+                // Other unanswered questions from the SAME user — let the master
+                // bundle them into this single reply (one combined Telegram message).
+                const siblingReqs = requests.filter(r =>
+                    r.telegram_id === request.telegram_id &&
+                    r.id !== request.id &&
+                    (r.status === 'pending' || r.status === 'rejected')
+                );
+                const bundleHtml = siblingReqs.length > 0 ? `
+                    <div class="bundle-section" id="bundleSection_${request.id}">
+                        <div class="bundle-title">📎 Shu foydalanuvchining boshqa savollari (${siblingReqs.length})</div>
+                        <p class="bundle-hint">Belgilangan savollarga ham shu bitta javob yuboriladi (foydalanuvchi bitta xabar oladi).</p>
+                        <label class="bundle-item bundle-item-current">
+                            <input type="checkbox" checked disabled>
+                            <span><strong>#${request.id}</strong> ${escapeHtml((request.request_text || '').substring(0, 90))}${(request.request_text || '').length > 90 ? '…' : ''}</span>
+                        </label>
+                        ${siblingReqs.map(r => `
+                        <label class="bundle-item">
+                            <input type="checkbox" class="bundle-pick" value="${r.id}">
+                            <span><strong>#${r.id}</strong> ${escapeHtml((r.request_text || '').substring(0, 90))}${(r.request_text || '').length > 90 ? '…' : ''}
+                            <em class="bundle-status">${({pending:'Kutilmoqda',rejected:'Rad etilgan'})[r.status] || r.status}</em></span>
+                        </label>
+                        `).join('')}
+                    </div>
+                ` : '';
+
                 modalContent += `
                     <div class="detail-section">
                         <h3>Javob yozish</h3>
+                        ${bundleHtml}
                         <textarea id="responseText" placeholder="Javobingizni shu yerga yozing..."></textarea>
                         <div style="margin-top: 15px; display: flex; align-items: center;">
                 `;
@@ -10929,20 +10977,40 @@
                 alert('Iltimos javob matnini kiriting!');
                 return;
             }
-            
+
+            // Collect any bundled sibling questions the master ticked.
+            const picked = Array.prototype.map.call(
+                document.querySelectorAll('#bundleSection_' + requestId + ' .bundle-pick:checked'),
+                function(c) { return parseInt(c.value, 10); }
+            );
+
             try {
-                const response = await fetch('/api/master-response', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ requestId, responseText })
-                });
-                
+                let response;
+                if (picked.length > 0) {
+                    const requestIds = [requestId].concat(picked);
+                    response = await fetch('/api/master-response-bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ requestIds, responseText })
+                    });
+                } else {
+                    response = await fetch('/api/master-response', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ requestId, responseText })
+                    });
+                }
+
                 if (response.ok) {
-                    alert('✅ Javob muvaffaqiyatli yuborildi!');
+                    alert(picked.length > 0
+                        ? '✅ Javob ' + (picked.length + 1) + ' ta savolga yuborildi!'
+                        : '✅ Javob muvaffaqiyatli yuborildi!');
                     closeModal();
                     loadRequests();
                 } else {
-                    alert('❌ Xatolik yuz berdi.');
+                    let msg = '❌ Xatolik yuz berdi.';
+                    try { const e = await response.json(); if (e && e.error) msg = '❌ ' + e.error; } catch (_) {}
+                    alert(msg);
                 }
             } catch (error) {
                 console.error('Error:', error);
