@@ -8961,9 +8961,9 @@
                 '<strong style="font-size:15px;color:var(--fg-1)">Kimga yuborish? <span style="font-weight:400;font-size:11px;color:var(--fg-3)">(bir nechta tanlash mumkin)</span></strong>' +
                 '<button onclick="closeAiSendPicker()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--fg-3);line-height:1">&times;</button>' +
                 '</div>' +
-                '<div style="font-size:12px;color:var(--fg-2);margin:6px 0 12px;padding:8px 10px;background:var(--parchment-100);border-radius:6px;max-height:72px;overflow:hidden">' +
+                '<div style="font-size:12px;color:var(--fg-2);margin:6px 0 12px;padding:8px 10px;background:var(--parchment-100);border-radius:6px">' +
                 '<span style="font-weight:600;color:var(--fg-3);font-size:11px">❓ SAVOL: </span>' +
-                escapeHtml((window._aiSendQuestion || responseText).substring(0, 200)) + ((window._aiSendQuestion || responseText).length > 200 ? '...' : '') +
+                escapeHtml(window._aiSendQuestion || '') +
                 '</div>' +
                 '<div style="flex:1;overflow-y:auto;min-height:0">' + rows + '</div>' +
                 '<button onclick="confirmAiSendSelected()" style="margin-top:12px;padding:11px;background:var(--navy-700);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;flex:none">📤 Tanlanganlarga yuborish</button>' +
