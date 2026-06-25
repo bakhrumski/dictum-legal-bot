@@ -3378,6 +3378,7 @@
             color: var(--text-primary);
         }
         .bundle-item:last-child { margin-bottom: 0; }
+        .bundle-item:not(.bundle-item-current):hover { border-color: var(--navy-500, #2c4a6e); background: var(--parchment-100, rgba(0,0,0,0.04)); }
         .bundle-item input { margin-top: 2px; width: 15px; height: 15px; flex: none; cursor: pointer; }
         .bundle-item-current { cursor: default; opacity: 0.85; background: var(--bg-student-response, rgba(46,139,87,0.08)); }
         .bundle-status { font-style: normal; font-size: 11px; color: var(--text-secondary); margin-left: 6px; }
@@ -7940,11 +7941,11 @@
                             <span><strong>#${request.id}</strong> ${escapeHtml((request.request_text || '').substring(0, 90))}${(request.request_text || '').length > 90 ? '…' : ''}</span>
                         </label>
                         ${siblingReqs.map(r => `
-                        <label class="bundle-item">
-                            <input type="checkbox" class="bundle-pick" value="${r.id}">
+                        <div class="bundle-item" onclick="showRequestDetail(${r.id})" title="Ochish: #${r.id}">
+                            <input type="checkbox" class="bundle-pick" value="${r.id}" onclick="event.stopPropagation()" onchange="event.stopPropagation()">
                             <span><strong>#${r.id}</strong> ${escapeHtml((r.request_text || '').substring(0, 90))}${(r.request_text || '').length > 90 ? '…' : ''}
                             <em class="bundle-status">${({pending:'Kutilmoqda',rejected:'Rad etilgan'})[r.status] || r.status}</em></span>
-                        </label>
+                        </div>
                         `).join('')}
                     </div>
                 ` : '';
