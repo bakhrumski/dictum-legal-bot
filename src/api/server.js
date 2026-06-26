@@ -359,6 +359,21 @@ app.get('/api/user-info', requireAuth, (req, res) => {
   });
 });
 
+// Corpus diagnostic (master only): is a given law's article actually ingested
+// and retrievable by metadata? Distinguishes a data gap from a retrieval bug.
+//   GET /api/admin/corpus-diagnostic?law=soliq%20kodeks&article=358
+app.get('/api/admin/corpus-diagnostic', requireMasterAdmin, async (req, res) => {
+  try {
+    const { diagnose } = require('../eval/corpus-diagnose');
+    const law = req.query.law || 'soliq kodeks';
+    const article = String(req.query.article || '358');
+    res.json(await diagnose({ law, article }));
+  } catch (err) {
+    console.error('[corpus-diagnostic] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ════════════════════════════════════════
 // FREE-ACCESS GATE (channel-join + weekly survey) — for role='user' free tier
 // ════════════════════════════════════════
