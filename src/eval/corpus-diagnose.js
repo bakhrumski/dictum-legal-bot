@@ -14,11 +14,17 @@
  */
 
 const { pool } = require('../database/db');
+const { detectLawHint } = require('../rag/law-hints');
 
 async function diagnose({ law = 'soliq kodeks', article = '358' } = {}) {
-  const lawLike = '%' + String(law).trim() + '%';
+  const rawLaw = String(law).trim();
+  // Resolve the law the SAME way retrieval does, so the diagnostic mirrors
+  // production scoping. detectLawHint also handles a full query as input
+  // (e.g. "Soliq kodeksi 358-modda"); fall back to the raw text if no match.
+  const resolvedLaw = detectLawHint(rawLaw) || rawLaw;
+  const lawLike = '%' + resolvedLaw + '%';
   const art = String(article).trim();
-  const out = { law: String(law).trim(), article: art };
+  const out = { law: rawLaw, resolvedLaw, lawScoping: detectLawHint(rawLaw) ? 'detectLawHint' : 'raw', article: art };
 
   // 0. Table exists?
   const tbl = await pool.query(
@@ -87,7 +93,7 @@ async function diagnose({ law = 'soliq kodeks', article = '358' } = {}) {
 
 function computeVerdict(o) {
   if (!o.lawPresence || o.lawPresence.chunks === 0) {
-    return { code: 'LAW_NOT_INGESTED', message: `No chunks for a law matching "${o.law}". The law is not in the corpus — DATA gap. Run the ingest for it.` };
+    return { code: 'LAW_NOT_INGESTED', message: `No chunks for a law matching "${o.resolvedLaw}". The law is not in the corpus — DATA gap. Run the ingest for it.` };
   }
   if (o.articleByMetadata.found > 0) {
     return { code: 'RETRIEVAL_BUG', message: `Article ${o.article} IS in the corpus and tagged in article_numbers, but the failure happened anyway → the bug is purely in retrieval wiring (article filter never applied). Fix retrieval, no re-ingest needed.` };
@@ -115,10 +121,10 @@ if (require.main === module) {
   diagnose({ law: get('law', 'soliq kodeks'), article: get('article', '358') })
     .then(r => {
       console.log('\n══════ CORPUS DIAGNOSTIC ══════');
-      console.log(`Law query: "${r.law}"   Article: ${r.article}\n`);
+      console.log(`Law input: "${r.law}"  →  resolved: "${r.resolvedLaw}" (${r.lawScoping})   Article: ${r.article}\n`);
       if (r.corpus) console.log(`Corpus: ${r.corpus.total} chunks, ${r.corpus.with_embedding} embedded, ${r.corpus.distinct_laws} distinct laws`);
       if (r.lawPresence) {
-        console.log(`\nLaw match "${r.law}":`);
+        console.log(`\nLaw match "${r.resolvedLaw}":`);
         console.log(`  chunks: ${r.lawPresence.chunks} (${r.lawPresence.with_embedding} embedded, ${r.lawPresence.docs} docs)`);
         console.log(`  with article_numbers meta: ${r.lawPresence.chunks_with_article_meta} | without: ${r.lawPresence.chunks_without_article_meta}`);
         console.log(`  distinct articles tagged: ${r.distinctArticles}`);
