@@ -3421,6 +3421,13 @@
         .gate-opt:hover { background: var(--parchment-100,#f7f4ee); }
         .gate-textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--border-1,#e2dcd0); border-radius: 8px; font-size: 14px; font-family: inherit; box-sizing: border-box; resize: vertical; }
 
+        /* Non-blocking survey reminder bar */
+        .survey-remind-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9000; display: flex; align-items: center; gap: 14px; max-width: 92vw; background: var(--navy-700,#0e2236); color: #fff; padding: 10px 14px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.28); font-size: 13px; }
+        .survey-remind-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+        .survey-remind-bar button { background: #fff; color: var(--navy-700,#0e2236); border: none; border-radius: 7px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .survey-remind-bar .srb-x { background: transparent; color: #fff; font-size: 18px; padding: 2px 6px; font-weight: 400; }
+        @media (max-width: 560px) { .survey-remind-bar { flex-direction: column; gap: 8px; text-align: center; bottom: 12px; } }
+
         .approval-section {
             background: var(--bg-approval);
             padding: 20px;
@@ -6592,8 +6599,37 @@
                 if (st.state === 'channel_required') renderChannelGate(st, false);
                 else if (st.state === 'survey_required') renderSurveyGate();
                 else if (st.reminder && st.reminder.type === 'channel') renderChannelGate(st, true);
-                else hideAccessGate();
+                else { hideAccessGate(); maybeShowSurveyReminder(st); }
             } catch (e) { /* ignore */ }
+        }
+
+        // Non-blocking heads-up banner shown a few days before the survey is due.
+        var SURVEY_REMIND_WITHIN_DAYS = 3;
+        function maybeShowSurveyReminder(st) {
+            var existing = document.getElementById('surveyReminderBar');
+            if (existing) existing.remove();
+            if (!st || st.surveyCompleted || !st.surveyDueAt) return;
+            var due = new Date(st.surveyDueAt).getTime();
+            var days = Math.ceil((due - Date.now()) / 86400000);
+            if (days < 0 || days > SURVEY_REMIND_WITHIN_DAYS) return;
+            // Don't re-nag within the same browser session for this due date
+            try { if (sessionStorage.getItem('surveyRemindDismissed') === st.surveyDueAt) return; } catch (e) {}
+            var when = days <= 0 ? 'bugun' : (days + ' kundan keyin');
+            var bar = document.createElement('div');
+            bar.id = 'surveyReminderBar';
+            bar.className = 'survey-remind-bar';
+            bar.innerHTML =
+                '<span>📋 Haftalik so\'rovnoma <b>' + when + '</b> — bepul foydalanishni davom ettirish uchun.</span>' +
+                '<span class="survey-remind-actions">' +
+                  '<button onclick="renderSurveyGate()">Hozir to\'ldirish</button>' +
+                  '<button class="srb-x" title="Yopish" onclick="dismissSurveyReminder(\'' + st.surveyDueAt + '\')">&times;</button>' +
+                '</span>';
+            document.body.appendChild(bar);
+        }
+        function dismissSurveyReminder(dueAt) {
+            try { sessionStorage.setItem('surveyRemindDismissed', dueAt); } catch (e) {}
+            var bar = document.getElementById('surveyReminderBar');
+            if (bar) bar.remove();
         }
 
         function gateOverlay() {
