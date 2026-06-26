@@ -46,6 +46,15 @@ async function runPortalMigrations() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_portal_users_email ON portal_users(email)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_portal_users_role ON portal_users(role)`);
 
+    // ──── Free-access flow: Telegram channel-join + weekly survey ────
+    await pool.query(`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS telegram_user_id BIGINT`);
+    await pool.query(`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100)`);
+    await pool.query(`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS telegram_link_code VARCHAR(40)`);
+    await pool.query(`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS channel_verified_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS survey_completed_at TIMESTAMPTZ`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_portal_users_tg ON portal_users(telegram_user_id) WHERE telegram_user_id IS NOT NULL`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_portal_users_linkcode ON portal_users(telegram_link_code) WHERE telegram_link_code IS NOT NULL`);
+
     // ──── portal_conversations ────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS portal_conversations (

@@ -378,6 +378,25 @@ body {
   backdrop-filter: blur(4px);
 }
 .sidebar-overlay.active { display: block; }
+
+/* Free-access gate overlay */
+.gate-overlay { position: fixed; inset: 0; background: rgba(26,20,16,.55); backdrop-filter: blur(6px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.gate-box { background: #fff; color: #1a1410; border-radius: 16px; padding: 28px 26px; max-width: 440px; width: 100%; max-height: 88vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,.35); text-align: center; }
+.gate-emoji { font-size: 40px; margin-bottom: 6px; }
+.gate-title { font-size: 21px; margin: 0 0 10px; font-weight: 700; }
+.gate-text { font-size: 14px; color: #555; line-height: 1.55; margin: 0 0 14px; }
+.gate-channel { font-weight: 700; font-size: 16px; background: #f3efe7; border-radius: 8px; padding: 9px; margin-bottom: 14px; word-break: break-all; }
+.gate-btn { display: inline-block; width: 100%; padding: 12px; margin-top: 8px; background: #0e2236; color: #fff; border: none; border-radius: 9px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.gate-btn:hover { background: #1a3550; }
+.gate-btn-ghost { background: transparent; color: #0e2236; border: 1px solid #0e2236; }
+.gate-btn-ghost:hover { background: #f3efe7; }
+.gate-status { font-size: 13px; color: #444; margin-top: 12px; line-height: 1.5; }
+.gate-link { display: inline-block; margin: 10px 0; font-size: 13px; color: #0e2236; text-decoration: underline; }
+.gate-q { text-align: left; margin-bottom: 16px; }
+.gate-q-text { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+.gate-opt { display: block; padding: 8px 10px; border: 1px solid #e2dcd0; border-radius: 8px; margin-bottom: 6px; font-size: 14px; cursor: pointer; }
+.gate-opt:hover { background: #f7f4ee; }
+.gate-textarea { width: 100%; padding: 9px 11px; border: 1px solid #e2dcd0; border-radius: 8px; font-size: 14px; font-family: inherit; box-sizing: border-box; resize: vertical; }
 </style>
 </head>
 <body>
@@ -532,6 +551,9 @@ if (!token) {
     // Usage badge
     updateUsageBadge();
 
+    // Free-access gate (channel join + weekly survey)
+    checkAccessGate();
+
     // Load conversations
     await loadConversations();
 
@@ -575,6 +597,169 @@ function updateUsageBadge() {
     document.getElementById('usageBadge').textContent =
       u.queriesUsed + ' / ' + (u.queriesLimit || '∞') + ' so\'rov';
   }
+}
+
+// ═══════════════════════════════════════
+// FREE-ACCESS GATE (Telegram channel + survey)
+// ═══════════════════════════════════════
+var _accessState = null;
+var _tgPollTimer = null;
+
+async function checkAccessGate(force) {
+  try {
+    var resp = await apiFetch('/api/portal/access');
+    if (!resp.ok) return;
+    _accessState = await resp.json();
+    if (_accessState.state === 'channel_required') {
+      renderChannelGate(_accessState);
+    } else if (_accessState.state === 'survey_required') {
+      renderSurveyGate();
+    } else {
+      hideAccessGate();
+    }
+  } catch (e) { /* network — ignore, app stays usable */ }
+}
+
+function gateOverlay() {
+  var el = document.getElementById('accessGateOverlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'accessGateOverlay';
+    el.className = 'gate-overlay';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function hideAccessGate() {
+  var el = document.getElementById('accessGateOverlay');
+  if (el) el.remove();
+  if (_tgPollTimer) { clearInterval(_tgPollTimer); _tgPollTimer = null; }
+}
+
+function renderChannelGate(st) {
+  var ch = st.channel || 'kanal';
+  var url = st.channelUrl || '#';
+  var el = gateOverlay();
+  el.innerHTML =
+    '<div class="gate-box">' +
+      '<div class="gate-emoji">📢</div>' +
+      '<h2 class="gate-title">Bepul foydalanish</h2>' +
+      '<p class="gate-text">To\'lov o\'rniga rasmiy Telegram kanalimizga obuna bo\'ling. ' +
+        'Telegram hisobingizni ulang va kanalga qo\'shiling:</p>' +
+      '<div class="gate-channel">' + ch + '</div>' +
+      '<div id="gateChannelSteps"></div>' +
+      '<button class="gate-btn" id="gateLinkBtn" onclick="startTelegramLink()">Telegramni ulash</button>' +
+      '<button class="gate-btn gate-btn-ghost" id="gateVerifyBtn" onclick="verifyTelegram()" style="display:none">Tekshirish</button>' +
+      '<div class="gate-status" id="gateStatus"></div>' +
+    '</div>';
+}
+
+async function startTelegramLink() {
+  var status = document.getElementById('gateStatus');
+  status.textContent = 'Havola tayyorlanmoqda...';
+  try {
+    var resp = await apiFetch('/api/portal/telegram/link-code');
+    var data = await resp.json();
+    if (!data.deepLink) { status.textContent = 'Bot sozlanmagan. Administrator bilan bog\'laning.'; return; }
+    window.open(data.deepLink, '_blank');
+    status.innerHTML = 'Telegram ochildi. Botga <b>Start</b> bosing va kanalga obuna bo\'ling, so\'ng <b>Tekshirish</b> tugmasini bosing.';
+    document.getElementById('gateVerifyBtn').style.display = '';
+    var link = document.createElement('a');
+    link.href = data.deepLink; link.target = '_blank';
+    link.className = 'gate-link'; link.textContent = 'Telegram ochilmadimi? Shu yerga bosing';
+    var steps = document.getElementById('gateChannelSteps');
+    steps.innerHTML = ''; steps.appendChild(link);
+    // Auto-poll for completion every 4s
+    if (_tgPollTimer) clearInterval(_tgPollTimer);
+    _tgPollTimer = setInterval(verifyTelegram, 4000);
+  } catch (e) {
+    status.textContent = 'Xatolik. Qaytadan urinib ko\'ring.';
+  }
+}
+
+async function verifyTelegram() {
+  var status = document.getElementById('gateStatus');
+  try {
+    var resp = await apiFetch('/api/portal/telegram/status');
+    var data = await resp.json();
+    if (data.channelVerified) {
+      if (_tgPollTimer) { clearInterval(_tgPollTimer); _tgPollTimer = null; }
+      status.textContent = '✅ Tasdiqlandi!';
+      checkAccessGate(); // re-evaluate (may move to survey or free)
+    } else if (data.telegramLinked) {
+      status.innerHTML = 'Hisob ulandi, lekin kanal obunasi topilmadi. Kanalga obuna bo\'ling.';
+    } else {
+      status.textContent = 'Hali ulanmadi. Botga Start bosing.';
+    }
+  } catch (e) { /* ignore poll errors */ }
+}
+
+async function renderSurveyGate() {
+  var el = gateOverlay();
+  el.innerHTML = '<div class="gate-box"><div class="gate-emoji">📋</div>' +
+    '<h2 class="gate-title">Haftalik so\'rovnoma</h2>' +
+    '<p class="gate-text">Bepul foydalanishni davom ettirish uchun qisqa so\'rovnomaga javob bering.</p>' +
+    '<div id="surveyFormBox">Yuklanmoqda...</div></div>';
+  try {
+    var resp = await apiFetch('/api/portal/survey/questions');
+    var data = await resp.json();
+    var qs = data.questions || [];
+    if (qs.length === 0) { hideAccessGate(); return; }
+    var box = document.getElementById('surveyFormBox');
+    var html = '';
+    qs.forEach(function(q, i) {
+      html += '<div class="gate-q"><div class="gate-q-text">' + (i + 1) + '. ' + escapeHtmlG(q.question_text) + '</div>';
+      var opts = q.options || [];
+      if (opts.length > 0) {
+        opts.forEach(function(opt, oi) {
+          html += '<label class="gate-opt"><input type="radio" name="sq_' + q.id + '" value="' + escapeHtmlG(opt) + '"> ' + escapeHtmlG(opt) + '</label>';
+        });
+      } else {
+        html += '<textarea class="gate-textarea" data-q="' + q.id + '" rows="2" placeholder="Javobingiz..."></textarea>';
+      }
+      html += '</div>';
+    });
+    html += '<button class="gate-btn" onclick="submitSurveyGate()">Yuborish</button><div class="gate-status" id="gateSurveyStatus"></div>';
+    box.innerHTML = html;
+    box._questions = qs;
+  } catch (e) {
+    document.getElementById('surveyFormBox').textContent = 'Yuklashda xatolik.';
+  }
+}
+
+async function submitSurveyGate() {
+  var box = document.getElementById('surveyFormBox');
+  var qs = box._questions || [];
+  var answers = [];
+  for (var i = 0; i < qs.length; i++) {
+    var q = qs[i];
+    var opts = q.options || [];
+    var val = '';
+    if (opts.length > 0) {
+      var sel = box.querySelector('input[name="sq_' + q.id + '"]:checked');
+      val = sel ? sel.value : '';
+    } else {
+      var ta = box.querySelector('textarea[data-q="' + q.id + '"]');
+      val = ta ? ta.value.trim() : '';
+    }
+    if (!val) { document.getElementById('gateSurveyStatus').textContent = 'Iltimos, barcha savollarga javob bering.'; return; }
+    answers.push({ questionId: q.id, answer: val });
+  }
+  document.getElementById('gateSurveyStatus').textContent = 'Yuborilmoqda...';
+  try {
+    var resp = await apiFetch('/api/portal/survey/submit', { method: 'POST', body: JSON.stringify({ answers: answers }) });
+    if (resp.ok) { checkAccessGate(); } // should now be free
+    else { document.getElementById('gateSurveyStatus').textContent = 'Xatolik. Qaytadan urinib ko\'ring.'; }
+  } catch (e) {
+    document.getElementById('gateSurveyStatus').textContent = 'Tarmoq xatoligi.';
+  }
+}
+
+function escapeHtmlG(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
 }
 
 // ═══════════════════════════════════════
@@ -775,7 +960,11 @@ async function sendMessage() {
 
     if (!resp.ok) {
       var errData = await resp.json();
-      appendMessage('assistant', 'Xatolik: ' + (errData.error || 'Noma\'lum xatolik'));
+      if (errData.code === 'CHANNEL_REQUIRED' || errData.code === 'SURVEY_REQUIRED') {
+        checkAccessGate(true);
+      } else {
+        appendMessage('assistant', 'Xatolik: ' + (errData.error || 'Noma\'lum xatolik'));
+      }
     } else {
       var data = await resp.json();
       var reply = data.reply || data.answer || 'Javob olinmadi';

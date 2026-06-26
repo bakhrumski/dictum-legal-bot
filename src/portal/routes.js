@@ -71,6 +71,77 @@ function checkChatRateLimit(userId) {
   _chatWindows.set(userId, ts);
 }
 
+// ════════════════════════════════════════
+// FREE-ACCESS GATE — Telegram channel-join + weekly survey
+// Free (trial) users get access in exchange for joining the channel and
+// completing a survey 7 days after signup, instead of paying.
+// ════════════════════════════════════════
+
+const crypto = require('crypto');
+const PAID_PLANS = new Set(['silver', 'gold', 'platinum']);
+const SURVEY_GRACE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days after signup
+const CHANNEL_REVERIFY_MS = 24 * 60 * 60 * 1000;  // re-check membership at most daily
+
+// Lazy bot accessor (bot module is loaded by server before portal mounts)
+function _bot() {
+  try { return require('../bot/bot'); } catch (_) { return {}; }
+}
+
+// Is the user's channel membership currently OK? Uses a cached timestamp and
+// re-checks live (via the bot) at most once per day. Updates the cache.
+async function isChannelOk(user) {
+  if (!user.telegram_user_id) return false;
+  const cachedAt = user.channel_verified_at ? new Date(user.channel_verified_at).getTime() : 0;
+  if (cachedAt && (Date.now() - cachedAt) < CHANNEL_REVERIFY_MS) return true;
+  const { isChannelMember } = _bot();
+  if (typeof isChannelMember !== 'function') return cachedAt > 0; // can't check → trust last known
+  try {
+    const ok = await isChannelMember(user.telegram_user_id);
+    if (ok) {
+      await pool.query('UPDATE portal_users SET channel_verified_at = NOW() WHERE id = $1', [user.id]);
+      return true;
+    }
+    // Lost membership — clear the cached verification
+    await pool.query('UPDATE portal_users SET channel_verified_at = NULL WHERE id = $1', [user.id]);
+    return false;
+  } catch (_) {
+    return cachedAt > 0; // API hiccup → don't punish; trust last known
+  }
+}
+
+// Decide the access state for a (full) portal_users row.
+// Returns one of: 'paid' | 'free' | 'channel_required' | 'survey_required'
+async function computeAccessState(user) {
+  if (PAID_PLANS.has(user.plan)) return { state: 'paid' };
+  const channelOk = await isChannelOk(user);
+  if (!user.telegram_user_id || !channelOk) {
+    return { state: 'channel_required', linked: !!user.telegram_user_id };
+  }
+  const signup = new Date(user.plan_started_at || user.created_at).getTime();
+  if (Date.now() >= signup + SURVEY_GRACE_MS && !user.survey_completed_at) {
+    return { state: 'survey_required' };
+  }
+  return { state: 'free' };
+}
+
+// Express middleware: block value-consuming endpoints unless access is allowed.
+async function gateAccess(req, res, next) {
+  try {
+    const user = await getUserById(req.user.sub);
+    if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    const acc = await computeAccessState(user);
+    if (acc.state === 'paid' || acc.state === 'free') return next();
+    return res.status(403).json({
+      error: acc.state === 'survey_required'
+        ? 'Bepul foydalanishni davom ettirish uchun qisqa so\'rovnomani to\'ldiring.'
+        : 'Bepul foydalanish uchun rasmiy Telegram kanalimizga obuna bo\'ling.',
+      code: acc.state === 'survey_required' ? 'SURVEY_REQUIRED' : 'CHANNEL_REQUIRED'
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
 // File upload config
 const docUpload = multer({
   dest: os.tmpdir(),
@@ -177,6 +248,125 @@ router.get('/auth/me', authenticate, async (req, res) => {
 });
 
 // ════════════════════════════════════════
+// FREE-ACCESS: status, Telegram link, survey
+// ════════════════════════════════════════
+
+// Current access state for the logged-in user (drives the frontend gate).
+router.get('/access', authenticate, async (req, res) => {
+  try {
+    const user = await getUserById(req.user.sub);
+    if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    const acc = await computeAccessState(user);
+    const signup = new Date(user.plan_started_at || user.created_at).getTime();
+    res.json({
+      state: acc.state,
+      plan: user.plan,
+      telegramLinked: !!user.telegram_user_id,
+      telegramUsername: user.telegram_username || null,
+      channelVerified: !!user.channel_verified_at,
+      surveyCompleted: !!user.survey_completed_at,
+      surveyDueAt: new Date(signup + SURVEY_GRACE_MS).toISOString(),
+      channel: (_bot().REQUIRED_CHANNEL || ''),
+      channelUrl: (typeof _bot().channelLink === 'function' ? _bot().channelLink() : '')
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Generate a one-time code + Telegram deep link to link the account.
+router.get('/telegram/link-code', authenticate, async (req, res) => {
+  try {
+    const code = crypto.randomBytes(12).toString('hex');
+    await pool.query('UPDATE portal_users SET telegram_link_code = $1 WHERE id = $2', [code, req.user.sub]);
+    let botUsername = process.env.BOT_USERNAME || '';
+    if (!botUsername) {
+      try {
+        const me = await _bot().bot.getMe();
+        botUsername = me.username;
+      } catch (_) {}
+    }
+    const deepLink = botUsername ? `https://t.me/${botUsername}?start=plink_${code}` : null;
+    res.json({ code, botUsername, deepLink });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Poll link/verification status (called after the user taps the deep link / joins).
+router.get('/telegram/status', authenticate, async (req, res) => {
+  try {
+    const user = await getUserById(req.user.sub);
+    if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    const channelOk = await isChannelOk(user);
+    const acc = await computeAccessState(user);
+    res.json({
+      telegramLinked: !!user.telegram_user_id,
+      channelVerified: channelOk,
+      state: acc.state
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Active survey questions for the user to answer on the web.
+router.get('/survey/questions', authenticate, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, question_text, options FROM survey_questions
+       WHERE is_active = TRUE ORDER BY position, id LIMIT 3`
+    );
+    res.json({ questions: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Submit survey answers. Body: { answers: [{ questionId, answer }] }
+router.post('/survey/submit', authenticate, async (req, res) => {
+  const { answers } = req.body;
+  if (!Array.isArray(answers) || answers.length === 0) {
+    return res.status(400).json({ error: 'answers required' });
+  }
+  const client = await pool.connect();
+  try {
+    const user = await getUserById(req.user.sub);
+    if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+
+    // Validate against the active question set
+    const qres = await pool.query(
+      `SELECT id, question_text, options FROM survey_questions WHERE is_active = TRUE`
+    );
+    const qById = new Map(qres.rows.map(q => [q.id, q]));
+
+    await client.query('BEGIN');
+    const sub = await client.query(
+      'INSERT INTO survey_submissions (telegram_id, portal_user_id) VALUES ($1, $2) RETURNING id',
+      [user.telegram_user_id || null, user.id]
+    );
+    const submissionId = sub.rows[0].id;
+    for (const a of answers) {
+      const q = qById.get(parseInt(a.questionId, 10));
+      if (!q) continue;
+      const ans = String(a.answer == null ? '' : a.answer).slice(0, 2000);
+      await client.query(
+        'INSERT INTO survey_answers (submission_id, question_id, question_text, answer_text) VALUES ($1,$2,$3,$4)',
+        [submissionId, q.id, q.question_text, ans]
+      );
+    }
+    await client.query('UPDATE portal_users SET survey_completed_at = NOW() WHERE id = $1', [user.id]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ════════════════════════════════════════
 // CONVERSATIONS
 // ════════════════════════════════════════
 
@@ -242,7 +432,7 @@ router.delete('/conversations/:id', authenticate, async (req, res) => {
 // CHAT (JSON + SSE STREAMING)
 // ════════════════════════════════════════
 
-router.post('/chat', authenticate, async (req, res) => {
+router.post('/chat', authenticate, gateAccess, async (req, res) => {
   try {
     checkChatRateLimit(req.user.sub);
     await incrementQueryCount(req.user.sub);
@@ -260,7 +450,7 @@ router.post('/chat', authenticate, async (req, res) => {
   }
 });
 
-router.post('/chat/stream', authenticate, async (req, res) => {
+router.post('/chat/stream', authenticate, gateAccess, async (req, res) => {
   // Rate-limit and quota checks must run before we switch to SSE headers,
   // otherwise the 429/400 JSON response can't be sent after writeHead(200).
   try {

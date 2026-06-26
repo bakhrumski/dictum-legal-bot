@@ -145,7 +145,8 @@ async function loginUser(email, password) {
 async function getUserById(id) {
   const result = await pool.query(
     `SELECT id, full_name, email, phone, firm_name, role, plan, plan_started_at,
-            queries_used, queries_limit, is_active, created_at, last_login_at
+            queries_used, queries_limit, is_active, created_at, last_login_at,
+            telegram_user_id, telegram_username, channel_verified_at, survey_completed_at
      FROM portal_users WHERE id = $1`,
     [id]
   );

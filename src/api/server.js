@@ -6667,6 +6667,10 @@ async function runMigrations() {
       answer_text TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
+    // Survey submissions also come from web-portal users (no telegram_id needed)
+    await pool.query(`ALTER TABLE survey_submissions ALTER COLUMN telegram_id DROP NOT NULL`).catch(() => {});
+    await pool.query(`ALTER TABLE survey_submissions ADD COLUMN IF NOT EXISTS portal_user_id INTEGER`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_portal ON survey_submissions(portal_user_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_tg_time ON survey_submissions(telegram_id, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_sub ON survey_answers(submission_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_q ON survey_answers(question_id)`);
