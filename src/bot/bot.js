@@ -95,6 +95,128 @@ function sendJoinPrompt(chatId) {
   );
 }
 
+// ========== WEEKLY R&D SURVEY ==========
+// Users must answer the active survey questions once per rolling 7 days
+// before a new request is accepted. State: chatId -> { questions, idx, answers, userId }
+const pendingSurveys = new Map();
+
+// True if the user completed a survey within the last 7 days.
+async function hasCompletedSurveyRecently(telegramId) {
+  try {
+    const r = await pool.query(
+      `SELECT 1 FROM survey_submissions
+       WHERE telegram_id = $1 AND created_at > NOW() - INTERVAL '7 days' LIMIT 1`,
+      [telegramId]
+    );
+    return r.rows.length > 0;
+  } catch (e) {
+    console.error('[Survey] recent-check failed:', e.message);
+    return true; // fail open — don't block users on a DB hiccup
+  }
+}
+
+async function getActiveSurveyQuestions() {
+  try {
+    const r = await pool.query(
+      `SELECT id, question_text, options FROM survey_questions
+       WHERE is_active = TRUE ORDER BY position, id LIMIT 3`
+    );
+    return r.rows;
+  } catch (e) {
+    console.error('[Survey] load questions failed:', e.message);
+    return [];
+  }
+}
+
+// Begin the survey. Returns false if there are no questions (gate disabled).
+async function startSurvey(chatId, userId) {
+  const questions = await getActiveSurveyQuestions();
+  if (questions.length === 0) return false;
+  pendingSurveys.set(chatId, { questions, idx: 0, answers: [], userId });
+  bot.sendMessage(
+    chatId,
+    '📋 Davom etishdan oldin haftalik qisqa so\'rovnomaga javob bering (R&D maqsadida). ' +
+    'Bu bir daqiqadan kam vaqt oladi.'
+  );
+  sendSurveyQuestion(chatId);
+  return true;
+}
+
+function sendSurveyQuestion(chatId) {
+  const st = pendingSurveys.get(chatId);
+  if (!st) return;
+  const q = st.questions[st.idx];
+  const header = `❓ Savol ${st.idx + 1}/${st.questions.length}\n\n${q.question_text}`;
+  const opts = Array.isArray(q.options) ? q.options : [];
+  if (opts.length > 0) {
+    // Multiple-choice: one button per option
+    const keyboard = opts.map((opt, i) => ([{ text: opt, callback_data: `sv_${st.idx}_${i}` }]));
+    bot.sendMessage(chatId, header, { reply_markup: { inline_keyboard: keyboard } });
+  } else {
+    // Free-text: wait for the next text message
+    bot.sendMessage(chatId, header + '\n\n✍️ Javobingizni matn shaklida yozing.');
+  }
+}
+
+// Advance to the next question or finish.
+function advanceSurvey(chatId) {
+  const st = pendingSurveys.get(chatId);
+  if (!st) return;
+  st.idx += 1;
+  if (st.idx < st.questions.length) {
+    sendSurveyQuestion(chatId);
+  } else {
+    finishSurvey(chatId);
+  }
+}
+
+// Persist the completed survey.
+async function finishSurvey(chatId) {
+  const st = pendingSurveys.get(chatId);
+  if (!st) return;
+  pendingSurveys.delete(chatId);
+  try {
+    // Resolve the internal user id (may be null if they never had a request yet)
+    let userId = st.userId || null;
+    if (!userId) {
+      const u = await pool.query('SELECT id FROM users WHERE telegram_id = $1', [chatId]);
+      if (u.rows.length > 0) userId = u.rows[0].id;
+    }
+    const sub = await pool.query(
+      'INSERT INTO survey_submissions (telegram_id, user_id) VALUES ($1, $2) RETURNING id',
+      [chatId, userId]
+    );
+    const submissionId = sub.rows[0].id;
+    for (const a of st.answers) {
+      await pool.query(
+        'INSERT INTO survey_answers (submission_id, question_id, question_text, answer_text) VALUES ($1,$2,$3,$4)',
+        [submissionId, a.question_id, a.question_text, a.answer_text]
+      );
+    }
+  } catch (e) {
+    console.error('[Survey] save failed:', e.message);
+  }
+  bot.sendMessage(
+    chatId,
+    '✅ Rahmat! So\'rovnoma yakunlandi.\n\nEndi huquqiy savolingizni yuborishingiz mumkin.'
+  );
+}
+
+// Record a free-text answer (called from the message handler).
+function recordSurveyText(chatId, text) {
+  const st = pendingSurveys.get(chatId);
+  if (!st) return;
+  const q = st.questions[st.idx];
+  const opts = Array.isArray(q.options) ? q.options : [];
+  if (opts.length > 0) {
+    // This question expects a button tap, not free text
+    bot.sendMessage(chatId, 'Iltimos, yuqoridagi tugmalardan birini tanlang.');
+    return;
+  }
+  st.answers.push({ question_id: q.id, question_text: q.question_text, answer_text: text });
+  advanceSurvey(chatId);
+}
+
 // ========== ADMIN COMMANDS ==========
 
 // /link username password - Link Telegram account to admin
@@ -210,6 +332,45 @@ bot.onText(/\/me/, async (msg) => {
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
+
+  // Handle weekly-survey multiple-choice answer: sv_<idx>_<optIdx>
+  if (data.startsWith('sv_')) {
+    try {
+      const st = pendingSurveys.get(chatId);
+      if (!st) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: 'So\'rovnoma yakunlangan.' });
+        return;
+      }
+      const parts = data.split('_');
+      const qIdx = parseInt(parts[1], 10);
+      const optIdx = parseInt(parts[2], 10);
+      if (qIdx !== st.idx) {
+        // Stale button from a previous question
+        bot.answerCallbackQuery(callbackQuery.id, { text: 'Bu savol allaqachon javoblangan.' });
+        return;
+      }
+      const q = st.questions[st.idx];
+      const opts = Array.isArray(q.options) ? q.options : [];
+      const chosen = opts[optIdx];
+      if (chosen === undefined) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: 'Noto\'g\'ri tanlov.' });
+        return;
+      }
+      st.answers.push({ question_id: q.id, question_text: q.question_text, answer_text: chosen });
+      bot.answerCallbackQuery(callbackQuery.id, { text: '✅ ' + chosen });
+      // Disable the buttons on the answered message to avoid re-taps
+      try {
+        await bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+          chat_id: chatId, message_id: callbackQuery.message.message_id
+        });
+      } catch (_) {}
+      advanceSurvey(chatId);
+    } catch (error) {
+      console.error('Survey callback error:', error);
+      bot.answerCallbackQuery(callbackQuery.id, { text: 'Xatolik yuz berdi!' });
+    }
+    return;
+  }
 
   // Handle channel-subscription re-check
   if (data === 'check_sub') {
@@ -591,6 +752,16 @@ bot.on('message', async (msg) => {
     return;
   }
 
+  // ---- REGULAR USER: mid-survey answer ----
+  if (pendingSurveys.has(chatId)) {
+    if (msg.text && !msg.text.startsWith('/')) {
+      recordSurveyText(chatId, msg.text.trim());
+    } else {
+      bot.sendMessage(chatId, 'Iltimos, so\'rovnomadagi savolga javob bering (tugmani tanlang yoki matn yozing).');
+    }
+    return;
+  }
+
   // ---- CHECK IF SENDER IS A LINKED ADMIN (without pending response) ----
   try {
     const adminCheck = await pool.query(
@@ -629,6 +800,13 @@ bot.on('message', async (msg) => {
   if (!(await isChannelMember(msg.from.id))) {
     sendJoinPrompt(chatId);
     return;
+  }
+
+  // Require the weekly R&D survey (once per rolling 7 days) before a request
+  if (!(await hasCompletedSurveyRecently(chatId))) {
+    const started = await startSurvey(chatId, null);
+    if (started) return; // survey in progress; request is not accepted yet
+    // No active questions configured → survey disabled, fall through
   }
 
   let requestData = {

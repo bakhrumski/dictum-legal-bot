@@ -808,6 +808,104 @@ Dictum advokatlik firmasi
   }
 });
 
+// ===== Weekly R&D survey: admin management & results =====
+
+// List the survey questions (ordered)
+app.get('/api/survey/questions', requireMasterAdmin, async (req, res) => {
+  try {
+    const r = await pool.query(
+      'SELECT id, position, question_text, options, is_active FROM survey_questions ORDER BY position, id'
+    );
+    res.json(r.rows);
+  } catch (error) {
+    console.error('Error loading survey questions:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Replace the full set of questions (max 3). Body: { questions: [{question_text, options:[], is_active}] }
+app.put('/api/survey/questions', requireMasterAdmin, async (req, res) => {
+  const { questions } = req.body;
+  if (!Array.isArray(questions)) {
+    return res.status(400).json({ error: 'questions array required' });
+  }
+  const cleaned = questions
+    .map(q => ({
+      question_text: String(q.question_text || '').trim(),
+      options: Array.isArray(q.options)
+        ? q.options.map(o => String(o).trim()).filter(Boolean).slice(0, 6)
+        : [],
+      is_active: q.is_active === false ? false : true,
+    }))
+    .filter(q => q.question_text)
+    .slice(0, 3);
+
+  if (cleaned.length === 0) {
+    return res.status(400).json({ error: 'Kamida bitta savol kerak' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Rebuild the question set; old answers keep their snapshotted question_text.
+    await client.query('DELETE FROM survey_questions');
+    await client.query("SELECT setval(pg_get_serial_sequence('survey_questions','id'), COALESCE((SELECT MAX(id) FROM survey_questions),0)+1, false)");
+    for (let i = 0; i < cleaned.length; i++) {
+      await client.query(
+        'INSERT INTO survey_questions (position, question_text, options, is_active) VALUES ($1,$2,$3,$4)',
+        [i + 1, cleaned[i].question_text, JSON.stringify(cleaned[i].options), cleaned[i].is_active]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true, count: cleaned.length });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error saving survey questions:', error);
+    res.status(500).json({ error: 'Saqlashda xatolik' });
+  } finally {
+    client.release();
+  }
+});
+
+// Aggregated results: per-question option tallies + free-text answers + totals
+app.get('/api/survey/results', requireMasterAdmin, async (req, res) => {
+  try {
+    const totals = await pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM survey_submissions) AS total_submissions,
+        (SELECT COUNT(*)::int FROM survey_submissions WHERE created_at > NOW() - INTERVAL '7 days') AS submissions_7d,
+        (SELECT COUNT(DISTINCT telegram_id)::int FROM survey_submissions) AS unique_users
+    `);
+
+    // Tally answers grouped by the (snapshotted) question text + answer value
+    const tally = await pool.query(`
+      SELECT question_text, answer_text, COUNT(*)::int AS n
+      FROM survey_answers
+      WHERE answer_text IS NOT NULL AND answer_text <> ''
+      GROUP BY question_text, answer_text
+      ORDER BY question_text, n DESC
+    `);
+
+    // Recent free-text-style answers (latest 50) for qualitative review
+    const recent = await pool.query(`
+      SELECT sa.question_text, sa.answer_text, sa.created_at
+      FROM survey_answers sa
+      WHERE sa.answer_text IS NOT NULL AND sa.answer_text <> ''
+      ORDER BY sa.created_at DESC
+      LIMIT 50
+    `);
+
+    res.json({
+      totals: totals.rows[0],
+      tally: tally.rows,
+      recent: recent.rows,
+    });
+  } catch (error) {
+    console.error('Error loading survey results:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Get all admins (for assignment dropdown + admin management)
 app.get('/api/admins', requireAuth, async (req, res) => {
   try {
@@ -6542,6 +6640,54 @@ async function runMigrations() {
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_traces_request ON agent_traces(request_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_traces_type ON agent_traces(agent_type)`);
+
+    // ===== Weekly R&D survey =====
+    // Up to 3 admin-editable questions users answer once per rolling 7 days
+    // before they may send a new request.
+    await pool.query(`CREATE TABLE IF NOT EXISTS survey_questions (
+      id SERIAL PRIMARY KEY,
+      position INTEGER NOT NULL,
+      question_text TEXT NOT NULL,
+      options JSONB NOT NULL DEFAULT '[]',
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS survey_submissions (
+      id SERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS survey_answers (
+      id SERIAL PRIMARY KEY,
+      submission_id INTEGER NOT NULL REFERENCES survey_submissions(id) ON DELETE CASCADE,
+      question_id INTEGER REFERENCES survey_questions(id) ON DELETE SET NULL,
+      question_text TEXT NOT NULL,
+      answer_text TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_tg_time ON survey_submissions(telegram_id, created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_sub ON survey_answers(submission_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_q ON survey_answers(question_id)`);
+    // Seed 3 default questions only if the table is empty (admin can edit later)
+    {
+      const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM survey_questions');
+      if (cnt.rows[0].n === 0) {
+        const defaults = [
+          { position: 1, question_text: 'Xizmatimizdan qanchalik mamnunsiz?', options: ['😞 Yomon', '😐 O\'rtacha', '🙂 Yaxshi', '😍 A\'lo'] },
+          { position: 2, question_text: 'Javob tezligi sizni qanoatlantiradimi?', options: ['Ha', 'Qisman', 'Yo\'q'] },
+          { position: 3, question_text: 'Qanday yangi imkoniyat yoki yaxshilanishni xohlaysiz? (ixtiyoriy)', options: [] },
+        ];
+        for (const q of defaults) {
+          await pool.query(
+            'INSERT INTO survey_questions (position, question_text, options) VALUES ($1, $2, $3)',
+            [q.position, q.question_text, JSON.stringify(q.options)]
+          );
+        }
+        console.log('✅ Seeded 3 default weekly survey questions');
+      }
+    }
 
     // New columns on requests for agent results
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS triage_result JSONB`);
