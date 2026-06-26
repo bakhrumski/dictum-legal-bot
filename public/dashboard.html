@@ -6589,8 +6589,9 @@
                 var resp = await fetch('/api/free-access/status', { credentials: 'same-origin' });
                 if (!resp.ok) return;
                 var st = await resp.json();
-                if (st.state === 'channel_required') renderChannelGate(st);
+                if (st.state === 'channel_required') renderChannelGate(st, false);
                 else if (st.state === 'survey_required') renderSurveyGate();
+                else if (st.reminder && st.reminder.type === 'channel') renderChannelGate(st, true);
                 else hideAccessGate();
             } catch (e) { /* ignore */ }
         }
@@ -6611,18 +6612,30 @@
             if (_tgPollTimer) { clearInterval(_tgPollTimer); _tgPollTimer = null; }
         }
 
-        function renderChannelGate(st) {
+        function renderChannelGate(st, dismissible) {
             var ch = st.channel || 'kanal';
             var el = gateOverlay();
+            var graceNote = '';
+            var laterBtn = '';
+            if (dismissible) {
+                var days = 0;
+                if (st.reminder && st.reminder.dueAt) {
+                    days = Math.max(0, Math.ceil((new Date(st.reminder.dueAt).getTime() - Date.now()) / 86400000));
+                }
+                graceNote = '<p class="gate-text" style="color:#b8860b;">⏳ Bepul foydalanishni saqlab qolish uchun ' + days + ' kun ichida obuna bo\'ling.</p>';
+                laterBtn = '<button class="gate-btn gate-btn-ghost" onclick="hideAccessGate()">Keyinroq</button>';
+            }
             el.innerHTML =
                 '<div class="gate-box">' +
                   '<div class="gate-emoji">📢</div>' +
                   '<h2 class="gate-title">Bepul foydalanish</h2>' +
                   '<p class="gate-text">To\'lov o\'rniga rasmiy Telegram kanalimizga obuna bo\'ling. Telegram hisobingizni ulang va kanalga qo\'shiling:</p>' +
                   '<div class="gate-channel">' + escapeHtml(ch) + '</div>' +
+                  graceNote +
                   '<div id="gateChannelSteps"></div>' +
                   '<button class="gate-btn" id="gateLinkBtn" onclick="startTelegramLink()">Telegramni ulash</button>' +
                   '<button class="gate-btn gate-btn-ghost" id="gateVerifyBtn" onclick="verifyTelegram()" style="display:none">Tekshirish</button>' +
+                  laterBtn +
                   '<div class="gate-status" id="gateStatus"></div>' +
                 '</div>';
         }

@@ -6882,12 +6882,6 @@ async function runMigrations() {
     await initCaseLawDataset();
     await initLegalCorpus().catch(e => console.log('[RAG] Legal corpus init skipped:', e.message));
 
-    // Mount AI Portal API
-    try {
-      const { mountPortal } = require('../portal');
-      await mountPortal(app);
-    } catch (e) { console.log('[PORTAL] Mount skipped:', e.message); }
-
     // Mount Advanced RAG routes (QA bank, parent-child search, few-shot)
     try {
       const { mountAdvancedRoutes } = require('../rag/advanced-routes');

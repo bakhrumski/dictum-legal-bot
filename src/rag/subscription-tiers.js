@@ -85,6 +85,10 @@ async function initSubscriptionSchema() {
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_link_code VARCHAR(40)`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS channel_verified_at TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS survey_completed_at TIMESTAMPTZ`);
+    // Anchor for the 7-day survey grace. Stamped the first time a free user is
+    // evaluated, so existing users get a full fresh week instead of being
+    // retroactively blocked the moment the feature ships.
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS free_gate_since TIMESTAMPTZ`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_admins_linkcode ON admins(telegram_link_code) WHERE telegram_link_code IS NOT NULL`);
 
     _initialized = true;
@@ -182,7 +186,8 @@ async function checkQuota(adminId) {
 // ════════════════════════════════════════
 
 const PAID_PLANS = new Set(['silver', 'gold', 'platinum']);
-const SURVEY_GRACE_MS = 7 * 24 * 60 * 60 * 1000;  // survey due 7 days after signup
+const SURVEY_GRACE_MS = 7 * 24 * 60 * 60 * 1000;  // survey due 7 days after anchor
+const CHANNEL_GRACE_MS = (parseInt(process.env.CHANNEL_GRACE_DAYS || '3', 10)) * 24 * 60 * 60 * 1000; // soft reminder before hard block
 const CHANNEL_REVERIFY_MS = 24 * 60 * 60 * 1000;   // re-check membership at most daily
 
 function _bot() {
@@ -220,19 +225,40 @@ async function checkFreeAccess(adminId) {
 
   const r = await pool.query(
     `SELECT telegram_user_id, telegram_username, channel_verified_at, survey_completed_at,
-            tariff_starts_at, created_at
+            free_gate_since, tariff_starts_at, created_at
        FROM admins WHERE id = $1`,
     [adminId]
   );
   const row = r.rows[0];
   if (!row) return { allowed: true, state: 'unknown' };
 
+  // Stamp the survey anchor on first evaluation so existing users get a full
+  // 7-day window from now rather than being blocked retroactively.
+  let anchor = row.free_gate_since;
+  if (!anchor) {
+    anchor = new Date();
+    await pool.query(
+      'UPDATE admins SET free_gate_since = NOW() WHERE id = $1 AND free_gate_since IS NULL',
+      [adminId]
+    );
+  }
+
+  const start = new Date(anchor).getTime();
+  const surveyDue = start + SURVEY_GRACE_MS;
+  const channelDue = start + CHANNEL_GRACE_MS;
+
   const channelOk = await isChannelOkForAdmin(row, adminId);
   if (!row.telegram_user_id || !channelOk) {
+    // Soft grace: gently remind but don't block yet (friendlier for existing users)
+    if (Date.now() < channelDue) {
+      return {
+        allowed: true, state: 'free',
+        reminder: { type: 'channel', dueAt: new Date(channelDue).toISOString() },
+        telegramLinked: !!row.telegram_user_id,
+      };
+    }
     return { allowed: false, code: 'CHANNEL_REQUIRED', state: 'channel_required', telegramLinked: !!row.telegram_user_id };
   }
-  const start = new Date(row.tariff_starts_at || row.created_at).getTime();
-  const surveyDue = start + SURVEY_GRACE_MS;
   if (Date.now() >= surveyDue && !row.survey_completed_at) {
     return { allowed: false, code: 'SURVEY_REQUIRED', state: 'survey_required', surveyDueAt: new Date(surveyDue).toISOString() };
   }
