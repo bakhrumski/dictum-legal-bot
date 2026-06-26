@@ -16,7 +16,7 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, articleNumberSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
 const tariffModule = require('../rag/subscription-tiers');
 const { sendEmailCode } = require('../auth/email-code');
@@ -2650,7 +2650,35 @@ function adaptParentChildChunk(r, idx, topic) {
  *
  * Falls back to text-only search if no embedding API key is configured.
  */
-async function retrieveLegalContext(query, topic, language = null) {
+// Detect which law a query refers to, returning a law_name ILIKE substring.
+// Ordered most-specific-first so "jinoyat-protsessual" wins over "jinoyat".
+// Matches Latin keywords against the (Latin) law_name column.
+const LAW_HINTS = [
+  [/jinoyat[-\s]?protsessual|\bjpk\b/i, 'jinoyat-protsessual'],
+  [/fuqarolik[-\s]?protsessual|\bfpk\b/i, 'fuqarolik protsessual'],
+  [/iqtisodiy[-\s]?protsessual|\bipk\b/i, 'iqtisodiy protsessual'],
+  [/ma'?muriy javobgarlik|\bmjtk\b|\bmajak\b/i, "ma'muriy javobgarlik"],
+  [/ma'?muriy sud|\bmsik\b|\bmsk\b/i, "ma'muriy sud"],
+  [/soliq kodeks|\bsoliq\b/i, 'soliq kodeks'],
+  [/mehnat kodeks|\bmehnat\b/i, 'mehnat kodeks'],
+  [/jinoyat kodeks|\bjinoyat\b|\bjk\b/i, 'jinoyat kodeks'],
+  [/oila kodeks|\boila\b/i, 'oila kodeks'],
+  [/fuqarolik kodeks|\bfuqarolik\b|\bfk\b/i, 'fuqarolik kodeks'],
+  [/uy-?joy kodeks|uy-?joy/i, 'uy-joy kodeks'],
+  [/yer kodeks/i, 'yer kodeks'],
+  [/bojxona kodeks|bojxona/i, 'bojxona kodeks'],
+  [/budjet kodeks|budjet/i, 'budjet kodeks'],
+  [/konstitutsiya/i, 'konstitutsiya'],
+];
+function detectLawHint(text) {
+  if (!text) return null;
+  for (const [re, hint] of LAW_HINTS) {
+    if (re.test(text)) return hint;
+  }
+  return null;
+}
+
+async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   const isUz = language !== 'ru';
   const expandedQuery = expandQueryVariants(query);
@@ -2662,6 +2690,30 @@ async function retrieveLegalContext(query, topic, language = null) {
   // ── 1. Router: choose search strategy ──
   const route = routeQuery(query);
   console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
+
+  // ── 1a. Article-aware retrieval ──
+  // If the user named specific article(s) ("modda 358"), fetch those chunks
+  // directly by article_numbers metadata. This is the authoritative path for
+  // article lookups — robust to Cyrillic-corpus/Latin-query mismatch and to
+  // bare numbers that semantic/keyword search miss. The law is inferred from
+  // the query, or from prior-turn context (opts.contextText) for follow-ups.
+  let articleMatches = [];
+  if (route.entities.length > 0) {
+    const lawHint = detectLawHint(query) || detectLawHint(opts.contextText || '');
+    try {
+      articleMatches = await articleNumberSearch(route.entities, { lawHint, category: topic || null, limit: 6 });
+      // If a scoped search came up empty, retry unscoped — a cross-law article
+      // hit beats nothing.
+      if (articleMatches.length === 0 && (topic || lawHint)) {
+        articleMatches = await articleNumberSearch(route.entities, { lawHint, limit: 6 });
+      }
+      if (articleMatches.length === 0 && lawHint) {
+        articleMatches = await articleNumberSearch(route.entities, { limit: 6 });
+      }
+    } catch (e) {
+      console.warn(`[RAG] articleNumberSearch failed: ${e.message}`);
+    }
+  }
 
   // ── 2. RRF Hybrid Search ──
   const retrievalLimit = 15;
@@ -2734,6 +2786,16 @@ async function retrieveLegalContext(query, topic, language = null) {
       .filter(isHighConfidenceKeywordMatch)
       .slice(0, 3);
 
+    // Article-number hits are the most authoritative for an article query —
+    // prepend them so they rank first and are protected through filtering.
+    if (articleMatches.length > 0) {
+      guaranteedKeywordMatches = mergePrioritizedResults(
+        articleMatches,
+        guaranteedKeywordMatches,
+        articleMatches.length + guaranteedKeywordMatches.length
+      );
+    }
+
     if (guaranteedKeywordMatches.length > 0) {
       rawResults = mergePrioritizedResults(
         guaranteedKeywordMatches,
@@ -2746,6 +2808,17 @@ async function retrieveLegalContext(query, topic, language = null) {
     }
   } catch (err) {
     console.warn(`[RAG] Keyword rescue failed (${err.message})`);
+  }
+
+  // Failsafe: if keyword rescue threw before injecting them, ensure article
+  // matches are still guaranteed and merged into the candidate pool.
+  if (articleMatches.length > 0 && !guaranteedKeywordMatches.some(m => articleMatches.some(a => a.id === m.id))) {
+    guaranteedKeywordMatches = mergePrioritizedResults(
+      articleMatches,
+      guaranteedKeywordMatches,
+      articleMatches.length + guaranteedKeywordMatches.length
+    );
+    rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, Math.max(rawResults.length, retrievalLimit, 6));
   }
 
   try {
@@ -3973,7 +4046,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     let ragMeta = null;
     let ragChunks = [];
     if (topic) {
-      const ragResult = await retrieveLegalContext(message, topic);
+      // Pass recent user turns so an article-only follow-up ("358-modda?") can
+      // still infer which law it refers to from the conversation.
+      const contextText = Array.isArray(history)
+        ? history.filter(m => m && (m.role === 'user' || m.role === 'model' || m.role === 'assistant'))
+            .slice(-4).map(m => m.text || m.content || '').join(' ')
+        : '';
+      const ragResult = await retrieveLegalContext(message, topic, null, { contextText });
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragMeta = ragResult.meta || null;
       ragChunks = ragResult.chunks || [];

@@ -1215,6 +1215,49 @@ async function exactMatchSearch(query, opts = {}) {
 }
 
 /**
+ * Article-aware retrieval — fetch chunks by their article_numbers metadata.
+ *
+ * This is the reliable path for "modda 358" style queries: it filters on the
+ * digit-only article_numbers array, so it works regardless of script
+ * (Cyrillic corpus vs Latin query) and regardless of how weak a bare number is
+ * for semantic/keyword search. Optionally scoped to a law (lawHint) and topic.
+ *
+ * @param {string[]} articleNums  e.g. ['358']
+ * @param {{ category?:string, language?:string, lawHint?:string, limit?:number }} opts
+ */
+async function articleNumberSearch(articleNums, opts = {}) {
+  await initLegalCorpus();
+  const { category = null, language = null, lawHint = null, limit = 6 } = opts;
+  const nums = Array.from(new Set((articleNums || []).map(String).map(s => s.trim()).filter(Boolean)));
+  if (nums.length === 0) return [];
+
+  const params = [limit, nums];           // $1 limit, $2 article numbers
+  let idx = 3;
+  const extra = [`article_numbers && $2::text[]`];
+  if (lawHint) {
+    extra.push(`law_name ILIKE $${idx++}`);
+    params.push('%' + lawHint + '%');
+  }
+  const { whereClause, params: filterParams } = buildRetrievalFilters({ category, language, startIndex: idx });
+  params.push(...filterParams);
+
+  const result = await pool.query(`
+    SELECT
+      id, law_name, chunk_text, article_numbers, chapter, source_url, category,
+      source_type, language, verified_by, adoption_date, document_number,
+      article_number_display, part_number, is_active,
+      0.95 + CASE WHEN source_type = 'verified_qa' THEN 0.05 ELSE 0 END AS score
+    FROM legal_chunks
+    WHERE ${extra.join(' AND ')} AND ${whereClause}
+    ORDER BY score DESC, part_number ASC NULLS FIRST, id
+    LIMIT $1
+  `, params);
+
+  console.log(`[RAG] Article search: ${result.rows.length} chunk(s) for modda ${nums.join(',')}${lawHint ? ` (law~"${lawHint}")` : ''}`);
+  return result.rows;
+}
+
+/**
  * Summary stats for ingest log.
  */
 async function getIngestStats() {
@@ -1242,6 +1285,7 @@ module.exports = {
   textOnlySearch,
   keywordSearch,
   exactMatchSearch,
+  articleNumberSearch,
   vectorSearch,
   getCorpusStats,
   rebuildVectorIndex,
