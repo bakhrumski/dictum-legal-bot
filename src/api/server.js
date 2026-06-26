@@ -359,6 +359,109 @@ app.get('/api/user-info', requireAuth, (req, res) => {
   });
 });
 
+// ════════════════════════════════════════
+// FREE-ACCESS GATE (channel-join + weekly survey) — for role='user' free tier
+// ════════════════════════════════════════
+
+// Current access state for the logged-in user (drives the dashboard gate).
+app.get('/api/free-access/status', requireAuth, async (req, res) => {
+  try {
+    const acc = await tariffModule.checkFreeAccess(req.session.adminId);
+    const botMod = require('../bot/bot');
+    res.json({
+      ...acc,
+      channel: botMod.REQUIRED_CHANNEL || '',
+      channelUrl: typeof botMod.channelLink === 'function' ? botMod.channelLink() : '',
+    });
+  } catch (err) {
+    console.error('[free-access] status error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Generate a one-time code + Telegram deep link to link & verify the account.
+app.get('/api/free-access/telegram-link', requireAuth, async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const code = crypto.randomBytes(12).toString('hex');
+    await pool.query('UPDATE admins SET telegram_link_code = $1 WHERE id = $2', [code, req.session.adminId]);
+    let botUsername = process.env.BOT_USERNAME || '';
+    if (!botUsername) {
+      try { botUsername = (await require('../bot/bot').bot.getMe()).username; } catch (_) {}
+    }
+    const deepLink = botUsername ? `https://t.me/${botUsername}?start=ulink_${code}` : null;
+    res.json({ code, botUsername, deepLink });
+  } catch (err) {
+    console.error('[free-access] link error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Poll link/verification status.
+app.get('/api/free-access/telegram-status', requireAuth, async (req, res) => {
+  try {
+    const acc = await tariffModule.checkFreeAccess(req.session.adminId);
+    res.json({ telegramLinked: !!acc.telegramLinked, channelVerified: acc.state === 'free' || acc.state === 'survey_required', state: acc.state });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Active survey questions for the user to answer.
+app.get('/api/free-access/survey-questions', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, question_text, options FROM survey_questions
+       WHERE is_active = TRUE ORDER BY position, id LIMIT 3`
+    );
+    res.json({ questions: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Submit survey answers. Body: { answers: [{ questionId, answer }] }
+app.post('/api/free-access/survey-submit', requireAuth, async (req, res) => {
+  const { answers } = req.body;
+  if (!Array.isArray(answers) || answers.length === 0) {
+    return res.status(400).json({ error: 'answers required' });
+  }
+  const client = await pool.connect();
+  try {
+    const adminId = req.session.adminId;
+    const ur = await pool.query('SELECT telegram_user_id FROM admins WHERE id = $1', [adminId]);
+    const telegramId = ur.rows[0] ? ur.rows[0].telegram_user_id : null;
+
+    const qres = await pool.query('SELECT id, question_text FROM survey_questions WHERE is_active = TRUE');
+    const qById = new Map(qres.rows.map(q => [q.id, q]));
+
+    await client.query('BEGIN');
+    const sub = await client.query(
+      'INSERT INTO survey_submissions (telegram_id, admin_id) VALUES ($1, $2) RETURNING id',
+      [telegramId, adminId]
+    );
+    const submissionId = sub.rows[0].id;
+    for (const a of answers) {
+      const q = qById.get(parseInt(a.questionId, 10));
+      if (!q) continue;
+      const ans = String(a.answer == null ? '' : a.answer).slice(0, 2000);
+      await client.query(
+        'INSERT INTO survey_answers (submission_id, question_id, question_text, answer_text) VALUES ($1,$2,$3,$4)',
+        [submissionId, q.id, q.question_text, ans]
+      );
+    }
+    await client.query('UPDATE admins SET survey_completed_at = NOW() WHERE id = $1', [adminId]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[free-access] survey submit error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
+});
+
 // Redirect root
 app.get('/', (req, res) => {
   if (req.session.isAuthenticated) {
@@ -6670,7 +6773,9 @@ async function runMigrations() {
     // Survey submissions also come from web-portal users (no telegram_id needed)
     await pool.query(`ALTER TABLE survey_submissions ALTER COLUMN telegram_id DROP NOT NULL`).catch(() => {});
     await pool.query(`ALTER TABLE survey_submissions ADD COLUMN IF NOT EXISTS portal_user_id INTEGER`);
+    await pool.query(`ALTER TABLE survey_submissions ADD COLUMN IF NOT EXISTS admin_id INTEGER`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_portal ON survey_submissions(portal_user_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_admin ON survey_submissions(admin_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_tg_time ON survey_submissions(telegram_id, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_sub ON survey_answers(submission_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_q ON survey_answers(question_id)`);

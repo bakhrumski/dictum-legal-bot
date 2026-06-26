@@ -346,6 +346,47 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     return;
   }
 
+  // Deep link: /start ulink_CODE — link a dashboard (role='user') account to
+  // this Telegram user and verify channel membership (free-access flow).
+  if (param.startsWith('ulink_')) {
+    const code = param.replace('ulink_', '').trim();
+    try {
+      const row = (await pool.query(
+        'SELECT id FROM admins WHERE telegram_link_code = $1', [code]
+      )).rows[0];
+      if (!row) {
+        bot.sendMessage(chatId, '⏳ Havola eskirgan yoki noto\'g\'ri. Saytda qayta urinib ko\'ring.');
+        return;
+      }
+      const tgId = String(msg.from.id);
+      const taken = (await pool.query(
+        'SELECT id FROM admins WHERE telegram_user_id = $1 AND id <> $2', [tgId, row.id]
+      )).rows[0];
+      if (taken) {
+        bot.sendMessage(chatId, '⚠️ Bu Telegram hisobi allaqachon boshqa akkauntga ulangan.');
+        return;
+      }
+      await pool.query(
+        'UPDATE admins SET telegram_user_id = $1, telegram_username = $2, telegram_link_code = NULL WHERE id = $3',
+        [tgId, msg.from.username || null, row.id]
+      );
+      const isMember = await isChannelMember(msg.from.id);
+      if (isMember) {
+        await pool.query('UPDATE admins SET channel_verified_at = NOW() WHERE id = $1', [row.id]);
+        bot.sendMessage(chatId, '✅ Hisobingiz ulandi va kanal obunasi tasdiqlandi!\n\nEndi saytga qaytib, bepul foydalanishni davom ettiring.');
+      } else {
+        bot.sendMessage(chatId,
+          'ℹ️ Hisobingiz ulandi. Endi rasmiy kanalga obuna bo\'ling, so\'ng saytdagi "Tekshirish" tugmasini bosing.',
+          { reply_markup: { inline_keyboard: [[{ text: '📢 Kanalga obuna bo\'lish', url: channelLink() }]] } }
+        );
+      }
+    } catch (e) {
+      console.error('[ulink]', e.message);
+      bot.sendMessage(chatId, '❌ Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
+    }
+    return;
+  }
+
   // Deep link: /start login_TOKEN — generate 4-digit OTP for login
   if (param.startsWith('login_')) {
     const token = param.replace('login_', '').trim();

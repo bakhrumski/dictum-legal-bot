@@ -81,6 +81,12 @@ async function initSubscriptionSchema() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_tariff_usage_admin_ts ON tariff_usage(admin_id, ts DESC)`);
 
+    // Free-access flow (channel-join + weekly survey instead of paying)
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS telegram_link_code VARCHAR(40)`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS channel_verified_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS survey_completed_at TIMESTAMPTZ`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_admins_linkcode ON admins(telegram_link_code) WHERE telegram_link_code IS NOT NULL`);
+
     _initialized = true;
     console.log('[TARIFF] schema ready (admins + tariff_usage)');
   } catch (err) {
@@ -170,6 +176,76 @@ async function checkQuota(adminId) {
   };
 }
 
+// ════════════════════════════════════════
+// FREE-ACCESS GATE — channel-join + weekly survey for free-tier users
+// (role='user' on sinov/no plan). Paid plans and staff bypass.
+// ════════════════════════════════════════
+
+const PAID_PLANS = new Set(['silver', 'gold', 'platinum']);
+const SURVEY_GRACE_MS = 7 * 24 * 60 * 60 * 1000;  // survey due 7 days after signup
+const CHANNEL_REVERIFY_MS = 24 * 60 * 60 * 1000;   // re-check membership at most daily
+
+function _bot() {
+  try { return require('../bot/bot'); } catch (_) { return {}; }
+}
+
+// Channel membership OK? cached on admins.channel_verified_at, live re-check ≤ daily.
+async function isChannelOkForAdmin(row, adminId) {
+  if (!row.telegram_user_id) return false;
+  const cachedAt = row.channel_verified_at ? new Date(row.channel_verified_at).getTime() : 0;
+  if (cachedAt && (Date.now() - cachedAt) < CHANNEL_REVERIFY_MS) return true;
+  const { isChannelMember } = _bot();
+  if (typeof isChannelMember !== 'function') return cachedAt > 0;
+  try {
+    const ok = await isChannelMember(row.telegram_user_id);
+    if (ok) {
+      await pool.query('UPDATE admins SET channel_verified_at = NOW() WHERE id = $1', [adminId]);
+      return true;
+    }
+    await pool.query('UPDATE admins SET channel_verified_at = NULL WHERE id = $1', [adminId]);
+    return false;
+  } catch (_) {
+    return cachedAt > 0;
+  }
+}
+
+// Access decision for a user. Returns { allowed, code?, state, ... }.
+// Only free-tier common users are gated.
+async function checkFreeAccess(adminId) {
+  if (!_initialized) await initSubscriptionSchema();
+  const u = await getUserPlan(adminId);
+  if (!u) return { allowed: true, state: 'unknown' };
+  if (u.role && u.role !== 'user') return { allowed: true, state: 'staff' };
+  if (PAID_PLANS.has(u.plan)) return { allowed: true, state: 'paid' };
+
+  const r = await pool.query(
+    `SELECT telegram_user_id, telegram_username, channel_verified_at, survey_completed_at,
+            tariff_starts_at, created_at
+       FROM admins WHERE id = $1`,
+    [adminId]
+  );
+  const row = r.rows[0];
+  if (!row) return { allowed: true, state: 'unknown' };
+
+  const channelOk = await isChannelOkForAdmin(row, adminId);
+  if (!row.telegram_user_id || !channelOk) {
+    return { allowed: false, code: 'CHANNEL_REQUIRED', state: 'channel_required', telegramLinked: !!row.telegram_user_id };
+  }
+  const start = new Date(row.tariff_starts_at || row.created_at).getTime();
+  const surveyDue = start + SURVEY_GRACE_MS;
+  if (Date.now() >= surveyDue && !row.survey_completed_at) {
+    return { allowed: false, code: 'SURVEY_REQUIRED', state: 'survey_required', surveyDueAt: new Date(surveyDue).toISOString() };
+  }
+  return {
+    allowed: true, state: 'free',
+    telegramLinked: !!row.telegram_user_id,
+    telegramUsername: row.telegram_username || null,
+    channelVerified: true,
+    surveyCompleted: !!row.survey_completed_at,
+    surveyDueAt: new Date(surveyDue).toISOString(),
+  };
+}
+
 async function recordUsage(adminId, endpoint) {
   if (!_initialized) await initSubscriptionSchema();
   try {
@@ -246,6 +322,19 @@ function enforceQuota(endpoint) {
       if (req.session?.role === 'master') return next();
       if (req.session?.role && req.session.role !== 'user') return next();
 
+      // Free-access gate: free-tier users must join the channel and (after a
+      // week) complete the survey, instead of paying. Paid plans bypass.
+      const access = await checkFreeAccess(adminId);
+      if (!access.allowed) {
+        return res.status(403).json({
+          error: access.code,
+          code: access.code,
+          message: access.code === 'SURVEY_REQUIRED'
+            ? 'Bepul foydalanishni davom ettirish uchun qisqa so\'rovnomani to\'ldiring.'
+            : 'Bepul foydalanish uchun rasmiy Telegram kanalimizga obuna bo\'ling.',
+        });
+      }
+
       const q = await checkQuota(adminId);
       if (!q.allowed) {
         return res.status(429).json({
@@ -278,4 +367,6 @@ module.exports = {
   getUsageStats,
   selectPlan,
   enforceQuota,
+  checkFreeAccess,
+  isChannelOkForAdmin,
 };
