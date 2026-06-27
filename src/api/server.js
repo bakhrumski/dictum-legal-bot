@@ -3338,7 +3338,16 @@ JIDDIY TAQIQLAR:
 // Only includes sources whose article number actually appears in the reply text —
 // prevents irrelevant or stale RAG chunks (e.g. Labor Code in a traffic-fine answer)
 // from being shown as authoritative sources.
-function buildManbalarFooter(chunks = [], replyText = '') {
+// lex.uz language segment for a question: Uzbek by default; Russian only when
+// the text is Russian Cyrillic (no Uzbek-specific letters ў/қ/ғ/ҳ).
+function lexLangForText(text) {
+  const t = String(text || '');
+  if (/[ўқғҳ]/i.test(t)) return 'uz';     // Uzbek Cyrillic
+  if (/[а-яё]/i.test(t)) return 'ru';     // Russian Cyrillic
+  return 'uz';                            // Latin / default → Uzbek
+}
+
+function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
   if (!chunks || chunks.length === 0) return '';
 
   const reply = String(replyText || '');
@@ -3373,12 +3382,12 @@ function buildManbalarFooter(chunks = [], replyText = '') {
         }
       }
 
-      // Force Uzbek-Latin version: lex.uz/docs/... → lex.uz/uz/docs/...
-      // Chunks ingested before the Uzbek-URL switch have no /uz/ prefix and
-      // lex.uz serves Russian by default for bare /docs/ paths.
+      // Open lex.uz in the question's language. Normalize ANY existing language
+      // segment (bare /docs/, /ru/docs/, /uz/docs/, ...) to the target lang, so
+      // chunks ingested with a /ru/ URL don't keep opening Russian.
       let rawUrl = r.source_url;
-      if (rawUrl && /lex\.uz\/docs\//.test(rawUrl)) {
-        rawUrl = rawUrl.replace('lex.uz/docs/', 'lex.uz/uz/docs/');
+      if (rawUrl) {
+        rawUrl = rawUrl.replace(/lex\.uz\/(?:[a-z]{2}\/)?docs\//, `lex.uz/${lang}/docs/`);
       }
       const url = rawUrl + fragment;
       lines.push(`- [${r.law_name}, ${art}-modda](${url})`);
@@ -4195,8 +4204,9 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       }
     }
 
-    // Append Manbalar footer with lex.uz Text Fragment links for lawyer citation verification
-    const manbalarFooter = buildManbalarFooter(ragChunks, displayReply);
+    // Append Manbalar footer with lex.uz Text Fragment links for lawyer citation
+    // verification — opened in the language the user asked in.
+    const manbalarFooter = buildManbalarFooter(ragChunks, displayReply, lexLangForText(message));
     if (manbalarFooter) displayReply += manbalarFooter;
 
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
