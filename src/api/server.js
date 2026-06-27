@@ -2891,11 +2891,15 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   }
 
   try {
-    exactResults = await exactMatchSearch(query, {
+    // Exclude verified_qa from the exact-match failsafe: an ILIKE token match
+    // isn't strong enough relevance to force-protect a curated QA answer (those
+    // entries can be mis-categorised, so even topic scoping won't drop them).
+    // Relevant QA still surfaces via vector ranking or an exact-phrase keyword match.
+    exactResults = (await exactMatchSearch(query, {
       category: topic || null,
       language,
       limit: 5,
-    });
+    })).filter(r => r.source_type !== 'verified_qa');
 
     if (exactResults.length > 0) {
       const existingIds = new Set(rawResults.map((row) => row.id));
