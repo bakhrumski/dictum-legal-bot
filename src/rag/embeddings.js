@@ -69,7 +69,14 @@ function httpsPostJson(url, body, headers = {}) {
 
 // ========== PROVIDER DETECTION ==========
 
+// EMBED_PROVIDER env overrides auto-detection (e.g. force 'gemini' even while
+// HF_TOKEN is still set). Falls back to auto-detect if the override's key is missing.
 function detectProvider() {
+  const override = (process.env.EMBED_PROVIDER || '').toLowerCase().trim();
+  if (override === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini';
+  if ((override === 'openai') && (process.env.GPT_API_KEY || process.env.OPENAI_API_KEY)) return 'openai';
+  if ((override === 'huggingface' || override === 'hf') && process.env.HF_TOKEN) return 'huggingface';
+
   if (process.env.HF_TOKEN) return 'huggingface';
   if (process.env.GEMINI_API_KEY) return 'gemini';
   if (process.env.GPT_API_KEY || process.env.OPENAI_API_KEY) return 'openai';
@@ -95,7 +102,11 @@ const PROVIDERS = {
   },
   gemini: {
     model: 'gemini-embedding-001',
-    dims: 3072,
+    // gemini-embedding-001 natively outputs 3072 dims, but pgvector's ivfflat
+    // index supports at most 2000 dims. We request MRL-truncated 1536-dim
+    // vectors (outputDimensionality) — top-tier quality, index-compatible.
+    // Overridable via GEMINI_EMBED_DIMS (must stay <= 2000 for ivfflat).
+    dims: parseInt(process.env.GEMINI_EMBED_DIMS || '1536', 10),
     maxInput: 8000,
     batchSize: 100,
   },
@@ -189,38 +200,58 @@ async function hfEmbed(texts, apiKey, isQuery = false) {
 
 // ========== GEMINI EMBEDDINGS ==========
 
+// Retry transient Gemini failures (429 rate limit, 503, 5xx) with backoff so a
+// long re-embed survives free-tier throttling and runtime queries are resilient.
+async function geminiPostWithRetry(url, payload, label) {
+  const MAX_ATTEMPTS = 5;
+  let lastText = '';
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let resp;
+    try {
+      resp = await httpsPostJson(url, payload);
+    } catch (err) {
+      if (attempt < MAX_ATTEMPTS) {
+        const wait = 2000 * Math.pow(2, attempt - 1);
+        console.warn(`[EMBEDDINGS] Gemini ${label} network error (${err.message}), retry ${attempt} in ${wait / 1000}s...`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      throw err;
+    }
+    if (resp.status === 200) return resp.body;
+    lastText = (resp.text || '').substring(0, 200);
+    if ((resp.status === 429 || resp.status === 503 || resp.status >= 500) && attempt < MAX_ATTEMPTS) {
+      const wait = resp.status === 429 ? 5000 * attempt : 2000 * Math.pow(2, attempt - 1);
+      console.warn(`[EMBEDDINGS] Gemini ${label} ${resp.status}, retry ${attempt} in ${wait / 1000}s...`);
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    throw new Error(`Gemini Embedding API ${resp.status}: ${lastText}`);
+  }
+  throw new Error(`Gemini Embedding API: exhausted retries. Last: ${lastText}`);
+}
+
 async function geminiEmbed(texts, apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${PROVIDERS.gemini.model}:batchEmbedContents?key=${apiKey}`;
-
   const requests = texts.map(text => ({
     model: `models/${PROVIDERS.gemini.model}`,
     content: { parts: [{ text }] },
-    taskType: 'RETRIEVAL_DOCUMENT'
+    taskType: 'RETRIEVAL_DOCUMENT',
+    outputDimensionality: PROVIDERS.gemini.dims,
   }));
-
-  const resp = await httpsPostJson(url, { requests });
-
-  if (resp.status !== 200) {
-    throw new Error(`Gemini Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
-  }
-
-  return resp.body.embeddings.map(e => e.values);
+  const body = await geminiPostWithRetry(url, { requests }, 'batch');
+  return body.embeddings.map(e => e.values);
 }
 
 async function geminiEmbedQuery(text, apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${PROVIDERS.gemini.model}:embedContent?key=${apiKey}`;
-
-  const resp = await httpsPostJson(url, {
+  const body = await geminiPostWithRetry(url, {
     model: `models/${PROVIDERS.gemini.model}`,
     content: { parts: [{ text }] },
-    taskType: 'RETRIEVAL_QUERY'
-  });
-
-  if (resp.status !== 200) {
-    throw new Error(`Gemini Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
-  }
-
-  return resp.body.embedding.values;
+    taskType: 'RETRIEVAL_QUERY',
+    outputDimensionality: PROVIDERS.gemini.dims,
+  }, 'query');
+  return body.embedding.values;
 }
 
 // ========== OPENAI EMBEDDINGS ==========
@@ -253,6 +284,22 @@ async function openaiEmbedQuery(text, apiKey) {
  * Get embedding for a single text (query-time).
  * Uses appropriate task prefix per provider.
  */
+// Lightweight health state so a dead embedding provider is visible (and never
+// again silently degrades RAG to text-only) — surfaced via /api/health.
+const _health = { lastOk: null, lastError: null, lastErrorAt: null, consecutiveErrors: 0 };
+function getEmbeddingHealth() {
+  return {
+    provider: detectProvider(),
+    model: EMBED_MODEL(),
+    dims: getEmbedDims(),
+    healthy: _health.consecutiveErrors === 0,
+    lastOkAt: _health.lastOk,
+    lastError: _health.lastError,
+    lastErrorAt: _health.lastErrorAt,
+    consecutiveErrors: _health.consecutiveErrors,
+  };
+}
+
 async function getEmbedding(text, apiKey) {
   const key = apiKey || getApiKey();
   if (!key) throw new Error('No API key for embeddings (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
@@ -267,13 +314,25 @@ async function getEmbedding(text, apiKey) {
   const provider = detectProvider();
   if (!provider) throw new Error('No embedding provider configured (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
 
-  if (provider === 'huggingface') {
-    const results = await hfEmbed([text], key, true /* isQuery */);
-    return results[0];
-  } else if (provider === 'gemini') {
-    return geminiEmbedQuery(text.substring(0, PROVIDERS.gemini.maxInput), key);
-  } else {
-    return openaiEmbedQuery(text.substring(0, PROVIDERS.openai.maxInput), key);
+  try {
+    let vec;
+    if (provider === 'huggingface') {
+      const results = await hfEmbed([text], key, true /* isQuery */);
+      vec = results[0];
+    } else if (provider === 'gemini') {
+      vec = await geminiEmbedQuery(text.substring(0, PROVIDERS.gemini.maxInput), key);
+    } else {
+      vec = await openaiEmbedQuery(text.substring(0, PROVIDERS.openai.maxInput), key);
+    }
+    _health.lastOk = new Date().toISOString();
+    _health.consecutiveErrors = 0;
+    _health.lastError = null;
+    return vec;
+  } catch (err) {
+    _health.lastError = err.message;
+    _health.lastErrorAt = new Date().toISOString();
+    _health.consecutiveErrors += 1;
+    throw err;
   }
 }
 
@@ -356,6 +415,7 @@ module.exports = {
   getEmbedding,
   getEmbeddingsBatch,
   getEmbedDims,
+  getEmbeddingHealth,
   detectProvider,
   PROVIDERS,
   httpsPostJson,
