@@ -2740,6 +2740,9 @@ const { detectLawHint } = require('../rag/law-hints');
 async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   const isUz = language !== 'ru';
+  // Category slugs are stored lowercase; normalize the topic so a stray
+  // "Soliq" vs "soliq" can never silently fall back to unscoped retrieval.
+  if (topic) topic = String(topic).toLowerCase();
   const expandedQuery = expandQueryVariants(query);
   if (expandedQuery !== query) {
     console.log(`[RAG] Prim-expanded query: "${query}" -> "${expandedQuery}"`);
@@ -2844,8 +2847,12 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     // Cap guaranteed keyword matches at 2 so loosely-matching entries (e.g.
     // verified_qa sharing a generic token) can't monopolize the final context
     // and crowd out semantically-strong vector/law results.
+    // A curated verified_qa answer only earns guaranteed status when the user's
+    // question matches it closely (exact phrase) — generic token overlap (e.g.
+    // a VAT answer matching "soliq") must NOT force it into context.
     guaranteedKeywordMatches = keywordCandidates
       .filter(isHighConfidenceKeywordMatch)
+      .filter(r => r.source_type !== 'verified_qa' || r.exact_phrase_match)
       .slice(0, 2);
 
     // Article-number hits are the most authoritative for an article query —
@@ -2939,8 +2946,12 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         ? await keywordSearch(query, { category: null, language: null, limit: 6 })
         : [];
 
+      // Cross-field augmentation pulls relevant LAW from OTHER legal fields —
+      // not QA-bank entries (a verified answer from another field is just noise
+      // here, e.g. an advocacy Q&A surfacing for a tax question).
       const candidates = [...unscopedExact, ...unscopedKeyword]
-        .filter(c => c && c.category && c.category !== topic && !existingIds.has(c.id));
+        .filter(c => c && c.category && c.category !== topic && !existingIds.has(c.id))
+        .filter(c => c.source_type !== 'verified_qa');
 
       const seen = new Set();
       for (const c of candidates) {
