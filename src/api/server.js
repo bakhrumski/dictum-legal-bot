@@ -7120,6 +7120,7 @@ app.get('/api/health', async (req, res) => {
     hasFile: typeof File === 'function',
     embedding_provider: process.env.HF_TOKEN ? 'huggingface' : process.env.GEMINI_API_KEY ? 'gemini' : process.env.GPT_API_KEY ? 'openai' : 'none',
     hf_token_prefix: process.env.HF_TOKEN ? process.env.HF_TOKEN.substring(0, 8) + '...' : 'NOT SET',
+    embedding_health: (() => { try { return require('../rag/embeddings').getEmbeddingHealth(); } catch (e) { return { error: e.message }; } })(),
     tavily: !!process.env.TAVILY_API_KEY,
     corpus: corpusInfo,
   });
