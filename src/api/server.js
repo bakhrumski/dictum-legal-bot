@@ -2841,9 +2841,12 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       limit: 6,
     });
 
+    // Cap guaranteed keyword matches at 2 so loosely-matching entries (e.g.
+    // verified_qa sharing a generic token) can't monopolize the final context
+    // and crowd out semantically-strong vector/law results.
     guaranteedKeywordMatches = keywordCandidates
       .filter(isHighConfidenceKeywordMatch)
-      .slice(0, 3);
+      .slice(0, 2);
 
     // Article-number hits are the most authoritative for an article query —
     // prepend them so they rank first and are protected through filtering.
@@ -2960,19 +2963,23 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     }
   }
 
-  if (rawResults.length > 3) {
+  // Final context window. Widened from 3 → 5 so guaranteed keyword matches and
+  // the top vector/law results coexist instead of the former displacing the latter.
+  const FINAL_K = 5;
+
+  if (rawResults.length > FINAL_K) {
     try {
       const { rerankChunks } = require('../rag/reranker');
-      rawResults = await rerankChunks(query, rawResults, { topK: 3 });
+      rawResults = await rerankChunks(query, rawResults, { topK: FINAL_K });
       searchMode = `${searchMode}+rerank`;
     } catch (rerankErr) {
-      console.warn(`[RAG] Reranker failed (${rerankErr.message}), using top 3 from hybrid search`);
-      rawResults = rawResults.slice(0, 3);
+      console.warn(`[RAG] Reranker failed (${rerankErr.message}), using top ${FINAL_K} from hybrid search`);
+      rawResults = rawResults.slice(0, FINAL_K);
     }
   }
 
   if (guaranteedKeywordMatches.length > 0) {
-    rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, 3);
+    rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, FINAL_K);
   }
 
   if (exactMatchIds.size > 0 && exactResults.length > 0) {
@@ -2988,7 +2995,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   if (rawResults.length > 0 && typeof callAI === 'function') {
     try {
       const corrective = await correctiveFilter(query, rawResults, callAI);
-      goodChunks = corrective.good.length > 0 ? corrective.good : rawResults.slice(0, 3);
+      goodChunks = corrective.good.length > 0 ? corrective.good : rawResults.slice(0, FINAL_K);
       needsWebSearch = corrective.needsWebSearch;
     } catch (err) {
       console.warn(`[RAG] Corrective filter failed (${err.message}), using raw results`);
@@ -3000,7 +3007,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     goodChunks = mergePrioritizedResults(
       guaranteedKeywordMatches,
       goodChunks,
-      Math.max(goodChunks.length, 3)
+      Math.max(goodChunks.length, FINAL_K)
     );
   }
 
@@ -3010,7 +3017,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       goodChunks = mergePrioritizedResults(
         [exactResults[0]],
         goodChunks,
-        Math.max(goodChunks.length, 3)
+        Math.max(goodChunks.length, FINAL_K)
       );
     }
   }
