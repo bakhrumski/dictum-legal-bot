@@ -301,7 +301,10 @@ function getEmbeddingHealth() {
 }
 
 async function getEmbedding(text, apiKey) {
-  const key = apiKey || getApiKey();
+  // Prefer the provider-aware key (respects EMBED_PROVIDER) over a caller-passed
+  // key, since many call sites build a stale "HF_TOKEN || GEMINI || GPT" chain
+  // that would hand the wrong provider's key to the embedding API.
+  const key = getApiKey() || apiKey;
   if (!key) throw new Error('No API key for embeddings (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
   if (!text || text.trim().length === 0) throw new Error('Empty text cannot be embedded');
 
@@ -342,7 +345,10 @@ async function getEmbedding(text, apiKey) {
  */
 async function getEmbeddingsBatch(texts, apiKey, opts = {}) {
   const { signal } = opts;
-  const key = apiKey || getApiKey();
+  // Prefer the provider-aware key (respects EMBED_PROVIDER) over a caller-passed
+  // key, since many call sites build a stale "HF_TOKEN || GEMINI || GPT" chain
+  // that would hand the wrong provider's key to the embedding API.
+  const key = getApiKey() || apiKey;
   if (!key) throw new Error('No API key for embeddings (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
   if (!texts || texts.length === 0) return [];
 
