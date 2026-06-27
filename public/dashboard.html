@@ -3383,6 +3383,51 @@
         .bundle-item-current { cursor: default; opacity: 0.85; background: var(--bg-student-response, rgba(46,139,87,0.08)); }
         .bundle-status { font-style: normal; font-size: 11px; color: var(--text-secondary); margin-left: 6px; }
 
+        /* Weekly survey admin */
+        .survey-q-card { background: var(--bg-1,#fff); border:1px solid var(--border-1,rgba(0,0,0,0.1)); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+        .survey-q-head { display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:13px; color:var(--text-primary); margin-bottom:8px; }
+        .survey-q-active { font-weight:400; font-size:12px; color:var(--text-secondary); display:flex; align-items:center; gap:5px; cursor:pointer; }
+        .survey-qtext { width:100%; padding:9px 11px; border:1px solid var(--border-1,rgba(0,0,0,0.15)); border-radius:7px; font-size:14px; font-family:inherit; box-sizing:border-box; margin-bottom:8px; color:var(--text-primary); background:var(--bg-1,#fff); }
+        .survey-opt-label { display:block; font-size:11px; color:var(--text-secondary); margin-bottom:4px; }
+        .survey-opts { width:100%; padding:8px 11px; border:1px solid var(--border-1,rgba(0,0,0,0.15)); border-radius:7px; font-size:13px; font-family:inherit; box-sizing:border-box; resize:vertical; color:var(--text-primary); background:var(--bg-1,#fff); }
+        .survey-stats { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+        .survey-stat { font-size:13px; color:var(--text-secondary); }
+        .survey-stat strong { font-size:18px; color:var(--text-primary); margin-right:4px; }
+        .survey-result-q { margin-bottom:16px; }
+        .survey-result-qtext { font-weight:600; font-size:13px; color:var(--text-primary); margin-bottom:8px; }
+        .survey-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; font-size:12px; }
+        .survey-bar-label { flex:0 0 130px; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .survey-bar { flex:1; height:14px; background:var(--parchment-100,rgba(0,0,0,0.06)); border-radius:7px; overflow:hidden; }
+        .survey-bar-fill { display:block; height:100%; background:var(--navy-500,#2c4a6e); border-radius:7px; }
+        .survey-bar-n { flex:0 0 70px; text-align:right; color:var(--text-secondary); }
+        .survey-recent-title { font-weight:600; font-size:13px; color:var(--text-primary); margin:14px 0 8px; }
+        .survey-recent-item { font-size:12px; color:var(--text-secondary); padding:6px 0; border-top:1px solid var(--border-1,rgba(0,0,0,0.06)); }
+
+        /* Free-access gate overlay */
+        .gate-overlay { position: fixed; inset: 0; background: rgba(26,20,16,.55); backdrop-filter: blur(6px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .gate-box { background: var(--bg-1,#fff); color: var(--text-primary,#1a1410); border-radius: 16px; padding: 28px 26px; max-width: 440px; width: 100%; max-height: 88vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,.35); text-align: center; }
+        .gate-emoji { font-size: 40px; margin-bottom: 6px; }
+        .gate-title { font-size: 21px; margin: 0 0 10px; font-weight: 700; }
+        .gate-text { font-size: 14px; color: var(--text-secondary,#555); line-height: 1.55; margin: 0 0 14px; }
+        .gate-channel { font-weight: 700; font-size: 16px; background: var(--parchment-100,#f3efe7); border-radius: 8px; padding: 9px; margin-bottom: 14px; word-break: break-all; }
+        .gate-btn { display: inline-block; width: 100%; padding: 12px; margin-top: 8px; background: var(--navy-700,#0e2236); color: #fff; border: none; border-radius: 9px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .gate-btn:hover { opacity: .92; }
+        .gate-btn-ghost { background: transparent; color: var(--navy-700,#0e2236); border: 1px solid var(--navy-700,#0e2236); }
+        .gate-status { font-size: 13px; color: var(--text-secondary,#444); margin-top: 12px; line-height: 1.5; }
+        .gate-link { display: inline-block; margin: 10px 0; font-size: 13px; color: var(--navy-700,#0e2236); text-decoration: underline; }
+        .gate-q { text-align: left; margin-bottom: 16px; }
+        .gate-q-text { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+        .gate-opt { display: block; padding: 8px 10px; border: 1px solid var(--border-1,#e2dcd0); border-radius: 8px; margin-bottom: 6px; font-size: 14px; cursor: pointer; }
+        .gate-opt:hover { background: var(--parchment-100,#f7f4ee); }
+        .gate-textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--border-1,#e2dcd0); border-radius: 8px; font-size: 14px; font-family: inherit; box-sizing: border-box; resize: vertical; }
+
+        /* Non-blocking survey reminder bar */
+        .survey-remind-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9000; display: flex; align-items: center; gap: 14px; max-width: 92vw; background: var(--navy-700,#0e2236); color: #fff; padding: 10px 14px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.28); font-size: 13px; }
+        .survey-remind-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+        .survey-remind-bar button { background: #fff; color: var(--navy-700,#0e2236); border: none; border-radius: 7px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .survey-remind-bar .srb-x { background: transparent; color: #fff; font-size: 18px; padding: 2px 6px; font-weight: 400; }
+        @media (max-width: 560px) { .survey-remind-bar { flex-direction: column; gap: 8px; text-align: center; bottom: 12px; } }
+
         .approval-section {
             background: var(--bg-approval);
             padding: 20px;
@@ -5926,6 +5971,29 @@
             </div>
         </div>
 
+        <!-- Weekly R&D Survey management (Master Only) -->
+        <div class="reg-section" id="surveyAdminSection" style="margin-top:16px;">
+            <div class="reg-section-header" onclick="document.getElementById('surveyAdminSection').classList.toggle('collapsed'); if(!document.getElementById('surveyAdminSection').classList.contains('collapsed')) loadSurveyAdmin();">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>📋 Haftalik so'rovnoma (R&D)</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;">
+                    Platforma (veb) foydalanuvchilari ro'yxatdan o'tgach 7 kundan so'ng bepul foydalanishni davom ettirish uchun
+                    shu savollarga javob beradi. Maksimal 3 ta savol. Variantlar kiritsangiz — tugmali tanlov; bo'sh qoldirsangiz — erkin matn javob.
+                </p>
+                <div id="surveyQuestionsEditor"><div class="reg-empty">Yuklanmoqda...</div></div>
+                <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
+                    <button class="btn" id="surveySaveBtn" onclick="saveSurveyQuestions()">💾 Saqlash</button>
+                    <button class="btn" onclick="loadSurveyResults()" style="background:var(--navy-500,#2c4a6e);">📊 Natijalarni ko'rish</button>
+                    <span id="surveySaveStatus" style="font-size:13px;color:var(--text-secondary);"></span>
+                </div>
+                <div id="surveyResults" style="margin-top:18px;"></div>
+            </div>
+        </div>
+
         </div><!-- /tab-view sorov -->
 
         <!-- Registration Detail Modal (outside tab-view to avoid stacking context) -->
@@ -6475,6 +6543,12 @@
                     }
                 }
 
+                // Survey admin panel: master only
+                const surveyAdminSection = document.getElementById('surveyAdminSection');
+                if (surveyAdminSection) {
+                    surveyAdminSection.style.display = data.role === 'master' ? '' : 'none';
+                }
+
                 // Show/hide master-only tabs in bottom tab bar
                 // (Default: visible. Hide for student/lawyer; keep visible for master/user.)
                 var tabBarAi = document.getElementById('tabBarAi');
@@ -6505,9 +6579,200 @@
                             if (!m.plan) window.location.href = '/tariff.html';
                         }
                     } catch (e) { /* ignore */ }
+                    // Free-access gate (channel join + weekly survey)
+                    checkAccessGate();
                 }
             } catch (error) {
                 console.error('Error loading user info:', error);
+            }
+        }
+
+        // ═══════════════════════════════════════
+        // FREE-ACCESS GATE (Telegram channel + weekly survey)
+        // ═══════════════════════════════════════
+        var _tgPollTimer = null;
+        async function checkAccessGate(force) {
+            try {
+                var resp = await fetch('/api/free-access/status', { credentials: 'same-origin' });
+                if (!resp.ok) return;
+                var st = await resp.json();
+                if (st.state === 'channel_required') renderChannelGate(st, false);
+                else if (st.state === 'survey_required') renderSurveyGate();
+                else if (st.reminder && st.reminder.type === 'channel') renderChannelGate(st, true);
+                else { hideAccessGate(); maybeShowSurveyReminder(st); }
+            } catch (e) { /* ignore */ }
+        }
+
+        // Non-blocking heads-up banner shown a few days before the survey is due.
+        var SURVEY_REMIND_WITHIN_DAYS = 3;
+        function maybeShowSurveyReminder(st) {
+            var existing = document.getElementById('surveyReminderBar');
+            if (existing) existing.remove();
+            if (!st || st.surveyCompleted || !st.surveyDueAt) return;
+            var due = new Date(st.surveyDueAt).getTime();
+            var days = Math.ceil((due - Date.now()) / 86400000);
+            if (days < 0 || days > SURVEY_REMIND_WITHIN_DAYS) return;
+            // Don't re-nag within the same browser session for this due date
+            try { if (sessionStorage.getItem('surveyRemindDismissed') === st.surveyDueAt) return; } catch (e) {}
+            var when = days <= 0 ? 'bugun' : (days + ' kundan keyin');
+            var bar = document.createElement('div');
+            bar.id = 'surveyReminderBar';
+            bar.className = 'survey-remind-bar';
+            bar.innerHTML =
+                '<span>📋 Haftalik so\'rovnoma <b>' + when + '</b> — bepul foydalanishni davom ettirish uchun.</span>' +
+                '<span class="survey-remind-actions">' +
+                  '<button onclick="renderSurveyGate()">Hozir to\'ldirish</button>' +
+                  '<button class="srb-x" title="Yopish" onclick="dismissSurveyReminder(\'' + st.surveyDueAt + '\')">&times;</button>' +
+                '</span>';
+            document.body.appendChild(bar);
+        }
+        function dismissSurveyReminder(dueAt) {
+            try { sessionStorage.setItem('surveyRemindDismissed', dueAt); } catch (e) {}
+            var bar = document.getElementById('surveyReminderBar');
+            if (bar) bar.remove();
+        }
+
+        function gateOverlay() {
+            var el = document.getElementById('accessGateOverlay');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'accessGateOverlay';
+                el.className = 'gate-overlay';
+                document.body.appendChild(el);
+            }
+            return el;
+        }
+        function hideAccessGate() {
+            var el = document.getElementById('accessGateOverlay');
+            if (el) el.remove();
+            if (_tgPollTimer) { clearInterval(_tgPollTimer); _tgPollTimer = null; }
+        }
+
+        function renderChannelGate(st, dismissible) {
+            var ch = st.channel || 'kanal';
+            var el = gateOverlay();
+            var graceNote = '';
+            var laterBtn = '';
+            if (dismissible) {
+                var days = 0;
+                if (st.reminder && st.reminder.dueAt) {
+                    days = Math.max(0, Math.ceil((new Date(st.reminder.dueAt).getTime() - Date.now()) / 86400000));
+                }
+                graceNote = '<p class="gate-text" style="color:#b8860b;">⏳ Bepul foydalanishni saqlab qolish uchun ' + days + ' kun ichida obuna bo\'ling.</p>';
+                laterBtn = '<button class="gate-btn gate-btn-ghost" onclick="hideAccessGate()">Keyinroq</button>';
+            }
+            el.innerHTML =
+                '<div class="gate-box">' +
+                  '<div class="gate-emoji">📢</div>' +
+                  '<h2 class="gate-title">Bepul foydalanish</h2>' +
+                  '<p class="gate-text">To\'lov o\'rniga rasmiy Telegram kanalimizga obuna bo\'ling. Telegram hisobingizni ulang va kanalga qo\'shiling:</p>' +
+                  '<div class="gate-channel">' + escapeHtml(ch) + '</div>' +
+                  graceNote +
+                  '<div id="gateChannelSteps"></div>' +
+                  '<button class="gate-btn" id="gateLinkBtn" onclick="startTelegramLink()">Telegramni ulash</button>' +
+                  '<button class="gate-btn gate-btn-ghost" id="gateVerifyBtn" onclick="verifyTelegram()" style="display:none">Tekshirish</button>' +
+                  laterBtn +
+                  '<div class="gate-status" id="gateStatus"></div>' +
+                '</div>';
+        }
+
+        async function startTelegramLink() {
+            var status = document.getElementById('gateStatus');
+            status.textContent = 'Havola tayyorlanmoqda...';
+            try {
+                var resp = await fetch('/api/free-access/telegram-link', { credentials: 'same-origin' });
+                var data = await resp.json();
+                if (!data.deepLink) { status.textContent = 'Bot sozlanmagan. Administrator bilan bog\'laning.'; return; }
+                window.open(data.deepLink, '_blank');
+                status.innerHTML = 'Telegram ochildi. Botga <b>Start</b> bosing va kanalga obuna bo\'ling, so\'ng <b>Tekshirish</b> tugmasini bosing.';
+                document.getElementById('gateVerifyBtn').style.display = '';
+                var steps = document.getElementById('gateChannelSteps');
+                steps.innerHTML = '<a href="' + data.deepLink + '" target="_blank" class="gate-link">Telegram ochilmadimi? Shu yerga bosing</a>';
+                if (_tgPollTimer) clearInterval(_tgPollTimer);
+                _tgPollTimer = setInterval(verifyTelegram, 4000);
+            } catch (e) {
+                status.textContent = 'Xatolik. Qaytadan urinib ko\'ring.';
+            }
+        }
+
+        async function verifyTelegram() {
+            var status = document.getElementById('gateStatus');
+            try {
+                var resp = await fetch('/api/free-access/telegram-status', { credentials: 'same-origin' });
+                var data = await resp.json();
+                if (data.channelVerified) {
+                    if (_tgPollTimer) { clearInterval(_tgPollTimer); _tgPollTimer = null; }
+                    if (status) status.textContent = '✅ Tasdiqlandi!';
+                    checkAccessGate();
+                } else if (data.telegramLinked) {
+                    if (status) status.innerHTML = 'Hisob ulandi, lekin kanal obunasi topilmadi. Kanalga obuna bo\'ling.';
+                } else {
+                    if (status) status.textContent = 'Hali ulanmadi. Botga Start bosing.';
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        async function renderSurveyGate() {
+            var el = gateOverlay();
+            el.innerHTML = '<div class="gate-box"><div class="gate-emoji">📋</div>' +
+                '<h2 class="gate-title">Haftalik so\'rovnoma</h2>' +
+                '<p class="gate-text">Bepul foydalanishni davom ettirish uchun qisqa so\'rovnomaga javob bering.</p>' +
+                '<div id="surveyFormBox">Yuklanmoqda...</div></div>';
+            try {
+                var resp = await fetch('/api/free-access/survey-questions', { credentials: 'same-origin' });
+                var data = await resp.json();
+                var qs = data.questions || [];
+                if (qs.length === 0) { hideAccessGate(); return; }
+                var box = document.getElementById('surveyFormBox');
+                var html = '';
+                qs.forEach(function(q, i) {
+                    html += '<div class="gate-q"><div class="gate-q-text">' + (i + 1) + '. ' + escapeHtml(q.question_text) + '</div>';
+                    var opts = q.options || [];
+                    if (opts.length > 0) {
+                        opts.forEach(function(opt) {
+                            html += '<label class="gate-opt"><input type="radio" name="sq_' + q.id + '" value="' + escapeHtml(opt) + '"> ' + escapeHtml(opt) + '</label>';
+                        });
+                    } else {
+                        html += '<textarea class="gate-textarea" data-q="' + q.id + '" rows="2" placeholder="Javobingiz..."></textarea>';
+                    }
+                    html += '</div>';
+                });
+                html += '<button class="gate-btn" onclick="submitSurveyGate()">Yuborish</button><div class="gate-status" id="gateSurveyStatus"></div>';
+                box.innerHTML = html;
+                box._questions = qs;
+            } catch (e) {
+                document.getElementById('surveyFormBox').textContent = 'Yuklashda xatolik.';
+            }
+        }
+
+        async function submitSurveyGate() {
+            var box = document.getElementById('surveyFormBox');
+            var qs = box._questions || [];
+            var answers = [];
+            for (var i = 0; i < qs.length; i++) {
+                var q = qs[i];
+                var opts = q.options || [];
+                var val = '';
+                if (opts.length > 0) {
+                    var sel = box.querySelector('input[name="sq_' + q.id + '"]:checked');
+                    val = sel ? sel.value : '';
+                } else {
+                    var ta = box.querySelector('textarea[data-q="' + q.id + '"]');
+                    val = ta ? ta.value.trim() : '';
+                }
+                if (!val) { document.getElementById('gateSurveyStatus').textContent = 'Iltimos, barcha savollarga javob bering.'; return; }
+                answers.push({ questionId: q.id, answer: val });
+            }
+            document.getElementById('gateSurveyStatus').textContent = 'Yuborilmoqda...';
+            try {
+                var resp = await fetch('/api/free-access/survey-submit', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin', body: JSON.stringify({ answers: answers })
+                });
+                if (resp.ok) checkAccessGate();
+                else document.getElementById('gateSurveyStatus').textContent = 'Xatolik. Qaytadan urinib ko\'ring.';
+            } catch (e) {
+                document.getElementById('gateSurveyStatus').textContent = 'Tarmoq xatoligi.';
             }
         }
 
@@ -9512,6 +9777,8 @@
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + ragBadge + actionsHtml + verifyRow + '</div>';
                     var twEl = document.getElementById(twId);
                     if (twEl) { twEl.removeAttribute('id'); typewriterRender(twEl, data.reply, messagesEl, null); }
+                } else if (data.code === 'CHANNEL_REQUIRED' || data.code === 'SURVEY_REQUIRED') {
+                    checkAccessGate(true);
                 } else {
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:#e74c3c;">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
                 }
@@ -10471,6 +10738,125 @@
                     } else { tabBadge.style.display = 'none'; }
                 }
             } catch (e) {}
+        }
+
+        // ========== WEEKLY SURVEY ADMIN ==========
+        let _surveyLoaded = false;
+        async function loadSurveyAdmin() {
+            const editor = document.getElementById('surveyQuestionsEditor');
+            try {
+                const r = await fetch('/api/survey/questions', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Server error');
+                const questions = await r.json();
+                renderSurveyEditor(questions);
+                _surveyLoaded = true;
+            } catch (e) {
+                editor.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
+            }
+        }
+
+        function renderSurveyEditor(questions) {
+            const editor = document.getElementById('surveyQuestionsEditor');
+            // Always render exactly 3 slots; empty ones are ignored on save.
+            let html = '';
+            for (let i = 0; i < 3; i++) {
+                const q = questions[i] || { question_text: '', options: [], is_active: true };
+                const optsText = (q.options || []).join('\n');
+                html += `
+                <div class="survey-q-card">
+                    <div class="survey-q-head">Savol ${i + 1}
+                        <label class="survey-q-active"><input type="checkbox" class="survey-active" ${q.is_active === false ? '' : 'checked'}> Faol</label>
+                    </div>
+                    <input type="text" class="survey-qtext" placeholder="Savol matni..." value="${escapeHtml(q.question_text || '')}">
+                    <label class="survey-opt-label">Variantlar (har birini yangi qatorda; bo'sh = erkin matn javob):</label>
+                    <textarea class="survey-opts" rows="3" placeholder="Masalan:\nHa\nYo'q">${escapeHtml(optsText)}</textarea>
+                </div>`;
+            }
+            editor.innerHTML = html;
+        }
+
+        async function saveSurveyQuestions() {
+            const cards = document.querySelectorAll('#surveyQuestionsEditor .survey-q-card');
+            const questions = [];
+            cards.forEach(card => {
+                const text = card.querySelector('.survey-qtext').value.trim();
+                if (!text) return;
+                const options = card.querySelector('.survey-opts').value
+                    .split('\n').map(s => s.trim()).filter(Boolean);
+                const is_active = card.querySelector('.survey-active').checked;
+                questions.push({ question_text: text, options, is_active });
+            });
+            if (questions.length === 0) { alert('Kamida bitta savol kiriting!'); return; }
+
+            const status = document.getElementById('surveySaveStatus');
+            status.textContent = 'Saqlanmoqda...';
+            try {
+                const r = await fetch('/api/survey/questions', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ questions })
+                });
+                const data = await r.json();
+                if (r.ok) {
+                    status.textContent = '✅ Saqlandi (' + data.count + ' ta savol)';
+                    loadSurveyAdmin();
+                } else {
+                    status.textContent = '❌ ' + (data.error || 'Xatolik');
+                }
+            } catch (e) {
+                status.textContent = '❌ Xatolik';
+            }
+        }
+
+        async function loadSurveyResults() {
+            const box = document.getElementById('surveyResults');
+            box.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                const r = await fetch('/api/survey/results', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Server error');
+                const data = await r.json();
+                const t = data.totals || {};
+                let html = `<div class="survey-stats">
+                    <span class="survey-stat"><strong>${t.total_submissions || 0}</strong> jami to'ldirilgan</span>
+                    <span class="survey-stat"><strong>${t.submissions_7d || 0}</strong> oxirgi 7 kun</span>
+                    <span class="survey-stat"><strong>${t.unique_users || 0}</strong> noyob foydalanuvchi</span>
+                </div>`;
+
+                // Group tally rows by question
+                const byQ = {};
+                (data.tally || []).forEach(row => {
+                    if (!byQ[row.question_text]) byQ[row.question_text] = [];
+                    byQ[row.question_text].push(row);
+                });
+                Object.keys(byQ).forEach(qText => {
+                    const rows = byQ[qText];
+                    const total = rows.reduce((s, r) => s + r.n, 0);
+                    html += `<div class="survey-result-q"><div class="survey-result-qtext">${escapeHtml(qText)}</div>`;
+                    rows.forEach(row => {
+                        const pct = total ? Math.round(row.n / total * 100) : 0;
+                        html += `<div class="survey-bar-row">
+                            <span class="survey-bar-label">${escapeHtml(row.answer_text)}</span>
+                            <span class="survey-bar"><span class="survey-bar-fill" style="width:${pct}%"></span></span>
+                            <span class="survey-bar-n">${row.n} (${pct}%)</span>
+                        </div>`;
+                    });
+                    html += `</div>`;
+                });
+
+                if ((data.recent || []).length > 0) {
+                    html += `<div class="survey-recent-title">So'nggi javoblar</div>`;
+                    data.recent.forEach(a => {
+                        html += `<div class="survey-recent-item"><em>${escapeHtml(a.question_text)}</em>: ${escapeHtml(a.answer_text)}</div>`;
+                    });
+                }
+                if (!data.tally?.length && !data.recent?.length) {
+                    html += '<div class="reg-empty">Hozircha javoblar yo\'q</div>';
+                }
+                box.innerHTML = html;
+            } catch (e) {
+                box.innerHTML = '<div class="reg-empty">Natijalarni yuklashda xatolik</div>';
+            }
         }
 
         async function loadRegRequests() {

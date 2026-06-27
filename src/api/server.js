@@ -16,7 +16,7 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, articleNumberSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
 const tariffModule = require('../rag/subscription-tiers');
 const { sendEmailCode } = require('../auth/email-code');
@@ -357,6 +357,124 @@ app.get('/api/user-info', requireAuth, (req, res) => {
     role: req.session.role,
     fullName: req.session.fullName
   });
+});
+
+// Corpus diagnostic (master only): is a given law's article actually ingested
+// and retrievable by metadata? Distinguishes a data gap from a retrieval bug.
+//   GET /api/admin/corpus-diagnostic?law=soliq%20kodeks&article=358
+app.get('/api/admin/corpus-diagnostic', requireMasterAdmin, async (req, res) => {
+  try {
+    const { diagnose } = require('../eval/corpus-diagnose');
+    const law = req.query.law || 'soliq kodeks';
+    const article = String(req.query.article || '358');
+    res.json(await diagnose({ law, article }));
+  } catch (err) {
+    console.error('[corpus-diagnostic] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ════════════════════════════════════════
+// FREE-ACCESS GATE (channel-join + weekly survey) — for role='user' free tier
+// ════════════════════════════════════════
+
+// Current access state for the logged-in user (drives the dashboard gate).
+app.get('/api/free-access/status', requireAuth, async (req, res) => {
+  try {
+    const acc = await tariffModule.checkFreeAccess(req.session.adminId);
+    const botMod = require('../bot/bot');
+    res.json({
+      ...acc,
+      channel: botMod.REQUIRED_CHANNEL || '',
+      channelUrl: typeof botMod.channelLink === 'function' ? botMod.channelLink() : '',
+    });
+  } catch (err) {
+    console.error('[free-access] status error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Generate a one-time code + Telegram deep link to link & verify the account.
+app.get('/api/free-access/telegram-link', requireAuth, async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const code = crypto.randomBytes(12).toString('hex');
+    await pool.query('UPDATE admins SET telegram_link_code = $1 WHERE id = $2', [code, req.session.adminId]);
+    let botUsername = process.env.BOT_USERNAME || '';
+    if (!botUsername) {
+      try { botUsername = (await require('../bot/bot').bot.getMe()).username; } catch (_) {}
+    }
+    const deepLink = botUsername ? `https://t.me/${botUsername}?start=ulink_${code}` : null;
+    res.json({ code, botUsername, deepLink });
+  } catch (err) {
+    console.error('[free-access] link error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Poll link/verification status.
+app.get('/api/free-access/telegram-status', requireAuth, async (req, res) => {
+  try {
+    const acc = await tariffModule.checkFreeAccess(req.session.adminId);
+    res.json({ telegramLinked: !!acc.telegramLinked, channelVerified: acc.state === 'free' || acc.state === 'survey_required', state: acc.state });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Active survey questions for the user to answer.
+app.get('/api/free-access/survey-questions', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, question_text, options FROM survey_questions
+       WHERE is_active = TRUE ORDER BY position, id LIMIT 3`
+    );
+    res.json({ questions: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Submit survey answers. Body: { answers: [{ questionId, answer }] }
+app.post('/api/free-access/survey-submit', requireAuth, async (req, res) => {
+  const { answers } = req.body;
+  if (!Array.isArray(answers) || answers.length === 0) {
+    return res.status(400).json({ error: 'answers required' });
+  }
+  const client = await pool.connect();
+  try {
+    const adminId = req.session.adminId;
+    const ur = await pool.query('SELECT telegram_user_id FROM admins WHERE id = $1', [adminId]);
+    const telegramId = ur.rows[0] ? ur.rows[0].telegram_user_id : null;
+
+    const qres = await pool.query('SELECT id, question_text FROM survey_questions WHERE is_active = TRUE');
+    const qById = new Map(qres.rows.map(q => [q.id, q]));
+
+    await client.query('BEGIN');
+    const sub = await client.query(
+      'INSERT INTO survey_submissions (telegram_id, admin_id) VALUES ($1, $2) RETURNING id',
+      [telegramId, adminId]
+    );
+    const submissionId = sub.rows[0].id;
+    for (const a of answers) {
+      const q = qById.get(parseInt(a.questionId, 10));
+      if (!q) continue;
+      const ans = String(a.answer == null ? '' : a.answer).slice(0, 2000);
+      await client.query(
+        'INSERT INTO survey_answers (submission_id, question_id, question_text, answer_text) VALUES ($1,$2,$3,$4)',
+        [submissionId, q.id, q.question_text, ans]
+      );
+    }
+    await client.query('UPDATE admins SET survey_completed_at = NOW() WHERE id = $1', [adminId]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[free-access] survey submit error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
 });
 
 // Redirect root
@@ -805,6 +923,104 @@ Dictum advokatlik firmasi
   } catch (error) {
     console.error('Error sending bulk master response:', error);
     res.status(500).json({ error: 'Failed to send response' });
+  }
+});
+
+// ===== Weekly R&D survey: admin management & results =====
+
+// List the survey questions (ordered)
+app.get('/api/survey/questions', requireMasterAdmin, async (req, res) => {
+  try {
+    const r = await pool.query(
+      'SELECT id, position, question_text, options, is_active FROM survey_questions ORDER BY position, id'
+    );
+    res.json(r.rows);
+  } catch (error) {
+    console.error('Error loading survey questions:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Replace the full set of questions (max 3). Body: { questions: [{question_text, options:[], is_active}] }
+app.put('/api/survey/questions', requireMasterAdmin, async (req, res) => {
+  const { questions } = req.body;
+  if (!Array.isArray(questions)) {
+    return res.status(400).json({ error: 'questions array required' });
+  }
+  const cleaned = questions
+    .map(q => ({
+      question_text: String(q.question_text || '').trim(),
+      options: Array.isArray(q.options)
+        ? q.options.map(o => String(o).trim()).filter(Boolean).slice(0, 6)
+        : [],
+      is_active: q.is_active === false ? false : true,
+    }))
+    .filter(q => q.question_text)
+    .slice(0, 3);
+
+  if (cleaned.length === 0) {
+    return res.status(400).json({ error: 'Kamida bitta savol kerak' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Rebuild the question set; old answers keep their snapshotted question_text.
+    await client.query('DELETE FROM survey_questions');
+    await client.query("SELECT setval(pg_get_serial_sequence('survey_questions','id'), COALESCE((SELECT MAX(id) FROM survey_questions),0)+1, false)");
+    for (let i = 0; i < cleaned.length; i++) {
+      await client.query(
+        'INSERT INTO survey_questions (position, question_text, options, is_active) VALUES ($1,$2,$3,$4)',
+        [i + 1, cleaned[i].question_text, JSON.stringify(cleaned[i].options), cleaned[i].is_active]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true, count: cleaned.length });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error saving survey questions:', error);
+    res.status(500).json({ error: 'Saqlashda xatolik' });
+  } finally {
+    client.release();
+  }
+});
+
+// Aggregated results: per-question option tallies + free-text answers + totals
+app.get('/api/survey/results', requireMasterAdmin, async (req, res) => {
+  try {
+    const totals = await pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM survey_submissions) AS total_submissions,
+        (SELECT COUNT(*)::int FROM survey_submissions WHERE created_at > NOW() - INTERVAL '7 days') AS submissions_7d,
+        (SELECT COUNT(DISTINCT telegram_id)::int FROM survey_submissions) AS unique_users
+    `);
+
+    // Tally answers grouped by the (snapshotted) question text + answer value
+    const tally = await pool.query(`
+      SELECT question_text, answer_text, COUNT(*)::int AS n
+      FROM survey_answers
+      WHERE answer_text IS NOT NULL AND answer_text <> ''
+      GROUP BY question_text, answer_text
+      ORDER BY question_text, n DESC
+    `);
+
+    // Recent free-text-style answers (latest 50) for qualitative review
+    const recent = await pool.query(`
+      SELECT sa.question_text, sa.answer_text, sa.created_at
+      FROM survey_answers sa
+      WHERE sa.answer_text IS NOT NULL AND sa.answer_text <> ''
+      ORDER BY sa.created_at DESC
+      LIMIT 50
+    `);
+
+    res.json({
+      totals: totals.rows[0],
+      tally: tally.rows,
+      recent: recent.rows,
+    });
+  } catch (error) {
+    console.error('Error loading survey results:', error);
+    res.status(500).json({ error: 'Database error' });
   }
 });
 
@@ -2434,7 +2650,9 @@ function adaptParentChildChunk(r, idx, topic) {
  *
  * Falls back to text-only search if no embedding API key is configured.
  */
-async function retrieveLegalContext(query, topic, language = null) {
+const { detectLawHint } = require('../rag/law-hints');
+
+async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   const isUz = language !== 'ru';
   const expandedQuery = expandQueryVariants(query);
@@ -2446,6 +2664,30 @@ async function retrieveLegalContext(query, topic, language = null) {
   // ── 1. Router: choose search strategy ──
   const route = routeQuery(query);
   console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
+
+  // ── 1a. Article-aware retrieval ──
+  // If the user named specific article(s) ("modda 358"), fetch those chunks
+  // directly by article_numbers metadata. This is the authoritative path for
+  // article lookups — robust to Cyrillic-corpus/Latin-query mismatch and to
+  // bare numbers that semantic/keyword search miss. The law is inferred from
+  // the query, or from prior-turn context (opts.contextText) for follow-ups.
+  let articleMatches = [];
+  if (route.entities.length > 0) {
+    const lawHint = detectLawHint(query) || detectLawHint(opts.contextText || '');
+    try {
+      articleMatches = await articleNumberSearch(route.entities, { lawHint, category: topic || null, limit: 6 });
+      // If a scoped search came up empty, retry unscoped — a cross-law article
+      // hit beats nothing.
+      if (articleMatches.length === 0 && (topic || lawHint)) {
+        articleMatches = await articleNumberSearch(route.entities, { lawHint, limit: 6 });
+      }
+      if (articleMatches.length === 0 && lawHint) {
+        articleMatches = await articleNumberSearch(route.entities, { limit: 6 });
+      }
+    } catch (e) {
+      console.warn(`[RAG] articleNumberSearch failed: ${e.message}`);
+    }
+  }
 
   // ── 2. RRF Hybrid Search ──
   const retrievalLimit = 15;
@@ -2518,6 +2760,16 @@ async function retrieveLegalContext(query, topic, language = null) {
       .filter(isHighConfidenceKeywordMatch)
       .slice(0, 3);
 
+    // Article-number hits are the most authoritative for an article query —
+    // prepend them so they rank first and are protected through filtering.
+    if (articleMatches.length > 0) {
+      guaranteedKeywordMatches = mergePrioritizedResults(
+        articleMatches,
+        guaranteedKeywordMatches,
+        articleMatches.length + guaranteedKeywordMatches.length
+      );
+    }
+
     if (guaranteedKeywordMatches.length > 0) {
       rawResults = mergePrioritizedResults(
         guaranteedKeywordMatches,
@@ -2530,6 +2782,17 @@ async function retrieveLegalContext(query, topic, language = null) {
     }
   } catch (err) {
     console.warn(`[RAG] Keyword rescue failed (${err.message})`);
+  }
+
+  // Failsafe: if keyword rescue threw before injecting them, ensure article
+  // matches are still guaranteed and merged into the candidate pool.
+  if (articleMatches.length > 0 && !guaranteedKeywordMatches.some(m => articleMatches.some(a => a.id === m.id))) {
+    guaranteedKeywordMatches = mergePrioritizedResults(
+      articleMatches,
+      guaranteedKeywordMatches,
+      articleMatches.length + guaranteedKeywordMatches.length
+    );
+    rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, Math.max(rawResults.length, retrievalLimit, 6));
   }
 
   try {
@@ -3757,7 +4020,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     let ragMeta = null;
     let ragChunks = [];
     if (topic) {
-      const ragResult = await retrieveLegalContext(message, topic);
+      // Pass recent user turns so an article-only follow-up ("358-modda?") can
+      // still infer which law it refers to from the conversation.
+      const contextText = Array.isArray(history)
+        ? history.filter(m => m && (m.role === 'user' || m.role === 'model' || m.role === 'assistant'))
+            .slice(-4).map(m => m.text || m.content || '').join(' ')
+        : '';
+      const ragResult = await retrieveLegalContext(message, topic, null, { contextText });
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragMeta = ragResult.meta || null;
       ragChunks = ragResult.chunks || [];
@@ -6543,6 +6812,60 @@ async function runMigrations() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_traces_request ON agent_traces(request_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_traces_type ON agent_traces(agent_type)`);
 
+    // ===== Weekly R&D survey =====
+    // Up to 3 admin-editable questions users answer once per rolling 7 days
+    // before they may send a new request.
+    await pool.query(`CREATE TABLE IF NOT EXISTS survey_questions (
+      id SERIAL PRIMARY KEY,
+      position INTEGER NOT NULL,
+      question_text TEXT NOT NULL,
+      options JSONB NOT NULL DEFAULT '[]',
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS survey_submissions (
+      id SERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS survey_answers (
+      id SERIAL PRIMARY KEY,
+      submission_id INTEGER NOT NULL REFERENCES survey_submissions(id) ON DELETE CASCADE,
+      question_id INTEGER REFERENCES survey_questions(id) ON DELETE SET NULL,
+      question_text TEXT NOT NULL,
+      answer_text TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    // Survey submissions also come from web-portal users (no telegram_id needed)
+    await pool.query(`ALTER TABLE survey_submissions ALTER COLUMN telegram_id DROP NOT NULL`).catch(() => {});
+    await pool.query(`ALTER TABLE survey_submissions ADD COLUMN IF NOT EXISTS portal_user_id INTEGER`);
+    await pool.query(`ALTER TABLE survey_submissions ADD COLUMN IF NOT EXISTS admin_id INTEGER`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_portal ON survey_submissions(portal_user_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_admin ON survey_submissions(admin_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_tg_time ON survey_submissions(telegram_id, created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_sub ON survey_answers(submission_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_q ON survey_answers(question_id)`);
+    // Seed 3 default questions only if the table is empty (admin can edit later)
+    {
+      const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM survey_questions');
+      if (cnt.rows[0].n === 0) {
+        const defaults = [
+          { position: 1, question_text: 'Xizmatimizdan qanchalik mamnunsiz?', options: ['😞 Yomon', '😐 O\'rtacha', '🙂 Yaxshi', '😍 A\'lo'] },
+          { position: 2, question_text: 'Javob tezligi sizni qanoatlantiradimi?', options: ['Ha', 'Qisman', 'Yo\'q'] },
+          { position: 3, question_text: 'Qanday yangi imkoniyat yoki yaxshilanishni xohlaysiz? (ixtiyoriy)', options: [] },
+        ];
+        for (const q of defaults) {
+          await pool.query(
+            'INSERT INTO survey_questions (position, question_text, options) VALUES ($1, $2, $3)',
+            [q.position, q.question_text, JSON.stringify(q.options)]
+          );
+        }
+        console.log('✅ Seeded 3 default weekly survey questions');
+      }
+    }
+
     // New columns on requests for agent results
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS triage_result JSONB`);
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS verification_result JSONB`);
@@ -6626,12 +6949,6 @@ async function runMigrations() {
     await initFeedbackDataset();
     await initCaseLawDataset();
     await initLegalCorpus().catch(e => console.log('[RAG] Legal corpus init skipped:', e.message));
-
-    // Mount AI Portal API
-    try {
-      const { mountPortal } = require('../portal');
-      await mountPortal(app);
-    } catch (e) { console.log('[PORTAL] Mount skipped:', e.message); }
 
     // Mount Advanced RAG routes (QA bank, parent-child search, few-shot)
     try {
