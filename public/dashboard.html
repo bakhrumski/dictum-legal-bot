@@ -8300,7 +8300,10 @@
                 const key = lawName.toLowerCase().trim();
                 const lawInfo = LAW_CITATION_MAP[key];
                 if (lawInfo) {
-                    return `<a href="${lawInfo.url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
+                    // These citations are always Uzbek law names → open the Uzbek
+                    // version of lex.uz, not the Russian default for bare /docs/ paths.
+                    const url = lawInfo.url.replace(/lex\.uz\/(?:[a-z]{2}\/)?docs\//, 'lex.uz/uz/docs/');
+                    return `<a href="${url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
                 }
                 return match;
             });
