@@ -374,6 +374,46 @@ app.get('/api/admin/corpus-diagnostic', requireMasterAdmin, async (req, res) => 
   }
 });
 
+// Retrieval debug (master only): see EXACTLY which chunks a query retrieves —
+// law, article, score, search mode, language. Answers "was article 358 actually
+// retrieved for this question, or did the model fill it in from its own memory?"
+//   GET /api/admin/retrieval-debug?q=...&topic=Soliq
+app.get('/api/admin/retrieval-debug', requireMasterAdmin, async (req, res) => {
+  try {
+    const q = req.query.q;
+    if (!q) return res.status(400).json({ error: 'q (query) required' });
+    const topic = req.query.topic || null;
+    const article = req.query.article ? String(req.query.article) : null;
+    const result = await retrieveLegalContext(q, topic, null, {});
+    const chunks = (result.chunks || []).map(c => ({
+      law_name: c.law_name,
+      article: c.article_number_display || (Array.isArray(c.article_numbers) ? c.article_numbers.join(',') : null),
+      article_numbers: c.article_numbers || [],
+      score: (typeof c.score === 'number') ? Number(c.score.toFixed(3)) : c.score,
+      source_type: c.source_type,
+      language: c.language,
+      preview: String(c.chunk_text || '').replace(/\s+/g, ' ').slice(0, 180),
+    }));
+    res.json({
+      query: q,
+      topic,
+      lawHint: detectLawHint(q),
+      searchMode: result.meta ? result.meta.searchMode : null,
+      chunkCount: chunks.length,
+      articleAsked: article,
+      articleRetrieved: article ? chunks.some(c => (c.article_numbers || []).includes(article)) : undefined,
+      scripts: {
+        cyrillic: chunks.filter(c => c.language === 'uz' && /[Ѐ-ӿ]/.test(c.preview)).length,
+        latin: chunks.filter(c => /[a-z]/i.test(c.preview) && !/[Ѐ-ӿ]/.test(c.preview)).length,
+      },
+      chunks,
+    });
+  } catch (err) {
+    console.error('[retrieval-debug] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ════════════════════════════════════════
 // FREE-ACCESS GATE (channel-join + weekly survey) — for role='user' free tier
 // ════════════════════════════════════════
