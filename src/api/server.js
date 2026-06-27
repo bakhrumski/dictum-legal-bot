@@ -374,6 +374,51 @@ app.get('/api/admin/corpus-diagnostic', requireMasterAdmin, async (req, res) => 
   }
 });
 
+// Embedding probe (master only): call the embedding provider directly and
+// report success/dims/latency/error, plus a raw vector-search count. This
+// reveals whether vector search is silently failing at query time (which
+// degrades RAG to script-blind text-only search).
+//   GET /api/admin/embed-probe?q=soliq rezidentligi
+app.get('/api/admin/embed-probe', requireMasterAdmin, async (req, res) => {
+  const q = req.query.q || 'soliq rezidentligini tasdiqlovchi hujjat';
+  const out = { query: q };
+  try {
+    const emb = require('../rag/embeddings');
+    out.provider = emb.detectProvider();
+    out.expectedDims = emb.getEmbedDims();
+    out.model = emb.EMBED_MODEL;
+    const t0 = Date.now();
+    try {
+      const vec = await emb.getEmbedding(q);
+      out.embeddingOk = Array.isArray(vec) && vec.length > 0;
+      out.returnedDims = Array.isArray(vec) ? vec.length : 0;
+      out.latencyMs = Date.now() - t0;
+      out.dimsMatch = out.returnedDims === out.expectedDims;
+    } catch (embErr) {
+      out.embeddingOk = false;
+      out.latencyMs = Date.now() - t0;
+      out.embeddingError = embErr.message;
+    }
+    // Raw vector search count (only if embedding succeeded)
+    if (out.embeddingOk) {
+      try {
+        const { vectorSearch } = require('../rag/legal-corpus');
+        const embKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+        const vr = await vectorSearch(q, { limit: 5, apiKey: embKey });
+        out.vectorSearchCount = Array.isArray(vr) ? vr.length : 0;
+        out.vectorTopLaws = (vr || []).slice(0, 5).map(r => ({
+          law: r.law_name, article: (r.article_numbers || []).join(','), score: r.score,
+        }));
+      } catch (vsErr) {
+        out.vectorSearchError = vsErr.message;
+      }
+    }
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: err.message, ...out });
+  }
+});
+
 // Retrieval debug (master only): see EXACTLY which chunks a query retrieves —
 // law, article, score, search mode, language. Answers "was article 358 actually
 // retrieved for this question, or did the model fill it in from its own memory?"
