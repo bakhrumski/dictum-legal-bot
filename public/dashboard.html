@@ -8321,32 +8321,35 @@
         }
         
         // Law citation map for auto-linking
+        // URLs are the Uzbek-Latin lex.uz documents (from the ingest registry).
+        // lex.uz uses DIFFERENT doc IDs per language — the bare positive IDs are
+        // the Russian versions, so we use the registry's Uzbek IDs (often '-'-prefixed).
         const LAW_CITATION_MAP = {
-            'konstitutsiya': { url: 'https://lex.uz/docs/35869', name: 'Konstitutsiya' },
-            'fuqarolik kodeksi': { url: 'https://lex.uz/docs/111189', name: 'Fuqarolik kodeksi' },
-            'fk': { url: 'https://lex.uz/docs/111189', name: 'FK' },
-            'mehnat kodeksi': { url: 'https://lex.uz/docs/145261', name: 'Mehnat kodeksi' },
-            'mk': { url: 'https://lex.uz/docs/145261', name: 'MK' },
-            'jinoyat kodeksi': { url: 'https://lex.uz/docs/111457', name: 'Jinoyat kodeksi' },
-            'jk': { url: 'https://lex.uz/docs/111457', name: 'JK' },
-            'oila kodeksi': { url: 'https://lex.uz/docs/104723', name: 'Oila kodeksi' },
-            'ok': { url: 'https://lex.uz/docs/104723', name: 'OK' },
-            'soliq kodeksi': { url: 'https://lex.uz/docs/4674893', name: 'Soliq kodeksi' },
-            'sk': { url: 'https://lex.uz/docs/4674893', name: 'SK' },
-            'ma\'muriy javobgarlik': { url: 'https://lex.uz/docs/97661', name: 'MJTK' },
-            'mjtk': { url: 'https://lex.uz/docs/97661', name: 'MJTK' },
-            'mjk': { url: 'https://lex.uz/docs/97661', name: 'MJTK' },
-            'iqtisodiy protsessual kodeks': { url: 'https://lex.uz/docs/112168', name: 'IPK' },
-            'ipk': { url: 'https://lex.uz/docs/112168', name: 'IPK' },
-            'fuqarolik protsessual kodeks': { url: 'https://lex.uz/docs/111325', name: 'FPK' },
-            'fpk': { url: 'https://lex.uz/docs/111325', name: 'FPK' },
-            'jinoyat-protsessual kodeks': { url: 'https://lex.uz/docs/111463', name: 'JPK' },
-            'jpk': { url: 'https://lex.uz/docs/111463', name: 'JPK' },
-            'uy-joy kodeksi': { url: 'https://lex.uz/docs/97012', name: 'Uy-joy kodeksi' },
-            'yer kodeksi': { url: 'https://lex.uz/docs/149946', name: 'Yer kodeksi' },
-            'budjet kodeksi': { url: 'https://lex.uz/docs/3523816', name: 'Budjet kodeksi' },
-            'bojxona kodeksi': { url: 'https://lex.uz/docs/4102378', name: 'Bojxona kodeksi' },
-            'ma\'muriy sudlov': { url: 'https://lex.uz/docs/3523895', name: 'MSK' },
+            'konstitutsiya': { url: 'https://lex.uz/uz/docs/35869', name: 'Konstitutsiya' },
+            'fuqarolik kodeksi': { url: 'https://lex.uz/docs/-111189', name: 'Fuqarolik kodeksi' },
+            'fk': { url: 'https://lex.uz/docs/-111189', name: 'FK' },
+            'mehnat kodeksi': { url: 'https://lex.uz/docs/-6257288', name: 'Mehnat kodeksi' },
+            'mk': { url: 'https://lex.uz/docs/-6257288', name: 'MK' },
+            'jinoyat kodeksi': { url: 'https://lex.uz/docs/-111453', name: 'Jinoyat kodeksi' },
+            'jk': { url: 'https://lex.uz/docs/-111453', name: 'JK' },
+            'oila kodeksi': { url: 'https://lex.uz/docs/-104720', name: 'Oila kodeksi' },
+            'ok': { url: 'https://lex.uz/docs/-104720', name: 'OK' },
+            'soliq kodeksi': { url: 'https://lex.uz/docs/-4674902', name: 'Soliq kodeksi' },
+            'sk': { url: 'https://lex.uz/docs/-4674902', name: 'SK' },
+            'ma\'muriy javobgarlik': { url: 'https://lex.uz/docs/-97664', name: 'MJTK' },
+            'mjtk': { url: 'https://lex.uz/docs/-97664', name: 'MJTK' },
+            'mjk': { url: 'https://lex.uz/docs/-97664', name: 'MJTK' },
+            'iqtisodiy protsessual kodeks': { url: 'https://lex.uz/docs/-3523891', name: 'IPK' },
+            'ipk': { url: 'https://lex.uz/docs/-3523891', name: 'IPK' },
+            'fuqarolik protsessual kodeks': { url: 'https://lex.uz/docs/-3517337', name: 'FPK' },
+            'fpk': { url: 'https://lex.uz/docs/-3517337', name: 'FPK' },
+            'jinoyat-protsessual kodeks': { url: 'https://lex.uz/docs/-111460', name: 'JPK' },
+            'jpk': { url: 'https://lex.uz/docs/-111460', name: 'JPK' },
+            'uy-joy kodeksi': { url: 'https://lex.uz/uz/docs/106136', name: 'Uy-joy kodeksi' },
+            'yer kodeksi': { url: 'https://lex.uz/docs/-152653', name: 'Yer kodeksi' },
+            'budjet kodeksi': { url: 'https://lex.uz/uz/docs/2304138', name: 'Budjet kodeksi' },
+            'bojxona kodeksi': { url: 'https://lex.uz/docs/-2876354', name: 'Bojxona kodeksi' },
+            'ma\'muriy sudlov': { url: 'https://lex.uz/docs/-3527353', name: 'MSK' },
         };
 
         /**
@@ -8361,10 +8364,8 @@
                 const key = lawName.toLowerCase().trim();
                 const lawInfo = LAW_CITATION_MAP[key];
                 if (lawInfo) {
-                    // These citations are always Uzbek law names → open the Uzbek
-                    // version of lex.uz, not the Russian default for bare /docs/ paths.
-                    const url = lawInfo.url.replace(/lex\.uz\/(?:[a-z]{2}\/)?docs\//, 'lex.uz/uz/docs/');
-                    return `<a href="${url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
+                    // lawInfo.url is already the correct Uzbek-Latin lex.uz document.
+                    return `<a href="${lawInfo.url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
                 }
                 return match;
             });
