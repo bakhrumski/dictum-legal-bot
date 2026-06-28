@@ -465,6 +465,57 @@ app.get('/api/admin/coverage-gaps', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// Suggested sources for Master-Admin review (Phase 2 enrichment).
+app.get('/api/admin/suggested-sources', requireMasterAdmin, async (req, res) => {
+  try {
+    const status = ['pending', 'ingested', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
+    const r = await pool.query(`
+      SELECT id, lex_doc_id, lex_url, title, is_active, status_label, sample_query, topic,
+             times_suggested, status, last_suggested_at
+      FROM suggested_sources WHERE status = $1
+      ORDER BY times_suggested DESC, last_suggested_at DESC LIMIT 100`, [status]);
+    res.json({ suggestions: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// One-click ingest of a suggested source (re-verifies it's active first).
+app.post('/api/admin/suggested-sources/:id/ingest', requireMasterAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const topic = req.body && req.body.topic;
+    const row = (await pool.query('SELECT * FROM suggested_sources WHERE id = $1', [id])).rows[0];
+    if (!row) return res.status(404).json({ error: 'Topilmadi' });
+    const useTopic = topic || row.topic;
+    if (!useTopic) return res.status(400).json({ error: 'Soha (topic) tanlanmadi' });
+
+    // ingestLexUrl re-fetches and refuses if the document is repealed/inactive.
+    const result = await ingestLexUrl({ url: row.lex_url, topic: useTopic, law_name: row.title, adminId: req.session.adminId });
+    await pool.query(
+      `UPDATE suggested_sources SET status = 'ingested', topic = $2, reviewed_by = $3, reviewed_at = NOW() WHERE id = $1`,
+      [id, useTopic, req.session.adminId]
+    );
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message, code: err.code });
+  }
+});
+
+// Reject a suggested source.
+app.post('/api/admin/suggested-sources/:id/reject', requireMasterAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    await pool.query(
+      `UPDATE suggested_sources SET status = 'rejected', reviewed_by = $2, reviewed_at = NOW() WHERE id = $1`,
+      [id, req.session.adminId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Retrieval debug (master only): see EXACTLY which chunks a query retrieves —
 // law, article, score, search mode, language. Answers "was article 358 actually
 // retrieved for this question, or did the model fill it in from its own memory?"
@@ -3403,6 +3454,51 @@ function logCoverage(query, topic, chunks, meta) {
   } catch (_) { /* never let logging break a response */ }
 }
 
+// Suggest additional ACTIVE lex.uz sources for a query (fire-and-forget).
+// Searches lex.uz live, keeps only in-force documents NOT already in the corpus,
+// and queues them for Master-Admin review → one-click ingest. No content is
+// generated; suggestions never reach the end user until an admin ingests them.
+const SUGGEST_MODE = (process.env.SOURCE_SUGGESTIONS || 'on').toLowerCase(); // on | weak | off
+const _suggestSeen = new Map(); // normalized query -> ts (dedup, avoid hammering lex.uz)
+const SUGGEST_TTL_MS = 24 * 60 * 60 * 1000;
+async function generateSourceSuggestions(query, topic, weak) {
+  if (SUGGEST_MODE === 'off') return;
+  if (SUGGEST_MODE === 'weak' && !weak) return;
+  const norm = String(query || '').toLowerCase().trim().slice(0, 200);
+  if (norm.length < 5) return;
+  const now = Date.now();
+  if (_suggestSeen.has(norm) && (now - _suggestSeen.get(norm)) < SUGGEST_TTL_MS) return;
+  _suggestSeen.set(norm, now);
+  if (_suggestSeen.size > 5000) {
+    for (const [k, t] of _suggestSeen) if (now - t > SUGGEST_TTL_MS) _suggestSeen.delete(k);
+  }
+  try {
+    const { searchLexUz } = require('../rag/lex-live-search');
+    const docs = await searchLexUz(query, { maxDocs: 2, maxChars: 300 });
+    for (const d of docs) {
+      const m = (d.url || '').match(/docs\/-?(\d+)/);
+      if (!m) continue;
+      const docId = m[1];
+      // Only ACTIVE (in-force) lex.uz documents.
+      if (d.metadata && d.metadata.is_active === false) continue;
+      // Skip anything already in the corpus.
+      const inCorpus = await pool.query(`SELECT 1 FROM legal_chunks WHERE source_url ILIKE $1 LIMIT 1`, ['%docs/' + docId + '%']);
+      if (inCorpus.rows.length) continue;
+      await pool.query(`
+        INSERT INTO suggested_sources (lex_doc_id, lex_url, title, is_active, status_label, sample_query, topic)
+        VALUES ($1,$2,$3,TRUE,$4,$5,$6)
+        ON CONFLICT (lex_doc_id) DO UPDATE
+          SET times_suggested = suggested_sources.times_suggested + 1,
+              last_suggested_at = NOW(),
+              sample_query = COALESCE(suggested_sources.sample_query, EXCLUDED.sample_query),
+              topic = COALESCE(suggested_sources.topic, EXCLUDED.topic)
+      `, [docId, d.url, (d.title || '').slice(0, 300), (d.metadata && d.metadata.status_label) || null, String(query).slice(0, 300), topic || null]);
+    }
+  } catch (e) {
+    console.warn('[suggest] failed:', e.message);
+  }
+}
+
 // lex.uz language segment for a question: Uzbek by default; Russian only when
 // the text is Russian Cyrillic (no Uzbek-specific letters ў/қ/ғ/ҳ).
 function lexLangForText(text) {
@@ -4213,8 +4309,11 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragMeta = ragResult.meta || null;
       ragChunks = ragResult.chunks || [];
-      // Phase 1 corpus gap-fill: record how much LAW the corpus could retrieve.
+      // Phase 1 corpus gap-fill: record coverage + queue lex.uz source suggestions
+      // for Master-Admin review (both fire-and-forget; never block the answer).
       logCoverage(message, topic, ragChunks, ragMeta);
+      const weakCoverage = (ragChunks || []).filter(c => c && c.source_type === 'law_text').length < MIN_LAW_CHUNKS;
+      generateSourceSuggestions(message, topic, weakCoverage).catch(() => {});
     }
 
     let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases);
@@ -5265,132 +5364,115 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
   }
 });
 
+// Shared lex.uz ingest: fetch → repeal-check → structural-chunk → embed → store.
+// Used by the manual URL ingest endpoint AND the one-click suggestion ingest.
+// Throws on failure; refuses to ingest a repealed (inactive) document.
+async function ingestLexUrl({ url, topic, law_name, adminId }) {
+  if (!url || !url.includes('lex.uz')) throw Object.assign(new Error('Faqat lex.uz havolalari qabul qilinadi'), { status: 400 });
+  if (!topic) throw Object.assign(new Error('Soha (topic) tanlanmadi'), { status: 400 });
+
+  const cleanUrl = url.split('#')[0];
+  const { fetchLexDocument } = require('../rag/fetch-lex');
+  const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
+  const { insertStructuredChunks } = require('../rag/advanced-corpus');
+  const { getEmbeddingsBatch } = require('../rag/embeddings');
+
+  console.log(`[LEX INGEST] Fetching: ${cleanUrl}`);
+  const doc = await fetchLexDocument(cleanUrl);
+  const lexMeta = doc.metadata || {};
+
+  // Zero-stale-law guard: never ingest a repealed/expired document.
+  if (lexMeta.is_active === false) {
+    throw Object.assign(new Error('Hujjat kuchini yo\'qotgan (eskirgan) — ingest qilinmadi'), { status: 400, code: 'INACTIVE' });
+  }
+
+  const urlHint = cleanUrl.includes('/uz/') ? 'uz' : null;
+  const bodySnippet = (doc.body || '').substring(0, 2000);
+  const hasUzbekMarkers = /\b(modda|bob|qism|huquq|qonun)\b/i.test(bodySnippet);
+  const inferredLanguage = urlHint || (hasUzbekMarkers ? 'uz' : 'ru');
+
+  if (!doc.body || doc.body.trim().length < 100) {
+    throw Object.assign(new Error('Hujjat matni topilmadi yoki bo\'sh'), { status: 400 });
+  }
+
+  const finalLawName = law_name || doc.title || cleanUrl;
+  const lexDocSuffix = cleanUrl.split('/').filter(Boolean).pop() || Date.now();
+  const docId = `lex_${topic}_${lexDocSuffix}`;
+  const rawHtml = doc.rawHtml || '';
+
+  const chunks = chunkLegalDocumentStructured(rawHtml || doc.body, {
+    ...lexMeta,
+    law_name: finalLawName,
+    doc_id: docId,
+    source_url: cleanUrl,
+    category: topic,
+    is_valid: true,
+    is_active: lexMeta.is_active !== false,
+    status_label: lexMeta.status_label || null,
+    adoption_date: lexMeta.adoption_date || null,
+    document_number: lexMeta.document_number || null,
+    language: lexMeta.language || inferredLanguage,
+    source_type: 'uploaded_doc',
+    quality_score: 0.8,
+    verified_by: adminId,
+  }, { isHtml: Boolean(rawHtml) });
+
+  if (chunks.length === 0) throw Object.assign(new Error('Hujjatdan bo\'lak ajratib bo\'lmadi'), { status: 400 });
+
+  const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+  let embeddings = [];
+  let embeddedCount = 0;
+  let embedError = null;
+  if (!apiKey) {
+    embedError = 'Embedding API key not set';
+  } else {
+    try {
+      embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
+      embeddedCount = embeddings.length;
+    } catch (embErr) {
+      embedError = embErr.message;
+      console.warn('[LEX INGEST] Embedding failed, saving text-only:', embErr.message);
+    }
+  }
+
+  await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
+  for (let i = 0; i < chunks.length; i++) {
+    chunks[i].chunkIndex = i;
+    chunks[i].embedding = embeddings[i] || null;
+  }
+  await insertStructuredChunks(chunks);
+
+  let justifyResult = null;
+  try {
+    if (await isJustifyAvailable()) justifyResult = await justifyScrape(cleanUrl);
+  } catch (justifyErr) {
+    console.warn('[LEX INGEST] Justify indexing failed (non-fatal):', justifyErr.message);
+  }
+
+  await logIngest({
+    sourceType: 'url', sourceUrl: cleanUrl, lawName: finalLawName, category: topic,
+    chunksTotal: chunks.length, embedded: embeddedCount, language: inferredLanguage, ingestBy: adminId || null,
+  });
+
+  console.log(`[LEX INGEST] Done: "${finalLawName}" — ${chunks.length} chunks, ${embeddedCount} embedded`);
+  return {
+    doc_name: finalLawName, doc_id: docId, chunks: chunks.length, embedded: embeddedCount,
+    topic, source_url: cleanUrl, is_active: lexMeta.is_active !== false,
+    justify: justifyResult ? { indexed: true, chunks: justifyResult.chunks } : { indexed: false },
+    ...(embedError ? { embed_warning: embedError } : {}),
+  };
+}
+
 // POST /api/rag/ingest-url — fetch a lex.uz URL and add to RAG corpus
 app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
   try {
     const { url, topic, law_name } = req.body;
-    if (!url || !url.includes('lex.uz')) {
-      return res.status(400).json({ error: 'Faqat lex.uz havolalari qabul qilinadi' });
-    }
-    if (!topic) return res.status(400).json({ error: 'Soha (topic) tanlanmadi' });
-
-    // Strip URL fragment (#...) — it's a browser anchor, not sent to server
-    const cleanUrl = url.split('#')[0];
-
-    const { fetchLexDocument } = require('../rag/fetch-lex');
-    const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
-    const { insertStructuredChunks } = require('../rag/advanced-corpus');
-    const { getEmbeddingsBatch } = require('../rag/embeddings');
-
-    // Fetch and parse lex.uz document
-    console.log(`[LEX INGEST] Fetching: ${cleanUrl}`);
-    const doc = await fetchLexDocument(cleanUrl);
-    const lexMeta = doc.metadata || {};
-    const urlHint = cleanUrl.includes('/uz/') ? 'uz' : null;
-    const bodySnippet = (doc.body || '').substring(0, 2000);
-    const hasUzbekMarkers = /\b(modda|bob|qism|huquq|qonun)\b/i.test(bodySnippet);
-    const inferredLanguage = urlHint || (hasUzbekMarkers ? 'uz' : 'ru');
-
-    if (!doc.body || doc.body.trim().length < 100) {
-      return res.status(400).json({ error: 'Hujjat matni topilmadi yoki bo\'sh. URL to\'g\'ri ekanligini tekshiring.' });
-    }
-
-    const finalLawName = law_name || doc.title || cleanUrl;
-    const lexDocSuffix = cleanUrl.split('/').filter(Boolean).pop() || Date.now();
-    const docId = `lex_${topic}_${lexDocSuffix}`;
-    const rawHtml = doc.rawHtml || '';
-
-    // Chunk Lex HTML structurally so prim articles become first-class rows.
-    const chunks = chunkLegalDocumentStructured(rawHtml || doc.body, {
-      ...lexMeta,
-      law_name: finalLawName,
-      doc_id: docId,
-      source_url: cleanUrl,
-      category: topic,
-      is_valid: true,
-      is_active: lexMeta.is_active !== false,
-      status_label: lexMeta.status_label || null,
-      adoption_date: lexMeta.adoption_date || null,
-      document_number: lexMeta.document_number || null,
-      language: lexMeta.language || inferredLanguage,
-      source_type: 'uploaded_doc',
-      quality_score: 0.8,
-      verified_by: req.session.adminId,
-    }, {
-      isHtml: Boolean(rawHtml),
-    });
-
-    if (chunks.length === 0) {
-      return res.status(400).json({ error: 'Hujjatdan bo\'lak ajratib bo\'lmadi' });
-    }
-
-    // Embed (best-effort — skip if quota exhausted)
-    const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
-    let embeddings = [];
-    let embeddedCount = 0;
-    let embedError = null;
-
-    if (!apiKey) {
-      embedError = 'Embedding API key not set (HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)';
-      console.warn('[LEX INGEST]', embedError);
-    } else {
-      try {
-        embeddings = await getEmbeddingsBatch(chunks.map(c => c.text), apiKey);
-        embeddedCount = embeddings.length;
-      } catch (embErr) {
-        embedError = embErr.message;
-        console.warn('[LEX INGEST] Embedding failed, saving text-only:', embErr.message);
-      }
-    }
-
-    // Replace any previous ingest for this Lex URL, then store structured rows.
-    await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
-    for (let i = 0; i < chunks.length; i++) {
-      chunks[i].chunkIndex = i;
-      chunks[i].embedding = embeddings[i] || null;
-    }
-    await insertStructuredChunks(chunks);
-
-    // Also index in Justify RAG (fire-and-forget, non-blocking)
-    let justifyResult = null;
-    try {
-      if (await isJustifyAvailable()) {
-        justifyResult = await justifyScrape(cleanUrl);
-        console.log(`[LEX INGEST] Justify indexed: ${justifyResult?.title || cleanUrl} (${justifyResult?.chunks || '?'} chunks)`);
-      }
-    } catch (justifyErr) {
-      console.warn('[LEX INGEST] Justify indexing failed (non-fatal):', justifyErr.message);
-    }
-
-    console.log(`[LEX INGEST] Done: "${finalLawName}" — ${chunks.length} chunks, ${embeddedCount} embedded`);
-
-    await logIngest({
-      sourceType: 'url',
-      sourceUrl: cleanUrl,
-      lawName: finalLawName,
-      category: topic,
-      chunksTotal: chunks.length,
-      embedded: embeddedCount,
-      language: inferredLanguage,
-      ingestBy: req.session?.adminId || null,
-    });
-
-    res.json({
-      success: true,
-      doc_name: finalLawName,
-      doc_id: docId,
-      chunks: chunks.length,
-      embedded: embeddedCount,
-      topic,
-      source_url: cleanUrl,
-      justify: justifyResult ? { indexed: true, chunks: justifyResult.chunks } : { indexed: false },
-      ...(embedError ? { embed_warning: embedError } : {}),
-    });
-
+    const result = await ingestLexUrl({ url, topic, law_name, adminId: req.session.adminId });
+    res.json({ success: true, ...result });
   } catch (error) {
-    console.error('[LEX INGEST] Error:', error.message, '\nStack:', error.stack);
+    console.error('[LEX INGEST] Error:', error.message);
     await logIngest({ sourceType: 'url', sourceUrl: req.body?.url, lawName: req.body?.law_name || '', chunksTotal: 0, status: 'error', errorMsg: error.message }).catch(() => {});
-    res.status(500).json({ error: 'Lex.uz dan yuklashda xatolik: ' + error.message, stack: (error.stack || '').split('\n').slice(0, 5) });
+    res.status(error.status || 500).json({ error: error.status ? error.message : ('Lex.uz dan yuklashda xatolik: ' + error.message) });
   }
 });
 
@@ -7051,6 +7133,26 @@ async function runMigrations() {
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_coverage_weak ON coverage_log(weak, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_coverage_topic ON coverage_log(topic)`);
+
+    // Suggested lex.uz sources for Master-Admin review → one-click ingest.
+    // Only ACTIVE (in-force) lex.uz documents not already in the corpus are kept.
+    await pool.query(`CREATE TABLE IF NOT EXISTS suggested_sources (
+      id SERIAL PRIMARY KEY,
+      lex_doc_id VARCHAR(60) UNIQUE,
+      lex_url TEXT NOT NULL,
+      title TEXT,
+      is_active BOOLEAN,
+      status_label VARCHAR(160),
+      sample_query TEXT,
+      topic VARCHAR(50),
+      times_suggested INTEGER NOT NULL DEFAULT 1,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      reviewed_by INTEGER,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      last_suggested_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_suggested_status ON suggested_sources(status, times_suggested DESC)`);
 
     // Seed 3 default questions only if the table is empty (admin can edit later)
     {
