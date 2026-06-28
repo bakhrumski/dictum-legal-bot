@@ -430,6 +430,11 @@
             display: flex !important;
         }
         .tab-view > .reg-section .reg-section-body { display: block !important; }
+        /* …but these admin panels are genuinely collapsible (ID beats the !important above) */
+        #regSection.collapsed .reg-section-body,
+        #surveyAdminSection.collapsed .reg-section-body,
+        #coverageSection.collapsed .reg-section-body,
+        #suggestedSection.collapsed .reg-section-body { display: none !important; }
 
         /* Hide chat wrapper button (chat is now a tab) */
         .header-chat-wrapper { display: none; }
@@ -5980,7 +5985,7 @@
         </div>
 
         <!-- Weekly R&D Survey management (Master Only) -->
-        <div class="reg-section" id="surveyAdminSection" style="margin-top:16px;">
+        <div class="reg-section collapsed" id="surveyAdminSection" style="margin-top:16px;">
             <div class="reg-section-header" onclick="document.getElementById('surveyAdminSection').classList.toggle('collapsed'); if(!document.getElementById('surveyAdminSection').classList.contains('collapsed')) loadSurveyAdmin();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -6003,7 +6008,7 @@
         </div>
 
         <!-- Corpus coverage gaps (Master Only) -->
-        <div class="reg-section" id="coverageSection" style="margin-top:16px;">
+        <div class="reg-section collapsed" id="coverageSection" style="margin-top:16px;">
             <div class="reg-section-header" onclick="document.getElementById('coverageSection').classList.toggle('collapsed'); if(!document.getElementById('coverageSection').classList.contains('collapsed')) loadCoverageGaps();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -6028,7 +6033,7 @@
         </div>
 
         <!-- Suggested lex.uz sources for enrichment (Master Only) -->
-        <div class="reg-section" id="suggestedSection" style="margin-top:16px;">
+        <div class="reg-section collapsed" id="suggestedSection" style="margin-top:16px;">
             <div class="reg-section-header" onclick="document.getElementById('suggestedSection').classList.toggle('collapsed'); if(!document.getElementById('suggestedSection').classList.contains('collapsed')) loadSuggestedSources();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
