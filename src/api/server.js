@@ -3319,6 +3319,12 @@ ANIQLIK:
 - Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami + qism.
 - FAQAT KONTEKSTdagi MANBALAR ro'yxatida ko'rsatilgan URL'larni keltiring — ular faol hujjatlardir. Boshqa URL TO'QIB CHIQARMANG.
 
+HALLUTSINATSIYAGA QARSHI — MUTLAQO MAJBURIY:
+- HECH QANDAY manbani (qaror, qonun, kodeks, hujjat, farmon, nizom) va uning RAQAMI yoki SANASINI xotirangizdan TO'QIB CHIQARMANG. Faqat KONTEKSTdagi MANBALAR ro'yxatida aniq mavjud bo'lgan hujjatlarni keltiring.
+- Masalan: kontekstda "Vazirlar Mahkamasining 150-son qarori" yoki "Davlat soliq qo'mitasining ... qarori" YO'Q bo'lsa — uni KELTIRMANG, raqam/sana o'ylab topmang.
+- Agar foydalanuvchining savoliga to'liq javob berish uchun zarur ma'lumot KONTEKSTda bo'lmasa, buni ochiq yozing: "Bu masala bo'yicha aniq ma'lumot mavjud korpusda yo'q" — va faqat kontekstda BOR bo'lgan qism bo'yicha javob bering. Bo'shliqni xotiradan TO'LDIRMANG.
+- Jarayon/tartib (masalan, hujjatlar ro'yxati, STIR/PINFL/ERI olish) bo'yicha tafsilotlarni faqat KONTEKSTda bor bo'lsa yozing; aks holda "tartib bo'yicha tafsilotlar korpusda yo'q" deb belgilang.
+
 ANIQ RAQAMLAR — JUDA MUHIM:
 - "Yuqori jarima", "katta miqdor", "ko'p" kabi NOANIQ iboralar MUTLAQO TAQIQLANGAN.
 - Jarimalar uchun ANIQ BHM ko'paytmasini yozing: "5 BHM", "20 BHM", "50 BHM" — taxminiy emas, aniq.
