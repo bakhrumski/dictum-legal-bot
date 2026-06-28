@@ -3430,9 +3430,11 @@ function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
 
       // Only include if the article number is actually cited in the AI's reply.
       // Matches "128-modda", "128-4-modda", "128-moddasi", "128 modda", etc.
+      // The (?!\d) guard is critical: without it, article "2" matches "20-modda"
+      // (the optional prim group swallows the "0"), linking the wrong article.
       if (reply) {
-        const artNum = String(art).split('-')[0];
-        const articleCited = new RegExp(`\\b${artNum}[-\\s]?(?:\\d+[-\\s]?)?modda`, 'i').test(reply);
+        const artNum = String(art).split('-')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const articleCited = new RegExp(`\\b${artNum}(?!\\d)(?:[-\\s]?\\d+)?[-\\s]?modda`, 'i').test(reply);
         if (!articleCited) continue;
       }
       seen.add(key);
