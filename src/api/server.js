@@ -16,7 +16,7 @@ const { initLegalDataset, retrieveSimilarExamples, formatExamplesForPrompt, addE
 const { initFeedbackDataset, saveMentorFeedback, retrieveFeedbackExamples, formatFeedbackForPrompt, getFeedbackStats, getAllFeedback } = require('../dataset/feedback-dataset');
 const { classifyLegalField, formatClassificationForPrompt } = require('../agents/classifier');
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
-const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, articleNumberSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
+const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, articleNumberSearch, vectorSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
 const tariffModule = require('../rag/subscription-tiers');
 const { sendEmailCode } = require('../auth/email-code');
@@ -2874,6 +2874,33 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     }
   }
 
+  // ── 1b. Guaranteed semantic matches ──
+  // parentChildSearch can preempt and under-perform the flat vector search for
+  // some phrasings (it returned generic Art. 1/2/6 while flat vector ranks the
+  // right articles 130/358/129 at 0.78). Run the flat vector search directly and
+  // guarantee its top LAW results into context so they can't be crowded out by
+  // generic keyword/exact matches downstream.
+  let semanticMatches = [];
+  {
+    const embKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    if (embKey) {
+      try {
+        let sm = await vectorSearch(query, { category: topic || null, language, limit: 6, apiKey: embKey });
+        if (sm.length === 0 && topic) sm = await vectorSearch(query, { limit: 6, apiKey: embKey }); // unscoped retry
+        const seenArt = new Set();
+        semanticMatches = sm
+          .filter(r => r.source_type === 'law_text')
+          .filter(r => { const k = `${r.law_name}_${(r.article_numbers || []).join(',')}`; if (seenArt.has(k)) return false; seenArt.add(k); return true; })
+          .slice(0, 3);
+        if (semanticMatches.length > 0) {
+          console.log(`[RAG] Semantic guarantee: ${semanticMatches.map(r => (r.article_numbers || []).join('/')).join(', ')}`);
+        }
+      } catch (e) {
+        console.warn(`[RAG] semantic guarantee failed: ${e.message}`);
+      }
+    }
+  }
+
   // ── 2. RRF Hybrid Search ──
   const retrievalLimit = 15;
   let rawResults = [];
@@ -2952,13 +2979,14 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       .filter(r => r.source_type !== 'verified_qa' || r.exact_phrase_match)
       .slice(0, 2);
 
-    // Article-number hits are the most authoritative for an article query —
-    // prepend them so they rank first and are protected through filtering.
-    if (articleMatches.length > 0) {
+    // Priority order for protected matches: explicit article hits, then the
+    // top flat-vector law results (proven strongest), then generic keyword hits.
+    const priorityMatches = [...articleMatches, ...semanticMatches];
+    if (priorityMatches.length > 0) {
       guaranteedKeywordMatches = mergePrioritizedResults(
-        articleMatches,
+        priorityMatches,
         guaranteedKeywordMatches,
-        articleMatches.length + guaranteedKeywordMatches.length
+        priorityMatches.length + guaranteedKeywordMatches.length
       );
     }
 
@@ -2976,15 +3004,18 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     console.warn(`[RAG] Keyword rescue failed (${err.message})`);
   }
 
-  // Failsafe: if keyword rescue threw before injecting them, ensure article
-  // matches are still guaranteed and merged into the candidate pool.
-  if (articleMatches.length > 0 && !guaranteedKeywordMatches.some(m => articleMatches.some(a => a.id === m.id))) {
-    guaranteedKeywordMatches = mergePrioritizedResults(
-      articleMatches,
-      guaranteedKeywordMatches,
-      articleMatches.length + guaranteedKeywordMatches.length
-    );
-    rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, Math.max(rawResults.length, retrievalLimit, 6));
+  // Failsafe: if keyword rescue threw before injecting them, ensure article +
+  // semantic matches are still guaranteed and merged into the candidate pool.
+  {
+    const priorityMatches = [...articleMatches, ...semanticMatches];
+    if (priorityMatches.length > 0 && !guaranteedKeywordMatches.some(m => priorityMatches.some(a => a.id === m.id))) {
+      guaranteedKeywordMatches = mergePrioritizedResults(
+        priorityMatches,
+        guaranteedKeywordMatches,
+        priorityMatches.length + guaranteedKeywordMatches.length
+      );
+      rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, Math.max(rawResults.length, retrievalLimit, 6));
+    }
   }
 
   try {
@@ -3318,6 +3349,12 @@ ANIQLIK:
 - DEFINITSIYA savollarida ham albatta MANBA modda raqamini ichki qavsda yozing — masalan: "Mehnat nizosi — bu... (MK, 541-modda)". Definitsiya manbasiz BO'LMAYDI.
 - Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami + qism.
 - FAQAT KONTEKSTdagi MANBALAR ro'yxatida ko'rsatilgan URL'larni keltiring — ular faol hujjatlardir. Boshqa URL TO'QIB CHIQARMANG.
+
+HALLUTSINATSIYAGA QARSHI — MUTLAQO MAJBURIY:
+- HECH QANDAY manbani (qaror, qonun, kodeks, hujjat, farmon, nizom) va uning RAQAMI yoki SANASINI xotirangizdan TO'QIB CHIQARMANG. Faqat KONTEKSTdagi MANBALAR ro'yxatida aniq mavjud bo'lgan hujjatlarni keltiring.
+- Masalan: kontekstda "Vazirlar Mahkamasining 150-son qarori" yoki "Davlat soliq qo'mitasining ... qarori" YO'Q bo'lsa — uni KELTIRMANG, raqam/sana o'ylab topmang.
+- Agar foydalanuvchining savoliga to'liq javob berish uchun zarur ma'lumot KONTEKSTda bo'lmasa, buni ochiq yozing: "Bu masala bo'yicha aniq ma'lumot mavjud korpusda yo'q" — va faqat kontekstda BOR bo'lgan qism bo'yicha javob bering. Bo'shliqni xotiradan TO'LDIRMANG.
+- Jarayon/tartib (masalan, hujjatlar ro'yxati, STIR/PINFL/ERI olish) bo'yicha tafsilotlarni faqat KONTEKSTda bor bo'lsa yozing; aks holda "tartib bo'yicha tafsilotlar korpusda yo'q" deb belgilang.
 
 ANIQ RAQAMLAR — JUDA MUHIM:
 - "Yuqori jarima", "katta miqdor", "ko'p" kabi NOANIQ iboralar MUTLAQO TAQIQLANGAN.
