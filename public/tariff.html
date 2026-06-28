@@ -50,7 +50,8 @@
             display: flex; align-items: center; gap: 12px;
             font-weight: 700; font-size: 18px; color: var(--text-1);
         }
-        .brand img { height: 32px; }
+        .brand { cursor: pointer; }
+        .brand img { height: 40px; }
         .theme-toggle {
             background: none; border: 1px solid var(--border); color: var(--text-1);
             border-radius: 8px; padding: 8px 10px; cursor: pointer;
@@ -210,7 +211,7 @@
 </head>
 <body>
     <header class="page-header">
-        <div class="brand">
+        <div class="brand" onclick="window.location.href='/index.html'">
             <img src="/juristAI_logo.png" alt="JuristAI" onerror="this.style.display='none'">
         </div>
         <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish">
