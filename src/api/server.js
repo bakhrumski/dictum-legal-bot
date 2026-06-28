@@ -419,6 +419,52 @@ app.get('/api/admin/embed-probe', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// Coverage gaps (master only): where the corpus retrieves too little law, so
+// the admin knows which fields/queries to enrich from lex.uz (Phase 1).
+//   GET /api/admin/coverage-gaps?days=30
+app.get('/api/admin/coverage-gaps', requireMasterAdmin, async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, parseInt(req.query.days || '30', 10)));
+    const since = `NOW() - INTERVAL '${days} days'`;
+
+    const totals = await pool.query(`
+      SELECT COUNT(*)::int AS total_queries,
+             COUNT(*) FILTER (WHERE weak)::int AS weak_queries,
+             COUNT(DISTINCT lower(query)) FILTER (WHERE weak)::int AS distinct_weak
+      FROM coverage_log WHERE created_at > ${since}`);
+
+    // Weakest fields: where the highest share of queries returned too little law
+    const byTopic = await pool.query(`
+      SELECT COALESCE(topic, '(belgilanmagan)') AS topic,
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE weak)::int AS weak,
+             ROUND(AVG(law_chunks)::numeric, 2) AS avg_law_chunks
+      FROM coverage_log WHERE created_at > ${since}
+      GROUP BY topic
+      HAVING COUNT(*) FILTER (WHERE weak) > 0
+      ORDER BY weak DESC LIMIT 30`);
+
+    // Most-repeated weak queries — the prioritized enrichment backlog
+    const topQueries = await pool.query(`
+      SELECT lower(query) AS query, topic,
+             COUNT(*)::int AS times, MAX(law_chunks)::int AS best_law_chunks,
+             MAX(created_at) AS last_seen
+      FROM coverage_log WHERE weak AND created_at > ${since}
+      GROUP BY lower(query), topic
+      ORDER BY times DESC, last_seen DESC LIMIT 50`);
+
+    res.json({
+      days,
+      totals: totals.rows[0],
+      byTopic: byTopic.rows,
+      topQueries: topQueries.rows,
+    });
+  } catch (err) {
+    console.error('[coverage-gaps] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Retrieval debug (master only): see EXACTLY which chunks a query retrieves —
 // law, article, score, search mode, language. Answers "was article 358 actually
 // retrieved for this question, or did the model fill it in from its own memory?"
@@ -3338,6 +3384,25 @@ JIDDIY TAQIQLAR:
 // Only includes sources whose article number actually appears in the reply text —
 // prevents irrelevant or stale RAG chunks (e.g. Labor Code in a traffic-fine answer)
 // from being shown as authoritative sources.
+// Record retrieval coverage for a user query (fire-and-forget). "Weak" =
+// the corpus returned fewer than MIN_LAW_CHUNKS law_text chunks — i.e. a
+// candidate for lex.uz enrichment. Pure measurement, no content generated.
+const MIN_LAW_CHUNKS = parseInt(process.env.COVERAGE_MIN_LAW_CHUNKS || '2', 10);
+function logCoverage(query, topic, chunks, meta) {
+  try {
+    const list = Array.isArray(chunks) ? chunks : [];
+    const lawChunks = list.filter(c => c && c.source_type === 'law_text').length;
+    const topScore = list.reduce((m, c) => Math.max(m, Number(c && c.score) || 0), 0);
+    const weak = lawChunks < MIN_LAW_CHUNKS;
+    pool.query(
+      `INSERT INTO coverage_log (query, topic, law_chunks, total_chunks, top_score, search_mode, weak)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [String(query || '').slice(0, 1000), topic || null, lawChunks, list.length,
+       Number.isFinite(topScore) ? topScore : 0, (meta && meta.searchMode) ? String(meta.searchMode).slice(0, 80) : null, weak]
+    ).catch(() => {});
+  } catch (_) { /* never let logging break a response */ }
+}
+
 // lex.uz language segment for a question: Uzbek by default; Russian only when
 // the text is Russian Cyrillic (no Uzbek-specific letters ў/қ/ғ/ҳ).
 function lexLangForText(text) {
@@ -4146,6 +4211,8 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragMeta = ragResult.meta || null;
       ragChunks = ragResult.chunks || [];
+      // Phase 1 corpus gap-fill: record how much LAW the corpus could retrieve.
+      logCoverage(message, topic, ragChunks, ragMeta);
     }
 
     let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases);
@@ -6964,6 +7031,25 @@ async function runMigrations() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_subs_tg_time ON survey_submissions(telegram_id, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_sub ON survey_answers(submission_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_q ON survey_answers(question_id)`);
+
+    // ===== Coverage logging (Phase 1 of corpus gap-fill) =====
+    // Records, per user legal-chat query, how much LAW the corpus could retrieve,
+    // so weak-coverage queries can be surfaced to the Master Admin for targeted
+    // lex.uz enrichment. No content is generated here — pure measurement.
+    await pool.query(`CREATE TABLE IF NOT EXISTS coverage_log (
+      id SERIAL PRIMARY KEY,
+      query TEXT NOT NULL,
+      topic VARCHAR(50),
+      law_chunks INTEGER NOT NULL DEFAULT 0,
+      total_chunks INTEGER NOT NULL DEFAULT 0,
+      top_score REAL NOT NULL DEFAULT 0,
+      search_mode VARCHAR(80),
+      weak BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_coverage_weak ON coverage_log(weak, created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_coverage_topic ON coverage_log(topic)`);
+
     // Seed 3 default questions only if the table is empty (admin can edit later)
     {
       const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM survey_questions');

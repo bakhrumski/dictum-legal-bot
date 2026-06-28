@@ -5994,6 +5994,31 @@
             </div>
         </div>
 
+        <!-- Corpus coverage gaps (Master Only) -->
+        <div class="reg-section" id="coverageSection" style="margin-top:16px;">
+            <div class="reg-section-header" onclick="document.getElementById('coverageSection').classList.toggle('collapsed'); if(!document.getElementById('coverageSection').classList.contains('collapsed')) loadCoverageGaps();">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>📉 Korpus qamrovi (bo'shliqlar)</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">
+                    Foydalanuvchi savollari bo'yicha korpusdan yetarlicha <b>qonun</b> topilmagan holatlar. Bu ro'yxat qaysi
+                    sohalar va savollarni lex.uz dan boyitish kerakligini ko'rsatadi. (Hech qanday matn yaratilmaydi — faqat o'lchov.)
+                </p>
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+                    <label style="font-size:12px;color:var(--text-secondary);">Davr:</label>
+                    <select id="coverageDays" onchange="loadCoverageGaps()" class="detail-select" style="width:auto;padding:5px 8px;">
+                        <option value="7">7 kun</option>
+                        <option value="30" selected>30 kun</option>
+                        <option value="90">90 kun</option>
+                    </select>
+                </div>
+                <div id="coverageContent"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
+            </div>
+        </div>
+
         </div><!-- /tab-view sorov -->
 
         <!-- Registration Detail Modal (outside tab-view to avoid stacking context) -->
@@ -6547,6 +6572,11 @@
                 const surveyAdminSection = document.getElementById('surveyAdminSection');
                 if (surveyAdminSection) {
                     surveyAdminSection.style.display = data.role === 'master' ? '' : 'none';
+                }
+                // Coverage gaps panel: master only
+                const coverageSection = document.getElementById('coverageSection');
+                if (coverageSection) {
+                    coverageSection.style.display = data.role === 'master' ? '' : 'none';
                 }
 
                 // Show/hide master-only tabs in bottom tab bar
@@ -10809,6 +10839,51 @@
                 }
             } catch (e) {
                 status.textContent = '❌ Xatolik';
+            }
+        }
+
+        async function loadCoverageGaps() {
+            const box = document.getElementById('coverageContent');
+            const days = (document.getElementById('coverageDays') || {}).value || '30';
+            box.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                const r = await fetch('/api/admin/coverage-gaps?days=' + encodeURIComponent(days), { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Server error');
+                const data = await r.json();
+                const t = data.totals || {};
+                let html = '<div class="survey-stats">' +
+                    '<span class="survey-stat"><strong>' + (t.total_queries || 0) + '</strong> jami savol</span>' +
+                    '<span class="survey-stat"><strong>' + (t.weak_queries || 0) + '</strong> zaif qamrov</span>' +
+                    '<span class="survey-stat"><strong>' + (t.distinct_weak || 0) + '</strong> noyob zaif savol</span>' +
+                    '</div>';
+
+                if ((data.byTopic || []).length > 0) {
+                    html += '<div class="survey-result-q"><div class="survey-result-qtext">Sohalar bo\'yicha</div>';
+                    data.byTopic.forEach(function(row) {
+                        const pct = row.total ? Math.round(row.weak / row.total * 100) : 0;
+                        html += '<div class="survey-bar-row">' +
+                            '<span class="survey-bar-label">' + escapeHtml(row.topic) + '</span>' +
+                            '<span class="survey-bar"><span class="survey-bar-fill" style="width:' + pct + '%"></span></span>' +
+                            '<span class="survey-bar-n">' + row.weak + '/' + row.total + ' (⌀' + row.avg_law_chunks + ')</span>' +
+                            '</div>';
+                    });
+                    html += '</div>';
+                }
+
+                if ((data.topQueries || []).length > 0) {
+                    html += '<div class="survey-recent-title">Boyitish kerak savollar (eng ko\'p so\'ralgan, zaif)</div>';
+                    data.topQueries.forEach(function(q) {
+                        html += '<div class="survey-recent-item" style="display:flex;justify-content:space-between;gap:10px;align-items:center;">' +
+                            '<span><b>×' + q.times + '</b> ' + escapeHtml(q.query) + ' <em style="color:var(--text-secondary)">[' + escapeHtml(q.topic || '—') + ']</em></span>' +
+                            '<button class="btn" style="flex:none;padding:4px 10px;font-size:12px;" onclick="window.open(\'/api/admin/retrieval-debug?q=\' + encodeURIComponent(' + JSON.stringify(q.query) + ') + \'&topic=\' + encodeURIComponent(' + JSON.stringify(q.topic || '') + '), \'_blank\')">🔍 Tekshirish</button>' +
+                            '</div>';
+                    });
+                } else {
+                    html += '<div class="reg-empty">Zaif qamrovli savollar yo\'q — korpus yaxshi qoplaydi 👍</div>';
+                }
+                box.innerHTML = html;
+            } catch (e) {
+                box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
             }
         }
 
