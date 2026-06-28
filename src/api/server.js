@@ -3545,13 +3545,12 @@ function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
         }
       }
 
-      // Open lex.uz in the question's language. Normalize ANY existing language
-      // segment (bare /docs/, /ru/docs/, /uz/docs/, ...) to the target lang, so
-      // chunks ingested with a /ru/ URL don't keep opening Russian.
-      let rawUrl = r.source_url;
-      if (rawUrl) {
-        rawUrl = rawUrl.replace(/lex\.uz\/(?:[a-z]{2}\/)?docs\//, `lex.uz/${lang}/docs/`);
-      }
+      // Use the ingested source_url as-is — it's already the Uzbek-Latin lex.uz
+      // document (lex.uz uses different doc IDs per language, so rewriting the
+      // path segment would point at the wrong/Russian document). Only an explicit
+      // /ru/ segment is downgraded to bare for an Uzbek question.
+      let rawUrl = r.source_url || '';
+      if (lang === 'uz') rawUrl = rawUrl.replace('lex.uz/ru/docs/', 'lex.uz/docs/');
       const url = rawUrl + fragment;
       lines.push(`- [${r.law_name}, ${art}-modda](${url})`);
     }
