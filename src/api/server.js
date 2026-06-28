@@ -3351,10 +3351,10 @@ ANIQLIK:
 - FAQAT KONTEKSTdagi MANBALAR ro'yxatida ko'rsatilgan URL'larni keltiring — ular faol hujjatlardir. Boshqa URL TO'QIB CHIQARMANG.
 
 HALLUTSINATSIYAGA QARSHI — MUTLAQO MAJBURIY:
-- HECH QANDAY manbani (qaror, qonun, kodeks, hujjat, farmon, nizom) va uning RAQAMI yoki SANASINI xotirangizdan TO'QIB CHIQARMANG. Faqat KONTEKSTdagi MANBALAR ro'yxatida aniq mavjud bo'lgan hujjatlarni keltiring.
-- Masalan: kontekstda "Vazirlar Mahkamasining 150-son qarori" yoki "Davlat soliq qo'mitasining ... qarori" YO'Q bo'lsa — uni KELTIRMANG, raqam/sana o'ylab topmang.
-- Agar foydalanuvchining savoliga to'liq javob berish uchun zarur ma'lumot KONTEKSTda bo'lmasa, buni ochiq yozing: "Bu masala bo'yicha aniq ma'lumot mavjud korpusda yo'q" — va faqat kontekstda BOR bo'lgan qism bo'yicha javob bering. Bo'shliqni xotiradan TO'LDIRMANG.
-- Jarayon/tartib (masalan, hujjatlar ro'yxati, STIR/PINFL/ERI olish) bo'yicha tafsilotlarni faqat KONTEKSTda bor bo'lsa yozing; aks holda "tartib bo'yicha tafsilotlar korpusda yo'q" deb belgilang.
+- ANIQ TAFSILOTLARNI (modda raqami, qaror/farmon raqami, sana, hujjat raqami, jarima miqdori, foiz, muddat) FAQAT KONTEKSTda aniq mavjud bo'lsa keltiring. Ularni xotirangizdan TO'QIB CHIQARMANG.
+- Masalan: kontekstda "Vazirlar Mahkamasining 150-son qarori" yoki "Davlat soliq qo'mitasining 2020-19-son qarori" YO'Q bo'lsa — bunday ANIQ RAQAM yoki SANANI o'ylab topmang.
+- LEKIN: masalaga tegishli REAL qonun yoki kodeksning NOMINI umumiy tarzda keltirishingiz MUMKIN (masalan: O'zbekiston Respublikasining "Qimmatli qog'ozlar bozori to'g'risida"gi Qonuni). Bunda uning aniq moddasi/raqamini kontekstsiz YOZMANG — shunchaki tegishli qonun sifatida sanab o'ting.
+- Agar zarur ANIQ ma'lumot (modda matni, tartib, raqam) KONTEKSTda bo'lmasa, buni ochiq yozing: "bu bo'yicha aniq tafsilotlar korpusda mavjud emas" — va kontekstda BOR bo'lgan qism bo'yicha javob bering. Aniq raqam/sana/jarayonni xotiradan TO'LDIRMANG.
 
 ANIQ RAQAMLAR — JUDA MUHIM:
 - "Yuqori jarima", "katta miqdor", "ko'p" kabi NOANIQ iboralar MUTLAQO TAQIQLANGAN.
@@ -3517,6 +3517,27 @@ function extractLawMentions(text) {
   return out;
 }
 
+// Dedicated relevant-law identifier (deterministic, independent of the answer).
+// A small LLM call lists candidate Uzbek laws for the question; lex.uz then
+// verifies each actually exists, so a fabricated name simply finds nothing and
+// is dropped — zero hallucination, with Master-Admin review as the final gate.
+async function identifyRelevantLaws(question, topic) {
+  if (typeof callAI !== 'function') return [];
+  try {
+    const label = LEGAL_TOPICS[topic] ? ` (soha: ${LEGAL_TOPICS[topic]})` : '';
+    const prompt = `Quyidagi huquqiy savolga eng tegishli O'zbekiston Respublikasining REAL, amaldagi qonun yoki kodekslarini sanab bering${label}. FAQAT qonun/kodeks NOMLARINI yozing — har birini yangi qatorda, maksimal 6 ta. Modda raqami, sana, tushuntirish yoki izoh BERMANG. Mavjud bo'lmagan hujjatni TO'QIB CHIQARMANG.\n\nSavol: ${question}`;
+    const res = await callAI([{ role: 'user', text: prompt }], { useSearch: false, maxTokens: 300, temperature: 0 });
+    const text = (res && res.text) || '';
+    return String(text)
+      .split('\n')
+      .map(s => s.replace(/^[-*•\d.\)\s]+/, '').trim())
+      .filter(s => s.length > 5 && /qonun|kodeks|nizom|qaror|farmon/i.test(s))
+      .slice(0, 6);
+  } catch (e) {
+    return [];
+  }
+}
+
 async function generateSourceSuggestions(query, topic, replyText) {
   if (SUGGEST_MODE === 'off') return;
   const norm = String(query || '').toLowerCase().trim().slice(0, 200);
@@ -3529,11 +3550,14 @@ async function generateSourceSuggestions(query, topic, replyText) {
   }
   try {
     const { searchLexUz } = require('../rag/lex-live-search');
-    // Primary: the laws the AI cited in this answer. Fallback: the question itself.
-    const terms = extractLawMentions(replyText);
+    // Candidate laws from three signals: what the AI cited, what the LLM
+    // identifies as relevant (deterministic), and the raw question.
+    const mentioned = extractLawMentions(replyText);
+    const identified = await identifyRelevantLaws(query, topic);
+    const terms = [...new Set([...mentioned, ...identified])];
     terms.push(query);
     const seenDoc = new Set();
-    for (const term of terms.slice(0, 6)) {
+    for (const term of terms.slice(0, 8)) {
       let docs = [];
       try { docs = await searchLexUz(term, { maxDocs: 1, maxChars: 200 }); } catch (_) { continue; }
       for (const d of docs) {
