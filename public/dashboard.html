@@ -3403,6 +3403,14 @@
         .survey-recent-title { font-weight:600; font-size:13px; color:var(--text-primary); margin:14px 0 8px; }
         .survey-recent-item { font-size:12px; color:var(--text-secondary); padding:6px 0; border-top:1px solid var(--border-1,rgba(0,0,0,0.06)); }
 
+        /* Suggested sources cards */
+        .suggest-card { background:var(--bg-1,#fff); border:1px solid var(--border-1,rgba(0,0,0,0.1)); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+        .suggest-title { font-weight:600; font-size:14px; color:var(--navy-700,#0e2236); text-decoration:none; }
+        .suggest-title:hover { text-decoration:underline; }
+        .suggest-meta { font-size:12px; color:var(--text-secondary); margin-top:3px; }
+        .suggest-actions { display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+        .suggest-status { font-size:12px; margin-top:8px; color:var(--text-secondary); }
+
         /* Free-access gate overlay */
         .gate-overlay { position: fixed; inset: 0; background: rgba(26,20,16,.55); backdrop-filter: blur(6px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; }
         .gate-box { background: var(--bg-1,#fff); color: var(--text-primary,#1a1410); border-radius: 16px; padding: 28px 26px; max-width: 440px; width: 100%; max-height: 88vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,.35); text-align: center; }
@@ -6019,6 +6027,24 @@
             </div>
         </div>
 
+        <!-- Suggested lex.uz sources for enrichment (Master Only) -->
+        <div class="reg-section" id="suggestedSection" style="margin-top:16px;">
+            <div class="reg-section-header" onclick="document.getElementById('suggestedSection').classList.toggle('collapsed'); if(!document.getElementById('suggestedSection').classList.contains('collapsed')) loadSuggestedSources();">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>🧩 Tavsiya etilgan manbalar</h2>
+                    <span class="reg-pending-badge" id="suggestedBadge" style="display:none;"></span>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">
+                    Foydalanuvchi savollari asosida lex.uz dan topilgan, korpusda hali yo'q <b>amaldagi</b> hujjatlar.
+                    Tekshirib, to'g'ri bo'lsa — bir bosishda korpusga qo'shing. Faqat amaldagi (kuchini yo'qotmagan) hujjatlar ko'rsatiladi.
+                </p>
+                <div id="suggestedContent"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
+            </div>
+        </div>
+
         </div><!-- /tab-view sorov -->
 
         <!-- Registration Detail Modal (outside tab-view to avoid stacking context) -->
@@ -6577,6 +6603,11 @@
                 const coverageSection = document.getElementById('coverageSection');
                 if (coverageSection) {
                     coverageSection.style.display = data.role === 'master' ? '' : 'none';
+                }
+                // Suggested sources panel: master only
+                const suggestedSection = document.getElementById('suggestedSection');
+                if (suggestedSection) {
+                    suggestedSection.style.display = data.role === 'master' ? '' : 'none';
                 }
 
                 // Show/hide master-only tabs in bottom tab bar
@@ -10885,6 +10916,76 @@
             } catch (e) {
                 box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
             }
+        }
+
+        var SUGGEST_TOPICS = [
+            ['soliq',"Soliq"],['mehnat',"Mehnat"],['fuqarolik',"Fuqarolik"],['oila',"Oila"],
+            ['jinoyat',"Jinoyat"],['mamuriy',"Ma'muriy"],['konstitutsiya',"Konstitutsiya"],
+            ['davlat-boshqaruvi',"Davlat boshqaruvi"],['uy-joy',"Uy-joy"],['tadbirkorlik',"Tadbirkorlik"],
+            ['bank',"Bank"],['moliya',"Moliya"],['ijtimoiy',"Ijtimoiy"],['sudlov',"Odil sudlov"],
+            ['adliya',"Adliya"],['xalqaro',"Xalqaro"],['ekologiya',"Ekologiya"]
+        ];
+        function suggestTopicOptions(sel) {
+            return SUGGEST_TOPICS.map(function(t){ return '<option value="'+t[0]+'"'+(t[0]===sel?' selected':'')+'>'+t[1]+'</option>'; }).join('');
+        }
+        async function loadSuggestedSources() {
+            var box = document.getElementById('suggestedContent');
+            box.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                var r = await fetch('/api/admin/suggested-sources?status=pending', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Server error');
+                var data = await r.json();
+                var list = data.suggestions || [];
+                var badge = document.getElementById('suggestedBadge');
+                if (badge) { if (list.length) { badge.textContent = list.length; badge.style.display = 'inline'; } else badge.style.display = 'none'; }
+                if (list.length === 0) { box.innerHTML = '<div class="reg-empty">Tavsiyalar yo\'q</div>'; return; }
+                box.innerHTML = list.map(function(s) {
+                    return '<div class="suggest-card" id="suggest-' + s.id + '">' +
+                        '<div class="suggest-main">' +
+                          '<a href="' + s.lex_url + '" target="_blank" rel="noopener" class="suggest-title">' + escapeHtml(s.title || s.lex_url) + '</a>' +
+                          '<div class="suggest-meta">✅ amaldagi · ×' + s.times_suggested + ' so\'ralgan' + (s.sample_query ? ' · «' + escapeHtml(String(s.sample_query).slice(0,80)) + '»' : '') + '</div>' +
+                        '</div>' +
+                        '<div class="suggest-actions">' +
+                          '<select class="detail-select suggest-topic" style="padding:5px 8px;">' + suggestTopicOptions(s.topic) + '</select>' +
+                          '<button class="btn" onclick="ingestSuggested(' + s.id + ')">✅ Qo\'shish</button>' +
+                          '<button class="btn btn-danger" style="background:#b94a48" onclick="rejectSuggested(' + s.id + ')">✕</button>' +
+                        '</div>' +
+                        '<div class="suggest-status" id="suggest-status-' + s.id + '"></div>' +
+                      '</div>';
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
+            }
+        }
+        async function ingestSuggested(id) {
+            var card = document.getElementById('suggest-' + id);
+            var topic = card.querySelector('.suggest-topic').value;
+            var st = document.getElementById('suggest-status-' + id);
+            st.textContent = 'Qo\'shilmoqda... (lex.uz dan yuklab, korpusga qo\'shilmoqda)';
+            try {
+                var r = await fetch('/api/admin/suggested-sources/' + id + '/ingest', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin', body: JSON.stringify({ topic: topic })
+                });
+                var data = await r.json();
+                if (r.ok) {
+                    st.style.color = '#2e8b57';
+                    st.textContent = '✅ Qo\'shildi: ' + (data.chunks || 0) + ' bo\'lak, ' + (data.embedded || 0) + ' embed';
+                    setTimeout(function(){ if (card) card.remove(); }, 1500);
+                } else {
+                    st.style.color = '#c0392b';
+                    st.textContent = '❌ ' + (data.error || 'Xatolik');
+                }
+            } catch (e) {
+                st.style.color = '#c0392b'; st.textContent = '❌ Tarmoq xatoligi';
+            }
+        }
+        async function rejectSuggested(id) {
+            try {
+                await fetch('/api/admin/suggested-sources/' + id + '/reject', { method: 'POST', credentials: 'same-origin' });
+                var card = document.getElementById('suggest-' + id);
+                if (card) card.remove();
+            } catch (e) { /* ignore */ }
         }
 
         async function loadSurveyResults() {
