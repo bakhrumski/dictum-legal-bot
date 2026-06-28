@@ -3495,12 +3495,30 @@ function logCoverage(query, topic, chunks, meta) {
 // Searches lex.uz live, keeps only in-force documents NOT already in the corpus,
 // and queues them for Master-Admin review → one-click ingest. No content is
 // generated; suggestions never reach the end user until an admin ingests them.
-const SUGGEST_MODE = (process.env.SOURCE_SUGGESTIONS || 'on').toLowerCase(); // on | weak | off
+const SUGGEST_MODE = (process.env.SOURCE_SUGGESTIONS || 'on').toLowerCase(); // on | off
 const _suggestSeen = new Map(); // normalized query -> ts (dedup, avoid hammering lex.uz)
 const SUGGEST_TTL_MS = 24 * 60 * 60 * 1000;
-async function generateSourceSuggestions(query, topic, weak) {
+
+// Extract the LAWS the AI named in its answer — quoted titles followed by a
+// law-type word (Qonun/Qaror/Nizom/Kodeks). These are the documents the answer
+// actually relied on; any that aren't in the corpus become enrichment candidates.
+function extractLawMentions(text) {
+  if (!text) return [];
+  const out = [];
+  const seen = new Set();
+  const re = /[«"'ʻ“”„]([^«»"'ʻ“”„\n]{6,160})[»"'ʻ“”]\s*(?:[-\w'ʻ ]{0,20})?(qonun|qaror|nizom|kodeks)/gi;
+  let m;
+  while ((m = re.exec(text)) && out.length < 6) {
+    const key = m[1].toLowerCase().trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(`${m[1].trim()} ${m[2]}`.trim());
+  }
+  return out;
+}
+
+async function generateSourceSuggestions(query, topic, replyText) {
   if (SUGGEST_MODE === 'off') return;
-  if (SUGGEST_MODE === 'weak' && !weak) return;
   const norm = String(query || '').toLowerCase().trim().slice(0, 200);
   if (norm.length < 5) return;
   const now = Date.now();
@@ -3511,25 +3529,32 @@ async function generateSourceSuggestions(query, topic, weak) {
   }
   try {
     const { searchLexUz } = require('../rag/lex-live-search');
-    const docs = await searchLexUz(query, { maxDocs: 2, maxChars: 300 });
-    for (const d of docs) {
-      const m = (d.url || '').match(/docs\/-?(\d+)/);
-      if (!m) continue;
-      const docId = m[1];
-      // Only ACTIVE (in-force) lex.uz documents.
-      if (d.metadata && d.metadata.is_active === false) continue;
-      // Skip anything already in the corpus.
-      const inCorpus = await pool.query(`SELECT 1 FROM legal_chunks WHERE source_url ILIKE $1 LIMIT 1`, ['%docs/' + docId + '%']);
-      if (inCorpus.rows.length) continue;
-      await pool.query(`
-        INSERT INTO suggested_sources (lex_doc_id, lex_url, title, is_active, status_label, sample_query, topic)
-        VALUES ($1,$2,$3,TRUE,$4,$5,$6)
-        ON CONFLICT (lex_doc_id) DO UPDATE
-          SET times_suggested = suggested_sources.times_suggested + 1,
-              last_suggested_at = NOW(),
-              sample_query = COALESCE(suggested_sources.sample_query, EXCLUDED.sample_query),
-              topic = COALESCE(suggested_sources.topic, EXCLUDED.topic)
-      `, [docId, d.url, (d.title || '').slice(0, 300), (d.metadata && d.metadata.status_label) || null, String(query).slice(0, 300), topic || null]);
+    // Primary: the laws the AI cited in this answer. Fallback: the question itself.
+    const terms = extractLawMentions(replyText);
+    terms.push(query);
+    const seenDoc = new Set();
+    for (const term of terms.slice(0, 6)) {
+      let docs = [];
+      try { docs = await searchLexUz(term, { maxDocs: 1, maxChars: 200 }); } catch (_) { continue; }
+      for (const d of docs) {
+        const m = (d.url || '').match(/docs\/-?(\d+)/);
+        if (!m) continue;
+        const docId = m[1];
+        if (seenDoc.has(docId)) continue;
+        seenDoc.add(docId);
+        if (d.metadata && d.metadata.is_active === false) continue; // only in-force
+        const inCorpus = await pool.query(`SELECT 1 FROM legal_chunks WHERE source_url ILIKE $1 LIMIT 1`, ['%docs/' + docId + '%']);
+        if (inCorpus.rows.length) continue; // already have it
+        await pool.query(`
+          INSERT INTO suggested_sources (lex_doc_id, lex_url, title, is_active, status_label, sample_query, topic)
+          VALUES ($1,$2,$3,TRUE,$4,$5,$6)
+          ON CONFLICT (lex_doc_id) DO UPDATE
+            SET times_suggested = suggested_sources.times_suggested + 1,
+                last_suggested_at = NOW(),
+                sample_query = COALESCE(suggested_sources.sample_query, EXCLUDED.sample_query),
+                topic = COALESCE(suggested_sources.topic, EXCLUDED.topic)
+        `, [docId, d.url, (d.title || '').slice(0, 300), (d.metadata && d.metadata.status_label) || null, String(query).slice(0, 300), topic || null]);
+      }
     }
   } catch (e) {
     console.warn('[suggest] failed:', e.message);
@@ -4348,8 +4373,8 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       // Phase 1 corpus gap-fill: record coverage + queue lex.uz source suggestions
       // for Master-Admin review (both fire-and-forget; never block the answer).
       logCoverage(message, topic, ragChunks, ragMeta);
-      const weakCoverage = (ragChunks || []).filter(c => c && c.source_type === 'law_text').length < MIN_LAW_CHUNKS;
-      generateSourceSuggestions(message, topic, weakCoverage).catch(() => {});
+      // Source suggestions run AFTER the answer is built (they parse the reply
+      // for laws the AI cited that aren't in the corpus) — see below.
     }
 
     let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases);
@@ -4412,6 +4437,10 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     // verification — opened in the language the user asked in.
     const manbalarFooter = buildManbalarFooter(ragChunks, displayReply, lexLangForText(message));
     if (manbalarFooter) displayReply += manbalarFooter;
+
+    // Enrichment: suggest the laws the AI cited that aren't yet in the corpus
+    // (Master-Admin reviews → one-click ingest). Fire-and-forget; never blocks.
+    if (topic) generateSourceSuggestions(message, topic, displayReply).catch(() => {});
 
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
     res.json({

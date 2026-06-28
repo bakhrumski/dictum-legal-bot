@@ -8370,7 +8370,14 @@
                 const lawInfo = LAW_CITATION_MAP[key];
                 if (lawInfo) {
                     // lawInfo.url is already the correct Uzbek-Latin lex.uz document.
-                    return `<a href="${lawInfo.url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
+                    let url = lawInfo.url;
+                    // The Civil Code is two separate lex.uz documents: Part 1 (art 1–385)
+                    // and Part 2 (386+). LAW_CITATION_MAP points at Part 1, so send
+                    // higher articles (e.g. 741, 743) to Part 2.
+                    if ((key === 'fuqarolik kodeksi' || key === 'fk') && parseInt(articleNum, 10) >= 386) {
+                        url = 'https://lex.uz/docs/-180552';
+                    }
+                    return `<a href="${url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
                 }
                 return match;
             });
