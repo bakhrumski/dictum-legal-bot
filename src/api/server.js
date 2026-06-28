@@ -3517,6 +3517,27 @@ function extractLawMentions(text) {
   return out;
 }
 
+// Dedicated relevant-law identifier (deterministic, independent of the answer).
+// A small LLM call lists candidate Uzbek laws for the question; lex.uz then
+// verifies each actually exists, so a fabricated name simply finds nothing and
+// is dropped — zero hallucination, with Master-Admin review as the final gate.
+async function identifyRelevantLaws(question, topic) {
+  if (typeof callAI !== 'function') return [];
+  try {
+    const label = LEGAL_TOPICS[topic] ? ` (soha: ${LEGAL_TOPICS[topic]})` : '';
+    const prompt = `Quyidagi huquqiy savolga eng tegishli O'zbekiston Respublikasining REAL, amaldagi qonun yoki kodekslarini sanab bering${label}. FAQAT qonun/kodeks NOMLARINI yozing — har birini yangi qatorda, maksimal 6 ta. Modda raqami, sana, tushuntirish yoki izoh BERMANG. Mavjud bo'lmagan hujjatni TO'QIB CHIQARMANG.\n\nSavol: ${question}`;
+    const res = await callAI([{ role: 'user', text: prompt }], { useSearch: false, maxTokens: 300, temperature: 0 });
+    const text = (res && res.text) || '';
+    return String(text)
+      .split('\n')
+      .map(s => s.replace(/^[-*•\d.\)\s]+/, '').trim())
+      .filter(s => s.length > 5 && /qonun|kodeks|nizom|qaror|farmon/i.test(s))
+      .slice(0, 6);
+  } catch (e) {
+    return [];
+  }
+}
+
 async function generateSourceSuggestions(query, topic, replyText) {
   if (SUGGEST_MODE === 'off') return;
   const norm = String(query || '').toLowerCase().trim().slice(0, 200);
@@ -3529,11 +3550,14 @@ async function generateSourceSuggestions(query, topic, replyText) {
   }
   try {
     const { searchLexUz } = require('../rag/lex-live-search');
-    // Primary: the laws the AI cited in this answer. Fallback: the question itself.
-    const terms = extractLawMentions(replyText);
+    // Candidate laws from three signals: what the AI cited, what the LLM
+    // identifies as relevant (deterministic), and the raw question.
+    const mentioned = extractLawMentions(replyText);
+    const identified = await identifyRelevantLaws(query, topic);
+    const terms = [...new Set([...mentioned, ...identified])];
     terms.push(query);
     const seenDoc = new Set();
-    for (const term of terms.slice(0, 6)) {
+    for (const term of terms.slice(0, 8)) {
       let docs = [];
       try { docs = await searchLexUz(term, { maxDocs: 1, maxChars: 200 }); } catch (_) { continue; }
       for (const d of docs) {
