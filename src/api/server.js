@@ -470,7 +470,7 @@ app.get('/api/admin/suggested-sources', requireMasterAdmin, async (req, res) => 
   try {
     const status = ['pending', 'ingested', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
     const r = await pool.query(`
-      SELECT id, lex_doc_id, lex_url, title, is_active, status_label, sample_query, topic,
+      SELECT id, lex_doc_id, lex_url, title, is_active, status_label, sample_query, sample_answer, topic,
              times_suggested, status, last_suggested_at
       FROM suggested_sources WHERE status = $1
       ORDER BY times_suggested DESC, last_suggested_at DESC LIMIT 100`, [status]);
@@ -3550,12 +3550,15 @@ async function generateSourceSuggestions(query, topic, replyText) {
   }
   try {
     const { searchLexUz } = require('../rag/lex-live-search');
-    // Candidate laws from three signals: what the AI cited, what the LLM
-    // identifies as relevant (deterministic), and the raw question.
+    // Candidates are LAW NAMES — what the AI cited + what the LLM identifies as
+    // relevant. We do NOT search the raw question: lex.uz keyword search returns
+    // unrelated top hits for a free-text question (e.g. a transport-driver
+    // regulation for a bonds question).
     const mentioned = extractLawMentions(replyText);
     const identified = await identifyRelevantLaws(query, topic);
     const terms = [...new Set([...mentioned, ...identified])];
-    terms.push(query);
+    if (terms.length === 0) return; // nothing reliable to search for
+    const answerExcerpt = String(replyText || '').replace(/\n{3,}/g, '\n\n').slice(0, 4000);
     const seenDoc = new Set();
     for (const term of terms.slice(0, 8)) {
       let docs = [];
@@ -3567,22 +3570,41 @@ async function generateSourceSuggestions(query, topic, replyText) {
         if (seenDoc.has(docId)) continue;
         seenDoc.add(docId);
         if (d.metadata && d.metadata.is_active === false) continue; // only in-force
+        // Relevance gate: the returned document's title must actually match the
+        // law we searched for — drops lex.uz's unrelated top hits.
+        if (!titleMatchesTerm(d.title, term)) continue;
         const inCorpus = await pool.query(`SELECT 1 FROM legal_chunks WHERE source_url ILIKE $1 LIMIT 1`, ['%docs/' + docId + '%']);
         if (inCorpus.rows.length) continue; // already have it
         await pool.query(`
-          INSERT INTO suggested_sources (lex_doc_id, lex_url, title, is_active, status_label, sample_query, topic)
-          VALUES ($1,$2,$3,TRUE,$4,$5,$6)
+          INSERT INTO suggested_sources (lex_doc_id, lex_url, title, is_active, status_label, sample_query, sample_answer, topic)
+          VALUES ($1,$2,$3,TRUE,$4,$5,$6,$7)
           ON CONFLICT (lex_doc_id) DO UPDATE
             SET times_suggested = suggested_sources.times_suggested + 1,
                 last_suggested_at = NOW(),
                 sample_query = COALESCE(suggested_sources.sample_query, EXCLUDED.sample_query),
+                sample_answer = COALESCE(suggested_sources.sample_answer, EXCLUDED.sample_answer),
                 topic = COALESCE(suggested_sources.topic, EXCLUDED.topic)
-        `, [docId, d.url, (d.title || '').slice(0, 300), (d.metadata && d.metadata.status_label) || null, String(query).slice(0, 300), topic || null]);
+        `, [docId, d.url, (d.title || '').slice(0, 300), (d.metadata && d.metadata.status_label) || null, String(query).slice(0, 500), answerExcerpt, topic || null]);
       }
     }
   } catch (e) {
     console.warn('[suggest] failed:', e.message);
   }
+}
+
+// True if a lex.uz document title genuinely matches the law name we searched —
+// at least 2 significant (4+ char) words shared, normalizing Uzbek apostrophes.
+function titleMatchesTerm(title, term) {
+  const norm = (s) => String(s || '')
+    .toLowerCase().normalize('NFKC')
+    .replace(/['ʻ`‘’]/g, '')
+    .replace(/[^a-zа-яё0-9\s]/gi, ' ')
+    .split(/\s+/).filter(w => w.length >= 4);
+  const titleWords = new Set(norm(title));
+  const termWords = norm(term);
+  if (termWords.length === 0 || titleWords.size === 0) return false;
+  const hits = termWords.filter(w => titleWords.has(w)).length;
+  return hits >= Math.min(2, termWords.length);
 }
 
 // lex.uz language segment for a question: Uzbek by default; Russian only when
@@ -7241,6 +7263,7 @@ async function runMigrations() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       last_suggested_at TIMESTAMPTZ DEFAULT NOW()
     )`);
+    await pool.query(`ALTER TABLE suggested_sources ADD COLUMN IF NOT EXISTS sample_answer TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_suggested_status ON suggested_sources(status, times_suggested DESC)`);
 
     // Seed 3 default questions only if the table is empty (admin can edit later)
