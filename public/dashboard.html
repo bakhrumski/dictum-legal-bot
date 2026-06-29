@@ -10922,7 +10922,8 @@
                     data.topQueries.forEach(function(q) {
                         html += '<div class="survey-recent-item" style="display:flex;justify-content:space-between;gap:10px;align-items:center;">' +
                             '<span><b>×' + q.times + '</b> ' + escapeHtml(q.query) + ' <em style="color:var(--text-secondary)">[' + escapeHtml(q.topic || '—') + ']</em></span>' +
-                            '<button class="btn" style="flex:none;padding:4px 10px;font-size:12px;" onclick="window.open(\'/api/admin/retrieval-debug?q=\' + encodeURIComponent(' + JSON.stringify(q.query) + ') + \'&topic=\' + encodeURIComponent(' + JSON.stringify(q.topic || '') + '), \'_blank\')">🔍 Tekshirish</button>' +
+                            '<button class="btn" style="flex:none;padding:4px 10px;font-size:12px;" onclick="openQuestionInChat(' + JSON.stringify(q.query) + ')">↗ Ochish</button>' +
+                            '<button class="btn" style="flex:none;padding:4px 8px;font-size:12px;background:var(--navy-500,#2c4a6e)" title="Texnik: qaysi bo\'laklar topilgani" onclick="window.open(\'/api/admin/retrieval-debug?q=\' + encodeURIComponent(' + JSON.stringify(q.query) + ') + \'&topic=\' + encodeURIComponent(' + JSON.stringify(q.topic || '') + '), \'_blank\')">🔍</button>' +
                             '</div>';
                     });
                 } else {
@@ -10944,6 +10945,18 @@
         function suggestTopicOptions(sel) {
             return SUGGEST_TOPICS.map(function(t){ return '<option value="'+t[0]+'"'+(t[0]===sel?' selected':'')+'>'+t[1]+'</option>'; }).join('');
         }
+        // Open a (weak-coverage) question in the AI chat so the admin can re-ask
+        // it and see the current answer.
+        function openQuestionInChat(q) {
+            if (typeof switchTab === 'function') switchTab('ai');
+            var input = document.getElementById('aiChatInput');
+            if (input) {
+                input.value = q;
+                if (typeof autoResizeAI === 'function') autoResizeAI(input);
+                input.focus();
+            }
+        }
+
         async function loadSuggestedSources() {
             var box = document.getElementById('suggestedContent');
             box.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';

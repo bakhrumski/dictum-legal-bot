@@ -2886,12 +2886,26 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     if (embKey) {
       try {
         let sm = await vectorSearch(query, { category: topic || null, language, limit: 6, apiKey: embKey });
-        if (sm.length === 0 && topic) sm = await vectorSearch(query, { limit: 6, apiKey: embKey }); // unscoped retry
+        // Always ALSO search unscoped and merge (highest score wins). A law
+        // ingested under a different category than the question's topic would
+        // otherwise never be retrieved — this is why freshly-added laws weren't
+        // used. The reranker downstream still enforces relevance.
+        if (topic) {
+          try {
+            const smU = await vectorSearch(query, { language, limit: 6, apiKey: embKey });
+            const byId = new Map();
+            for (const r of [...sm, ...smU]) {
+              const prev = byId.get(r.id);
+              if (!prev || (Number(r.score) || 0) > (Number(prev.score) || 0)) byId.set(r.id, r);
+            }
+            sm = [...byId.values()].sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+          } catch (_) {}
+        }
         const seenArt = new Set();
         semanticMatches = sm
           .filter(r => r.source_type === 'law_text')
           .filter(r => { const k = `${r.law_name}_${(r.article_numbers || []).join(',')}`; if (seenArt.has(k)) return false; seenArt.add(k); return true; })
-          .slice(0, 3);
+          .slice(0, 4);
         if (semanticMatches.length > 0) {
           console.log(`[RAG] Semantic guarantee: ${semanticMatches.map(r => (r.article_numbers || []).join('/')).join(', ')}`);
         }
