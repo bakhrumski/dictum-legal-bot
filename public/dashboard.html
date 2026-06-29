@@ -3415,6 +3415,9 @@
         .suggest-meta { font-size:12px; color:var(--text-secondary); margin-top:3px; }
         .suggest-actions { display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap; }
         .suggest-status { font-size:12px; margin-top:8px; color:var(--text-secondary); }
+        .suggest-ctx { font-size:12px; color:var(--text-secondary); margin-top:6px; line-height:1.5; }
+        .suggest-toggle { margin-top:6px; background:none; border:none; color:var(--navy-700,#0e2236); font-size:12px; cursor:pointer; padding:0; text-decoration:underline; font-family:inherit; }
+        .suggest-answer { margin-top:8px; padding:10px 12px; background:var(--parchment-100,rgba(0,0,0,0.04)); border-radius:8px; font-size:12px; color:var(--text-primary); white-space:pre-wrap; max-height:320px; overflow-y:auto; line-height:1.55; }
 
         /* Free-access gate overlay */
         .gate-overlay { position: fixed; inset: 0; background: rgba(26,20,16,.55); backdrop-filter: blur(6px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -10953,10 +10956,19 @@
                 if (badge) { if (list.length) { badge.textContent = list.length; badge.style.display = 'inline'; } else badge.style.display = 'none'; }
                 if (list.length === 0) { box.innerHTML = '<div class="reg-empty">Tavsiyalar yo\'q</div>'; return; }
                 box.innerHTML = list.map(function(s) {
+                    var ctx = '';
+                    if (s.sample_query) {
+                        ctx += '<div class="suggest-ctx"><b>Savol:</b> ' + escapeHtml(String(s.sample_query)) + '</div>';
+                    }
+                    if (s.sample_answer) {
+                        ctx += '<button class="suggest-toggle" onclick="toggleSuggestAnswer(' + s.id + ')">📄 Platforma javobini ko\'rish</button>' +
+                               '<div class="suggest-answer" id="suggest-answer-' + s.id + '" style="display:none;">' + escapeHtml(String(s.sample_answer)) + '</div>';
+                    }
                     return '<div class="suggest-card" id="suggest-' + s.id + '">' +
                         '<div class="suggest-main">' +
                           '<a href="' + s.lex_url + '" target="_blank" rel="noopener" class="suggest-title">' + escapeHtml(s.title || s.lex_url) + '</a>' +
-                          '<div class="suggest-meta">✅ amaldagi · ×' + s.times_suggested + ' so\'ralgan' + (s.sample_query ? ' · «' + escapeHtml(String(s.sample_query).slice(0,80)) + '»' : '') + '</div>' +
+                          '<div class="suggest-meta">✅ amaldagi · ×' + s.times_suggested + ' so\'ralgan</div>' +
+                          ctx +
                         '</div>' +
                         '<div class="suggest-actions">' +
                           '<select class="detail-select suggest-topic" style="padding:5px 8px;">' + suggestTopicOptions(s.topic) + '</select>' +
@@ -10969,6 +10981,10 @@
             } catch (e) {
                 box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
             }
+        }
+        function toggleSuggestAnswer(id) {
+            var el = document.getElementById('suggest-answer-' + id);
+            if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
         }
         async function ingestSuggested(id) {
             var card = document.getElementById('suggest-' + id);
