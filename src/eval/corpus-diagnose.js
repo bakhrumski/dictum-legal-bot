@@ -45,6 +45,17 @@ async function diagnose({ law = 'soliq kodeks', article = '358' } = {}) {
       FROM legal_chunks`);
   out.corpus = corpus.rows[0];
 
+  // 1b. Every distinct law in the corpus (name, chunk count, category, embedded)
+  const laws = await pool.query(`
+    SELECT law_name,
+           COUNT(*)::int AS chunks,
+           COUNT(*) FILTER (WHERE embedding IS NOT NULL)::int AS embedded,
+           MIN(category) AS category
+      FROM legal_chunks
+     GROUP BY law_name
+     ORDER BY law_name`);
+  out.lawsInCorpus = laws.rows;
+
   // 2. Does the law exist at all?
   const lawRows = await pool.query(`
     SELECT COUNT(*)::int AS chunks,
