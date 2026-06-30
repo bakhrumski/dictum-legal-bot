@@ -22,7 +22,10 @@ async function diagnose({ law = 'soliq kodeks', article = '358' } = {}) {
   // production scoping. detectLawHint also handles a full query as input
   // (e.g. "Soliq kodeksi 358-modda"); fall back to the raw text if no match.
   const resolvedLaw = detectLawHint(rawLaw) || rawLaw;
-  const lawLike = '%' + resolvedLaw + '%';
+  // Apostrophe-agnostic match: corpus law_names use the modifier letter 'ʻ'
+  // while users type a straight quote — replace any apostrophe variant with the
+  // SQL single-char wildcard '_' so both forms match (qog'ozlar ≈ qogʻozlar).
+  const lawLike = '%' + resolvedLaw.replace(/['ʻ`‘’]/g, '_') + '%';
   const art = String(article).trim();
   const out = { law: rawLaw, resolvedLaw, lawScoping: detectLawHint(rawLaw) ? 'detectLawHint' : 'raw', article: art };
 
