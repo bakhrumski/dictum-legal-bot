@@ -134,6 +134,11 @@ if (require.main === module) {
       console.log('\n══════ CORPUS DIAGNOSTIC ══════');
       console.log(`Law input: "${r.law}"  →  resolved: "${r.resolvedLaw}" (${r.lawScoping})   Article: ${r.article}\n`);
       if (r.corpus) console.log(`Corpus: ${r.corpus.total} chunks, ${r.corpus.with_embedding} embedded, ${r.corpus.distinct_laws} distinct laws`);
+      if (r.lawsInCorpus?.length) {
+        console.log(`\nLaws in corpus (${r.lawsInCorpus.length}):`);
+        r.lawsInCorpus.forEach(l =>
+          console.log(`  • [${l.category || '—'}] ${l.law_name}  (${l.chunks} chunk, ${l.embedded} embed)`));
+      }
       if (r.lawPresence) {
         console.log(`\nLaw match "${r.resolvedLaw}":`);
         console.log(`  chunks: ${r.lawPresence.chunks} (${r.lawPresence.with_embedding} embedded, ${r.lawPresence.docs} docs)`);
