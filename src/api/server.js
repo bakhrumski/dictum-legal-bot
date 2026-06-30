@@ -3428,7 +3428,8 @@ SOHA: MA'MURIY HUQUQ (regulatory/tartibga soluvchi)
 JAVOB FORMATI (3 bo'lim, MAJBURIY):
 ${definitionHint}
 
-**Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism qo'llanadi? Qonun nomi va modda raqamini **qalin** yozing. Bir nechta norma bo'lsa — hammasini sanab o'ting. Har bir norma uchun: (**Qonun nomi, N-modda, M-qism**).
+**Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism qo'llanadi? Qonun nomi va modda raqamini **qalin** yozing. Har bir norma uchun: (**Qonun nomi, N-modda, M-qism**).
+MUHIM: KONTEKSTda berilgan HAR BIR TEGISHLI qonun/kodeksni keltiring — faqat bittasi yoki ikkitasi bilan cheklanmang. Agar kontekstda savolga aloqador bir nechta hujjat (masalan, Fuqarolik kodeksi VA "Qimmatli qog'ozlar bozori to'g'risida"gi Qonun VA "Aksiyadorlik jamiyatlari..." Qonuni) bo'lsa — hammasini Huquqiy asos bo'limida tegishli modda raqami bilan sanab o'ting. Aloqasi yo'q hujjatlarni esa keltirmang.
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha (jismoniy / mansabdor / yuridik shaxs) farq bo'lsa — har birini alohida jumlada ko'rsating. Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Foydalanuvchi savoliga to'g'ridan-to'g'ri aloqador holatlarni tahlil qiling.
 
