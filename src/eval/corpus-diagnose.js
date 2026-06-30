@@ -22,7 +22,10 @@ async function diagnose({ law = 'soliq kodeks', article = '358' } = {}) {
   // production scoping. detectLawHint also handles a full query as input
   // (e.g. "Soliq kodeksi 358-modda"); fall back to the raw text if no match.
   const resolvedLaw = detectLawHint(rawLaw) || rawLaw;
-  const lawLike = '%' + resolvedLaw + '%';
+  // Apostrophe-agnostic match: corpus law_names use the modifier letter 'ʻ'
+  // while users type a straight quote — replace any apostrophe variant with the
+  // SQL single-char wildcard '_' so both forms match (qog'ozlar ≈ qogʻozlar).
+  const lawLike = '%' + resolvedLaw.replace(/['ʻ`‘’]/g, '_') + '%';
   const art = String(article).trim();
   const out = { law: rawLaw, resolvedLaw, lawScoping: detectLawHint(rawLaw) ? 'detectLawHint' : 'raw', article: art };
 
@@ -134,6 +137,11 @@ if (require.main === module) {
       console.log('\n══════ CORPUS DIAGNOSTIC ══════');
       console.log(`Law input: "${r.law}"  →  resolved: "${r.resolvedLaw}" (${r.lawScoping})   Article: ${r.article}\n`);
       if (r.corpus) console.log(`Corpus: ${r.corpus.total} chunks, ${r.corpus.with_embedding} embedded, ${r.corpus.distinct_laws} distinct laws`);
+      if (r.lawsInCorpus?.length) {
+        console.log(`\nLaws in corpus (${r.lawsInCorpus.length}):`);
+        r.lawsInCorpus.forEach(l =>
+          console.log(`  • [${l.category || '—'}] ${l.law_name}  (${l.chunks} chunk, ${l.embedded} embed)`));
+      }
       if (r.lawPresence) {
         console.log(`\nLaw match "${r.resolvedLaw}":`);
         console.log(`  chunks: ${r.lawPresence.chunks} (${r.lawPresence.with_embedding} embedded, ${r.lawPresence.docs} docs)`);
