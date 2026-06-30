@@ -2901,13 +2901,21 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
             sm = [...byId.values()].sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
           } catch (_) {}
         }
-        const seenArt = new Set();
-        semanticMatches = sm
-          .filter(r => r.source_type === 'law_text')
-          .filter(r => { const k = `${r.law_name}_${(r.article_numbers || []).join(',')}`; if (seenArt.has(k)) return false; seenArt.add(k); return true; })
-          .slice(0, 4);
+        // Breadth-first: guarantee the BEST chunk from each distinct law before
+        // adding extra chunks from the same law. Otherwise 1-2 laws (e.g. Civil
+        // Code 741/743) fill every slot and other relevant laws (JSC, securities
+        // bylaws) never reach context. Cap 2 per law so one law can't monopolise.
+        const lawSeen = new Map();
+        const primary = [];
+        const extra = [];
+        for (const r of sm.filter(r => r.source_type === 'law_text')) {
+          const n = lawSeen.get(r.law_name) || 0;
+          if (n === 0) { primary.push(r); lawSeen.set(r.law_name, 1); }
+          else if (n < 2) { extra.push(r); lawSeen.set(r.law_name, n + 1); }
+        }
+        semanticMatches = [...primary, ...extra].slice(0, 6);
         if (semanticMatches.length > 0) {
-          console.log(`[RAG] Semantic guarantee: ${semanticMatches.map(r => (r.article_numbers || []).join('/')).join(', ')}`);
+          console.log(`[RAG] Semantic guarantee (${primary.length} laws): ${semanticMatches.map(r => `${r.law_name.slice(0,18)}#${(r.article_numbers || []).join('/')}`).join(', ')}`);
         }
       } catch (e) {
         console.warn(`[RAG] semantic guarantee failed: ${e.message}`);
@@ -3120,9 +3128,10 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     }
   }
 
-  // Final context window. Widened from 3 → 5 so guaranteed keyword matches and
-  // the top vector/law results coexist instead of the former displacing the latter.
-  const FINAL_K = 5;
+  // Final context window. Widened to 7 so breadth-first guaranteed matches (the
+  // best chunk from each relevant law) and keyword/exact hits coexist — a
+  // multi-law question (e.g. corporate vs government bonds) can cite all of them.
+  const FINAL_K = 7;
 
   if (rawResults.length > FINAL_K) {
     try {
@@ -3419,7 +3428,8 @@ SOHA: MA'MURIY HUQUQ (regulatory/tartibga soluvchi)
 JAVOB FORMATI (3 bo'lim, MAJBURIY):
 ${definitionHint}
 
-**Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism qo'llanadi? Qonun nomi va modda raqamini **qalin** yozing. Bir nechta norma bo'lsa — hammasini sanab o'ting. Har bir norma uchun: (**Qonun nomi, N-modda, M-qism**).
+**Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism qo'llanadi? Qonun nomi va modda raqamini **qalin** yozing. Har bir norma uchun: (**Qonun nomi, N-modda, M-qism**).
+MUHIM: KONTEKSTda berilgan HAR BIR TEGISHLI qonun/kodeksni keltiring — faqat bittasi yoki ikkitasi bilan cheklanmang. Agar kontekstda savolga aloqador bir nechta hujjat (masalan, Fuqarolik kodeksi VA "Qimmatli qog'ozlar bozori to'g'risida"gi Qonun VA "Aksiyadorlik jamiyatlari..." Qonuni) bo'lsa — hammasini Huquqiy asos bo'limida tegishli modda raqami bilan sanab o'ting. Aloqasi yo'q hujjatlarni esa keltirmang.
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha (jismoniy / mansabdor / yuridik shaxs) farq bo'lsa — har birini alohida jumlada ko'rsating. Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Foydalanuvchi savoliga to'g'ridan-to'g'ri aloqador holatlarni tahlil qiling.
 
