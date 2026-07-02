@@ -2885,14 +2885,14 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     const embKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
     if (embKey) {
       try {
-        let sm = await vectorSearch(query, { category: topic || null, language, limit: 6, apiKey: embKey });
+        let sm = await vectorSearch(query, { category: topic || null, language, limit: 12, apiKey: embKey });
         // Always ALSO search unscoped and merge (highest score wins). A law
         // ingested under a different category than the question's topic would
         // otherwise never be retrieved — this is why freshly-added laws weren't
         // used. The reranker downstream still enforces relevance.
         if (topic) {
           try {
-            const smU = await vectorSearch(query, { language, limit: 6, apiKey: embKey });
+            const smU = await vectorSearch(query, { language, limit: 12, apiKey: embKey });
             const byId = new Map();
             for (const r of [...sm, ...smU]) {
               const prev = byId.get(r.id);
@@ -5550,9 +5550,26 @@ async function ingestLexUrl({ url, topic, law_name, adminId }) {
     source_type: 'uploaded_doc',
     quality_score: 0.8,
     verified_by: adminId,
-  }, { isHtml: Boolean(rawHtml) });
+  }, { isHtml: Boolean(rawHtml), fallbackText: doc.body });
 
   if (chunks.length === 0) throw Object.assign(new Error('Hujjatdan bo\'lak ajratib bo\'lmadi'), { status: 400 });
+
+  // Quality guard: refuse to store page chrome as "content". The VMQ-1016 NIZOM
+  // once ingested as a single chunk of lex.uz navigation text ("Кейинги таҳрирга
+  // ҳавола / индекслаш / Расмий нашр манбаси...") because the article parser found
+  // nothing and the fallback captured whole-page text.
+  {
+    const totalText = chunks.map(c => c.text || '').join(' ');
+    const CHROME_RX = /(таҳрирга ҳавола|tahrirga havola|бўйича индекслаш|индекслаш|Ўзгартиришлар манбаси|Расмий нашр манбаси|O'zgartirishlar manbasi|Rasmiy nashr manbasi)/gi;
+    const chromeHits = (totalText.match(CHROME_RX) || []).length;
+    const looksLikeLaw = /(модда|modda|банд|band|қисм|qism|боб|bob)/i.test(totalText);
+    if (totalText.trim().length < 400 || (chromeHits >= 3 && !looksLikeLaw)) {
+      throw Object.assign(new Error(
+        'Hujjat matni to\'g\'ri ajratilmadi (sahifa navigatsiyasi olindi, qonun matni emas). ' +
+        'Lex.uz sahifa tuzilishini tekshiring yoki hujjatni fayl sifatida yuklang.'
+      ), { status: 400, code: 'JUNK_EXTRACTION' });
+    }
+  }
 
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   let embeddings = [];

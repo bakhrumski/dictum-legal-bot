@@ -53,7 +53,8 @@ async function diagnose({ law = 'soliq kodeks', article = '358' } = {}) {
     SELECT law_name,
            COUNT(*)::int AS chunks,
            COUNT(*) FILTER (WHERE embedding IS NOT NULL)::int AS embedded,
-           MIN(category) AS category
+           MIN(category) AS category,
+           MIN(source_url) AS source_url
       FROM legal_chunks
      GROUP BY law_name
      ORDER BY law_name`);
@@ -140,7 +141,7 @@ if (require.main === module) {
       if (r.lawsInCorpus?.length) {
         console.log(`\nLaws in corpus (${r.lawsInCorpus.length}):`);
         r.lawsInCorpus.forEach(l =>
-          console.log(`  • [${l.category || '—'}] ${l.law_name}  (${l.chunks} chunk, ${l.embedded} embed)`));
+          console.log(`  • [${l.category || '—'}] ${l.law_name}  (${l.chunks} chunk, ${l.embedded} embed)${l.source_url ? `\n      ${l.source_url}` : ''}`));
       }
       if (r.lawPresence) {
         console.log(`\nLaw match "${r.resolvedLaw}":`);
