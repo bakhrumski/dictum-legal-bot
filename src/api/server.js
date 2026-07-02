@@ -5606,12 +5606,15 @@ async function ingestLexUrl({ url, topic, law_name, adminId }) {
     chunksTotal: chunks.length, embedded: embeddedCount, language: inferredLanguage, ingestBy: adminId || null,
   });
 
-  console.log(`[LEX INGEST] Done: "${finalLawName}" — ${chunks.length} chunks, ${embeddedCount} embedded`);
+  console.log(`[LEX INGEST] Done: "${finalLawName}" — ${chunks.length} chunks, ${embeddedCount} embedded, lang=${inferredLanguage}`);
   return {
     doc_name: finalLawName, doc_id: docId, chunks: chunks.length, embedded: embeddedCount,
-    topic, source_url: cleanUrl, is_active: lexMeta.is_active !== false,
+    topic, source_url: cleanUrl, is_active: lexMeta.is_active !== false, language: inferredLanguage,
     justify: justifyResult ? { indexed: true, chunks: justifyResult.chunks } : { indexed: false },
     ...(embedError ? { embed_warning: embedError } : {}),
+    // Warn the admin when a non-Uzbek document is ingested — the corpus is
+    // Uzbek-first, so a RU version yields Russian citations and source links.
+    ...(inferredLanguage !== 'uz' ? { lang_warning: 'Hujjat o\'zbek tilida emas (RU). O\'zbekcha (lotin) versiyani yuklash tavsiya etiladi.' } : {}),
   };
 }
 

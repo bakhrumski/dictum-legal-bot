@@ -8838,6 +8838,10 @@
                         statusEl.className = 'ai-doc-upload-status error';
                         statusEl.innerHTML += '<br>⚠️ Vektorlashtirish amalga oshmadi: <b>' + escapeHtml(data.embed_warning) + '</b>';
                     }
+                    if (data.lang_warning) {
+                        statusEl.className = 'ai-doc-upload-status error';
+                        statusEl.innerHTML += '<br>⚠️ <b>' + escapeHtml(data.lang_warning) + '</b>';
+                    }
                     statusEl.style.display = 'block';
                     document.getElementById('docLexUrl').value = '';
                     document.getElementById('docUploadName').value = '';
