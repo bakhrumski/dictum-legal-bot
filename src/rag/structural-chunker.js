@@ -501,7 +501,12 @@ function chunkLegalDocumentStructured(html, docMeta = {}, opts = {}) {
     if (parsed.articles.length === 0) {
       console.warn('[STRUCT-CHUNKER] No articles found in HTML, falling back to legacy chunker');
       const { chunkLegalDocument } = require('./chunker');
-      return chunkLegalDocument(extractPlainText(html), docMeta);
+      // Prefer the caller's already-extracted clean body (fetch-lex #divCont
+      // extraction) over re-deriving text from raw HTML.
+      const fallbackText = (opts.fallbackText && opts.fallbackText.trim().length > 200)
+        ? opts.fallbackText
+        : extractPlainText(html);
+      return chunkLegalDocument(fallbackText, docMeta);
     }
 
     // Articles were detected by CSS class, but the number comes from a regex
@@ -533,12 +538,20 @@ function chunkLegalDocumentStructured(html, docMeta = {}, opts = {}) {
 }
 
 /**
- * Extract plain text from HTML (fallback for non-lex.uz sources).
+ * Extract plain text from HTML (fallback when no article structure is found).
+ *
+ * Scoped to lex.uz's #divCont content container when present — taking
+ * $('body').text() swallows the page chrome (version-history links,
+ * "Кейинги таҳрирга ҳавола", indexing widgets), which once ingested a NIZOM
+ * as a single chunk of navigation junk. Chrome elements are stripped either way.
  */
 function extractPlainText(html) {
   const $ = cheerio.load(html);
   $('script, style, nav, footer').remove();
-  return $('body').text().replace(/\s+/g, ' ').trim();
+  // Strip lex.uz chrome/metadata blocks wherever they appear
+  $('.CHANGES_ORIGINS, .INDEXES_ON_REF, .COMMENT, .ACT_FORM, .PUBLICATION_ORIGIN').remove();
+  const scope = $('#divCont').length ? $('#divCont') : $('body');
+  return scope.text().replace(/\s+/g, ' ').trim();
 }
 
 /**
