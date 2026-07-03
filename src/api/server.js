@@ -516,6 +516,71 @@ app.post('/api/admin/suggested-sources/:id/reject', requireMasterAdmin, async (r
   }
 });
 
+// ── Inline answer-error reports ────────────────────────────────────────────
+// Any authenticated reader can flag an inaccurate span of an answer, tag it
+// grammar vs context, add an optional suggestion, and send it to the Master.
+const FEEDBACK_SELECTED_MAX = 2000;
+const FEEDBACK_SUGGESTION_MAX = 500;
+
+app.post('/api/answer-feedback', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const errorType = String(b.errorType || '').trim();
+    if (!['grammar', 'context'].includes(errorType)) {
+      return res.status(400).json({ error: 'Xato turi noto\'g\'ri (grammar/context)' });
+    }
+    const selectedText = String(b.selectedText || '').trim().slice(0, FEEDBACK_SELECTED_MAX);
+    if (!selectedText) return res.status(400).json({ error: 'Belgilangan matn bo\'sh' });
+    const suggestion = String(b.suggestion || '').trim().slice(0, FEEDBACK_SUGGESTION_MAX) || null;
+    const source = ['ai', 'response'].includes(b.source) ? b.source : null;
+    const requestId = Number.isInteger(b.requestId) ? b.requestId : (parseInt(b.requestId, 10) || null);
+    const analysisId = Number.isInteger(b.analysisId) ? b.analysisId : (parseInt(b.analysisId, 10) || null);
+
+    const r = await pool.query(
+      `INSERT INTO answer_feedback
+         (request_id, analysis_id, source, selected_text, error_type, suggestion, submitted_by, submitter_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [requestId, analysisId, source, selectedText, errorType, suggestion, req.session.adminId, req.session.fullName]
+    );
+    res.json({ success: true, id: r.rows[0].id });
+  } catch (err) {
+    console.error('[answer-feedback] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Master-Admin: list submitted answer-error reports (default: unreviewed).
+app.get('/api/admin/answer-feedback', requireMasterAdmin, async (req, res) => {
+  try {
+    const status = ['new', 'reviewed', 'dismissed'].includes(req.query.status) ? req.query.status : 'new';
+    const r = await pool.query(
+      `SELECT id, request_id, analysis_id, source, selected_text, error_type, suggestion,
+              submitted_by, submitter_name, status, created_at
+         FROM answer_feedback WHERE status = $1
+        ORDER BY created_at DESC LIMIT 100`, [status]);
+    const cnt = await pool.query(`SELECT COUNT(*)::int AS n FROM answer_feedback WHERE status = 'new'`);
+    res.json({ feedback: r.rows, newCount: cnt.rows[0].n });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Master-Admin: mark a report reviewed/dismissed.
+app.post('/api/admin/answer-feedback/:id/status', requireMasterAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const status = ['reviewed', 'dismissed', 'new'].includes(req.body && req.body.status) ? req.body.status : null;
+    if (!status) return res.status(400).json({ error: 'Holat noto\'g\'ri' });
+    await pool.query(
+      `UPDATE answer_feedback SET status = $2, reviewed_by = $3, reviewed_at = NOW() WHERE id = $1`,
+      [id, status, req.session.adminId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Retrieval debug (master only): see EXACTLY which chunks a query retrieves —
 // law, article, score, search mode, language. Answers "was article 358 actually
 // retrieved for this question, or did the model fill it in from its own memory?"
@@ -7306,6 +7371,26 @@ async function runMigrations() {
     )`);
     await pool.query(`ALTER TABLE suggested_sources ADD COLUMN IF NOT EXISTS sample_answer TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_suggested_status ON suggested_sources(status, times_suggested DESC)`);
+
+    // Inline answer-error reports: a reader highlights an inaccurate span of an
+    // answer, tags it grammar vs context, optionally suggests a fix, and sends
+    // it to the Master-Admin in one click.
+    await pool.query(`CREATE TABLE IF NOT EXISTS answer_feedback (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER,
+      analysis_id INTEGER,
+      source VARCHAR(20),
+      selected_text TEXT NOT NULL,
+      error_type VARCHAR(20) NOT NULL,
+      suggestion TEXT,
+      submitted_by INTEGER,
+      submitter_name TEXT,
+      status VARCHAR(20) NOT NULL DEFAULT 'new',
+      reviewed_by INTEGER,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_answer_feedback_status ON answer_feedback(status, created_at DESC)`);
 
     // Seed 3 default questions only if the table is empty (admin can edit later)
     {
