@@ -331,6 +331,39 @@ function parseLexHtml(html, sourceUrl) {
 }
 
 /**
+ * Infer a lex.uz document's language from its actual text, not a URL guess.
+ *
+ * lex.uz serves the SAME logical act under different doc IDs per language, and
+ * the URL path does not reliably carry a `/uz/` hint. A keyword check
+ * ("modda", "qonun", …) also fails on NIZOM/resolution documents, whose
+ * opening is a Cabinet preamble structured as numbered "band"s rather than
+ * "-modda" articles — so those Uzbek-Latin docs were mislabelled 'ru'.
+ *
+ * Script ratio is the robust signal:
+ *   - Uzbek-Latin  → dominated by Latin letters (a–z, plus oʻ/gʻ)
+ *   - Russian      → dominated by Cyrillic, WITHOUT Uzbek-only letters
+ *   - Uzbek-Cyrillic → Cyrillic, but carries ў/қ/ғ/ҳ which Russian lacks
+ *
+ * Returns 'uz' or 'ru'. A URL `/uz/` path, when present, is honoured as an
+ * override since it is authoritative.
+ *
+ * @param {string} text  — document body (and/or title) to sample
+ * @param {string} [url] — optional source URL for a `/uz/` override
+ */
+function inferDocLanguage(text, url = '') {
+  if (url && url.includes('/uz/')) return 'uz';
+  const sample = String(text || '').slice(0, 8000);
+  const latin = (sample.match(/[a-zA-Z]/g) || []).length;
+  const cyrillic = (sample.match(/[Ѐ-ӿ]/g) || []).length;
+  // Predominantly Latin script → Uzbek-Latin.
+  if (latin > cyrillic) return 'uz';
+  // Cyrillic-dominant: distinguish Uzbek-Cyrillic from Russian by the
+  // Uzbek-only Cyrillic letters ў(U+045E) қ(U+049B) ғ(U+0493) ҳ(U+04B3).
+  if (/[ўқғҳ]/.test(sample)) return 'uz';
+  return 'ru';
+}
+
+/**
  * Clean extracted text: normalize whitespace, remove zero-width chars.
  */
 function cleanText(text) {
@@ -420,4 +453,4 @@ function formatForIngestion(doc, opts = {}) {
   return `${header}\n\n${doc.body}`;
 }
 
-module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet };
+module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet, inferDocLanguage };

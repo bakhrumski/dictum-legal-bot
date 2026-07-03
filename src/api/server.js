@@ -5507,7 +5507,7 @@ async function ingestLexUrl({ url, topic, law_name, adminId }) {
   if (!topic) throw Object.assign(new Error('Soha (topic) tanlanmadi'), { status: 400 });
 
   const cleanUrl = url.split('#')[0];
-  const { fetchLexDocument } = require('../rag/fetch-lex');
+  const { fetchLexDocument, inferDocLanguage } = require('../rag/fetch-lex');
   const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
   const { insertStructuredChunks } = require('../rag/advanced-corpus');
   const { getEmbeddingsBatch } = require('../rag/embeddings');
@@ -5521,10 +5521,9 @@ async function ingestLexUrl({ url, topic, law_name, adminId }) {
     throw Object.assign(new Error('Hujjat kuchini yo\'qotgan (eskirgan) — ingest qilinmadi'), { status: 400, code: 'INACTIVE' });
   }
 
-  const urlHint = cleanUrl.includes('/uz/') ? 'uz' : null;
-  const bodySnippet = (doc.body || '').substring(0, 2000);
-  const hasUzbekMarkers = /\b(modda|bob|qism|huquq|qonun)\b/i.test(bodySnippet);
-  const inferredLanguage = urlHint || (hasUzbekMarkers ? 'uz' : 'ru');
+  // Detect language by script ratio over the title + body — robust for
+  // NIZOM/resolution docs that lack "-modda" markers (see inferDocLanguage).
+  const inferredLanguage = inferDocLanguage(`${doc.title || ''}\n${doc.body || ''}`, cleanUrl);
 
   if (!doc.body || doc.body.trim().length < 100) {
     throw Object.assign(new Error('Hujjat matni topilmadi yoki bo\'sh'), { status: 400 });
@@ -5635,7 +5634,7 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
 // legal_chunks. Reads distinct (doc_id, source_url) from the DB, looks up each
 // in the registry for metadata, then re-fetches from the Uzbek-Latin lex.uz URLs.
 app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
-  const { fetchLexDocument } = require('../rag/fetch-lex');
+  const { fetchLexDocument, inferDocLanguage } = require('../rag/fetch-lex');
   const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
   const { insertStructuredChunks } = require('../rag/advanced-corpus');
   const { getEmbeddingsBatch } = require('../rag/embeddings');
@@ -5684,9 +5683,7 @@ app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
         results.push({ law: law.law_name, ok: false, error: 'bo\'sh hujjat' });
         continue;
       }
-      const urlHint = cleanUrl.includes('/uz/') ? 'uz' : null;
-      const hasUzbekMarkers = /\b(modda|bob|qism|huquq|qonun)\b/i.test((doc.body || '').substring(0, 2000));
-      const inferredLanguage = urlHint || (hasUzbekMarkers ? 'uz' : 'ru');
+      const inferredLanguage = inferDocLanguage(`${doc.title || ''}\n${doc.body || ''}`, cleanUrl);
       const rawHtml = doc.rawHtml || '';
 
       const chunks = chunkLegalDocumentStructured(rawHtml || doc.body, {
