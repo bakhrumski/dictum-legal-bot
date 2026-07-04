@@ -3487,6 +3487,25 @@
         .fb-btn.open { border-color:var(--navy-500,#2c4a6e); color:var(--navy-700,#0e2236); }
         [data-theme="dark"] .fb-btn.open { color:var(--brass-300); }
         .fb-btn:hover { background:var(--parchment-100,rgba(0,0,0,0.05)); }
+        /* One-time "how to flag an error" guide shown in the AI chat */
+        .flag-guide {
+            display:flex; gap:13px; align-items:flex-start;
+            background:linear-gradient(135deg, rgba(1,156,224,0.08), rgba(14,34,54,0.05));
+            border:1px solid var(--border-1,rgba(0,0,0,0.1)); border-left:4px solid var(--navy-700,#0e2236);
+            border-radius:12px; padding:13px 15px; margin:0 0 14px;
+        }
+        [data-theme="dark"] .flag-guide { background:linear-gradient(135deg, rgba(0,185,242,0.08), rgba(255,255,255,0.03)); }
+        .flag-guide-art { flex:none; }
+        .flag-guide-body { flex:1; min-width:0; }
+        .flag-guide-title { font-size:13.5px; font-weight:700; color:var(--text-primary); margin:0 0 4px; }
+        .flag-guide-text { font-size:12.5px; color:var(--text-secondary); line-height:1.5; margin:0; }
+        .flag-guide-dismiss {
+            margin-top:9px; padding:5px 12px; border:1px solid var(--navy-700,#0e2236); border-radius:7px;
+            background:transparent; color:var(--navy-700,#0e2236); font-size:12px; font-weight:600;
+            font-family:inherit; cursor:pointer;
+        }
+        [data-theme="dark"] .flag-guide-dismiss { color:var(--brass-300); border-color:var(--brass-300); }
+        .flag-guide-dismiss:hover { background:rgba(14,34,54,0.06); }
 
         /* Free-access gate overlay */
         .gate-overlay { position: fixed; inset: 0; background: rgba(26,20,16,.55); backdrop-filter: blur(6px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -9953,6 +9972,7 @@
                     messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + ragBadge + actionsHtml + verifyRow + '</div>';
                     var twEl = document.getElementById(twId);
                     if (twEl) { twEl.removeAttribute('id'); typewriterRender(twEl, data.reply, messagesEl, null); }
+                    maybeShowFlagGuide();
                 } else if (data.code === 'CHANNEL_REQUIRED' || data.code === 'SURVEY_REQUIRED') {
                     checkAccessGate(true);
                 } else {
@@ -11173,18 +11193,31 @@
             var text = sel.toString().trim();
             if (text.length < 3) { hideFlagBtn(); return; }
             var node = sel.anchorNode;
-            var container = node && (node.nodeType === 1 ? node : node.parentElement);
-            container = container && container.closest ? container.closest('.flaggable-answer') : null;
+            var el = node && (node.nodeType === 1 ? node : node.parentElement);
+            // Flaggable surfaces: request-detail answer boxes (.flaggable-answer)
+            // AND AI-chat answer bubbles (.ai-analysis-content) the user reads.
+            var container = el && el.closest ? el.closest('.flaggable-answer, .ai-analysis-content') : null;
             if (!container) { hideFlagBtn(); return; }
             // Ignore the "click to view" placeholder before the AI answer loads.
             if (container.querySelector('svg') && text.indexOf('Ko\'rish uchun') !== -1) { hideFlagBtn(); return; }
 
-            flagCtx = {
-                source: container.getAttribute('data-fb-source') || null,
-                requestId: parseInt(container.getAttribute('data-fb-request'), 10) || null,
-                analysisId: parseInt(container.getAttribute('data-fb-analysis'), 10) || null,
-                text: text
-            };
+            if (container.classList.contains('ai-analysis-content')) {
+                // AI-chat bubble: no request id, but carry the question for context.
+                var bubble = container.closest('.ai-chat-msg');
+                flagCtx = {
+                    source: 'ai', requestId: null, analysisId: null,
+                    question: (bubble && bubble.getAttribute('data-q')) || null,
+                    text: text
+                };
+            } else {
+                flagCtx = {
+                    source: container.getAttribute('data-fb-source') || null,
+                    requestId: parseInt(container.getAttribute('data-fb-request'), 10) || null,
+                    analysisId: parseInt(container.getAttribute('data-fb-analysis'), 10) || null,
+                    question: null,
+                    text: text
+                };
+            }
             ensureFlagWidgets();
             var rect = sel.getRangeAt(0).getBoundingClientRect();
             flagBtnEl.style.display = 'block';
@@ -11255,7 +11288,8 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
                     body: JSON.stringify({
                         requestId: flagCtx.requestId, analysisId: flagCtx.analysisId, source: flagCtx.source,
-                        selectedText: flagCtx.text, errorType: flagCtx.errorType, suggestion: suggestion
+                        selectedText: flagCtx.text, errorType: flagCtx.errorType, suggestion: suggestion,
+                        question: flagCtx.question || null
                     })
                 });
                 var data = await r.json();
@@ -11283,6 +11317,42 @@
         });
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { hideFlagBtn(); hideFlagPop(); } });
 
+        // One-time guide: teach the reader they can flag an inaccurate span.
+        // Shows a tiny illustration of a highlighted line + flag tag.
+        function maybeShowFlagGuide() {
+            try { if (localStorage.getItem('flagGuideSeen') === '1') return; } catch (e) { return; }
+            var host = document.getElementById('aiChatMessages');
+            if (!host || document.getElementById('flagGuideCard')) return;
+            var art =
+                '<svg class="flag-guide-art" width="86" height="60" viewBox="0 0 86 60" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+                    '<rect x="1" y="12" width="84" height="47" rx="8" fill="var(--bg-1,#fff)" stroke="var(--border-1,rgba(0,0,0,0.15))"/>' +
+                    '<rect x="10" y="21" width="52" height="4" rx="2" fill="var(--text-secondary)" opacity="0.35"/>' +
+                    '<rect x="8" y="31" width="70" height="10" rx="3" fill="var(--navy-700,#0e2236)" opacity="0.16"/>' +
+                    '<rect x="10" y="34" width="66" height="4" rx="2" fill="var(--navy-700,#0e2236)" opacity="0.75"/>' +
+                    '<rect x="10" y="47" width="40" height="4" rx="2" fill="var(--text-secondary)" opacity="0.35"/>' +
+                    '<rect x="30" y="0" width="30" height="15" rx="4" fill="var(--navy-700,#0e2236)"/>' +
+                    '<text x="45" y="11" text-anchor="middle" font-size="10" fill="#fff">🚩</text>' +
+                    '<path d="M45 15 L45 31" stroke="var(--navy-700,#0e2236)" stroke-width="1.5" stroke-dasharray="2 2"/>' +
+                '</svg>';
+            var card = document.createElement('div');
+            card.className = 'flag-guide';
+            card.id = 'flagGuideCard';
+            card.innerHTML = art +
+                '<div class="flag-guide-body">' +
+                    '<p class="flag-guide-title">Xato ko\'rsangiz — belgilang va yuboring</p>' +
+                    '<p class="flag-guide-text">Javobning noto\'g\'ri qismini <b>belgilang</b> (sichqoncha bilan tanlang), so\'ng chiqadigan ' +
+                    '<b>🚩 Xatoni belgilash</b> tugmasini bosing. Xato turini tanlab (grammatik yoki mazmun), taklif yozib, Master Adminga yuboring.</p>' +
+                    '<button class="flag-guide-dismiss" type="button" onclick="dismissFlagGuide()">Tushunarli</button>' +
+                '</div>';
+            host.appendChild(card);
+            host.scrollTop = host.scrollHeight;
+        }
+        function dismissFlagGuide() {
+            try { localStorage.setItem('flagGuideSeen', '1'); } catch (e) {}
+            var c = document.getElementById('flagGuideCard');
+            if (c) c.remove();
+        }
+
         // ── Master review: answer-error reports ─────────────────────────────
         async function loadAnswerFeedback() {
             var box = document.getElementById('answerFeedbackContent');
@@ -11309,6 +11379,7 @@
                             '<span>' + escapeHtml(f.submitter_name || 'Foydalanuvchi') + '</span>' +
                             '<span>· ' + when + '</span>' +
                         '</div>' +
+                        (f.question ? '<div class="fb-suggest"><b>Savol:</b> ' + escapeHtml(f.question) + '</div>' : '') +
                         '<div class="fb-selected">' + escapeHtml(f.selected_text) + '</div>' +
                         (f.suggestion ? '<div class="fb-suggest"><b>Taklif:</b> ' + escapeHtml(f.suggestion) + '</div>' : '') +
                         '<div class="fb-actions">' +

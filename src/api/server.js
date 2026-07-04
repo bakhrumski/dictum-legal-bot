@@ -522,6 +522,32 @@ app.post('/api/admin/suggested-sources/:id/reject', requireMasterAdmin, async (r
 const FEEDBACK_SELECTED_MAX = 2000;
 const FEEDBACK_SUGGESTION_MAX = 500;
 
+// Post a team-chat message that @-mentions every Master-Admin, so a newly
+// flagged answer error surfaces immediately (mention badge + unread count).
+async function notifyMastersInChat({ reporterId, reporterName, errorType, selectedText, suggestion, requestId }) {
+  const masters = await pool.query(`SELECT id, username FROM admins WHERE role = 'master'`);
+  if (masters.rows.length === 0) return;
+  const usernames = masters.rows.map(m => m.username).filter(Boolean);
+  const mentionStr = usernames.map(u => '@' + u).join(' ');
+  const typeLabel = errorType === 'grammar' ? 'grammatik xato' : 'mazmun xatosi';
+  const snip = s => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > 140 ? t.slice(0, 140) + '…' : t; };
+  const parts = [
+    `🚩 Javobda ${typeLabel} belgilandi${reporterName ? ' (' + reporterName + ')' : ''}.`,
+    `Belgilangan: "${snip(selectedText)}"`,
+  ];
+  if (suggestion) parts.push(`Taklif: "${snip(suggestion)}"`);
+  if (requestId) parts.push(`Murojaat #${requestId}.`);
+  parts.push(`👉 So'rov tabidagi "Javob xatolari" bo'limini ko'ring. ${mentionStr}`);
+  const message = parts.join(' ');
+  // Author the notice as the reporter when they are a real admin row; fall
+  // back to the first master so the chat_messages FK is always satisfied.
+  const authorId = reporterId || masters.rows[0].id;
+  await pool.query(
+    `INSERT INTO chat_messages (admin_id, message, mentions) VALUES ($1, $2, $3)`,
+    [authorId, message.slice(0, 2000), JSON.stringify(usernames.map(u => u.toLowerCase()))]
+  );
+}
+
 app.post('/api/answer-feedback', requireAuth, async (req, res) => {
   try {
     const b = req.body || {};
@@ -532,16 +558,27 @@ app.post('/api/answer-feedback', requireAuth, async (req, res) => {
     const selectedText = String(b.selectedText || '').trim().slice(0, FEEDBACK_SELECTED_MAX);
     if (!selectedText) return res.status(400).json({ error: 'Belgilangan matn bo\'sh' });
     const suggestion = String(b.suggestion || '').trim().slice(0, FEEDBACK_SUGGESTION_MAX) || null;
+    const question = String(b.question || '').trim().slice(0, 1000) || null;
     const source = ['ai', 'response'].includes(b.source) ? b.source : null;
     const requestId = Number.isInteger(b.requestId) ? b.requestId : (parseInt(b.requestId, 10) || null);
     const analysisId = Number.isInteger(b.analysisId) ? b.analysisId : (parseInt(b.analysisId, 10) || null);
 
     const r = await pool.query(
       `INSERT INTO answer_feedback
-         (request_id, analysis_id, source, selected_text, error_type, suggestion, submitted_by, submitter_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [requestId, analysisId, source, selectedText, errorType, suggestion, req.session.adminId, req.session.fullName]
+         (request_id, analysis_id, source, selected_text, error_type, suggestion, question, submitted_by, submitter_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [requestId, analysisId, source, selectedText, errorType, suggestion, question, req.session.adminId, req.session.fullName]
     );
+
+    // Ping the Master-Admin(s) in the team chat so a new flag is seen at once.
+    try {
+      await notifyMastersInChat({
+        reporterId: req.session.adminId,
+        reporterName: req.session.fullName,
+        errorType, selectedText, suggestion, requestId,
+      });
+    } catch (e) { console.warn('[answer-feedback] chat ping failed:', e.message); }
+
     res.json({ success: true, id: r.rows[0].id });
   } catch (err) {
     console.error('[answer-feedback] error:', err.message);
@@ -554,7 +591,7 @@ app.get('/api/admin/answer-feedback', requireMasterAdmin, async (req, res) => {
   try {
     const status = ['new', 'reviewed', 'dismissed'].includes(req.query.status) ? req.query.status : 'new';
     const r = await pool.query(
-      `SELECT id, request_id, analysis_id, source, selected_text, error_type, suggestion,
+      `SELECT id, request_id, analysis_id, source, selected_text, error_type, suggestion, question,
               submitted_by, submitter_name, status, created_at
          FROM answer_feedback WHERE status = $1
         ORDER BY created_at DESC LIMIT 100`, [status]);
@@ -7383,6 +7420,7 @@ async function runMigrations() {
       selected_text TEXT NOT NULL,
       error_type VARCHAR(20) NOT NULL,
       suggestion TEXT,
+      question TEXT,
       submitted_by INTEGER,
       submitter_name TEXT,
       status VARCHAR(20) NOT NULL DEFAULT 'new',
@@ -7390,6 +7428,7 @@ async function runMigrations() {
       reviewed_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
+    await pool.query(`ALTER TABLE answer_feedback ADD COLUMN IF NOT EXISTS question TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_answer_feedback_status ON answer_feedback(status, created_at DESC)`);
 
     // Seed 3 default questions only if the table is empty (admin can edit later)
