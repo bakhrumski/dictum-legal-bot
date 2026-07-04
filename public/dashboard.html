@@ -3419,6 +3419,75 @@
         .suggest-toggle { margin-top:6px; background:none; border:none; color:var(--navy-700,#0e2236); font-size:12px; cursor:pointer; padding:0; text-decoration:underline; font-family:inherit; }
         .suggest-answer { margin-top:8px; padding:10px 12px; background:var(--parchment-100,rgba(0,0,0,0.04)); border-radius:8px; font-size:12px; color:var(--text-primary); white-space:pre-wrap; max-height:320px; overflow-y:auto; line-height:1.55; }
 
+        /* Inline answer-error flagging */
+        .flaggable-answer { position: relative; }
+        .answer-flag-btn {
+            position: fixed; z-index: 100000; display: none;
+            padding: 6px 11px; border: none; border-radius: 8px;
+            background: var(--navy-700, #0e2236); color: #fff;
+            font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.28); white-space: nowrap;
+        }
+        .answer-flag-btn:hover { opacity: 0.92; }
+        .answer-flag-pop {
+            position: fixed; z-index: 100001; display: none;
+            width: 300px; max-width: calc(100vw - 24px);
+            background: var(--bg-1, #fff); color: var(--text-primary, #1a1410);
+            border: 1px solid var(--border-1, rgba(0,0,0,0.12)); border-radius: 12px;
+            box-shadow: 0 16px 44px rgba(0,0,0,0.32); padding: 14px 15px; font-family: inherit;
+        }
+        .afp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+        .afp-title { font-size:13px; font-weight:700; color:var(--text-primary); }
+        .afp-close { background:none; border:none; font-size:18px; line-height:1; color:var(--text-secondary); cursor:pointer; padding:0 2px; }
+        .afp-quote {
+            font-size:12px; color:var(--text-secondary); background:var(--parchment-100,rgba(0,0,0,0.05));
+            border-left:3px solid var(--navy-500,#2c4a6e); border-radius:6px; padding:7px 9px; margin-bottom:11px;
+            max-height:66px; overflow-y:auto; line-height:1.5; font-style:italic;
+        }
+        .afp-label { font-size:12px; font-weight:600; color:var(--text-primary); margin:0 0 7px; }
+        .afp-types { display:flex; gap:8px; margin-bottom:4px; }
+        .afp-type-btn {
+            flex:1; padding:9px 6px; border:1.5px solid var(--border-1,rgba(0,0,0,0.15));
+            border-radius:9px; background:var(--bg-1,#fff); color:var(--text-primary);
+            font-size:12px; font-weight:600; font-family:inherit; cursor:pointer; transition:all 0.15s; text-align:center;
+        }
+        .afp-type-btn:hover { border-color:var(--navy-500,#2c4a6e); }
+        .afp-type-btn.selected { border-color:var(--navy-700,#0e2236); background:rgba(14,34,54,0.08); color:var(--navy-700,#0e2236); }
+        [data-theme="dark"] .afp-type-btn.selected { background:rgba(0,185,242,0.12); color:var(--brass-300); border-color:var(--brass-300); }
+        .afp-suggest-wrap { margin-top:12px; display:none; }
+        .afp-suggest-wrap.visible { display:block; }
+        .afp-textarea {
+            width:100%; box-sizing:border-box; min-height:64px; resize:vertical;
+            padding:8px 10px; border:1px solid var(--border-1,rgba(0,0,0,0.15)); border-radius:8px;
+            font-size:13px; font-family:inherit; color:var(--text-primary); background:var(--bg-1,#fff);
+        }
+        .afp-count { text-align:right; font-size:11px; color:var(--text-secondary); margin-top:3px; }
+        .afp-send {
+            width:100%; margin-top:10px; padding:10px; border:none; border-radius:9px;
+            background:var(--navy-700,#0e2236); color:#fff; font-size:13px; font-weight:600;
+            font-family:inherit; cursor:pointer;
+        }
+        .afp-send:disabled { opacity:0.5; cursor:not-allowed; }
+        .afp-send:not(:disabled):hover { opacity:0.92; }
+        .afp-status { font-size:12px; text-align:center; margin-top:9px; color:var(--text-secondary); min-height:16px; }
+        .afp-status.ok { color:#2e7d32; font-weight:600; }
+        .afp-status.err { color:#e74c3c; font-weight:600; }
+        /* Master review cards */
+        .fb-card { background:var(--bg-1,#fff); border:1px solid var(--border-1,rgba(0,0,0,0.1)); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+        .fb-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; font-size:12px; color:var(--text-secondary); }
+        .fb-type { font-weight:700; padding:2px 9px; border-radius:20px; font-size:11px; }
+        .fb-type.grammar { background:rgba(46,125,50,0.14); color:#2e7d32; }
+        .fb-type.context { background:rgba(191,90,20,0.16); color:#bf5a14; }
+        .fb-selected { font-size:13px; color:var(--text-primary); background:var(--parchment-100,rgba(0,0,0,0.05)); border-left:3px solid var(--navy-500,#2c4a6e); border-radius:6px; padding:8px 10px; line-height:1.5; }
+        .fb-suggest { font-size:13px; color:var(--text-primary); margin-top:8px; line-height:1.5; }
+        .fb-suggest b { color:var(--navy-700,#0e2236); }
+        [data-theme="dark"] .fb-suggest b { color:var(--brass-300); }
+        .fb-actions { display:flex; gap:8px; margin-top:11px; flex-wrap:wrap; }
+        .fb-btn { padding:6px 13px; border-radius:8px; border:1px solid var(--border-1,rgba(0,0,0,0.2)); background:var(--bg-1,#fff); color:var(--text-primary); font-size:12px; font-weight:600; font-family:inherit; cursor:pointer; }
+        .fb-btn.open { border-color:var(--navy-500,#2c4a6e); color:var(--navy-700,#0e2236); }
+        [data-theme="dark"] .fb-btn.open { color:var(--brass-300); }
+        .fb-btn:hover { background:var(--parchment-100,rgba(0,0,0,0.05)); }
+
         /* Free-access gate overlay */
         .gate-overlay { position: fixed; inset: 0; background: rgba(26,20,16,.55); backdrop-filter: blur(6px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; }
         .gate-box { background: var(--bg-1,#fff); color: var(--text-primary,#1a1410); border-radius: 16px; padding: 28px 26px; max-width: 440px; width: 100%; max-height: 88vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,.35); text-align: center; }
@@ -6053,6 +6122,24 @@
             </div>
         </div>
 
+        <!-- Answer-error reports from readers (Master Only) -->
+        <div class="reg-section collapsed" id="answerFeedbackSection" style="margin-top:16px;">
+            <div class="reg-section-header" onclick="document.getElementById('answerFeedbackSection').classList.toggle('collapsed'); if(!document.getElementById('answerFeedbackSection').classList.contains('collapsed')) loadAnswerFeedback();">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>🚩 Javob xatolari (foydalanuvchi belgilagan)</h2>
+                    <span class="reg-pending-badge" id="answerFeedbackBadge" style="display:none;"></span>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">
+                    Foydalanuvchilar javobning noto'g'ri qismini belgilab yuborgan xabarlar. Har biri
+                    <b>grammatik</b> yoki <b>mazmun</b> xatosi sifatida belgilangan; taklif bo'lsa, u ham ko'rsatiladi.
+                </p>
+                <div id="answerFeedbackContent"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
+            </div>
+        </div>
+
         </div><!-- /tab-view sorov -->
 
         <!-- Registration Detail Modal (outside tab-view to avoid stacking context) -->
@@ -6616,6 +6703,11 @@
                 const suggestedSection = document.getElementById('suggestedSection');
                 if (suggestedSection) {
                     suggestedSection.style.display = data.role === 'master' ? '' : 'none';
+                }
+                // Answer-error reports panel: master only
+                const answerFeedbackSection = document.getElementById('answerFeedbackSection');
+                if (answerFeedbackSection) {
+                    answerFeedbackSection.style.display = data.role === 'master' ? '' : 'none';
                 }
 
                 // Show/hide master-only tabs in bottom tab bar
@@ -8174,7 +8266,7 @@
                     <div class="detail-section response-kanban">
                         <div class="response-kanban-col">
                             <h3>Berilgan javob</h3>
-                            <div class="response-box">${request.response_text}</div>
+                            <div class="response-box flaggable-answer" data-fb-source="response" data-fb-request="${request.id}">${request.response_text}</div>
                             <p style="color: #7f8c8d; margin-top: 10px; font-size: 13px;">
                                 Javob berdi: ${request.responded_by || 'N/A'}<br>
                                 Javob berilgan: ${new Date(request.answered_at).toLocaleString('uz-UZ')}
@@ -8182,7 +8274,7 @@
                         </div>
                         <div class="response-kanban-col">
                             <h3 style="display:flex;align-items:center;gap:8px;">AI javob <span class="ai-badge" style="font-size:10px;">GPT-4o</span></h3>
-                            <div class="ai-javob-box" id="aiJavobContent_${request.id}">
+                            <div class="ai-javob-box flaggable-answer" id="aiJavobContent_${request.id}" data-fb-source="ai" data-fb-request="${request.id}" data-fb-analysis="${request.ai_analysis_id}">
                                 <div style="text-align:center;color:var(--text-secondary);padding:20px;cursor:pointer;" onclick="loadAiJavob(${request.ai_analysis_id}, ${request.id})">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg>
                                     <div style="margin-top:6px;font-size:13px;">Ko'rish uchun bosing</div>
@@ -8195,7 +8287,7 @@
                     modalContent += `
                     <div class="detail-section">
                         <h3>Berilgan javob</h3>
-                        <div class="response-box">${request.response_text}</div>
+                        <div class="response-box flaggable-answer" data-fb-source="response" data-fb-request="${request.id}">${request.response_text}</div>
                         <p style="color: #7f8c8d; margin-top: 10px; font-size: 13px;">
                             Javob berdi: ${request.responded_by || 'N/A'}<br>
                             Javob berilgan: ${new Date(request.answered_at).toLocaleString('uz-UZ')}
@@ -11041,6 +11133,210 @@
                 await fetch('/api/admin/suggested-sources/' + id + '/reject', { method: 'POST', credentials: 'same-origin' });
                 var card = document.getElementById('suggest-' + id);
                 if (card) card.remove();
+            } catch (e) { /* ignore */ }
+        }
+
+        // ── Inline answer-error flagging ────────────────────────────────────
+        // Reader highlights an inaccurate span of an answer → small survey
+        // (grammar vs context) → optional suggestion (capped) → one-click send.
+        var AFP_SUGGEST_MAX = 500;
+        var flagCtx = null;          // { source, requestId, analysisId, text }
+        var flagBtnEl = null, flagPopEl = null;
+
+        function ensureFlagWidgets() {
+            if (flagBtnEl) return;
+            flagBtnEl = document.createElement('button');
+            flagBtnEl.className = 'answer-flag-btn';
+            flagBtnEl.type = 'button';
+            flagBtnEl.innerHTML = '🚩 Xatoni belgilash';
+            flagBtnEl.addEventListener('mousedown', function (e) { e.preventDefault(); }); // keep selection
+            flagBtnEl.addEventListener('click', openFlagPop);
+            document.body.appendChild(flagBtnEl);
+
+            flagPopEl = document.createElement('div');
+            flagPopEl.className = 'answer-flag-pop';
+            document.body.appendChild(flagPopEl);
+        }
+
+        function hideFlagBtn() { if (flagBtnEl) flagBtnEl.style.display = 'none'; }
+        function hideFlagPop() { if (flagPopEl) flagPopEl.style.display = 'none'; }
+
+        // Selection listener — show the flag button near a valid selection.
+        document.addEventListener('mouseup', function (e) {
+            if (flagBtnEl && flagBtnEl.contains(e.target)) return;
+            if (flagPopEl && flagPopEl.style.display === 'block') { if (flagPopEl.contains(e.target)) return; }
+            setTimeout(handleSelectionChange, 0);
+        });
+        function handleSelectionChange() {
+            var sel = window.getSelection();
+            if (!sel || sel.isCollapsed) { hideFlagBtn(); return; }
+            var text = sel.toString().trim();
+            if (text.length < 3) { hideFlagBtn(); return; }
+            var node = sel.anchorNode;
+            var container = node && (node.nodeType === 1 ? node : node.parentElement);
+            container = container && container.closest ? container.closest('.flaggable-answer') : null;
+            if (!container) { hideFlagBtn(); return; }
+            // Ignore the "click to view" placeholder before the AI answer loads.
+            if (container.querySelector('svg') && text.indexOf('Ko\'rish uchun') !== -1) { hideFlagBtn(); return; }
+
+            flagCtx = {
+                source: container.getAttribute('data-fb-source') || null,
+                requestId: parseInt(container.getAttribute('data-fb-request'), 10) || null,
+                analysisId: parseInt(container.getAttribute('data-fb-analysis'), 10) || null,
+                text: text
+            };
+            ensureFlagWidgets();
+            var rect = sel.getRangeAt(0).getBoundingClientRect();
+            flagBtnEl.style.display = 'block';
+            var top = rect.top - 40;
+            if (top < 8) top = rect.bottom + 8;
+            flagBtnEl.style.top = top + 'px';
+            var left = Math.min(rect.left, window.innerWidth - flagBtnEl.offsetWidth - 12);
+            flagBtnEl.style.left = Math.max(8, left) + 'px';
+        }
+
+        function openFlagPop() {
+            if (!flagCtx) return;
+            ensureFlagWidgets();
+            hideFlagBtn();
+            var quote = flagCtx.text.length > 220 ? flagCtx.text.slice(0, 220) + '…' : flagCtx.text;
+            flagPopEl.innerHTML =
+                '<div class="afp-head">' +
+                    '<span class="afp-title">🚩 Xato haqida xabar</span>' +
+                    '<button class="afp-close" type="button" onclick="hideFlagPop()">×</button>' +
+                '</div>' +
+                '<div class="afp-quote">' + escapeHtml(quote) + '</div>' +
+                '<p class="afp-label">Bu qanday xato?</p>' +
+                '<div class="afp-types">' +
+                    '<button class="afp-type-btn" type="button" data-type="grammar" onclick="selectFlagType(this,\'grammar\')">✍️ Grammatik</button>' +
+                    '<button class="afp-type-btn" type="button" data-type="context" onclick="selectFlagType(this,\'context\')">📖 Mazmun</button>' +
+                '</div>' +
+                '<div class="afp-suggest-wrap" id="afpSuggestWrap">' +
+                    '<p class="afp-label">Taklif (ixtiyoriy)</p>' +
+                    '<textarea class="afp-textarea" id="afpSuggest" maxlength="' + AFP_SUGGEST_MAX + '" ' +
+                        'placeholder="To\'g\'ri variant yoki izohingiz..." oninput="afpUpdateCount()"></textarea>' +
+                    '<div class="afp-count"><span id="afpCount">0</span>/' + AFP_SUGGEST_MAX + '</div>' +
+                    '<button class="afp-send" id="afpSend" type="button" onclick="submitAnswerFlag()">Master Adminga yuborish</button>' +
+                '</div>' +
+                '<div class="afp-status" id="afpStatus"></div>';
+            flagPopEl.style.display = 'block';
+            flagCtx.errorType = null;
+            // Position under (or above) the flag button's last spot.
+            var bt = parseInt(flagBtnEl.style.top, 10) || 80;
+            var bl = parseInt(flagBtnEl.style.left, 10) || 20;
+            var top = bt + 34;
+            if (top + flagPopEl.offsetHeight > window.innerHeight - 8) top = Math.max(8, window.innerHeight - flagPopEl.offsetHeight - 8);
+            flagPopEl.style.top = top + 'px';
+            flagPopEl.style.left = Math.max(8, Math.min(bl, window.innerWidth - flagPopEl.offsetWidth - 12)) + 'px';
+        }
+
+        function selectFlagType(btn, type) {
+            if (!flagCtx) return;
+            flagCtx.errorType = type;
+            var btns = flagPopEl.querySelectorAll('.afp-type-btn');
+            for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('selected', btns[i] === btn);
+            document.getElementById('afpSuggestWrap').classList.add('visible');
+        }
+        function afpUpdateCount() {
+            var ta = document.getElementById('afpSuggest');
+            var c = document.getElementById('afpCount');
+            if (ta && c) c.textContent = ta.value.length;
+        }
+        async function submitAnswerFlag() {
+            if (!flagCtx || !flagCtx.errorType) return;
+            var sendBtn = document.getElementById('afpSend');
+            var status = document.getElementById('afpStatus');
+            var suggestion = (document.getElementById('afpSuggest').value || '').trim();
+            sendBtn.disabled = true;
+            status.className = 'afp-status';
+            status.textContent = 'Yuborilmoqda...';
+            try {
+                var r = await fetch('/api/answer-feedback', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify({
+                        requestId: flagCtx.requestId, analysisId: flagCtx.analysisId, source: flagCtx.source,
+                        selectedText: flagCtx.text, errorType: flagCtx.errorType, suggestion: suggestion
+                    })
+                });
+                var data = await r.json();
+                if (r.ok && data.success) {
+                    status.className = 'afp-status ok';
+                    status.textContent = '✅ Yuborildi. Rahmat!';
+                    window.getSelection().removeAllRanges();
+                    setTimeout(hideFlagPop, 1300);
+                } else {
+                    status.className = 'afp-status err';
+                    status.textContent = '❌ ' + (data.error || 'Xatolik');
+                    sendBtn.disabled = false;
+                }
+            } catch (e) {
+                status.className = 'afp-status err';
+                status.textContent = '❌ Tarmoq xatoligi';
+                sendBtn.disabled = false;
+            }
+        }
+        // Dismiss widgets on outside click / Escape.
+        document.addEventListener('mousedown', function (e) {
+            if (flagBtnEl && e.target === flagBtnEl) return;
+            if (flagPopEl && flagPopEl.contains(e.target)) return;
+            if (flagPopEl && flagPopEl.style.display === 'block') hideFlagPop();
+        });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { hideFlagBtn(); hideFlagPop(); } });
+
+        // ── Master review: answer-error reports ─────────────────────────────
+        async function loadAnswerFeedback() {
+            var box = document.getElementById('answerFeedbackContent');
+            box.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                var r = await fetch('/api/admin/answer-feedback?status=new', { credentials: 'same-origin' });
+                var data = await r.json();
+                var list = data.feedback || [];
+                var badge = document.getElementById('answerFeedbackBadge');
+                if (badge) {
+                    if (data.newCount > 0) { badge.style.display = ''; badge.textContent = data.newCount; }
+                    else badge.style.display = 'none';
+                }
+                if (list.length === 0) { box.innerHTML = '<div class="reg-empty">Yangi xabar yo\'q</div>'; return; }
+                var typeLabel = { grammar: '✍️ Grammatik', context: '📖 Mazmun' };
+                var srcLabel = { ai: 'AI javob', response: 'Berilgan javob' };
+                box.innerHTML = list.map(function (f) {
+                    var when = new Date(f.created_at).toLocaleString('uz-UZ');
+                    return '<div class="fb-card" id="fb-' + f.id + '">' +
+                        '<div class="fb-top">' +
+                            '<span class="fb-type ' + f.error_type + '">' + (typeLabel[f.error_type] || f.error_type) + '</span>' +
+                            (f.source ? '<span>' + (srcLabel[f.source] || f.source) + '</span>' : '') +
+                            (f.request_id ? '<span>#' + f.request_id + '</span>' : '') +
+                            '<span>' + escapeHtml(f.submitter_name || 'Foydalanuvchi') + '</span>' +
+                            '<span>· ' + when + '</span>' +
+                        '</div>' +
+                        '<div class="fb-selected">' + escapeHtml(f.selected_text) + '</div>' +
+                        (f.suggestion ? '<div class="fb-suggest"><b>Taklif:</b> ' + escapeHtml(f.suggestion) + '</div>' : '') +
+                        '<div class="fb-actions">' +
+                            (f.request_id ? '<button class="fb-btn open" onclick="showRequestDetail(' + f.request_id + ')">Murojaatni ochish</button>' : '') +
+                            '<button class="fb-btn" onclick="setAnswerFeedbackStatus(' + f.id + ',\'reviewed\')">✓ Ko\'rib chiqildi</button>' +
+                            '<button class="fb-btn" onclick="setAnswerFeedbackStatus(' + f.id + ',\'dismissed\')">✕ E\'tiborsiz</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
+            }
+        }
+        async function setAnswerFeedbackStatus(id, status) {
+            try {
+                await fetch('/api/admin/answer-feedback/' + id + '/status', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin', body: JSON.stringify({ status: status })
+                });
+                var card = document.getElementById('fb-' + id);
+                if (card) card.remove();
+                var badge = document.getElementById('answerFeedbackBadge');
+                if (badge && badge.style.display !== 'none') {
+                    var n = parseInt(badge.textContent, 10) - 1;
+                    if (n > 0) badge.textContent = n; else badge.style.display = 'none';
+                }
+                var box = document.getElementById('answerFeedbackContent');
+                if (box && !box.querySelector('.fb-card')) box.innerHTML = '<div class="reg-empty">Yangi xabar yo\'q</div>';
             } catch (e) { /* ignore */ }
         }
 
