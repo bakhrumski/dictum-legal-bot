@@ -7989,15 +7989,22 @@
             }
             
             if (request.request_type === 'document') {
+                if (isOpenableFile(request.file_name)) {
+                    return `
+                        <div style="text-align: center;">
+                            <button class="btn" onclick="openFile('${fileId}', ${attrArg(request.file_name)})">
+                                📥 Faylni ochish
+                            </button>
+                        </div>
+                    `;
+                }
                 return `
-                    <div style="text-align: center;">
-                        <button class="btn" onclick="downloadFile('${fileId}', '${request.file_name}')">
-                            📥 Faylni yuklash
-                        </button>
+                    <div style="text-align: center; color:#7f8c8d; padding:10px; font-size:13px;">
+                        Bu fayl turini ochib bo'lmaydi. Faqat PDF, PNG, JPG, JPEG fayllar ochiladi.
                     </div>
                 `;
             }
-            
+
             return '';
         }
         
@@ -8052,16 +8059,33 @@
             }
         }
         
-        async function downloadFile(fileId, fileName) {
-            try {
-                const response = await fetch(`/api/files/${fileId}`);
-                const data = await response.json();
-                window.open(data.fileLink, '_blank');
-            } catch (error) {
-                console.error('Error downloading file:', error);
-                alert('Faylni yuklab bo\'lmadi');
+        // Only these types can be opened in the browser.
+        var OPENABLE_EXT = ['pdf', 'png', 'jpg', 'jpeg'];
+        function fileExt(name) { return (String(name || '').split('.').pop() || '').toLowerCase(); }
+        function isOpenableFile(name) { return OPENABLE_EXT.indexOf(fileExt(name)) !== -1; }
+
+        function openFile(fileId, fileName) {
+            if (!isOpenableFile(fileName)) {
+                alert("Faqat PDF, PNG, JPG, JPEG fayllarni ochish mumkin.");
+                return;
             }
+            // Open a blank tab synchronously, INSIDE the click gesture, so mobile
+            // browsers don't block it as a popup (the fetch below is async).
+            var w = window.open('', '_blank');
+            fetch('/api/files/' + fileId, { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data && data.fileLink) {
+                        if (w) w.location = data.fileLink; else window.location.href = data.fileLink;
+                    } else {
+                        if (w) w.close();
+                        alert('Faylni ochib bo\'lmadi');
+                    }
+                })
+                .catch(function () { if (w) w.close(); alert('Faylni ochib bo\'lmadi'); });
         }
+        // Back-compat alias.
+        function downloadFile(fileId, fileName) { openFile(fileId, fileName); }
         
         async function updateRequestCategory(requestId, category) {
             try {
@@ -11181,11 +11205,33 @@
         function hideFlagBtn() { if (flagBtnEl) flagBtnEl.style.display = 'none'; }
         function hideFlagPop() { if (flagPopEl) flagPopEl.style.display = 'none'; }
 
-        // Selection listener — show the flag button near a valid selection.
+        // Selection listeners — show the flag button near a valid selection.
+        // Desktop fires mouseup; mobile long-press selection fires touchend and
+        // selectionchange but NOT mouseup, so we watch all three.
+        var lastTouch = false;
+        var selCheckTimer = null;
+        function scheduleSelCheck(delay) {
+            if (selCheckTimer) clearTimeout(selCheckTimer);
+            selCheckTimer = setTimeout(handleSelectionChange, delay || 0);
+        }
+        function inWidgets(t) {
+            if (flagBtnEl && flagBtnEl.contains(t)) return true;
+            if (flagPopEl && flagPopEl.style.display === 'block' && flagPopEl.contains(t)) return true;
+            return false;
+        }
+        document.addEventListener('mousedown', function () { lastTouch = false; }, true);
+        document.addEventListener('touchstart', function () { lastTouch = true; }, true);
         document.addEventListener('mouseup', function (e) {
-            if (flagBtnEl && flagBtnEl.contains(e.target)) return;
-            if (flagPopEl && flagPopEl.style.display === 'block') { if (flagPopEl.contains(e.target)) return; }
-            setTimeout(handleSelectionChange, 0);
+            if (inWidgets(e.target)) return;
+            scheduleSelCheck(0);
+        });
+        document.addEventListener('touchend', function (e) {
+            if (inWidgets(e.target)) return;
+            scheduleSelCheck(80); // let the mobile selection settle
+        });
+        document.addEventListener('selectionchange', function () {
+            if (flagPopEl && flagPopEl.style.display === 'block') return;
+            scheduleSelCheck(300); // fallback for handle-drag selection on mobile
         });
         function handleSelectionChange() {
             var sel = window.getSelection();
@@ -11221,8 +11267,11 @@
             ensureFlagWidgets();
             var rect = sel.getRangeAt(0).getBoundingClientRect();
             flagBtnEl.style.display = 'block';
-            var top = rect.top - 40;
-            if (top < 8) top = rect.bottom + 8;
+            // On touch, the native selection menu sits ABOVE the selection, so
+            // place our button BELOW it to avoid collision; on desktop, above.
+            var top = lastTouch ? (rect.bottom + 12) : (rect.top - 40);
+            if (top < 8) top = rect.bottom + 12;
+            if (top > window.innerHeight - 44) top = window.innerHeight - 44;
             flagBtnEl.style.top = top + 'px';
             var left = Math.min(rect.left, window.innerWidth - flagBtnEl.offsetWidth - 12);
             flagBtnEl.style.left = Math.max(8, left) + 'px';
