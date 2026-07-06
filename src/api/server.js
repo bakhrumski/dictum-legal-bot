@@ -920,6 +920,41 @@ app.get('/api/files/:fileId', requireAuth, async (req, res) => {
   }
 });
 
+// Stream a Telegram file through our own origin as a downloadable attachment,
+// so the browser saves it with the real name/extension (e.g. "9017-04797.pdf").
+// A cross-origin Telegram CDN link can only be viewed inline; the `download`
+// attribute is ignored cross-origin, so a same-origin proxy is required.
+const DOWNLOADABLE_MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' };
+app.get('/api/files/:fileId/download', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    // Sanitise the requested filename and gate to allowed types.
+    let name = String(req.query.name || 'fayl').replace(/[\r\n"]/g, '').replace(/[^\w.\- ]+/g, '_').trim() || 'fayl';
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    if (!DOWNLOADABLE_MIME[ext]) {
+      return res.status(400).json({ error: 'Faqat PDF, PNG, JPG, JPEG fayllarni saqlash mumkin' });
+    }
+    const fileLink = await bot.getFileLink(fileId);
+    const lib = fileLink.startsWith('https') ? require('https') : require('http');
+    lib.get(fileLink, (fr) => {
+      if (fr.statusCode !== 200) {
+        fr.resume();
+        return res.status(502).json({ error: 'Faylni olishda xatolik' });
+      }
+      res.setHeader('Content-Type', DOWNLOADABLE_MIME[ext]);
+      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+      if (fr.headers['content-length']) res.setHeader('Content-Length', fr.headers['content-length']);
+      fr.pipe(res);
+    }).on('error', (e) => {
+      console.error('Error streaming file:', e.message);
+      if (!res.headersSent) res.status(502).json({ error: 'Faylni yuklab bo\'lmadi' });
+    });
+  } catch (error) {
+    console.error('Error downloading file:', error.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to download file' });
+  }
+});
+
 // Student submits response (doesn't send to client yet)
 app.post('/api/student-response', requireAuth, async (req, res) => {
   try {

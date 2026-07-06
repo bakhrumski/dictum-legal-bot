@@ -8003,9 +8003,12 @@
             if (request.request_type === 'document') {
                 if (isOpenableFile(request.file_name)) {
                     return `
-                        <div style="text-align: center;">
+                        <div style="text-align: center; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
                             <button class="btn" onclick="openFile('${fileId}', ${attrArg(request.file_name)})">
-                                📥 Faylni ochish
+                                👁️ Ochish
+                            </button>
+                            <button class="btn" onclick="saveFile('${fileId}', ${attrArg(request.file_name)})">
+                                💾 Saqlash
                             </button>
                         </div>
                     `;
@@ -8096,8 +8099,24 @@
                 })
                 .catch(function () { if (w) w.close(); alert('Faylni ochib bo\'lmadi'); });
         }
+        // Save the file to local storage as a real .pdf/.png/.jpg — routes through
+        // our same-origin proxy which sends Content-Disposition: attachment so the
+        // browser saves it with the correct name/extension (works on mobile too).
+        function saveFile(fileId, fileName) {
+            if (!isOpenableFile(fileName)) {
+                alert("Faqat PDF, PNG, JPG, JPEG fayllarni saqlash mumkin.");
+                return;
+            }
+            var url = '/api/files/' + encodeURIComponent(fileId) + '/download?name=' + encodeURIComponent(fileName || 'fayl');
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fileName || '';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
         // Back-compat alias.
-        function downloadFile(fileId, fileName) { openFile(fileId, fileName); }
+        function downloadFile(fileId, fileName) { saveFile(fileId, fileName); }
         
         async function updateRequestCategory(requestId, category) {
             try {
