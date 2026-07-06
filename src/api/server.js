@@ -5385,6 +5385,12 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
     const { question, answer, topic, originalAiAnswer } = req.body;
     if (!question || !answer) return res.status(400).json({ error: 'Savol va javob kerak' });
 
+    // Optional referenced law articles — accept an array or a free-text list
+    // ("FK 741-modda; QQ 6-modda"), split on ; , or newline, capped and trimmed.
+    const rawRefs = req.body.articleRefs;
+    const articleRefs = (Array.isArray(rawRefs) ? rawRefs : String(rawRefs || '').split(/[;,\n]/))
+      .map(s => String(s).trim()).filter(Boolean).slice(0, 30);
+
     // 1. Insert into legal_chunks (RAG retrieval pool with verified_qa source_type)
     await insertVerifiedAnswer({
       question,
@@ -5408,7 +5414,7 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
         category: topic || 'boshqa',
         topic: topic || null,
         sourceUrl: null,
-        articleRefs: [],
+        articleRefs,
         editedBy: req.session.adminId,
         editedByName: req.session.fullName || req.session.adminUsername || 'Admin',
       });
@@ -5424,7 +5430,7 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
         correctedAnswer: answer,
         originalAiAnswer: originalAiAnswer || null,
         topic: topic || 'boshqa',
-        articleRefs: [],
+        articleRefs,
         createdBy: req.session.adminId,
         createdByName: req.session.fullName || req.session.adminUsername || 'Admin',
       });

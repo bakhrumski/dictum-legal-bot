@@ -11515,6 +11515,9 @@
                 '<textarea class="afp-textarea" id="fbQ-' + id + '" rows="2">' + escapeHtml(f.question || '') + '</textarea>' +
                 '<p class="afp-label" style="margin-top:10px;">To\'g\'ri javob (RAG korpusiga qo\'shiladi)</p>' +
                 '<textarea class="afp-textarea" id="fbA-' + id + '" rows="7" style="min-height:130px;">' + escapeHtml(f.answer_text || '') + '</textarea>' +
+                '<p class="afp-label" style="margin-top:10px;">To\'g\'ri qonun moddalari (ixtiyoriy)</p>' +
+                '<input type="text" class="survey-qtext" id="fbR-' + id + '" style="margin-bottom:0;" ' +
+                    'placeholder="Masalan: FK 741-modda; Mehnat kodeksi 100-modda">' +
                 '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
                     '<select class="survey-qtext" id="fbT-' + id + '" style="width:auto;margin-bottom:0;flex:1;min-width:160px;">' + opts + '</select>' +
                 '</div>' +
@@ -11530,6 +11533,7 @@
             var q = (document.getElementById('fbQ-' + id).value || '').trim();
             var a = (document.getElementById('fbA-' + id).value || '').trim();
             var topic = (document.getElementById('fbT-' + id).value || '').trim();
+            var articleRefs = (document.getElementById('fbR-' + id).value || '').trim();
             var st = document.getElementById('fbStatus-' + id);
             var saveBtn = document.getElementById('fbSave-' + id);
             if (!q || !a) { st.className = 'afp-status err'; st.textContent = 'Savol va javob bo\'sh bo\'lmasin'; return; }
@@ -11537,7 +11541,7 @@
             try {
                 var resp = await fetch('/api/rag/verify-chat-answer', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ question: q, answer: a, topic: topic || null })
+                    body: JSON.stringify({ question: q, answer: a, topic: topic || null, articleRefs: articleRefs || null })
                 });
                 var data = await resp.json();
                 if (resp.ok && data.success) {
