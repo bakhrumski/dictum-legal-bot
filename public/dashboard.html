@@ -3432,9 +3432,20 @@
         .answer-flag-pop {
             position: fixed; z-index: 100001; display: none;
             width: 300px; max-width: calc(100vw - 24px);
+            max-height: calc(100vh - 20px); overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             background: var(--bg-1, #fff); color: var(--text-primary, #1a1410);
             border: 1px solid var(--border-1, rgba(0,0,0,0.12)); border-radius: 12px;
             box-shadow: 0 16px 44px rgba(0,0,0,0.32); padding: 14px 15px; font-family: inherit;
+        }
+        /* On phones, dock as a bottom sheet so it always fits and scrolls.
+           !important overrides the inline top/left the JS sets for desktop. */
+        @media (max-width: 600px) {
+            .answer-flag-pop {
+                left: 8px !important; right: 8px !important; bottom: 8px !important;
+                top: auto !important; width: auto !important; max-width: none !important;
+                max-height: 82vh; border-radius: 16px;
+            }
         }
         .afp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
         .afp-title { font-size:13px; font-weight:700; color:var(--text-primary); }
@@ -11303,11 +11314,19 @@
                 '<div class="afp-status" id="afpStatus"></div>';
             flagPopEl.style.display = 'block';
             flagCtx.errorType = null;
-            // Position under (or above) the flag button's last spot.
-            var bt = parseInt(flagBtnEl.style.top, 10) || 80;
-            var bl = parseInt(flagBtnEl.style.left, 10) || 20;
+            positionFlagPop();
+        }
+
+        // Clamp the popup fully inside the viewport (desktop). On phones the CSS
+        // bottom-sheet rules (!important) override these inline coords.
+        function positionFlagPop() {
+            if (!flagPopEl || flagPopEl.style.display !== 'block') return;
+            var bt = parseInt(flagBtnEl && flagBtnEl.style.top, 10) || 80;
+            var bl = parseInt(flagBtnEl && flagBtnEl.style.left, 10) || 20;
+            var h = flagPopEl.offsetHeight;
             var top = bt + 34;
-            if (top + flagPopEl.offsetHeight > window.innerHeight - 8) top = Math.max(8, window.innerHeight - flagPopEl.offsetHeight - 8);
+            if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+            if (top < 8) top = 8;
             flagPopEl.style.top = top + 'px';
             flagPopEl.style.left = Math.max(8, Math.min(bl, window.innerWidth - flagPopEl.offsetWidth - 12)) + 'px';
         }
@@ -11317,7 +11336,12 @@
             flagCtx.errorType = type;
             var btns = flagPopEl.querySelectorAll('.afp-type-btn');
             for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('selected', btns[i] === btn);
-            document.getElementById('afpSuggestWrap').classList.add('visible');
+            var wrap = document.getElementById('afpSuggestWrap');
+            wrap.classList.add('visible');
+            // The textarea + send button just appeared → re-clamp so nothing is
+            // cut off at the viewport bottom, then reveal them into view.
+            positionFlagPop();
+            wrap.scrollIntoView({ block: 'nearest' });
         }
         function afpUpdateCount() {
             var ta = document.getElementById('afpSuggest');
