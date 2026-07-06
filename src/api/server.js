@@ -559,15 +559,16 @@ app.post('/api/answer-feedback', requireAuth, async (req, res) => {
     if (!selectedText) return res.status(400).json({ error: 'Belgilangan matn bo\'sh' });
     const suggestion = String(b.suggestion || '').trim().slice(0, FEEDBACK_SUGGESTION_MAX) || null;
     const question = String(b.question || '').trim().slice(0, 1000) || null;
+    const answerText = String(b.answerText || '').trim().slice(0, 12000) || null;
     const source = ['ai', 'response'].includes(b.source) ? b.source : null;
     const requestId = Number.isInteger(b.requestId) ? b.requestId : (parseInt(b.requestId, 10) || null);
     const analysisId = Number.isInteger(b.analysisId) ? b.analysisId : (parseInt(b.analysisId, 10) || null);
 
     const r = await pool.query(
       `INSERT INTO answer_feedback
-         (request_id, analysis_id, source, selected_text, error_type, suggestion, question, submitted_by, submitter_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [requestId, analysisId, source, selectedText, errorType, suggestion, question, req.session.adminId, req.session.fullName]
+         (request_id, analysis_id, source, selected_text, error_type, suggestion, question, answer_text, submitted_by, submitter_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [requestId, analysisId, source, selectedText, errorType, suggestion, question, answerText, req.session.adminId, req.session.fullName]
     );
 
     // Ping the Master-Admin(s) in the team chat so a new flag is seen at once.
@@ -591,7 +592,7 @@ app.get('/api/admin/answer-feedback', requireMasterAdmin, async (req, res) => {
   try {
     const status = ['new', 'reviewed', 'dismissed'].includes(req.query.status) ? req.query.status : 'new';
     const r = await pool.query(
-      `SELECT id, request_id, analysis_id, source, selected_text, error_type, suggestion, question,
+      `SELECT id, request_id, analysis_id, source, selected_text, error_type, suggestion, question, answer_text,
               submitted_by, submitter_name, status, created_at
          FROM answer_feedback WHERE status = $1
         ORDER BY created_at DESC LIMIT 100`, [status]);
@@ -5384,6 +5385,12 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
     const { question, answer, topic, originalAiAnswer } = req.body;
     if (!question || !answer) return res.status(400).json({ error: 'Savol va javob kerak' });
 
+    // Optional referenced law articles — accept an array or a free-text list
+    // ("FK 741-modda; QQ 6-modda"), split on ; , or newline, capped and trimmed.
+    const rawRefs = req.body.articleRefs;
+    const articleRefs = (Array.isArray(rawRefs) ? rawRefs : String(rawRefs || '').split(/[;,\n]/))
+      .map(s => String(s).trim()).filter(Boolean).slice(0, 30);
+
     // 1. Insert into legal_chunks (RAG retrieval pool with verified_qa source_type)
     await insertVerifiedAnswer({
       question,
@@ -5407,7 +5414,7 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
         category: topic || 'boshqa',
         topic: topic || null,
         sourceUrl: null,
-        articleRefs: [],
+        articleRefs,
         editedBy: req.session.adminId,
         editedByName: req.session.fullName || req.session.adminUsername || 'Admin',
       });
@@ -5423,7 +5430,7 @@ app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
         correctedAnswer: answer,
         originalAiAnswer: originalAiAnswer || null,
         topic: topic || 'boshqa',
-        articleRefs: [],
+        articleRefs,
         createdBy: req.session.adminId,
         createdByName: req.session.fullName || req.session.adminUsername || 'Admin',
       });
@@ -7421,6 +7428,7 @@ async function runMigrations() {
       error_type VARCHAR(20) NOT NULL,
       suggestion TEXT,
       question TEXT,
+      answer_text TEXT,
       submitted_by INTEGER,
       submitter_name TEXT,
       status VARCHAR(20) NOT NULL DEFAULT 'new',
@@ -7429,6 +7437,7 @@ async function runMigrations() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
     await pool.query(`ALTER TABLE answer_feedback ADD COLUMN IF NOT EXISTS question TEXT`);
+    await pool.query(`ALTER TABLE answer_feedback ADD COLUMN IF NOT EXISTS answer_text TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_answer_feedback_status ON answer_feedback(status, created_at DESC)`);
 
     // Seed 3 default questions only if the table is empty (admin can edit later)

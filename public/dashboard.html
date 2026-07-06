@@ -11259,11 +11259,13 @@
             if (container.querySelector('svg') && text.indexOf('Ko\'rish uchun') !== -1) { hideFlagBtn(); return; }
 
             if (container.classList.contains('ai-analysis-content')) {
-                // AI-chat bubble: no request id, but carry the question for context.
+                // AI-chat bubble: no request id, but carry the question + full
+                // answer (data-raw) so the master can correct it into the corpus.
                 var bubble = container.closest('.ai-chat-msg');
                 flagCtx = {
                     source: 'ai', requestId: null, analysisId: null,
                     question: (bubble && bubble.getAttribute('data-q')) || null,
+                    answerText: (bubble && bubble.getAttribute('data-raw')) || (container.innerText || '').trim(),
                     text: text
                 };
             } else {
@@ -11272,6 +11274,7 @@
                     requestId: parseInt(container.getAttribute('data-fb-request'), 10) || null,
                     analysisId: parseInt(container.getAttribute('data-fb-analysis'), 10) || null,
                     question: null,
+                    answerText: (container.innerText || '').trim(),
                     text: text
                 };
             }
@@ -11362,7 +11365,7 @@
                     body: JSON.stringify({
                         requestId: flagCtx.requestId, analysisId: flagCtx.analysisId, source: flagCtx.source,
                         selectedText: flagCtx.text, errorType: flagCtx.errorType, suggestion: suggestion,
-                        question: flagCtx.question || null
+                        question: flagCtx.question || null, answerText: flagCtx.answerText || null
                     })
                 });
                 var data = await r.json();
@@ -11442,7 +11445,9 @@
                 if (list.length === 0) { box.innerHTML = '<div class="reg-empty">Yangi xabar yo\'q</div>'; return; }
                 var typeLabel = { grammar: '✍️ Grammatik', context: '📖 Mazmun' };
                 var srcLabel = { ai: 'AI javob', response: 'Berilgan javob' };
+                answerFeedbackMap = {};
                 box.innerHTML = list.map(function (f) {
+                    answerFeedbackMap[f.id] = f;
                     var when = new Date(f.created_at).toLocaleString('uz-UZ');
                     return '<div class="fb-card" id="fb-' + f.id + '">' +
                         '<div class="fb-top">' +
@@ -11456,10 +11461,12 @@
                         '<div class="fb-selected">' + escapeHtml(f.selected_text) + '</div>' +
                         (f.suggestion ? '<div class="fb-suggest"><b>Taklif:</b> ' + escapeHtml(f.suggestion) + '</div>' : '') +
                         '<div class="fb-actions">' +
+                            (f.question ? '<button class="fb-btn open" onclick="openFeedbackCorrect(' + f.id + ')">✏️ Tuzatish</button>' : '') +
                             (f.request_id ? '<button class="fb-btn open" onclick="showRequestDetail(' + f.request_id + ')">Murojaatni ochish</button>' : '') +
                             '<button class="fb-btn" onclick="setAnswerFeedbackStatus(' + f.id + ',\'reviewed\')">✓ Ko\'rib chiqildi</button>' +
                             '<button class="fb-btn" onclick="setAnswerFeedbackStatus(' + f.id + ',\'dismissed\')">✕ E\'tiborsiz</button>' +
                         '</div>' +
+                        '<div class="fb-edit" id="fbEdit-' + f.id + '" style="display:none;"></div>' +
                     '</div>';
                 }).join('');
             } catch (e) {
@@ -11482,6 +11489,87 @@
                 var box = document.getElementById('answerFeedbackContent');
                 if (box && !box.querySelector('.fb-card')) box.innerHTML = '<div class="reg-empty">Yangi xabar yo\'q</div>';
             } catch (e) { /* ignore */ }
+        }
+
+        // Master correction: rewrite the answer and save it to the RAG corpus so
+        // future answers to the same/similar question use the corrected version.
+        var answerFeedbackMap = {};
+        var FB_TOPIC_OPTS = [
+            ['', '— Soha (ixtiyoriy) —'], ['adliya', 'Advokatura. Notariat. Adliya'], ['axborot', 'Axborot'],
+            ['bank', 'Bank'], ['davlat-boshqaruvi', 'Davlat boshqaruvi'], ['ekologiya', 'Ekologiya'],
+            ['fuqarolik', 'Fuqarolik qonunchiligi'], ['ijtimoiy', 'Ijtimoiy himoya'], ['jinoyat', 'Jinoyat qonunchiligi'],
+            ['konstitutsiya', 'Konstitutsiyaviy tuzum'], ['mamuriy', "Ma'muriy javobgarlik"], ['mehnat', 'Mehnat va bandlik'],
+            ['moliya', 'Moliya va kredit'], ['mudofaa', 'Mudofaa'], ['sudlov', 'Odil sudlov'], ['oila', 'Oila qonunchiligi'],
+            ['shaxsiy', 'Shaxsiy hujjatlar'], ['soglik', "Sog'liqni saqlash"], ['soliq', 'Soliq'],
+            ['talim', "Ta'lim. Fan. Madaniyat"], ['tadbirkorlik', 'Tadbirkorlik'], ['tashqi-iqtisod', 'Tashqi iqtisod. Bojxona'],
+            ['uy-joy', 'Uy-joy qonunchiligi'], ['xalqaro', 'Xalqaro huquq'], ['yol-harakati', "Yo'l-harakati qoidalari"]
+        ];
+        function openFeedbackCorrect(id) {
+            var f = answerFeedbackMap[id];
+            var host = document.getElementById('fbEdit-' + id);
+            if (!f || !host) return;
+            if (host.style.display === 'block') { host.style.display = 'none'; host.innerHTML = ''; return; }
+            var opts = FB_TOPIC_OPTS.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('');
+            host.innerHTML =
+                '<p class="afp-label" style="margin-top:12px;">Savol</p>' +
+                '<textarea class="afp-textarea" id="fbQ-' + id + '" rows="2">' + escapeHtml(f.question || '') + '</textarea>' +
+                '<p class="afp-label" style="margin-top:10px;">To\'g\'ri javob (RAG korpusiga qo\'shiladi)</p>' +
+                '<textarea class="afp-textarea" id="fbA-' + id + '" rows="7" style="min-height:130px;">' + escapeHtml(f.answer_text || '') + '</textarea>' +
+                '<p class="afp-label" style="margin-top:10px;">To\'g\'ri qonun moddalari (ixtiyoriy)</p>' +
+                '<input type="text" class="survey-qtext" id="fbR-' + id + '" style="margin-bottom:0;" ' +
+                    'placeholder="Masalan: FK 741-modda; Mehnat kodeksi 100-modda">' +
+                '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
+                    '<select class="survey-qtext" id="fbT-' + id + '" style="width:auto;margin-bottom:0;flex:1;min-width:160px;">' + opts + '</select>' +
+                '</div>' +
+                '<div class="fb-actions">' +
+                    '<button class="fb-btn open" id="fbSave-' + id + '" onclick="saveFeedbackCorrection(' + id + ')">✅ Saqlash va korpusga qo\'shish</button>' +
+                    '<button class="fb-btn" onclick="openFeedbackCorrect(' + id + ')">Bekor qilish</button>' +
+                '</div>' +
+                '<div class="afp-status" id="fbStatus-' + id + '"></div>';
+            if (f.topic) { var ts = document.getElementById('fbT-' + id); if (ts) ts.value = f.topic; }
+            host.style.display = 'block';
+        }
+        async function saveFeedbackCorrection(id) {
+            var q = (document.getElementById('fbQ-' + id).value || '').trim();
+            var a = (document.getElementById('fbA-' + id).value || '').trim();
+            var topic = (document.getElementById('fbT-' + id).value || '').trim();
+            var articleRefs = (document.getElementById('fbR-' + id).value || '').trim();
+            var st = document.getElementById('fbStatus-' + id);
+            var saveBtn = document.getElementById('fbSave-' + id);
+            if (!q || !a) { st.className = 'afp-status err'; st.textContent = 'Savol va javob bo\'sh bo\'lmasin'; return; }
+            saveBtn.disabled = true; st.className = 'afp-status'; st.textContent = 'Saqlanmoqda...';
+            try {
+                var resp = await fetch('/api/rag/verify-chat-answer', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify({ question: q, answer: a, topic: topic || null, articleRefs: articleRefs || null })
+                });
+                var data = await resp.json();
+                if (resp.ok && data.success) {
+                    // Corrected answer is now in the corpus → mark this report resolved.
+                    await fetch('/api/admin/answer-feedback/' + id + '/status', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin', body: JSON.stringify({ status: 'reviewed' })
+                    });
+                    st.className = 'afp-status ok'; st.textContent = '✅ Tuzatildi va korpusga qo\'shildi';
+                    var badge = document.getElementById('answerFeedbackBadge');
+                    if (badge && badge.style.display !== 'none') {
+                        var n = parseInt(badge.textContent, 10) - 1;
+                        if (n > 0) badge.textContent = n; else badge.style.display = 'none';
+                    }
+                    setTimeout(function () {
+                        var card = document.getElementById('fb-' + id);
+                        if (card) card.remove();
+                        var box = document.getElementById('answerFeedbackContent');
+                        if (box && !box.querySelector('.fb-card')) box.innerHTML = '<div class="reg-empty">Yangi xabar yo\'q</div>';
+                    }, 1200);
+                } else {
+                    st.className = 'afp-status err'; st.textContent = '❌ ' + (data.error || 'Xatolik');
+                    saveBtn.disabled = false;
+                }
+            } catch (e) {
+                st.className = 'afp-status err'; st.textContent = '❌ Tarmoq xatoligi';
+                saveBtn.disabled = false;
+            }
         }
 
         async function loadSurveyResults() {
