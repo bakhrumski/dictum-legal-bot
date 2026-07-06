@@ -42,6 +42,12 @@ let pendingRequests = {};
 // Store pending admin responses: chatId -> { requestId, adminId, role, fullName }
 const pendingResponses = new Map();
 
+// Files sent WITHOUT a written description are held here until the user sends
+// the describing text, then the two are combined into one request.
+// chatId -> { request_type, file_id, file_size, file_name, at }
+const pendingFiles = new Map();
+const PENDING_FILE_TTL = 60 * 60 * 1000; // 1 hour
+
 // ========== REQUIRED CHANNEL SUBSCRIPTION ==========
 // Users must join this channel before they can send a legal request.
 // Set REQUIRED_CHANNEL='' to disable the gate. The bot MUST be an
@@ -714,6 +720,38 @@ bot.on('message', async (msg) => {
     return;
   }
 
+  // ── A file must come WITH a written description ──────────────────────────
+  // If a user attaches a document/photo/video without a caption, don't create
+  // the request yet: hold the file and ask them to describe the situation. The
+  // next text message they send is combined with the held file below.
+  const MAX_FILE_SIZE = 5242880; // 5MB
+  const attachedFile =
+    (msg.document && { request_type: 'document', file_id: msg.document.file_id, file_size: msg.document.file_size, file_name: msg.document.file_name || 'fayl' }) ||
+    (msg.video && { request_type: 'video', file_id: msg.video.file_id, file_size: msg.video.file_size, file_name: msg.video.file_name || 'video.mp4' }) ||
+    (msg.photo && (() => { const p = msg.photo[msg.photo.length - 1]; return { request_type: 'photo', file_id: p.file_id, file_size: p.file_size, file_name: 'photo.jpg' }; })()) ||
+    null;
+  const hasCaption = ((msg.caption || '').trim().length > 0);
+
+  if (attachedFile && !hasCaption) {
+    if (attachedFile.file_size && attachedFile.file_size > MAX_FILE_SIZE) {
+      bot.sendMessage(chatId, '❌ Fayl hajmi juda katta! Maksimal: 5MB');
+      return;
+    }
+    const alreadyPending = pendingFiles.has(chatId);
+    pendingFiles.set(chatId, { ...attachedFile, at: Date.now() });
+    // Only prompt once — an album arrives as several separate photo messages.
+    if (!alreadyPending) {
+      bot.sendMessage(chatId,
+        '📎 Faylingiz qabul qilindi.\n\n' +
+        '✍️ Endi vaziyatingizni yozib yuboring — nima bo\'lgani va qanday yordam kerakligini qisqacha tushuntiring.\n\n' +
+        '⚠️ Faqat fayl yuborish yetarli emas: hujjat/rasm bilan birga izoh (savolingiz) bo\'lishi shart.'
+      );
+    }
+    return;
+  }
+  // A captioned file (or plain text) supersedes any stale held file.
+  if (attachedFile && hasCaption) pendingFiles.delete(chatId);
+
   let requestData = {
     telegram_id: chatId,
     username: username,
@@ -726,7 +764,23 @@ bot.on('message', async (msg) => {
   };
 
   // Handle different message types
-  if (msg.text) {
+  if (msg.text && pendingFiles.has(chatId)) {
+    // This text is the description for a file the user just sent → combine them.
+    const pf = pendingFiles.get(chatId);
+    pendingFiles.delete(chatId);
+    if (Date.now() - pf.at > PENDING_FILE_TTL) {
+      // Held file expired — treat the text as a normal request.
+      requestData.request_text = msg.text;
+      requestData.request_type = 'text';
+    } else {
+      requestData.request_text = msg.text;
+      requestData.request_type = pf.request_type;
+      requestData.file_id = pf.file_id;
+      requestData.file_size = pf.file_size;
+      requestData.file_name = pf.file_name;
+    }
+  }
+  else if (msg.text) {
     requestData.request_text = msg.text;
     requestData.request_type = 'text';
   }
