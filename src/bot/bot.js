@@ -47,6 +47,7 @@ const pendingResponses = new Map();
 // chatId -> { request_type, file_id, file_size, file_name, at }
 const pendingFiles = new Map();
 const PENDING_FILE_TTL = 60 * 60 * 1000; // 1 hour
+const MIN_FILE_DESC = 200; // min chars of description required with a file
 
 // ========== REQUIRED CHANNEL SUBSCRIPTION ==========
 // Users must join this channel before they can send a legal request.
@@ -730,9 +731,11 @@ bot.on('message', async (msg) => {
     (msg.video && { request_type: 'video', file_id: msg.video.file_id, file_size: msg.video.file_size, file_name: msg.video.file_name || 'video.mp4' }) ||
     (msg.photo && (() => { const p = msg.photo[msg.photo.length - 1]; return { request_type: 'photo', file_id: p.file_id, file_size: p.file_size, file_name: 'photo.jpg' }; })()) ||
     null;
-  const hasCaption = ((msg.caption || '').trim().length > 0);
+  const caption = (msg.caption || '').trim();
 
-  if (attachedFile && !hasCaption) {
+  // A file needs a written description of at least MIN_FILE_DESC characters.
+  // If it's missing or too short, hold the file and ask for a proper one.
+  if (attachedFile && caption.length < MIN_FILE_DESC) {
     if (attachedFile.file_size && attachedFile.file_size > MAX_FILE_SIZE) {
       bot.sendMessage(chatId, '❌ Fayl hajmi juda katta! Maksimal: 5MB');
       return;
@@ -741,16 +744,19 @@ bot.on('message', async (msg) => {
     pendingFiles.set(chatId, { ...attachedFile, at: Date.now() });
     // Only prompt once — an album arrives as several separate photo messages.
     if (!alreadyPending) {
+      const tooShortNote = caption.length > 0
+        ? `\n\n⚠️ Izohingiz juda qisqa (${caption.length}/${MIN_FILE_DESC} belgi).`
+        : '';
       bot.sendMessage(chatId,
-        '📎 Faylingiz qabul qilindi.\n\n' +
-        '✍️ Endi vaziyatingizni yozib yuboring — nima bo\'lgani va qanday yordam kerakligini qisqacha tushuntiring.\n\n' +
+        '📎 Faylingiz qabul qilindi.' + tooShortNote + '\n\n' +
+        `✍️ Endi vaziyatingizni yozib yuboring — nima bo'lgani va qanday yordam kerakligini batafsil tushuntiring (kamida ${MIN_FILE_DESC} belgi).\n\n` +
         '⚠️ Faqat fayl yuborish yetarli emas: hujjat/rasm bilan birga izoh (savolingiz) bo\'lishi shart.'
       );
     }
     return;
   }
-  // A captioned file (or plain text) supersedes any stale held file.
-  if (attachedFile && hasCaption) pendingFiles.delete(chatId);
+  // A file with a sufficient caption supersedes any stale held file.
+  if (attachedFile) pendingFiles.delete(chatId);
 
   let requestData = {
     telegram_id: chatId,
@@ -767,12 +773,24 @@ bot.on('message', async (msg) => {
   if (msg.text && pendingFiles.has(chatId)) {
     // This text is the description for a file the user just sent → combine them.
     const pf = pendingFiles.get(chatId);
-    pendingFiles.delete(chatId);
     if (Date.now() - pf.at > PENDING_FILE_TTL) {
       // Held file expired — treat the text as a normal request.
+      pendingFiles.delete(chatId);
       requestData.request_text = msg.text;
       requestData.request_type = 'text';
     } else {
+      const desc = msg.text.trim();
+      if (desc.length < MIN_FILE_DESC) {
+        // Too short — keep the file held and ask for a fuller description.
+        pf.at = Date.now();
+        pendingFiles.set(chatId, pf);
+        bot.sendMessage(chatId,
+          `⚠️ Izohingiz juda qisqa (${desc.length}/${MIN_FILE_DESC} belgi).\n\n` +
+          `Iltimos, vaziyatingizni batafsilroq yozing — kamida ${MIN_FILE_DESC} belgi. Faylingiz saqlanib turibdi.`
+        );
+        return;
+      }
+      pendingFiles.delete(chatId);
       requestData.request_text = msg.text;
       requestData.request_type = pf.request_type;
       requestData.file_id = pf.file_id;
