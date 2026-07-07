@@ -5067,15 +5067,18 @@ QOIDALAR:
 2. Muhim huquqiy faktlarni qoldiring: aniq modda raqamlari, summalar, muddatlar, jarima miqdorlari.
 3. Ortiqcha tahlil, takror va kirish so'zlarini OLIB TASHLANG.
 4. Sodda, tushunarli tilda yozing — yuridik jargon minimallashtirilsin.
-5. Qisqa bo'lsin: 1-2 xatboshi yoki qisqa ro'yxat. Iloji boricha 600 so'zdan kam.
+5. Qisqa bo'lsin: 2-4 xatboshi yoki qisqa ro'yxat. Iloji boricha 350 so'zdan kam.
 6. Faqat O'zbek (lotin) tilida yozing.
 7. Hech qanday yangi modda yoki fakt TO'QIB CHIQARMANG — faqat matndagilarni ishlating.
 8. To'g'ridan-to'g'ri foydalanuvchiga murojaat qilgandek yozing (salomlashuvsiz, imzosiz).
+9. Javobni HAR DOIM to'liq tugating — gap yoki fikr yarim qolmasin. Boshlagan har bir bandni yakunlang.
 
 Qisqartirilgan javobni yozing:`;
 
     const aiResult = await callAI([{ role: 'user', text: prompt }], {
-      maxTokens: 2048,
+      // Headroom so the compacted answer is never truncated mid-sentence.
+      // A <=350-word Uzbek-Latin reply fits comfortably under 4096 tokens.
+      maxTokens: 4096,
       userId: req.session?.adminId,
       endpoint: '/api/ai-compact-answer',
     });
