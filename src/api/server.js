@@ -5067,7 +5067,7 @@ QOIDALAR:
 2. Muhim huquqiy faktlarni qoldiring: aniq modda raqamlari, summalar, muddatlar, jarima miqdorlari.
 3. Ortiqcha tahlil, takror va kirish so'zlarini OLIB TASHLANG.
 4. Sodda, tushunarli tilda yozing — yuridik jargon minimallashtirilsin.
-5. Qisqa bo'lsin: 2-4 xatboshi yoki qisqa ro'yxat. Iloji boricha 350 so'zdan kam.
+5. Qisqa bo'lsin: 100-150 so'z (2-3 qisqa xatboshi yoki qisqa ro'yxat). 150 so'zdan oshmasin.
 6. Faqat O'zbek (lotin) tilida yozing.
 7. Hech qanday yangi modda yoki fakt TO'QIB CHIQARMANG — faqat matndagilarni ishlating.
 8. To'g'ridan-to'g'ri foydalanuvchiga murojaat qilgandek yozing (salomlashuvsiz, imzosiz).
