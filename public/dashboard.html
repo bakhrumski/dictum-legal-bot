@@ -2969,6 +2969,81 @@
         /* attached-file chips shown inside a sent user bubble */
         .ai-msg-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
         .ai-msg-file { font-size: 12px; opacity: .9; background: rgba(255,255,255,0.16); border-radius: 8px; padding: 3px 8px; }
+
+        /* ── Document builder overlay ── */
+        .docb-overlay {
+            position: fixed; inset: 0; z-index: 10000; display: none;
+            flex-direction: column; background: var(--bg-1);
+        }
+        .docb-overlay.open { display: flex; }
+        .docb-topbar {
+            display: flex; align-items: center; gap: 10px; flex: none;
+            padding: 10px 14px; border-bottom: 1px solid var(--border-1); background: var(--bg-2);
+        }
+        .docb-icon {
+            width: 38px; height: 38px; border-radius: 50%; border: none; background: transparent;
+            color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        .docb-icon:hover { background: var(--parchment-100, rgba(0,0,0,0.05)); color: var(--text-primary); }
+        .docb-title { flex: 1; font-weight: 700; font-size: 16px; color: var(--text-primary); }
+        .docb-actions { display: flex; gap: 8px; }
+        .docb-btn {
+            padding: 8px 14px; border-radius: 9px; border: 1px solid var(--border-1);
+            background: var(--bg-2); color: var(--text-primary); font-size: 13px; font-weight: 600;
+            font-family: inherit; cursor: pointer;
+        }
+        .docb-btn:hover { background: var(--parchment-100, rgba(0,0,0,0.05)); }
+        .docb-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+        /* template list */
+        .docb-list { max-width: 760px; margin: 0 auto; padding: 22px 16px 60px; display: grid; gap: 12px; }
+        .docb-tpl {
+            display: flex; align-items: flex-start; gap: 13px; text-align: left; width: 100%;
+            background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 14px;
+            padding: 16px 18px; cursor: pointer; font-family: inherit; transition: border-color .15s, box-shadow .15s;
+        }
+        .docb-tpl:hover { border-color: var(--navy-300); box-shadow: 0 4px 16px rgba(14,34,54,0.07); }
+        .docb-tpl-ic { flex: none; color: var(--navy-500); margin-top: 2px; }
+        .docb-tpl-name { font-weight: 600; font-size: 15px; color: var(--text-primary); }
+        .docb-tpl-desc { font-size: 13px; color: var(--text-secondary); margin-top: 3px; line-height: 1.5; }
+        .docb-list-empty, .docb-list-loading { text-align: center; color: var(--text-secondary); padding: 50px 20px; }
+
+        /* Word-style page */
+        .docb-editor { padding: 20px 12px 80px; }
+        .docb-page {
+            max-width: 800px; margin: 0 auto; background: #fff; color: #14110d;
+            border: 1px solid #e5e0d5; border-radius: 4px;
+            box-shadow: 0 6px 30px rgba(0,0,0,0.12);
+            padding: 64px 68px; min-height: 60vh;
+            font-family: 'Source Serif 4', Georgia, serif; font-size: 15.5px; line-height: 1.9;
+            white-space: pre-wrap; word-wrap: break-word;
+        }
+        [data-theme="dark"] .docb-page { background: #f7f4ee; }
+        .docb-page h1, .docb-page h2, .docb-page h3 { font-family: 'Source Serif 4', Georgia, serif; }
+        /* fillable fields: yellow while empty, plain once filled */
+        .docfld {
+            background: #fff2a8; border-bottom: 1px dashed #c99a3d; border-radius: 3px;
+            padding: 0 4px; cursor: text; min-width: 24px; display: inline;
+            outline: none; transition: background .12s;
+        }
+        .docfld.filled { background: transparent; border-bottom: 1px solid transparent; }
+        .docfld.empty::before { content: attr(data-label); color: #9a7b1f; font-style: italic; }
+        .docfld:focus { background: #ffe867; border-bottom-color: #c99a3d; box-shadow: 0 0 0 2px rgba(201,154,61,0.35); }
+        .docfld.flash { animation: docfld-flash 1s ease; }
+        @keyframes docfld-flash { 0%,100%{ background:#fff2a8 } 50%{ background:#bfe3c0 } }
+
+        /* floating side hint for the focused field */
+        .docb-hint {
+            position: fixed; z-index: 10001; display: none; max-width: 260px;
+            background: var(--navy-900, #0e2236); color: #fff; font-size: 12.5px; line-height: 1.5;
+            padding: 9px 12px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+        }
+        .docb-hint.show { display: block; }
+        .docb-hint b { color: var(--brass-300, #d6b379); display: block; margin-bottom: 2px; font-size: 12px; }
+        @media (max-width: 640px) {
+            .docb-page { padding: 34px 22px; font-size: 15px; }
+            .docb-hint { left: 10px !important; right: 10px; max-width: none; bottom: 12px; top: auto !important; }
+        }
         @media (pointer: coarse) {
             .ai-attach-btn, .ai-chat-input-bar .ai-chat-send-btn { width: 40px; height: 40px; }
             .ai-attach-menu button { padding: 13px 12px; }
@@ -5610,6 +5685,30 @@
         }
         .header-logo { animation: logo-reveal 0.3s ease both; }
         @keyframes logo-reveal { from { opacity: 0; } to { opacity: 1; } }
+
+        /* ══════════ ChatGPT-flat pass ══════════
+           Strip decorative chrome (drop-shadows + gradient fills) for a clean,
+           minimal look; keep hairline borders, primary-button fills, and a
+           subtle elevation ONLY on floating layers so overlays still read as
+           overlays. Shadows are decoration — removing them hides nothing. */
+        * { box-shadow: none !important; }
+        .hdr-dd-panel, .ai-attach-menu, .answer-flag-pop, .docb-page, .docb-hint,
+        .ai-msg-toast, .chat-msg-notif, .gate-box, .reg-detail-box, .ai-verify-editor,
+        .topic-modal-box {
+            box-shadow: 0 8px 28px rgba(14,34,54,0.14) !important;
+        }
+        [data-theme="dark"] .hdr-dd-panel, [data-theme="dark"] .ai-attach-menu,
+        [data-theme="dark"] .answer-flag-pop, [data-theme="dark"] .docb-hint,
+        [data-theme="dark"] .ai-msg-toast, [data-theme="dark"] .chat-msg-notif,
+        [data-theme="dark"] .gate-box, [data-theme="dark"] .reg-detail-box,
+        [data-theme="dark"] .topic-modal-box {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.45) !important;
+        }
+        /* flatten navy gradient avatars/badges to a solid fill */
+        .chat-member-avatar, .chat-msg-notif-avatar,
+        .master-av, .lawyer-av, .student-av { background: var(--navy-700) !important; }
+        /* flatten the gradient header used by dropdowns */
+        :root { --dropdown-header-bg: var(--navy-700); }
     </style>
 </head>
 <body>
@@ -5624,7 +5723,7 @@
     <div class="container">
         <header>
             <div class="header-left">
-                <div class="header-brand" onclick="switchTab('home')">
+                <div class="header-brand" onclick="brandClick()">
                     <img src="/icon-1024.png"                   alt="JuristAI" class="header-logo header-logo-icon">
                     <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
                     <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
@@ -5633,9 +5732,6 @@
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
                 <a href="/enterprise.html" id="enterpriseLaunchBtn" class="hicon" title="Enterprise Uzbekistan — English Law" style="display:none">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9"/><line x1="9" y1="13" x2="9" y2="13"/><line x1="9" y1="17" x2="9" y2="17"/></svg>
-                </a>
-                <a href="/draft.html" id="draftLaunchBtn" class="hicon" title="Hujjat tuzish" style="display:inline-flex">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                 </a>
                 <a href="/templates.html" id="templatesLaunchBtn" class="hicon" title="Shablonlar muharriri" style="display:none">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -6067,6 +6163,7 @@
                                 <button type="button" onclick="pickAttach('camera')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Kamera</button>
                                 <button type="button" onclick="pickAttach('photo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Rasm</button>
                                 <button type="button" onclick="pickAttach('file')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> Fayl (PDF, rasm)</button>
+                                <button type="button" onclick="openDocBuilder()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg> Hujjat yaratish</button>
                             </div>
                         </div>
                         <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" oninput="autoResizeAI(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
@@ -6588,6 +6685,13 @@
         // ========== TAB NAVIGATION SYSTEM ==========
         let currentTab = 'home';
 
+        // Logo click: the Home tab (Murojaatlar + Monte Carlo forecast) is a
+        // Master-Admin surface. Regular users go to their AI chat instead.
+        function brandClick() {
+            var role = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.role : null;
+            switchTab(role === 'user' ? 'ai' : 'home');
+        }
+
         function switchTab(tabName) {
             // Hide all tab views
             document.querySelectorAll('.tab-view').forEach(function(view) {
@@ -6769,11 +6873,9 @@
                 document.querySelectorAll('.header-icon-btn').forEach(function(btn) {
                     btn.style.display = data.role === 'master' ? '' : 'none';
                 });
-                // Draft launcher: visible to all authenticated users.
-                // (Document analysis is now built into the AI chat composer via
-                // the + attach button, so the separate analyzer page was removed.)
-                var draftBtn = document.getElementById('draftLaunchBtn');
-                if (draftBtn) draftBtn.style.display = 'inline-flex';
+                // Document analysis and drafting are now built into the AI chat
+                // composer ("+" menu: attach files / Hujjat yaratish), so the
+                // standalone analyzer.html and draft.html launchers were removed.
                 // Enterprise (English-law) lane: master only for now (R&D)
                 var enterpriseBtn = document.getElementById('enterpriseLaunchBtn');
                 if (enterpriseBtn) enterpriseBtn.style.display = data.role === 'master' ? 'inline-flex' : 'none';
@@ -10002,6 +10104,133 @@
                 input.value = text;
                 sendAiChat();
             }
+        }
+
+        // ── Document builder: pick a template, fill the yellow fields on a
+        //    Word-style page (top-to-bottom), with a side hint per field. ──
+        var DOCB = { tpl: null, lang: 'uz', values: {} };
+        function docbL(o) { return (o && (o[DOCB.lang] || o.uz || o.ru)) || ''; }
+
+        async function openDocBuilder() {
+            var m = document.getElementById('aiAttachMenu'); if (m) m.classList.remove('open');
+            document.getElementById('docBuilder').classList.add('open');
+            docbShowList();
+            await loadDocTemplates();
+        }
+        function closeDocBuilder() { document.getElementById('docBuilder').classList.remove('open'); hideDocHint(); }
+        function docbShowList() {
+            document.getElementById('docbList').style.display = '';
+            document.getElementById('docbEditor').style.display = 'none';
+            document.getElementById('docbActions').style.display = 'none';
+            document.getElementById('docbTitle').textContent = 'Hujjat yaratish';
+            DOCB.tpl = null; hideDocHint();
+        }
+        function docbBack() { if (DOCB.tpl) docbShowList(); else closeDocBuilder(); }
+
+        async function loadDocTemplates() {
+            var box = document.getElementById('docbList');
+            box.innerHTML = '<div class="docb-list-loading">Yuklanmoqda…</div>';
+            try {
+                var r = await fetch('/api/templates', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Shablonlar yuklanmadi');
+                var tpls = (await r.json()).templates || [];
+                if (!tpls.length) { box.innerHTML = '<div class="docb-list-empty">Hozircha shablon yo\'q.</div>'; return; }
+                var ic = '<svg class="docb-tpl-ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+                box.innerHTML = tpls.map(function (t) {
+                    return '<button class="docb-tpl" type="button" onclick="pickDocTemplate(\'' + t.id + '\')">' + ic +
+                        '<div><div class="docb-tpl-name">' + escapeHtml(docbL(t.name)) + '</div>' +
+                        (t.description ? '<div class="docb-tpl-desc">' + escapeHtml(docbL(t.description)) + '</div>' : '') + '</div></button>';
+                }).join('');
+            } catch (e) { box.innerHTML = '<div class="docb-list-empty">' + escapeHtml(e.message) + '</div>'; }
+        }
+        async function pickDocTemplate(id) {
+            var box = document.getElementById('docbList');
+            box.innerHTML = '<div class="docb-list-loading">Ochilmoqda…</div>';
+            try {
+                var r = await fetch('/api/templates/' + encodeURIComponent(id), { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Shablon topilmadi');
+                DOCB.tpl = await r.json();
+                DOCB.values = {};
+                var today = new Date().toISOString().slice(0, 10);
+                (DOCB.tpl.fields || []).forEach(function (f) {
+                    if (f.type === 'date') DOCB.values[f.key] = today;
+                    else if (f.type === 'select' && f.options && f.options[0]) DOCB.values[f.key] = f.options[0].value;
+                });
+                renderDocPage();
+                document.getElementById('docbList').style.display = 'none';
+                document.getElementById('docbEditor').style.display = 'block';
+                document.getElementById('docbActions').style.display = 'flex';
+                document.getElementById('docbTitle').textContent = docbL(DOCB.tpl.name);
+                document.querySelector('.docb-body').scrollTop = 0;
+                var first = document.querySelector('#docbPage .docfld.empty');
+                if (first) first.focus();
+            } catch (e) { await loadDocTemplates(); alert(e.message); }
+        }
+        function renderDocPage() {
+            var tpl = DOCB.tpl;
+            var page = document.getElementById('docbPage');
+            // Template body is trusted master-authored HTML/text with {{key}} slots.
+            var html = String(tpl.body || '').replace(/\{\{(\w+)\}\}/g, function (_, key) {
+                var f = (tpl.fields || []).find(function (x) { return x.key === key; });
+                var label = f ? docbL(f.label) : key;
+                var hint = f ? (docbL(f.placeholder) || docbL(f.label)) : '';
+                var val = DOCB.values[key];
+                var filled = val != null && String(val).trim() !== '';
+                return '<span class="docfld ' + (filled ? 'filled' : 'empty') + '" contenteditable="true"' +
+                    ' data-k="' + escapeHtml(key) + '" data-label="' + escapeHtml(label) + '" data-hint="' + escapeHtml(hint) + '">' +
+                    (filled ? escapeHtml(val) : '') + '</span>';
+            });
+            page.innerHTML = html;
+            var spans = page.querySelectorAll('.docfld');
+            spans.forEach(function (sp, idx) {
+                sp.addEventListener('input', function () {
+                    var v = sp.textContent; DOCB.values[sp.dataset.k] = v;
+                    var has = v.trim() !== '';
+                    sp.classList.toggle('filled', has); sp.classList.toggle('empty', !has);
+                });
+                sp.addEventListener('focus', function () { showDocHint(sp); });
+                sp.addEventListener('blur', function () { hideDocHint(); });
+                sp.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); var n = spans[idx + 1]; if (n) n.focus(); else sp.blur(); }
+                });
+            });
+        }
+        function showDocHint(sp) {
+            var h = document.getElementById('docbHint');
+            h.innerHTML = '<b>' + escapeHtml(sp.dataset.label || '') + '</b>' + escapeHtml(sp.dataset.hint || sp.dataset.label || '');
+            h.classList.add('show');
+            var r = sp.getBoundingClientRect();
+            var top = r.bottom + 8;
+            if (top + h.offsetHeight + 8 > window.innerHeight) { var t2 = r.top - 8 - h.offsetHeight; if (t2 > 8) top = t2; }
+            h.style.top = Math.max(8, top) + 'px';
+            h.style.left = Math.max(8, Math.min(r.left, window.innerWidth - h.offsetWidth - 12)) + 'px';
+        }
+        function hideDocHint() { var h = document.getElementById('docbHint'); if (h) h.classList.remove('show'); }
+
+        async function docbExport(format) {
+            var tpl = DOCB.tpl; if (!tpl) return;
+            var missing = (tpl.fields || []).filter(function (f) { return f.required && (!DOCB.values[f.key] || !String(DOCB.values[f.key]).trim()); });
+            if (missing.length && !confirm('Ba\'zi majburiy maydonlar bo\'sh (' + missing.length + ' ta). Baribir davom etasizmi?')) return;
+            var btn = document.getElementById(format === 'pdf' ? 'docbPdf' : 'docbDocx');
+            var orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ …';
+            try {
+                var r = await fetch('/api/draft/export', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify({ templateId: tpl.id, values: DOCB.values, format: format })
+                });
+                if (r.status === 429) { alert('Kunlik limit tugadi'); return; }
+                var ct = r.headers.get('Content-Type') || '';
+                if (ct.indexOf('application/json') !== -1) {
+                    var d = await r.json();
+                    if (d.mode === 'client-print' && d.html) { var w = window.open('', '_blank'); if (w) { w.document.write(d.html); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400); } return; }
+                    alert(d.error || 'Eksport xatoligi'); return;
+                }
+                var blob = await r.blob();
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a'); a.href = url; a.download = tpl.id + (format === 'pdf' ? '.pdf' : '.doc');
+                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+            } catch (e) { alert('Xatolik: ' + e.message); }
+            finally { btn.disabled = false; btn.textContent = orig; }
         }
 
         // ── Composer attachments: OCR + PDF extraction merged into the message ──
@@ -14101,6 +14330,30 @@
                 <button type="button" class="topic-modal-btn primary" id="topicPickerConfirm" onclick="confirmTopicPicker()" disabled>Davom etish</button>
             </div>
         </div>
+    </div>
+
+    <!-- Document builder: pick a template, then fill the yellow fields directly on the Word-style page -->
+    <div class="docb-overlay" id="docBuilder">
+        <div class="docb-topbar">
+            <button class="docb-icon" type="button" onclick="docbBack()" id="docbBackBtn" title="Orqaga" aria-label="Orqaga">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            </button>
+            <div class="docb-title" id="docbTitle">Hujjat yaratish</div>
+            <div class="docb-actions" id="docbActions" style="display:none;">
+                <button class="docb-btn" type="button" onclick="docbExport('docx')" id="docbDocx">⬇ Word</button>
+                <button class="docb-btn" type="button" onclick="docbExport('pdf')" id="docbPdf">⬇ PDF</button>
+            </div>
+            <button class="docb-icon" type="button" onclick="closeDocBuilder()" title="Yopish" aria-label="Yopish">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="docb-body">
+            <div class="docb-list" id="docbList"></div>
+            <div class="docb-editor" id="docbEditor" style="display:none;">
+                <div class="docb-page" id="docbPage"></div>
+            </div>
+        </div>
+        <div class="docb-hint" id="docbHint"></div>
     </div>
 </body>
 </html>
