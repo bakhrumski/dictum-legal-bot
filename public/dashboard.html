@@ -3499,6 +3499,16 @@
         .fb-btn.open { border-color:var(--navy-500,#2c4a6e); color:var(--navy-700,#0e2236); }
         [data-theme="dark"] .fb-btn.open { color:var(--brass-300); }
         .fb-btn:hover { background:var(--parchment-100,rgba(0,0,0,0.05)); }
+        /* Correction editor: answer on the right (taller), other fields left */
+        .fb-edit-grid { display:flex; gap:16px; align-items:stretch; margin-top:12px; }
+        .fb-edit-left { flex:1 1 40%; min-width:0; display:flex; flex-direction:column; }
+        .fb-edit-right { flex:1 1 60%; min-width:0; display:flex; flex-direction:column; }
+        .fb-edit-right .afp-textarea { flex:1; min-height:320px; resize:vertical; }
+        .fb-edit-left .afp-label:first-child { margin-top:0; }
+        @media (max-width: 760px) {
+            .fb-edit-grid { flex-direction:column; gap:10px; }
+            .fb-edit-right .afp-textarea { min-height:200px; }
+        }
         /* One-time "how to flag an error" guide shown in the AI chat */
         .flag-guide {
             display:flex; gap:13px; align-items:flex-start;
@@ -11531,15 +11541,20 @@
             if (host.style.display === 'block') { host.style.display = 'none'; host.innerHTML = ''; return; }
             var opts = FB_TOPIC_OPTS.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('');
             host.innerHTML =
-                '<p class="afp-label" style="margin-top:12px;">Savol</p>' +
-                '<textarea class="afp-textarea" id="fbQ-' + id + '" rows="2">' + escapeHtml(f.question || '') + '</textarea>' +
-                '<p class="afp-label" style="margin-top:10px;">To\'g\'ri javob (RAG korpusiga qo\'shiladi)</p>' +
-                '<textarea class="afp-textarea" id="fbA-' + id + '" rows="7" style="min-height:130px;">' + escapeHtml(f.answer_text || '') + '</textarea>' +
-                '<p class="afp-label" style="margin-top:10px;">To\'g\'ri qonun moddalari (ixtiyoriy)</p>' +
-                '<input type="text" class="survey-qtext" id="fbR-' + id + '" style="margin-bottom:0;" ' +
-                    'placeholder="Masalan: FK 741-modda; Mehnat kodeksi 100-modda">' +
-                '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
-                    '<select class="survey-qtext" id="fbT-' + id + '" style="width:auto;margin-bottom:0;flex:1;min-width:160px;">' + opts + '</select>' +
+                '<div class="fb-edit-grid">' +
+                    '<div class="fb-edit-left">' +
+                        '<p class="afp-label">Savol</p>' +
+                        '<textarea class="afp-textarea" id="fbQ-' + id + '" rows="3">' + escapeHtml(f.question || '') + '</textarea>' +
+                        '<p class="afp-label" style="margin-top:10px;">To\'g\'ri qonun moddalari (ixtiyoriy)</p>' +
+                        '<input type="text" class="survey-qtext" id="fbR-' + id + '" style="margin-bottom:0;" ' +
+                            'placeholder="Masalan: FK 741-modda; Mehnat kodeksi 100-modda">' +
+                        '<p class="afp-label" style="margin-top:10px;">Soha (ixtiyoriy)</p>' +
+                        '<select class="survey-qtext" id="fbT-' + id + '" style="margin-bottom:0;">' + opts + '</select>' +
+                    '</div>' +
+                    '<div class="fb-edit-right">' +
+                        '<p class="afp-label">To\'g\'ri javob (RAG korpusiga qo\'shiladi)</p>' +
+                        '<textarea class="afp-textarea" id="fbA-' + id + '">' + escapeHtml(f.answer_text || '') + '</textarea>' +
+                    '</div>' +
                 '</div>' +
                 '<div class="fb-actions">' +
                     '<button class="fb-btn open" id="fbSave-' + id + '" onclick="saveFeedbackCorrection(' + id + ')">✅ Saqlash va korpusga qo\'shish</button>' +
