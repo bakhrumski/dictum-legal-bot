@@ -10,27 +10,25 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/design-tokens.css">
 <style>
 /* ═══ RESET ═══ */
 *{margin:0;padding:0;box-sizing:border-box}
 
 :root{
-  --gold:       #B08442;
-  --gold-lt:    #D6B379;
+  /* Brand + neutrals sourced from /css/design-tokens.css so the landing page,
+     login and dashboard share ONE palette. Local aliases keep index's existing
+     rules working; values are identical to the tokens (no visual change). */
+  --gold:       var(--brass-500);
+  --gold-lt:    var(--brass-300);
   --gold-dim:   rgba(176,132,66,0.2);
-  --navy-deep:  #0A1929;
-  --navy-mid:   #0E2236;
-  --navy-700:   #16365A;
-  --navy-500:   #2C5C92;
-  --cream:      #FBF8F2;
-  --cream-100:  #F5EFE3;
-  --cream-200:  #ECE3CF;
-  --ink-900:    #1A1410;
-  --ink-700:    #3B2F26;
-  --ink-500:    #6B5A4B;
-  --ink-300:    #9C8C7B;
-  --r: 14px;
-  --ease: .28s cubic-bezier(.4,0,.2,1);
+  --navy-deep:  #0A1929;              /* landing-only deepest navy */
+  --navy-mid:   var(--navy-900);
+  --cream:      var(--parchment-50);
+  --cream-100:  var(--parchment-100);
+  --cream-200:  var(--parchment-200);
+  --r: var(--r-lg);
+  --ease: var(--ease-in-out);
   /* light */
   --bg:      var(--cream);
   --bg2:     var(--cream-100);
