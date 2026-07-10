@@ -212,6 +212,7 @@
             min-height: 100vh;
             padding: 20px 0;
             padding-bottom: calc(64px + 20px + env(safe-area-inset-bottom, 0px));
+            overflow-x: clip;   /* kill accidental horizontal scroll on phones; 'clip' keeps position:sticky working */
         }
         body.no-tab-bar {
             padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
@@ -3508,6 +3509,15 @@
         @media (max-width: 760px) {
             .fb-edit-grid { flex-direction:column; gap:10px; }
             .fb-edit-right .afp-textarea { min-height:200px; }
+        }
+        /* Touch devices: enlarge the answer-flag / feedback controls to a
+           comfortable ~44px tap target (Apple/Material minimum). */
+        @media (pointer: coarse) {
+            .answer-flag-btn { padding:11px 16px; font-size:13px; }
+            .afp-type-btn { padding:13px 8px; font-size:13px; }
+            .afp-send { padding:14px; font-size:14px; }
+            .afp-close { font-size:24px; padding:2px 10px; }
+            .fb-btn, .flag-guide-dismiss { min-height:44px; padding-top:10px; padding-bottom:10px; }
         }
         /* One-time "how to flag an error" guide shown in the AI chat */
         .flag-guide {
