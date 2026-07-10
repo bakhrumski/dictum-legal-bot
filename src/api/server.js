@@ -4390,6 +4390,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
+    // Optional attached-document text (OCR/PDF extract from the composer). When
+    // present we give it to the model as context AND skip the verified-QA
+    // verbatim short-circuit — the question is about THIS document, so a canned
+    // answer would be wrong.
+    const docContext = (typeof req.body.documentText === 'string')
+      ? req.body.documentText.trim().slice(0, 15000) : '';
+    const hasDocument = docContext.length > 0;
 
     // Resolve the effective topic:
     //   • autoDetect=true  → run the lightweight classifier; null if it can't pick (RAG searches all).
@@ -4435,6 +4442,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     let verifiedOverride = null;
 
     try {
+      if (hasDocument) throw { __skipQa: true }; // attached doc → no canned QA
       const { searchKorpus, formatKorpusGroundTruth } = require('../rag/qa-korpus');
       const stageOneApiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
       if (stageOneApiKey) {
@@ -4548,7 +4556,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         }
       }
     } catch (qaErr) {
-      console.warn(`[Legal Chat] verified_qa lookup failed: ${qaErr.message}`);
+      if (!(qaErr && qaErr.__skipQa)) console.warn(`[Legal Chat] verified_qa lookup failed: ${qaErr.message}`);
     }
 
     // ── Short-circuit: return verified answer directly ──
@@ -4612,7 +4620,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       });
     }
 
-    aiMessages.push({ role: 'user', text: message });
+    // Attach the uploaded document as context on the final user turn (not in the
+    // RAG query above, which stays keyed to the question so retrieval isn't
+    // polluted by the document body).
+    const finalUserText = hasDocument
+      ? `${message}\n\n─── ILOVA QILINGAN HUJJAT MATNI ───\n${docContext}\n─── HUJJAT TUGADI ───`
+      : message;
+    aiMessages.push({ role: 'user', text: finalUserText });
 
     const _chatUserId = req.session?.adminId || null;
     let aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
