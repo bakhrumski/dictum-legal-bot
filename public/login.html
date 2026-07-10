@@ -746,6 +746,11 @@
         }
         .hero-logo img { animation: logo-reveal 0.3s ease both; }
         @keyframes logo-reveal { from { opacity: 0; } to { opacity: 1; } }
+
+        /* ChatGPT-flat pass: drop decorative shadows; the card keeps a hairline
+           border for structure. Hero art and primary button fill are kept. */
+        * { box-shadow: none !important; }
+        .login-card { border: 1px solid var(--border-1); }
     </style>
     <script>
         (function() {

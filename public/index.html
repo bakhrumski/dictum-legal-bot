@@ -355,6 +355,12 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
   .brand-wordmark{display:none!important}
   .brand-icon{display:block!important}
 }
+/* ChatGPT-flat pass: drop decorative drop-shadows and flatten the gradient
+   primary button to a solid brass fill. The hero's gradient/glow art is a
+   background (not a shadow) and is intentionally kept. */
+*{box-shadow:none!important}
+.btn-primary{background:var(--gold)!important;border-color:transparent!important}
+.btn-primary:hover{transform:translateY(-2px)}
 </style>
 </head>
 <body>

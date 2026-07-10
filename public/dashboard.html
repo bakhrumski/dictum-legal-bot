@@ -5685,6 +5685,30 @@
         }
         .header-logo { animation: logo-reveal 0.3s ease both; }
         @keyframes logo-reveal { from { opacity: 0; } to { opacity: 1; } }
+
+        /* ══════════ ChatGPT-flat pass ══════════
+           Strip decorative chrome (drop-shadows + gradient fills) for a clean,
+           minimal look; keep hairline borders, primary-button fills, and a
+           subtle elevation ONLY on floating layers so overlays still read as
+           overlays. Shadows are decoration — removing them hides nothing. */
+        * { box-shadow: none !important; }
+        .hdr-dd-panel, .ai-attach-menu, .answer-flag-pop, .docb-page, .docb-hint,
+        .ai-msg-toast, .chat-msg-notif, .gate-box, .reg-detail-box, .ai-verify-editor,
+        .topic-modal-box {
+            box-shadow: 0 8px 28px rgba(14,34,54,0.14) !important;
+        }
+        [data-theme="dark"] .hdr-dd-panel, [data-theme="dark"] .ai-attach-menu,
+        [data-theme="dark"] .answer-flag-pop, [data-theme="dark"] .docb-hint,
+        [data-theme="dark"] .ai-msg-toast, [data-theme="dark"] .chat-msg-notif,
+        [data-theme="dark"] .gate-box, [data-theme="dark"] .reg-detail-box,
+        [data-theme="dark"] .topic-modal-box {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.45) !important;
+        }
+        /* flatten navy gradient avatars/badges to a solid fill */
+        .chat-member-avatar, .chat-msg-notif-avatar,
+        .master-av, .lawyer-av, .student-av { background: var(--navy-700) !important; }
+        /* flatten the gradient header used by dropdowns */
+        :root { --dropdown-header-bg: var(--navy-700); }
     </style>
 </head>
 <body>
