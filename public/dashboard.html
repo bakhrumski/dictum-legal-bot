@@ -10283,15 +10283,38 @@
             } catch (e) { docInfoCard('❌ ' + escapeHtml(e.message)); }
         }
 
+        // Turn ANY [bracketed] placeholder the AI left in the text into an empty
+        // yellow field — not just [_____]. The AI sometimes writes a named
+        // placeholder like [Raqami] or [Sana] instead of blank underscores; both
+        // forms must become a tap-to-fill field with NO bracket characters left
+        // behind, so the user never has to delete "[" "]" by hand.
+        function bracketsToFields(html) {
+            return String(html).replace(/\[([^\[\]\n]{1,80})\]/g, function (_, inner) {
+                var text = inner.trim();
+                var isBlank = /^_+$/.test(text);
+                var label = isBlank ? 'to\'ldiring' : text;
+                var hint = isBlank ? 'Kerakli ma\'lumotni shu yerga kiriting' : (text + ' — shu yerga kiriting');
+                return '<span class="docfld empty" data-label="' + escapeHtml(label) + '" data-hint="' + escapeHtml(hint) + '"></span>';
+            });
+        }
+        // Select the field's entire contents on tap/click so the very next
+        // keystroke replaces it — no manual deleting of old text or brackets.
+        function selectFieldContents(sp) {
+            try {
+                var r = document.createRange();
+                r.selectNodeContents(sp);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(r);
+            } catch (e) { /* ignore — worst case caret lands at click point */ }
+        }
+
         // ── Inline Word-style document message (shared by both flows) ──
         function renderDocMessage(opts) {
             var messagesEl = document.getElementById('aiChatMessages');
             var id = 'docmsg_' + (++DOCB.seq);
             var title = opts.title || opts.rawTitle || 'Hujjat';
-            var body = opts.tplId
-                ? opts.html
-                : String(opts.html).replace(/\[_{2,}\]/g,
-                    '<span class="docfld empty" data-label="to\'ldiring" data-hint="Kerakli ma\'lumotni shu yerga kiriting"></span>');
+            var body = opts.tplId ? opts.html : bracketsToFields(opts.html);
             messagesEl.innerHTML +=
                 '<div class="ai-chat-msg ai docmsg" id="' + id + '"' +
                     (opts.tplId ? ' data-tpl-id="' + escapeHtml(String(opts.tplId)) + '"' : '') +
@@ -10307,7 +10330,7 @@
             var page = document.querySelector('#' + id + ' .docb-page');
             page.addEventListener('click', function (e) {
                 var sp = e.target.closest && e.target.closest('.docfld');
-                if (sp) showDocHint(sp); else hideDocHint();
+                if (sp) { selectFieldContents(sp); showDocHint(sp); } else hideDocHint();
             });
             page.addEventListener('input', function () {
                 page.querySelectorAll('.docfld').forEach(function (sp) {
