@@ -3043,7 +3043,26 @@
             transition: border-color .15s;
         }
         .docflow-opt:hover { border-color: var(--navy-300); }
+        .docflow-opt.docflow-primary { background: var(--navy-700); color: #fff; border-color: var(--navy-700); }
         @media (pointer: coarse) { .docflow-opt { padding: 12px 16px; } }
+        /* labeled inputs for the AI-doc required-information form */
+        .docform-row { margin-top: 10px; }
+        .docform-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+        .docform-input {
+            width: 100%; box-sizing: border-box; padding: 9px 11px;
+            border: 1px solid var(--border-1); border-radius: 9px;
+            font-family: inherit; font-size: 14px; color: var(--text-primary); background: var(--bg-2);
+            resize: vertical;
+        }
+        .docform-input:focus { outline: none; border-color: var(--navy-300); }
+        /* inline Word-style document message */
+        .ai-chat-msg.docmsg { max-width: 100%; width: 100%; background: transparent; padding: 0; }
+        .docmsg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+        .docmsg-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
+        .docmsg-actions { display: flex; gap: 8px; }
+        .docmsg .docb-page { padding: 42px 44px; min-height: 200px; }
+        .docmsg-note { font-size: 12px; color: var(--text-secondary); margin-top: 7px; }
+        @media (max-width: 640px) { .docmsg .docb-page { padding: 26px 18px; } }
 
         /* floating side hint for the focused field */
         .docb-hint {
@@ -10115,29 +10134,39 @@
             }
         }
 
-        // ── Document builder: pick a template, fill the yellow fields on a
-        //    Word-style page (top-to-bottom), with a side hint per field. ──
-        var DOCB = { tpl: null, lang: 'uz', values: {} };
+        // ── Document builder: everything runs inside aiChatMessages. ──
+        //    Step cards replace each other (only the current step is visible);
+        //    finished documents render inline as Word-style pages in the chat.
+        var DOCB = { lang: 'uz', seq: 0 };
         function docbL(o) { return (o && (o[DOCB.lang] || o.uz || o.ru)) || ''; }
 
-        // ── In-chat flow: "Hujjat yaratish" runs inside aiChatMessages ──
-        var aiDocFlow = null;   // {stage:'details', docType} while collecting details
-        var DOC_TYPES = ['Shartnoma', "Da'vo arizasi", 'Iltimosnoma', 'Apellyatsiya shikoyati',
-            'Kassatsiya shikoyati', 'Bildirgi', 'Qaror', 'Buyruq', "Advokatlik so'rovi", 'Rasmiy xat'];
-
-        function docChatCard(html) {
+        // Append a step card, replacing any previous step card so switching
+        // between Shablon / AI (and steps inside them) shows only the current UI.
+        function docStepCard(html) {
             var messagesEl = document.getElementById('aiChatMessages');
             var welcome = document.getElementById('aiChatWelcome');
             if (welcome) welcome.style.display = 'none';
+            messagesEl.querySelectorAll('.docflow-step').forEach(function (c) { c.remove(); });
+            messagesEl.innerHTML += '<div class="ai-chat-msg ai docflow-card docflow-step">' + html + '</div>';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        // Permanent info card (kept in history, not replaced).
+        function docInfoCard(html) {
+            var messagesEl = document.getElementById('aiChatMessages');
             messagesEl.innerHTML += '<div class="ai-chat-msg ai docflow-card">' + html + '</div>';
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
+        function docFlowClose() {
+            document.querySelectorAll('#aiChatMessages .docflow-step').forEach(function (c) { c.remove(); });
+        }
+
         function openDocBuilder() {
             var m = document.getElementById('aiAttachMenu'); if (m) m.classList.remove('open');
-            docChatCard('<div class="docflow-title">Hujjat yaratish</div>Qaysi usulni tanlaysiz?' +
+            docStepCard('<div class="docflow-title">Hujjat yaratish</div>Qaysi usulni tanlaysiz?' +
                 '<div class="docflow-opts">' +
                 '<button class="docflow-opt" type="button" onclick="docFlowTemplates()">📄 Shablon</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowAI()">✨ AI bilan yangi hujjat yaratish</button>' +
+                '<button class="docflow-opt" type="button" onclick="docFlowClose()">Bekor qilish</button>' +
                 '</div>');
         }
         async function docFlowTemplates() {
@@ -10145,137 +10174,149 @@
                 var r = await fetch('/api/templates', { credentials: 'same-origin' });
                 if (!r.ok) throw new Error('Shablonlar yuklanmadi');
                 var tpls = (await r.json()).templates || [];
-                if (!tpls.length) { docChatCard('Hozircha tayyor shablon yo\'q — Master Admin tez orada yuklaydi. Hozircha <b>AI bilan yangi hujjat yaratish</b>dan foydalaning.'); return; }
-                docChatCard('<div class="docflow-title">Shablonni tanlang</div><div class="docflow-opts">' +
+                if (!tpls.length) {
+                    docStepCard('Hozircha tayyor shablon yo\'q — Master Admin tez orada yuklaydi.' +
+                        '<div class="docflow-opts">' +
+                        '<button class="docflow-opt" type="button" onclick="docFlowAI()">✨ AI bilan yangi hujjat yaratish</button>' +
+                        '<button class="docflow-opt" type="button" onclick="openDocBuilder()">← Orqaga</button></div>');
+                    return;
+                }
+                docStepCard('<div class="docflow-title">Shablonni tanlang</div><div class="docflow-opts">' +
                     tpls.map(function (t) {
                         return '<button class="docflow-opt" type="button" onclick="pickDocTemplate(\'' + t.id + '\')">📄 ' + escapeHtml(docbL(t.name)) + '</button>';
-                    }).join('') + '</div>');
-            } catch (e) { docChatCard('❌ ' + escapeHtml(e.message)); }
+                    }).join('') +
+                    '<button class="docflow-opt" type="button" onclick="openDocBuilder()">← Orqaga</button></div>');
+            } catch (e) { docInfoCard('❌ ' + escapeHtml(e.message)); }
         }
+
+        // ── AI flow: type → labeled input form → generate ──
+        var DOC_TYPES = ['Shartnoma', "Da'vo arizasi", 'Iltimosnoma', 'Apellyatsiya shikoyati',
+            'Kassatsiya shikoyati', 'Bildirgi', 'Qaror', 'Buyruq', "Advokatlik so'rovi", 'Rasmiy xat'];
+        // Required-info inputs shown for the selected type (generic base set —
+        // Master Admin can extend types/templates later).
+        var DOC_FORM_FIELDS = [
+            { k: 'sender',    label: 'Yuboruvchi / birinchi tomon (F.I.O. yoki tashkilot)', ph: 'Masalan: Alisher Karimov yoki "Alfa" MChJ' },
+            { k: 'recipient', label: 'Qabul qiluvchi / ikkinchi tomon (kimga)', ph: 'Masalan: Toshkent shahar sudi / "Beta" MChJ' },
+            { k: 'dateplace', label: 'Sana va joy', ph: 'Masalan: 2026-yil 15-iyul, Toshkent' },
+            { k: 'amount',    label: 'Pul miqdori (bo\'lsa)', ph: 'Masalan: 25 000 000 so\'m' },
+            { k: 'details',   label: 'Muhim shartlar va tafsilotlar', ph: 'Vaziyat, talablar, muddatlar, asoslar...', ta: true }
+        ];
         function docFlowAI() {
-            docChatCard('<div class="docflow-title">Qanday hujjat kerak?</div><div class="docflow-opts">' +
+            docStepCard('<div class="docflow-title">Qanday hujjat kerak?</div><div class="docflow-opts">' +
                 DOC_TYPES.map(function (t) {
                     return '<button class="docflow-opt" type="button" onclick="docFlowPickType(' + attrArg(t) + ')">' + escapeHtml(t) + '</button>';
                 }).join('') +
                 '<button class="docflow-opt" type="button" onclick="docFlowPickType(\'__custom\')">✏️ Boshqa…</button>' +
+                '<button class="docflow-opt" type="button" onclick="openDocBuilder()">← Orqaga</button>' +
                 '</div>');
         }
         function docFlowPickType(t) {
             if (t === '__custom') { var v = prompt('Hujjat turini yozing:'); if (!v || !v.trim()) return; t = v.trim(); }
-            aiDocFlow = { stage: 'details', docType: t };
-            docChatCard('<b>' + escapeHtml(t) + '</b> uchun asosiy ma\'lumotlarni pastdagi xabar maydoniga yozing:<br>' +
-                '• tomonlar (kim kimga / yuboruvchi va qabul qiluvchi)<br>' +
-                '• sana va joy<br>• pul miqdori (bo\'lsa)<br>• muhim shartlar va boshqa tafsilotlar<br>' +
-                'Barchasini bitta xabarda yuboring — AI hujjatni tayyorlaydi.' +
-                '<div class="docflow-opts"><button class="docflow-opt" type="button" onclick="docFlowCancel()">Bekor qilish</button></div>');
-            var inp = document.getElementById('aiChatInput'); if (inp) inp.focus();
+            var rows = DOC_FORM_FIELDS.map(function (f) {
+                var ctl = f.ta
+                    ? '<textarea class="docform-input" id="docf_' + f.k + '" rows="4" placeholder="' + escapeHtml(f.ph) + '"></textarea>'
+                    : '<input class="docform-input" id="docf_' + f.k + '" type="text" placeholder="' + escapeHtml(f.ph) + '">';
+                return '<div class="docform-row"><label class="docform-label" for="docf_' + f.k + '">' + escapeHtml(f.label) + '</label>' + ctl + '</div>';
+            }).join('');
+            docStepCard('<div class="docflow-title">' + escapeHtml(t) + ' — kerakli ma\'lumotlar</div>' + rows +
+                '<div class="docflow-opts">' +
+                '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowSubmit(' + attrArg(t) + ')">📄 Hujjatni yaratish</button>' +
+                '<button class="docflow-opt" type="button" onclick="docFlowAI()">← Orqaga</button>' +
+                '</div>');
+            var first = document.querySelector('#aiChatMessages .docform-input'); if (first) first.focus();
         }
-        function docFlowCancel() { aiDocFlow = null; docChatCard('Hujjat yaratish bekor qilindi.'); }
-        async function docFlowGenerate(details) {
+        function docFlowSubmit(docType) {
+            var parts = [];
+            DOC_FORM_FIELDS.forEach(function (f) {
+                var el = document.getElementById('docf_' + f.k);
+                var v = el ? el.value.trim() : '';
+                if (v) parts.push(f.label + ': ' + v);
+            });
+            if (!parts.length) { alert('Kamida bitta maydonni to\'ldiring.'); return; }
+            docFlowClose();
+            docFlowGenerate(docType, parts.join('\n'));
+        }
+        async function docFlowGenerate(docType, details) {
             var messagesEl = document.getElementById('aiChatMessages');
-            messagesEl.innerHTML += '<div class="ai-chat-msg user">' + escapeHtml(details) + '</div>';
+            messagesEl.innerHTML += '<div class="ai-chat-msg user">📄 ' + escapeHtml(docType) + '<br>' + escapeHtml(details).replace(/\n/g, '<br>') + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
             messagesEl.scrollTop = messagesEl.scrollHeight;
-            var flow = aiDocFlow; aiDocFlow = null;
             try {
                 var r = await fetch('/api/draft/ai-generate', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ docType: flow.docType, details: details })
+                    body: JSON.stringify({ docType: docType, details: details })
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
-                if (!r.ok || !d.html) { docChatCard('❌ ' + escapeHtml(d.error || 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring')); return; }
-                docChatCard('✅ Hujjat tayyor — sahifada ochildi. Sariq [_____] joylarni to\'ldiring, matnni tekshiring, so\'ng Word yoki PDF yuklab oling.');
-                openDocOverlayRaw(flow.docType, d.html);
+                if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring')); return; }
+                renderDocMessage({ rawTitle: docType, html: d.html });
             } catch (e) {
                 var t2 = document.getElementById('aiChatTyping'); if (t2) t2.remove();
-                docChatCard('❌ Tarmoq xatoligi — qayta urinib ko\'ring.');
+                docInfoCard('❌ Tarmoq xatoligi — qayta urinib ko\'ring.');
             }
         }
-        function openDocOverlayRaw(title, html) {
-            DOCB.tpl = null; DOCB.rawTitle = title;
-            document.getElementById('docBuilder').classList.add('open');
-            document.getElementById('docbList').style.display = 'none';
-            document.getElementById('docbEditor').style.display = 'block';
-            document.getElementById('docbActions').style.display = 'flex';
-            document.getElementById('docbTitle').textContent = title;
-            var page = document.getElementById('docbPage');
-            // AI output body; highlight [_____] placeholders as yellow fields.
-            page.innerHTML = String(html).replace(/\[_{2,}\]/g,
-                '<span class="docfld empty" data-label="to\'ldiring" data-hint="Kerakli ma\'lumotni shu yerga kiriting"></span>');
-            page.setAttribute('contenteditable', 'true');
-            // Delegated hint + fill-state handling (spans live inside one big
-            // contenteditable, so per-span focus events don't fire reliably).
-            if (!page._docfldDelegated) {
-                page._docfldDelegated = true;
-                page.addEventListener('click', function (e) {
-                    var sp = e.target.closest && e.target.closest('.docfld');
-                    if (sp) showDocHint(sp); else hideDocHint();
-                });
-                page.addEventListener('input', function () {
-                    page.querySelectorAll('.docfld').forEach(function (sp) {
-                        var has = (sp.textContent || '').trim() !== '';
-                        sp.classList.toggle('filled', has); sp.classList.toggle('empty', !has);
-                    });
-                });
-            }
-            document.querySelector('.docb-body').scrollTop = 0;
-        }
-        function closeDocBuilder() { document.getElementById('docBuilder').classList.remove('open'); hideDocHint(); }
-        function docbBack() { closeDocBuilder(); }
 
+        // ── Template flow: render the template as an inline doc message ──
         async function pickDocTemplate(id) {
             try {
                 var r = await fetch('/api/templates/' + encodeURIComponent(id), { credentials: 'same-origin' });
                 if (!r.ok) throw new Error('Shablon topilmadi');
-                DOCB.tpl = await r.json();
-                DOCB.rawTitle = null;
-                DOCB.values = {};
+                var tpl = await r.json();
+                docFlowClose();
+                var values = {};
                 var today = new Date().toISOString().slice(0, 10);
-                (DOCB.tpl.fields || []).forEach(function (f) {
-                    if (f.type === 'date') DOCB.values[f.key] = today;
-                    else if (f.type === 'select' && f.options && f.options[0]) DOCB.values[f.key] = f.options[0].value;
+                (tpl.fields || []).forEach(function (f) {
+                    if (f.type === 'date') values[f.key] = today;
+                    else if (f.type === 'select' && f.options && f.options[0]) values[f.key] = f.options[0].value;
                 });
-                renderDocPage();
-                document.getElementById('docBuilder').classList.add('open');
-                document.getElementById('docbList').style.display = 'none';
-                document.getElementById('docbEditor').style.display = 'block';
-                document.getElementById('docbActions').style.display = 'flex';
-                document.getElementById('docbTitle').textContent = docbL(DOCB.tpl.name);
-                document.querySelector('.docb-body').scrollTop = 0;
-                var first = document.querySelector('#docbPage .docfld.empty');
-                if (first) first.focus();
-            } catch (e) { docChatCard('❌ ' + escapeHtml(e.message)); }
+                var body = String(tpl.body || '').replace(/\{\{(\w+)\}\}/g, function (_, key) {
+                    var f = (tpl.fields || []).find(function (x) { return x.key === key; });
+                    var label = f ? docbL(f.label) : key;
+                    var hint = f ? (docbL(f.placeholder) || docbL(f.label)) : '';
+                    var val = values[key];
+                    var filled = val != null && String(val).trim() !== '';
+                    return '<span class="docfld ' + (filled ? 'filled' : 'empty') + '"' +
+                        ' data-k="' + escapeHtml(key) + '" data-label="' + escapeHtml(label) + '" data-hint="' + escapeHtml(hint) + '">' +
+                        (filled ? escapeHtml(val) : '') + '</span>';
+                });
+                renderDocMessage({ tplId: tpl.id, title: docbL(tpl.name), html: body });
+            } catch (e) { docInfoCard('❌ ' + escapeHtml(e.message)); }
         }
-        function renderDocPage() {
-            var tpl = DOCB.tpl;
-            var page = document.getElementById('docbPage');
-            page.removeAttribute('contenteditable');   // template mode: only field spans are editable
-            // Template body is trusted master-authored HTML/text with {{key}} slots.
-            var html = String(tpl.body || '').replace(/\{\{(\w+)\}\}/g, function (_, key) {
-                var f = (tpl.fields || []).find(function (x) { return x.key === key; });
-                var label = f ? docbL(f.label) : key;
-                var hint = f ? (docbL(f.placeholder) || docbL(f.label)) : '';
-                var val = DOCB.values[key];
-                var filled = val != null && String(val).trim() !== '';
-                return '<span class="docfld ' + (filled ? 'filled' : 'empty') + '" contenteditable="true"' +
-                    ' data-k="' + escapeHtml(key) + '" data-label="' + escapeHtml(label) + '" data-hint="' + escapeHtml(hint) + '">' +
-                    (filled ? escapeHtml(val) : '') + '</span>';
+
+        // ── Inline Word-style document message (shared by both flows) ──
+        function renderDocMessage(opts) {
+            var messagesEl = document.getElementById('aiChatMessages');
+            var id = 'docmsg_' + (++DOCB.seq);
+            var title = opts.title || opts.rawTitle || 'Hujjat';
+            var body = opts.tplId
+                ? opts.html
+                : String(opts.html).replace(/\[_{2,}\]/g,
+                    '<span class="docfld empty" data-label="to\'ldiring" data-hint="Kerakli ma\'lumotni shu yerga kiriting"></span>');
+            messagesEl.innerHTML +=
+                '<div class="ai-chat-msg ai docmsg" id="' + id + '"' +
+                    (opts.tplId ? ' data-tpl-id="' + escapeHtml(String(opts.tplId)) + '"' : '') +
+                    ' data-title="' + escapeHtml(title) + '">' +
+                    '<div class="docmsg-head"><span class="docmsg-title">📄 ' + escapeHtml(title) + '</span>' +
+                        '<span class="docmsg-actions">' +
+                        '<button class="docflow-opt" type="button" onclick="docMsgExport(\'' + id + '\',\'docx\',this)">⬇ Word</button>' +
+                        '<button class="docflow-opt" type="button" onclick="docMsgExport(\'' + id + '\',\'pdf\',this)">⬇ PDF</button>' +
+                        '</span></div>' +
+                    '<div class="docb-page" contenteditable="true">' + body + '</div>' +
+                    '<div class="docmsg-note">Sariq joylarni to\'ldiring — har biriga bosganda yon izoh chiqadi.</div>' +
+                '</div>';
+            var page = document.querySelector('#' + id + ' .docb-page');
+            page.addEventListener('click', function (e) {
+                var sp = e.target.closest && e.target.closest('.docfld');
+                if (sp) showDocHint(sp); else hideDocHint();
             });
-            page.innerHTML = html;
-            var spans = page.querySelectorAll('.docfld');
-            spans.forEach(function (sp, idx) {
-                sp.addEventListener('input', function () {
-                    var v = sp.textContent; DOCB.values[sp.dataset.k] = v;
-                    var has = v.trim() !== '';
+            page.addEventListener('input', function () {
+                page.querySelectorAll('.docfld').forEach(function (sp) {
+                    var has = (sp.textContent || '').trim() !== '';
                     sp.classList.toggle('filled', has); sp.classList.toggle('empty', !has);
                 });
-                sp.addEventListener('focus', function () { showDocHint(sp); });
-                sp.addEventListener('blur', function () { hideDocHint(); });
-                sp.addEventListener('keydown', function (e) {
-                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); var n = spans[idx + 1]; if (n) n.focus(); else sp.blur(); }
-                });
             });
+            page.addEventListener('blur', hideDocHint, true);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
         }
         function showDocHint(sp) {
             var h = document.getElementById('docbHint');
@@ -10289,48 +10330,33 @@
         }
         function hideDocHint() { var h = document.getElementById('docbHint'); if (h) h.classList.remove('show'); }
 
-        async function docbExport(format) {
-            var tpl = DOCB.tpl;
-            if (!tpl && DOCB.rawTitle) return docbExportRaw(format);
-            if (!tpl) return;
-            var missing = (tpl.fields || []).filter(function (f) { return f.required && (!DOCB.values[f.key] || !String(DOCB.values[f.key]).trim()); });
-            if (missing.length && !confirm('Ba\'zi majburiy maydonlar bo\'sh (' + missing.length + ' ta). Baribir davom etasizmi?')) return;
-            var btn = document.getElementById(format === 'pdf' ? 'docbPdf' : 'docbDocx');
-            var orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ …';
+        // ── Export an inline document (template → /api/draft/export with values
+        //    read back from the page; AI doc → /api/draft/export-raw) ──
+        async function docMsgExport(id, format, btn) {
+            var card = document.getElementById(id); if (!card) return;
+            var page = card.querySelector('.docb-page');
+            var tplId = card.getAttribute('data-tpl-id');
+            var title = card.getAttribute('data-title') || 'Hujjat';
+            var orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
             try {
-                var r = await fetch('/api/draft/export', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ templateId: tpl.id, values: DOCB.values, format: format })
-                });
-                if (r.status === 429) { alert('Kunlik limit tugadi'); return; }
-                var ct = r.headers.get('Content-Type') || '';
-                if (ct.indexOf('application/json') !== -1) {
-                    var d = await r.json();
-                    if (d.mode === 'client-print' && d.html) { var w = window.open('', '_blank'); if (w) { w.document.write(d.html); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400); } return; }
-                    alert(d.error || 'Eksport xatoligi'); return;
+                var r;
+                if (tplId) {
+                    var values = {};
+                    page.querySelectorAll('.docfld[data-k]').forEach(function (sp) { values[sp.dataset.k] = sp.textContent || ''; });
+                    r = await fetch('/api/draft/export', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                        body: JSON.stringify({ templateId: tplId, values: values, format: format })
+                    });
+                } else {
+                    var clone = page.cloneNode(true);
+                    clone.querySelectorAll('.docfld').forEach(function (sp) {
+                        sp.replaceWith(document.createTextNode(sp.textContent || '[_____]'));
+                    });
+                    r = await fetch('/api/draft/export-raw', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                        body: JSON.stringify({ title: title, html: clone.innerHTML, format: format })
+                    });
                 }
-                var blob = await r.blob();
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement('a'); a.href = url; a.download = tpl.id + (format === 'pdf' ? '.pdf' : '.doc');
-                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-            } catch (e) { alert('Xatolik: ' + e.message); }
-            finally { btn.disabled = false; btn.textContent = orig; }
-        }
-        // Export an AI-generated (template-less) document from the edited page.
-        async function docbExportRaw(format) {
-            var page = document.getElementById('docbPage');
-            // Strip the field-highlight spans but keep their text content.
-            var clone = page.cloneNode(true);
-            clone.querySelectorAll('.docfld').forEach(function (sp) {
-                sp.replaceWith(document.createTextNode(sp.textContent || '[_____]'));
-            });
-            var btn = document.getElementById(format === 'pdf' ? 'docbPdf' : 'docbDocx');
-            var orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ …';
-            try {
-                var r = await fetch('/api/draft/export-raw', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ title: DOCB.rawTitle || 'Hujjat', html: clone.innerHTML, format: format })
-                });
                 if (r.status === 429) { alert('Kunlik limit tugadi'); return; }
                 var ct = r.headers.get('Content-Type') || '';
                 if (ct.indexOf('application/json') !== -1) {
@@ -10341,7 +10367,7 @@
                 var blob = await r.blob();
                 var url = URL.createObjectURL(blob);
                 var a = document.createElement('a'); a.href = url;
-                a.download = (DOCB.rawTitle || 'hujjat').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (format === 'pdf' ? '.pdf' : '.doc');
+                a.download = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (format === 'pdf' ? '.pdf' : '.doc');
                 document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
             } catch (e) { alert('Xatolik: ' + e.message); }
             finally { btn.disabled = false; btn.textContent = orig; }
@@ -10431,12 +10457,6 @@
         async function sendAiChat() {
             var input = document.getElementById('aiChatInput');
             var text = input.value.trim();
-            // Document-builder detail collection intercepts the next message.
-            if (aiDocFlow && aiDocFlow.stage === 'details' && text) {
-                input.value = ''; input.style.height = 'auto';
-                docFlowGenerate(text);
-                return;
-            }
             var readyDocs = aiAttachments.filter(function (a) { return a.status === 'ready'; });
             var processing = aiAttachments.some(function (a) { return a.status === 'processing'; });
             if (!text && aiAttachments.length === 0) return;
@@ -14451,28 +14471,7 @@
         </div>
     </div>
 
-    <!-- Document builder: pick a template, then fill the yellow fields directly on the Word-style page -->
-    <div class="docb-overlay" id="docBuilder">
-        <div class="docb-topbar">
-            <button class="docb-icon" type="button" onclick="docbBack()" id="docbBackBtn" title="Orqaga" aria-label="Orqaga">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            </button>
-            <div class="docb-title" id="docbTitle">Hujjat yaratish</div>
-            <div class="docb-actions" id="docbActions" style="display:none;">
-                <button class="docb-btn" type="button" onclick="docbExport('docx')" id="docbDocx">⬇ Word</button>
-                <button class="docb-btn" type="button" onclick="docbExport('pdf')" id="docbPdf">⬇ PDF</button>
-            </div>
-            <button class="docb-icon" type="button" onclick="closeDocBuilder()" title="Yopish" aria-label="Yopish">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-        </div>
-        <div class="docb-body">
-            <div class="docb-list" id="docbList"></div>
-            <div class="docb-editor" id="docbEditor" style="display:none;">
-                <div class="docb-page" id="docbPage"></div>
-            </div>
-        </div>
-        <div class="docb-hint" id="docbHint"></div>
-    </div>
+    <!-- Floating hint for document fields (documents render inline in the chat) -->
+    <div class="docb-hint" id="docbHint"></div>
 </body>
 </html>
