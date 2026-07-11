@@ -3032,6 +3032,19 @@
         .docfld.flash { animation: docfld-flash 1s ease; }
         @keyframes docfld-flash { 0%,100%{ background:#fff2a8 } 50%{ background:#bfe3c0 } }
 
+        /* in-chat document-flow cards */
+        .docflow-card { line-height: 1.6; }
+        .docflow-title { font-weight: 700; margin-bottom: 6px; }
+        .docflow-opts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .docflow-opt {
+            padding: 9px 15px; border: 1px solid var(--border-1); border-radius: 999px;
+            background: var(--bg-2); color: var(--text-primary);
+            font-family: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
+            transition: border-color .15s;
+        }
+        .docflow-opt:hover { border-color: var(--navy-300); }
+        @media (pointer: coarse) { .docflow-opt { padding: 12px 16px; } }
+
         /* floating side hint for the focused field */
         .docb-hint {
             position: fixed; z-index: 10001; display: none; max-width: 260px;
@@ -6160,18 +6173,14 @@
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             </button>
                             <div class="ai-attach-menu" id="aiAttachMenu">
-                                <button type="button" onclick="pickAttach('camera')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Kamera</button>
-                                <button type="button" onclick="pickAttach('photo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Rasm</button>
-                                <button type="button" onclick="pickAttach('file')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> Fayl (PDF, rasm)</button>
+                                <button type="button" onclick="pickAttach('file')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> Fayl (PDF, JPG, PNG)</button>
                                 <button type="button" onclick="openDocBuilder()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg> Hujjat yaratish</button>
                             </div>
                         </div>
                         <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" oninput="autoResizeAI(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
                         <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
                     </div>
-                    <input type="file" id="aiFileCamera" accept="image/*" capture="environment" style="display:none" onchange="onAttachSelected(this)">
-                    <input type="file" id="aiFilePhoto" accept="image/*" style="display:none" onchange="onAttachSelected(this)">
-                    <input type="file" id="aiFileDoc" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" onchange="onAttachSelected(this)">
+                    <input type="file" id="aiFileDoc" accept=".pdf,.jpg,.jpeg,.png" multiple style="display:none" onchange="onAttachSelected(this)">
                 </div>
             </div>
 
@@ -10111,45 +10120,116 @@
         var DOCB = { tpl: null, lang: 'uz', values: {} };
         function docbL(o) { return (o && (o[DOCB.lang] || o.uz || o.ru)) || ''; }
 
-        async function openDocBuilder() {
-            var m = document.getElementById('aiAttachMenu'); if (m) m.classList.remove('open');
-            document.getElementById('docBuilder').classList.add('open');
-            docbShowList();
-            await loadDocTemplates();
-        }
-        function closeDocBuilder() { document.getElementById('docBuilder').classList.remove('open'); hideDocHint(); }
-        function docbShowList() {
-            document.getElementById('docbList').style.display = '';
-            document.getElementById('docbEditor').style.display = 'none';
-            document.getElementById('docbActions').style.display = 'none';
-            document.getElementById('docbTitle').textContent = 'Hujjat yaratish';
-            DOCB.tpl = null; hideDocHint();
-        }
-        function docbBack() { if (DOCB.tpl) docbShowList(); else closeDocBuilder(); }
+        // ── In-chat flow: "Hujjat yaratish" runs inside aiChatMessages ──
+        var aiDocFlow = null;   // {stage:'details', docType} while collecting details
+        var DOC_TYPES = ['Shartnoma', "Da'vo arizasi", 'Iltimosnoma', 'Apellyatsiya shikoyati',
+            'Kassatsiya shikoyati', 'Bildirgi', 'Qaror', 'Buyruq', "Advokatlik so'rovi", 'Rasmiy xat'];
 
-        async function loadDocTemplates() {
-            var box = document.getElementById('docbList');
-            box.innerHTML = '<div class="docb-list-loading">Yuklanmoqda…</div>';
+        function docChatCard(html) {
+            var messagesEl = document.getElementById('aiChatMessages');
+            var welcome = document.getElementById('aiChatWelcome');
+            if (welcome) welcome.style.display = 'none';
+            messagesEl.innerHTML += '<div class="ai-chat-msg ai docflow-card">' + html + '</div>';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        function openDocBuilder() {
+            var m = document.getElementById('aiAttachMenu'); if (m) m.classList.remove('open');
+            docChatCard('<div class="docflow-title">Hujjat yaratish</div>Qaysi usulni tanlaysiz?' +
+                '<div class="docflow-opts">' +
+                '<button class="docflow-opt" type="button" onclick="docFlowTemplates()">📄 Shablon</button>' +
+                '<button class="docflow-opt" type="button" onclick="docFlowAI()">✨ AI bilan yangi hujjat yaratish</button>' +
+                '</div>');
+        }
+        async function docFlowTemplates() {
             try {
                 var r = await fetch('/api/templates', { credentials: 'same-origin' });
                 if (!r.ok) throw new Error('Shablonlar yuklanmadi');
                 var tpls = (await r.json()).templates || [];
-                if (!tpls.length) { box.innerHTML = '<div class="docb-list-empty">Hozircha shablon yo\'q.</div>'; return; }
-                var ic = '<svg class="docb-tpl-ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
-                box.innerHTML = tpls.map(function (t) {
-                    return '<button class="docb-tpl" type="button" onclick="pickDocTemplate(\'' + t.id + '\')">' + ic +
-                        '<div><div class="docb-tpl-name">' + escapeHtml(docbL(t.name)) + '</div>' +
-                        (t.description ? '<div class="docb-tpl-desc">' + escapeHtml(docbL(t.description)) + '</div>' : '') + '</div></button>';
-                }).join('');
-            } catch (e) { box.innerHTML = '<div class="docb-list-empty">' + escapeHtml(e.message) + '</div>'; }
+                if (!tpls.length) { docChatCard('Hozircha tayyor shablon yo\'q — Master Admin tez orada yuklaydi. Hozircha <b>AI bilan yangi hujjat yaratish</b>dan foydalaning.'); return; }
+                docChatCard('<div class="docflow-title">Shablonni tanlang</div><div class="docflow-opts">' +
+                    tpls.map(function (t) {
+                        return '<button class="docflow-opt" type="button" onclick="pickDocTemplate(\'' + t.id + '\')">📄 ' + escapeHtml(docbL(t.name)) + '</button>';
+                    }).join('') + '</div>');
+            } catch (e) { docChatCard('❌ ' + escapeHtml(e.message)); }
         }
+        function docFlowAI() {
+            docChatCard('<div class="docflow-title">Qanday hujjat kerak?</div><div class="docflow-opts">' +
+                DOC_TYPES.map(function (t) {
+                    return '<button class="docflow-opt" type="button" onclick="docFlowPickType(' + attrArg(t) + ')">' + escapeHtml(t) + '</button>';
+                }).join('') +
+                '<button class="docflow-opt" type="button" onclick="docFlowPickType(\'__custom\')">✏️ Boshqa…</button>' +
+                '</div>');
+        }
+        function docFlowPickType(t) {
+            if (t === '__custom') { var v = prompt('Hujjat turini yozing:'); if (!v || !v.trim()) return; t = v.trim(); }
+            aiDocFlow = { stage: 'details', docType: t };
+            docChatCard('<b>' + escapeHtml(t) + '</b> uchun asosiy ma\'lumotlarni pastdagi xabar maydoniga yozing:<br>' +
+                '• tomonlar (kim kimga / yuboruvchi va qabul qiluvchi)<br>' +
+                '• sana va joy<br>• pul miqdori (bo\'lsa)<br>• muhim shartlar va boshqa tafsilotlar<br>' +
+                'Barchasini bitta xabarda yuboring — AI hujjatni tayyorlaydi.' +
+                '<div class="docflow-opts"><button class="docflow-opt" type="button" onclick="docFlowCancel()">Bekor qilish</button></div>');
+            var inp = document.getElementById('aiChatInput'); if (inp) inp.focus();
+        }
+        function docFlowCancel() { aiDocFlow = null; docChatCard('Hujjat yaratish bekor qilindi.'); }
+        async function docFlowGenerate(details) {
+            var messagesEl = document.getElementById('aiChatMessages');
+            messagesEl.innerHTML += '<div class="ai-chat-msg user">' + escapeHtml(details) + '</div>';
+            messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            var flow = aiDocFlow; aiDocFlow = null;
+            try {
+                var r = await fetch('/api/draft/ai-generate', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify({ docType: flow.docType, details: details })
+                });
+                var d = await r.json();
+                var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
+                if (!r.ok || !d.html) { docChatCard('❌ ' + escapeHtml(d.error || 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring')); return; }
+                docChatCard('✅ Hujjat tayyor — sahifada ochildi. Sariq [_____] joylarni to\'ldiring, matnni tekshiring, so\'ng Word yoki PDF yuklab oling.');
+                openDocOverlayRaw(flow.docType, d.html);
+            } catch (e) {
+                var t2 = document.getElementById('aiChatTyping'); if (t2) t2.remove();
+                docChatCard('❌ Tarmoq xatoligi — qayta urinib ko\'ring.');
+            }
+        }
+        function openDocOverlayRaw(title, html) {
+            DOCB.tpl = null; DOCB.rawTitle = title;
+            document.getElementById('docBuilder').classList.add('open');
+            document.getElementById('docbList').style.display = 'none';
+            document.getElementById('docbEditor').style.display = 'block';
+            document.getElementById('docbActions').style.display = 'flex';
+            document.getElementById('docbTitle').textContent = title;
+            var page = document.getElementById('docbPage');
+            // AI output body; highlight [_____] placeholders as yellow fields.
+            page.innerHTML = String(html).replace(/\[_{2,}\]/g,
+                '<span class="docfld empty" data-label="to\'ldiring" data-hint="Kerakli ma\'lumotni shu yerga kiriting"></span>');
+            page.setAttribute('contenteditable', 'true');
+            // Delegated hint + fill-state handling (spans live inside one big
+            // contenteditable, so per-span focus events don't fire reliably).
+            if (!page._docfldDelegated) {
+                page._docfldDelegated = true;
+                page.addEventListener('click', function (e) {
+                    var sp = e.target.closest && e.target.closest('.docfld');
+                    if (sp) showDocHint(sp); else hideDocHint();
+                });
+                page.addEventListener('input', function () {
+                    page.querySelectorAll('.docfld').forEach(function (sp) {
+                        var has = (sp.textContent || '').trim() !== '';
+                        sp.classList.toggle('filled', has); sp.classList.toggle('empty', !has);
+                    });
+                });
+            }
+            document.querySelector('.docb-body').scrollTop = 0;
+        }
+        function closeDocBuilder() { document.getElementById('docBuilder').classList.remove('open'); hideDocHint(); }
+        function docbBack() { closeDocBuilder(); }
+
         async function pickDocTemplate(id) {
-            var box = document.getElementById('docbList');
-            box.innerHTML = '<div class="docb-list-loading">Ochilmoqda…</div>';
             try {
                 var r = await fetch('/api/templates/' + encodeURIComponent(id), { credentials: 'same-origin' });
                 if (!r.ok) throw new Error('Shablon topilmadi');
                 DOCB.tpl = await r.json();
+                DOCB.rawTitle = null;
                 DOCB.values = {};
                 var today = new Date().toISOString().slice(0, 10);
                 (DOCB.tpl.fields || []).forEach(function (f) {
@@ -10157,6 +10237,7 @@
                     else if (f.type === 'select' && f.options && f.options[0]) DOCB.values[f.key] = f.options[0].value;
                 });
                 renderDocPage();
+                document.getElementById('docBuilder').classList.add('open');
                 document.getElementById('docbList').style.display = 'none';
                 document.getElementById('docbEditor').style.display = 'block';
                 document.getElementById('docbActions').style.display = 'flex';
@@ -10164,11 +10245,12 @@
                 document.querySelector('.docb-body').scrollTop = 0;
                 var first = document.querySelector('#docbPage .docfld.empty');
                 if (first) first.focus();
-            } catch (e) { await loadDocTemplates(); alert(e.message); }
+            } catch (e) { docChatCard('❌ ' + escapeHtml(e.message)); }
         }
         function renderDocPage() {
             var tpl = DOCB.tpl;
             var page = document.getElementById('docbPage');
+            page.removeAttribute('contenteditable');   // template mode: only field spans are editable
             // Template body is trusted master-authored HTML/text with {{key}} slots.
             var html = String(tpl.body || '').replace(/\{\{(\w+)\}\}/g, function (_, key) {
                 var f = (tpl.fields || []).find(function (x) { return x.key === key; });
@@ -10208,7 +10290,9 @@
         function hideDocHint() { var h = document.getElementById('docbHint'); if (h) h.classList.remove('show'); }
 
         async function docbExport(format) {
-            var tpl = DOCB.tpl; if (!tpl) return;
+            var tpl = DOCB.tpl;
+            if (!tpl && DOCB.rawTitle) return docbExportRaw(format);
+            if (!tpl) return;
             var missing = (tpl.fields || []).filter(function (f) { return f.required && (!DOCB.values[f.key] || !String(DOCB.values[f.key]).trim()); });
             if (missing.length && !confirm('Ba\'zi majburiy maydonlar bo\'sh (' + missing.length + ' ta). Baribir davom etasizmi?')) return;
             var btn = document.getElementById(format === 'pdf' ? 'docbPdf' : 'docbDocx');
@@ -10232,6 +10316,36 @@
             } catch (e) { alert('Xatolik: ' + e.message); }
             finally { btn.disabled = false; btn.textContent = orig; }
         }
+        // Export an AI-generated (template-less) document from the edited page.
+        async function docbExportRaw(format) {
+            var page = document.getElementById('docbPage');
+            // Strip the field-highlight spans but keep their text content.
+            var clone = page.cloneNode(true);
+            clone.querySelectorAll('.docfld').forEach(function (sp) {
+                sp.replaceWith(document.createTextNode(sp.textContent || '[_____]'));
+            });
+            var btn = document.getElementById(format === 'pdf' ? 'docbPdf' : 'docbDocx');
+            var orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ …';
+            try {
+                var r = await fetch('/api/draft/export-raw', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify({ title: DOCB.rawTitle || 'Hujjat', html: clone.innerHTML, format: format })
+                });
+                if (r.status === 429) { alert('Kunlik limit tugadi'); return; }
+                var ct = r.headers.get('Content-Type') || '';
+                if (ct.indexOf('application/json') !== -1) {
+                    var d = await r.json();
+                    if (d.mode === 'client-print' && d.html) { var w = window.open('', '_blank'); if (w) { w.document.write(d.html); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400); } return; }
+                    alert(d.error || 'Eksport xatoligi'); return;
+                }
+                var blob = await r.blob();
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a'); a.href = url;
+                a.download = (DOCB.rawTitle || 'hujjat').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (format === 'pdf' ? '.pdf' : '.doc');
+                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+            } catch (e) { alert('Xatolik: ' + e.message); }
+            finally { btn.disabled = false; btn.textContent = orig; }
+        }
 
         // ── Composer attachments: OCR + PDF extraction merged into the message ──
         var aiAttachments = [];   // {id, name, kind:'pdf'|'image', status, text, error}
@@ -10248,10 +10362,9 @@
             var b = document.getElementById('aiAttachBtn');
             if (m && m.classList.contains('open') && !m.contains(e.target) && !(b && b.contains(e.target))) m.classList.remove('open');
         });
-        function pickAttach(kind) {
+        function pickAttach() {
             var m = document.getElementById('aiAttachMenu'); if (m) m.classList.remove('open');
-            var id = kind === 'camera' ? 'aiFileCamera' : kind === 'photo' ? 'aiFilePhoto' : 'aiFileDoc';
-            var el = document.getElementById(id);
+            var el = document.getElementById('aiFileDoc');
             if (el) { el.value = ''; el.click(); }
         }
         function onAttachSelected(input) {
@@ -10318,6 +10431,12 @@
         async function sendAiChat() {
             var input = document.getElementById('aiChatInput');
             var text = input.value.trim();
+            // Document-builder detail collection intercepts the next message.
+            if (aiDocFlow && aiDocFlow.stage === 'details' && text) {
+                input.value = ''; input.style.height = 'auto';
+                docFlowGenerate(text);
+                return;
+            }
             var readyDocs = aiAttachments.filter(function (a) { return a.status === 'ready'; });
             var processing = aiAttachments.some(function (a) { return a.status === 'processing'; });
             if (!text && aiAttachments.length === 0) return;

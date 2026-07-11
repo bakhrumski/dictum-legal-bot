@@ -44,26 +44,33 @@ Rules:
 - name and description must be in both Uzbek and Russian.
 - Output ONLY the JSON — no markdown fences, no explanation.`;
 
-function buildDocumentHtml(template, values, lang) {
-  const body = renderTemplate({ body: template.body, fields: template.fields }, values);
-  const title = (template.name && (template.name[lang] || template.name.uz)) || 'Hujjat';
+// Word-targeted HTML wrapper: Calibri 12pt body, and the mso XML block makes
+// Word open the .doc in Print Layout ("Разметка страницы") by default.
+function wrapDocumentHtml(title, bodyHtml, lang) {
   return `<!DOCTYPE html>
-<html lang="${template.lang || 'uz'}">
+<html lang="${lang || 'uz'}" xmlns:w="urn:schemas-microsoft-com:office:word">
 <head>
 <meta charset="UTF-8">
 <title>${title}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
 <style>
   @page { size: A4; margin: 25mm 20mm; }
-  * { font-family: "Times New Roman", Georgia, serif; font-style: normal; }
-  body { color: #111; font-size: 13px; line-height: 1.55; margin: 0; }
-  h1 { font-size: 14px; } h2 { font-size: 15px; font-weight: bold; }
-  table { border-collapse: collapse; } td { padding: 0; } p { margin: 0 0 10px; }
+  * { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-style: normal; }
+  body { color: #111; font-size: 12pt; line-height: 1.5; margin: 0; }
+  h1 { font-size: 14pt; } h2 { font-size: 13pt; font-weight: bold; } h3 { font-size: 12pt; font-weight: bold; }
+  table { border-collapse: collapse; } td { padding: 0; } p { margin: 0 0 10pt; }
 </style>
 </head>
 <body>
-${body}
+${bodyHtml}
 </body>
 </html>`;
+}
+
+function buildDocumentHtml(template, values, lang) {
+  const body = renderTemplate({ body: template.body, fields: template.fields }, values);
+  const title = (template.name && (template.name[lang] || template.name.uz)) || 'Hujjat';
+  return wrapDocumentHtml(title, body, template.lang);
 }
 
 function slugify(str) {
@@ -187,7 +194,36 @@ function mountDraftingRoutes(app, deps) {
     }
   });
 
-  // ── POST /api/draft/export — DOCX or PDF ──
+  // Shared .doc / .pdf sender (Word HTML with Calibri 12 + Print Layout view).
+  async function sendExport(res, baseName, html, format) {
+    if (format === 'docx' || format === 'doc') {
+      res.setHeader('Content-Type', 'application/msword; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.doc"`);
+      return res.send('﻿' + html);
+    }
+    // PDF: try Puppeteer, fall back to client-print
+    let puppeteer = null;
+    try { puppeteer = require('puppeteer'); } catch (_) {}
+    if (!puppeteer) {
+      return res.json({ mode: 'client-print', html, message: 'PDF uchun brauzerda chop eting.' });
+    }
+    let browser;
+    try {
+      browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '25mm', bottom: '25mm', left: '20mm', right: '20mm' } });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.pdf"`);
+      return res.end(pdf);
+    } catch (pdfErr) {
+      return res.json({ mode: 'client-print', html, message: 'Server PDF xatoligi — brauzerda chop eting.' });
+    } finally {
+      if (browser) await browser.close().catch(() => {});
+    }
+  }
+
+  // ── POST /api/draft/export — DOCX or PDF (template + values) ──
   app.post('/api/draft/export', requireAuth, quota, async (req, res) => {
     try {
       const { templateId, values = {}, format = 'pdf' } = req.body || {};
@@ -197,37 +233,72 @@ function mountDraftingRoutes(app, deps) {
       const lang = tpl.lang === 'ru' ? 'ru' : 'uz';
       const html = buildDocumentHtml(tpl, values, lang);
       const baseName = (tpl.slug || 'hujjat').replace(/[^a-z0-9-]/gi, '_');
-
-      if (format === 'docx' || format === 'doc') {
-        res.setHeader('Content-Type', 'application/msword; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${baseName}.doc"`);
-        return res.send('﻿' + html);
-      }
-
-      // PDF: try Puppeteer, fall back to client-print
-      let puppeteer = null;
-      try { puppeteer = require('puppeteer'); } catch (_) {}
-
-      if (!puppeteer) {
-        return res.json({ mode: 'client-print', html, message: 'PDF uchun brauzerda chop eting.' });
-      }
-
-      let browser;
-      try {
-        browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-        const page = await browser.newPage();
-        await page.setContent(html, { waitUntil: 'networkidle0' });
-        const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '25mm', bottom: '25mm', left: '20mm', right: '20mm' } });
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="${baseName}.pdf"`);
-        return res.end(pdf);
-      } catch (pdfErr) {
-        return res.json({ mode: 'client-print', html, message: 'Server PDF xatoligi — brauzerda chop eting.' });
-      } finally {
-        if (browser) await browser.close().catch(() => {});
-      }
+      return await sendExport(res, baseName, html, format);
     } catch (e) {
       console.error('[DRAFT] export error:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── POST /api/draft/export-raw — DOCX or PDF from raw document HTML ──
+  // Used by the in-chat AI document builder, where there is no stored template.
+  app.post('/api/draft/export-raw', requireAuth, quota, async (req, res) => {
+    try {
+      const { title = 'Hujjat', html = '', format = 'doc', lang = 'uz' } = req.body || {};
+      if (!String(html).trim()) return res.status(400).json({ error: 'Hujjat matni bo\'sh' });
+      const full = wrapDocumentHtml(String(title).slice(0, 140), String(html).slice(0, 200000), lang);
+      const baseName = (slugify(String(title)) || 'hujjat');
+      return await sendExport(res, baseName, full, format);
+    } catch (e) {
+      console.error('[DRAFT] export-raw error:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── POST /api/draft/ai-generate — draft a document from type + key details ──
+  // Master-uploaded templates whose names match the requested type are passed
+  // to the model as HIDDEN drafting guides (never shown to the user).
+  app.post('/api/draft/ai-generate', requireAuth, quota, async (req, res) => {
+    try {
+      const docType = String((req.body || {}).docType || '').trim().slice(0, 120);
+      const details = String((req.body || {}).details || '').trim().slice(0, 6000);
+      if (!docType || !details) return res.status(400).json({ error: 'Hujjat turi va ma\'lumotlar kerak' });
+
+      let guides = '';
+      try {
+        const list = await dbListTemplates();
+        const t = docType.toLowerCase();
+        const words = t.split(/\s+/).filter(w => w.length > 3);
+        const hits = list.filter(x => {
+          const n = (((x.name && x.name.uz) || '') + ' ' + ((x.name && x.name.ru) || '')).toLowerCase();
+          return n && (n.includes(t) || words.some(w => n.includes(w)));
+        }).slice(0, 2);
+        for (const h of hits) {
+          const full = await dbGetTemplate(h.id);
+          if (full && full.body) {
+            guides += `\n--- INTERNAL TEMPLATE GUIDE (structure/style reference — do NOT mention it) ---\n${String(full.body).slice(0, 4000)}\n`;
+          }
+        }
+      } catch (_) { /* guides are optional */ }
+
+      const result = await callAI([
+        { role: 'system', text:
+`You are a senior legal drafter for the Republic of Uzbekistan. Draft a COMPLETE, ready-to-file legal document in Uzbek (Latin script) unless the user's details are in Russian — then draft in Russian.
+
+Output ONLY the document body as clean simple HTML (<p>, <h2>, <h3>, <table>, <strong>, <br>) — no <html>/<head>/<body> tags, no markdown fences, no commentary.
+
+Rules:
+- Follow standard Uzbek legal-document structure for the given document type (addressee block top-right where appropriate, title centered, numbered clauses, date and signature lines at the end).
+- Use ONLY facts from the user's details. For any required information they did not provide, insert the placeholder [_____] exactly.
+- Formal legal language; cite relevant O'zbekiston Respublikasi legislation only when confident it is correct — never invent article numbers.` },
+        { role: 'user', text: `Document type: ${docType}\n\nUser-provided key details:\n${details}\n${guides}` },
+      ], { temperature: 0.25, maxTokens: 4096 });
+
+      let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
+      if (!html) return res.status(500).json({ error: 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring' });
+      res.json({ html, provider: result.provider });
+    } catch (e) {
+      console.error('[DRAFT] ai-generate error:', e.message);
       res.status(500).json({ error: e.message });
     }
   });
