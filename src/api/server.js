@@ -220,22 +220,79 @@ if (WEBHOOK_DOMAIN) {
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Render/Railway terminate TLS at a proxy — trust exactly one hop so
+// req.secure, secure cookies, and rate-limit client IPs all work correctly.
+app.set('trust proxy', 1);
+
+// Security headers. CSP is deferred: the dashboard still uses ~169 inline
+// event handlers/scripts, so a strict CSP would break it — enable after the
+// inline-handler refactor (tracked in the security roadmap).
+const helmet = require('helmet');
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// CORS: the app is same-origin (dashboard served from this server). A wide-open
+// `cors()` on a cookie-authenticated API invites cross-origin abuse; only the
+// explicitly configured origins (e.g. a future mobile app) are allowed.
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true); // same-origin / curl
+    return cb(null, false); // cross-origin browsers: no CORS headers
+  },
+  credentials: true,
+}));
+
+// Body limits: uploads go through multer (multipart), so no JSON route needs
+// more than a couple of MB. The previous global 50mb limit was a memory-DoS
+// vector — any authed user could post 50MB JSON at every endpoint.
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 try { app.use(require('cookie-parser')()); } catch { console.log('[WARN] cookie-parser not installed, refresh tokens via cookie disabled'); }
 
-// Session configuration — PostgreSQL store survives server restarts
+// ── Rate limiting ──────────────────────────────────────────────────────────
+// Three tiers: a light global ceiling, a strict login limiter (brute-force
+// gate for the master-admin account that controls the legal corpus), and a
+// medium limiter for expensive AI endpoints.
+const rateLimit = require('express-rate-limit');
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, limit: 300,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: "So'rovlar soni juda ko'p — bir daqiqadan so'ng urinib ko'ring" },
+});
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 10,
+  standardHeaders: true, legacyHeaders: false,
+  skipSuccessfulRequests: true, // only failed attempts count toward the lockout
+  message: { error: "Juda ko'p urinish — 15 daqiqadan so'ng qayta urinib ko'ring" },
+});
+const aiLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, limit: 40,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: "AI so'rovlari limiti — bir necha daqiqadan so'ng urinib ko'ring" },
+});
+app.use('/api/', globalLimiter);
+app.use('/api/login', loginLimiter);
+app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat'], aiLimiter);
+
+// Session configuration — PostgreSQL store survives server restarts.
+// SESSION_SECRET should be set independently of JWT_SECRET (separate
+// cryptographic domains); JWT_SECRET remains the fallback so existing
+// deployments don't log everyone out before the env var is added.
 app.use(session({
   store: new pgSession({
     pool,
     tableName: 'user_sessions',
     createTableIfMissing: true
   }),
-  secret: process.env.JWT_SECRET,
+  secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 }
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    sameSite: 'lax',   // blocks cross-site POST CSRF
+    secure: 'auto',    // HTTPS-only when the request is HTTPS (trust proxy set above)
+  }
 }));
 
 // Serve static files
@@ -255,6 +312,18 @@ function requireMasterAdmin(req, res, next) {
     next();
   } else {
     res.status(403).json({ error: 'Master admin access required' });
+  }
+}
+
+// Staff (master/lawyer/student) — client request files contain sensitive legal
+// documents and are only shown on staff request-review screens. Free-tier
+// role='user' accounts must never be able to fetch arbitrary Telegram file IDs.
+function requireStaff(req, res, next) {
+  const staff = ['master', 'lawyer', 'student'];
+  if (req.session.isAuthenticated && staff.includes(req.session.role)) {
+    next();
+  } else {
+    res.status(403).json({ error: 'Ruxsat yo\'q' });
   }
 }
 
@@ -909,7 +978,7 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
 });
 
 // Get file from Telegram
-app.get('/api/files/:fileId', requireAuth, async (req, res) => {
+app.get('/api/files/:fileId', requireStaff, async (req, res) => {
   try {
     const { fileId } = req.params;
     const fileLink = await bot.getFileLink(fileId);
@@ -925,7 +994,7 @@ app.get('/api/files/:fileId', requireAuth, async (req, res) => {
 // A cross-origin Telegram CDN link can only be viewed inline; the `download`
 // attribute is ignored cross-origin, so a same-origin proxy is required.
 const DOWNLOADABLE_MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' };
-app.get('/api/files/:fileId/download', requireAuth, async (req, res) => {
+app.get('/api/files/:fileId/download', requireStaff, async (req, res) => {
   try {
     const { fileId } = req.params;
     // Sanitise the requested filename and gate to allowed types.
@@ -7523,6 +7592,12 @@ async function runMigrations() {
     // Internal reasoning storage for audit
     await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS internal_reasoning TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_legal_field ON requests(detected_legal_field)`);
+    // Hot-path indexes: every dashboard poll filters/sorts requests by these.
+    // Without them each 30s poll from every open tab was a sequential scan.
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_user_id ON requests(user_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests(created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_assigned_to ON requests(assigned_to)`);
 
     // Fix vector dimension mismatch — if embedding column exists with wrong dims, recreate it.
     //
