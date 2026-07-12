@@ -327,6 +327,25 @@ function requireStaff(req, res, next) {
   }
 }
 
+// Audit trail: who touched which client data, from where. Fire-and-forget —
+// an audit write must never block or fail the request it describes.
+function logAudit(req, action, resource, resourceId, adminIdOverride) {
+  try {
+    pool.query(
+      `INSERT INTO audit_log (admin_id, role, action, resource, resource_id, ip)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [
+        adminIdOverride != null ? adminIdOverride : (req.session && req.session.adminId) || null,
+        (req.session && req.session.role) || null,
+        action,
+        resource || null,
+        resourceId != null ? String(resourceId) : null,
+        req.ip || null,
+      ]
+    ).catch(e => console.error('[AUDIT] write failed:', e.message));
+  } catch (_) { /* never throw from audit */ }
+}
+
 // Format anonymous ID: #userOrdinal_MM_YY_seq
 function anonId(userId, dateStr, seq) {
   const d = dateStr ? new Date(dateStr) : new Date();
@@ -370,6 +389,26 @@ function trackActivity(req, res, next) {
 }
 app.use(trackActivity);
 
+// ── Master 2FA: password alone is not enough for the account that can edit
+// the legal corpus. After a correct password, a 6-digit code goes to the
+// master's linked Telegram; the session is only created when it's confirmed.
+// In-memory pending state is fine: single-process deploy, 5-minute TTL, and a
+// restart only means re-entering the password. MASTER_2FA=off disables (e.g.
+// while the master hasn't linked Telegram yet).
+const pending2fa = new Map(); // token -> {adminId, role, username, fullName, code, expiresAt, tries}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of pending2fa) { if (now > v.expiresAt) pending2fa.delete(k); }
+}, 60 * 1000).unref();
+
+function createSession(req, admin) {
+  req.session.isAuthenticated = true;
+  req.session.role = admin.role;
+  req.session.adminId = admin.id;
+  req.session.username = admin.username;
+  req.session.fullName = admin.full_name;
+}
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
@@ -389,21 +428,39 @@ app.post('/api/login', async (req, res) => {
       const passwordMatch = await bcrypt.compare(password, admin.password);
 
       if (passwordMatch) {
-        req.session.isAuthenticated = true;
-        req.session.role = admin.role;
-        req.session.adminId = admin.id;
-        req.session.username = admin.username;
-        req.session.fullName = admin.full_name;
+        // Master with linked Telegram → require the second factor.
+        if (admin.role === 'master' && admin.telegram_user_id && process.env.MASTER_2FA !== 'off') {
+          const code = String(Math.floor(100000 + Math.random() * 900000));
+          const token = require('crypto').randomBytes(24).toString('hex');
+          pending2fa.set(token, {
+            adminId: admin.id, role: admin.role, username: admin.username,
+            full_name: admin.full_name, code, expiresAt: Date.now() + 5 * 60 * 1000, tries: 0,
+          });
+          try {
+            await bot.sendMessage(admin.telegram_user_id,
+              `🔐 JuristAI kirish kodi: ${code}\n\n5 daqiqa amal qiladi.\nAgar bu siz bo'lmasangiz — DARHOL parolni almashtiring!`);
+          } catch (e) {
+            pending2fa.delete(token);
+            console.error('[2FA] Telegram send failed:', e.message);
+            return res.status(500).json({ error: 'Tasdiqlash kodini yuborib bo\'lmadi — Telegram bog\'lanishini tekshiring' });
+          }
+          logAudit(req, 'login.2fa_sent', 'admin', admin.id, admin.id);
+          return res.json({ twofa: true, token });
+        }
 
+        createSession(req, admin);
+        logAudit(req, 'login.success', 'admin', admin.id, admin.id);
         res.json({
           success: true,
           role: admin.role,
           fullName: admin.full_name
         });
       } else {
+        logAudit(req, 'login.fail', 'admin', admin.id, admin.id);
         res.status(401).json({ error: 'Noto\'g\'ri foydalanuvchi nomi yoki parol' });
       }
     } else {
+      logAudit(req, 'login.fail_unknown_user', 'admin', cleanUsername, null);
       res.status(401).json({ error: 'Noto\'g\'ri foydalanuvchi nomi yoki parol' });
     }
   } catch (error) {
@@ -412,10 +469,49 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Second factor confirmation (rate-limited by the /api/login limiter prefix).
+app.post('/api/login/2fa', async (req, res) => {
+  const token = String((req.body || {}).token || '');
+  const code = String((req.body || {}).code || '').trim();
+  const p = pending2fa.get(token);
+  if (!p || Date.now() > p.expiresAt) {
+    pending2fa.delete(token);
+    return res.status(401).json({ error: 'Kod muddati tugadi — qaytadan kiring', expired: true });
+  }
+  p.tries++;
+  if (p.tries > 5) {
+    pending2fa.delete(token);
+    logAudit(req, 'login.2fa_lockout', 'admin', p.adminId, p.adminId);
+    return res.status(429).json({ error: 'Juda ko\'p urinish — qaytadan kiring', expired: true });
+  }
+  if (code !== p.code) {
+    return res.status(401).json({ error: 'Kod noto\'g\'ri' });
+  }
+  pending2fa.delete(token);
+  createSession(req, { id: p.adminId, role: p.role, username: p.username, full_name: p.full_name });
+  logAudit(req, 'login.2fa_success', 'admin', p.adminId, p.adminId);
+  res.json({ success: true, role: p.role, fullName: p.full_name });
+});
+
 // Logout endpoint
 app.post('/api/logout', (req, res) => {
   req.session.destroy();
   res.json({ success: true });
+});
+
+// Audit trail viewer (master only): recent sensitive-data access + auth events.
+app.get('/api/admin/audit-log', requireMasterAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 200, 1000);
+    const r = await pool.query(`
+      SELECT al.id, al.admin_id, a.full_name, al.role, al.action, al.resource,
+             al.resource_id, al.ip, al.created_at
+        FROM audit_log al LEFT JOIN admins a ON a.id = al.admin_id
+       ORDER BY al.created_at DESC LIMIT $1`, [limit]);
+    res.json({ entries: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Get current user info
@@ -923,6 +1019,7 @@ app.get('/api/requests', requireAuth, async (req, res) => {
 
 // Get single request
 app.get('/api/requests/:id', requireAuth, async (req, res) => {
+  logAudit(req, 'request.view', 'request', req.params.id);
   try {
     const { id } = req.params;
     const result = await pool.query(`
@@ -979,6 +1076,7 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
 
 // Get file from Telegram
 app.get('/api/files/:fileId', requireStaff, async (req, res) => {
+  logAudit(req, 'file.view', 'file', req.params.fileId);
   try {
     const { fileId } = req.params;
     const fileLink = await bot.getFileLink(fileId);
@@ -995,6 +1093,7 @@ app.get('/api/files/:fileId', requireStaff, async (req, res) => {
 // attribute is ignored cross-origin, so a same-origin proxy is required.
 const DOWNLOADABLE_MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' };
 app.get('/api/files/:fileId/download', requireStaff, async (req, res) => {
+  logAudit(req, 'file.download', 'file', req.params.fileId);
   try {
     const { fileId } = req.params;
     // Sanitise the requested filename and gate to allowed types.
@@ -5502,6 +5601,7 @@ app.get('/api/rag/verified-answers', requireMasterAdmin, async (req, res) => {
 
 // POST /api/rag/verify-chat-answer — lawyer verifies an AI chat answer and adds to corpus
 app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
+  logAudit(req, 'corpus.verified_answer', 'qa', (req.body && req.body.question || '').slice(0, 80));
   try {
     const { question, answer, topic, originalAiAnswer } = req.body;
     if (!question || !answer) return res.status(400).json({ error: 'Savol va javob kerak' });
@@ -7598,6 +7698,21 @@ async function runMigrations() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_user_id ON requests(user_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests(created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_assigned_to ON requests(assigned_to)`);
+
+    // Audit trail of sensitive-data access and auth events (enterprise
+    // confidentiality requirement — "who read this client's file, when").
+    await pool.query(`CREATE TABLE IF NOT EXISTS audit_log (
+      id BIGSERIAL PRIMARY KEY,
+      admin_id INTEGER,
+      role VARCHAR(20),
+      action VARCHAR(60) NOT NULL,
+      resource VARCHAR(60),
+      resource_id TEXT,
+      ip VARCHAR(64),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_admin ON audit_log(admin_id, created_at DESC)`);
 
     // Fix vector dimension mismatch — if embedding column exists with wrong dims, recreate it.
     //

@@ -1168,15 +1168,16 @@
                 });
                 const data = await response.json();
                 if (response.ok) {
-                    // Remember me
+                    // Remember me — username ONLY. Storing the password in
+                    // localStorage means any XSS can read it in plaintext.
                     if (document.getElementById('rememberMe').checked) {
                         localStorage.setItem('juristai_remember', JSON.stringify({
-                            username: document.getElementById('username').value,
-                            password: document.getElementById('password').value
+                            username: document.getElementById('username').value
                         }));
                     } else {
                         localStorage.removeItem('juristai_remember');
                     }
+                    if (data.twofa) { show2faStep(data.token); return; }
                     window.location.href = '/dashboard.html';
                 } else {
                     errorDiv.textContent = data.error || 'Kirish xato';
@@ -1187,6 +1188,53 @@
                 errorDiv.classList.remove('show'); void errorDiv.offsetWidth; errorDiv.classList.add('show');
             }
         });
+
+        // ── Master 2FA step: a 6-digit code sent to the linked Telegram ──
+        function show2faStep(token) {
+            var form = document.getElementById('loginForm');
+            form.style.display = 'none';
+            var old = document.getElementById('twofaBox'); if (old) old.remove();
+            var box = document.createElement('div');
+            box.id = 'twofaBox';
+            box.innerHTML =
+                '<div style="text-align:center;margin-bottom:14px;font-size:34px;">🔐</div>' +
+                '<p style="font-size:14px;color:var(--fg-2);line-height:1.55;margin-bottom:16px;text-align:center;">' +
+                    'Telegramingizga 6 xonali tasdiqlash kodi yuborildi.<br>Kodni kiriting (5 daqiqa amal qiladi):</p>' +
+                '<input id="twofaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" ' +
+                    'style="width:100%;box-sizing:border-box;padding:13px;font-size:22px;text-align:center;letter-spacing:8px;' +
+                    'border:1px solid var(--border-1);border-radius:10px;font-family:inherit;color:var(--fg-1);background:var(--bg-1);">' +
+                '<div id="twofaErr" style="color:var(--danger-700,#b3261e);font-size:13px;min-height:18px;margin-top:8px;text-align:center;"></div>' +
+                '<button id="twofaBtn" style="width:100%;padding:13px;margin-top:6px;background:var(--navy-700,#16365A);color:#fff;' +
+                    'border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Tasdiqlash</button>' +
+                '<button type="button" onclick="location.reload()" style="width:100%;padding:10px;margin-top:10px;background:none;' +
+                    'border:none;color:var(--fg-3);font-size:13px;cursor:pointer;font-family:inherit;">← Orqaga</button>';
+            form.parentNode.insertBefore(box, form);
+            var input = document.getElementById('twofaCode');
+            input.focus();
+            async function submit2fa() {
+                var code = input.value.trim();
+                if (code.length !== 6) { document.getElementById('twofaErr').textContent = '6 xonali kodni kiriting'; return; }
+                var btn = document.getElementById('twofaBtn');
+                btn.disabled = true; btn.textContent = 'Tekshirilmoqda…';
+                try {
+                    var r = await fetch('/api/login/2fa', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: token, code: code })
+                    });
+                    var d = await r.json();
+                    if (r.ok && d.success) { window.location.href = '/dashboard.html'; return; }
+                    if (d.expired) { location.reload(); return; }
+                    document.getElementById('twofaErr').textContent = d.error || 'Kod noto\'g\'ri';
+                    btn.disabled = false; btn.textContent = 'Tasdiqlash';
+                    input.select();
+                } catch (e) {
+                    document.getElementById('twofaErr').textContent = 'Tarmoq xatoligi';
+                    btn.disabled = false; btn.textContent = 'Tasdiqlash';
+                }
+            }
+            document.getElementById('twofaBtn').addEventListener('click', submit2fa);
+            input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit2fa(); } });
+        }
 
         // Tajriba: allow only numbers
         document.getElementById('regExperience').addEventListener('input', function() {
@@ -1199,15 +1247,18 @@
             el.addEventListener('change', function() { this.classList.remove('input-invalid'); });
         });
 
-        // Remember me: restore saved credentials
+        // Remember me: restore saved username. Older versions also stored the
+        // password — scrub it from localStorage on sight.
         (function() {
             const saved = localStorage.getItem('juristai_remember');
             if (saved) {
                 try {
-                    const { username, password } = JSON.parse(saved);
-                    document.getElementById('username').value = username || '';
-                    document.getElementById('password').value = password || '';
+                    const parsed = JSON.parse(saved);
+                    document.getElementById('username').value = parsed.username || '';
                     document.getElementById('rememberMe').checked = true;
+                    if (parsed.password) {
+                        localStorage.setItem('juristai_remember', JSON.stringify({ username: parsed.username || '' }));
+                    }
                 } catch(e) {}
             }
         })();
