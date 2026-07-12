@@ -81,6 +81,19 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 .doc-page p{margin:0 0 10px}
 .fld-ph{background:#FBEFD2;border-bottom:1px dashed #D6B379;border-radius:2px;padding:0 2px;color:#9a8f80;font-style:italic;font-size:.95em}
 
+/* ── Belgilash (mark) mode: select text on the rendered page, mark as field ── */
+.mark-hint{font-size:12px;color:var(--txt2);margin-bottom:10px;line-height:1.5}
+.mark-page{user-select:text;cursor:text}
+.tplfld{background:#fff2a8;border-bottom:1px dashed #c99a3d;border-radius:3px;padding:0 3px;cursor:pointer;color:#5b4a12;font-weight:600;transition:background .12s}
+.tplfld:hover{background:#ffe867}
+.mark-fab{position:fixed;z-index:250;display:none;padding:8px 15px;border:none;border-radius:20px;background:var(--navy);color:#F5EFE3;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25);font-family:inherit}
+.mark-fab:hover{background:var(--navy2)}
+#markModal .fld{margin-bottom:12px}
+#markModal label{display:block;font-size:11.5px;font-weight:600;color:var(--txt2);margin-bottom:4px}
+#markModal input[type=text],#markModal input:not([type]),#markModal select,#markModal textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;color:var(--txt)}
+#markModal textarea{min-height:48px;resize:vertical}
+.mark-sel-preview{font-style:italic;background:#faf6ec;padding:8px 10px;border-radius:8px;border-left:3px solid var(--gold);font-size:12.5px;margin-bottom:16px;max-height:70px;overflow-y:auto}
+
 /* Actions */
 .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 .btn{padding:9px 20px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--txt);transition:.15s}
@@ -181,6 +194,30 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
     <div class="modal-actions">
       <button class="btn" onclick="closeImportModal()">Bekor</button>
       <button class="btn primary" id="importRunBtn" onclick="runImport()" disabled>🤖 AI tahlil qilsin</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mark-as-field Modal (Belgilash) ── -->
+<div class="modal-overlay" id="markModal" onclick="if(event.target===this)closeMarkModal()">
+  <div class="modal-box">
+    <h3>✏️ Maydon sifatida belgilash</h3>
+    <div class="mark-sel-preview" id="markSelPreview"></div>
+    <div class="fld">
+      <label>Kalit (ID) — faqat lotin harf/raqam/pastki chiziq</label>
+      <input type="text" id="markKey" list="markKeyList">
+      <datalist id="markKeyList"></datalist>
+    </div>
+    <div class="fld"><label>Nomi (UZ)</label><input type="text" id="markLabelUz"></div>
+    <div class="fld"><label>Nomi (RU) — ixtiyoriy</label><input type="text" id="markLabelRu"></div>
+    <div class="fld"><label>Turi</label>
+      <select id="markType"><option value="text">text</option><option value="textarea">textarea</option><option value="date">date</option><option value="number">number</option><option value="select">select</option></select>
+    </div>
+    <div class="fld"><label style="display:flex;align-items:center;gap:6px;font-weight:600;color:var(--txt)"><input type="checkbox" id="markRequired" style="width:auto"> Majburiy</label></div>
+    <div class="fld"><label>AI maslahat (ixtiyoriy)</label><textarea id="markHint" placeholder="Masalan: rasmiy, qisqa ohangda yozilsin..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeMarkModal()">Bekor</button>
+      <button class="btn primary" onclick="confirmMarkField()">✅ Belgilash</button>
     </div>
   </div>
 </div>
@@ -306,16 +343,23 @@ function renderEditor(){
   </div>
   <div class="palette" id="palette"></div>
   <div class="preview-toggle">
-    <button id="btnEdit" class="on" onclick="showTab('edit')">✏️ Tahrirlash</button>
+    <button id="btnMark" class="on" onclick="showTab('mark')">🖊 Belgilash</button>
+    <button id="btnEdit" onclick="showTab('edit')">✏️ Tahrirlash (HTML)</button>
     <button id="btnPreview" onclick="showTab('preview')">👁 Ko'rish</button>
   </div>
-  <div id="editView">
+  <div id="markView">
+    <div class="mark-hint">Hujjatdagi to'ldiriladigan joyni (ism, sana, summa va h.k.) sichqoncha bilan belgilang (tanlang), so'ng chiqqan tugmani bosing. Mavjud sariq maydonni bosib o'chirishingiz mumkin.</div>
+    <div class="preview-wrap"><div class="doc-page mark-page" id="markDoc"></div></div>
+  </div>
+  <div id="editView" style="display:none">
     <textarea class="body-ta" id="bodyTa" oninput="syncBody()">${esc(t.body||'')}</textarea>
   </div>
   <div id="previewView" style="display:none">
     <div class="preview-wrap"><div class="doc-page" id="previewDoc"></div></div>
   </div>
 </div>
+
+<button class="mark-fab" id="markFab" type="button" onclick="openMarkPopup()">+ Maydon qilib belgilash</button>
 
 <div class="actions">
   ${!isNew ? `<button class="btn danger" onclick="deleteTemplate()">🗑 O'chirish</button>` : ''}
@@ -325,6 +369,7 @@ function renderEditor(){
 `;
   renderFieldRows();
   renderPalette();
+  showTab('mark');   // "Belgilash" (visual highlight) is the primary workflow
 }
 
 // ── Field rows ──
@@ -370,18 +415,21 @@ function insertKey(key){
 
 function syncBody(){ /* live sync is via direct access in saveTemplate */ }
 
-// ── Preview / edit tabs ──
+// ── Belgilash / Tahrirlash / Ko'rish tabs ──
 function showTab(t){
   const edit = document.getElementById('editView');
   const prev = document.getElementById('previewView');
+  const mark = document.getElementById('markView');
   const bE = document.getElementById('btnEdit');
   const bP = document.getElementById('btnPreview');
-  if(t==='edit'){
-    edit.style.display=''; prev.style.display='none'; bE.classList.add('on'); bP.classList.remove('on');
-  } else {
-    edit.style.display='none'; prev.style.display=''; bE.classList.remove('on'); bP.classList.add('on');
-    renderPreview();
-  }
+  const bM = document.getElementById('btnMark');
+  if(!edit || !prev || !mark) return;
+  edit.style.display='none'; prev.style.display='none'; mark.style.display='none';
+  bE.classList.remove('on'); bP.classList.remove('on'); bM.classList.remove('on');
+  hideMarkFab();
+  if(t==='edit'){ edit.style.display=''; bE.classList.add('on'); }
+  else if(t==='mark'){ mark.style.display=''; bM.classList.add('on'); renderMarkView(); }
+  else { prev.style.display=''; bP.classList.add('on'); renderPreview(); }
 }
 
 function renderPreview(){
@@ -395,6 +443,143 @@ function renderPreview(){
   });
   const pd = document.getElementById('previewDoc');
   if(pd) pd.innerHTML = html;
+}
+
+// ════════════════════════════════════════════
+// BELGILASH — select text on the rendered document, mark it as a field
+// ════════════════════════════════════════════
+let markRange = null, markSelText = '';
+
+// raw body ({{key}} tokens) -> rendered chips for visual selection
+function tplBodyToChips(rawHtml, flds){
+  return String(rawHtml||'').replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const f = flds.find(x=>x.key===key);
+    const label = (f && (f.label?.uz || f.label?.ru)) || key;
+    return '<span class="tplfld" data-key="'+esc(key)+'" title="O\'chirish uchun bosing">'+esc(label)+'</span>';
+  });
+}
+// live chip DOM -> canonical raw body ({{key}} tokens), for saving
+function tplChipsToRaw(container){
+  const clone = container.cloneNode(true);
+  clone.querySelectorAll('.tplfld').forEach(sp => {
+    sp.replaceWith(document.createTextNode('{{'+sp.dataset.key+'}}'));
+  });
+  return clone.innerHTML;
+}
+function syncFromMarkView(){
+  const el = document.getElementById('markDoc'); const ta = document.getElementById('bodyTa');
+  if(el && ta) ta.value = tplChipsToRaw(el);
+}
+
+function renderMarkView(){
+  const ta = document.getElementById('bodyTa'); const el = document.getElementById('markDoc');
+  if(!ta || !el) return;
+  el.innerHTML = tplBodyToChips(ta.value, fields);
+  if(!el._wired){
+    el._wired = true;
+    el.addEventListener('mouseup', handleMarkSelection);
+    el.addEventListener('touchend', () => setTimeout(handleMarkSelection, 60));
+    el.addEventListener('click', (e) => {
+      const chip = e.target.closest && e.target.closest('.tplfld');
+      if(chip) removeMarkField(chip.dataset.key);
+    });
+  }
+}
+
+function handleMarkSelection(e){
+  if(e && e.target && e.target.closest && e.target.closest('.tplfld')){ hideMarkFab(); return; }
+  const sel = window.getSelection();
+  if(!sel || sel.isCollapsed){ hideMarkFab(); return; }
+  const text = sel.toString().trim();
+  if(!text){ hideMarkFab(); return; }
+  const el = document.getElementById('markDoc');
+  const anchor = sel.anchorNode;
+  const node = anchor && (anchor.nodeType===1 ? anchor : anchor.parentElement);
+  if(!el || !node || !el.contains(node)){ hideMarkFab(); return; }
+  const range = sel.getRangeAt(0);
+  const startEl = range.startContainer.nodeType===1 ? range.startContainer : range.startContainer.parentElement;
+  const endEl = range.endContainer.nodeType===1 ? range.endContainer : range.endContainer.parentElement;
+  // A selection touching an existing field chip is ambiguous — ignore it.
+  if((startEl && startEl.closest('.tplfld')) || (endEl && endEl.closest('.tplfld'))){ hideMarkFab(); return; }
+  markRange = range.cloneRange();
+  markSelText = text;
+  const rect = range.getBoundingClientRect();
+  const fab = document.getElementById('markFab');
+  fab.style.display = 'block';
+  let top = rect.top - 42; if(top < 8) top = rect.bottom + 8;
+  fab.style.top = Math.max(8, top) + 'px';
+  fab.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - fab.offsetWidth - 12)) + 'px';
+}
+function hideMarkFab(){ const f=document.getElementById('markFab'); if(f) f.style.display='none'; }
+
+function slugifyKey(s){
+  let t = String(s||'').toLowerCase().replace(/[ʻʼ'`’]/g,'').replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,40);
+  if(!t) t = 'maydon';
+  if(/^[0-9]/.test(t)) t = 'f_'+t;
+  return t;
+}
+function uniqueSlug(base){
+  if(!fields.some(f=>f.key===base)) return base;
+  let i=2; while(fields.some(f=>f.key===base+'_'+i)) i++;
+  return base+'_'+i;
+}
+
+function openMarkPopup(){
+  if(!markRange) return;
+  document.getElementById('markSelPreview').textContent = '"' + (markSelText.length>140 ? markSelText.slice(0,140)+'…' : markSelText) + '"';
+  document.getElementById('markKey').value = uniqueSlug(slugifyKey(markSelText));
+  document.getElementById('markLabelUz').value = markSelText.length>60 ? markSelText.slice(0,60) : markSelText;
+  document.getElementById('markLabelRu').value = '';
+  document.getElementById('markType').value = 'text';
+  document.getElementById('markRequired').checked = false;
+  document.getElementById('markHint').value = '';
+  const dl = document.getElementById('markKeyList');
+  dl.innerHTML = fields.map(f=>'<option value="'+esc(f.key)+'">'+esc(f.label?.uz||f.key)+'</option>').join('');
+  document.getElementById('markModal').classList.add('open');
+  hideMarkFab();
+}
+function closeMarkModal(){ document.getElementById('markModal').classList.remove('open'); markRange = null; }
+
+function confirmMarkField(){
+  if(!markRange) return;
+  const key = (document.getElementById('markKey').value||'').trim();
+  if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)){ alert('Kalit lotin harfi/pastki chiziq bilan boshlanib, faqat lotin harf, raqam va pastki chiziqdan iborat bo\'lishi kerak (bo\'sh joysiz).'); return; }
+  const existing = fields.find(f=>f.key===key);
+  if(!existing){
+    fields.push({
+      key,
+      label: { uz: document.getElementById('markLabelUz').value.trim()||key, ru: document.getElementById('markLabelRu').value.trim()||'' },
+      type: document.getElementById('markType').value,
+      required: document.getElementById('markRequired').checked,
+      placeholder: { uz:'', ru:'' },
+      aiHint: document.getElementById('markHint').value.trim()
+    });
+  }
+  const label = existing ? (existing.label?.uz||key) : (document.getElementById('markLabelUz').value.trim()||key);
+  const chip = document.createElement('span');
+  chip.className = 'tplfld'; chip.dataset.key = key; chip.title = "O'chirish uchun bosing"; chip.textContent = label;
+  try{
+    markRange.deleteContents();
+    markRange.insertNode(chip);
+  }catch(e){ alert('Belgilashda xatolik: hujjat o\'zgargan bo\'lishi mumkin — qayta urinib ko\'ring.'); markRange=null; return; }
+  markRange = null;
+  syncFromMarkView();
+  renderFieldRows(); renderPalette();
+  closeMarkModal();
+  toast('✅ Maydon belgilandi');
+}
+
+function removeMarkField(key){
+  const f = fields.find(x=>x.key===key);
+  if(!confirm((f?.label?.uz||key) + ' maydonini olib tashlaymizmi? (hujjatdagi barcha joylarda)')) return;
+  fields = fields.filter(x=>x.key!==key);
+  const el = document.getElementById('markDoc');
+  el.querySelectorAll('.tplfld[data-key="'+key+'"]').forEach(sp => {
+    sp.replaceWith(document.createTextNode(sp.textContent));
+  });
+  syncFromMarkView();
+  renderFieldRows(); renderPalette();
+  toast('O\'chirildi');
 }
 
 // ── Collect form values ──
