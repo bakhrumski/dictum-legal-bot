@@ -3055,6 +3055,18 @@
             resize: vertical;
         }
         .docform-input:focus { outline: none; border-color: var(--navy-300); }
+        /* Two-column doc-flow form: short fields on the left, textarea
+           (long free-text) fields alone on the right with room to grow. */
+        .docform-grid { display: flex; gap: 18px; align-items: stretch; margin-top: 4px; }
+        .docform-col-left, .docform-col-right { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; }
+        .docform-col-full { flex: 1 1 100%; }
+        .docform-col-right .docform-row { flex: 1; display: flex; flex-direction: column; margin-top: 0; }
+        .docform-col-right .docform-input { flex: 1; min-height: 190px; }
+        @media (max-width: 720px) {
+            .docform-grid { flex-direction: column; gap: 0; }
+            .docform-col-right .docform-row { flex: none; margin-top: 10px; }
+            .docform-col-right .docform-input { min-height: 120px; }
+        }
         /* inline Word-style document message */
         .ai-chat-msg.docmsg { max-width: 100%; width: 100%; background: transparent; padding: 0; }
         .docmsg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -10240,11 +10252,22 @@
                 return (full.fields && full.fields.length) ? full.fields : null;
             } catch (e) { return null; }
         }
+        // Lay the form out as two columns on wide screens: short fields stack
+        // on the left, long free-text (textarea) fields sit alone on the right
+        // so they get real vertical room instead of squeezing between short
+        // fields. On mobile the columns stack into today's single-column view.
+        function buildDocFormGrid(rowObjs) {
+            var left = rowObjs.filter(function (r) { return !r.isTextarea; }).map(function (r) { return r.html; }).join('');
+            var right = rowObjs.filter(function (r) { return r.isTextarea; }).map(function (r) { return r.html; }).join('');
+            if (!right) return '<div class="docform-grid"><div class="docform-col-left docform-col-full">' + left + '</div></div>';
+            if (!left) return '<div class="docform-grid"><div class="docform-col-right docform-col-full">' + right + '</div></div>';
+            return '<div class="docform-grid"><div class="docform-col-left">' + left + '</div><div class="docform-col-right">' + right + '</div></div>';
+        }
         function renderDocTypeForm(t, tplFields) {
             docFlowActiveFields = (tplFields && tplFields.length) ? tplFields : null;
-            var rows;
+            var rowObjs;
             if (docFlowActiveFields) {
-                rows = docFlowActiveFields.map(function (f) {
+                rowObjs = docFlowActiveFields.map(function (f) {
                     var label = docbL(f.label) || f.key;
                     var ph = docbL(f.placeholder) || f.aiHint || '';
                     var id = 'docf_' + f.key;
@@ -10257,18 +10280,20 @@
                             return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(docbL(o.label) || o.value) + '</option>';
                         }).join('') + '</select>';
                     } else ctl = '<input class="docform-input" id="' + id + '" type="text" placeholder="' + escapeHtml(ph) + '">';
-                    return '<div class="docform-row"><label class="docform-label" for="' + id + '">' + escapeHtml(label) +
+                    var html = '<div class="docform-row"><label class="docform-label" for="' + id + '">' + escapeHtml(label) +
                         (f.required ? ' <span style="color:var(--danger-700)">*</span>' : '') + '</label>' + ctl + '</div>';
-                }).join('');
+                    return { html: html, isTextarea: f.type === 'textarea' };
+                });
             } else {
-                rows = DOC_FORM_FIELDS.map(function (f) {
+                rowObjs = DOC_FORM_FIELDS.map(function (f) {
                     var ctl = f.ta
                         ? '<textarea class="docform-input" id="docf_' + f.k + '" rows="4" placeholder="' + escapeHtml(f.ph) + '"></textarea>'
                         : '<input class="docform-input" id="docf_' + f.k + '" type="text" placeholder="' + escapeHtml(f.ph) + '">';
-                    return '<div class="docform-row"><label class="docform-label" for="docf_' + f.k + '">' + escapeHtml(f.label) + '</label>' + ctl + '</div>';
-                }).join('');
+                    var html = '<div class="docform-row"><label class="docform-label" for="docf_' + f.k + '">' + escapeHtml(f.label) + '</label>' + ctl + '</div>';
+                    return { html: html, isTextarea: !!f.ta };
+                });
             }
-            docStepCard('<div class="docflow-title">' + escapeHtml(t) + ' — kerakli ma\'lumotlar</div>' + rows +
+            docStepCard('<div class="docflow-title">' + escapeHtml(t) + ' — kerakli ma\'lumotlar</div>' + buildDocFormGrid(rowObjs) +
                 '<div class="docflow-opts">' +
                 '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowSubmit(' + attrArg(t) + ')">📄 Hujjatni yaratish</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowAI()">← Orqaga</button>' +
