@@ -3033,38 +3033,58 @@
         @keyframes docfld-flash { 0%,100%{ background:#fff2a8 } 50%{ background:#bfe3c0 } }
 
         /* in-chat document-flow cards */
-        .docflow-card { line-height: 1.6; }
-        .docflow-title { font-weight: 700; margin-bottom: 6px; }
-        .docflow-opts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        /* Doc-flow step/info cards render as a proper full-width card instead
+           of a squeezed 80%-wide chat bubble, so a multi-field form has room
+           to breathe. */
+        .ai-chat-msg.docflow-card {
+            max-width: 100%; width: 100%; line-height: 1.6;
+            background: var(--bg-2); border: 1px solid var(--border-1);
+            border-radius: 16px; padding: 20px 24px;
+        }
+        .docflow-title {
+            font-weight: 700; font-size: 15px; color: var(--text-primary);
+            margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-1);
+        }
+        .docflow-opts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
         .docflow-opt {
-            padding: 9px 15px; border: 1px solid var(--border-1); border-radius: 999px;
-            background: var(--bg-2); color: var(--text-primary);
+            padding: 10px 18px; border: 1px solid var(--border-1); border-radius: 999px;
+            background: var(--bg-1); color: var(--text-primary);
             font-family: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
-            transition: border-color .15s;
+            transition: border-color .15s, background .15s;
         }
-        .docflow-opt:hover { border-color: var(--navy-300); }
+        .docflow-opt:hover { border-color: var(--navy-300); background: var(--parchment-100, rgba(0,0,0,0.03)); }
         .docflow-opt.docflow-primary { background: var(--navy-700); color: #fff; border-color: var(--navy-700); }
-        @media (pointer: coarse) { .docflow-opt { padding: 12px 16px; } }
-        /* labeled inputs for the AI-doc required-information form */
-        .docform-row { margin-top: 10px; }
-        .docform-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
-        .docform-input {
-            width: 100%; box-sizing: border-box; padding: 9px 11px;
-            border: 1px solid var(--border-1); border-radius: 9px;
-            font-family: inherit; font-size: 14px; color: var(--text-primary); background: var(--bg-2);
-            resize: vertical;
+        .docflow-opt.docflow-primary:hover { background: var(--navy-500); border-color: var(--navy-500); }
+        @media (pointer: coarse) { .docflow-opt { padding: 13px 18px; } }
+
+        /* ── Required-information form: two aligned columns ── */
+        .docform-grid { display: flex; gap: 28px; align-items: stretch; }
+        .docform-col-left, .docform-col-right {
+            flex: 1 1 260px; min-width: 0;
+            display: flex; flex-direction: column; gap: 16px;
         }
-        .docform-input:focus { outline: none; border-color: var(--navy-300); }
-        /* Two-column doc-flow form: short fields on the left, textarea
-           (long free-text) fields alone on the right with room to grow. */
-        .docform-grid { display: flex; gap: 18px; align-items: stretch; margin-top: 4px; }
-        .docform-col-left, .docform-col-right { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; }
         .docform-col-full { flex: 1 1 100%; }
-        .docform-col-right .docform-row { flex: 1; display: flex; flex-direction: column; margin-top: 0; }
+        .docform-row { display: flex; flex-direction: column; }
+        .docform-col-right .docform-row { flex: 1; }
+        .docform-label {
+            display: block; font-size: 12.5px; font-weight: 600;
+            color: var(--text-secondary); margin-bottom: 6px; letter-spacing: .01em;
+        }
+        .docform-input {
+            width: 100%; box-sizing: border-box; padding: 11px 14px;
+            border: 1px solid var(--border-1); border-radius: 10px;
+            font-family: inherit; font-size: 14.5px; color: var(--text-primary); background: var(--bg-1);
+            resize: vertical; transition: border-color .15s, box-shadow .15s;
+        }
         .docform-col-right .docform-input { flex: 1; min-height: 190px; }
+        .docform-input:focus { outline: none; border-color: var(--navy-300); box-shadow: 0 0 0 3px rgba(44,92,146,0.12); }
+        .docform-input::placeholder { color: var(--text-muted); }
+        .docform-actions {
+            display: flex; flex-wrap: wrap; gap: 10px;
+            margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-1);
+        }
         @media (max-width: 720px) {
-            .docform-grid { flex-direction: column; gap: 0; }
-            .docform-col-right .docform-row { flex: none; margin-top: 10px; }
+            .docform-grid { flex-direction: column; gap: 16px; }
             .docform-col-right .docform-input { min-height: 120px; }
         }
         /* inline Word-style document message */
@@ -10294,7 +10314,7 @@
                 });
             }
             docStepCard('<div class="docflow-title">' + escapeHtml(t) + ' — kerakli ma\'lumotlar</div>' + buildDocFormGrid(rowObjs) +
-                '<div class="docflow-opts">' +
+                '<div class="docform-actions">' +
                 '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowSubmit(' + attrArg(t) + ')">📄 Hujjatni yaratish</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowAI()">← Orqaga</button>' +
                 '</div>');
