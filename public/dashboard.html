@@ -13969,9 +13969,30 @@
             }
         }
 
+        // ── Server-push events (SSE): chat + requests update on push instead of
+        // per-tab polling. The old intervals stay as a FALLBACK that only fires
+        // while the event stream is disconnected, so nothing regresses if SSE
+        // drops (EventSource auto-reconnects with the server-sent retry).
+        var esConnected = false;
+        var _eventSource = null;
+        function startEventStream() {
+            if (_eventSource || typeof EventSource === 'undefined') return;
+            try {
+                _eventSource = new EventSource('/api/events');
+                _eventSource.onopen = function () { esConnected = true; };
+                _eventSource.onerror = function () { esConnected = false; };
+                _eventSource.addEventListener('chat', function () {
+                    loadChatMessages();
+                });
+                _eventSource.addEventListener('requests', function () {
+                    if (typeof loadRequests === 'function') loadRequests();
+                });
+            } catch (e) { esConnected = false; }
+        }
+
         function startChatPolling() {
             if (chatPollInterval) return;
-            chatPollInterval = setInterval(loadChatMessages, 3000);
+            chatPollInterval = setInterval(function () { if (!esConnected) loadChatMessages(); }, 3000);
         }
 
         function stopChatPolling() {
@@ -13983,8 +14004,9 @@
         function startBackgroundPoll() {
             if (bgPollStarted) return;
             bgPollStarted = true;
+            startEventStream();
             loadChatMessages().then(() => {
-                setInterval(() => { if (!chatIsOpen) loadChatMessages(); }, 5000);
+                setInterval(() => { if (!chatIsOpen && !esConnected) loadChatMessages(); }, 5000);
             });
         }
 
@@ -14446,7 +14468,9 @@
             }
         });
         loadRequests();
-        setInterval(loadRequests, 30000);
+        // Requests now update via server push (see startEventStream); this
+        // interval is only the fallback while the event stream is disconnected.
+        setInterval(function () { if (typeof esConnected === 'undefined' || !esConnected) loadRequests(); }, 30000);
         setInterval(loadAdmins, 60000);
         setInterval(loadRankings, 120000);
         setInterval(loadMonteCarlo, 300000);
