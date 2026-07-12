@@ -2210,6 +2210,48 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
   }
 });
 
+// ── Server-push event channel (SSE) ─────────────────────────────────────────
+// Replaces per-tab polling (team chat every 3-5s, requests every 30s, per open
+// tab) with one held connection per tab and push on change. Chat pushes fire
+// directly from the single write endpoint; request changes are detected by ONE
+// server-side watcher query every 10s for ALL clients (this also catches
+// requests inserted by the Telegram bot without instrumenting bot.js).
+// NOTE: in-process fan-out — when the app ever runs >1 instance this must move
+// to Postgres LISTEN/NOTIFY or Redis pub/sub.
+const sseClients = new Set();
+app.get('/api/events', requireAuth, (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  res.write('retry: 5000\n\n');
+  sseClients.add(res);
+  const hb = setInterval(() => { try { res.write(':hb\n\n'); } catch (_) {} }, 25000);
+  req.on('close', () => { clearInterval(hb); sseClients.delete(res); });
+});
+function pushEvent(name) {
+  for (const c of sseClients) {
+    try { c.write(`event: ${name}\ndata: {}\n\n`); } catch (_) { sseClients.delete(c); }
+  }
+}
+// Requests watcher: status distribution + latest created_at as a change stamp.
+// Catches new requests (bot or API), answers, approvals, deletions — any
+// status transition — with one cheap indexed query per 10s server-wide.
+let _reqStamp = null;
+setInterval(async () => {
+  if (sseClients.size === 0) return; // nobody listening — don't query
+  try {
+    const r = await pool.query(`
+      SELECT COALESCE(string_agg(s || ':' || n, ',' ORDER BY s), '') AS dist,
+             (SELECT COALESCE(MAX(created_at), 'epoch')::text FROM requests) AS latest
+        FROM (SELECT status AS s, COUNT(*)::int AS n FROM requests GROUP BY status) t`);
+    const stamp = r.rows[0].dist + '|' + r.rows[0].latest;
+    if (_reqStamp !== null && stamp !== _reqStamp) pushEvent('requests');
+    _reqStamp = stamp;
+  } catch (e) { /* transient DB errors must not kill the watcher */ }
+}, 10000).unref();
+
 // Send a chat message
 app.post('/api/chat/messages', requireAuth, async (req, res) => {
   try {
@@ -2256,6 +2298,7 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
       }
     }
 
+    pushEvent('chat'); // wake connected dashboards instead of them polling
     res.json({
       success: true,
       message: {
@@ -2324,6 +2367,7 @@ app.delete('/api/chat/messages/:id', requireMasterAdmin, async (req, res) => {
     const msgId = parseInt(req.params.id);
     if (!msgId) return res.status(400).json({ error: 'Invalid message ID' });
     await pool.query('DELETE FROM chat_messages WHERE id = $1', [msgId]);
+    pushEvent('chat');
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting chat message:', error);
@@ -2335,6 +2379,7 @@ app.delete('/api/chat/messages/:id', requireMasterAdmin, async (req, res) => {
 app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM chat_messages');
+    pushEvent('chat');
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting all chat messages:', error);
@@ -4804,6 +4849,40 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       });
     }
 
+    // ── Answer cache ─────────────────────────────────────────────────────────
+    // Identical first-turn questions skip RAG + generation entirely. Only
+    // cacheable when there's no history (follow-ups depend on conversation)
+    // and no attached document. Placed AFTER the verified/korpus overrides so
+    // a master correction always beats a stale cached answer. ANSWER_CACHE=off
+    // disables (useful while testing prompt changes).
+    const cacheable = process.env.ANSWER_CACHE !== 'off'
+      && !hasDocument
+      && (!Array.isArray(history) || history.length === 0);
+    const cacheKey = cacheable
+      ? require('crypto').createHash('sha256')
+          .update((topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          .digest('hex')
+      : null;
+    if (cacheKey) {
+      try {
+        const c = await pool.query(
+          `SELECT reply, provider, rag FROM answer_cache
+            WHERE key = $1 AND created_at > NOW() - INTERVAL '72 hours'`, [cacheKey]);
+        if (c.rows[0]) {
+          pool.query('UPDATE answer_cache SET hits = hits + 1 WHERE key = $1', [cacheKey]).catch(() => {});
+          return res.json({
+            reply: c.rows[0].reply,
+            provider: (c.rows[0].provider || 'AI'),
+            databases: Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'],
+            ragUsed: true,
+            rag: c.rows[0].rag,
+            qaBank: qaMatchInfo,
+            cached: true,
+          });
+        }
+      } catch (cacheErr) { /* cache read failure must never block the answer */ }
+    }
+
     // RAG retrieval: fetch relevant legal chunks for the user's query
     let ragContext = '';
     let ragMeta = null;
@@ -4950,6 +5029,18 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       rag: ragMeta,
       qaBank: qaMatchInfo,
     };
+
+    // Store in the answer cache (fire-and-forget; failed answers never cached).
+    if (cacheKey && !isFailedAnswer(displayReply)) {
+      pool.query(
+        `INSERT INTO answer_cache (key, reply, provider, rag)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (key) DO UPDATE
+           SET reply = EXCLUDED.reply, provider = EXCLUDED.provider,
+               rag = EXCLUDED.rag, created_at = NOW()`,
+        [cacheKey, displayReply, finalProvider, ragMeta ? JSON.stringify(ragMeta) : null]
+      ).catch(e => console.warn('[Answer Cache] write failed:', e.message));
+    }
     if (sse) {
       sse({ type: 'done', ...responsePayload });
       return res.end();
@@ -7836,6 +7927,19 @@ async function runMigrations() {
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_admin ON audit_log(admin_id, created_at DESC)`);
+
+    // Answer cache: identical first-turn questions (same topic) return the
+    // stored answer instantly instead of paying full RAG + LLM cost again.
+    // 72h TTL keeps answers from outliving law changes / corpus updates.
+    await pool.query(`CREATE TABLE IF NOT EXISTS answer_cache (
+      key CHAR(64) PRIMARY KEY,
+      reply TEXT NOT NULL,
+      provider VARCHAR(80),
+      rag JSONB,
+      hits INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_answer_cache_created ON answer_cache(created_at)`);
 
     // Fix vector dimension mismatch — if embedding column exists with wrong dims, recreate it.
     //
