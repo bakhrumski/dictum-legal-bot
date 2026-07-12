@@ -10647,80 +10647,28 @@
                         topic: selectedTopic || (selectedTopics[0] || null),
                         topics: selectedTopics.length > 0 ? selectedTopics : null,
                         autoDetect: topicAutoDetect === true,
-                        documentText: documentText || null
+                        documentText: documentText || null,
+                        stream: true
                     })
                 });
+
+                var contentType = (response.headers.get('Content-Type') || '');
+                if (response.ok && contentType.indexOf('text/event-stream') !== -1) {
+                    // Streaming path: tokens render live; the 'done' event carries
+                    // the final normalized reply + meta and is re-rendered through
+                    // the same code path as the JSON response.
+                    await readAiChatStream(response, currentQuestion, messagesEl);
+                    sendBtn.disabled = false;
+                    saveAiChatSession();
+                    return;
+                }
 
                 var typing = document.getElementById('aiChatTyping');
                 if (typing) typing.remove();
 
                 var data = await response.json();
                 if (response.ok) {
-                    aiChatHistory.push({ role: 'model', text: data.reply });
-                    // ── RAG source info badge — ONLY visible to Master Admin ──
-                    var ragBadge = '';
-                    var isMasterAdmin = (typeof currentUser !== 'undefined' && currentUser.role === 'master');
-                    if (isMasterAdmin) {
-                        if (data.rag && data.rag.chunks > 0) {
-                            var srcLabels = {
-                                'verified_qa': '✅ Tasdiqlangan',
-                                'uploaded_doc': '📄 Yuklangan hujjat',
-                                'law_text': '📜 Qonun matni',
-                                'fetched': '🌐 Lex.uz'
-                            };
-                            var srcParts = (data.rag.sources || []).map(function(s) {
-                                var label = srcLabels[s.type] || s.type;
-                                var lawList = s.laws && s.laws.length ? ' (' + s.laws.join(', ') + ')' : '';
-                                return '<span class="ai-rag-src">' + label + ' × ' + s.count + lawList + '</span>';
-                            }).join('');
-                            var webPart = data.rag.webResults > 0 ? '<span class="ai-rag-src">🌐 Internet × ' + data.rag.webResults + '</span>' : '';
-                            ragBadge = '<div class="ai-rag-info">'
-                                + '<span class="ai-rag-mode" title="RAG search mode">📊 ' + (data.rag.searchMode || 'text') + ' | ' + data.rag.chunks + ' chunk</span>'
-                                + srcParts + webPart
-                                + '</div>';
-                        } else if (data.ragUsed === false) {
-                            ragBadge = '<div class="ai-rag-info"><span class="ai-rag-mode ai-rag-no">🤖 RAG ishlatilmadi — faqat ' + escapeHtml(data.provider || 'AI') + '</span></div>';
-                        }
-                    }
-                    // ── Italic disclaimer — visible to ALL users ──
-                    var aiDisclaimer = '<div class="ai-disclaimer"><em>Javob AI yordamida tayyorlandi. Professional huquqiy maslahat uchun professional yuristlarga murojaat qiling!</em></div>';
-                    ragBadge = ragBadge + aiDisclaimer;
-
-                    // ── Provider badge ──
-                    var providerBadge = data.provider ? '<span class="ai-provider-badge">' + escapeHtml(data.provider) + '</span>' : '';
-
-                    // Store Q&A for verification (master admin only)
-                    var msgId = 'aimsg_' + Date.now();
-                    aiVerifyMap[msgId] = { question: currentQuestion, answer: data.reply, topic: selectedTopic };
-                    var isMasterUser = typeof currentUser !== 'undefined' && currentUser.role === 'master';
-                    var verifyRow = isMasterUser ? ('<div class="ai-verify-row" id="vrow_' + msgId + '">' +
-                        '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
-                        '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
-                        '<button class="ai-verify-btn" onclick="sendAiMsgToUser(\'' + msgId + '\')" title="AI javobini foydalanuvchiga Telegram orqali yuborish" style="background:var(--navy-700);color:#fff;border-color:var(--navy-700)">📤 Foydalanuvchiga yuborish</button>' +
-                        providerBadge +
-                        '</div>' +
-                        '<div class="ai-verify-editor" id="veditor_' + msgId + '" style="display:none">' +
-                        '<textarea class="ai-verify-textarea" id="vtxt_' + msgId + '"></textarea>' +
-                        '<div class="ai-verify-editor-actions">' +
-                        '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
-                        '<button class="ai-verify-btn" onclick="applyEditOnly(\'' + msgId + '\')" title="Faqat matnni o\'zgartiradi (korpusga qo\'shilmaydi) — foydalanuvchiga yuborishdan oldin qisqartirish uchun">💾 Saqlash</button>' +
-                        '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
-                        '</div></div>') : '';
-                    // ── Message action icons (copy, download, thumbs) ──
-                    var actId = 'aiact_' + Date.now();
-                    var actionsHtml = '<div class="ai-msg-actions" id="' + actId + '">' +
-                        '<button class="ai-msg-act" data-tip="Nusxalash" onclick="copyAiMsg(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
-                        '<button class="ai-msg-act" data-tip="Word yuklab olish" onclick="downloadAiMsg(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>' +
-                        '<button class="ai-msg-act" data-tip="Yaxshi javob" onclick="rateAiMsg(this,\'good\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>' +
-                        '<button class="ai-msg-act" data-tip="Yomon javob" onclick="rateAiMsg(this,\'bad\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>' +
-                        '</div>';
-
-                    var qaIdAttr = (data.qaBank && data.qaBank.id) ? (' data-qa-id="' + data.qaBank.id + '"') : '';
-                    var twId = 'tw_' + Date.now();
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + ragBadge + actionsHtml + verifyRow + '</div>';
-                    var twEl = document.getElementById(twId);
-                    if (twEl) { twEl.removeAttribute('id'); typewriterRender(twEl, data.reply, messagesEl, null); }
-                    maybeShowFlagGuide();
+                    renderAiChatReply(data, currentQuestion, messagesEl, false);
                 } else if (data.code === 'CHANNEL_REQUIRED' || data.code === 'SURVEY_REQUIRED') {
                     checkAccessGate(true);
                 } else {
@@ -10737,6 +10685,150 @@
 
             // Auto-save session
             saveAiChatSession();
+        }
+
+        // Final render of an AI reply — shared by the JSON path (typewriter
+        // animation) and the streaming path (instant: tokens already streamed
+        // live, so the finished bubble renders markdown immediately).
+        function renderAiChatReply(data, currentQuestion, messagesEl, instant) {
+            aiChatHistory.push({ role: 'model', text: data.reply });
+            // ── RAG source info badge — ONLY visible to Master Admin ──
+            var ragBadge = '';
+            var isMasterAdmin = (typeof currentUser !== 'undefined' && currentUser.role === 'master');
+            if (isMasterAdmin) {
+                if (data.rag && data.rag.chunks > 0) {
+                    var srcLabels = {
+                        'verified_qa': '✅ Tasdiqlangan',
+                        'uploaded_doc': '📄 Yuklangan hujjat',
+                        'law_text': '📜 Qonun matni',
+                        'fetched': '🌐 Lex.uz'
+                    };
+                    var srcParts = (data.rag.sources || []).map(function(s) {
+                        var label = srcLabels[s.type] || s.type;
+                        var lawList = s.laws && s.laws.length ? ' (' + s.laws.join(', ') + ')' : '';
+                        return '<span class="ai-rag-src">' + label + ' × ' + s.count + lawList + '</span>';
+                    }).join('');
+                    var webPart = data.rag.webResults > 0 ? '<span class="ai-rag-src">🌐 Internet × ' + data.rag.webResults + '</span>' : '';
+                    ragBadge = '<div class="ai-rag-info">'
+                        + '<span class="ai-rag-mode" title="RAG search mode">📊 ' + (data.rag.searchMode || 'text') + ' | ' + data.rag.chunks + ' chunk</span>'
+                        + srcParts + webPart
+                        + '</div>';
+                } else if (data.ragUsed === false) {
+                    ragBadge = '<div class="ai-rag-info"><span class="ai-rag-mode ai-rag-no">🤖 RAG ishlatilmadi — faqat ' + escapeHtml(data.provider || 'AI') + '</span></div>';
+                }
+            }
+            // ── Italic disclaimer — visible to ALL users ──
+            var aiDisclaimer = '<div class="ai-disclaimer"><em>Javob AI yordamida tayyorlandi. Professional huquqiy maslahat uchun professional yuristlarga murojaat qiling!</em></div>';
+            ragBadge = ragBadge + aiDisclaimer;
+
+            // ── Provider badge ──
+            var providerBadge = data.provider ? '<span class="ai-provider-badge">' + escapeHtml(data.provider) + '</span>' : '';
+
+            // Store Q&A for verification (master admin only)
+            var msgId = 'aimsg_' + Date.now();
+            aiVerifyMap[msgId] = { question: currentQuestion, answer: data.reply, topic: selectedTopic };
+            var isMasterUser = typeof currentUser !== 'undefined' && currentUser.role === 'master';
+            var verifyRow = isMasterUser ? ('<div class="ai-verify-row" id="vrow_' + msgId + '">' +
+                '<button class="ai-verify-btn" onclick="verifyAiAnswer(\'' + msgId + '\')" title="Javob to\'g\'ri — RAG korpusiga qo\'shish">📚 Korpusga qo\'shish</button>' +
+                '<button class="ai-verify-btn ai-edit-btn" onclick="openVerifyEditor(\'' + msgId + '\')" title="Javobni tahrirlash va yaxshilab korpusga qo\'shish">✏️ Tahrirlash</button>' +
+                '<button class="ai-verify-btn" onclick="sendAiMsgToUser(\'' + msgId + '\')" title="AI javobini foydalanuvchiga Telegram orqali yuborish" style="background:var(--navy-700);color:#fff;border-color:var(--navy-700)">📤 Foydalanuvchiga yuborish</button>' +
+                providerBadge +
+                '</div>' +
+                '<div class="ai-verify-editor" id="veditor_' + msgId + '" style="display:none">' +
+                '<textarea class="ai-verify-textarea" id="vtxt_' + msgId + '"></textarea>' +
+                '<div class="ai-verify-editor-actions">' +
+                '<button class="ai-verify-btn" id="vsave_' + msgId + '" onclick="saveVerifiedEdit(\'' + msgId + '\')">✅ Saqlash va korpusga qo\'shish</button>' +
+                '<button class="ai-verify-btn" onclick="applyEditOnly(\'' + msgId + '\')" title="Faqat matnni o\'zgartiradi (korpusga qo\'shilmaydi) — foydalanuvchiga yuborishdan oldin qisqartirish uchun">💾 Saqlash</button>' +
+                '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
+                '</div></div>') : '';
+            // ── Message action icons (copy, download, thumbs) ──
+            var actId = 'aiact_' + Date.now();
+            var actionsHtml = '<div class="ai-msg-actions" id="' + actId + '">' +
+                '<button class="ai-msg-act" data-tip="Nusxalash" onclick="copyAiMsg(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
+                '<button class="ai-msg-act" data-tip="Word yuklab olish" onclick="downloadAiMsg(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>' +
+                '<button class="ai-msg-act" data-tip="Yaxshi javob" onclick="rateAiMsg(this,\'good\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>' +
+                '<button class="ai-msg-act" data-tip="Yomon javob" onclick="rateAiMsg(this,\'bad\',\'' + actId + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>' +
+                '</div>';
+
+            var qaIdAttr = (data.qaBank && data.qaBank.id) ? (' data-qa-id="' + data.qaBank.id + '"') : '';
+            var twId = 'tw_' + Date.now();
+            messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + ragBadge + actionsHtml + verifyRow + '</div>';
+            var twEl = document.getElementById(twId);
+            if (twEl) {
+                twEl.removeAttribute('id');
+                if (instant) {
+                    twEl.innerHTML = simpleMarkdown(data.reply);
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                } else {
+                    typewriterRender(twEl, data.reply, messagesEl, null);
+                }
+            }
+            maybeShowFlagGuide();
+        }
+
+        // Consume the /api/legal-chat SSE stream: live-append tokens into a
+        // temporary bubble, then swap it for the fully rendered reply from the
+        // 'done' event (same renderer as the JSON path — identical final UI).
+        async function readAiChatStream(response, currentQuestion, messagesEl) {
+            var liveWrap = null, liveEl = null;
+            var acc = '';
+            var doneData = null, errMsg = null;
+            function ensureLive() {
+                if (liveEl) return liveEl;
+                var typing = document.getElementById('aiChatTyping');
+                if (typing) typing.remove();
+                liveWrap = document.createElement('div');
+                liveWrap.className = 'ai-chat-msg ai';
+                liveEl = document.createElement('div');
+                liveEl.className = 'ai-analysis-content';
+                liveEl.style.whiteSpace = 'pre-wrap';   // raw text during stream
+                liveWrap.appendChild(liveEl);
+                messagesEl.appendChild(liveWrap);
+                return liveEl;
+            }
+            try {
+                var reader = response.body.getReader();
+                var decoder = new TextDecoder();
+                var buf = '';
+                while (true) {
+                    var r = await reader.read();
+                    if (r.done) break;
+                    buf += decoder.decode(r.value, { stream: true });
+                    var idx;
+                    while ((idx = buf.indexOf('\n')) !== -1) {
+                        var line = buf.slice(0, idx).trim();
+                        buf = buf.slice(idx + 1);
+                        if (line.indexOf('data:') !== 0) continue;
+                        var payload = line.slice(5).trim();
+                        if (!payload) continue;
+                        var ev;
+                        try { ev = JSON.parse(payload); } catch (e) { continue; }
+                        if (ev.type === 'token') {
+                            acc += ev.t;
+                            ensureLive().textContent = acc;
+                            messagesEl.scrollTop = messagesEl.scrollHeight;
+                        } else if (ev.type === 'replace') {
+                            acc = ev.text;
+                            ensureLive().textContent = acc;
+                        } else if (ev.type === 'done') {
+                            doneData = ev;
+                        } else if (ev.type === 'error') {
+                            errMsg = ev.error;
+                        }
+                    }
+                }
+            } catch (e) {
+                errMsg = errMsg || 'Tarmoq xatoligi — javob uzildi';
+            }
+            var typing2 = document.getElementById('aiChatTyping');
+            if (typing2) typing2.remove();
+            if (liveWrap) liveWrap.remove();
+            if (doneData) {
+                renderAiChatReply(doneData, currentQuestion, messagesEl, true);
+            } else {
+                messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:var(--danger-700);">Xatolik: ' + escapeHtml(errMsg || 'Javob uzildi — qayta urinib ko\'ring') + '</div>';
+            }
+            messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
         async function saveAiChatSession() {

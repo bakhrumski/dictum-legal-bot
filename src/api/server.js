@@ -2426,6 +2426,71 @@ async function callGemini(messages, options = {}) {
   return { text, provider: 'Gemini' };
 }
 
+// Streaming variant: same request shape as callGemini, but via
+// :streamGenerateContent?alt=sse — emits text deltas through onToken as they
+// arrive so the user watches the answer being written instead of staring at a
+// spinner for the full generation (10-30s on long legal answers).
+async function callGeminiStream(messages, options = {}, onToken) {
+  const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) throw new Error('GEMINI_API_KEY sozlanmagan');
+
+  const model = 'gemini-2.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${geminiKey}`;
+
+  let systemInstruction = null;
+  const chatMessages = [];
+  for (const m of messages) {
+    if (m.role === 'system') systemInstruction = { parts: [{ text: m.text }] };
+    else chatMessages.push({ role: m.role === 'model' ? 'model' : 'user', parts: [{ text: m.text }] });
+  }
+  const body = { contents: chatMessages, generationConfig: { temperature, maxOutputTokens: maxTokens } };
+  if (systemInstruction) body.systemInstruction = systemInstruction;
+  if (useSearch) body.tools = [{ googleSearch: {} }];
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok || !resp.body) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`Gemini stream ${resp.status}: ${errBody.substring(0, 300)}`);
+  }
+
+  const decoder = new TextDecoder();
+  let buf = '';
+  let full = '';
+  let finishReason = null;
+  for await (const chunk of resp.body) {
+    buf += decoder.decode(chunk, { stream: true });
+    // SSE frames are separated by blank lines; each data line is a JSON chunk.
+    let idx;
+    while ((idx = buf.indexOf('\n')) !== -1) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      let data;
+      try { data = JSON.parse(payload); } catch (_) { continue; }
+      const cand = data.candidates && data.candidates[0];
+      if (!cand) continue;
+      if (cand.finishReason) finishReason = cand.finishReason;
+      const parts = (cand.content && cand.content.parts) || [];
+      for (const p of parts) {
+        if (p.text !== undefined && !p.thought) {
+          full += p.text;
+          try { onToken(p.text); } catch (_) { /* consumer errors must not kill the stream */ }
+        }
+      }
+    }
+  }
+  if (finishReason === 'SAFETY') throw new Error('Gemini safety filter (stream)');
+  if (!full) throw new Error(`Gemini stream empty response (finish: ${finishReason || '?'})`);
+  return { text: full, provider: 'Gemini' };
+}
+
 async function callOpenAI(messages, options = {}) {
   const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
   const gptKey = process.env.GPT_API_KEY;
@@ -4797,9 +4862,52 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     aiMessages.push({ role: 'user', text: finalUserText });
 
     const _chatUserId = req.session?.adminId || null;
-    let aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
-    let displayReply = normalizeResponseForUser(aiResult.text);
-    let finalProvider = aiResult.provider;
+
+    // ── Streaming mode (body.stream === true) ──
+    // We only switch the response to SSE HERE — after every fast short-circuit
+    // (quota, verified override, korpus override) has had its chance to return
+    // plain JSON. From this point the answer takes 10-30s, so tokens are
+    // streamed as they arrive. Event protocol:
+    //   {type:'token', t}      — text delta (primary provider streaming)
+    //   {type:'replace', text} — discard shown text (fallback produced better)
+    //   {type:'done', ...}     — final normalized reply + meta (same shape as
+    //                            the JSON response; client re-renders from it)
+    //   {type:'error', error}  — terminal failure after headers were sent
+    const wantStream = req.body && req.body.stream === true;
+    let sse = null;
+    if (wantStream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // defeat proxy buffering so tokens flush immediately
+      res.flushHeaders();
+      sse = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch (_) {} };
+    }
+
+    let displayReply, finalProvider;
+    if (wantStream) {
+      try {
+        const sres = await callGeminiStream(
+          aiMessages,
+          { useSearch: true, maxTokens: 8192 },
+          (t) => sse({ type: 'token', t })
+        );
+        displayReply = normalizeResponseForUser(sres.text);
+        finalProvider = sres.provider;
+      } catch (streamErr) {
+        // Primary stream failed (rate limit, safety, network) — run the normal
+        // non-streaming provider chain and replace whatever was shown.
+        console.warn('[Legal Chat] stream failed, using non-streaming chain:', streamErr.message);
+        const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
+        displayReply = normalizeResponseForUser(aiResult.text);
+        finalProvider = aiResult.provider;
+        sse({ type: 'replace', text: displayReply });
+      }
+    } else {
+      const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
+      displayReply = normalizeResponseForUser(aiResult.text);
+      finalProvider = aiResult.provider;
+    }
 
     // ── GEMINI FALLBACK: if RAG-constrained answer failed, let Gemini answer freely ──
     if (isFailedAnswer(displayReply)) {
@@ -4817,6 +4925,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
           displayReply = fallbackReply;
           finalProvider = `${fallbackResult.provider} (fallback)`;
           console.log(`[Legal Chat] Gemini fallback succeeded — using pretrained answer`);
+          if (sse) sse({ type: 'replace', text: displayReply });
         }
       } catch (fallbackErr) {
         console.warn(`[Legal Chat] Gemini fallback failed: ${fallbackErr.message}`);
@@ -4833,16 +4942,30 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     if (topic) generateSourceSuggestions(message, topic, displayReply).catch(() => {});
 
     const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
-    res.json({
+    const responsePayload = {
       reply: displayReply,
       provider: finalProvider,
       databases: usedDbs,
       ragUsed: !!ragContext,
       rag: ragMeta,
       qaBank: qaMatchInfo,
-    });
+    };
+    if (sse) {
+      sse({ type: 'done', ...responsePayload });
+      return res.end();
+    }
+    res.json(responsePayload);
   } catch (error) {
     console.error('[Legal Chat] Error:', error);
+    // If SSE headers already went out, res.status() would throw — emit a
+    // terminal error event on the open stream instead.
+    if (res.headersSent) {
+      try {
+        res.write('data: ' + JSON.stringify({ type: 'error', error: 'Qonun qidirish xatoligi: ' + error.message }) + '\n\n');
+        res.end();
+      } catch (_) {}
+      return;
+    }
     res.status(500).json({ error: 'Qonun qidirish xatoligi: ' + error.message });
   }
 });
