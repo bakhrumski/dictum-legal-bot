@@ -436,7 +436,8 @@
         #surveyAdminSection.collapsed .reg-section-body,
         #coverageSection.collapsed .reg-section-body,
         #suggestedSection.collapsed .reg-section-body,
-        #answerFeedbackSection.collapsed .reg-section-body { display: none !important; }
+        #answerFeedbackSection.collapsed .reg-section-body,
+        #auditLogSection.collapsed .reg-section-body { display: none !important; }
 
         /* Hide chat wrapper button (chat is now a tab) */
         .header-chat-wrapper { display: none; }
@@ -2209,6 +2210,14 @@
             overflow-x: hidden;
             padding: 10px 10px;
         }
+        .ai-history-search {
+            width: 100%; box-sizing: border-box; margin: 0 0 8px;
+            padding: 8px 11px; font-size: 13px; font-family: inherit;
+            border: 1px solid var(--border-1, rgba(0,0,0,0.12)); border-radius: 9px;
+            background: var(--bg-2, #fff); color: var(--text-primary);
+        }
+        .ai-history-search:focus { outline: none; border-color: var(--navy-300, #7AA0C6); }
+        .ai-history-search::placeholder { color: var(--text-muted); }
         .ai-history-title {
             font-size: 11px;
             font-weight: 700;
@@ -5934,6 +5943,8 @@
                 <!-- History -->
                 <div class="ai-history-section">
                     <div class="ai-history-title">Suhbatlar tarixi</div>
+                    <input type="search" class="ai-history-search" id="aiHistorySearch"
+                           placeholder="Suhbatlardan qidirish..." oninput="renderAiHistoryList()">
                     <div class="ai-history-list" id="aiHistoryList">
                         <div class="ai-history-empty">Hali suhbat yo'q</div>
                     </div>
@@ -6421,6 +6432,23 @@
                     <b>grammatik</b> yoki <b>mazmun</b> xatosi sifatida belgilangan; taklif bo'lsa, u ham ko'rsatiladi.
                 </p>
                 <div id="answerFeedbackContent"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
+            </div>
+        </div>
+
+        <!-- Audit trail: who accessed which client data + auth events (Master Only) -->
+        <div class="reg-section collapsed" id="auditLogSection" style="margin-top:16px;">
+            <div class="reg-section-header" onclick="document.getElementById('auditLogSection').classList.toggle('collapsed'); if(!document.getElementById('auditLogSection').classList.contains('collapsed')) loadAuditLog();">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>🗂 Audit jurnali</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">
+                    Kim qachon qaysi mijoz ma'lumotiga kirgani va kirish (login/2FA) hodisalari.
+                    Maxfiylik nazorati uchun — har bir murojaat ko'rish, fayl ochish va korpus o'zgarishi qayd etiladi.
+                </p>
+                <div id="auditLogContent"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
             </div>
         </div>
 
@@ -6997,6 +7025,11 @@
                 const answerFeedbackSection = document.getElementById('answerFeedbackSection');
                 if (answerFeedbackSection) {
                     answerFeedbackSection.style.display = data.role === 'master' ? '' : 'none';
+                }
+                // Audit-log panel: master only
+                const auditLogSection = document.getElementById('auditLogSection');
+                if (auditLogSection) {
+                    auditLogSection.style.display = data.role === 'master' ? '' : 'none';
                 }
 
                 // Show/hide master-only tabs in bottom tab bar
@@ -10134,6 +10167,10 @@
             // Remove from DOM immediately — no waiting for API round-trip
             const item = btn && btn.closest('.ai-history-item');
             if (item) item.remove();
+            // Keep the search cache in sync, or the row reappears on filter.
+            if (Array.isArray(aiChatSessions)) {
+                aiChatSessions = aiChatSessions.filter(function (s) { return s.id !== sessionId; });
+            }
             try {
                 const resp = await fetch('/api/ai-chat-sessions/' + sessionId, {
                     method: 'DELETE',
@@ -11147,19 +11184,63 @@
             } catch (e) { console.error('[FB Review]', e); }
         }
 
+        // ── Audit-log panel (master): who touched which client data, when ──
+        async function loadAuditLog() {
+            var box = document.getElementById('auditLogContent');
+            box.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                var r = await fetch('/api/admin/audit-log?limit=200', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Yuklab bo\'lmadi');
+                var entries = (await r.json()).entries || [];
+                if (!entries.length) { box.innerHTML = '<div class="reg-empty">Hozircha yozuv yo\'q</div>'; return; }
+                var actionLabels = {
+                    'login.success': '✅ Kirish', 'login.fail': '❌ Noto\'g\'ri parol',
+                    'login.fail_unknown_user': '❌ Noma\'lum foydalanuvchi',
+                    'login.2fa_sent': '🔐 2FA kod yuborildi', 'login.2fa_success': '🔐 2FA tasdiqlandi',
+                    'login.2fa_lockout': '🚫 2FA bloklandi',
+                    'request.view': '👁 Murojaat ko\'rildi', 'file.view': '📄 Fayl ochildi',
+                    'file.download': '⬇ Fayl yuklab olindi', 'corpus.verified_answer': '📚 Korpusga javob'
+                };
+                box.innerHTML = '<div style="overflow-x:auto;"><table class="admin-table" style="width:100%;font-size:12.5px;">' +
+                    '<thead><tr><th>Vaqt</th><th>Kim</th><th>Harakat</th><th>Obyekt</th><th>IP</th></tr></thead><tbody>' +
+                    entries.map(function (e) {
+                        var when = new Date(e.created_at).toLocaleString('uz-UZ');
+                        var who = (e.full_name || (e.admin_id ? '#' + e.admin_id : '—')) + (e.role ? ' (' + e.role + ')' : '');
+                        var act = actionLabels[e.action] || e.action;
+                        var obj = e.resource ? (e.resource + (e.resource_id ? ' ' + e.resource_id : '')) : '—';
+                        return '<tr><td style="white-space:nowrap;">' + when + '</td><td>' + escapeHtml(who) + '</td><td>' +
+                            escapeHtml(act) + '</td><td>' + escapeHtml(String(obj).slice(0, 60)) + '</td><td>' + escapeHtml(e.ip || '—') + '</td></tr>';
+                    }).join('') + '</tbody></table></div>';
+            } catch (e) {
+                box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
+            }
+        }
+
         async function loadAiChatHistory() {
             aiHistoryLoaded = true;
             try {
                 var response = await fetch('/api/ai-chat-sessions', { credentials: 'same-origin' });
                 if (!response.ok) return;
-                var sessions = await response.json();
-                aiChatSessions = sessions;
+                aiChatSessions = await response.json();
+                renderAiHistoryList();
+            } catch (e) {
+                console.error('[AI] Load history error:', e);
+            }
+        }
 
-                var list = document.getElementById('aiHistoryList');
-                if (sessions.length === 0) {
-                    list.innerHTML = '<div class="ai-history-empty">Hali suhbat yo\'q</div>';
-                    return;
-                }
+        // Render the sidebar history, optionally filtered by the search box.
+        function renderAiHistoryList() {
+            var list = document.getElementById('aiHistoryList');
+            if (!list) return;
+            var q = (document.getElementById('aiHistorySearch') || { value: '' }).value.trim().toLowerCase();
+            var sessions = (aiChatSessions || []).filter(function (s) {
+                if (!q) return true;
+                return ((s.title || '') + ' ' + (s.first_message || '')).toLowerCase().indexOf(q) !== -1;
+            });
+            if (sessions.length === 0) {
+                list.innerHTML = '<div class="ai-history-empty">' + (q ? 'Hech narsa topilmadi' : 'Hali suhbat yo\'q') + '</div>';
+                return;
+            }
 
                 var html = '';
                 sessions.forEach(function(s) {
@@ -11188,9 +11269,6 @@
                         + '</div>';
                 });
                 list.innerHTML = html;
-            } catch (e) {
-                console.error('[AI] Load history error:', e);
-            }
         }
 
         async function openAiChatSession(sessionId) {
