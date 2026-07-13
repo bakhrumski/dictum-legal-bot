@@ -3851,6 +3851,8 @@ MUHIM: KONTEKSTda berilgan HAR BIR TEGISHLI qonun/kodeksni keltiring — faqat b
 
 **Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
 
+TAKRORLANMASLIK QOIDASI: Har bir bo'lim YANGI ma'lumot bersin. Bitta faktni turli so'zlar bilan qayta-qayta yozish TAQIQLANADI. Agar savol/hujjat mazmuni kam bo'lsa (masalan, bitta jumla), javob ham qisqa bo'lsin — har bir bo'lim 1-2 jumla; takrorlash o'rniga qisqalik afzal.
+
 JIDDIY TAQIQLAR:
 - Kontekstdagi modda matnlarini KO'CHIRIB QO'YMANG.
 - "Huquqiy asos:", "Tahlil:", "Xulosa:" sarlavhalarini TEKST SIFATIDA qo'shmang — faqat **qalin** markdown sarlavha sifatida.
