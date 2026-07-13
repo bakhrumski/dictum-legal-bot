@@ -429,7 +429,12 @@ app.post('/api/login', async (req, res) => {
 
       if (passwordMatch) {
         // Master with linked Telegram → require the second factor.
-        if (admin.role === 'master' && admin.telegram_user_id && process.env.MASTER_2FA !== 'off') {
+        // The bot's /link command stores telegram_chat_id; the self-signup flow
+        // stores telegram_user_id. Either works as a delivery target (for
+        // private chats chat_id === user_id), so accept both — otherwise a
+        // master linked via /link silently skipped 2FA.
+        const tgTarget = admin.telegram_user_id || admin.telegram_chat_id;
+        if (admin.role === 'master' && tgTarget && process.env.MASTER_2FA !== 'off') {
           const code = String(Math.floor(100000 + Math.random() * 900000));
           const token = require('crypto').randomBytes(24).toString('hex');
           pending2fa.set(token, {
@@ -437,7 +442,7 @@ app.post('/api/login', async (req, res) => {
             full_name: admin.full_name, code, expiresAt: Date.now() + 5 * 60 * 1000, tries: 0,
           });
           try {
-            await bot.sendMessage(admin.telegram_user_id,
+            await bot.sendMessage(tgTarget,
               `🔐 JuristAI kirish kodi: ${code}\n\n5 daqiqa amal qiladi.\nAgar bu siz bo'lmasangiz — DARHOL parolni almashtiring!`);
           } catch (e) {
             pending2fa.delete(token);
