@@ -10709,9 +10709,16 @@
                         return '<span class="ai-rag-src">' + label + ' × ' + s.count + lawList + '</span>';
                     }).join('');
                     var webPart = data.rag.webResults > 0 ? '<span class="ai-rag-src">🌐 Internet × ' + data.rag.webResults + '</span>' : '';
+                    // Citation post-check: answer body cites articles absent from
+                    // the retrieved context — a hallucination review signal.
+                    var citWarn = '';
+                    var cc = data.rag.citationCheck;
+                    if (cc && cc.unverified && cc.unverified.length > 0) {
+                        citWarn = '<span class="ai-rag-src" style="color:var(--warning-700);font-weight:600;" title="Javob matnida keltirilgan, lekin topilgan manbalarda uchramagan moddalar — tekshiring">⚠️ Tekshirilmagan modda: ' + cc.unverified.slice(0, 6).map(escapeHtml).join(', ') + '</span>';
+                    }
                     ragBadge = '<div class="ai-rag-info">'
                         + '<span class="ai-rag-mode" title="RAG search mode">📊 ' + (data.rag.searchMode || 'text') + ' | ' + data.rag.chunks + ' chunk</span>'
-                        + srcParts + webPart
+                        + srcParts + webPart + citWarn
                         + '</div>';
                 } else if (data.ragUsed === false) {
                     ragBadge = '<div class="ai-rag-info"><span class="ai-rag-mode ai-rag-no">🤖 RAG ishlatilmadi — faqat ' + escapeHtml(data.provider || 'AI') + '</span></div>';
