@@ -6233,7 +6233,7 @@ async function ingestLexUrl({ url, topic, law_name, adminId }) {
     ...(embedError ? { embed_warning: embedError } : {}),
     // Warn the admin when a non-Uzbek document is ingested — the corpus is
     // Uzbek-first, so a RU version yields Russian citations and source links.
-    ...(inferredLanguage !== 'uz' ? { lang_warning: 'Hujjat o\'zbek tilida emas (RU). O\'zbekcha (lotin) versiyani yuklash tavsiya etiladi.' } : {}),
+    ...(inferredLanguage !== 'uz' ? { lang_warning: 'Hujjat o\'zbek tilida emas (RU). Agar lex.uz da o\'zbekcha (lotin) versiyasi mavjud bo\'lsa, o\'shani yuklash tavsiya etiladi — mavjud bo\'lmasa, bu holat normal (qidiruv baribir ishlaydi).' } : {}),
   };
 }
 

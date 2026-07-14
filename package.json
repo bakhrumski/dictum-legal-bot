@@ -31,7 +31,8 @@
     "db:purge": "node src/eval/db-purge.js",
     "db:purge:confirm": "node src/eval/db-purge.js --confirm",
     "corpus:check-freshness": "node src/rag/check-freshness.js",
-    "corpus:check-freshness:dry": "node src/rag/check-freshness.js --dry-run"
+    "corpus:check-freshness:dry": "node src/rag/check-freshness.js --dry-run",
+    "test:authz": "node tests/authz-matrix.test.js"
   },
   "keywords": [],
   "author": "",
