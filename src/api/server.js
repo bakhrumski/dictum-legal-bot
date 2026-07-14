@@ -3850,7 +3850,8 @@ JAVOB FORMATI (3 bo'lim, MAJBURIY):
 ${definitionHint}
 
 **Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism qo'llanadi? Qonun nomi va modda raqamini **qalin** yozing. Har bir norma uchun: (**Qonun nomi, N-modda, M-qism**).
-MUHIM: KONTEKSTda berilgan HAR BIR TEGISHLI qonun/kodeksni keltiring — faqat bittasi yoki ikkitasi bilan cheklanmang. Agar kontekstda savolga aloqador bir nechta hujjat (masalan, Fuqarolik kodeksi VA "Qimmatli qog'ozlar bozori to'g'risida"gi Qonun VA "Aksiyadorlik jamiyatlari..." Qonuni) bo'lsa — hammasini Huquqiy asos bo'limida tegishli modda raqami bilan sanab o'ting. Aloqasi yo'q hujjatlarni esa keltirmang.
+MUHIM: KONTEKSTda berilgan, savolga BEVOSITA taalluqli HAR BIR qonun/kodeksni keltiring — faqat bittasi yoki ikkitasi bilan cheklanmang. Agar kontekstda savolga bevosita aloqador bir nechta hujjat (masalan, Fuqarolik kodeksi VA "Qimmatli qog'ozlar bozori to'g'risida"gi Qonun VA "Aksiyadorlik jamiyatlari..." Qonuni) bo'lsa — hammasini Huquqiy asos bo'limida tegishli modda raqami bilan sanab o'ting.
+QAT'IY: Savolga BEVOSITA taalluqli bo'lmagan qonun yoki moddani KELTIRMANG — hatto kontekstda bo'lsa ham. Qonunni faqat "bu qo'llanilmaydi" deyish uchun keltirish TAQIQLANADI (bu javobni chalkash qiladi). Agar savol milliy qonun bilan emas, balki ichki tartib-qoidalar, shartnoma yoki tashkilot nizomi bilan tartibga solinsa — buni OCHIQ ayting: "Bu masala bevosita milliy qonun bilan emas, ... bilan tartibga solinadi" — va tangens moddalar bilan to'ldirmang.
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha (jismoniy / mansabdor / yuridik shaxs) farq bo'lsa — har birini alohida jumlada ko'rsating. Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Foydalanuvchi savoliga to'g'ridan-to'g'ri aloqador holatlarni tahlil qiling.
 
@@ -5078,12 +5079,18 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     }
 
     // Citation post-check (before the footer append — the footer's own
-    // verified citations must not be counted as body citations).
-    if (ragChunks.length > 0) {
+    // verified citations must not be counted as body citations). Runs ALWAYS,
+    // not only when chunks exist: when RAG retrieved nothing (no topic, or a
+    // niche question), any article the answer cites is by definition
+    // unverified — precisely the case where hallucinated citations are most
+    // likely, so skipping the check there was the worst possible gap.
+    {
       const citationCheck = verifyCitations(displayReply, ragChunks);
       if (citationCheck.unverified.length > 0) {
         console.warn(`[Legal Chat] ${citationCheck.unverified.length}/${citationCheck.total} cited article(s) not found in retrieved context: ${citationCheck.unverified.join(', ')}`);
       }
+      // Attach to a meta object even when ragMeta was null, so the master badge
+      // can render the warning for the no-RAG path too.
       ragMeta = Object.assign({}, ragMeta || {}, { citationCheck });
     }
 
