@@ -27,8 +27,10 @@ const analyzeUpload = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ok = file.mimetype === 'application/pdf' ||
-      (file.originalname || '').match(/\.pdf$/i);
-    cb(ok ? null : new Error('Faqat PDF fayl qabul qilinadi'), ok);
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.mimetype === 'application/msword' ||
+      /\.(pdf|docx|doc)$/i.test(file.originalname || '');
+    cb(ok ? null : new Error('Faqat PDF yoki Word (docx) fayl qabul qilinadi'), ok);
   },
 });
 
@@ -230,7 +232,17 @@ function mountAnalyzerRoutes(app, deps) {
   app.post('/api/analyze/extract', requireAuth, analyzeUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     let filePath = req.file.path;
+    const isDoc = /\.(docx|doc)$/i.test(req.file.originalname || '') ||
+      req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      req.file.mimetype === 'application/msword';
     try {
+      if (isDoc) {
+        // Word (.docx) — extract text via mammoth (already a dependency).
+        const mammoth = require('mammoth');
+        const result = await mammoth.extractRawText({ path: filePath });
+        const text = (result.value || '').trim();
+        return res.json({ text, pageCount: 1, scanned: false, charCount: text.length });
+      }
       const pdfParse = require('pdf-parse');
       const buf = fs.readFileSync(filePath);
       const parsed = await pdfParse(buf);
@@ -243,8 +255,8 @@ function mountAnalyzerRoutes(app, deps) {
         charCount: text.length,
       });
     } catch (e) {
-      console.error('[ANALYZE] PDF extract error:', e.message);
-      res.status(500).json({ error: 'PDF o\'qib bo\'lmadi: ' + e.message });
+      console.error('[ANALYZE] extract error:', e.message);
+      res.status(500).json({ error: 'Faylni o\'qib bo\'lmadi: ' + e.message });
     } finally {
       fs.unlink(filePath, () => {});
     }
