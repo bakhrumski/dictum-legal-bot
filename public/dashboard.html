@@ -1397,6 +1397,14 @@
             overflow-y: auto;
             padding: 24px;
         }
+        /* Streaming progress line (search/RAG/generation) before first token */
+        .ai-analysis-content.ai-stream-status {
+            color: var(--text-secondary);
+            font-style: italic;
+            opacity: 0.85;
+            animation: aiStatusPulse 1.4s ease-in-out infinite;
+        }
+        @keyframes aiStatusPulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
         .ai-analysis-content {
             background: none;
             border: none;
@@ -10850,13 +10858,28 @@
                         if (!payload) continue;
                         var ev;
                         try { ev = JSON.parse(payload); } catch (e) { continue; }
-                        if (ev.type === 'token') {
+                        if (ev.type === 'status') {
+                            // Progress line during the pre-token phase (search/
+                            // RAG/generation start) — replaces the typing dots
+                            // with a concrete step so the wait feels alive.
+                            var live = ensureLive();
+                            live.classList.add('ai-stream-status');
+                            live.textContent = ev.text || '';
+                            messagesEl.scrollTop = messagesEl.scrollHeight;
+                        } else if (ev.type === 'status_clear') {
+                            if (liveEl) { liveEl.classList.remove('ai-stream-status'); liveEl.textContent = ''; }
+                            acc = '';
+                        } else if (ev.type === 'token') {
+                            var el = ensureLive();
+                            el.classList.remove('ai-stream-status');
                             acc += ev.t;
-                            ensureLive().textContent = acc;
+                            el.textContent = acc;
                             messagesEl.scrollTop = messagesEl.scrollHeight;
                         } else if (ev.type === 'replace') {
                             acc = ev.text;
-                            ensureLive().textContent = acc;
+                            var el2 = ensureLive();
+                            el2.classList.remove('ai-stream-status');
+                            el2.textContent = acc;
                         } else if (ev.type === 'done') {
                             doneData = ev;
                         } else if (ev.type === 'error') {

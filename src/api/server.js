@@ -4701,6 +4701,29 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });
     }
+
+    // ── Streaming: open the SSE channel NOW, before any slow work ────────────
+    // The heavy phase (verified-QA lookup, cache probe, RAG retrieval) runs
+    // BEFORE token generation and can take 10-20s. Previously the response
+    // headers weren't flushed until after all of it, so the browser sat on a
+    // dead spinner the whole time and only saw bytes once generation began.
+    // Flushing here lets us push progress status immediately; fast paths
+    // (verified/cache) now finish over SSE via a 'done' event instead of JSON.
+    const wantStream = req.body && req.body.stream === true;
+    let sse = null;
+    if (wantStream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+      sse = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch (_) {} };
+      // 2KB padding comment forces proxies that buffer by size to flush the
+      // headers + first frame immediately (Render's front proxy can hold small
+      // responses); harmless to the client SSE parser (lines starting with ':').
+      res.write(':' + ' '.repeat(2048) + '\n\n');
+      sse({ type: 'status', text: '🔍 Qonunlar qidirilmoqda...' });
+    }
     // Optional attached-document text (OCR/PDF extract from the composer). When
     // present we give it to the model as context AND skip the verified-QA
     // verbatim short-circuit — the question is about THIS document, so a canned
@@ -4875,14 +4898,16 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
 
     // ── Short-circuit: return verified answer directly ──
     if (verifiedOverride) {
-      return res.json({
+      const payload = {
         reply: verifiedOverride,
         provider: 'verified-qa',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
         rag: null,
         qaBank: qaMatchInfo,
-      });
+      };
+      if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
+      return res.json(payload);
     }
 
     // ── Answer cache ─────────────────────────────────────────────────────────
@@ -4906,7 +4931,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
             WHERE key = $1 AND created_at > NOW() - INTERVAL '72 hours'`, [cacheKey]);
         if (c.rows[0]) {
           pool.query('UPDATE answer_cache SET hits = hits + 1 WHERE key = $1', [cacheKey]).catch(() => {});
-          return res.json({
+          const payload = {
             reply: c.rows[0].reply,
             provider: (c.rows[0].provider || 'AI'),
             databases: Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'],
@@ -4914,12 +4939,15 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
             rag: c.rows[0].rag,
             qaBank: qaMatchInfo,
             cached: true,
-          });
+          };
+          if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
+          return res.json(payload);
         }
       } catch (cacheErr) { /* cache read failure must never block the answer */ }
     }
 
     // RAG retrieval: fetch relevant legal chunks for the user's query
+    if (sse) sse({ type: 'status', text: '📚 Manbalar tahlil qilinmoqda...' });
     let ragContext = '';
     let ragMeta = null;
     let ragChunks = [];
@@ -5009,34 +5037,22 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
 
     const _chatUserId = req.session?.adminId || null;
 
-    // ── Streaming mode (body.stream === true) ──
-    // We only switch the response to SSE HERE — after every fast short-circuit
-    // (quota, verified override, korpus override) has had its chance to return
-    // plain JSON. From this point the answer takes 10-30s, so tokens are
-    // streamed as they arrive. Event protocol:
+    // SSE was already opened at the top of the handler; the slow phase
+    // (verified/cache/RAG) is done. Now generation. Event protocol:
+    //   {type:'status', text}  — progress line shown before the first token
     //   {type:'token', t}      — text delta (primary provider streaming)
     //   {type:'replace', text} — discard shown text (fallback produced better)
-    //   {type:'done', ...}     — final normalized reply + meta (same shape as
-    //                            the JSON response; client re-renders from it)
+    //   {type:'done', ...}     — final normalized reply + meta (JSON-response shape)
     //   {type:'error', error}  — terminal failure after headers were sent
-    const wantStream = req.body && req.body.stream === true;
-    let sse = null;
-    if (wantStream) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('X-Accel-Buffering', 'no'); // defeat proxy buffering so tokens flush immediately
-      res.flushHeaders();
-      sse = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch (_) {} };
-    }
-
     let displayReply, finalProvider;
     if (wantStream) {
+      sse({ type: 'status', text: '✍️ Javob tayyorlanmoqda...' });
       try {
+        let firstToken = true;
         const sres = await callGeminiStream(
           aiMessages,
           { useSearch: true, maxTokens: 8192 },
-          (t) => sse({ type: 'token', t })
+          (t) => { if (firstToken) { sse({ type: 'status_clear' }); firstToken = false; } sse({ type: 'token', t }); }
         );
         displayReply = normalizeResponseForUser(sres.text);
         finalProvider = sres.provider;
