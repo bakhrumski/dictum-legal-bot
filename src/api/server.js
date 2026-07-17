@@ -4141,6 +4141,20 @@ function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
   return '\n\n---\n**Manbalar:**\n' + lines.join('\n');
 }
 
+// Convert the markdown Manbalar footer into a clean HTML link list, for
+// contexts that render HTML (e.g. the legal-opinion document). Emitting the raw
+// markdown into HTML showed literal '**' and let the doc renderer's
+// bracket-to-field converter eat "[Law, N-modda]" into empty [_____] fields.
+function manbalarFooterToHtml(footer) {
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const items = [];
+  for (const raw of String(footer || '').split('\n')) {
+    const m = raw.trim().match(/^-\s*\[([^\]]+)\]\(([^)]+)\)/);
+    if (m) items.push(`<li><a href="${esc(m[2])}" target="_blank" rel="noopener">${esc(m[1].replace(/\*/g, '').trim())}</a></li>`);
+  }
+  return items.length ? '<ul>' + items.join('') + '</ul>' : '';
+}
+
 // ── ONE-SHOT: backfill qa_bank from existing verified_qa rows in legal_chunks ──
 // Existing edits saved via /api/rag/verify-chat-answer only landed in legal_chunks.
 // This endpoint migrates them into qa_bank so the verbatim override works.
@@ -5207,13 +5221,35 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       ragChunks = (ragResult && ragResult.chunks) || [];
     } catch (e) { console.warn('[Legal Opinion] RAG failed:', e.message); }
 
-    // Corpus thin? Fall back to grounding on lex.uz via web search.
+    // Corpus thin? Supplement with LIVE lex.uz excerpts — via searchLexUz,
+    // which is domain-restricted by construction (it only ever queries
+    // lex.uz/search/nat and fetches lex.uz documents). This keeps the hard
+    // constraint "qa-korpus + lex.uz ONLY": no general web search anywhere in
+    // this endpoint.
     const ragWeak = !ragContext || ragContext.trim().length < 400 || ragChunks.length < 2;
+    const lexLiveSources = [];   // {title, url} — listed in Manbalar
+    if (ragWeak) {
+      try {
+        const { extractReferences, referenceWeight } = require('../rag/legal-verify');
+        const { searchLexUz } = require('../rag/lex-live-search');
+        const refs = await extractReferences(docForAnalysis, { callAI });
+        const top = refs.sort((a, b) => referenceWeight(b) - referenceWeight(a)).slice(0, 3);
+        for (const ref of top) {
+          const q = [ref.number, ref.name].filter(Boolean).join(' ').trim();
+          if (!q || q.length < 3) continue;
+          const hits = await searchLexUz(q, { maxDocs: 1 });
+          for (const h of hits) {
+            lexLiveSources.push({ title: h.title, url: h.url });
+            ragContext += `\n\n[lex.uz (jonli): ${h.title}]\n${String(h.content || '').slice(0, 2500)}`;
+          }
+        }
+        console.log(`[Legal Opinion] lex.uz-live supplement: ${lexLiveSources.length} doc(s) for ${top.length} reference(s)`);
+      } catch (e) { console.warn('[Legal Opinion] lex.uz-live supplement failed:', e.message); }
+    }
 
     const langName = lang === 'ru' ? 'Russian (Cyrillic)' : 'Uzbek (Latin script)';
-    const groundingRule = ragWeak
-      ? `- The KONTEKST from our corpus is thin for this matter. GROUND YOUR ANALYSIS ON lex.uz: use the web-search tool to find the CURRENT, in-force O'zbekiston Respublikasi legislation on lex.uz that applies, and cite exact article numbers from what you actually find there. Prefer lex.uz as the source. Never invent an article number.`
-      : `- Ground every legal claim in the KONTEKST below. Cite an article number ONLY if it appears in the KONTEKST. If a directly-relevant norm is missing, you may verify it on lex.uz via web search, but do not fabricate.`;
+    const groundingRule =
+      `- Ground EVERY legal claim ONLY on the KONTEKST below (internal qa-korpus excerpts + live lex.uz excerpts). These are the ONLY permitted sources. Cite an article number ONLY if it appears in the KONTEKST — never from memory, never invented. If a claim in the document cannot be verified against the KONTEKST, say so openly ("KONTEKSTda tasdiqlanmadi") instead of guessing.`;
     const systemPrompt =
 `You are a senior legal counsel of the Republic of Uzbekistan writing a formal legal opinion (yuridik xulosa) about a document the user uploaded. Write entirely in ${langName}.
 
@@ -5237,14 +5273,26 @@ ${groundingRule}
 
     const result = await callAI(
       [{ role: 'system', text: systemPrompt }, { role: 'user', text: userText }],
-      { useSearch: true, maxTokens: 8192, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
+      // useSearch OFF: hard source restriction — grounding comes exclusively
+      // from the KONTEKST (qa-korpus + lex.uz-live excerpts assembled above).
+      { useSearch: false, maxTokens: 8192, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
     );
     let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
 
-    // Append the verified Manbalar footer (lex.uz links) as a Manbalar section.
-    const footer = buildManbalarFooter(ragChunks, html, lang);
-    if (footer) html += '<h2>Manbalar</h2>' + footer.replace(/^\n*[—-]+\s*\**Manbalar\**:?\s*/i, '');
+    // Append the verified Manbalar footer as a clean HTML link list (NOT raw
+    // markdown — that rendered literal '**' and the "[Law]" labels got turned
+    // into empty [_____] fields by the doc renderer).
+    let manbalarHtml = manbalarFooterToHtml(buildManbalarFooter(ragChunks, html, lang));
+    // Include the live lex.uz documents used for grounding (deduped by URL).
+    if (lexLiveSources.length) {
+      const escA = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const seenU = new Set();
+      const extra = lexLiveSources.filter(s => s.url && !seenU.has(s.url) && seenU.add(s.url))
+        .map(s => `<li><a href="${escA(s.url)}" target="_blank" rel="noopener">${escA(s.title || s.url)} (lex.uz)</a></li>`).join('');
+      if (extra) manbalarHtml = (manbalarHtml ? manbalarHtml.replace('</ul>', extra + '</ul>') : '<ul>' + extra + '</ul>');
+    }
+    if (manbalarHtml) html += '<h2>Manbalar</h2>' + manbalarHtml;
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
     res.json({ html, provider: result.provider, topic });

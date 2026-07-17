@@ -2983,6 +2983,17 @@
         .ai-attach-chip .chip-remove:hover { color: var(--danger-700); }
         .ai-attach-chip.err { border-color: var(--danger-700); }
         .ai-attach-chip.err .chip-status { color: var(--danger-700); }
+        /* one-tap legal-opinion suggestion shown when a document is ready */
+        .ai-attach-suggest {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 14px; border: 1px solid var(--navy-300);
+            border-radius: 999px; background: var(--navy-100, #E1ECF6);
+            color: var(--navy-700); font-family: inherit; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: background .15s, border-color .15s;
+        }
+        .ai-attach-suggest:hover { background: var(--navy-300); color: #fff; }
+        [data-theme="dark"] .ai-attach-suggest { background: rgba(122,160,198,0.15); color: var(--brass-300); border-color: var(--brass-300); }
+        @media (pointer: coarse) { .ai-attach-suggest { padding: 11px 16px; } }
         /* attached-file chips shown inside a sent user bubble */
         .ai-msg-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
         .ai-msg-file { font-size: 12px; opacity: .9; background: rgba(255,255,255,0.16); border-radius: 8px; padding: 3px 8px; }
@@ -10699,7 +10710,7 @@
             var box = document.getElementById('aiAttachChips');
             if (!box) return;
             var icon = '<svg class="chip-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-            box.innerHTML = aiAttachments.map(function (a) {
+            var html = aiAttachments.map(function (a) {
                 var status = a.status === 'processing' ? 'O\'qilmoqda…' : a.status === 'error' ? (a.error || 'Xato') : 'Tayyor';
                 return '<div class="ai-attach-chip ' + (a.status === 'error' ? 'err' : '') + '">' +
                     icon +
@@ -10708,6 +10719,27 @@
                     '<button class="chip-remove" type="button" onclick="removeAttachment(' + a.id + ')" aria-label="O\'chirish">&times;</button>' +
                     '</div>';
             }).join('');
+            // Once at least one document is embedded and ready, offer the
+            // one-tap legal-opinion suggestion (qa-korpus + lex.uz grounded).
+            if (aiAttachments.some(function (a) { return a.status === 'ready'; })) {
+                html += '<button class="ai-attach-suggest" type="button" onclick="opinionFromAttachment()">' +
+                    '📑 Ushbu hujjatga yuridik xulosa yozib berishimni xohlaysizmi?</button>';
+            }
+            box.innerHTML = html;
+        }
+
+        // One-tap: turn the ready composer attachment(s) into a formal legal
+        // opinion via the dedicated qa-korpus + lex.uz pipeline (NOT normal chat).
+        function opinionFromAttachment() {
+            var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
+            if (!ready.length) return;
+            opinionDoc = {
+                name: ready.map(function (a) { return a.name; }).join(', '),
+                text: ready.map(function (a) { return '【' + a.name + '】\n' + a.text; }).join('\n\n')
+            };
+            aiAttachments = [];
+            renderAttachChips();
+            docFlowGenerateOpinion();
         }
 
         async function sendAiChat() {
