@@ -4141,6 +4141,20 @@ function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
   return '\n\n---\n**Manbalar:**\n' + lines.join('\n');
 }
 
+// Convert the markdown Manbalar footer into a clean HTML link list, for
+// contexts that render HTML (e.g. the legal-opinion document). Emitting the raw
+// markdown into HTML showed literal '**' and let the doc renderer's
+// bracket-to-field converter eat "[Law, N-modda]" into empty [_____] fields.
+function manbalarFooterToHtml(footer) {
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const items = [];
+  for (const raw of String(footer || '').split('\n')) {
+    const m = raw.trim().match(/^-\s*\[([^\]]+)\]\(([^)]+)\)/);
+    if (m) items.push(`<li><a href="${esc(m[2])}" target="_blank" rel="noopener">${esc(m[1].replace(/\*/g, '').trim())}</a></li>`);
+  }
+  return items.length ? '<ul>' + items.join('') + '</ul>' : '';
+}
+
 // ── ONE-SHOT: backfill qa_bank from existing verified_qa rows in legal_chunks ──
 // Existing edits saved via /api/rag/verify-chat-answer only landed in legal_chunks.
 // This endpoint migrates them into qa_bank so the verbatim override works.
@@ -5242,9 +5256,11 @@ ${groundingRule}
     let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
 
-    // Append the verified Manbalar footer (lex.uz links) as a Manbalar section.
-    const footer = buildManbalarFooter(ragChunks, html, lang);
-    if (footer) html += '<h2>Manbalar</h2>' + footer.replace(/^\n*[—-]+\s*\**Manbalar\**:?\s*/i, '');
+    // Append the verified Manbalar footer as a clean HTML link list (NOT raw
+    // markdown — that rendered literal '**' and the "[Law]" labels got turned
+    // into empty [_____] fields by the doc renderer).
+    const manbalarHtml = manbalarFooterToHtml(buildManbalarFooter(ragChunks, html, lang));
+    if (manbalarHtml) html += '<h2>Manbalar</h2>' + manbalarHtml;
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
     res.json({ html, provider: result.provider, topic });
