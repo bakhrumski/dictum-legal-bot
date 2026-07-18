@@ -10374,7 +10374,7 @@
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
                 if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Xulosa yaratib bo\'lmadi')); return; }
-                renderDocMessage({ rawTitle: 'Yuridik xulosa — ' + opinionDoc.name, html: d.html });
+                renderDocMessage({ rawTitle: 'Yuridik xulosa — ' + opinionDoc.name, html: d.html, kind: 'opinion', topic: d.topic || '', docHash: d.docHash || '' });
                 opinionDoc = null;
             } catch (e) {
                 var t2 = document.getElementById('aiChatTyping'); if (t2) t2.remove();
@@ -10557,12 +10557,25 @@
             var id = 'docmsg_' + (++DOCB.seq);
             var title = opts.title || opts.rawTitle || 'Hujjat';
             var body = opts.tplId ? opts.html : bracketsToFields(opts.html);
+            // Opinion cards carry a quality signal (👍/👎, audited) and a
+            // master-only "generalize into corpus" action (anonymized pattern).
+            var isMasterHere = (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'master');
+            var opinionBtns = '';
+            if (opts.kind === 'opinion') {
+                opinionBtns =
+                    '<button class="docflow-opt" type="button" title="Xulosa foydali bo\'ldi" onclick="opinionRate(\'' + id + '\', true, this)">👍 Foydali</button>' +
+                    '<button class="docflow-opt" type="button" title="Xulosa foydali emas" onclick="opinionRate(\'' + id + '\', false, this)">👎</button>' +
+                    (isMasterHere ? '<button class="docflow-opt" type="button" title="Shaxsiy ma\'lumotlarsiz umumlashtirilib, korpusga saqlanadi" onclick="opinionSaveToCorpus(\'' + id + '\', this)">📚 Korpusga qo\'shish</button>' : '');
+            }
             messagesEl.innerHTML +=
                 '<div class="ai-chat-msg ai docmsg" id="' + id + '"' +
                     (opts.tplId ? ' data-tpl-id="' + escapeHtml(String(opts.tplId)) + '"' : '') +
+                    (opts.docHash ? ' data-doc-hash="' + escapeHtml(String(opts.docHash)) + '"' : '') +
+                    (opts.topic ? ' data-topic="' + escapeHtml(String(opts.topic)) + '"' : '') +
                     ' data-title="' + escapeHtml(title) + '">' +
                     '<div class="docmsg-head"><span class="docmsg-title">📄 ' + escapeHtml(title) + '</span>' +
                         '<span class="docmsg-actions">' +
+                        opinionBtns +
                         '<button class="docflow-opt" type="button" onclick="docMsgExport(\'' + id + '\',\'docx\',this)">⬇ Word</button>' +
                         '<button class="docflow-opt" type="button" onclick="docMsgExport(\'' + id + '\',\'pdf\',this)">⬇ PDF</button>' +
                         '</span></div>' +
@@ -10594,6 +10607,42 @@
             h.style.left = Math.max(8, Math.min(r.left, window.innerWidth - h.offsetWidth - 12)) + 'px';
         }
         function hideDocHint() { var h = document.getElementById('docbHint'); if (h) h.classList.remove('show'); }
+
+        // Opinion rating: one tap, audited server-side (master sees it in the
+        // Audit jurnali panel). Buttons lock after voting.
+        async function opinionRate(cardId, good, btn) {
+            var card = document.getElementById(cardId); if (!card) return;
+            try {
+                await fetch('/api/draft/legal-opinion/rate', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify({ docHash: card.getAttribute('data-doc-hash') || '', good: good === true })
+                });
+                card.querySelectorAll('.docmsg-actions .docflow-opt').forEach(function (b) {
+                    if (b.textContent.indexOf('👍') !== -1 || b.textContent.indexOf('👎') !== -1) { b.disabled = true; b.style.opacity = '0.5'; }
+                });
+                btn.textContent = good ? '✅ Rahmat!' : '✅ Qayd etildi';
+                btn.style.opacity = '1';
+            } catch (e) { /* rating is best-effort */ }
+        }
+
+        // Master: anonymize + save the opinion as a reusable corpus pattern.
+        async function opinionSaveToCorpus(cardId, btn) {
+            var card = document.getElementById(cardId); if (!card) return;
+            var page = card.querySelector('.docb-page'); if (!page) return;
+            var orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Umumlashtirilmoqda...';
+            try {
+                var r = await fetch('/api/draft/legal-opinion/save-pattern', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify({ html: page.innerHTML, topic: card.getAttribute('data-topic') || '' })
+                });
+                var d = await r.json();
+                if (r.ok && d.success) {
+                    btn.textContent = '✅ Korpusga qo\'shildi';
+                } else {
+                    alert(d.error || 'Xatolik'); btn.disabled = false; btn.textContent = orig;
+                }
+            } catch (e) { alert('Tarmoq xatoligi'); btn.disabled = false; btn.textContent = orig; }
+        }
 
         // ── Export an inline document (template → /api/draft/export with values
         //    read back from the page; AI doc → /api/draft/export-raw) ──
@@ -11342,7 +11391,10 @@
                     'login.2fa_sent': '🔐 2FA kod yuborildi', 'login.2fa_success': '🔐 2FA tasdiqlandi',
                     'login.2fa_lockout': '🚫 2FA bloklandi',
                     'request.view': '👁 Murojaat ko\'rildi', 'file.view': '📄 Fayl ochildi',
-                    'file.download': '⬇ Fayl yuklab olindi', 'corpus.verified_answer': '📚 Korpusga javob'
+                    'file.download': '⬇ Fayl yuklab olindi', 'corpus.verified_answer': '📚 Korpusga javob',
+                    'legal_opinion.generate': '📑 Yuridik xulosa yaratildi', 'legal_opinion.cache_hit': '📑 Xulosa keshdan',
+                    'legal_opinion.rate_good': '👍 Xulosa foydali', 'legal_opinion.rate_bad': '👎 Xulosa foydasiz',
+                    'legal_opinion.pattern_saved': '📚 Xulosa andozasi korpusga'
                 };
                 box.innerHTML = '<div style="overflow-x:auto;"><table class="admin-table" style="width:100%;font-size:12.5px;">' +
                     '<thead><tr><th>Vaqt</th><th>Kim</th><th>Harakat</th><th>Obyekt</th><th>IP</th></tr></thead><tbody>' +
