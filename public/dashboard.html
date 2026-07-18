@@ -10769,12 +10769,47 @@
                     '</div>';
             }).join('');
             // Once at least one document is embedded and ready, offer the
-            // one-tap legal-opinion suggestion (qa-korpus + lex.uz grounded).
+            // one-tap suggestions: formal legal opinion, or a plain-language
+            // explanation for non-lawyers.
             if (aiAttachments.some(function (a) { return a.status === 'ready'; })) {
                 html += '<button class="ai-attach-suggest" type="button" onclick="opinionFromAttachment()">' +
                     '📑 Ushbu hujjatga yuridik xulosa yozib berishimni xohlaysizmi?</button>';
+                html += '<button class="ai-attach-suggest" type="button" onclick="explainFromAttachment()">' +
+                    '💬 Hujjat mazmunini tushuntirib berishimni xohlaysizmi?</button>';
             }
             box.innerHTML = html;
+        }
+
+        // Plain-language explanation of the attached document(s). Attachments
+        // are kept after explaining, so the user can follow up with questions
+        // or request the formal opinion next.
+        async function explainFromAttachment() {
+            var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
+            if (!ready.length) return;
+            var name = ready.map(function (a) { return a.name; }).join(', ');
+            var text = ready.map(function (a) { return '【' + a.name + '】\n' + a.text; }).join('\n\n');
+            var messagesEl = document.getElementById('aiChatMessages');
+            var welcome = document.getElementById('aiChatWelcome');
+            if (welcome) welcome.style.display = 'none';
+            aiChatHistory.push({ role: 'user', text: '[Hujjat: ' + name + '] mazmunini oddiy tilda tushuntirib bering' });
+            messagesEl.innerHTML += '<div class="ai-chat-msg user">💬 Hujjat mazmunini tushuntirish — ' + escapeHtml(name) + '</div>';
+            messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            try {
+                var r = await fetch('/api/draft/explain-document', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify({ documentText: text })
+                });
+                var d = await r.json();
+                var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
+                if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.error || 'Tushuntirib bo\'lmadi')); return; }
+                renderAiChatReply({ reply: d.reply, provider: d.provider, ragUsed: false, rag: null, qaBank: null },
+                    'Hujjat mazmunini tushuntirish: ' + name, messagesEl, true);
+                saveAiChatSession();
+            } catch (e) {
+                var t2 = document.getElementById('aiChatTyping'); if (t2) t2.remove();
+                docInfoCard('❌ Tarmoq xatoligi — qayta urinib ko\'ring.');
+            }
         }
 
         // One-tap: turn the ready composer attachment(s) into a formal legal
@@ -11394,7 +11429,8 @@
                     'file.download': '⬇ Fayl yuklab olindi', 'corpus.verified_answer': '📚 Korpusga javob',
                     'legal_opinion.generate': '📑 Yuridik xulosa yaratildi', 'legal_opinion.cache_hit': '📑 Xulosa keshdan',
                     'legal_opinion.rate_good': '👍 Xulosa foydali', 'legal_opinion.rate_bad': '👎 Xulosa foydasiz',
-                    'legal_opinion.pattern_saved': '📚 Xulosa andozasi korpusga'
+                    'legal_opinion.pattern_saved': '📚 Xulosa andozasi korpusga',
+                    'document.explain': '💬 Hujjat tushuntirildi'
                 };
                 box.innerHTML = '<div style="overflow-x:auto;"><table class="admin-table" style="width:100%;font-size:12.5px;">' +
                     '<thead><tr><th>Vaqt</th><th>Kim</th><th>Harakat</th><th>Obyekt</th><th>IP</th></tr></thead><tbody>' +
