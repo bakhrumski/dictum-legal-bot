@@ -5242,6 +5242,21 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       return res.status(400).json({ error: 'Hujjat matni bo\'sh yoki juda qisqa — matnli (skaner emas) hujjat yuklang' });
     }
 
+    // ── Opinion cache: identical document → cached opinion, zero AI cost ─────
+    // Checked BEFORE the plan limit: a cache hit is free and does not consume
+    // the monthly quota (the limit counts only 'legal_opinion.generate').
+    const docHash = require('crypto').createHash('sha256').update(documentText).digest('hex');
+    try {
+      const c = await pool.query(
+        `SELECT html, provider, topic FROM opinion_cache
+          WHERE doc_hash = $1 AND created_at > NOW() - INTERVAL '30 days'`, [docHash]);
+      if (c.rows[0]) {
+        pool.query('UPDATE opinion_cache SET hits = hits + 1 WHERE doc_hash = $1', [docHash]).catch(() => {});
+        logAudit(req, 'legal_opinion.cache_hit', 'opinion', docHash.slice(0, 12));
+        return res.json({ html: c.rows[0].html, provider: (c.rows[0].provider || 'AI') + ' (kesh)', topic: c.rows[0].topic, docHash, cached: true });
+      }
+    } catch (cErr) { /* cache failure never blocks generation */ }
+
     // ── Per-plan opinion limits ──────────────────────────────────────────────
     // Legal opinions run on the premium model and are the most expensive
     // generation on the platform. Freemium (sinov / no plan): 1 per month.
@@ -5386,10 +5401,69 @@ ${groundingRule}
     if (manbalarHtml) html += '<h2>Manbalar</h2>' + manbalarHtml;
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
-    res.json({ html, provider: result.provider, topic });
+    // Store in the opinion cache (fire-and-forget).
+    pool.query(
+      `INSERT INTO opinion_cache (doc_hash, html, provider, topic) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (doc_hash) DO UPDATE SET html = EXCLUDED.html, provider = EXCLUDED.provider,
+         topic = EXCLUDED.topic, created_at = NOW()`,
+      [docHash, html, result.provider, topic]
+    ).catch(e => console.warn('[Legal Opinion] cache store failed:', e.message));
+    res.json({ html, provider: result.provider, topic, docHash });
   } catch (e) {
     console.error('[Legal Opinion] error:', e.message);
     res.status(500).json({ error: 'Yuridik xulosa xatoligi: ' + e.message });
+  }
+});
+
+// User quality signal on an opinion (👍/👎). Stored in the audit trail, so the
+// master sees ratings in the Audit jurnali panel without a new table/panel.
+app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
+  try {
+    const docHash = String((req.body || {}).docHash || '').slice(0, 64);
+    const good = (req.body || {}).good === true;
+    logAudit(req, good ? 'legal_opinion.rate_good' : 'legal_opinion.rate_bad', 'opinion', docHash.slice(0, 12) || null);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Master-gated corpus learning: generalize a good opinion into an ANONYMIZED
+// reusable pattern (document type + applicable law + reasoning; all party
+// names, personal data, amounts and dates stripped) and store it as verified
+// knowledge. Verbatim opinions are NEVER shared across users — only this
+// redacted pattern enters the corpus, and only on the master's click.
+app.post('/api/draft/legal-opinion/save-pattern', requireMasterAdmin, async (req, res) => {
+  try {
+    const html = String((req.body || {}).html || '').slice(0, 40000);
+    const topic = String((req.body || {}).topic || '').slice(0, 50) || 'boshqa';
+    if (html.length < 200) return res.status(400).json({ error: 'Xulosa matni juda qisqa' });
+
+    const plain = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const result = await callAI([
+      { role: 'system', text:
+`You anonymize a specific Uzbek legal opinion into a REUSABLE PATTERN for a legal knowledge base. Remove ALL identifying facts: party names, organization names, personal data, exact amounts, exact dates, addresses, case numbers. Keep: the document type, which O'zbekiston Respublikasi laws/articles apply and why, the typical risks, and the generic recommendations.
+
+Return ONLY JSON (no fences): {"title": "short Uzbek label of the document type (e.g. 'Autsorsing shartnomasi bo'yicha yuridik xulosa')", "pattern": "the anonymized reusable analysis in Uzbek, 150-400 words"}` },
+      { role: 'user', text: plain.slice(0, 12000) },
+    ], { temperature: 0.1, maxTokens: 1500, userId: req.session.adminId, endpoint: '/api/draft/legal-opinion/save-pattern' });
+
+    const { salvageJson } = require('../rag/legal-verify');
+    const j = salvageJson(result.text);
+    if (!j || !j.pattern || String(j.pattern).length < 100) {
+      return res.status(500).json({ error: 'Umumlashtirib bo\'lmadi — qayta urinib ko\'ring' });
+    }
+    await insertVerifiedAnswer({
+      question: `Yuridik xulosa andozasi: ${String(j.title || 'hujjat').slice(0, 180)}`,
+      answer: String(j.pattern).slice(0, 6000),
+      category: topic,
+      requestId: null,
+      verifiedBy: req.session.adminId,
+      verifiedByName: req.session.fullName,
+    });
+    logAudit(req, 'legal_opinion.pattern_saved', 'corpus', String(j.title || '').slice(0, 60));
+    res.json({ success: true, title: j.title });
+  } catch (e) {
+    console.error('[Legal Opinion] save-pattern error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -8263,6 +8337,18 @@ async function runMigrations() {
     // Answer cache: identical first-turn questions (same topic) return the
     // stored answer instantly instead of paying full RAG + LLM cost again.
     // 72h TTL keeps answers from outliving law changes / corpus updates.
+    // Legal-opinion cache: byte-identical document (sha256 of extracted text)
+    // -> same opinion served free. Privacy-safe by construction: a cache hit
+    // requires already possessing the identical document text.
+    await pool.query(`CREATE TABLE IF NOT EXISTS opinion_cache (
+      doc_hash CHAR(64) PRIMARY KEY,
+      html TEXT NOT NULL,
+      provider VARCHAR(80),
+      topic VARCHAR(50),
+      hits INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+
     await pool.query(`CREATE TABLE IF NOT EXISTS answer_cache (
       key CHAR(64) PRIMARY KEY,
       reply TEXT NOT NULL,
