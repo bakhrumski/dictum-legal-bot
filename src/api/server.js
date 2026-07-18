@@ -2623,6 +2623,59 @@ async function callGroq(messages, options = {}) {
   return { text, provider: 'Groq/Llama' };
 }
 
+// ── Premium provider: Anthropic Claude — for high-stakes generations where
+// instruction-following and grounding fidelity matter most (legal opinions).
+// Model via OPINION_MODEL env (default claude-opus-4-8; e.g. claude-fable-5
+// or claude-sonnet-5 also work). Requires ANTHROPIC_API_KEY.
+async function callClaude(messages, options = {}) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY sozlanmagan');
+  const { temperature = 0.2, maxTokens = 8192 } = options;
+  const model = options.model || process.env.OPINION_MODEL || 'claude-opus-4-8';
+
+  let system = '';
+  const msgs = [];
+  for (const m of messages) {
+    if (m.role === 'system') system += (system ? '\n\n' : '') + m.text;
+    else msgs.push({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text });
+  }
+  if (msgs.length === 0) msgs.push({ role: 'user', content: '...' });
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      ...(system ? { system } : {}),
+      messages: msgs,
+    }),
+  });
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`Claude ${resp.status}: ${errBody.substring(0, 300)}`);
+  }
+  const data = await resp.json();
+  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  if (!text) throw new Error('Claude empty response');
+  return { text, provider: model };
+}
+
+// Premium routing: Claude first when configured, normal chain as fallback —
+// a missing/failed ANTHROPIC_API_KEY never breaks the feature.
+async function callPremiumAI(messages, options = {}) {
+  if (process.env.ANTHROPIC_API_KEY) {
+    try { return await callClaude(messages, options); }
+    catch (e) { console.warn('[PremiumAI] Claude failed, falling back to standard chain:', e.message); }
+  }
+  return callAI(messages, options);
+}
+
 async function callAI(messages, options = {}) {
   const geminiKey = process.env.GEMINI_API_KEY;
   const groqKey = process.env.GROQ_API_KEY;
@@ -5188,7 +5241,40 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     if (!documentText || documentText.length < 40) {
       return res.status(400).json({ error: 'Hujjat matni bo\'sh yoki juda qisqa — matnli (skaner emas) hujjat yuklang' });
     }
+
+    // ── Per-plan opinion limits ──────────────────────────────────────────────
+    // Legal opinions run on the premium model and are the most expensive
+    // generation on the platform. Freemium (sinov / no plan): 1 per month.
+    // Paid tiers get more (override any of these via OPINION_LIMIT_<PLAN> env).
+    // Master + staff (lawyer/student) are exempt.
+    const OPINION_LIMITS = { sinov: 1, silver: 3, gold: 10, platinum: 30 };
+    let opinionMaxTokens = 8192;
+    try {
+      const u = await tariffModule.getUserPlan(req.session.adminId);
+      const isExempt = u && (u.plan === 'master' || (u.role && u.role !== 'user'));
+      if (!isExempt) {
+        const planKey = (u && u.plan) || 'sinov';
+        const limit = parseInt(process.env['OPINION_LIMIT_' + planKey.toUpperCase()], 10)
+          || OPINION_LIMITS[planKey] || 1;
+        const used = (await pool.query(
+          `SELECT COUNT(*)::int AS n FROM audit_log
+            WHERE admin_id = $1 AND action = 'legal_opinion.generate'
+              AND created_at >= date_trunc('month', NOW())`, [req.session.adminId])).rows[0].n;
+        if (used >= limit) {
+          return res.status(429).json({
+            error: `Yuridik xulosa uchun oylik limit tugadi (${limit} ta/oy${planKey === 'sinov' ? ' — bepul tarif' : ''}). Keyingi oyni kuting yoki yuqoriroq tarifga o'ting.`,
+            code: 'OPINION_LIMIT', used, limit,
+          });
+        }
+        // Freemium opinions get a smaller output budget than paid tiers.
+        opinionMaxTokens = planKey === 'sinov' ? 4096 : 8192;
+      }
+    } catch (qErr) { console.warn('[Legal Opinion] plan check failed (allowing):', qErr.message); }
+
     const lang = lexLangForText(documentText);
+    // Relevance diagnostics: if an opinion ever comes out unrelated to the
+    // document, this line shows what text actually reached the pipeline.
+    console.log(`[Legal Opinion] input ${documentText.length} chars, head="${documentText.slice(0, 180).replace(/\s+/g, ' ')}"`);
 
     // Map-reduce digest: for long docs, extract legally-relevant facts from
     // EVERY page (parallel, chunked) so the whole document is covered.
@@ -5271,11 +5357,16 @@ ${groundingRule}
     const userText =
 `KONTEKST (O'zbekiston qonunchiligidan tegishli parchalar):\n${ragContext || '(kontekst topilmadi — faqat ishonchli umumiy normalarga tayaning, modda raqamini taxmin qilmang)'}\n\n─── YUKLANGAN HUJJAT (yoki uning to'liq dayjesti) ───\n${docForAnalysis}\n─── HUJJAT TUGADI ───\n\nYuqoridagi hujjat bo'yicha to'liq yuridik xulosa tayyorlang.`;
 
-    const result = await callAI(
+    console.log(`[Legal Opinion] topic=${topic} ragChunks=${ragChunks.length} ragWeak=${ragWeak} lexLive=${lexLiveSources.length} digest=${docForAnalysis === documentText ? 'no' : 'yes'}`);
+    // Premium model for the synthesis (Claude via callPremiumAI when
+    // ANTHROPIC_API_KEY is set; standard chain otherwise). The cheap digest
+    // stage above stays on the standard chain — only the high-stakes final
+    // reasoning pays for the strong model.
+    const result = await callPremiumAI(
       [{ role: 'system', text: systemPrompt }, { role: 'user', text: userText }],
       // useSearch OFF: hard source restriction — grounding comes exclusively
       // from the KONTEKST (qa-korpus + lex.uz-live excerpts assembled above).
-      { useSearch: false, maxTokens: 8192, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
+      { useSearch: false, maxTokens: opinionMaxTokens, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
     );
     let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
