@@ -5287,11 +5287,25 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // Paid tiers get more (override any of these via OPINION_LIMIT_<PLAN> env).
     // Master + staff (lawyer/student) are exempt.
     const OPINION_LIMITS = { sinov: 1, silver: 3, gold: 10, platinum: 30 };
+    // Tiered quality: the more expensive the plan, the stronger the model.
+    // Per-plan override via OPINION_MODEL_<PLAN>; global OPINION_MODEL wins
+    // over everything. All of this only applies when ANTHROPIC_API_KEY is set —
+    // otherwise callPremiumAI falls back to the standard chain regardless.
+    const OPINION_MODELS = {
+      sinov: 'claude-sonnet-5',
+      silver: 'claude-sonnet-5',
+      gold: 'claude-opus-4-8',
+      platinum: 'claude-fable-5',
+    };
     let opinionMaxTokens = 8192;
+    let opinionModel = process.env.OPINION_MODEL || null;
     try {
       const u = await tariffModule.getUserPlan(req.session.adminId);
       const isExempt = u && (u.plan === 'master' || (u.role && u.role !== 'user'));
-      if (!isExempt) {
+      if (isExempt) {
+        // Master/staff test with the best model.
+        if (!opinionModel) opinionModel = process.env.OPINION_MODEL_STAFF || 'claude-fable-5';
+      } else {
         const planKey = (u && u.plan) || 'sinov';
         const limit = parseInt(process.env['OPINION_LIMIT_' + planKey.toUpperCase()], 10)
           || OPINION_LIMITS[planKey] || 1;
@@ -5307,8 +5321,10 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
         }
         // Freemium opinions get a smaller output budget than paid tiers.
         opinionMaxTokens = planKey === 'sinov' ? 4096 : 8192;
+        if (!opinionModel) opinionModel = process.env['OPINION_MODEL_' + planKey.toUpperCase()] || OPINION_MODELS[planKey] || 'claude-sonnet-5';
       }
     } catch (qErr) { console.warn('[Legal Opinion] plan check failed (allowing):', qErr.message); }
+    if (!opinionModel) opinionModel = 'claude-sonnet-5';
 
     const lang = lexLangForText(documentText);
     // Relevance diagnostics: if an opinion ever comes out unrelated to the
@@ -5384,11 +5400,12 @@ ${groundingRule}
     // ANTHROPIC_API_KEY is set; standard chain otherwise). The cheap digest
     // stage above stays on the standard chain — only the high-stakes final
     // reasoning pays for the strong model.
+    console.log(`[Legal Opinion] model=${opinionModel} maxTokens=${opinionMaxTokens}`);
     const result = await callPremiumAI(
       [{ role: 'system', text: systemPrompt }, { role: 'user', text: userText }],
       // useSearch OFF: hard source restriction — grounding comes exclusively
       // from the KONTEKST (qa-korpus + lex.uz-live excerpts assembled above).
-      { useSearch: false, maxTokens: opinionMaxTokens, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
+      { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
     );
     let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
