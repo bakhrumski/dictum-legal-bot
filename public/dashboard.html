@@ -2983,6 +2983,10 @@
         .ai-attach-chip .chip-remove:hover { color: var(--danger-700); }
         .ai-attach-chip.err { border-color: var(--danger-700); }
         .ai-attach-chip.err .chip-status { color: var(--danger-700); }
+        /* documents persisting for the whole conversation */
+        .ai-attach-chip.session { background: var(--navy-100, #E1ECF6); border-color: var(--navy-300); }
+        .ai-attach-chip.session .chip-status { color: var(--navy-700); font-weight: 600; }
+        [data-theme="dark"] .ai-attach-chip.session { background: rgba(122,160,198,0.12); }
         /* one-tap legal-opinion suggestion shown when a document is ready */
         .ai-attach-suggest {
             display: inline-flex; align-items: center; gap: 6px;
@@ -10162,7 +10166,7 @@
             selectedTopics = [];
             topicAutoDetect = false;
             pendingChatText = '';
-            if (typeof aiAttachments !== 'undefined') { aiAttachments = []; renderAttachChips(); }
+            if (typeof aiAttachments !== 'undefined') { aiAttachments = []; sessionDocs = []; renderAttachChips(); }
             var banner = document.getElementById('aiReqContextBanner');
             if (banner) banner.style.display = 'none';
             aiOpenedFromRequest = false;
@@ -10689,6 +10693,11 @@
 
         // ── Composer attachments: OCR + PDF extraction merged into the message ──
         var aiAttachments = [];   // {id, name, kind:'pdf'|'image', status, text, error}
+        // Documents already sent in this conversation. They persist (ChatGPT-
+        // style) so follow-up questions keep the document context — previously
+        // the attachment was discarded after one message and later questions
+        // silently lost the document. Cleared on new chat; removable via ×.
+        var sessionDocs = [];     // {name, text}
         var aiAttachSeq = 0;
         var ATTACH_MAX = 20 * 1024 * 1024;
 
@@ -10759,7 +10768,15 @@
             var box = document.getElementById('aiAttachChips');
             if (!box) return;
             var icon = '<svg class="chip-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-            var html = aiAttachments.map(function (a) {
+            var html = sessionDocs.map(function (d, i) {
+                return '<div class="ai-attach-chip session">' +
+                    icon +
+                    '<span class="chip-name">' + escapeHtml(d.name) + '</span>' +
+                    '<span class="chip-status">suhbatda</span>' +
+                    '<button class="chip-remove" type="button" onclick="removeSessionDoc(' + i + ')" aria-label="O\'chirish">&times;</button>' +
+                    '</div>';
+            }).join('');
+            html += aiAttachments.map(function (a) {
                 var status = a.status === 'processing' ? 'O\'qilmoqda…' : a.status === 'error' ? (a.error || 'Xato') : 'Tayyor';
                 return '<div class="ai-attach-chip ' + (a.status === 'error' ? 'err' : '') + '">' +
                     icon +
@@ -10768,10 +10785,9 @@
                     '<button class="chip-remove" type="button" onclick="removeAttachment(' + a.id + ')" aria-label="O\'chirish">&times;</button>' +
                     '</div>';
             }).join('');
-            // Once at least one document is embedded and ready, offer the
-            // one-tap suggestions: formal legal opinion, or a plain-language
-            // explanation for non-lawyers.
-            if (aiAttachments.some(function (a) { return a.status === 'ready'; })) {
+            // Offer the one-tap suggestions while any document is available —
+            // newly attached OR persisting in the conversation.
+            if (aiAttachments.some(function (a) { return a.status === 'ready'; }) || sessionDocs.length > 0) {
                 html += '<button class="ai-attach-suggest" type="button" onclick="opinionFromAttachment()">' +
                     '📑 Ushbu hujjatga yuridik xulosa yozib berishimni xohlaysizmi?</button>';
                 html += '<button class="ai-attach-suggest" type="button" onclick="explainFromAttachment()">' +
@@ -10784,10 +10800,10 @@
         // are kept after explaining, so the user can follow up with questions
         // or request the formal opinion next.
         async function explainFromAttachment() {
-            var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
-            if (!ready.length) return;
-            var name = ready.map(function (a) { return a.name; }).join(', ');
-            var text = ready.map(function (a) { return '【' + a.name + '】\n' + a.text; }).join('\n\n');
+            var docs = collectSessionDocs();
+            if (!docs.length) return;
+            var name = docs.map(function (d) { return d.name; }).join(', ');
+            var text = docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
             var messagesEl = document.getElementById('aiChatMessages');
             var welcome = document.getElementById('aiChatWelcome');
             if (welcome) welcome.style.display = 'none';
@@ -10812,17 +10828,31 @@
             }
         }
 
-        // One-tap: turn the ready composer attachment(s) into a formal legal
+        function removeSessionDoc(i) {
+            sessionDocs.splice(i, 1);
+            renderAttachChips();
+        }
+        // Combined document set: conversation-persistent + newly ready; newly
+        // ready ones are promoted into the session so they survive the action.
+        function collectSessionDocs() {
+            var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
+            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text }); });
+            if (ready.length) {
+                aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
+            }
+            renderAttachChips();
+            return sessionDocs.slice();
+        }
+
+        // One-tap: turn the attached/session document(s) into a formal legal
         // opinion via the dedicated qa-korpus + lex.uz pipeline (NOT normal chat).
         function opinionFromAttachment() {
-            var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
-            if (!ready.length) return;
+            var docs = collectSessionDocs();
+            if (!docs.length) return;
             opinionDoc = {
-                name: ready.map(function (a) { return a.name; }).join(', '),
-                text: ready.map(function (a) { return '【' + a.name + '】\n' + a.text; }).join('\n\n')
+                name: docs.map(function (d) { return d.name; }).join(', '),
+                text: docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n')
             };
-            aiAttachments = [];
-            renderAttachChips();
             docFlowGenerateOpinion();
         }
 
@@ -10849,9 +10879,11 @@
             var welcome = document.getElementById('aiChatWelcome');
             if (welcome) welcome.style.display = 'none';
 
-            // Build attached-document context (from ready OCR/PDF extractions).
-            var documentText = readyDocs.map(function (a) {
-                return '【' + a.name + '】\n' + a.text;
+            // Document context = conversation-persistent docs + newly attached.
+            // Follow-up questions keep working against the same document(s).
+            var allDocs = sessionDocs.concat(readyDocs.map(function (a) { return { name: a.name, text: a.text }; }));
+            var documentText = allDocs.map(function (d) {
+                return '【' + d.name + '】\n' + d.text;
             }).join('\n\n');
             var attachLine = readyDocs.length
                 ? '<div class="ai-msg-files">' + readyDocs.map(function (a) {
@@ -10864,8 +10896,10 @@
             var currentQuestion = text;
             input.value = '';
             input.style.height = 'auto';
-            // Clear the composer attachments now that they're sent.
-            aiAttachments = [];
+            // Newly sent docs persist for the rest of the conversation
+            // (removable via the × on their "suhbatda" chip).
+            readyDocs.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text }); });
+            aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
             renderAttachChips();
 
             aiChatHistory.push({ role: 'user', text: text });
