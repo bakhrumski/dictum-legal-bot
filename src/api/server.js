@@ -2552,7 +2552,7 @@ async function callOpenAI(messages, options = {}) {
   }));
 
   const body = {
-    model: 'gpt-4o',
+    model: options.model || 'gpt-4o',
     input,
     temperature,
     max_output_tokens: maxTokens
@@ -2666,12 +2666,26 @@ async function callClaude(messages, options = {}) {
   return { text, provider: model };
 }
 
-// Premium routing: Claude first when configured, normal chain as fallback —
-// a missing/failed ANTHROPIC_API_KEY never breaks the feature.
+// Premium routing for high-stakes generations (legal opinions), in order:
+//   1. Anthropic Claude — if ANTHROPIC_API_KEY set (best quality). options.model
+//      is a claude-* id here.
+//   2. OpenAI — if GPT_API_KEY set (no Anthropic key or it failed). Uses
+//      OPINION_OPENAI_MODEL (default gpt-4o; set gpt-4.1 etc. if your account
+//      has it). This lets opinions run on a strong model using the OpenAI key
+//      you ALREADY fund for the fallback chain — no Anthropic payment needed.
+//   3. Standard chain (Gemini/Groq/GPT-4o) — always-available fallback.
+// A claude-* model id is only sent to Claude; OpenAI gets its own model id.
 async function callPremiumAI(messages, options = {}) {
-  if (process.env.ANTHROPIC_API_KEY) {
+  const wantsClaude = String(options.model || '').startsWith('claude');
+  if (process.env.ANTHROPIC_API_KEY && (wantsClaude || !process.env.GPT_API_KEY)) {
     try { return await callClaude(messages, options); }
-    catch (e) { console.warn('[PremiumAI] Claude failed, falling back to standard chain:', e.message); }
+    catch (e) { console.warn('[PremiumAI] Claude failed, trying OpenAI/standard:', e.message); }
+  }
+  if (process.env.GPT_API_KEY) {
+    try {
+      const openaiModel = process.env.OPINION_OPENAI_MODEL || 'gpt-4o';
+      return await callOpenAI(messages, { ...options, model: openaiModel, useSearch: false });
+    } catch (e) { console.warn('[PremiumAI] OpenAI failed, falling back to standard chain:', e.message); }
   }
   return callAI(messages, options);
 }
