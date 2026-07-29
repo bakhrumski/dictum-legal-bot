@@ -3048,8 +3048,22 @@
             box-shadow: 0 6px 30px rgba(0,0,0,0.12);
             padding: 64px 68px; min-height: 60vh;
             font-family: 'Source Serif 4', Georgia, serif; font-size: 15.5px; line-height: 1.9;
-            white-space: pre-wrap; word-wrap: break-word;
+            /* NOT pre-wrap: the AI/template body is HTML, so pre-wrap rendered
+               every newline BETWEEN tags as a visible blank line. */
+            word-wrap: break-word;
         }
+        /* Tight, even vertical rhythm — no empty gaps between blocks. */
+        .docb-page > *:first-child { margin-top: 0; }
+        .docb-page > *:last-child { margin-bottom: 0; }
+        .docb-page p { margin: 0 0 10px; }
+        .docb-page h2 { margin: 20px 0 8px; font-size: 1.15em; }
+        .docb-page h3 { margin: 16px 0 6px; font-size: 1.05em; }
+        .docb-page ul, .docb-page ol { margin: 0 0 10px; padding-left: 22px; }
+        .docb-page li { margin: 0 0 4px; }
+        .docb-page table { margin: 0 0 12px; }
+        /* Collapse empty blocks the model sometimes emits (<p></p>, <p><br></p>) */
+        .docb-page p:empty, .docb-page div:empty { display: none; }
+        .docb-page br + br { display: none; }
         [data-theme="dark"] .docb-page { background: #f7f4ee; }
         .docb-page h1, .docb-page h2, .docb-page h3 { font-family: 'Source Serif 4', Georgia, serif; }
         /* fillable fields: yellow while empty, plain once filled */

@@ -297,6 +297,12 @@ Rules:
 
       let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
       if (!html) return res.status(500).json({ error: 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring' });
+      // Strip the empty <p></p>/<br> blocks LLMs emit (blank gaps in the doc).
+      html = html
+        .replace(/<p>\s*(?:<br\s*\/?>\s*)*<\/p>/gi, '')
+        .replace(/(?:<br\s*\/?>\s*){2,}/gi, '<br>')
+        .replace(/>\s*\n\s*</g, '><')
+        .trim();
       res.json({ html, provider: result.provider });
     } catch (e) {
       console.error('[DRAFT] ai-generate error:', e.message);

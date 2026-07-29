@@ -5241,6 +5241,22 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
   }
 });
 
+// Remove the empty blocks LLMs sprinkle into generated HTML (<p></p>,
+// <p><br></p>, stacked <br>, whitespace-only paragraphs) and the newlines
+// between tags. Without this the rendered document shows blank gaps between
+// paragraphs — and the gaps also survive into the Word/PDF export, where CSS
+// fixes cannot reach.
+function tidyDocumentHtml(html) {
+  return String(html || '')
+    .replace(/<p>\s*(?:<br\s*\/?>\s*)*<\/p>/gi, '')            // <p></p>, <p><br></p>
+    .replace(/<div>\s*(?:<br\s*\/?>\s*)*<\/div>/gi, '')         // same for <div>
+    .replace(/(?:<br\s*\/?>\s*){2,}/gi, '<br>')                 // <br><br>... -> one
+    .replace(/(<\/(?:p|h[1-6]|ul|ol|li|table|tr|div)>)\s*(?:<br\s*\/?>\s*)+/gi, '$1')  // <br> right after a block close
+    .replace(/>\s*\n\s*</g, '><')                               // newlines between tags
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
 // Map-reduce digest for long documents: extract the legally-relevant facts
 // from EVERY chunk in parallel so the whole document is covered, not just the
 // first pages. Short docs pass through unchanged. Shared by the legal-opinion
@@ -5423,6 +5439,7 @@ ${groundingRule}
     );
     let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
+    html = tidyDocumentHtml(html);
 
     // Append the verified Manbalar footer as a clean HTML link list (NOT raw
     // markdown — that rendered literal '**' and the "[Law]" labels got turned
