@@ -532,6 +532,61 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
   res.json(out);
 });
 
+// Per-user AI spend report (master only) — the unit-economics view: what does
+// a user actually cost per month, and who are the p95 outliers? Use this before
+// repricing plans instead of guessing at token estimates.
+//   GET /api/admin/spend-report?month=YYYY-MM
+app.get('/api/admin/spend-report', requireMasterAdmin, async (req, res) => {
+  try {
+    const month = /^\d{4}-\d{2}$/.test(req.query.month || '')
+      ? req.query.month : new Date().toISOString().slice(0, 7);
+
+    const perUser = await pool.query(`
+      SELECT l.user_id, a.full_name, a.username, a.tariff_plan,
+             COUNT(*)::int                        AS calls,
+             SUM(l.in_tokens)::bigint             AS in_tokens,
+             SUM(l.out_tokens)::bigint            AS out_tokens,
+             ROUND(SUM(l.cost_usd)::numeric, 4)::float AS usd
+        FROM llm_spend_log l
+        LEFT JOIN admins a ON a.id = l.user_id
+       WHERE l.month = $1 AND l.user_id IS NOT NULL
+       GROUP BY l.user_id, a.full_name, a.username, a.tariff_plan
+       ORDER BY usd DESC LIMIT 100`, [month]);
+
+    const byModel = await pool.query(`
+      SELECT model, COUNT(*)::int AS calls,
+             ROUND(SUM(cost_usd)::numeric, 4)::float AS usd
+        FROM llm_spend_log WHERE month = $1
+       GROUP BY model ORDER BY usd DESC`, [month]);
+
+    const byEndpoint = await pool.query(`
+      SELECT COALESCE(endpoint, '(none)') AS endpoint, COUNT(*)::int AS calls,
+             ROUND(SUM(cost_usd)::numeric, 4)::float AS usd
+        FROM llm_spend_log WHERE month = $1
+       GROUP BY endpoint ORDER BY usd DESC LIMIT 20`, [month]);
+
+    // p50/p95 cost per active user — the number that decides pricing.
+    const costs = perUser.rows.map(r => r.usd).sort((a, b) => a - b);
+    const pct = (p) => costs.length ? costs[Math.min(costs.length - 1, Math.floor(costs.length * p))] : 0;
+    const total = (await pool.query(
+      `SELECT ROUND(COALESCE(SUM(cost_usd),0)::numeric, 4)::float AS usd FROM llm_spend_log WHERE month = $1`,
+      [month])).rows[0].usd;
+
+    res.json({
+      month,
+      totalUsd: total,
+      activeUsers: perUser.rowCount,
+      perUserUsd: { p50: pct(0.5), p95: pct(0.95), max: costs.length ? costs[costs.length - 1] : 0 },
+      topUsers: perUser.rows,
+      byModel: byModel.rows,
+      byEndpoint: byEndpoint.rows,
+    });
+  } catch (err) {
+    console.error('[spend-report] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Audit trail viewer (master only): recent sensitive-data access + auth events.
 app.get('/api/admin/audit-log', requireMasterAdmin, async (req, res) => {
   try {
