@@ -5400,13 +5400,22 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
         const planKey = (u && u.plan) || 'sinov';
         const limit = parseInt(process.env['OPINION_LIMIT_' + planKey.toUpperCase()], 10)
           || OPINION_LIMITS[planKey] || 1;
+        // Count from the start of the current TARIFF PERIOD, not the calendar
+        // month: a 10-day trial straddling a month boundary would otherwise
+        // grant two opinions ("1 per month" twice). One opinion per trial.
+        const periodStart = (u && u.startsAt) ? new Date(u.startsAt) : null;
         const used = (await pool.query(
-          `SELECT COUNT(*)::int AS n FROM audit_log
-            WHERE admin_id = $1 AND action = 'legal_opinion.generate'
-              AND created_at >= date_trunc('month', NOW())`, [req.session.adminId])).rows[0].n;
+          periodStart
+            ? `SELECT COUNT(*)::int AS n FROM audit_log
+                 WHERE admin_id = $1 AND action = 'legal_opinion.generate' AND created_at >= $2`
+            : `SELECT COUNT(*)::int AS n FROM audit_log
+                 WHERE admin_id = $1 AND action = 'legal_opinion.generate'
+                   AND created_at >= date_trunc('month', NOW())`,
+          periodStart ? [req.session.adminId, periodStart] : [req.session.adminId])).rows[0].n;
         if (used >= limit) {
+          const perLabel = planKey === 'sinov' ? 'sinov muddati' : 'tarif davri';
           return res.status(429).json({
-            error: `Yuridik xulosa uchun oylik limit tugadi (${limit} ta/oy${planKey === 'sinov' ? ' — bepul tarif' : ''}). Keyingi oyni kuting yoki yuqoriroq tarifga o'ting.`,
+            error: `Yuridik xulosa limiti tugadi (${limit} ta / ${perLabel}${planKey === 'sinov' ? ' — bepul tarif' : ''}). Yuqoriroq tarifga o'tsangiz, ko'proq xulosa olasiz.`,
             code: 'OPINION_LIMIT', used, limit,
           });
         }
