@@ -31,27 +31,27 @@ const PLANS = {
     label: 'Sinov',
     dailyLimit: 3,
     monthlyLimit: null,
-    durationDays: 7,
+    durationDays: 10,
     priceUzs: 0,
   },
   silver: {
     label: 'Silver',
     dailyLimit: null,
-    monthlyLimit: 300,
+    monthlyLimit: 200,
     durationDays: 30,
     priceUzs: 299000,
   },
   gold: {
     label: 'Gold',
     dailyLimit: null,
-    monthlyLimit: 750,
+    monthlyLimit: 500,
     durationDays: 30,
     priceUzs: 599000,
   },
   platinum: {
     label: 'Platinum',
     dailyLimit: null,
-    monthlyLimit: 1500,
+    monthlyLimit: 1200,
     durationDays: 30,
     priceUzs: 1199000,
   },
@@ -66,6 +66,10 @@ async function initSubscriptionSchema() {
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS tariff_starts_at TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS tariff_expires_at TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS bepul_used BOOLEAN DEFAULT FALSE`);
+    // Unused requests carried from the immediately previous paid period.
+    // Carried ONCE: on each renewal this value is REPLACED (never accumulated),
+    // so credits that go unused a second time expire.
+    await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS tariff_rollover INTEGER DEFAULT 0`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email VARCHAR(255)`);
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`);
@@ -129,6 +133,7 @@ async function getUserPlan(adminId) {
     startsAt: row.tariff_starts_at,
     expiresAt: row.tariff_expires_at,
     bepulUsed: !!row.bepul_used,
+    rollover: parseInt(row.tariff_rollover, 10) || 0,
     expired,
   };
 }
@@ -169,12 +174,18 @@ async function checkQuota(adminId) {
     [adminId, since]
   );
   const used = r.rows[0].used;
+  // Effective allowance = this period's plan limit + credits carried over from
+  // the previous period (see selectPlan).
+  const rollover = u.rollover || 0;
+  const effectiveLimit = cfg.monthlyLimit + rollover;
   return {
-    allowed: used < cfg.monthlyLimit,
+    allowed: used < effectiveLimit,
     plan: u.plan,
-    limit: cfg.monthlyLimit,
+    limit: effectiveLimit,
+    baseLimit: cfg.monthlyLimit,
+    rollover,
     used,
-    remaining: Math.max(0, cfg.monthlyLimit - used),
+    remaining: Math.max(0, effectiveLimit - used),
     period: 'month',
     expiresAt: u.expiresAt,
   };
@@ -321,16 +332,43 @@ async function selectPlan(adminId, plan) {
 
   const now = new Date();
   const expires = new Date(now.getTime() + cfg.durationDays * 24 * 3600 * 1000);
+
+  // ── Rollover: "Didn't use your cap? It carries to the next purchase." ──
+  // Unused requests from the period that is ending are carried into the new
+  // one, ONCE: tariff_rollover is REPLACED (not incremented), so credits that
+  // remain unused for a second period expire. Capped at one month's plan
+  // allowance so a long dormant period can't bank an unbounded balance.
+  // Only for paid monthly plans (the trial has a daily cap, nothing to carry).
+  let rollover = 0;
+  if (cfg.monthlyLimit) {
+    try {
+      const prev = await pool.query(
+        `SELECT tariff_plan, tariff_starts_at, tariff_rollover FROM admins WHERE id = $1`, [adminId]);
+      const row = prev.rows[0];
+      const prevCfg = row && row.tariff_plan ? PLANS[row.tariff_plan] : null;
+      if (prevCfg && prevCfg.monthlyLimit && row.tariff_starts_at) {
+        const prevEffective = prevCfg.monthlyLimit + (parseInt(row.tariff_rollover, 10) || 0);
+        const usedPrev = (await pool.query(
+          `SELECT COUNT(*)::int AS n FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+          [adminId, row.tariff_starts_at])).rows[0].n;
+        rollover = Math.max(0, Math.min(prevEffective - usedPrev, cfg.monthlyLimit));
+      }
+    } catch (e) {
+      console.warn('[TARIFF] rollover calc failed (defaulting to 0):', e.message);
+    }
+  }
+
   await pool.query(
     `UPDATE admins
         SET tariff_plan = $1,
             tariff_starts_at = $2,
             tariff_expires_at = $3,
-            bepul_used = bepul_used OR $4
+            bepul_used = bepul_used OR $4,
+            tariff_rollover = $6
       WHERE id = $5`,
-    [plan, now, expires, plan === 'sinov', adminId]
+    [plan, now, expires, plan === 'sinov', adminId, rollover]
   );
-  return { plan, startsAt: now, expiresAt: expires };
+  return { plan, startsAt: now, expiresAt: expires, rollover, limit: (cfg.monthlyLimit || cfg.dailyLimit) + rollover };
 }
 
 /**
