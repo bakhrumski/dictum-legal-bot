@@ -6,51 +6,47 @@ const log = require('../utils/logger').createLogger('HYBRID');
  * Hybrid RAG Pipeline — JuristAI (Phase 2)
  *
  * Two-model architecture per user budget decision:
- *   1. CLASSIFY (cheap, fast): gpt-5.4-nano → fallback gpt-4o-mini
+ *   1. CLASSIFY (cheap, fast): gpt-5.6-luna → fallback gemini-2.5-flash
  *        Input: raw user query
  *        Output: { topic, language, intent, needs_rag, search_terms }
  *
- *   2. GENERATE (quality):    gpt-5.4 → fallback gemini-3.1 → gemini-2.5-flash → gpt-4o
+ *   2. GENERATE (quality):    gpt-5.6-terra → gpt-5.6-luna → gemini-2.5-flash
  *        Input: query + RAG context + citation table
  *        Output: grounded answer, strict zero-hallucination prompt
  *
  * Budget guard:
  *   - Hard ceiling: $1000/month (LLM + infra combined; caller enforces infra side)
  *   - Per-request token cap (DEFAULT_MAX_OUTPUT_TOKENS)
- *   - Per-day spend cap tracked in-process via `spendTracker` (resets on process restart;
- *     persistent tracking lives in DB table `llm_spend_log` if caller wires it in)
+ *   - Per-day spend cap tracked in-process via `spendTracker`
  *
- * Rough pricing ($/1M tokens, used for estimation only):
- *   gpt-5.4-nano         : $0.10 in / $0.40 out
- *   gpt-5.4-mini         : $0.40 in / $1.60 out
- *   gpt-4o-mini          : $0.15 in / $0.60 out
- *   gpt-5.4              : $2.50 in / $10.00 out
- *   gpt-4o               : $2.50 in / $10.00 out
- *   gemini-3.1           : $1.25 in / $5.00 out
- *   gemini-2.5-flash     : $0.30 in / $2.50 out
+ * Pricing ($/1M tokens):
+ *   gpt-5.6-luna         : $1.00 in / $6.00 out   (cost-sensitive, high volume)
+ *   gpt-5.6-terra        : $2.50 in / $15.00 out  (balanced)
+ *   gpt-5.6-sol          : $5.00 in / $30.00 out  (frontier reasoning)
+ *   gemini-2.5-flash     : $0.30 in / $2.50 out   (free-tier fallback)
  *
  * Model chains:
- *   CLASSIFY: gpt-5.4-nano → gpt-5.4-mini → gpt-4o-mini
- *   GENERATE: gpt-5.4 → gpt-5.4-mini → gpt-4o → gemini-3.1 → gemini-2.5-flash
+ *   CLASSIFY: gpt-5.6-luna → gemini-2.5-flash
+ *   GENERATE: gpt-5.6-terra → gpt-5.6-luna → gemini-2.5-flash
  *
  *   Each call tries the primary model first; on error we auto-fall back to the
  *   next in the chain. Fallback chain is hard-coded per call type below.
  */
 
-const CLASSIFY_MODEL_CHAIN = ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-4o-mini'];
-const GENERATE_MODEL_CHAIN = ['gpt-5.4', 'gpt-5.4-mini', 'gpt-4o', 'gemini-3.1', 'gemini-2.5-flash'];
+const CLASSIFY_MODEL_CHAIN = ['gpt-5.6-luna', 'gemini-2.5-flash'];
+const GENERATE_MODEL_CHAIN = ['gpt-5.6-terra', 'gpt-5.6-luna', 'gemini-2.5-flash'];
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 1500;
 const CLASSIFY_MAX_OUTPUT_TOKENS = 200;
 
 // Rough price table ($ per 1M tokens). Used for spend tracking.
 const PRICING = {
-  'gpt-5.4-nano':     { in: 0.10, out: 0.40 },
-  'gpt-5.4-mini':     { in: 0.40, out: 1.60 },
-  'gpt-4o-mini':      { in: 0.15, out: 0.60 },
-  'gpt-5.4':          { in: 2.50, out: 10.00 },
-  'gpt-4o':           { in: 2.50, out: 10.00 },
-  'gemini-3.1':       { in: 1.25, out: 5.00 },
+  // GPT-5.6 family (official per-1M pricing)
+  'gpt-5.6-luna':     { in: 1.00, out: 6.00 },
+  'gpt-5.6-terra':    { in: 2.50, out: 15.00 },
+  'gpt-5.6-sol':      { in: 5.00, out: 30.00 },
+  'gpt-5.6':          { in: 5.00, out: 30.00 },   // alias -> Sol
+  // Gemini free-tier fallback
   'gemini-2.5-flash': { in: 0.30, out: 2.50 },
 };
 

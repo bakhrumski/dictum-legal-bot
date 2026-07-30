@@ -504,34 +504,30 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// Model diagnostic (master only): which premium keys are configured and does
-// the configured opinion model actually answer? Use this instead of burning a
-// legal opinion to find out.
-//   GET /api/admin/model-check            → uses OPINION_OPENAI_MODEL
-//   GET /api/admin/model-check?model=gpt-4o → test a specific model
+// Model diagnostic (master only): verify the configured GPT-5.6 models answer
+// on this account, without burning a real generation.
+//   GET /api/admin/model-check                    → probes all three tiers
+//   GET /api/admin/model-check?model=gpt-5.6-luna → probe one model
 app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
-  const model = req.query.model || process.env.OPINION_OPENAI_MODEL || 'gpt-4o';
   const out = {
     keys: {
-      ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
       GPT_API_KEY: !!process.env.GPT_API_KEY,
       GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
     },
-    OPINION_OPENAI_MODEL: process.env.OPINION_OPENAI_MODEL || '(not set → gpt-4o)',
-    CHEAP_OPENAI_MODEL: process.env.CHEAP_OPENAI_MODEL || '(not set → standard chain)',
-    tested: model,
+    configured: MODELS,
+    results: {},
   };
   const probe = [{ role: 'user', text: 'Reply with exactly: OK' }];
-  try {
-    const r = String(model).startsWith('claude')
-      ? await callClaude(probe, { maxTokens: 20 })
-      : await callOpenAI(probe, { model, maxTokens: 20 });
-    out.ok = true;
-    out.provider = r.provider;
-    out.reply = (r.text || '').trim().slice(0, 40);
-  } catch (e) {
-    out.ok = false;
-    out.error = e.message;
+  const targets = req.query.model
+    ? [['requested', String(req.query.model)]]
+    : [['premium (Sol)', MODELS.premium], ['standard (Terra)', MODELS.standard], ['cheap (Luna)', MODELS.cheap]];
+  for (const [label, model] of targets) {
+    try {
+      const r = await callOpenAI(probe, { model, maxTokens: 20 });
+      out.results[label] = { model, ok: true, reply: (r.text || '').trim().slice(0, 40) };
+    } catch (e) {
+      out.results[label] = { model, ok: false, error: e.message.substring(0, 200) };
+    }
   }
   res.json(out);
 });
@@ -2573,6 +2569,18 @@ async function callGeminiStream(messages, options = {}, onToken) {
   return { text: full, provider: 'Gemini' };
 }
 
+// ── GPT-5.6 model family (single source of truth) ────────────────────────────
+// Sol   $5 /$30  — highest reasoning, frontier: legal-opinion synthesis
+// Terra $2.50/$15 — balanced: main legal chat / general generation
+// Luna  $1 /$6   — cost-sensitive, high volume: digests, explainer, compaction
+// All: 1.05M context, 128k max output, reasoning-token support.
+// Each id is env-overridable; Gemini (free tier) is the only fallback.
+const MODELS = {
+  premium:  process.env.MODEL_PREMIUM  || 'gpt-5.6-sol',
+  standard: process.env.MODEL_STANDARD || 'gpt-5.6-terra',
+  cheap:    process.env.MODEL_CHEAP    || 'gpt-5.6-luna',
+};
+
 async function callOpenAI(messages, options = {}) {
   const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
   const gptKey = process.env.GPT_API_KEY;
@@ -2584,7 +2592,7 @@ async function callOpenAI(messages, options = {}) {
   }));
 
   const body = {
-    model: options.model || 'gpt-4o',
+    model: options.model || MODELS.standard,
     input,
     temperature,
     max_output_tokens: maxTokens
@@ -2594,14 +2602,30 @@ async function callOpenAI(messages, options = {}) {
     body.tools = [{ type: 'web_search_preview' }];
   }
 
-  const resp = await fetch('https://api.openai.com/v1/responses', {
+  const post = (payload) => fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${gptKey}`
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(payload)
   });
+
+  let resp = await post(body);
+  // Reasoning models can reject `temperature` (and occasionally the search
+  // tool). Retry once without the offending parameter instead of failing the
+  // whole request and silently downgrading to the fallback chain.
+  if (!resp.ok && (resp.status === 400 || resp.status === 422)) {
+    const errText = await resp.clone().text().catch(() => '');
+    const retry = { ...body };
+    let changed = false;
+    if (/temperature/i.test(errText)) { delete retry.temperature; changed = true; }
+    if (/tool|web_search/i.test(errText) && retry.tools) { delete retry.tools; changed = true; }
+    if (changed) {
+      console.warn(`[OpenAI] ${body.model} rejected a parameter, retrying without it:`, errText.substring(0, 120));
+      resp = await post(retry);
+    }
+  }
 
   const usedModel = body.model;
   if (!resp.ok) {
@@ -2624,237 +2648,72 @@ async function callOpenAI(messages, options = {}) {
   return { text, provider: usedModel };
 }
 
-async function callGroq(messages, options = {}) {
-  const { temperature = 0.2, maxTokens = 8192 } = options;
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) throw new Error('GROQ_API_KEY sozlanmagan');
 
-  const input = messages.map(m => ({
-    role: m.role === 'model' ? 'assistant' : (m.role === 'system' ? 'system' : 'user'),
-    content: m.text
-  }));
 
-  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${groqKey}`
-    },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: input,
-      temperature,
-      max_tokens: maxTokens
-    })
-  });
 
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
-    throw new Error(`Groq ${resp.status}: ${errBody.substring(0, 200)}`);
-  }
 
-  const data = await resp.json();
-  const text = data.choices?.[0]?.message?.content || '';
-  if (!text) throw new Error('Groq empty response');
-  return { text, provider: 'Groq/Llama' };
-}
-
-// ── Premium provider: Anthropic Claude — for high-stakes generations where
-// instruction-following and grounding fidelity matter most (legal opinions).
-// Model via OPINION_MODEL env (default claude-opus-4-8; e.g. claude-fable-5
-// or claude-sonnet-5 also work). Requires ANTHROPIC_API_KEY.
-async function callClaude(messages, options = {}) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('ANTHROPIC_API_KEY sozlanmagan');
-  const { temperature = 0.2, maxTokens = 8192 } = options;
-  const model = options.model || process.env.OPINION_MODEL || 'claude-opus-4-8';
-
-  let system = '';
-  const msgs = [];
-  for (const m of messages) {
-    if (m.role === 'system') system += (system ? '\n\n' : '') + m.text;
-    else msgs.push({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text });
-  }
-  if (msgs.length === 0) msgs.push({ role: 'user', content: '...' });
-
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      ...(system ? { system } : {}),
-      messages: msgs,
-    }),
-  });
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
-    throw new Error(`Claude ${resp.status}: ${errBody.substring(0, 300)}`);
-  }
-  const data = await resp.json();
-  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-  if (!text) throw new Error('Claude empty response');
-  return { text, provider: model };
-}
-
-// Premium routing for high-stakes generations (legal opinions), in order:
-//   1. Anthropic Claude — if ANTHROPIC_API_KEY set (best quality). options.model
-//      is a claude-* id here.
-//   2. OpenAI — if GPT_API_KEY set (no Anthropic key or it failed). Uses
-//      OPINION_OPENAI_MODEL (default gpt-4o; set gpt-4.1 etc. if your account
-//      has it). This lets opinions run on a strong model using the OpenAI key
-//      you ALREADY fund for the fallback chain — no Anthropic payment needed.
-//   3. Standard chain (Gemini/Groq/GPT-4o) — always-available fallback.
-// A claude-* model id is only sent to Claude; OpenAI gets its own model id.
-// Cheap lane for high-volume, low-stakes calls (per-chunk document digests,
-// plain-language explanations, answer compaction, anonymization). These are
-// summarization/extraction tasks where a small model is enough, and they are
-// called many times per document — so this is where model price actually
-// shows up on the bill.
-//
-// Set CHEAP_OPENAI_MODEL to the cheapest model your OpenAI account has
-// (verify it first with /api/admin/model-check?model=<id>). When unset, or on
-// any failure, this falls back to the standard chain — so it is always safe.
-async function callCheapAI(messages, options = {}) {
-  const cheap = process.env.CHEAP_OPENAI_MODEL;
-  if (cheap && process.env.GPT_API_KEY) {
-    try {
-      return await callOpenAI(messages, { ...options, model: cheap, useSearch: false });
-    } catch (e) {
-      console.warn(`[CheapAI] "${cheap}" failed (falling back to standard chain):`, e.message);
-    }
-  }
-  return callAI(messages, options);
-}
-
+// Premium routing: GPT-5.6 Sol (highest reasoning) for high-stakes
+// generations (legal opinions), with the free Gemini tier as fallback.
 async function callPremiumAI(messages, options = {}) {
-  const wantsClaude = String(options.model || '').startsWith('claude');
-  if (process.env.ANTHROPIC_API_KEY && (wantsClaude || !process.env.GPT_API_KEY)) {
-    try { return await callClaude(messages, options); }
-    catch (e) { console.error('[PremiumAI] Claude FAILED (falling back):', e.message); }
-  }
   if (process.env.GPT_API_KEY) {
-    const openaiModel = process.env.OPINION_OPENAI_MODEL || 'gpt-4o';
+    const model = options.model || MODELS.premium;
     try {
-      return await callOpenAI(messages, { ...options, model: openaiModel, useSearch: false });
+      return await callOpenAI(messages, { ...options, model, useSearch: false });
     } catch (e) {
-      // Loud: a premium model silently falling back to the cheap chain looks
-      // like "it worked" while quality (and $0 API usage) says otherwise.
-      console.error(`[PremiumAI] OpenAI "${openaiModel}" FAILED — check the model name is available on your account. Falling back to the standard chain. Error:`, e.message);
-      if (openaiModel !== 'gpt-4o') {
-        try { return await callOpenAI(messages, { ...options, model: 'gpt-4o', useSearch: false }); }
-        catch (e2) { console.error('[PremiumAI] gpt-4o retry also failed:', e2.message); }
-      }
+      console.error(`[PremiumAI] ${model} FAILED (falling back to Gemini):`, e.message);
     }
   } else {
-    console.warn('[PremiumAI] No ANTHROPIC_API_KEY and no GPT_API_KEY — using the standard chain.');
+    console.warn('[PremiumAI] No GPT_API_KEY — using Gemini fallback.');
   }
-  return callAI(messages, options);
+  return callAI(messages, { ...options, model: undefined });
 }
 
-async function callAI(messages, options = {}) {
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const groqKey = process.env.GROQ_API_KEY;
-  const gptKey = process.env.GPT_API_KEY;
 
+async function callAI(messages, options = {}) {
+  const gptKey = process.env.GPT_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
   const errors = [];
 
-  // 1. Try Gemini first (Google Search grounding support)
+  // 1. GPT-5.6 Terra — balanced intelligence/cost, primary for general work.
+  if (gptKey) {
+    try {
+      const model = options.model || MODELS.standard;
+      console.log(`[AI] Calling ${model}${options.useSearch ? ' with web search' : ''}...`);
+      const result = await callOpenAI(messages, { ...options, model });
+      console.log(`[AI] ${model} succeeded`);
+      return result;
+    } catch (err) {
+      console.warn(`[AI] OpenAI failed: ${err.message}`);
+      errors.push(`OpenAI: ${err.message}`);
+    }
+  }
+
+  // 2. Gemini (free tier) — the only fallback.
   if (geminiKey) {
     try {
-      console.log(`[AI] Calling Gemini${options.useSearch ? ' with Google Search' : ''}...`);
-      const result = await callGemini(messages, options);
+      console.log(`[AI] Falling back to Gemini${options.useSearch ? ' with Google Search' : ''}...`);
+      const result = await callGemini(messages, { ...options, model: undefined });
       console.log('[AI] Gemini succeeded');
       return result;
     } catch (err) {
       console.warn(`[AI] Gemini failed: ${err.message}`);
       errors.push(`Gemini: ${err.message}`);
-
-      // Retry WITHOUT Google Search — search grounding can cause empty/blocked responses
       if (options.useSearch) {
         try {
           console.log('[AI] Retrying Gemini WITHOUT Google Search...');
-          const result = await callGemini(messages, { ...options, useSearch: false });
+          const result = await callGemini(messages, { ...options, model: undefined, useSearch: false });
           console.log('[AI] Gemini succeeded (no search)');
           return result;
         } catch (err2) {
-          console.warn(`[AI] Gemini retry failed: ${err2.message}`);
           errors.push(`Gemini (no-search): ${err2.message}`);
         }
       }
     }
   }
 
-  // 2. Try Groq (free, fast, no search but good quality)
-  // Groq has strict token limits — trim messages if needed
-  if (groqKey) {
-    try {
-      console.log('[AI] Calling Groq/Llama...');
-      const trimmedMessages = trimMessagesForGroq(messages);
-      const result = await callGroq(trimmedMessages, { ...options, maxTokens: Math.min(options.maxTokens || 4096, 4096) });
-      console.log('[AI] Groq succeeded');
-      return result;
-    } catch (err) {
-      console.warn(`[AI] Groq failed: ${err.message}`);
-      errors.push(`Groq: ${err.message}`);
-    }
-  }
-
-  // 3. Try OpenAI GPT-4o
-  if (gptKey) {
-    try {
-      console.log(`[AI] Calling GPT-4o${options.useSearch ? ' with web search' : ''}...`);
-      const result = await callOpenAI(messages, options);
-      console.log('[AI] GPT-4o succeeded');
-      return result;
-    } catch (err) {
-      console.warn(`[AI] GPT-4o failed: ${err.message}`);
-      errors.push(`GPT-4o: ${err.message}`);
-    }
-  }
-
   throw new Error('Barcha AI provayderlar ishlamayapti: ' + errors.join(' | '));
 }
 
-/**
- * Trim messages to fit within Groq's token limits (~6K input tokens safe).
- * Strategy: keep system prompt (trimmed), keep last 4 history messages, keep current user message.
- */
-function trimMessagesForGroq(messages) {
-  if (!messages || messages.length <= 3) return messages;
-
-  const MAX_CHARS = 20000; // ~5000 tokens, safe for Groq's 12K TPM with 4K output
-  let totalChars = messages.reduce((sum, m) => sum + (m.text || '').length, 0);
-
-  if (totalChars <= MAX_CHARS) return messages;
-
-  const trimmed = [];
-  const systemMsg = messages.find(m => m.role === 'system');
-  const userMsgs = messages.filter(m => m.role !== 'system');
-
-  // Trim system prompt to 8000 chars if too long
-  if (systemMsg) {
-    const maxSystem = 8000;
-    trimmed.push({
-      ...systemMsg,
-      text: systemMsg.text.length > maxSystem
-        ? systemMsg.text.substring(0, maxSystem) + '\n\n[Kontekst qisqartirildi...]'
-        : systemMsg.text
-    });
-  }
-
-  // Keep only last 4 non-system messages (2 Q&A pairs)
-  const recentMsgs = userMsgs.length > 4 ? userMsgs.slice(-4) : userMsgs;
-  trimmed.push(...recentMsgs);
-
-  console.log(`[AI] Trimmed for Groq: ${messages.length} → ${trimmed.length} messages, ${totalChars} → ${trimmed.reduce((s, m) => s + (m.text || '').length, 0)} chars`);
-  return trimmed;
-}
 
 // Initialize agent runner with callAI function
 const { initRunner } = require('../agents/runner');
@@ -5150,7 +5009,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         systemPrompt;
     }
 
-    // Build messages array — system prompt as dedicated system role (works with Groq + Gemini)
+    // Build messages array — system prompt as a dedicated system role
     const aiMessages = [{ role: 'system', text: systemPrompt }];
 
     if (Array.isArray(history) && history.length > 0) {
@@ -5386,13 +5245,13 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     const OPINION_LIMITS = { sinov: 1, silver: 3, gold: 10, platinum: 30 };
     // Tiered quality: the more expensive the plan, the stronger the model.
     // Per-plan override via OPINION_MODEL_<PLAN>; global OPINION_MODEL wins
-    // over everything. All of this only applies when ANTHROPIC_API_KEY is set —
-    // otherwise callPremiumAI falls back to the standard chain regardless.
+    // over everything. Falls back to Gemini (free tier) if OpenAI is down.
+    // GPT-5.6 ladder: better plan -> stronger model.
     const OPINION_MODELS = {
-      sinov: 'claude-sonnet-5',
-      silver: 'claude-sonnet-5',
-      gold: 'claude-opus-4-8',
-      platinum: 'claude-fable-5',
+      sinov: MODELS.cheap,       // Luna  $1/$6
+      silver: MODELS.standard,   // Terra $2.50/$15
+      gold: MODELS.premium,      // Sol   $5/$30
+      platinum: MODELS.premium,  // Sol
     };
     let opinionMaxTokens = 8192;
     let opinionModel = process.env.OPINION_MODEL || null;
@@ -5401,7 +5260,7 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       const isExempt = u && (u.plan === 'master' || (u.role && u.role !== 'user'));
       if (isExempt) {
         // Master/staff test with the best model.
-        if (!opinionModel) opinionModel = process.env.OPINION_MODEL_STAFF || 'claude-fable-5';
+        if (!opinionModel) opinionModel = process.env.OPINION_MODEL_STAFF || MODELS.premium;
       } else {
         const planKey = (u && u.plan) || 'sinov';
         const limit = parseInt(process.env['OPINION_LIMIT_' + planKey.toUpperCase()], 10)
@@ -5418,10 +5277,10 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
         }
         // Freemium opinions get a smaller output budget than paid tiers.
         opinionMaxTokens = planKey === 'sinov' ? 4096 : 8192;
-        if (!opinionModel) opinionModel = process.env['OPINION_MODEL_' + planKey.toUpperCase()] || OPINION_MODELS[planKey] || 'claude-sonnet-5';
+        if (!opinionModel) opinionModel = process.env['OPINION_MODEL_' + planKey.toUpperCase()] || OPINION_MODELS[planKey] || MODELS.standard;
       }
     } catch (qErr) { console.warn('[Legal Opinion] plan check failed (allowing):', qErr.message); }
-    if (!opinionModel) opinionModel = 'claude-sonnet-5';
+    if (!opinionModel) opinionModel = MODELS.premium;
 
     const lang = lexLangForText(documentText);
     // Relevance diagnostics: if an opinion ever comes out unrelated to the
@@ -7213,7 +7072,7 @@ async function triggerAiScreening(regId, regData) {
     const today = new Date().toISOString().split('T')[0];
     const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nBugungi sana: ${today}\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${docNote}\n\nTekshiring:\n1. ${docFetched ? 'Hujjatdagi ism-familiya ariza beruvchi kiritgan ma\'lumotlarga mosmi?' : 'Ism-familiya to\'g\'ri formatdami?'}\n2. ${docFetched ? 'Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?' : 'Ma\'lumotlar to\'liqmi?'}\n3. Barcha ma'lumotlar to'liqmi?\n4. ${docFetched ? 'Hujjat haqiqiymi yoki shubhalimi? Bugungi sana ' + today + ' — hujjat sanasi bugungi yoki undan oldingi bo\'lsa, bu normal.' : 'Hujjat texnik sabablarga ko\'ra ko\'rib bo\'lmadi — true deb belgilang.'}\n${isLawyer ? '5. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
 
-    // Build GPT-4o Chat Completions request with vision
+    // Vision screening request (GPT-5.6 Terra supports text+image input).
     const content = [];
     if (docBase64 && docMimeType) {
       content.push({ type: 'image_url', image_url: { url: `data:${docMimeType};base64,${docBase64}` } });
@@ -7221,7 +7080,7 @@ async function triggerAiScreening(regId, regData) {
     content.push({ type: 'text', text: screenPrompt });
 
     const gptBody = {
-      model: 'gpt-4o',
+      model: process.env.MODEL_VISION || MODELS.standard,
       messages: [{ role: 'user', content }],
       temperature: 0.2,
       max_tokens: 1024,
