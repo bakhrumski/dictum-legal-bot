@@ -504,6 +504,37 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// Model diagnostic (master only): which premium keys are configured and does
+// the configured opinion model actually answer? Use this instead of burning a
+// legal opinion to find out.
+//   GET /api/admin/model-check            → uses OPINION_OPENAI_MODEL
+//   GET /api/admin/model-check?model=gpt-4o → test a specific model
+app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
+  const model = req.query.model || process.env.OPINION_OPENAI_MODEL || 'gpt-4o';
+  const out = {
+    keys: {
+      ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
+      GPT_API_KEY: !!process.env.GPT_API_KEY,
+      GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
+    },
+    OPINION_OPENAI_MODEL: process.env.OPINION_OPENAI_MODEL || '(not set → gpt-4o)',
+    tested: model,
+  };
+  const probe = [{ role: 'user', text: 'Reply with exactly: OK' }];
+  try {
+    const r = String(model).startsWith('claude')
+      ? await callClaude(probe, { maxTokens: 20 })
+      : await callOpenAI(probe, { model, maxTokens: 20 });
+    out.ok = true;
+    out.provider = r.provider;
+    out.reply = (r.text || '').trim().slice(0, 40);
+  } catch (e) {
+    out.ok = false;
+    out.error = e.message;
+  }
+  res.json(out);
+});
+
 // Audit trail viewer (master only): recent sensitive-data access + auth events.
 app.get('/api/admin/audit-log', requireMasterAdmin, async (req, res) => {
   try {
@@ -2571,9 +2602,10 @@ async function callOpenAI(messages, options = {}) {
     body: JSON.stringify(body)
   });
 
+  const usedModel = body.model;
   if (!resp.ok) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`GPT-4o ${resp.status}: ${errBody.substring(0, 200)}`);
+    throw new Error(`OpenAI ${usedModel} ${resp.status}: ${errBody.substring(0, 200)}`);
   }
 
   const data = await resp.json();
@@ -2584,8 +2616,11 @@ async function callOpenAI(messages, options = {}) {
     .map(c => c.text)
     .join('');
 
-  if (!text) throw new Error('GPT-4o empty response');
-  return { text, provider: 'GPT-4o' };
+  if (!text) throw new Error(`OpenAI ${usedModel} empty response`);
+  // Report the model actually used — a hardcoded 'GPT-4o' label made it
+  // impossible to tell which model answered (or that a premium model was
+  // silently skipped).
+  return { text, provider: usedModel };
 }
 
 async function callGroq(messages, options = {}) {
@@ -2679,13 +2714,23 @@ async function callPremiumAI(messages, options = {}) {
   const wantsClaude = String(options.model || '').startsWith('claude');
   if (process.env.ANTHROPIC_API_KEY && (wantsClaude || !process.env.GPT_API_KEY)) {
     try { return await callClaude(messages, options); }
-    catch (e) { console.warn('[PremiumAI] Claude failed, trying OpenAI/standard:', e.message); }
+    catch (e) { console.error('[PremiumAI] Claude FAILED (falling back):', e.message); }
   }
   if (process.env.GPT_API_KEY) {
+    const openaiModel = process.env.OPINION_OPENAI_MODEL || 'gpt-4o';
     try {
-      const openaiModel = process.env.OPINION_OPENAI_MODEL || 'gpt-4o';
       return await callOpenAI(messages, { ...options, model: openaiModel, useSearch: false });
-    } catch (e) { console.warn('[PremiumAI] OpenAI failed, falling back to standard chain:', e.message); }
+    } catch (e) {
+      // Loud: a premium model silently falling back to the cheap chain looks
+      // like "it worked" while quality (and $0 API usage) says otherwise.
+      console.error(`[PremiumAI] OpenAI "${openaiModel}" FAILED — check the model name is available on your account. Falling back to the standard chain. Error:`, e.message);
+      if (openaiModel !== 'gpt-4o') {
+        try { return await callOpenAI(messages, { ...options, model: 'gpt-4o', useSearch: false }); }
+        catch (e2) { console.error('[PremiumAI] gpt-4o retry also failed:', e2.message); }
+      }
+    }
+  } else {
+    console.warn('[PremiumAI] No ANTHROPIC_API_KEY and no GPT_API_KEY — using the standard chain.');
   }
   return callAI(messages, options);
 }
