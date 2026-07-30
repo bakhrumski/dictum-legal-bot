@@ -518,6 +518,7 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
       GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
     },
     OPINION_OPENAI_MODEL: process.env.OPINION_OPENAI_MODEL || '(not set → gpt-4o)',
+    CHEAP_OPENAI_MODEL: process.env.CHEAP_OPENAI_MODEL || '(not set → standard chain)',
     tested: model,
   };
   const probe = [{ role: 'user', text: 'Reply with exactly: OK' }];
@@ -2710,6 +2711,27 @@ async function callClaude(messages, options = {}) {
 //      you ALREADY fund for the fallback chain — no Anthropic payment needed.
 //   3. Standard chain (Gemini/Groq/GPT-4o) — always-available fallback.
 // A claude-* model id is only sent to Claude; OpenAI gets its own model id.
+// Cheap lane for high-volume, low-stakes calls (per-chunk document digests,
+// plain-language explanations, answer compaction, anonymization). These are
+// summarization/extraction tasks where a small model is enough, and they are
+// called many times per document — so this is where model price actually
+// shows up on the bill.
+//
+// Set CHEAP_OPENAI_MODEL to the cheapest model your OpenAI account has
+// (verify it first with /api/admin/model-check?model=<id>). When unset, or on
+// any failure, this falls back to the standard chain — so it is always safe.
+async function callCheapAI(messages, options = {}) {
+  const cheap = process.env.CHEAP_OPENAI_MODEL;
+  if (cheap && process.env.GPT_API_KEY) {
+    try {
+      return await callOpenAI(messages, { ...options, model: cheap, useSearch: false });
+    } catch (e) {
+      console.warn(`[CheapAI] "${cheap}" failed (falling back to standard chain):`, e.message);
+    }
+  }
+  return callAI(messages, options);
+}
+
 async function callPremiumAI(messages, options = {}) {
   const wantsClaude = String(options.model || '').startsWith('claude');
   if (process.env.ANTHROPIC_API_KEY && (wantsClaude || !process.env.GPT_API_KEY)) {
@@ -5314,7 +5336,7 @@ async function digestLongDocument(documentText, userId) {
     chunks.push(documentText.slice(i, i + CHUNK));
   }
   const briefs = await Promise.all(chunks.map((c, idx) =>
-    callAI([
+    callCheapAI([
       { role: 'system', text: 'You extract material for a legal opinion from a document excerpt. Go CLAUSE BY CLAUSE: list EVERY clause that establishes an obligation, a right, a date, a term/period, a deadline, a requirement or a condition — one bullet per clause, citing the clause/band number when present, stating WHO owes/holds it and the exact amount/date/period. Also capture: parties and their roles, other legally-relevant facts, and every reference to laws, regulations (qonun, kodeks, VM qarori, farmon) or court decisions. Same language as the text. No analysis, no opinion, no preamble.' },
       { role: 'user', text: `Excerpt ${idx + 1}/${chunks.length}:\n\n${c}` },
     ], { temperature: 0.1, maxTokens: 1300, userId: userId || null, endpoint: '/api/draft/doc-digest' })
@@ -5542,7 +5564,7 @@ app.post('/api/draft/explain-document', requireAuth, tariffModule.enforceQuota('
     const lang = lexLangForText(documentText);
     const langName = lang === 'ru' ? 'Russian' : 'Uzbek (Latin script)';
 
-    const result = await callAI([
+    const result = await callCheapAI([
       { role: 'system', text:
 `You explain official/legal documents to ordinary people in ${langName}, in SIMPLE everyday language — like explaining to a friend with no legal background.
 
@@ -5582,7 +5604,7 @@ app.post('/api/draft/legal-opinion/save-pattern', requireMasterAdmin, async (req
     if (html.length < 200) return res.status(400).json({ error: 'Xulosa matni juda qisqa' });
 
     const plain = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    const result = await callAI([
+    const result = await callCheapAI([
       { role: 'system', text:
 `You anonymize a specific Uzbek legal opinion into a REUSABLE PATTERN for a legal knowledge base. Remove ALL identifying facts: party names, organization names, personal data, exact amounts, exact dates, addresses, case numbers. Keep: the document type, which O'zbekiston Respublikasi laws/articles apply and why, the typical risks, and the generic recommendations.
 
@@ -6021,7 +6043,7 @@ QOIDALAR:
 
 Qisqartirilgan javobni yozing:`;
 
-    const aiResult = await callAI([{ role: 'user', text: prompt }], {
+    const aiResult = await callCheapAI([{ role: 'user', text: prompt }], {
       // Headroom so the compacted answer is never truncated mid-sentence.
       // A <=350-word Uzbek-Latin reply fits comfortably under 4096 tokens.
       maxTokens: 4096,
