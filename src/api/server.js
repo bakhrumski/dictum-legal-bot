@@ -2556,6 +2556,13 @@ async function callGemini(messages, options = {}) {
     console.error(`[Gemini] Empty text. Parts received: [${partTypes}], finishReason: ${candidate.finishReason}`);
     throw new Error(`Gemini empty response (parts: ${partTypes || 'none'}, finish: ${candidate.finishReason || '?'})`);
   }
+  recordSpend({
+    model: 'gemini-2.5-flash',
+    inTokens: (data.usageMetadata && data.usageMetadata.promptTokenCount) || 0,
+    outTokens: (data.usageMetadata && data.usageMetadata.candidatesTokenCount) || 0,
+    userId: options.userId || null,
+    endpoint: options.endpoint || null,
+  });
   return { text, provider: 'Gemini' };
 }
 
@@ -2636,6 +2643,58 @@ const MODELS = {
   cheap:    process.env.MODEL_CHEAP    || 'gpt-5.6-luna',
 };
 
+// Official per-1M-token prices, used for spend logging and the budget guard.
+const MODEL_PRICING = {
+  'gpt-5.6-sol':      { in: 5.00, out: 30.00 },
+  'gpt-5.6':          { in: 5.00, out: 30.00 },   // alias -> Sol
+  'gpt-5.6-terra':    { in: 2.50, out: 15.00 },
+  'gpt-5.6-luna':     { in: 1.00, out:  6.00 },
+  'gemini-2.5-flash': { in: 0.30, out:  2.50 },
+};
+
+// Record every main-path AI call into llm_spend_log. Previously only the R&D
+// hybrid pipeline logged spend, so the master spend report saw almost nothing
+// and there was no way to know what a user actually costs.
+function recordSpend({ model, inTokens = 0, outTokens = 0, userId = null, endpoint = null }) {
+  try {
+    const price = MODEL_PRICING[model] || { in: 0, out: 0 };
+    const costUsd = (inTokens / 1e6) * price.in + (outTokens / 1e6) * price.out;
+    _spendToday.usd += costUsd;
+    const now = new Date();
+    pool.query(
+      `INSERT INTO llm_spend_log (day, month, model, stage, in_tokens, out_tokens, cost_usd, user_id, endpoint)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [now.toISOString().slice(0, 10), now.toISOString().slice(0, 7), model, 'main',
+       inTokens, outTokens, costUsd, userId, endpoint]
+    ).catch(() => {});
+  } catch (_) { /* accounting must never break a request */ }
+}
+
+// ── Budget circuit breaker ───────────────────────────────────────────────────
+// Caps paid-model spend per day. When the ceiling is hit, paid models are
+// skipped and the free Gemini tier serves requests instead — the product keeps
+// working, the bill stops growing. Essential before any large free promo.
+const _spendToday = { day: new Date().toISOString().slice(0, 10), usd: 0, loaded: false };
+const DAILY_BUDGET_USD = Number(process.env.LLM_DAILY_BUDGET_USD || 0);   // 0 = disabled
+async function paidModelsAllowed() {
+  if (!DAILY_BUDGET_USD) return true;
+  const today = new Date().toISOString().slice(0, 10);
+  if (_spendToday.day !== today) { _spendToday.day = today; _spendToday.usd = 0; _spendToday.loaded = false; }
+  if (!_spendToday.loaded) {
+    try {
+      const r = await pool.query(
+        `SELECT COALESCE(SUM(cost_usd),0)::float AS usd FROM llm_spend_log WHERE day = $1`, [today]);
+      _spendToday.usd = r.rows[0].usd;
+    } catch (_) { /* on DB error, trust the in-process counter */ }
+    _spendToday.loaded = true;
+  }
+  if (_spendToday.usd >= DAILY_BUDGET_USD) {
+    console.warn(`[BUDGET] Daily ceiling reached ($${_spendToday.usd.toFixed(2)} >= $${DAILY_BUDGET_USD}) — using the free Gemini tier.`);
+    return false;
+  }
+  return true;
+}
+
 async function callOpenAI(messages, options = {}) {
   const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
   const gptKey = process.env.GPT_API_KEY;
@@ -2697,6 +2756,13 @@ async function callOpenAI(messages, options = {}) {
     .join('');
 
   if (!text) throw new Error(`OpenAI ${usedModel} empty response`);
+  recordSpend({
+    model: usedModel,
+    inTokens: (data.usage && (data.usage.input_tokens || data.usage.prompt_tokens)) || 0,
+    outTokens: (data.usage && (data.usage.output_tokens || data.usage.completion_tokens)) || 0,
+    userId: options.userId || null,
+    endpoint: options.endpoint || null,
+  });
   // Report the model actually used — a hardcoded 'GPT-4o' label made it
   // impossible to tell which model answered (or that a premium model was
   // silently skipped).
@@ -2707,10 +2773,24 @@ async function callOpenAI(messages, options = {}) {
 
 
 
+// Cheap lane: GPT-5.6 Luna ($1/$6) for high-volume, low-stakes calls —
+// per-chunk document digests, the plain-language explainer, Telegram answer
+// compaction, opinion anonymization. Falls back to the free Gemini tier.
+async function callCheapAI(messages, options = {}) {
+  if (process.env.GPT_API_KEY && await paidModelsAllowed()) {
+    try {
+      return await callOpenAI(messages, { ...options, model: MODELS.cheap, useSearch: false });
+    } catch (e) {
+      console.warn(`[CheapAI] ${MODELS.cheap} failed (falling back to Gemini):`, e.message);
+    }
+  }
+  return callAI(messages, { ...options, model: undefined });
+}
+
 // Premium routing: GPT-5.6 Sol (highest reasoning) for high-stakes
 // generations (legal opinions), with the free Gemini tier as fallback.
 async function callPremiumAI(messages, options = {}) {
-  if (process.env.GPT_API_KEY) {
+  if (process.env.GPT_API_KEY && await paidModelsAllowed()) {
     const model = options.model || MODELS.premium;
     try {
       return await callOpenAI(messages, { ...options, model, useSearch: false });
@@ -2718,7 +2798,7 @@ async function callPremiumAI(messages, options = {}) {
       console.error(`[PremiumAI] ${model} FAILED (falling back to Gemini):`, e.message);
     }
   } else {
-    console.warn('[PremiumAI] No GPT_API_KEY — using Gemini fallback.');
+    console.warn('[PremiumAI] Paid models unavailable (no GPT_API_KEY or daily budget reached) — using Gemini fallback.');
   }
   return callAI(messages, { ...options, model: undefined });
 }
@@ -2730,7 +2810,7 @@ async function callAI(messages, options = {}) {
   const errors = [];
 
   // 1. GPT-5.6 Terra — balanced intelligence/cost, primary for general work.
-  if (gptKey) {
+  if (gptKey && await paidModelsAllowed()) {
     try {
       const model = options.model || MODELS.standard;
       console.log(`[AI] Calling ${model}${options.useSearch ? ' with web search' : ''}...`);

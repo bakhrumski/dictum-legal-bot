@@ -31,7 +31,7 @@ const PLANS = {
     label: 'Sinov',
     dailyLimit: 3,
     monthlyLimit: null,
-    durationDays: 7,
+    durationDays: 10,
     priceUzs: 0,
   },
   silver: {
