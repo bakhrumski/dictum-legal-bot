@@ -10675,19 +10675,27 @@
             page.addEventListener('blur', hideDocHint, true);
             // After a legal opinion: offer the natural next steps as plain text
             // (no icons), so the user isn't left at a dead end.
-            if (isOpinion) renderOpinionNextSteps(messagesEl);
+            if (isOpinion) renderDocNextSteps(messagesEl, 'opinion');
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
-        // Plain-text follow-up options shown under a finished legal opinion.
-        function renderOpinionNextSteps(messagesEl) {
-            var steps = [
-                ['Hujjat mazmunini oddiy tilda tushuntiring', 'explainFromAttachment()'],
-                ['Asosiy huquqiy xavflarni sanab bering', "askFollowUp('Ushbu hujjat bo\\'yicha asosiy huquqiy xavflarni sanab bering va har birini qisqacha izohlang.')"],
-                ['Shartnomaga qanday tuzatishlar kiritish kerak?', "askFollowUp('Ushbu hujjatga qanday tuzatish va qo\\'shimchalar kiritish kerak? Aniq takliflar bering.')"],
-                ['Keltirilgan qonun moddalarini tushuntiring', "askFollowUp('Xulosada keltirilgan qonun moddalarini oddiy tilda tushuntirib bering.')"],
-                ['Javob xati / e\'tiroz loyihasini tayyorlang', "askFollowUp('Ushbu hujjat bo\\'yicha javob xati (yoki e\\'tiroz) loyihasini tayyorlang.')"]
-            ];
+        // Plain-text follow-up options shown under a finished answer. `kind`
+        // decides which alternatives make sense next — the action the user did
+        // NOT choose is offered first.
+        function renderDocNextSteps(messagesEl, kind) {
+            var steps = (kind === 'explain')
+                ? [
+                    ['Ushbu hujjatga yuridik xulosa yozib bering', 'opinionFromAttachment()'],
+                    ['Asosiy majburiyat va muddatlarni sanab bering', "askFollowUp('Ushbu hujjatdagi asosiy majburiyatlar, muddatlar va to\\'lovlarni sanab bering.')"],
+                    ['Menga qanday xavflar bor?', "askFollowUp('Ushbu hujjat men uchun qanday huquqiy xavflar tug\\'diradi?')"]
+                  ]
+                : [
+                    ['Hujjat mazmunini oddiy tilda tushuntiring', 'explainFromAttachment()'],
+                    ['Asosiy huquqiy xavflarni sanab bering', "askFollowUp('Ushbu hujjat bo\\'yicha asosiy huquqiy xavflarni sanab bering va har birini qisqacha izohlang.')"],
+                    ['Shartnomaga qanday tuzatishlar kiritish kerak?', "askFollowUp('Ushbu hujjatga qanday tuzatish va qo\\'shimchalar kiritish kerak? Aniq takliflar bering.')"],
+                    ['Keltirilgan qonun moddalarini tushuntiring', "askFollowUp('Xulosada keltirilgan qonun moddalarini oddiy tilda tushuntirib bering.')"],
+                    ['Javob xati / e\'tiroz loyihasini tayyorlang', "askFollowUp('Ushbu hujjat bo\\'yicha javob xati (yoki e\\'tiroz) loyihasini tayyorlang.')"]
+                  ];
             messagesEl.innerHTML += '<div class="ai-chat-msg ai next-steps">' +
                 '<div class="next-steps-title">Keyingi qadam:</div>' +
                 steps.map(function (s) {
@@ -10900,11 +10908,12 @@
             // disappears once used: after an opinion is written, re-offering
             // "shall I write an opinion?" is noise (and a duplicate charge).
             if (aiAttachments.some(function (a) { return a.status === 'ready'; }) || sessionDocs.length > 0) {
-                if (!docActionsUsed.opinion) {
+                // Once EITHER action is chosen both prompts disappear — the
+                // alternative is re-offered in the next-steps list under the
+                // finished answer, where it belongs.
+                if (!docActionsUsed.opinion && !docActionsUsed.explain) {
                     html += '<button class="ai-attach-suggest" type="button" onclick="opinionFromAttachment()">' +
                         'Ushbu hujjatga yuridik xulosa yozib berishimni xohlaysizmi?</button>';
-                }
-                if (!docActionsUsed.explain) {
                     html += '<button class="ai-attach-suggest" type="button" onclick="explainFromAttachment()">' +
                         'Hujjat mazmunini tushuntirib berishimni xohlaysizmi?</button>';
                 }
@@ -10938,6 +10947,8 @@
                 if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.error || 'Tushuntirib bo\'lmadi')); return; }
                 renderAiChatReply({ reply: d.reply, provider: d.provider, ragUsed: false, rag: null, qaBank: null },
                     'Hujjat mazmunini tushuntirish: ' + name, messagesEl, true);
+                // Offer the alternative (legal opinion) as a next step.
+                renderDocNextSteps(messagesEl, 'explain');
                 saveAiChatSession();
             } catch (e) {
                 var t2 = document.getElementById('aiChatTyping'); if (t2) t2.remove();
