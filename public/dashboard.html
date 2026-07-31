@@ -437,7 +437,8 @@
         #coverageSection.collapsed .reg-section-body,
         #suggestedSection.collapsed .reg-section-body,
         #answerFeedbackSection.collapsed .reg-section-body,
-        #auditLogSection.collapsed .reg-section-body { display: none !important; }
+        #auditLogSection.collapsed .reg-section-body,
+        #spendSection.collapsed .reg-section-body { display: none !important; }
 
         /* Hide chat wrapper button (chat is now a tab) */
         .header-chat-wrapper { display: none; }
@@ -3148,6 +3149,15 @@
         .docmsg .docb-page { padding: 42px 44px; min-height: 200px; }
         .docmsg-note { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
         .docmsg-note.opinion-note em { color: var(--text-secondary); }
+        /* API spend panel (master) */
+        .spend-cards { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+        .spend-card {
+            flex: 1 1 130px; min-width: 120px; padding: 12px 14px;
+            background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 10px;
+        }
+        .spend-card-v { font-size: 17px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono, monospace); }
+        .spend-card-l { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
+        .spend-tbl-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin: 16px 0 6px; }
         .docmsg-cost { display: block; margin-top: 4px; font-size: 11px; color: var(--text-muted); font-family: var(--font-mono, monospace); }
         /* Actions under the document — minimal, colourless, no borders/shadow */
         .docmsg-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
@@ -6526,6 +6536,27 @@
             </div>
         </div>
 
+        <!-- API xarajatlari — AI spend, master only -->
+        <div class="reg-section collapsed" id="spendSection" style="margin-top:16px;">
+            <div class="reg-section-header" onclick="document.getElementById('spendSection').classList.toggle('collapsed'); if(!document.getElementById('spendSection').classList.contains('collapsed')) loadSpendReport();">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>💰 API xarajatlari</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">
+                    Barcha AI so'rovlari (chat, yuridik xulosa, tushuntirish, OCR) bo'yicha real token va xarajat hisoboti.
+                    Faqat Master Admin ko'radi.
+                </p>
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+                    <label style="font-size:12px;color:var(--text-secondary);">Oy:</label>
+                    <input type="month" id="spendMonth" class="detail-select" style="width:auto;padding:5px 8px;" onchange="loadSpendReport()">
+                </div>
+                <div id="spendContent"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
+            </div>
+        </div>
+
         </div><!-- /tab-view sorov -->
 
         <!-- Registration Detail Modal (outside tab-view to avoid stacking context) -->
@@ -7104,6 +7135,11 @@
                 const auditLogSection = document.getElementById('auditLogSection');
                 if (auditLogSection) {
                     auditLogSection.style.display = data.role === 'master' ? '' : 'none';
+                }
+                // API spend panel: master only
+                const spendSection = document.getElementById('spendSection');
+                if (spendSection) {
+                    spendSection.style.display = data.role === 'master' ? '' : 'none';
                 }
 
                 // Show/hide master-only tabs in bottom tab bar
@@ -11573,6 +11609,60 @@
                     loadFbStats();
                 }
             } catch (e) { console.error('[FB Review]', e); }
+        }
+
+        // ── API spend panel (master): real token + USD cost of every AI call ──
+        async function loadSpendReport() {
+            var box = document.getElementById('spendContent');
+            var monthEl = document.getElementById('spendMonth');
+            if (monthEl && !monthEl.value) monthEl.value = new Date().toISOString().slice(0, 7);
+            var month = (monthEl && monthEl.value) || new Date().toISOString().slice(0, 7);
+            box.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                var r = await fetch('/api/admin/spend-report?month=' + encodeURIComponent(month), { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('Yuklab bo\'lmadi');
+                var d = await r.json();
+                var usd = function (n) { return '$' + Number(n || 0).toFixed(4); };
+                var num = function (n) { return Number(n || 0).toLocaleString('uz-UZ'); };
+
+                var summary =
+                    '<div class="spend-cards">' +
+                        '<div class="spend-card"><div class="spend-card-v">' + usd(d.totalUsd) + '</div><div class="spend-card-l">Jami (' + escapeHtml(d.month) + ')</div></div>' +
+                        '<div class="spend-card"><div class="spend-card-v">' + num(d.activeUsers) + '</div><div class="spend-card-l">Faol foydalanuvchi</div></div>' +
+                        '<div class="spend-card"><div class="spend-card-v">' + usd(d.perUserUsd && d.perUserUsd.p50) + '</div><div class="spend-card-l">Median (p50)</div></div>' +
+                        '<div class="spend-card"><div class="spend-card-v">' + usd(d.perUserUsd && d.perUserUsd.p95) + '</div><div class="spend-card-l">p95</div></div>' +
+                        '<div class="spend-card"><div class="spend-card-v">' + usd(d.perUserUsd && d.perUserUsd.max) + '</div><div class="spend-card-l">Eng ko\'p</div></div>' +
+                    '</div>';
+
+                var tbl = function (title, head, rows) {
+                    if (!rows) return '';
+                    return '<div class="spend-tbl-title">' + title + '</div>' +
+                        '<div style="overflow-x:auto;"><table class="admin-table" style="width:100%;font-size:12.5px;">' +
+                        '<thead><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead>' +
+                        '<tbody>' + (rows.length ? rows.join('') : '<tr><td colspan="' + head.length + '" style="text-align:center;color:var(--text-secondary);">Ma\'lumot yo\'q</td></tr>') + '</tbody></table></div>';
+                };
+
+                var byModel = (d.byModel || []).map(function (m) {
+                    return '<tr><td>' + escapeHtml(m.model || '—') + '</td><td>' + num(m.calls) + '</td><td>' + usd(m.usd) + '</td></tr>';
+                });
+                var byEndpoint = (d.byEndpoint || []).map(function (e) {
+                    return '<tr><td>' + escapeHtml(e.endpoint || '—') + '</td><td>' + num(e.calls) + '</td><td>' + usd(e.usd) + '</td></tr>';
+                });
+                var byUser = (d.topUsers || []).map(function (u) {
+                    return '<tr><td>' + escapeHtml(u.full_name || (u.username ? '@' + u.username : '#' + u.user_id)) + '</td>' +
+                        '<td>' + escapeHtml(u.tariff_plan || '—') + '</td>' +
+                        '<td>' + num(u.calls) + '</td>' +
+                        '<td>' + num(u.in_tokens) + ' / ' + num(u.out_tokens) + '</td>' +
+                        '<td>' + usd(u.usd) + '</td></tr>';
+                });
+
+                box.innerHTML = summary +
+                    tbl('Model bo\'yicha', ['Model', 'So\'rovlar', 'Xarajat'], byModel) +
+                    tbl('Xizmat bo\'yicha (endpoint)', ['Endpoint', 'So\'rovlar', 'Xarajat'], byEndpoint) +
+                    tbl('Foydalanuvchi bo\'yicha (eng ko\'p 100 ta)', ['Foydalanuvchi', 'Tarif', 'So\'rovlar', 'Tokenlar (in/out)', 'Xarajat'], byUser);
+            } catch (e) {
+                box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
+            }
         }
 
         // ── Audit-log panel (master): who touched which client data, when ──

@@ -5604,7 +5604,13 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
     if (result.usage) {
       console.log(`[Legal Opinion] tokens in=${result.usage.inTokens} out=${result.usage.outTokens} cost=$${result.usage.costUsd.toFixed(4)} (synthesis only; digest logged separately)`);
     }
-    res.json({ html, provider: result.provider, topic, docHash, usage: result.usage || null });
+    // Cost/token telemetry is Master-Admin-only: hiding it client-side would
+    // still ship the numbers to every user in the JSON response.
+    const isMasterViewer = req.session && req.session.role === 'master';
+    res.json({
+      html, provider: result.provider, topic, docHash,
+      usage: (isMasterViewer && result.usage) ? result.usage : null,
+    });
   } catch (e) {
     console.error('[Legal Opinion] error:', e.message);
     res.status(500).json({ error: 'Yuridik xulosa xatoligi: ' + e.message });
