@@ -2587,6 +2587,74 @@ async function callGemini(messages, options = {}) {
 // :streamGenerateContent?alt=sse — emits text deltas through onToken as they
 // arrive so the user watches the answer being written instead of staring at a
 // spinner for the full generation (10-30s on long legal answers).
+// Streaming via the OpenAI Responses API. The non-streaming router sends chat
+// to GPT-5.6 Terra, but the streaming path used to call Gemini directly —
+// so in practice every streamed answer was served by the FALLBACK provider.
+// This restores the intended routing for streamed answers too.
+async function callOpenAIStream(messages, options = {}, onToken) {
+  const gptKey = process.env.GPT_API_KEY;
+  if (!gptKey) throw new Error('GPT_API_KEY sozlanmagan');
+  const { temperature = 0.2, maxTokens = 8192 } = options;
+  const model = options.model || MODELS.standard;
+
+  const input = messages.map(m => ({
+    role: m.role === 'model' ? 'assistant' : (m.role === 'user' ? 'user' : 'assistant'),
+    content: m.text,
+  }));
+  const body = { model, input, temperature, max_output_tokens: maxTokens, stream: true };
+
+  const post = (payload) => fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gptKey}` },
+    body: JSON.stringify(payload),
+  });
+
+  let resp = await post(body);
+  if (!resp.ok && (resp.status === 400 || resp.status === 422)) {
+    const errText = await resp.clone().text().catch(() => '');
+    if (/temperature/i.test(errText)) {
+      const retry = { ...body }; delete retry.temperature;
+      resp = await post(retry);
+    }
+  }
+  if (!resp.ok || !resp.body) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`OpenAI stream ${model} ${resp.status}: ${errBody.substring(0, 200)}`);
+  }
+
+  const decoder = new TextDecoder();
+  let buf = '', full = '', usage = null;
+  for await (const chunk of resp.body) {
+    buf += decoder.decode(chunk, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n')) !== -1) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      let ev;
+      try { ev = JSON.parse(payload); } catch (_) { continue; }
+      if (ev.type === 'response.output_text.delta' && typeof ev.delta === 'string') {
+        full += ev.delta;
+        try { onToken(ev.delta); } catch (_) { /* consumer errors must not kill the stream */ }
+      } else if (ev.type === 'response.completed' && ev.response && ev.response.usage) {
+        usage = ev.response.usage;
+      } else if (ev.type === 'error' || ev.type === 'response.failed') {
+        throw new Error(`OpenAI stream error: ${JSON.stringify(ev).substring(0, 200)}`);
+      }
+    }
+  }
+  if (!full) throw new Error(`OpenAI stream ${model} returned no text`);
+
+  const inTok = (usage && (usage.input_tokens || 0)) || 0;
+  const outTok = (usage && (usage.output_tokens || 0)) || 0;
+  const cachedTok = (usage && usage.input_tokens_details && usage.input_tokens_details.cached_tokens) || 0;
+  recordSpend({ model, inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok,
+    userId: options.userId || null, endpoint: options.endpoint || '/api/legal-chat/stream' });
+  return { text: full, provider: model };
+}
+
 async function callGeminiStream(messages, options = {}, onToken) {
   const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
   const geminiKey = process.env.GEMINI_API_KEY;
@@ -5263,13 +5331,25 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     let displayReply, finalProvider;
     if (wantStream) {
       sse({ type: 'status', text: '✍️ Javob tayyorlanmoqda...' });
+      let firstToken = true;
+      const emit = (t) => { if (firstToken) { sse({ type: 'status_clear' }); firstToken = false; } sse({ type: 'token', t }); };
+      const streamOpts = { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' };
       try {
-        let firstToken = true;
-        const sres = await callGeminiStream(
-          aiMessages,
-          { useSearch: true, maxTokens: 8192 },
-          (t) => { if (firstToken) { sse({ type: 'status_clear' }); firstToken = false; } sse({ type: 'token', t }); }
-        );
+        // GPT-5.6 Terra first (same routing as the non-streaming path);
+        // Gemini streaming only if OpenAI is unavailable or over budget.
+        let sres;
+        if (process.env.GPT_API_KEY && await paidModelsAllowed()) {
+          try {
+            sres = await callOpenAIStream(aiMessages, streamOpts, emit);
+          } catch (oaErr) {
+            console.warn('[Legal Chat] OpenAI stream failed, trying Gemini stream:', oaErr.message);
+            if (!firstToken) { sse({ type: 'status_clear' }); }
+            firstToken = true;
+            sres = await callGeminiStream(aiMessages, streamOpts, emit);
+          }
+        } else {
+          sres = await callGeminiStream(aiMessages, streamOpts, emit);
+        }
         displayReply = normalizeResponseForUser(sres.text);
         finalProvider = sres.provider;
       } catch (streamErr) {
