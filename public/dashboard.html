@@ -3143,12 +3143,41 @@
         }
         /* inline Word-style document message */
         .ai-chat-msg.docmsg { max-width: 100%; width: 100%; background: transparent; padding: 0; }
-        .docmsg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-        .docmsg-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
-        .docmsg-actions { display: flex; gap: 8px; }
+        .docmsg-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+        .docmsg-title { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; color: var(--text-primary); }
         .docmsg .docb-page { padding: 42px 44px; min-height: 200px; }
-        .docmsg-note { font-size: 12px; color: var(--text-secondary); margin-top: 7px; }
-        @media (max-width: 640px) { .docmsg .docb-page { padding: 26px 18px; } }
+        .docmsg-note { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+        .docmsg-note.opinion-note em { color: var(--text-secondary); }
+        .docmsg-cost { display: block; margin-top: 4px; font-size: 11px; color: var(--text-muted); font-family: var(--font-mono, monospace); }
+        /* Actions under the document — minimal, colourless, no borders/shadow */
+        .docmsg-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+        .docact {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 7px 10px; border: none; background: none; border-radius: 8px;
+            color: var(--text-secondary); font-family: inherit; font-size: 13px;
+            cursor: pointer; transition: background .15s, color .15s;
+        }
+        .docact:hover { background: var(--parchment-100, rgba(0,0,0,0.05)); color: var(--text-primary); }
+        .docact:disabled { opacity: .45; cursor: default; background: none; }
+        .docact-ic { flex: none; opacity: .8; }
+        @media (max-width: 640px) {
+            .docmsg .docb-page { padding: 26px 18px; }
+            .docact { padding: 9px 10px; }
+            .docact span { display: none; }          /* icons only on narrow screens */
+            .docact:first-child span, .docact:last-child span { display: inline; }
+        }
+        /* Plain-text follow-up options after a legal opinion */
+        .ai-chat-msg.next-steps { background: transparent; padding: 4px 0 0; max-width: 100%; }
+        .next-steps-title { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        .next-step {
+            display: block; width: 100%; text-align: left;
+            padding: 9px 2px; border: none; background: none;
+            color: var(--navy-700); font-family: inherit; font-size: 14px;
+            cursor: pointer; border-bottom: 1px solid var(--border-1);
+        }
+        .next-step:last-child { border-bottom: none; }
+        .next-step:hover { color: var(--navy-500); }
+        [data-theme="dark"] .next-step { color: var(--brass-300); }
 
         /* floating side hint for the focused field */
         .docb-hint {
@@ -10180,7 +10209,7 @@
             selectedTopics = [];
             topicAutoDetect = false;
             pendingChatText = '';
-            if (typeof aiAttachments !== 'undefined') { aiAttachments = []; sessionDocs = []; renderAttachChips(); }
+            if (typeof aiAttachments !== 'undefined') { aiAttachments = []; sessionDocs = []; docActionsUsed = { opinion: false, explain: false }; renderAttachChips(); }
             var banner = document.getElementById('aiReqContextBanner');
             if (banner) banner.style.display = 'none';
             aiOpenedFromRequest = false;
@@ -10392,7 +10421,7 @@
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
                 if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Xulosa yaratib bo\'lmadi')); return; }
-                renderDocMessage({ rawTitle: 'Yuridik xulosa — ' + opinionDoc.name, html: d.html, kind: 'opinion', topic: d.topic || '', docHash: d.docHash || '' });
+                renderDocMessage({ rawTitle: 'Yuridik xulosa — ' + opinionDoc.name, html: d.html, kind: 'opinion', topic: d.topic || '', docHash: d.docHash || '', usage: d.usage || null });
                 opinionDoc = null;
             } catch (e) {
                 var t2 = document.getElementById('aiChatTyping'); if (t2) t2.remove();
@@ -10578,27 +10607,49 @@
             // Opinion cards carry a quality signal (👍/👎, audited) and a
             // master-only "generalize into corpus" action (anonymized pattern).
             var isMasterHere = (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'master');
-            var opinionBtns = '';
-            if (opts.kind === 'opinion') {
-                opinionBtns =
-                    '<button class="docflow-opt" type="button" title="Xulosa foydali bo\'ldi" onclick="opinionRate(\'' + id + '\', true, this)">👍 Foydali</button>' +
-                    '<button class="docflow-opt" type="button" title="Xulosa foydali emas" onclick="opinionRate(\'' + id + '\', false, this)">👎</button>' +
-                    (isMasterHere ? '<button class="docflow-opt" type="button" title="Shaxsiy ma\'lumotlarsiz umumlashtirilib, korpusga saqlanadi" onclick="opinionSaveToCorpus(\'' + id + '\', this)">📚 Korpusga qo\'shish</button>' : '');
-            }
+            var isOpinion = opts.kind === 'opinion';
+            // Minimal, uniform line icons (ChatGPT style): 16px, currentColor,
+            // no fill, no shadow — replaces the mixed-size colour emoji.
+            var ic = function (paths) {
+                return '<svg class="docact-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+                    'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+            };
+            var IC_UP = ic('<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>');
+            var IC_DOWN = ic('<path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>');
+            var IC_DL = ic('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>');
+            var IC_LIB = ic('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>');
+            var IC_DOC = ic('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>');
+
+            var actionBtns =
+                (isOpinion
+                    ? '<button class="docact" type="button" title="Foydali" onclick="opinionRate(\'' + id + '\', true, this)">' + IC_UP + '<span>Foydali</span></button>' +
+                      '<button class="docact" type="button" title="Foydali emas" onclick="opinionRate(\'' + id + '\', false, this)">' + IC_DOWN + '</button>' +
+                      (isMasterHere ? '<button class="docact" type="button" title="Shaxsiy ma\'lumotlarsiz umumlashtirilib, korpusga saqlanadi" onclick="opinionSaveToCorpus(\'' + id + '\', this)">' + IC_LIB + '<span>Korpusga qo\'shish</span></button>' : '')
+                    : '') +
+                '<button class="docact" type="button" onclick="docMsgExport(\'' + id + '\',\'docx\',this)">' + IC_DL + '<span>Word</span></button>' +
+                '<button class="docact" type="button" onclick="docMsgExport(\'' + id + '\',\'pdf\',this)">' + IC_DL + '<span>PDF</span></button>';
+
+            // Master-only cost readout: real tokens + USD for this generation.
+            var costNote = (isMasterHere && opts.usage)
+                ? '<span class="docmsg-cost">' + opts.usage.inTokens + ' in / ' + opts.usage.outTokens +
+                  ' out · $' + Number(opts.usage.costUsd || 0).toFixed(4) + '</span>'
+                : '';
+            var note = isOpinion
+                ? '<div class="docmsg-note opinion-note"><em>Xulosa SI asosida tayyorlandi va mutaxassis tasdig\'isiz yuridik kuchga ega emas!</em>' + costNote + '</div>'
+                : '<div class="docmsg-note">Sariq joylarni to\'ldiring — har biriga bosganda yon izoh chiqadi.' + costNote + '</div>';
+
             messagesEl.innerHTML +=
                 '<div class="ai-chat-msg ai docmsg" id="' + id + '"' +
                     (opts.tplId ? ' data-tpl-id="' + escapeHtml(String(opts.tplId)) + '"' : '') +
                     (opts.docHash ? ' data-doc-hash="' + escapeHtml(String(opts.docHash)) + '"' : '') +
                     (opts.topic ? ' data-topic="' + escapeHtml(String(opts.topic)) + '"' : '') +
                     ' data-title="' + escapeHtml(title) + '">' +
-                    '<div class="docmsg-head"><span class="docmsg-title">📄 ' + escapeHtml(title) + '</span>' +
-                        '<span class="docmsg-actions">' +
-                        opinionBtns +
-                        '<button class="docflow-opt" type="button" onclick="docMsgExport(\'' + id + '\',\'docx\',this)">⬇ Word</button>' +
-                        '<button class="docflow-opt" type="button" onclick="docMsgExport(\'' + id + '\',\'pdf\',this)">⬇ PDF</button>' +
-                        '</span></div>' +
+                    '<div class="docmsg-head"><span class="docmsg-title">' + IC_DOC + ' ' + escapeHtml(title) + '</span></div>' +
                     '<div class="docb-page" contenteditable="true">' + body + '</div>' +
-                    '<div class="docmsg-note">Sariq joylarni to\'ldiring — har biriga bosganda yon izoh chiqadi.</div>' +
+                    note +
+                    // Actions live BELOW the document — you decide what to do
+                    // with an opinion after reading it, not before.
+                    '<div class="docmsg-actions">' + actionBtns + '</div>' +
                 '</div>';
             var page = document.querySelector('#' + id + ' .docb-page');
             page.addEventListener('click', function (e) {
@@ -10612,7 +10663,35 @@
                 });
             });
             page.addEventListener('blur', hideDocHint, true);
+            // After a legal opinion: offer the natural next steps as plain text
+            // (no icons), so the user isn't left at a dead end.
+            if (isOpinion) renderOpinionNextSteps(messagesEl);
             messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        // Plain-text follow-up options shown under a finished legal opinion.
+        function renderOpinionNextSteps(messagesEl) {
+            var steps = [
+                ['Hujjat mazmunini oddiy tilda tushuntiring', 'explainFromAttachment()'],
+                ['Asosiy huquqiy xavflarni sanab bering', "askFollowUp('Ushbu hujjat bo\\'yicha asosiy huquqiy xavflarni sanab bering va har birini qisqacha izohlang.')"],
+                ['Shartnomaga qanday tuzatishlar kiritish kerak?', "askFollowUp('Ushbu hujjatga qanday tuzatish va qo\\'shimchalar kiritish kerak? Aniq takliflar bering.')"],
+                ['Keltirilgan qonun moddalarini tushuntiring', "askFollowUp('Xulosada keltirilgan qonun moddalarini oddiy tilda tushuntirib bering.')"],
+                ['Javob xati / e\'tiroz loyihasini tayyorlang', "askFollowUp('Ushbu hujjat bo\\'yicha javob xati (yoki e\\'tiroz) loyihasini tayyorlang.')"]
+            ];
+            messagesEl.innerHTML += '<div class="ai-chat-msg ai next-steps">' +
+                '<div class="next-steps-title">Keyingi qadam:</div>' +
+                steps.map(function (s) {
+                    return '<button class="next-step" type="button" onclick="' + s[1] + '">' + escapeHtml(s[0]) + '</button>';
+                }).join('') + '</div>';
+        }
+
+        // Send a canned follow-up question through the normal chat path (the
+        // session documents are still attached, so it stays in context).
+        function askFollowUp(text) {
+            var input = document.getElementById('aiChatInput');
+            if (!input) return;
+            input.value = text;
+            sendAiChat();
         }
         function showDocHint(sp) {
             var h = document.getElementById('docbHint');
@@ -10635,10 +10714,14 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
                     body: JSON.stringify({ docHash: card.getAttribute('data-doc-hash') || '', good: good === true })
                 });
-                card.querySelectorAll('.docmsg-actions .docflow-opt').forEach(function (b) {
-                    if (b.textContent.indexOf('👍') !== -1 || b.textContent.indexOf('👎') !== -1) { b.disabled = true; b.style.opacity = '0.5'; }
+                // Lock both rating buttons (identified by their onclick, since
+                // the icons are now SVG rather than detectable emoji text).
+                card.querySelectorAll('.docmsg-actions .docact').forEach(function (b) {
+                    if ((b.getAttribute('onclick') || '').indexOf('opinionRate') !== -1) {
+                        b.disabled = true; b.style.opacity = '0.5';
+                    }
                 });
-                btn.textContent = good ? '✅ Rahmat!' : '✅ Qayd etildi';
+                btn.innerHTML = '<span>' + (good ? 'Rahmat!' : 'Qayd etildi') + '</span>';
                 btn.style.opacity = '1';
             } catch (e) { /* rating is best-effort */ }
         }
@@ -10712,6 +10795,9 @@
         // the attachment was discarded after one message and later questions
         // silently lost the document. Cleared on new chat; removable via ×.
         var sessionDocs = [];     // {name, text}
+        // Which one-tap document actions have already been used in this
+        // conversation — used to retire the suggestion chips after use.
+        var docActionsUsed = { opinion: false, explain: false };
         var aiAttachSeq = 0;
         var ATTACH_MAX = 20 * 1024 * 1024;
 
@@ -10800,12 +10886,18 @@
                     '</div>';
             }).join('');
             // Offer the one-tap suggestions while any document is available —
-            // newly attached OR persisting in the conversation.
+            // newly attached OR persisting in the conversation. Each suggestion
+            // disappears once used: after an opinion is written, re-offering
+            // "shall I write an opinion?" is noise (and a duplicate charge).
             if (aiAttachments.some(function (a) { return a.status === 'ready'; }) || sessionDocs.length > 0) {
-                html += '<button class="ai-attach-suggest" type="button" onclick="opinionFromAttachment()">' +
-                    '📑 Ushbu hujjatga yuridik xulosa yozib berishimni xohlaysizmi?</button>';
-                html += '<button class="ai-attach-suggest" type="button" onclick="explainFromAttachment()">' +
-                    '💬 Hujjat mazmunini tushuntirib berishimni xohlaysizmi?</button>';
+                if (!docActionsUsed.opinion) {
+                    html += '<button class="ai-attach-suggest" type="button" onclick="opinionFromAttachment()">' +
+                        'Ushbu hujjatga yuridik xulosa yozib berishimni xohlaysizmi?</button>';
+                }
+                if (!docActionsUsed.explain) {
+                    html += '<button class="ai-attach-suggest" type="button" onclick="explainFromAttachment()">' +
+                        'Hujjat mazmunini tushuntirib berishimni xohlaysizmi?</button>';
+                }
             }
             box.innerHTML = html;
         }
@@ -10816,6 +10908,8 @@
         async function explainFromAttachment() {
             var docs = collectSessionDocs();
             if (!docs.length) return;
+            docActionsUsed.explain = true;
+            renderAttachChips();
             var name = docs.map(function (d) { return d.name; }).join(', ');
             var text = docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
             var messagesEl = document.getElementById('aiChatMessages');
@@ -10863,6 +10957,8 @@
         function opinionFromAttachment() {
             var docs = collectSessionDocs();
             if (!docs.length) return;
+            docActionsUsed.opinion = true;
+            renderAttachChips();
             opinionDoc = {
                 name: docs.map(function (d) { return d.name; }).join(', '),
                 text: docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n')
