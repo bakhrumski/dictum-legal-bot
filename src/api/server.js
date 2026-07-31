@@ -4215,6 +4215,43 @@ function verifyCitations(replyText, chunks = []) {
   return { total: cited.size, unverified: [...cited].filter(a => !inContext.has(a)) };
 }
 
+// Audit the citations in a generated legal opinion against the exact source
+// text it was supposed to be grounded in (qa-korpus excerpts + live lex.uz
+// text). Returns the locators that do NOT appear in that context — i.e. the
+// ones the model produced from memory rather than from a source.
+// Catches both article references ("234-modda", "статья 234") and decree
+// numbers ("306-son", "PQ-4624").
+function auditOpinionCitations(html, contextText) {
+  const plain = String(html || '').replace(/<[^>]+>/g, ' ');
+  const ctx = String(contextText || '');
+  const unverified = [];
+  const seen = new Set();
+
+  const artRx = /(\d{1,4}(?:[¹²³⁴⁵⁶⁷⁸⁹⁰]+)?)\s*[-\s]?\s*(?:modda|модда|статья|статьи)/gi;
+  let m;
+  while ((m = artRx.exec(plain)) !== null) {
+    const num = m[1];
+    const key = 'modda:' + num;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // The article number must appear in the source text near an article marker.
+    const inCtx = new RegExp('\\b' + num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+      '(?!\\d)\\s*[-\\s]?\\s*(?:modda|модда|статья|статьи)', 'i').test(ctx);
+    if (!inCtx) unverified.push(num + '-modda');
+  }
+
+  const decreeRx = /((?:PQ|PF|VM|ПП|ПФ|ВМ)[-\s]?\d{2,5}|\d{2,5}\s*-\s*son)/gi;
+  while ((m = decreeRx.exec(plain)) !== null) {
+    const raw = m[1].replace(/\s+/g, '');
+    const key = 'decree:' + raw.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const digits = (raw.match(/\d{2,5}/) || [])[0];
+    if (digits && !new RegExp('\\b' + digits + '\\b').test(ctx)) unverified.push(raw);
+  }
+  return { unverified };
+}
+
 function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
   if (!chunks || chunks.length === 0) return '';
 
@@ -5355,20 +5392,12 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       return res.status(400).json({ error: 'Hujjat matni bo\'sh yoki juda qisqa — matnli (skaner emas) hujjat yuklang' });
     }
 
-    // ── Opinion cache: identical document → cached opinion, zero AI cost ─────
-    // Checked BEFORE the plan limit: a cache hit is free and does not consume
-    // the monthly quota (the limit counts only 'legal_opinion.generate').
+    // NOTE: opinions are deliberately NOT cached. A legal opinion is only valid
+    // for the document it was written from, and a cached one freezes whatever
+    // citations it happened to contain — including wrong ones — and re-serves
+    // them after the law, the corpus or the prompt has changed. Every request
+    // is generated fresh and re-verified against current sources.
     const docHash = require('crypto').createHash('sha256').update(documentText).digest('hex');
-    try {
-      const c = await pool.query(
-        `SELECT html, provider, topic FROM opinion_cache
-          WHERE doc_hash = $1 AND created_at > NOW() - INTERVAL '30 days'`, [docHash]);
-      if (c.rows[0]) {
-        pool.query('UPDATE opinion_cache SET hits = hits + 1 WHERE doc_hash = $1', [docHash]).catch(() => {});
-        logAudit(req, 'legal_opinion.cache_hit', 'opinion', docHash.slice(0, 12));
-        return res.json({ html: c.rows[0].html, provider: (c.rows[0].provider || 'AI') + ' (kesh)', topic: c.rows[0].topic, docHash, cached: true });
-      }
-    } catch (cErr) { /* cache failure never blocks generation */ }
 
     // ── Per-plan opinion limits ──────────────────────────────────────────────
     // Legal opinions run on the premium model and are the most expensive
@@ -5521,6 +5550,42 @@ ${groundingRule}
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
     html = tidyDocumentHtml(html);
 
+    // ── Citation audit: every locator in the opinion must trace back to the
+    // source text it was grounded in. Anything the model produced from memory
+    // is either corrected in one focused pass or explicitly flagged — a legal
+    // opinion must never present an unverified article as authority.
+    const sourceText = ragContext || '';
+    let audit = auditOpinionCitations(html, sourceText);
+    if (audit.unverified.length > 0) {
+      console.warn(`[Legal Opinion] unverified citations: ${audit.unverified.join(', ')} — running correction pass`);
+      try {
+        const fix = await callPremiumAI([
+          { role: 'system', text:
+`You are correcting a legal opinion. The following citations do NOT appear in the permitted sources and are therefore unverified: ${audit.unverified.join(', ')}.
+
+Rewrite the opinion so that:
+- Every unverified citation is REMOVED, or replaced with a norm that genuinely appears in the KONTEKST, or restated without the invented locator.
+- Nothing else changes: keep the same language, structure (<h2> sections) and all verified content.
+Return ONLY the corrected HTML body — no fences, no commentary.` },
+          { role: 'user', text: `KONTEKST:\n${sourceText.slice(0, 12000)}\n\n─── XULOSA ───\n${html}` },
+        ], { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens,
+             userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion/fix-citations' });
+        const fixed = tidyDocumentHtml((fix.text || '').trim().replace(/```(?:html)?/gi, '').trim());
+        if (fixed && fixed.length > 200) {
+          html = fixed;
+          audit = auditOpinionCitations(html, sourceText);
+        }
+      } catch (e) {
+        console.warn('[Legal Opinion] citation correction failed:', e.message);
+      }
+      // Anything still unverified after the correction pass is disclosed to the
+      // reader rather than silently presented as authority.
+      if (audit.unverified.length > 0) {
+        html += '<p><em>Diqqat: quyidagi manbalar tekshirilgan manbalar ro\'yxatidan topilmadi va mustaqil tasdiqlashni talab qiladi: ' +
+          audit.unverified.slice(0, 10).map(x => String(x).replace(/[<>&]/g, '')).join(', ') + '.</em></p>';
+      }
+    }
+
     // Append the verified Manbalar footer as a clean HTML link list (NOT raw
     // markdown — that rendered literal '**' and the "[Law]" labels got turned
     // into empty [_____] fields by the doc renderer).
@@ -5536,13 +5601,6 @@ ${groundingRule}
     if (manbalarHtml) html += '<h2>Manbalar</h2>' + manbalarHtml;
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
-    // Store in the opinion cache (fire-and-forget).
-    pool.query(
-      `INSERT INTO opinion_cache (doc_hash, html, provider, topic) VALUES ($1,$2,$3,$4)
-       ON CONFLICT (doc_hash) DO UPDATE SET html = EXCLUDED.html, provider = EXCLUDED.provider,
-         topic = EXCLUDED.topic, created_at = NOW()`,
-      [docHash, html, result.provider, topic]
-    ).catch(e => console.warn('[Legal Opinion] cache store failed:', e.message));
     if (result.usage) {
       console.log(`[Legal Opinion] tokens in=${result.usage.inTokens} out=${result.usage.outTokens} cost=$${result.usage.costUsd.toFixed(4)} (synthesis only; digest logged separately)`);
     }
