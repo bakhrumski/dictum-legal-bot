@@ -2756,17 +2756,15 @@ async function callOpenAI(messages, options = {}) {
     .join('');
 
   if (!text) throw new Error(`OpenAI ${usedModel} empty response`);
-  recordSpend({
-    model: usedModel,
-    inTokens: (data.usage && (data.usage.input_tokens || data.usage.prompt_tokens)) || 0,
-    outTokens: (data.usage && (data.usage.output_tokens || data.usage.completion_tokens)) || 0,
-    userId: options.userId || null,
-    endpoint: options.endpoint || null,
-  });
-  // Report the model actually used — a hardcoded 'GPT-4o' label made it
-  // impossible to tell which model answered (or that a premium model was
-  // silently skipped).
-  return { text, provider: usedModel };
+  const inTok = (data.usage && (data.usage.input_tokens || data.usage.prompt_tokens)) || 0;
+  const outTok = (data.usage && (data.usage.output_tokens || data.usage.completion_tokens)) || 0;
+  recordSpend({ model: usedModel, inTokens: inTok, outTokens: outTok,
+    userId: options.userId || null, endpoint: options.endpoint || null });
+  // Report the model actually used (a hardcoded label previously hid which
+  // model answered) plus token usage, so callers can surface real cost.
+  const price = MODEL_PRICING[usedModel] || { in: 0, out: 0 };
+  return { text, provider: usedModel, usage: { inTokens: inTok, outTokens: outTok,
+    costUsd: (inTok / 1e6) * price.in + (outTok / 1e6) * price.out } };
 }
 
 
@@ -5450,12 +5448,17 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // this endpoint.
     const ragWeak = !ragContext || ragContext.trim().length < 400 || ragChunks.length < 2;
     const lexLiveSources = [];   // {title, url} — listed in Manbalar
-    if (ragWeak) {
+    // ALWAYS supplement with live lex.uz (not only when the corpus is thin):
+    // a legal opinion must rest on the current in-force text of the actual
+    // laws/decrees the document touches, with article and clause numbers.
+    // searchLexUz is lex.uz-only by construction, and fetchLexDocument refuses
+    // repealed documents, so only active law reaches the context.
+    {
       try {
         const { extractReferences, referenceWeight } = require('../rag/legal-verify');
         const { searchLexUz } = require('../rag/lex-live-search');
         const refs = await extractReferences(docForAnalysis, { callAI });
-        const top = refs.sort((a, b) => referenceWeight(b) - referenceWeight(a)).slice(0, 3);
+        const top = refs.sort((a, b) => referenceWeight(b) - referenceWeight(a)).slice(0, ragWeak ? 5 : 3);
         for (const ref of top) {
           const q = [ref.number, ref.name].filter(Boolean).join(' ').trim();
           if (!q || q.length < 3) continue;
@@ -5471,7 +5474,14 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
 
     const langName = lang === 'ru' ? 'Russian (Cyrillic)' : 'Uzbek (Latin script)';
     const groundingRule =
-      `- Ground EVERY legal claim ONLY on the KONTEKST below (internal qa-korpus excerpts + live lex.uz excerpts). These are the ONLY permitted sources. Cite an article number ONLY if it appears in the KONTEKST — never from memory, never invented. If a claim in the document cannot be verified against the KONTEKST, say so openly ("KONTEKSTda tasdiqlanmadi") instead of guessing.`;
+      `- Ground EVERY legal claim ONLY on the KONTEKST below (internal qa-korpus excerpts + live lex.uz excerpts). These are the ONLY permitted sources — no other website, no memory.
+- CITATION PRECISION (required): for every norm you rely on, give the most precise locator the KONTEKST supports, in this order of preference:
+    1) Qonun/kodeks nomi + modda + qism/band  — e.g. (**Fuqarolik kodeksi, 234-modda, 2-qism**)
+    2) Qonun/kodeks nomi + modda            — e.g. (**Mehnat kodeksi, 100-modda**)
+    3) If no article number is available: the document type, number, name and year — e.g. (**Vazirlar Mahkamasining 2021-yil 306-son qarori**)
+  Never state a norm without at least option 3. Never invent an article, clause or number that is not in the KONTEKST.
+- Use ONLY currently in-force (amaldagi) legislation. If the KONTEKST shows a document is repealed or superseded, say so and do not rely on it.
+- If a claim in the document cannot be verified against the KONTEKST, write "KONTEKSTda tasdiqlanmadi" instead of guessing.`
     const systemPrompt =
 `You are a senior legal counsel of the Republic of Uzbekistan writing a formal legal opinion (yuridik xulosa) about a document the user uploaded. Write entirely in ${langName}.
 
@@ -5480,7 +5490,7 @@ Output ONLY clean simple HTML (<h2>, <h3>, <p>, <strong>, <br>, <table>) — no 
 Structure EXACTLY these five sections (classic legal-memo IRAC form), each as an <h2> heading (in ${lang === 'ru' ? 'Russian' : 'Uzbek'}):
 1. Masala (Issue) — what legal question(s) this document raises; why an opinion is needed (2-4 sentences).
 2. Faktlar (Facts) — the material facts, CLAUSE BY CLAUSE where relevant: every clause that establishes an obligation, right, date, term/period, deadline, requirement or condition — who owes/holds it, exact amounts and dates. Use a "- " list. Cover the WHOLE document.
-3. Qo'llaniladigan huquq (Applicable law) — the O'zbekiston Respublikasi laws, codes, regulations (and court decisions, if any appear in the KONTEKST) that govern these facts. Cite each as (**Qonun nomi, N-modda**). Only sources from the KONTEKST.
+3. Qo'llaniladigan huquq (Applicable law) — the O'zbekiston Respublikasi laws, codes, regulations, decrees (and court decisions, if present in the KONTEKST) that govern these facts. List EACH applicable norm on its own line with its precise locator (modda / qism / band, or document number+year), plus one sentence on what it requires. This section must reflect the LAW, not merely restate the document.
 4. Tahlil (Analysis) — apply each cited norm to the specific clauses/facts above: is each obligation/term lawful, enforceable, compliant? Where is the risk, the missing requirement, the deadline consequence? Connect law to fact explicitly — never analyse in the abstract.
 5. Xulosa (Conclusion) — the reasoned answer to the Masala + concrete numbered recommendations.
 (Manbalar will be appended automatically; do NOT write it yourself.)
@@ -5533,7 +5543,10 @@ ${groundingRule}
          topic = EXCLUDED.topic, created_at = NOW()`,
       [docHash, html, result.provider, topic]
     ).catch(e => console.warn('[Legal Opinion] cache store failed:', e.message));
-    res.json({ html, provider: result.provider, topic, docHash });
+    if (result.usage) {
+      console.log(`[Legal Opinion] tokens in=${result.usage.inTokens} out=${result.usage.outTokens} cost=$${result.usage.costUsd.toFixed(4)} (synthesis only; digest logged separately)`);
+    }
+    res.json({ html, provider: result.provider, topic, docHash, usage: result.usage || null });
   } catch (e) {
     console.error('[Legal Opinion] error:', e.message);
     res.status(500).json({ error: 'Yuridik xulosa xatoligi: ' + e.message });
