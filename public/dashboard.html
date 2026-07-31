@@ -10285,10 +10285,17 @@
 
         // Append a step card, replacing any previous step card so switching
         // between Shablon / AI (and steps inside them) shows only the current UI.
+        // Any code path that appends a chat message must hide the welcome
+        // screen (topic picker), or it stays visible and overlaps the
+        // conversation. Centralised so a new append path can't forget it.
+        function hideChatWelcome() {
+            var w = document.getElementById('aiChatWelcome');
+            if (w) w.style.display = 'none';
+        }
+
         function docStepCard(html) {
             var messagesEl = document.getElementById('aiChatMessages');
-            var welcome = document.getElementById('aiChatWelcome');
-            if (welcome) welcome.style.display = 'none';
+            hideChatWelcome();
             messagesEl.querySelectorAll('.docflow-step').forEach(function (c) { c.remove(); });
             messagesEl.innerHTML += '<div class="ai-chat-msg ai docflow-card docflow-step">' + html + '</div>';
             messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -10296,6 +10303,7 @@
         // Permanent info card (kept in history, not replaced).
         function docInfoCard(html) {
             var messagesEl = document.getElementById('aiChatMessages');
+            hideChatWelcome();
             messagesEl.innerHTML += '<div class="ai-chat-msg ai docflow-card">' + html + '</div>';
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
@@ -10410,6 +10418,7 @@
             if (!opinionDoc) return;
             var messagesEl = document.getElementById('aiChatMessages');
             docFlowClose();
+            hideChatWelcome();
             messagesEl.innerHTML += '<div class="ai-chat-msg user">📑 Yuridik xulosa — ' + escapeHtml(opinionDoc.name) + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
             messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -10601,6 +10610,7 @@
         // ── Inline Word-style document message (shared by both flows) ──
         function renderDocMessage(opts) {
             var messagesEl = document.getElementById('aiChatMessages');
+            hideChatWelcome();
             var id = 'docmsg_' + (++DOCB.seq);
             var title = opts.title || opts.rawTitle || 'Hujjat';
             var body = opts.tplId ? opts.html : bracketsToFields(opts.html);
@@ -10913,8 +10923,7 @@
             var name = docs.map(function (d) { return d.name; }).join(', ');
             var text = docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
             var messagesEl = document.getElementById('aiChatMessages');
-            var welcome = document.getElementById('aiChatWelcome');
-            if (welcome) welcome.style.display = 'none';
+            hideChatWelcome();
             aiChatHistory.push({ role: 'user', text: '[Hujjat: ' + name + '] mazmunini oddiy tilda tushuntirib bering' });
             messagesEl.innerHTML += '<div class="ai-chat-msg user">💬 Hujjat mazmunini tushuntirish — ' + escapeHtml(name) + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
