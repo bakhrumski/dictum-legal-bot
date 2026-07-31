@@ -572,9 +572,26 @@ app.get('/api/admin/spend-report', requireMasterAdmin, async (req, res) => {
       `SELECT ROUND(COALESCE(SUM(cost_usd),0)::numeric, 4)::float AS usd FROM llm_spend_log WHERE month = $1`,
       [month])).rows[0].usd;
 
+    // Split by provider: only the OpenAI rows should match the OpenAI invoice.
+    // Gemini runs on the free tier and is priced here for comparison only —
+    // mixing them is why the platform total looked different from the bill.
+    const byProvider = await pool.query(`
+      SELECT CASE WHEN model LIKE 'gpt%' THEN 'OpenAI (billed)'
+                  WHEN model LIKE 'gemini%' THEN 'Gemini (free tier — hisob-kitob uchun)'
+                  ELSE 'Boshqa' END AS provider,
+             COUNT(*)::int AS calls,
+             ROUND(SUM(cost_usd)::numeric, 4)::float AS usd
+        FROM llm_spend_log WHERE month = $1
+       GROUP BY 1 ORDER BY usd DESC`, [month]);
+    const openaiUsd = (await pool.query(
+      `SELECT ROUND(COALESCE(SUM(cost_usd),0)::numeric, 4)::float AS usd
+         FROM llm_spend_log WHERE month = $1 AND model LIKE 'gpt%'`, [month])).rows[0].usd;
+
     res.json({
       month,
       totalUsd: total,
+      openaiUsd,
+      byProvider: byProvider.rows,
       activeUsers: perUser.rowCount,
       perUserUsd: { p50: pct(0.5), p95: pct(0.95), max: costs.length ? costs[costs.length - 1] : 0 },
       topUsers: perUser.rows,
@@ -2602,6 +2619,7 @@ async function callGeminiStream(messages, options = {}, onToken) {
   let buf = '';
   let full = '';
   let finishReason = null;
+  let usage = null;   // last usageMetadata seen in the stream
   for await (const chunk of resp.body) {
     buf += decoder.decode(chunk, { stream: true });
     // SSE frames are separated by blank lines; each data line is a JSON chunk.
@@ -2614,6 +2632,7 @@ async function callGeminiStream(messages, options = {}, onToken) {
       if (!payload || payload === '[DONE]') continue;
       let data;
       try { data = JSON.parse(payload); } catch (_) { continue; }
+      if (data.usageMetadata) usage = data.usageMetadata;
       const cand = data.candidates && data.candidates[0];
       if (!cand) continue;
       if (cand.finishReason) finishReason = cand.finishReason;
@@ -2628,6 +2647,15 @@ async function callGeminiStream(messages, options = {}, onToken) {
   }
   if (finishReason === 'SAFETY') throw new Error('Gemini safety filter (stream)');
   if (!full) throw new Error(`Gemini stream empty response (finish: ${finishReason || '?'})`);
+  // The streaming path is the highest-volume call on the platform; without
+  // this it was invisible to the spend report.
+  recordSpend({
+    model: 'gemini-2.5-flash',
+    inTokens: (usage && usage.promptTokenCount) || 0,
+    outTokens: (usage && usage.candidatesTokenCount) || 0,
+    userId: options.userId || null,
+    endpoint: options.endpoint || '/api/legal-chat/stream',
+  });
   return { text: full, provider: 'Gemini' };
 }
 
@@ -2645,20 +2673,26 @@ const MODELS = {
 
 // Official per-1M-token prices, used for spend logging and the budget guard.
 const MODEL_PRICING = {
-  'gpt-5.6-sol':      { in: 5.00, out: 30.00 },
-  'gpt-5.6':          { in: 5.00, out: 30.00 },   // alias -> Sol
-  'gpt-5.6-terra':    { in: 2.50, out: 15.00 },
-  'gpt-5.6-luna':     { in: 1.00, out:  6.00 },
-  'gemini-2.5-flash': { in: 0.30, out:  2.50 },
+  // `cached` = price for input tokens served from the prompt cache. OpenAI
+  // bills these at ~10% of the normal input rate; ignoring that made our
+  // estimate higher than the real invoice on repeated/long prompts.
+  'gpt-5.6-sol':      { in: 5.00, out: 30.00, cached: 0.50 },
+  'gpt-5.6':          { in: 5.00, out: 30.00, cached: 0.50 },   // alias -> Sol
+  'gpt-5.6-terra':    { in: 2.50, out: 15.00, cached: 0.25 },
+  'gpt-5.6-luna':     { in: 1.00, out:  6.00, cached: 0.10 },
+  'gemini-2.5-flash': { in: 0.30, out:  2.50, cached: 0.075 },
 };
 
 // Record every main-path AI call into llm_spend_log. Previously only the R&D
 // hybrid pipeline logged spend, so the master spend report saw almost nothing
 // and there was no way to know what a user actually costs.
-function recordSpend({ model, inTokens = 0, outTokens = 0, userId = null, endpoint = null }) {
+function recordSpend({ model, inTokens = 0, outTokens = 0, cachedTokens = 0, userId = null, endpoint = null }) {
   try {
-    const price = MODEL_PRICING[model] || { in: 0, out: 0 };
-    const costUsd = (inTokens / 1e6) * price.in + (outTokens / 1e6) * price.out;
+    const price = MODEL_PRICING[model] || { in: 0, out: 0, cached: 0 };
+    const fresh = Math.max(0, inTokens - cachedTokens);
+    const costUsd = (fresh / 1e6) * price.in
+      + (cachedTokens / 1e6) * (price.cached != null ? price.cached : price.in)
+      + (outTokens / 1e6) * price.out;
     _spendToday.usd += costUsd;
     const now = new Date();
     pool.query(
@@ -2758,13 +2792,18 @@ async function callOpenAI(messages, options = {}) {
   if (!text) throw new Error(`OpenAI ${usedModel} empty response`);
   const inTok = (data.usage && (data.usage.input_tokens || data.usage.prompt_tokens)) || 0;
   const outTok = (data.usage && (data.usage.output_tokens || data.usage.completion_tokens)) || 0;
-  recordSpend({ model: usedModel, inTokens: inTok, outTokens: outTok,
+  const cachedTok = (data.usage && data.usage.input_tokens_details && data.usage.input_tokens_details.cached_tokens) || 0;
+  recordSpend({ model: usedModel, inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok,
     userId: options.userId || null, endpoint: options.endpoint || null });
   // Report the model actually used (a hardcoded label previously hid which
   // model answered) plus token usage, so callers can surface real cost.
-  const price = MODEL_PRICING[usedModel] || { in: 0, out: 0 };
-  return { text, provider: usedModel, usage: { inTokens: inTok, outTokens: outTok,
-    costUsd: (inTok / 1e6) * price.in + (outTok / 1e6) * price.out } };
+  const price = MODEL_PRICING[usedModel] || { in: 0, out: 0, cached: 0 };
+  const freshTok = Math.max(0, inTok - cachedTok);
+  return { text, provider: usedModel, usage: {
+    inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok,
+    costUsd: (freshTok / 1e6) * price.in
+      + (cachedTok / 1e6) * (price.cached != null ? price.cached : price.in)
+      + (outTok / 1e6) * price.out } };
 }
 
 

@@ -10466,7 +10466,13 @@
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
                 if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Xulosa yaratib bo\'lmadi')); return; }
-                renderDocMessage({ rawTitle: 'Yuridik xulosa — ' + opinionDoc.name, html: d.html, kind: 'opinion', topic: d.topic || '', docHash: d.docHash || '', usage: d.usage || null });
+                var oTitle = 'Yuridik xulosa — ' + opinionDoc.name;
+                renderDocMessage({ rawTitle: oTitle, html: d.html, kind: 'opinion', topic: d.topic || '', docHash: d.docHash || '', usage: d.usage || null });
+                // Persist into the conversation so it survives a reload and
+                // appears in Suhbatlar tarixi (docs are rendered from `kind`).
+                aiChatHistory.push({ role: 'user', text: '📄 ' + oTitle });
+                aiChatHistory.push({ role: 'model', kind: 'opinion', title: oTitle, topic: d.topic || '', docHash: d.docHash || '', text: d.html });
+                saveAiChatSession();
                 opinionDoc = null;
             } catch (e) {
                 var t2 = document.getElementById('aiChatTyping'); if (t2) t2.remove();
@@ -11627,7 +11633,8 @@
 
                 var summary =
                     '<div class="spend-cards">' +
-                        '<div class="spend-card"><div class="spend-card-v">' + usd(d.totalUsd) + '</div><div class="spend-card-l">Jami (' + escapeHtml(d.month) + ')</div></div>' +
+                        '<div class="spend-card"><div class="spend-card-v">' + usd(d.openaiUsd) + '</div><div class="spend-card-l">OpenAI (hisobga tushadi)</div></div>' +
+                        '<div class="spend-card"><div class="spend-card-v">' + usd(d.totalUsd) + '</div><div class="spend-card-l">Jami, Gemini bilan (' + escapeHtml(d.month) + ')</div></div>' +
                         '<div class="spend-card"><div class="spend-card-v">' + num(d.activeUsers) + '</div><div class="spend-card-l">Faol foydalanuvchi</div></div>' +
                         '<div class="spend-card"><div class="spend-card-v">' + usd(d.perUserUsd && d.perUserUsd.p50) + '</div><div class="spend-card-l">Median (p50)</div></div>' +
                         '<div class="spend-card"><div class="spend-card-v">' + usd(d.perUserUsd && d.perUserUsd.p95) + '</div><div class="spend-card-l">p95</div></div>' +
@@ -11656,7 +11663,12 @@
                         '<td>' + usd(u.usd) + '</td></tr>';
                 });
 
+                var byProvider = (d.byProvider || []).map(function (p) {
+                    return '<tr><td>' + escapeHtml(p.provider || '—') + '</td><td>' + num(p.calls) + '</td><td>' + usd(p.usd) + '</td></tr>';
+                });
                 box.innerHTML = summary +
+                    '<p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;">Faqat <b>OpenAI</b> qatori OpenAI hisobiga tushadi. Gemini bepul tarifda ishlaydi — narxi taqqoslash uchun ko\'rsatilgan.</p>' +
+                    tbl('Provayder bo\'yicha', ['Provayder', 'So\'rovlar', 'Xarajat'], byProvider) +
                     tbl('Model bo\'yicha', ['Model', 'So\'rovlar', 'Xarajat'], byModel) +
                     tbl('Xizmat bo\'yicha (endpoint)', ['Endpoint', 'So\'rovlar', 'Xarajat'], byEndpoint) +
                     tbl('Foydalanuvchi bo\'yicha (eng ko\'p 100 ta)', ['Foydalanuvchi', 'Tarif', 'So\'rovlar', 'Tokenlar (in/out)', 'Xarajat'], byUser);
@@ -11783,6 +11795,13 @@
 
                 var lastUserText = '';
                 aiChatHistory.forEach(function(msg) {
+                    // Legal opinions / generated documents are re-rendered as
+                    // document cards, not as plain chat text.
+                    if (msg.role === 'model' && msg.kind === 'opinion') {
+                        renderDocMessage({ rawTitle: msg.title || 'Yuridik xulosa', html: msg.text,
+                            kind: 'opinion', topic: msg.topic || '', docHash: msg.docHash || '' });
+                        return;
+                    }
                     if (msg.role === 'user') {
                         lastUserText = msg.text;
                         messagesEl.innerHTML += '<div class="ai-chat-msg user">' + escapeHtml(msg.text) + '</div>';
