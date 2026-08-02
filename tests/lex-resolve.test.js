@@ -433,6 +433,29 @@ test('the on-topic confirmed hit outranks the off-topic one', () => {
   assert.ok(/сақлаш/i.test(kept[0].title), `wrong winner: ${kept[0].title}`);
 });
 
+console.log('\nlex-resolve — prefix overlap (corpus relevance gate)\n');
+
+test('agglutinated forms count as the same stem', () => {
+  const { prefixOverlap } = require('../src/rag/lex-resolve');
+  assert.ok(prefixOverlap('autsorsing asosida xizmatlar xarid qilish', 'Davlat xaridlarini tashkil etish') >= 1,
+    'xarid/xaridlarini should match');
+  assert.ok(prefixOverlap('autsorsing xizmatlari', 'Аутсорсинг хизматларини ташкил этиш механизмлари') >= 1,
+    'cross-script stems should match');
+});
+
+test('procedural-code chunks score zero against an outsourcing subject', () => {
+  // Run 6: the corpus returned Civil-Procedure/Criminal-Procedure/Tax-Code
+  // articles for an outsourcing report — pure article-number resonance.
+  const { prefixOverlap } = require('../src/rag/lex-resolve');
+  const subject = 'TIBBIY XIZMATLARDA AUTSORSING ASOSIDA XIZMATLAR XARID QILISH tender shartnoma';
+  for (const chunk of [
+    'Fuqarolik protsessual kodeksi. Vakilning da\'vodan voz kechish, kelishuv tuzish vakolatlari ishonchnomada ko\'rsatiladi',
+    'Jinoyat-protsessual kodeksi. Jinoyat ishlari bo\'yicha odil sudlovni faqat sud amalga oshiradi',
+  ]) {
+    assert.strictEqual(prefixOverlap(subject, chunk), 0, `should not match: ${chunk.slice(0, 40)}`);
+  }
+});
+
 console.log('\nlex-resolve — excerpt targeting\n');
 
 test('scoringText uses the claims, not the document number', () => {

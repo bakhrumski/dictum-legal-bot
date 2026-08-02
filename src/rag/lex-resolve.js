@@ -592,6 +592,24 @@ function matchesReference(ref, hit) {
   return topicalMatch(ref, title, 'nom');
 }
 
+/**
+ * Fuzzy topical overlap between two texts, tolerant of Uzbek agglutination:
+ * tokens match when one is a prefix of the other at ≥5 chars, so "xarid",
+ * "xaridlari" and "xaridlarini" all count as the same stem. Cross-script safe
+ * (both sides are transliterated by nameTokens).
+ */
+function prefixOverlap(aText, bText) {
+  const a = nameTokens(aText);
+  const b = nameTokens(bText);
+  if (!a.length || !b.length) return 0;
+  const stems = b.map(t => t.slice(0, 5));
+  let n = 0;
+  for (const t of new Set(a.map(t => t.slice(0, 5)))) {
+    if (stems.some(s => s === t)) n++;
+  }
+  return n;
+}
+
 /** Raw token-overlap count between a reference's name+claims and a title. */
 function topicalOverlap(ref, title) {
   const want = nameTokens([ref.name, ...(ref.claims || [])].filter(Boolean).join(' '));
@@ -721,6 +739,7 @@ module.exports = {
   translitToCyr,
   gateAndCapHits,
   topicalOverlap,
+  prefixOverlap,
   scoringText,
   resolveReference,
   resolveReferences,
