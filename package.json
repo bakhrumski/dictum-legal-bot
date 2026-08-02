@@ -34,7 +34,8 @@
     "corpus:check-freshness:dry": "node src/rag/check-freshness.js --dry-run",
     "test:authz": "node tests/authz-matrix.test.js",
     "test:verify-engine": "node tests/legal-verify.test.js",
-    "model:ab": "node scripts/model-ab.js"
+    "model:ab": "node scripts/model-ab.js",
+    "test:lex-resolve": "node tests/lex-resolve.test.js"
   },
   "keywords": [],
   "author": "",
