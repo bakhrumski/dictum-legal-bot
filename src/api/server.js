@@ -2890,8 +2890,15 @@ async function callOpenAI(messages, options = {}) {
     model: options.model || MODELS.standard,
     input,
     temperature,
-    max_output_tokens: maxTokens
+    // OpenAI rejects values below 16 ("integer below minimum value").
+    max_output_tokens: Math.max(16, maxTokens)
   };
+
+  // GPT-5.x reasoning models reject `temperature` outright. Sending it anyway
+  // cost a 400 + retry — TWO HTTP round-trips on every single call (the run-8
+  // log shows the rejection on every terra/luna request). The retry below
+  // stays as a safety net for other parameter rejections.
+  if (/^gpt-5/i.test(body.model)) delete body.temperature;
 
   if (useSearch) {
     body.tools = [{ type: 'web_search_preview' }];
@@ -3963,9 +3970,13 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   }
 
   // ── 4. Web Search fallback (Tavily) + Lex.uz Live Search ──
+  // opts.noWebFallback: hard-source-restricted callers (legal opinions:
+  // qa-corpus + lex.uz ONLY) must never reach Tavily. The run-8 log shows
+  // this branch firing a Tavily query from the opinion path — it only failed
+  // because the query happened to exceed Tavily's length limit.
   let webResults = [];
   let lexLiveResults = [];
-  if (needsWebSearch) {
+  if (needsWebSearch && !opts.noWebFallback) {
     // Run Tavily and lex.uz live search in parallel
     const [tavilyRes, lexRes] = await Promise.all([
       webSearch(query).catch(() => []),
@@ -5057,7 +5068,9 @@ async function classifyLegalTopic(message, opts = {}) {
   try {
     const result = await callAI(
       [{ role: 'system', text: sys }, { role: 'user', text: message }],
-      { useSearch: false, maxTokens: 8 }
+      // 16 is OpenAI's minimum max_output_tokens — 8 got a 400 and pushed
+      // every topic classification onto the Gemini fallback.
+      { useSearch: false, maxTokens: 16 }
     );
     const raw = (result.text || '').trim().toLowerCase().replace(/[^a-z\-]/g, '');
     if (keys.includes(raw)) return raw;
@@ -5744,7 +5757,7 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
           .filter(r => !r.foreign)
           .map(r => [sanitizeActName(r.name), r.number && `${r.number}-son`].filter(Boolean).join(' ')),
       ].filter(s => s && s.trim().length > 3).join('. ').slice(0, 1200);
-      const ragResult = await retrieveLegalContext(ragQuery || docForAnalysis.slice(0, 1500), topic, null, {});
+      const ragResult = await retrieveLegalContext(ragQuery || docForAnalysis.slice(0, 1500), topic, null, { noWebFallback: true });
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragChunks = (ragResult && ragResult.chunks) || [];
 
@@ -5829,7 +5842,11 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
             // A same-number act of a different body (yearly numbering
             // collision) stays in the context with a caution label, but is
             // NOT presented as a source of the opinion.
-            lexLiveSources.push({ title: h.title, url: h.url, offTopic: h.confirmed && h.overlap === 0 && (r.ref.claims || []).length > 0 });
+            lexLiveSources.push({
+              title: h.title, url: h.url,
+              num: String(r.ref.number || '').replace(/\D/g, ''),
+              offTopic: h.confirmed && h.overlap === 0 && (r.ref.claims || []).length > 0,
+            });
             // Say in the context itself whether the act's own number was
             // confirmed, so the model can rely on a confirmed act and hedge on
             // one matched only by subject.
@@ -5954,11 +5971,22 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
     // markdown — that rendered literal '**' and the "[Law]" labels got turned
     // into empty [_____] fields by the doc renderer).
     let manbalarHtml = manbalarFooterToHtml(buildManbalarFooter(ragChunks, html, lang));
-    // Include the live lex.uz documents used for grounding (deduped by URL).
+    // Manbalar lists ONLY sources the opinion actually relies on. Grounding
+    // material that reached the model but was never cited (a resolved act the
+    // opinion found irrelevant, a number-collision doc it dismissed) must not
+    // be presented as a source: a reader clicking through to an unrelated act
+    // stops trusting the whole document. A lex.uz doc qualifies when the
+    // opinion text cites its number ("306-son") or clearly names it.
     if (lexLiveSources.length) {
+      const { prefixOverlap } = require('../rag/lex-resolve');
       const escA = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const plainOpinion = html.replace(/<[^>]+>/g, ' ');
+      const citedInOpinion = (s) => {
+        if (s.num && new RegExp(`(?<![\\p{L}\\p{N}])${s.num}\\s*[-–—]?\\s*(?:son|сон|qaror|Qonun)`, 'iu').test(plainOpinion)) return true;
+        return prefixOverlap(s.title, plainOpinion) >= 2;
+      };
       const seenU = new Set();
-      const extra = lexLiveSources.filter(s => s.url && !s.offTopic && !seenU.has(s.url) && seenU.add(s.url))
+      const extra = lexLiveSources.filter(s => s.url && !s.offTopic && citedInOpinion(s) && !seenU.has(s.url) && seenU.add(s.url))
         .map(s => `<li><a href="${escA(s.url)}" target="_blank" rel="noopener">${escA(s.title || s.url)} (lex.uz)</a></li>`).join('');
       if (extra) manbalarHtml = (manbalarHtml ? manbalarHtml.replace('</ul>', extra + '</ul>') : '<ul>' + extra + '</ul>');
     }
