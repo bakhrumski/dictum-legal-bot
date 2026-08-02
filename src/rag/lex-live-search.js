@@ -77,6 +77,10 @@ async function searchLexUz(query, opts = {}) {
         title: doc.title || 'Nomsiz hujjat',
         url: doc.metadata.source_url || docUrl,
         content: excerpt,
+        // The unexcerpted head of the act, for callers that must confirm the
+        // document's identity (its own number/date) rather than read it. The
+        // excerpt is section-selected and may skip the header entirely.
+        head: String(doc.body || '').slice(0, 1200),
         source: 'lex.uz-live',
         metadata: doc.metadata,
       });

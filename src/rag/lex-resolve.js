@@ -344,9 +344,13 @@ function isDescriptiveName(name) {
   if (!s) return true;
   if (s.length > 70) return true;
   // "... ga oid prezident hujjati", "... bo'yicha qaror" — a trailing generic
-  // act-word introduced by a descriptive connective, with up to a few words in
+  // act-word introduced by a DESCRIPTIVE connective, with up to a few words in
   // between ("oid PREZIDENT hujjati").
-  return /(?:^|[^\p{L}])(oid|doir|bo['`‘’]?yicha|haqidagi|to['`‘’]?g['`‘’]?risidagi)\s+(?:\p{L}+\s+){0,3}(hujjat|qaror|farmon|norma|akt|qonun)\w*\.?$/iu.test(s);
+  //
+  // "to'g'risidagi" and "haqidagi" are deliberately NOT descriptive: they form
+  // the canonical Uzbek act title ("Davlat xaridlari to'g'risidagi Qonun"), and
+  // treating them as descriptions suppressed the query for real laws.
+  return /(?:^|[^\p{L}])(oid|doir|bo['`‘’]?yicha)\s+(?:\p{L}+\s+){0,3}(hujjat|qaror|farmon|norma|akt)\w*\.?$/iu.test(s);
 }
 
 function queryVariants(ref) {
@@ -392,9 +396,28 @@ const NAME_STOPWORDS = new Set([
   'nizom', 'nizomi', 'hujjat', 'hujjati', 'son', 'sonli', 'respublikasi',
 ]);
 
+// Uzbek Cyrillic → Latin, so a Latin citation can be compared with a Cyrillic
+// lex.uz title. lex.uz publishes predominantly in Cyrillic while reports are
+// written in Latin, so without this every cross-script comparison scores zero
+// and the topical fallback can never fire.
+const UZ_CYR_TO_LAT = {
+  'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'ғ': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+  'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'қ': 'q', 'л': 'l', 'м': 'm',
+  'н': 'n', 'о': 'o', 'ў': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+  'ф': 'f', 'х': 'x', 'ҳ': 'h', 'ц': 's', 'ч': 'ch', 'ш': 'sh', 'щ': 'sh',
+  'ъ': '', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'ы': 'i',
+};
+
+function translitUz(s) {
+  let out = '';
+  for (const ch of String(s || '')) {
+    out += Object.prototype.hasOwnProperty.call(UZ_CYR_TO_LAT, ch) ? UZ_CYR_TO_LAT[ch] : ch;
+  }
+  return out;
+}
+
 function nameTokens(s) {
-  return String(s || '')
-    .toLowerCase()
+  return translitUz(String(s || '').toLowerCase())
     .replace(/['`‘’ʻʼ´]/g, '')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .split(/\s+/)
@@ -415,41 +438,83 @@ function nameTokens(s) {
  *
  * @returns {{ok: boolean, why: string}}
  */
+/**
+ * Every number a lex.uz page states as its OWN — from the parsed metadata, the
+ * title, the act-form line, the publication origin and the document head.
+ * A lex.uz ACT_TITLE usually carries only the act's NAME, so relying on the
+ * title alone declares almost every document "raqami aniqlanmadi" and rejects
+ * even correct matches.
+ */
+function documentOwnNumbers(hit) {
+  const meta = (hit && hit.metadata) || {};
+  const out = new Set();
+
+  const fromMeta = numberDigits(meta.document_number);
+  if (fromMeta) out.add(fromMeta);
+
+  const surfaces = [hit && hit.title, meta.act_form, meta.publication, hit && hit.head]
+    .filter(Boolean).join('\n');
+
+  // "596-сон", "596-son", "№ 596", "N 596", "ПҚ-4624"
+  for (const m of surfaces.matchAll(/(?<![\p{L}\p{N}])(\d{1,5})\s*[-–—]\s*(?:son|сон)(?![\p{L}\p{N}])/giu)) out.add(m[1]);
+  for (const m of surfaces.matchAll(/(?:№|\bN\b)\s*[-–—]?\s*(\d{1,5})(?![\p{L}\p{N}])/gu)) out.add(m[1]);
+  for (const m of surfaces.matchAll(/(?<![\p{L}\p{N}])[A-ZА-ЯЎҚҒҲ]{1,4}\s*[-–—]\s*(\d{1,5})(?![\p{L}\p{N}])/gu)) out.add(m[1]);
+
+  return out;
+}
+
+/**
+ * Does this lex.uz hit actually BELONG to the reference?
+ *
+ * Three outcomes, not two — "the document says it is something else" and "the
+ * document does not say what it is" are different failures. Rejecting both
+ * outright discards correct matches, which is how a run that removed all the
+ * junk also removed all the grounding.
+ */
 function matchesReference(ref, hit) {
   const meta = (hit && hit.metadata) || {};
   const wantNum = numberDigits(ref.number);
-  const gotNum = numberDigits(meta.document_number);
   const title = String(hit && hit.title || '');
 
   if (wantNum) {
-    if (!gotNum) {
-      // No parsable number on the document — fall back to the title carrying
-      // the number literally ("... 306-son ...").
-      const re = new RegExp(`(?<![\\p{L}\\p{N}])${wantNum}\\s*[-–—]?\\s*(?:son|сон)`, 'iu');
-      if (re.test(title)) return { ok: true, why: 'title-number' };
-      return { ok: false, why: 'hujjat raqami aniqlanmadi' };
+    const own = documentOwnNumbers(hit);
+
+    if (own.has(wantNum)) {
+      // Number matches. If the reference carries a year, the act's adoption
+      // year must agree — acts reuse numbers across years.
+      const wantYear = (String(ref.date || '').match(/(?:19|20)\d{2}/) || [])[0];
+      const gotYear = (String(meta.adoption_date || '').match(/^(\d{4})/) || [])[1];
+      if (wantYear && gotYear && wantYear !== gotYear) {
+        return { ok: false, why: `yil mos emas (kutilgan ${wantYear}, topilgan ${gotYear})` };
+      }
+      return { ok: true, why: 'raqam mos', confirmed: true };
     }
-    if (gotNum !== wantNum) {
-      return { ok: false, why: `raqam mos emas (kutilgan ${wantNum}, topilgan ${meta.document_number})` };
+
+    if (own.size) {
+      return { ok: false, why: `raqam mos emas (kutilgan ${wantNum}, hujjatda ${[...own].slice(0, 3).join('/')})` };
     }
-    // Number matches. If the reference carries a year, the act's adoption year
-    // must agree — different acts reuse the same number across years.
-    const wantYear = (String(ref.date || '').match(/(?:19|20)\d{2}/) || [])[0];
-    const gotYear = (String(meta.adoption_date || '').match(/^(\d{4})/) || [])[1];
-    if (wantYear && gotYear && wantYear !== gotYear) {
-      return { ok: false, why: `yil mos emas (kutilgan ${wantYear}, topilgan ${gotYear})` };
-    }
-    return { ok: true, why: 'raqam mos' };
+
+    // Identity indeterminate: the page never states its own number. Fall back
+    // to topical agreement so a correct document is not thrown away, but mark
+    // it unconfirmed so the opinion can hedge.
+    return topicalMatch(ref, title, 'raqam koʻrsatilmagan');
   }
 
-  // Name-only reference: require real overlap between the cited name and the
-  // document title, not a lucky single word.
-  const want = nameTokens(ref.name);
+  // Name-only reference: require real overlap with the title, not one lucky word.
+  return topicalMatch(ref, title, 'nom');
+}
+
+/** Token overlap between what the report cites and the document's title. */
+function topicalMatch(ref, title, kind) {
+  const want = nameTokens([ref.name, ...(ref.claims || [])].filter(Boolean).join(' '));
   if (!want.length) return { ok: false, why: 'tekshirib boʻlmaydi (raqam ham, nom ham yoʻq)' };
   const got = new Set(nameTokens(title));
   const overlap = want.filter(w => got.has(w)).length;
-  if (overlap >= Math.max(2, Math.ceil(want.length * 0.4))) return { ok: true, why: 'nom mos' };
-  return { ok: false, why: `nom mos emas (${overlap}/${want.length} soʻz)` };
+  const need = Math.max(2, Math.ceil(Math.min(want.length, 8) * 0.4));
+  if (overlap >= need) {
+    return { ok: true, why: `${kind} — mavzu mos (${overlap}/${want.length})`, confirmed: false };
+  }
+  return { ok: false, why: `${kind}, mavzu ham mos emas (${overlap}/${want.length} soʻz)` };
 }
 
 /**
@@ -482,9 +547,11 @@ async function resolveReference(ref, opts = {}) {
     const kept = [];
     for (const h of hits || []) {
       const verdict = matchesReference(ref, h);
-      if (verdict.ok) kept.push(h);
+      if (verdict.ok) kept.push({ ...h, confirmed: !!verdict.confirmed, matchWhy: verdict.why });
       else rejected.push({ title: h.title, url: h.url, why: verdict.why });
     }
+    // A number-confirmed hit beats a merely topical one.
+    kept.sort((a, b) => Number(b.confirmed) - Number(a.confirmed));
     if (kept.length) return { ref, hits: kept, query: q, tried, rejected };
   }
   return {
@@ -535,6 +602,7 @@ module.exports = {
   queryVariants,
   isDescriptiveName,
   matchesReference,
+  documentOwnNumbers,
   scoringText,
   resolveReference,
   resolveReferences,

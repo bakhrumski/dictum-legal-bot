@@ -227,19 +227,50 @@ test('a described act is not searched verbatim', () => {
   );
 });
 
-test('a real title is still searched', () => {
-  assert.ok(!isDescriptiveName('Davlat xaridlari to‘g‘risida'));
-  assert.ok(queryVariants({ number: '', name: 'Davlat xaridlari to‘g‘risida', prefix: '', date: '' }).length > 0);
+test('"X to‘g‘risidagi Qonun" is a real title, not a description', () => {
+  // This is the canonical Uzbek act-title form. Treating it as descriptive
+  // suppressed the query for the Public Procurement Law itself.
+  for (const n of ['Davlat xaridlari to‘g‘risidagi qonun', 'Davlat xaridlari to‘g‘risida', 'Ijro hujjatlari haqidagi qonun']) {
+    assert.ok(!isDescriptiveName(n), `"${n}" wrongly treated as descriptive`);
+    assert.ok(queryVariants({ number: '', name: n, prefix: '', date: '' }).length > 0, `"${n}" produced no query`);
+  }
 });
 
 console.log('\nlex-resolve — identity gate\n');
 
-const hit = (title, document_number, adoption_date) =>
-  ({ title, url: 'https://lex.uz/docs/1', metadata: { document_number, adoption_date } });
+const hit = (title, document_number, adoption_date, extra = {}) =>
+  ({ title, url: 'https://lex.uz/docs/1', head: extra.head || '', metadata: { document_number, adoption_date, act_form: extra.act_form, publication: extra.publication } });
 
 test('accepts a document whose OWN number matches', () => {
   const v = matchesReference({ number: '306', name: '' }, hit('Autsorsing to‘g‘risida', '306', '2026-06-12'));
   assert.strictEqual(v.ok, true, v.why);
+  assert.strictEqual(v.confirmed, true);
+});
+
+test('reads the number from the act-form line when the title has none', () => {
+  // A lex.uz ACT_TITLE usually states only the act's NAME. Requiring the
+  // number to be in the title rejected every correct match.
+  const v = matchesReference(
+    { number: '596', name: '' },
+    hit('Ижро этувчи ҳокимият органларида аутсорсинг', null, null,
+        { act_form: 'ВАЗИРЛАР МАҲКАМАСИНИНГ ҚАРОРИ 23.09.2021 й. N 596' })
+  );
+  assert.strictEqual(v.ok, true, v.why);
+  assert.strictEqual(v.confirmed, true);
+});
+
+test('reads the number from the document head ("596-сон")', () => {
+  const v = matchesReference({ number: '596', name: '' },
+    hit('Аутсорсинг тўғрисида', null, null, { head: 'Вазирлар Маҳкамасининг 596-сон қарори' }));
+  assert.strictEqual(v.ok, true, v.why);
+});
+
+test('a number stated anywhere on the page beats a wrong one elsewhere', () => {
+  const own = require('../src/rag/lex-resolve').documentOwnNumbers(
+    hit('T', null, null, { act_form: 'ҚАРОР N 596', head: 'ПҚ-4624 га мувофиқ' })
+  );
+  assert.ok(own.has('596'));
+  assert.ok(own.has('4624'));
 });
 
 test('rejects the full-text false positive that broke production', () => {
@@ -264,15 +295,44 @@ test('accepts when the number is only in the title, not the metadata', () => {
   assert.strictEqual(v.ok, true, v.why);
 });
 
-test('rejects when neither metadata nor title carries the number', () => {
-  const v = matchesReference({ number: '306', name: '' }, hit('Qandaydir boshqa hujjat', null, null));
-  assert.strictEqual(v.ok, false);
+test('an unidentifiable but on-topic document is kept, flagged unconfirmed', () => {
+  // "Does not say what it is" must not be treated like "says it is something
+  // else": rejecting both outright removed all the junk AND all the grounding.
+  const v = matchesReference(
+    { number: '306', name: 'autsorsing xizmatlari nizomi', claims: ['autsorsing tartibi belgilanadi'] },
+    hit('Autsorsing xizmatlarini tashkil etish nizomi', null, null)
+  );
+  assert.strictEqual(v.ok, true, v.why);
+  assert.strictEqual(v.confirmed, false, 'should not claim the number was confirmed');
+});
+
+test('matches a Latin citation against a Cyrillic lex.uz title', () => {
+  // lex.uz publishes predominantly in Cyrillic; reports are written in Latin.
+  // Without transliteration every cross-script comparison scores zero and the
+  // topical fallback can never fire on real data.
+  const cases = [
+    [{ number: '', name: 'Davlat xaridlari to‘g‘risida', claims: [] }, 'Давлат харидлари тўғрисида', true],
+    [{ number: '306', name: 'autsorsing xizmatlari nizomi', claims: ['autsorsing tartibi'] },
+      'Ижро этувчи ҳокимият органлари ва давлат корхоналарида аутсорсинг хизматларини ташкил этиш', true],
+    [{ number: '306', name: 'autsorsing nizomi', claims: [] }, 'ДАФН ЭТИШГА НАФАҚА ТАЙИНЛАШ ТАРТИБИ', false],
+    [{ number: '', name: 'Davlat xaridlari to‘g‘risida', claims: [] }, 'Давлат ижтимоий суғуртаси тўғрисида', false],
+  ];
+  for (const [ref, title, want] of cases) {
+    const v = matchesReference(ref, hit(title, null, null));
+    assert.strictEqual(v.ok, want, `"${title.slice(0, 40)}" → ${v.ok} (${v.why})`);
+  }
+});
+
+test('rejects an unidentifiable document that is also off-topic', () => {
+  const v = matchesReference(
+    { number: '306', name: 'autsorsing xizmatlari nizomi', claims: [] },
+    hit('Dafn etishga nafaqa tayinlash tartibi', null, null)
+  );
+  assert.strictEqual(v.ok, false, v.why);
 });
 
 test('name-only reference needs real title overlap, not one lucky word', () => {
   const ref = { number: '', name: 'Davlat xaridlari to‘g‘risida' };
-  assert.strictEqual(matchesReference(ref, hit('Давлат харидлари тўғрисида', null, null)).ok, false,
-    'Cyrillic title should not accidentally pass on Latin tokens');
   assert.strictEqual(matchesReference(ref, hit('Davlat xaridlari to‘g‘risidagi Qonun', null, null)).ok, true);
   assert.strictEqual(matchesReference(ref, hit('Davlat ijtimoiy sug‘urtasi to‘g‘risida', null, null)).ok, false);
 });
