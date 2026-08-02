@@ -77,10 +77,13 @@ async function searchLexUz(query, opts = {}) {
         title: doc.title || 'Nomsiz hujjat',
         url: doc.metadata.source_url || docUrl,
         content: excerpt,
-        // The unexcerpted head of the act, for callers that must confirm the
-        // document's identity (its own number/date) rather than read it. The
-        // excerpt is section-selected and may skip the header entirely.
+        // The unexcerpted head and tail of the act, for callers that must
+        // confirm the document's identity (its own number/date) rather than
+        // read it. The excerpt is section-selected and may skip both. The tail
+        // matters for LAWS: lex.uz puts a law's "№ ЎРҚ-684" in the signature
+        // block at the END of the document, not in the header.
         head: String(doc.body || '').slice(0, 1200),
+        tail: String(doc.body || '').slice(-800),
         source: 'lex.uz-live',
         metadata: doc.metadata,
       });

@@ -431,6 +431,10 @@ function extractTitleMetadata(title) {
   }
 
   const numPatterns = [
+    // National-registry path "03/21/684/0367-сон": segment 3 is the ACT's
+    // number (684); the trailing segment is only the registration index. This
+    // must outrank the generic "-сон" pattern, which would capture 0367.
+    /\b\d{2}\/\d{2}\/(\d{1,5})\/\d{3,5}\b/,
     /(?:№\s*|\bN\s+|raqami\s+)([A-ZА-Я]{0,4}-?\d+(?:-[IVX]+)?(?:-son)?)/,
     // "-son" (Latin) and "-сон" (Cyrillic). JS \b is ASCII-only, so the
     // Cyrillic form needs an explicit non-letter right boundary.

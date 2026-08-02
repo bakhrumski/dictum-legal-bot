@@ -5691,6 +5691,9 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       const llmRefs = llmBatches.flat();
 
       documentRefs = mergeReferences(llmRefs, scanned)
+        // A reference with no number and no usable name cannot be looked up or
+        // reported — it would only surface as a "?" row in the log.
+        .filter(r => r.number || (r.name && r.name.trim().length >= 6))
         .sort((a, b) => scanWeight(b) - scanWeight(a));
       console.log(`[Legal Opinion] references: ${documentRefs.length} (regex ${scanned.length}, llm ${llmRefs.length} over ${windows.length} window(s)) — ${documentRefs.slice(0, 15).map(r => r.number || r.name).join(', ')}`);
     } catch (e) { console.warn('[Legal Opinion] reference extraction failed:', e.message); }
@@ -5731,7 +5734,7 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
         // not latency-per-reference.
         const MAX_REFS = parseInt(process.env.OPINION_MAX_REFS, 10) || 15;
         const top = documentRefs.slice(0, MAX_REFS);
-        const resolved = await resolveReferences(top, { concurrency: 4, maxDocs: 2, maxVariants: 4 });
+        const resolved = await resolveReferences(top, { concurrency: 4, maxDocs: 2, maxVariants: 5 });
 
         // Total budget for live lex.uz text so a reference-heavy document
         // cannot crowd the uploaded document out of the context window.
