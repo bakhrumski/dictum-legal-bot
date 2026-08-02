@@ -34,6 +34,12 @@ const { searchLexUz } = require('./lex-live-search');
 const BARE_NUMBER_RE =
   /(?<![\p{L}\p{N}])(\d{1,5})\s*[-–—]?\s*(?:son|сон)(?:li|lili|ли)?(?![\p{L}\p{N}])/giu;
 
+// A list of numbers sharing one trailing "-son": "4734 va 4735-son qonunlari",
+// "276, 596-son qarorlar". Only the last number carries the suffix, so the
+// single-number pattern above sees just one of them.
+const NUMBER_LIST_RE =
+  /(?<![\p{L}\p{N}])\d{1,5}(?:\s*(?:,|va|hamda|и|и\s)\s*\d{1,5})+\s*[-–—]?\s*(?:son|сон)(?:li|lili|ли)?(?![\p{L}\p{N}])/giu;
+
 // Prefixed forms that carry their own type: PF-200, ПФ-200, F-59, PQ-4624.
 // "F-" (farmoyish) is included — answer-verification.js does not cover it.
 const PREFIXED_RE =
@@ -67,6 +73,18 @@ const TYPE_HINTS = [
   [/qaror\w*|қарор\w*/iu,                                    { type: 'VM_qarori',         prefix: 'VMQ' }],
 ];
 
+// Jurisdiction markers. lex.uz indexes O'zbekiston law only, so a number cited
+// next to one of these is a FOREIGN instrument: searching lex.uz for it can
+// only return an unrelated Uzbek act that happens to contain the same digits.
+// (Real case: "Turkiyaning 4734 va 4735-son qonunlari" and "2014/24/EU".)
+const FOREIGN_HINTS = [
+  [/t[uü]rkiya\w*|t[uü]rk\s+\w*qonun|туркия\w*/iu,                          'Turkiya'],
+  [/yevropa\s+ittifoq\w*|\bEU\b|\bEC\b|\d{4}\s*\/\s*\d{1,3}\s*\/\s*EU/iu,  'Yevropa Ittifoqi'],
+  [/\bOECD\b|\bIHTT\b|ИХТТ/iu,                                              'OECD'],
+  [/angliya\w*|buyuk\s+britaniya\w*|\bUK\b/iu,                              'Angliya'],
+  [/qozog['`’]?iston\w*|rossiya\s+federatsiya\w*/iu,                        'xorijiy'],
+];
+
 const DATE_RE =
   /(\d{1,2}[.\-/]\d{1,2}[.\-/](?:19|20)\d{2})|((?:19|20)\d{2})[-\s]?yil\w*\s+(\d{1,2})[-\s]?([a-zA-Zʼ’'о-я]+)/giu;
 
@@ -84,6 +102,54 @@ function inferType(text, at) {
   const window = text.slice(Math.max(0, at - 120), at + 120);
   for (const [re, hint] of TYPE_HINTS) if (re.test(window)) return hint;
   return { type: 'boshqa', prefix: '' };
+}
+
+// Markers that positively identify a number as O'zbekiston law. When one of
+// these sits between a foreign marker and the number, the number is domestic.
+const DOMESTIC_HINTS =
+  /o['`‘’]?zbekiston|ўзбекистон|o['`‘’]?zr\b|vazirlar\s+mahkamasi|вазирлар|prezidentining|президентининг|respublikasi\s+qonuni|vazirligi/iu;
+
+/**
+ * Which foreign jurisdiction (if any) this number belongs to.
+ *
+ * Attribution in Uzbek is prenominal and clause-local — "Turkiyaning 4734 va
+ * 4735-son qonunlari", "Yevropa Ittifoqining 2014/24/EU direktivasi" — so the
+ * evidence is looked for in the CURRENT clause only. Scanning a fixed ±150
+ * char window instead would mark a domestic act foreign whenever a comparative
+ * report mentions Turkey one sentence earlier, and a domestic act wrongly
+ * marked foreign is never looked up at all — the exact failure being fixed.
+ */
+function inferJurisdiction(text, at) {
+  // Back to the start of the clause (sentence/semicolon/newline), max 120 chars.
+  const backStart = Math.max(0, at - 120);
+  let back = text.slice(backStart, at);
+  const cut = Math.max(back.lastIndexOf('.'), back.lastIndexOf(';'), back.lastIndexOf('\n'));
+  if (cut !== -1) back = back.slice(cut + 1);
+
+  // Forward only as far as the same clause continues, max 50 chars.
+  let fwd = text.slice(at, Math.min(text.length, at + 50));
+  const fcut = fwd.search(/[.;\n]/);
+  if (fcut !== -1) fwd = fwd.slice(0, fcut);
+
+  const clause = back + fwd;
+  if (DOMESTIC_HINTS.test(clause)) return '';
+
+  // Attribution is consumed by the first act it governs: in "Yevropa
+  // Ittifoqining 2014/24/EU direktivasi va 16-sonlili qaror", "16" belongs to
+  // the conjunct, not to the EU. So a foreign marker stops carrying once an
+  // act-noun and a conjunction stand between it and the number.
+  const HANDOFF =
+    /(direktiva|qonun|qaror|hujjat|reglament|nizom|farmon|qoida|tartib|standart|tavsiya|amaliyot|tajriba|me['`‘’]?yor)\w*\s*(?:,|\bva\b|\bhamda\b|\bи\b)/iu;
+
+  for (const [re, label] of FOREIGN_HINTS) {
+    re.lastIndex = 0;
+    const m = re.exec(clause);
+    if (!m) continue;
+    const gap = clause.slice(m.index + m[0].length, back.length);
+    if (gap && HANDOFF.test(gap)) continue;
+    return label;
+  }
+  return '';
 }
 
 /**
@@ -110,13 +176,14 @@ function scanBareReferences(text) {
   /** key → ref */
   const byKey = new Map();
 
-  const put = (digits, prefix, type, date, name, confidence) => {
+  const put = (digits, prefix, type, date, name, confidence, foreign) => {
     const key = `${prefix || '?'}-${digits}`;
     const existing = byKey.get(key);
     if (existing) {
       existing.hits++;
       if (!existing.date && date) existing.date = date;
       if (!existing.name && name) existing.name = name;
+      if (!existing.foreign && foreign) existing.foreign = foreign;
       if (confidence === 'high') existing.confidence = 'high';
       return;
     }
@@ -129,6 +196,7 @@ function scanBareReferences(text) {
       prefix: prefix || '',
       key,
       confidence,
+      foreign: foreign || '',
       hits: 1,
     });
   };
@@ -144,17 +212,38 @@ function scanBareReferences(text) {
       prefix === 'F'  ? 'farmoyish' :
       prefix === 'ORQ' || prefix === 'QR' ? 'qonun' :
       prefix === 'VM' || prefix === 'VMQ' ? 'VM_qarori' : 'boshqa';
-    put(m[2], prefix, type, nearbyDate(src, m.index), nearbyName(src, m.index + m[0].length), 'high');
+    put(m[2], prefix, type, nearbyDate(src, m.index), nearbyName(src, m.index + m[0].length), 'high',
+        inferJurisdiction(src, m.index));
   }
 
-  // Bare "<N>-son(li)" — type inferred from surrounding words.
   const bareDigits = new Set();
+
+  // Number lists first ("4734 va 4735-son qonunlari"), recording the spans they
+  // consume so the single-number pass below does not double-count the last one.
+  const listSpans = [];
+  NUMBER_LIST_RE.lastIndex = 0;
+  while ((m = NUMBER_LIST_RE.exec(src)) !== null) {
+    listSpans.push([m.index, m.index + m[0].length]);
+    const { type, prefix } = inferType(src, m.index);
+    const date = nearbyDate(src, m.index);
+    const foreign = inferJurisdiction(src, m.index);
+    const name = nearbyName(src, m.index + m[0].length);
+    for (const d of m[0].matchAll(/\d{1,5}/g)) {
+      bareDigits.add(d[0]);
+      put(d[0], prefix, type, date, name, 'high', foreign);
+    }
+  }
+  const inList = (i) => listSpans.some(([s, e]) => i >= s && i < e);
+
+  // Bare "<N>-son(li)" — type inferred from surrounding words.
   BARE_NUMBER_RE.lastIndex = 0;
   while ((m = BARE_NUMBER_RE.exec(src)) !== null) {
+    if (inList(m.index)) continue;
     const digits = m[1];
     bareDigits.add(digits);
     const { type, prefix } = inferType(src, m.index);
-    put(digits, prefix, type, nearbyDate(src, m.index), nearbyName(src, m.index + m[0].length), 'high');
+    put(digits, prefix, type, nearbyDate(src, m.index), nearbyName(src, m.index + m[0].length), 'high',
+        inferJurisdiction(src, m.index));
   }
 
   // Parenthesised citation lists — only numbers already seen as "<N>-son".
@@ -166,7 +255,7 @@ function scanBareReferences(text) {
     for (const d of inner.matchAll(/(?<![\p{L}\p{N}\-–—])(\d{2,5})(?![\p{L}\p{N}]|\s*[-–—]\s*(?:m\b|modda|band|qism))/gu)) {
       if (!bareDigits.has(d[1])) continue;   // corroboration required
       const { type, prefix } = inferType(src, m.index);
-      put(d[1], prefix, type, '', '', 'low');
+      put(d[1], prefix, type, '', '', 'low', inferJurisdiction(src, m.index));
     }
   }
 
@@ -202,7 +291,8 @@ function mergeReferences(llmRefs = [], scanned = []) {
       // Named-only reference (e.g. "Fuqarolik kodeksi") — keep as-is.
       byDigits.set(`name:${(r.name || '').toLowerCase()}`, {
         type: r.type || 'boshqa', name: r.name || '', number: '', date: r.date || '',
-        claims: r.claims || [], prefix: '', key: `name:${r.name}`, confidence: 'high', hits: 1,
+        claims: r.claims || [], prefix: '', key: `name:${r.name}`, confidence: 'high',
+        foreign: '', hits: 1,
       });
       continue;
     }
@@ -216,7 +306,8 @@ function mergeReferences(llmRefs = [], scanned = []) {
     } else {
       byDigits.set(d, {
         type: r.type || 'boshqa', name: r.name || '', number: d, date: r.date || '',
-        claims: r.claims || [], prefix: '', key: `?-${d}`, confidence: 'high', hits: 1,
+        claims: r.claims || [], prefix: '', key: `?-${d}`, confidence: 'high',
+        foreign: '', hits: 1,
       });
     }
   }
@@ -242,7 +333,26 @@ function scanWeight(ref) {
  * first because lex.uz's index is primarily Cyrillic; bare and Latin forms are
  * the fallback; the plain name is the last resort.
  */
+/**
+ * True when a "name" is the LLM DESCRIBING an act rather than naming it —
+ * e.g. "Davlat korxonalarida xarajatlarni kamaytirish va samaradorlikka oid
+ * prezident hujjati". Searching such a string verbatim can only fail, so it is
+ * not worth a lex.uz round-trip.
+ */
+function isDescriptiveName(name) {
+  const s = String(name || '').trim();
+  if (!s) return true;
+  if (s.length > 70) return true;
+  // "... ga oid prezident hujjati", "... bo'yicha qaror" — a trailing generic
+  // act-word introduced by a descriptive connective, with up to a few words in
+  // between ("oid PREZIDENT hujjati").
+  return /(?:^|[^\p{L}])(oid|doir|bo['`‘’]?yicha|haqidagi|to['`‘’]?g['`‘’]?risidagi)\s+(?:\p{L}+\s+){0,3}(hujjat|qaror|farmon|norma|akt|qonun)\w*\.?$/iu.test(s);
+}
+
 function queryVariants(ref) {
+  // Foreign instruments are not on lex.uz — never spend a lookup on them.
+  if (ref.foreign) return [];
+
   const out = [];
   const num = String(ref.number || '').trim();
   const name = String(ref.name || '').trim();
@@ -257,36 +367,139 @@ function queryVariants(ref) {
     out.push(`${num}-сон`);
     if (year) out.push(`${num}-сон ${year}`);
     out.push(`${num}-son`);
-    if (name) out.push(`${num}-son ${name}`.slice(0, 120));
+    if (name && !isDescriptiveName(name)) out.push(`${num}-son ${name}`.slice(0, 120));
   }
-  if (name && name.length >= 6) out.push(name.slice(0, 120));
+  // A name-only query is worth trying only when the name is an actual title.
+  if (name && name.length >= 6 && !isDescriptiveName(name)) out.push(name.slice(0, 120));
 
   // Dedupe, drop anything too short for searchLexUz.
   return [...new Set(out)].filter(q => q.length >= 3);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Identity gate
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Digits of a document number, ignoring any prefix: "ПҚ-4624" → "4624". */
+function numberDigits(s) {
+  const m = String(s || '').match(/(\d{1,5})(?!.*\d)/);
+  return m ? m[1] : '';
+}
+
+const NAME_STOPWORDS = new Set([
+  'va', 'bilan', 'uchun', 'haqida', 'haqidagi', 'togrisida', 'togrisidagi',
+  'oid', 'boyicha', 'qaror', 'qarori', 'qonun', 'qonuni', 'farmon', 'farmoni',
+  'nizom', 'nizomi', 'hujjat', 'hujjati', 'son', 'sonli', 'respublikasi',
+]);
+
+function nameTokens(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/['`‘’ʻʼ´]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !NAME_STOPWORDS.has(w));
+}
+
+/**
+ * Does this lex.uz hit actually BELONG to the reference?
+ *
+ * lex.uz search is FULL TEXT: querying "306-сон" returns every document whose
+ * body merely contains that string. Without this check, an outsourcing report
+ * citing 306-son gets grounded on a burial-benefit regulation that happens to
+ * mention 306 — which is exactly what happened in production, with four
+ * unrelated acts printed under "Manbalar".
+ *
+ * fetchLexDocument already parses the document's OWN number and adoption date
+ * out of its title, so the check is a metadata comparison, not another fetch.
+ *
+ * @returns {{ok: boolean, why: string}}
+ */
+function matchesReference(ref, hit) {
+  const meta = (hit && hit.metadata) || {};
+  const wantNum = numberDigits(ref.number);
+  const gotNum = numberDigits(meta.document_number);
+  const title = String(hit && hit.title || '');
+
+  if (wantNum) {
+    if (!gotNum) {
+      // No parsable number on the document — fall back to the title carrying
+      // the number literally ("... 306-son ...").
+      const re = new RegExp(`(?<![\\p{L}\\p{N}])${wantNum}\\s*[-–—]?\\s*(?:son|сон)`, 'iu');
+      if (re.test(title)) return { ok: true, why: 'title-number' };
+      return { ok: false, why: 'hujjat raqami aniqlanmadi' };
+    }
+    if (gotNum !== wantNum) {
+      return { ok: false, why: `raqam mos emas (kutilgan ${wantNum}, topilgan ${meta.document_number})` };
+    }
+    // Number matches. If the reference carries a year, the act's adoption year
+    // must agree — different acts reuse the same number across years.
+    const wantYear = (String(ref.date || '').match(/(?:19|20)\d{2}/) || [])[0];
+    const gotYear = (String(meta.adoption_date || '').match(/^(\d{4})/) || [])[1];
+    if (wantYear && gotYear && wantYear !== gotYear) {
+      return { ok: false, why: `yil mos emas (kutilgan ${wantYear}, topilgan ${gotYear})` };
+    }
+    return { ok: true, why: 'raqam mos' };
+  }
+
+  // Name-only reference: require real overlap between the cited name and the
+  // document title, not a lucky single word.
+  const want = nameTokens(ref.name);
+  if (!want.length) return { ok: false, why: 'tekshirib boʻlmaydi (raqam ham, nom ham yoʻq)' };
+  const got = new Set(nameTokens(title));
+  const overlap = want.filter(w => got.has(w)).length;
+  if (overlap >= Math.max(2, Math.ceil(want.length * 0.4))) return { ok: true, why: 'nom mos' };
+  return { ok: false, why: `nom mos emas (${overlap}/${want.length} soʻz)` };
+}
+
 /**
  * Resolve ONE reference against lex.uz, trying query variants in order until a
- * document comes back.
+ * document comes back that PASSES the identity gate. A hit that fails the gate
+ * is discarded and recorded in `rejected` — it never reaches the model.
  *
- * @returns {{ref, hits: Array, query: string|null, tried: string[]}}
+ * @returns {{ref, hits: Array, query: string|null, tried: string[],
+ *            rejected: Array<{title,url,why}>, reason?: string}}
  */
 async function resolveReference(ref, opts = {}) {
-  const { maxDocs = 1, maxVariants = 4 } = opts;
+  const { maxDocs = 2, maxVariants = 4 } = opts;
+
+  if (ref.foreign) {
+    return { ref, hits: [], query: null, tried: [], rejected: [], reason: `xorijiy manba (${ref.foreign})` };
+  }
+
   const variants = queryVariants(ref).slice(0, maxVariants);
   const tried = [];
+  const rejected = [];
 
   for (const q of variants) {
     tried.push(q);
     let hits = [];
     try {
-      hits = await searchLexUz(q, { maxDocs });
+      hits = await searchLexUz(q, { maxDocs, scoreText: scoringText(ref) });
     } catch (e) {
       continue;
     }
-    if (hits && hits.length) return { ref, hits, query: q, tried };
+    const kept = [];
+    for (const h of hits || []) {
+      const verdict = matchesReference(ref, h);
+      if (verdict.ok) kept.push(h);
+      else rejected.push({ title: h.title, url: h.url, why: verdict.why });
+    }
+    if (kept.length) return { ref, hits: kept, query: q, tried, rejected };
   }
-  return { ref, hits: [], query: null, tried };
+  return {
+    ref, hits: [], query: null, tried, rejected,
+    reason: rejected.length ? 'topilgan hujjatlar havolaga mos kelmadi' : 'lex.uz da natija yoʻq',
+  };
+}
+
+/**
+ * Text used to pick WHICH sections of a resolved act to excerpt. The document
+ * number alone selects the title page; the claims the report makes about the
+ * act ("14-modda xizmatni ruxsat etadi") select the articles that matter.
+ */
+function scoringText(ref) {
+  return [ref.name, ...(ref.claims || [])].filter(Boolean).join(' ').slice(0, 600);
 }
 
 /** Run `fn` over `items` with bounded concurrency, preserving input order. */
@@ -298,7 +511,7 @@ async function mapLimit(items, limit, fn) {
       const i = next++;
       if (i >= items.length) return;
       try { out[i] = await fn(items[i], i); }
-      catch (e) { out[i] = { ref: items[i], hits: [], query: null, tried: [], error: e.message }; }
+      catch (e) { out[i] = { ref: items[i], hits: [], query: null, tried: [], rejected: [], error: e.message }; }
     }
   });
   await Promise.all(workers);
@@ -311,7 +524,7 @@ async function mapLimit(items, limit, fn) {
  * @returns {Promise<Array<{ref, hits, query, tried, error?}>>}
  */
 async function resolveReferences(refs, opts = {}) {
-  const { concurrency = 4, maxDocs = 1, maxVariants = 4 } = opts;
+  const { concurrency = 4, maxDocs = 2, maxVariants = 4 } = opts;
   return mapLimit(refs, concurrency, (r) => resolveReference(r, { maxDocs, maxVariants }));
 }
 
@@ -320,6 +533,9 @@ module.exports = {
   mergeReferences,
   scanWeight,
   queryVariants,
+  isDescriptiveName,
+  matchesReference,
+  scoringText,
   resolveReference,
   resolveReferences,
   mapLimit,
