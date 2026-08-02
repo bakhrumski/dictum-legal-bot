@@ -5711,15 +5711,43 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       // Code, run after run. What actually identifies the relevant law is the
       // document's subject line plus the acts it cites and the claims it makes
       // about them.
+      // Deliberately NO claims here: claims are full of article numbers
+      // ("55 va 69-moddalariga ko'ra..."), and when the corpus lacks the
+      // relevant field, the nearest neighbours of "69-modda" are article 69
+      // of unrelated codes — run 6 retrieved Civil-Procedure and
+      // Criminal-Procedure articles purely on number resonance.
       const ragQuery = [
         documentText.slice(0, 220).replace(/\s+/g, ' '),
-        ...documentRefs.slice(0, 8).map(r =>
-          [r.name, r.number && `${r.number}-son`].filter(Boolean).join(' ')),
-        ...documentRefs.slice(0, 5).flatMap(r => (r.claims || []).slice(0, 2)),
-      ].filter(s => s && s.trim().length > 3).join('. ').slice(0, 1500);
+        ...documentRefs.slice(0, 8)
+          .filter(r => !r.foreign)
+          .map(r => [r.name, r.number && `${r.number}-son`].filter(Boolean).join(' ')),
+      ].filter(s => s && s.trim().length > 3).join('. ').slice(0, 1200);
       const ragResult = await retrieveLegalContext(ragQuery || docForAnalysis.slice(0, 1500), topic, null, {});
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragChunks = (ragResult && ragResult.chunks) || [];
+
+      // Relevance gate on corpus chunks. When the corpus has nothing in the
+      // document's field, vector search still returns SOMETHING — run 6
+      // grounded an outsourcing opinion on Civil-Procedure, Criminal-Procedure
+      // and Tax-Code articles, which the model then confidently applied.
+      // Irrelevant-but-real law in a legal opinion is worse than no corpus
+      // context at all (the prompt handles an empty KONTEKST honestly).
+      try {
+        const { prefixOverlap } = require('../rag/lex-resolve');
+        const docSubject = documentText.slice(0, 300).replace(/\s+/g, ' ') + ' '
+          + documentRefs.slice(0, 8).map(r => r.name).filter(Boolean).join(' ');
+        const kept = ragChunks.filter(c =>
+          prefixOverlap(docSubject, `${c.law_name || ''} ${String(c.chunk_text || '').slice(0, 300)}`) >= 1);
+        if (kept.length < ragChunks.length) {
+          const dropped = ragChunks.filter(c => !kept.includes(c)).map(c => c.law_name).filter(Boolean);
+          console.log(`[Legal Opinion] corpus relevance gate: kept ${kept.length}/${ragChunks.length} chunk(s), dropped: ${[...new Set(dropped)].join('; ') || '(unnamed)'}`);
+          ragChunks = kept;
+          ragContext = kept.map(c => {
+            const art = c.article_number_display || (Array.isArray(c.article_numbers) && c.article_numbers.length ? c.article_numbers.join(', ') + '-modda' : '');
+            return `[${[c.law_name, art].filter(Boolean).join(', ')}]\n${String(c.chunk_text || '').trim()}`;
+          }).join('\n\n');
+        }
+      } catch (e) { console.warn('[Legal Opinion] corpus relevance gate failed (keeping all):', e.message); }
     } catch (e) { console.warn('[Legal Opinion] RAG failed:', e.message); }
 
     // Corpus thin? Supplement with LIVE lex.uz excerpts — via searchLexUz,
@@ -5776,7 +5804,10 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
             if (room < 500) break;
             const excerpt = String(h.content || '').slice(0, Math.min(2500, room));
             lexUsed += excerpt.length;
-            lexLiveSources.push({ title: h.title, url: h.url });
+            // A same-number act of a different body (yearly numbering
+            // collision) stays in the context with a caution label, but is
+            // NOT presented as a source of the opinion.
+            lexLiveSources.push({ title: h.title, url: h.url, offTopic: h.confirmed && h.overlap === 0 && (r.ref.claims || []).length > 0 });
             // Say in the context itself whether the act's own number was
             // confirmed, so the model can rely on a confirmed act and hedge on
             // one matched only by subject.
@@ -5897,7 +5928,7 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
     if (lexLiveSources.length) {
       const escA = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       const seenU = new Set();
-      const extra = lexLiveSources.filter(s => s.url && !seenU.has(s.url) && seenU.add(s.url))
+      const extra = lexLiveSources.filter(s => s.url && !s.offTopic && !seenU.has(s.url) && seenU.add(s.url))
         .map(s => `<li><a href="${escA(s.url)}" target="_blank" rel="noopener">${escA(s.title || s.url)} (lex.uz)</a></li>`).join('');
       if (extra) manbalarHtml = (manbalarHtml ? manbalarHtml.replace('</ul>', extra + '</ul>') : '<ul>' + extra + '</ul>');
     }
@@ -5905,7 +5936,15 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
     if (result.usage) {
-      console.log(`[Legal Opinion] tokens in=${result.usage.inTokens} out=${result.usage.outTokens} cost=$${result.usage.costUsd.toFixed(4)} (synthesis only; digest logged separately)`);
+      // result.provider is the model that ACTUALLY answered. The earlier
+      // "model=" line only logs intent — callPremiumAI silently falls back
+      // Sol → Terra → Gemini on error, and run 6 was billed at exactly Terra
+      // rates while the intent line still said Sol.
+      const actualModel = result.provider || 'unknown';
+      if (actualModel !== opinionModel) {
+        console.warn(`[Legal Opinion] FALLBACK: requested ${opinionModel}, answered by ${actualModel}`);
+      }
+      console.log(`[Legal Opinion] tokens in=${result.usage.inTokens} out=${result.usage.outTokens} cost=$${result.usage.costUsd.toFixed(4)} actual-model=${actualModel} (synthesis only; digest logged separately)`);
       // Hitting the cap means the opinion was cut off mid-text — a quality
       // failure, not just a cost fact. Surface it loudly.
       if (result.usage.outTokens >= opinionMaxTokens) {
