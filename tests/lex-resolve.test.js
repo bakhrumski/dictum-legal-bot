@@ -443,6 +443,28 @@ test('agglutinated forms count as the same stem', () => {
     'cross-script stems should match');
 });
 
+test('generic stems ("ozbekiston", "kodeks") do not create relevance', () => {
+  // Run 7: every corpus chunk passed the gate because every law text contains
+  // "O'zbekiston" — six unrelated codes' article 69 reached the opinion.
+  const { prefixOverlap } = require('../src/rag/lex-resolve');
+  assert.strictEqual(
+    prefixOverlap(
+      'OʻZBEKISTON RESPUBLIKASI SOGʻLIQNI SAQLASH VAZIRLIGI autsorsing xizmatlar xarid',
+      'O\'zbekiston Respublikasining Oila kodeksi. Ota-onalik huquqlaridan mahrum qilish'
+    ), 0);
+  // ...but real shared subject-matter still counts.
+  assert.ok(prefixOverlap('autsorsing xizmatlar xarid qilish', 'Davlat xaridlari to‘g‘risida qonun') >= 1);
+});
+
+test('sanitizeActName strips article locators and bare numbers', () => {
+  const { sanitizeActName } = require('../src/rag/lex-resolve');
+  assert.strictEqual(
+    sanitizeActName('qonunning 55 va 69-moddalariga ko‘ra yagona taklif bo‘lganda tender yakunlanmaydi'),
+    'qonunning ko‘ra yagona taklif bo‘lganda tender yakunlanmaydi');
+  assert.strictEqual(sanitizeActName('14-modda'), '');
+  assert.strictEqual(sanitizeActName('Davlat xaridlari to‘g‘risidagi qonun'), 'Davlat xaridlari to‘g‘risidagi qonun');
+});
+
 test('procedural-code chunks score zero against an outsourcing subject', () => {
   // Run 6: the corpus returned Civil-Procedure/Criminal-Procedure/Tax-Code
   // articles for an outsourcing report — pure article-number resonance.

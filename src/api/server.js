@@ -5613,7 +5613,10 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       gold: MODELS.premium,      // Sol   $5/$30
       platinum: MODELS.premium,  // Sol
     };
-    let opinionMaxTokens = 5500;
+    // Uzbek tokenizes heavily (~3 tokens/word), so the "1200-1800 words"
+    // length rule plus HTML markup needs ~5-6.5k output tokens. 5500 sat
+    // EXACTLY at the rule's upper edge and run 7 truncated mid-opinion.
+    let opinionMaxTokens = 7000;
     let opinionModel = process.env.OPINION_MODEL || null;
     try {
       const u = await tariffModule.getUserPlan(req.session.adminId);
@@ -5645,7 +5648,7 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
           });
         }
         // Freemium opinions get a smaller output budget than paid tiers.
-        opinionMaxTokens = planKey === 'sinov' ? 3500 : 5500;
+        opinionMaxTokens = planKey === 'sinov' ? 4500 : 7000;
         if (!opinionModel) opinionModel = process.env['OPINION_MODEL_' + planKey.toUpperCase()] || OPINION_MODELS[planKey] || MODELS.standard;
       }
     } catch (qErr) { console.warn('[Legal Opinion] plan check failed (allowing):', qErr.message); }
@@ -5716,11 +5719,16 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       // relevant field, the nearest neighbours of "69-modda" are article 69
       // of unrelated codes — run 6 retrieved Civil-Procedure and
       // Criminal-Procedure articles purely on number resonance.
+      // Names are sanitized: the scanner's auto-captured "name" is often claim
+      // text with article locators ("55 va 69-moddalariga ko'ra..."), and the
+      // retriever's article-aware routing turns "69-modda" into article 69 of
+      // EVERY code (cross-law fallback) — run 7 cited six codes' article 69.
+      const { sanitizeActName } = require('../rag/lex-resolve');
       const ragQuery = [
         documentText.slice(0, 220).replace(/\s+/g, ' '),
         ...documentRefs.slice(0, 8)
           .filter(r => !r.foreign)
-          .map(r => [r.name, r.number && `${r.number}-son`].filter(Boolean).join(' ')),
+          .map(r => [sanitizeActName(r.name), r.number && `${r.number}-son`].filter(Boolean).join(' ')),
       ].filter(s => s && s.trim().length > 3).join('. ').slice(0, 1200);
       const ragResult = await retrieveLegalContext(ragQuery || docForAnalysis.slice(0, 1500), topic, null, {});
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
@@ -5735,7 +5743,7 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       try {
         const { prefixOverlap } = require('../rag/lex-resolve');
         const docSubject = documentText.slice(0, 300).replace(/\s+/g, ' ') + ' '
-          + documentRefs.slice(0, 8).map(r => r.name).filter(Boolean).join(' ');
+          + documentRefs.slice(0, 8).map(r => sanitizeActName(r.name)).filter(Boolean).join(' ');
         const kept = ragChunks.filter(c =>
           prefixOverlap(docSubject, `${c.law_name || ''} ${String(c.chunk_text || '').slice(0, 300)}`) >= 1);
         if (kept.length < ragChunks.length) {
@@ -5902,10 +5910,15 @@ Rewrite the opinion so that:
 - Nothing else changes: keep the same language, structure (<h2> sections) and all verified content.
 Return ONLY the corrected HTML body — no fences, no commentary.` },
           { role: 'user', text: `KONTEKST:\n${sourceText.slice(0, 12000)}\n\n─── XULOSA ───\n${html}` },
-        ], { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens,
+        ], { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens + 1000,
              userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion/fix-citations' });
         const fixed = tidyDocumentHtml((fix.text || '').trim().replace(/```(?:html)?/gi, '').trim());
-        if (fixed && fixed.length > 200) {
+        // A truncated rewrite is worse than the original with a disclosure
+        // note: never swap in a correction that ran out of budget mid-text.
+        const fixTruncated = fix.usage && fix.usage.outTokens >= opinionMaxTokens + 1000;
+        if (fixTruncated) {
+          console.warn('[Legal Opinion] correction pass output truncated — keeping the original opinion');
+        } else if (fixed && fixed.length > 200) {
           html = fixed;
           audit = auditOpinionCitations(html, sourceText);
         }
