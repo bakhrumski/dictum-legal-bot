@@ -598,16 +598,43 @@ function matchesReference(ref, hit) {
  * "xaridlari" and "xaridlarini" all count as the same stem. Cross-script safe
  * (both sides are transliterated by nameTokens).
  */
+// Stems too generic to indicate topical relatedness: nearly every Uzbek legal
+// text contains them, so counting them lets everything match everything (a
+// relevance gate that fired on "ozbekiston" kept article 69 of six unrelated
+// codes for an outsourcing report).
+const GENERIC_STEMS = new Set([
+  'ozbek', 'respub', 'davla', 'vazir', 'prezi', 'hukum', 'kodek', 'mahka',
+  'tasdi', 'belgi', 'muvof', 'asosi',
+]);
+
 function prefixOverlap(aText, bText) {
-  const a = nameTokens(aText);
-  const b = nameTokens(bText);
-  if (!a.length || !b.length) return 0;
-  const stems = b.map(t => t.slice(0, 5));
+  const stemsOf = (text) => new Set(
+    nameTokens(text).map(t => t.slice(0, 5)).filter(s => !GENERIC_STEMS.has(s))
+  );
+  const a = stemsOf(aText);
+  const b = stemsOf(bText);
+  if (!a.size || !b.size) return 0;
   let n = 0;
-  for (const t of new Set(a.map(t => t.slice(0, 5)))) {
-    if (stems.some(s => s === t)) n++;
-  }
+  for (const t of a) if (b.has(t)) n++;
   return n;
+}
+
+/**
+ * Clean an auto-captured act "name" for use in a retrieval query. The scanner
+ * takes whatever words follow the number, so a "name" is often claim text full
+ * of article locators — "qonunning 55 va 69-moddalariga ko'ra ...". Fed to a
+ * retriever with article-aware routing, "69-modda" fetches article 69 of every
+ * code in the corpus (cross-law fallback), which is how an outsourcing opinion
+ * cited six different codes' article 69. Strips article/clause locators and
+ * digit lists; returns '' when nothing meaningful is left.
+ */
+function sanitizeActName(name) {
+  let s = String(name || '');
+  s = s.replace(/\d[\d\s,–—-]*(?:va\s+\d+\s*)?[-–—]?\s*(?:modda\w*|band\w*|qism\w*|м\.|m\.)/giu, ' ');
+  s = s.replace(/(?<![\p{L}])\d+(?![\p{L}])/gu, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+  if (s.length < 6) return '';
+  return s.slice(0, 120);
 }
 
 /** Raw token-overlap count between a reference's name+claims and a title. */
@@ -740,6 +767,7 @@ module.exports = {
   gateAndCapHits,
   topicalOverlap,
   prefixOverlap,
+  sanitizeActName,
   scoringText,
   resolveReference,
   resolveReferences,
