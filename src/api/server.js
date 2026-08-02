@@ -604,6 +604,85 @@ app.get('/api/admin/spend-report', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// ── Model A/B harness (master only) ─────────────────────────────────────────
+// Runs the SAME questions through the SAME pipeline (real RAG context, real
+// prompt) on two models and reports objective differences: unverified
+// citations (the hallucination signal), answer length, latency and real cost.
+// Turns "is Luna good enough for chat?" into data instead of intuition.
+//   GET /api/admin/model-ab?a=gpt-5.6-terra&b=gpt-5.6-luna[&topic=fuqarolik]
+const AB_QUESTIONS = [
+  { q: "Mehnat shartnomasini ish beruvchi tashabbusi bilan bekor qilish tartibi qanday?", topic: 'mehnat' },
+  { q: "Ish haqi kechiktirilsa, xodim qanday choralar ko'rishi mumkin?", topic: 'mehnat' },
+  { q: "Fuqarolik shartnomasi qachon haqiqiy emas deb topiladi?", topic: 'fuqarolik' },
+  { q: "Yetkazilgan zararni undirish uchun da'vo muddati qancha?", topic: 'fuqarolik' },
+  { q: "Yakka tartibdagi tadbirkor qanday soliqlarni to'laydi?", topic: 'soliq' },
+  { q: "Tezlikni oshirganlik uchun jarima miqdori qancha?", topic: 'yol-harakati' },
+  { q: "Nikohni bekor qilishda mol-mulk qanday taqsimlanadi?", topic: 'oila' },
+  { q: "Ma'muriy huquqbuzarlik ishi bo'yicha shikoyat muddati qancha?", topic: 'mamuriy' },
+];
+
+app.get('/api/admin/model-ab', requireMasterAdmin, async (req, res) => {
+  const modelA = req.query.a || MODELS.standard;
+  const modelB = req.query.b || MODELS.cheap;
+  const limit = Math.min(parseInt(req.query.n, 10) || AB_QUESTIONS.length, AB_QUESTIONS.length);
+  const set = AB_QUESTIONS.slice(0, limit);
+  const out = { models: [modelA, modelB], questions: set.length, rows: [], totals: {} };
+
+  const runOne = async (model, question, topic) => {
+    const t0 = Date.now();
+    try {
+      // Identical grounding for both models — only the model differs.
+      const ragResult = await retrieveLegalContext(question, topic, null, {});
+      const ctx = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
+      const chunks = (ragResult && ragResult.chunks) || [];
+      const systemPrompt = buildTopicPrompt(topic, ctx, question);
+      const r = await callOpenAI(
+        [{ role: 'system', text: systemPrompt }, { role: 'user', text: question }],
+        { model, maxTokens: 2500, useSearch: false, userId: req.session.adminId, endpoint: '/api/admin/model-ab' }
+      );
+      const reply = normalizeResponseForUser(r.text || '');
+      const cit = verifyCitations(reply, chunks);
+      return {
+        ok: true,
+        ms: Date.now() - t0,
+        chars: reply.length,
+        citedTotal: cit.total,
+        unverified: cit.unverified.length,
+        unverifiedList: cit.unverified.slice(0, 6),
+        inTokens: r.usage ? r.usage.inTokens : 0,
+        outTokens: r.usage ? r.usage.outTokens : 0,
+        costUsd: r.usage ? Number(r.usage.costUsd.toFixed(5)) : 0,
+        preview: reply.substring(0, 240),
+      };
+    } catch (e) {
+      return { ok: false, ms: Date.now() - t0, error: e.message.substring(0, 160) };
+    }
+  };
+
+  for (const item of set) {
+    const [a, b] = await Promise.all([runOne(modelA, item.q, item.topic), runOne(modelB, item.q, item.topic)]);
+    out.rows.push({ question: item.q, topic: item.topic, a, b });
+  }
+
+  const agg = (key) => {
+    const sum = (side) => out.rows.reduce((n, r) => n + ((r[side] && r[side][key]) || 0), 0);
+    return { a: sum('a'), b: sum('b') };
+  };
+  const okCount = (side) => out.rows.filter(r => r[side] && r[side].ok).length;
+  out.totals = {
+    succeeded: { a: okCount('a'), b: okCount('b') },
+    unverifiedCitations: agg('unverified'),   // lower is better — the quality signal
+    citedTotal: agg('citedTotal'),
+    costUsd: (() => { const c = agg('costUsd'); return { a: Number(c.a.toFixed(5)), b: Number(c.b.toFixed(5)) }; })(),
+    avgMs: (() => { const m = agg('ms'); const n = out.rows.length || 1; return { a: Math.round(m.a / n), b: Math.round(m.b / n) }; })(),
+    avgChars: (() => { const c = agg('chars'); const n = out.rows.length || 1; return { a: Math.round(c.a / n), b: Math.round(c.b / n) }; })(),
+  };
+  out.verdict = out.totals.unverifiedCitations.b <= out.totals.unverifiedCitations.a
+    ? `${modelB} matched or beat ${modelA} on unverified citations — the cheaper model looks safe for this workload.`
+    : `${modelB} produced ${out.totals.unverifiedCitations.b - out.totals.unverifiedCitations.a} more unverified citations than ${modelA} — prefer ${modelA} for chat.`;
+  res.json(out);
+});
+
 // Audit trail viewer (master only): recent sensitive-data access + auth events.
 app.get('/api/admin/audit-log', requireMasterAdmin, async (req, res) => {
   try {
