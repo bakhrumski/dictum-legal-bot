@@ -5705,7 +5705,19 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     try { topic = await classifyLegalTopic(docForAnalysis.slice(0, 3000), { forcePick: true }); } catch (_) {}
     let ragContext = '', ragChunks = [];
     try {
-      const ragResult = await retrieveLegalContext(docForAnalysis.slice(0, 1500), topic, null, {});
+      // The corpus query is BUILT, not sliced. An arbitrary 1,500-char prefix
+      // of a digest retrieves whatever its opening paragraphs resemble — for
+      // an outsourcing report that was the Administrative Court Procedure
+      // Code, run after run. What actually identifies the relevant law is the
+      // document's subject line plus the acts it cites and the claims it makes
+      // about them.
+      const ragQuery = [
+        documentText.slice(0, 220).replace(/\s+/g, ' '),
+        ...documentRefs.slice(0, 8).map(r =>
+          [r.name, r.number && `${r.number}-son`].filter(Boolean).join(' ')),
+        ...documentRefs.slice(0, 5).flatMap(r => (r.claims || []).slice(0, 2)),
+      ].filter(s => s && s.trim().length > 3).join('. ').slice(0, 1500);
+      const ragResult = await retrieveLegalContext(ragQuery || docForAnalysis.slice(0, 1500), topic, null, {});
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragChunks = (ragResult && ragResult.chunks) || [];
     } catch (e) { console.warn('[Legal Opinion] RAG failed:', e.message); }
@@ -5734,7 +5746,10 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
         // not latency-per-reference.
         const MAX_REFS = parseInt(process.env.OPINION_MAX_REFS, 10) || 15;
         const top = documentRefs.slice(0, MAX_REFS);
-        const resolved = await resolveReferences(top, { concurrency: 4, maxDocs: 2, maxVariants: 5 });
+        // maxDocs 3: search-result order on lex.uz is not stable, and the true
+        // act (PF-200 in run 4 vs run 5) drifts in and out of the top 2. The
+        // per-reference hit cap keeps the extra candidates out of the context.
+        const resolved = await resolveReferences(top, { concurrency: 4, maxDocs: 3, maxVariants: 5 });
 
         // Total budget for live lex.uz text so a reference-heavy document
         // cannot crowd the uploaded document out of the context window.
@@ -5765,8 +5780,12 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
             // Say in the context itself whether the act's own number was
             // confirmed, so the model can rely on a confirmed act and hedge on
             // one matched only by subject.
+            // A number can match the wrong body's act of the same year, so a
+            // confirmed number with zero topical overlap still gets a caution.
             const badge = h.confirmed
-              ? `raqami tasdiqlandi: ${label}`
+              ? (h.overlap === 0 && (r.ref.claims || []).length
+                  ? `raqami mos (${label}), lekin mazmuni hujjat da'volariga mos kelmasligi mumkin — ehtiyot bo'ling`
+                  : `raqami tasdiqlandi: ${label}`)
               : `raqami tasdiqlanmadi — mavzu boʻyicha mos keldi (${label})`;
             ragContext += `\n\n[lex.uz (jonli): ${h.title} — ${badge}]\n${excerpt}`;
           }
