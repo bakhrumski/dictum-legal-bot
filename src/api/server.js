@@ -2976,10 +2976,20 @@ async function callCheapAI(messages, options = {}) {
 async function callPremiumAI(messages, options = {}) {
   if (process.env.GPT_API_KEY && await paidModelsAllowed()) {
     const model = options.model || MODELS.premium;
-    try {
-      return await callOpenAI(messages, { ...options, model, useSearch: false });
-    } catch (e) {
-      console.error(`[PremiumAI] ${model} FAILED (falling back to Gemini):`, e.message);
+    // premiumRetries: how many times to RE-TRY the premium model itself
+    // before falling down the chain. High-stakes callers (legal opinions for
+    // paid users) set this so a transient 429/timeout does not silently
+    // downgrade the one deliverable that must come from the strongest model —
+    // run 6 was billed at Terra rates while the log claimed Sol.
+    const attempts = 1 + Math.max(0, options.premiumRetries || 0);
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await callOpenAI(messages, { ...options, model, useSearch: false });
+      } catch (e) {
+        const last = i === attempts - 1;
+        console.error(`[PremiumAI] ${model} attempt ${i + 1}/${attempts} FAILED${last ? ' (falling back)' : ', retrying'}:`, e.message);
+        if (!last) await new Promise(r => setTimeout(r, 800 * (i + 1)));
+      }
     }
   } else {
     console.warn('[PremiumAI] Paid models unavailable (no GPT_API_KEY or daily budget reached) — using Gemini fallback.');
@@ -5607,10 +5617,14 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // Per-plan override via OPINION_MODEL_<PLAN>; global OPINION_MODEL wins
     // over everything. Falls back to Gemini (free tier) if OpenAI is down.
     // GPT-5.6 ladder: better plan -> stronger model.
+    // A legal opinion is the deliverable that justifies a paid plan — every
+    // paid tier gets Sol for the synthesis. Only the free trial runs cheaper.
+    // (Silver: 3 opinions/period × ~$0.14 Sol-vs-Terra delta ≈ +$0.42/month
+    // worst case — negligible against the quality difference.)
     const OPINION_MODELS = {
       sinov: MODELS.cheap,       // Luna  $1/$6
-      silver: MODELS.standard,   // Terra $2.50/$15
-      gold: MODELS.premium,      // Sol   $5/$30
+      silver: MODELS.premium,    // Sol   $5/$30
+      gold: MODELS.premium,      // Sol
       platinum: MODELS.premium,  // Sol
     };
     // Uzbek tokenizes heavily (~3 tokens/word), so the "1200-1800 words"
@@ -5886,7 +5900,10 @@ ${groundingRule}
       [{ role: 'system', text: systemPrompt }, { role: 'user', text: userText }],
       // useSearch OFF: hard source restriction — grounding comes exclusively
       // from the KONTEKST (qa-korpus + lex.uz-live excerpts assembled above).
-      { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
+      // premiumRetries 2: the synthesis MUST come from the requested model
+      // (Sol for every paid tier) — retry through transient 429s/timeouts
+      // rather than silently downgrading the deliverable to Terra.
+      { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens, premiumRetries: 2, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
     );
     let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
@@ -5910,7 +5927,7 @@ Rewrite the opinion so that:
 - Nothing else changes: keep the same language, structure (<h2> sections) and all verified content.
 Return ONLY the corrected HTML body — no fences, no commentary.` },
           { role: 'user', text: `KONTEKST:\n${sourceText.slice(0, 12000)}\n\n─── XULOSA ───\n${html}` },
-        ], { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens + 1000,
+        ], { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens + 1000, premiumRetries: 1,
              userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion/fix-citations' });
         const fixed = tidyDocumentHtml((fix.text || '').trim().replace(/```(?:html)?/gi, '').trim());
         // A truncated rewrite is worse than the original with a disclosure
@@ -5970,6 +5987,9 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
     res.json({
       html, provider: result.provider, topic, docHash,
       usage: (isMasterViewer && result.usage) ? result.usage : null,
+      // Master-only: true when the synthesis was NOT produced by the model
+      // this plan promises (e.g. Sol fell back to Terra even after retries).
+      modelDowngraded: isMasterViewer ? (result.provider || null) !== opinionModel : undefined,
     });
   } catch (e) {
     console.error('[Legal Opinion] error:', e.message);
