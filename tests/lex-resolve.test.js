@@ -135,6 +135,28 @@ test('merge keeps LLM-only numbered references the scanner missed', () => {
   assert.ok(merged.some(r => r.number === '4624'));
 });
 
+test('an LLM-extracted EU directive is flagged foreign at merge time', () => {
+  // "2014/24/EU direktivasi" arrives from the LLM extractor, so clause-local
+  // scanning never sees it; without a merge-time check its year resolves
+  // against lex.uz and matches some Uzbek act adopted in 2014.
+  const merged = mergeReferences(
+    [{ type: 'boshqa', name: '2014/24/EU direktivasi', number: '2014/24', claims: ['ochiq tanlov'] }], []);
+  const r = merged.find(x => /2014/.test(x.number) || /2014/.test(x.name));
+  assert.ok(r, 'directive lost in merge');
+  assert.strictEqual(r.foreign, 'Yevropa Ittifoqi');
+  assert.deepStrictEqual(queryVariants(r), []);
+});
+
+test('a prefixless year-like number is not queried as "<year>-сон"', () => {
+  const v = queryVariants({ number: '2014', prefix: '', name: '', date: '', claims: [] });
+  assert.ok(!v.some(q => /^2014-сон/.test(q)), `got [${v.join(' | ')}]`);
+});
+
+test('a name query is tried in Cyrillic — the script lex.uz indexes', () => {
+  const v = queryVariants({ number: '', prefix: '', name: 'Davlat xaridlari to‘g‘risida', date: '' });
+  assert.ok(v.some(q => /давлат харидлари тўғрисида/.test(q)), `got [${v.join(' | ')}]`);
+});
+
 test('merge keeps name-only references', () => {
   const merged = mergeReferences([{ type: 'kodeks', name: 'Fuqarolik kodeksi', number: '', claims: ['8-modda'] }], []);
   assert.ok(merged.some(r => r.name === 'Fuqarolik kodeksi'));
@@ -161,9 +183,9 @@ test('falls back to bare and Latin forms when the prefix is unknown', () => {
   assert.ok(v.includes('16-son'));
 });
 
-test('a name-only reference still produces a query', () => {
+test('a name-only reference still produces a query (Cyrillic first)', () => {
   const v = queryVariants({ number: '', prefix: '', name: 'Fuqarolik kodeksi', date: '' });
-  assert.deepStrictEqual(v, ['Fuqarolik kodeksi']);
+  assert.deepStrictEqual(v, ['фуқаролик кодекси', 'Fuqarolik kodeksi']);
 });
 
 test('no query is emitted for an empty reference', () => {
@@ -239,7 +261,7 @@ test('"X to‘g‘risidagi Qonun" is a real title, not a description', () => {
 console.log('\nlex-resolve — identity gate\n');
 
 const hit = (title, document_number, adoption_date, extra = {}) =>
-  ({ title, url: 'https://lex.uz/docs/1', head: extra.head || '', metadata: { document_number, adoption_date, act_form: extra.act_form, publication: extra.publication } });
+  ({ title, url: 'https://lex.uz/docs/1', head: extra.head || '', tail: extra.tail || '', metadata: { document_number, adoption_date, act_form: extra.act_form, publication: extra.publication } });
 
 test('accepts a document whose OWN number matches', () => {
   const v = matchesReference({ number: '306', name: '' }, hit('Autsorsing to‘g‘risida', '306', '2026-06-12'));
@@ -265,12 +287,42 @@ test('reads the number from the document head ("596-сон")', () => {
   assert.strictEqual(v.ok, true, v.why);
 });
 
-test('a number stated anywhere on the page beats a wrong one elsewhere', () => {
-  const own = require('../src/rag/lex-resolve').documentOwnNumbers(
-    hit('T', null, null, { act_form: 'ҚАРОР N 596', head: 'ПҚ-4624 га мувофиқ' })
-  );
-  assert.ok(own.has('596'));
-  assert.ok(own.has('4624'));
+test('the registry path yields the ACT number, not the registration index', () => {
+  // "03/21/684/0367-сон" is the national-registry form: 684 is the Public
+  // Procurement Law's number, 0367 only its registration index. Capturing
+  // 0367 made the gate reject the real law — the biggest miss of run 4.
+  const { documentOwnNumbers } = require('../src/rag/lex-resolve');
+  const own = documentOwnNumbers(hit('Давлат харидлари тўғрисида', null, null,
+    { publication: 'Қонунчилик маълумотлари миллий базаси, 23.04.2021 й., 03/21/684/0367-сон' }));
+  assert.ok(own.strong.has('684'), `expected 684, strong=[${[...own.strong]}]`);
+  assert.ok(!own.strong.has('0367'), 'registration index leaked as a document number');
+});
+
+test('a law\'s number in the signature block (tail) is strong identity', () => {
+  const v = matchesReference({ number: '684', name: '' },
+    hit('Давлат харидлари тўғрисида', null, null,
+      { tail: 'Ўзбекистон Республикасининг Президенти Ш. МИРЗИЁЕВ\nТошкент ш.,\n2021 йил 22 апрель,\nЎРҚ-684-сон' }));
+  assert.strictEqual(v.ok, true, v.why);
+  assert.strictEqual(v.confirmed, true);
+});
+
+test('an amendment decree targeting the act is kept but never confirmed', () => {
+  // "...16-сон қарорига ўзгартириш киритиш тўғрисида" MENTIONS 16 in its
+  // title; it amends the act, it is not the act.
+  const v = matchesReference({ number: '16', name: '' },
+    hit('Ҳукуматнинг 16-сон қарорига ўзгартириш ва қўшимчалар киритиш тўғрисида', null, null));
+  assert.strictEqual(v.ok, true, v.why);
+  assert.strictEqual(v.confirmed, false, 'amendment must not be a confirmed identity');
+});
+
+test('a strong number mismatch is not overridden by a weak mention', () => {
+  // The outsourcing decree (own number 596) cites 306 in its preamble; that
+  // mention must not let it pass as decree 306.
+  const v = matchesReference({ number: '306', name: '' },
+    hit('Аутсорсинг хизматларини ташкил этиш тўғрисида', null, null,
+      { act_form: 'ВАЗИРЛАР МАҲКАМАСИНИНГ ҚАРОРИ N 596', head: '306-сон қарорга мувофиқ ишлаб чиқилган' }));
+  assert.strictEqual(v.ok, false);
+  assert.match(v.why, /raqam mos emas/);
 });
 
 test('rejects the full-text false positive that broke production', () => {

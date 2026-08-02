@@ -267,6 +267,20 @@ function scanBareReferences(text) {
  * document number. The LLM contributes `claims` (what the document asserts
  * about the act); the scanner contributes coverage and the lex.uz prefix.
  */
+/**
+ * Foreign check for a reference AS EXTRACTED (by the LLM), where the evidence
+ * sits in the ref's own fields rather than in surrounding document text:
+ * "2014/24/EU direktivasi", "Turkiyaning 4734-son qonuni". Without this, an
+ * EU directive's year resolves against lex.uz and matches some Uzbek act
+ * adopted in 2014.
+ */
+function refLooksForeign(r) {
+  const s = [r.name, r.number, r.type].filter(Boolean).join(' ');
+  if (/\d{4}\s*\/\s*\d{1,4}(\s*\/\s*(EU|EC|ЕС))?/iu.test(s) && /\bEU\b|\bEC\b|direktiv/iu.test(s)) return 'Yevropa Ittifoqi';
+  for (const [re, label] of FOREIGN_HINTS) if (re.test(s)) return label;
+  return '';
+}
+
 function mergeReferences(llmRefs = [], scanned = []) {
   // The scanner's "name" is whatever words trail the number, so it is often
   // just the act type ("qarori", "nizomi"). A real name from the LLM beats it.
@@ -287,12 +301,13 @@ function mergeReferences(llmRefs = [], scanned = []) {
 
   for (const r of llmRefs) {
     const d = digitsOf(r.number);
+    const foreign = refLooksForeign(r);
     if (!d) {
       // Named-only reference (e.g. "Fuqarolik kodeksi") — keep as-is.
       byDigits.set(`name:${(r.name || '').toLowerCase()}`, {
         type: r.type || 'boshqa', name: r.name || '', number: '', date: r.date || '',
         claims: r.claims || [], prefix: '', key: `name:${r.name}`, confidence: 'high',
-        foreign: '', hits: 1,
+        foreign, hits: 1,
       });
       continue;
     }
@@ -302,12 +317,13 @@ function mergeReferences(llmRefs = [], scanned = []) {
       if (r.name && isGenericName(existing.name)) existing.name = r.name;
       if (!existing.date && r.date) existing.date = r.date;
       if (existing.type === 'boshqa' && r.type) existing.type = r.type;
+      if (!existing.foreign && foreign) existing.foreign = foreign;
       existing.confidence = 'high';
     } else {
       byDigits.set(d, {
         type: r.type || 'boshqa', name: r.name || '', number: d, date: r.date || '',
         claims: r.claims || [], prefix: '', key: `?-${d}`, confidence: 'high',
-        foreign: '', hits: 1,
+        foreign, hits: 1,
       });
     }
   }
@@ -363,7 +379,12 @@ function queryVariants(ref) {
   const year = (String(ref.date || '').match(/(?:19|20)\d{2}/) || [])[0] || '';
   const cyr = CYR_PREFIX[canonPrefix(ref.prefix)] || '';
 
-  if (num) {
+  // A prefixless number that reads as a year (2014, 1996) is almost never a
+  // real Uzbek act number in a report — it is a directive year or a date
+  // fragment, and querying "2014-сон" can only match the wrong document.
+  const yearLike = !cyr && /^(?:19|20)\d{2}$/.test(num);
+
+  if (num && !yearLike) {
     if (cyr) {
       out.push(`${cyr}-${num}-сон`);
       out.push(`${cyr}-${num}`);
@@ -373,8 +394,14 @@ function queryVariants(ref) {
     out.push(`${num}-son`);
     if (name && !isDescriptiveName(name)) out.push(`${num}-son ${name}`.slice(0, 120));
   }
-  // A name-only query is worth trying only when the name is an actual title.
-  if (name && name.length >= 6 && !isDescriptiveName(name)) out.push(name.slice(0, 120));
+  // A name-only query is worth trying only when the name is an actual title —
+  // and in Cyrillic first, since that is the script lex.uz's index speaks.
+  if (name && name.length >= 6 && !isDescriptiveName(name)) {
+    const cyrName = translitToCyr(name).slice(0, 120);
+    out.push(cyrName);
+    if (num && !yearLike) out.push(`${num}-сон ${cyrName}`.slice(0, 120));
+    out.push(name.slice(0, 120));
+  }
 
   // Dedupe, drop anything too short for searchLexUz.
   return [...new Set(out)].filter(q => q.length >= 3);
@@ -408,6 +435,27 @@ const UZ_CYR_TO_LAT = {
   'ъ': '', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'ы': 'i',
 };
 
+// Latin → Uzbek Cyrillic, for building lex.uz QUERIES: the search index is
+// predominantly Cyrillic, so "Davlat xaridlari to'g'risida" finds nothing
+// while "Давлат харидлари тўғрисида" finds the law. Digraphs first.
+const UZ_LAT_TO_CYR_DIGRAPHS = [
+  [/o['`‘’ʻ]/gi, 'ў'], [/g['`‘’ʻ]/gi, 'ғ'], [/sh/gi, 'ш'], [/ch/gi, 'ч'],
+  [/yo/gi, 'ё'], [/yu/gi, 'ю'], [/ya/gi, 'я'], [/ts/gi, 'ц'],
+];
+const UZ_LAT_TO_CYR = {
+  a: 'а', b: 'б', d: 'д', e: 'е', f: 'ф', g: 'г', h: 'ҳ', i: 'и', j: 'ж',
+  k: 'к', l: 'л', m: 'м', n: 'н', o: 'о', p: 'п', q: 'қ', r: 'р', s: 'с',
+  t: 'т', u: 'у', v: 'в', x: 'х', y: 'й', z: 'з',
+};
+
+function translitToCyr(s) {
+  let t = String(s || '').toLowerCase().replace(/[’‘`´ʼ]/g, "'");
+  for (const [re, cyr] of UZ_LAT_TO_CYR_DIGRAPHS) t = t.replace(re, cyr);
+  let out = '';
+  for (const ch of t) out += UZ_LAT_TO_CYR[ch] || ch;
+  return out;
+}
+
 function translitUz(s) {
   let out = '';
   for (const ch of String(s || '')) {
@@ -439,28 +487,52 @@ function nameTokens(s) {
  * @returns {{ok: boolean, why: string}}
  */
 /**
- * Every number a lex.uz page states as its OWN — from the parsed metadata, the
- * title, the act-form line, the publication origin and the document head.
- * A lex.uz ACT_TITLE usually carries only the act's NAME, so relying on the
- * title alone declares almost every document "raqami aniqlanmadi" and rejects
- * even correct matches.
+ * Every number a lex.uz page states as its OWN, split by evidence strength.
+ *
+ * STRONG — declarations of identity: parsed metadata, the act-form line
+ * ("ВАЗИРЛАР МАҲКАМАСИНИНГ ҚАРОРИ ... N 596"), the national-registry path
+ * ("03/21/684/0367" — segment 3 is the act's number, the tail only a
+ * registration index), "№ N" anywhere, prefixed codes (ЎРҚ-684), and the
+ * signature block in the document TAIL, which is where lex.uz puts a law's
+ * number.
+ *
+ * WEAK — bare "N-сон" occurrences in the title/head. These are usually the
+ * document talking about itself, but in amendment decrees ("...306-сон
+ * қарорига ўзгартириш...") and preamble citations they name OTHER documents,
+ * so they can support identity but never override a strong number.
  */
 function documentOwnNumbers(hit) {
   const meta = (hit && hit.metadata) || {};
-  const out = new Set();
+  const strong = new Set();
+  const weak = new Set();
 
   const fromMeta = numberDigits(meta.document_number);
-  if (fromMeta) out.add(fromMeta);
+  if (fromMeta) strong.add(fromMeta);
 
-  const surfaces = [hit && hit.title, meta.act_form, meta.publication, hit && hit.head]
+  const strongSurfaces = [meta.act_form, meta.publication, hit && hit.tail]
+    .filter(Boolean).join('\n');
+  const weakSurfaces = [hit && hit.title, hit && hit.head]
     .filter(Boolean).join('\n');
 
-  // "596-сон", "596-son", "№ 596", "N 596", "ПҚ-4624"
-  for (const m of surfaces.matchAll(/(?<![\p{L}\p{N}])(\d{1,5})\s*[-–—]\s*(?:son|сон)(?![\p{L}\p{N}])/giu)) out.add(m[1]);
-  for (const m of surfaces.matchAll(/(?:№|\bN\b)\s*[-–—]?\s*(\d{1,5})(?![\p{L}\p{N}])/gu)) out.add(m[1]);
-  for (const m of surfaces.matchAll(/(?<![\p{L}\p{N}])[A-ZА-ЯЎҚҒҲ]{1,4}\s*[-–—]\s*(\d{1,5})(?![\p{L}\p{N}])/gu)) out.add(m[1]);
+  const collect = (text, into) => {
+    // Registry path first — its digits must not leak into the generic patterns.
+    let t = String(text);
+    for (const m of t.matchAll(/\b\d{2}\/\d{2}\/(\d{1,5})\/\d{3,5}\b/g)) into.add(m[1]);
+    t = t.replace(/\b\d{2}\/\d{2}\/\d{1,5}\/\d{3,5}\b/g, ' ');
+    for (const m of t.matchAll(/(?<![\p{L}\p{N}])(\d{1,5})\s*[-–—]\s*(?:son|сон)(?![\p{L}\p{N}])/giu)) into.add(m[1]);
+    for (const m of t.matchAll(/(?:№|\bN\b)\s*[-–—]?\s*(\d{1,5})(?![\p{L}\p{N}])/gu)) into.add(m[1]);
+    for (const m of t.matchAll(/(?<![\p{L}\p{N}])[A-ZА-ЯЎҚҒҲ]{2,4}\s*[-–—]\s*(\d{1,5})(?![\p{L}\p{N}])/gu)) into.add(m[1]);
+  };
+  collect(strongSurfaces, strong);
+  collect(weakSurfaces, weak);
 
-  return out;
+  return { strong, weak };
+}
+
+/** "...қарорига ўзгартириш(лар) киритиш..." — an act ABOUT another act. */
+function isAmendmentTitle(title) {
+  return /ўзгартириш|ўзгартиш|қўшимча(?:лар)?\s+киритиш|o['`‘’]?zgartirish|qo['`‘’]?shimcha(?:lar)?\s+kiritish/iu
+    .test(String(title || ''));
 }
 
 /**
@@ -477,21 +549,34 @@ function matchesReference(ref, hit) {
   const title = String(hit && hit.title || '');
 
   if (wantNum) {
-    const own = documentOwnNumbers(hit);
+    const { strong, weak } = documentOwnNumbers(hit);
 
-    if (own.has(wantNum)) {
-      // Number matches. If the reference carries a year, the act's adoption
-      // year must agree — acts reuse numbers across years.
-      const wantYear = (String(ref.date || '').match(/(?:19|20)\d{2}/) || [])[0];
-      const gotYear = (String(meta.adoption_date || '').match(/^(\d{4})/) || [])[1];
-      if (wantYear && gotYear && wantYear !== gotYear) {
-        return { ok: false, why: `yil mos emas (kutilgan ${wantYear}, topilgan ${gotYear})` };
-      }
+    // Acts reuse numbers across years — a matching number from the wrong year
+    // is a different act.
+    const wantYear = (String(ref.date || '').match(/(?:19|20)\d{2}/) || [])[0];
+    const gotYear = (String(meta.adoption_date || '').match(/^(\d{4})/) || [])[1];
+    const yearOk = !(wantYear && gotYear && wantYear !== gotYear);
+
+    if (strong.has(wantNum)) {
+      if (!yearOk) return { ok: false, why: `yil mos emas (kutilgan ${wantYear}, topilgan ${gotYear})` };
       return { ok: true, why: 'raqam mos', confirmed: true };
     }
 
-    if (own.size) {
-      return { ok: false, why: `raqam mos emas (kutilgan ${wantNum}, hujjatda ${[...own].slice(0, 3).join('/')})` };
+    // The page firmly claims to be a DIFFERENT act. A weak mention of the
+    // wanted number elsewhere on it (amendment target, preamble citation)
+    // must not override that.
+    if (strong.size) {
+      return { ok: false, why: `raqam mos emas (kutilgan ${wantNum}, hujjatda ${[...strong].slice(0, 3).join('/')})` };
+    }
+
+    if (weak.has(wantNum)) {
+      if (!yearOk) return { ok: false, why: `yil mos emas (kutilgan ${wantYear}, topilgan ${gotYear})` };
+      // An amendment decree that TARGETS the wanted act is related material,
+      // not the act itself — keep it, but never as a confirmed identity.
+      if (isAmendmentTitle(title)) {
+        return { ok: true, why: `oʻzgartirish hujjati (${wantNum}-son hujjatga)`, confirmed: false };
+      }
+      return { ok: true, why: 'raqam sarlavhada', confirmed: true };
     }
 
     // Identity indeterminate: the page never states its own number. Fall back
@@ -603,6 +688,8 @@ module.exports = {
   isDescriptiveName,
   matchesReference,
   documentOwnNumbers,
+  isAmendmentTitle,
+  translitToCyr,
   scoringText,
   resolveReference,
   resolveReferences,
