@@ -14,6 +14,7 @@
 const assert = require('assert');
 const {
   scanBareReferences, mergeReferences, scanWeight, queryVariants, mapLimit,
+  isDescriptiveName, matchesReference, scoringText,
 } = require('../src/rag/lex-resolve');
 
 let passed = 0, failed = 0;
@@ -38,7 +39,8 @@ tasdiqlangan reglament ham amal qiladi (306, 7–12-m.; 684).
 O'zbekiston Respublikasi Prezidentining 27.11.2023 sanali PF-200 farmoni
 hamda 18.11.2025 sanali F-59 farmoyishi ham inobatga olingan.
 
-Xorijiy tajriba sifatida Turkiya va OECD hujjatlari keltirilgan.
+Turkiyaning 4734 va 4735-son qonunlari hamda Yevropa Ittifoqining 2014/24/EU
+direktivasi qiyoslash uchun keltirilgan. OECD tahlillari ham mavjud.
 `;
 
 console.log('\nlex-resolve — scanning\n');
@@ -92,6 +94,18 @@ test('infers act type and lex.uz prefix from surrounding words', () => {
 test('captures a nearby date', () => {
   const refs = scanBareReferences('27.11.2023 sanali PF-200 farmoni');
   assert.strictEqual(refs[0].date, '27.11.2023');
+});
+
+test('splits a list sharing one "-son" suffix ("276, 596-son qarorlar")', () => {
+  const refs = scanBareReferences('Hisobot 276, 596-son qarorlarga tayangan.');
+  const nums = refs.map(r => r.number).sort();
+  assert.deepStrictEqual(nums, ['276', '596'], `got [${nums.join(', ')}]`);
+});
+
+test('a listed number is not double-counted by the single-number pass', () => {
+  const refs = scanBareReferences('4734 va 4735-son qonunlari');
+  const last = refs.find(r => r.number === '4735');
+  assert.strictEqual(last.hits, 1, `hits=${last.hits}`);
 });
 
 test('counts repeat citations rather than duplicating the reference', () => {
@@ -154,6 +168,121 @@ test('a name-only reference still produces a query', () => {
 
 test('no query is emitted for an empty reference', () => {
   assert.deepStrictEqual(queryVariants({ number: '', prefix: '', name: '', date: '' }), []);
+});
+
+console.log('\nlex-resolve — foreign instruments\n');
+
+test('Turkish law numbers are flagged foreign, not searched on lex.uz', () => {
+  const refs = scanBareReferences(REPORT);
+  const t = refs.filter(r => ['4734', '4735'].includes(r.number));
+  assert.strictEqual(t.length, 2, `expected 4734 and 4735, got ${t.length}`);
+  for (const r of t) {
+    assert.strictEqual(r.foreign, 'Turkiya', `${r.number} not flagged foreign`);
+    assert.deepStrictEqual(queryVariants(r), [], `${r.number} still produces a lex.uz query`);
+  }
+});
+
+test('an EU directive year is not treated as an Uzbek document number', () => {
+  const refs = scanBareReferences('Yevropa Ittifoqining 2014/24/EU direktivasi');
+  for (const r of refs) assert.ok(r.foreign, `"${r.number}" leaked as a domestic reference`);
+});
+
+test('jurisdiction attribution is clause-local, not window-based', () => {
+  // A domestic act wrongly marked foreign is never looked up at all — the very
+  // failure this pipeline exists to fix — so a comparative report that names
+  // Turkey or the EU nearby must not contaminate the Uzbek acts around it.
+  const cases = [
+    ['Turkiyaning 4734 va 4735-son qonunlari; 306-sonli qaror; 684-sonli qonun.', { 4734: 'F', 4735: 'F', 306: '', 684: '' }],
+    ['Turkiya tajribasi keltirilgan. Vazirlar Mahkamasining 306-sonli qarori.', { 306: '' }],
+    ['Yevropa Ittifoqining 2014/24/EU direktivasi va 16-sonlili qaror', { 16: '' }],
+    ['Turkiyaning 4734 va 4735-son qonunlari, Yevropa Ittifoqi qoidalari hamda 276-sonli ijro Nizomi.', { 4734: 'F', 4735: 'F', 276: '' }],
+    ['OECD tavsiyalari va 596-sonli qaror', { 596: '' }],
+    ['Angliyaning 2012-son akti', { 2012: 'F' }],
+  ];
+  for (const [text, expected] of cases) {
+    for (const r of scanBareReferences(text)) {
+      const want = expected[r.number];
+      if (want === undefined) continue;
+      assert.strictEqual(r.foreign ? 'F' : '', want,
+        `"${text}" → ${r.number} expected ${want || 'domestic'}, got ${r.foreign || 'domestic'}`);
+    }
+  }
+});
+
+test('domestic references are NOT flagged foreign', () => {
+  const refs = scanBareReferences(REPORT);
+  const domestic = refs.find(r => r.number === '306');
+  assert.strictEqual(domestic.foreign, '');
+  assert.ok(queryVariants(domestic).length > 0);
+});
+
+console.log('\nlex-resolve — descriptive names\n');
+
+test('a described act is not searched verbatim', () => {
+  assert.ok(isDescriptiveName('Davlat korxonalarida xarajatlarni kamaytirish va samaradorlikka oid prezident hujjati'));
+  assert.ok(isDescriptiveName('xarid tartibiga doir qaror'));
+  assert.deepStrictEqual(
+    queryVariants({ number: '', name: 'Davlat korxonalarida xarajatlarni kamaytirishga oid prezident hujjati', prefix: '', date: '' }),
+    []
+  );
+});
+
+test('a real title is still searched', () => {
+  assert.ok(!isDescriptiveName('Davlat xaridlari to‘g‘risida'));
+  assert.ok(queryVariants({ number: '', name: 'Davlat xaridlari to‘g‘risida', prefix: '', date: '' }).length > 0);
+});
+
+console.log('\nlex-resolve — identity gate\n');
+
+const hit = (title, document_number, adoption_date) =>
+  ({ title, url: 'https://lex.uz/docs/1', metadata: { document_number, adoption_date } });
+
+test('accepts a document whose OWN number matches', () => {
+  const v = matchesReference({ number: '306', name: '' }, hit('Autsorsing to‘g‘risida', '306', '2026-06-12'));
+  assert.strictEqual(v.ok, true, v.why);
+});
+
+test('rejects the full-text false positive that broke production', () => {
+  // lex.uz search for "306-сон" returned a burial-benefit regulation that
+  // merely MENTIONS 306 somewhere in its body.
+  const v = matchesReference(
+    { number: '306', name: '' },
+    hit('ДАФН ЭТИШГА НАФАҚА ТАЙИНЛАШ ВА ТЎЛАШ ТАРТИБИ ТЎҒРИСИДАГИ НИЗОМ', '870', '2011-12-30')
+  );
+  assert.strictEqual(v.ok, false);
+  assert.match(v.why, /raqam mos emas/);
+});
+
+test('rejects a right number from the wrong year', () => {
+  const v = matchesReference({ number: '306', date: '2026-yil' }, hit('Boshqa qaror', '306', '2011-05-04'));
+  assert.strictEqual(v.ok, false);
+  assert.match(v.why, /yil mos emas/);
+});
+
+test('accepts when the number is only in the title, not the metadata', () => {
+  const v = matchesReference({ number: '306', name: '' }, hit('Vazirlar Mahkamasining 306-son qarori', null, null));
+  assert.strictEqual(v.ok, true, v.why);
+});
+
+test('rejects when neither metadata nor title carries the number', () => {
+  const v = matchesReference({ number: '306', name: '' }, hit('Qandaydir boshqa hujjat', null, null));
+  assert.strictEqual(v.ok, false);
+});
+
+test('name-only reference needs real title overlap, not one lucky word', () => {
+  const ref = { number: '', name: 'Davlat xaridlari to‘g‘risida' };
+  assert.strictEqual(matchesReference(ref, hit('Давлат харидлари тўғрисида', null, null)).ok, false,
+    'Cyrillic title should not accidentally pass on Latin tokens');
+  assert.strictEqual(matchesReference(ref, hit('Davlat xaridlari to‘g‘risidagi Qonun', null, null)).ok, true);
+  assert.strictEqual(matchesReference(ref, hit('Davlat ijtimoiy sug‘urtasi to‘g‘risida', null, null)).ok, false);
+});
+
+console.log('\nlex-resolve — excerpt targeting\n');
+
+test('scoringText uses the claims, not the document number', () => {
+  const s = scoringText({ number: '684', name: 'Davlat xaridlari to‘g‘risida', claims: ['55 va 69-moddalariga ko‘ra yagona taklif'] });
+  assert.ok(/55 va 69-moddalariga/.test(s), s);
+  assert.ok(/Davlat xaridlari/.test(s), s);
 });
 
 console.log('\nlex-resolve — concurrency\n');

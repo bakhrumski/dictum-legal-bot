@@ -5721,7 +5721,8 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // repealed documents, so only active law reaches the context.
     // Which references could NOT be resolved — reported to the model so it can
     // say WHY something is unverified instead of a bare "tasdiqlanmadi".
-    const lexUnresolved = [];
+    const lexUnresolved = [];   // "306-son qaror — lex.uz da natija yo'q"
+    const lexForeign = [];      // "4734 — Turkiya" (never on lex.uz by definition)
     {
       try {
         const { resolveReferences } = require('../rag/lex-resolve');
@@ -5730,7 +5731,7 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
         // not latency-per-reference.
         const MAX_REFS = parseInt(process.env.OPINION_MAX_REFS, 10) || 15;
         const top = documentRefs.slice(0, MAX_REFS);
-        const resolved = await resolveReferences(top, { concurrency: 4, maxDocs: 1, maxVariants: 4 });
+        const resolved = await resolveReferences(top, { concurrency: 4, maxDocs: 2, maxVariants: 4 });
 
         // Total budget for live lex.uz text so a reference-heavy document
         // cannot crowd the uploaded document out of the context window.
@@ -5739,9 +5740,17 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
 
         for (const r of resolved) {
           const label = [r.ref.number, r.ref.name].filter(Boolean).join(' ').trim() || r.ref.name || '?';
+          if (r.ref.foreign) {
+            lexForeign.push(`${label} — ${r.ref.foreign}`);
+            console.log(`[Legal Opinion]   ⊘ ${label} — foreign (${r.ref.foreign}), lex.uz skipped`);
+            continue;
+          }
           if (!r.hits || !r.hits.length) {
-            lexUnresolved.push(label);
-            console.log(`[Legal Opinion]   ✗ ${label} — lex.uz: no result (tried: ${(r.tried || []).join(' | ') || 'no query'})${r.error ? ` [${r.error}]` : ''}`);
+            lexUnresolved.push(`${label} — ${r.reason || 'lex.uz da natija yoʻq'}`);
+            // Rejected candidates are the interesting half of a failure: they
+            // show lex.uz full-text matching a number inside an unrelated act.
+            const rej = (r.rejected || []).map(x => `${x.title ? x.title.slice(0, 60) : x.url} [${x.why}]`).join('; ');
+            console.log(`[Legal Opinion]   ✗ ${label} — ${r.reason || 'no result'} (tried: ${(r.tried || []).join(' | ') || 'no query'})${rej ? ` | rejected: ${rej}` : ''}${r.error ? ` [${r.error}]` : ''}`);
             continue;
           }
           for (const h of r.hits) {
@@ -5752,9 +5761,10 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
             lexLiveSources.push({ title: h.title, url: h.url });
             ragContext += `\n\n[lex.uz (jonli): ${h.title}]\n${excerpt}`;
           }
-          console.log(`[Legal Opinion]   ✓ ${label} — via "${r.query}" → ${r.hits.map(h => h.url).join(', ')}`);
+          const rej = (r.rejected || []).length;
+          console.log(`[Legal Opinion]   ✓ ${label} — via "${r.query}" → ${r.hits.map(h => `${h.url} (#${(h.metadata && h.metadata.document_number) || '?'})`).join(', ')}${rej ? ` | ${rej} candidate(s) rejected` : ''}`);
         }
-        console.log(`[Legal Opinion] lex.uz-live supplement: ${lexLiveSources.length} doc(s) for ${top.length}/${documentRefs.length} reference(s), ${lexUsed} chars, ${lexUnresolved.length} unresolved`);
+        console.log(`[Legal Opinion] lex.uz-live supplement: ${lexLiveSources.length} doc(s) for ${top.length}/${documentRefs.length} reference(s), ${lexUsed} chars, ${lexUnresolved.length} unresolved, ${lexForeign.length} foreign`);
       } catch (e) { console.warn('[Legal Opinion] lex.uz-live supplement failed:', e.message); }
     }
 
@@ -5790,9 +5800,11 @@ ${groundingRule}
 - Formal, precise legal language. No fabricated facts.
 - LENGTH DISCIPLINE (important): the whole opinion must be COMPLETE within roughly 1200-1800 words. Never leave a section, sentence or list unfinished — if the material is large, write more concisely (shorter clauses in Faktlar, tighter Tahlil) rather than running out of space. Xulosa must always be present and fully written.`;
 
-    const unresolvedBlock = lexUnresolved.length
-      ? `\n\nTEKSHIRILMAGAN HAVOLALAR (hujjat ularga tayanadi, lekin lex.uz qidiruvi natija bermadi — ularni amaldagi normativ asos sifatida ishlatmang, sababini ko'rsating):\n${lexUnresolved.map(l => `- ${l}`).join('\n')}`
-      : '';
+    const unresolvedBlock = (lexUnresolved.length
+      ? `\n\nTEKSHIRILMAGAN HAVOLALAR (hujjat ularga tayanadi, lekin lex.uz'da tasdiqlanmadi — ularni amaldagi normativ asos sifatida ishlatmang, har biri uchun sababini ko'rsating):\n${lexUnresolved.map(l => `- ${l}`).join('\n')}`
+      : '') + (lexForeign.length
+      ? `\n\nXORIJIY MANBALAR (O'zbekiston qonunchiligi emas — lex.uz'da bo'lishi mumkin emas; hujjatning o'z bayoniga tayanib tavsiflang, normativ asos sifatida ishlatmang):\n${lexForeign.map(l => `- ${l}`).join('\n')}`
+      : '');
     const userText =
 `KONTEKST (O'zbekiston qonunchiligidan tegishli parchalar):\n${ragContext || '(kontekst topilmadi — faqat ishonchli umumiy normalarga tayaning, modda raqamini taxmin qilmang)'}${unresolvedBlock}\n\n─── YUKLANGAN HUJJAT (yoki uning to'liq dayjesti) ───\n${docForAnalysis}\n─── HUJJAT TUGADI ───\n\nYuqoridagi hujjat bo'yicha to'liq yuridik xulosa tayyorlang.`;
 

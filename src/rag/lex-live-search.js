@@ -28,10 +28,15 @@ const SEARCH_TIMEOUT_MS = 15000;
  * @param {object} opts
  * @param {number} opts.maxDocs - max documents to fetch (default 2)
  * @param {number} opts.maxChars - max chars per excerpt (default 4000)
+ * @param {string} opts.scoreText - text used to pick WHICH sections to excerpt,
+ *   when it differs from the search query. Searching by document number finds
+ *   the act; the number is then useless for choosing sections inside it (it
+ *   only appears in the preamble), so callers that know what they are looking
+ *   for — the claims a report makes about the act — pass that here instead.
  * @returns {Promise<Array<{ title, url, content, source, metadata }>>}
  */
 async function searchLexUz(query, opts = {}) {
-  const { maxDocs = MAX_DOCS_TO_FETCH, maxChars = MAX_EXCERPT_CHARS } = opts;
+  const { maxDocs = MAX_DOCS_TO_FETCH, maxChars = MAX_EXCERPT_CHARS, scoreText = '' } = opts;
 
   if (!query || query.trim().length < 3) return [];
 
@@ -67,7 +72,7 @@ async function searchLexUz(query, opts = {}) {
         continue;
       }
 
-      const excerpt = extractRelevantSections(doc.body, query, maxChars);
+      const excerpt = extractRelevantSections(doc.body, scoreText || query, maxChars);
       results.push({
         title: doc.title || 'Nomsiz hujjat',
         url: doc.metadata.source_url || docUrl,
@@ -123,7 +128,22 @@ function extractRelevantSections(body, query, maxChars) {
     .split(/\s+/)
     .filter(w => w.length > 2);
 
-  if (keywords.length === 0) return body.substring(0, maxChars);
+  // Articles named explicitly in the query ("14-modda", "55 va 69-moddalariga
+  // koʻra", "статья 14"). When the caller says which article it needs, that
+  // section outranks any keyword overlap — otherwise a long act returns its
+  // preamble and the cited article never reaches the model.
+  const wantedArticles = new Set();
+  const qs = String(query || '');
+  for (const m of qs.matchAll(/(\d{1,4})\s*[-–—]?\s*(?:modda|статья|ст\.)/giu)) {
+    wantedArticles.add(m[1]);
+  }
+  // "55 va 69-moddalariga": only the last number carries the word, so sweep up
+  // the numbers joined to it by "va" / "и" / "," / a dash.
+  for (const m of qs.matchAll(/\d{1,4}(?:\s*(?:,|va|и|[-–])\s*\d{1,4})+\s*[-–—]?\s*(?:modda|статья)/giu)) {
+    for (const n of m[0].matchAll(/\d{1,4}/g)) wantedArticles.add(n[0]);
+  }
+
+  if (keywords.length === 0 && wantedArticles.size === 0) return body.substring(0, maxChars);
 
   // Split at article boundaries (Uzbek + Russian patterns)
   const SUPER = '\u2070\u00B9\u00B2\u00B3\u2074\u2075\u2076\u2077\u2078\u2079';
@@ -132,10 +152,18 @@ function extractRelevantSections(body, query, maxChars) {
   );
   const sections = body.split(articleSplitRe);
 
+  const articleNumOf = (sec) => {
+    const m = sec.match(/^\s*(?:Статья\s+)?(\d{1,4})/);
+    return m ? m[1] : null;
+  };
+
   // Score each section
   const scored = sections.map((sec) => {
     const lower = sec.toLowerCase();
     let score = 0;
+    // An explicitly requested article dominates the ranking.
+    const artNum = articleNumOf(sec);
+    if (artNum && wantedArticles.has(artNum)) score += 100;
     for (const kw of keywords) {
       const idx = lower.indexOf(kw);
       if (idx !== -1) {
