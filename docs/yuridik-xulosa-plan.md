@@ -1,68 +1,78 @@
-# Yuridik xulosa — verification pipeline (assembly plan)
+# Yuridik xulosa — pipeline (current state)
 
-Implements the uploaded spec: a legal-opinion mode that verifies every citation
-in an uploaded document against **only** qa-corpus + lex.uz, producing a
-verification table + thematic critique + downloadable .docx.
+Legal-opinion mode for uploaded documents. Hard source restriction: grounding
+comes from **qa-corpus + lex.uz only** — no general web anywhere in the path.
 
-## Decisions (defaults; change if needed)
-- **Verify budget:** top 15 load-bearing references in full; rest → `tekshirilmadi`.
-- **Docx:** reuse the existing Word-HTML approach (`wrapDocumentHtml`/`sendExport`).
-- **Model:** `callAI` (Gemini 2.5 Flash primary) for extraction/judge/synthesis.
+## Architecture (as shipped, `POST /api/draft/legal-opinion`)
 
-## DONE (committed)
-- `src/rag/legal-verify.js` — engine: `extractReferences`, `verifyReference`
-  (lex.uz-only via `searchLexUz` + qa-corpus + LLM judge, records `lex_urls`),
-  `verifyDocument` (extract → weight-order → cap at maxRefs → defer rest →
-  status counts + confidence + keyFinding). Dependency-injected.
-- `tests/legal-verify.test.js` — passing unit tests (parsing, ordering, cap).
+1. **Reference extraction — on the RAW text, before any digest.**
+   Two extractors merged (`src/rag/lex-resolve.js`):
+   - regex scanner over the full document: bare `N-son(li)` forms, prefixed
+     codes (PF/F/PQ/VMQ/O'RQ, Latin+Cyrillic), number lists sharing one suffix
+     ("276, 596-son qarorlar"), corroborated parenthesised citations;
+   - LLM extractor (`legal-verify.js#extractReferences`) windowed 3×30k in
+     parallel — contributes the CLAIMS the document makes about each act.
+   Foreign instruments (Turkiya/EU/OECD…) are flagged clause-locally and at
+   merge time and are **never searched on lex.uz**.
+2. **Map-reduce digest** (`digestLongDocument`) for documents >14k chars —
+   used only for the synthesis prompt, never for extraction.
+3. **Corpus retrieval** with a BUILT query (subject line + sanitized act
+   names; no claims — article numbers in claims trigger the retriever's
+   cross-law article fallback) + a relevance gate: chunks survive only on a
+   non-generic stem overlap with the document subject (`prefixOverlap`).
+4. **lex.uz live resolution** (`resolveReferences`, concurrency 4, top 15 refs,
+   `OPINION_MAX_REFS`): per-reference Cyrillic-first query variants, then an
+   **identity gate** — the fetched page must state the cited number as its OWN
+   (metadata / act-form line / national-registry path `03/21/684/0367` /
+   signature-block tail), with year agreement; amendment decrees pass only as
+   unconfirmed; one act per reference (`gateAndCapHits`), same-number
+   collisions of other bodies stay in context with a caution label but are
+   excluded from Manbalar. Excerpts are selected by the reference's CLAIMS
+   (`scoreText`), so cited articles ("55 va 69-modda") outrank the preamble.
+5. **Synthesis** — `callPremiumAI`, IRAC structure, cite-only-from-KONTEKST
+   rule, unresolved references disclosed to the model (TEKSHIRILMAGAN
+   HAVOLALAR + XORIJIY MANBALAR blocks) so it states WHY, not just
+   "tasdiqlanmadi".
+6. **Citation audit** (`auditOpinionCitations`) → correction pass (keeps the
+   original if the rewrite truncates) → italic disclosure of anything still
+   unverified → Manbalar footer (corpus chunks actually cited + confirmed
+   lex.uz docs, deduped).
 
-## TODO (fresh session) — 3 pieces
+## Models / limits
 
-### 1. Rework `POST /api/draft/legal-opinion` (src/api/server.js, ~line 5168)
-Replace the current single-synthesis body with:
-```
-const { verifyDocument } = require('../rag/legal-verify');
-const { searchKorpus } = require('../rag/qa-korpus');
-const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
-// keep the map-reduce digest ONLY if you also want a prose summary; for the
-// verification memo the raw full text drives extraction.
-const result = await verifyDocument(documentText, {
-  callAI, apiKey, searchKorpus, retrieveLegalContext, maxRefs: 15,
-  onProgress: sse ? (d,total,label) => sse({type:'status', text:`⚖️ Havolalar tekshirilmoqda... ${d}/${total} — ${label}`}) : null,
-});
-// then a final synthesis call: pass result.references (table rows) + the
-// document digest to build the memo sections (Xulosa predmeti, Metodologiya,
-// Asosiy topilma, thematic assessment, Xulosa va tavsiyalar).
-```
-- Make this endpoint **SSE-capable** like `/api/legal-chat` (accept `stream:true`);
-  emit `status` during extraction + per-reference verification, then `done`
-  with `{ html, summary, references }`.
-- Audit-log the run (already has `logAudit`).
+- **Sol (`MODELS.premium`) for every paid tier**; Luna for sinov. Overrides:
+  `OPINION_MODEL`, `OPINION_MODEL_<PLAN>`, `OPINION_MODEL_STAFF`.
+- `premiumRetries: 2` on synthesis (1 on correction): transient errors retry
+  the premium model before falling back; a fallback is logged
+  (`FALLBACK: requested … answered by …`, `actual-model=` in the tokens line)
+  and surfaced master-only as `modelDowngraded`.
+- Output caps: 7000 tokens paid / 4500 sinov (Uzbek ≈ 3 tokens/word, so the
+  1200–1800-word rule needs the headroom). Opinion counts per tariff period:
+  sinov 1, silver 3, gold 10, platinum 30 (`OPINION_LIMIT_<PLAN>`).
+- Typical cost per opinion (79k-char report, Sol): ~$0.25 synthesis + digest.
 
-### 2. `.docx` memo template (src/drafting/routes.js — extend wrapDocumentHtml, or a new buildOpinionDocx)
-Structure EXACTLY (Uzbek, Times New Roman body, justified):
-1. Title "YURIDIK XULOSA" + subject (doc name) + date.
-2. Bold disclaimer (AI-assisted, qa-corpus+lex.uz only, not a lawyer's sign-off).
-3. Xulosa predmeti.
-4. Tekshiruv metodologiyasi va cheklovlari (state verified-in-full vs deferred honestly — use verifiedCount/deferredCount).
-5. Asosiy topilma(lar) (summary.keyFinding if any nomuvofiqlik).
-6. Verification table — cols: Manba | Hisobotdagi tavsif | Tekshiruv natijasi (status + izoh). Shaded header row. One row per reference; include `lex_urls` as footnote/links.
-7. Hujjatning asosiy tezislari bo'yicha huquqiy baho (thematic — from synthesis call).
-8. Xulosa va tavsiyalar (real bullet list, no literal •).
-9. Closing italic note: verification date + "qonunchilik o'zgarishi mumkin".
-Add an `/api/draft/opinion-export` (or reuse export-raw) that renders this to .doc/.pdf.
+## Tests
 
-### 3. Frontend (public/dashboard.html)
-- The upload card + `docFlowGenerateOpinion` already exist. Switch its fetch to
-  the SSE endpoint, render progress via the existing `readAiChatStream` status
-  handling (or a small dedicated reader), then render the memo as an inline
-  doc message (`renderDocMessage`) with Word/PDF export.
-- Show the 2-4 sentence summary card: confidence + counts (tasdiqlandi/
-  nomuvofiqlik/tekshirilmadi) + keyFinding.
+- `npm run test:opinion` = `tests/lex-resolve.test.js` (52) +
+  `tests/lex-excerpt.test.js` (6) + `tests/legal-verify.test.js` (3).
+  Fixtures are the real citation strings from the outsourcing-report runs.
 
-## Constraints to keep
-- lex.uz-only (searchLexUz enforces it; never add general web here).
-- No fabricated citations; unverifiable → tekshirilmadi.
-- Short quotes only from lex.uz (paraphrase); disclaimer in every doc.
-- Log lex.uz URLs per reference (engine already returns `lex_urls`).
-- Note: lex.uz is blocked from the CI sandbox (403) — verify live on Render.
+## Known limits (accepted, disclosed in the opinion)
+
+- lex.uz full-text search recall: some cited acts (596/200/59/276 in test
+  runs) don't surface in the top results under any query variant → honest
+  `✗` with the tried queries logged. Permanent fix: ingest the field's acts
+  into the corpus.
+- Yearly numbering collides across issuing bodies; number+year matches with
+  zero topical overlap are kept only with a caution label.
+- lex.uz is blocked from the CI sandbox (403) — verify live on Render.
+
+## Remaining TODO (not blocking)
+
+1. **User-visible verification table** — wire `legal-verify.js#verifyDocument`
+   output (status per reference: tasdiqlandi / qisman / nomuvofiqlik /
+   tekshirilmadi + lex.uz links) into the opinion HTML + .docx export, with
+   SSE progress per reference. The engine is built and tested; only the
+   endpoint/frontend wiring remains.
+2. **Corpus ingest** of procurement/outsourcing acts (O'RQ-684, VMQ-306,
+   healthcare decrees) via the existing ingest pipeline.
