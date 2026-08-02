@@ -248,11 +248,25 @@ function parseLexHtml(html, sourceUrl) {
     metadata.publication = cleanText(pubEl.text());
   }
 
-  // ── Extract adoption date + document number from title ──
-  if (title) {
-    const titleMeta = extractTitleMetadata(title);
-    if (titleMeta.adoption_date)   metadata.adoption_date = titleMeta.adoption_date;
-    if (titleMeta.document_number) metadata.document_number = titleMeta.document_number;
+  // Extract the act-form line ("ВАЗИРЛАР МАҲКАМАСИНИНГ ҚАРОРИ 23.09.2021 й.
+  // N 596"). It is deliberately excluded from the BODY below, but it is the
+  // one place a lex.uz page reliably states the document's OWN number and
+  // date — most ACT_TITLE headings carry only the name. Callers that must
+  // confirm "is this really decree 596?" have nothing else to compare against.
+  const formEl = $('div.ACT_FORM a[id]').add($('div.ACT_FORM > div[id]')).first();
+  if (formEl.length > 0) {
+    metadata.act_form = cleanText(formEl.text());
+  }
+
+  // ── Extract adoption date + document number ──
+  // Title first (most precise when present), then the act-form line, then the
+  // publication origin — each is tried only for the fields still missing.
+  for (const src of [title, metadata.act_form, metadata.publication]) {
+    if (!src) continue;
+    if (metadata.adoption_date && metadata.document_number) break;
+    const meta = extractTitleMetadata(src);
+    if (!metadata.adoption_date && meta.adoption_date) metadata.adoption_date = meta.adoption_date;
+    if (!metadata.document_number && meta.document_number) metadata.document_number = meta.document_number;
   }
 
   // Process all content elements in document order
@@ -418,7 +432,10 @@ function extractTitleMetadata(title) {
 
   const numPatterns = [
     /(?:№\s*|\bN\s+|raqami\s+)([A-ZА-Я]{0,4}-?\d+(?:-[IVX]+)?(?:-son)?)/,
+    // "-son" (Latin) and "-сон" (Cyrillic). JS \b is ASCII-only, so the
+    // Cyrillic form needs an explicit non-letter right boundary.
     /\b(\d+(?:-[IVX]+)?)-son\b/,
+    /(?<![\p{L}\p{N}])(\d+(?:-[IVX]+)?)\s*[-–—]\s*сон(?![\p{L}\p{N}])/u,
     /(?:^|[^A-ZА-Яa-zа-я0-9])([A-ZА-Я]{2,4}-\d+(?:-[IVX]+)?)(?![A-ZА-Яa-zа-я0-9])/,
   ];
   for (const pat of numPatterns) {

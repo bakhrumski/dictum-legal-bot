@@ -5759,10 +5759,17 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
             const excerpt = String(h.content || '').slice(0, Math.min(2500, room));
             lexUsed += excerpt.length;
             lexLiveSources.push({ title: h.title, url: h.url });
-            ragContext += `\n\n[lex.uz (jonli): ${h.title}]\n${excerpt}`;
+            // Say in the context itself whether the act's own number was
+            // confirmed, so the model can rely on a confirmed act and hedge on
+            // one matched only by subject.
+            const badge = h.confirmed
+              ? `raqami tasdiqlandi: ${label}`
+              : `raqami tasdiqlanmadi — mavzu boʻyicha mos keldi (${label})`;
+            ragContext += `\n\n[lex.uz (jonli): ${h.title} — ${badge}]\n${excerpt}`;
           }
           const rej = (r.rejected || []).length;
-          console.log(`[Legal Opinion]   ✓ ${label} — via "${r.query}" → ${r.hits.map(h => `${h.url} (#${(h.metadata && h.metadata.document_number) || '?'})`).join(', ')}${rej ? ` | ${rej} candidate(s) rejected` : ''}`);
+          const conf = r.hits.every(h => h.confirmed) ? '✓' : '~';
+          console.log(`[Legal Opinion]   ${conf} ${label} — via "${r.query}" → ${r.hits.map(h => `${h.url} (${h.confirmed ? '#' + ((h.metadata && h.metadata.document_number) || 'ok') : 'mavzu'})`).join(', ')}${rej ? ` | ${rej} candidate(s) rejected` : ''}`);
         }
         console.log(`[Legal Opinion] lex.uz-live supplement: ${lexLiveSources.length} doc(s) for ${top.length}/${documentRefs.length} reference(s), ${lexUsed} chars, ${lexUnresolved.length} unresolved, ${lexForeign.length} foreign`);
       } catch (e) { console.warn('[Legal Opinion] lex.uz-live supplement failed:', e.message); }
