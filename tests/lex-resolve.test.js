@@ -157,6 +157,14 @@ test('a name query is tried in Cyrillic — the script lex.uz indexes', () => {
   assert.ok(v.some(q => /давлат харидлари тўғрисида/.test(q)), `got [${v.join(' | ')}]`);
 });
 
+test('transliteration keeps t+s intact ("autsorsing" is not "ауцорсинг")', () => {
+  // Run 5 queried "ауцорсинг тендерларини..." and found nothing — the ts→ц
+  // digraph corrupted a loanword where t and s straddle a morpheme boundary.
+  const { translitToCyr } = require('../src/rag/lex-resolve');
+  assert.strictEqual(translitToCyr('autsorsing'), 'аутсорсинг');
+  assert.strictEqual(translitToCyr('Davlat xaridlari to‘g‘risida'), 'давлат харидлари тўғрисида');
+});
+
 test('merge keeps name-only references', () => {
   const merged = mergeReferences([{ type: 'kodeks', name: 'Fuqarolik kodeksi', number: '', claims: ['8-modda'] }], []);
   assert.ok(merged.some(r => r.name === 'Fuqarolik kodeksi'));
@@ -387,6 +395,42 @@ test('name-only reference needs real title overlap, not one lucky word', () => {
   const ref = { number: '', name: 'Davlat xaridlari to‘g‘risida' };
   assert.strictEqual(matchesReference(ref, hit('Davlat xaridlari to‘g‘risidagi Qonun', null, null)).ok, true);
   assert.strictEqual(matchesReference(ref, hit('Davlat ijtimoiy sug‘urtasi to‘g‘risida', null, null)).ok, false);
+});
+
+console.log('\nlex-resolve — hit ranking and cap\n');
+
+test('one act per reference; off-topic runner-ups are dropped', () => {
+  // Run 5: "18-сон 2022" passed BOTH a sanitary-permit regulation and a
+  // telecom-licensing amendment — two same-numbered acts of different bodies.
+  // Both ended up under Manbalar of an outsourcing opinion.
+  const { gateAndCapHits } = require('../src/rag/lex-resolve');
+  const ref = { number: '18', name: 'elektron tender platformasiga oid qaror', claims: ['elektron tender platformasi orqali xarid'], date: '' };
+  const rejected = [];
+  const kept = gateAndCapHits(ref, [
+    hit('Санитария-эпидемиология хизмати рухсат тартиб-таомиллари тўғрисида', '18', '2022-01-05'),
+    hit('ТЕЛЕКОММУНИКАЦИЯЛАР СОҲАСИДА ЛИЦЕНЗИЯЛАШ НИЗОМИГА ЎЗГАРТИРИШ', '18', '2022-03-01'),
+  ], rejected);
+  assert.strictEqual(kept.length, 1, `kept ${kept.length}, expected 1`);
+});
+
+test('an on-topic runner-up survives the cap', () => {
+  const { gateAndCapHits } = require('../src/rag/lex-resolve');
+  const ref = { number: '306', name: 'autsorsing xizmatlari', claims: ['autsorsing xizmatlarini tashkil etish'], date: '' };
+  const kept = gateAndCapHits(ref, [
+    hit('Аутсорсинг хизматларини ташкил этиш тўғрисида', '306', '2026-06-12'),
+    hit('Аутсорсинг хизматлари механизмларини такомиллаштириш', '306', '2026-06-12'),
+  ], []);
+  assert.strictEqual(kept.length, 2);
+});
+
+test('the on-topic confirmed hit outranks the off-topic one', () => {
+  const { gateAndCapHits } = require('../src/rag/lex-resolve');
+  const ref = { number: '16', name: 'sogʻliqni saqlash xizmatlari', claims: ['sogʻliqni saqlashda xizmatlar roʻyxati'], date: '' };
+  const kept = gateAndCapHits(ref, [
+    hit('ОИЛАЛАРНИНГ ИЖТИМОИЙ-МАИШИЙ ШАРОИТЛАРИНИ ЯХШИЛАШ ТЎҒРИСИДА', '16', '2020-01-10'),
+    hit('Соғлиқни сақлаш хизматлари рўйхатини тасдиқлаш тўғрисида', '16', '2020-01-10'),
+  ], []);
+  assert.ok(/сақлаш/i.test(kept[0].title), `wrong winner: ${kept[0].title}`);
 });
 
 console.log('\nlex-resolve — excerpt targeting\n');

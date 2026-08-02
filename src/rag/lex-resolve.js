@@ -438,9 +438,12 @@ const UZ_CYR_TO_LAT = {
 // Latin → Uzbek Cyrillic, for building lex.uz QUERIES: the search index is
 // predominantly Cyrillic, so "Davlat xaridlari to'g'risida" finds nothing
 // while "Давлат харидлари тўғрисида" finds the law. Digraphs first.
+// NOTE: no "ts"→ц rule — in Uzbek Latin, t+s across a morpheme boundary is far
+// more common than a real ц ("autsorsing" → аутсорсинг, not "ауцорсинг", which
+// is exactly the corrupted query lex.uz rejected in production).
 const UZ_LAT_TO_CYR_DIGRAPHS = [
   [/o['`‘’ʻ]/gi, 'ў'], [/g['`‘’ʻ]/gi, 'ғ'], [/sh/gi, 'ш'], [/ch/gi, 'ч'],
-  [/yo/gi, 'ё'], [/yu/gi, 'ю'], [/ya/gi, 'я'], [/ts/gi, 'ц'],
+  [/yo/gi, 'ё'], [/yu/gi, 'ю'], [/ya/gi, 'я'],
 ];
 const UZ_LAT_TO_CYR = {
   a: 'а', b: 'б', d: 'д', e: 'е', f: 'ф', g: 'г', h: 'ҳ', i: 'и', j: 'ж',
@@ -589,6 +592,14 @@ function matchesReference(ref, hit) {
   return topicalMatch(ref, title, 'nom');
 }
 
+/** Raw token-overlap count between a reference's name+claims and a title. */
+function topicalOverlap(ref, title) {
+  const want = nameTokens([ref.name, ...(ref.claims || [])].filter(Boolean).join(' '));
+  if (!want.length) return 0;
+  const got = new Set(nameTokens(title));
+  return want.filter(w => got.has(w)).length;
+}
+
 /** Token overlap between what the report cites and the document's title. */
 function topicalMatch(ref, title, kind) {
   const want = nameTokens([ref.name, ...(ref.claims || [])].filter(Boolean).join(' '));
@@ -600,6 +611,31 @@ function topicalMatch(ref, title, kind) {
     return { ok: true, why: `${kind} — mavzu mos (${overlap}/${want.length})`, confirmed: false };
   }
   return { ok: false, why: `${kind}, mavzu ham mos emas (${overlap}/${want.length} soʻz)` };
+}
+
+/**
+ * Gate a batch of search hits for one reference, then rank and cap them.
+ *
+ * Rank: number-confirmed beats topical; on-topic beats off-topic. Then keep
+ * ONE act per reference — a second hit stays only if it is itself on-topic.
+ * Yearly numbering collides across issuing bodies, so a query like
+ * "18-сон 2022" can pass several same-numbered acts; feeding all of them
+ * cites unrelated regulations under Manbalar of a legal opinion.
+ *
+ * Failing hits are appended to `rejected` (mutated in place).
+ */
+function gateAndCapHits(ref, hits, rejected) {
+  const kept = [];
+  for (const h of hits) {
+    const verdict = matchesReference(ref, h);
+    if (verdict.ok) {
+      kept.push({ ...h, confirmed: !!verdict.confirmed, matchWhy: verdict.why, overlap: topicalOverlap(ref, h.title) });
+    } else {
+      rejected.push({ title: h.title, url: h.url, why: verdict.why });
+    }
+  }
+  kept.sort((a, b) => Number(b.confirmed) - Number(a.confirmed) || b.overlap - a.overlap);
+  return kept.filter((h, i) => i === 0 || h.overlap > 0).slice(0, 2);
 }
 
 /**
@@ -629,14 +665,7 @@ async function resolveReference(ref, opts = {}) {
     } catch (e) {
       continue;
     }
-    const kept = [];
-    for (const h of hits || []) {
-      const verdict = matchesReference(ref, h);
-      if (verdict.ok) kept.push({ ...h, confirmed: !!verdict.confirmed, matchWhy: verdict.why });
-      else rejected.push({ title: h.title, url: h.url, why: verdict.why });
-    }
-    // A number-confirmed hit beats a merely topical one.
-    kept.sort((a, b) => Number(b.confirmed) - Number(a.confirmed));
+    const kept = gateAndCapHits(ref, hits || [], rejected);
     if (kept.length) return { ref, hits: kept, query: q, tried, rejected };
   }
   return {
@@ -690,6 +719,8 @@ module.exports = {
   documentOwnNumbers,
   isAmendmentTitle,
   translitToCyr,
+  gateAndCapHits,
+  topicalOverlap,
   scoringText,
   resolveReference,
   resolveReferences,
