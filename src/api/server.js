@@ -5656,6 +5656,45 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // document, this line shows what text actually reached the pipeline.
     console.log(`[Legal Opinion] input ${documentText.length} chars, head="${documentText.slice(0, 180).replace(/\s+/g, ' ')}"`);
 
+    // ── Reference extraction runs on the RAW document, BEFORE the digest ─────
+    // digestLongDocument() summarises anything over ~14k chars, and the first
+    // detail a summariser drops is exactly what we need here: bare document
+    // numbers ("306-sonli qaror", "(306, 7–12-m.; 684)", "16-sonlili"). Once
+    // they are gone, no lex.uz lookup can happen and the opinion can only say
+    // "KONTEKSTda tasdiqlanmadi". So: scan first, digest second.
+    //
+    // Two extractors, merged: a regex scanner over the FULL raw text (free, no
+    // tokens, catches the informal forms) and the LLM extractor over windows of
+    // it (contributes the CLAIMS the document makes about each act).
+    let documentRefs = [];
+    try {
+      const { extractReferences } = require('../rag/legal-verify');
+      const { scanBareReferences, mergeReferences, scanWeight } = require('../rag/lex-resolve');
+      const scanned = scanBareReferences(documentText);
+
+      // extractReferences() reads 30k chars per call. A 79k-char report would
+      // otherwise have claims extracted from its first third only — and the
+      // acts a report leans on hardest are usually cited in its analysis, near
+      // the end. Window the raw text and merge; windows run in parallel.
+      const WIN = 30000;
+      const MAX_WINDOWS = parseInt(process.env.OPINION_REF_WINDOWS, 10) || 3;
+      const windows = [];
+      for (let i = 0; i < documentText.length && windows.length < MAX_WINDOWS; i += WIN) {
+        windows.push(documentText.slice(i, i + WIN));
+      }
+      const llmBatches = await Promise.all(windows.map(w =>
+        extractReferences(w, { callAI }).catch(e => {
+          console.warn('[Legal Opinion] LLM reference extraction failed for a window:', e.message);
+          return [];
+        })
+      ));
+      const llmRefs = llmBatches.flat();
+
+      documentRefs = mergeReferences(llmRefs, scanned)
+        .sort((a, b) => scanWeight(b) - scanWeight(a));
+      console.log(`[Legal Opinion] references: ${documentRefs.length} (regex ${scanned.length}, llm ${llmRefs.length} over ${windows.length} window(s)) — ${documentRefs.slice(0, 15).map(r => r.number || r.name).join(', ')}`);
+    } catch (e) { console.warn('[Legal Opinion] reference extraction failed:', e.message); }
+
     const docForAnalysis = await digestLongDocument(documentText, req.session?.adminId || null);
 
     // Classify the field, then retrieve grounding law from the corpus.
@@ -5680,22 +5719,42 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // laws/decrees the document touches, with article and clause numbers.
     // searchLexUz is lex.uz-only by construction, and fetchLexDocument refuses
     // repealed documents, so only active law reaches the context.
+    // Which references could NOT be resolved — reported to the model so it can
+    // say WHY something is unverified instead of a bare "tasdiqlanmadi".
+    const lexUnresolved = [];
     {
       try {
-        const { extractReferences, referenceWeight } = require('../rag/legal-verify');
-        const { searchLexUz } = require('../rag/lex-live-search');
-        const refs = await extractReferences(docForAnalysis, { callAI });
-        const top = refs.sort((a, b) => referenceWeight(b) - referenceWeight(a)).slice(0, ragWeak ? 5 : 3);
-        for (const ref of top) {
-          const q = [ref.number, ref.name].filter(Boolean).join(' ').trim();
-          if (!q || q.length < 3) continue;
-          const hits = await searchLexUz(q, { maxDocs: 1 });
-          for (const h of hits) {
-            lexLiveSources.push({ title: h.title, url: h.url });
-            ragContext += `\n\n[lex.uz (jonli): ${h.title}]\n${String(h.content || '').slice(0, 2500)}`;
+        const { resolveReferences } = require('../rag/lex-resolve');
+        // A document that leans on seven acts needs seven lookups, not three.
+        // These run in parallel (bounded), so the cap costs latency-per-batch,
+        // not latency-per-reference.
+        const MAX_REFS = parseInt(process.env.OPINION_MAX_REFS, 10) || 15;
+        const top = documentRefs.slice(0, MAX_REFS);
+        const resolved = await resolveReferences(top, { concurrency: 4, maxDocs: 1, maxVariants: 4 });
+
+        // Total budget for live lex.uz text so a reference-heavy document
+        // cannot crowd the uploaded document out of the context window.
+        const LEX_BUDGET = parseInt(process.env.OPINION_LEX_BUDGET_CHARS, 10) || 40000;
+        let lexUsed = 0;
+
+        for (const r of resolved) {
+          const label = [r.ref.number, r.ref.name].filter(Boolean).join(' ').trim() || r.ref.name || '?';
+          if (!r.hits || !r.hits.length) {
+            lexUnresolved.push(label);
+            console.log(`[Legal Opinion]   ✗ ${label} — lex.uz: no result (tried: ${(r.tried || []).join(' | ') || 'no query'})${r.error ? ` [${r.error}]` : ''}`);
+            continue;
           }
+          for (const h of r.hits) {
+            const room = Math.max(0, LEX_BUDGET - lexUsed);
+            if (room < 500) break;
+            const excerpt = String(h.content || '').slice(0, Math.min(2500, room));
+            lexUsed += excerpt.length;
+            lexLiveSources.push({ title: h.title, url: h.url });
+            ragContext += `\n\n[lex.uz (jonli): ${h.title}]\n${excerpt}`;
+          }
+          console.log(`[Legal Opinion]   ✓ ${label} — via "${r.query}" → ${r.hits.map(h => h.url).join(', ')}`);
         }
-        console.log(`[Legal Opinion] lex.uz-live supplement: ${lexLiveSources.length} doc(s) for ${top.length} reference(s)`);
+        console.log(`[Legal Opinion] lex.uz-live supplement: ${lexLiveSources.length} doc(s) for ${top.length}/${documentRefs.length} reference(s), ${lexUsed} chars, ${lexUnresolved.length} unresolved`);
       } catch (e) { console.warn('[Legal Opinion] lex.uz-live supplement failed:', e.message); }
     }
 
@@ -5708,7 +5767,8 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     3) If no article number is available: the document type, number, name and year — e.g. (**Vazirlar Mahkamasining 2021-yil 306-son qarori**)
   Never state a norm without at least option 3. Never invent an article, clause or number that is not in the KONTEKST.
 - Use ONLY currently in-force (amaldagi) legislation. If the KONTEKST shows a document is repealed or superseded, say so and do not rely on it.
-- If a claim in the document cannot be verified against the KONTEKST, write "KONTEKSTda tasdiqlanmadi" instead of guessing.`
+- If a claim in the document cannot be verified against the KONTEKST, write "KONTEKSTda tasdiqlanmadi" instead of guessing. When the act is listed under TEKSHIRILMAGAN HAVOLALAR below, say WHY (lex.uz'da topilmadi / xorijiy manba) rather than leaving a bare "tasdiqlanmadi".
+- Foreign instruments (Turkish, EU, OECD, etc.) are outside lex.uz by definition. Describe them from the document's own account, label them clearly as "xorijiy manba — lex.uz orqali tasdiqlanmaydi", and never treat them as O'zbekiston normative basis. Do NOT group them with Uzbek acts that simply failed to resolve.`
     const systemPrompt =
 `You are a senior legal counsel of the Republic of Uzbekistan writing a formal legal opinion (yuridik xulosa) about a document the user uploaded. Write entirely in ${langName}.
 
@@ -5730,8 +5790,11 @@ ${groundingRule}
 - Formal, precise legal language. No fabricated facts.
 - LENGTH DISCIPLINE (important): the whole opinion must be COMPLETE within roughly 1200-1800 words. Never leave a section, sentence or list unfinished — if the material is large, write more concisely (shorter clauses in Faktlar, tighter Tahlil) rather than running out of space. Xulosa must always be present and fully written.`;
 
+    const unresolvedBlock = lexUnresolved.length
+      ? `\n\nTEKSHIRILMAGAN HAVOLALAR (hujjat ularga tayanadi, lekin lex.uz qidiruvi natija bermadi — ularni amaldagi normativ asos sifatida ishlatmang, sababini ko'rsating):\n${lexUnresolved.map(l => `- ${l}`).join('\n')}`
+      : '';
     const userText =
-`KONTEKST (O'zbekiston qonunchiligidan tegishli parchalar):\n${ragContext || '(kontekst topilmadi — faqat ishonchli umumiy normalarga tayaning, modda raqamini taxmin qilmang)'}\n\n─── YUKLANGAN HUJJAT (yoki uning to'liq dayjesti) ───\n${docForAnalysis}\n─── HUJJAT TUGADI ───\n\nYuqoridagi hujjat bo'yicha to'liq yuridik xulosa tayyorlang.`;
+`KONTEKST (O'zbekiston qonunchiligidan tegishli parchalar):\n${ragContext || '(kontekst topilmadi — faqat ishonchli umumiy normalarga tayaning, modda raqamini taxmin qilmang)'}${unresolvedBlock}\n\n─── YUKLANGAN HUJJAT (yoki uning to'liq dayjesti) ───\n${docForAnalysis}\n─── HUJJAT TUGADI ───\n\nYuqoridagi hujjat bo'yicha to'liq yuridik xulosa tayyorlang.`;
 
     console.log(`[Legal Opinion] topic=${topic} ragChunks=${ragChunks.length} ragWeak=${ragWeak} lexLive=${lexLiveSources.length} digest=${docForAnalysis === documentText ? 'no' : 'yes'}`);
     // Premium model for the synthesis (Claude via callPremiumAI when
