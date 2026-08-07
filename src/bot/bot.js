@@ -10,17 +10,14 @@ const https = require('https');
 const path = require('path');
 
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
-const {
-  isJustifyAvailable,
-  askJustify,
-} = require('../rag/justify-client');
 
-// Cache Justify availability at startup (re-check every 5 min)
-let _justifyOk = false;
-isJustifyAvailable().then(ok => { _justifyOk = ok; }).catch(() => {});
-setInterval(() => {
-  isJustifyAvailable().then(ok => { _justifyOk = ok; }).catch(() => {});
-}, 5 * 60 * 1000);
+// Auto-answering used to run through `askJustify`, an external service whose
+// URL defaults to http://localhost:8000. In production that host does not
+// exist, so the availability probe always failed and EVERY question — however
+// simple — fell through to the human queue. Answers now come from the
+// platform's own retrieval + citation-verification stack via
+// src/agents/telegram-agent.js. justify-client.js is left in place for the
+// separate Justify integration; the bot no longer depends on it.
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -864,7 +861,12 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // Check pending request limit (max 3 per cycle, resets after any response)
+  // Check pending request limit — one open request at a time.
+  //
+  // Only requests still WAITING ON A HUMAN count. Questions the agent answered
+  // autonomously are already resolved, so they must not lock the user out of
+  // asking the next one — that would make the whole point of the agent
+  // (instant, unlimited self-service) invisible.
   try {
     const userRow = await pool.query(
       'SELECT id FROM users WHERE telegram_id = $1',
@@ -872,27 +874,14 @@ bot.on('message', async (msg) => {
     );
     if (userRow.rows.length > 0) {
       const uid = userRow.rows[0].id;
-      // Find the latest response time (when a lawyer/student last answered)
-      const lastResponse = await pool.query(
-        "SELECT MAX(answered_at) as last_answered FROM requests WHERE user_id = $1 AND status = 'answered' AND answered_at IS NOT NULL",
+      const waiting = await pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM requests
+          WHERE user_id = $1 AND status IN ('pending', 'assigned', 'student_responded')`,
         [uid]
       );
-      const lastAnswered = lastResponse.rows[0]?.last_answered;
-      // Count requests created AFTER the last response (or all if no response yet)
-      let countQuery;
-      let countParams;
-      if (lastAnswered) {
-        countQuery = "SELECT COUNT(*) as cnt FROM requests WHERE user_id = $1 AND created_at > $2";
-        countParams = [uid, lastAnswered];
-      } else {
-        countQuery = "SELECT COUNT(*) as cnt FROM requests WHERE user_id = $1";
-        countParams = [uid];
-      }
-      const requestCount = await pool.query(countQuery, countParams);
-      if (parseInt(requestCount.rows[0].cnt) >= 1) {
+      if (waiting.rows[0].cnt >= 1) {
         bot.sendMessage(chatId,
-          '⏳ Savolingiz yuborilgan, javob kutilmoqda.\n\n' +
-          'Yangi savol yuborish uchun avvalgi savolingizga javob kelishini kuting.\n\n' +
+          '⏳ Avvalgi murojaatingiz yurist ko\'rigida.\n\n' +
           'Javob kelgandan so\'ng yana savol yuborishingiz mumkin.'
         );
         return;
@@ -902,97 +891,126 @@ bot.on('message', async (msg) => {
     console.error('Error checking pending limit:', error);
   }
 
-  // ── AI-first: auto-answer text questions via Justify RAG ──
-  if (requestData.request_type === 'text' && _justifyOk) {
-    const question = requestData.request_text;
-    const MIN_QUESTION_LENGTH = 10;
-    if (question.length >= MIN_QUESTION_LENGTH) {
-      // Send "thinking" indicator
-      await bot.sendMessage(chatId, '⏳ Savolingiz tekshirilmoqda...').catch(() => {});
-      try {
-        const aiResult = await askJustify(question);
-        if (aiResult && aiResult.answer) {
-          // Format sources list
-          let sourcesText = '';
-          if (aiResult.sources && aiResult.sources.length > 0) {
-            const topSources = aiResult.sources.slice(0, 3);
-            sourcesText = '\n\n📎 *Manbalar:*\n' + topSources.map((s, i) => {
-              const title = s.title || s.article || 'Manba';
-              return s.url ? `${i + 1}. [${title}](${s.url})` : `${i + 1}. ${title}`;
-            }).join('\n');
-          }
-
-          const webNote = aiResult.web_search_used ? '\n_🌐 (Internet qidiruvi ham ishlatildi)_' : '';
-          const strategyNote = aiResult.strategy ? ` · _${aiResult.strategy}_` : '';
-
-          const aiMessage = `🤖 *AI Yurist javobi*${strategyNote}\n\n${aiResult.answer}${sourcesText}${webNote}`;
-
-          // Telegram has 4096 char limit; truncate if needed
-          const maxLen = 4000;
-          const finalMsg = aiMessage.length > maxLen
-            ? aiMessage.substring(0, maxLen) + '...'
-            : aiMessage;
-
-          await bot.sendMessage(chatId, finalMsg, {
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true,
-          }).catch(async () => {
-            // If Markdown fails, send plain text
-            await bot.sendMessage(chatId, aiResult.answer.substring(0, 4000)).catch(() => {});
+  // ── Autonomous agent: converse and answer without a human ────────────────
+  // Text-only. A file or voice note still goes to the human queue: the agent
+  // grounds answers on retrieved law, and it cannot read an attachment it has
+  // not transcribed — answering one anyway would be exactly the confident
+  // guessing this platform exists to avoid.
+  let agentResult = null;
+  if (requestData.request_type === 'text') {
+    try {
+      const { handleUserMessage, splitForTelegram, isReady } = require('../agents/telegram-agent');
+      if (isReady()) {
+        await bot.sendChatAction(chatId, 'typing').catch(() => {});
+        const typing = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000);
+        try {
+          agentResult = await handleUserMessage({
+            chatId,
+            text: requestData.request_text,
+            firstName,
           });
+        } finally {
+          clearInterval(typing);
         }
-      } catch (aiErr) {
-        console.warn('[BOT] AI auto-answer failed:', aiErr.message);
-        // Continue silently — user still gets the request-saved message below
+
+        if (agentResult && agentResult.handled && agentResult.reply) {
+          for (const part of splitForTelegram(agentResult.reply)) {
+            await bot.sendMessage(chatId, part, {
+              parse_mode: 'Markdown',
+              disable_web_page_preview: true,
+            }).catch(async () => {
+              // Markdown in a legal answer breaks on stray * or _ — never let
+              // a formatting failure swallow the answer itself.
+              await bot.sendMessage(chatId, part.replace(/[*_`\[\]]/g, '')).catch(() => {});
+            });
+          }
+        }
       }
+    } catch (agentErr) {
+      console.error('[BOT] agent failed, falling back to human queue:', agentErr.message);
+      agentResult = null;
     }
   }
 
+  // Conversational turns (greetings, clarifying questions, off-topic replies)
+  // are not legal requests — they must not create dashboard rows or the queue
+  // fills with "salom".
+  const conversational = agentResult && agentResult.handled
+    && ['greeting', 'clarify', 'offtopic'].includes(agentResult.action);
+  if (conversational) return;
+
+  const aiAnswered = !!(agentResult && agentResult.handled && agentResult.action === 'answered');
+  const needsHuman = !aiAnswered || agentResult.escalate;
+
   // Save to database
   try {
-    const result = await saveRequest(requestData);
+    const result = await saveRequest(requestData, {
+      aiAnswer: aiAnswered ? agentResult.reply : null,
+      status: needsHuman ? 'pending' : 'ai_answered',
+    });
 
     if (result.success) {
-      const aiAnswered = requestData.request_type === 'text' && _justifyOk && requestData.request_text.length >= 10;
-      const confirmation = aiAnswered
-        ? `✅ Murojaat yuristlarga ham yuborildi.\n\nYurist yaxshiroq javob yoki tuzatish kiritishi mumkin — shu yerda xabardor bo'lasiz.`
-        : `✅ Murojaat qabul qilindi!\n\n📋 Sizning ma'lumotlaringiz:\n👤 Username: @${username}\n📝 Turi: ${getRequestTypeLabel(requestData.request_type)}\n\nYurist tez orada murojatingizni ko'rib chiqadi va javob beradi. Rahmat!`;
+      if (aiAnswered && !needsHuman) {
+        // Fully handled — no queue message, the answer already arrived.
+        bot.sendMessage(chatId, '💬 Yana savolingiz bo\'lsa — bemalol yozing.').catch(() => {});
+      } else if (aiAnswered && needsHuman) {
+        bot.sendMessage(chatId, '👨‍⚖️ Murojaatingiz aniqlik uchun yuristga ham yuborildi — tasdiq shu yerda keladi.').catch(() => {});
+      } else {
+        bot.sendMessage(chatId,
+          `✅ Murojaat qabul qilindi!\n\n📝 Turi: ${getRequestTypeLabel(requestData.request_type)}\n\nYurist tez orada ko'rib chiqadi va javob beradi. Rahmat!`);
+      }
 
-      bot.sendMessage(chatId, confirmation);
-
-      // Notify admin
-      try {
-        const adminNotification = `
+      // Notify admins ONLY when a human is actually needed. Notifying on every
+      // AI-resolved question would recreate the noise the agent removes.
+      if (needsHuman) {
+        try {
+          const adminNotification = `
 🔔 Yangi murojaat keldi!
 
 👤 Foydalanuvchi: ${firstName}
 🆔 Username: @${username}
 📝 Turi: ${getRequestTypeLabel(requestData.request_type)}
+${aiAnswered ? '🤖 AI dastlabki javob berdi — tasdiqlash kerak' : ''}
 
 ${requestData.request_type === 'text' ? `Murojaat: ${requestData.request_text}` : ''}
 
 Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}
-        `;
-
-        await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID, adminNotification);
-      } catch (error) {
-        console.error('Failed to notify admin:', error);
+          `;
+          await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID, adminNotification);
+        } catch (error) {
+          console.error('Failed to notify admin:', error);
+        }
       }
 
-      console.log('Yangi murojaat saqlandi!');
+      console.log(`[BOT] request #${result.requestId} saved — ${needsHuman ? 'queued for human' : 'resolved by agent'}`);
     } else {
       const errMsg = result.error?.message || result.error || 'Unknown DB error';
       console.error('Save error:', errMsg, result.error?.detail || '');
-      bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${errMsg})`);
+      if (!aiAnswered) {
+        bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${errMsg})`);
+      }
     }
   } catch (error) {
     console.error('Error processing request:', error.message, error.stack);
-    bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${error.message})`);
+    if (!aiAnswered) {
+      bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${error.message})`);
+    }
   }
 });
 
-// Save request to database
-async function saveRequest(data) {
+/**
+ * Save a request.
+ *
+ * @param {object} data
+ * @param {object} [opts]
+ * @param {string|null} [opts.aiAnswer] — the agent's answer, stored so the
+ *   dashboard shows what the user was actually told (and a lawyer can correct
+ *   it into the corpus).
+ * @param {string} [opts.status] — 'pending' (needs a human) or 'ai_answered'.
+ */
+async function saveRequest(data, opts = {}) {
+  const status = opts.status || 'pending';
+  const aiAnswer = opts.aiAnswer || null;
   const client = await pool.connect();
 
   try {
@@ -1022,12 +1040,17 @@ async function saveRequest(data) {
       userId = userResult.rows[0].id;
     }
 
-    // Insert request
+    // Insert request. An agent-resolved request is stored already answered —
+    // response_text is what the user actually received, so the dashboard shows
+    // the real conversation and a lawyer can correct it into the corpus.
     const insertResult = await client.query(
       `INSERT INTO requests
-       (user_id, request_text, request_type, file_id, file_size, file_name, status, category)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [userId, data.request_text, data.request_type, data.file_id, data.file_size, data.file_name, 'pending', 'Boshqa']
+       (user_id, request_text, request_type, file_id, file_size, file_name, status, category,
+        response_text, responded_by, answered_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+      [userId, data.request_text, data.request_type, data.file_id, data.file_size, data.file_name,
+       status, 'Boshqa',
+       aiAnswer, aiAnswer ? 'JuristAI (avtomatik)' : null, aiAnswer ? new Date() : null]
     );
 
     await client.query('COMMIT');

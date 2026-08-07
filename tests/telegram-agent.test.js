@@ -1,0 +1,233 @@
+'use strict';
+
+/**
+ * Tests for the autonomous Telegram agent (src/agents/telegram-agent.js).
+ *
+ * All dependencies are injected, so the whole decision tree — intent routing,
+ * clarification limits, the confidence gate, escalation — is testable without
+ * a database, a model, or Telegram. The DB-backed conversation store is
+ * stubbed out; what is under test here is the routing logic, which is what
+ * decides whether a user gets an answer or sits in a queue.
+ *
+ *   node tests/telegram-agent.test.js
+ */
+
+const assert = require('assert');
+const Module = require('module');
+const path = require('path');
+const fs = require('fs');
+
+// ── Load the agent with ../database/db stubbed (no DB in tests) ─────────────
+// The conversation store is DB-backed, so the fake pool is how a test controls
+// prior state (how many clarifying questions this chat has already had).
+const dbState = { clarifyCount: 0, turns: [] };
+const fakePool = {
+  query: async (sql) => {
+    if (/SELECT\s+turns/i.test(sql)) {
+      return { rows: [{ turns: dbState.turns, clarify_count: dbState.clarifyCount }] };
+    }
+    return { rows: [] };
+  },
+};
+
+const agentPath = require.resolve('../src/agents/telegram-agent');
+const src = fs.readFileSync(agentPath, 'utf8');
+const m = new Module(agentPath);
+m.filename = agentPath;
+m.paths = Module._nodeModulePaths(path.dirname(agentPath));
+const origRequire = Module.prototype.require;
+Module.prototype.require = function (id) {
+  if (id === '../database/db') return { pool: fakePool };
+  return origRequire.apply(this, arguments);
+};
+m._compile(src, agentPath);
+Module.prototype.require = origRequire;
+const agent = m.exports;
+
+let passed = 0, failed = 0;
+async function test(name, fn) {
+  try { await fn(); console.log(`  ✓ ${name}`); passed++; }
+  catch (e) { console.error(`  ✗ ${name}\n      ${e.message}`); failed++; }
+}
+
+// ── Dependency factory ──────────────────────────────────────────────────────
+
+/**
+ * @param {object} o
+ *   intent   — what the intent classifier should return
+ *   answer   — the generated answer text
+ *   chunks   — retrieved corpus chunks (empty => low confidence)
+ *   unverified — article numbers the citation check flags
+ *   korpus   — a lawyer-verified answer to return from qa-korpus
+ */
+function deps(o = {}) {
+  const calls = { answer: 0, intent: 0, korpus: 0 };
+  return {
+    calls,
+    callCheapAI: async () => {
+      calls.intent++;
+      return { text: JSON.stringify(o.intent || { intent: 'huquqiy_savol', missing: [] }) };
+    },
+    callAI: async () => {
+      calls.answer++;
+      return { text: o.answer !== undefined ? o.answer : 'Mehnat kodeksining 100-moddasiga ko\'ra ish beruvchi buyruq chiqarishi shart.', provider: 'test-model' };
+    },
+    retrieveLegalContext: async () => ({
+      context: o.chunks && o.chunks.length ? 'kontekst' : '',
+      chunks: o.chunks !== undefined ? o.chunks : [{ law_name: 'Mehnat kodeksi', article_numbers: ['100'], source_url: 'https://lex.uz/docs/1', chunk_text: '100-modda ...' }],
+    }),
+    verifyCitations: () => ({ total: 1, unverified: o.unverified || [] }),
+    buildTopicPrompt: () => 'SYSTEM',
+    classifyLegalTopic: async () => 'mehnat',
+    searchKorpus: o.korpus ? async () => { calls.korpus++; return { corrected_answer: o.korpus }; } : null,
+    embeddingApiKey: o.korpus ? 'key' : null,
+  };
+}
+
+/** Set how many clarifying questions this chat has already been asked. */
+function stubMemory(clarifyCount = 0) {
+  dbState.clarifyCount = clarifyCount;
+  dbState.turns = [];
+}
+
+(async () => {
+  console.log('\ntelegram-agent — social routing\n');
+
+  await test('a greeting is answered without touching the model or the queue', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Assalomu alaykum', firstName: 'Aslan' });
+    assert.strictEqual(r.action, 'greeting');
+    assert.strictEqual(r.escalate, false, 'a greeting must not create a lawyer task');
+    assert.ok(/Aslan/.test(r.reply), 'should greet by name');
+    assert.strictEqual(d.calls.answer, 0, 'no answer generation for a greeting');
+    assert.strictEqual(d.calls.intent, 0, 'greeting matched without an LLM call');
+  });
+
+  await test('"rahmat" closes the loop instead of being answered as a question', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Rahmat!' });
+    assert.strictEqual(r.action, 'greeting');
+    assert.strictEqual(d.calls.answer, 0);
+  });
+
+  await test('asking for a human escalates immediately', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Men jonli yurist bilan gaplashmoqchiman' });
+    assert.strictEqual(r.action, 'escalate');
+    assert.strictEqual(r.escalate, true);
+    assert.strictEqual(d.calls.answer, 0, 'do not answer someone who asked for a person');
+  });
+
+  console.log('\ntelegram-agent — answering\n');
+
+  await test('a clear legal question is answered with sources and a disclaimer', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Ish beruvchi meni ishdan bo\'shatdi, buyruq bermadi. Nima qilishim kerak?' });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(r.escalate, false, 'a confident answer must not also queue a lawyer');
+    assert.ok(/Mehnat kodeksi/.test(r.reply), 'sources missing');
+    assert.ok(/lex\.uz/.test(r.reply), 'source link missing');
+    assert.ok(/yuridik kuchga ega emas/.test(r.reply), 'disclaimer missing');
+  });
+
+  await test('a lawyer-verified corpus answer is preferred over generation', async () => {
+    const d = deps({ korpus: 'Yurist tomonidan tasdiqlangan javob matni, yetarlicha uzun.' });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasi qanday bekor qilinadi?' });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(r.meta.path, 'qa-korpus');
+    assert.strictEqual(d.calls.answer, 0, 'must not pay for generation when a verified answer exists');
+  });
+
+  console.log('\ntelegram-agent — the confidence gate\n');
+
+  await test('nothing retrieved => answer is sent but flagged and escalated', async () => {
+    const d = deps({ chunks: [] });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Bu holatda qanday javobgarlik bor?' });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(r.escalate, true, 'ungrounded answer must reach a human');
+    assert.ok(/dastlabki javob/.test(r.reply), 'user must be told the answer is preliminary');
+  });
+
+  await test('an unverifiable citation downgrades confidence', async () => {
+    const d = deps({ unverified: ['512'] });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Shartnoma buzilsa nima bo\'ladi?' });
+    assert.strictEqual(r.meta.confidence, 'low');
+    assert.strictEqual(r.escalate, true);
+  });
+
+  console.log('\ntelegram-agent — clarification\n');
+
+  await test('a vague question gets ONE targeted follow-up, not an answer', async () => {
+    const d = deps({ intent: { intent: 'noaniq', missing: ['Shartnoma turi qanday?', 'Qachon imzolangan?'] } });
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Menga yordam kerak' });
+    assert.strictEqual(r.action, 'clarify');
+    assert.strictEqual(r.escalate, false);
+    assert.ok(/Shartnoma turi/.test(r.reply));
+    assert.strictEqual(d.calls.answer, 0);
+  });
+
+  await test('clarification never loops forever — it answers after the cap', async () => {
+    // The failure mode this prevents: a user who cannot phrase the missing
+    // fact gets asked the same thing until they leave.
+    const d = deps({ intent: { intent: 'noaniq', missing: ['Qaysi hujjat?'] } });
+    agent.initTelegramAgent(d);
+    stubMemory(2); // already at MAX_CLARIFY
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Bilmayman' });
+    assert.strictEqual(r.action, 'answered', 'must answer with best effort after the cap');
+    assert.strictEqual(d.calls.answer, 1);
+  });
+
+  console.log('\ntelegram-agent — failure handling\n');
+
+  await test('an uninitialized agent hands the request to the human queue', async () => {
+    agent.initTelegramAgent(null);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Savolim bor' });
+    assert.strictEqual(r.handled, false);
+    assert.strictEqual(r.escalate, true, 'unhandled must never mean the user is ignored');
+  });
+
+  await test('a model failure during generation falls back to the human queue', async () => {
+    const d = deps();
+    d.callAI = async () => { throw new Error('upstream 500'); };
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Ishdan bo\'shatish tartibi qanday?' });
+    assert.strictEqual(r.handled, false);
+    assert.strictEqual(r.escalate, true);
+  });
+
+  await test('an intent-classifier failure still answers rather than stalling', async () => {
+    const d = deps();
+    d.callCheapAI = async () => { throw new Error('classifier down'); };
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasi haqida savol' });
+    assert.strictEqual(r.action, 'answered');
+  });
+
+  console.log('\ntelegram-agent — Telegram limits\n');
+
+  await test('a long answer is split on paragraph breaks, not mid-word', async () => {
+    const para = 'Bu juda uzun huquqiy javob matni. '.repeat(200);
+    const parts = agent.splitForTelegram(para + '\n\n' + para, 3900);
+    assert.ok(parts.length > 1, 'should split');
+    for (const p of parts) assert.ok(p.length <= 3900, `part too long: ${p.length}`);
+    assert.ok(!/\S$/.test(parts[0]) || !parts[0].endsWith('matn'), 'should not cut mid-word');
+  });
+
+  await test('a short answer is not split', async () => {
+    assert.deepStrictEqual(agent.splitForTelegram('qisqa javob'), ['qisqa javob']);
+  });
+
+  console.log(`\n${passed} passed, ${failed} failed\n`);
+  process.exit(failed ? 1 : 0);
+})();
