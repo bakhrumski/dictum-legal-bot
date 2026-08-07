@@ -148,3 +148,111 @@ law as it stands today. JuristAI. The law, verified.
   that checks the law is still in force before it does."*
 - Closing tagline translations: *"Qonun — tasdiqlangan."* /
   *"Закон — проверено."*
+
+---
+
+## AI Video Generator Prompts (60-second cut, Uzbek voiceover)
+
+Workflow that produces the best result with today's tools (Veo 3, Sora,
+Runway Gen-4, Kling):
+
+1. **Generate the B-roll clips below silently** (no dialogue in the prompt).
+   AI models garble non-English speech and any on-screen text — let them do
+   atmosphere only.
+2. **Record the real product on screen** for Scenes 2–3 UI moments. AI cannot
+   render your actual interface, and a jury can tell a mockup from a product.
+   Blend: AI clip → real screen recording → AI clip.
+3. **Record the Uzbek voiceover separately** (a human voice, or a TTS with
+   real Uzbek support) and lay it over the edit. Do not ask the video model
+   to speak Uzbek.
+
+Global style (prepend to every prompt):
+
+> Cinematic corporate tech film, 16:9, shallow depth of field, natural warm
+> lighting mixed with cool screen glow, muted color grade with teal-and-amber
+> accents, smooth slow camera movement, photorealistic, 4k, no on-screen
+> text, no captions, no watermarks.
+
+### Scene 1 — Hook (0:00–0:10) · 2 clips × 5s
+
+**Clip 1A prompt:**
+> Aerial drone shot slowly descending over Tashkent, Uzbekistan at golden
+> hour: modern government buildings, wide avenues, crowds of small figures
+> crossing a plaza. The city feels vast and busy. Slow push-in.
+
+**Clip 1B prompt:**
+> Close-up of a worried middle-aged man at a kitchen table at night, holding
+> a thick stack of official documents, warm lamp light, his phone lying dark
+> beside him. He rubs his forehead. Rack focus from the papers to the dark
+> phone screen. Documentary realism.
+
+**Uzbek VO (Scene 1):**
+> Har uch ming kishiga — bitta yurist. Bu — O'zbekiston. JuristAI ana shu
+> bo'shliqni to'ldirayotgan sun'iy intellektli yuridik yordamchidir.
+
+### Scene 2 — The Difference (0:10–0:30) · 1 AI clip + real screen capture
+
+**Clip 2A prompt (metaphor for verification):**
+> Macro shot inside a vast dark archive of glowing document pages floating in
+> rows like a library of light. A single beam scans across them; one document
+> lights up green with a soft pulse, another flickers red and dims. Abstract,
+> elegant, futuristic data-verification aesthetic, volumetric light, slow
+> dolly forward. No text.
+
+**Real footage 2B (do not generate):** screen recording — a chat answer
+appearing with its sources list; cursor clicks a lex.uz link; the official
+law page opens. Then a repealed-document warning badge in close-up.
+
+**Uzbek VO (Scene 2):**
+> Har qanday sun'iy intellekt ishonchli javob bera oladi. JuristAI esa —
+> tekshiradi. Har bir keltirilgan qonun lex.uz milliy bazasida jonli
+> tekshiriladi: raqami to'g'ri, yili to'g'ri va hozir ham kuchda. Bekor
+> qilingan hujjatlar belgilanadi. Tasdiqlanmagan da'volar esa hech qachon
+> o'ylab topilmaydi.
+
+### Scene 3 — The Flagship (0:30–0:50) · 1 AI clip + real screen capture
+
+**Clip 3A prompt (transition into the demo):**
+> Over-the-shoulder shot of a young Uzbek professional woman in a modern
+> office dragging a thick paper contract toward a laptop; as it reaches the
+> screen the paper dissolves into particles of light flowing into the
+> display. Cool blue screen glow on her face, cinematic, slow motion at the
+> moment of dissolve. No readable text.
+
+**Real footage 3B (do not generate):** screen recording — the upload, the
+progress states, the finished opinion scrolling section by section (Masala →
+Faktlar → Qo'llaniladigan huquq → Tahlil → Xulosa → Manbalar), ending on a
+zoom into one verified citation and its lex.uz link.
+
+**Uzbek VO (Scene 3):**
+> Yigirma besh sahifalik shartnomani yuklang — va rasmiy yuridik xulosani
+> oling: masala, faktlar, qo'llaniladigan huquq, tahlil va xulosa. Har bir
+> iqtibos lex.uz'da tasdiqlangan, har bir manba — bosiladigan havola.
+> Kunlab davom etadigan yuridik ish — endi bir necha daqiqada.
+
+### Scene 4 — Close (0:50–1:00) · 1 clip × 5s + title card
+
+**Clip 4A prompt:**
+> Stylized dark map of Uzbekistan seen from above; points of warm light
+> ignite one by one across cities and connect into a glowing network,
+> starting from Tashkent and spreading to the whole country. Elegant,
+> minimal, dark background, slow zoom out. No text, no labels.
+
+**Title card (build in the editor, not the model):** logo,
+`@yuristga_savolbot`, web address, tagline **"Qonun — tasdiqlangan."**
+
+**Uzbek VO (Scene 4):**
+> Har bir fuqaro uchun yuridik bilim — o'z tilida, bugungi kunda amalda
+> bo'lgan qonunga tayangan holda. JuristAI. Qonun — tasdiqlangan.
+
+### Practical notes
+
+- **Negative prompt** (for models that accept one): text, captions,
+  subtitles, watermark, logo, distorted faces, extra fingers, jerky motion.
+- Generate 2–3 takes per clip and pick; AI video variance is high.
+- Keep every AI clip ≤ 8 seconds — quality degrades on longer generations;
+  the edit rhythm above never needs more.
+- The Uzbek VO above is ~140 words — comfortably 60 seconds at a calm,
+  confident pace. Ask the narrator for "measured, assured, not salesy."
+- Music: minimal electronic pulse, swelling slightly at Scene 3's dissolve
+  moment and resolving cleanly under the tagline.
