@@ -1,6 +1,7 @@
 # JuristAI — Tech Award Submission Materials
 
-Language: English (jury default). Uzbek/Russian versions on request.
+Language: English (jury default). Uzbek voiceover included. Uzbek/Russian
+full translations on request.
 
 ---
 
@@ -29,230 +30,243 @@ to citizens and small businesses across Uzbekistan.
 
 ---
 
-## Video Script — 3:00 cut (~420 words VO)
+# PRODUCTION SCRIPT — self-shot
 
-**Format:** voiceover + screen recordings. Timings are targets.
+Everything below is shootable with a phone, a laptop, one colleague as an
+on-camera subject, and free screen-recording software. No drone, no crew, no
+AI generation.
 
-### [0:00–0:20 — THE PROBLEM]
-*Visual: street scenes of Tashkent, a person staring at a dense legal
-document; a phone with an unanswered question typed out.*
-
-**VO:** In Uzbekistan, there is roughly one lawyer for every three thousand
-people. For most citizens, a legal question means days of searching,
-conflicting advice, or an expensive consultation. And getting it wrong — a
-repealed decree, a misquoted article — has real consequences.
-
-### [0:20–0:40 — THE IDEA]
-*Visual: JuristAI logo animates in. Split screen: Telegram bot on a phone,
-web dashboard on a laptop.*
-
-**VO:** JuristAI is an AI legal assistant built for Uzbek law, in Uzbek and
-Russian. Ask a question in Telegram or on the web — and get an answer
-grounded in the actual legislation of the Republic of Uzbekistan, with
-sources you can click and check.
-
-### [0:40–1:10 — HOW IT'S DIFFERENT]
-*Visual: animation — a question flows into a pipeline: "Corpus search →
-lex.uz verification → cited answer". Show a real answer with its sources
-list of lex.uz links.*
-
-**VO:** Every AI can produce a confident answer. JuristAI produces a
-**verified** one. Behind every response is a retrieval system built on the
-national legal database — and a verification layer that checks each cited law
-directly on lex.uz: the correct document number, the correct year, and
-whether it is still in force. Repealed law gets flagged. Unverifiable claims
-are labeled honestly, never invented. Every source in the answer is a live
-link to the official text.
-
-### [1:10–2:00 — THE FLAGSHIP: LEGAL OPINIONS]
-*Visual: screen recording — a 25-page report is uploaded; progress
-indicators; the finished opinion scrolls: Masala, Faktlar, Qo'llaniladigan
-huquq, Tahlil, Xulosa, Manbalar. Zoom on a line citing a decree with its
-clause number.*
-
-**VO:** Upload a contract or a report, and JuristAI writes a formal legal
-opinion in classic legal-memo structure: the issue, the facts clause by
-clause, the applicable law, the analysis, and a reasoned conclusion. The
-system reads the whole document, extracts every legal act it cites — even
-informal references — finds each one on lex.uz, confirms its identity and
-validity, and applies the real text of the law to the real clauses of your
-document. What used to take a legal department days now takes minutes — at
-the cost of a cup of coffee.
-
-### [2:00–2:30 — THE ECOSYSTEM]
-*Visual: quick cuts — document drafting from a template; a photo of a
-document being explained in simple words; a user selecting text and flagging
-an error; admin dashboard with the correction loop.*
-
-**VO:** JuristAI also drafts legal documents, explains complex paperwork in
-plain language, and reads scanned files. And it learns: users can flag any
-inaccuracy directly in the answer — flagged content goes to legal experts,
-and corrections flow back into the knowledge base. Accuracy is not a
-promise. It is a process.
-
-### [2:30–3:00 — THE VISION]
-*Visual: map of Uzbekistan lighting up; usage counter; closing card — logo,
-@yuristga_savolbot, web address.*
-
-**VO:** Our goal is simple: first-line legal knowledge for every citizen and
-every small business — affordable, in their language, and always backed by
-the law as it stands today. JuristAI. The law, verified.
+**The governing principle:** roughly half the runtime is clean screen
+recording of the real product. That footage wins the award. The human shots
+exist only to give it emotional context — keep them simple and few.
 
 ---
 
-## Video Script — 60-second cut (~150 words VO)
+## 60-SECOND CUT (primary submission)
 
-Tight version for awards that cap submissions at one minute. One continuous
-screen-recording aesthetic; no B-roll needed.
+Total: 7 shots. One afternoon of shooting.
 
-### [0:00–0:10 — HOOK]
-*Visual: a legal question typed into Telegram; instant answer appears with
-lex.uz source links.*
+### SHOT 1 — Establishing (0:00–0:05)
+**What:** Tashkent, exterior. A busy street, a government building, or a
+plaza with people crossing.
+**How:** Phone, 4K, horizontal, locked off on a tripod or braced against a
+wall/railing. Shoot from an elevated window, a pedestrian bridge, or a metro
+overpass to get depth. Golden hour (an hour after sunrise or before sunset).
+Hold for 15 seconds so you can choose the best 5.
+**Why it's here:** establishes country and scale. Do not skip it — an
+international jury needs to know where this is happening.
 
-**VO:** One lawyer for every three thousand people — that's Uzbekistan.
-JuristAI is the AI legal assistant closing that gap.
+### SHOT 2 — The problem, human (0:05–0:12)
+**What:** A person at a table at home or in a small office, a thick stack of
+official documents in front of them. They flip a page, pause, rub their
+forehead. Phone lying dark beside them.
+**How:** One colleague or family member; no acting talent required — no
+dialogue, just being tired. Sit them beside a window, shoot from the side at
+chest height, natural light only. Get three angles: wide (person + papers),
+close on hands turning pages, close on the face. Two minutes of footage total.
+**Tip:** turn off overhead fluorescent lights. Window light alone looks
+cinematic; mixed lighting looks like a security camera.
 
-### [0:10–0:30 — THE DIFFERENCE]
-*Visual: pipeline animation compressed to 5 seconds; an answer's source list;
-a repealed-law warning badge.*
+### SHOT 3 — First contact (0:12–0:20)
+**What:** Screen recording — a legal question typed into the Telegram bot on
+a phone, the answer arriving with its sources.
+**How:** Record the phone screen natively (iOS: Control Center → Screen
+Recording; Android: Quick Settings → Screen Record). Type the question
+beforehand and delete it so you can retype smoothly. Choose a question with
+a genuinely useful, short answer.
 
-**VO:** Any AI can sound confident. JuristAI verifies. Every cited law is
-checked live against the national legislation database — right number, right
-year, still in force. Repealed law gets flagged. Unverifiable claims are
-labeled, never invented.
+### SHOT 4 — Verification, the differentiator (0:20–0:32)
+**What:** Screen recording — the sources list under an answer; the cursor
+clicks a lex.uz link; the official law page opens. Then a close-up of a
+repealed-document warning badge.
+**How:** Desktop screen recording (see the setup guide below). Move the
+mouse slowly and deliberately. Let the lex.uz page sit on screen for a full
+2 seconds — the jury needs time to register that it's the real government
+site.
+**This is the most important non-demo shot in the film.** It is your entire
+claim, shown rather than asserted.
 
-### [0:30–0:50 — THE FLAGSHIP]
-*Visual: 25-page report uploaded → finished legal opinion scrolls; zoom on a
-verified citation and its lex.uz link.*
+### SHOT 5 — The flagship demo (0:32–0:50)
+**What:** Screen recording — the 25-page report is uploaded; progress
+appears; the finished legal opinion scrolls through its sections (Masala →
+Faktlar → Qo'llaniladigan huquq → Tahlil → Xulosa → Manbalar); ends zoomed
+on one verified citation and its lex.uz link.
+**How:** Rehearse this until it runs flawlessly. Record the whole flow in
+one take, then speed the generation wait up 4–8× in editing (a small
+"tezlashtirilgan / accelerated" label keeps you honest). Scroll slowly and
+steadily — jerky scrolling reads as amateur more than anything else in the
+film.
+**Budget your effort here.** These 18 seconds are the submission.
 
-**VO:** Upload a twenty-five-page contract and receive a formal legal
-opinion: issue, facts, applicable law, analysis, conclusion — every citation
-confirmed on lex.uz, every source a clickable link. Days of legal work, in
-minutes.
+### SHOT 6 — Resolution, human (0:50–0:55)
+**What:** Same person, same table, same light as Shot 2 — but now calm,
+reading the answer on their phone or laptop. A small nod. Papers pushed
+aside.
+**How:** Shoot immediately after Shot 2, same setup, just change the
+posture and remove the document stack. Costs you 90 seconds and gives the
+film a real arc.
 
-### [0:50–1:00 — CLOSE]
-*Visual: closing card — logo, @yuristga_savolbot, web address.*
+### SHOT 7 — Title card (0:55–1:00)
+**What:** Logo, `@yuristga_savolbot`, web address, tagline
+**"Qonun — tasdiqlangan."**
+**How:** Build in the editor (Canva, Figma, or your editor's title tool).
+White or very dark background, one accent color, nothing moving except a
+slow fade in.
 
-**VO:** Legal knowledge for every citizen, in their language, backed by the
-law as it stands today. JuristAI. The law, verified.
+### Uzbek voiceover — 60-second cut
+
+Record as one continuous take, then split across the shots in editing.
+~140 words, comfortable at a calm pace.
+
+**Over Shots 1–2 (0:00–0:12):**
+> Har uch ming kishiga — bitta yurist. Bu — O'zbekiston. Ko'pchilik uchun
+> huquqiy savol kunlab izlanish yoki qimmat maslahat degani.
+
+**Over Shot 3 (0:12–0:20):**
+> JuristAI — o'zbek va rus tillarida ishlaydigan sun'iy intellektli yuridik
+> yordamchi. Telegram orqali ham, veb-platformada ham.
+
+**Over Shot 4 (0:20–0:32):**
+> Har qanday sun'iy intellekt ishonchli javob bera oladi. JuristAI esa —
+> tekshiradi. Har bir keltirilgan qonun lex.uz milliy bazasida jonli
+> tekshiriladi: raqami to'g'ri, yili to'g'ri va hozir ham kuchda. Bekor
+> qilingan hujjatlar belgilanadi.
+
+**Over Shot 5 (0:32–0:50):**
+> Yigirma besh sahifalik shartnomani yuklang — va rasmiy yuridik xulosani
+> oling: masala, faktlar, qo'llaniladigan huquq, tahlil va xulosa. Har bir
+> iqtibos lex.uz'da tasdiqlangan, har bir manba — bosiladigan havola.
+
+**Over Shots 6–7 (0:50–1:00):**
+> Har bir fuqaro uchun yuridik bilim — o'z tilida, bugungi kunda amalda
+> bo'lgan qonunga tayangan holda. JuristAI. Qonun — tasdiqlangan.
 
 ---
 
-## Production notes
+## 3-MINUTE CUT (extended version)
 
-- The strongest 15 seconds for a jury is the upload-to-opinion sequence
-  (3-min cut: 1:10–1:25; 60-sec cut: 0:30–0:50). Rehearse that screen
-  recording until flawless; use a real document with visible lex.uz links in
-  the result.
+Same seven shots, plus five more. Shoot these in the same session.
+
+### SHOT 8 — Second user, small business (~0:20 in the long cut)
+**What:** A shop or small-office owner at a counter with an invoice or
+contract, phone in hand.
+**How:** Ask a friendly local business to let you film for ten minutes.
+Shoot over the shoulder so the person is not the focus — the situation is.
+**Purpose:** widens the audience from "citizens" to "small business," which
+matters to award juries assessing impact.
+
+### SHOT 9 — Document drafting (~1:55)
+**What:** Screen recording — choosing a template, filling the fields,
+downloading the finished Word document. End with the .docx open in Word.
+**How:** Straight screen capture. The moment the real Word file opens is
+the payoff — hold on it.
+
+### SHOT 10 — Photo / OCR (~2:10)
+**What:** A phone photographing a paper document, then the screen showing
+JuristAI explaining it in plain language.
+**How:** Two shots cut together — real hand holding a phone over a
+document (shoot with a second phone), then the screen recording of the
+result.
+
+### SHOT 11 — The correction loop (~2:20)
+**What:** Screen recording — a user selects text in an answer, flags it as
+inaccurate, submits a suggestion; then cut to the admin dashboard showing
+the flag arriving.
+**How:** Two screen recordings, cut together. This is your "it improves"
+proof — juries reward systems that learn.
+
+### SHOT 12 — Closing montage (~2:45)
+**What:** 3–4 one-second cuts: the phone in a hand on a street, the laptop
+on a desk, the Telegram bot open, the title card.
+**How:** Reuse the best frames you already shot. No new setup.
+
+### Uzbek voiceover — additional lines for the 3-minute cut
+
+**Over Shot 8:**
+> Fuqarolar uchun ham, kichik biznes uchun ham — bir xil savol: bu qonuniymi?
+
+**Over Shots 9–10:**
+> JuristAI hujjat ham tayyorlaydi, murakkab qog'ozlarni oddiy tilda
+> tushuntiradi va suratga olingan hujjatlarni ham o'qiydi.
+
+**Over Shot 11:**
+> Va u o'rganadi. Foydalanuvchi javobdagi har qanday xatoni belgilashi
+> mumkin — belgilangan matn mutaxassislarga boradi, tuzatish esa bilimlar
+> bazasiga qaytadi. Aniqlik — bu va'da emas, bu jarayon.
+
+---
+
+## SCREEN-RECORDING SETUP (read before you record anything)
+
+This is where a self-shot tech video is won or lost.
+
+**Software:** OBS Studio (free, Windows/Mac/Linux). Built-in alternatives:
+Windows `Win + Alt + R`, macOS `Cmd + Shift + 5`.
+
+**Settings:** 1920×1080 minimum, 60 fps, MP4.
+
+**Prepare the browser:**
+- New clean profile or incognito — no bookmarks bar, no extensions, no
+  other tabs.
+- Zoom the page to 125–150% (`Ctrl` + `+`). Text that is comfortable on your
+  monitor is unreadable in a video played on a laptop.
+- Full screen (`F11`) to remove browser chrome.
+- Clear the notification tray. One Telegram popup mid-take ruins a
+  perfect run.
+
+**Perform, don't use:**
+- Move the mouse slowly and in straight lines. Real usage looks frantic
+  on camera.
+- Pause 1–2 seconds before each click so the viewer's eye can follow.
+- Scroll with smooth, short strokes — never a flick.
+- Rehearse the whole path 3–4 times before recording. Record 3 takes.
+
+**Use real data.** Real Uzbek legal text, real lex.uz links, the real
+outsourcing report. A jury that spots dummy content stops believing the
+rest.
+
+---
+
+## GEAR & LOGISTICS
+
+**Minimum viable kit:**
+- A modern smartphone (4K, horizontal) — genuinely sufficient
+- A tripod or any stable surface; a stack of books works
+- A window for light
+- A quiet room for the voiceover
+
+**Voiceover recording:** a phone's voice-memo app in a small room with soft
+furnishings (a bedroom, a car with the engine off) beats an expensive mic in
+an echoey office. Record the whole script in one take, then a second take —
+you will use pieces of both. Direction for the narrator: *measured,
+assured, not salesy.*
+
+**Music:** a minimal electronic pulse under everything, dipping about 6 dB
+whenever the voiceover speaks. It should swell slightly at Shot 5 and
+resolve cleanly under the tagline. Use a royalty-free track and record the
+license.
+
+**Editing:** DaVinci Resolve (free, professional) or CapCut (free, faster
+to learn). Both handle the speed-ramping needed for Shot 5.
+
+**Shooting order — if you only have one afternoon:**
+1. All screen recordings (Shots 3, 4, 5) — most important, done at a desk
+2. Human shots 2 and 6 back-to-back (same setup, 15 minutes total)
+3. Exterior Shot 1 at golden hour on the way home
+4. Voiceover that evening
+5. Title card and edit the next day
+
+---
+
+## PRODUCTION NOTES
+
+- The strongest 18 seconds for a jury is **Shot 5**, the upload-to-opinion
+  sequence. If time is short, sacrifice everything else and perfect that one.
 - Live demo / Q&A one-liner: *"Every legal AI can answer. Ours is the one
   that checks the law is still in force before it does."*
 - Closing tagline translations: *"Qonun — tasdiqlangan."* /
   *"Закон — проверено."*
-
----
-
-## AI Video Generator Prompts (60-second cut, Uzbek voiceover)
-
-Workflow that produces the best result with today's tools (Veo 3, Sora,
-Runway Gen-4, Kling):
-
-1. **Generate the B-roll clips below silently** (no dialogue in the prompt).
-   AI models garble non-English speech and any on-screen text — let them do
-   atmosphere only.
-2. **Record the real product on screen** for Scenes 2–3 UI moments. AI cannot
-   render your actual interface, and a jury can tell a mockup from a product.
-   Blend: AI clip → real screen recording → AI clip.
-3. **Record the Uzbek voiceover separately** (a human voice, or a TTS with
-   real Uzbek support) and lay it over the edit. Do not ask the video model
-   to speak Uzbek.
-
-Global style (prepend to every prompt):
-
-> Cinematic corporate tech film, 16:9, shallow depth of field, natural warm
-> lighting mixed with cool screen glow, muted color grade with teal-and-amber
-> accents, smooth slow camera movement, photorealistic, 4k, no on-screen
-> text, no captions, no watermarks.
-
-### Scene 1 — Hook (0:00–0:10) · 2 clips × 5s
-
-**Clip 1A prompt:**
-> Aerial drone shot slowly descending over Tashkent, Uzbekistan at golden
-> hour: modern government buildings, wide avenues, crowds of small figures
-> crossing a plaza. The city feels vast and busy. Slow push-in.
-
-**Clip 1B prompt:**
-> Close-up of a worried middle-aged man at a kitchen table at night, holding
-> a thick stack of official documents, warm lamp light, his phone lying dark
-> beside him. He rubs his forehead. Rack focus from the papers to the dark
-> phone screen. Documentary realism.
-
-**Uzbek VO (Scene 1):**
-> Har uch ming kishiga — bitta yurist. Bu — O'zbekiston. JuristAI ana shu
-> bo'shliqni to'ldirayotgan sun'iy intellektli yuridik yordamchidir.
-
-### Scene 2 — The Difference (0:10–0:30) · 1 AI clip + real screen capture
-
-**Clip 2A prompt (metaphor for verification):**
-> Macro shot inside a vast dark archive of glowing document pages floating in
-> rows like a library of light. A single beam scans across them; one document
-> lights up green with a soft pulse, another flickers red and dims. Abstract,
-> elegant, futuristic data-verification aesthetic, volumetric light, slow
-> dolly forward. No text.
-
-**Real footage 2B (do not generate):** screen recording — a chat answer
-appearing with its sources list; cursor clicks a lex.uz link; the official
-law page opens. Then a repealed-document warning badge in close-up.
-
-**Uzbek VO (Scene 2):**
-> Har qanday sun'iy intellekt ishonchli javob bera oladi. JuristAI esa —
-> tekshiradi. Har bir keltirilgan qonun lex.uz milliy bazasida jonli
-> tekshiriladi: raqami to'g'ri, yili to'g'ri va hozir ham kuchda. Bekor
-> qilingan hujjatlar belgilanadi. Tasdiqlanmagan da'volar esa hech qachon
-> o'ylab topilmaydi.
-
-### Scene 3 — The Flagship (0:30–0:50) · 1 AI clip + real screen capture
-
-**Clip 3A prompt (transition into the demo):**
-> Over-the-shoulder shot of a young Uzbek professional woman in a modern
-> office dragging a thick paper contract toward a laptop; as it reaches the
-> screen the paper dissolves into particles of light flowing into the
-> display. Cool blue screen glow on her face, cinematic, slow motion at the
-> moment of dissolve. No readable text.
-
-**Real footage 3B (do not generate):** screen recording — the upload, the
-progress states, the finished opinion scrolling section by section (Masala →
-Faktlar → Qo'llaniladigan huquq → Tahlil → Xulosa → Manbalar), ending on a
-zoom into one verified citation and its lex.uz link.
-
-**Uzbek VO (Scene 3):**
-> Yigirma besh sahifalik shartnomani yuklang — va rasmiy yuridik xulosani
-> oling: masala, faktlar, qo'llaniladigan huquq, tahlil va xulosa. Har bir
-> iqtibos lex.uz'da tasdiqlangan, har bir manba — bosiladigan havola.
-> Kunlab davom etadigan yuridik ish — endi bir necha daqiqada.
-
-### Scene 4 — Close (0:50–1:00) · 1 clip × 5s + title card
-
-**Clip 4A prompt:**
-> Stylized dark map of Uzbekistan seen from above; points of warm light
-> ignite one by one across cities and connect into a glowing network,
-> starting from Tashkent and spreading to the whole country. Elegant,
-> minimal, dark background, slow zoom out. No text, no labels.
-
-**Title card (build in the editor, not the model):** logo,
-`@yuristga_savolbot`, web address, tagline **"Qonun — tasdiqlangan."**
-
-**Uzbek VO (Scene 4):**
-> Har bir fuqaro uchun yuridik bilim — o'z tilida, bugungi kunda amalda
-> bo'lgan qonunga tayangan holda. JuristAI. Qonun — tasdiqlangan.
-
-### Practical notes
-
-- **Negative prompt** (for models that accept one): text, captions,
-  subtitles, watermark, logo, distorted faces, extra fingers, jerky motion.
-- Generate 2–3 takes per clip and pick; AI video variance is high.
-- Keep every AI clip ≤ 8 seconds — quality degrades on longer generations;
-  the edit rhythm above never needs more.
-- The Uzbek VO above is ~140 words — comfortably 60 seconds at a calm,
-  confident pace. Ask the narrator for "measured, assured, not salesy."
-- Music: minimal electronic pulse, swelling slightly at Scene 3's dissolve
-  moment and resolving cleanly under the tagline.
+- Subtitle the film in English even though the voiceover is Uzbek — most
+  juries will not speak Uzbek, and burned-in English subtitles are usually
+  required for international submissions. Keep them to two lines maximum,
+  bottom-centered.
