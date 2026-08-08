@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JuristAI — Logo Animation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+/*
+  JuristAI entrance animation — extracted verbatim from public/index.html
+  (#intro-overlay). Timings, colours and easing are unchanged so this stays
+  identical to what visitors see on the site:
+
+    0.05s / 0.20s / 0.35s   three rings draw in (staggered)
+    0.90s                   "J" fades in
+    1.25s                   diamond fades in
+    1.50s                   "juristAI" wordmark fades in
+    2.30s                   overlay fades out (0.65s)
+
+  Controls are for capture, not decoration — see the toolbar or press:
+    R  replay      L  loop      T  transparent background      H  hide toolbar
+  URL params work too:  ?size=520&bg=transparent&loop=1&clean=1
+*/
+:root{
+  --navy:#0E2236;
+  --gold:#D6B379;
+  --cream:#F5EFE3;
+  --size:340px;         /* overall animation box */
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--navy);
+  display:grid;place-items:center;
+  font-family:'Source Serif 4',Georgia,serif;
+  overflow:hidden;
+}
+body.transparent{background:transparent}
+
+/* Checkerboard so a transparent export is obviously transparent on screen.
+   It is painted on the BODY, never inside the stage, so it can never be
+   captured with the artwork. */
+body.transparent.show-grid{
+  background-image:
+    linear-gradient(45deg,#2a2a2a 25%,transparent 25%),
+    linear-gradient(-45deg,#2a2a2a 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#2a2a2a 75%),
+    linear-gradient(-45deg,transparent 75%,#2a2a2a 75%);
+  background-size:24px 24px;
+  background-position:0 0,0 12px,12px -12px,-12px 0;
+  background-color:#1e1e1e;
+}
+
+/* ═══ THE ANIMATION ═══ */
+.stage{
+  width:var(--size);height:var(--size);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+}
+.stage.out{animation:io-fade .65s ease forwards}
+@keyframes io-fade{to{opacity:0}}
+
+.ib-svg{width:40%;height:auto;overflow:visible}
+
+.ib-ring{stroke-dasharray:502;stroke-dashoffset:502}
+.playing .ib-ring:nth-child(1){animation:ring-in .9s .05s ease forwards}
+.playing .ib-ring:nth-child(2){animation:ring-in .9s .2s  ease forwards}
+.playing .ib-ring:nth-child(3){animation:ring-in .9s .35s ease forwards}
+@keyframes ring-in{to{stroke-dashoffset:0}}
+
+.ib-j,.ib-d,.ib-wm{opacity:0}
+.playing .ib-j {animation:fade-in .5s .9s  ease forwards}
+.playing .ib-d {animation:fade-in .4s 1.25s ease forwards}
+.playing .ib-wm{animation:fade-in .4s 1.5s ease forwards}
+@keyframes fade-in{to{opacity:1}}
+
+.ib-wm{
+  font-size:calc(var(--size) * .059);
+  letter-spacing:.14em;
+  color:var(--cream);
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.ib-wm span{color:var(--gold)}
+
+/* ═══ TOOLBAR (never captured — hide with H or ?clean=1) ═══ */
+.bar{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:6px;
+  background:rgba(20,20,20,.82);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:999px;padding:7px 9px;
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  z-index:50;
+}
+.bar.hidden{display:none}
+.bar button,.bar select{
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14);
+  color:#eee;font-size:12.5px;font-weight:600;font-family:inherit;
+  padding:6px 12px;border-radius:999px;cursor:pointer;
+  transition:background .15s,border-color .15s;
+}
+.bar button:hover,.bar select:hover{background:rgba(255,255,255,.16)}
+.bar button.on{background:var(--gold);border-color:var(--gold);color:#1A1410}
+.bar .sep{width:1px;height:20px;background:rgba(255,255,255,.16);margin:0 3px}
+.bar .hint{color:rgba(255,255,255,.42);font-size:11px;padding:0 6px;white-space:nowrap}
+@media(max-width:640px){.bar .hint{display:none}}
+</style>
+</head>
+<body>
+
+<div class="stage playing" id="stage">
+  <svg class="ib-svg" viewBox="0 0 136 136" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle class="ib-ring" cx="68" cy="68" r="64" stroke="#D6B379" stroke-width="0.75" opacity="0.45"/>
+    <circle class="ib-ring" cx="68" cy="68" r="56" stroke="#D6B379" stroke-width="0.75" opacity="0.3"/>
+    <circle class="ib-ring" cx="68" cy="68" r="48" stroke="#D6B379" stroke-width="0.75" opacity="0.2"/>
+    <text class="ib-j" x="68" y="86" text-anchor="middle" font-family="Source Serif 4,Georgia,serif" font-size="54" font-weight="600" fill="#F5EFE3">J</text>
+    <text class="ib-d" x="68" y="106" text-anchor="middle" font-size="11" fill="#D6B379">◆</text>
+  </svg>
+  <div class="ib-wm">jurist<span>AI</span></div>
+</div>
+
+<div class="bar" id="bar">
+  <button id="replay" title="R">↻ Replay</button>
+  <button id="loop" title="L">Loop</button>
+  <div class="sep"></div>
+  <select id="size" title="Animation size">
+    <option value="240">240</option>
+    <option value="340" selected>340</option>
+    <option value="520">520</option>
+    <option value="720">720</option>
+    <option value="1000">1000</option>
+  </select>
+  <button id="bg" title="T">Transparent</button>
+  <button id="fade" title="Play the closing fade-out">Fade-out</button>
+  <div class="sep"></div>
+  <span class="hint">H — hide this bar</span>
+</div>
+
+<script>
+(function(){
+  const stage  = document.getElementById('stage');
+  const bar    = document.getElementById('bar');
+  const params = new URLSearchParams(location.search);
+
+  const CYCLE_MS = 2300;   // matches index.html: hold, then fade
+  const FADE_MS  = 650;
+
+  let looping = false, loopTimer = null;
+
+  /* Restarting a CSS animation requires the class to be removed, the layout
+     flushed, and the class re-added — without the reflow read the browser
+     coalesces both changes and nothing replays. */
+  function play(){
+    clearTimeout(loopTimer);
+    stage.classList.remove('playing','out');
+    void stage.offsetWidth;
+    stage.classList.add('playing');
+    if(looping) loopTimer = setTimeout(fadeOutThenReplay, CYCLE_MS);
+  }
+
+  function fadeOut(){
+    stage.classList.add('out');
+  }
+
+  function fadeOutThenReplay(){
+    fadeOut();
+    loopTimer = setTimeout(play, FADE_MS + 250);
+  }
+
+  function setSize(px){
+    document.documentElement.style.setProperty('--size', px + 'px');
+  }
+
+  function setTransparent(on){
+    document.body.classList.toggle('transparent', on);
+    document.body.classList.toggle('show-grid', on && !bar.classList.contains('hidden'));
+    document.getElementById('bg').classList.toggle('on', on);
+  }
+
+  function setClean(on){
+    bar.classList.toggle('hidden', on);
+    // The checkerboard is a screen-only aid; clean mode is capture mode.
+    if(document.body.classList.contains('transparent')){
+      document.body.classList.toggle('show-grid', !on);
+    }
+  }
+
+  document.getElementById('replay').onclick = play;
+  document.getElementById('fade').onclick   = fadeOut;
+  document.getElementById('size').onchange  = e => { setSize(e.target.value); play(); };
+  document.getElementById('bg').onclick     = () => setTransparent(!document.body.classList.contains('transparent'));
+  document.getElementById('loop').onclick   = () => {
+    looping = !looping;
+    document.getElementById('loop').classList.toggle('on', looping);
+    play();
+  };
+
+  document.addEventListener('keydown', e => {
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if(k === 'r') play();
+    else if(k === 'l') document.getElementById('loop').click();
+    else if(k === 't') document.getElementById('bg').click();
+    else if(k === 'h') setClean(!bar.classList.contains('hidden'));
+    else if(k === 'f') fadeOut();
+  });
+
+  /* ── URL params: ?size=520&bg=transparent&loop=1&clean=1 ── */
+  const sizeParam = params.get('size');
+  if(sizeParam && /^\d+$/.test(sizeParam)){
+    setSize(sizeParam);
+    const sel = document.getElementById('size');
+    if(![...sel.options].some(o => o.value === sizeParam)){
+      sel.add(new Option(sizeParam, sizeParam, true, true));
+    } else { sel.value = sizeParam; }
+  }
+  if(params.get('bg') === 'transparent') setTransparent(true);
+  if(params.get('clean') === '1') setClean(true);
+  if(params.get('loop') === '1') document.getElementById('loop').click();
+
+  /* Fonts must be ready before the wordmark fades in, or the first play shows
+     a Georgia fallback that swaps mid-animation — very visible in a capture. */
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(play);
+  }
+})();
+</script>
+</body>
+</html>

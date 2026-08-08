@@ -3055,6 +3055,29 @@ async function callAI(messages, options = {}) {
 const { initRunner } = require('../agents/runner');
 initRunner(callAI);
 
+// Initialize the autonomous Telegram agent with the SAME retrieval and
+// verification stack the dashboard chat uses, so a Telegram user gets an
+// equally grounded answer. Injected rather than imported: bot.js is required
+// by this file, so a static import the other way would be a require cycle.
+// (Every function below is a hoisted declaration, so referencing them here —
+// above their definitions — is safe.)
+try {
+  const { initTelegramAgent } = require('../agents/telegram-agent');
+  const { searchKorpus } = require('../rag/qa-korpus');
+  initTelegramAgent({
+    callAI,
+    callCheapAI,
+    retrieveLegalContext,
+    verifyCitations,
+    buildTopicPrompt,
+    classifyLegalTopic,
+    searchKorpus,
+    embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
+  });
+} catch (e) {
+  console.error('[TG-AGENT] init failed — Telegram requests will go to the human queue:', e.message);
+}
+
 // AI Analysis endpoint — Legal GPT (RAG-based)
 app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
   try {
