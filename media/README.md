@@ -18,7 +18,13 @@ there and re-render; the timings must stay in sync with the site.
 | `juristai-logo-alpha.webm` | 1920×1080 60fps VP9 **yuva420p**, silent | Overlay on footage (carries alpha) |
 | `juristai-sting.wav` | 48kHz stereo PCM | The audio alone, for an editor to place freely |
 
-Duration 3.23s: entrance 2.3s → fade-out 0.65s → ~0.25s empty tail.
+**Duration 2.80s: entrance 2.3s → 0.5s holding the finished logo.** The clip
+ends ON the logo, so an editor can freeze the last frame or cut straight out
+of it.
+
+A fade-out variant (3.23s, ending on empty background) is not shipped but is
+one flag away — see "Re-rendering" below. Pair it with the fade-out audio
+defaults, or the sting ducks while the logo is still on screen.
 
 MP4/H.264 cannot carry an alpha channel that editors read reliably, which is
 why the transparent variant is WebM. If an editor rejects it, re-render to
@@ -38,7 +44,7 @@ Cues land on the animation beats:
 | 0.90s | warm chime — A4 with 2nd/3rd partials, exponential decay | the "J" appears |
 | 1.25s | quiet high ping (E6) | the diamond |
 | 1.50s | A-major chord swell (A2–A3–C♯4–E4) | the wordmark |
-| 2.75s | fade out | with the visual fade |
+| 2.50s | chord resolves to silence by 2.80s | logo holds on screen |
 
 Delivered at **−3.0 dBFS peak** (≈ −10.5 LUFS integrated). That is a normal
 standalone-sting level with headroom for an editor to place it; duck it under
@@ -64,8 +70,11 @@ Requires `playwright-core` + `ffmpeg-static` (dev-only, not project deps) and
 the Chromium at `PLAYWRIGHT_BROWSERS_PATH`:
 
 ```bash
-# 1. frames  (env: W H FPS SIZE HOLD_MS FADE_MS TAIL_MS TRANSPARENT)
-FPS=60 SIZE=720 node render.js public/logo-animation.html frames
+# 1. frames  (env: W H FPS SIZE HOLD_MS FADE_MS TAIL_MS TRANSPARENT FADE)
+#    FADE=0 ends on the logo (shipped); FADE=1 adds the 0.65s fade-out.
+#    playwright-core is dev-only, so point NODE_PATH at wherever it is installed.
+NODE_PATH=/path/to/node_modules FADE=0 TAIL_MS=500 FPS=60 SIZE=720 \
+  node scripts/render-logo-animation.js public/logo-animation.html frames
 
 # 2. MP4
 ffmpeg -framerate 60 -i frames/%05d.png \
@@ -85,8 +94,13 @@ ffmpeg -framerate 60 -i frames/%05d.png -vf "crop=1080:1080:420:0" \
 
 ```bash
 # 5. sting + mux (synthesizes the audio and muxes it, copying the video stream)
-scripts/render-logo-audio.sh <ffmpeg> juristai-logo-1080p60.mp4 \
-                             juristai-logo-1080p60-sound.mp4 juristai-sting.wav
+#    The audio timing MUST match the video variant, or the sting ducks while
+#    the logo is still on screen:
+#      hold clip (shipped):  DUR=2.80 FADE_ST=2.50 FADE_D=0.30
+#      fade-out clip:        defaults (DUR=3.23 FADE_ST=2.75 FADE_D=0.46)
+DUR=2.80 FADE_ST=2.50 FADE_D=0.30 \
+  scripts/render-logo-audio.sh <ffmpeg> juristai-logo-1080p60.mp4 \
+                               juristai-logo-1080p60-sound.mp4 juristai-sting.wav
 ```
 
 Scripts: `scripts/render-logo-animation.js`, `scripts/render-logo-audio.sh`.

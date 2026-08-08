@@ -24,9 +24,17 @@ VIDEO_IN="${2:?input video required}"
 VIDEO_OUT="${3:?output video required}"
 AUDIO_OUT="${4:-/tmp/juristai-sting.wav}"
 
-DUR=3.23           # must match the rendered animation
-MASTER_GAIN=10.5dB # brings the mix peak to about -2 dBFS; the limiter is the
-                   # safety net, not the level control
+# Must match the rendered animation. The fade-out variant runs 3.23s and ducks
+# with the visual fade; the hold-on-logo variant (FADE=0 render) runs 2.80s and
+# should RESOLVE instead — a sting that ducks while the logo is still on screen
+# sounds like a mistake.
+#   fade-out clip:  DUR=3.23 FADE_ST=2.75 FADE_D=0.46   (defaults)
+#   hold clip:      DUR=2.80 FADE_ST=2.50 FADE_D=0.30
+DUR="${DUR:-3.23}"
+FADE_ST="${FADE_ST:-2.75}"
+FADE_D="${FADE_D:-0.46}"
+MASTER_GAIN="${MASTER_GAIN:-10.5dB}"  # peak lands near -3 dBFS; the limiter is
+                                      # the safety net, not the level control
 
 # ── Synthesize ──────────────────────────────────────────────────────────────
 # Levels are set per element and amix runs with normalize=0, so the balance is
@@ -77,7 +85,7 @@ MASTER_GAIN=10.5dB # brings the mix peak to about -2 dBFS; the limiter is the
       aecho=0.85:0.5:65:0.16,
       volume=${MASTER_GAIN},
       alimiter=limit=0.95,
-      afade=t=out:st=2.75:d=0.46,
+      afade=t=out:st=${FADE_ST}:d=${FADE_D},
       atrim=0:${DUR},asetpts=PTS-STARTPTS,
       aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo
   " "$AUDIO_OUT"
