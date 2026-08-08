@@ -11,15 +11,44 @@ there and re-render; the timings must stay in sync with the site.
 
 | File | Format | Use |
 |---|---|---|
-| `juristai-logo-1080p60.mp4` | 1920×1080, 60fps, H.264 yuv420p | General video use, award submission |
-| `juristai-logo-square-1080.mp4` | 1080×1080, 60fps, H.264 yuv420p | Instagram / square social |
-| `juristai-logo-alpha.webm` | 1920×1080, 60fps, VP9 **yuva420p** | Overlay on footage (carries alpha) |
+| `juristai-logo-1080p60-sound.mp4` | 1920×1080 60fps H.264 + AAC | **Default.** General video use, award submission |
+| `juristai-logo-square-1080-sound.mp4` | 1080×1080 60fps H.264 + AAC | Instagram / square social |
+| `juristai-logo-1080p60.mp4` | 1920×1080 60fps H.264, silent | When the edit supplies its own audio bed |
+| `juristai-logo-square-1080.mp4` | 1080×1080 60fps H.264, silent | Square, silent |
+| `juristai-logo-alpha.webm` | 1920×1080 60fps VP9 **yuva420p**, silent | Overlay on footage (carries alpha) |
+| `juristai-sting.wav` | 48kHz stereo PCM | The audio alone, for an editor to place freely |
 
 Duration 3.23s: entrance 2.3s → fade-out 0.65s → ~0.25s empty tail.
 
 MP4/H.264 cannot carry an alpha channel that editors read reliably, which is
 why the transparent variant is WebM. If an editor rejects it, re-render to
 ProRes 4444 or a PNG sequence instead.
+
+## Audio
+
+Synthesized by `scripts/render-logo-audio.sh` from ffmpeg sine and noise
+sources — **no licensed track**, so there is nothing to clear before using
+this in a submission, an ad, or a store listing.
+
+Cues land on the animation beats:
+
+| Time | Sound | Visual |
+|---|---|---|
+| 0.05 / 0.20 / 0.35s | three soft air swells (pink noise, lowpassed) | the rings drawing in |
+| 0.90s | warm chime — A4 with 2nd/3rd partials, exponential decay | the "J" appears |
+| 1.25s | quiet high ping (E6) | the diamond |
+| 1.50s | A-major chord swell (A2–A3–C♯4–E4) | the wordmark |
+| 2.75s | fade out | with the visual fade |
+
+Delivered at **−3.0 dBFS peak** (≈ −10.5 LUFS integrated). That is a normal
+standalone-sting level with headroom for an editor to place it; duck it under
+a voiceover rather than using it as-is in a mixed edit.
+
+Two level traps are handled in the script and worth knowing if you edit it:
+ffmpeg's `sine` generator peaks near −18 dBFS while `anoisesrc` peaks near
+0 dBFS, so tonal elements are lifted 18 dB before mixing — without that the
+background ring swells sit at the same level as the hero chime. Master level
+is set by an explicit gain, with `alimiter` only as a safety net.
 
 ## Re-rendering
 
@@ -54,4 +83,10 @@ ffmpeg -framerate 60 -i frames/%05d.png -vf "crop=1080:1080:420:0" \
        -movflags +faststart juristai-logo-square-1080.mp4
 ```
 
-`render.js` is in `scripts/render-logo-animation.js`.
+```bash
+# 5. sting + mux (synthesizes the audio and muxes it, copying the video stream)
+scripts/render-logo-audio.sh <ffmpeg> juristai-logo-1080p60.mp4 \
+                             juristai-logo-1080p60-sound.mp4 juristai-sting.wav
+```
+
+Scripts: `scripts/render-logo-animation.js`, `scripts/render-logo-audio.sh`.
