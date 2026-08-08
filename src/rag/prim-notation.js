@@ -255,8 +255,64 @@ function stripLeakedInstructions(text) {
   return cleaned.trim();
 }
 
+// Domains an answer may link to. lex.uz is the national legislation database;
+// the rest of the web — commercial aggregators, news sites, blogs — is neither
+// authoritative nor version-tracked, and a repealed article quoted from one of
+// them looks exactly like a current one.
+const ALLOWED_LINK_HOSTS = /^(?:[a-z0-9-]+\.)*lex\.uz$/i;
+
+function isAllowedUrl(url) {
+  try {
+    const u = new URL(String(url).trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    return ALLOWED_LINK_HOSTS.test(u.hostname);
+  } catch (_) {
+    return false;   // unparseable => not a link we are willing to publish
+  }
+}
+
+/**
+ * Remove every link to a source outside lex.uz.
+ *
+ * Web search is disabled at the provider layer, so this is a safety net for
+ * the case the search guard misses: a model citing a site from its training
+ * memory. It is mechanical rather than probabilistic — whatever the model
+ * writes, the delivered answer cannot contain a non-lex.uz URL.
+ *
+ * A markdown link is reduced to its label, unless the label is itself just a
+ * domain ("buxgalter.uz"), in which case the whole citation goes — keeping it
+ * would leave a bare domain reading as an attribution.
+ */
+function stripNonLexSources(text) {
+  let s = String(text || '');
+
+  // [label](url)
+  s = s.replace(/\[([^\]\n]*)\]\(\s*(<)?([^)\s>]+)(>)?[^)]*\)/g, (m, label, _lt, url) => {
+    if (isAllowedUrl(url)) return m;
+    const looksLikeDomain = /^[a-z0-9-]+(\.[a-z0-9-]+)+\s*$/i.test(label);
+    return looksLikeDomain ? '' : label;
+  });
+
+  // Bare URLs, including inside angle brackets.
+  s = s.replace(/<?\bhttps?:\/\/[^\s<>()\[\]"']+>?/gi, (m) => {
+    const url = m.replace(/^<|>$/g, '');
+    return isAllowedUrl(url) ? m : '';
+  });
+
+  // Tidy what removal leaves behind: empty citation parens, doubled spaces,
+  // orphaned separators, and blank list items.
+  s = s.replace(/\(\s*[;,]?\s*\)/g, '');
+  s = s.replace(/\[\s*\]/g, '');
+  s = s.replace(/^[ \t]*[-*•]\s*$/gm, '');
+  s = s.replace(/[ \t]{2,}/g, ' ');
+  s = s.replace(/[ \t]+([.,;:!?])/g, '$1');
+  s = s.replace(/\n{3,}/g, '\n\n');
+
+  return s.trim();
+}
+
 function normalizeResponseForUser(text) {
-  return toPrimNotation(stripLeakedInstructions(text || ''));
+  return stripNonLexSources(toPrimNotation(stripLeakedInstructions(text || '')));
 }
 
 module.exports = {
@@ -264,5 +320,7 @@ module.exports = {
   enrichForIngest,
   expandQueryVariants,
   normalizeResponseForUser,
+  stripNonLexSources,
+  isAllowedUrl,
   SUPER_DIGITS,
 };
