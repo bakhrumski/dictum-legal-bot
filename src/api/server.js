@@ -5348,7 +5348,10 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     // ── Short-circuit: return verified answer directly ──
     if (verifiedOverride) {
       const payload = {
-        reply: verifiedOverride,
+        // Also scrubbed: a lawyer-verified answer stored before the
+        // restriction (or pasted from an aggregator during correction) must
+        // not become the one path that can still publish an external link.
+        reply: normalizeResponseForUser(verifiedOverride),
         provider: 'verified-qa',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
@@ -5381,7 +5384,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         if (c.rows[0]) {
           pool.query('UPDATE answer_cache SET hits = hits + 1 WHERE key = $1', [cacheKey]).catch(() => {});
           const payload = {
-            reply: c.rows[0].reply,
+            // Scrubbed on READ, not just on write. A cache entry outlives the
+            // code that produced it: answers stored before the lex.uz-only
+            // restriction shipped were being replayed verbatim for 72 hours,
+            // bypassing the provider guard, the prompt rule and the scrubber
+            // alike — which is exactly why a re-test after the fix returned
+            // the same external citations.
+            reply: normalizeResponseForUser(c.rows[0].reply),
             provider: (c.rows[0].provider || 'AI'),
             databases: Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'],
             ragUsed: true,
@@ -9075,6 +9084,32 @@ async function runMigrations() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_answer_cache_created ON answer_cache(created_at)`);
+
+    // Purge cached answers that cite a source outside lex.uz.
+    //
+    // Cache entries outlive the code that produced them. Answers generated
+    // before the lex.uz-only restriction sat here for 72 hours and were
+    // replayed verbatim, so a re-test after the fix returned the very same
+    // buxgalter.uz / talimxabarlari.uz citations. Reads are scrubbed now, but
+    // storing known-bad answers is still wrong — a cached reply is also what
+    // a lawyer sees when reviewing, and it should not contain links the
+    // platform would never publish.
+    try {
+      const purged = await pool.query(`
+        DELETE FROM answer_cache
+         WHERE reply ~ 'https?://'
+           AND EXISTS (
+             SELECT 1
+               FROM regexp_matches(reply, 'https?://([A-Za-z0-9.-]+)', 'g') AS m(host)
+              WHERE m.host[1] !~ '(^|\\.)lex\\.uz$'
+           )
+      `);
+      if (purged.rowCount > 0) {
+        console.log(`[SOURCE-GUARD] purged ${purged.rowCount} cached answer(s) citing non-lex.uz sources`);
+      }
+    } catch (e) {
+      console.warn('[SOURCE-GUARD] answer_cache purge failed (non-fatal):', e.message);
+    }
 
     // Fix vector dimension mismatch — if embedding column exists with wrong dims, recreate it.
     //

@@ -114,6 +114,20 @@ test('an answer with no links is returned unchanged', () => {
   assert.strictEqual(stripNonLexSources(t), t);
 });
 
+test('the cache-purge predicate matches poisoned rows only', () => {
+  // Mirrors the SQL used at boot to delete answer_cache rows citing sources
+  // outside lex.uz. A cache entry outlives the code that produced it, so
+  // answers stored before the restriction were replayed verbatim for 72
+  // hours — that is why a re-test after the fix returned the same citations.
+  const hosts = s => [...String(s).matchAll(/https?:\/\/([A-Za-z0-9.-]+)/g)].map(m => m[1]);
+  const isPoisoned = s => /https?:\/\//.test(s) && hosts(s).some(h => !/(^|\.)lex\.uz$/.test(h));
+
+  assert.strictEqual(isPoisoned('Javob ([buxgalter.uz](https://buxgalter.uz/x)) va https://lex.uz/docs/1'), true);
+  assert.strictEqual(isPoisoned('Javob [MJTK](https://lex.uz/docs/97664) va https://www.lex.uz/docs/2'), false);
+  assert.strictEqual(isPoisoned('Javob hech qanday havolasiz.'), false);
+  assert.strictEqual(isPoisoned('https://lex.uz.evil.com/docs/1'), true, 'suffix attack must be purged');
+});
+
 test('scrubbing runs as part of the normal answer normalizer', () => {
   // The guarantee only holds if it is wired into the path every chat answer
   // takes, not merely available as a helper.
