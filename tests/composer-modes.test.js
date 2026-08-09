@@ -107,6 +107,39 @@ test('analyzer upload has a bounded wait, not an endless poll', () => {
   assert.ok(fn.includes('clearInterval'), 'interval must be cleared');
 });
 
+console.log('\ncomposer modes — no duplicate routes to the same feature\n');
+
+test('Yuridik xulosa is reachable only from the top-level menu', () => {
+  // It used to be the primary button inside "Hujjat yaratish → AI bilan yangi
+  // hujjat yaratish" as well. Two doors to one feature is confusing on its
+  // own; worse, that one filed "analyse a document" under "create a document".
+  // Bound to docFlowAI()'s own body — docFlowOpinion() is DEFINED just below
+  // it, and a slice that runs past the closing brace matches the definition
+  // rather than a button.
+  const card = html.slice(html.indexOf('function docFlowAI()'), html.indexOf('var opinionDoc'));
+  assert.ok(!card.includes('docFlowOpinion()'),
+    'the create-a-document card still offers Yuridik xulosa');
+
+  const menuHits = (menu.match(/modeOpinion\(\)/g) || []).length;
+  assert.strictEqual(menuHits, 1, 'exactly one menu entry should open the opinion flow');
+});
+
+test('templates are USED in one place and MANAGED in another', () => {
+  // The editor lists/uploads/deletes; the builder's Shablon picker is where a
+  // template actually gets filled. Both offering "fill" duplicated the flow.
+  const editor = html.slice(html.indexOf('async function tplEditorHome'), html.indexOf('async function onTplUpload'));
+  assert.ok(!editor.includes('pickDocTemplate('),
+    'the template editor should manage, not fill — that is the builder\'s job');
+  assert.ok(editor.includes('tplDeleteMine('), 'the editor must still delete');
+});
+
+test('own templates are findable in the picker that fills them', () => {
+  // Removing the editor shortcut only works if a user can spot their own
+  // uploads in the shared list.
+  const picker = html.slice(html.indexOf('async function docFlowTemplates'), html.indexOf('function docFlowAI'));
+  assert.ok(picker.includes('t.isMine'), 'the picker does not distinguish own templates');
+});
+
 console.log('\ncomposer modes — hygiene\n');
 
 test('every mode closes the menu before opening its card', () => {
