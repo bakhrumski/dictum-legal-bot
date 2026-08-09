@@ -41,7 +41,9 @@
     "test:agent": "node tests/telegram-agent.test.js",
     "test:sources": "node tests/source-restriction.test.js",
     "test:tariff": "node tests/tariff-unlimited.test.js",
-    "test:templates": "node tests/user-templates.test.js"
+    "test:templates": "node tests/user-templates.test.js",
+    "test:ui": "node tests/composer-modes.test.js",
+    "test:all": "node tests/lex-resolve.test.js && node tests/lex-excerpt.test.js && node tests/legal-verify.test.js && node tests/telegram-agent.test.js && node tests/source-restriction.test.js && node tests/tariff-unlimited.test.js && node tests/user-templates.test.js && node tests/composer-modes.test.js && node tests/answer-verification.test.js && node tests/ingest-queue.test.js"
   },
   "keywords": [],
   "author": "",
