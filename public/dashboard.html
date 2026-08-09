@@ -10382,7 +10382,12 @@
                 }
                 docStepCard('<div class="docflow-title">Shablonni tanlang</div><div class="docflow-opts">' +
                     tpls.map(function (t) {
-                        return '<button class="docflow-opt" type="button" onclick="pickDocTemplate(\'' + t.id + '\')">📄 ' + escapeHtml(docbL(t.name)) + '</button>';
+                        // Own uploads are marked so they are findable here —
+                        // this picker is now the single place templates get
+                        // USED, so a user must be able to spot theirs.
+                        return '<button class="docflow-opt" type="button" onclick="pickDocTemplate(\'' + t.id + '\')">' +
+                            (t.isMine ? '🗂 ' : '📄 ') + escapeHtml(docbL(t.name)) +
+                            (t.isMine ? ' <span style="opacity:.55;font-size:12px;">(meniki)</span>' : '') + '</button>';
                     }).join('') +
                     '<button class="docflow-opt" type="button" onclick="openDocBuilder()">← Orqaga</button></div>');
             } catch (e) { docInfoCard('❌ ' + escapeHtml(e.message)); }
@@ -10401,8 +10406,11 @@
             { k: 'details',   label: 'Muhim shartlar va tafsilotlar', ph: 'Vaziyat, talablar, muddatlar, asoslar...', ta: true }
         ];
         function docFlowAI() {
+            // Yuridik xulosa deliberately does NOT appear here. An opinion
+            // analyses a document you already have; it does not create one.
+            // It lived in this card only because there was no top-level entry
+            // for it — there is one now ("+" menu → Yuridik xulosa).
             docStepCard('<div class="docflow-title">Qanday hujjat kerak?</div><div class="docflow-opts">' +
-                '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowOpinion()">📑 Yuridik xulosa (hujjat asosida)</button>' +
                 DOC_TYPES.map(function (t) {
                     return '<button class="docflow-opt" type="button" onclick="docFlowPickType(' + attrArg(t) + ')">' + escapeHtml(t) + '</button>';
                 }).join('') +
@@ -10954,7 +10962,7 @@
             docStepCard('<div class="docflow-title">🗂 Shablonlar muharriri</div>' +
                 '<p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;line-height:1.55;">' +
                 'O\'z shablonlaringizni yuklang — platforma ularni tahlil qilib, to\'ldiriladigan maydonlarni aniqlaydi. ' +
-                'Shablonlaringiz faqat sizga ko\'rinadi.</p>' +
+                'Shablonlaringiz faqat sizga ko\'rinadi va <b>Hujjat yaratish → Shablon</b> ro\'yxatida chiqadi.</p>' +
                 '<div id="tplMineList" style="font-size:13px;color:var(--text-secondary);">Yuklanmoqda…</div>' +
                 '<div class="docflow-opts">' +
                 '<button class="docflow-opt docflow-primary" type="button" onclick="document.getElementById(\'tplUploadFile\').click()">⬆️ Shablon yuklash</button>' +
@@ -10975,7 +10983,6 @@
                     list.map(function (t) {
                         return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-1);">' +
                             '<span style="flex:1;color:var(--text-primary);">📄 ' + escapeHtml(docbL(t.name)) + '</span>' +
-                            '<button class="docflow-opt" style="padding:5px 11px;font-size:12.5px;" type="button" onclick="pickDocTemplate(\'' + t.id + '\')">To\'ldirish</button>' +
                             '<button class="docflow-opt" style="padding:5px 11px;font-size:12.5px;" type="button" onclick="tplDeleteMine(' + t.id + ')">O\'chirish</button>' +
                             '</div>';
                     }).join('');
