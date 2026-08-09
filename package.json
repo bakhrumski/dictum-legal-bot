@@ -39,7 +39,8 @@
     "test:lex-excerpt": "node tests/lex-excerpt.test.js",
     "test:opinion": "node tests/lex-resolve.test.js && node tests/lex-excerpt.test.js && node tests/legal-verify.test.js",
     "test:agent": "node tests/telegram-agent.test.js",
-    "test:sources": "node tests/source-restriction.test.js"
+    "test:sources": "node tests/source-restriction.test.js",
+    "test:tariff": "node tests/tariff-unlimited.test.js"
   },
   "keywords": [],
   "author": "",

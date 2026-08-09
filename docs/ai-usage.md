@@ -29,7 +29,7 @@ Free tier in practice; not billed in `MODEL_PRICING`.
 | `callPremiumAI` | Sol → (retry) → Terra/Gemini | Legal opinions only |
 | `callAI` | Terra → Gemini | Default for almost everything |
 | `callCheapAI` | Luna → Gemini | Bulk / mechanical work |
-| `callOpenAIStream` | Terra (streaming) | Chat, primary |
+| `callOpenAIStream` | model from caller (streaming) | Chat, primary — passed `MODELS.chat` |
 | `callGeminiStream` | Gemini (streaming) | Chat, only if OpenAI is down or over budget |
 
 Gemini is the **only** fallback. It engages when `GPT_API_KEY` is absent, the
@@ -57,14 +57,11 @@ The workhorse. Everything that calls `callAI` without a model override.
 
 | Job | Where |
 |---|---|
-| **Legal chat answers** (streamed and non-streamed) | `/api/legal-chat` |
-| Chat fallback pass | `/api/legal-chat/fallback` |
 | Document explanation | `/api/draft/explain-document` |
 | Document drafting / templates | `src/drafting/routes.js` (3 sites) |
 | OCR post-processing | `src/ocr/routes.js` |
 | Corrective RAG grading | `src/rag/corrective.js` |
 | Reference extraction for opinions | `src/rag/legal-verify.js` |
-| Telegram agent answers | `src/agents/telegram-agent.js` |
 | Triage / classifier agents | `src/agents/runner.js` |
 | Enterprise module | `src/enterprise/index.js` |
 | Master tools (ai-analysis, ai-chat, qa enrich, style audit) | various, master-only |
@@ -75,6 +72,8 @@ Bulk and mechanical work where quality per token matters least.
 
 | Job | Where | Why cheap is right |
 |---|---|---|
+| **Legal chat answers** (`MODEL_CHAT`) | `/api/legal-chat` | Unlimited on paid plans, so per-answer cost compounds without bound; answers are short and RAG-grounded |
+| **Telegram agent answers** | `src/agents/telegram-agent.js` | Same workload, capped at ~200 words |
 | **Long-document digest (map-reduce)** | `digestLongDocument` | Summarizing 7+ chunks in parallel; the expensive reasoning happens later on Sol |
 | Sinov-tier legal opinions | `/api/draft/legal-opinion` | Free trial |
 | Opinion pattern extraction | `/api/draft/legal-opinion/save-pattern` | Master-triggered, structural |
@@ -107,17 +106,17 @@ synthesis understates it by roughly half.
 | — topic classification | Terra | ~1k in / 16 out | ~$0.003 |
 | — citation correction (only when triggered) | Sol | ~12k in / ~5k out | ~$0.21 |
 | **Legal opinion, typical contract** (<14k chars) | Sol | — | **~$0.15–0.20** |
-
-A document under ~14,000 chars skips the digest entirely and needs one
-reference window instead of three, so a normal contract costs a third of the
-79k-char stress-test document these figures come from.
-| **Chat answer** | Terra | ~4k in / ~0.3k out | **~$0.015** |
-| **Telegram answer** | Terra + Luna | ~4.6k in / ~0.36k out | **~$0.016** |
+| **Chat answer** | **Luna** | ~4k in / ~0.3k out | **~$0.006** |
+| **Telegram answer** | **Luna** | ~4.6k in / ~0.36k out | **~$0.007** |
 | — Telegram greeting | none (regex) | 0 | **$0.00** |
 | — Telegram clarifying question | Luna | ~0.6k in / 60 out | ~$0.001 |
 | — Telegram answer from qa-korpus | embedding only | — | ~$0.0001 |
 | Document explanation | Terra | varies | ~$0.01–0.03 |
 | Topic classification | Terra | ~1k in / 16 out | ~$0.003 |
+
+A document under ~14,000 chars skips the digest entirely and needs one
+reference window instead of three, so a normal contract costs a third of the
+79k-char stress-test document these figures come from.
 
 **Worst case** — large document, all four stages plus a correction pass —
 lands near **$0.65**.
@@ -142,38 +141,47 @@ spent at that point. The model is accurate to about 1%.
 
 ## 4. Plan economics
 
-| Plan | Price (UZS) | Cap | Opinions | Opinion model |
-|---|---|---|---|---|
-| Sinov | free, 10 days | 3/day | 1 per trial | Luna |
-| Silver | 299,000 /mo | 200/mo | 3 | **Sol** |
-| Gold | 599,000 /mo | 500/mo | 10 | **Sol** |
-| Platinum | 1,199,000 /mo | 1,200/mo | 30 | **Sol** |
+| Plan | Price (UZS) | Chat | Fair-use ceiling | Opinions | Opinion model |
+|---|---|---|---|---|---|
+| Sinov | free, 10 days | 3/day (real quota) | — | 1 per trial | Luna |
+| Silver | 299,000 /mo | **unlimited** | 75/day | 3 | **Sol** |
+| Gold | 599,000 /mo | **unlimited** | 150/day | 10 | **Sol** |
+| Platinum | 1,199,000 /mo | **unlimited** | 250/day | 30 | **Sol** |
 
-Unused quota rolls over once (`tariff_rollover` in
-`src/rag/subscription-tiers.js`).
+Chat runs on **Luna** (`MODEL_CHAT`), ~$0.006 per answer. Legal opinions are
+the only metered unit and the only reason to move up a tier.
 
-**AI gross margin**, at chat $0.015 and a large opinion $0.437, priced at
-13,000 UZS/USD (Silver $23.00, Gold $46.08, Platinum $92.23):
+The fair-use ceiling is an anti-abuse guard, not a quota — it catches a login
+shared across a firm, or a script. Break-even sits at 125 / 240 / 455 per day,
+so even a subscriber sustaining the ceiling every day for a month still
+leaves ~34-39% margin. Rollover is retired: with chat unlimited there is
+nothing left to carry.
 
-| Scenario | Silver | Gold | Platinum |
+**AI gross margin** at chat $0.006 (Luna) and a large opinion $0.437, priced
+at 13,000 UZS/USD (Silver $23.00, Gold $46.08, Platinum $92.23). Chat is
+unlimited, so the axis is *actual daily use* rather than a cap:
+
+| Chat/day | Silver | Gold | Platinum |
 |---|---|---|---|
-| **Cap exhausted (100%)** | $4.31 → **81.3%** | $11.87 → **74.2%** | $31.11 → **66.3%** |
-| **Realistic (25% chat, 50% opinions)** | $1.62 → **92.9%** | $4.06 → **91.2%** | $11.05 → **88.0%** |
-| **Light (10% chat, few opinions)** | $0.74 → **96.8%** | $1.62 → **96.5%** | $3.98 → **95.7%** |
+| 10 (typical) | **86%** | **87%** | **84%** |
+| 20 | **79%** | **83%** | **82%** |
+| 50 (very heavy) | **58%** | **71%** | **76%** |
+| at the fair-use ceiling, sustained | **38%** (75/day) | **34%** (150/day) | **39%** (250/day) |
+| break-even | 125/day | 240/day | 455/day |
 
-Two things this shows:
+Three things this shows:
 
-- **Opinions dominate.** At Platinum's cap, 30 opinions are $13.11 of the
-  $31.11 — chat is the cheap part. Opinion count per plan is the lever that
-  actually moves cost, not the chat cap.
-- **Platinum is the thinnest plan.** A power user who exhausts it still leaves
-  66% margin, but it is the only tier where heavy use meaningfully compresses
-  the number. Raising its opinion allowance is the one change that could push
-  a tier toward unprofitability.
-
-These are **AI gross margins**. Hosting, database, payment-processing fees
-(typically 2–3%) and the lawyer time spent on escalations come out of what is
-left.
+- **Opinions dominate cost, not chat.** Even at 50 messages a day, a Silver
+  subscriber's chat costs $8.70 a month against $1.31 of opinions — but at a
+  *typical* 10/day chat is $1.80, below the opinions. Opinion count per plan
+  is the lever that moves money; the chat cap moved nothing, which is why
+  removing it was safe.
+- **No plan can be driven to a loss through legitimate use.** Sustaining the
+  fair-use ceiling every day for a month — which no real user does — still
+  leaves 34-39%.
+- **Moving chat to Luna is what made unlimited safe.** On Terra, Silver's
+  break-even was 48 messages a day and heavy users went negative. On Luna it
+  is 125, and the ceiling sits below that with room to spare.
 
 ### The uncapped exposure: Telegram
 
@@ -242,12 +250,14 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 | `MODEL_PREMIUM` | `gpt-5.6-sol` | Opinion synthesis model |
 | `MODEL_STANDARD` | `gpt-5.6-terra` | Default model |
 | `MODEL_CHEAP` | `gpt-5.6-luna` | Bulk work model |
+| `MODEL_CHAT` | `gpt-5.6-luna` | Chat + Telegram answers (own slot, so raising it does not move drafting/OCR/agents) |
 | `OPINION_MODEL` | — | Forces one model for all opinions |
 | `OPINION_MODEL_<PLAN>` | — | Per-plan opinion model |
 | `OPINION_LIMIT_<PLAN>` | 1/3/10/30 | Opinions per tariff period |
 | `OPINION_MAX_REFS` | 15 | lex.uz lookups per opinion |
 | `LLM_DAILY_BUDGET_USD` | 0 (off) | Daily paid-model ceiling |
 | `ANSWER_CACHE` | on | `off` disables the 72h chat cache |
+| `FAIR_USE_SILVER` / `_GOLD` / `_PLATINUM` | 75 / 150 / 250 | Daily anti-abuse ceiling on unlimited chat |
 | `ALLOW_WEB_SEARCH` | false | `true` lifts the lex.uz-only restriction |
 | `AGENT_AUTO_ANSWER` | true | `false` sends all Telegram requests to humans |
 | `AGENT_ESCALATE_WEAK` | true | Queue a lawyer on low-confidence answers |
@@ -258,15 +268,14 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 ## 7. Levers, in the order I would pull them
 
 1. **Cap Telegram** — a daily free allowance is the only change that bounds
-   the platform's unbounded cost.
+   the platform's unbounded cost. Telegram users still have no plan and no
+   quota; unlimited chat for *paying* subscribers is bounded by fair use,
+   but anonymous Telegram traffic is not bounded by anything.
 2. **Grow `qa_korpus`** — a verified answer reused costs ~$0.0001 instead of
    ~$0.015, and it is *higher* quality than generation. The lawyer-correction
    loop already feeds it; nothing else gives a 100× cost reduction and a
    quality gain at the same time.
-3. **Terra → Luna for Telegram answers** — 57% cheaper (~$0.007). Telegram
-   answers are capped at 200 words, so the quality gap is far smaller than on
-   opinions. Validate with `npm run model:ab` first.
-4. **Set `LLM_DAILY_BUDGET_USD`** — not a saving, but it converts a runaway
+3. **Set `LLM_DAILY_BUDGET_USD`** — not a saving, but it converts a runaway
    bill into a quality degradation.
 
 Do **not** economize on opinion synthesis. It is the deliverable that
