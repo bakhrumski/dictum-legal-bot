@@ -122,6 +122,38 @@ async function initSubscriptionSchema() {
   }
 }
 
+// ── Cost weighting for the fair-use counter ─────────────────────────────────
+// The ceiling is expressed in "chat-equivalents", not raw requests, because
+// the endpoints behind it do not cost the same. A chat answer runs on Luna at
+// ~$0.006; generating a full legal document runs on Terra with a much larger
+// output and costs ~$0.0425 — seven times more.
+//
+// Counting both as "1 request" is what makes an unlimited plan dangerous: a
+// Silver subscriber spending 75 requests a day on documents instead of chat
+// would cost ~$97/month against $23 of revenue. Weighting keeps the ceiling
+// meaningful whatever mix of features a user actually chooses, and any future
+// expensive endpoint only needs a line here.
+//
+// Applied at COUNT time via SQL rather than stored on the row, so historical
+// usage needs no migration and re-pricing needs no backfill.
+const ENDPOINT_WEIGHT_SQL = `
+  CASE
+    WHEN endpoint LIKE '/api/draft/ai-generate%' THEN 7
+    WHEN endpoint LIKE '/api/templates/import%'  THEN 7
+    WHEN endpoint LIKE '/api/draft%'             THEN 7
+    ELSE 1
+  END`;
+
+/** SUM of cost-weighted usage since `since`, for one admin. */
+async function weightedUsageSince(adminId, since) {
+  const r = await pool.query(
+    `SELECT COALESCE(SUM(${ENDPOINT_WEIGHT_SQL}), 0)::int AS used
+       FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+    [adminId, since]
+  );
+  return r.rows[0].used;
+}
+
 // Return today's 00:00 Asia/Tashkent as a Date (UTC+5, no DST)
 function tashkentMidnight() {
   const nowMs = Date.now();
@@ -197,12 +229,8 @@ async function checkQuota(adminId) {
              period: 'unlimited', expiresAt: u.expiresAt };
   }
 
-  const midnight = tashkentMidnight();
-  const r = await pool.query(
-    `SELECT COUNT(*)::int AS used FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
-    [adminId, midnight]
-  );
-  const usedToday = r.rows[0].used;
+  // Cost-weighted, not a raw request count — see ENDPOINT_WEIGHT_SQL.
+  const usedToday = await weightedUsageSince(adminId, tashkentMidnight());
   return {
     allowed: usedToday < fairUse,
     plan: u.plan,

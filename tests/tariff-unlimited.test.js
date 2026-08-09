@@ -31,7 +31,8 @@ const fakePool = {
         bepul_used: false, role: state.role, tariff_rollover: 0,
       }] };
     }
-    if (/COUNT\(\*\)/i.test(sql)) return { rows: [{ used: state.usedToday, n: state.usedToday }] };
+    // Matches both the trial's COUNT(*) and the paid tiers' weighted SUM(CASE...).
+    if (/COUNT\(\*\)|SUM\(/i.test(sql)) return { rows: [{ used: state.usedToday, n: state.usedToday }] };
     return { rows: [] };
   },
 };
@@ -84,6 +85,34 @@ async function test(name, fn) {
   await test('the trial keeps a real 3/day quota', () => {
     assert.strictEqual(tiers.PLANS.sinov.dailyLimit, 3);
     assert.strictEqual(tiers.PLANS.sinov.fairUseDaily, null);
+  });
+
+  console.log('\ntariff — cost weighting\n');
+
+  await test('the ceiling holds whatever mix of features is used', () => {
+    // The hole this closes: chat runs on Luna (~$0.006) but generating a legal
+    // document runs on Terra with a much bigger output (~$0.0425). Counting
+    // both as "1 request" let a Silver subscriber spend 75/day on documents —
+    // ~$97/month against $23 of revenue.
+    const RATE = 13000, OPIN = 0.437;
+    const CHAT = 4000 * 1 / 1e6 + 300 * 6 / 1e6;
+    const DOC = 5000 * 2.5 / 1e6 + 2000 * 15 / 1e6;
+    const DOC_WEIGHT = 7;
+    const opinions = { silver: 3, gold: 10, platinum: 30 };
+
+    assert.ok(DOC / CHAT <= DOC_WEIGHT + 1,
+      `a document costs ${(DOC / CHAT).toFixed(1)}x a chat message — weight ${DOC_WEIGHT} is too low`);
+
+    for (const p of ['silver', 'gold', 'platinum']) {
+      const rev = tiers.PLANS[p].priceUzs / RATE;
+      const ceiling = tiers.PLANS[p].fairUseDaily;
+      const opinionCost = opinions[p] * OPIN;
+      // Two extremes of the same ceiling; both must stay profitable.
+      const allChat = ceiling * 30 * CHAT + opinionCost;
+      const allDocs = (ceiling / DOC_WEIGHT) * 30 * DOC + opinionCost;
+      assert.ok(allChat < rev, `${p}: all-chat at the ceiling loses money`);
+      assert.ok(allDocs < rev, `${p}: all-documents at the ceiling loses money ($${allDocs.toFixed(2)} vs $${rev.toFixed(2)})`);
+    }
   });
 
   console.log('\ntariff — quota checks\n');
