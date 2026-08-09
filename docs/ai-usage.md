@@ -141,47 +141,55 @@ spent at that point. The model is accurate to about 1%.
 
 ## 4. Plan economics
 
-| Plan | Price (UZS) | Chat | Fair-use ceiling | Opinions | Opinion model |
-|---|---|---|---|---|---|
-| Sinov | free, 10 days | 3/day (real quota) | — | 1 per trial | Luna |
-| Silver | 299,000 /mo | **unlimited** | 75/day | 3 | **Sol** |
-| Gold | 599,000 /mo | **unlimited** | 150/day | 10 | **Sol** |
-| Platinum | 1,199,000 /mo | **unlimited** | 250/day | 30 | **Sol** |
+Rate: **11,980 UZS/USD**. Quotas are *solved* from measured unit costs against
+three targets — worst case 5–10%, medium (35% usage) 40–60%, and anything a
+customer generates above 75% returned to them as a rebate.
 
-Chat runs on **Luna** (`MODEL_CHAT`), ~$0.006 per answer. Legal opinions are
-the only metered unit and the only reason to move up a tier.
+| Plan | Price | USD | Chat | Fair use | Opinion credits/wk | Drafts/wk | Worst case |
+|---|---|---|---|---|---|---|---|
+| Bepul | free | — | 10/day → 3/day after 30d | — | 0 | 0 | — |
+| Sinov | free, 10d | — | 3/day | — | 1 | 2 | — |
+| Silver | 199,000 | $16.61 | unlimited | 15/day | **9** (~39/mo) | **22** (~95/mo) | **8.2%** |
+| Gold | 399,000 | $33.31 | unlimited | 30/day | **17** (~74/mo) | **50** (~217/mo) | **8.0%** |
+| Platinum | 999,000 | $83.39 | unlimited | 70/day | **42** (~182/mo) | **125** (~542/mo) | **9.8%** |
 
-The fair-use ceiling is an anti-abuse guard, not a quota — it catches a login
-shared across a firm, or a script. Break-even sits at 125 / 240 / 455 per day,
-so even a subscriber sustaining the ceiling every day for a month still
-leaves ~34-39% margin. Rollover is retired: with chat unlimited there is
-nothing left to carry.
+Weekly windows reset Monday 00:00 Asia/Tashkent — a fresh allowance every week
+reads as more generous than one monthly number, and caps what a single abusive
+week can cost.
 
-**AI gross margin** at chat $0.006 (Luna) and a large opinion $0.437, priced
-at 13,000 UZS/USD (Silver $23.00, Gold $46.08, Platinum $92.23). Chat is
-unlimited, so the axis is *actual daily use* rather than a cap:
+### Opinion credits, not opinion counts
 
-| Chat/day | Silver | Gold | Platinum |
-|---|---|---|---|
-| 10 (typical) | **86%** | **87%** | **84%** |
-| 20 | **79%** | **83%** | **82%** |
-| 50 (very heavy) | **58%** | **71%** | **76%** |
-| at the fair-use ceiling, sustained | **38%** (75/day) | **34%** (150/day) | **39%** (250/day) |
-| break-even | 125/day | 240/day | 455/day |
+An opinion costs $0.15–$0.65 depending on document length — a 4× spread.
+Charging one "opinion" regardless made the worst case a lottery: with every
+document at max size, every plan went to **−20%**. Credits flatten it to
+~$0.22 each.
 
-Three things this shows:
+| Document | Credits |
+|---|---|
+| ≤ 40k chars (~15 pages) | 1 |
+| 40–90k chars | 2 |
+| > 90k chars | 3 |
 
-- **Opinions dominate cost, not chat.** Even at 50 messages a day, a Silver
-  subscriber's chat costs $8.70 a month against $1.31 of opinions — but at a
-  *typical* 10/day chat is $1.80, below the opinions. Opinion count per plan
-  is the lever that moves money; the chat cap moved nothing, which is why
-  removing it was safe.
-- **No plan can be driven to a loss through legitimate use.** Sustaining the
-  fair-use ceiling every day for a month — which no real user does — still
-  leaves 34-39%.
-- **Moving chat to Luna is what made unlimited safe.** On Terra, Silver's
-  break-even was 48 messages a day and heavy users went negative. On Luna it
-  is 125, and the ceiling sits below that with room to spare.
+### Margin by usage
+
+| Usage | Silver | Gold | Platinum | |
+|---|---|---|---|---|
+| 100% quota + ceiling chat | 8% | 8% | 10% | worst |
+| 50% + 20 chat/day | 41% | 51% | 58% | target |
+| 35% + 15 chat/day | 58% | 65% | 70% | target |
+| 20% + 8 chat/day | 76% | 81% | 83% | **rebate** |
+| 5% + 2 chat/day | 94% | 95% | 96% | **rebate** |
+
+### Loyalty rebate
+
+Margin above `REBATE_THRESHOLD` (0.75) is returned as a discount on the next
+renewal — a discount rather than cash, because it costs the same, is funded by
+the following month's revenue, and only pays someone who stays.
+
+`GET /api/admin/margin-report` (master only) computes it per customer from
+**real** `llm_spend_log` cost, and bands each user `rebate` / `target` /
+`thin` / `loss`. Modelled on a 50/30/20 light/medium/heavy mix it returns
+~8% of revenue and lands net margin at 53–65%.
 
 ### The uncapped exposure: Telegram
 

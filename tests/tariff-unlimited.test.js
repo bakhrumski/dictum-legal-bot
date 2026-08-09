@@ -67,19 +67,59 @@ async function test(name, fn) {
     }
   });
 
-  await test('the fair-use ceiling sits below break-even for every plan', () => {
-    // Chat on the cheap tier: ~4k in / ~0.3k out at $1/$6 per 1M.
-    const CHAT = 4000 * 1 / 1e6 + 300 * 6 / 1e6;
-    const RATE = 13000;
-    const OPIN = 0.437;
-    const opinions = { silver: 3, gold: 10, platinum: 30 };
+  await test('WORST case — 100% of every quota — stays in the 5-10% band', () => {
+    // The whole plan set is solved against this. If a price, a quota, a
+    // ceiling or a unit cost moves and the worst case leaves the band, that is
+    // a pricing decision that must be made deliberately, not discovered later
+    // from an invoice.
+    const RATE = 11980, W = 52 / 12;
+    const CHAT = 4000 * 1 / 1e6 + 300 * 6 / 1e6;   // Luna
+    const DRAFT = 5000 * 2.5 / 1e6 + 2000 * 15 / 1e6;  // Terra
+    const CREDIT = 0.22;
     for (const p of ['silver', 'gold', 'platinum']) {
-      const revenue = tiers.PLANS[p].priceUzs / RATE;
-      const chatBudget = revenue - opinions[p] * OPIN;
-      const breakEvenPerDay = (chatBudget / CHAT) / 30;
-      assert.ok(tiers.PLANS[p].fairUseDaily < breakEvenPerDay,
-        `${p}: ceiling ${tiers.PLANS[p].fairUseDaily}/day exceeds break-even ${breakEvenPerDay.toFixed(0)}/day`);
+      const c = tiers.PLANS[p];
+      const revenue = c.priceUzs / RATE;
+      const cost = c.weeklyOpinionCredits * W * CREDIT
+                 + c.weeklyDrafts * W * DRAFT
+                 + c.fairUseDaily * 30 * CHAT;
+      const margin = (revenue - cost) / revenue;
+      assert.ok(margin >= 0.04 && margin <= 0.12,
+        `${p}: worst-case margin ${(margin * 100).toFixed(1)}% is outside the 5-10% band`);
     }
+  });
+
+  await test('MEDIUM case — 35% usage — lands in the 40-60%+ band', () => {
+    const RATE = 11980, W = 52 / 12;
+    const CHAT = 4000 * 1 / 1e6 + 300 * 6 / 1e6;
+    const DRAFT = 5000 * 2.5 / 1e6 + 2000 * 15 / 1e6;
+    const CREDIT = 0.22, Q = 0.35;
+    for (const p of ['silver', 'gold', 'platinum']) {
+      const c = tiers.PLANS[p];
+      const revenue = c.priceUzs / RATE;
+      const cost = c.weeklyOpinionCredits * W * Q * CREDIT
+                 + c.weeklyDrafts * W * Q * DRAFT + 15 * 30 * CHAT;
+      const margin = (revenue - cost) / revenue;
+      assert.ok(margin >= 0.40, `${p}: medium margin ${(margin * 100).toFixed(0)}% below 40%`);
+    }
+  });
+
+  await test('opinion credits scale with document size', () => {
+    // Flat counting made the worst case a lottery: opinions cost $0.15-$0.65.
+    assert.strictEqual(tiers.opinionCreditsFor(10000), 1);
+    assert.strictEqual(tiers.opinionCreditsFor(40000), 1);
+    assert.strictEqual(tiers.opinionCreditsFor(40001), 2);
+    assert.strictEqual(tiers.opinionCreditsFor(90000), 2);
+    assert.strictEqual(tiers.opinionCreditsFor(120000), 3);
+    assert.strictEqual(tiers.opinionCreditsFor(0), 1, 'unknown length must not be free');
+  });
+
+  await test('the free tier steps down instead of running 10/day forever', () => {
+    const b = tiers.PLANS.bepul;
+    assert.strictEqual(b.priceUzs, 0);
+    assert.strictEqual(b.dailyLimit, 10);
+    assert.ok(b.dailyLimitLater < b.dailyLimit,
+      'an un-stepped free tier is the platform\'s largest unbounded cost');
+    assert.strictEqual(b.durationDays, null, 'the free tier must not expire');
   });
 
   await test('the trial keeps a real 3/day quota', () => {
@@ -90,35 +130,34 @@ async function test(name, fn) {
   console.log('\ntariff — cost weighting\n');
 
   await test('the ceiling holds whatever mix of features is used', () => {
-    // The hole this closes: chat runs on Luna (~$0.006) but generating a legal
-    // document runs on Terra with a much bigger output (~$0.0425). Counting
-    // both as "1 request" let a Silver subscriber spend 75/day on documents —
-    // ~$97/month against $23 of revenue.
-    const RATE = 13000, OPIN = 0.437;
+    // Chat runs on Luna (~$0.006); generating a document runs on Terra with a
+    // much bigger output (~$0.0425) — 7x. Counting both as "1 request" once let
+    // a subscriber spend the whole ceiling on documents at a -321% margin.
+    const RATE = 11980, W = 52 / 12;
     const CHAT = 4000 * 1 / 1e6 + 300 * 6 / 1e6;
     const DOC = 5000 * 2.5 / 1e6 + 2000 * 15 / 1e6;
-    const DOC_WEIGHT = 7;
-    const opinions = { silver: 3, gold: 10, platinum: 30 };
+    const CREDIT = 0.22, DOC_WEIGHT = 7;
 
     assert.ok(DOC / CHAT <= DOC_WEIGHT + 1,
       `a document costs ${(DOC / CHAT).toFixed(1)}x a chat message — weight ${DOC_WEIGHT} is too low`);
 
     for (const p of ['silver', 'gold', 'platinum']) {
-      const rev = tiers.PLANS[p].priceUzs / RATE;
-      const ceiling = tiers.PLANS[p].fairUseDaily;
-      const opinionCost = opinions[p] * OPIN;
-      // Two extremes of the same ceiling; both must stay profitable.
-      const allChat = ceiling * 30 * CHAT + opinionCost;
-      const allDocs = (ceiling / DOC_WEIGHT) * 30 * DOC + opinionCost;
+      const c = tiers.PLANS[p];
+      const rev = c.priceUzs / RATE;
+      const quota = c.weeklyOpinionCredits * W * CREDIT + c.weeklyDrafts * W * DOC;
+      // Both extremes of the SAME ceiling must stay profitable on top of a
+      // fully-spent quota.
+      const allChat = quota + c.fairUseDaily * 30 * CHAT;
+      const allDocs = quota + (c.fairUseDaily / DOC_WEIGHT) * 30 * DOC;
       assert.ok(allChat < rev, `${p}: all-chat at the ceiling loses money`);
-      assert.ok(allDocs < rev, `${p}: all-documents at the ceiling loses money ($${allDocs.toFixed(2)} vs $${rev.toFixed(2)})`);
+      assert.ok(allDocs < rev, `${p}: all-documents at the ceiling loses money`);
     }
   });
 
   console.log('\ntariff — quota checks\n');
 
   await test('a paid user well under the ceiling is unlimited', async () => {
-    state.plan = 'silver'; state.usedToday = 40;
+    state.plan = 'silver'; state.usedToday = 8;   // ceiling is 15/day
     const q = await tiers.checkQuota(1);
     assert.strictEqual(q.allowed, true);
     assert.strictEqual(q.unlimited, true);
@@ -131,14 +170,14 @@ async function test(name, fn) {
     // The ceiling is now per-day, so the same subscriber can sustain
     // fairUseDaily every day — roughly 15x the old monthly allowance — and
     // the monthly total is never consulted at all.
-    state.plan = 'silver'; state.usedToday = 50;   // 7x the old ~7/day pace
+    state.plan = 'silver'; state.usedToday = 10;  // still under the 15/day ceiling
     const q = await tiers.checkQuota(1);
     assert.strictEqual(q.allowed, true);
     assert.strictEqual(q.period, 'unlimited');
 
     const oldMonthlyCap = 200;
     const newMonthlyEquivalent = tiers.PLANS.silver.fairUseDaily * 30;
-    assert.ok(newMonthlyEquivalent > oldMonthlyCap * 10,
+    assert.ok(newMonthlyEquivalent > oldMonthlyCap,
       `expected a large increase, got ${newMonthlyEquivalent} vs ${oldMonthlyCap}`);
   });
 

@@ -3,17 +3,16 @@
 /**
  * JuristAI tariff plans — for common users (role = 'user').
  *
- * Plans:
- *   sinov    : 3 chat requests/day, 1 opinion, valid 10 days, ONCE per user, free
- *   silver   : UNLIMITED chat +  3 legal opinions,   299,000 so'm/oy
- *   gold     : UNLIMITED chat + 10 legal opinions,   599,000 so'm/oy
- *   platinum : UNLIMITED chat + 30 legal opinions, 1,199,000 so'm/oy
+ * Plans (see PLANS for the derivation of every number):
+ *   bepul    : 10 chat/day for 30 days, then 3/day. Free forever.
+ *   sinov    : 3 chat/day + 1 opinion credit + 2 drafts weekly, 10 days
+ *   silver   : unlimited chat +  9 credits + 22 drafts weekly,   199,000/oy
+ *   gold     : unlimited chat + 17 credits + 50 drafts weekly,   399,000/oy
+ *   platinum : unlimited chat + 42 credits + 125 drafts weekly,  999,000/oy
  *
- * Chat is unlimited on every paid plan and guarded only by a daily fair-use
- * ceiling (see PLANS below). Legal opinions are the metered unit — their
- * limits live in OPINION_LIMITS in server.js.
- *
- * All daily counters reset at 00:00 Asia/Tashkent (UTC+5, no DST).
+ * Chat is unlimited on paid plans, bounded only by an anti-abuse ceiling.
+ * Opinions are metered in CREDITS scaled to document size; drafting has its
+ * own weekly count. Both reset every Monday 00:00 Asia/Tashkent.
  *
  * Schema additions (admins table):
  *   tariff_plan       VARCHAR(20)   -- 'sinov'|'silver'|'gold'|'platinum'|NULL
@@ -29,53 +28,97 @@
 
 const { pool } = require('../database/db');
 
-// Paid plans have UNLIMITED chat. Chat runs on the cheap tier at roughly
-// $0.006 per answer, so a Silver subscription ($23) only reaches break-even
-// past ~125 messages a day — far beyond what a person asks in real legal
-// work. Metering it bought nothing and made the product harder to explain.
+// ── Plan economics ──────────────────────────────────────────────────────────
+// Quotas are solved from measured unit costs, not guessed, against three
+// targets: a WORST case (100% quota + chat at the ceiling) that still clears
+// 5-10%, a MEDIUM case (~35% usage) in the 40-60% band, and anything above
+// 75% returned to the customer as a loyalty rebate (see marginReport()).
 //
-// `fairUseDaily` is not a quota: it is an anti-abuse ceiling, set well above
-// genuine use and well below break-even. Its job is to catch one login shared
-// across a whole firm, or a script — not to ration a paying subscriber. Users
-// who hit it get a slow-down message, never "you are out of messages".
+// Measured units @ 11,980 UZS/USD:
+//   chat     $0.0058   (Luna)
+//   drafting $0.0425   (Terra, larger output)
+//   opinion  $0.22 per CREDIT — see OPINION_CREDIT_TIERS below
 //
-// Legal opinions stay metered by count: they are the expensive deliverable
-// (~$0.44 each, up to ~$0.80 for a 120k-char document) and the real reason to
-// move up a tier. Limits live in OPINION_LIMITS in server.js.
+// Weekly windows rather than monthly: a fresh allowance every Monday reads as
+// more generous than one big monthly number, and it caps the damage a single
+// abusive week can do.
+//
+// Worst-case margins at these numbers: Silver 8.2%, Gold 8.0%, Platinum 9.8%.
 const PLANS = {
-  sinov: {
-    label: 'Sinov',
-    dailyLimit: 3,          // a real quota — the free trial
+  bepul: {
+    label: 'Bepul',
+    // Generous for the first month, then a smaller steady allowance. A free
+    // tier with no step-down is the platform's largest unbounded cost: 1,000
+    // active users at 10/day is ~$1,000/month against zero revenue.
+    dailyLimit: 10,
+    dailyLimitAfterDays: 30,
+    dailyLimitLater: 3,
     monthlyLimit: null,
     fairUseDaily: null,
+    weeklyOpinionCredits: 0,
+    weeklyDrafts: 0,
+    durationDays: null,          // no expiry
+    priceUzs: 0,
+  },
+  sinov: {
+    label: 'Sinov',
+    dailyLimit: 3,
+    monthlyLimit: null,
+    fairUseDaily: null,
+    weeklyOpinionCredits: 1,
+    weeklyDrafts: 2,
     durationDays: 10,
     priceUzs: 0,
   },
   silver: {
     label: 'Silver',
     dailyLimit: null,
-    monthlyLimit: null,     // unlimited chat
-    fairUseDaily: parseInt(process.env.FAIR_USE_SILVER, 10) || 75,
+    monthlyLimit: null,          // unlimited chat
+    fairUseDaily: parseInt(process.env.FAIR_USE_SILVER, 10) || 15,
+    weeklyOpinionCredits: parseInt(process.env.CREDITS_SILVER, 10) || 9,
+    weeklyDrafts: parseInt(process.env.DRAFTS_SILVER, 10) || 22,
     durationDays: 30,
-    priceUzs: 299000,
+    priceUzs: 199000,
   },
   gold: {
     label: 'Gold',
     dailyLimit: null,
     monthlyLimit: null,
-    fairUseDaily: parseInt(process.env.FAIR_USE_GOLD, 10) || 150,
+    fairUseDaily: parseInt(process.env.FAIR_USE_GOLD, 10) || 30,
+    weeklyOpinionCredits: parseInt(process.env.CREDITS_GOLD, 10) || 17,
+    weeklyDrafts: parseInt(process.env.DRAFTS_GOLD, 10) || 50,
     durationDays: 30,
-    priceUzs: 599000,
+    priceUzs: 399000,
   },
   platinum: {
     label: 'Platinum',
     dailyLimit: null,
     monthlyLimit: null,
-    fairUseDaily: parseInt(process.env.FAIR_USE_PLATINUM, 10) || 250,
+    fairUseDaily: parseInt(process.env.FAIR_USE_PLATINUM, 10) || 70,
+    weeklyOpinionCredits: parseInt(process.env.CREDITS_PLATINUM, 10) || 42,
+    weeklyDrafts: parseInt(process.env.DRAFTS_PLATINUM, 10) || 125,
     durationDays: 30,
-    priceUzs: 1199000,
+    priceUzs: 999000,
   },
 };
+
+// A legal opinion costs $0.15-$0.65 depending on document length — a 4x
+// spread. Charging one "opinion" regardless meant the worst case was a
+// lottery: with every document at max size, every plan went to -20%. Credits
+// make cost-per-credit flat (~$0.22) so the worst case is predictable, and
+// light users stop subsidising heavy ones.
+const OPINION_CREDIT_TIERS = [
+  { maxChars: 40000,  credits: 1 },
+  { maxChars: 90000,  credits: 2 },
+  { maxChars: Infinity, credits: 3 },
+];
+
+/** Credits a document of this length costs. */
+function opinionCreditsFor(charCount) {
+  const n = Number(charCount) || 0;
+  for (const t of OPINION_CREDIT_TIERS) if (n <= t.maxChars) return t.credits;
+  return 3;
+}
 
 let _initialized = false;
 
@@ -103,6 +146,9 @@ async function initSubscriptionSchema() {
         ts       TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // Opinions consume 1-3 credits by document size; everything else is 1.
+    // Nullable with a COALESCE at read time, so historical rows need no backfill.
+    await pool.query(`ALTER TABLE tariff_usage ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 1`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_tariff_usage_admin_ts ON tariff_usage(admin_id, ts DESC)`);
 
     // Free-access flow (channel-join + weekly survey instead of paying)
@@ -165,6 +211,13 @@ function tashkentMidnight() {
   return new Date(`${y}-${m}-${day}T00:00:00+05:00`);
 }
 
+// Monday 00:00 Asia/Tashkent — the reset point for weekly credit windows.
+function tashkentWeekStart() {
+  const d = tashkentMidnight();
+  const dow = (d.getUTCDay() + 6) % 7;           // 0 = Monday
+  return new Date(d.getTime() - dow * 86400000);
+}
+
 async function getUserPlan(adminId) {
   if (!_initialized) await initSubscriptionSchema();
   const r = await pool.query(
@@ -200,6 +253,22 @@ async function checkQuota(adminId) {
 
   const cfg = PLANS[u.plan];
   if (!cfg) return { allowed: false, reason: 'unknown_plan' };
+
+  // Bepul: generous for the first 30 days, then a smaller steady allowance.
+  if (u.plan === 'bepul') {
+    const ageDays = u.startsAt ? (Date.now() - new Date(u.startsAt)) / 86400000 : 0;
+    const limit = ageDays > (cfg.dailyLimitAfterDays || 30)
+      ? (cfg.dailyLimitLater || 3)
+      : cfg.dailyLimit;
+    const used = (await pool.query(
+      `SELECT COUNT(*)::int AS used FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+      [adminId, tashkentMidnight()])).rows[0].used;
+    return {
+      allowed: used < limit, plan: 'bepul', limit, used,
+      remaining: Math.max(0, limit - used), period: 'day',
+      steppedDown: ageDays > (cfg.dailyLimitAfterDays || 30),
+    };
+  }
 
   if (u.plan === 'sinov') {
     const midnight = tashkentMidnight();
@@ -337,12 +406,12 @@ async function checkFreeAccess(adminId) {
   };
 }
 
-async function recordUsage(adminId, endpoint) {
+async function recordUsage(adminId, endpoint, credits = 1) {
   if (!_initialized) await initSubscriptionSchema();
   try {
     await pool.query(
-      `INSERT INTO tariff_usage (admin_id, endpoint) VALUES ($1, $2)`,
-      [adminId, endpoint || null]
+      `INSERT INTO tariff_usage (admin_id, endpoint, credits) VALUES ($1, $2, $3)`,
+      [adminId, endpoint || null, credits]
     );
   } catch (err) {
     console.warn('[TARIFF] usage log failed:', err.message);
@@ -475,7 +544,138 @@ function enforceQuota(endpoint) {
   };
 }
 
+// ── Weekly opinion credits & drafting ───────────────────────────────────────
+// Counted from tariff_usage rows tagged with the endpoint and, for opinions,
+// the credits consumed. Weighted in SQL so a re-price needs no backfill.
+
+/** Credits already spent this week. */
+async function opinionCreditsUsed(adminId) {
+  const r = await pool.query(
+    `SELECT COALESCE(SUM(COALESCE(credits, 1)), 0)::int AS n
+       FROM tariff_usage
+      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '%legal-opinion%'`,
+    [adminId, tashkentWeekStart()]);
+  return r.rows[0].n;
+}
+
+/** Drafts already generated this week. */
+async function draftsUsed(adminId) {
+  const r = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM tariff_usage
+      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '%draft/ai-generate%'`,
+    [adminId, tashkentWeekStart()]);
+  return r.rows[0].n;
+}
+
+/**
+ * Can this user spend `credits` on an opinion right now?
+ * Staff and master bypass; free tiers get their small weekly allowance.
+ */
+async function checkOpinionCredits(adminId, credits = 1) {
+  const u = await getUserPlan(adminId);
+  if (!u) return { allowed: false, reason: 'unknown_user' };
+  if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true };
+  const cfg = PLANS[u.plan];
+  if (!cfg) return { allowed: false, reason: 'no_plan' };
+  const limit = cfg.weeklyOpinionCredits || 0;
+  if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
+  const used = await opinionCreditsUsed(adminId);
+  return {
+    allowed: used + credits <= limit,
+    limit, used, cost: credits,
+    remaining: Math.max(0, limit - used),
+    period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000),
+  };
+}
+
+/** Can this user generate another document this week? */
+async function checkDraftQuota(adminId) {
+  const u = await getUserPlan(adminId);
+  if (!u) return { allowed: false, reason: 'unknown_user' };
+  if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true };
+  const cfg = PLANS[u.plan];
+  if (!cfg) return { allowed: false, reason: 'no_plan' };
+  const limit = cfg.weeklyDrafts || 0;
+  if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
+  const used = await draftsUsed(adminId);
+  return {
+    allowed: used < limit, limit, used,
+    remaining: Math.max(0, limit - used),
+    period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000),
+  };
+}
+
+// ── Loyalty rebate ──────────────────────────────────────────────────────────
+// Margin above REBATE_THRESHOLD is returned to the customer as a discount on
+// their next renewal. Light users are the ones subsidising the model; giving
+// the excess back turns that into a retention mechanism instead of a windfall.
+// Paid as a discount, not cash: same cost, funded by the following month's
+// revenue, and it only pays out to someone who stays.
+const REBATE_THRESHOLD = Number(process.env.REBATE_THRESHOLD || 0.75);
+const UZS_PER_USD = Number(process.env.UZS_PER_USD || 11980);
+
+/**
+ * Per-customer margin over a period, with the rebate each has earned.
+ * Reads real spend from llm_spend_log — this is measured, not modelled.
+ */
+async function marginReport({ since = null, plan = null } = {}) {
+  const from = since ? new Date(since) : new Date(Date.now() - 30 * 86400000);
+  const r = await pool.query(
+    `SELECT a.id, a.username, a.full_name, a.tariff_plan,
+            COALESCE(SUM(l.cost_usd), 0)::float AS cost_usd,
+            COUNT(l.id)::int AS calls
+       FROM admins a
+       LEFT JOIN llm_spend_log l ON l.user_id = a.id AND l.created_at >= $1
+      WHERE a.tariff_plan IS NOT NULL
+        AND ($2::text IS NULL OR a.tariff_plan = $2)
+      GROUP BY a.id, a.username, a.full_name, a.tariff_plan
+      ORDER BY cost_usd DESC`,
+    [from, plan]);
+
+  const rows = r.rows.map(row => {
+    const cfg = PLANS[row.tariff_plan] || {};
+    const revenue = (cfg.priceUzs || 0) / UZS_PER_USD;
+    const margin = revenue > 0 ? (revenue - row.cost_usd) / revenue : null;
+    // Only paid plans can earn a rebate — there is no margin on a free one.
+    const rebateUsd = (margin != null && margin > REBATE_THRESHOLD)
+      ? (margin - REBATE_THRESHOLD) * revenue : 0;
+    return {
+      adminId: row.id, username: row.username, fullName: row.full_name,
+      plan: row.tariff_plan, calls: row.calls,
+      revenueUsd: Number(revenue.toFixed(2)),
+      costUsd: Number(row.cost_usd.toFixed(4)),
+      margin: margin == null ? null : Number((margin * 100).toFixed(1)),
+      rebateUsd: Number(rebateUsd.toFixed(2)),
+      rebateUzs: Math.round(rebateUsd * UZS_PER_USD / 1000) * 1000,
+      band: margin == null ? 'free'
+        : margin > REBATE_THRESHOLD ? 'rebate'
+        : margin >= 0.40 ? 'target'
+        : margin >= 0.05 ? 'thin' : 'loss',
+    };
+  });
+
+  const totals = rows.reduce((t, x) => {
+    t.revenueUsd += x.revenueUsd; t.costUsd += x.costUsd; t.rebateUsd += x.rebateUsd;
+    t.byBand[x.band] = (t.byBand[x.band] || 0) + 1;
+    return t;
+  }, { revenueUsd: 0, costUsd: 0, rebateUsd: 0, byBand: {} });
+  totals.grossMargin = totals.revenueUsd > 0
+    ? Number((((totals.revenueUsd - totals.costUsd) / totals.revenueUsd) * 100).toFixed(1)) : null;
+  totals.netMargin = totals.revenueUsd > 0
+    ? Number((((totals.revenueUsd - totals.costUsd - totals.rebateUsd) / totals.revenueUsd) * 100).toFixed(1)) : null;
+  for (const k of ['revenueUsd', 'costUsd', 'rebateUsd']) totals[k] = Number(totals[k].toFixed(2));
+
+  return { since: from, users: rows.length, totals, rows };
+}
+
 module.exports = {
+  opinionCreditsFor,
+  opinionCreditsUsed,
+  draftsUsed,
+  checkOpinionCredits,
+  checkDraftQuota,
+  marginReport,
+  tashkentWeekStart,
   PLANS,
   initSubscriptionSchema,
   getUserPlan,
