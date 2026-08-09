@@ -95,11 +95,22 @@ invoice.
 Measured from production logs where available, otherwise computed from the
 token caps in code.
 
+A legal opinion is **four** billed stages, not one. Counting only the
+synthesis understates it by roughly half.
+
 | Operation | Model | Typical tokens | Cost |
 |---|---|---|---|
-| **Legal opinion** (79k-char document) | Sol | ~16k in / ~5k out | **~$0.23–0.25** |
-| — its document digest | Luna | ~20k in / ~6k out | ~$0.06 |
-| — citation correction (when triggered) | Sol | ~12k in / ~5k out | ~$0.21 |
+| **Legal opinion, all-in** (79k-char document) | mixed | — | **~$0.44** |
+| — reference extraction (3 × 30k windows) | Terra | ~36k in / ~4.5k out | ~$0.158 |
+| — document digest (map-reduce) | Luna | ~32k in / ~9k out | ~$0.086 |
+| — synthesis | Sol | ~17k in / ~5k out | ~$0.24 |
+| — topic classification | Terra | ~1k in / 16 out | ~$0.003 |
+| — citation correction (only when triggered) | Sol | ~12k in / ~5k out | ~$0.21 |
+| **Legal opinion, typical contract** (<14k chars) | Sol | — | **~$0.15–0.20** |
+
+A document under ~14,000 chars skips the digest entirely and needs one
+reference window instead of three, so a normal contract costs a third of the
+79k-char stress-test document these figures come from.
 | **Chat answer** | Terra | ~4k in / ~0.3k out | **~$0.015** |
 | **Telegram answer** | Terra + Luna | ~4.6k in / ~0.36k out | **~$0.016** |
 | — Telegram greeting | none (regex) | 0 | **$0.00** |
@@ -108,8 +119,13 @@ token caps in code.
 | Document explanation | Terra | varies | ~$0.01–0.03 |
 | Topic classification | Terra | ~1k in / 16 out | ~$0.003 |
 
-**Worst realistic legal opinion** — digest + synthesis + correction pass —
-lands near **$0.50**. Typical is ~$0.30 including the digest.
+**Worst case** — large document, all four stages plus a correction pass —
+lands near **$0.65**.
+
+Verified against the real invoice: five logged opinion runs on the same 79k
+document sum to $0.953 of synthesis; adding the three support stages
+($0.246 each) predicts **$2.19** total. The OpenAI account showed **$2.22**
+spent at that point. The model is accurate to about 1%.
 
 ### Output caps in code
 
@@ -136,16 +152,28 @@ lands near **$0.50**. Typical is ~$0.30 including the digest.
 Unused quota rolls over once (`tariff_rollover` in
 `src/rag/subscription-tiers.js`).
 
-**Worst-case AI cost if a subscriber exhausts everything:**
+**AI gross margin**, at chat $0.015 and a large opinion $0.437, priced at
+13,000 UZS/USD (Silver $23.00, Gold $46.08, Platinum $92.23):
 
-| Plan | Chat cost | Opinion cost | Total | Price ≈ USD¹ | Margin |
-|---|---|---|---|---|---|
-| Silver | 200 × $0.015 = $3.00 | 3 × $0.30 = $0.90 | **$3.90** | ~$23 | ~83% |
-| Gold | 500 × $0.015 = $7.50 | 10 × $0.30 = $3.00 | **$10.50** | ~$46 | ~77% |
-| Platinum | 1200 × $0.015 = $18.00 | 30 × $0.30 = $9.00 | **$27.00** | ~$92 | ~71% |
+| Scenario | Silver | Gold | Platinum |
+|---|---|---|---|
+| **Cap exhausted (100%)** | $4.31 → **81.3%** | $11.87 → **74.2%** | $31.11 → **66.3%** |
+| **Realistic (25% chat, 50% opinions)** | $1.62 → **92.9%** | $4.06 → **91.2%** | $11.05 → **88.0%** |
+| **Light (10% chat, few opinions)** | $0.74 → **96.8%** | $1.62 → **96.5%** | $3.98 → **95.7%** |
 
-¹ at ~13,000 UZS/USD. Real margins are better — almost no user exhausts
-their cap, and qa-korpus hits cost nearly nothing.
+Two things this shows:
+
+- **Opinions dominate.** At Platinum's cap, 30 opinions are $13.11 of the
+  $31.11 — chat is the cheap part. Opinion count per plan is the lever that
+  actually moves cost, not the chat cap.
+- **Platinum is the thinnest plan.** A power user who exhausts it still leaves
+  66% margin, but it is the only tier where heavy use meaningfully compresses
+  the number. Raising its opinion allowance is the one change that could push
+  a tier toward unprofitability.
+
+These are **AI gross margins**. Hosting, database, payment-processing fees
+(typically 2–3%) and the lawyer time spent on escalations come out of what is
+left.
 
 ### The uncapped exposure: Telegram
 
