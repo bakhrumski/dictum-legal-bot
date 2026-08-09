@@ -3,7 +3,9 @@
 const multer = require('multer');
 const os = require('os');
 const fs = require('fs');
-const { initTemplatesTable, dbListTemplates, dbGetTemplate, dbCreateTemplate, dbUpdateTemplate, dbDeleteTemplate } = require('./db');
+const { initTemplatesTable, dbListTemplates, dbListTemplatesAll, dbGetTemplate, dbGetTemplateAny,
+        dbCountOwnedTemplates, dbCreateTemplate, dbUpdateTemplate,
+        dbDeleteTemplate, dbDeleteOwnedTemplate } = require('./db');
 const { renderTemplate } = require('./templates');
 
 const importUpload = multer({
@@ -80,6 +82,72 @@ function slugify(str) {
 function mountDraftingRoutes(app, deps) {
   const { requireAuth, callAI, tariffModule } = deps;
 
+  /** Pull plain text out of an uploaded .docx/.doc/.pdf. */
+  async function extractDocText(filePath, file) {
+    const isDoc = /\.(docx|doc)$/i.test(file.originalname) ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.mimetype === 'application/msword';
+    if (isDoc) {
+      const mammoth = require('mammoth');
+      return ((await mammoth.extractRawText({ path: filePath })).value || '').trim();
+    }
+    const pdfParse = require('pdf-parse');
+    const parsed = await pdfParse(fs.readFileSync(filePath));
+    return (parsed.text || '').trim();
+  }
+
+  /**
+   * Turn extracted document text into a template JSON via the LLM.
+   *
+   * Shared by the master import flow and the user upload flow so both get the
+   * same field detection and the same JSON salvage — LLMs truncate long JSON,
+   * and a template that fails to parse is a failed upload for the user.
+   */
+  async function analyzeTemplateText(extractedText, { hint, existingTemplate } = {}) {
+    const MAX_CHARS = 10000;
+    const snippet = extractedText.slice(0, MAX_CHARS);
+    const enrichNote = hint ? `\nAdditional instruction: ${String(hint).slice(0, 500)}` : '';
+    const existingNote = existingTemplate
+      ? `\nExisting template body for reference (enrich/improve it):\n${String(existingTemplate).slice(0, 4000)}`
+      : '';
+
+    const aiResult = await callAI([
+      { role: 'system', text: IMPORT_SYSTEM_PROMPT },
+      { role: 'user', text: `Document text:${enrichNote}${existingNote}\n\n---\n${snippet}\n---` },
+    ], { temperature: 0.2, maxTokens: 4096 });
+
+    let raw = (aiResult.text || '').trim().replace(/```(?:json)?/gi, '').trim();
+    const start = raw.indexOf('{');
+    if (start > 0) raw = raw.slice(start);
+    let tplData = null;
+    try { tplData = JSON.parse(raw); } catch (_) {
+      // Repair a truncated tail: close open strings and brackets.
+      let inStr = false, esc = false;
+      const stack = [];
+      let out = '';
+      for (let i = 0; i < raw.length; i++) {
+        const c = raw[i]; out += c;
+        if (inStr) { if (esc) { esc = false; } else if (c === '\\') { esc = true; } else if (c === '"') { inStr = false; } continue; }
+        if (c === '"') inStr = true;
+        else if (c === '{' || c === '[') stack.push(c);
+        else if (c === '}' || c === ']') stack.pop();
+      }
+      if (inStr) out += '"';
+      out = out.replace(/,\s*"[^"]*"\s*:?\s*$/s, '').replace(/,\s*$/s, '');
+      for (let i = stack.length - 1; i >= 0; i--) out += stack[i] === '{' ? '}' : ']';
+      try { tplData = JSON.parse(out); } catch (_2) {}
+    }
+
+    if (!tplData || (!tplData.name?.uz && !tplData.name?.ru)) {
+      console.warn('[DRAFT] template analyze: JSON salvage failed, provider=' + aiResult.provider);
+      return null;
+    }
+    tplData.fields = Array.isArray(tplData.fields) ? tplData.fields : [];
+    tplData.provider = aiResult.provider;
+    return tplData;
+  }
+
+
   // Middleware: requireMasterAdmin inline (gates write operations)
   function masterOnly(req, res, next) {
     if (req.session?.isAuthenticated && req.session?.role === 'master') return next();
@@ -96,10 +164,11 @@ function mountDraftingRoutes(app, deps) {
   // ── GET /api/templates — list (all authenticated users) ──
   app.get('/api/templates', requireAuth, async (req, res) => {
     try {
-      const list = await dbListTemplates();
+      // Curated library + this user's own uploads. Never anyone else's.
+      const list = await dbListTemplates(req.session.adminId);
       // Slim list for picker (omit body)
-      const slim = list.map(({ id, slug, name, description, category, lang, fieldCount }) =>
-        ({ id, slug, name, description, category, lang, fieldCount }));
+      const slim = list.map(({ id, slug, name, description, category, lang, fieldCount, isMine }) =>
+        ({ id, slug, name, description, category, lang, fieldCount, isMine }));
       res.json({ templates: slim });
     } catch (e) {
       console.error('[DRAFT] list error:', e.message);
@@ -110,7 +179,7 @@ function mountDraftingRoutes(app, deps) {
   // ── GET /api/templates/full — full list with body (master only, for editor) ──
   app.get('/api/templates/full', requireAuth, masterOnly, async (req, res) => {
     try {
-      res.json({ templates: await dbListTemplates() });
+      res.json({ templates: await dbListTemplatesAll() });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -119,7 +188,7 @@ function mountDraftingRoutes(app, deps) {
   // ── GET /api/templates/:id — full single template (slug or numeric id) ──
   app.get('/api/templates/:id', requireAuth, async (req, res) => {
     try {
-      const tpl = await dbGetTemplate(req.params.id);
+      const tpl = await dbGetTemplate(req.params.id, req.session.adminId);
       if (!tpl) return res.status(404).json({ error: 'Shablon topilmadi' });
       res.json(tpl);
     } catch (e) {
@@ -168,7 +237,9 @@ function mountDraftingRoutes(app, deps) {
   app.post('/api/draft/suggest', requireAuth, quota, async (req, res) => {
     try {
       const { templateId, fieldKey, values = {} } = req.body || {};
-      const tpl = await dbGetTemplate(templateId);
+      // Scoped: templateId comes from the client, so an unscoped read would
+      // let anyone pull another user's uploaded template by guessing an id.
+      const tpl = await dbGetTemplate(templateId, req.session.adminId);
       if (!tpl) return res.status(404).json({ error: 'Shablon topilmadi' });
       const field = tpl.fields.find(f => f.key === fieldKey);
       if (!field) return res.status(400).json({ error: 'Maydon topilmadi' });
@@ -227,7 +298,9 @@ function mountDraftingRoutes(app, deps) {
   app.post('/api/draft/export', requireAuth, quota, async (req, res) => {
     try {
       const { templateId, values = {}, format = 'pdf' } = req.body || {};
-      const tpl = await dbGetTemplate(templateId);
+      // Scoped — without this, export renders someone else's private template
+      // straight into a downloadable Word/PDF file.
+      const tpl = await dbGetTemplate(templateId, req.session.adminId);
       if (!tpl) return res.status(404).json({ error: 'Shablon topilmadi' });
 
       const lang = tpl.lang === 'ru' ? 'ru' : 'uz';
@@ -266,7 +339,7 @@ function mountDraftingRoutes(app, deps) {
 
       let guides = '';
       try {
-        const list = await dbListTemplates();
+        const list = await dbListTemplates(req.session.adminId);
         const t = docType.toLowerCase();
         const words = t.split(/\s+/).filter(w => w.length > 3);
         const hits = list.filter(x => {
@@ -274,7 +347,7 @@ function mountDraftingRoutes(app, deps) {
           return n && (n.includes(t) || words.some(w => n.includes(w)));
         }).slice(0, 2);
         for (const h of hits) {
-          const full = await dbGetTemplate(h.id);
+          const full = await dbGetTemplate(h.id, req.session.adminId);
           if (full && full.body) {
             guides += `\n--- INTERNAL TEMPLATE GUIDE (structure/style reference — do NOT mention it) ---\n${String(full.body).slice(0, 4000)}\n`;
           }
@@ -310,74 +383,121 @@ Rules:
     }
   });
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // USER-OWNED TEMPLATES
+  // "Upload your own template, the platform adapts it."
+  //
+  // Two steps on purpose. /analyze extracts the structure and shows it back
+  // for review; /mine saves it. A user should see which fields the AI found
+  // before it becomes a template they will fill in for years — and an upload
+  // that was misread is then discarded rather than silently kept.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const MAX_OWN_TEMPLATES = parseInt(process.env.MAX_USER_TEMPLATES, 10) || 30;
+
+  // ── GET /api/templates/mine — this user's uploaded templates ──
+  app.get('/api/templates/mine', requireAuth, async (req, res) => {
+    try {
+      const all = await dbListTemplates(req.session.adminId);
+      res.json({ templates: all.filter(t => t.isMine), max: MAX_OWN_TEMPLATES });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── POST /api/templates/analyze — upload a document, get a draft template ──
+  // Nothing is saved here; the response is a proposal for the user to confirm.
+  app.post('/api/templates/analyze', requireAuth, quota, importUpload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
+    const filePath = req.file.path;
+    try {
+      const extractedText = await extractDocText(filePath, req.file);
+      if (!extractedText || extractedText.length < 30) {
+        return res.status(422).json({
+          error: 'Fayldan matn ajratib bo\'lmadi. Skanerlangan rasm bo\'lsa, avval matnli (Word yoki matnli PDF) nusxani yuklang.',
+        });
+      }
+
+      const tplData = await analyzeTemplateText(extractedText, {
+        hint: req.body.hint,
+        existingTemplate: null,
+      });
+      if (!tplData) {
+        return res.status(500).json({ error: 'Shablonni tahlil qilib bo\'lmadi. Faylni tekshirib, qayta urinib ko\'ring.' });
+      }
+
+      res.json({
+        template: tplData,
+        charCount: extractedText.length,
+        fileName: req.file.originalname,
+      });
+    } catch (err) {
+      console.error('[DRAFT] analyze error:', err.message);
+      res.status(500).json({ error: 'Tahlil xatoligi: ' + err.message });
+    } finally {
+      fs.unlink(filePath, () => {});
+    }
+  });
+
+  // ── POST /api/templates/mine — save a reviewed template as the user's own ──
+  app.post('/api/templates/mine', requireAuth, async (req, res) => {
+    try {
+      const ownerId = req.session.adminId;
+      const { name, description, category, lang, fields, body } = req.body || {};
+      if (!name?.uz && !name?.ru) return res.status(400).json({ error: 'Shablon nomi kerak' });
+      if (!body || String(body).trim().length < 30) return res.status(400).json({ error: 'Shablon matni juda qisqa' });
+
+      const owned = await dbCountOwnedTemplates(ownerId);
+      if (owned >= MAX_OWN_TEMPLATES) {
+        return res.status(409).json({
+          error: `Shaxsiy shablonlar chegarasi (${MAX_OWN_TEMPLATES}) to'ldi. Eskilarini o'chiring.`,
+          code: 'TEMPLATE_LIMIT', max: MAX_OWN_TEMPLATES,
+        });
+      }
+
+      // Slugs are globally unique; namespacing by owner keeps a user's
+      // "Shartnoma" from colliding with the curated one or another user's.
+      const slug = slugify('u' + ownerId + '-' + ((name.uz || name.ru) + '-' + Date.now()));
+      const tpl = await dbCreateTemplate({
+        slug, name, description, category, lang,
+        fields: Array.isArray(fields) ? fields : [],
+        body, createdBy: ownerId, ownerId,
+      });
+      res.status(201).json(tpl);
+    } catch (e) {
+      console.error('[DRAFT] save-own error:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── DELETE /api/templates/mine/:id — remove one of the user's own ──
+  app.delete('/api/templates/mine/:id', requireAuth, async (req, res) => {
+    try {
+      const ok = await dbDeleteOwnedTemplate(parseInt(req.params.id, 10), req.session.adminId);
+      if (!ok) return res.status(404).json({ error: 'Shablon topilmadi' });
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── POST /api/templates/import-file — extract text from Word/PDF, generate template via AI ──
   app.post('/api/templates/import-file', requireAuth, masterOnly, importUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     const filePath = req.file.path;
     try {
-      const isDoc = /\.(docx|doc)$/i.test(req.file.originalname) ||
-        req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-        req.file.mimetype === 'application/msword';
-
-      let extractedText = '';
-
-      if (isDoc) {
-        const mammoth = require('mammoth');
-        const result = await mammoth.extractRawText({ path: filePath });
-        extractedText = (result.value || '').trim();
-      } else {
-        const pdfParse = require('pdf-parse');
-        const buf = fs.readFileSync(filePath);
-        const parsed = await pdfParse(buf);
-        extractedText = (parsed.text || '').trim();
-      }
-
+      const extractedText = await extractDocText(filePath, req.file);
       if (!extractedText || extractedText.length < 30) {
         return res.status(422).json({ error: 'Fayldan matn ajratib bo\'lmadi (skanerlangan yoki bo\'sh fayl)' });
       }
-
-      const MAX_CHARS = 10000;
-      const snippet = extractedText.slice(0, MAX_CHARS);
-      const enrichNote = req.body.enrichHint ? `\nAdditional instruction from admin: ${req.body.enrichHint}` : '';
-      const existingNote = req.body.existingTemplate
-        ? `\nExisting template body for reference (enrich/improve it):\n${req.body.existingTemplate.slice(0, 4000)}`
-        : '';
-
-      const aiResult = await callAI([
-        { role: 'system', text: IMPORT_SYSTEM_PROMPT },
-        { role: 'user', text: `Document text:${enrichNote}${existingNote}\n\n---\n${snippet}\n---` },
-      ], { temperature: 0.2, maxTokens: 4096 });
-
-      // Salvage JSON from AI response
-      let raw = (aiResult.text || '').trim().replace(/```(?:json)?/gi, '').trim();
-      const start = raw.indexOf('{');
-      if (start > 0) raw = raw.slice(start);
-      let tplData = null;
-      try { tplData = JSON.parse(raw); } catch (_) {
-        // Repair truncated JSON
-        let inStr = false, esc = false;
-        const stack = [];
-        let out = '';
-        for (let i = 0; i < raw.length; i++) {
-          const c = raw[i]; out += c;
-          if (inStr) { if (esc) { esc = false; } else if (c === '\\') { esc = true; } else if (c === '"') { inStr = false; } continue; }
-          if (c === '"') inStr = true;
-          else if (c === '{' || c === '[') stack.push(c);
-          else if (c === '}' || c === ']') stack.pop();
-        }
-        if (inStr) out += '"';
-        out = out.replace(/,\s*"[^"]*"\s*:?\s*$/s, '').replace(/,\s*$/s, '');
-        for (let i = stack.length - 1; i >= 0; i--) out += stack[i] === '{' ? '}' : ']';
-        try { tplData = JSON.parse(out); } catch (_2) {}
-      }
-
-      if (!tplData || (!tplData.name?.uz && !tplData.name?.ru)) {
-        console.warn('[DRAFT] import-file: JSON salvage failed, provider=' + aiResult.provider);
+      const tplData = await analyzeTemplateText(extractedText, {
+        hint: req.body.enrichHint,
+        existingTemplate: req.body.existingTemplate,
+      });
+      if (!tplData) {
         return res.status(500).json({ error: 'AI shablonni tahlil qila olmadi. Faylni tekshiring va qayta urinib ko\'ring.' });
       }
-
-      tplData.fields = Array.isArray(tplData.fields) ? tplData.fields : [];
-      res.json({ template: tplData, provider: aiResult.provider, charCount: extractedText.length });
+      res.json({ template: tplData, provider: tplData.provider, charCount: extractedText.length });
     } catch (err) {
       console.error('[DRAFT] import-file error:', err.message);
       res.status(500).json({ error: 'Import xatoligi: ' + err.message });

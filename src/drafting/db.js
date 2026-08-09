@@ -43,6 +43,16 @@ async function initTemplatesTable() {
       updated_at  TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // owner_id NULL = curated library, visible to everyone.
+  // owner_id set  = a template one user uploaded, visible only to them.
+  //
+  // Uploaded templates routinely contain real client names, sums and terms —
+  // the source document IS someone's contract — so they are private by
+  // default and never surface in another user's picker.
+  await pool.query(`ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS owner_id INTEGER`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_doc_templates_owner
+                    ON document_templates(owner_id) WHERE owner_id IS NOT NULL`);
+
   // Seed from static library if table is empty
   const { rows } = await pool.query('SELECT COUNT(*) AS n FROM document_templates');
   if (parseInt(rows[0].n) === 0 && SEED.length > 0) {
@@ -71,15 +81,25 @@ function rowToTemplate(r) {
     fields:      r.fields || [],
     body:        r.body,
     isActive:    r.is_active,
+    ownerId:     r.owner_id || null,
+    isMine:      r.owner_id != null,
     createdAt:   r.created_at,
     updatedAt:   r.updated_at,
   };
 }
 
-async function dbListTemplates() {
+/**
+ * Templates visible to one user: the curated library plus their own uploads.
+ * Passing no ownerId returns the curated library only — so a caller that
+ * forgets to scope leaks nothing.
+ */
+async function dbListTemplates(ownerId = null) {
   const { rows } = await pool.query(
-    `SELECT id, slug, name, description, category, lang, fields, is_active, created_at, updated_at
-     FROM document_templates WHERE is_active = TRUE ORDER BY created_at ASC`
+    `SELECT id, slug, name, description, category, lang, fields, is_active, owner_id, created_at, updated_at
+       FROM document_templates
+      WHERE is_active = TRUE AND (owner_id IS NULL OR owner_id = $1)
+      ORDER BY owner_id NULLS FIRST, created_at ASC`,
+    [ownerId]
   );
   return rows.map(r => ({
     ...rowToTemplate(r),
@@ -87,21 +107,51 @@ async function dbListTemplates() {
   }));
 }
 
-async function dbGetTemplate(slugOrId) {
+/**
+ * Fetch one template, enforcing ownership. A private template is returned
+ * only to its owner; the check is in the QUERY, not in the caller, so no
+ * route can accidentally serve someone else's uploaded contract.
+ */
+async function dbGetTemplate(slugOrId, ownerId = null) {
   const isNum = /^\d+$/.test(String(slugOrId));
   const { rows } = await pool.query(
-    `SELECT * FROM document_templates WHERE ${isNum ? 'id=$1' : 'slug=$1'}`,
-    [slugOrId]
+    `SELECT * FROM document_templates
+      WHERE ${isNum ? 'id=$1' : 'slug=$1'} AND (owner_id IS NULL OR owner_id = $2)`,
+    [slugOrId, ownerId]
   );
   return rows[0] ? rowToTemplate(rows[0]) : null;
 }
 
-async function dbCreateTemplate({ slug, name, description, category, lang, fields, body, createdBy }) {
+/** Unscoped list — master editor only. Never reachable from a user route. */
+async function dbListTemplatesAll() {
   const { rows } = await pool.query(
-    `INSERT INTO document_templates (slug, name, description, category, lang, fields, body, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    `SELECT id, slug, name, description, category, lang, fields, body, is_active, owner_id, created_at, updated_at
+       FROM document_templates WHERE is_active = TRUE ORDER BY owner_id NULLS FIRST, created_at ASC`);
+  return rows.map(r => ({ ...rowToTemplate(r), fieldCount: Array.isArray(r.fields) ? r.fields.length : 0 }));
+}
+
+/** Unscoped read — master tools only. Never reachable from a user route. */
+async function dbGetTemplateAny(slugOrId) {
+  const isNum = /^\d+$/.test(String(slugOrId));
+  const { rows } = await pool.query(
+    `SELECT * FROM document_templates WHERE ${isNum ? 'id=$1' : 'slug=$1'}`, [slugOrId]);
+  return rows[0] ? rowToTemplate(rows[0]) : null;
+}
+
+async function dbCountOwnedTemplates(ownerId) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM document_templates WHERE owner_id = $1 AND is_active = TRUE`,
+    [ownerId]);
+  return rows[0].n;
+}
+
+async function dbCreateTemplate({ slug, name, description, category, lang, fields, body, createdBy, ownerId }) {
+  const { rows } = await pool.query(
+    `INSERT INTO document_templates (slug, name, description, category, lang, fields, body, created_by, owner_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
     [slug, JSON.stringify(name), JSON.stringify(description || {}),
-     category || 'boshqa', lang || 'uz', JSON.stringify(fields || []), body || '', createdBy || null]
+     category || 'boshqa', lang || 'uz', JSON.stringify(fields || []), body || '',
+     createdBy || null, ownerId || null]
   );
   return rowToTemplate(rows[0]);
 }
@@ -122,4 +172,17 @@ async function dbDeleteTemplate(id) {
   await pool.query(`UPDATE document_templates SET is_active=FALSE, updated_at=NOW() WHERE id=$1`, [id]);
 }
 
-module.exports = { initTemplatesTable, dbListTemplates, dbGetTemplate, dbCreateTemplate, dbUpdateTemplate, dbDeleteTemplate };
+/** Delete only if the caller owns it. Returns false when it is not theirs. */
+async function dbDeleteOwnedTemplate(id, ownerId) {
+  const r = await pool.query(
+    `UPDATE document_templates SET is_active=FALSE, updated_at=NOW()
+      WHERE id=$1 AND owner_id=$2 AND is_active=TRUE`,
+    [id, ownerId]);
+  return r.rowCount > 0;
+}
+
+module.exports = {
+  initTemplatesTable, dbListTemplates, dbListTemplatesAll, dbGetTemplate, dbGetTemplateAny,
+  dbCountOwnedTemplates, dbCreateTemplate, dbUpdateTemplate,
+  dbDeleteTemplate, dbDeleteOwnedTemplate,
+};

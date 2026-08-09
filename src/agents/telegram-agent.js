@@ -271,7 +271,13 @@ TELEGRAM FORMATI (majburiy):
   if (hist) messages.push({ role: 'user', text: `Suhbat tarixi (kontekst uchun):\n${hist}` });
   messages.push({ role: 'user', text: question });
 
-  const res = await D.callAI(messages, { useSearch: false, maxTokens: 900, endpoint: '/tg-agent/answer' });
+  // Same model as web chat (D.chatModel) — Telegram answers are the same
+  // workload, capped even shorter, and are the platform's highest-volume
+  // path, so they should not run on a more expensive tier than the dashboard.
+  const res = await D.callAI(messages, {
+    model: D.chatModel || undefined,
+    useSearch: false, maxTokens: 900, endpoint: '/tg-agent/answer',
+  });
   const text = String(res.text || '').trim();
 
   // ── 4. Confidence gate ──────────────────────────────────────────────────

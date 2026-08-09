@@ -2845,6 +2845,12 @@ const MODELS = {
   premium:  process.env.MODEL_PREMIUM  || 'gpt-5.6-sol',
   standard: process.env.MODEL_STANDARD || 'gpt-5.6-terra',
   cheap:    process.env.MODEL_CHEAP    || 'gpt-5.6-luna',
+  // Chat has its OWN slot rather than reusing `standard`, because `standard`
+  // also drives drafting, OCR, corrective RAG, reference extraction and the
+  // agents — moving all of those to save money on chat would be a much
+  // larger, unmeasured change. Chat is unlimited on paid plans, so it is the
+  // one workload where per-answer cost compounds without bound.
+  chat:     process.env.MODEL_CHAT     || 'gpt-5.6-luna',
 };
 
 // Official per-1M-token prices, used for spend logging and the budget guard.
@@ -3106,6 +3112,7 @@ try {
     buildTopicPrompt,
     classifyLegalTopic,
     searchKorpus,
+    chatModel: MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
   });
 } catch (e) {
@@ -5507,7 +5514,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       sse({ type: 'status', text: '✍️ Javob tayyorlanmoqda...' });
       let firstToken = true;
       const emit = (t) => { if (firstToken) { sse({ type: 'status_clear' }); firstToken = false; } sse({ type: 'token', t }); };
-      const streamOpts = { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' };
+      const streamOpts = { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' };
       try {
         // GPT-5.6 Terra first (same routing as the non-streaming path);
         // Gemini streaming only if OpenAI is unavailable or over budget.
@@ -5530,13 +5537,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         // Primary stream failed (rate limit, safety, network) — run the normal
         // non-streaming provider chain and replace whatever was shown.
         console.warn('[Legal Chat] stream failed, using non-streaming chain:', streamErr.message);
-        const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
+        const aiResult = await callAI(aiMessages, { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
         displayReply = normalizeResponseForUser(aiResult.text);
         finalProvider = aiResult.provider;
         sse({ type: 'replace', text: displayReply });
       }
     } else {
-      const aiResult = await callAI(aiMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
+      const aiResult = await callAI(aiMessages, { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
       displayReply = normalizeResponseForUser(aiResult.text);
       finalProvider = aiResult.provider;
     }
@@ -5551,7 +5558,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
           { role: 'system', text: geminiPrompt },
           { role: 'user', text: message },
         ];
-        const fallbackResult = await callAI(fallbackMessages, { useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat/fallback' });
+        const fallbackResult = await callAI(fallbackMessages, { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat/fallback' });
         const fallbackReply = normalizeResponseForUser(fallbackResult.text);
         if (!isFailedAnswer(fallbackReply)) {
           displayReply = fallbackReply;

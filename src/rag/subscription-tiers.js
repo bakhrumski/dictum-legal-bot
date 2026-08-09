@@ -4,13 +4,16 @@
  * JuristAI tariff plans — for common users (role = 'user').
  *
  * Plans:
- *   sinov    : 3 requests/day,  valid 7 days,  ONCE per user, free
- *   silver   : 300 requests/month,   299,000 so'm/oy
- *   gold     : 750 requests/month,   599,000 so'm/oy
- *   platinum : 1,500 requests/month, 1,199,000 so'm/oy
+ *   sinov    : 3 chat requests/day, 1 opinion, valid 10 days, ONCE per user, free
+ *   silver   : UNLIMITED chat +  3 legal opinions,   299,000 so'm/oy
+ *   gold     : UNLIMITED chat + 10 legal opinions,   599,000 so'm/oy
+ *   platinum : UNLIMITED chat + 30 legal opinions, 1,199,000 so'm/oy
  *
- * Daily quotas (sinov) reset at 00:00 Asia/Tashkent (UTC+5, no DST).
- * Monthly quotas roll on the day of tariff start.
+ * Chat is unlimited on every paid plan and guarded only by a daily fair-use
+ * ceiling (see PLANS below). Legal opinions are the metered unit — their
+ * limits live in OPINION_LIMITS in server.js.
+ *
+ * All daily counters reset at 00:00 Asia/Tashkent (UTC+5, no DST).
  *
  * Schema additions (admins table):
  *   tariff_plan       VARCHAR(20)   -- 'sinov'|'silver'|'gold'|'platinum'|NULL
@@ -26,32 +29,49 @@
 
 const { pool } = require('../database/db');
 
+// Paid plans have UNLIMITED chat. Chat runs on the cheap tier at roughly
+// $0.006 per answer, so a Silver subscription ($23) only reaches break-even
+// past ~125 messages a day — far beyond what a person asks in real legal
+// work. Metering it bought nothing and made the product harder to explain.
+//
+// `fairUseDaily` is not a quota: it is an anti-abuse ceiling, set well above
+// genuine use and well below break-even. Its job is to catch one login shared
+// across a whole firm, or a script — not to ration a paying subscriber. Users
+// who hit it get a slow-down message, never "you are out of messages".
+//
+// Legal opinions stay metered by count: they are the expensive deliverable
+// (~$0.44 each, up to ~$0.80 for a 120k-char document) and the real reason to
+// move up a tier. Limits live in OPINION_LIMITS in server.js.
 const PLANS = {
   sinov: {
     label: 'Sinov',
-    dailyLimit: 3,
+    dailyLimit: 3,          // a real quota — the free trial
     monthlyLimit: null,
+    fairUseDaily: null,
     durationDays: 10,
     priceUzs: 0,
   },
   silver: {
     label: 'Silver',
     dailyLimit: null,
-    monthlyLimit: 200,
+    monthlyLimit: null,     // unlimited chat
+    fairUseDaily: parseInt(process.env.FAIR_USE_SILVER, 10) || 75,
     durationDays: 30,
     priceUzs: 299000,
   },
   gold: {
     label: 'Gold',
     dailyLimit: null,
-    monthlyLimit: 500,
+    monthlyLimit: null,
+    fairUseDaily: parseInt(process.env.FAIR_USE_GOLD, 10) || 150,
     durationDays: 30,
     priceUzs: 599000,
   },
   platinum: {
     label: 'Platinum',
     dailyLimit: null,
-    monthlyLimit: 1200,
+    monthlyLimit: null,
+    fairUseDaily: parseInt(process.env.FAIR_USE_PLATINUM, 10) || 250,
     durationDays: 30,
     priceUzs: 1199000,
   },
@@ -100,6 +120,38 @@ async function initSubscriptionSchema() {
   } catch (err) {
     console.error('[TARIFF] init failed:', err.message);
   }
+}
+
+// ── Cost weighting for the fair-use counter ─────────────────────────────────
+// The ceiling is expressed in "chat-equivalents", not raw requests, because
+// the endpoints behind it do not cost the same. A chat answer runs on Luna at
+// ~$0.006; generating a full legal document runs on Terra with a much larger
+// output and costs ~$0.0425 — seven times more.
+//
+// Counting both as "1 request" is what makes an unlimited plan dangerous: a
+// Silver subscriber spending 75 requests a day on documents instead of chat
+// would cost ~$97/month against $23 of revenue. Weighting keeps the ceiling
+// meaningful whatever mix of features a user actually chooses, and any future
+// expensive endpoint only needs a line here.
+//
+// Applied at COUNT time via SQL rather than stored on the row, so historical
+// usage needs no migration and re-pricing needs no backfill.
+const ENDPOINT_WEIGHT_SQL = `
+  CASE
+    WHEN endpoint LIKE '/api/draft/ai-generate%' THEN 7
+    WHEN endpoint LIKE '/api/templates/import%'  THEN 7
+    WHEN endpoint LIKE '/api/draft%'             THEN 7
+    ELSE 1
+  END`;
+
+/** SUM of cost-weighted usage since `since`, for one admin. */
+async function weightedUsageSince(adminId, since) {
+  const r = await pool.query(
+    `SELECT COALESCE(SUM(${ENDPOINT_WEIGHT_SQL}), 0)::int AS used
+       FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+    [adminId, since]
+  );
+  return r.rows[0].used;
 }
 
 // Return today's 00:00 Asia/Tashkent as a Date (UTC+5, no DST)
@@ -167,26 +219,28 @@ async function checkQuota(adminId) {
     };
   }
 
-  const since = u.startsAt ? new Date(u.startsAt) : null;
-  if (!since) return { allowed: false, reason: 'no_start_date' };
-  const r = await pool.query(
-    `SELECT COUNT(*)::int AS used FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
-    [adminId, since]
-  );
-  const used = r.rows[0].used;
-  // Effective allowance = this period's plan limit + credits carried over from
-  // the previous period (see selectPlan).
-  const rollover = u.rollover || 0;
-  const effectiveLimit = cfg.monthlyLimit + rollover;
+  // ── Paid plans: unlimited chat, guarded by a daily fair-use ceiling ──────
+  // Counted per DAY, not per period: the ceiling exists to stop a shared login
+  // or a script, and both show up as a burst within one day. A monthly figure
+  // would let an abusive day pass unnoticed and then lock out a legitimate one.
+  const fairUse = cfg.fairUseDaily;
+  if (!fairUse) {
+    return { allowed: true, plan: u.plan, limit: null, used: 0, remaining: Infinity,
+             period: 'unlimited', expiresAt: u.expiresAt };
+  }
+
+  // Cost-weighted, not a raw request count — see ENDPOINT_WEIGHT_SQL.
+  const usedToday = await weightedUsageSince(adminId, tashkentMidnight());
   return {
-    allowed: used < effectiveLimit,
+    allowed: usedToday < fairUse,
     plan: u.plan,
-    limit: effectiveLimit,
-    baseLimit: cfg.monthlyLimit,
-    rollover,
-    used,
-    remaining: Math.max(0, effectiveLimit - used),
-    period: 'month',
+    limit: null,              // the offer is unlimited; this is not a quota
+    unlimited: true,
+    fairUseDaily: fairUse,
+    used: usedToday,
+    remaining: Infinity,
+    fairUseHit: usedToday >= fairUse,
+    period: 'unlimited',
     expiresAt: u.expiresAt,
   };
 }
@@ -333,30 +387,11 @@ async function selectPlan(adminId, plan) {
   const now = new Date();
   const expires = new Date(now.getTime() + cfg.durationDays * 24 * 3600 * 1000);
 
-  // ── Rollover: "Didn't use your cap? It carries to the next purchase." ──
-  // Unused requests from the period that is ending are carried into the new
-  // one, ONCE: tariff_rollover is REPLACED (not incremented), so credits that
-  // remain unused for a second period expire. Capped at one month's plan
-  // allowance so a long dormant period can't bank an unbounded balance.
-  // Only for paid monthly plans (the trial has a daily cap, nothing to carry).
-  let rollover = 0;
-  if (cfg.monthlyLimit) {
-    try {
-      const prev = await pool.query(
-        `SELECT tariff_plan, tariff_starts_at, tariff_rollover FROM admins WHERE id = $1`, [adminId]);
-      const row = prev.rows[0];
-      const prevCfg = row && row.tariff_plan ? PLANS[row.tariff_plan] : null;
-      if (prevCfg && prevCfg.monthlyLimit && row.tariff_starts_at) {
-        const prevEffective = prevCfg.monthlyLimit + (parseInt(row.tariff_rollover, 10) || 0);
-        const usedPrev = (await pool.query(
-          `SELECT COUNT(*)::int AS n FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
-          [adminId, row.tariff_starts_at])).rows[0].n;
-        rollover = Math.max(0, Math.min(prevEffective - usedPrev, cfg.monthlyLimit));
-      }
-    } catch (e) {
-      console.warn('[TARIFF] rollover calc failed (defaulting to 0):', e.message);
-    }
-  }
+  // Rollover is retired. It existed to carry unused CHAT requests into the
+  // next period; with chat unlimited on every paid plan there is nothing left
+  // to carry. The tariff_rollover column is kept (written as 0) so historical
+  // rows stay readable and no migration is needed.
+  const rollover = 0;
 
   await pool.query(
     `UPDATE admins
@@ -368,7 +403,11 @@ async function selectPlan(adminId, plan) {
       WHERE id = $5`,
     [plan, now, expires, plan === 'sinov', adminId, rollover]
   );
-  return { plan, startsAt: now, expiresAt: expires, rollover, limit: (cfg.monthlyLimit || cfg.dailyLimit) + rollover };
+  return {
+    plan, startsAt: now, expiresAt: expires, rollover,
+    limit: cfg.monthlyLimit || cfg.dailyLimit || null,   // null = unlimited chat
+    unlimited: !cfg.monthlyLimit && !cfg.dailyLimit,
+  };
 }
 
 /**
@@ -401,6 +440,20 @@ function enforceQuota(endpoint) {
 
       const q = await checkQuota(adminId);
       if (!q.allowed) {
+        // A paid subscriber who trips the fair-use ceiling has NOT run out —
+        // their plan is unlimited. Telling them "limit tugadi" would be false
+        // and would read as a bait-and-switch, so it is framed as the
+        // temporary slow-down it actually is.
+        if (q.fairUseHit) {
+          return res.status(429).json({
+            error: 'rate_limited',
+            reason: 'fair_use',
+            message: 'Juda ko\'p so\'rov yuborildi. Biroz kuting va davom eting — tarifingiz cheklanmagan.',
+            plan: q.plan,
+            unlimited: true,
+            retryAfterHours: 24,
+          });
+        }
         return res.status(429).json({
           error: 'quota_exceeded',
           reason: q.reason || 'limit_reached',
