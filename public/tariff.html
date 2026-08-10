@@ -115,6 +115,24 @@
             transition: transform 0.15s, border-color 0.15s;
         }
         .plan-card:hover { transform: translateY(-2px); }
+        /* Paid tiers while payments are off. Dimmed AND labelled: a greyed
+           card with no explanation reads as broken, or as "you are not
+           eligible", rather than "not yet". */
+        .plan-card.soon { opacity: .62; }
+        .plan-card.soon:hover { transform: none; }
+        .plan-card.soon .plan-price, .plan-card.soon .plan-name { filter: grayscale(1); }
+        .badge-soon {
+            position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+            background: var(--text-3); color: #fff; white-space: nowrap;
+            font-size: 12px; font-weight: 600; padding: 4px 14px; border-radius: 999px;
+        }
+        .plan-note {
+            max-width: 760px; margin: 0 auto 28px; text-align: center;
+            font-size: 13.5px; line-height: 1.65; color: var(--text-3);
+            background: var(--bg-card); border: 1px dashed var(--border);
+            border-radius: 12px; padding: 14px 18px;
+        }
+        .plan-note b { color: var(--text-1); }
         .plan-card.featured { border-color: var(--success); border-width: 1.5px; }
         .plan-card .badge-top {
             position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
@@ -256,9 +274,16 @@
             <button data-mult="6">6 oy <span class="badge">-15%</span></button>
         </div>
 
+        <p class="plan-note" id="planNote" style="display:none">
+            <b>Platforma sinov bosqichida.</b> To'lov tizimi hali ulanmagan —
+            hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak
+            bo'lsa, "Xabar berish" tugmasini bosing: ishga tushganda birinchi
+            bo'lib xabar beramiz.
+        </p>
+
         <section class="plans-grid">
             <!-- SINOV (Bepul) -->
-            <article class="plan-card" data-plan="sinov">
+            <article class="plan-card featured" data-plan="bepul">
                 <div class="plan-name">Bepul</div>
                 <div class="plan-price">Bepul</div>
                 <div class="plan-period">Doimo bepul</div>
@@ -271,7 +296,7 @@
                     <li>Har bir javob lex.uz manbasi bilan</li>
                     <li>Karta talab qilinmaydi</li>
                 </ul>
-                <button class="plan-btn" data-plan="sinov" onclick="selectPlan('sinov')">Sinab ko'rish</button>
+                <button class="plan-btn primary" data-plan="bepul" onclick="selectPlan('bepul')">Bepul boshlash</button>
             </article>
 
             <!-- SILVER -->
@@ -292,8 +317,8 @@
             </article>
 
             <!-- GOLD (featured) -->
-            <article class="plan-card featured" data-plan="gold">
-                <span class="badge-top">Mashhur</span>
+            <article class="plan-card" data-plan="gold">
+                
                 <div class="plan-name">Gold</div>
                 <div class="plan-price"><span data-price="399000">399,000</span><small>so'm</small></div>
                 <div class="plan-period">oyiga</div>
@@ -307,7 +332,7 @@
                     <li>Skan va rasmdan hujjat tahlili</li>
                     <li>Ustuvor navbat — tezroq javob</li>
                 </ul>
-                <button class="plan-btn primary" data-plan="gold" onclick="selectPlan('gold')">Tanlash</button>
+                <button class="plan-btn" data-plan="gold" onclick="selectPlan('gold')">Tanlash</button>
             </article>
 
             <!-- PLATINUM -->
@@ -396,18 +421,44 @@
         let selectedPlan = null;
         let selectedPaymentMethod = null;
 
+        // Set from /api/tariff/plans — the same flag the server enforces with.
+        let paymentsEnabled = false;
+
+        async function registerInterest(plan) {
+            const btn = document.querySelector('.plan-btn[data-plan="' + plan + '"]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Yuborilmoqda...'; }
+            try {
+                const r = await fetch('/api/tariff/interest', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin', body: JSON.stringify({ plan }),
+                });
+                if (r.ok) {
+                    if (btn) btn.textContent = '✓ Xabar beramiz';
+                    toast('Rahmat! Ushbu tarif ishga tushganda sizga xabar beramiz.');
+                } else {
+                    if (btn) { btn.disabled = false; btn.textContent = 'Xabar berish'; }
+                    toast('Xatolik yuz berdi, qayta urinib ko\'ring.');
+                }
+            } catch (e) {
+                if (btn) { btn.disabled = false; btn.textContent = 'Xabar berish'; }
+                toast('Xatolik: ' + e.message);
+            }
+        }
+
         async function selectPlan(plan) {
-            if (plan === 'sinov') {
-                // Free trial — activate immediately
+            if (plan === 'bepul' || plan === 'sinov') {
+                // Free — activate immediately. The plan key must be the one the
+                // card advertises: the card promises 10/day, and `sinov` grants
+                // 3/day for 10 days.
                 try {
                     const r = await fetch('/api/tariff/select', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ plan: 'sinov' }),
+                        body: JSON.stringify({ plan }),
                     });
                     const data = await r.json();
                     if (r.ok) {
-                        toast('Bepul Sinov rejasi faollashtirildi. Dashboardga o\'tilmoqda...');
+                        toast('Bepul tarif faollashtirildi. Dashboardga o\'tilmoqda...');
                         setTimeout(() => { window.location.href = '/dashboard.html'; }, 1200);
                     } else {
                         toast(data.message || data.error || 'Xatolik');
@@ -466,8 +517,40 @@
             setTimeout(() => t.classList.remove('show'), 2800);
         }
 
+        // Paid tiers are closed until PAYMENTS_ENABLED is set server-side. The
+        // UI reads that flag rather than carrying its own, so the two cannot
+        // disagree — a dimmed card whose endpoint still sells is worse than no
+        // dimming at all.
+        async function applyPaymentsState() {
+            try {
+                const d = await fetch('/api/tariff/plans').then(r => r.json());
+                paymentsEnabled = !!d.paymentsEnabled;
+            } catch (_) { paymentsEnabled = false; }
+            if (paymentsEnabled) return;
+
+            const note = document.getElementById('planNote');
+            if (note) note.style.display = '';
+            ['silver', 'gold', 'platinum'].forEach(plan => {
+                const card = document.querySelector('.plan-card[data-plan="' + plan + '"]');
+                if (!card) return;
+                card.classList.add('soon');
+                if (!card.querySelector('.badge-soon')) {
+                    const b = document.createElement('span');
+                    b.className = 'badge-soon';
+                    b.textContent = 'Tez orada';
+                    card.prepend(b);
+                }
+                const btn = card.querySelector('.plan-btn');
+                if (btn) {
+                    btn.textContent = 'Xabar berish';
+                    btn.setAttribute('onclick', "registerInterest('" + plan + "')");
+                }
+            });
+        }
+
         // ── Auth check + Bepul-used check ──
         (async function init() {
+            applyPaymentsState();
             try {
                 const r = await fetch('/api/user-info', { credentials: 'same-origin' });
                 if (!r.ok) {

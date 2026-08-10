@@ -281,6 +281,14 @@ h2.sh{text-align:center;font-size:clamp(30px,4vw,46px);font-weight:700;letter-sp
 .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px 24px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow);position:relative;transition:transform .3s,box-shadow .3s}
 .plan:hover{transform:translateY(-4px);box-shadow:0 2px 4px rgba(26,20,16,.05),0 20px 48px rgba(26,20,16,.12)}
+/* Paid tiers while payments are off — dimmed AND labelled. A greyed card with
+   no explanation reads as broken rather than as "not yet". */
+.plan.soon{opacity:.6}
+.plan.soon:hover{transform:none;box-shadow:var(--shadow)}
+.plan.soon .plan-price,.plan.soon .plan-name{filter:grayscale(1)}
+.plan-tag.soon-tag{background:var(--txt3)}
+.pr-testing{max-width:720px;margin:0 auto 30px;text-align:center;font-size:13.5px;line-height:1.65;color:var(--txt3);background:var(--card);border:1px dashed var(--border);border-radius:12px;padding:14px 18px}
+.pr-testing b{color:var(--txt)}
 .plan.ft{border:none;padding:29px 25px;z-index:1}
 .plan.ft::before{content:'';position:absolute;inset:0;border-radius:calc(var(--r) + 1px);background:linear-gradient(135deg,#D6B379,#B08442,#8E6730,#D6B379);background-size:300%;animation:border-anim 4s linear infinite;z-index:-1}
 .plan.ft::after{content:'';position:absolute;inset:1.5px;border-radius:calc(var(--r) - 1px);background:var(--card);z-index:-1}
@@ -620,8 +628,10 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
     <p class="ey reveal" data-i18n="pr_ey">Tariflar</p>
     <h2 class="sh reveal" data-i18n="pr_h">Sizga mos rejani tanlang</h2>
     <p class="sh-sub reveal" data-i18n="pr_sub">Bepul boshlang — karta kerak emas. Istalgan vaqtda bekor qilasiz.</p>
+    <p class="pr-testing reveal" data-i18n="pr_testing"><b>Platforma sinov bosqichida.</b> To‘lov tizimi hali ulanmagan — hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak bo‘lsa, «Xabar berish» tugmasini bosing.</p>
     <div class="plans">
-      <div class="plan reveal">
+      <div class="plan ft reveal">
+        <span class="plan-tag" data-i18n="p1_tag">Boshlash uchun</span>
         <div class="plan-name" data-i18n="p1_name">Bepul</div>
         <div class="plan-price" data-i18n="p1_price">Bepul</div>
         <div class="plan-per" data-i18n="p1_per">Doimo bepul</div>
@@ -632,9 +642,10 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
           <li data-i18n="p1_f3">Har bir javob lex.uz manbasi bilan</li>
           <li data-i18n="p1_f4">Karta talab qilinmaydi</li>
         </ul>
-        <a href="/login.html" class="btn btn-outline" data-i18n="p1_btn">Bepul boshlash</a>
+        <a href="/login.html" class="btn btn-primary" data-i18n="p1_btn">Bepul boshlash</a>
       </div>
-      <div class="plan reveal" data-d="1">
+      <div class="plan soon reveal" data-d="1">
+        <span class="plan-tag soon-tag" data-i18n="p_soon">Tez orada</span>
         <div class="plan-name" data-i18n="p2_name">Silver</div>
         <div class="plan-price">199 000<small data-i18n="p_cur"> so'm</small></div>
         <div class="plan-per" data-i18n="p_per">oyiga</div>
@@ -645,10 +656,10 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
           <li data-i18n="p2_f3">Oyiga ~95 ta hujjat tayyorlash</li>
           <li data-i18n="p2_f4">O‘z shablonlaringizni yuklash</li>
         </ul>
-        <a href="/login.html" class="btn btn-outline" data-i18n="p_select">Tanlash</a>
+        <a href="/login.html" class="btn btn-outline" data-i18n="p_soon_btn">Xabar berish</a>
       </div>
-      <div class="plan ft reveal" data-d="2">
-        <span class="plan-tag" data-i18n="p3_tag">Mashhur</span>
+      <div class="plan soon reveal" data-d="2">
+        <span class="plan-tag soon-tag" data-i18n="p_soon">Tez orada</span>
         <div class="plan-name" data-i18n="p3_name">Gold</div>
         <div class="plan-price">399 000<small data-i18n="p_cur"> so'm</small></div>
         <div class="plan-per" data-i18n="p_per">oyiga</div>
@@ -660,9 +671,10 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
           <li data-i18n="p3_f4">Skan va rasmdan hujjat tahlili</li>
           <li data-i18n="p3_f5">Ustuvor navbat — tezroq javob</li>
         </ul>
-        <a href="/login.html" class="btn btn-primary" data-i18n="p_select">Tanlash</a>
+        <a href="/login.html" class="btn btn-outline" data-i18n="p_soon_btn">Xabar berish</a>
       </div>
-      <div class="plan reveal" data-d="3">
+      <div class="plan soon reveal" data-d="3">
+        <span class="plan-tag soon-tag" data-i18n="p_soon">Tez orada</span>
         <div class="plan-name" data-i18n="p4_name">Platinum</div>
         <div class="plan-price">999 000<small data-i18n="p_cur"> so'm</small></div>
         <div class="plan-per" data-i18n="p_per">oyiga</div>
@@ -674,7 +686,7 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
           <li data-i18n="p4_f4">Shaxsiy konsierj va o‘qitish</li>
           <li data-i18n="p4_f5">API orqali integratsiya</li>
         </ul>
-        <a href="/login.html" class="btn btn-outline" data-i18n="p_select">Tanlash</a>
+        <a href="/login.html" class="btn btn-outline" data-i18n="p_soon_btn">Xabar berish</a>
       </div>
     </div>
     <p class="pr-note reveal" data-i18n="pr_note"><b>Kam ishlatdingizmi — kamroq to‘laysiz.</b> Har oy sarfingizni hisoblab boramiz: rejangizni to‘liq ishlatmagan bo‘lsangiz, farqi keyingi oy uchun chegirma sifatida qaytariladi. Ortiqcha to‘lov yo‘q.</p>
@@ -802,6 +814,10 @@ uz:{
   pr_sub:"Bepul boshlang — karta kerak emas. Istalgan vaqtda bekor qilasiz.",
   pr_note:"<b>Kam ishlatdingizmi — kamroq to‘laysiz.</b> Har oy sarfingizni hisoblab boramiz: rejangizni to‘liq ishlatmagan bo‘lsangiz, farqi keyingi oy uchun chegirma sifatida qaytariladi. Ortiqcha to‘lov yo‘q.",
   p_cur:" so'm",p_per:"oyiga",p_select:"Tanlash",
+  p_soon:"Tez orada",
+  p_soon_btn:"Xabar berish",
+  p1_tag:"Boshlash uchun",
+  pr_testing:"<b>Platforma sinov bosqichida.</b> To‘lov tizimi hali ulanmagan — hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak bo‘lsa, «Xabar berish» tugmasini bosing.",
   faq_ey:"Savol-javob",faq_h:"Tez-tez beriladigan savollar",
   q1_q:"JuristAI yuristning o'rnini bosadimi?",q1_a:"JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz.",
   q2_q:"Javoblar qanchalik ishonchli?",q2_a:"Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi. Siz manbani o'zingiz tekshirishingiz mumkin.",
@@ -860,6 +876,10 @@ ru:{
   pr_sub:"Начните бесплатно — карта не нужна. Отмена в любой момент.",
   pr_note:"<b>Меньше используете — меньше платите.</b> Мы считаем ваш расход каждый месяц: если вы не выбрали тариф полностью, разница возвращается скидкой на следующий месяц. Никаких переплат.",
   p_cur:" сум",p_per:"в месяц",p_select:"Выбрать",
+  p_soon:"Скоро",
+  p_soon_btn:"Сообщить мне",
+  p1_tag:"Для старта",
+  pr_testing:"<b>Платформа в стадии тестирования.</b> Платёжная система ещё не подключена — сейчас все возможности открыты на бесплатном тарифе. Нужен платный — нажмите «Сообщить мне».",
   faq_ey:"Вопросы и ответы",faq_h:"Часто задаваемые вопросы",
   q1_q:"Заменяет ли JuristAI юриста?",q1_a:"JuristAI предоставляет быструю информацию с источниками, но для сложных дел рекомендуем консультироваться с квалифицированным юристом.",
   q2_q:"Насколько надёжны ответы?",q2_a:"Каждый ответ основан на тексте действующего закона с Lex.uz. Вы можете проверить источник самостоятельно.",

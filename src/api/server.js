@@ -2851,6 +2851,12 @@ async function callGeminiStream(messages, options = {}, onToken) {
 // fetchLexDocument, both domain-restricted by construction) is unaffected.
 const LEXUZ_ONLY = process.env.ALLOW_WEB_SEARCH !== 'true';
 
+// Paid plans stay closed until a real payment provider is wired up. One flag
+// governs the server guard, the plan catalogue and the pricing UI, so the
+// three cannot drift out of step: set PAYMENTS_ENABLED=true and every surface
+// opens at once.
+const PAYMENTS_ENABLED = process.env.PAYMENTS_ENABLED === 'true';
+
 /** True when a provider may attach a general web-search tool. */
 function webSearchAllowed(requested) {
   if (!requested) return false;
@@ -8405,7 +8411,10 @@ app.post('/api/register/common', async (req, res) => {
 
 // GET /api/tariff/plans — public plan catalog (used by tariff.html)
 app.get('/api/tariff/plans', (req, res) => {
-  res.json({ plans: tariffModule.PLANS });
+  // paymentsEnabled travels with the catalogue so the UI reads its disabled
+  // state from the same source that enforces it, instead of a second flag
+  // that can be flipped in one place and forgotten in the other.
+  res.json({ plans: tariffModule.PLANS, paymentsEnabled: PAYMENTS_ENABLED });
 });
 
 // GET /api/tariff/me — current user's plan + remaining quota
@@ -8450,6 +8459,57 @@ app.get('/api/tariff/usage-report', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// ── Plan interest ("tell me when it's ready") ───────────────────────────────
+// While payments are off, a user who wants a paid tier can register interest
+// instead of hitting a dead button. Two things come out of it: a warm list to
+// contact when billing goes live, and — more useful — the real demand split
+// between tiers BEFORE the prices are locked in.
+app.post('/api/tariff/interest', requireAuth, async (req, res) => {
+  try {
+    const plan = String((req.body || {}).plan || '').trim();
+    if (!tariffModule.PLANS[plan] || tariffModule.PLANS[plan].priceUzs <= 0) {
+      return res.status(400).json({ error: 'Noto\'g\'ri tarif' });
+    }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS plan_interest (
+        id         SERIAL PRIMARY KEY,
+        admin_id   INTEGER NOT NULL,
+        plan       VARCHAR(20) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (admin_id, plan)
+      )`);
+    // Re-registering interest is not an error — it is the same signal twice.
+    await pool.query(
+      `INSERT INTO plan_interest (admin_id, plan) VALUES ($1, $2)
+       ON CONFLICT (admin_id, plan) DO UPDATE SET created_at = NOW()`,
+      [req.session.adminId, plan]);
+    logAudit(req, 'tariff.interest', 'plan', plan);
+    res.json({ ok: true, plan });
+  } catch (e) {
+    console.error('[TARIFF INTEREST]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/plan-interest — who is waiting, and for what (master only)
+app.get('/api/admin/plan-interest', requireMasterAdmin, async (req, res) => {
+  try {
+    const byPlan = await pool.query(
+      `SELECT plan, COUNT(*)::int AS n FROM plan_interest GROUP BY plan ORDER BY n DESC`);
+    const people = await pool.query(
+      `SELECT i.plan, i.created_at, a.username, a.full_name, a.tariff_plan AS current_plan
+         FROM plan_interest i JOIN admins a ON a.id = i.admin_id
+        ORDER BY i.created_at DESC LIMIT 500`);
+    res.json({ byPlan: byPlan.rows, waiting: people.rows.length, people: people.rows });
+  } catch (e) {
+    // The table only exists once someone has registered interest.
+    if (/relation .* does not exist/i.test(e.message)) {
+      return res.json({ byPlan: [], waiting: 0, people: [] });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/tariff/select — user picks a plan (sinov is once-per-user)
 app.post('/api/tariff/select', requireAuth, async (req, res) => {
   try {
@@ -8457,7 +8517,17 @@ app.post('/api/tariff/select', requireAuth, async (req, res) => {
     if (!plan || !tariffModule.PLANS[plan]) {
       return res.status(400).json({ error: 'Noto\'g\'ri tarif tanlandi' });
     }
-    // Paid plans: this endpoint just sets the plan AS IF paid. Payment integration is deferred.
+    // Payment integration is not live. Until it is, this endpoint must REFUSE
+    // paid plans rather than granting them "as if paid" — it previously did the
+    // latter, so anyone could POST {plan:'platinum'} and get it for nothing.
+    // Dimming the cards in the UI does not close that; only this does.
+    if (!PAYMENTS_ENABLED && tariffModule.PLANS[plan].priceUzs > 0) {
+      return res.status(503).json({
+        error: 'payments_disabled',
+        code: 'PAYMENTS_DISABLED',
+        message: 'To\'lov tizimi hali ulanmagan. Hozircha bepul tarifdan foydalaning — pullik tariflar tez orada ochiladi.',
+      });
+    }
     const result = await tariffModule.selectPlan(req.session.adminId, plan);
     res.json({ success: true, ...result });
   } catch (err) {
