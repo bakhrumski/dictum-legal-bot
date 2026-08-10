@@ -21,9 +21,9 @@ const path = require('path');
 const fs = require('fs');
 
 // ── Load the module with ../database/db stubbed ─────────────────────────────
-const state = { usedToday: 0, plan: 'silver', role: 'user', startsAt: new Date('2026-01-01') };
+const state = { usedToday: 0, plan: 'silver', role: 'user', startsAt: new Date('2026-01-01'), lastUpdateParams: null };
 const fakePool = {
-  query: async (sql) => {
+  query: async (sql, params = []) => {
     if (/FROM admins WHERE id/i.test(sql)) {
       return { rows: [{
         tariff_plan: state.plan, tariff_starts_at: state.startsAt,
@@ -33,6 +33,10 @@ const fakePool = {
     }
     // Matches both the trial's COUNT(*) and the paid tiers' weighted SUM(CASE...).
     if (/COUNT\(\*\)|SUM\(/i.test(sql)) return { rows: [{ used: state.usedToday, n: state.usedToday }] };
+    if (/UPDATE admins\s+SET tariff_plan/i.test(sql)) {
+      state.lastUpdateParams = params;
+      return { rows: [] };
+    }
     return { rows: [] };
   },
 };
@@ -120,6 +124,14 @@ async function test(name, fn) {
     assert.ok(b.dailyLimitLater < b.dailyLimit,
       'an un-stepped free tier is the platform\'s largest unbounded cost');
     assert.strictEqual(b.durationDays, null, 'the free tier must not expire');
+  });
+
+  await test('the permanent free plan is stored without an expiry date', async () => {
+    state.lastUpdateParams = null;
+    const selected = await tiers.selectPlan(1, 'bepul');
+    assert.strictEqual(selected.expiresAt, null);
+    assert.ok(state.lastUpdateParams, 'plan update was not written');
+    assert.strictEqual(state.lastUpdateParams[2], null, 'database expiry must be NULL');
   });
 
   await test('the trial keeps a real 3/day quota', () => {

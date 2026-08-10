@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        if (location.protocol === 'file:') {
+            location.replace('http://localhost:3000/dashboard.html' + location.search + location.hash);
+        }
+    </script>
     <title>JuristAI - Murojaatlar Dashboard</title>
-    <link rel="icon" type="image/png" sizes="256x256" href="/favicon-256.png">
-    <link rel="apple-touch-icon" href="/favicon-256.png">
+    <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
+    <link rel="apple-touch-icon" href="./favicon-256.png">
     <!-- PDF & Chart Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="./css/design-tokens.css">
     <style>
         /* ========== JURISTAI DESIGN SYSTEM (Phase 2.2) ==========
            Legacy variable names retained for compatibility — values
@@ -206,7 +208,7 @@
             scrollbar-gutter: stable;
         }
         body {
-            font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Inter', BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: var(--font-sans);
             background: var(--bg-gradient);
             background-attachment: fixed;
             min-height: 100vh;
@@ -433,6 +435,9 @@
         .tab-view > .reg-section .reg-section-body { display: block !important; }
         /* …but these admin panels are genuinely collapsible (ID beats the !important above) */
         #regSection.collapsed .reg-section-body,
+        #attorneyAdminSection.collapsed .reg-section-body,
+        #paidServicesSection.collapsed .reg-section-body,
+        #telegramAgentSection.collapsed .reg-section-body,
         #surveyAdminSection.collapsed .reg-section-body,
         #coverageSection.collapsed .reg-section-body,
         #suggestedSection.collapsed .reg-section-body,
@@ -2269,11 +2274,15 @@
         .ai-history-item-meta {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             font-size: 11px;
             color: var(--text-muted);
             flex-wrap: wrap;
             overflow: hidden;
+        }
+        .ai-history-item-time {
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
         }
         .ai-history-item-db {
             font-size: 9px;
@@ -3092,16 +3101,19 @@
             border-radius: 16px; padding: 20px 24px;
         }
         .docflow-title {
+            display: flex; align-items: center; gap: 8px;
             font-weight: 700; font-size: 15px; color: var(--text-primary);
             margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-1);
         }
         .docflow-opts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
         .docflow-opt {
-            padding: 10px 18px; border: 1px solid var(--border-1); border-radius: 999px;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 10px 16px; border: 1px solid var(--border-1); border-radius: 10px;
             background: var(--bg-1); color: var(--text-primary);
             font-family: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
             transition: border-color .15s, background .15s;
         }
+        .docflow-opt svg, .docflow-icon { width: 17px; height: 17px; flex: 0 0 auto; }
         .docflow-opt:hover { border-color: var(--navy-300); background: var(--parchment-100, rgba(0,0,0,0.03)); }
         .docflow-opt.docflow-primary { background: var(--navy-700); color: #fff; border-color: var(--navy-700); }
         .docflow-opt.docflow-primary:hover { background: var(--navy-500); border-color: var(--navy-500); }
@@ -3134,12 +3146,13 @@
             margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-1);
         }
         .opinion-drop {
-            border: 2px dashed var(--border-1); border-radius: 12px;
+            border: 1px solid var(--border-1); border-radius: 12px;
             padding: 26px 18px; text-align: center; cursor: pointer;
             color: var(--text-secondary); transition: border-color .15s, background .15s;
         }
         .opinion-drop:hover { border-color: var(--navy-300); background: var(--parchment-100, rgba(0,0,0,0.02)); }
-        .opinion-drop-ic { font-size: 26px; margin-bottom: 6px; }
+        .opinion-drop-ic { display: flex; justify-content: center; margin-bottom: 8px; }
+        .opinion-drop-ic svg { width: 24px; height: 24px; }
         #opinionDropLabel { font-size: 13.5px; word-break: break-word; }
         @media (max-width: 720px) {
             .docform-grid { flex-direction: column; gap: 16px; }
@@ -3850,6 +3863,10 @@
         .gate-btn-ghost { background: transparent; color: var(--navy-700,#0e2236); border: 1px solid var(--navy-700,#0e2236); }
         .gate-status { font-size: 13px; color: var(--text-secondary,#444); margin-top: 12px; line-height: 1.5; }
         .gate-link { display: inline-block; margin: 10px 0; font-size: 13px; color: var(--navy-700,#0e2236); text-decoration: underline; }
+        .gate-promo { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-1,#e2dcd0); }
+        .gate-promo-label { margin: 0 0 8px; color: var(--text-muted,#777); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+        .gate-instagram-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px 12px; border: 1px solid var(--border-1,#e2dcd0); border-radius: 9px; color: var(--text-primary,#1a1410); background: transparent; font-size: 13px; font-weight: 600; text-decoration: none; box-sizing: border-box; }
+        .gate-instagram-link:hover { background: var(--parchment-100,#f7f4ee); }
         .gate-q { text-align: left; margin-bottom: 16px; }
         .gate-q-text { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
         .gate-opt { display: block; padding: 8px 10px; border: 1px solid var(--border-1,#e2dcd0); border-radius: 8px; margin-bottom: 6px; font-size: 14px; cursor: pointer; }
@@ -5864,11 +5881,801 @@
         [data-theme="dark"] .topic-modal-box {
             box-shadow: 0 10px 30px rgba(0,0,0,0.45) !important;
         }
+
+        /* ===== Chat-first shell: simple, focused and familiar ===== */
+        .ai-workspace {
+            background: var(--glass-bg);
+            border: 1px solid var(--border-1, var(--glass-border));
+            box-shadow: 0 12px 32px rgba(14, 34, 54, 0.06);
+        }
+        .ai-sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: var(--glass-bg);
+            border-right: 1px solid var(--border-1, var(--glass-border));
+        }
+        .ai-sidebar-close {
+            display: none;
+            width: 36px;
+            height: 36px;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 9px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .ai-sidebar-close:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+        .ai-sidebar-header {
+            min-height: 54px;
+            padding: 7px 12px;
+            gap: 6px;
+        }
+        .ai-sidebar-new-btn {
+            flex: 1;
+            min-width: 0;
+            width: auto;
+            justify-content: flex-start;
+            padding: 10px 12px;
+            border: 1px solid var(--border-1, var(--glass-border));
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text-primary);
+            box-shadow: none;
+            font-weight: 600;
+        }
+        .ai-sidebar-new-btn:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--navy-300);
+        }
+        .ai-history-section { padding: 8px 10px 14px; }
+        .ai-history-title {
+            padding: 5px 7px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .ai-history-search-wrap {
+            height: 38px;
+            margin: 0 2px 10px;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            background: var(--bg-input);
+            color: var(--text-muted);
+        }
+        .ai-history-search-wrap:focus-within {
+            border-color: var(--navy-300);
+            background: var(--glass-bg);
+        }
+        .ai-history-search {
+            min-width: 0;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            outline: 0;
+            background: transparent;
+        }
+        .ai-history-search:focus { border-color: transparent; }
+        .ai-history-item { padding: 9px 10px; }
+        .ai-history-item-title { font-weight: 500; }
+        .ai-history-item.active { background: var(--bg-card-hover); }
+
+        .ai-chat-main { background: var(--glass-bg); }
+        .ai-chat-header {
+            min-height: 54px;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-1, var(--glass-border));
+            background: color-mix(in srgb, var(--glass-bg) 94%, transparent);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+        .ai-sidebar-toggle {
+            display: flex;
+            width: 38px;
+            height: 38px;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+        @media (min-width: 769px) {
+            .ai-sidebar { transition: width .2s ease, min-width .2s ease, opacity .15s ease; }
+            .ai-workspace.sidebar-collapsed .ai-sidebar {
+                width: 0;
+                min-width: 0;
+                border-right: 0;
+                opacity: 0;
+                pointer-events: none;
+            }
+        }
+
+        .ai-chat-messages {
+            gap: 18px;
+            padding: 24px clamp(18px, 4vw, 48px);
+        }
+        .ai-chat-welcome {
+            width: min(100%, 720px);
+            margin: auto;
+            padding: 32px 0 20px;
+            gap: 22px;
+        }
+        .ai-welcome-mark {
+            width: 46px;
+            height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 13px;
+            background: var(--glass-bg);
+            box-shadow: 0 3px 16px rgba(14, 34, 54, 0.10);
+        }
+        .ai-welcome-mark img { width: 38px; height: 38px; object-fit: contain; }
+        .ai-welcome-copy { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .ai-welcome-copy h1 {
+            max-width: 620px;
+            margin: 0;
+            color: var(--text-primary);
+            font-size: clamp(24px, 3vw, 32px);
+            font-weight: 650;
+            line-height: 1.2;
+            letter-spacing: -0.025em;
+        }
+        .ai-welcome-copy p {
+            max-width: 520px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .ai-starter-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .ai-starter-card {
+            min-width: 0;
+            min-height: 74px;
+            padding: 13px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-align: left;
+            border: 1px solid var(--border-1, var(--glass-border));
+            border-radius: 14px;
+            background: transparent;
+            color: var(--text-primary);
+            font-family: inherit;
+            cursor: pointer;
+            transition: background .15s, border-color .15s, transform .15s;
+        }
+        .ai-starter-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--navy-300);
+            transform: translateY(-1px);
+        }
+        .ai-starter-card svg {
+            width: 21px;
+            height: 21px;
+            flex: none;
+            fill: none;
+            stroke: var(--text-secondary);
+            stroke-width: 1.7;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .ai-starter-card span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+        .ai-starter-card strong {
+            overflow: hidden;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.25;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .ai-starter-card small { color: var(--text-muted); font-size: 11.5px; line-height: 1.25; }
+        .ai-topics-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 9px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 12.5px;
+            cursor: pointer;
+        }
+        .ai-topics-toggle:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+        .ai-topics-chevron { transition: transform .18s ease; }
+        .ai-topics-toggle[aria-expanded="true"] .ai-topics-chevron { transform: rotate(180deg); }
+        .ai-welcome-topics { width: 100%; }
+        .ai-welcome-topics-help {
+            max-width: none !important;
+            margin: 0 0 10px !important;
+            font-size: 12px !important;
+            color: var(--text-muted) !important;
+        }
+        .ai-welcome-topics .ai-chat-suggestions {
+            max-width: 100%;
+            max-height: none;
+            margin-top: 0;
+            gap: 7px;
+            opacity: 1;
+            transform: none;
+        }
+        .ai-welcome-topics .ai-chat-suggestion {
+            padding: 7px 10px;
+            border: 1px solid var(--border-1, var(--glass-border));
+            border-radius: 999px;
+            background: transparent;
+            font-size: 11.5px;
+        }
+
+        .ai-chat-msg.ai,
+        .ai-chat-typing,
+        .ai-chat-msg.next-steps {
+            width: min(100%, 820px);
+            max-width: 820px;
+            margin-inline: auto;
+            align-self: center;
+        }
+        .ai-chat-msg.user {
+            max-width: min(72%, 680px);
+            margin-right: max(0px, calc((100% - 820px) / 2));
+            padding: 10px 14px;
+            border-radius: 18px;
+            border-bottom-right-radius: 5px;
+            background: var(--navy-700);
+        }
+        .ai-chat-msg.ai { padding: 8px 0 18px; }
+        /* Interactive document/template cards keep their own inset spacing.
+           This must follow the flat AI-message rule above or its zero
+           horizontal padding wins in the cascade. */
+        .ai-chat-msg.ai.docflow-card {
+            width: 100%;
+            max-width: 100%;
+            padding: 20px 24px;
+            box-sizing: border-box;
+        }
+        @media (max-width: 600px) {
+            .ai-chat-msg.ai.docflow-card { padding: 16px; }
+        }
+
+        .ai-chat-input-bar {
+            padding: 10px clamp(18px, 4vw, 48px) 12px;
+            border-top: 0;
+            background: var(--glass-bg);
+        }
+        .ai-chat-input-bar .ai-chat-input-wrapper,
+        .ai-attach-chips,
+        .ai-composer-note {
+            width: min(100%, 820px);
+            margin-left: auto;
+            margin-right: auto;
+            box-sizing: border-box;
+        }
+        .ai-chat-input-bar .ai-chat-input-wrapper {
+            min-height: 52px;
+            padding: 6px;
+            border-radius: 18px;
+            box-shadow: 0 3px 14px rgba(14, 34, 54, 0.06);
+        }
+        .ai-chat-input-bar .ai-chat-input-wrapper:focus-within {
+            box-shadow: 0 4px 18px rgba(14, 34, 54, 0.10);
+        }
+        .ai-chat-input-bar .ai-chat-textarea { padding: 8px 7px; overflow-y: hidden; }
+        .ai-chat-input-bar .ai-chat-send-btn,
+        .ai-attach-btn { width: 38px; height: 38px; }
+        .ai-chat-input-bar .ai-chat-send-btn { background: var(--navy-900, var(--navy-700)); }
+        .ai-composer-note {
+            margin-top: 7px;
+            margin-bottom: 0;
+            color: var(--text-muted);
+            font-size: 10.5px;
+            line-height: 1.35;
+            text-align: center;
+        }
+
+        .ai-sidebar-new-btn:focus-visible,
+        .ai-sidebar-close:focus-visible,
+        .ai-sidebar-toggle:focus-visible,
+        .ai-starter-card:focus-visible,
+        .ai-topics-toggle:focus-visible,
+        .ai-chat-suggestion:focus-visible,
+        .ai-attach-btn:focus-visible,
+        .ai-chat-send-btn:focus-visible {
+            outline: 3px solid color-mix(in srgb, var(--navy-300) 55%, transparent);
+            outline-offset: 2px;
+        }
+
+        /* Common users get a dedicated full-screen chat, without dashboard chrome. */
+        body.no-tab-bar { padding: 0 !important; overflow: hidden; }
+        body.no-tab-bar .container { max-width: none; height: 100dvh; padding: 0; }
+        body.no-tab-bar .container > header { display: none; }
+        body.no-tab-bar #tabAi { height: 100%; }
+        body.no-tab-bar .ai-workspace {
+            height: 100vh;
+            height: 100dvh;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        [data-theme="dark"] .ai-workspace,
+        [data-theme="dark"] .ai-chat-main,
+        [data-theme="dark"] .ai-chat-header,
+        [data-theme="dark"] .ai-chat-input-bar { background: var(--dark-bg-2); }
+        [data-theme="dark"] .ai-sidebar { background: var(--dark-bg-3); }
+        [data-theme="dark"] .ai-welcome-mark { background: var(--dark-bg-3); box-shadow: none; }
+
+        @media (max-width: 768px) {
+            .ai-sidebar { width: min(86vw, 300px); }
+            .ai-sidebar-close { display: flex; }
+            .ai-chat-header { min-height: 56px; padding: 8px 10px; }
+            .ai-chat-messages { padding: 18px 14px; }
+            .ai-chat-welcome { padding: 18px 0 12px; gap: 18px; }
+            .ai-welcome-copy h1 { font-size: 25px; }
+            .ai-chat-input-bar { padding: 8px 10px calc(9px + env(safe-area-inset-bottom, 0px)); }
+            .ai-chat-msg.user { max-width: 86%; margin-right: 0; }
+        }
+        @media (max-width: 480px) {
+            .ai-starter-grid { gap: 8px; }
+            .ai-starter-card { min-height: 68px; padding: 10px; gap: 9px; }
+            .ai-starter-card svg { width: 19px; height: 19px; }
+            .ai-starter-card strong { font-size: 12px; }
+            .ai-starter-card small { font-size: 10.5px; }
+            .ai-welcome-mark { width: 40px; height: 40px; }
+            .ai-welcome-mark img { width: 33px; height: 33px; }
+            .ai-welcome-copy h1 { font-size: 22px; }
+            .ai-welcome-copy p { font-size: 13px; }
+            .ai-topics-toggle { font-size: 12px; }
+            .ai-composer-note { font-size: 9.5px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .ai-sidebar,
+            .ai-starter-card,
+            .ai-topics-chevron,
+            .ai-chat-msg { transition: none !important; animation: none !important; }
+        }
+        /* Approved visual direction: flat chat shell and progressive admin tools. */
+        .ai-workspace,
+        .ai-welcome-mark,
+        .ai-chat-input-bar .ai-chat-input-wrapper,
+        .ai-chat-input-bar .ai-chat-input-wrapper:focus-within {
+            box-shadow: none;
+        }
+        .ai-workspace { border-color: var(--border-1); }
+        .ai-sidebar { background: var(--parchment-100); }
+        .ai-sidebar-new-btn:hover,
+        .ai-starter-card:hover,
+        .ai-chat-send-btn:hover,
+        .ai-feedback-btn:hover {
+            transform: none;
+        }
+        .ai-sidebar-new-btn:hover { border-color: var(--border-1); }
+        .ai-starter-card {
+            min-height: 62px;
+            border-color: transparent;
+            border-radius: 9px;
+        }
+        .ai-starter-card:hover { border-color: transparent; }
+        .ai-welcome-mark { background: var(--navy-100); }
+        .ai-chat-msg.user { background: var(--navy-700); }
+        .ai-chat-input-bar .ai-chat-input-wrapper { border-color: var(--parchment-300); }
+        .ai-chat-input-bar .ai-chat-input-wrapper:focus-within { border-color: var(--navy-500); }
+        .ai-chat-input-bar .ai-chat-send-btn { background: var(--navy-700); }
+        .bottom-tab-bar {
+            background: var(--glass-bg-strong);
+            border-top: 1px solid var(--border-1);
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+        [data-theme="dark"] .bottom-tab-bar { background: var(--dark-bg-2); box-shadow: none; }
+        .tab-bar-item,
+        .tab-bar-item:active { transform: none; }
+        .tab-bar-item.active,
+        [data-theme="dark"] .tab-bar-item.active { color: var(--text-primary); }
+        .tab-bar-item.active .tab-icon,
+        [data-theme="dark"] .tab-bar-item.active .tab-icon { stroke: currentColor; }
+
+        /* All master-only controls live behind one neutral Tools drawer. */
+        .ai-chat-header.master-mode .hdr-mobile-toggle {
+            display: inline-flex;
+            width: auto;
+            min-height: 36px;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 10px;
+            border: 0;
+            color: var(--text-secondary);
+            font: inherit;
+        }
+        .ai-chat-header.master-mode .hdr-actions,
+        body > .hdr-actions.master-tools-drawer {
+            display: flex;
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: min(360px, 92vw);
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            padding: 16px;
+            z-index: 2200;
+            overflow-y: auto;
+            background: var(--glass-bg-strong);
+            border-left: 1px solid var(--border-1);
+            transform: translateX(100%);
+            visibility: hidden;
+            transition: transform .2s ease, visibility .2s;
+        }
+        .ai-chat-header.master-mode .hdr-actions.drawer-open,
+        body > .hdr-actions.master-tools-drawer.drawer-open {
+            transform: translateX(0);
+            visibility: visible;
+            box-shadow: var(--shadow-3);
+        }
+        .hdr-drawer-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-1);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .hdr-dd { position: static; width: 100%; }
+        .hdr-dd-btn { width: 100%; justify-content: space-between; border-color: transparent; }
+        .hdr-dd-btn:hover,
+        .hdr-dd-btn.dd-open { background: var(--bg-card-hover); border-color: transparent; color: var(--text-primary); }
+        .hdr-dd-panel {
+            position: static !important;
+            width: auto !important;
+            min-width: 0;
+            max-height: none;
+            margin: 0;
+            padding: 10px 2px 4px;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        [data-theme="dark"] .ai-sidebar { background: var(--dark-bg-3); }
+        [data-theme="dark"] .ai-welcome-mark { background: rgba(147, 183, 201, .12); }
+        [data-theme="dark"] .ai-chat-input-bar .ai-chat-send-btn { background: var(--dark-accent); color: var(--dark-bg-1); }
+        @media (max-width: 520px) {
+            .ai-chat-header.master-mode .hdr-mobile-toggle span { display: none; }
+            .ai-chat-header.master-mode .hdr-mobile-toggle { width: 36px; padding: 0; justify-content: center; }
+        }
         /* flatten navy gradient avatars/badges to a solid fill */
         .chat-member-avatar, .chat-msg-notif-avatar,
         .master-av, .lawyer-av, .student-av { background: var(--navy-700) !important; }
         /* flatten the gradient header used by dropdowns */
         :root { --dropdown-header-bg: var(--navy-700); }
+    </style>
+    <style>
+        /* Master Admin operations workspace — restrained, monochrome and
+           optimized for scanning rather than decorative dashboard cards. */
+        .operations-heading {
+            max-width: 1440px;
+            margin: 20px auto 12px;
+            padding: 0 28px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        .operations-eyebrow {
+            margin: 0 0 5px;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .operations-heading h1 { margin: 0; color: var(--text-primary); font-size: clamp(25px, 3vw, 34px); letter-spacing: -.035em; }
+        .operations-heading > div > p:last-child { margin: 7px 0 0; color: var(--text-secondary); font-size: 14px; }
+        .operations-refresh, .queue-refresh, .queue-clear {
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-primary);
+            border-radius: 10px;
+            min-height: 40px;
+            padding: 0 13px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 650;
+            cursor: pointer;
+            box-shadow: none;
+        }
+        .operations-refresh:hover, .queue-refresh:hover, .queue-clear:hover { background: var(--bg-tertiary); }
+        .stats {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 0 28px;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .stat-card {
+            min-height: 112px;
+            padding: 18px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            background: var(--card-bg);
+            box-shadow: none;
+            transform: none;
+        }
+        .stat-card:hover { transform: none; border-color: var(--text-muted); background: var(--bg-secondary); }
+        .stat-card .stat-icon,
+        .stat-card.card-pending .stat-icon,
+        .stat-card.card-rejected .stat-icon,
+        .stat-card.card-student .stat-icon,
+        .stat-card.card-answered .stat-icon {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        .stat-card.card-overdue .stat-icon { color: var(--danger-700); }
+        .stat-card .stat-info { align-items: flex-start; text-align: left; }
+        .stat-card .number { color: var(--text-primary); font-size: 27px; line-height: 1; margin: 1px 0 6px; }
+        .stat-card .stat-info h3 { color: var(--text-primary); font-size: 13px; line-height: 1.25; margin: 0; }
+        .stat-card .stat-info span { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; }
+        .operations-health-shell {
+            max-width: 1440px;
+            margin: 10px auto 0;
+            padding: 0 28px;
+        }
+        .operations-health {
+            width: 100%;
+            padding: 11px 14px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--card-bg);
+        }
+        .health-item { min-width: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+        .health-item strong { color: var(--text-primary); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .health-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success-700); }
+        .health-dot.is-warning { background: var(--warning-700); }
+        .health-dot.is-error { background: var(--danger-700); }
+        .health-dot.is-loading { background: var(--text-muted); }
+        .main-content-area { max-width: 1440px; margin: 18px auto 0; padding: 0 28px; }
+        .requests-container { border: 1px solid var(--border-color); border-radius: 16px; background: var(--card-bg); box-shadow: none; overflow: hidden; }
+        .requests-container .controls { padding: 18px 18px 14px; border-bottom: 1px solid var(--border-color); }
+        .controls-header { min-height: 40px; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 14px; cursor: default; }
+        .controls-header h2 { margin: 0; color: var(--text-primary); font-size: 18px; letter-spacing: -.015em; }
+        .controls-header p { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
+        .queue-refresh { width: 40px; padding: 0; }
+        .queue-views { display: flex; gap: 4px; overflow-x: auto; margin: 16px 0 12px; padding-bottom: 2px; scrollbar-width: thin; }
+        .queue-view-btn {
+            flex: 0 0 auto;
+            min-height: 36px;
+            padding: 0 12px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            background: transparent;
+            color: var(--text-secondary);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 650;
+            cursor: pointer;
+        }
+        .queue-view-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .queue-view-btn.active { background: var(--navy-900); color: #fff; }
+        .filter-section { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: stretch; overflow: visible; animation: none; }
+        .filter-section select, .queue-search {
+            min-width: 0;
+            min-height: 40px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-2);
+            color: var(--text-primary);
+            box-shadow: none;
+        }
+        .filter-section select { width: 100%; padding: 0 30px 0 10px; font: inherit; font-size: 12px; }
+        .queue-native-select {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            clip-path: inset(50%);
+        }
+        .queue-select { position: relative; min-width: 0; }
+        .queue-select-trigger {
+            width: 100%;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 0 10px 0 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-2);
+            color: var(--text-primary);
+            box-shadow: none;
+            font: inherit;
+            font-size: 12px;
+            text-align: left;
+            cursor: pointer;
+        }
+        .queue-select-trigger:hover { background: var(--bg-3); }
+        .queue-select-trigger:focus-visible,
+        .queue-select.open .queue-select-trigger {
+            border-color: var(--text-muted);
+            outline: 2px solid color-mix(in srgb, var(--navy-500) 24%, transparent);
+            outline-offset: 1px;
+        }
+        .queue-select-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .queue-select-chevron { flex: 0 0 auto; transition: transform 150ms ease; }
+        .queue-select.open .queue-select-chevron { transform: rotate(180deg); }
+        .queue-select-menu {
+            position: absolute;
+            z-index: 140;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            display: none;
+            max-height: min(280px, 45vh);
+            overflow-y: auto;
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-2);
+            box-shadow: 0 12px 28px rgba(8, 24, 39, 0.12);
+        }
+        .queue-select.open .queue-select-menu { display: block; }
+        .queue-select.open-up .queue-select-menu { top: auto; bottom: calc(100% + 6px); }
+        .queue-select-option {
+            width: 100%;
+            min-height: 36px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 9px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-primary);
+            font: inherit;
+            font-size: 12px;
+            line-height: 1.35;
+            text-align: left;
+            cursor: pointer;
+        }
+        .queue-select-option:hover,
+        .queue-select-option:focus-visible { background: var(--bg-3); outline: 0; }
+        .queue-select-option[aria-selected="true"] { background: color-mix(in srgb, var(--navy-500) 12%, var(--bg-2)); font-weight: 650; }
+        .queue-select-check { opacity: 0; color: var(--navy-700); }
+        .queue-select-option[aria-selected="true"] .queue-select-check { opacity: 1; }
+        .queue-search { display: flex; align-items: center; gap: 8px; padding: 0 11px; color: var(--text-muted); }
+        .queue-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; }
+        .queue-clear { min-height: 40px; }
+        .queue-search { grid-column: span 3; }
+        #categoryFilter, #assigneeFilter, #statusFilter,
+        .queue-select-categoryFilter, .queue-select-assigneeFilter, .queue-select-statusFilter { grid-column: span 2; }
+        #urgencyFilter, .queue-select-urgencyFilter { grid-column: span 3; }
+        #sourceFilter, #assignedFilter, #sortFilter,
+        .queue-select-sourceFilter, .queue-select-assignedFilter, .queue-select-sortFilter, .queue-clear { grid-column: span 3; }
+        #requestsList { padding: 0 18px 8px; }
+        .ops-request-list { display: flex; flex-direction: column; }
+        .ops-request {
+            position: relative;
+            display: grid;
+            grid-template-columns: 5px minmax(0, 1.7fr) minmax(120px, .7fr) minmax(105px, .6fr) auto;
+            gap: 14px;
+            align-items: center;
+            min-height: 78px;
+            padding: 12px 4px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        .ops-request:last-child { border-bottom: 0; }
+        .ops-request:hover { background: var(--bg-secondary); }
+        .ops-priority { align-self: stretch; border-radius: 999px; background: var(--text-muted); opacity: .35; }
+        .ops-priority.critical { background: var(--danger-700); opacity: 1; }
+        .ops-priority.high { background: var(--warning-700); opacity: 1; }
+        .ops-request-main { min-width: 0; }
+        .ops-request-title { color: var(--text-primary); font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ops-request-meta { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px 12px; color: var(--text-muted); font-size: 11px; }
+        .ops-request-person, .ops-request-time { min-width: 0; }
+        .ops-request-person strong, .ops-request-time strong { display: block; color: var(--text-primary); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ops-request-person span, .ops-request-time span { display: block; margin-top: 4px; color: var(--text-muted); font-size: 11px; }
+        .ops-status { justify-self: end; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-secondary); background: var(--bg-primary); font-size: 10px; font-weight: 700; white-space: nowrap; }
+        .ops-status.pending, .ops-status.assigned { border-color: color-mix(in srgb, var(--warning-700) 35%, var(--border-color)); }
+        .ops-status.student_responded, .ops-status.lawyer_approved { border-color: color-mix(in srgb, var(--navy-500) 40%, var(--border-color)); }
+        .ops-status.answered, .ops-status.ai_answered { border-color: color-mix(in srgb, var(--success-700) 35%, var(--border-color)); }
+        .queue-empty { padding: 54px 20px; text-align: center; color: var(--text-secondary); }
+        .queue-empty strong { display: block; color: var(--text-primary); margin-bottom: 5px; }
+        .queue-pagination { padding: 12px 18px 16px; display: flex; justify-content: center; align-items: center; gap: 12px; color: var(--text-muted); font-size: 12px; }
+        .queue-pagination[hidden] { display: none; }
+        .queue-pagination button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--card-bg); color: var(--text-primary); cursor: pointer; }
+        .queue-pagination button:disabled { opacity: .4; cursor: default; }
+        .management-heading { max-width: 1384px; margin: 22px auto 14px; }
+        .management-heading h1 { margin: 0; color: var(--text-primary); font-size: 30px; letter-spacing: -.035em; }
+        .management-heading > p:last-child { margin: 7px 0 0; color: var(--text-secondary); font-size: 14px; }
+        .management-grid { max-width: 1384px; margin: 0 auto 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+        .management-grid button {
+            position: relative;
+            min-height: 90px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 13px;
+            background: var(--card-bg);
+            color: var(--text-primary);
+            text-align: left;
+            font: inherit;
+            cursor: pointer;
+            box-shadow: none;
+        }
+        .management-grid button:hover { background: var(--bg-secondary); border-color: var(--text-muted); }
+        .management-grid span { display: block; font-size: 14px; font-weight: 750; }
+        .management-grid small { display: block; margin-top: 7px; color: var(--text-muted); font-size: 11px; line-height: 1.35; }
+        .management-grid b { position: absolute; top: 12px; right: 12px; min-width: 22px; height: 22px; padding: 0 6px; display: grid; place-items: center; border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-secondary); font-size: 10px; }
+        #tabSorov > .reg-section, #tabSorov > .monte-carlo-section { max-width: 1384px; margin-left: auto !important; margin-right: auto !important; }
+        .management-note { margin: 0 0 14px; color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
+        .admin-data-list { display: grid; gap: 8px; }
+        .admin-data-row { display: grid; grid-template-columns: minmax(180px, 1.3fr) minmax(130px, .8fr) minmax(140px, .9fr) auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 11px; background: var(--bg-primary); }
+        .admin-data-row strong { color: var(--text-primary); font-size: 13px; }
+        .admin-data-row span, .admin-data-row small { color: var(--text-secondary); font-size: 11px; }
+        .admin-data-row input, .admin-data-row select { min-height: 36px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--card-bg); color: var(--text-primary); padding: 0 9px; }
+        .admin-data-row button { min-height: 36px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--text-primary); color: var(--bg-primary); padding: 0 11px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .admin-data-status { display: inline-flex; width: fit-content; padding: 4px 7px; border: 1px solid var(--border-color); border-radius: 999px; font-size: 10px !important; font-weight: 700; }
+        @media (max-width: 1120px) {
+            .filter-section { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+            .queue-search { grid-column: 1 / -1; }
+            .filter-section select, .queue-select, .queue-clear { grid-column: span 2 !important; }
+            .ops-request { grid-template-columns: 5px minmax(0, 1fr) minmax(110px, .5fr) auto; }
+            .ops-request-time { display: none; }
+            .management-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (max-width: 720px) {
+            .operations-heading, .stats, .operations-health-shell, .main-content-area, .management-heading, .management-grid { padding-left: 14px; padding-right: 14px; }
+            .operations-heading { align-items: center; }
+            .operations-heading > div > p:last-child, .operations-refresh { display: none; }
+            .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .stat-card { min-height: 96px; padding: 14px; }
+            .operations-health { grid-template-columns: 1fr; }
+            .filter-section { grid-template-columns: 1fr 1fr; }
+            .queue-search { grid-column: 1 / -1; }
+            .filter-section select, .queue-select, .queue-clear { grid-column: span 1 !important; }
+            .ops-request { grid-template-columns: 4px minmax(0, 1fr) auto; gap: 9px; }
+            .ops-request-person { display: none; }
+            .ops-status { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+            .management-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .admin-data-row { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -5884,9 +6691,9 @@
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="brandClick()">
-                    <img src="/icon-1024.png"                   alt="JuristAI" class="header-logo header-logo-icon">
-                    <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
-                    <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
+                    <img src="./icon-1024.png"                   alt="JuristAI" class="header-logo header-logo-icon">
+                    <img src="./wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
+                    <img src="./wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
@@ -5904,8 +6711,8 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 </button>
                 <button class="theme-toggle-header" onclick="toggleTheme()" title="Rejimni almashtirish">
-                    <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-secondary)" stroke="none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round"/></svg></span>
-                    <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-secondary)" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg></span>
+                    <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg></span>
+                    <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg></span>
                 </button>
                 <div class="header-chat-wrapper">
                     <button class="header-chat-btn" onclick="toggleChat()" title="Guruh chat">
@@ -5931,43 +6738,58 @@
                 <span id="userRole" style="display:none;"></span>
             </div>
         </header>
-        <!-- TAB: Home — Stats -->
+        <!-- TAB: Home — Operations command center -->
         <div class="tab-view active" data-tab="home">
+        <section class="operations-heading" aria-labelledby="operationsTitle">
+            <div>
+                <p class="operations-eyebrow">Master Admin</p>
+                <h1 id="operationsTitle">Bugungi boshqaruv</h1>
+                <p>Navbat, jamoa va JuristAI xizmatlari holati bir joyda.</p>
+            </div>
+            <button class="operations-refresh" type="button" onclick="refreshOperations()" aria-label="Ma'lumotlarni yangilash">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Yangilash
+            </button>
+        </section>
         <div class="stats">
-            <div class="stat-card" onclick="scrollToRequests('')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+            <div class="stat-card card-overdue" onclick="setQueueView('overdue')">
+                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
                 <div class="stat-info">
-                    <div class="number num-total" id="totalRequests">0</div>
-                    <h3>Jami</h3>
+                    <div class="number" id="overdueRequests">0</div>
+                    <h3>SLA o'tgan</h3>
+                    <span>4 soatdan ko'p</span>
                 </div>
             </div>
-            <div class="stat-card card-pending" onclick="scrollToRequests('pending')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <div class="stat-card" onclick="setQueueView('unassigned')">
+                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M18 8v6M15 11h6"/></svg></div>
                 <div class="stat-info">
-                    <div class="number num-pending" id="pendingRequests">0</div>
-                    <h3>Jarayonda</h3>
+                    <div class="number" id="unassignedRequests">0</div>
+                    <h3>Tayinlanmagan</h3>
+                    <span>Egasi belgilanmagan</span>
                 </div>
             </div>
-            <div class="stat-card card-rejected" onclick="scrollToRequests('rejected')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+            <div class="stat-card" onclick="setQueueView('review')">
+                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
                 <div class="stat-info">
-                    <div class="number num-rejected" id="rejectedRequests">0</div>
-                    <h3>Rad etilgan</h3>
+                    <div class="number" id="awaitingReview">0</div>
+                    <h3>Tekshiruvda</h3>
+                    <span>Yurist qarori kerak</span>
                 </div>
             </div>
-            <div class="stat-card card-student" onclick="scrollToRequests('student_responded')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"/></svg></div>
+            <div class="stat-card" onclick="setQueueView('answered_today')">
+                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
                 <div class="stat-info">
-                    <div class="number num-student" id="studentResponded">0</div>
-                    <h3>Student javobi</h3>
+                    <div class="number" id="answeredToday">0</div>
+                    <h3>Bugun yakunlandi</h3>
+                    <span>AI va yurist javoblari</span>
                 </div>
             </div>
-            <div class="stat-card card-answered" onclick="scrollToRequests('answered')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-                <div class="stat-info">
-                    <div class="number num-answered" id="answeredRequests">0</div>
-                    <h3>Javob berilgan</h3>
-                </div>
+        </div>
+        <div class="operations-health-shell">
+            <div class="operations-health" id="operationsHealth" aria-live="polite">
+                <div class="health-item"><span class="health-dot is-loading"></span><span>Telegram agent</span><strong id="agentHealthText">Tekshirilmoqda</strong></div>
+                <div class="health-item"><span class="health-dot is-loading"></span><span>Huquqiy korpus</span><strong id="corpusHealthText">Tekshirilmoqda</strong></div>
+                <div class="health-item"><span class="health-dot is-loading"></span><span>Jamoa navbati</span><strong id="teamHealthText">Tekshirilmoqda</strong></div>
             </div>
         </div>
         </div><!-- /tab-view home: stats -->
@@ -6019,25 +6841,31 @@
         <div class="tab-view" id="tabAi" data-tab="ai">
         <div class="ai-workspace">
             <!-- Sidebar -->
-            <div class="ai-sidebar" id="aiSidebar">
+            <aside class="ai-sidebar" id="aiSidebar" aria-label="Suhbatlar">
                 <div class="ai-sidebar-header">
-                    <button class="ai-sidebar-new-btn" onclick="createNewAiChat()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <button class="ai-sidebar-new-btn" type="button" onclick="createNewAiChat()">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
                         Yangi suhbat
+                    </button>
+                    <button class="ai-sidebar-close" type="button" onclick="closeMobileSidebar()" title="Menyuni yopish" aria-label="Suhbatlar menyusini yopish">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
 
                 <!-- History -->
                 <div class="ai-history-section">
-                    <div class="ai-history-title">Suhbatlar tarixi</div>
-                    <input type="search" class="ai-history-search" id="aiHistorySearch"
-                           placeholder="Suhbatlardan qidirish..." oninput="renderAiHistoryList()">
+                    <div class="ai-history-title">Suhbatlar</div>
+                    <label class="ai-history-search-wrap" for="aiHistorySearch">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/></svg>
+                        <input type="search" class="ai-history-search" id="aiHistorySearch"
+                               placeholder="Suhbatlarni qidirish" oninput="renderAiHistoryList()">
+                    </label>
                     <div class="ai-history-list" id="aiHistoryList">
                         <div class="ai-history-empty">Hali suhbat yo'q</div>
                     </div>
                 </div>
 
-            </div>
+            </aside>
 
             <!-- Sidebar backdrop for mobile (shared by both sidebars) -->
             <div class="ai-sidebar-backdrop" id="aiSidebarBackdrop" onclick="closeBothSidebars()"></div>
@@ -6047,16 +6875,16 @@
                 <!-- Chat header -->
                 <div class="ai-chat-header" id="aiChatHeader">
                     <div class="ai-chat-header-left">
-                        <button class="ai-sidebar-toggle" onclick="toggleAiSidebar()" title="Menyu">
+                        <button class="ai-sidebar-toggle" type="button" onclick="toggleAiSidebar()" title="Suhbatlar" aria-label="Suhbatlar menyusini ochish yoki yopish" aria-expanded="true" aria-controls="aiSidebar">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                         </button>
-                        <span class="ai-chat-header-title" id="aiChatHeaderTitle"></span>
+                        <span id="aiChatHeaderTitle" hidden>Yangi suhbat</span>
                     </div>
                     <!-- Master-admin dropdown actions — desktop: header dropdowns; mobile: right drawer -->
                     <div class="hdr-actions" id="masterHeaderActions">
                         <div class="hdr-drawer-head">
                             <span>Admin paneli</span>
-                            <button class="hdr-drawer-close" onclick="closeHdrDrawer()" title="Yopish">&times;</button>
+                            <button class="hdr-drawer-close" onclick="closeHdrDrawer()" title="Yopish" aria-label="Vositalar panelini yopish">&times;</button>
                         </div>
 
                         <!-- ① Queue / update status -->
@@ -6269,45 +7097,74 @@
                         </div>
 
                     </div>
-                    <!-- Mobile-only: opens the admin actions as a right drawer (as before) -->
-                    <button class="hdr-mobile-toggle" id="hdrMobileToggle" onclick="toggleHdrDrawer()" title="Admin paneli">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    <button class="hdr-mobile-toggle" id="hdrMobileToggle" type="button" onclick="toggleHdrDrawer()" title="Admin vositalari" aria-label="Admin vositalarini ochish" aria-expanded="false" aria-controls="masterHeaderActions">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5-5l-1.7 1.7 5 5 1.7-1.7Z"/><path d="m5.5 8.5-3 3a2.1 2.1 0 0 0 3 3l3-3"/><path d="m15.5 12.5 6 6a2.1 2.1 0 0 1-3 3l-6-6"/></svg>
+                        <span>Vositalar</span>
                     </button>
                 </div>
 
                 <!-- Messages -->
                 <div id="aiReqContextBanner" style="display:none;margin:0;padding:10px 16px;background:var(--parchment-100);border-bottom:1px solid var(--border-1);font-size:13px;color:var(--fg-1)"></div>
-                <div class="ai-chat-messages" id="aiChatMessages">
+                <div class="ai-chat-messages" id="aiChatMessages" role="log" aria-live="polite" aria-relevant="additions">
                     <div class="ai-chat-welcome" id="aiChatWelcome">
-                        <div class="ai-chat-welcome-icon" onclick="toggleWelcomeCategories()">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--navy-500)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        <div class="ai-welcome-mark" aria-hidden="true">
+                            <img src="./icon-1024.png" alt="">
                         </div>
-                        <p class="ai-chat-welcome-text">Quyidagi sohalardan keraklisini tanlang!</p>
-                        <div class="ai-chat-suggestions">
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="adliya" onclick="selectTopic('adliya')">Advokatura. Notariat. Adliya</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="axborot" onclick="selectTopic('axborot')">Axborot</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="bank" onclick="selectTopic('bank')">Bank</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="davlat-boshqaruvi" onclick="selectTopic('davlat-boshqaruvi')">Davlat boshqaruvi</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="ekologiya" onclick="selectTopic('ekologiya')">Ekologiya</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="fuqarolik" onclick="selectTopic('fuqarolik')">Fuqarolik qonunchiligi</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="ijtimoiy" onclick="selectTopic('ijtimoiy')">Ijtimoiy himoya</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="jinoyat" onclick="selectTopic('jinoyat')">Jinoyat qonunchiligi</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="konstitutsiya" onclick="selectTopic('konstitutsiya')">Konstitutsiyaviy tuzum</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mamuriy" onclick="selectTopic('mamuriy')">Ma'muriy javobgarlik</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mehnat" onclick="selectTopic('mehnat')">Mehnat va bandlik</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="moliya" onclick="selectTopic('moliya')">Moliya va kredit</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="mudofaa" onclick="selectTopic('mudofaa')">Mudofaa</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="sudlov" onclick="selectTopic('sudlov')">Odil sudlov</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="oila" onclick="selectTopic('oila')">Oila qonunchiligi</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="shaxsiy" onclick="selectTopic('shaxsiy')">Shaxsiy hujjatlar</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="soglik" onclick="selectTopic('soglik')">Sog'liqni saqlash</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="soliq" onclick="selectTopic('soliq')">Soliq</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="talim" onclick="selectTopic('talim')">Ta'lim. Fan. Madaniyat</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="tadbirkorlik" onclick="selectTopic('tadbirkorlik')">Tadbirkorlik</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="tashqi-iqtisod" onclick="selectTopic('tashqi-iqtisod')">Tashqi iqtisod. Bojxona</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="uy-joy" onclick="selectTopic('uy-joy')">Uy-joy qonunchiligi</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="xalqaro" onclick="selectTopic('xalqaro')">Xalqaro huquq</button>
-                            <button class="ai-chat-suggestion ai-topic-btn" data-topic="yol-harakati" onclick="selectTopic('yol-harakati')">Yo'l-harakati qoidalari</button>
+                        <div class="ai-welcome-copy">
+                            <h1>Bugun qanday huquqiy masalada yordam kerak?</h1>
+                            <p>Savolingizni oddiy tilda yozing yoki hujjat biriktiring.</p>
+                        </div>
+                        <div class="ai-starter-grid" aria-label="Savol namunalari">
+                            <button type="button" class="ai-starter-card" onclick="useAiStarterPrompt('Mehnat shartnomasini qonuniy bekor qilish tartibini tushuntiring')">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M9 5V3h6v2M8 10h8M8 14h5"/></svg>
+                                <span><strong>Mehnat shartnomasi</strong><small>Bekor qilish tartibi</small></span>
+                            </button>
+                            <button type="button" class="ai-starter-card" onclick="useAiStarterPrompt('Menga qo‘llangan jarima miqdori qonuniyligini tekshirishga yordam bering')">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                                <span><strong>Jarimani tekshirish</strong><small>Miqdor va asoslar</small></span>
+                            </button>
+                            <button type="button" class="ai-starter-card" onclick="useAiStarterPrompt('Biriktirilgan shartnomani tahlil qilib, huquqiy xavflarni ko‘rsating')">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6M8 14h8M8 17h5"/></svg>
+                                <span><strong>Shartnomani tahlil qilish</strong><small>Xavfli bandlarni topish</small></span>
+                            </button>
+                            <button type="button" class="ai-starter-card" onclick="useAiStarterPrompt('Vaziyatim bo‘yicha rasmiy ariza loyihasini tayyorlashga yordam bering')">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+                                <span><strong>Ariza tayyorlash</strong><small>Loyiha tuzish</small></span>
+                            </button>
+                        </div>
+                        <button type="button" class="ai-topics-toggle" id="aiTopicsToggle" onclick="toggleWelcomeCategories()" aria-expanded="false" aria-controls="aiWelcomeTopics">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                            Huquqiy sohani oldindan tanlash
+                            <svg class="ai-topics-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="ai-welcome-topics" id="aiWelcomeTopics" hidden>
+                            <p class="ai-welcome-topics-help">Aniq sohani bilsangiz, javobni yo'naltirish uchun tanlang.</p>
+                            <div class="ai-chat-suggestions">
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="adliya" onclick="selectTopic('adliya')">Advokatura. Notariat. Adliya</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="axborot" onclick="selectTopic('axborot')">Axborot</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="bank" onclick="selectTopic('bank')">Bank</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="davlat-boshqaruvi" onclick="selectTopic('davlat-boshqaruvi')">Davlat boshqaruvi</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="ekologiya" onclick="selectTopic('ekologiya')">Ekologiya</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="fuqarolik" onclick="selectTopic('fuqarolik')">Fuqarolik qonunchiligi</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="ijtimoiy" onclick="selectTopic('ijtimoiy')">Ijtimoiy himoya</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="jinoyat" onclick="selectTopic('jinoyat')">Jinoyat qonunchiligi</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="konstitutsiya" onclick="selectTopic('konstitutsiya')">Konstitutsiyaviy tuzum</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="mamuriy" onclick="selectTopic('mamuriy')">Ma'muriy javobgarlik</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="mehnat" onclick="selectTopic('mehnat')">Mehnat va bandlik</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="moliya" onclick="selectTopic('moliya')">Moliya va kredit</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="mudofaa" onclick="selectTopic('mudofaa')">Mudofaa</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="sudlov" onclick="selectTopic('sudlov')">Odil sudlov</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="oila" onclick="selectTopic('oila')">Oila qonunchiligi</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="shaxsiy" onclick="selectTopic('shaxsiy')">Shaxsiy hujjatlar</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="soglik" onclick="selectTopic('soglik')">Sog'liqni saqlash</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="soliq" onclick="selectTopic('soliq')">Soliq</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="talim" onclick="selectTopic('talim')">Ta'lim. Fan. Madaniyat</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="tadbirkorlik" onclick="selectTopic('tadbirkorlik')">Tadbirkorlik</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="tashqi-iqtisod" onclick="selectTopic('tashqi-iqtisod')">Tashqi iqtisod. Bojxona</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="uy-joy" onclick="selectTopic('uy-joy')">Uy-joy qonunchiligi</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="xalqaro" onclick="selectTopic('xalqaro')">Xalqaro huquq</button>
+                                <button class="ai-chat-suggestion ai-topic-btn" data-topic="yol-harakati" onclick="selectTopic('yol-harakati')">Yo'l-harakati qoidalari</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -6318,7 +7175,7 @@
                     <div class="ai-attach-chips" id="aiAttachChips"></div>
                     <div class="ai-chat-input-wrapper">
                         <div class="ai-attach-wrap">
-                            <button class="ai-attach-btn" id="aiAttachBtn" type="button" onclick="toggleAttachMenu(event)" title="Biriktirish" aria-label="Fayl biriktirish">
+                            <button class="ai-attach-btn" id="aiAttachBtn" type="button" onclick="toggleAttachMenu(event)" title="Ish turini tanlash" aria-label="Ish turini tanlash" aria-controls="aiAttachMenu" aria-expanded="false">
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             </button>
                             <div class="ai-attach-menu" id="aiAttachMenu">
@@ -6335,9 +7192,10 @@
                                 <button type="button" onclick="pickAttach('file')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> Fayl biriktirish</button>
                             </div>
                         </div>
-                        <textarea class="ai-chat-textarea" id="aiChatInput" placeholder="Huquqiy savolingizni yozing..." rows="1" oninput="autoResizeAI(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
-                        <button class="ai-chat-send-btn" id="aiChatSendBtn" onclick="sendAiChat()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                        <textarea class="ai-chat-textarea" id="aiChatInput" aria-label="JuristAI'ga xabar yozish" placeholder="JuristAI'ga huquqiy savol yozing" rows="1" oninput="autoResizeAI(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiChat();}"></textarea>
+                        <button class="ai-chat-send-btn" id="aiChatSendBtn" type="button" onclick="sendAiChat()" title="Yuborish" aria-label="Xabarni yuborish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
                     </div>
+                    <p class="ai-composer-note">JuristAI xatolarga yo'l qo'yishi mumkin. Muhim ma'lumotlarni birlamchi manbadan tekshiring.</p>
                     <input type="file" id="aiFileDoc" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple style="display:none" onchange="onAttachSelected(this)">
                 </div>
             </div>
@@ -6356,13 +7214,28 @@
         <div class="main-content-area">
             <div class="requests-container" id="requestsSection">
                 <div class="controls">
-                    <div class="controls-header" onclick="document.getElementById('requestsSection').classList.toggle('collapsed')">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                            <h2>Murojaatlar ro'yxati</h2>
+                    <div class="controls-header">
+                        <div>
+                            <h2>Ish navbati</h2>
+                            <p id="queueSummary">Muhim murojaatlar birinchi ko'rsatiladi</p>
                         </div>
+                        <button class="queue-refresh" type="button" onclick="loadRequests()" title="Navbatni yangilash" aria-label="Navbatni yangilash">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        </button>
+                    </div>
+                    <div class="queue-views" role="tablist" aria-label="Navbat ko'rinishlari">
+                        <button class="queue-view-btn active" type="button" data-view="priority" onclick="setQueueView('priority')">Muhim</button>
+                        <button class="queue-view-btn" type="button" data-view="overdue" onclick="setQueueView('overdue')">SLA o'tgan</button>
+                        <button class="queue-view-btn" type="button" data-view="unassigned" onclick="setQueueView('unassigned')">Tayinlanmagan</button>
+                        <button class="queue-view-btn" type="button" data-view="review" onclick="setQueueView('review')">Tekshiruv</button>
+                        <button class="queue-view-btn" type="button" data-view="paid" onclick="setQueueView('paid')">Pullik xizmatlar</button>
+                        <button class="queue-view-btn" type="button" data-view="attorney" onclick="setQueueView('attorney')">Advokat so'ralgan</button>
                     </div>
                     <div class="filter-section">
+                        <label class="queue-search">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                            <input id="requestSearch" type="search" placeholder="Murojaat yoki foydalanuvchini qidiring" oninput="scheduleRequestFilter()">
+                        </label>
                         <select id="categoryFilter" onchange="filterRequests()">
                             <option value="">Barcha yo'nalishlar</option>
                             <option value="Konstitutsiyaviy tuzum">Konstitutsiyaviy tuzum</option>
@@ -6393,16 +7266,31 @@
 
                         <select id="assigneeFilter" onchange="filterRequests()">
                             <option value="">Barcha javob beruvchilar</option>
-                            <option value="Master Admin">Master Admin</option>
-                            <option value="Student Admin 1">Student Admin 1</option>
                         </select>
 
                         <select id="statusFilter" onchange="filterRequests()">
-                            <option value="">Barcha statuslar</option>
+                            <option value="open">Ochiq murojaatlar</option>
                             <option value="pending">Kutilmoqda</option>
+                            <option value="lawyer_approved">Yurist tasdig'i</option>
                             <option value="rejected">Rad etilgan</option>
                             <option value="student_responded">Student javobi</option>
                             <option value="answered">Javob berilgan</option>
+                            <option value="ai_answered">AI javob bergan</option>
+                            <option value="">Barcha statuslar</option>
+                        </select>
+
+                        <select id="urgencyFilter" onchange="filterRequests()">
+                            <option value="">Barcha ustuvorliklar</option>
+                            <option value="critical">Kritik</option>
+                            <option value="high">Yuqori</option>
+                            <option value="medium">O'rtacha</option>
+                            <option value="low">Past</option>
+                        </select>
+
+                        <select id="sourceFilter" onchange="filterRequests()">
+                            <option value="">Barcha kanallar</option>
+                            <option value="telegram">Telegram</option>
+                            <option value="web">Platforma</option>
                         </select>
 
                         <select id="assignedFilter" onchange="filterRequests()">
@@ -6411,16 +7299,24 @@
                             <option value="assigned">Tayinlangan</option>
                         </select>
 
-                        <button class="btn" onclick="clearFilters()" style="background: var(--fg-3); padding: 8px 15px;">
-                            ↺ Tozalash
+                        <select id="sortFilter" onchange="filterRequests()">
+                            <option value="priority">Muhimligi bo'yicha</option>
+                            <option value="newest">Eng yangi</option>
+                            <option value="oldest">Eng eski</option>
+                        </select>
+
+                        <button class="queue-clear" type="button" onclick="clearFilters()">
+                            Tozalash
                         </button>
                     </div>
                 </div>
-                <div class="requests-preview">
-                    <div class="requests-preview-list" id="requestsPreviewList"></div>
-                </div>
                 <div id="requestsList">
                     <div class="loading">Yuklanmoqda...</div>
+                </div>
+                <div class="queue-pagination" id="queuePagination" hidden>
+                    <button type="button" id="queuePrev" onclick="changeRequestPage(-1)">Oldingi</button>
+                    <span id="queuePageInfo">1 / 1</span>
+                    <button type="button" id="queueNext" onclick="changeRequestPage(1)">Keyingi</button>
                 </div>
             </div>
 
@@ -6429,14 +7325,29 @@
 
         <!-- (Legal chat modal removed — now inline in AI workspace) -->
 
-        <!-- TAB: So'rovlar (Registrations) -->
+        <!-- TAB: Boshqaruv -->
         <div class="tab-view" id="tabSorov" data-tab="sorov">
+        <section class="management-heading">
+            <p class="operations-eyebrow">Platforma boshqaruvi</p>
+            <h1>Boshqaruv</h1>
+            <p>Qabul, xizmatlar, sifat, korpus, xavfsizlik va xarajatlarni boshqaring.</p>
+        </section>
+        <div class="management-grid" aria-label="Boshqaruv bo'limlari">
+            <button type="button" onclick="openManagementSection('regSection', loadRegRequests, true)"><span>Qabul</span><small>Advokat va student arizalari</small><b id="managementRegCount">0</b></button>
+            <button type="button" onclick="openManagementSection('attorneyAdminSection', loadAttorneyAdmin, true)"><span>Advokatlar</span><small>Tekshiruv va katalog</small><b id="managementAttorneyCount">0</b></button>
+            <button type="button" onclick="openManagementSection('paidServicesSection', loadPaidServicesAdmin, true)"><span>Pullik xizmatlar</span><small>Hujjat buyurtmalari va narxlar</small><b id="managementPaidCount">0</b></button>
+            <button type="button" onclick="openManagementSection('telegramAgentSection', loadTelegramAgentAdmin, true)"><span>Telegram agent</span><small>24/7 suhbatlar va operator rejimi</small><b id="managementHumanCount">0</b></button>
+            <button type="button" onclick="openManagementSection('answerFeedbackSection', loadAnswerFeedback, true)"><span>Sifat</span><small>Javob xatolari va tekshiruv</small></button>
+            <button type="button" onclick="openManagementSection('coverageSection', loadCoverageGaps, true)"><span>Korpus</span><small>Bo'shliqlar va yangi manbalar</small></button>
+            <button type="button" onclick="openManagementSection('auditLogSection', loadAuditLog, true)"><span>Xavfsizlik</span><small>Audit va muhim hodisalar</small></button>
+            <button type="button" onclick="openManagementSection('spendSection', loadSpendReport, true)"><span>Xarajat</span><small>AI token va API sarfi</small></button>
+        </div>
         <!-- Registration Requests Section (Master Only) -->
         <div class="reg-section" id="regSection">
             <div class="reg-section-header" onclick="document.getElementById('regSection').classList.toggle('collapsed'); if(!document.getElementById('regSection').classList.contains('collapsed') && !regRequestsLoaded) loadRegRequests();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>So'rovlar</h2>
+                    <h2>Qabul arizalari</h2>
                     <span class="reg-pending-badge" id="regPendingBadge" style="display:none;"></span>
                 </div>
             </div>
@@ -6447,12 +7358,54 @@
             </div>
         </div>
 
+        <!-- Verified attorney directory management -->
+        <div class="reg-section collapsed" id="attorneyAdminSection" style="margin-top:16px;">
+            <div class="reg-section-header" role="button" tabindex="0" aria-expanded="false" onclick="openManagementSection('attorneyAdminSection', loadAttorneyAdmin)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openManagementSection('attorneyAdminSection', loadAttorneyAdmin);}">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>Advokatlar katalogi</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p class="management-note">Profil faqat litsenziya rasmiy reyestrdan tekshirilgandan keyin e'lon qilinadi.</p>
+                <div id="attorneyAdminContent"><div class="reg-empty">Bo'limni oching</div></div>
+            </div>
+        </div>
+
+        <!-- Paid document services -->
+        <div class="reg-section collapsed" id="paidServicesSection" style="margin-top:16px;">
+            <div class="reg-section-header" role="button" tabindex="0" aria-expanded="false" onclick="openManagementSection('paidServicesSection', loadPaidServicesAdmin)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openManagementSection('paidServicesSection', loadPaidServicesAdmin);}">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>Pullik hujjat xizmatlari</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p class="management-note">Telegram agent narx o'ylab topmaydi. Faqat shu katalogda saqlangan narxlar ishlatiladi va har bir buyurtma yurist tasdig'ini kutadi.</p>
+                <div id="paidServicesContent"><div class="reg-empty">Bo'limni oching</div></div>
+            </div>
+        </div>
+
+        <!-- Telegram concierge operations -->
+        <div class="reg-section collapsed" id="telegramAgentSection" style="margin-top:16px;">
+            <div class="reg-section-header" role="button" tabindex="0" aria-expanded="false" onclick="openManagementSection('telegramAgentSection', loadTelegramAgentAdmin)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openManagementSection('telegramAgentSection', loadTelegramAgentAdmin);}">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>Telegram agent suhbatlari</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p class="management-note">Avtomatik rejim huquqiy savollarni platforma orqali javoblaydi. Murakkab holatda suhbatni operator rejimiga o'tkazib, keyin yana agentga qaytarish mumkin.</p>
+                <div id="telegramAgentContent"><div class="reg-empty">Bo'limni oching</div></div>
+            </div>
+        </div>
+
         <!-- Weekly R&D Survey management (Master Only) -->
         <div class="reg-section collapsed" id="surveyAdminSection" style="margin-top:16px;">
             <div class="reg-section-header" onclick="document.getElementById('surveyAdminSection').classList.toggle('collapsed'); if(!document.getElementById('surveyAdminSection').classList.contains('collapsed')) loadSurveyAdmin();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>📋 Haftalik so'rovnoma (R&D)</h2>
+                    <h2>Haftalik so'rovnoma (R&amp;D)</h2>
                 </div>
             </div>
             <div class="reg-section-body">
@@ -6475,7 +7428,7 @@
             <div class="reg-section-header" onclick="document.getElementById('coverageSection').classList.toggle('collapsed'); if(!document.getElementById('coverageSection').classList.contains('collapsed')) loadCoverageGaps();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>📉 Korpus qamrovi (bo'shliqlar)</h2>
+                    <h2>Korpus qamrovi</h2>
                 </div>
             </div>
             <div class="reg-section-body">
@@ -6500,7 +7453,7 @@
             <div class="reg-section-header" onclick="document.getElementById('suggestedSection').classList.toggle('collapsed'); if(!document.getElementById('suggestedSection').classList.contains('collapsed')) loadSuggestedSources();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>🧩 Tavsiya etilgan manbalar</h2>
+                    <h2>Tavsiya etilgan manbalar</h2>
                     <span class="reg-pending-badge" id="suggestedBadge" style="display:none;"></span>
                 </div>
             </div>
@@ -6518,7 +7471,7 @@
             <div class="reg-section-header" onclick="document.getElementById('answerFeedbackSection').classList.toggle('collapsed'); if(!document.getElementById('answerFeedbackSection').classList.contains('collapsed')) loadAnswerFeedback();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>🚩 Javob xatolari (foydalanuvchi belgilagan)</h2>
+                    <h2>Javob xatolari</h2>
                     <span class="reg-pending-badge" id="answerFeedbackBadge" style="display:none;"></span>
                 </div>
             </div>
@@ -6536,7 +7489,7 @@
             <div class="reg-section-header" onclick="document.getElementById('auditLogSection').classList.toggle('collapsed'); if(!document.getElementById('auditLogSection').classList.contains('collapsed')) loadAuditLog();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>🗂 Audit jurnali</h2>
+                    <h2>Audit jurnali</h2>
                 </div>
             </div>
             <div class="reg-section-body">
@@ -6553,7 +7506,7 @@
             <div class="reg-section-header" onclick="document.getElementById('spendSection').classList.toggle('collapsed'); if(!document.getElementById('spendSection').classList.contains('collapsed')) loadSpendReport();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <h2>💰 API xarajatlari</h2>
+                    <h2>API xarajatlari</h2>
                 </div>
             </div>
             <div class="reg-section-body">
@@ -6576,13 +7529,13 @@
             <div class="reg-detail-box" id="regDetailBox"></div>
         </div>
 
-        <!-- TAB: Home — Monte Carlo -->
-        <div class="tab-view active" data-tab="home">
+        <!-- TAB: Boshqaruv — Analytics -->
+        <div class="tab-view" data-tab="sorov">
         <!-- Monte Carlo Simulation Section -->
         <div class="monte-carlo-section" id="monteCarloSection">
             <div class="mc-card">
                 <h3>
-                    <span class="mc-icon">📈</span> Murojaatlar prognozi (Monte Carlo)
+                    Murojaatlar prognozi
                     <button class="mc-info-btn" type="button">?
                         <div class="mc-info-tooltip">
                             <strong>Monte Carlo simulyatsiyasi</strong><br>
@@ -6597,7 +7550,7 @@
             </div>
             <div class="mc-card">
                 <h3>
-                    <span class="mc-icon">⏱️</span> Hal qilish vaqti tahlili
+                    Hal qilish vaqti tahlili
                     <button class="mc-info-btn" type="button">?
                         <div class="mc-info-tooltip">
                             <strong>Persentillar nima?</strong><br>
@@ -6690,7 +7643,7 @@
         </button>
         <button class="tab-bar-item" data-tab="sorov" id="tabBarSorov" onclick="switchTab('sorov')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>
-            <span class="tab-label">So'rovlar</span>
+            <span class="tab-label">Boshqaruv</span>
             <span class="tab-badge" id="tabSorovBadge" style="display:none;">0</span>
         </button>
     </nav>
@@ -7020,11 +7973,21 @@
         let allAdmins = [];
         let openFolders = new Set();
         let openDateGroups = new Set();
+        let currentQueueView = 'priority';
+        let requestFilterTimer = null;
+        let requestLoadSequence = 0;
+        let requestPagination = { page: 1, limit: 50, total: 0, pages: 1 };
         let currentFilters = {
+            search: '',
             category: '',
             assignee: '',
-            status: 'pending',
-            assigned: ''
+            status: 'open',
+            assigned: '',
+            urgency: '',
+            source: '',
+            sort: 'priority',
+            overdue: '',
+            agent_action: ''
         };
         
         async function loadUserInfo(retries) {
@@ -7108,6 +8071,16 @@
                 const aiChatHeader = document.getElementById('aiChatHeader');
                 if (aiChatHeader) {
                     aiChatHeader.classList.toggle('master-mode', data.role === 'master');
+                }
+                // Keep the drawer outside the clipped chat workspace. A fixed
+                // descendant of the workspace was visually cut down to the
+                // chat-header height, leaving an apparently empty panel.
+                const masterToolsDrawer = document.getElementById('masterHeaderActions');
+                if (masterToolsDrawer) {
+                    masterToolsDrawer.classList.toggle('master-tools-drawer', data.role === 'master');
+                    if (data.role === 'master' && masterToolsDrawer.parentElement !== document.body) {
+                        document.body.appendChild(masterToolsDrawer);
+                    }
                 }
                 // Initial queue status fetch for master
                 if (data.role === 'master') refreshQueueStatus();
@@ -7258,6 +8231,13 @@
             var el = gateOverlay();
             var graceNote = '';
             var laterBtn = '';
+            var instagramPromo = '';
+            if (st.instagramUrl) {
+                var instagramUrl = escapeHtml(st.instagramUrl);
+                instagramPromo = '<div class="gate-promo">' +
+                    '<p class="gate-promo-label">Reklama</p>' +
+                    '<a class="gate-instagram-link" href="' + instagramUrl + '" target="_blank" rel="noopener noreferrer sponsored">Instagramda bizni kuzating</a></div>';
+            }
             if (dismissible) {
                 var days = 0;
                 if (st.reminder && st.reminder.dueAt) {
@@ -7278,6 +8258,7 @@
                   '<button class="gate-btn gate-btn-ghost" id="gateVerifyBtn" onclick="verifyTelegram()" style="display:none">Tekshirish</button>' +
                   laterBtn +
                   '<div class="gate-status" id="gateStatus"></div>' +
+                  instagramPromo +
                 '</div>';
         }
 
@@ -7413,6 +8394,7 @@
             try {
                 const response = await fetch('/api/admins');
                 allAdmins = await response.json();
+                populateAssigneeFilter();
                 renderAdminTable();
             } catch (error) {
                 console.error('Error loading admins:', error);
@@ -7939,50 +8921,205 @@
                 <div class="mc-summary-row"><span class="label">Tahlil qilingan murojaatlar:</span><span class="value">${resolution.sample_size} ta</span></div>`;
         }
 
-        async function loadRequests(retries) {
+        function normalizeRequestCategory(value) {
+            const key = String(value || '').trim().toLowerCase();
+            const aliases = {
+                'fuqarolik huquqi': 'fuqarolik qonunchiligi',
+                'oila huquqi': 'oila qonunchiligi',
+                'mehnat huquqi': 'mehnat va bandlik',
+                'jinoyat huquqi': 'jinoyat qonunchiligi',
+                "ma'muriy huquq": "ma'muriy javobgarlik",
+                'uy-joy huquqi': 'uy-joy qonunchiligi'
+            };
+            return aliases[key] || key;
+        }
+
+        function legacyRequestTriage(request) {
+            if (request && request.triage_result && typeof request.triage_result === 'object') return request.triage_result;
+            if (request && typeof request.triage_result === 'string') {
+                try { return JSON.parse(request.triage_result); } catch (error) { return {}; }
+            }
+            return {};
+        }
+
+        function filterLegacyRequests(items) {
+            const openStatuses = ['pending', 'assigned', 'student_responded', 'lawyer_approved'];
+            const reviewStatuses = ['student_responded', 'lawyer_approved'];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const search = String(currentFilters.search || '').toLocaleLowerCase('uz-UZ');
+            const filtered = items.filter(function(request) {
+                const triage = legacyRequestTriage(request);
+                const status = String(request.status || '');
+                const assignedStudents = Array.isArray(request.assigned_students) ? request.assigned_students : [];
+                const isAssigned = Boolean(request.assigned_to) || assignedStudents.length > 0;
+                const urgency = String(request.urgency || triage.urgency || 'medium');
+                const source = String(request.source_channel || 'telegram');
+
+                if (search) {
+                    const haystack = [request.request_text, request.first_name, request.name, request.username, request.category]
+                        .map(function(value) { return String(value || ''); }).join(' ').toLocaleLowerCase('uz-UZ');
+                    if (!haystack.includes(search)) return false;
+                }
+                if (currentFilters.category && normalizeRequestCategory(request.category) !== normalizeRequestCategory(currentFilters.category)) return false;
+                if (currentFilters.urgency && urgency !== currentFilters.urgency) return false;
+                if (currentFilters.source && source !== currentFilters.source) return false;
+                if (currentFilters.agent_action && request.agent_action !== currentFilters.agent_action) return false;
+                if (currentFilters.assigned === 'assigned' && !isAssigned) return false;
+                if (currentFilters.assigned === 'unassigned' && isAssigned) return false;
+                if (currentFilters.assignee) {
+                    const assignee = String(currentFilters.assignee);
+                    const hasAssignee = String(request.assigned_to || '') === assignee || assignedStudents.some(function(student) { return String(student.id) === assignee; });
+                    if (!hasAssignee) return false;
+                }
+
+                if (currentFilters.status === 'open' && !openStatuses.includes(status)) return false;
+                if (currentFilters.status === 'review' && !reviewStatuses.includes(status)) return false;
+                if (currentFilters.status === 'answered_today') {
+                    const answeredAt = new Date(request.answered_at || 0);
+                    if (!['answered', 'ai_answered'].includes(status) || Number.isNaN(answeredAt.getTime()) || answeredAt < today) return false;
+                } else if (currentFilters.status && !['open', 'review'].includes(currentFilters.status) && status !== currentFilters.status) {
+                    return false;
+                }
+                if (currentFilters.overdue === '1') {
+                    const createdAt = new Date(request.created_at || 0);
+                    if (!openStatuses.includes(status) || Number.isNaN(createdAt.getTime()) || Date.now() - createdAt.getTime() <= 4 * 60 * 60 * 1000) return false;
+                }
+                return true;
+            });
+
+            const urgencyOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+            return filtered.sort(function(a, b) {
+                const aTime = new Date(a.created_at || 0).getTime();
+                const bTime = new Date(b.created_at || 0).getTime();
+                if (currentFilters.sort === 'newest') return bTime - aTime;
+                if (currentFilters.sort === 'oldest') return aTime - bTime;
+                const aTriage = legacyRequestTriage(a);
+                const bTriage = legacyRequestTriage(b);
+                const aUrgency = urgencyOrder[a.urgency || aTriage.urgency || 'medium'] ?? 2;
+                const bUrgency = urgencyOrder[b.urgency || bTriage.urgency || 'medium'] ?? 2;
+                return aUrgency - bUrgency || aTime - bTime;
+            });
+        }
+
+        async function loadRequests(retries, sequence) {
             if (retries === undefined) retries = 2;
+            if (sequence === undefined) sequence = ++requestLoadSequence;
             try {
-                const response = await fetch('/api/requests');
+                const params = new URLSearchParams();
+                Object.entries(currentFilters).forEach(function(entry) {
+                    if (entry[1] !== '' && entry[1] !== null && entry[1] !== undefined) params.set(entry[0], entry[1]);
+                });
+                params.set('page', requestPagination.page);
+                params.set('limit', requestPagination.limit);
+                const response = await fetch('/api/requests?' + params.toString());
                 if (response.status === 401) { window.location.href = '/login.html'; return; }
                 if (!response.ok) throw new Error('Server ' + response.status);
-                requests = await response.json();
-                if (!Array.isArray(requests)) { requests = []; throw new Error('Invalid response'); }
+                const data = await response.json();
+                if (sequence !== requestLoadSequence) return;
+                if (Array.isArray(data)) {
+                    const legacyItems = filterLegacyRequests(data);
+                    const pageCount = Math.max(1, Math.ceil(legacyItems.length / requestPagination.limit));
+                    requestPagination.page = Math.min(requestPagination.page, pageCount);
+                    const pageStart = (requestPagination.page - 1) * requestPagination.limit;
+                    requests = legacyItems.slice(pageStart, pageStart + requestPagination.limit);
+                    requestPagination = {
+                        page: requestPagination.page,
+                        limit: requestPagination.limit,
+                        total: legacyItems.length,
+                        pages: pageCount
+                    };
+                } else {
+                    requests = Array.isArray(data.items) ? data.items : [];
+                    if (data.pagination) requestPagination = data.pagination;
+                }
 
-                displayRequests(
-                    currentFilters.category,
-                    currentFilters.assignee,
-                    currentFilters.status,
-                    currentFilters.assigned
-                );
+                displayOperationalRequests();
+                updateRequestPagination();
+                populateAssigneeFilter();
                 updateStats();
             } catch (error) {
+                if (sequence !== requestLoadSequence) return;
                 console.error('Error loading requests:', error);
                 if (retries > 0) {
                     await new Promise(r => setTimeout(r, 3000));
-                    return loadRequests(retries - 1);
+                    if (sequence !== requestLoadSequence) return;
+                    return loadRequests(retries - 1, sequence);
                 }
                 document.getElementById('requestsList').innerHTML =
                     '<div class="empty-state"><h2>Xatolik yuz berdi</h2><p>Serverga ulanib bo\'lmadi</p></div>';
             }
         }
-        
+
+        function applyQueueViewFilters() {
+            currentFilters.overdue = '';
+            currentFilters.agent_action = '';
+            if (currentQueueView === 'overdue') {
+                currentFilters.status = 'open';
+                currentFilters.overdue = '1';
+            } else if (currentQueueView === 'unassigned') {
+                currentFilters.status = 'open';
+                currentFilters.assigned = 'unassigned';
+            } else if (currentQueueView === 'review') {
+                currentFilters.status = 'review';
+            } else if (currentQueueView === 'paid') {
+                currentFilters.status = 'open';
+                currentFilters.agent_action = 'paid_service';
+            } else if (currentQueueView === 'attorney') {
+                currentFilters.status = 'open';
+                currentFilters.agent_action = 'attorney_request';
+            } else if (currentQueueView === 'answered_today') {
+                currentFilters.status = 'answered_today';
+            }
+        }
+
         function filterRequests() {
+            syncQueueSelects();
+            currentFilters.search = (document.getElementById('requestSearch').value || '').trim();
             currentFilters.category = document.getElementById('categoryFilter').value;
             currentFilters.assignee = document.getElementById('assigneeFilter').value;
             currentFilters.status = document.getElementById('statusFilter').value;
             currentFilters.assigned = document.getElementById('assignedFilter').value;
-            
-            displayRequests(
-                currentFilters.category,
-                currentFilters.assignee,
-                currentFilters.status,
-                currentFilters.assigned
-            );
+            currentFilters.urgency = document.getElementById('urgencyFilter').value;
+            currentFilters.source = document.getElementById('sourceFilter').value;
+            currentFilters.sort = document.getElementById('sortFilter').value;
+            applyQueueViewFilters();
+            requestPagination.page = 1;
+            loadRequests();
         }
-        
+
+        function scheduleRequestFilter() {
+            clearTimeout(requestFilterTimer);
+            requestFilterTimer = setTimeout(filterRequests, 280);
+        }
+
+        function setQueueView(view) {
+            currentQueueView = view || 'priority';
+            document.querySelectorAll('.queue-view-btn').forEach(function(btn) {
+                btn.classList.toggle('active', btn.dataset.view === currentQueueView);
+            });
+            document.getElementById('statusFilter').value = 'open';
+            document.getElementById('assignedFilter').value = '';
+            document.getElementById('sortFilter').value = 'priority';
+            syncQueueSelects();
+            currentFilters.status = 'open';
+            currentFilters.assigned = '';
+            currentFilters.sort = 'priority';
+            applyQueueViewFilters();
+            requestPagination.page = 1;
+            if (currentTab !== 'home') switchTab('home');
+            loadRequests();
+            setTimeout(function() {
+                const section = document.getElementById('requestsSection');
+                if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 80);
+        }
+
         function scrollToRequests(statusValue) {
             if (currentTab !== 'home') switchTab('home');
             document.getElementById('statusFilter').value = statusValue;
+            currentQueueView = 'priority';
+            document.querySelectorAll('.queue-view-btn').forEach(function(btn) { btn.classList.toggle('active', btn.dataset.view === 'priority'); });
             filterRequests();
             setTimeout(function() {
                 document.getElementById('requestsSection').scrollIntoView({ behavior: 'smooth' });
@@ -7990,23 +9127,303 @@
         }
 
         function clearFilters() {
+            document.getElementById('requestSearch').value = '';
             document.getElementById('categoryFilter').value = '';
             document.getElementById('assigneeFilter').value = '';
-            document.getElementById('statusFilter').value = '';
+            document.getElementById('statusFilter').value = 'open';
             document.getElementById('assignedFilter').value = '';
-            
+            document.getElementById('urgencyFilter').value = '';
+            document.getElementById('sourceFilter').value = '';
+            document.getElementById('sortFilter').value = 'priority';
+            syncQueueSelects();
+            currentQueueView = 'priority';
+            document.querySelectorAll('.queue-view-btn').forEach(function(btn) { btn.classList.toggle('active', btn.dataset.view === 'priority'); });
             currentFilters = {
+                search: '',
                 category: '',
                 assignee: '',
-                status: '',
-                assigned: ''
+                status: 'open',
+                assigned: '',
+                urgency: '',
+                source: '',
+                sort: 'priority',
+                overdue: '',
+                agent_action: ''
             };
-            
-            displayRequests();
+            requestPagination.page = 1;
+            loadRequests();
+        }
+
+        function changeRequestPage(direction) {
+            const next = requestPagination.page + direction;
+            if (next < 1 || next > requestPagination.pages) return;
+            requestPagination.page = next;
+            loadRequests();
+            document.getElementById('requestsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function updateRequestPagination() {
+            const wrap = document.getElementById('queuePagination');
+            if (!wrap) return;
+            wrap.hidden = requestPagination.pages <= 1;
+            document.getElementById('queuePageInfo').textContent = requestPagination.page + ' / ' + requestPagination.pages;
+            document.getElementById('queuePrev').disabled = requestPagination.page <= 1;
+            document.getElementById('queueNext').disabled = requestPagination.page >= requestPagination.pages;
+        }
+
+        function populateAssigneeFilter() {
+            const select = document.getElementById('assigneeFilter');
+            if (!select || !Array.isArray(allAdmins)) return;
+            const selected = select.value;
+            const options = allAdmins
+                .filter(function(admin) { return admin && admin.id && ['master', 'lawyer', 'student'].includes(admin.role); })
+                .map(function(admin) { return '<option value="' + Number(admin.id) + '">' + escapeHtml(admin.full_name || admin.username || 'Admin') + '</option>'; })
+                .join('');
+            select.innerHTML = '<option value="">Barcha javob beruvchilar</option>' + options;
+            if (Array.from(select.options).some(function(option) { return option.value === selected; })) select.value = selected;
+            refreshQueueSelect(select);
+        }
+
+        function queueSelectOptionLabel(select) {
+            const option = select && select.options ? select.options[select.selectedIndex] : null;
+            return option ? option.textContent.trim() : '';
+        }
+
+        function closeQueueSelect(wrapper, returnFocus) {
+            if (!wrapper) return;
+            const trigger = wrapper.querySelector('.queue-select-trigger');
+            wrapper.classList.remove('open', 'open-up');
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+            if (returnFocus && trigger) trigger.focus();
+        }
+
+        function closeAllQueueSelects(except) {
+            document.querySelectorAll('.queue-select.open').forEach(function(wrapper) {
+                if (wrapper !== except) closeQueueSelect(wrapper, false);
+            });
+        }
+
+        function refreshQueueSelect(select) {
+            if (!select) return;
+            const wrapper = select.closest('.queue-select');
+            if (!wrapper) return;
+            const trigger = wrapper.querySelector('.queue-select-trigger');
+            const label = wrapper.querySelector('.queue-select-label');
+            const menu = wrapper.querySelector('.queue-select-menu');
+            if (!trigger || !label || !menu) return;
+
+            const selectedLabel = queueSelectOptionLabel(select);
+            label.textContent = selectedLabel;
+            trigger.title = selectedLabel;
+            trigger.setAttribute('aria-label', selectedLabel);
+            menu.innerHTML = '';
+
+            Array.from(select.options).forEach(function(option) {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'queue-select-option';
+                item.dataset.value = option.value;
+                item.setAttribute('role', 'option');
+                item.setAttribute('aria-selected', option.selected ? 'true' : 'false');
+                item.innerHTML = '<span></span><svg class="queue-select-check" aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>';
+                item.firstElementChild.textContent = option.textContent.trim();
+                item.addEventListener('click', function() {
+                    select.value = option.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    syncQueueSelect(select);
+                    closeQueueSelect(wrapper, true);
+                });
+                item.addEventListener('keydown', function(event) {
+                    const items = Array.from(menu.querySelectorAll('.queue-select-option'));
+                    const index = items.indexOf(item);
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        const step = event.key === 'ArrowDown' ? 1 : -1;
+                        items[(index + step + items.length) % items.length].focus();
+                    } else if (event.key === 'Home' || event.key === 'End') {
+                        event.preventDefault();
+                        items[event.key === 'Home' ? 0 : items.length - 1].focus();
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        closeQueueSelect(wrapper, true);
+                    }
+                });
+                menu.appendChild(item);
+            });
+        }
+
+        function syncQueueSelect(select) {
+            if (!select) return;
+            const wrapper = select.closest('.queue-select');
+            if (!wrapper) return;
+            const label = wrapper.querySelector('.queue-select-label');
+            const trigger = wrapper.querySelector('.queue-select-trigger');
+            const selectedLabel = queueSelectOptionLabel(select);
+            if (label) label.textContent = selectedLabel;
+            if (trigger) {
+                trigger.title = selectedLabel;
+                trigger.setAttribute('aria-label', selectedLabel);
+            }
+            wrapper.querySelectorAll('.queue-select-option').forEach(function(item) {
+                item.setAttribute('aria-selected', item.dataset.value === select.value ? 'true' : 'false');
+            });
+        }
+
+        function syncQueueSelects() {
+            document.querySelectorAll('.filter-section select').forEach(syncQueueSelect);
+        }
+
+        function enhanceQueueFilters() {
+            document.querySelectorAll('.filter-section select').forEach(function(select) {
+                if (select.closest('.queue-select')) return;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'queue-select queue-select-' + select.id;
+                const trigger = document.createElement('button');
+                const label = document.createElement('span');
+                const menu = document.createElement('div');
+                const menuId = select.id + 'Menu';
+
+                trigger.type = 'button';
+                trigger.className = 'queue-select-trigger';
+                trigger.setAttribute('aria-haspopup', 'listbox');
+                trigger.setAttribute('aria-expanded', 'false');
+                trigger.setAttribute('aria-controls', menuId);
+                label.className = 'queue-select-label';
+                trigger.appendChild(label);
+                trigger.insertAdjacentHTML('beforeend', '<svg class="queue-select-chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5"/></svg>');
+                menu.className = 'queue-select-menu';
+                menu.id = menuId;
+                menu.setAttribute('role', 'listbox');
+
+                select.parentNode.insertBefore(wrapper, select);
+                wrapper.appendChild(select);
+                wrapper.appendChild(trigger);
+                wrapper.appendChild(menu);
+                select.classList.add('queue-native-select');
+                select.tabIndex = -1;
+                select.setAttribute('aria-hidden', 'true');
+
+                trigger.addEventListener('click', function() {
+                    const willOpen = !wrapper.classList.contains('open');
+                    closeAllQueueSelects(wrapper);
+                    if (!willOpen) {
+                        closeQueueSelect(wrapper, false);
+                        return;
+                    }
+                    wrapper.classList.add('open');
+                    trigger.setAttribute('aria-expanded', 'true');
+                    const rect = wrapper.getBoundingClientRect();
+                    const menuHeight = Math.min(menu.scrollHeight || 280, 280);
+                    const spaceBelow = window.innerHeight - rect.bottom - 12;
+                    const spaceAbove = rect.top - 12;
+                    wrapper.classList.toggle('open-up', spaceBelow < menuHeight && spaceAbove > spaceBelow);
+                });
+                trigger.addEventListener('keydown', function(event) {
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        if (!wrapper.classList.contains('open')) trigger.click();
+                        const items = Array.from(menu.querySelectorAll('.queue-select-option'));
+                        const selectedIndex = Math.max(0, items.findIndex(function(item) { return item.getAttribute('aria-selected') === 'true'; }));
+                        const targetIndex = event.key === 'ArrowDown' ? selectedIndex : Math.max(0, selectedIndex - 1);
+                        if (items[targetIndex]) items[targetIndex].focus();
+                    } else if (event.key === 'Escape') {
+                        closeQueueSelect(wrapper, false);
+                    }
+                });
+
+                const observer = new MutationObserver(function() { refreshQueueSelect(select); });
+                observer.observe(select, { childList: true, subtree: true });
+                refreshQueueSelect(select);
+            });
+
+            document.addEventListener('pointerdown', function(event) {
+                if (!event.target.closest('.queue-select')) closeAllQueueSelects();
+            });
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') closeAllQueueSelects();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', enhanceQueueFilters, { once: true });
+
+        function queueStatusLabel(status) {
+            return ({
+                pending: 'Kutilmoqda', assigned: 'Tayinlangan', student_responded: 'Student javobi',
+                lawyer_approved: "Yurist tasdig'i", answered: 'Javob berilgan', ai_answered: 'AI javobi',
+                rejected: 'Rad etilgan'
+            })[status] || status || 'Noma\'lum';
+        }
+
+        function formatQueueAge(dateValue) {
+            const date = new Date(dateValue);
+            const diff = Math.max(0, Date.now() - date.getTime());
+            const minutes = Math.floor(diff / 60000);
+            if (minutes < 1) return 'Hozir';
+            if (minutes < 60) return minutes + ' daqiqa';
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return hours + ' soat';
+            const days = Math.floor(hours / 24);
+            return days === 1 ? 'Kecha' : days + ' kun';
+        }
+
+        function formatQueueTimestamp(dateValue) {
+            const date = new Date(dateValue);
+            const now = new Date();
+            const sameDay = date.toDateString() === now.toDateString();
+            const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const label = sameDay ? 'Bugun' : (date.toDateString() === yesterday.toDateString()
+                ? 'Kecha'
+                : date.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' }));
+            return label + ', ' + date.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function displayOperationalRequests() {
+            const container = document.getElementById('requestsList');
+            const summary = document.getElementById('queueSummary');
+            if (summary) summary.textContent = requestPagination.total + ' ta murojaat · muhimlari birinchi';
+            if (!requests.length) {
+                container.innerHTML = '<div class="queue-empty"><strong>Bu navbat hozircha bo\'sh</strong><span>Yangi murojaatlar kelganda shu yerda ko\'rinadi.</span></div>';
+                return;
+            }
+
+            const rows = requests.map(function(req) {
+                const urgency = req.urgency || (req.triage_result && req.triage_result.urgency) || 'medium';
+                const title = escapeHtml((req.request_text || 'Matnsiz murojaat').replace(/^\[[^\]]+\]\s*/, ''));
+                const person = escapeHtml(req.first_name || req.name || 'Foydalanuvchi');
+                const username = escapeHtml(req.username ? '@' + req.username : 'Telegram foydalanuvchisi');
+                const category = escapeHtml(req.category || 'Aniqlanmagan');
+                const subfield = escapeHtml(req.legal_subfield || (req.triage_result && req.triage_result.subcategory) || '');
+                const channel = req.source_channel === 'web' ? 'Platforma' : 'Telegram';
+                const assignees = req.assigned_lawyer_name
+                    ? escapeHtml(req.assigned_lawyer_name)
+                    : (Array.isArray(req.assigned_students) && req.assigned_students.length
+                        ? escapeHtml(req.assigned_students.map(function(item) { return item.full_name; }).join(', '))
+                        : 'Tayinlanmagan');
+                const actionLabel = req.agent_action === 'paid_service'
+                    ? 'Pullik hujjat'
+                    : (req.agent_action === 'attorney_request' ? "Advokat so'ralgan" : '');
+                return `
+                    <article class="ops-request" onclick="showRequestDetail(${Number(req.id)})" tabindex="0" onkeydown="if(event.key==='Enter')showRequestDetail(${Number(req.id)})">
+                        <span class="ops-priority ${escapeHtml(urgency)}" title="${escapeHtml(urgency)}"></span>
+                        <div class="ops-request-main">
+                            <div class="ops-request-title">${title}</div>
+                            <div class="ops-request-meta">
+                                <span>${category}${subfield ? ' · ' + subfield : ''}</span>
+                                <span>${channel}</span>
+                                ${actionLabel ? '<span>' + actionLabel + '</span>' : ''}
+                                <span>${assignees}</span>
+                            </div>
+                        </div>
+                        <div class="ops-request-person"><strong>${person}</strong><span>${username}</span></div>
+                        <div class="ops-request-time"><strong>${formatQueueAge(req.created_at)}</strong><span>${formatQueueTimestamp(req.created_at)}</span></div>
+                        <span class="ops-status ${escapeHtml(req.status)}">${escapeHtml(queueStatusLabel(req.status))}</span>
+                    </article>`;
+            }).join('');
+            container.innerHTML = '<div class="ops-request-list">' + rows + '</div>';
         }
         
         function isUnanswered(req) {
-            return req.status === 'pending' || req.status === 'rejected' || req.status === 'student_responded' || req.status === 'lawyer_approved';
+            return ['pending', 'assigned', 'student_responded', 'lawyer_approved'].includes(req.status);
         }
 
         function getDatePeriod(dateStr) {
@@ -8117,9 +9534,9 @@
                 const bUnanswered = b.requests.filter(isUnanswered).length;
                 if (aUnanswered > 0 && bUnanswered === 0) return -1;
                 if (bUnanswered > 0 && aUnanswered === 0) return 1;
-                const aLatest = new Date(a.requests[a.requests.length - 1].created_at);
-                const bLatest = new Date(b.requests[b.requests.length - 1].created_at);
-                return aLatest - bLatest;
+                const aLatest = Math.max.apply(null, a.requests.map(function(r) { return new Date(r.created_at).getTime(); }));
+                const bLatest = Math.max.apply(null, b.requests.map(function(r) { return new Date(r.created_at).getTime(); }));
+                return bLatest - aLatest;
             });
 
             const statusText = {
@@ -8136,7 +9553,7 @@
                 const totalReqs = user.requests.length;
                 const pendingCount = user.requests.filter(r => r.status === 'pending').length;
                 const rejectedCount = user.requests.filter(r => r.status === 'rejected').length;
-                const unansweredCount = pendingCount + rejectedCount + user.requests.filter(r => r.status === 'student_responded').length;
+                const unansweredCount = user.requests.filter(isUnanswered).length;
                 const answeredCount = user.requests.filter(r => r.status === 'answered').length;
                 const initial = (user.first_name || '?')[0].toUpperCase();
                 const folderId = `folder_${user.telegram_id}`;
@@ -8157,8 +9574,8 @@
                             <span class="folder-toggle ${isFolderOpen ? 'open' : ''}" id="toggle_${folderId}">▶</span>
                             <div class="user-avatar ${user.blocked ? 'blocked' : ''}">${user.blocked ? '🚫' : initial}</div>
                             <div class="user-folder-info">
-                                <h3>${user.first_name} ${user.blocked ? '<span style="color:var(--danger-700);font-size:12px;">BLOKLANGAN</span>' : ''}</h3>
-                                <div class="user-meta">@${user.username || 'N/A'}</div>
+                                <h3>${escapeHtml(user.first_name)} ${user.blocked ? '<span style="color:var(--danger-700);font-size:12px;">BLOKLANGAN</span>' : ''}</h3>
+                                <div class="user-meta">@${escapeHtml(user.username || 'N/A')}</div>
                             </div>
                         </div>
                         <div class="user-folder-badges">
@@ -8197,12 +9614,13 @@
 
                     periodReqs.forEach(req => {
                         const needsApproval = req.status === 'student_responded' && currentUser.role === 'master';
+                        const requestPreview = String(req.request_text || '');
                         html += `
                         <div class="request-item ${needsApproval ? 'needs-approval' : ''}" onclick="event.stopPropagation(); showRequestDetail(${req.id})">
                             <div class="request-header">
                                 <div class="client-name">
                                     ${req.triage_result ? `<span class="triage-urgency triage-${req.triage_result.urgency || 'medium'}" title="AI: ${req.triage_result.urgency || 'medium'}">${{critical:'!!',high:'!',medium:'~',low:''}[req.triage_result.urgency] || '~'}</span>` : ''}
-                                    ${req.request_text.substring(0, 80)}${req.request_text.length > 80 ? '...' : ''}
+                                    ${escapeHtml(requestPreview.substring(0, 80))}${requestPreview.length > 80 ? '...' : ''}
                                 </div>
                                 <span class="status-badge status-${req.status}">
                                     ${statusText[req.status] || req.status}
@@ -8210,11 +9628,11 @@
                             </div>
                             <div class="request-meta">
                                 ${req.file_id ? `<span>${getFileIcon(req.request_type)} ${req.request_type}</span>` : ''}
-                                <span>📂 ${req.category || 'N/A'}</span>
-                                ${req.triage_result ? `<span class="triage-chip" title="AI tasnif">${req.triage_result.complexity || ''}</span>` : ''}
-                                ${req.assigned_lawyer_name ? `<span>👤 ${req.assigned_lawyer_name}</span>` : '<span style="color: #e67e22;">⚠️ Tayinlanmagan</span>'}
+                                <span>📂 ${escapeHtml(req.category || 'N/A')}</span>
+                                ${req.triage_result ? `<span class="triage-chip" title="AI tasnif">${escapeHtml(req.triage_result.complexity || '')}</span>` : ''}
+                                ${req.assigned_lawyer_name ? `<span>👤 ${escapeHtml(req.assigned_lawyer_name)}</span>` : '<span style="color: #e67e22;">⚠️ Tayinlanmagan</span>'}
                                 <span>🕐 ${new Date(req.created_at).toLocaleString('uz-UZ')}</span>
-                                ${req.responded_by ? `<span>✍️ ${req.responded_by}</span>` : ''}
+                                ${req.responded_by ? `<span>✍️ ${escapeHtml(req.responded_by)}</span>` : ''}
                             </div>
                         </div>
                         `;
@@ -8271,10 +9689,10 @@
                 const time = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
                 return `
                     <div class="requests-preview-item" onclick="showRequestDetail(${req.id})">
-                        <div class="rp-name">${name}</div>
-                        <div class="rp-text">${text.substring(0, 60)}${text.length > 60 ? '...' : ''}</div>
+                        <div class="rp-name">${escapeHtml(name)}</div>
+                        <div class="rp-text">${escapeHtml(text.substring(0, 60))}${text.length > 60 ? '...' : ''}</div>
                         <div class="rp-meta">
-                            <span class="rp-status ${statusClass[req.status] || 'pending'}">${statusText[req.status] || req.status}</span>
+                            <span class="rp-status ${escapeHtml(statusClass[req.status] || 'pending')}">${escapeHtml(statusText[req.status] || req.status)}</span>
                             <span>${time}</span>
                         </div>
                     </div>
@@ -8336,14 +9754,49 @@
             try {
                 const response = await fetch('/api/stats');
                 const data = await response.json();
-                animateCounter(document.getElementById('totalRequests'), data.total || 0, 800);
-                animateCounter(document.getElementById('pendingRequests'), data.pending || 0, 800);
-                animateCounter(document.getElementById('rejectedRequests'), data.rejected || 0, 800);
-                animateCounter(document.getElementById('studentResponded'), data.student_responded || 0, 800);
-                animateCounter(document.getElementById('answeredRequests'), data.answered || 0, 800);
+                animateCounter(document.getElementById('overdueRequests'), data.overdue || 0, 650);
+                animateCounter(document.getElementById('unassignedRequests'), data.unassigned || 0, 650);
+                animateCounter(document.getElementById('awaitingReview'), data.awaiting_review || 0, 650);
+                animateCounter(document.getElementById('answeredToday'), data.answered_today || 0, 650);
             } catch (error) {
                 console.error('Error loading stats:', error);
             }
+        }
+
+        function setOperationHealth(index, state, value) {
+            const row = document.querySelectorAll('#operationsHealth .health-item')[index];
+            if (!row) return;
+            const dot = row.querySelector('.health-dot');
+            const strong = row.querySelector('strong');
+            dot.className = 'health-dot' + (state === 'warning' ? ' is-warning' : state === 'error' ? ' is-error' : '');
+            strong.textContent = value;
+        }
+
+        async function loadOperationsOverview() {
+            if (!currentUser || currentUser.role !== 'master') return;
+            try {
+                const response = await fetch('/api/admin/operations-overview');
+                if (!response.ok) throw new Error('Server ' + response.status);
+                const data = await response.json();
+                const agent = data.telegram_agent || {};
+                const corpus = data.corpus || {};
+                const team = Array.isArray(data.team) ? data.team : [];
+                const teamOpen = team.reduce(function(sum, member) { return sum + Number(member.open_requests || 0); }, 0);
+                setOperationHealth(0, agent.ready ? (Number(agent.failed_24h || 0) ? 'warning' : 'ok') : 'error',
+                    agent.ready ? (Number(agent.handled_24h || 0) + ' ta / 24 soat') : 'Oflayn');
+                setOperationHealth(1, Number(corpus.chunks || 0) > 0 ? 'ok' : 'warning',
+                    Number(corpus.chunks || 0).toLocaleString('uz-UZ') + ' bo\'lak');
+                setOperationHealth(2, teamOpen > 20 ? 'warning' : 'ok', teamOpen + ' ta ochiq ish');
+            } catch (error) {
+                console.error('Operations overview failed:', error);
+                setOperationHealth(0, 'error', 'Tekshirib bo\'lmadi');
+                setOperationHealth(1, 'warning', 'Tekshirib bo\'lmadi');
+                setOperationHealth(2, 'warning', 'Tekshirib bo\'lmadi');
+            }
+        }
+
+        function refreshOperations() {
+            return Promise.all([loadRequests(), updateStats(), loadOperationsOverview(), loadAdmins()]);
         }
         
         function getFileIcon(type) {
@@ -10116,20 +11569,22 @@
         };
 
         function toggleWelcomeCategories() {
-            var welcome = document.getElementById('aiChatWelcome');
-            if (!welcome) return;
-            if (welcome.classList.contains('collapsed')) {
-                // Expanding: add expanding class for typing animation
-                welcome.classList.remove('collapsed');
-                welcome.classList.add('expanding');
-                setTimeout(function() {
-                    welcome.classList.remove('expanding');
-                }, 1800);
-            } else {
-                // Collapsing
-                welcome.classList.remove('expanding');
-                welcome.classList.add('collapsed');
-            }
+            var topics = document.getElementById('aiWelcomeTopics');
+            var toggle = document.getElementById('aiTopicsToggle');
+            if (!topics || !toggle) return;
+            var willOpen = topics.hidden;
+            topics.hidden = !willOpen;
+            toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            if (willOpen) topics.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function useAiStarterPrompt(text) {
+            var input = document.getElementById('aiChatInput');
+            if (!input) return;
+            input.value = text;
+            autoResizeAI(input);
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
         }
 
         function selectTopic(topic) {
@@ -10140,7 +11595,7 @@
             if (selectedTopic === topic) {
                 selectedTopic = null;
                 document.querySelectorAll('.ai-topic-btn').forEach(function(btn) { btn.classList.remove('active'); });
-                document.getElementById('aiChatHeaderTitle').textContent = '';
+                document.getElementById('aiChatHeaderTitle').textContent = aiChatHistory.length ? 'Suhbat' : 'Yangi suhbat';
                 return;
             }
             selectedTopic = topic;
@@ -10266,7 +11721,11 @@
             msgs.innerHTML = '';
             msgs.appendChild(welcome);
             welcome.style.display = 'flex';
-            document.getElementById('aiChatHeaderTitle').textContent = '';
+            document.getElementById('aiChatHeaderTitle').textContent = 'Yangi suhbat';
+            var topics = document.getElementById('aiWelcomeTopics');
+            var topicsToggle = document.getElementById('aiTopicsToggle');
+            if (topics) topics.hidden = true;
+            if (topicsToggle) topicsToggle.setAttribute('aria-expanded', 'false');
             // Reset topic buttons
             document.querySelectorAll('.ai-topic-btn').forEach(function(btn) { btn.classList.remove('active'); });
             // Deselect sidebar history items
@@ -10302,7 +11761,7 @@
                 if (currentAiSessionId === sessionId) {
                     currentAiSessionId = null;
                     aiChatHistory = [];
-                    document.getElementById('aiChatHeaderTitle').textContent = '';
+                    document.getElementById('aiChatHeaderTitle').textContent = 'Yangi suhbat';
                     const welcome = document.getElementById('aiChatWelcome');
                     const msgs = document.getElementById('aiChatMessages');
                     msgs.innerHTML = '';
@@ -10359,12 +11818,26 @@
             document.querySelectorAll('#aiChatMessages .docflow-step').forEach(function (c) { c.remove(); });
         }
 
+        function flowIcon(name) {
+            var paths = {
+                file: '<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/>',
+                create: '<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/><path d="M12 11v6M9 14h6"/>',
+                folder: '<path d="M3 6h7l2 2h9v11H3z"/>',
+                edit: '<path d="M4 20h4l11-11-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+                opinion: '<path d="M12 3v18M5 7h14M7 7l-4 7h8L7 7ZM17 7l-4 7h8l-4-7Z"/>',
+                upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
+                search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+                template: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/>'
+            };
+            return '<svg class="docflow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || paths.file) + '</svg>';
+        }
+
         function openDocBuilder() {
-            var m = document.getElementById('aiAttachMenu'); if (m) m.classList.remove('open');
+            closeAttachMenu();
             docStepCard('<div class="docflow-title">Hujjat yaratish</div>Qaysi usulni tanlaysiz?' +
                 '<div class="docflow-opts">' +
-                '<button class="docflow-opt" type="button" onclick="docFlowTemplates()">📄 Shablon</button>' +
-                '<button class="docflow-opt" type="button" onclick="docFlowAI()">✨ AI bilan yangi hujjat yaratish</button>' +
+                '<button class="docflow-opt" type="button" onclick="docFlowTemplates()">' + flowIcon('template') + 'Shablon</button>' +
+                '<button class="docflow-opt" type="button" onclick="docFlowAI()">' + flowIcon('create') + 'AI bilan yangi hujjat yaratish</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowClose()">Bekor qilish</button>' +
                 '</div>');
         }
@@ -10376,7 +11849,7 @@
                 if (!tpls.length) {
                     docStepCard('Hozircha tayyor shablon yo\'q — Master Admin tez orada yuklaydi.' +
                         '<div class="docflow-opts">' +
-                        '<button class="docflow-opt" type="button" onclick="docFlowAI()">✨ AI bilan yangi hujjat yaratish</button>' +
+                        '<button class="docflow-opt" type="button" onclick="docFlowAI()">' + flowIcon('create') + 'AI bilan yangi hujjat yaratish</button>' +
                         '<button class="docflow-opt" type="button" onclick="openDocBuilder()">← Orqaga</button></div>');
                     return;
                 }
@@ -10386,7 +11859,7 @@
                         // this picker is now the single place templates get
                         // USED, so a user must be able to spot theirs.
                         return '<button class="docflow-opt" type="button" onclick="pickDocTemplate(\'' + t.id + '\')">' +
-                            (t.isMine ? '🗂 ' : '📄 ') + escapeHtml(docbL(t.name)) +
+                            flowIcon(t.isMine ? 'folder' : 'file') + escapeHtml(docbL(t.name)) +
                             (t.isMine ? ' <span style="opacity:.55;font-size:12px;">(meniki)</span>' : '') + '</button>';
                     }).join('') +
                     '<button class="docflow-opt" type="button" onclick="openDocBuilder()">← Orqaga</button></div>');
@@ -10414,7 +11887,7 @@
                 DOC_TYPES.map(function (t) {
                     return '<button class="docflow-opt" type="button" onclick="docFlowPickType(' + attrArg(t) + ')">' + escapeHtml(t) + '</button>';
                 }).join('') +
-                '<button class="docflow-opt" type="button" onclick="docFlowPickType(\'__custom\')">✏️ Boshqa…</button>' +
+                '<button class="docflow-opt" type="button" onclick="docFlowPickType(\'__custom\')">' + flowIcon('edit') + 'Boshqa…</button>' +
                 '<button class="docflow-opt" type="button" onclick="openDocBuilder()">← Orqaga</button>' +
                 '</div>');
         }
@@ -10423,18 +11896,18 @@
         var opinionDoc = null;   // { name, text } of the extracted upload
         function docFlowOpinion() {
             opinionDoc = null;
-            docStepCard('<div class="docflow-title">📑 Yuridik xulosa</div>' +
+            docStepCard('<div class="docflow-title">' + flowIcon('opinion') + ' Yuridik xulosa</div>' +
                 '<p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;line-height:1.55;">' +
                 'Hujjatni (PDF yoki Word) yuklang — platforma uni tahlil qilib, O\'zbekiston qonunchiligi (lex.uz) asosida ' +
                 '<b>Kirish · Asosiy ma\'lumotlar · Tahlil · Xulosa · Manbalar</b> tuzilishida yuridik xulosa tayyorlaydi.</p>' +
                 '<div id="opinionDrop" class="opinion-drop" onclick="document.getElementById(\'opinionFile\').click()">' +
-                    '<div class="opinion-drop-ic">⬆️</div>' +
+                    '<div class="opinion-drop-ic">' + flowIcon('upload') + '</div>' +
                     '<div id="opinionDropLabel">Hujjat yuklash (PDF, Word) — bosing</div>' +
                 '</div>' +
                 '<input type="file" id="opinionFile" accept=".pdf,.doc,.docx" style="display:none" onchange="onOpinionFile(this)">' +
                 '<div id="opinionStatus" class="afp-status"></div>' +
                 '<div class="docform-actions">' +
-                '<button class="docflow-opt docflow-primary" id="opinionGenBtn" type="button" onclick="docFlowGenerateOpinion()" disabled>📑 Xulosa tayyorlash</button>' +
+                '<button class="docflow-opt docflow-primary" id="opinionGenBtn" type="button" onclick="docFlowGenerateOpinion()" disabled>' + flowIcon('opinion') + 'Xulosa tayyorlash</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowAI()">← Orqaga</button>' +
                 '</div>');
         }
@@ -10572,7 +12045,7 @@
             }
             docStepCard('<div class="docflow-title">' + escapeHtml(t) + ' — kerakli ma\'lumotlar</div>' + buildDocFormGrid(rowObjs) +
                 '<div class="docform-actions">' +
-                '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowSubmit(' + attrArg(t) + ')">📄 Hujjatni yaratish</button>' +
+                '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowSubmit(' + attrArg(t) + ')">' + flowIcon('create') + 'Hujjatni yaratish</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowAI()">← Orqaga</button>' +
                 '</div>');
             var first = document.querySelector('#aiChatMessages .docform-input'); if (first) first.focus();
@@ -10891,6 +12364,8 @@
         function closeAttachMenu() {
             var m = document.getElementById('aiAttachMenu');
             if (m) m.classList.remove('open');
+            var b = document.getElementById('aiAttachBtn');
+            if (b) b.setAttribute('aria-expanded', 'false');
         }
 
         function modeChat() {
@@ -10916,12 +12391,12 @@
                 explainFromAttachment();
                 return;
             }
-            docStepCard('<div class="docflow-title">🔍 Hujjat tahlili</div>' +
+            docStepCard('<div class="docflow-title">' + flowIcon('search') + ' Hujjat tahlili</div>' +
                 '<p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;line-height:1.55;">' +
                 'Hujjatni yuklang — platforma uning mazmunini oddiy tilda tushuntirib beradi: ' +
                 'kim nimaga majbur, qanday muddatlar bor va nimaga e\'tibor berish kerak.</p>' +
                 '<div class="opinion-drop" onclick="document.getElementById(\'analyzerFile\').click()">' +
-                    '<div class="opinion-drop-ic">⬆️</div>' +
+                    '<div class="opinion-drop-ic">' + flowIcon('upload') + '</div>' +
                     '<div id="analyzerDropLabel">Hujjat yuklash (PDF, Word, rasm) — bosing</div>' +
                 '</div>' +
                 '<input type="file" id="analyzerFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="onAnalyzerFile(this)">' +
@@ -10959,13 +12434,13 @@
         }
 
         async function tplEditorHome() {
-            docStepCard('<div class="docflow-title">🗂 Shablonlar muharriri</div>' +
+            docStepCard('<div class="docflow-title">' + flowIcon('template') + ' Shablonlar muharriri</div>' +
                 '<p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;line-height:1.55;">' +
                 'O\'z shablonlaringizni yuklang — platforma ularni tahlil qilib, to\'ldiriladigan maydonlarni aniqlaydi. ' +
                 'Shablonlaringiz faqat sizga ko\'rinadi va <b>Hujjat yaratish → Shablon</b> ro\'yxatida chiqadi.</p>' +
                 '<div id="tplMineList" style="font-size:13px;color:var(--text-secondary);">Yuklanmoqda…</div>' +
                 '<div class="docflow-opts">' +
-                '<button class="docflow-opt docflow-primary" type="button" onclick="document.getElementById(\'tplUploadFile\').click()">⬆️ Shablon yuklash</button>' +
+                '<button class="docflow-opt docflow-primary" type="button" onclick="document.getElementById(\'tplUploadFile\').click()">' + flowIcon('upload') + 'Shablon yuklash</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowClose()">Yopish</button>' +
                 '</div>' +
                 '<input type="file" id="tplUploadFile" accept=".pdf,.doc,.docx" style="display:none" onchange="onTplUpload(this)">');
@@ -10982,7 +12457,7 @@
                 el.innerHTML = '<div style="margin-bottom:6px;font-weight:600;color:var(--text-primary);">Mening shablonlarim (' + list.length + '/' + (d.max || 30) + ')</div>' +
                     list.map(function (t) {
                         return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-1);">' +
-                            '<span style="flex:1;color:var(--text-primary);">📄 ' + escapeHtml(docbL(t.name)) + '</span>' +
+                            '<span style="display:flex;align-items:center;gap:8px;flex:1;color:var(--text-primary);">' + flowIcon('file') + escapeHtml(docbL(t.name)) + '</span>' +
                             '<button class="docflow-opt" style="padding:5px 11px;font-size:12.5px;" type="button" onclick="tplDeleteMine(' + t.id + ')">O\'chirish</button>' +
                             '</div>';
                     }).join('');
@@ -11064,15 +12539,19 @@
         function toggleAttachMenu(e) {
             if (e) e.stopPropagation();
             var m = document.getElementById('aiAttachMenu');
-            if (m) m.classList.toggle('open');
+            var b = document.getElementById('aiAttachBtn');
+            if (m) {
+                var isOpen = m.classList.toggle('open');
+                if (b) b.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            }
         }
         document.addEventListener('click', function (e) {
             var m = document.getElementById('aiAttachMenu');
             var b = document.getElementById('aiAttachBtn');
-            if (m && m.classList.contains('open') && !m.contains(e.target) && !(b && b.contains(e.target))) m.classList.remove('open');
+            if (m && m.classList.contains('open') && !m.contains(e.target) && !(b && b.contains(e.target))) closeAttachMenu();
         });
         function pickAttach() {
-            var m = document.getElementById('aiAttachMenu'); if (m) m.classList.remove('open');
+            closeAttachMenu();
             var el = document.getElementById('aiFileDoc');
             if (el) { el.value = ''; el.click(); }
         }
@@ -11380,7 +12859,11 @@
                 }
             }
             // ── Italic disclaimer — visible to ALL users ──
-            var aiDisclaimer = '<div class="ai-disclaimer"><em>Javob AI yordamida tayyorlandi. Professional huquqiy maslahat uchun professional yuristlarga murojaat qiling!</em></div>';
+            var isCorpusOnly = /^Korpus \(AI-siz\)/i.test(data.provider || '');
+            var disclaimerText = isCorpusOnly
+                ? 'Javob qonunchilik korpusidagi manbalar asosida avtomatik shakllantirildi. Muhim ma\'lumotlarni birlamchi manbadan tekshiring.'
+                : 'Javob AI yordamida tayyorlandi. Professional huquqiy maslahat uchun professional yuristlarga murojaat qiling!';
+            var aiDisclaimer = '<div class="ai-disclaimer"><em>' + escapeHtml(disclaimerText) + '</em></div>';
             ragBadge = ragBadge + aiDisclaimer;
 
             // ── Provider badge ──
@@ -11925,6 +13408,36 @@
             }
         }
 
+        function formatAiHistoryTimestamp(value) {
+            var date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+
+            var now = new Date();
+            var yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+
+            function sameCalendarDay(a, b) {
+                return a.getFullYear() === b.getFullYear()
+                    && a.getMonth() === b.getMonth()
+                    && a.getDate() === b.getDate();
+            }
+            function twoDigits(number) {
+                return String(number).padStart(2, '0');
+            }
+
+            var dayLabel;
+            if (sameCalendarDay(date, now)) {
+                dayLabel = 'Bugun';
+            } else if (sameCalendarDay(date, yesterday)) {
+                dayLabel = 'Kecha';
+            } else {
+                dayLabel = twoDigits(date.getDate()) + '.'
+                    + twoDigits(date.getMonth() + 1) + '.'
+                    + date.getFullYear();
+            }
+            return dayLabel + ' · ' + twoDigits(date.getHours()) + ':' + twoDigits(date.getMinutes());
+        }
+
         // Render the sidebar history, optionally filtered by the search box.
         function renderAiHistoryList() {
             var list = document.getElementById('aiHistoryList');
@@ -11941,26 +13454,14 @@
 
                 var html = '';
                 sessions.forEach(function(s) {
-                    var date = new Date(s.updated_at || s.created_at);
-                    var now = new Date();
-                    var diffDays = Math.floor((now - date) / 86400000);
-                    var timeAgo = diffDays === 0 ? 'Bugun' : diffDays === 1 ? 'Kecha' : diffDays + ' kun oldin';
-                    var allDbs = s.databases || ['lex.uz'];
-                    var shownDbs = allDbs.slice(0, 3);
-                    var dbs = shownDbs.map(function(db) {
-                        var info = AI_DATABASES[db] || { label: db };
-                        return '<span class="ai-history-item-db">' + info.label + '</span>';
-                    }).join('');
-                    if (allDbs.length > 3) {
-                        dbs += '<span class="ai-history-item-db">+' + (allDbs.length - 3) + '</span>';
-                    }
+                    var timestamp = formatAiHistoryTimestamp(s.updated_at || s.created_at);
                     var isActive = currentAiSessionId === s.id ? ' active' : '';
                     html += '<div class="ai-history-item' + isActive + '" onclick="openAiChatSession(' + s.id + ')">'
                         + '<div class="ai-history-item-content">'
                         + '<div class="ai-history-item-title">' + escapeHtml(s.title || 'Nomsiz suhbat') + '</div>'
-                        + '<div class="ai-history-item-meta">' + dbs + '<span>' + timeAgo + '</span></div>'
+                        + '<div class="ai-history-item-meta"><span class="ai-history-item-time">' + timestamp + '</span></div>'
                         + '</div>'
-                        + '<button class="ai-history-delete-btn" onclick="event.stopPropagation(); deleteAiConversation(' + s.id + ', this)" title="O\'chirish">'
+                        + '<button class="ai-history-delete-btn" onclick="event.stopPropagation(); deleteAiConversation(' + s.id + ', this)" title="O\'chirish" aria-label="Suhbatni o\'chirish">'
                         + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
                         + '</button>'
                         + '</div>';
@@ -12086,13 +13587,22 @@
             document.querySelectorAll('.hdr-dd-btn.dd-open').forEach(function(b)   { b.classList.remove('dd-open'); });
         }
 
-        // Mobile-only: open/close the admin actions as a right drawer
+        function syncHdrDrawerControl(open) {
+            var toggle = document.getElementById('hdrMobileToggle');
+            if (!toggle) return;
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            toggle.setAttribute('aria-label', open ? 'Admin vositalarini yopish' : 'Admin vositalarini ochish');
+        }
+
+        // Open/close the admin actions as a right drawer on every screen size.
         function toggleHdrDrawer() {
             var actions  = document.getElementById('masterHeaderActions');
             var backdrop = document.getElementById('aiSidebarBackdrop');
             if (!actions) return;
             var open = actions.classList.toggle('drawer-open');
             if (backdrop) backdrop.classList.toggle('active', open);
+            syncHdrDrawerControl(open);
+            if (!open) closeAllHdrDds();
             if (open && typeof refreshQueueStatus === 'function') refreshQueueStatus();
         }
         function closeHdrDrawer() {
@@ -12100,6 +13610,8 @@
             var backdrop = document.getElementById('aiSidebarBackdrop');
             if (actions) actions.classList.remove('drawer-open');
             if (backdrop) backdrop.classList.remove('active');
+            closeAllHdrDds();
+            syncHdrDrawerControl(false);
         }
 
         // Close dropdowns on click outside. On mobile, ignore clicks inside the
@@ -12107,6 +13619,9 @@
         document.addEventListener('click', function(ev) {
             if (ev.target.closest('.hdr-actions') || ev.target.closest('.hdr-mobile-toggle')) return;
             closeAllHdrDds();
+        });
+        document.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Escape') closeHdrDrawer();
         });
 
         // Desktop only: close a dropdown when the cursor leaves it.
@@ -12382,17 +13897,30 @@
             }).join('');
         }
 
-        // Mobile sidebar toggles
+        // Conversation sidebar: collapsible on desktop, off-canvas on mobile.
         function toggleAiSidebar() {
             var sidebar  = document.getElementById('aiSidebar');
             var backdrop = document.getElementById('aiSidebarBackdrop');
+            var workspace = document.querySelector('.ai-workspace');
+            var toggle = document.querySelector('.ai-sidebar-toggle');
+            var isMobile = window.matchMedia('(max-width: 768px)').matches;
+            if (!sidebar) return;
+            if (!isMobile) {
+                var collapsed = workspace.classList.toggle('sidebar-collapsed');
+                if (toggle) toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                return;
+            }
             var rightOpen = document.getElementById('aiSidebarRight')?.classList.contains('open');
             if (rightOpen) toggleAiSidebarRight(); // close right first
             // Also close the master admin drawer if it's open
             var actions = document.getElementById('masterHeaderActions');
-            if (actions && actions.classList.contains('drawer-open')) actions.classList.remove('drawer-open');
+            if (actions && actions.classList.contains('drawer-open')) {
+                actions.classList.remove('drawer-open');
+                syncHdrDrawerControl(false);
+            }
             sidebar.classList.toggle('open');
             backdrop.classList.toggle('active');
+            if (toggle) toggle.setAttribute('aria-expanded', sidebar.classList.contains('open') ? 'true' : 'false');
         }
         function toggleAiSidebarRight() {
             var sidebar  = document.getElementById('aiSidebarRight');
@@ -12414,10 +13942,25 @@
             if (right)    right.classList.remove('open');
             if (actions)  actions.classList.remove('drawer-open'); // mobile admin drawer
             if (backdrop) backdrop.classList.remove('active');
+            syncHdrDrawerControl(false);
+            var toggle = document.querySelector('.ai-sidebar-toggle');
+            if (toggle && window.matchMedia('(max-width: 768px)').matches) toggle.setAttribute('aria-expanded', 'false');
         }
         function closeMobileSidebar() {
             closeBothSidebars();
         }
+
+        function syncAiSidebarAccessibilityState() {
+            var sidebar = document.getElementById('aiSidebar');
+            var workspace = document.querySelector('.ai-workspace');
+            var toggle = document.querySelector('.ai-sidebar-toggle');
+            if (!sidebar || !workspace || !toggle) return;
+            var isMobile = window.matchMedia('(max-width: 768px)').matches;
+            var expanded = isMobile ? sidebar.classList.contains('open') : !workspace.classList.contains('sidebar-collapsed');
+            toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        }
+        document.addEventListener('DOMContentLoaded', syncAiSidebarAccessibilityState);
+        window.addEventListener('resize', syncAiSidebarAccessibilityState);
 
         // --- AI Legal Template (kept for analysis modal) ---
         function generateLegalTemplate() {
@@ -12550,6 +14093,8 @@
                 const s = await r.json();
                 const badge = document.getElementById('regPendingBadge');
                 var pendingCount = parseInt(s.pending) || 0;
+                var managementCount = document.getElementById('managementRegCount');
+                if (managementCount) managementCount.textContent = pendingCount;
                 if (pendingCount > 0) {
                     badge.textContent = s.pending + ' kutilmoqda';
                     badge.style.display = 'inline';
@@ -12563,6 +14108,254 @@
                     } else { tabBadge.style.display = 'none'; }
                 }
             } catch (e) {}
+        }
+
+        function openManagementSection(sectionId, loader, forceOpen) {
+            const section = document.getElementById(sectionId);
+            if (!section) return;
+            const wasCollapsed = section.classList.contains('collapsed');
+            if (forceOpen) section.classList.remove('collapsed');
+            else section.classList.toggle('collapsed');
+
+            const isOpen = !section.classList.contains('collapsed');
+            const header = section.querySelector('.reg-section-header');
+            if (header) header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            if (isOpen && typeof loader === 'function') Promise.resolve(loader()).catch(function() {});
+            if (isOpen && (forceOpen || wasCollapsed)) {
+                setTimeout(function() { section.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 70);
+            }
+        }
+
+        let attorneyAdminItems = [];
+        let attorneyPracticeAreas = [];
+        async function loadAttorneyAdmin() {
+            const container = document.getElementById('attorneyAdminContent');
+            if (!container) return;
+            container.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                const responses = await Promise.all([
+                    fetch('/api/admin/attorneys'),
+                    fetch('/api/admin/practice-areas')
+                ]);
+                if (!responses[0].ok || !responses[1].ok) throw new Error('Server xatosi');
+                const data = await responses[0].json();
+                const practiceData = await responses[1].json();
+                attorneyAdminItems = Array.isArray(data.items) ? data.items : [];
+                attorneyPracticeAreas = Array.isArray(practiceData.items) ? practiceData.items : [];
+                const pending = attorneyAdminItems.filter(function(item) { return item.license_status === 'pending'; }).length;
+                const badge = document.getElementById('managementAttorneyCount');
+                if (badge) badge.textContent = pending;
+                if (!attorneyAdminItems.length) {
+                    container.innerHTML = '<div class="reg-empty">Advokat profillari hali yo\'q. Tasdiqlangan advokat arizalari bu yerda paydo bo\'ladi.</div>';
+                    return;
+                }
+                container.innerHTML = '<div class="admin-data-list">' + attorneyAdminItems.map(function(item) {
+                    const selectedAreaIds = new Set((item.practice_areas || []).map(function(area) { return Number(area.id); }));
+                    return `
+                        <div class="admin-data-row attorney-admin-row">
+                            <div><strong>${escapeHtml(item.full_name)}</strong><small style="display:block;margin-top:4px;">${escapeHtml(item.organization_name || 'Tashkilot ko\'rsatilmagan')}</small></div>
+                            <label><span>Litsenziya</span><input id="attorneyLicense${Number(item.id)}" value="${escapeHtml(item.license_number || '')}" placeholder="Litsenziya raqami"></label>
+                            <select id="attorneyStatus${Number(item.id)}" aria-label="Litsenziya holati">
+                                ${['pending','active','suspended','expired','rejected'].map(function(status) { return '<option value="' + status + '"' + (item.license_status === status ? ' selected' : '') + '>' + ({pending:'Tekshirilmoqda',active:'Faol',suspended:'To\'xtatilgan',expired:'Muddati tugagan',rejected:'Rad etilgan'})[status] + '</option>'; }).join('')}
+                            </select>
+                            <div style="display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
+                                <label style="font-size:11px;color:var(--text-secondary);display:flex;gap:5px;align-items:center;"><input type="checkbox" id="attorneyPublish${Number(item.id)}" ${item.is_published ? 'checked' : ''}> E'lon qilish</label>
+                                <button type="button" onclick="saveAttorneyAdmin(${Number(item.id)})">Saqlash</button>
+                            </div>
+                            <input id="attorneyRegion${Number(item.id)}" value="${escapeHtml(item.region || '')}" placeholder="Hudud (masalan, Toshkent)">
+                            <select id="attorneyAreas${Number(item.id)}" multiple size="4" aria-label="Huquq yo'nalishlari">
+                                ${attorneyPracticeAreas.map(function(area) { return '<option value="' + Number(area.id) + '"' + (selectedAreaIds.has(Number(area.id)) ? ' selected' : '') + '>' + escapeHtml((area.parent_name_uz ? area.parent_name_uz + ' — ' : '') + area.name_uz) + '</option>'; }).join('')}
+                            </select>
+                            <input id="attorneySource${Number(item.id)}" style="grid-column:1/-1;" value="${escapeHtml(item.verification_source || '')}" placeholder="Rasmiy reyestr havolasi yoki tekshiruv izohi">
+                        </div>`;
+                }).join('') + '</div>';
+            } catch (error) {
+                container.innerHTML = '<div class="reg-empty">Advokatlarni yuklashda xatolik</div>';
+            }
+        }
+
+        async function saveAttorneyAdmin(id) {
+            const item = attorneyAdminItems.find(function(profile) { return Number(profile.id) === Number(id); });
+            if (!item) return;
+            const status = document.getElementById('attorneyStatus' + id).value;
+            const published = document.getElementById('attorneyPublish' + id).checked;
+            const source = document.getElementById('attorneySource' + id).value.trim();
+            const licenseNumber = document.getElementById('attorneyLicense' + id).value.trim();
+            const region = document.getElementById('attorneyRegion' + id).value.trim();
+            const areaSelect = document.getElementById('attorneyAreas' + id);
+            const practiceAreaIds = Array.from(areaSelect.selectedOptions).map(function(option) { return Number(option.value); });
+            if (status === 'active' && (!licenseNumber || !source)) {
+                alert("Faol deb tasdiqlash uchun litsenziya raqami va rasmiy tekshiruv manbasi kerak.");
+                return;
+            }
+            if (published && !practiceAreaIds.length) {
+                alert("Katalogga e'lon qilish uchun kamida bitta huquq yo'nalishini tanlang.");
+                return;
+            }
+            try {
+                const response = await fetch('/api/admin/attorneys/' + id, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_name: item.full_name,
+                        license_number: licenseNumber,
+                        license_status: status,
+                        verification_source: source,
+                        organization_name: item.organization_name,
+                        bio: item.bio,
+                        region: region,
+                        district: item.district,
+                        languages: item.languages,
+                        consultation_formats: item.consultation_formats,
+                        is_accepting_requests: item.is_accepting_requests,
+                        is_published: published,
+                        practice_area_ids: practiceAreaIds
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Saqlashda xatolik');
+                await loadAttorneyAdmin();
+            } catch (error) { alert(error.message); }
+        }
+
+        let serviceCatalogItems = [];
+        let serviceOrderItems = [];
+        async function loadPaidServicesAdmin() {
+            const container = document.getElementById('paidServicesContent');
+            if (!container) return;
+            container.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                const responses = await Promise.all([
+                    fetch('/api/admin/service-catalog'),
+                    fetch('/api/admin/service-orders?limit=50')
+                ]);
+                if (!responses[0].ok || !responses[1].ok) throw new Error('Server xatosi');
+                const catalogData = await responses[0].json();
+                const orderData = await responses[1].json();
+                serviceCatalogItems = Array.isArray(catalogData.items) ? catalogData.items : [];
+                serviceOrderItems = Array.isArray(orderData.items) ? orderData.items : [];
+                const pending = serviceOrderItems.filter(function(order) { return order.status === 'pending_lawyer_review'; }).length;
+                const badge = document.getElementById('managementPaidCount');
+                if (badge) badge.textContent = pending;
+
+                const catalogHtml = serviceCatalogItems.map(function(service) {
+                    return `
+                        <div class="admin-data-row">
+                            <div><strong>${escapeHtml(service.name_uz)}</strong><small style="display:block;margin-top:4px;">${service.requires_lawyer_approval ? 'Yurist tasdig\'i majburiy' : ''}</small></div>
+                            <input id="servicePrice${Number(service.id)}" type="number" min="0" step="1000" value="${service.price_minor === null ? '' : Number(service.price_minor)}" placeholder="Narx belgilanmagan">
+                            <span>${escapeHtml(service.currency || 'UZS')}</span>
+                            <button type="button" onclick="saveServiceCatalogItem(${Number(service.id)})">Narxni saqlash</button>
+                        </div>`;
+                }).join('');
+
+                const orderStatuses = {
+                    pending_lawyer_review: 'Yurist tekshiruvida',
+                    approved_awaiting_payment: 'Tasdiqlandi, to\'lov kutilmoqda',
+                    rejected: 'Rad etildi', paid: 'To\'langan', in_progress: 'Jarayonda',
+                    ready: 'Tayyor', delivered: 'Topshirildi', cancelled: 'Bekor qilindi'
+                };
+                const lawyerOptions = (allAdmins || []).filter(function(admin) { return admin.role === 'lawyer' || admin.role === 'master'; });
+                const ordersHtml = serviceOrderItems.length ? serviceOrderItems.map(function(order) {
+                    return `
+                        <div class="admin-data-row">
+                            <div><strong>${escapeHtml(order.service_name || 'Yuridik hujjat')}</strong><small style="display:block;margin-top:4px;">${escapeHtml(order.first_name || order.username || 'Telegram foydalanuvchisi')}</small></div>
+                            <select id="serviceOrderStatus${Number(order.id)}" aria-label="Buyurtma holati">${Object.keys(orderStatuses).map(function(status) { return '<option value="' + status + '"' + (order.status === status ? ' selected' : '') + '>' + orderStatuses[status] + '</option>'; }).join('')}</select>
+                            <input id="serviceOrderQuote${Number(order.id)}" type="number" min="0" step="1000" value="${order.quoted_price_minor === null ? '' : Number(order.quoted_price_minor)}" placeholder="Tasdiqlangan narx">
+                            <select id="serviceOrderLawyer${Number(order.id)}" aria-label="Mas'ul yurist"><option value="">Yurist tanlanmagan</option>${lawyerOptions.map(function(admin) { return '<option value="' + Number(admin.id) + '"' + (Number(order.assigned_lawyer_id) === Number(admin.id) ? ' selected' : '') + '>' + escapeHtml(admin.full_name) + '</option>'; }).join('')}</select>
+                            <div style="display:flex;gap:7px;justify-content:flex-end;"><button type="button" onclick="saveServiceOrder(${Number(order.id)})">Saqlash</button>${order.request_id ? '<button type="button" onclick="showRequestDetail(' + Number(order.request_id) + ')">Murojaat</button>' : ''}</div>
+                        </div>`;
+                }).join('') : '<div class="reg-empty">Hozircha pullik xizmat buyurtmasi yo\'q</div>';
+
+                container.innerHTML = '<h3 style="margin:0 0 10px;font-size:14px;">Xizmatlar katalogi</h3><div class="admin-data-list">' + catalogHtml + '</div>' +
+                    '<h3 style="margin:22px 0 10px;font-size:14px;">Buyurtmalar</h3><div class="admin-data-list">' + ordersHtml + '</div>';
+            } catch (error) {
+                container.innerHTML = '<div class="reg-empty">Pullik xizmatlarni yuklashda xatolik</div>';
+            }
+        }
+
+        async function saveServiceCatalogItem(id) {
+            const item = serviceCatalogItems.find(function(service) { return Number(service.id) === Number(id); });
+            if (!item) return;
+            const rawPrice = document.getElementById('servicePrice' + id).value;
+            try {
+                const response = await fetch('/api/admin/service-catalog/' + id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name_uz: item.name_uz,
+                        description_uz: item.description_uz,
+                        price_minor: rawPrice === '' ? null : Number(rawPrice),
+                        is_active: item.is_active
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Saqlashda xatolik');
+                await loadPaidServicesAdmin();
+            } catch (error) { alert(error.message); }
+        }
+
+        async function saveServiceOrder(id) {
+            const status = document.getElementById('serviceOrderStatus' + id).value;
+            const quoteRaw = document.getElementById('serviceOrderQuote' + id).value;
+            const lawyerRaw = document.getElementById('serviceOrderLawyer' + id).value;
+            try {
+                const response = await fetch('/api/admin/service-orders/' + id, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        status: status,
+                        quoted_price_minor: quoteRaw === '' ? null : Number(quoteRaw),
+                        assigned_lawyer_id: lawyerRaw === '' ? null : Number(lawyerRaw)
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Saqlashda xatolik');
+                await loadPaidServicesAdmin();
+            } catch (error) { alert(error.message); }
+        }
+
+        async function loadTelegramAgentAdmin() {
+            const container = document.getElementById('telegramAgentContent');
+            if (!container) return;
+            container.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                const response = await fetch('/api/admin/telegram-conversations?limit=100');
+                if (!response.ok) throw new Error('Server ' + response.status);
+                const data = await response.json();
+                const conversations = Array.isArray(data.items) ? data.items : [];
+                const humanCount = conversations.filter(function(item) { return item.mode === 'human'; }).length;
+                const badge = document.getElementById('managementHumanCount');
+                if (badge) badge.textContent = humanCount;
+                if (!conversations.length) {
+                    container.innerHTML = '<div class="reg-empty">Telegram suhbatlari hali yo\'q</div>';
+                    return;
+                }
+                container.innerHTML = '<div class="admin-data-list">' + conversations.map(function(item) {
+                    const displayName = [item.first_name, item.last_name].filter(Boolean).join(' ') || (item.username ? '@' + item.username : 'Telegram #' + item.chat_id);
+                    const nextMode = item.mode === 'human' ? 'automatic' : 'human';
+                    return `<div class="admin-data-row">
+                        <div><strong>${escapeHtml(displayName)}</strong><small style="display:block;margin-top:4px;">${escapeHtml(formatQueueTimestamp(item.updated_at))}</small></div>
+                        <span class="admin-data-status">${item.mode === 'human' ? 'Operator rejimi' : 'Agent rejimi'}</span>
+                        <span>${Number(item.open_requests) || 0} ta ochiq murojaat</span>
+                        <button type="button" onclick="setTelegramConversationMode('${escapeHtml(String(item.chat_id))}', '${nextMode}')">${nextMode === 'human' ? 'Operatorga olish' : 'Agentga qaytarish'}</button>
+                    </div>`;
+                }).join('') + '</div>';
+            } catch (error) {
+                container.innerHTML = '<div class="reg-empty">Telegram suhbatlarini yuklashda xatolik</div>';
+            }
+        }
+
+        async function setTelegramConversationMode(chatId, mode) {
+            try {
+                const response = await fetch('/api/admin/telegram-conversations/' + encodeURIComponent(chatId), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: mode })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Rejimni saqlashda xatolik');
+                await loadTelegramAgentAdmin();
+            } catch (error) { alert(error.message); }
         }
 
         // ========== WEEKLY SURVEY ADMIN ==========
@@ -15234,8 +17027,8 @@
             }
         }
 
-        // Set default filter to "Kutilmoqda"
-        document.getElementById('statusFilter').value = 'pending';
+        // Default to the operational queue; specialist views are one tap away.
+        document.getElementById('statusFilter').value = 'open';
 
         loadUserInfo().then(() => {
             startBackgroundPoll();
@@ -15246,6 +17039,7 @@
             if (currentUser.role === 'master') {
                 const addBtn = document.getElementById('addMemberBtn');
                 if (addBtn) addBtn.style.display = 'inline-block';
+                loadOperationsOverview();
             }
             // Restore last active tab (validate it exists and is visible)
             var savedTab = localStorage.getItem('dictum-active-tab');

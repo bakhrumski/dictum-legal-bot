@@ -18,6 +18,8 @@ const { classifyLegalField, formatClassificationForPrompt } = require('../agents
 const { initCaseLawDataset, retrieveSimilarCases, formatCasesForPrompt, addCase, updateCase, deleteCase, getAllCases, getCaseLawStats } = require('../dataset/case-law-dataset');
 const { initLegalCorpus, hybridSearch, rrfSearch, textOnlySearch, keywordSearch, exactMatchSearch, articleNumberSearch, vectorSearch, getCorpusStats, insertVerifiedAnswer, logIngest, getIngestLog, getIngestStats } = require('../rag/legal-corpus');
 const { expandQueryVariants, normalizeResponseForUser } = require('../rag/prim-notation');
+const { expandLegalQueryAliases } = require('../rag/query-aliases');
+const { buildCorpusOnlyAnswer } = require('../rag/corpus-fallback');
 const tariffModule = require('../rag/subscription-tiers');
 const { sendEmailCode } = require('../auth/email-code');
 const { getChunkArticleRefs } = require('../rag/citation-utils');
@@ -148,6 +150,9 @@ function getYurxizmatCatalogText() {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+// Keep public legal requests and platform authentication on separate bots.
+const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
+const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
 
 // Prevent process crashes from unhandled errors
 process.on('unhandledRejection', (err) => {
@@ -160,8 +165,8 @@ process.on('uncaughtException', (err) => {
 // Import bot from bot.js (created with polling: false)
 const { bot } = require('../bot/bot');
 
-// Start the separate registration bot (juristAI_registration_bot) — always polls
-const { startRegBot } = require('../bot/reg-bot');
+// Start the dedicated authentication bot (@juristAI_registration_bot) — always polls
+const { startRegBot, getRegBot } = require('../bot/reg-bot');
 startRegBot();
 
 // Catch ALL bot errors to prevent crashes
@@ -274,11 +279,16 @@ app.use('/api/', globalLimiter);
 app.use('/api/login', loginLimiter);
 app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat'], aiLimiter);
 
+// Public assets do not need a database-backed session. Serving them before the
+// session store keeps the landing, login, tariff and attorney-directory pages
+// available even when the database is restarting or at its connection limit.
+app.use(express.static('public'));
+
 // Session configuration — PostgreSQL store survives server restarts.
 // SESSION_SECRET should be set independently of JWT_SECRET (separate
 // cryptographic domains); JWT_SECRET remains the fallback so existing
 // deployments don't log everyone out before the env var is added.
-app.use(session({
+const sessionMiddleware = session({
   store: new pgSession({
     pool,
     tableName: 'user_sessions',
@@ -293,10 +303,12 @@ app.use(session({
     sameSite: 'lax',   // blocks cross-site POST CSRF
     secure: 'auto',    // HTTPS-only when the request is HTTPS (trust proxy set above)
   }
-}));
-
-// Serve static files
-app.use(express.static('public'));
+});
+app.use((req, res, next) => {
+  const publicDataRoute = req.method === 'GET'
+    && (req.path === '/api/attorneys' || req.path === '/api/practice-areas');
+  return publicDataRoute ? next() : sessionMiddleware(req, res, next);
+});
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -435,6 +447,17 @@ app.post('/api/login', async (req, res) => {
         // master linked via /link silently skipped 2FA.
         const tgTarget = admin.telegram_user_id || admin.telegram_chat_id;
         if (admin.role === 'master' && tgTarget && process.env.MASTER_2FA !== 'off') {
+          const authBot = getRegBot();
+          const authBotUrl = `https://t.me/${AUTH_BOT_USERNAME}`;
+          if (!authBot) {
+            console.error('[2FA] REG_BOT_TOKEN is not configured');
+            return res.status(503).json({
+              code: 'AUTH_BOT_NOT_CONFIGURED',
+              error: `Tasdiqlash boti @${AUTH_BOT_USERNAME} sozlanmagan. Administrator REG_BOT_TOKEN ni sozlashi kerak.`,
+              botUsername: AUTH_BOT_USERNAME,
+              botUrl: authBotUrl,
+            });
+          }
           const code = String(Math.floor(100000 + Math.random() * 900000));
           const token = require('crypto').randomBytes(24).toString('hex');
           pending2fa.set(token, {
@@ -442,12 +465,17 @@ app.post('/api/login', async (req, res) => {
             full_name: admin.full_name, code, expiresAt: Date.now() + 5 * 60 * 1000, tries: 0,
           });
           try {
-            await bot.sendMessage(tgTarget,
+            await authBot.sendMessage(tgTarget,
               `🔐 JuristAI kirish kodi: ${code}\n\n5 daqiqa amal qiladi.\nAgar bu siz bo'lmasangiz — DARHOL parolni almashtiring!`);
           } catch (e) {
             pending2fa.delete(token);
-            console.error('[2FA] Telegram send failed:', e.message);
-            return res.status(500).json({ error: 'Tasdiqlash kodini yuborib bo\'lmadi — Telegram bog\'lanishini tekshiring' });
+            console.error(`[2FA] @${AUTH_BOT_USERNAME} send failed:`, e.message);
+            return res.status(503).json({
+              code: 'AUTH_BOT_DELIVERY_FAILED',
+              error: `Tasdiqlash kodi yuborilmadi. @${AUTH_BOT_USERNAME} botini ochib Start bosing, so'ng qayta kiring.`,
+              botUsername: AUTH_BOT_USERNAME,
+              botUrl: authBotUrl,
+            });
           }
           logAudit(req, 'login.2fa_sent', 'admin', admin.id, admin.id);
           return res.json({ twofa: true, token });
@@ -1038,6 +1066,7 @@ app.get('/api/free-access/status', requireAuth, async (req, res) => {
       ...acc,
       channel: botMod.REQUIRED_CHANNEL || '',
       channelUrl: typeof botMod.channelLink === 'function' ? botMod.channelLink() : '',
+      instagramUrl: botMod.INSTAGRAM_URL || '',
     });
   } catch (err) {
     console.error('[free-access] status error:', err.message);
@@ -1051,12 +1080,8 @@ app.get('/api/free-access/telegram-link', requireAuth, async (req, res) => {
     const crypto = require('crypto');
     const code = crypto.randomBytes(12).toString('hex');
     await pool.query('UPDATE admins SET telegram_link_code = $1 WHERE id = $2', [code, req.session.adminId]);
-    let botUsername = process.env.BOT_USERNAME || '';
-    if (!botUsername) {
-      try { botUsername = (await require('../bot/bot').bot.getMe()).username; } catch (_) {}
-    }
-    const deepLink = botUsername ? `https://t.me/${botUsername}?start=ulink_${code}` : null;
-    res.json({ code, botUsername, deepLink });
+    const deepLink = `https://t.me/${LEGAL_BOT_USERNAME}?start=ulink_${code}`;
+    res.json({ code, botUsername: LEGAL_BOT_USERNAME, deepLink });
   } catch (err) {
     console.error('[free-access] link error:', err.message);
     res.status(500).json({ error: 'Server error' });
@@ -1143,17 +1168,37 @@ app.get('/api/stats', requireAuth, async (req, res) => {
   try {
     const role = req.session.role;
     const aid = parseInt(req.session.adminId);
-    const assignedFilter = (role === 'student' || role === 'lawyer') ? `WHERE assigned_to = ${aid}` : '';
+    const params = [];
+    let assignedFilter = '';
+    if (role === 'student' || role === 'lawyer') {
+      params.push(aid);
+      assignedFilter = `WHERE (r.assigned_to = $1 OR EXISTS (
+        SELECT 1 FROM request_students rs WHERE rs.request_id = r.id AND rs.student_id = $1
+      ))`;
+    }
     const result = await pool.query(`
       SELECT
         COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE status = 'pending') AS pending,
-        COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
-        COUNT(*) FILTER (WHERE status = 'student_responded') AS student_responded,
-        COUNT(*) FILTER (WHERE status = 'answered') AS answered
-      FROM requests
+        COUNT(*) FILTER (WHERE r.status = 'pending') AS pending,
+        COUNT(*) FILTER (WHERE r.status = 'rejected') AS rejected,
+        COUNT(*) FILTER (WHERE r.status = 'student_responded') AS student_responded,
+        COUNT(*) FILTER (WHERE r.status IN ('answered', 'ai_answered')) AS answered,
+        COUNT(*) FILTER (
+          WHERE r.status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved')
+            AND r.created_at < NOW() - INTERVAL '4 hours'
+        ) AS overdue,
+        COUNT(*) FILTER (
+          WHERE r.status IN ('pending', 'assigned')
+            AND r.assigned_to IS NULL
+            AND NOT EXISTS (SELECT 1 FROM request_students rs WHERE rs.request_id = r.id)
+        ) AS unassigned,
+        COUNT(*) FILTER (WHERE r.status IN ('student_responded', 'lawyer_approved')) AS awaiting_review,
+        COUNT(*) FILTER (WHERE r.status IN ('answered', 'ai_answered') AND r.answered_at >= CURRENT_DATE) AS answered_today,
+        COUNT(*) FILTER (WHERE r.agent_action = 'paid_service' AND r.status = 'pending') AS paid_services,
+        COUNT(*) FILTER (WHERE r.agent_action = 'attorney_request' AND r.status = 'pending') AS attorney_requests
+      FROM requests r
       ${assignedFilter}
-    `);
+    `, params);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error fetching stats:', error);
@@ -1164,10 +1209,96 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 // Get all requests
 app.get('/api/requests', requireAuth, async (req, res) => {
   try {
-    // Lawyers and students only see requests assigned to them
     const role = req.session.role;
     const aid = parseInt(req.session.adminId);
-    const assignedFilter = (role === 'student' || role === 'lawyer') ? `WHERE (r.assigned_to = ${aid} OR EXISTS (SELECT 1 FROM request_students rs2 WHERE rs2.request_id = r.id AND rs2.student_id = ${aid}))` : '';
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.max(10, Math.min(parseInt(req.query.limit, 10) || 50, 100));
+    const params = [];
+    const where = [];
+    const addParam = value => {
+      params.push(value);
+      return `$${params.length}`;
+    };
+
+    // Lawyers and students only see requests assigned to them.
+    if (role === 'student' || role === 'lawyer') {
+      const p = addParam(aid);
+      where.push(`(r.assigned_to = ${p} OR EXISTS (
+        SELECT 1 FROM request_students rs2 WHERE rs2.request_id = r.id AND rs2.student_id = ${p}
+      ))`);
+    }
+
+    const search = String(req.query.search || '').trim().slice(0, 200);
+    if (search) {
+      const p = addParam(`%${search}%`);
+      where.push(`(r.request_text ILIKE ${p} OR u.first_name ILIKE ${p} OR u.username ILIKE ${p})`);
+    }
+    if (req.query.category) {
+      const requestedCategory = String(req.query.category).slice(0, 255);
+      const categoryAliases = {
+        'Fuqarolik qonunchiligi': ['Fuqarolik huquqi'],
+        'Oila qonunchiligi': ['Oila huquqi'],
+        'Mehnat va bandlik': ['Mehnat huquqi'],
+        'Jinoyat qonunchiligi': ['Jinoyat huquqi'],
+        "Ma'muriy javobgarlik": ["Ma'muriy huquq"],
+        'Uy-joy qonunchiligi': ['Uy-joy huquqi'],
+      };
+      const categories = [requestedCategory].concat(categoryAliases[requestedCategory] || []);
+      where.push(`r.category = ANY(${addParam(categories)}::text[])`);
+    }
+    if (req.query.urgency) where.push(`COALESCE(r.urgency, r.triage_result->>'urgency', 'medium') = ${addParam(String(req.query.urgency).slice(0, 20))}`);
+    if (req.query.source) where.push(`r.source_channel = ${addParam(String(req.query.source).slice(0, 30))}`);
+
+    const status = String(req.query.status || '').trim();
+    if (status === 'open') {
+      where.push(`r.status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved')`);
+    } else if (status === 'review') {
+      where.push(`r.status IN ('student_responded', 'lawyer_approved')`);
+    } else if (status === 'answered_today') {
+      where.push(`r.status IN ('answered', 'ai_answered') AND r.answered_at >= CURRENT_DATE`);
+    } else if (status) {
+      where.push(`r.status = ${addParam(status.slice(0, 50))}`);
+    }
+
+    if (String(req.query.overdue || '') === '1') {
+      where.push(`r.status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved') AND r.created_at < NOW() - INTERVAL '4 hours'`);
+    }
+    if (req.query.agent_action) {
+      where.push(`r.agent_action = ${addParam(String(req.query.agent_action).slice(0, 60))}`);
+    }
+
+    const assigned = String(req.query.assigned || '');
+    if (assigned === 'unassigned') {
+      where.push(`r.assigned_to IS NULL AND NOT EXISTS (SELECT 1 FROM request_students rs3 WHERE rs3.request_id = r.id)`);
+    } else if (assigned === 'assigned') {
+      where.push(`(r.assigned_to IS NOT NULL OR EXISTS (SELECT 1 FROM request_students rs3 WHERE rs3.request_id = r.id))`);
+    }
+
+    const assignee = parseInt(req.query.assignee, 10);
+    if (Number.isInteger(assignee) && assignee > 0) {
+      const p = addParam(assignee);
+      where.push(`(r.assigned_to = ${p} OR EXISTS (
+        SELECT 1 FROM request_students rs4 WHERE rs4.request_id = r.id AND rs4.student_id = ${p}
+      ))`);
+    }
+
+    if (req.query.date_from) where.push(`r.created_at >= ${addParam(String(req.query.date_from).slice(0, 30))}::timestamptz`);
+    if (req.query.date_to) where.push(`r.created_at < (${addParam(String(req.query.date_to).slice(0, 30))}::date + INTERVAL '1 day')`);
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const sort = String(req.query.sort || 'priority');
+    const orderSql = sort === 'newest'
+      ? 'r.created_at DESC'
+      : sort === 'oldest'
+        ? 'r.created_at ASC'
+        : `CASE COALESCE(r.urgency, r.triage_result->>'urgency', 'medium')
+             WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3
+           END, r.created_at ASC`;
+
+    const queryParams = params.slice();
+    queryParams.push(limit, (page - 1) * limit);
+    const limitParam = `$${queryParams.length - 1}`;
+    const offsetParam = `$${queryParams.length}`;
     const result = await pool.query(`
       SELECT
         r.id,
@@ -1187,6 +1318,15 @@ app.get('/api/requests', requireAuth, async (req, res) => {
         r.assigned_at,
         r.created_at,
         r.answered_at,
+        r.source_channel,
+        r.legal_subfield,
+        COALESCE(r.urgency, r.triage_result->>'urgency', 'medium') AS urgency,
+        r.language,
+        r.region,
+        r.agent_intent,
+        r.agent_action,
+        r.requires_lawyer_review,
+        COUNT(*) OVER()::int AS filtered_total,
         u.telegram_id,
         u.username,
         u.first_name,
@@ -1206,15 +1346,398 @@ app.get('/api/requests', requireAuth, async (req, res) => {
       FROM requests r
       JOIN users u ON r.user_id = u.id
       LEFT JOIN admins a ON r.assigned_to = a.id
-      ${assignedFilter}
-      ORDER BY r.created_at ASC
-    `);
+      ${whereSql}
+      ORDER BY ${orderSql}
+      LIMIT ${limitParam} OFFSET ${offsetParam}
+    `, queryParams);
 
-    const rows = result.rows.map(r => anonymizeRequest(r, req.session.role));
-    res.json(rows);
+    const total = result.rows.length ? Number(result.rows[0].filtered_total) : 0;
+    const rows = result.rows.map(row => {
+      const { filtered_total, ...requestRow } = row;
+      return anonymizeRequest(requestRow, req.session.role);
+    });
+    res.json({
+      items: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      },
+    });
   } catch (error) {
     console.error('Error fetching requests:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Master Admin command-center data: operational work, team capacity, and the
+// Telegram concierge health in one lightweight request.
+app.get('/api/admin/operations-overview', requireMasterAdmin, async (req, res) => {
+  try {
+    const [queueResult, teamResult, agentResult, corpusResult] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved'))::int AS open,
+          COUNT(*) FILTER (WHERE status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved') AND created_at < NOW() - INTERVAL '4 hours')::int AS overdue,
+          COUNT(*) FILTER (WHERE status IN ('pending', 'assigned') AND assigned_to IS NULL AND NOT EXISTS (SELECT 1 FROM request_students rs WHERE rs.request_id = requests.id))::int AS unassigned,
+          COUNT(*) FILTER (WHERE status IN ('student_responded', 'lawyer_approved'))::int AS awaiting_review,
+          COUNT(*) FILTER (WHERE agent_action = 'paid_service' AND status = 'pending')::int AS paid_services,
+          COUNT(*) FILTER (WHERE agent_action = 'attorney_request' AND status = 'pending')::int AS attorney_requests
+        FROM requests
+      `),
+      pool.query(`
+        SELECT a.id, a.full_name, a.role, a.last_active_at,
+               COUNT(r.id) FILTER (WHERE r.status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved'))::int AS open_requests
+          FROM admins a
+          LEFT JOIN requests r ON r.assigned_to = a.id
+         WHERE a.role IN ('master', 'lawyer', 'student')
+           AND COALESCE(a.is_active, TRUE) = TRUE
+         GROUP BY a.id
+         ORDER BY open_requests ASC, a.full_name
+      `).catch(async error => {
+        // Older installations may not have admins.is_active yet.
+        if (!/is_active/i.test(error.message)) throw error;
+        return pool.query(`
+          SELECT a.id, a.full_name, a.role, a.last_active_at,
+                 COUNT(r.id) FILTER (WHERE r.status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved'))::int AS open_requests
+            FROM admins a LEFT JOIN requests r ON r.assigned_to = a.id
+           WHERE a.role IN ('master', 'lawyer', 'student')
+           GROUP BY a.id ORDER BY open_requests ASC, a.full_name
+        `);
+      }),
+      pool.query(`
+        SELECT COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS handled_24h,
+               COUNT(*) FILTER (WHERE status = 'failed' AND created_at >= NOW() - INTERVAL '24 hours')::int AS failed_24h,
+               COUNT(*) FILTER (WHERE action = 'paid_service' AND created_at >= NOW() - INTERVAL '24 hours')::int AS paid_service_24h,
+               MAX(created_at) AS last_event_at,
+               COALESCE(ROUND(AVG(duration_ms) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')), 0)::int AS average_duration_ms
+          FROM telegram_agent_events
+      `),
+      pool.query(`
+        SELECT COUNT(*)::int AS chunks,
+               MAX(updated_at) AS last_updated_at
+          FROM legal_chunks
+         WHERE COALESCE(is_valid, TRUE) = TRUE
+      `).catch(() => ({ rows: [{ chunks: 0, last_updated_at: null }] })),
+    ]);
+
+    let agentReady = false;
+    try { agentReady = require('../agents/telegram-agent').isReady(); } catch (_) { /* reported as false */ }
+
+    res.json({
+      generated_at: new Date().toISOString(),
+      queue: queueResult.rows[0],
+      team: teamResult.rows,
+      telegram_agent: { ready: agentReady, ...agentResult.rows[0] },
+      corpus: corpusResult.rows[0],
+    });
+  } catch (error) {
+    console.error('[OPERATIONS] overview failed:', error);
+    res.status(500).json({ error: 'Operatsion ma\'lumotlarni olishda xatolik' });
+  }
+});
+
+app.get('/api/admin/telegram-conversations', requireMasterAdmin, async (req, res) => {
+  try {
+    const mode = ['automatic', 'human'].includes(req.query.mode) ? req.query.mode : null;
+    const limit = Math.max(10, Math.min(parseInt(req.query.limit, 10) || 50, 100));
+    const result = await pool.query(`
+      SELECT tc.chat_id, tc.mode, tc.state, tc.language, tc.last_intent,
+             tc.updated_at, u.first_name, u.last_name, u.username,
+             COUNT(r.id) FILTER (WHERE r.status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved'))::int AS open_requests
+        FROM tg_conversations tc
+        LEFT JOIN users u ON u.telegram_id = tc.chat_id
+        LEFT JOIN requests r ON r.user_id = u.id
+       WHERE ($1::text IS NULL OR tc.mode = $1)
+       GROUP BY tc.chat_id, tc.mode, tc.state, tc.language, tc.last_intent,
+                tc.updated_at, u.first_name, u.last_name, u.username
+       ORDER BY tc.updated_at DESC
+       LIMIT $2
+    `, [mode, limit]);
+    res.json({ items: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Telegram suhbatlarini olishda xatolik' });
+  }
+});
+
+app.patch('/api/admin/telegram-conversations/:chatId', requireMasterAdmin, async (req, res) => {
+  try {
+    const chatId = String(req.params.chatId || '').trim();
+    if (!/^-?\d{4,20}$/.test(chatId)) return res.status(400).json({ error: 'Telegram chat ID noto\'g\'ri' });
+    const mode = req.body.mode;
+    if (!['automatic', 'human'].includes(mode)) return res.status(400).json({ error: 'Rejim automatic yoki human bo\'lishi kerak' });
+    const result = await pool.query(`
+      INSERT INTO tg_conversations (chat_id, mode, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (chat_id) DO UPDATE SET mode = EXCLUDED.mode, updated_at = NOW()
+      RETURNING chat_id, mode, state, updated_at
+    `, [chatId, mode]);
+    logAudit(req, 'telegram_conversation.mode.' + mode, 'telegram_conversation', chatId);
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Telegram suhbat rejimini saqlashda xatolik' });
+  }
+});
+
+// Public attorney discovery. Only published profiles with an active, verified
+// licence are ever returned by the matching service, so no private draft or
+// applicant document can leak through this endpoint.
+app.get('/api/practice-areas', async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT child.id, child.slug, child.name_uz, parent.slug AS parent_slug
+        FROM legal_practice_areas child
+        LEFT JOIN legal_practice_areas parent ON parent.id = child.parent_id
+       WHERE child.is_active = TRUE
+       ORDER BY parent.slug NULLS FIRST, child.sort_order, child.name_uz
+    `);
+    res.json({ items: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Yo\'nalishlarni olishda xatolik' });
+  }
+});
+
+app.get('/api/attorneys', async (req, res) => {
+  try {
+    const { findMatchingAttorneys } = require('../services/legal-marketplace');
+    const items = await findMatchingAttorneys({
+      query: req.query.q || '',
+      legalField: req.query.field || '',
+      legalSubfield: req.query.subfield || '',
+      region: req.query.region || '',
+      language: req.query.language || 'uz',
+      limit: req.query.limit || 20,
+      strictField: Boolean(req.query.field),
+      strictRegion: Boolean(req.query.region),
+    });
+    res.json({ items });
+  } catch (error) {
+    console.error('[ATTORNEYS] directory failed:', error);
+    res.status(500).json({ error: 'Advokatlarni olishda xatolik' });
+  }
+});
+
+app.get('/api/admin/attorneys', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT ap.*,
+             COALESCE(jsonb_agg(DISTINCT jsonb_build_object(
+               'id', lpa.id, 'slug', lpa.slug, 'name_uz', lpa.name_uz,
+               'is_verified', apa.is_verified
+             )) FILTER (WHERE lpa.id IS NOT NULL), '[]'::jsonb) AS practice_areas
+        FROM attorney_profiles ap
+        LEFT JOIN attorney_practice_areas apa ON apa.attorney_id = ap.id
+        LEFT JOIN legal_practice_areas lpa ON lpa.id = apa.practice_area_id
+       GROUP BY ap.id
+       ORDER BY CASE ap.license_status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,
+                ap.created_at DESC
+    `);
+    res.json({ items: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Advokat profillarini olishda xatolik' });
+  }
+});
+
+app.get('/api/admin/practice-areas', requireMasterAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT child.id, child.slug, child.name_uz, parent.name_uz AS parent_name_uz
+        FROM legal_practice_areas child
+        LEFT JOIN legal_practice_areas parent ON parent.id = child.parent_id
+       WHERE child.is_active = TRUE
+       ORDER BY parent.name_uz NULLS FIRST, child.sort_order, child.name_uz
+    `);
+    res.json({ items: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Yo\'nalishlarni olishda xatolik' });
+  }
+});
+
+app.patch('/api/admin/attorneys/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Noto\'g\'ri profil ID' });
+    const allowedStatuses = ['pending', 'active', 'suspended', 'expired', 'rejected'];
+    const licenseStatus = allowedStatuses.includes(req.body.license_status) ? req.body.license_status : 'pending';
+    const publishRequested = req.body.is_published === true;
+    const licenseNumber = String(req.body.license_number || '').trim().slice(0, 100);
+    const verificationSource = String(req.body.verification_source || '').trim().slice(0, 1000);
+    const practiceAreaIds = Array.isArray(req.body.practice_area_ids)
+      ? [...new Set(req.body.practice_area_ids
+        .map(value => parseInt(value, 10))
+        .filter(value => Number.isInteger(value) && value > 0))].slice(0, 12)
+      : null;
+    if (publishRequested && licenseStatus !== 'active') {
+      return res.status(400).json({ error: 'Faqat faol litsenziya tasdiqlangandan keyin profilni e\'lon qilish mumkin' });
+    }
+    if (licenseStatus === 'active' && (!licenseNumber || !verificationSource)) {
+      return res.status(400).json({ error: 'Faol profil uchun litsenziya raqami va rasmiy tekshiruv manbasi majburiy' });
+    }
+    if (publishRequested) {
+      const hasPracticeArea = practiceAreaIds !== null
+        ? practiceAreaIds.length > 0
+        : Number((await pool.query('SELECT COUNT(*)::int AS count FROM attorney_practice_areas WHERE attorney_id = $1', [id])).rows[0].count) > 0;
+      if (!hasPracticeArea) return res.status(400).json({ error: 'Katalog uchun kamida bitta huquq yo\'nalishi majburiy' });
+    }
+
+    const languages = Array.isArray(req.body.languages)
+      ? req.body.languages.map(String).map(item => item.slice(0, 10)).slice(0, 5)
+      : ['uz'];
+    const formats = Array.isArray(req.body.consultation_formats)
+      ? req.body.consultation_formats.map(String).map(item => item.slice(0, 30)).slice(0, 5)
+      : ['online'];
+
+    const result = await pool.query(`
+      UPDATE attorney_profiles SET
+        full_name = COALESCE(NULLIF($1, ''), full_name),
+        license_number = NULLIF($2, ''),
+        license_status = $3,
+        license_verified_at = CASE WHEN $3 = 'active' THEN NOW() ELSE license_verified_at END,
+        verification_source = NULLIF($4, ''),
+        organization_name = NULLIF($5, ''),
+        bio = NULLIF($6, ''),
+        region = NULLIF($7, ''),
+        district = NULLIF($8, ''),
+        languages = $9::jsonb,
+        consultation_formats = $10::jsonb,
+        is_accepting_requests = $11,
+        is_published = $12,
+        updated_at = NOW()
+      WHERE id = $13
+      RETURNING *
+    `, [
+      String(req.body.full_name || '').trim().slice(0, 255),
+      licenseNumber,
+      licenseStatus,
+      verificationSource,
+      String(req.body.organization_name || '').trim().slice(0, 255),
+      String(req.body.bio || '').trim().slice(0, 5000),
+      String(req.body.region || '').trim().slice(0, 120),
+      String(req.body.district || '').trim().slice(0, 120),
+      JSON.stringify(languages),
+      JSON.stringify(formats),
+      req.body.is_accepting_requests !== false,
+      publishRequested,
+      id,
+    ]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Advokat profili topilmadi' });
+
+    if (practiceAreaIds !== null) {
+      await pool.query('DELETE FROM attorney_practice_areas WHERE attorney_id = $1', [id]);
+      if (practiceAreaIds.length) {
+        await pool.query(`
+          INSERT INTO attorney_practice_areas (attorney_id, practice_area_id, is_verified)
+          SELECT $1, id, $3 FROM legal_practice_areas
+           WHERE id = ANY($2::int[]) AND is_active = TRUE
+          ON CONFLICT (attorney_id, practice_area_id) DO UPDATE SET is_verified = EXCLUDED.is_verified
+        `, [id, practiceAreaIds, licenseStatus === 'active']);
+      }
+    }
+    logAudit(req, 'attorney_profile.update', 'attorney_profile', id);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('[ATTORNEYS] update failed:', error);
+    const duplicate = error && error.code === '23505';
+    res.status(duplicate ? 409 : 500).json({ error: duplicate ? 'Bu litsenziya boshqa faol profilga biriktirilgan' : 'Advokat profilini saqlashda xatolik' });
+  }
+});
+
+app.get('/api/admin/service-catalog', requireMasterAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT * FROM service_catalog ORDER BY id`);
+    res.json({ items: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Xizmatlar katalogini olishda xatolik' });
+  }
+});
+
+app.put('/api/admin/service-catalog/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Noto\'g\'ri xizmat ID' });
+    const name = String(req.body.name_uz || '').trim().slice(0, 255);
+    const description = String(req.body.description_uz || '').trim().slice(0, 4000) || null;
+    const rawPrice = req.body.price_minor;
+    const price = rawPrice === null || rawPrice === '' || rawPrice === undefined ? null : Number(rawPrice);
+    if (!name) return res.status(400).json({ error: 'Xizmat nomi majburiy' });
+    if (price !== null && (!Number.isSafeInteger(price) || price < 0)) return res.status(400).json({ error: 'Narx noto\'g\'ri' });
+
+    const result = await pool.query(
+      `UPDATE service_catalog
+          SET name_uz = $1, description_uz = $2, price_minor = $3,
+              is_active = $4, updated_at = NOW()
+        WHERE id = $5 RETURNING *`,
+      [name, description, price, req.body.is_active !== false, id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Xizmat topilmadi' });
+    logAudit(req, 'service_catalog.update', 'service_catalog', id);
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Xizmatni saqlashda xatolik' });
+  }
+});
+
+app.get('/api/admin/service-orders', requireMasterAdmin, async (req, res) => {
+  try {
+    const limit = Math.max(10, Math.min(parseInt(req.query.limit, 10) || 50, 100));
+    const status = String(req.query.status || '').slice(0, 40);
+    const params = [];
+    const where = status ? `WHERE so.status = $${params.push(status)}` : '';
+    params.push(limit);
+    const result = await pool.query(`
+      SELECT so.*, sc.name_uz AS service_name, u.first_name, u.username,
+             a.full_name AS assigned_lawyer_name
+        FROM service_orders so
+        LEFT JOIN service_catalog sc ON sc.id = so.service_id
+        LEFT JOIN users u ON u.id = so.user_id
+        LEFT JOIN admins a ON a.id = so.assigned_lawyer_id
+        ${where}
+       ORDER BY so.created_at DESC
+       LIMIT $${params.length}
+    `, params);
+    res.json({ items: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Pullik xizmat buyurtmalarini olishda xatolik' });
+  }
+});
+
+app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Noto\'g\'ri buyurtma ID' });
+    const allowedStatuses = [
+      'pending_lawyer_review', 'approved_awaiting_payment', 'rejected',
+      'paid', 'in_progress', 'ready', 'delivered', 'cancelled',
+    ];
+    const status = allowedStatuses.includes(req.body.status) ? req.body.status : 'pending_lawyer_review';
+    const lawyerId = req.body.assigned_lawyer_id === null || req.body.assigned_lawyer_id === ''
+      ? null : parseInt(req.body.assigned_lawyer_id, 10);
+    const rawQuote = req.body.quoted_price_minor;
+    const quote = rawQuote === null || rawQuote === '' || rawQuote === undefined ? null : Number(rawQuote);
+    if (lawyerId !== null && (!Number.isInteger(lawyerId) || lawyerId < 1)) return res.status(400).json({ error: 'Yurist ID noto\'g\'ri' });
+    if (quote !== null && (!Number.isSafeInteger(quote) || quote < 0)) return res.status(400).json({ error: 'Narx noto\'g\'ri' });
+    if (['approved_awaiting_payment', 'paid', 'in_progress', 'ready', 'delivered'].includes(status) && quote === null) {
+      return res.status(400).json({ error: 'Tasdiqlangan buyurtma uchun narx kiritilishi kerak' });
+    }
+    const result = await pool.query(`
+      UPDATE service_orders SET
+        status = $1,
+        quoted_price_minor = $2,
+        assigned_lawyer_id = $3,
+        lawyer_approved_at = CASE
+          WHEN $1 = 'approved_awaiting_payment' AND lawyer_approved_at IS NULL THEN NOW()
+          ELSE lawyer_approved_at
+        END,
+        updated_at = NOW()
+      WHERE id = $4
+      RETURNING *
+    `, [status, quote, lawyerId, id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Buyurtma topilmadi' });
+    logAudit(req, 'service_order.update.' + status, 'service_order', id);
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Buyurtmani saqlashda xatolik' });
   }
 });
 
@@ -1242,6 +1765,14 @@ app.get('/api/requests/:id', requireAuth, async (req, res) => {
         r.assigned_at,
         r.created_at,
         r.answered_at,
+        r.source_channel,
+        r.legal_subfield,
+        COALESCE(r.urgency, r.triage_result->>'urgency', 'medium') AS urgency,
+        r.language,
+        r.region,
+        r.agent_intent,
+        r.agent_action,
+        r.requires_lawyer_review,
         u.telegram_id,
         u.username,
         u.first_name,
@@ -3073,6 +3604,10 @@ async function callAI(messages, options = {}) {
   const geminiKey = process.env.GEMINI_API_KEY;
   const errors = [];
 
+  if (!gptKey && !geminiKey) {
+    throw new Error('AI provayder sozlanmagan (GPT_API_KEY yoki GEMINI_API_KEY kerak)');
+  }
+
   // 1. GPT-5.6 Terra — balanced intelligence/cost, primary for general work.
   if (gptKey && await paidModelsAllowed()) {
     try {
@@ -3127,6 +3662,11 @@ initRunner(callAI);
 try {
   const { initTelegramAgent } = require('../agents/telegram-agent');
   const { searchKorpus } = require('../rag/qa-korpus');
+  const {
+    findMatchingAttorneys,
+    revealAttorneyContactAfterConsent,
+    recordTelegramAgentEvent,
+  } = require('../services/legal-marketplace');
   initTelegramAgent({
     callAI,
     callCheapAI,
@@ -3135,6 +3675,9 @@ try {
     buildTopicPrompt,
     classifyLegalTopic,
     searchKorpus,
+    findAttorneys: findMatchingAttorneys,
+    getAttorneyContact: revealAttorneyContactAfterConsent,
+    recordAgentEvent: recordTelegramAgentEvent,
     chatModel: MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
   });
@@ -3677,9 +4220,9 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // Category slugs are stored lowercase; normalize the topic so a stray
   // "Soliq" vs "soliq" can never silently fall back to unscoped retrieval.
   if (topic) topic = String(topic).toLowerCase();
-  const expandedQuery = expandQueryVariants(query);
+  const expandedQuery = expandLegalQueryAliases(expandQueryVariants(query));
   if (expandedQuery !== query) {
-    console.log(`[RAG] Prim-expanded query: "${query}" -> "${expandedQuery}"`);
+    console.log(`[RAG] Expanded query: "${query}" -> "${expandedQuery}"`);
   }
   query = expandedQuery;
 
@@ -5533,7 +6076,15 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     //   {type:'done', ...}     — final normalized reply + meta (JSON-response shape)
     //   {type:'error', error}  — terminal failure after headers were sent
     let displayReply, finalProvider;
-    if (wantStream) {
+    const hasAiProvider = !!(process.env.GPT_API_KEY || process.env.GEMINI_API_KEY);
+    if (!hasAiProvider) {
+      displayReply = buildCorpusOnlyAnswer(message, ragChunks);
+      finalProvider = 'Korpus (AI-siz)';
+      if (sse) {
+        sse({ type: 'status_clear' });
+        sse({ type: 'replace', text: displayReply });
+      }
+    } else if (wantStream) {
       sse({ type: 'status', text: '✍️ Javob tayyorlanmoqda...' });
       let firstToken = true;
       const emit = (t) => { if (firstToken) { sse({ type: 'status_clear' }); firstToken = false; } sse({ type: 'token', t }); };
@@ -5572,7 +6123,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     }
 
     // ── GEMINI FALLBACK: if RAG-constrained answer failed, let Gemini answer freely ──
-    if (isFailedAnswer(displayReply)) {
+    if (hasAiProvider && isFailedAnswer(displayReply)) {
       console.warn(`[Legal Chat] RAG answer failed ("topilmadi"), retrying with Gemini pretrained knowledge...`);
       try {
         const topicLabel = LEGAL_TOPICS[topic] || topic || 'huquq';
@@ -7973,8 +8524,7 @@ app.post('/api/reg-session', (req, res) => {
   const token = crypto.randomBytes(12).toString('hex');
   regSessions.set(token, { verified: false, telegramUserId: null, createdAt: Date.now() });
   setTimeout(() => regSessions.delete(token), 10 * 60 * 1000);
-  const botUsername = process.env.REG_BOT_USERNAME || process.env.BOT_USERNAME || 'juristAI_registration_bot';
-  res.json({ token, botUsername });
+  res.json({ token, botUsername: AUTH_BOT_USERNAME });
 });
 
 // POST /api/login-session — create a Telegram login OTP session
@@ -7982,8 +8532,7 @@ app.post('/api/login-session', (req, res) => {
   const token = crypto.randomBytes(12).toString('hex');
   loginSessions.set(token, { otp: null, telegramUserId: null, createdAt: Date.now() });
   setTimeout(() => loginSessions.delete(token), 10 * 60 * 1000);
-  const botUsername = process.env.REG_BOT_USERNAME || process.env.BOT_USERNAME || 'juristAI_registration_bot';
-  res.json({ token, botUsername });
+  res.json({ token, botUsername: AUTH_BOT_USERNAME });
 });
 
 // POST /api/login/telegram-otp — verify OTP and log user in
@@ -8217,8 +8766,8 @@ app.post('/api/recover/init', async (req, res) => {
     if (!row || !row.telegram_user_id) return res.json({ sent: false, reason: 'not_found' });
     const token = crypto.randomBytes(16).toString('hex');
     verificationTokens.set('recover_' + token, { adminId: row.id, expiresAt: Date.now() + 10 * 60 * 1000 });
-    const { getRegBot } = require('../bot/reg-bot');
-    const regBot = getRegBot() || require('../bot/bot').getBot();
+    const regBot = getRegBot();
+    if (!regBot) return res.status(503).json({ sent: false, reason: 'otp_bot_not_configured' });
     const recoverLink = `${process.env.APP_URL || 'https://' + process.env.RENDER_EXTERNAL_HOSTNAME}/login.html?recover=${token}`;
     await regBot.sendMessage(row.telegram_user_id, `🔑 Hisobni tiklash havolasi:\n${recoverLink}\n\nHavola 10 daqiqa amal qiladi.`);
     res.json({ sent: true });
@@ -8238,8 +8787,7 @@ app.post('/api/recover/bot-init', (req, res) => {
   // Also store under botinit_ key so bot.js can signal back via verificationTokens
   const { verificationTokens: vt } = require('../verification-store');
   vt.set('botinit_' + token, { confirmed: false, resetToken: null, expiresAt: Date.now() + 10 * 60 * 1000 });
-  const botUsername = process.env.REG_BOT_USERNAME || process.env.BOT_USERNAME || 'juristAI_registration_bot';
-  res.json({ token, botUsername });
+  res.json({ token, botUsername: AUTH_BOT_USERNAME });
 });
 
 app.get('/api/recover/status/:token', (req, res) => {
@@ -8727,8 +9275,51 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
     const fullName = `${reg.last_name} ${reg.first_name}`;
     const role = reg.type === 'lawyer' ? 'lawyer' : 'student';
 
-    await pool.query('INSERT INTO admins (username, password, full_name, role, telegram_username) VALUES ($1, $2, $3, $4, $5)', [finalUsername, finalHashedPassword, fullName, role, reg.telegram_username]);
+    const adminInsert = await pool.query(
+      'INSERT INTO admins (username, password, full_name, role, telegram_username) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [finalUsername, finalHashedPassword, fullName, role, reg.telegram_username]
+    );
+    const newAdminId = adminInsert.rows[0].id;
     await pool.query('UPDATE registration_requests SET status = $1, reviewed_at = NOW(), reviewed_by = $2 WHERE id = $3', ['approved', req.session.adminId, req.params.id]);
+
+    // A staff lawyer account and a public attorney profile are intentionally
+    // separate. Approval creates a private draft; publication is impossible
+    // until a Master Admin verifies the licence against the official registry.
+    if (role === 'lawyer') {
+      const profileResult = await pool.query(`
+        INSERT INTO attorney_profiles
+          (admin_id, registration_request_id, full_name, license_number,
+           license_status, telegram_username, is_published)
+        VALUES ($1, $2, $3, $4, 'pending', $5, FALSE)
+        ON CONFLICT (registration_request_id) DO UPDATE SET
+          admin_id = EXCLUDED.admin_id,
+          full_name = EXCLUDED.full_name,
+          license_number = EXCLUDED.license_number,
+          telegram_username = EXCLUDED.telegram_username,
+          updated_at = NOW()
+        RETURNING id
+      `, [newAdminId, reg.id, fullName, reg.license_number || null, reg.telegram_username || null]);
+
+      // Registration uses free-form specialization text. Seed one conservative
+      // practice-area link so matching has useful data, while leaving it
+      // unverified until the Master Admin reviews the profile.
+      const specialization = String(reg.specialization || '').toLocaleLowerCase('uz');
+      const practiceSlug = /oila|nikoh|aliment|family/.test(specialization) ? 'family'
+        : /mehnat|ish(?:ga|dan)?|labor/.test(specialization) ? 'labor'
+          : /jinoyat|criminal/.test(specialization) ? 'criminal'
+            : /tadbirkor|biznes|korporativ|business/.test(specialization) ? 'business'
+              : /soliq|tax/.test(specialization) ? 'tax'
+                : /ma['’]?muriy|administrative/.test(specialization) ? 'administrative'
+                  : /kadastr|mulk|uy-?joy|real.?estate/.test(specialization) ? 'real-estate'
+                    : /qurilish|construction/.test(specialization) ? 'construction'
+                      : 'civil';
+      await pool.query(`
+        INSERT INTO attorney_practice_areas (attorney_id, practice_area_id, experience_years, is_verified)
+        SELECT $1, id, $2, FALSE FROM legal_practice_areas WHERE slug = $3
+        ON CONFLICT (attorney_id, practice_area_id) DO UPDATE SET
+          experience_years = EXCLUDED.experience_years
+      `, [profileResult.rows[0].id, reg.experience_years || null, practiceSlug]);
+    }
 
     // Notify via Telegram using stored chat_id from verification
     const parolText = reg.password_hash ? "Siz ro'yxatdan o'tishda yaratgan parol" : '(Admin tomonidan beriladi)';
@@ -9127,6 +9718,16 @@ async function runMigrations() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_user_id ON requests(user_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests(created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_requests_assigned_to ON requests(assigned_to)`);
+
+    // Attorney directory, paid legal services and Telegram concierge state.
+    // Kept in a separate module so the bot, API and future worker processes
+    // share one schema and one explainable matching implementation.
+    try {
+      const { initLegalMarketplaceSchema } = require('../services/legal-marketplace');
+      await initLegalMarketplaceSchema();
+    } catch (e) {
+      console.log('[LEGAL-MARKETPLACE] Init skipped:', e.message);
+    }
 
     // Audit trail of sensitive-data access and auth events (enterprise
     // confidentiality requirement — "who read this client's file, when").

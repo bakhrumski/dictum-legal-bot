@@ -16,7 +16,8 @@ const fs = require('fs');
 const path = require('path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-const tariff = fs.readFileSync(path.join(__dirname, '..', 'public', 'tariff.html'), 'utf8');
+const tariffHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'tariff.html'), 'utf8');
+const tariff = tariffHtml;
 const tiersSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'rag', 'subscription-tiers.js'), 'utf8');
 
 let passed = 0, failed = 0;
@@ -40,18 +41,43 @@ test('every advertised price is the price the server charges', () => {
   }
 });
 
-test('no superseded price is still displayed', () => {
+test('the authenticated tariff page uses the same prices', () => {
+  for (const [plan, uzs] of [['silver', '199000'], ['gold', '399000'], ['platinum', '999000']]) {
+    assert.ok(tariffHtml.includes(`data-price="${uzs}"`),
+      `tariff.html still has a stale ${plan} price`);
+  }
+});
+
+test('the authenticated tariff page offers the permanent free plan', () => {
+  assert.ok(tariffHtml.includes('data-plan="bepul"'), 'bepul action is missing');
+  assert.ok(!/<button[^>]+data-plan="sinov"/.test(tariffHtml), 'obsolete sinov action is still advertised');
+  assert.match(tariffHtml, /30 kun[\s\S]{0,80}kuniga 3 ta/, 'free step-down is missing');
+});
+
+test('opinion allowances are labelled as credits', () => {
+  assert.match(tariffHtml, /39 ta yuridik xulosa krediti/);
+  assert.match(tariffHtml, /74 ta yuridik xulosa krediti/);
+  assert.match(tariffHtml, /182 ta yuridik xulosa krediti/);
+  assert.match(tariffHtml, /1–3 kredit/, 'credit cost explanation is missing');
+});
+
+test('no superseded price or unanchored discount is still displayed', () => {
   // The old figures were struck through beside the new ones; that made the
   // Platinum price wrap mid-number and cluttered every card. Prices now show
-  // once. If a future edit reintroduces one, this catches it.
+  // once on both pricing surfaces.
   for (const old of ['299 000', '599 000', '1 199 000']) {
     assert.ok(!html.includes('>' + old + '<') && !html.includes('">' + old),
       `the superseded price ${old} is still on the page`);
   }
+  for (const old of ['299,000', '599,000', '1,199,000']) {
+    assert.ok(!tariffHtml.includes(old), `the superseded price ${old} is still on tariff.html`);
+  }
   assert.ok(!html.includes('plan-old'), 'the struck-through price element is still present');
+  assert.ok(!tariffHtml.includes('plan-price-old'), 'tariff.html still has struck-through prices');
   // The -33% badge went with them: a discount claim with no anchor price
   // tells a reader 33% off *what*, and cannot be answered from the card.
   assert.ok(!html.includes('plan-off'), 'the discount badge has no reference price to justify it');
+  assert.ok(!tariffHtml.includes('plan-saving'), 'tariff.html still has an unanchored discount badge');
 });
 
 test('a price can never wrap mid-number', () => {
@@ -144,15 +170,9 @@ test('tariff.html charges the same prices as the landing page', () => {
     assert.ok(tariff.includes('>' + markup + '<'), `tariff.html missing price ${markup}`);
     assert.ok(tariff.includes('data-price="' + base + '"'), `tariff.html data-price ${base} missing`);
   }
-  // The multi-month calculator multiplies BASE_PRICES, so a stale entry there
-  // charges the old price on any duration other than one month.
-  const bp = tariff.match(/BASE_PRICES = \{([^}]*)\}/)[1];
-  for (const n of ['199000', '399000', '999000']) {
-    assert.ok(bp.includes(n), `BASE_PRICES is stale: ${n} missing`);
-  }
-  for (const old of ['299000', '599000', '1199000']) {
-    assert.ok(!bp.includes(old), `BASE_PRICES still carries the old price ${old}`);
-  }
+  // Multi-month controls were intentionally removed from the simplified UI;
+  // there must not be a second client-side price table that can drift.
+  assert.ok(!tariff.includes('BASE_PRICES'), 'tariff.html carries a duplicate client-side price table');
 });
 
 test('tariff.html advertises the same quotas', () => {
@@ -174,10 +194,10 @@ test('both pages lead every paid tier with the same benefit', () => {
 });
 
 test('cards reserve height so rows align across the row', () => {
-  for (const [name, doc] of [['index', html], ['tariff', tariff]]) {
-    const forCss = doc.slice(doc.indexOf('.plan-for'), doc.indexOf('.plan-for') + 260);
+  for (const [name, doc, selector] of [['index', html, '.plan-for'], ['tariff', tariff, '.plan-audience']]) {
+    const forCss = doc.slice(doc.indexOf(selector), doc.indexOf(selector) + 260);
     assert.ok(/min-height:\s*\d+/.test(forCss),
-      `${name}.html: .plan-for has no reserved height, so bullet lists start at different heights`);
+      `${name}.html: ${selector} has no reserved height, so bullet lists start at different heights`);
     assert.ok(/min-height:\s*0/.test(doc),
       `${name}.html: reserved heights are never released, so stacked cards carry dead space`);
   }

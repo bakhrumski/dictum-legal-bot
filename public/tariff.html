@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        if (location.protocol === 'file:') {
+            location.replace('http://localhost:3000/tariff.html' + location.search + location.hash);
+        }
+    </script>
     <title>Tarif rejasi — JuristAI</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="./css/design-tokens.css">
     <style>
         :root {
             --bg-page: var(--parchment-50);
@@ -37,7 +39,7 @@
         * { box-sizing: border-box; }
         body {
             margin: 0; padding: 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: var(--font-sans);
             background: var(--bg-page); color: var(--text-1);
             min-height: 100vh;
             -webkit-font-smoothing: antialiased;
@@ -80,28 +82,6 @@
             text-align: center; font-size: 16px; font-weight: 500;
             color: var(--text-2); margin: 8px 0 28px;
         }
-        .duration-toggle {
-            display: flex; justify-content: center; gap: 6px;
-            margin-bottom: 36px;
-        }
-        .duration-toggle button {
-            background: var(--bg-card); border: 1px solid var(--border);
-            color: var(--text-2); padding: 10px 22px; border-radius: 999px;
-            cursor: pointer; font-size: 14px; font-weight: 500;
-            transition: all 0.15s;
-            display: inline-flex; align-items: center; gap: 8px;
-        }
-        .duration-toggle button:hover { background: var(--bg-card-hover); }
-        .duration-toggle button.active {
-            background: var(--success); color: #fff; border-color: var(--success);
-        }
-        .duration-toggle .badge {
-            display: inline-block; font-size: 11px; padding: 1px 6px;
-            background: rgba(47, 107, 67, 0.18); color: var(--success);
-            border-radius: 4px; font-weight: 600;
-        }
-        .duration-toggle button.active .badge { background: rgba(255,255,255,0.22); color: #fff; }
-
         .plans-grid {
             display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
         }
@@ -118,7 +98,7 @@
         /* Paid tiers while payments are off. Dimmed AND labelled: a greyed
            card with no explanation reads as broken, or as "you are not
            eligible", rather than "not yet". */
-        .plan-card.soon { opacity: .62; }
+        .plan-card.soon { opacity: .68; }
         .plan-card.soon:hover { transform: none; }
         .plan-card.soon .plan-price, .plan-card.soon .plan-name { filter: grayscale(1); }
         .badge-soon {
@@ -129,7 +109,7 @@
         .plan-note {
             max-width: 760px; margin: 0 auto 28px; text-align: center;
             font-size: 13.5px; line-height: 1.65; color: var(--text-3);
-            background: var(--bg-card); border: 1px dashed var(--border);
+            background: var(--accent-soft); border: 0;
             border-radius: 12px; padding: 14px 18px;
         }
         .plan-note b { color: var(--text-1); }
@@ -175,7 +155,6 @@
         }
         .plan-meter span { display: block; height: 100%; border-radius: 2px; }
         .plan-card[data-plan="bepul"]    .plan-meter span { width: 25%;  background: var(--success); }
-        .plan-card[data-plan="sinov"]    .plan-meter span { width: 25%;  background: var(--success); }
         .plan-card[data-plan="silver"]   .plan-meter span { width: 100%; background: var(--success); }
         .plan-card[data-plan="gold"]     .plan-meter span { width: 100%; background: var(--navy-500); }
         .plan-card[data-plan="platinum"] .plan-meter span {
@@ -250,28 +229,205 @@
             z-index: 2000;
         }
         .toast.show { opacity: 1; }
+
+        /* JuristAI modern pricing: flat hierarchy, one recommended plan. */
+        [data-theme="dark"] {
+            --accent-soft: rgba(147, 183, 201, 0.13);
+        }
+        body { background: var(--bg-page); }
+        .page-header {
+            max-width: none;
+            min-height: 62px;
+            padding: 10px clamp(18px, 4vw, 40px);
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+        }
+        .header-brand {
+            color: var(--text-1);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .header-brand strong { font-size: 16px; font-weight: 700; }
+        .brand-mark {
+            width: 32px;
+            height: 32px;
+            display: grid;
+            place-items: center;
+            border-radius: 8px;
+            background: var(--navy-700);
+            color: #fff;
+            font-weight: 700;
+        }
+        [data-theme="dark"] .brand-mark { background: var(--dark-accent); color: var(--dark-bg-1); }
+        .theme-toggle {
+            width: 38px;
+            height: 38px;
+            justify-content: center;
+            padding: 0;
+            border: 0;
+            border-radius: 9px;
+        }
+        .container { max-width: 1040px; padding: 48px clamp(18px, 4vw, 40px) 72px; }
+        .pricing-intro { max-width: 680px; margin-bottom: 28px; }
+        .pricing-intro h1 {
+            margin: 8px 0 10px;
+            color: var(--text-1);
+            text-align: left;
+            font-size: clamp(28px, 4vw, 38px);
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+        .pricing-intro > p:last-child { margin: 0; color: var(--text-2); line-height: 1.55; }
+        .pricing-eyebrow { margin: 0; color: var(--brass-600); font-size: 13px; font-weight: 700; }
+        [data-theme="dark"] .pricing-eyebrow { color: var(--brass-300); }
+        .trial-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 28px;
+            padding: 16px 18px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+        .trial-strip > div { display: grid; gap: 4px; }
+        .trial-strip strong { font-size: 15px; }
+        .trial-strip span { color: var(--text-3); font-size: 13px; }
+        .trial-strip .trial-btn { width: auto; min-width: 144px; }
+        .plans-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+        .plan-note { max-width: none; text-align: left; }
+        .plan-card {
+            min-width: 0;
+            padding: 24px 20px;
+            background: transparent;
+            border: 0;
+            border-top: 1px solid var(--border);
+            border-radius: 0;
+            transition: none;
+        }
+        .plan-card:hover { transform: none; }
+        .plan-card.soon .badge-soon {
+            top: 23px;
+            right: 20px;
+            left: auto;
+            transform: none;
+            padding: 0;
+            color: var(--text-3);
+            background: transparent;
+            border-radius: 0;
+            line-height: 20px;
+        }
+        .plan-card.featured {
+            padding: 23px 20px 24px;
+            background: var(--accent-soft);
+            border: 0;
+            border-top: 2px solid var(--accent);
+            border-radius: 0 0 14px 14px;
+        }
+        .plan-card .badge-top {
+            position: absolute;
+            top: 23px;
+            right: 20px;
+            left: auto;
+            align-self: auto;
+            transform: none;
+            margin: 0;
+            padding: 0;
+            color: var(--accent);
+            background: transparent;
+            border-radius: 0;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 20px;
+        }
+        .plan-name {
+            margin-bottom: 5px;
+            color: var(--text-1);
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+        .plan-audience { min-height: 60px; margin: 0 0 22px; color: var(--text-3); font-size: 13px; line-height: 1.5; }
+        .plan-price { margin-bottom: 2px; font-size: clamp(27px, 3.4vw, 34px); font-weight: 700; }
+        .plan-price > span { white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .plan-price small { display: block; margin: 5px 0 0; }
+        .plan-period { margin: 0 0 24px; }
+        .plan-meter,
+        .plan-meter-label { display: none; }
+        .features { margin-bottom: 26px; }
+        .features li { gap: 9px; padding: 7px 0; color: var(--text-2); }
+        .features li::before {
+            flex-basis: 16px;
+            background: var(--text-3);
+            border-radius: 0;
+        }
+        .plan-btn {
+            padding: 11px 14px;
+            border-radius: 9px;
+            background: transparent;
+            transition: background .15s, border-color .15s;
+        }
+        .plan-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--accent-fg);
+        }
+        .plan-btn.primary:hover { filter: none; background: var(--accent-hover); }
+        .trial-btn { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+        .usage-note {
+            max-width: 760px;
+            margin: 28px auto 0;
+            color: var(--text-3);
+            font-size: 12px;
+            line-height: 1.55;
+            text-align: center;
+        }
+        .loyalty-note {
+            max-width: 760px;
+            margin: 14px auto 0;
+            color: var(--text-2);
+            font-size: 13px;
+            line-height: 1.6;
+            text-align: center;
+        }
+        .pay-option.selected { border-color: var(--accent); background: var(--accent-soft); }
+        .btn-confirm { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+        .modal { box-shadow: var(--shadow-3); }
+        button:focus-visible,
+        a:focus-visible,
+        .pay-option:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent); outline-offset: 2px; }
+        @media (max-width: 760px) {
+            .plans-grid { grid-template-columns: 1fr; }
+            .plan-card { padding-inline: 4px; }
+            .plan-card.featured { padding-inline: 18px; }
+            .plan-audience { min-height: 0; }
+        }
+        @media (max-width: 520px) {
+            .container { padding-top: 34px; }
+            .trial-strip { align-items: stretch; flex-direction: column; }
+            .trial-strip .trial-btn { width: 100%; }
+        }
     </style>
 </head>
 <body>
     <header class="page-header">
-        <div class="header-brand" onclick="window.location.href='/index.html'">
-            <img src="/icon-1024.png"                   alt="JuristAI" class="header-logo header-logo-icon">
-            <img src="/wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
-            <img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
-        </div>
-        <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish">
-            <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
-            <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg></span>
+        <a class="header-brand" href="/dashboard.html" aria-label="JuristAI chatga qaytish">
+            <span class="brand-mark" aria-hidden="true">J</span>
+            <strong>JuristAI</strong>
+        </a>
+        <button class="theme-toggle" type="button" onclick="toggleTheme()" title="Rejimni almashtirish" aria-label="Yorug‘ yoki qorong‘i rejimni almashtirish">
+            <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg></span>
+            <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg></span>
         </button>
     </header>
 
     <main class="container">
-        <h1>Ehtiyojingizga mos rejani tanlang</h1>
-
-        <div class="duration-toggle">
-            <button class="active" data-mult="1">1 oy</button>
-            <button data-mult="3">3 oy <span class="badge">-10%</span></button>
-            <button data-mult="6">6 oy <span class="badge">-15%</span></button>
+        <div class="pricing-intro">
+            <p class="pricing-eyebrow">Doimo bepul reja · karta kerak emas</p>
+            <h1>O'zingizga mos rejani tanlang</h1>
+            <p>Pullik rejalarda AI chat cheksiz. Rejalar xulosa kreditlari, hujjat yaratish hajmi va xizmat darajasi bilan farqlanadi.</p>
         </div>
 
         <p class="plan-note" id="planNote" style="display:none">
@@ -281,85 +437,71 @@
             bo'lib xabar beramiz.
         </p>
 
-        <section class="plans-grid">
-            <!-- SINOV (Bepul) -->
-            <article class="plan-card featured" data-plan="bepul">
-                <div class="plan-name">Bepul</div>
-                <div class="plan-price">Bepul</div>
-                <div class="plan-period">Doimo bepul</div>
-                <div class="plan-for">Platformani sinab ko'rish va kundalik oddiy savollar uchun.</div>
-                <div class="plan-meter-label"><span>Kunlik limit</span><span>Bepul</span></div>
-                <div class="plan-meter"><span></span></div>
-                <ul class="features">
-                    <li>Kuniga 10 ta savol — 30 kun</li>
-                    <li>So'ngra kuniga 3 ta, muddatsiz</li>
-                    <li>Har bir javob lex.uz manbasi bilan</li>
-                    <li>Karta talab qilinmaydi</li>
-                </ul>
-                <button class="plan-btn primary" data-plan="bepul" onclick="selectPlan('bepul')">Bepul boshlash</button>
-            </article>
+        <section class="trial-strip" aria-label="Bepul reja">
+            <div>
+                <strong>Bepul</strong>
+                <span>Birinchi 30 kun kuniga 10 ta savol, keyin kuniga 3 ta — muddatsiz.</span>
+            </div>
+            <button class="plan-btn trial-btn" data-plan="bepul" onclick="selectPlan('bepul')">Bepul boshlash</button>
+        </section>
 
+        <section class="plans-grid">
             <!-- SILVER -->
             <article class="plan-card" data-plan="silver">
                 <div class="plan-name">Silver</div>
+                <p class="plan-audience">Yakka yuristlar, tadbirkorlar va kichik ofislar uchun</p>
                 <div class="plan-price"><span data-price="199000">199,000</span><small>so'm</small></div>
                 <div class="plan-period">oyiga</div>
-                <div class="plan-for">Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.</div>
-                <div class="plan-meter-label"><span>AI chat</span><span>Cheksiz</span></div>
-                <div class="plan-meter"><span></span></div>
                 <ul class="features">
                     <li>Cheksiz AI chat</li>
-                    <li>Oyiga ~39 ta yuridik xulosa</li>
+                    <li>Oyiga ~39 ta yuridik xulosa krediti</li>
                     <li>Oyiga ~95 ta hujjat tayyorlash</li>
                     <li>O'z shablonlaringizni yuklash</li>
                 </ul>
-                <button class="plan-btn" data-plan="silver" onclick="selectPlan('silver')">Tanlash</button>
+                <button class="plan-btn" data-plan="silver" onclick="selectPlan('silver')">Silver'ni tanlash</button>
             </article>
 
-            <!-- GOLD (featured) -->
+            <!-- GOLD -->
             <article class="plan-card" data-plan="gold">
-                
                 <div class="plan-name">Gold</div>
+                <p class="plan-audience">Yuridik bo'lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga</p>
                 <div class="plan-price"><span data-price="399000">399,000</span><small>so'm</small></div>
                 <div class="plan-period">oyiga</div>
-                <div class="plan-for">Yuridik bo'lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.</div>
-                <div class="plan-meter-label"><span>AI chat</span><span>Cheksiz</span></div>
-                <div class="plan-meter"><span></span></div>
                 <ul class="features">
                     <li>Cheksiz AI chat</li>
-                    <li>Oyiga ~74 ta yuridik xulosa</li>
-                    <li>Oyiga ~217 ta hujjat</li>
+                    <li>Oyiga ~74 ta yuridik xulosa krediti</li>
+                    <li>Oyiga ~217 ta hujjat tayyorlash</li>
                     <li>Skan va rasmdan hujjat tahlili</li>
-                    <li>Ustuvor navbat — tezroq javob</li>
+                    <li>Ustuvor navbat - tezroq javob</li>
                 </ul>
-                <button class="plan-btn" data-plan="gold" onclick="selectPlan('gold')">Tanlash</button>
+                <button class="plan-btn" data-plan="gold" onclick="selectPlan('gold')">Gold'ni tanlash</button>
             </article>
 
             <!-- PLATINUM -->
             <article class="plan-card" data-plan="platinum">
                 <div class="plan-name">Platinum</div>
+                <p class="plan-audience">Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya</p>
                 <div class="plan-price"><span data-price="999000">999,000</span><small>so'm</small></div>
                 <div class="plan-period">oyiga</div>
-                <div class="plan-for">Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya.</div>
-                <div class="plan-meter-label"><span>AI chat</span><span>Cheksiz</span></div>
-                <div class="plan-meter"><span></span></div>
                 <ul class="features">
                     <li>Cheksiz AI chat</li>
-                    <li>Oyiga ~182 ta yuridik xulosa</li>
-                    <li>Oyiga ~542 ta hujjat</li>
+                    <li>Oyiga ~182 ta yuridik xulosa krediti</li>
+                    <li>Oyiga ~542 ta hujjat tayyorlash</li>
                     <li>Shaxsiy konsierj va o'qitish</li>
                     <li>API orqali integratsiya</li>
                 </ul>
-                <button class="plan-btn" data-plan="platinum" onclick="selectPlan('platinum')">Tanlash</button>
+                <button class="plan-btn" data-plan="platinum" onclick="selectPlan('platinum')">Platinum'ni tanlash</button>
             </article>
         </section>
+        <p class="usage-note">Xulosa hujjat hajmiga qarab 1–3 kredit sarflaydi; kredit va hujjat limitlari har dushanba yangilanadi. Cheksiz chat avtomatlashtirilgan foydalanish va hisobni ulashishdan himoya qiluvchi kunlik xavfsizlik chegarasiga ega.</p>
+        <p class="loyalty-note"><strong>Kam ishlatdingizmi — kamroq to'laysiz.</strong> Rejani to'liq ishlatmagan bo'lsangiz, hisoblangan farq keyingi oy uchun chegirma sifatida qaytariladi.</p>
     </main>
 
     <!-- Payment modal (for paid plans) -->
     <div class="modal-backdrop" id="payModal">
         <div class="modal">
             <h2 id="payTitle">To'lov usulini tanlang</h2>
-            <p class="modal-sub" id="paySub">Tariff: <strong></strong></p>
+            <p class="modal-sub" id="paySub">Tarif: <strong></strong></p>
             <div class="pay-grid">
                 <div class="pay-option" data-pm="click">Click</div>
                 <div class="pay-option" data-pm="payme">Payme</div>
@@ -397,26 +539,6 @@
             }
         }
 
-        // ── Duration multiplier (1 oy / 3 oy / 6 oy) ──
-        const BASE_PRICES = { silver: 199000, gold: 399000, platinum: 999000 };
-        const DISCOUNT = { 1: 1, 3: 0.9, 6: 0.85 };
-        let currentMult = 1;
-        document.querySelectorAll('.duration-toggle button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.duration-toggle button').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentMult = parseInt(btn.dataset.mult, 10);
-                document.querySelectorAll('.plan-card').forEach(card => {
-                    const plan = card.dataset.plan;
-                    if (BASE_PRICES[plan]) {
-                        const total = Math.round(BASE_PRICES[plan] * currentMult * DISCOUNT[currentMult]);
-                        const span = card.querySelector('[data-price]');
-                        span.textContent = total.toLocaleString('uz-UZ').replace(/ /g, ',');
-                    }
-                });
-            });
-        });
-
         // ── Plan selection ──
         let selectedPlan = null;
         let selectedPaymentMethod = null;
@@ -446,19 +568,17 @@
         }
 
         async function selectPlan(plan) {
-            if (plan === 'bepul' || plan === 'sinov') {
-                // Free — activate immediately. The plan key must be the one the
-                // card advertises: the card promises 10/day, and `sinov` grants
-                // 3/day for 10 days.
+            if (plan === 'bepul') {
+                // Free plan — activate immediately
                 try {
                     const r = await fetch('/api/tariff/select', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ plan }),
+                        body: JSON.stringify({ plan: 'bepul' }),
                     });
                     const data = await r.json();
                     if (r.ok) {
-                        toast('Bepul tarif faollashtirildi. Dashboardga o\'tilmoqda...');
+                        toast('Bepul reja faollashtirildi. Dashboardga o\'tilmoqda...');
                         setTimeout(() => { window.location.href = '/dashboard.html'; }, 1200);
                     } else {
                         toast(data.message || data.error || 'Xatolik');
@@ -550,20 +670,19 @@
 
         // ── Auth check + Bepul-used check ──
         (async function init() {
-            applyPaymentsState();
+            await applyPaymentsState();
             try {
                 const r = await fetch('/api/user-info', { credentials: 'same-origin' });
                 if (!r.ok) {
                     window.location.href = '/login.html';
                     return;
                 }
-                // Disable Sinov if already used
                 const mine = await fetch('/api/tariff/me').then(x => x.json()).catch(() => null);
-                if (mine && mine.bepulUsed) {
-                    const btn = document.querySelector('.plan-btn[data-plan="sinov"]');
+                if (mine && mine.plan === 'bepul') {
+                    const btn = document.querySelector('.plan-btn[data-plan="bepul"]');
                     if (btn) {
                         btn.disabled = true;
-                        btn.textContent = "Ishlatilgan";
+                        btn.textContent = "Joriy reja";
                     }
                 }
             } catch (e) { /* ignore */ }

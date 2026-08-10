@@ -321,7 +321,7 @@ async function checkQuota(adminId) {
 
 const PAID_PLANS = new Set(['silver', 'gold', 'platinum']);
 const SURVEY_GRACE_MS = 7 * 24 * 60 * 60 * 1000;  // survey due 7 days after anchor
-const CHANNEL_GRACE_MS = (parseInt(process.env.CHANNEL_GRACE_DAYS || '3', 10)) * 24 * 60 * 60 * 1000; // soft reminder before hard block
+const CHANNEL_GRACE_MS = (parseInt(process.env.CHANNEL_GRACE_DAYS || '0', 10)) * 24 * 60 * 60 * 1000; // mandatory immediately by default
 const CHANNEL_REVERIFY_MS = 24 * 60 * 60 * 1000;   // re-check membership at most daily
 
 function _bot() {
@@ -454,7 +454,11 @@ async function selectPlan(adminId, plan) {
   }
 
   const now = new Date();
-  const expires = new Date(now.getTime() + cfg.durationDays * 24 * 3600 * 1000);
+  // `bepul` is permanent. Multiplying its null duration by milliseconds
+  // produces zero and would otherwise expire the plan immediately.
+  const expires = cfg.durationDays == null
+    ? null
+    : new Date(now.getTime() + cfg.durationDays * 24 * 3600 * 1000);
 
   // Rollover is retired. It existed to carry unused CHAT requests into the
   // next period; with chat unlimited on every paid plan there is nothing left

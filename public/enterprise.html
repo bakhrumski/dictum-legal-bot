@@ -3,52 +3,58 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script>
+  if(location.protocol==='file:'){
+    location.replace('http://localhost:3000/enterprise.html'+location.search+location.hash);
+  }
+</script>
 <title>Enterprise Uzbekistan — English Law · JuristAI</title>
-<link rel="icon" type="image/png" sizes="256x256" href="/favicon-256.png">
-<link rel="stylesheet" href="/css/design-tokens.css">
+<link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
+<link rel="stylesheet" href="./css/design-tokens.css">
 <style>
 :root{
-  --gold:#B08442;--gold-lt:#D6B379;--navy:#0E2236;--navy2:#16365A;
-  --txt:#1A1410;--txt2:#5b5147;--card:#fff;--bg:#FBF8F2;--border:rgba(26,20,16,.12);
+  --gold:var(--brass-500);--gold-lt:var(--brass-300);--navy:var(--navy-700);--navy2:var(--navy-600);
+  --txt:var(--fg-1);--txt2:var(--fg-3);--card:var(--bg-2);--bg:var(--bg-1);--border:var(--border-1);
 }
+[data-theme="dark"]{--txt:var(--dark-fg-1);--txt2:var(--dark-fg-3);--card:var(--dark-bg-2);--bg:var(--dark-bg-1);--border:var(--dark-border);--navy:var(--dark-accent);--navy2:#B8CFD8}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column;overflow:hidden}
 
-header{display:flex;align-items:center;justify-content:space-between;padding:11px 22px;background:var(--navy);color:#F5EFE3;flex-shrink:0}
+header{display:flex;align-items:center;justify-content:space-between;padding:11px 22px;background:var(--card);color:var(--txt);border-bottom:1px solid var(--border);flex-shrink:0}
 header .brand{display:flex;align-items:center;gap:14px;font-size:15px;font-weight:600}
-header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
-.hback{font-size:12px;color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.22);padding:5px 13px;border-radius:7px;text-decoration:none}
-.hback:hover{background:rgba(255,255,255,.1)}
-.corpus-badge{font-size:11px;color:rgba(255,255,255,.65);display:flex;align-items:center;gap:6px}
-.corpus-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--gold-lt)}
+header b{font-family:var(--font-sans);color:var(--txt)}
+.hback{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--txt2);border:0;padding:7px 8px;border-radius:7px;text-decoration:none}
+.hback:hover{background:var(--bg)}
+.corpus-badge{font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:6px}
+.corpus-badge .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
 
-.banner{background:linear-gradient(135deg,#16365A,#0E2236);color:#F5EFE3;padding:14px 26px;font-size:12.5px;line-height:1.55;border-bottom:2px solid var(--gold);flex-shrink:0}
-.banner b{color:var(--gold-lt);font-family:'Source Serif 4',Georgia,serif}
+.banner{background:var(--bg);color:var(--txt2);padding:12px 26px;font-size:12.5px;line-height:1.55;border-bottom:1px solid var(--border);flex-shrink:0}
+.banner b{color:var(--txt);font-family:var(--font-sans)}
 
 .chat-wrap{flex:1;display:flex;flex-direction:column;min-height:0;max-width:920px;width:100%;margin:0 auto}
 .messages{flex:1;overflow-y:auto;padding:24px 24px 8px;display:flex;flex-direction:column;gap:16px}
 .msg{max-width:88%;line-height:1.6;font-size:14px}
 .msg.user{align-self:flex-end;background:var(--navy);color:#F5EFE3;padding:11px 16px;border-radius:14px 14px 4px 14px}
-.msg.bot{align-self:flex-start;background:#fff;border:1px solid var(--border);padding:14px 18px;border-radius:14px 14px 14px 4px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
-.msg.bot h1,.msg.bot h2,.msg.bot h3{font-family:'Source Serif 4',Georgia,serif;color:var(--navy);font-size:15px;margin:10px 0 5px}
+.msg.bot{align-self:flex-start;background:transparent;border:0;padding:14px 0;border-radius:0;box-shadow:none}
+.msg.bot h1,.msg.bot h2,.msg.bot h3{font-family:var(--font-sans);color:var(--navy);font-size:15px;margin:10px 0 5px}
 .msg.bot strong{color:var(--navy)}
 .msg.bot em{font-style:italic}
 .msg.bot p{margin:0 0 9px}.msg.bot p:last-child{margin:0}
 .msg.bot ul,.msg.bot ol{margin:0 0 9px;padding-left:20px}
-.msg.bot a{color:var(--gold)}
+.msg.bot a{color:var(--navy);text-decoration:underline;text-underline-offset:3px}
 .msg .sources{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--txt2)}
 .msg .sources a{color:var(--gold);text-decoration:none}
 .welcome{margin:auto;text-align:center;color:var(--txt2);max-width:480px;padding:30px}
-.welcome .icon{font-size:38px;margin-bottom:14px}
-.welcome h2{font-family:'Source Serif 4',Georgia,serif;font-size:20px;color:var(--navy);margin-bottom:8px}
+.welcome .icon{margin-bottom:14px;color:var(--txt2)}
+.welcome h2{font-family:var(--font-sans);font-size:20px;color:var(--navy);margin-bottom:8px}
 .welcome p{font-size:13.5px;line-height:1.6;margin-bottom:18px}
 .suggest{display:flex;flex-direction:column;gap:8px}
-.suggest button{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;text-align:left;cursor:pointer;color:var(--txt);transition:.15s}
-.suggest button:hover{border-color:var(--gold);background:rgba(176,132,66,.05)}
+.suggest button{background:transparent;border:0;border-radius:8px;padding:10px 14px;font-size:13px;text-align:left;cursor:pointer;color:var(--txt);transition:.15s}
+.suggest button:hover{background:var(--card)}
 
 .composer{padding:14px 24px 20px;flex-shrink:0;display:flex;gap:10px;align-items:flex-end}
-.composer textarea{flex:1;border:1px solid var(--border);border-radius:12px;padding:11px 15px;font-size:14px;font-family:inherit;resize:none;max-height:140px;line-height:1.5;background:#fff}
-.composer textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(176,132,66,.12)}
+.composer textarea{flex:1;border:1px solid var(--border);border-radius:12px;padding:11px 15px;font-size:14px;font-family:inherit;resize:none;max-height:140px;line-height:1.5;background:var(--card);color:var(--txt)}
+.composer textarea:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px color-mix(in srgb,var(--navy) 18%,transparent)}
 .send-btn{background:var(--navy);color:#F5EFE3;border:none;border-radius:12px;width:46px;height:46px;cursor:pointer;font-size:18px;flex-shrink:0;transition:.15s;display:flex;align-items:center;justify-content:center}
 .send-btn:hover{background:var(--navy2)}
 .send-btn:disabled{opacity:.5;cursor:not-allowed}
@@ -56,35 +62,41 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Master ingest panel */
-.ingest-fab{position:fixed;bottom:90px;right:24px;background:var(--gold);color:#1A1410;border:none;border-radius:50%;width:46px;height:46px;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;z-index:30}
+.ingest-fab{position:fixed;bottom:90px;right:24px;background:var(--navy);color:var(--accent-fg);border:none;border-radius:50%;width:46px;height:46px;font-size:20px;cursor:pointer;box-shadow:none;display:none;z-index:30}
 .ingest-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
 .ingest-modal.show{display:flex}
-.ingest-card{background:#fff;border-radius:14px;padding:24px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto}
-.ingest-card h3{font-family:'Source Serif 4',Georgia,serif;color:var(--navy);font-size:18px;margin-bottom:14px}
+.ingest-card{background:var(--card);color:var(--txt);border-radius:14px;padding:24px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-3)}
+.ingest-card h3{font-family:var(--font-sans);color:var(--navy);font-size:18px;margin-bottom:14px}
 .ingest-card label{font-size:12px;font-weight:600;color:var(--txt2);display:block;margin:12px 0 5px}
-.ingest-card input,.ingest-card textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit}
+.ingest-card input,.ingest-card textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;background:var(--card);color:var(--txt)}
 .ingest-card textarea{min-height:160px;resize:vertical;line-height:1.5}
 .ingest-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
-.btn{padding:9px 18px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--txt)}
+.btn{padding:9px 18px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--txt);box-shadow:none}
 .btn.primary{background:var(--navy);color:#F5EFE3;border-color:var(--navy)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
-.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--navy);color:#F5EFE3;padding:10px 20px;border-radius:10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.22);opacity:0;transition:.3s;pointer-events:none;z-index:99}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--navy);color:var(--accent-fg);padding:10px 20px;border-radius:10px;font-size:13px;box-shadow:none;opacity:0;transition:.3s;pointer-events:none;z-index:99}
+.ui-icon{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .toast.show{opacity:1}
 </style>
+<script>
+  (function(){
+    if(localStorage.getItem('dictum-theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+  })();
+</script>
 </head>
 <body>
 
 <header>
   <div class="brand">
-    <a href="/dashboard.html" class="hback">← Dashboard</a>
+    <a href="/dashboard.html" class="hback"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Dashboard</a>
     <span>Enterprise Uzbekistan <b>English Law</b></span>
   </div>
   <div class="corpus-badge"><span class="dot"></span><span id="corpusBadge">…</span></div>
 </header>
 
 <div class="banner">
-  ⚖️ This assistant operates under the <b>common law of England &amp; Wales</b>, the legal regime of the
+  This assistant operates under the <b>common law of England &amp; Wales</b>, the legal regime of the
   <b>Tashkent International Financial Center (TIFC)</b> and <b>Enterprise Uzbekistan</b>. Answers cover English
   commercial, contract, company and financial-services law as applied within the TIFC framework. General information only — not formal legal advice.
 </div>
@@ -92,7 +104,7 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 <div class="chat-wrap">
   <div class="messages" id="messages">
     <div class="welcome" id="welcome">
-      <div class="icon">⚖️</div>
+      <div class="icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 6h14M5 6l-3 7h6L5 6ZM19 6l-3 7h6l-3-7ZM7 21h10"/></svg></div>
       <h2>TIFC / English-Law Assistant</h2>
       <p>Ask about contracts, company formation, corporate governance, dispute resolution or financial regulation under the TIFC's English-law regime.</p>
       <div class="suggest">
@@ -105,12 +117,12 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 
   <div class="composer">
     <textarea id="input" rows="1" placeholder="Ask a question about English law within the TIFC framework…" onkeydown="onKey(event)" oninput="autoGrow(this)"></textarea>
-    <button class="send-btn" id="sendBtn" onclick="send()">➤</button>
+    <button class="send-btn" id="sendBtn" onclick="send()" aria-label="Send"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-8-5 16-2-6-7-2Z"/></svg></button>
   </div>
 </div>
 
 <!-- Master-only: ingest English-law documents -->
-<button class="ingest-fab" id="ingestFab" onclick="openIngest()" title="Add English-law document">＋</button>
+<button class="ingest-fab" id="ingestFab" onclick="openIngest()" title="Add English-law document" aria-label="Add English-law document"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
 <div class="ingest-modal" id="ingestModal" onclick="if(event.target===this)closeIngest()">
   <div class="ingest-card">
     <h3>Add English-law document</h3>

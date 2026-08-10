@@ -1,4 +1,5 @@
-// Registration bot — handles OTP flows for juristAI_registration_bot
+// Authentication bot — registration, login OTP and recovery for
+// @juristAI_registration_bot.
 // This bot always uses long-polling (it never uses webhooks)
 // so it works even when the main bot runs in webhook mode on Render.
 const TelegramBot = require('node-telegram-bot-api');
@@ -7,15 +8,21 @@ const crypto = require('crypto');
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
 
 let regBot = null;
+const OTP_BOT_USERNAME = 'juristAI_registration_bot';
 
 function startRegBot() {
   const token = process.env.REG_BOT_TOKEN;
   if (!token) {
-    console.warn('[REG-BOT] REG_BOT_TOKEN not set — registration bot disabled');
+    console.warn(`[REG-BOT] REG_BOT_TOKEN not set — @${OTP_BOT_USERNAME} authentication is disabled`);
     return null;
   }
 
   regBot = new TelegramBot(token, { polling: true });
+  regBot.getMe().then((info) => {
+    if (!info || String(info.username).toLowerCase() !== OTP_BOT_USERNAME.toLowerCase()) {
+      console.error(`[REG-BOT] REG_BOT_TOKEN must belong to @${OTP_BOT_USERNAME}; received @${info && info.username ? info.username : 'unknown'}`);
+    }
+  }).catch((err) => console.error('[REG-BOT] Unable to verify bot identity:', err.message));
 
   regBot.on('polling_error', (err) => {
     console.error('[REG-BOT] Polling error:', err.code, err.message);

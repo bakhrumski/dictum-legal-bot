@@ -20,9 +20,33 @@ const { verificationTokens, regSessions, loginSessions } = require('../verificat
 // separate Justify integration; the bot no longer depends on it.
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
+const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
+const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
+const LEGAL_BOT_AUTH_FALLBACK_ENABLED = false;
+
+function normalizeInstagramUrl(value) {
+  if (!value) return '';
+  try {
+    const url = new URL(String(value).trim());
+    const host = url.hostname.toLowerCase();
+    return url.protocol === 'https:' && (host === 'instagram.com' || host.endsWith('.instagram.com'))
+      ? url.toString()
+      : '';
+  } catch (_) {
+    return '';
+  }
+}
+const INSTAGRAM_URL = normalizeInstagramUrl(
+  process.env.INSTAGRAM_URL || 'https://www.instagram.com/bakhrom_abdimuminov/'
+);
 
 // NEVER start polling in constructor — polling is started explicitly when needed
 const bot = new TelegramBot(token, { polling: false });
+bot.getMe().then((info) => {
+  if (!info || String(info.username).toLowerCase() !== LEGAL_BOT_USERNAME.toLowerCase()) {
+    console.error(`[BOT] TELEGRAM_BOT_TOKEN must belong to @${LEGAL_BOT_USERNAME}; received @${info && info.username ? info.username : 'unknown'}`);
+  }
+}).catch((err) => console.error('[BOT] Unable to verify legal bot identity:', err.message));
 
 // If run directly (node bot.js) — start polling for local dev
 if (require.main === module) {
@@ -60,9 +84,16 @@ function channelLink() {
   return c; // already a URL, or empty
 }
 
+function freeAccessKeyboard(includeVerify) {
+  const rows = [[{ text: 'Kanalga obuna bo\'lish', url: channelLink() }]];
+  if (includeVerify) rows.push([{ text: 'Tekshirish', callback_data: 'check_sub' }]);
+  if (INSTAGRAM_URL) rows.push([{ text: 'Instagram sahifamiz', url: INSTAGRAM_URL }]);
+  return rows;
+}
+
 // Returns true if the user is a member of REQUIRED_CHANNEL.
-// Fails OPEN (returns true) on API/config errors so a misconfiguration
-// doesn't block every user — but logs loudly so it can be fixed.
+// Fails closed on API/config errors because the requirement is mandatory.
+// Configuration errors are logged and access remains blocked until fixed.
 async function isChannelMember(userId) {
   if (!REQUIRED_CHANNEL || !REQUIRED_CHANNEL.trim()) return true; // gate disabled
   try {
@@ -76,25 +107,19 @@ async function isChannelMember(userId) {
       `[Channel gate] Could not check membership for ${REQUIRED_CHANNEL}. ` +
       `Make sure the bot is an ADMINISTRATOR of the channel. Error: ${error.message}`
     );
-    return true; // fail open
+    return false; // fail closed: the free-answer requirement is mandatory
   }
 }
 
 // Prompt shown to users who haven't joined yet.
 function sendJoinPrompt(chatId) {
-  const link = channelLink();
   return bot.sendMessage(
     chatId,
     '📢 Murojaat yuborishdan oldin rasmiy kanalimizga obuna bo\'ling:\n\n' +
     '👉 ' + (REQUIRED_CHANNEL || '') + '\n\n' +
     'Obuna bo\'lgach, "✅ Tekshirish" tugmasini bosing va savolingizni yuboring.',
     {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '📢 Kanalga obuna bo\'lish', url: link }],
-          [{ text: '✅ Tekshirish', callback_data: 'check_sub' }]
-        ]
-      }
+      reply_markup: { inline_keyboard: freeAccessKeyboard(true) }
     }
   );
 }
@@ -294,6 +319,34 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   const username = msg.from.username || '';
   const param = (match[1] || '').trim();
 
+  // Authentication never happens in the public legal-question bot. Preserve
+  // the deep-link payload and send the user to the dedicated auth bot.
+  if (/^(login_|reg_|recover_|legacy_recover_)/.test(param)) {
+    const authUrl = `https://t.me/${AUTH_BOT_USERNAME}?start=${encodeURIComponent(param)}`;
+    await bot.sendMessage(chatId,
+      'Kirish, ro\'yxatdan o\'tish va parolni tiklash uchun maxsus JuristAI botidan foydalaning.',
+      { reply_markup: { inline_keyboard: [[{ text: 'JuristAI ro\'yxatdan o\'tish boti', url: authUrl }]] } }
+    );
+    return;
+  }
+
+  if (param === 'advokat') {
+    try {
+      await pool.query(`
+        INSERT INTO tg_conversations (chat_id, state, updated_at)
+        VALUES ($1, 'attorney_intake', NOW())
+        ON CONFLICT (chat_id) DO UPDATE SET state = 'attorney_intake', updated_at = NOW()
+      `, [chatId]);
+    } catch (error) {
+      console.warn('[BOT] attorney intake state could not be saved:', error.message);
+    }
+    await bot.sendMessage(chatId,
+      'Sizga mos advokat topishim uchun vaziyatni qisqacha yozing.\n\n' +
+      'Huquq sohasi, hudud va qaysi tilda maslahat kerakligini ko\'rsatsangiz, moslik aniqroq bo\'ladi. JuristAI narx belgilamaydi va xizmat narxi bo\'yicha muzokara olib bormaydi.'
+    );
+    return;
+  }
+
   // Deep link: /start verify_TOKEN — deliver verification code
   if (param.startsWith('verify_')) {
     const deepToken = param.replace('verify_', '');
@@ -340,7 +393,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       } else {
         bot.sendMessage(chatId,
           'ℹ️ Hisobingiz ulandi. Endi rasmiy kanalga obuna bo\'ling, so\'ng saytdagi "Tekshirish" tugmasini bosing.',
-          { reply_markup: { inline_keyboard: [[{ text: '📢 Kanalga obuna bo\'lish', url: channelLink() }]] } }
+          { reply_markup: { inline_keyboard: freeAccessKeyboard(false) } }
         );
       }
     } catch (e) {
@@ -381,7 +434,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       } else {
         bot.sendMessage(chatId,
           'ℹ️ Hisobingiz ulandi. Endi rasmiy kanalga obuna bo\'ling, so\'ng saytdagi "Tekshirish" tugmasini bosing.',
-          { reply_markup: { inline_keyboard: [[{ text: '📢 Kanalga obuna bo\'lish', url: channelLink() }]] } }
+          { reply_markup: { inline_keyboard: freeAccessKeyboard(false) } }
         );
       }
     } catch (e) {
@@ -488,7 +541,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   // Fallback for bare /start (Telegram sometimes strips the start parameter on
   // existing chats). Find the most recently created pending session and attach
   // this user to it, then send the OTP code as if the deep link had worked.
-  if (!param) {
+  if (!param && LEGAL_BOT_AUTH_FALLBACK_ENABLED) {
     const WINDOW_MS = 120000; // 2 minutes
     const now = Date.now();
     let bestReg = null, bestRegTime = 0;
@@ -861,36 +914,6 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // Check pending request limit — one open request at a time.
-  //
-  // Only requests still WAITING ON A HUMAN count. Questions the agent answered
-  // autonomously are already resolved, so they must not lock the user out of
-  // asking the next one — that would make the whole point of the agent
-  // (instant, unlimited self-service) invisible.
-  try {
-    const userRow = await pool.query(
-      'SELECT id FROM users WHERE telegram_id = $1',
-      [chatId]
-    );
-    if (userRow.rows.length > 0) {
-      const uid = userRow.rows[0].id;
-      const waiting = await pool.query(
-        `SELECT COUNT(*)::int AS cnt FROM requests
-          WHERE user_id = $1 AND status IN ('pending', 'assigned', 'student_responded')`,
-        [uid]
-      );
-      if (waiting.rows[0].cnt >= 1) {
-        bot.sendMessage(chatId,
-          '⏳ Avvalgi murojaatingiz yurist ko\'rigida.\n\n' +
-          'Javob kelgandan so\'ng yana savol yuborishingiz mumkin.'
-        );
-        return;
-      }
-    }
-  } catch (error) {
-    console.error('Error checking pending limit:', error);
-  }
-
   // ── Autonomous agent: converse and answer without a human ────────────────
   // Text-only. A file or voice note still goes to the human queue: the agent
   // grounds answers on retrieved law, and it cannot read an attachment it has
@@ -936,26 +959,64 @@ bot.on('message', async (msg) => {
   // are not legal requests — they must not create dashboard rows or the queue
   // fills with "salom".
   const conversational = agentResult && agentResult.handled
-    && ['greeting', 'clarify', 'offtopic'].includes(agentResult.action);
+    && [
+      'greeting', 'clarify', 'offtopic', 'account_help',
+      'attorney_contact_shared', 'attorney_contact_cancelled', 'attorney_choice_required',
+    ].includes(agentResult.action);
   if (conversational) return;
 
-  const aiAnswered = !!(agentResult && agentResult.handled && agentResult.action === 'answered');
-  const needsHuman = !aiAnswered || agentResult.escalate;
+  const agentDelivered = !!(agentResult && agentResult.handled && agentResult.reply);
+  const resolvedByAgent = !!(agentResult && agentResult.handled
+    && ['answered', 'attorney_matches'].includes(agentResult.action)
+    && !agentResult.escalate);
+  const needsHuman = !resolvedByAgent || !!(agentResult && agentResult.escalate);
 
   // Save to database
   try {
     const result = await saveRequest(requestData, {
-      aiAnswer: aiAnswered ? agentResult.reply : null,
+      agentReply: agentDelivered ? agentResult.reply : null,
+      agentMeta: agentResult ? { action: agentResult.action, ...(agentResult.meta || {}) } : null,
       status: needsHuman ? 'pending' : 'ai_answered',
     });
 
     if (result.success) {
-      if (aiAnswered && !needsHuman) {
+      // Persist the business workflow created by the concierge. Prices are
+      // intentionally absent until the Master Admin configures the catalogue.
+      if (agentResult && agentResult.action === 'paid_service') {
+        try {
+          const { createServiceOrder } = require('../services/legal-marketplace');
+          await createServiceOrder({
+            requestId: result.requestId,
+            telegramChatId: chatId,
+            serviceSlug: agentResult.meta && agentResult.meta.serviceSlug,
+            intakeData: { originalText: requestData.request_text, source: 'telegram' },
+          });
+        } catch (e) {
+          console.error('[BOT] paid service order creation failed:', e.message);
+        }
+      }
+
+      if (agentResult && ['attorney_matches', 'attorney_request'].includes(agentResult.action)) {
+        try {
+          const { createConsultationRequest } = require('../services/legal-marketplace');
+          await createConsultationRequest({
+            requestId: result.requestId,
+            telegramChatId: chatId,
+            caseSummary: requestData.request_text,
+            legalField: agentResult.meta && agentResult.meta.legalField,
+            attorneyIds: (agentResult.meta && (agentResult.meta.attorneyRefs || agentResult.meta.attorneyIds)) || [],
+          });
+        } catch (e) {
+          console.error('[BOT] attorney consultation request creation failed:', e.message);
+        }
+      }
+
+      if (resolvedByAgent) {
         // Fully handled — no queue message, the answer already arrived.
         bot.sendMessage(chatId, '💬 Yana savolingiz bo\'lsa — bemalol yozing.').catch(() => {});
-      } else if (aiAnswered && needsHuman) {
+      } else if (agentDelivered && needsHuman && agentResult.action === 'answered') {
         bot.sendMessage(chatId, '👨‍⚖️ Murojaatingiz aniqlik uchun yuristga ham yuborildi — tasdiq shu yerda keladi.').catch(() => {});
-      } else {
+      } else if (!agentDelivered) {
         bot.sendMessage(chatId,
           `✅ Murojaat qabul qilindi!\n\n📝 Turi: ${getRequestTypeLabel(requestData.request_type)}\n\nYurist tez orada ko'rib chiqadi va javob beradi. Rahmat!`);
       }
@@ -970,7 +1031,7 @@ bot.on('message', async (msg) => {
 👤 Foydalanuvchi: ${firstName}
 🆔 Username: @${username}
 📝 Turi: ${getRequestTypeLabel(requestData.request_type)}
-${aiAnswered ? '🤖 AI dastlabki javob berdi — tasdiqlash kerak' : ''}
+${agentDelivered ? '🤖 Agent foydalanuvchiga dastlabki javob berdi' : ''}
 
 ${requestData.request_type === 'text' ? `Murojaat: ${requestData.request_text}` : ''}
 
@@ -986,13 +1047,13 @@ Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}
     } else {
       const errMsg = result.error?.message || result.error || 'Unknown DB error';
       console.error('Save error:', errMsg, result.error?.detail || '');
-      if (!aiAnswered) {
+      if (!agentDelivered) {
         bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${errMsg})`);
       }
     }
   } catch (error) {
     console.error('Error processing request:', error.message, error.stack);
-    if (!aiAnswered) {
+    if (!agentDelivered) {
       bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${error.message})`);
     }
   }
@@ -1003,14 +1064,15 @@ Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}
  *
  * @param {object} data
  * @param {object} [opts]
- * @param {string|null} [opts.aiAnswer] — the agent's answer, stored so the
+ * @param {string|null} [opts.agentReply] — the agent's answer, stored so the
  *   dashboard shows what the user was actually told (and a lawyer can correct
  *   it into the corpus).
  * @param {string} [opts.status] — 'pending' (needs a human) or 'ai_answered'.
  */
 async function saveRequest(data, opts = {}) {
   const status = opts.status || 'pending';
-  const aiAnswer = opts.aiAnswer || null;
+  const agentReply = opts.agentReply || null;
+  const agentMeta = opts.agentMeta || {};
   const client = await pool.connect();
 
   try {
@@ -1046,11 +1108,14 @@ async function saveRequest(data, opts = {}) {
     const insertResult = await client.query(
       `INSERT INTO requests
        (user_id, request_text, request_type, file_id, file_size, file_name, status, category,
-        response_text, responded_by, answered_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+        response_text, responded_by, answered_at, source_channel, agent_intent,
+        agent_action, requires_lawyer_review)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'telegram', $12, $13, $14) RETURNING id`,
       [userId, data.request_text, data.request_type, data.file_id, data.file_size, data.file_name,
        status, 'Boshqa',
-       aiAnswer, aiAnswer ? 'JuristAI (avtomatik)' : null, aiAnswer ? new Date() : null]
+       agentReply, agentReply ? 'JuristAI Telegram agenti' : null,
+       status === 'ai_answered' ? new Date() : null,
+       agentMeta.intent || null, agentMeta.action || null, status !== 'ai_answered']
     );
 
     await client.query('COMMIT');
@@ -1088,6 +1153,6 @@ function getRequestTypeLabel(type) {
 }
 
 // Export bot for use in other modules
-module.exports = { bot, getBot: () => bot, isChannelMember, channelLink, REQUIRED_CHANNEL };
+module.exports = { bot, getBot: () => bot, isChannelMember, channelLink, REQUIRED_CHANNEL, INSTAGRAM_URL };
 
 console.log('Bot ishlamoqda...');

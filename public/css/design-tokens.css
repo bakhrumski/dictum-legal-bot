@@ -5,44 +5,44 @@
 
 @font-face {
   font-family: "Roboto";
-  src: url("/fonts/Roboto-Regular.ttf") format("truetype");
+  src: url("../fonts/Roboto-Regular.ttf") format("truetype");
   font-weight: 400; font-style: normal; font-display: swap;
 }
 @font-face {
   font-family: "Roboto";
-  src: url("/fonts/Roboto-Bold.ttf") format("truetype");
+  src: url("../fonts/Roboto-Bold.ttf") format("truetype");
   font-weight: 700; font-style: normal; font-display: swap;
 }
 
 :root {
   /* ── Core neutrals: warm parchment & ink ─────────────────── */
-  --parchment-50:  #FBF8F2;
-  --parchment-100: #F5EFE3;
-  --parchment-200: #ECE3CF;
-  --parchment-300: #DCCFB1;
-  --ink-900:       #1A1410;
-  --ink-700:       #3B2F26;
-  --ink-500:       #6B5A4B;
-  --ink-300:       #9C8C7B;
+  --parchment-50:  #F6F5F1;
+  --parchment-100: #ECEFEC;
+  --parchment-200: #E3E5E1;
+  --parchment-300: #D8DAD6;
+  --ink-900:       #182027;
+  --ink-700:       #343D44;
+  --ink-500:       #60686F;
+  --ink-300:       #8A9299;
 
   /* ── Brand: navy primary, supported by brass & burgundy ──── */
-  --navy-900:      #0E2236;
-  --navy-700:      #16365A;
-  --navy-600:      #1E4878;
-  --navy-500:      #2C5C92;
-  --navy-300:      #7AA0C6;
-  --navy-100:      #E1ECF6;
+  --navy-900:      #102B38;
+  --navy-700:      #173B4D;
+  --navy-600:      #1F5263;
+  --navy-500:      #477F8A;
+  --navy-300:      #8DB6C4;
+  --navy-100:      #E4ECEC;
 
-  --winter-100:    #E8ECEF;
-  --winter-200:    #CBD3D9;
-  --winter-400:    #8C9AA5;
-  --winter-600:    #4F5C66;
-  --winter-800:    #2A333B;
+  --winter-100:    #ECEFEC;
+  --winter-200:    #D8DAD6;
+  --winter-400:    #8A9299;
+  --winter-600:    #60686F;
+  --winter-800:    #343D44;
 
-  --brass-500:     #B08442;
-  --brass-600:     #8E6730;
-  --brass-300:     #D6B379;
-  --brass-100:     #F2E5C9;
+  --brass-500:     #9A7A45;
+  --brass-600:     #755B31;
+  --brass-300:     #C3A66E;
+  --brass-100:     #F0E9DA;
 
   --burgundy-700:  #6B1F2A;
   --burgundy-500:  #8E2A38;
@@ -63,14 +63,14 @@
   --info-100:      #DCE6F0;
 
   /* ── Dark mode (warm) ────────────────────────────────────── */
-  --dark-bg-1:     #18120D;
-  --dark-bg-2:     #221A12;
-  --dark-bg-3:     #2C2218;
-  --dark-border:   #3A2D1F;
-  --dark-fg-1:     #F5EFE3;
-  --dark-fg-2:     #C8B89C;
-  --dark-fg-3:     #8A7A63;
-  --dark-accent:   #D6B379;
+  --dark-bg-1:     #10161B;
+  --dark-bg-2:     #181E24;
+  --dark-bg-3:     #202830;
+  --dark-border:   #303A43;
+  --dark-fg-1:     #EDF0F2;
+  --dark-fg-2:     #C7CDD2;
+  --dark-fg-3:     #AAB2BA;
+  --dark-accent:   #93B7C9;
 
   /* ── Semantic foreground/background tokens ───────────────── */
   --fg-1: var(--ink-900);
@@ -88,9 +88,9 @@
   --link: var(--navy-700);
 
   /* ── Type families ───────────────────────────────────────── */
-  --font-serif:   "Source Serif 4", "Iowan Old Style", Georgia, "Times New Roman", serif;
-  --font-sans:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-serif:   "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-sans:    "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono:    "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-print:   "Roboto", system-ui, sans-serif;
 
   /* ── Type scale (modular, 1.200) ─────────────────────────── */
@@ -134,10 +134,10 @@
   --r-pill: 999px;
 
   /* ── Elevation ───────────────────────────────────────────── */
-  --shadow-1: 0 1px 2px rgba(26, 20, 16, 0.06), 0 1px 1px rgba(26, 20, 16, 0.04);
-  --shadow-2: 0 4px 12px rgba(26, 20, 16, 0.08), 0 1px 2px rgba(26, 20, 16, 0.04);
-  --shadow-3: 0 10px 30px rgba(26, 20, 16, 0.12), 0 2px 6px rgba(26, 20, 16, 0.06);
-  --shadow-seal: 0 0 0 1px var(--brass-300), 0 8px 24px rgba(176, 132, 66, 0.18);
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: 0 18px 48px rgba(16, 22, 27, 0.18);
+  --shadow-seal: none;
 
   /* ── Motion ──────────────────────────────────────────────── */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -157,10 +157,19 @@
   --bg-3: var(--dark-bg-3);
   --border-1: var(--dark-border);
   --border-2: var(--dark-border);
-  --accent: var(--brass-300);
-  --accent-hover: var(--brass-500);
-  --accent-fg: var(--ink-900);
-  --link: var(--brass-300);
+  --accent: var(--dark-accent);
+  --accent-hover: #B8CFD8;
+  --accent-fg: var(--dark-bg-1);
+  --link: #B8CFD8;
+}
+
+html,
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-sans);
 }
 
 /* ============================================================

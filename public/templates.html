@@ -3,23 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script>
+  if(location.protocol==='file:'){
+    location.replace('http://localhost:3000/templates.html'+location.search+location.hash);
+  }
+</script>
 <title>Shablonlar — JuristAI</title>
-<link rel="icon" type="image/png" sizes="256x256" href="/favicon-256.png">
-<link rel="stylesheet" href="/css/design-tokens.css">
+<link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
+<link rel="stylesheet" href="./css/design-tokens.css">
 <style>
 :root{
-  --gold:#B08442;--gold-lt:#D6B379;--navy:#0E2236;--navy2:#16365A;
-  --txt:#1A1410;--txt2:#5b5147;--card:#fff;--bg:#FBF8F2;
-  --border:rgba(26,20,16,.12);--red:#b3261e;--green:#1a7a4a;
+  --gold:var(--brass-500);--gold-lt:var(--brass-300);--navy:var(--navy-700);--navy2:var(--navy-600);
+  --txt:var(--fg-1);--txt2:var(--fg-3);--card:var(--bg-2);--bg:var(--bg-1);
+  --border:var(--border-1);--red:var(--danger-700);--green:var(--success-700);
+}
+[data-theme="dark"]{
+  --txt:var(--dark-fg-1);--txt2:var(--dark-fg-3);--card:var(--dark-bg-2);--bg:var(--dark-bg-1);
+  --border:var(--dark-border);--navy:var(--dark-accent);--navy2:#B8CFD8;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column;overflow:hidden}
 
-header{display:flex;align-items:center;justify-content:space-between;padding:11px 22px;background:var(--navy);color:#F5EFE3;flex-shrink:0}
+header{display:flex;align-items:center;justify-content:space-between;padding:11px 22px;background:var(--card);color:var(--txt);border-bottom:1px solid var(--border);flex-shrink:0}
 header .brand{display:flex;align-items:center;gap:14px;font-size:15px;font-weight:600}
-header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
-.hback{font-size:12px;color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.22);padding:5px 13px;border-radius:7px;text-decoration:none;transition:.2s}
-.hback:hover{background:rgba(255,255,255,.1)}
+header b{font-family:var(--font-sans);color:var(--txt)}
+.hback{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--txt2);border:0;padding:7px 8px;border-radius:7px;text-decoration:none;transition:.2s}
+.hback:hover{background:var(--bg)}
 
 .split{flex:1;display:flex;min-height:0}
 
@@ -38,17 +47,17 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 
 /* ── Right: editor ── */
 .editor-pane{flex:1;overflow-y:auto;padding:24px 28px 60px;min-width:0}
-.editor-pane h1{font-family:'Source Serif 4',Georgia,serif;font-size:20px;color:var(--navy);margin-bottom:4px}
+.editor-pane h1{font-family:var(--font-sans);font-size:20px;color:var(--navy);margin-bottom:4px}
 .editor-pane .sub{font-size:13px;color:var(--txt2);margin-bottom:22px}
 
-.section{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:18px}
-.section h3{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.section{background:transparent;border:0;border-bottom:1px solid var(--border);border-radius:0;padding:20px 0;margin-bottom:18px}
+.section h3{font-size:14px;font-weight:700;color:var(--txt);margin-bottom:14px;padding-bottom:8px;border-bottom:0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 .fld{display:flex;flex-direction:column;gap:5px}
 .fld label{font-size:12px;font-weight:600;color:var(--txt2)}
-.fld input,.fld textarea,.fld select{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:var(--txt)}
-.fld input:focus,.fld textarea:focus,.fld select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(176,132,66,.15)}
+.fld input,.fld textarea,.fld select{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--card);color:var(--txt)}
+.fld input:focus,.fld textarea:focus,.fld select:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px color-mix(in srgb,var(--navy) 18%,transparent)}
 .fld textarea{resize:vertical;min-height:60px;line-height:1.5}
 .req{color:var(--red);margin-left:2px}
 
@@ -68,12 +77,12 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 .palette{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .chip{background:#e9f0f8;color:var(--navy2);font-size:11px;font-weight:600;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;transition:.15s}
 .chip:hover{background:#d0e2f5}
-.body-ta{width:100%;font-family:'Courier New',monospace;font-size:12px;min-height:220px;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.55;background:#fafafa}
+.body-ta{width:100%;font-family:var(--font-sans);font-size:12px;min-height:220px;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.55;background:#fafafa}
 .body-ta:focus{outline:none;border-color:var(--gold)}
 
 /* Preview */
-.preview-wrap{border:1px solid var(--border);border-radius:8px;background:#e9e4da;padding:18px;min-height:300px;overflow:auto}
-.doc-page{background:#fff;padding:48px 56px;max-width:720px;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,.12);font-family:'Times New Roman',Georgia,serif;font-size:13.5px;line-height:1.6;color:#111}
+.preview-wrap{border:1px solid var(--border);border-radius:8px;background:var(--bg);padding:18px;min-height:300px;overflow:auto}
+.doc-page{background:#fff;padding:48px 56px;max-width:720px;margin:0 auto;box-shadow:none;font-family:'Times New Roman',Georgia,serif;font-size:13.5px;line-height:1.6;color:#111}
 .doc-page h1{font-size:14px;font-weight:normal}
 .doc-page h2{font-size:15px}
 .doc-page table{width:100%;border-collapse:collapse}
@@ -132,15 +141,65 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 .drop-zone .dz-label{font-size:13px;color:var(--txt2)}
 .drop-zone .dz-chosen{font-size:13px;font-weight:600;color:var(--navy);margin-top:6px}
 .import-progress{font-size:12px;color:var(--txt2);margin-top:10px;text-align:center;min-height:18px}
+.ui-icon{width:16px;height:16px;display:inline-block;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+.ui-icon-lg{width:28px;height:28px;color:var(--txt2)}
+.btn,.btn-new,.btn-import,.btn-add-field,.preview-toggle button{display:inline-flex;align-items:center;justify-content:center;gap:7px;box-shadow:none;transform:none}
+.btn:hover,.btn-new:hover,.btn-import:hover,.btn-add-field:hover{transform:none}
+.mark-fab{box-shadow:none;border-radius:9px}
+.modal-box{background:var(--card);color:var(--txt);box-shadow:var(--shadow-3)}
+.modal-box h3{color:var(--txt)}
+.drop-zone{border-color:var(--border);background:var(--bg)}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--navy);background:var(--navy-100)}
+[data-theme="dark"] .drop-zone:hover,[data-theme="dark"] .drop-zone.drag{background:rgba(147,183,201,.1)}
+.fields-table th{background:var(--bg)}
+.fields-table td input,.fields-table td select,.fields-table td textarea,.body-ta,#markModal input[type=text],#markModal input:not([type]),#markModal select,#markModal textarea{background:var(--card);color:var(--txt)}
+.tpl-item:hover,.tpl-item.active{background:var(--navy-100)}
+[data-theme="dark"] .tpl-item:hover,[data-theme="dark"] .tpl-item.active{background:rgba(147,183,201,.1)}
+.tpl-item.active{border-left-color:var(--navy)}
+.btn.primary,.btn-new{background:var(--navy);border-color:var(--navy);color:var(--accent-fg)}
+.btn-add-field,.btn-import{background:transparent;color:var(--txt);border-color:var(--border)}
+.preview-toggle button{background:transparent;color:var(--txt2)}
+.preview-toggle button.on{background:var(--navy-100);border-color:transparent;color:var(--txt)}
+[data-theme="dark"] .preview-toggle button.on{background:rgba(147,183,201,.1)}
+.master-only-label{font-size:12px;color:var(--txt2)}
+.mobile-editor-back{display:none}
+@media(max-width:720px){
+  header{padding:10px 14px}
+  header .brand{gap:6px;min-width:0}
+  header .brand>span{font-size:14px;line-height:1.25}
+  .master-only-label{display:none}
+  .split{position:relative}
+  .list-pane{width:100%;min-width:0;border-right:0}
+  .editor-pane{display:none;width:100%;padding:18px 16px 48px}
+  body.editor-open .list-pane{display:none}
+  body.editor-open .editor-pane{display:block}
+  .mobile-editor-back{
+    display:inline-flex;align-items:center;gap:7px;margin:0 0 18px;padding:7px 0;
+    border:0;background:transparent;color:var(--txt2);font:600 13px var(--font-sans);cursor:pointer
+  }
+  .grid2,.grid3{grid-template-columns:1fr}
+  .section{overflow-x:auto}
+  .fields-table{min-width:720px}
+  .preview-wrap{padding:10px}
+  .doc-page{min-width:620px;padding:36px 40px}
+  .actions{flex-wrap:wrap}
+  .actions .btn{flex:1;min-width:120px}
+  .modal-box{width:calc(100% - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;padding:22px 18px}
+}
 </style>
+<script>
+  (function(){
+    if(localStorage.getItem('dictum-theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+  })();
+</script>
 </head>
 <body>
 <header>
   <div class="brand">
-    <a href="/dashboard.html" class="hback">← Dashboard</a>
+    <a href="/dashboard.html" class="hback"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Dashboard</a>
     <span>Shablon muharriri <b>JuristAI</b></span>
   </div>
-  <span style="font-size:12px;color:rgba(255,255,255,.5)">Faqat master admin</span>
+  <span class="master-only-label">Faqat master admin</span>
 </header>
 
 <div class="split">
@@ -149,8 +208,8 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
     <div class="list-head">
       <h2>Shablonlar</h2>
       <div style="display:flex;gap:6px">
-        <button class="btn-import" onclick="openImportModal()" title="Word/PDF fayldan shablon yaratish yoki boyitish">📎 Fayl</button>
-        <button class="btn-new" onclick="newTemplate()">+ Yangi</button>
+        <button class="btn-import" onclick="openImportModal()" title="Word/PDF fayldan shablon yaratish yoki boyitish"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 1 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>Fayl</button>
+        <button class="btn-new" onclick="newTemplate()"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Yangi</button>
       </div>
     </div>
     <div class="tpl-list" id="tplList">
@@ -161,7 +220,7 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
   <!-- Editor -->
   <div class="editor-pane" id="editorPane">
     <div class="empty-state" style="margin-top:60px">
-      <div style="font-size:32px;margin-bottom:12px">📄</div>
+      <svg class="ui-icon ui-icon-lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
       <div>Chap tomondagi shablonni tanlang yoki yangi shablon yarating.</div>
     </div>
   </div>
@@ -170,7 +229,7 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 <!-- ── Import File Modal ── -->
 <div class="modal-overlay" id="importModal" onclick="if(event.target===this)closeImportModal()">
   <div class="modal-box">
-    <h3>📎 Fayldan shablon</h3>
+    <h3><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 1 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg> Fayldan shablon</h3>
     <p>Word (.docx) yoki PDF fayl yuklang. AI fayldan shablonni avtomatik tuzadi.<br>
        Agar hozir shablon tahrirlayotgan bo'lsangiz, AI uni boyitishga urinadi.</p>
 
@@ -179,7 +238,7 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
          ondragleave="this.classList.remove('drag')"
          ondrop="event.preventDefault();this.classList.remove('drag');handleImportDrop(event.dataTransfer.files)">
       <input type="file" id="importFileInput" accept=".pdf,.docx,.doc" onchange="handleImportFile(this.files)">
-      <div class="dz-icon">📄</div>
+      <div class="dz-icon"><svg class="ui-icon ui-icon-lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
       <div class="dz-label">Bosing yoki faylni bu yerga tashlang<br><span style="font-size:11px">PDF, DOCX, DOC · maks 20 MB</span></div>
       <div class="dz-chosen" id="dzChosen" style="display:none"></div>
     </div>
@@ -193,7 +252,7 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 
     <div class="modal-actions">
       <button class="btn" onclick="closeImportModal()">Bekor</button>
-      <button class="btn primary" id="importRunBtn" onclick="runImport()" disabled>🤖 AI tahlil qilsin</button>
+      <button class="btn primary" id="importRunBtn" onclick="runImport()" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="13" rx="3"/><path d="M9 11h.01M15 11h.01M9 15h6M12 2v4"/></svg>AI tahlil qilsin</button>
     </div>
   </div>
 </div>
@@ -201,7 +260,7 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
 <!-- ── Mark-as-field Modal (Belgilash) ── -->
 <div class="modal-overlay" id="markModal" onclick="if(event.target===this)closeMarkModal()">
   <div class="modal-box">
-    <h3>✏️ Maydon sifatida belgilash</h3>
+    <h3><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg> Maydon sifatida belgilash</h3>
     <div class="mark-sel-preview" id="markSelPreview"></div>
     <div class="fld">
       <label>Kalit (ID) — faqat lotin harf/raqam/pastki chiziq</label>
@@ -217,7 +276,7 @@ header b{font-family:'Source Serif 4',Georgia,serif;color:var(--gold-lt)}
     <div class="fld"><label>AI maslahat (ixtiyoriy)</label><textarea id="markHint" placeholder="Masalan: rasmiy, qisqa ohangda yozilsin..."></textarea></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeMarkModal()">Bekor</button>
-      <button class="btn primary" onclick="confirmMarkField()">✅ Belgilash</button>
+      <button class="btn primary" onclick="confirmMarkField()"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Belgilash</button>
     </div>
   </div>
 </div>
@@ -238,6 +297,20 @@ function toast(msg, ok){
   clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 2600);
 }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function iconSvg(name){
+  const paths = {
+    pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
+    code: '<path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+    trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6"/>',
+    save: '<path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
+    bot: '<rect x="4" y="6" width="16" height="13" rx="3"/><path d="M9 11h.01M15 11h.01M9 15h6M12 2v4"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
+    back: '<path d="m15 18-6-6 6-6"/>'
+  };
+  return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">'+(paths[name]||'')+'</svg>';
+}
 
 // ── Auth & load ──
 async function init(){
@@ -289,7 +362,9 @@ function renderEditor(){
   const p = document.getElementById('editorPane');
   const t = editing;
   const isNew = !t.id;
+  document.body.classList.add('editor-open');
   p.innerHTML = `
+<button class="mobile-editor-back" type="button" onclick="showTemplateList()">${iconSvg('back')}Shablonlar</button>
 <h1>${isNew ? 'Yangi shablon' : esc(t.name?.uz||t.slug)}</h1>
 <p class="sub">${isNew ? 'Yangi huquqiy hujjat shabloni yaratilmoqda' : 'Shablonni tahrirlang va saqlang'}</p>
 
@@ -343,9 +418,9 @@ function renderEditor(){
   </div>
   <div class="palette" id="palette"></div>
   <div class="preview-toggle">
-    <button id="btnMark" class="on" onclick="showTab('mark')">🖊 Belgilash</button>
-    <button id="btnEdit" onclick="showTab('edit')">✏️ Tahrirlash (HTML)</button>
-    <button id="btnPreview" onclick="showTab('preview')">👁 Ko'rish</button>
+    <button id="btnMark" class="on" onclick="showTab('mark')">${iconSvg('pen')}Belgilash</button>
+    <button id="btnEdit" onclick="showTab('edit')">${iconSvg('code')}Tahrirlash (HTML)</button>
+    <button id="btnPreview" onclick="showTab('preview')">${iconSvg('eye')}Ko'rish</button>
   </div>
   <div id="markView">
     <div class="mark-hint">Hujjatdagi to'ldiriladigan joyni (ism, sana, summa va h.k.) sichqoncha bilan belgilang (tanlang), so'ng chiqqan tugmani bosing. Mavjud sariq maydonni bosib o'chirishingiz mumkin.</div>
@@ -362,9 +437,9 @@ function renderEditor(){
 <button class="mark-fab" id="markFab" type="button" onclick="openMarkPopup()">+ Maydon qilib belgilash</button>
 
 <div class="actions">
-  ${!isNew ? `<button class="btn danger" onclick="deleteTemplate()">🗑 O'chirish</button>` : ''}
+  ${!isNew ? `<button class="btn danger" onclick="deleteTemplate()">${iconSvg('trash')}O'chirish</button>` : ''}
   <button class="btn" onclick="cancelEdit()">Bekor</button>
-  <button class="btn primary" id="saveBtn" onclick="saveTemplate()">💾 Saqlash</button>
+  <button class="btn primary" id="saveBtn" onclick="saveTemplate()">${iconSvg('save')}Saqlash</button>
 </div>
 `;
   renderFieldRows();
@@ -566,7 +641,7 @@ function confirmMarkField(){
   syncFromMarkView();
   renderFieldRows(); renderPalette();
   closeMarkModal();
-  toast('✅ Maydon belgilandi');
+  toast('Maydon belgilandi');
 }
 
 function removeMarkField(key){
@@ -602,7 +677,7 @@ async function saveTemplate(){
   const data = collect();
   if(!data.name.uz && !data.name.ru){ toast('Shablon nomini kiriting'); return; }
   const btn = document.getElementById('saveBtn');
-  btn.disabled=true; btn.textContent='⏳ Saqlanmoqda…';
+  btn.disabled=true; btn.textContent='Saqlanmoqda…';
   try{
     const method = editing.id ? 'PUT' : 'POST';
     const url = editing.id ? '/api/templates/'+editing.id : '/api/templates';
@@ -611,12 +686,12 @@ async function saveTemplate(){
     const saved = await r.json();
     editing = saved;
     fields = JSON.parse(JSON.stringify(saved.fields||[]));
-    toast('✅ Saqlandi');
+    toast('Saqlandi');
     await loadList();
     renderEditor();
     renderList();
   }catch(e){ toast('Xato: '+e.message); }
-  finally{ btn.disabled=false; btn.textContent='💾 Saqlash'; }
+  finally{ btn.disabled=false; btn.innerHTML=iconSvg('save')+'Saqlash'; }
 }
 
 // ── Delete ──
@@ -625,12 +700,17 @@ async function deleteTemplate(){
   if(!confirm('Shablonni o\'chirasizmi? Bu amalni qaytarib bo\'lmaydi.')) return;
   await fetch('/api/templates/'+editing.id,{ method:'DELETE', credentials:'same-origin' });
   editing=null; fields=[];
+  document.body.classList.remove('editor-open');
   toast('O\'chirildi');
   await loadList();
-  document.getElementById('editorPane').innerHTML='<div class="empty-state" style="margin-top:60px"><div style="font-size:32px;margin-bottom:12px">📄</div><div>Shablon tanlang yoki yangi yarating.</div></div>';
+  document.getElementById('editorPane').innerHTML='<div class="empty-state" style="margin-top:60px">'+iconSvg('file')+'<div>Shablon tanlang yoki yangi yarating.</div></div>';
 }
 
-function cancelEdit(){ editing=null; fields=[]; renderList(); document.getElementById('editorPane').innerHTML='<div class="empty-state" style="margin-top:60px">Shablon tanlang yoki yangi yarating.</div>'; }
+function showTemplateList(){
+  document.body.classList.remove('editor-open');
+  renderList();
+}
+function cancelEdit(){ editing=null; fields=[]; showTemplateList(); document.getElementById('editorPane').innerHTML='<div class="empty-state" style="margin-top:60px">Shablon tanlang yoki yangi yarating.</div>'; }
 
 // ════════════════════════════════════════════
 // FILE IMPORT — Word / PDF → AI → Template
@@ -667,7 +747,7 @@ async function runImport(){
   const btn = document.getElementById('importRunBtn');
   const prog = document.getElementById('importProgress');
   btn.disabled = true;
-  btn.textContent = '⏳ Tahlil qilinmoqda…';
+  btn.textContent = 'Tahlil qilinmoqda…';
   prog.textContent = 'Fayl yuklanmoqda va AI tahlil qilmoqda…';
 
   try{
@@ -710,13 +790,13 @@ async function runImport(){
     closeImportModal();
     renderEditor();
     renderList();
-    toast('✅ AI shablon tuzdi — ko\'rib chiqing va saqlang');
+    toast('AI shablon tuzdi — ko\'rib chiqing va saqlang');
   } catch(e){
     prog.textContent = '';
     toast('Xato: ' + e.message);
   } finally{
     btn.disabled = false;
-    btn.textContent = '🤖 AI tahlil qilsin';
+    btn.innerHTML = iconSvg('bot')+'AI tahlil qilsin';
   }
 }
 
