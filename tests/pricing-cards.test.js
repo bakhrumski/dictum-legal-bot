@@ -183,5 +183,71 @@ test('cards reserve height so rows align across the row', () => {
   }
 });
 
+console.log('\npricing cards — payments not yet live\n');
+
+test('the server REFUSES paid plans, not just the UI', () => {
+  // Dimming cards is cosmetic. /api/tariff/select previously activated any
+  // plan "as if paid", so anyone could POST {plan:'platinum'} and get it free.
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
+  assert.ok(/const PAYMENTS_ENABLED = process\.env\.PAYMENTS_ENABLED === 'true'/.test(srv),
+    'no PAYMENTS_ENABLED flag');
+  const sel = srv.slice(srv.indexOf("app.post('/api/tariff/select'"), srv.indexOf("app.post('/api/tariff/select'") + 1400);
+  assert.ok(/!PAYMENTS_ENABLED/.test(sel) && /priceUzs > 0/.test(sel),
+    'the select endpoint does not refuse paid plans while payments are off');
+  assert.ok(!/sets the plan AS IF paid/.test(sel), 'the grant-anyway path is still present');
+});
+
+test('the UI reads the flag the server enforces with', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
+  assert.ok(/paymentsEnabled: PAYMENTS_ENABLED/.test(srv),
+    '/api/tariff/plans must publish the flag so the UI cannot carry its own');
+  assert.ok(tariff.includes('paymentsEnabled'), 'tariff.html does not read the flag');
+});
+
+test('interest is captured instead of a dead button', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
+  assert.ok(srv.includes("app.post('/api/tariff/interest'"), 'no interest endpoint');
+  assert.ok(srv.includes("app.get('/api/admin/plan-interest'"), 'no way to read the demand signal');
+  assert.ok(tariff.includes('registerInterest('), 'tariff.html does not register interest');
+  for (const [name, doc] of [['index', html], ['tariff', tariff]])
+    assert.ok(/Xabar berish/.test(doc), `${name}.html has no "notify me" action`);
+});
+
+test('paid cards are dimmed AND labelled, never dimmed alone', () => {
+  // A greyed card with no explanation reads as broken, or as "you are not
+  // eligible", rather than "not yet".
+  assert.strictEqual((html.match(/class="plan soon/g) || []).length, 3,
+    'index.html should dim exactly the three paid tiers');
+  assert.ok(/\.plan\.soon\{opacity/.test(html), 'no dimming style');
+  assert.ok(html.includes('data-i18n="p_soon"'), 'no "Tez orada" badge');
+  assert.ok(tariff.includes('badge-soon'), 'tariff.html has no badge');
+});
+
+test('the reason is stated once, above the cards, in both languages', () => {
+  assert.ok(html.includes('data-i18n="pr_testing"'), 'index.html has no testing notice');
+  for (const [lang, block] of [['uz', uz], ['ru', ru]]) {
+    const n = val(block, 'pr_testing') || '';
+    assert.ok(n.length > 60, `pr_testing missing or too short in ${lang}`);
+  }
+  assert.ok(tariff.includes('planNote'), 'tariff.html has no testing notice');
+});
+
+test('the free plan is the featured card while paid is closed', () => {
+  // Gold carried the "Mashhur" tag and the only primary button — the strongest
+  // pull on the page led to a dead end.
+  const bepulCard = html.slice(html.indexOf('data-i18n="p1_name"') - 260, html.indexOf('data-i18n="p1_f1"'));
+  assert.ok(bepulCard.includes('plan ft'), 'the free card is not featured');
+  assert.ok(!/data-i18n="p3_tag"/.test(html), 'Gold still carries the "Mashhur" tag');
+  assert.ok(tariff.includes('data-plan="bepul"'), 'tariff.html free card is not the bepul plan');
+});
+
+test('the free card activates the plan it advertises', () => {
+  // It promised "Kuniga 10 ta savol / Doimo bepul" while activating `sinov` —
+  // 3/day for 10 days. A broken promise at the first step of onboarding.
+  assert.ok(tariff.includes("selectPlan('bepul')"), 'free button still selects the wrong plan');
+  const tiers = fs.readFileSync(path.join(__dirname, '..', 'src', 'rag', 'subscription-tiers.js'), 'utf8');
+  assert.ok(/bepul:\s*\{/.test(tiers), 'the bepul plan does not exist server-side');
+});
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

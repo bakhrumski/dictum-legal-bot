@@ -265,7 +265,12 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 | `OPINION_MAX_REFS` | 15 | lex.uz lookups per opinion |
 | `LLM_DAILY_BUDGET_USD` | 0 (off) | Daily paid-model ceiling |
 | `ANSWER_CACHE` | on | `off` disables the 72h chat cache |
-| `FAIR_USE_SILVER` / `_GOLD` / `_PLATINUM` | 75 / 150 / 250 | Daily anti-abuse ceiling on unlimited chat |
+| `FAIR_USE_SILVER` / `_GOLD` / `_PLATINUM` | 15 / 30 / 70 | Daily anti-abuse ceiling on unlimited chat |
+| `CREDITS_SILVER` / `_GOLD` / `_PLATINUM` | 9 / 17 / 42 | Weekly opinion credits |
+| `DRAFTS_SILVER` / `_GOLD` / `_PLATINUM` | 22 / 50 / 125 | Weekly document generations |
+| `PAYMENTS_ENABLED` | false | **Paid plans are refused until this is `true`.** Governs the server guard, the plan catalogue and the pricing UI together |
+| `REBATE_THRESHOLD` | 0.75 | Margin above which the excess is returned to the customer |
+| `UZS_PER_USD` | 11980 | Rate used for margin reporting |
 | `ALLOW_WEB_SEARCH` | false | `true` lifts the lex.uz-only restriction |
 | `AGENT_AUTO_ANSWER` | true | `false` sends all Telegram requests to humans |
 | `AGENT_ESCALATE_WEAK` | true | Queue a lawyer on low-confidence answers |
