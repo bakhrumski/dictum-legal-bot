@@ -590,23 +590,21 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     } catch(e) { console.error('[Bot bare-start]', e.message); }
   }
 
-  const welcomeMessage = `
-Assalomu aleykum, ${msg.from.first_name}! 👋
+  let dailyAiLimit = 3;
+  try { dailyAiLimit = require('../agents/telegram-agent').DAILY_AI_LIMIT; } catch (_) { /* use default */ }
+  const welcomeMessage = `Assalomu alaykum, ${msg.from.first_name}! 👋
 
-JuristAIga xush kelibsiz!
+JuristAIga xush kelibsiz. Men inson yurist emasman — O'zbekiston qonunchiligi bo'yicha ma'lumot beruvchi AI yordamchiman.
 
-📝 Yuridik masalangizni yuboring:
-• Matn shaklida
-• Ovozli xabar
-• Video xabar
-• Fayl (max 5MB)
+📝 Huquqiy vaziyatingizni matn shaklida yozing. Har kuni ${dailyAiLimit} ta bepul AI huquqiy javob olishingiz mumkin. Salomlashuv, aniqlashtirish va xizmat bo'yicha murojaatlar bu limitga kirmaydi.
 
-Yuristlarimiz tez orada javob berishadi.
+📎 Ovozli xabar, video yoki 5 MB gacha fayl ham yuborishingiz mumkin; bunday murojaatlarni yurist ko'rib chiqadi.
 
-👨‍💼 Admin bo'lsangiz: /link <username> <parol>
-  `;
+Javoblar umumiy huquqiy ma'lumot bo'lib, rasmiy yuridik xulosa hisoblanmaydi.`;
 
-  bot.sendMessage(chatId, welcomeMessage);
+  bot.sendMessage(chatId, welcomeMessage, {
+    reply_markup: { inline_keyboard: freeAccessKeyboard(false) }
+  });
   pendingRequests[chatId] = { username: username || 'Noma\'lum', messages: [] };
 });
 
@@ -961,6 +959,7 @@ bot.on('message', async (msg) => {
   const conversational = agentResult && agentResult.handled
     && [
       'greeting', 'clarify', 'offtopic', 'account_help',
+      'identity', 'quota_exceeded', 'quota_unavailable',
       'attorney_contact_shared', 'attorney_contact_cancelled', 'attorney_choice_required',
     ].includes(agentResult.action);
   if (conversational) return;
@@ -1013,7 +1012,9 @@ bot.on('message', async (msg) => {
 
       if (resolvedByAgent) {
         // Fully handled — no queue message, the answer already arrived.
-        bot.sendMessage(chatId, '💬 Yana savolingiz bo\'lsa — bemalol yozing.').catch(() => {});
+        if (!agentResult.meta || agentResult.meta.remainingDailyAnswers > 0) {
+          bot.sendMessage(chatId, '💬 Yana savolingiz bo\'lsa — bemalol yozing.').catch(() => {});
+        }
       } else if (agentDelivered && needsHuman && agentResult.action === 'answered') {
         bot.sendMessage(chatId, '👨‍⚖️ Murojaatingiz aniqlik uchun yuristga ham yuborildi — tasdiq shu yerda keladi.').catch(() => {});
       } else if (!agentDelivered) {

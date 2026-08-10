@@ -275,15 +275,15 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 | `AGENT_AUTO_ANSWER` | true | `false` sends all Telegram requests to humans |
 | `AGENT_ESCALATE_WEAK` | true | Queue a lawyer on low-confidence answers |
 | `AGENT_MAX_CLARIFY` | 2 | Clarifying questions before answering anyway |
+| `AGENT_DAILY_AI_LIMIT` | 3 | Successful Telegram legal answers per chat per Tashkent day; greetings, FAQ and clarification do not consume it |
 
 ---
 
 ## 7. Levers, in the order I would pull them
 
-1. **Cap Telegram** — a daily free allowance is the only change that bounds
-   the platform's unbounded cost. Telegram users still have no plan and no
-   quota; unlimited chat for *paying* subscribers is bounded by fair use,
-   but anonymous Telegram traffic is not bounded by anything.
+1. **Monitor the Telegram cap** — anonymous chats receive three successful
+   legal answers per Tashkent day by default. Adjust `AGENT_DAILY_AI_LIMIT`
+   only after measuring answer quality, repeat usage and conversion.
 2. **Grow `qa_korpus`** — a verified answer reused costs ~$0.0001 instead of
    ~$0.015, and it is *higher* quality than generation. The lawyer-correction
    loop already feeds it; nothing else gives a 100× cost reduction and a

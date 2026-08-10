@@ -59,6 +59,8 @@ function isReady() { return !!(D && D.callAI && D.retrieveLegalContext); }
 const AUTO_ANSWER      = process.env.AGENT_AUTO_ANSWER !== 'false';   // master switch
 const ESCALATE_WEAK    = process.env.AGENT_ESCALATE_WEAK !== 'false'; // hand low-confidence to humans
 const MAX_CLARIFY      = parseInt(process.env.AGENT_MAX_CLARIFY, 10) || 2;
+const parsedDailyLimit = Number.parseInt(process.env.AGENT_DAILY_AI_LIMIT || '3', 10);
+const DAILY_AI_LIMIT   = Number.isFinite(parsedDailyLimit) && parsedDailyLimit >= 0 ? parsedDailyLimit : 3;
 const HISTORY_TURNS    = 8;
 const HISTORY_TTL_H    = 48;
 const TG_LIMIT         = 3900;  // Telegram hard limit is 4096; leave headroom
@@ -72,6 +74,7 @@ const DISCLAIMER = "\n\n_Javob SI tomonidan tayyorlandi va yuridik kuchga ega em
 // a user mid-clarification would otherwise be asked the same question twice.
 
 let _tableReady = false;
+let _usageTableReady = false;
 async function ensureTable() {
   if (_tableReady) return;
   await pool.query(`
@@ -93,6 +96,62 @@ async function ensureTable() {
   await pool.query(`ALTER TABLE tg_conversations ADD COLUMN IF NOT EXISTS last_intent VARCHAR(60)`);
   await pool.query(`ALTER TABLE tg_conversations ADD COLUMN IF NOT EXISTS context JSONB NOT NULL DEFAULT '{}'::jsonb`);
   _tableReady = true;
+}
+
+async function ensureUsageTable() {
+  if (_usageTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tg_agent_daily_usage (
+      chat_id    BIGINT  NOT NULL,
+      usage_day  DATE    NOT NULL,
+      ai_answers INTEGER NOT NULL DEFAULT 0 CHECK (ai_answers >= 0),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (chat_id, usage_day)
+    )
+  `);
+  _usageTableReady = true;
+}
+
+/** Atomically reserve one legal answer for the current Tashkent day. */
+async function claimDailyAiAnswer(chatId) {
+  if (DAILY_AI_LIMIT === 0) {
+    return { allowed: false, used: 0, remaining: 0, limit: 0 };
+  }
+  try {
+    await ensureUsageTable();
+    const result = await pool.query(`
+      INSERT INTO tg_agent_daily_usage (chat_id, usage_day, ai_answers, updated_at)
+      VALUES ($1, timezone('Asia/Tashkent', NOW())::date, 1, NOW())
+      ON CONFLICT (chat_id, usage_day) DO UPDATE SET
+        ai_answers = tg_agent_daily_usage.ai_answers + 1,
+        updated_at = NOW()
+      WHERE tg_agent_daily_usage.ai_answers < $2
+      RETURNING ai_answers
+    `, [chatId, DAILY_AI_LIMIT]);
+    if (!result.rows.length) {
+      return { allowed: false, used: DAILY_AI_LIMIT, remaining: 0, limit: DAILY_AI_LIMIT };
+    }
+    const used = Number(result.rows[0].ai_answers) || 1;
+    return { allowed: true, used, remaining: Math.max(0, DAILY_AI_LIMIT - used), limit: DAILY_AI_LIMIT };
+  } catch (error) {
+    console.error('[TG-AGENT] daily quota check failed:', error.message);
+    return { allowed: false, unavailable: true, used: 0, remaining: 0, limit: DAILY_AI_LIMIT };
+  }
+}
+
+/** Release a reservation when generation fails before an answer is delivered. */
+async function releaseDailyAiAnswer(chatId) {
+  try {
+    await ensureUsageTable();
+    await pool.query(`
+      UPDATE tg_agent_daily_usage
+         SET ai_answers = GREATEST(0, ai_answers - 1), updated_at = NOW()
+       WHERE chat_id = $1
+         AND usage_day = timezone('Asia/Tashkent', NOW())::date
+    `, [chatId]);
+  } catch (error) {
+    console.warn('[TG-AGENT] daily quota release failed:', error.message);
+  }
 }
 
 async function loadConversation(chatId) {
@@ -158,6 +217,8 @@ function historyToText(turns) {
 // down the paid answer path.
 const GREETING_RE = /^\s*(assalomu?\s+alayku?m|assalom\w*|salom\w*|salam|(?:x|h)ayrli\s+(kun|tong|kech)|hello|hi|привет|здравствуйте)[\s!.,]*$/iu;
 const THANKS_RE   = /^\s*(rahmat|raxmat|tashakkur|katta\s+rahmat|thanks|thank\s*you|спасибо)[\s!.,)]*$/iu;
+const HELP_RE     = /^\s*(menga\s+)?yordam\s+(kerak|bering|qiling)(\s+iltimos)?[\s!?.]*$/iu;
+const IDENTITY_RE = /(siz\s+)?(yurist|advokat)\s*(?:e?mas)?misiz|(?:siz\s+)?(yurist|advokat)\s*mi|kimsiz|kim\s+siz|o['’]?zingiz\s+kim|robotmisiz|ai\s*misiz|sun['’]?iy\s+intellektmisiz|вы\s+(юрист|адвокат)|кто\s+вы/iu;
 const ATTORNEY_RE = /(advokat\s+(kerak|top|izla)|yurist\s+(kerak|top|izla)|адвокат\s+(нужен|найти)|найти\s+(адвоката|юриста))/iu;
 const HUMAN_RE    = /(inson\s+bilan|jonli\s+odam|operator|real\s+yurist|yurist\s+bilan\s+gaplash|человек|оператор|юрист(ом)?\s+связ)/iu;
 const DOCUMENT_RE = /(hujjat|ariza|da['’]?vo|shikoyat|shartnoma|iltimosnoma|e['’]?tiroz|претензи|иск|жалоб|договор|заявлен).*\b(tayyor|yoz|tuz|kerak|состав|подготов)/iu;
@@ -173,6 +234,7 @@ intent qiymatlari:
 - "noaniq"         — huquqiy mavzu, lekin javob berish uchun muhim faktlar yetishmaydi
 - "davomi"         — oldingi savolning davomi yoki so'ralgan aniqlikni bergan javob
 - "salomlashuv"    — salom, rahmat, xayrlashuv kabi ijtimoiy xabar
+- "bot_haqida"     — foydalanuvchi bot kimligi, AI yoki yurist ekanini so'ramoqda
 - "advokat_kerak"  — mos advokat yoki yurist topishni so'ramoqda
 - "hujjat_tayyorlash" — ariza, da'vo, shikoyat, shartnoma yoki boshqa hujjat tayyorlashni so'ramoqda
 - "hisob_yordam"   — ro'yxatdan o'tish, login, OTP yoki parol masalasi
@@ -182,13 +244,15 @@ intent qiymatlari:
 "missing": agar intent "noaniq" bo'lsa, javob uchun zarur bo'lgan 1-3 ta faktni yozing (o'zbekcha, qisqa). Aks holda [].
 Imkon bo'lsa legal_field, legal_subfield, region va language (uz/ru) maydonlarini ham qaytaring.
 
-Muhim: agar savol umumiy bo'lsa-yu, umumiy huquqiy javob berish mumkin bo'lsa — bu "huquqiy_savol". "noaniq" ni faqat javob berish HAQIQATAN mumkin bo'lmaganda tanlang.`;
+Muhim: bot faqat O'zbekiston qonunchiligiga javob beradi, shuning uchun foydalanuvchidan davlatni so'ramang. Agar savol umumiy bo'lsa-yu, umumiy huquqiy javob berish mumkin bo'lsa — bu "huquqiy_savol". "noaniq" ni faqat javob berish HAQIQATAN mumkin bo'lmaganda tanlang.`;
 
 async function classifyIntent(text, turns) {
   const t = String(text || '').trim();
 
   if (GREETING_RE.test(t)) return { intent: 'salomlashuv', kind: 'greeting', missing: [] };
   if (THANKS_RE.test(t))   return { intent: 'salomlashuv', kind: 'thanks',   missing: [] };
+  if (IDENTITY_RE.test(t)) return { intent: 'bot_haqida', missing: [] };
+  if (HELP_RE.test(t))     return { intent: 'noaniq', missing: ['Qanday huquqiy muammo yoki vaziyat bo\'yicha yordam kerak?'] };
   if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
   if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
   if (ACCOUNT_RE.test(t))  return { intent: 'hisob_yordam', missing: [] };
@@ -205,7 +269,7 @@ async function classifyIntent(text, turns) {
     const raw = String(res.text || '').replace(/```(?:json)?/gi, '').trim();
     const m = raw.match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) : {};
-    const valid = ['huquqiy_savol', 'noaniq', 'davomi', 'salomlashuv', 'advokat_kerak', 'hujjat_tayyorlash', 'hisob_yordam', 'yurist_kerak', 'mavzudan_tashqari'];
+    const valid = ['huquqiy_savol', 'noaniq', 'davomi', 'salomlashuv', 'bot_haqida', 'advokat_kerak', 'hujjat_tayyorlash', 'hisob_yordam', 'yurist_kerak', 'mavzudan_tashqari'];
     return {
       intent: valid.includes(parsed.intent) ? parsed.intent : 'huquqiy_savol',
       missing: Array.isArray(parsed.missing) ? parsed.missing.slice(0, 3).map(String) : [],
@@ -543,6 +607,14 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     return complete({ handled: true, reply, action: 'greeting', escalate: false, meta: { intent: intent.intent } });
   }
 
+  // Identity/capability questions are product FAQ, not legal questions. They
+  // must never enter RAG or acquire unrelated statute citations.
+  if (intent.intent === 'bot_haqida') {
+    const reply = "Men inson yurist yoki advokat emasman. Men JuristAI — O'zbekiston qonunchiligi bo'yicha ma'lumot beruvchi AI yordamchiman.\n\nQonunchilik manbalari asosida tushuntirish beraman, lekin sudda vakillik qilmayman va javobim rasmiy yuridik xulosa hisoblanmaydi. Huquqiy vaziyatingizni yozsangiz, qaysi yo'l tutish mumkinligini tushuntiraman.";
+    await remember(reply, clarifyCount);
+    return complete({ handled: true, reply, action: 'identity', escalate: false, meta: { intent: intent.intent } });
+  }
+
   // ── Account and authentication support ─────────────────────────────────
   if (intent.intent === 'hisob_yordam') {
     const reply = "Ro'yxatdan o'tish, kirish, OTP va parolni tiklash uchun @juristAI_registration_bot yordam beradi.\n\nBotni ochib, kerakli amalni tanlang. Bu bot esa faqat huquqiy savollar uchun ishlaydi.";
@@ -651,15 +723,38 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
   }
 
   // ── Answer ──────────────────────────────────────────────────────────────
+  const quota = D.claimDailyAnswer
+    ? await D.claimDailyAnswer(chatId, DAILY_AI_LIMIT)
+    : await claimDailyAiAnswer(chatId);
+
+  if (!quota.allowed) {
+    const reply = quota.unavailable
+      ? "Kunlik bepul AI javob limitini hozir tekshirib bo'lmadi. Iltimos, birozdan keyin qayta urinib ko'ring."
+      : `Bugungi ${quota.limit} ta bepul AI huquqiy javob limitingiz tugadi. Yangi limit ertaga Toshkent vaqti bilan ochiladi.\n\nShoshilinch holatda “yurist kerak” deb yozishingiz mumkin.`;
+    return complete({
+      handled: true,
+      reply,
+      action: quota.unavailable ? 'quota_unavailable' : 'quota_exceeded',
+      escalate: false,
+      meta: { intent: intent.intent, dailyLimit: quota.limit, remainingDailyAnswers: 0 },
+    });
+  }
+
   let answer;
   try {
     answer = await generateAnswer(question, turns);
   } catch (e) {
+    if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId).catch(() => {});
+    else await releaseDailyAiAnswer(chatId);
     console.error('[TG-AGENT] answer generation failed:', e.message);
     return skip('generation failed: ' + e.message);
   }
 
-  if (!answer.text || answer.text.length < 20) return skip('empty answer');
+  if (!answer.text || answer.text.length < 20) {
+    if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId).catch(() => {});
+    else await releaseDailyAiAnswer(chatId);
+    return skip('empty answer');
+  }
 
   const lowConfidence = answer.confidence === 'low' && ESCALATE_WEAK;
 
@@ -670,7 +765,10 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     ? '\n\n⚠️ _Bu dastlabki javob: ba\'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim. Yurist ko\'rib chiqib, aniqlashtiradi._'
     : '';
 
-  const reply = answer.text + answer.sources + banner + DISCLAIMER;
+  const allowance = quota.remaining > 0
+    ? `\n\n🎟 Bugun yana ${quota.remaining} ta bepul AI javob qolgan.`
+    : `\n\n🎟 Bugungi ${quota.limit} ta bepul AI javobdan foydalandingiz. Yangi limit ertaga Toshkent vaqti bilan ochiladi.`;
+  const reply = answer.text + answer.sources + banner + DISCLAIMER + allowance;
 
   await remember(answer.text, 0);
   console.log(`[TG-AGENT] chat=${chatId} intent=${intent.intent} path=${answer.meta.path} conf=${answer.confidence} ${Date.now() - started}ms`);
@@ -680,7 +778,14 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     reply,
     action: 'answered',
     escalate: lowConfidence,
-    meta: { intent: intent.intent, ...answer.meta, confidence: answer.confidence, ms: Date.now() - started },
+    meta: {
+      intent: intent.intent,
+      ...answer.meta,
+      confidence: answer.confidence,
+      dailyLimit: quota.limit,
+      remainingDailyAnswers: quota.remaining,
+      ms: Date.now() - started,
+    },
   });
 }
 
@@ -715,4 +820,7 @@ module.exports = {
   loadConversation,
   saveConversation,
   setConversationState,
+  claimDailyAiAnswer,
+  releaseDailyAiAnswer,
+  DAILY_AI_LIMIT,
 };
