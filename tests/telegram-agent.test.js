@@ -36,6 +36,13 @@ const fakePool = {
       dbState.aiAnswers = Math.max(0, dbState.aiAnswers - 1);
       return { rows: [] };
     }
+    if (/INSERT INTO\s+tg_conversations/i.test(sql) && /state\s*=\s*'idle'/i.test(sql)) {
+      dbState.turns = [];
+      dbState.clarifyCount = 0;
+      dbState.state = 'idle';
+      dbState.context = {};
+      return { rows: [] };
+    }
     return { rows: [] };
   },
 };
@@ -397,10 +404,25 @@ function stubMemory(clarifyCount = 0) {
     assert.deepStrictEqual(agent.splitForTelegram('qisqa javob'), ['qisqa javob']);
   });
 
+  await test('/start reset clears a stale attorney-choice state', async () => {
+    dbState.state = 'awaiting_attorney_choice';
+    dbState.context = { attorneyOptions: [{ attorney_ref: 'eadvokat:1' }] };
+    dbState.turns = [{ role: 'user', text: 'Menga advokat kerak' }];
+    dbState.clarifyCount = 2;
+
+    await agent.resetConversation(1);
+
+    assert.strictEqual(dbState.state, 'idle');
+    assert.deepStrictEqual(dbState.context, {});
+    assert.deepStrictEqual(dbState.turns, []);
+    assert.strictEqual(dbState.clarifyCount, 0);
+  });
+
   await test('/start explains AI identity and the daily allowance', async () => {
     const botSource = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
     assert.ok(/Men inson yurist emasman/.test(botSource));
     assert.ok(/Har kuni \$\{dailyAiLimit\} ta bepul AI huquqiy javob/.test(botSource));
+    assert.ok(/await telegramAgent\.resetConversation\(chatId\)/.test(botSource), 'bare /start must clear stale agent state');
     assert.ok(/'identity', 'quota_exceeded', 'quota_unavailable'/.test(botSource), 'non-legal guardrail replies must not create queue rows');
   });
 
