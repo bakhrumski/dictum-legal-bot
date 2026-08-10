@@ -39,11 +39,24 @@ test('every advertised price is the price the server charges', () => {
   }
 });
 
-test('old prices are struck through, not just deleted', () => {
+test('no superseded price is still displayed', () => {
+  // The old figures were struck through beside the new ones; that made the
+  // Platinum price wrap mid-number and cluttered every card. Prices now show
+  // once. If a future edit reintroduces one, this catches it.
   for (const old of ['299 000', '599 000', '1 199 000']) {
-    assert.ok(html.includes('plan-old">' + old), `${old} is not shown struck through`);
+    assert.ok(!html.includes('>' + old + '<') && !html.includes('">' + old),
+      `the superseded price ${old} is still on the page`);
   }
-  assert.ok(html.includes('plan-off'), 'no discount badge');
+  assert.ok(!html.includes('plan-old'), 'the struck-through price element is still present');
+  // The -33% badge went with them: a discount claim with no anchor price
+  // tells a reader 33% off *what*, and cannot be answered from the card.
+  assert.ok(!html.includes('plan-off'), 'the discount badge has no reference price to justify it');
+});
+
+test('a price can never wrap mid-number', () => {
+  // "999 000" split across two lines in production before this.
+  const css = html.slice(html.indexOf('.plan-price{'), html.indexOf('}', html.indexOf('.plan-price{')));
+  assert.ok(css.includes('white-space:nowrap'), '.plan-price must not wrap');
 });
 
 console.log('\npricing cards — advertised quotas match PLANS\n');
