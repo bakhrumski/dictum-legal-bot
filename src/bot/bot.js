@@ -591,7 +591,17 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   }
 
   let dailyAiLimit = 3;
-  try { dailyAiLimit = require('../agents/telegram-agent').DAILY_AI_LIMIT; } catch (_) { /* use default */ }
+  try {
+    const telegramAgent = require('../agents/telegram-agent');
+    dailyAiLimit = telegramAgent.DAILY_AI_LIMIT;
+    // A bare /start means "begin again". Clear stale clarification/service
+    // states so the next message is classified normally. The reset deliberately
+    // preserves human-takeover mode when an operator is handling the chat.
+    await telegramAgent.resetConversation(chatId);
+  } catch (error) {
+    console.warn('[BOT] conversation could not be reset on /start:', error.message);
+  }
+  pendingFiles.delete(chatId);
   const welcomeMessage = `Assalomu alaykum, ${msg.from.first_name}! 👋
 
 JuristAIga xush kelibsiz. Men inson yurist emasman — O'zbekiston qonunchiligi bo'yicha ma'lumot beruvchi AI yordamchiman.

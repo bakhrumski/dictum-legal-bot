@@ -193,6 +193,28 @@ async function saveConversation(chatId, turns, clarifyCount) {
   }
 }
 
+/** Start a new user-led session without overriding an active human takeover. */
+async function resetConversation(chatId) {
+  try {
+    await ensureTable();
+    await pool.query(`
+      INSERT INTO tg_conversations
+        (chat_id, turns, clarify_count, state, last_intent, context, updated_at)
+      VALUES
+        ($1, '[]'::jsonb, 0, 'idle', NULL, '{}'::jsonb, NOW())
+      ON CONFLICT (chat_id) DO UPDATE SET
+        turns = '[]'::jsonb,
+        clarify_count = 0,
+        state = 'idle',
+        last_intent = NULL,
+        context = '{}'::jsonb,
+        updated_at = NOW()
+    `, [chatId]);
+  } catch (e) {
+    console.warn('[TG-AGENT] resetConversation failed:', e.message);
+  }
+}
+
 /** Called when a topic closes, so the next question starts clean. */
 async function resetClarify(chatId) {
   try {
@@ -819,6 +841,7 @@ module.exports = {
   detectServiceSlug,
   loadConversation,
   saveConversation,
+  resetConversation,
   setConversationState,
   claimDailyAiAnswer,
   releaseDailyAiAnswer,
