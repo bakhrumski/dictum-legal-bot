@@ -333,6 +333,20 @@ function mountDraftingRoutes(app, deps) {
   // to the model as HIDDEN drafting guides (never shown to the user).
   app.post('/api/draft/ai-generate', requireAuth, quota, async (req, res) => {
     try {
+      // Weekly drafting allowance, separate from chat. Document generation
+      // costs ~7x a chat answer, so it gets its own counter rather than
+      // silently draining the fair-use ceiling.
+      if (tariffModule && typeof tariffModule.checkDraftQuota === 'function') {
+        const dq = await tariffModule.checkDraftQuota(req.session.adminId);
+        if (!dq.allowed) {
+          return res.status(429).json({
+            error: dq.reason === 'not_in_plan'
+              ? 'Hujjat yaratish tarifingizga kirmaydi. Silver, Gold yoki Platinum tarifini tanlang.'
+              : `Ushbu haftalik hujjat limiti tugadi (${dq.used}/${dq.limit}). Limit dushanba kuni yangilanadi.`,
+            code: 'DRAFT_QUOTA', used: dq.used, limit: dq.limit, resetsAt: dq.resetsAt,
+          });
+        }
+      }
       const docType = String((req.body || {}).docType || '').trim().slice(0, 120);
       const details = String((req.body || {}).details || '').trim().slice(0, 6000);
       if (!docType || !details) return res.status(400).json({ error: 'Hujjat turi va ma\'lumotlar kerak' });

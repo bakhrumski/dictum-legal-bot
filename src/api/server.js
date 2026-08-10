@@ -536,6 +536,23 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
 // a user actually cost per month, and who are the p95 outliers? Use this before
 // repricing plans instead of guessing at token estimates.
 //   GET /api/admin/spend-report?month=YYYY-MM
+// ── Per-customer margin + loyalty rebate (master only) ──────────────────────
+// Answers "who is subsidising whom". Cost comes from llm_spend_log, so these
+// are measured margins, not modelled ones. Anyone above REBATE_THRESHOLD has
+// earned a discount on their next renewal.
+app.get('/api/admin/margin-report', requireMasterAdmin, async (req, res) => {
+  try {
+    const report = await tariffModule.marginReport({
+      since: req.query.since || null,
+      plan: req.query.plan || null,
+    });
+    res.json(report);
+  } catch (e) {
+    console.error('[Margin Report]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/admin/spend-report', requireMasterAdmin, async (req, res) => {
   try {
     const month = /^\d{4}-\d{2}$/.test(req.query.month || '')
@@ -5704,60 +5721,45 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // generation on the platform. Freemium (sinov / no plan): 1 per month.
     // Paid tiers get more (override any of these via OPINION_LIMIT_<PLAN> env).
     // Master + staff (lawyer/student) are exempt.
-    const OPINION_LIMITS = { sinov: 1, silver: 3, gold: 10, platinum: 30 };
+    // ── Opinion credits ─────────────────────────────────────────────────────
+    // Metered in CREDITS scaled to document size (1 / 2 / 3), not flat counts.
+    // A legal opinion costs $0.15-$0.65 depending on length, so charging one
+    // "opinion" regardless made the worst case a lottery and let heavy users
+    // ride on light ones. Credits make cost-per-credit flat.
+    const opinionCredits = tariffModule.opinionCreditsFor(documentText.length);
     // Tiered quality: the more expensive the plan, the stronger the model.
-    // Per-plan override via OPINION_MODEL_<PLAN>; global OPINION_MODEL wins
-    // over everything. Falls back to Gemini (free tier) if OpenAI is down.
-    // GPT-5.6 ladder: better plan -> stronger model.
-    // A legal opinion is the deliverable that justifies a paid plan — every
-    // paid tier gets Sol for the synthesis. Only the free trial runs cheaper.
-    // (Silver: 3 opinions/period × ~$0.14 Sol-vs-Terra delta ≈ +$0.42/month
-    // worst case — negligible against the quality difference.)
     const OPINION_MODELS = {
+      bepul: MODELS.cheap,
       sinov: MODELS.cheap,       // Luna  $1/$6
       silver: MODELS.premium,    // Sol   $5/$30
       gold: MODELS.premium,      // Sol
       platinum: MODELS.premium,  // Sol
     };
-    // Uzbek tokenizes heavily (~3 tokens/word), so the "1200-1800 words"
-    // length rule plus HTML markup needs ~5-6.5k output tokens. 5500 sat
-    // EXACTLY at the rule's upper edge and run 7 truncated mid-opinion.
     let opinionMaxTokens = 7000;
     let opinionModel = process.env.OPINION_MODEL || null;
     try {
       const u = await tariffModule.getUserPlan(req.session.adminId);
       const isExempt = u && (u.plan === 'master' || (u.role && u.role !== 'user'));
       if (isExempt) {
-        // Master/staff test with the best model.
         if (!opinionModel) opinionModel = process.env.OPINION_MODEL_STAFF || MODELS.premium;
       } else {
-        const planKey = (u && u.plan) || 'sinov';
-        const limit = parseInt(process.env['OPINION_LIMIT_' + planKey.toUpperCase()], 10)
-          || OPINION_LIMITS[planKey] || 1;
-        // Count from the start of the current TARIFF PERIOD, not the calendar
-        // month: a 10-day trial straddling a month boundary would otherwise
-        // grant two opinions ("1 per month" twice). One opinion per trial.
-        const periodStart = (u && u.startsAt) ? new Date(u.startsAt) : null;
-        const used = (await pool.query(
-          periodStart
-            ? `SELECT COUNT(*)::int AS n FROM audit_log
-                 WHERE admin_id = $1 AND action = 'legal_opinion.generate' AND created_at >= $2`
-            : `SELECT COUNT(*)::int AS n FROM audit_log
-                 WHERE admin_id = $1 AND action = 'legal_opinion.generate'
-                   AND created_at >= date_trunc('month', NOW())`,
-          periodStart ? [req.session.adminId, periodStart] : [req.session.adminId])).rows[0].n;
-        if (used >= limit) {
-          const perLabel = planKey === 'sinov' ? 'sinov muddati' : 'tarif davri';
+        const planKey = (u && u.plan) || 'bepul';
+        const c = await tariffModule.checkOpinionCredits(req.session.adminId, opinionCredits);
+        if (!c.allowed) {
+          const msg = c.reason === 'not_in_plan'
+            ? 'Yuridik xulosa tarifingizga kirmaydi. Silver, Gold yoki Platinum tarifini tanlang.'
+            : `Ushbu haftalik yuridik xulosa limiti tugadi (${c.used}/${c.limit} kredit). ` +
+              `Bu hujjat ${opinionCredits} kredit talab qiladi. Limit dushanba kuni yangilanadi.`;
           return res.status(429).json({
-            error: `Yuridik xulosa limiti tugadi (${limit} ta / ${perLabel}${planKey === 'sinov' ? ' — bepul tarif' : ''}). Yuqoriroq tarifga o'tsangiz, ko'proq xulosa olasiz.`,
-            code: 'OPINION_LIMIT', used, limit,
+            error: msg, code: 'OPINION_CREDITS',
+            used: c.used, limit: c.limit, cost: opinionCredits,
+            remaining: c.remaining, resetsAt: c.resetsAt,
           });
         }
-        // Freemium opinions get a smaller output budget than paid tiers.
-        opinionMaxTokens = planKey === 'sinov' ? 4500 : 7000;
+        opinionMaxTokens = (planKey === 'sinov' || planKey === 'bepul') ? 4500 : 7000;
         if (!opinionModel) opinionModel = process.env['OPINION_MODEL_' + planKey.toUpperCase()] || OPINION_MODELS[planKey] || MODELS.standard;
       }
-    } catch (qErr) { console.warn('[Legal Opinion] plan check failed (allowing):', qErr.message); }
+    } catch (qErr) { console.warn('[Legal Opinion] credit check failed (allowing):', qErr.message); }
     if (!opinionModel) opinionModel = MODELS.premium;
 
     const lang = lexLangForText(documentText);
@@ -6072,6 +6074,10 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
     if (manbalarHtml) html += '<h2>Manbalar</h2>' + manbalarHtml;
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
+    // Spend the credits only once the opinion actually exists — a failed
+    // generation must never consume a user's weekly allowance.
+    tariffModule.recordUsage(req.session.adminId, '/api/draft/legal-opinion', opinionCredits)
+      .catch(e => console.warn('[Legal Opinion] credit record failed:', e.message));
     if (result.usage) {
       // result.provider is the model that ACTUALLY answered. The earlier
       // "model=" line only logs intent — callPremiumAI silently falls back
