@@ -131,7 +131,21 @@
         }
         .plan-price small { font-size: 14px; font-weight: 500; color: var(--text-3); margin-left: 4px; }
         .plan-period {
-            font-size: 13px; color: var(--text-3); margin-bottom: 22px;
+            font-size: 13px; color: var(--text-3); margin-bottom: 14px; min-height: 18px;
+        }
+        /* Each card lays itself out independently, so a two-line audience line
+           and a three-line one push their feature lists to different heights
+           and nothing lines up across the row. Reserving the tallest height for
+           the rows above the list re-aligns them. Only needed while the cards
+           sit side by side. */
+        .plan-name { min-height: 18px; }
+        .plan-price { min-height: 44px; }
+        .plan-for {
+            font-size: 12.5px; color: var(--text-3); line-height: 1.45;
+            margin-bottom: 18px; min-height: 56px;
+        }
+        @media (max-width: 720px) {
+            .plan-name, .plan-price, .plan-period, .plan-for { min-height: 0; }
         }
         .plan-meter-label {
             display: flex; justify-content: space-between; font-size: 11px;
@@ -142,9 +156,10 @@
             margin-bottom: 24px; overflow: hidden;
         }
         .plan-meter span { display: block; height: 100%; border-radius: 2px; }
+        .plan-card[data-plan="bepul"]    .plan-meter span { width: 25%;  background: var(--success); }
         .plan-card[data-plan="sinov"]    .plan-meter span { width: 25%;  background: var(--success); }
-        .plan-card[data-plan="silver"]   .plan-meter span { width: 40%;  background: var(--success); }
-        .plan-card[data-plan="gold"]     .plan-meter span { width: 65%;  background: var(--navy-500); }
+        .plan-card[data-plan="silver"]   .plan-meter span { width: 100%; background: var(--success); }
+        .plan-card[data-plan="gold"]     .plan-meter span { width: 100%; background: var(--navy-500); }
         .plan-card[data-plan="platinum"] .plan-meter span {
             width: 100%; background: linear-gradient(90deg, var(--plum-500), var(--brass-500), var(--success));
         }
@@ -244,16 +259,17 @@
         <section class="plans-grid">
             <!-- SINOV (Bepul) -->
             <article class="plan-card" data-plan="sinov">
-                <div class="plan-name">Sinov</div>
+                <div class="plan-name">Bepul</div>
                 <div class="plan-price">Bepul</div>
-                <div class="plan-period">1 kunda 3 ta so'rov</div>
-                <div class="plan-meter-label"><span>1 hafta davomida</span><span>Trial</span></div>
+                <div class="plan-period">Doimo bepul</div>
+                <div class="plan-for">Platformani sinab ko'rish va kundalik oddiy savollar uchun.</div>
+                <div class="plan-meter-label"><span>Kunlik limit</span><span>Bepul</span></div>
                 <div class="plan-meter"><span></span></div>
                 <ul class="features">
-                    <li>AI chat — asosiy rejim</li>
-                    <li>1 kunda 3 ta so'rov</li>
-                    <li>RAG qidiruv (cheklangan)</li>
-                    <li>Asosiy huquqiy sohalar</li>
+                    <li>Kuniga 10 ta savol — 30 kun</li>
+                    <li>So'ngra kuniga 3 ta, muddatsiz</li>
+                    <li>Har bir javob lex.uz manbasi bilan</li>
+                    <li>Karta talab qilinmaydi</li>
                 </ul>
                 <button class="plan-btn" data-plan="sinov" onclick="selectPlan('sinov')">Sinab ko'rish</button>
             </article>
@@ -261,15 +277,16 @@
             <!-- SILVER -->
             <article class="plan-card" data-plan="silver">
                 <div class="plan-name">Silver</div>
-                <div class="plan-price"><span data-price="299000">299,000</span><small>so'm</small></div>
+                <div class="plan-price"><span data-price="199000">199,000</span><small>so'm</small></div>
                 <div class="plan-period">oyiga</div>
-                <div class="plan-meter-label"><span>So'rov limiti</span><span>Standart</span></div>
+                <div class="plan-for">Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.</div>
+                <div class="plan-meter-label"><span>AI chat</span><span>Cheksiz</span></div>
                 <div class="plan-meter"><span></span></div>
                 <ul class="features">
-                    <li>Professional AI yordamchi</li>
-                    <li>Oyiga 300 ta so'rov</li>
-                    <li>RAG to'liq qidiruv</li>
-                    <li>13 ta huquqiy soha</li>
+                    <li>Cheksiz AI chat</li>
+                    <li>Oyiga ~39 ta yuridik xulosa</li>
+                    <li>Oyiga ~95 ta hujjat tayyorlash</li>
+                    <li>O'z shablonlaringizni yuklash</li>
                 </ul>
                 <button class="plan-btn" data-plan="silver" onclick="selectPlan('silver')">Tanlash</button>
             </article>
@@ -278,16 +295,17 @@
             <article class="plan-card featured" data-plan="gold">
                 <span class="badge-top">Mashhur</span>
                 <div class="plan-name">Gold</div>
-                <div class="plan-price"><span data-price="599000">599,000</span><small>so'm</small></div>
+                <div class="plan-price"><span data-price="399000">399,000</span><small>so'm</small></div>
                 <div class="plan-period">oyiga</div>
-                <div class="plan-meter-label"><span>So'rov limiti</span><span>2.5x Silver</span></div>
+                <div class="plan-for">Yuridik bo'lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.</div>
+                <div class="plan-meter-label"><span>AI chat</span><span>Cheksiz</span></div>
                 <div class="plan-meter"><span></span></div>
                 <ul class="features">
-                    <li>Oyiga 750 ta so'rov</li>
-                    <li>Ustuvor navbat</li>
-                    <li>Hujjat tahlili (OCR)</li>
-                    <li>RAG + web qidiruv</li>
-                    <li>Chuqur huquqiy tahlil</li>
+                    <li>Cheksiz AI chat</li>
+                    <li>Oyiga ~74 ta yuridik xulosa</li>
+                    <li>Oyiga ~217 ta hujjat</li>
+                    <li>Skan va rasmdan hujjat tahlili</li>
+                    <li>Ustuvor navbat — tezroq javob</li>
                 </ul>
                 <button class="plan-btn primary" data-plan="gold" onclick="selectPlan('gold')">Tanlash</button>
             </article>
@@ -295,16 +313,17 @@
             <!-- PLATINUM -->
             <article class="plan-card" data-plan="platinum">
                 <div class="plan-name">Platinum</div>
-                <div class="plan-price"><span data-price="1199000">1,199,000</span><small>so'm</small></div>
+                <div class="plan-price"><span data-price="999000">999,000</span><small>so'm</small></div>
                 <div class="plan-period">oyiga</div>
-                <div class="plan-meter-label"><span>So'rov limiti</span><span>5x Silver</span></div>
+                <div class="plan-for">Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya.</div>
+                <div class="plan-meter-label"><span>AI chat</span><span>Cheksiz</span></div>
                 <div class="plan-meter"><span></span></div>
                 <ul class="features">
-                    <li>Oyiga 1,500 ta so'rov</li>
-                    <li>Ultra-yuqori kontekst</li>
-                    <li>Lex.uz yangilanishlar — birinchi</li>
-                    <li>Shaxsiy konsierj</li>
-                    <li>API integratsiya</li>
+                    <li>Cheksiz AI chat</li>
+                    <li>Oyiga ~182 ta yuridik xulosa</li>
+                    <li>Oyiga ~542 ta hujjat</li>
+                    <li>Shaxsiy konsierj va o'qitish</li>
+                    <li>API orqali integratsiya</li>
                 </ul>
                 <button class="plan-btn" data-plan="platinum" onclick="selectPlan('platinum')">Tanlash</button>
             </article>
@@ -354,7 +373,7 @@
         }
 
         // ── Duration multiplier (1 oy / 3 oy / 6 oy) ──
-        const BASE_PRICES = { silver: 299000, gold: 599000, platinum: 1199000 };
+        const BASE_PRICES = { silver: 199000, gold: 399000, platinum: 999000 };
         const DISCOUNT = { 1: 1, 3: 0.9, 6: 0.85 };
         let currentMult = 1;
         document.querySelectorAll('.duration-toggle button').forEach(btn => {

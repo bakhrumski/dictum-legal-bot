@@ -293,7 +293,10 @@ h2.sh{text-align:center;font-size:clamp(30px,4vw,46px);font-weight:700;letter-sp
 .plan-price small{font-size:14px;font-weight:500;color:var(--txt2)}
 .plan-per{font-size:13.5px;color:var(--txt3);margin-bottom:18px}
 /* Who the plan is for — the first thing a buyer scans for. */
-.plan-for{font-size:12.5px;color:var(--txt3);line-height:1.45;margin-bottom:14px;min-height:36px}
+.plan-name{min-height:22px}
+.plan-price{min-height:44px;display:flex;align-items:baseline;flex-wrap:nowrap}
+.plan-per{min-height:20px}
+.plan-for{font-size:12.5px;color:var(--txt3);line-height:1.45;margin-bottom:14px;min-height:58px}
 .plan-inherit{font-weight:600;color:var(--txt2)}
 .pr-note{max-width:760px;margin:34px auto 0;text-align:center;font-size:13.5px;line-height:1.7;color:var(--txt3)}
 .pr-note b{color:var(--txt2)}
@@ -349,6 +352,7 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
 }
 @media(max-width:580px){
   .stats-grid,.testi-grid,.steps,.plans{grid-template-columns:1fr}
+  .plan-name,.plan-price,.plan-per,.plan-for{min-height:0}
   .bento{grid-template-columns:1fr}.b1,.b2,.b3,.b4,.b5,.b6{grid-column:1/-1;grid-row:auto}
   nav{height:62px}
   .hero{padding:100px 0 70px;min-height:auto}
@@ -650,7 +654,7 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
         <div class="plan-per" data-i18n="p_per">oyiga</div>
         <div class="plan-for" data-i18n="p3_for">Yuridik bo‘lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.</div>
         <ul class="plan-features">
-          <li data-i18n="p3_f1">Silver’dagi hamma narsa, ustiga:</li>
+          <li data-i18n="p3_f1">Cheksiz AI chat</li>
           <li data-i18n="p3_f2">Oyiga ~74 ta yuridik xulosa</li>
           <li data-i18n="p3_f3">Oyiga ~217 ta hujjat</li>
           <li data-i18n="p3_f4">Skan va rasmdan hujjat tahlili</li>
@@ -664,7 +668,7 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
         <div class="plan-per" data-i18n="p_per">oyiga</div>
         <div class="plan-for" data-i18n="p4_for">Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya.</div>
         <ul class="plan-features">
-          <li data-i18n="p4_f1">Gold’dagi hamma narsa, ustiga:</li>
+          <li data-i18n="p4_f1">Cheksiz AI chat</li>
           <li data-i18n="p4_f2">Oyiga ~182 ta yuridik xulosa</li>
           <li data-i18n="p4_f3">Oyiga ~542 ta hujjat</li>
           <li data-i18n="p4_f4">Shaxsiy konsierj va o‘qitish</li>
@@ -789,8 +793,8 @@ uz:{
   pr_ey:"Tariflar",pr_h:"Sizga mos rejani tanlang",pr_sub:"Bepul boshlang — karta kerak emas. Istalgan vaqtda bekor qilasiz.",
   p1_name:"Bepul",p1_price:"Bepul",p1_per:"Doimo bepul",p1_f1:"Kuniga 10 ta savol — 30 kun",p1_f2:"So‘ngra kuniga 3 ta, muddatsiz",p1_f3:"Har bir javob lex.uz manbasi bilan",p1_f4:"Karta talab qilinmaydi",p1_btn:"Bepul boshlash",
   p2_name:"Silver",p2_f1:"Cheksiz AI chat",p2_f2:"Oyiga ~39 ta yuridik xulosa",p2_f3:"Oyiga ~95 ta hujjat tayyorlash",p2_f4:"O‘z shablonlaringizni yuklash",
-  p3_tag:"Mashhur",p3_name:"Gold",p3_f1:"Silver’dagi hamma narsa, ustiga:",p3_f2:"Oyiga ~74 ta yuridik xulosa",p3_f3:"Oyiga ~217 ta hujjat",p3_f4:"Skan va rasmdan hujjat tahlili",p3_f5:"Ustuvor navbat — tezroq javob",
-  p4_name:"Platinum",p4_f1:"Gold’dagi hamma narsa, ustiga:",p4_f2:"Oyiga ~182 ta yuridik xulosa",p4_f3:"Oyiga ~542 ta hujjat",p4_f4:"Shaxsiy konsierj va o‘qitish",p4_f5:"API orqali integratsiya",
+  p3_tag:"Mashhur",p3_name:"Gold",p3_f1:"Cheksiz AI chat",p3_f2:"Oyiga ~74 ta yuridik xulosa",p3_f3:"Oyiga ~217 ta hujjat",p3_f4:"Skan va rasmdan hujjat tahlili",p3_f5:"Ustuvor navbat — tezroq javob",
+  p4_name:"Platinum",p4_f1:"Cheksiz AI chat",p4_f2:"Oyiga ~182 ta yuridik xulosa",p4_f3:"Oyiga ~542 ta hujjat",p4_f4:"Shaxsiy konsierj va o‘qitish",p4_f5:"API orqali integratsiya",
   p1_for:"Platformani sinab ko‘rish va kundalik oddiy savollar uchun.",
   p2_for:"Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.",
   p3_for:"Yuridik bo‘lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.",
@@ -847,8 +851,8 @@ ru:{
   pr_ey:"Тарифы",pr_h:"Выберите подходящий план",pr_sub:"Начните бесплатно — карта не нужна. Отмена в любой момент.",
   p1_name:"Бесплатный",p1_price:"Бесплатно",p1_per:"Навсегда бесплатно",p1_f1:"10 вопросов в день — 30 дней",p1_f2:"Далее 3 в день, бессрочно",p1_f3:"Каждый ответ со ссылкой на lex.uz",p1_f4:"Без привязки карты",p1_btn:"Начать бесплатно",
   p2_name:"Silver",p2_f1:"Безлимитный AI-чат",p2_f2:"~39 юридических заключений в месяц",p2_f3:"~95 документов в месяц",p2_f4:"Загрузка своих шаблонов",
-  p3_tag:"Популярный",p3_name:"Gold",p3_f1:"Всё из Silver, плюс:",p3_f2:"~74 заключения в месяц",p3_f3:"~217 документов в месяц",p3_f4:"Анализ сканов и фото документов",p3_f5:"Приоритетная очередь",
-  p4_name:"Platinum",p4_f1:"Всё из Gold, плюс:",p4_f2:"~182 заключения в месяц",p4_f3:"~542 документа в месяц",p4_f4:"Персональный консьерж и обучение",p4_f5:"Интеграция по API",
+  p3_tag:"Популярный",p3_name:"Gold",p3_f1:"Безлимитный AI-чат",p3_f2:"~74 заключения в месяц",p3_f3:"~217 документов в месяц",p3_f4:"Анализ сканов и фото документов",p3_f5:"Приоритетная очередь",
+  p4_name:"Platinum",p4_f1:"Безлимитный AI-чат",p4_f2:"~182 заключения в месяц",p4_f3:"~542 документа в месяц",p4_f4:"Персональный консьерж и обучение",p4_f5:"Интеграция по API",
   p1_for:"Чтобы попробовать платформу и для простых повседневных вопросов.",
   p2_for:"Для частных юристов, предпринимателей и небольших офисов.",
   p3_for:"Для юротдела, HR и бухгалтерии — тем, кто работает с документами каждый день.",
