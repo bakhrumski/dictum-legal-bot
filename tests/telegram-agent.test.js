@@ -20,11 +20,21 @@ const fs = require('fs');
 // ── Load the agent with ../database/db stubbed (no DB in tests) ─────────────
 // The conversation store is DB-backed, so the fake pool is how a test controls
 // prior state (how many clarifying questions this chat has already had).
-const dbState = { clarifyCount: 0, turns: [], mode: 'automatic', state: 'idle', context: {} };
+const dbState = { clarifyCount: 0, turns: [], mode: 'automatic', state: 'idle', context: {}, aiAnswers: 0 };
 const fakePool = {
-  query: async (sql) => {
+  query: async (sql, params = []) => {
     if (/SELECT\s+turns/i.test(sql)) {
       return { rows: [{ turns: dbState.turns, clarify_count: dbState.clarifyCount, mode: dbState.mode, state: dbState.state, language: 'uz', context: dbState.context }] };
+    }
+    if (/INSERT INTO\s+tg_agent_daily_usage/i.test(sql)) {
+      const limit = Number(params[1]) || 0;
+      if (dbState.aiAnswers >= limit) return { rows: [] };
+      dbState.aiAnswers++;
+      return { rows: [{ ai_answers: dbState.aiAnswers }] };
+    }
+    if (/UPDATE\s+tg_agent_daily_usage/i.test(sql)) {
+      dbState.aiAnswers = Math.max(0, dbState.aiAnswers - 1);
+      return { rows: [] };
     }
     return { rows: [] };
   },
@@ -61,7 +71,7 @@ async function test(name, fn) {
  *   korpus   — a lawyer-verified answer to return from qa-korpus
  */
 function deps(o = {}) {
-  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, contacts: 0, events: 0 };
+  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, contacts: 0, events: 0, quota: 0, release: 0 };
   return {
     calls,
     callCheapAI: async () => {
@@ -90,6 +100,11 @@ function deps(o = {}) {
       return o.contact || null;
     },
     recordAgentEvent: async () => { calls.events++; },
+    claimDailyAnswer: async () => {
+      calls.quota++;
+      return o.quota || { allowed: true, used: 1, remaining: 2, limit: 3 };
+    },
+    releaseDailyAnswer: async () => { calls.release++; },
   };
 }
 
@@ -100,6 +115,7 @@ function stubMemory(clarifyCount = 0) {
   dbState.mode = 'automatic';
   dbState.state = 'idle';
   dbState.context = {};
+  dbState.aiAnswers = 0;
 }
 
 (async () => {
@@ -154,6 +170,31 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(r.escalate, false);
     assert.ok(/@juristAI_registration_bot/.test(r.reply));
     assert.strictEqual(d.calls.answer, 0);
+  });
+
+  await test('"are you a lawyer" is product FAQ, not a sourced legal answer', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Siz yuristmasmisiz?' });
+    assert.strictEqual(r.action, 'identity');
+    assert.strictEqual(r.escalate, false);
+    assert.ok(/inson yurist yoki advokat emasman/i.test(r.reply));
+    assert.ok(!/📎\s*Manbalar:|lex\.uz/i.test(r.reply), 'identity reply must not contain legal citations');
+    assert.strictEqual(d.calls.intent, 0, 'common identity question should not cost a classifier call');
+    assert.strictEqual(d.calls.answer, 0, 'identity question must not enter RAG generation');
+    assert.strictEqual(d.calls.quota, 0, 'identity question must not consume a legal answer');
+  });
+
+  await test('generic help asks only for the legal situation, not the country', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Menga yordam kerak' });
+    assert.strictEqual(r.action, 'clarify');
+    assert.ok(/Qanday huquqiy muammo/i.test(r.reply));
+    assert.ok(!/davlat|hudud/i.test(r.reply), 'JuristAI already knows the governing country');
+    assert.strictEqual(d.calls.intent, 0);
+    assert.strictEqual(d.calls.quota, 0);
   });
 
   await test('document drafting becomes a lawyer-approved paid service without an invented price', async () => {
@@ -234,6 +275,31 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/Mehnat kodeksi/.test(r.reply), 'sources missing');
     assert.ok(/lex\.uz/.test(r.reply), 'source link missing');
     assert.ok(/yuridik kuchga ega emas/.test(r.reply), 'disclaimer missing');
+    assert.ok(/yana 2 ta bepul AI javob/i.test(r.reply), 'remaining daily allowance missing');
+    assert.strictEqual(r.meta.remainingDailyAnswers, 2);
+  });
+
+  await test('the fourth legal answer is blocked before retrieval or generation', async () => {
+    const d = deps({ quota: { allowed: false, used: 3, remaining: 0, limit: 3 } });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat ta\'tili necha kun?' });
+    assert.strictEqual(r.action, 'quota_exceeded');
+    assert.ok(/3 ta bepul AI huquqiy javob/i.test(r.reply));
+    assert.strictEqual(d.calls.answer, 0, 'quota must block answer generation');
+    assert.strictEqual(d.calls.korpus, 0, 'quota must block paid/verified answer work');
+  });
+
+  await test('the database quota reservation is atomic and releasable', async () => {
+    dbState.aiAnswers = 2;
+    const third = await agent.claimDailyAiAnswer(77);
+    const fourth = await agent.claimDailyAiAnswer(77);
+    assert.strictEqual(third.allowed, true);
+    assert.strictEqual(third.remaining, 0);
+    assert.strictEqual(fourth.allowed, false);
+    await agent.releaseDailyAiAnswer(77);
+    const retry = await agent.claimDailyAiAnswer(77);
+    assert.strictEqual(retry.allowed, true, 'a failed answer reservation must be reusable');
+    stubMemory();
   });
 
   await test('a lawyer-verified corpus answer is preferred over generation', async () => {
@@ -270,7 +336,7 @@ function stubMemory(clarifyCount = 0) {
     const d = deps({ intent: { intent: 'noaniq', missing: ['Shartnoma turi qanday?', 'Qachon imzolangan?'] } });
     agent.initTelegramAgent(d);
     stubMemory(0);
-    const r = await agent.handleUserMessage({ chatId: 1, text: 'Menga yordam kerak' });
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Bu masala bo\'yicha aniq yo\'l ko\'rsating' });
     assert.strictEqual(r.action, 'clarify');
     assert.strictEqual(r.escalate, false);
     assert.ok(/Shartnoma turi/.test(r.reply));
@@ -305,6 +371,7 @@ function stubMemory(clarifyCount = 0) {
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Ishdan bo\'shatish tartibi qanday?' });
     assert.strictEqual(r.handled, false);
     assert.strictEqual(r.escalate, true);
+    assert.strictEqual(d.calls.release, 1, 'failed generation must refund the daily answer');
   });
 
   await test('an intent-classifier failure still answers rather than stalling', async () => {
@@ -328,6 +395,13 @@ function stubMemory(clarifyCount = 0) {
 
   await test('a short answer is not split', async () => {
     assert.deepStrictEqual(agent.splitForTelegram('qisqa javob'), ['qisqa javob']);
+  });
+
+  await test('/start explains AI identity and the daily allowance', async () => {
+    const botSource = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
+    assert.ok(/Men inson yurist emasman/.test(botSource));
+    assert.ok(/Har kuni \$\{dailyAiLimit\} ta bepul AI huquqiy javob/.test(botSource));
+    assert.ok(/'identity', 'quota_exceeded', 'quota_unavailable'/.test(botSource), 'non-legal guardrail replies must not create queue rows');
   });
 
   console.log(`\n${passed} passed, ${failed} failed\n`);
