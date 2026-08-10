@@ -48,6 +48,9 @@ test('no superseded price is still displayed', () => {
       `the superseded price ${old} is still on the page`);
   }
   assert.ok(!html.includes('plan-old'), 'the struck-through price element is still present');
+  // The -33% badge went with them: a discount claim with no anchor price
+  // tells a reader 33% off *what*, and cannot be answered from the card.
+  assert.ok(!html.includes('plan-off'), 'the discount badge has no reference price to justify it');
 });
 
 test('a price can never wrap mid-number', () => {
