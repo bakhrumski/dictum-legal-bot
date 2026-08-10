@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+const tariff = fs.readFileSync(path.join(__dirname, '..', 'public', 'tariff.html'), 'utf8');
 const tiersSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'rag', 'subscription-tiers.js'), 'utf8');
 
 let passed = 0, failed = 0;
@@ -102,9 +103,14 @@ test('every plan says who it is for', () => {
   }
 });
 
-test('higher tiers inherit rather than repeat', () => {
-  assert.match(val(uz, 'p3_f1'), /Silver/, 'Gold should build on Silver');
-  assert.match(val(uz, 'p4_f1'), /Gold/, 'Platinum should build on Gold');
+test('every paid tier leads with the headline benefit, not a pointer', () => {
+  // These used to read "Silver'dagi hamma narsa, ustiga:" — an instruction to
+  // go read another card, and a different length on every tier, which is what
+  // knocked the bullet lists out of alignment.
+  for (const k of ['p2_f1', 'p3_f1', 'p4_f1']) {
+    assert.match(val(uz, k), /Cheksiz AI chat/, `${k} should lead with the headline benefit`);
+    assert.match(val(ru, k), /Безлимитный AI-чат/, `${k} missing in Russian`);
+  }
 });
 
 test('the loyalty rebate is advertised', () => {
@@ -126,6 +132,55 @@ test('every pricing key exists in both languages', () => {
   const keys = [...new Set([...html.matchAll(/data-i18n="(p[0-9]_[a-z0-9]+|pr_[a-z]+|p_[a-z]+)"/g)].map(m => m[1]))];
   const missing = keys.filter(k => val(uz, k) === undefined || val(ru, k) === undefined);
   assert.deepStrictEqual(missing, [], 'untranslated key(s): ' + missing.join(', '));
+});
+
+console.log('\npricing cards — tariff.html stays in step\n');
+
+test('tariff.html charges the same prices as the landing page', () => {
+  // Two pages advertise the same plans. They drifted before: tariff.html was
+  // still on 299/599/1199 with "Oyiga 300 ta so'rov" long after the landing
+  // page moved, and it is the page a user reaches to PAY.
+  for (const [markup, base] of [['199,000', '199000'], ['399,000', '399000'], ['999,000', '999000']]) {
+    assert.ok(tariff.includes('>' + markup + '<'), `tariff.html missing price ${markup}`);
+    assert.ok(tariff.includes('data-price="' + base + '"'), `tariff.html data-price ${base} missing`);
+  }
+  // The multi-month calculator multiplies BASE_PRICES, so a stale entry there
+  // charges the old price on any duration other than one month.
+  const bp = tariff.match(/BASE_PRICES = \{([^}]*)\}/)[1];
+  for (const n of ['199000', '399000', '999000']) {
+    assert.ok(bp.includes(n), `BASE_PRICES is stale: ${n} missing`);
+  }
+  for (const old of ['299000', '599000', '1199000']) {
+    assert.ok(!bp.includes(old), `BASE_PRICES still carries the old price ${old}`);
+  }
+});
+
+test('tariff.html advertises the same quotas', () => {
+  for (const q of ['~39', '~95', '~74', '~217', '~182', '~542']) {
+    assert.ok(tariff.includes(q), `tariff.html missing quota ${q}`);
+  }
+  assert.ok(!/Oyiga (300|750|1,?500) ta so‘?'?rov/.test(tariff),
+    'tariff.html still advertises the old request counts');
+});
+
+test('both pages lead every paid tier with the same benefit', () => {
+  // "Silver'dagi hamma narsa, ustiga:" was an inheritance pointer, not a
+  // benefit — and it made the first bullet of each card a different length.
+  for (const [name, doc] of [['index', html], ['tariff', tariff]]) {
+    assert.ok(!/dagi hamma narsa/.test(doc), `${name}.html still uses an inheritance line`);
+  }
+  assert.strictEqual((tariff.match(/Cheksiz AI chat/g) || []).length, 3,
+    'each paid tier in tariff.html should lead with "Cheksiz AI chat"');
+});
+
+test('cards reserve height so rows align across the row', () => {
+  for (const [name, doc] of [['index', html], ['tariff', tariff]]) {
+    const forCss = doc.slice(doc.indexOf('.plan-for'), doc.indexOf('.plan-for') + 260);
+    assert.ok(/min-height:\s*\d+/.test(forCss),
+      `${name}.html: .plan-for has no reserved height, so bullet lists start at different heights`);
+    assert.ok(/min-height:\s*0/.test(doc),
+      `${name}.html: reserved heights are never released, so stacked cards carry dead space`);
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
