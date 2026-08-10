@@ -26,6 +26,9 @@ const CASES = [
   ['GET', '/health', [200], 'health check'],
   ['GET', '/', [200], 'landing page'],
   ['GET', '/login.html', [200], 'login page'],
+  ['GET', '/attorneys.html', [200], 'attorney directory page'],
+  ['GET', '/api/practice-areas', [200], 'public practice areas'],
+  ['GET', '/api/attorneys', [200], 'verified public attorneys'],
 
   // ── authenticated-only (any role) ──
   ['GET', '/api/user-info', REJECTED, 'session identity'],
@@ -56,6 +59,12 @@ const CASES = [
   ['GET', '/api/admin/corpus-diagnostic', REJECTED, 'corpus diagnostic'],
   ['GET', '/api/admin/retrieval-debug?q=test', REJECTED, 'retrieval debug'],
   ['GET', '/api/admin/answer-feedback', REJECTED, 'error reports'],
+  ['GET', '/api/admin/operations-overview', REJECTED, 'operations command center'],
+  ['GET', '/api/admin/attorneys', REJECTED, 'attorney verification'],
+  ['GET', '/api/admin/practice-areas', REJECTED, 'practice area management'],
+  ['GET', '/api/admin/service-catalog', REJECTED, 'paid service catalogue'],
+  ['GET', '/api/admin/service-orders', REJECTED, 'paid service orders'],
+  ['GET', '/api/admin/telegram-conversations', REJECTED, 'Telegram takeover controls'],
   ['GET', '/api/templates/full', REJECTED, 'full templates w/ bodies'],
 ];
 

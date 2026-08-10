@@ -35,8 +35,11 @@ async function triageRequest(requestId, requestText, requestType = 'text') {
         : 'Murojaat juda qisqa'
     };
     await pool.query(
-      'UPDATE requests SET triage_result = $1 WHERE id = $2',
-      [JSON.stringify(fallback), requestId]
+      `UPDATE requests
+          SET triage_result = $1, detected_legal_field = $2,
+              legal_subfield = $3, urgency = $4
+        WHERE id = $5`,
+      [JSON.stringify(fallback), fallback.category, fallback.subcategory, fallback.urgency, requestId]
     );
     return fallback;
   }
@@ -72,8 +75,15 @@ async function triageRequest(requestId, requestText, requestType = 'text') {
 
   // Store in requests table
   await pool.query(
-    'UPDATE requests SET triage_result = $1, category = $2 WHERE id = $3',
-    [JSON.stringify(result), result.category, requestId]
+    `UPDATE requests
+        SET triage_result = $1, category = $2, detected_legal_field = $2,
+            legal_subfield = $3, urgency = $4,
+            requires_lawyer_review = CASE
+              WHEN $4 IN ('critical', 'high') THEN TRUE
+              ELSE requires_lawyer_review
+            END
+      WHERE id = $5`,
+    [JSON.stringify(result), result.category, result.subcategory, result.urgency, requestId]
   );
 
   console.log(`[TRIAGE] Request #${requestId}: ${result.category} / ${result.urgency} / ${result.complexity}`);

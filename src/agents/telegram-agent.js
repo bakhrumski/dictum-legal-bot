@@ -42,6 +42,8 @@ let D = null;
  *   buildTopicPrompt               — the same prompt the dashboard chat uses
  *   classifyLegalTopic             — legal field classifier
  *   searchKorpus, embeddingApiKey  — lawyer-verified answer bank (optional)
+ *   findAttorneys                  — verified, explainable attorney matching
+ *   recordAgentEvent               — operational telemetry (optional)
  */
 function initTelegramAgent(deps) {
   D = deps || null;
@@ -77,9 +79,19 @@ async function ensureTable() {
       chat_id       BIGINT PRIMARY KEY,
       turns         JSONB   NOT NULL DEFAULT '[]'::jsonb,
       clarify_count INTEGER NOT NULL DEFAULT 0,
+      mode          VARCHAR(20) NOT NULL DEFAULT 'automatic',
+      state         VARCHAR(40) NOT NULL DEFAULT 'idle',
+      language      VARCHAR(10) NOT NULL DEFAULT 'uz',
+      last_intent   VARCHAR(60),
+      context       JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at    TIMESTAMP NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(`ALTER TABLE tg_conversations ADD COLUMN IF NOT EXISTS mode VARCHAR(20) NOT NULL DEFAULT 'automatic'`);
+  await pool.query(`ALTER TABLE tg_conversations ADD COLUMN IF NOT EXISTS state VARCHAR(40) NOT NULL DEFAULT 'idle'`);
+  await pool.query(`ALTER TABLE tg_conversations ADD COLUMN IF NOT EXISTS language VARCHAR(10) NOT NULL DEFAULT 'uz'`);
+  await pool.query(`ALTER TABLE tg_conversations ADD COLUMN IF NOT EXISTS last_intent VARCHAR(60)`);
+  await pool.query(`ALTER TABLE tg_conversations ADD COLUMN IF NOT EXISTS context JSONB NOT NULL DEFAULT '{}'::jsonb`);
   _tableReady = true;
 }
 
@@ -87,18 +99,22 @@ async function loadConversation(chatId) {
   try {
     await ensureTable();
     const r = await pool.query(
-      `SELECT turns, clarify_count FROM tg_conversations
+      `SELECT turns, clarify_count, mode, state, language, context FROM tg_conversations
         WHERE chat_id = $1 AND updated_at > NOW() - INTERVAL '${HISTORY_TTL_H} hours'`,
       [chatId]
     );
-    if (!r.rows.length) return { turns: [], clarifyCount: 0 };
+    if (!r.rows.length) return { turns: [], clarifyCount: 0, mode: 'automatic', state: 'idle', language: 'uz', context: {} };
     return {
       turns: Array.isArray(r.rows[0].turns) ? r.rows[0].turns : [],
       clarifyCount: r.rows[0].clarify_count || 0,
+      mode: r.rows[0].mode || 'automatic',
+      state: r.rows[0].state || 'idle',
+      language: r.rows[0].language || 'uz',
+      context: r.rows[0].context && typeof r.rows[0].context === 'object' ? r.rows[0].context : {},
     };
   } catch (e) {
     console.warn('[TG-AGENT] loadConversation failed:', e.message);
-    return { turns: [], clarifyCount: 0 };
+    return { turns: [], clarifyCount: 0, mode: 'automatic', state: 'idle', language: 'uz', context: {} };
   }
 }
 
@@ -142,7 +158,10 @@ function historyToText(turns) {
 // down the paid answer path.
 const GREETING_RE = /^\s*(assalomu?\s+alayku?m|assalom\w*|salom\w*|salam|(?:x|h)ayrli\s+(kun|tong|kech)|hello|hi|привет|здравствуйте)[\s!.,]*$/iu;
 const THANKS_RE   = /^\s*(rahmat|raxmat|tashakkur|katta\s+rahmat|thanks|thank\s*you|спасибо)[\s!.,)]*$/iu;
-const HUMAN_RE    = /(yurist\s+bilan|advokat\s+bilan|inson\s+bilan|jonli\s+odam|operator|real\s+yurist|человек|юрист(ом)?\s+связ)/iu;
+const ATTORNEY_RE = /(advokat\s+(kerak|top|izla)|yurist\s+(kerak|top|izla)|адвокат\s+(нужен|найти)|найти\s+(адвоката|юриста))/iu;
+const HUMAN_RE    = /(inson\s+bilan|jonli\s+odam|operator|real\s+yurist|yurist\s+bilan\s+gaplash|человек|оператор|юрист(ом)?\s+связ)/iu;
+const DOCUMENT_RE = /(hujjat|ariza|da['’]?vo|shikoyat|shartnoma|iltimosnoma|e['’]?tiroz|претензи|иск|жалоб|договор|заявлен).*\b(tayyor|yoz|tuz|kerak|состав|подготов)/iu;
+const ACCOUNT_RE  = /(ro['’]?yxat|registrat|login|kirish|parol|otp|kod\s+kelm|hisob|аккаунт|регистрац|парол|войти)/iu;
 
 const INTENT_PROMPT = `Siz Telegram yuridik botining niyat aniqlovchi modulisiz. Foydalanuvchi xabarini tasniflang.
 
@@ -154,10 +173,14 @@ intent qiymatlari:
 - "noaniq"         — huquqiy mavzu, lekin javob berish uchun muhim faktlar yetishmaydi
 - "davomi"         — oldingi savolning davomi yoki so'ralgan aniqlikni bergan javob
 - "salomlashuv"    — salom, rahmat, xayrlashuv kabi ijtimoiy xabar
-- "yurist_kerak"   — jonli yurist bilan bog'lanishni so'ramoqda
+- "advokat_kerak"  — mos advokat yoki yurist topishni so'ramoqda
+- "hujjat_tayyorlash" — ariza, da'vo, shikoyat, shartnoma yoki boshqa hujjat tayyorlashni so'ramoqda
+- "hisob_yordam"   — ro'yxatdan o'tish, login, OTP yoki parol masalasi
+- "yurist_kerak"   — operator yoki jonli inson bilan gaplashishni so'ramoqda
 - "mavzudan_tashqari" — huquqqa aloqasi yo'q
 
 "missing": agar intent "noaniq" bo'lsa, javob uchun zarur bo'lgan 1-3 ta faktni yozing (o'zbekcha, qisqa). Aks holda [].
+Imkon bo'lsa legal_field, legal_subfield, region va language (uz/ru) maydonlarini ham qaytaring.
 
 Muhim: agar savol umumiy bo'lsa-yu, umumiy huquqiy javob berish mumkin bo'lsa — bu "huquqiy_savol". "noaniq" ni faqat javob berish HAQIQATAN mumkin bo'lmaganda tanlang.`;
 
@@ -166,6 +189,9 @@ async function classifyIntent(text, turns) {
 
   if (GREETING_RE.test(t)) return { intent: 'salomlashuv', kind: 'greeting', missing: [] };
   if (THANKS_RE.test(t))   return { intent: 'salomlashuv', kind: 'thanks',   missing: [] };
+  if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
+  if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
+  if (ACCOUNT_RE.test(t))  return { intent: 'hisob_yordam', missing: [] };
   if (HUMAN_RE.test(t))    return { intent: 'yurist_kerak', missing: [] };
 
   const ask = D.callCheapAI || D.callAI;
@@ -179,10 +205,14 @@ async function classifyIntent(text, turns) {
     const raw = String(res.text || '').replace(/```(?:json)?/gi, '').trim();
     const m = raw.match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) : {};
-    const valid = ['huquqiy_savol', 'noaniq', 'davomi', 'salomlashuv', 'yurist_kerak', 'mavzudan_tashqari'];
+    const valid = ['huquqiy_savol', 'noaniq', 'davomi', 'salomlashuv', 'advokat_kerak', 'hujjat_tayyorlash', 'hisob_yordam', 'yurist_kerak', 'mavzudan_tashqari'];
     return {
       intent: valid.includes(parsed.intent) ? parsed.intent : 'huquqiy_savol',
       missing: Array.isArray(parsed.missing) ? parsed.missing.slice(0, 3).map(String) : [],
+      legalField: String(parsed.legal_field || '').slice(0, 120),
+      legalSubfield: String(parsed.legal_subfield || '').slice(0, 120),
+      region: String(parsed.region || '').slice(0, 120),
+      language: parsed.language === 'ru' ? 'ru' : 'uz',
     };
   } catch (e) {
     console.warn('[TG-AGENT] intent classification failed, treating as legal question:', e.message);
@@ -190,6 +220,59 @@ async function classifyIntent(text, turns) {
     // costs one imperfect answer, a missed ANSWER costs the whole interaction.
     return { intent: 'huquqiy_savol', missing: [] };
   }
+}
+
+async function setConversationState(chatId, state, context) {
+  try {
+    await ensureTable();
+    const hasContext = context !== undefined;
+    await pool.query(`
+      INSERT INTO tg_conversations (chat_id, state, context, updated_at)
+      VALUES ($1, $2, $3::jsonb, NOW())
+      ON CONFLICT (chat_id) DO UPDATE SET
+        state = EXCLUDED.state,
+        context = CASE WHEN $4 THEN EXCLUDED.context ELSE tg_conversations.context END,
+        updated_at = NOW()
+    `, [chatId, state, JSON.stringify(hasContext ? context : {}), hasContext]);
+  } catch (_) { /* non-fatal */ }
+}
+
+function formatAttorneyRecommendations(attorneys) {
+  if (!Array.isArray(attorneys) || !attorneys.length) return '';
+  const rows = attorneys.slice(0, 5).map((attorney, index) => {
+    const reasons = Array.isArray(attorney.match_reasons) ? attorney.match_reasons.join(', ') : 'soha mos keladi';
+    const practice = Array.isArray(attorney.practice_areas)
+      ? attorney.practice_areas.slice(0, 3).map(area => area.name_uz).filter(Boolean).join(', ')
+      : '';
+    return [
+      `${index + 1}. *${attorney.full_name}*`,
+      attorney.region ? `Hudud: ${attorney.region}` : '',
+      practice ? `Yo'nalish: ${practice}` : '',
+      attorney.license_number ? `Litsenziya: ${attorney.license_number} (faol)` : 'Litsenziya: faol',
+      `Moslik sababi: ${reasons}`,
+      attorney.source_name ? `Manba: ${attorney.source_name}` : '',
+    ].filter(Boolean).join('\n');
+  });
+  return rows.join('\n\n');
+}
+
+function parseAttorneyChoice(text, options) {
+  const value = String(text || '').trim();
+  if (/^(yo['’]?q|kerak emas|bekor|rad etaman|hech qaysi|нет|отмена)[.!\s]*$/iu.test(value)) return { cancelled: true };
+  const number = value.match(/(?:^|\s)([1-5])(?:\s|$|[-.)])/);
+  if (!number) return null;
+  const index = Number(number[1]) - 1;
+  return options[index] ? { option: options[index], index } : null;
+}
+
+function detectServiceSlug(text) {
+  const value = String(text || '').toLocaleLowerCase('uz');
+  if (/da['’]?vo|иск/iu.test(value)) return 'claim';
+  if (/shikoyat|жалоб|претензи/iu.test(value)) return 'complaint';
+  if (/shartnoma|договор/iu.test(value)) return 'contract';
+  if (/xulosa|заключен/iu.test(value)) return 'legal-opinion';
+  if (/ariza|заявлен/iu.test(value)) return 'application';
+  return 'legal-document';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -329,7 +412,20 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
   if (!question)    return skip('empty message');
 
   const started = Date.now();
-  const { turns, clarifyCount } = await loadConversation(chatId);
+  const { turns, clarifyCount, mode, state, context } = await loadConversation(chatId);
+
+  // Master Admin can pause automation for an individual conversation. The
+  // bot still records the message in the normal request queue, but it does not
+  // classify or answer on the user's behalf until automatic mode is restored.
+  if (mode === 'human') {
+    return {
+      handled: true,
+      reply: null,
+      action: 'human_takeover',
+      escalate: true,
+      meta: { reason: 'conversation is in human takeover mode' },
+    };
+  }
 
   let intent;
   try {
@@ -338,6 +434,43 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     console.warn('[TG-AGENT] intent failed:', e.message);
     intent = { intent: 'huquqiy_savol', missing: [] };
   }
+  if (state === 'attorney_intake') intent = { ...intent, intent: 'advokat_kerak' };
+
+  const complete = async (result) => {
+    try {
+      await ensureTable();
+      const nextState = result.meta && result.meta.conversationState
+        ? result.meta.conversationState
+        : (result.action === 'clarify' ? 'clarifying' : (result.escalate ? 'awaiting_lawyer' : 'idle'));
+      await pool.query(`
+        INSERT INTO tg_conversations (chat_id, last_intent, language, state, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (chat_id) DO UPDATE SET
+          last_intent = EXCLUDED.last_intent,
+          language = EXCLUDED.language,
+          state = EXCLUDED.state,
+          updated_at = NOW()
+      `, [chatId, intent.intent, intent.language === 'ru' ? 'ru' : 'uz', nextState]);
+    } catch (e) {
+      console.warn('[TG-AGENT] conversation state update failed:', e.message);
+    }
+    if (D && D.recordAgentEvent) {
+      try {
+        await D.recordAgentEvent({
+          telegramChatId: chatId,
+          intent: intent.intent,
+          action: result.action,
+          legalField: result.meta && result.meta.legalField,
+          status: result.handled ? 'completed' : 'failed',
+          durationMs: Date.now() - started,
+          metadata: result.meta || {},
+        });
+      } catch (e) {
+        console.warn('[TG-AGENT] event telemetry failed:', e.message);
+      }
+    }
+    return result;
+  };
 
   const remember = async (replyText, nextClarify = 0) => {
     await saveConversation(
@@ -348,30 +481,165 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
   };
 
   // ── Social ──────────────────────────────────────────────────────────────
+  // The initial recommendation never contains a phone. A numbered choice is
+  // treated as explicit consent to reveal that one public directory contact;
+  // it does not authorize sharing the user's case or identity with anyone.
+  if (state === 'awaiting_attorney_choice') {
+    const options = Array.isArray(context && context.attorneyOptions) ? context.attorneyOptions.slice(0, 5) : [];
+    const choice = parseAttorneyChoice(question, options);
+    if (choice && choice.cancelled) {
+      const reply = "Tushunarli. Hech qaysi advokatning aloqa raqami ochilmadi. Keyinroq kerak bo'lsa yana yozishingiz mumkin.";
+      await setConversationState(chatId, 'idle', {});
+      await remember(reply, 0);
+      return complete({ handled: true, reply, action: 'attorney_contact_cancelled', escalate: false, meta: { intent: 'advokat_kerak' } });
+    }
+    if (!choice || !choice.option) {
+      const reply = options.length
+        ? `Aloqa raqamini olish uchun 1 dan ${options.length} gacha bo'lgan raqamni yuboring. Masalan: *1*. Bekor qilish uchun “yo'q” deb yozing.`
+        : "Advokat tanlovi eskirgan. Iltimos, qaysi yo'nalish va hudud bo'yicha advokat kerakligini qayta yozing.";
+      if (!options.length) await setConversationState(chatId, 'idle', {});
+      await remember(reply, 0);
+      return complete({
+        handled: true,
+        reply,
+        action: 'attorney_choice_required',
+        escalate: false,
+        meta: { intent: 'advokat_kerak', conversationState: options.length ? 'awaiting_attorney_choice' : 'idle' },
+      });
+    }
+
+    let contact = null;
+    if (D && D.getAttorneyContact) {
+      try {
+        contact = await D.getAttorneyContact({ telegramChatId: chatId, attorneyRef: choice.option.ref });
+      } catch (error) {
+        console.warn('[TG-AGENT] attorney contact lookup failed:', error.message);
+      }
+    }
+    if (!contact || !contact.contact_phone) {
+      const reply = "Tanlangan advokatning aloqa raqamini hozir rasmiy manbadan qayta tasdiqlab bo'lmadi. Murojaatingiz Master Adminga yuborildi; tekshirilgach shu yerda xabar beramiz.";
+      await setConversationState(chatId, 'awaiting_lawyer', {});
+      await remember(reply, 0);
+      return complete({ handled: true, reply, action: 'attorney_contact_unavailable', escalate: true, meta: { intent: 'advokat_kerak', attorneyRef: choice.option.ref } });
+    }
+
+    const reply = [
+      `Siz *${contact.full_name || choice.option.name}*ni tanladingiz.`,
+      contact.organization_name ? `Advokatlik tuzilmasi: ${contact.organization_name}` : '',
+      `Telefon: *${contact.contact_phone}*`,
+      contact.source_name ? `Manba: ${contact.source_name}` : '',
+      "Sizning shaxsiy ma'lumotlaringiz va murojaat matningiz advokatga yuborilmadi. JuristAI xizmat narxini belgilamaydi va narx bo'yicha muzokara olib bormaydi.",
+    ].filter(Boolean).join('\n');
+    await setConversationState(chatId, 'idle', {});
+    await remember(reply, 0);
+    return complete({ handled: true, reply, action: 'attorney_contact_shared', escalate: false, meta: { intent: 'advokat_kerak', attorneyRef: choice.option.ref } });
+  }
+
   if (intent.intent === 'salomlashuv') {
     const reply = intent.kind === 'thanks'
       ? 'Arzimaydi! 🙌 Yana savolingiz bo\'lsa — yozing.'
       : `Assalomu alaykum${firstName ? ', ' + firstName : ''}! 👋\n\nMen JuristAI — O'zbekiston qonunchiligi bo'yicha yordamchiman.\n\nHuquqiy savolingizni yozing: vaziyatni qisqacha tushuntiring, men amaldagi qonun asosida javob beraman.`;
     await resetClarify(chatId);
-    return { handled: true, reply, action: 'greeting', escalate: false, meta: { intent: intent.intent } };
+    return complete({ handled: true, reply, action: 'greeting', escalate: false, meta: { intent: intent.intent } });
+  }
+
+  // ── Account and authentication support ─────────────────────────────────
+  if (intent.intent === 'hisob_yordam') {
+    const reply = "Ro'yxatdan o'tish, kirish, OTP va parolni tiklash uchun @juristAI_registration_bot yordam beradi.\n\nBotni ochib, kerakli amalni tanlang. Bu bot esa faqat huquqiy savollar uchun ishlaydi.";
+    await remember(reply, 0);
+    return complete({ handled: true, reply, action: 'account_help', escalate: false, meta: { intent: intent.intent } });
+  }
+
+  // ── Paid document preparation ──────────────────────────────────────────
+  if (intent.intent === 'hujjat_tayyorlash') {
+    const serviceSlug = detectServiceSlug(question);
+    const reply = "Hujjat tayyorlash JuristAI'da pullik xizmat hisoblanadi. Buyurtma faqat mas'ul yurist ko'rib chiqib, ruxsat berganidan keyin ishga olinadi.\n\nHozircha murojaatingizni yurist tekshiruviga yuboraman. Narx va bajarish shartlari tasdiqlangach sizga alohida xabar beriladi.";
+    await remember(reply, 0);
+    return complete({
+      handled: true,
+      reply,
+      action: 'paid_service',
+      escalate: true,
+      meta: { intent: intent.intent, serviceSlug, paidService: true, requiresLawyerApproval: true },
+    });
+  }
+
+  // ── Verified attorney matching ─────────────────────────────────────────
+  if (intent.intent === 'advokat_kerak') {
+    let legalField = intent.legalField || '';
+    if (!legalField && D.classifyLegalTopic) {
+      try { legalField = String(await D.classifyLegalTopic(question, { forcePick: true }) || ''); } catch (_) { /* optional */ }
+    }
+
+    let attorneys = [];
+    if (D.findAttorneys) {
+      try {
+        attorneys = await D.findAttorneys({
+          query: question,
+          legalField,
+          legalSubfield: intent.legalSubfield || '',
+          region: intent.region || '',
+          language: intent.language || 'uz',
+          limit: 5,
+        });
+      } catch (e) {
+        console.warn('[TG-AGENT] attorney matching failed:', e.message);
+      }
+    }
+
+    if (attorneys.length) {
+      const attorneyOptions = attorneys.slice(0, 5).map((item, index) => ({
+        index: index + 1,
+        ref: item.contact_ref || `local:${item.id}`,
+        name: item.full_name,
+        organization: item.organization_name || '',
+      }));
+      const reply = `Sizning murojaatingizga mos, litsenziyasi tasdiqlangan advokatlar:\n\n${formatAttorneyRecommendations(attorneys)}\n\nTelefon raqamlari tanlovingizgacha yopiq saqlanadi. Bog'lanmoqchi bo'lgan advokat raqamini yuboring: masalan, *1*.\n\nJuristAI advokat xizmatining narxini belgilamaydi va narx bo'yicha muzokara olib bormaydi. Xizmat shartlari advokat bilan alohida kelishiladi.`;
+      await remember(reply, 0);
+      await setConversationState(chatId, 'awaiting_attorney_choice', { attorneyOptions });
+      return complete({
+        handled: true,
+        reply,
+        action: 'attorney_matches',
+        escalate: false,
+        meta: {
+          intent: intent.intent,
+          legalField,
+          attorneyIds: attorneys.map(item => item.id),
+          attorneyRefs: attorneyOptions.map(item => item.ref),
+          conversationState: 'awaiting_attorney_choice',
+        },
+      });
+    }
+
+    const reply = "Hozircha ushbu yo'nalish bo'yicha tasdiqlangan mos advokat topilmadi. Murojaatingiz Master Adminga yuborildi — mos mutaxassis topilganda shu yerda xabar beramiz.\n\nJuristAI advokat xizmatlari narxini belgilamaydi va narx bo'yicha muzokara olib bormaydi.";
+    await remember(reply, 0);
+    await setConversationState(chatId, 'idle');
+    return complete({
+      handled: true,
+      reply,
+      action: 'attorney_request',
+      escalate: true,
+      meta: { intent: intent.intent, legalField, attorneyIds: [] },
+    });
   }
 
   // ── Wants a human ───────────────────────────────────────────────────────
   if (intent.intent === 'yurist_kerak') {
-    return {
+    return complete({
       handled: true,
       reply: '👨‍⚖️ Tushunarli — murojaatingiz yuristga yuborildi.\n\nMutaxassis ko\'rib chiqib, shu yerda javob beradi. Kutib turing.',
       action: 'escalate',
       escalate: true,
       meta: { intent: intent.intent },
-    };
+    });
   }
 
   // ── Off-topic ───────────────────────────────────────────────────────────
   if (intent.intent === 'mavzudan_tashqari') {
     const reply = 'Men faqat O\'zbekiston qonunchiligi bo\'yicha yordam bera olaman. 🙏\n\nHuquqiy savolingiz bo\'lsa — bemalol yozing.';
     await remember(reply, clarifyCount);
-    return { handled: true, reply, action: 'offtopic', escalate: false, meta: { intent: intent.intent } };
+    return complete({ handled: true, reply, action: 'offtopic', escalate: false, meta: { intent: intent.intent } });
   }
 
   // ── Too vague → ask ONE targeted question, but never loop forever ───────
@@ -379,7 +647,7 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     const asks = intent.missing.map((m, i) => `${i + 1}. ${m}`).join('\n');
     const reply = `Savolingizga aniq javob berishim uchun quyidagilarni bilishim kerak:\n\n${asks}\n\nShularni yozib yuboring — keyin qonun asosida javob beraman.`;
     await remember(reply, clarifyCount + 1);
-    return { handled: true, reply, action: 'clarify', escalate: false, meta: { intent: intent.intent, missing: intent.missing } };
+    return complete({ handled: true, reply, action: 'clarify', escalate: false, meta: { intent: intent.intent, missing: intent.missing } });
   }
 
   // ── Answer ──────────────────────────────────────────────────────────────
@@ -407,13 +675,13 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
   await remember(answer.text, 0);
   console.log(`[TG-AGENT] chat=${chatId} intent=${intent.intent} path=${answer.meta.path} conf=${answer.confidence} ${Date.now() - started}ms`);
 
-  return {
+  return complete({
     handled: true,
     reply,
     action: 'answered',
     escalate: lowConfidence,
     meta: { intent: intent.intent, ...answer.meta, confidence: answer.confidence, ms: Date.now() - started },
-  };
+  });
 }
 
 /** Split a reply that exceeds Telegram's message limit, preferring paragraph breaks. */
@@ -442,6 +710,9 @@ module.exports = {
   // exported for tests
   classifyIntent,
   formatSources,
+  formatAttorneyRecommendations,
+  detectServiceSlug,
   loadConversation,
   saveConversation,
+  setConversationState,
 };

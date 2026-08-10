@@ -138,14 +138,24 @@ test('detects Russian "Документ утратил силу"', () => {
   assertMatch(metadata.status_label, /Документ\s+утратил\s+силу/i, 'Russian status_label');
 });
 
-test('detects "Eski tahrir" → inactive', () => {
+test('detects the document-level "Hujjatning eski tahriri" banner → inactive', () => {
+  const html = buildHtml({
+    title: 'Yangilangan qonun',
+    bannerText: 'Hujjatning eski tahriri',
+  });
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/225');
+  assertFalse(metadata.is_active, 'document-level old-edition banner should mark inactive');
+  assertEq(metadata.status_label, 'Eski tahrir', 'Eski tahrir label');
+});
+
+test('does not treat a bare "Eski tahrir" navigation label as repeal status', () => {
   const html = buildHtml({
     title: 'Yangilangan qonun',
     bannerText: 'Eski tahrir',
   });
-  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/225');
-  assertFalse(metadata.is_active, 'Eski tahrir should mark inactive');
-  assertEq(metadata.status_label, 'Eski tahrir', 'Eski tahrir label');
+  const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/225-current');
+  assertTrue(metadata.is_active, 'bare navigation label must not mark the act inactive');
+  assertEq(metadata.status_label, null, 'bare navigation label is not a status');
 });
 
 test('extracts adoption_date from "27.12.1996" numeric title', () => {
@@ -305,9 +315,6 @@ const advancedCorpusSrc = fs.readFileSync(
 const ingestLexSrc = fs.readFileSync(
   path.join(__dirname, '../src/rag/ingest-lex.js'), 'utf8'
 );
-const portalServicesSrc = fs.readFileSync(
-  path.join(__dirname, '../src/portal/services.js'), 'utf8'
-);
 const systemPromptSrc = fs.readFileSync(
   path.join(__dirname, '../src/rag/system-prompt.js'), 'utf8'
 );
@@ -417,38 +424,39 @@ const serverSrc = fs.readFileSync(
   path.join(__dirname, '../src/api/server.js'), 'utf8'
 );
 
-test('retrieveLegalContext builds citationBlocks with metadata (date, number, URL)', () => {
-  assertMatch(serverSrc, /citationBlocks\s*=\s*\[\]/, 'citationBlocks array declared');
+test('retrieveLegalContext builds source references with metadata (date, number, URL)', () => {
+  assertMatch(serverSrc, /sourceRefLines\s*=\s*\[\]/, 'source reference array declared');
   assertMatch(serverSrc, /r\.adoption_date/, 'reads adoption_date from chunk');
   assertMatch(serverSrc, /r\.document_number/, 'reads document_number from chunk');
   assertMatch(serverSrc, /formatDate/, 'date formatter helper present');
 });
 
 test('citation table emits "modda" locator with metadata block', () => {
-  // The block builder joins law_name, optional (date, № num), the modda
-  // locator, and the source URL.
-  assertMatch(serverSrc, /\$\{locator\}/, 'uses `${locator}` in citation block');
+  // The source-reference builder joins law_name, optional (date, № num),
+  // the article locator, and the verified active source URL.
   assertMatch(serverSrc, /\$\{art\}-modda/, 'locator built from article + "-modda"');
+  assertMatch(serverSrc, /r\.is_active === true && r\.source_url/, 'URL is limited to active source records');
 });
 
-test('citation table uses "RUXSAT ETILGAN MANBALAR" header', () => {
-  assertMatch(serverSrc, /RUXSAT ETILGAN MANBALAR/, 'allowed-sources header');
+test('citation table uses the compact "MANBALAR" header', () => {
+  assertMatch(serverSrc, /MANBALAR:/, 'source-list header');
 });
 
-test('empty-context branch returns the zero-hallucination fallback sentence', () => {
+test('empty-context branch returns an explicit empty context for safe fallback handling', () => {
   assertMatch(
     serverSrc,
-    /Ushbu savol bo['’]yicha lex\.uz ma['’]lumotlar bazasida aniq ma['’]lumot topilmadi/,
-    'fallback sentence present'
+    /goodChunks\.length === 0[\s\S]{0,200}return \{ context: ''/,
+    'empty retrieval is represented explicitly'
   );
 });
 
 test('retrieveLegalContext does not force "topilmadi" when chunks exist but article metadata is missing', () => {
   assertMatch(
     serverSrc,
-    /Kontekstdagi ayrim bo‘laklarda modda raqami metadata ko‘rinmadi/,
-    'soft fallback for missing article metadata is present'
+    /sourceBlock = sourceRefLines\.length > 0[\s\S]{0,120}: ''/,
+    'missing article metadata only omits the source list'
   );
+  assertMatch(serverSrc, /sourceBlock[\s\S]{0,100}chunksText/, 'retrieved chunk text remains in context');
 });
 
 test('buildTopicPrompt MUST NOT contain pretrained topicKnowledge leakage', () => {
@@ -459,8 +467,8 @@ test('buildTopicPrompt MUST NOT contain pretrained topicKnowledge leakage', () =
   assertNoMatch(serverSrc, /QQS\s*\(12%\)/, 'hard-coded QQS rate removed');
 });
 
-test('buildTopicPrompt declares YAGONA (sole) source = RAG context', () => {
-  assertMatch(serverSrc, /YAGONA huquqiy manbangiz/, 'sole-source declaration');
+test('buildTopicPrompt restricts legal claims to RAG context and lex.uz', () => {
+  assertMatch(serverSrc, /Faqat KONTEKSTdagi ma'lumot va lex\.uz havolalariga tayaning/, 'context-only declaration');
 });
 
 test('query-intent detects true definition questions without matching action queries', () => {
@@ -492,11 +500,6 @@ test('buildTopicPrompt source includes intent-aware definition instructions', ()
   assertMatch(serverSrc, /const termExplanationRule = getTermExplanationRule\(userQuestion\)/, 'server prompt computes explanation rule');
 });
 
-test('portal prompt source includes intent-aware definition instructions', () => {
-  assertMatch(portalServicesSrc, /buildLegalSystemPrompt\(topicLabel, ragContext, userQuestion = ''\)/, 'portal prompt accepts user question');
-  assertMatch(portalServicesSrc, /const definitionPromptAddendum = getDefinitionPromptAddendum\(userQuestion\)/, 'portal prompt computes definition addendum');
-});
-
 test('advanced prompt source includes intent-aware definition instructions', () => {
   assertMatch(systemPromptSrc, /userQuestion = ''/, 'advanced prompt accepts user question');
   assertMatch(systemPromptSrc, /const definitionPromptAddendum = getDefinitionPromptAddendum\(userQuestion\)/, 'advanced prompt computes definition addendum');
@@ -513,11 +516,6 @@ test('retrieveLegalContext retries without category filter when topic-scoped ret
     /await retrieveLegalContext\(query, null, null\)/,
     'server reruns retrieval without category or language'
   );
-});
-
-test('portal legal chat reuses retrieveLegalContext fallback logic from server when available', () => {
-  assertMatch(portalServicesSrc, /retrieveLegalContext = serverModule\.retrieveLegalContext/, 'portal imports shared retrieveLegalContext');
-  assertMatch(portalServicesSrc, /if \(typeof retrieveLegalContext === 'function'\)/, 'portal prefers shared retrieval');
 });
 
 test('advanced chat retries parent-child retrieval without category filter on underflow', () => {
@@ -545,20 +543,15 @@ test('buildAdvancedPrompt switches off the blanket no-redefinition rule for defi
   assertMatch(prompt, /Bu definitsiya savoli: savoldagi tushunchani aynan kontekstdagi huquqiy mazmuni bilan bevosita tushuntiring\./, 'definition rule overrides blanket ban');
 });
 
-test('MAJBURIY IQTIBOS FORMATI block is present and matches the spec shape', () => {
-  assertMatch(serverSrc, /MAJBURIY IQTIBOS FORMATI/, 'mandatory citation header');
-  assertMatch(serverSrc, /<Qonun nomi>/, 'law name placeholder');
-  assertMatch(serverSrc, /<sana>/, 'date placeholder');
-  assertMatch(serverSrc, /<raqam>/, 'number placeholder');
-  assertMatch(serverSrc, /<modda>-modda/, 'article placeholder');
-  assertMatch(serverSrc, /<qism>-qism/, 'part placeholder');
-  assertMatch(serverSrc, /<URL>/, 'URL placeholder');
+test('mandatory citation instructions require law, article, and part', () => {
+  assertMatch(serverSrc, /Har bir norma uchun: \(\*\*Qonun nomi, N-modda, M-qism\*\*\)/, 'mandatory citation shape');
+  assertMatch(serverSrc, /FAQAT KONTEKSTdagi MANBALAR ro'yxatida ko'rsatilgan URL'larni keltiring/, 'URL allowlist instruction');
 });
 
-test('concrete example in prompt uses the Advokatura law and 349-I doc number', () => {
-  assertMatch(serverSrc, /Advokatura to['’]g['’]risida/, 'Advokatura example law name');
-  assertMatch(serverSrc, /27\.12\.1996/, 'example date');
-  assertMatch(serverSrc, /349-I/, 'example document number');
+test('source references preserve official date and document-number metadata', () => {
+  assertMatch(serverSrc, /const dateStr = formatDate\(r\.adoption_date\)/, 'official date included');
+  assertMatch(serverSrc, /const docNum = r\.document_number/, 'document number included');
+  assertMatch(serverSrc, /docNum \? `\\u2116 \$\{docNum\}` : null/, 'document number format');
 });
 
 test('/api/legal-chat uses qa_korpus Stage 1 interceptor for expert-corrected answers', () => {
