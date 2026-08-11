@@ -1444,19 +1444,20 @@ app.get('/api/admin/telegram-conversations', requireMasterAdmin, async (req, res
     const limit = Math.max(10, Math.min(parseInt(req.query.limit, 10) || 50, 100));
     const result = await pool.query(`
       SELECT tc.chat_id, tc.mode, tc.state, tc.language, tc.last_intent,
-             tc.updated_at, u.first_name, u.last_name, u.username,
+             tc.updated_at, u.first_name, u.name, u.username,
              COUNT(r.id) FILTER (WHERE r.status IN ('pending', 'assigned', 'student_responded', 'lawyer_approved'))::int AS open_requests
         FROM tg_conversations tc
         LEFT JOIN users u ON u.telegram_id = tc.chat_id
         LEFT JOIN requests r ON r.user_id = u.id
        WHERE ($1::text IS NULL OR tc.mode = $1)
        GROUP BY tc.chat_id, tc.mode, tc.state, tc.language, tc.last_intent,
-                tc.updated_at, u.first_name, u.last_name, u.username
+                tc.updated_at, u.first_name, u.name, u.username
        ORDER BY tc.updated_at DESC
        LIMIT $2
     `, [mode, limit]);
     res.json({ items: result.rows });
   } catch (error) {
+    console.error('[TELEGRAM-ADMIN] conversations failed:', error.message);
     res.status(500).json({ error: 'Telegram suhbatlarini olishda xatolik' });
   }
 });

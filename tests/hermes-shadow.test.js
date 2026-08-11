@@ -56,7 +56,8 @@ function fakeDb() {
       env: {
         HERMES_SHADOW_ENABLED: 'true',
         HERMES_SHADOW_URL: 'http://hermes.internal:8642/v1',
-        HERMES_SHADOW_MODEL: 'gpt-5.6-luna',
+        HERMES_SHADOW_MODEL: 'hermes-agent',
+        HERMES_SHADOW_PRICING_MODEL: 'gpt-5.6-luna',
         HERMES_SHADOW_SAMPLE_RATE: '1',
       },
       db,
@@ -66,7 +67,7 @@ function fakeDb() {
         return {
           ok: true,
           json: async () => ({
-            model: 'gpt-5.6-luna',
+            model: 'hermes-agent',
             choices: [{ message: { content: JSON.stringify({
               intent: 'huquqiy_savol',
               recommended_action: 'answer',
@@ -117,6 +118,64 @@ function fakeDb() {
     assert.match(result.error, /503/);
     assert.strictEqual(db.inserts.length, 1);
     assert.strictEqual(db.inserts[0][17], 'failed');
+  });
+
+  await test('invalid JSON is retried once and both attempts are counted', async () => {
+    const db = fakeDb();
+    let calls = 0;
+    const service = createHermesShadow({
+      env: {
+        HERMES_SHADOW_ENABLED: 'true',
+        HERMES_SHADOW_URL: 'http://hermes:8642/v1',
+        HERMES_SHADOW_MODEL: 'hermes-agent',
+        HERMES_SHADOW_PRICING_MODEL: 'gpt-5.6-luna',
+        HERMES_SHADOW_MAX_ATTEMPTS: '2',
+      },
+      db,
+      random: () => 0,
+      fetchImpl: async () => {
+        calls++;
+        return {
+          ok: true,
+          json: async () => ({
+            model: 'hermes-agent',
+            choices: [{ message: { content: calls === 1 ? 'Aniqlashtirish kerak.' : JSON.stringify({
+              intent: 'noaniq',
+              recommended_action: 'clarify',
+              needs_clarification: true,
+              should_use_ai_answer: false,
+              should_escalate: false,
+              confidence: 0.88,
+              reason: 'Vague help request',
+            }) } }],
+            usage: { prompt_tokens: 500, completion_tokens: 50, total_tokens: 550 },
+          }),
+        };
+      },
+    });
+    const result = await service.run({
+      chatId: 10,
+      text: 'Menga yordam kerak',
+      productionResult: { action: 'clarify', escalate: false, meta: { intent: 'noaniq' } },
+    });
+    assert.strictEqual(calls, 2);
+    assert.strictEqual(result.status, 'success');
+    assert.strictEqual(result.agreement, true);
+    assert.strictEqual(result.usage.totalTokens, 1100);
+    assert.ok(Number(db.inserts[0][15]) > 0, 'pricing alias must use the configured backing model');
+  });
+
+  await test('timeout can be configured up to sixty seconds', async () => {
+    const service = createHermesShadow({
+      env: {
+        HERMES_SHADOW_ENABLED: 'true',
+        HERMES_SHADOW_URL: 'http://hermes:8642/v1',
+        HERMES_SHADOW_TIMEOUT_MS: '60000',
+      },
+      db: fakeDb(),
+      fetchImpl: async () => { throw new Error('unused'); },
+    });
+    assert.strictEqual(service.publicStatus().timeoutMs, 60000);
   });
 
   await test('report exposes only public configuration and aggregate metrics', async () => {

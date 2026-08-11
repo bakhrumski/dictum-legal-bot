@@ -14362,6 +14362,14 @@
             return labels[value] || value || '—';
         }
 
+        function formatShadowError(value) {
+            const error = String(value || '');
+            const timeout = error.match(/timeout after (\d+)ms/i);
+            if (timeout) return `Hermes ${Math.round(Number(timeout[1]) / 1000)} soniyada javob bermadi`;
+            if (/did not return JSON/i.test(error)) return 'Hermes JSON formatidagi qarorni qaytarmadi';
+            return error ? `Hermes xatosi: ${error.slice(0, 160)}` : 'Hermes baholashi bajarilmadi';
+        }
+
         async function loadHermesShadowAdmin() {
             const container = document.getElementById('hermesShadowContent');
             if (!container) return;
@@ -14390,7 +14398,8 @@
                     <div class="shadow-metric"><strong>${escapeHtml(costLabel)}</strong><span>Taxminiy narx</span></div>
                     <div class="shadow-metric"><strong>${Number(stats.average_latency_ms) || 0} ms</strong><span>O'rtacha vaqt</span></div>
                 </div>`;
-                const modelLine = `<p style="margin:9px 0 0;color:var(--text-muted);font-size:10px;">Model: ${escapeHtml(data.model || '—')} · Namuna: ${Math.round((Number(data.sampleRate) || 0) * 100)}% · So'nggi ${Number(data.days) || 7} kun</p>`;
+                const pricingModel = data.pricingModel ? ` · Narx modeli: ${escapeHtml(data.pricingModel)}` : '';
+                const modelLine = `<p style="margin:9px 0 0;color:var(--text-muted);font-size:10px;">Model: ${escapeHtml(data.model || '—')}${pricingModel} · Namuna: ${Math.round((Number(data.sampleRate) || 0) * 100)}% · So'nggi ${Number(data.days) || 7} kun</p>`;
                 if (!items.length) {
                     const emptyText = data.status === 'disabled'
                         ? "Shadow rejimi o'chirilgan. Render sozlamalarida yoqilgach, natijalar shu yerda ko'rinadi."
@@ -14402,10 +14411,11 @@
                 }
                 const rows = items.map(function(item) {
                     const resultLabel = item.status !== 'success' ? 'Xato' : (item.agreement ? 'Mos' : 'Farq');
+                    const reason = item.hermes_reason || (item.error ? formatShadowError(item.error) : 'Sabab ko\'rsatilmagan');
                     return `<div class="shadow-run">
                         <div class="shadow-run-copy">
                             <div class="shadow-run-message" title="${escapeHtml(item.message_preview || '')}">${escapeHtml(item.message_preview || 'Matn saqlanmagan')}</div>
-                            <small class="shadow-run-reason" title="${escapeHtml(item.hermes_reason || '')}">${escapeHtml(item.hermes_reason || (item.error ? 'Hermes baholashi bajarilmadi' : 'Sabab ko\'rsatilmagan'))}</small>
+                            <small class="shadow-run-reason" title="${escapeHtml(reason)}">${escapeHtml(reason)}</small>
                         </div>
                         <small class="shadow-run-route">JuristAI: ${escapeHtml(formatShadowRoute(item.production_route))}</small>
                         <small class="shadow-run-route">Hermes: ${escapeHtml(formatShadowRoute(item.hermes_action))}</small>
@@ -14437,7 +14447,7 @@
                     return;
                 }
                 container.innerHTML = '<div class="admin-data-list">' + conversations.map(function(item) {
-                    const displayName = [item.first_name, item.last_name].filter(Boolean).join(' ') || (item.username ? '@' + item.username : 'Telegram #' + item.chat_id);
+                    const displayName = item.name || item.first_name || (item.username ? '@' + item.username : 'Telegram #' + item.chat_id);
                     const nextMode = item.mode === 'human' ? 'automatic' : 'human';
                     return `<div class="admin-data-row">
                         <div><strong>${escapeHtml(displayName)}</strong><small style="display:block;margin-top:4px;">${escapeHtml(formatQueueTimestamp(item.updated_at))}</small></div>
