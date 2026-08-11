@@ -78,7 +78,7 @@ Bulk and mechanical work where quality per token matters least.
 | Sinov-tier legal opinions | `/api/draft/legal-opinion` | Free trial |
 | Opinion pattern extraction | `/api/draft/legal-opinion/save-pattern` | Master-triggered, structural |
 | Answer compaction | `/api/ai-compact-answer` | Shortening existing text |
-| Telegram intent classification | `src/agents/telegram-agent.js` | One JSON label per message |
+| Telegram intent classification | `src/agents/telegram-agent.js` | Free-form messages only; menu-selected service, advocate and document flows bypass it |
 
 ### Gemini 2.5 Flash — fallback only
 
@@ -109,6 +109,7 @@ synthesis understates it by roughly half.
 | **Chat answer** | **Luna** | ~4k in / ~0.3k out | **~$0.006** |
 | **Telegram answer** | **Luna** | ~4.6k in / ~0.36k out | **~$0.007** |
 | — Telegram greeting | none (regex) | 0 | **$0.00** |
+| — Telegram service menu / advocate intake / document intake | none (buttons + state machine) | 0 | **$0.00** |
 | — Telegram clarifying question | Luna | ~0.6k in / 60 out | ~$0.001 |
 | — Telegram answer from qa-korpus | embedding only | — | ~$0.0001 |
 | Document explanation | Terra | varies | ~$0.01–0.03 |
@@ -191,23 +192,24 @@ the following month's revenue, and only pays someone who stays.
 `thin` / `loss`. Modelled on a 50/30/20 light/medium/heavy mix it returns
 ~8% of revenue and lands net margin at 53–65%.
 
-### The uncapped exposure: Telegram
+### Telegram cost controls
 
-Telegram users live in the `users` table with **no plan, no quota, and no
-payment path**. `enforceQuota` operates on `adminId` (dashboard/portal
-accounts) and the bot never calls it. Since the autonomous agent shipped,
-every Telegram user gets unlimited free answers at ~$0.016 each.
+Each Telegram chat receives three successful AI legal answers per Tashkent
+day by default. The reservation is atomic in PostgreSQL and is released if
+generation fails, so concurrent messages cannot exceed the allowance and a
+failed provider does not consume it.
 
-| Volume | Monthly cost |
-|---|---|
-| 100 questions/day | ~$48 |
-| 500/day | ~$240 |
-| 1,000/day | ~$470 |
-| 5,000/day | ~$2,350 |
+The `/start` flow is deterministic and costs nothing: users select **Huquqiy
+savol**, **Advokat topish**, or **Hujjat tayyorlash**. Advocate matching does
+not invoke an AI classifier; it requires an explicit legal field, region and
+case description before querying the verified directory. Document intake is
+also button-driven and goes to lawyer approval without generating an AI
+document or inventing a price. The selected field is also written directly to
+the Master Admin queue, so guided requests skip the separate AI triage call.
 
-**This is the largest unbounded cost in the platform.** A daily free
-allowance per Telegram user (matching the sinov 3/day) would cap it and turn
-the bot into a funnel. Not yet implemented.
+The remaining abuse risk is identity-based: a person can use multiple
+Telegram accounts. Monitor unique daily chat IDs and add phone/account linking
+before increasing `AGENT_DAILY_AI_LIMIT`.
 
 ---
 

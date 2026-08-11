@@ -16,6 +16,7 @@ const assert = require('assert');
 const Module = require('module');
 const path = require('path');
 const fs = require('fs');
+const intakeMenus = require('../src/bot/intake-menus');
 
 // ── Load the agent with ../database/db stubbed (no DB in tests) ─────────────
 // The conversation store is DB-backed, so the fake pool is how a test controls
@@ -41,6 +42,20 @@ const fakePool = {
       dbState.clarifyCount = 0;
       dbState.state = 'idle';
       dbState.context = {};
+      return { rows: [] };
+    }
+    if (/INSERT INTO\s+tg_conversations/i.test(sql) && /CASE WHEN \$4/i.test(sql)) {
+      dbState.state = String(params[1] || 'idle');
+      if (params[3]) dbState.context = JSON.parse(params[2] || '{}');
+      return { rows: [] };
+    }
+    if (/last_intent, language, state/i.test(sql)) {
+      dbState.state = String(params[3] || 'idle');
+      return { rows: [] };
+    }
+    if (/chat_id, turns, clarify_count/i.test(sql) && params.length === 3) {
+      dbState.turns = JSON.parse(params[1] || '[]');
+      dbState.clarifyCount = Number(params[2]) || 0;
       return { rows: [] };
     }
     return { rows: [] };
@@ -78,7 +93,7 @@ async function test(name, fn) {
  *   korpus   — a lawyer-verified answer to return from qa-korpus
  */
 function deps(o = {}) {
-  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, contacts: 0, events: 0, quota: 0, release: 0 };
+  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, attorneyCriteria: null, contacts: 0, events: 0, quota: 0, release: 0 };
   return {
     calls,
     callCheapAI: async () => {
@@ -98,8 +113,9 @@ function deps(o = {}) {
     classifyLegalTopic: async () => 'mehnat',
     searchKorpus: o.korpus ? async () => { calls.korpus++; return { corrected_answer: o.korpus }; } : null,
     embeddingApiKey: o.korpus ? 'key' : null,
-    findAttorneys: async () => {
+    findAttorneys: async (criteria) => {
       calls.attorneys++;
+      calls.attorneyCriteria = criteria;
       return o.attorneys || [];
     },
     getAttorneyContact: async () => {
@@ -204,19 +220,50 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(d.calls.quota, 0);
   });
 
-  await test('document drafting becomes a lawyer-approved paid service without an invented price', async () => {
+  await test('a free-text document request starts deterministic paid-service intake', async () => {
     const d = deps();
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: "Menga da'vo arizasi tayyorlab bering" });
+    assert.strictEqual(r.action, 'document_intake_started');
+    assert.strictEqual(r.escalate, false);
+    assert.strictEqual(r.meta.conversationState, 'document_type');
+    assert.ok(/pullik xizmat/.test(r.reply));
+    assert.ok(!/\d[\d\s,.]*\s*(so['’]?m|UZS)/i.test(r.reply), 'agent must not invent a price');
+    assert.strictEqual(d.calls.intent, 0, 'document keyword routing must not use AI');
+  });
+
+  await test('completed document intake creates a lawyer-approved paid service', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    dbState.state = 'document_details';
+    dbState.context = { serviceSlug: 'claim', documentTypeLabel: "Da'vo arizasi", category: 'Odil sudlov' };
+    const r = await agent.handleUserMessage({
+      chatId: 1,
+      text: "Qarz oluvchi olti oydan beri 20 million so'm qarzni qaytarmayapti, tilxat bor.",
+    });
     assert.strictEqual(r.action, 'paid_service');
     assert.strictEqual(r.escalate, true);
     assert.strictEqual(r.meta.serviceSlug, 'claim');
+    assert.strictEqual(r.meta.category, 'Odil sudlov');
     assert.strictEqual(r.meta.requiresLawyerApproval, true);
-    assert.ok(/pullik xizmat/.test(r.reply));
-    assert.ok(!/\d[\d\s,.]*\s*(so['’]?m|UZS)/i.test(r.reply), 'agent must not invent a price');
+    assert.strictEqual(d.calls.intent, 0, 'button-selected document intake must not use AI classification');
+    stubMemory();
   });
 
-  await test('an attorney request returns verified matches and does not negotiate price', async () => {
+  await test('a generic attorney request starts intake instead of guessing matches', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Menga yurist kerak!' });
+    assert.strictEqual(r.action, 'attorney_intake_started');
+    assert.strictEqual(r.escalate, false);
+    assert.strictEqual(r.meta.conversationState, 'attorney_field');
+    assert.strictEqual(d.calls.attorneys, 0, 'directory must not be searched without criteria');
+    assert.strictEqual(d.calls.intent, 0, 'obvious attorney request must not use AI classification');
+    assert.ok(/yo'nalishi va hududni tanlash/i.test(r.reply));
+    stubMemory();
+  });
+
+  await test('a completed attorney intake uses strict explicit criteria', async () => {
     const d = deps({ attorneys: [{
       id: 7,
       full_name: 'Aziza Karimova',
@@ -230,7 +277,21 @@ function stubMemory(clarifyCount = 0) {
       source_name: 'e-advokat.adliya.uz',
     }] });
     agent.initTelegramAgent(d);
-    const r = await agent.handleUserMessage({ chatId: 1, text: 'Menga mehnat masalasi bo\'yicha advokat kerak' });
+    dbState.state = 'attorney_problem';
+    dbState.context = {
+      fieldCode: 'labor',
+      fieldLabel: 'Mehnat huquqi',
+      legalField: 'Fuqarolik va iqtisodiy sud ishlarini yuritish',
+      category: 'Mehnat va aholining bandligi',
+      strictField: true,
+      region: 'Toshkent shahar',
+      regionLabel: 'Toshkent shahri',
+      strictRegion: true,
+    };
+    const r = await agent.handleUserMessage({
+      chatId: 1,
+      text: 'Ish beruvchi meni noqonuniy bo\'shatdi, buyruq nusxasini bermadi va ishga tiklanmoqchiman.',
+    });
     assert.strictEqual(r.action, 'attorney_matches');
     assert.strictEqual(r.escalate, false);
     assert.ok(/Aziza Karimova/.test(r.reply));
@@ -239,6 +300,38 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/raqamini yuboring/.test(r.reply), 'the consent step must be explicit');
     assert.deepStrictEqual(r.meta.attorneyIds, [7]);
     assert.deepStrictEqual(r.meta.attorneyRefs, ['eadvokat:7']);
+    assert.strictEqual(r.meta.category, 'Mehnat va aholining bandligi');
+    assert.strictEqual(d.calls.intent, 0, 'structured attorney intake must not use AI classification');
+    assert.deepStrictEqual(d.calls.attorneyCriteria, {
+      query: 'Ish beruvchi meni noqonuniy bo\'shatdi, buyruq nusxasini bermadi va ishga tiklanmoqchiman.',
+      legalField: 'Fuqarolik va iqtisodiy sud ishlarini yuritish',
+      legalSubfield: 'Mehnat huquqi',
+      region: 'Toshkent shahar',
+      strictField: true,
+      strictRegion: true,
+      limit: 3,
+    });
+    stubMemory();
+  });
+
+  await test('an incomplete attorney problem never searches the directory', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    dbState.state = 'attorney_problem';
+    dbState.context = {
+      fieldCode: 'criminal',
+      fieldLabel: 'Jinoyat ishlari',
+      legalField: "Ma'muriy va jinoiy sud ishlarini yuritish",
+      strictField: true,
+      region: 'Samarqand viloyati',
+      regionLabel: 'Samarqand',
+      strictRegion: true,
+    };
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Advokat kerak' });
+    assert.strictEqual(r.action, 'attorney_problem_required');
+    assert.strictEqual(d.calls.attorneys, 0);
+    assert.strictEqual(d.calls.intent, 0);
+    stubMemory();
   });
 
   await test('the selected attorney phone is revealed only after an explicit numbered choice', async () => {
@@ -262,16 +355,67 @@ function stubMemory(clarifyCount = 0) {
     stubMemory();
   });
 
-  await test('no verified attorney match creates a human follow-up request', async () => {
+  await test('natural-language uncertainty compares candidates instead of forcing a number', async () => {
+    dbState.state = 'awaiting_attorney_choice';
+    dbState.context = {
+      criteria: { fieldLabel: 'Mehnat huquqi', regionLabel: 'Toshkent shahri' },
+      attorneyOptions: [
+        { index: 1, ref: 'eadvokat:7', name: 'Aziza Karimova', region: 'Toshkent shahar', reasons: ['soha mos keladi', 'hudud mos keladi'] },
+        { index: 2, ref: 'eadvokat:8', name: 'Jasur Alimov', region: 'Toshkent shahar', reasons: ['soha mos keladi'] },
+      ],
+    };
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Men ularni tanimayman, qaysi birini maslahat berasan?' });
+    assert.strictEqual(r.action, 'attorney_compare');
+    assert.ok(/xizmat sifatini kafolatlay olmayman/i.test(r.reply));
+    assert.ok(/Aziza Karimova/.test(r.reply));
+    assert.strictEqual(d.calls.contacts, 0, 'comparison is not consent to reveal a phone');
+    assert.strictEqual(d.calls.intent, 0, 'choice-state messages must not use AI classification');
+    stubMemory();
+  });
+
+  await test('no verified strict match creates a human follow-up request', async () => {
     const d = deps({ attorneys: [] });
     agent.initTelegramAgent(d);
-    const r = await agent.handleUserMessage({ chatId: 1, text: 'Menga jinoyat ishi bo\'yicha advokat kerak' });
+    dbState.state = 'attorney_problem';
+    dbState.context = {
+      fieldCode: 'criminal',
+      fieldLabel: 'Jinoyat ishlari',
+      legalField: "Ma'muriy va jinoiy sud ishlarini yuritish",
+      strictField: true,
+      region: 'Namangan viloyati',
+      regionLabel: 'Namangan',
+      strictRegion: true,
+    };
+    const r = await agent.handleUserMessage({
+      chatId: 1,
+      text: 'Tergovchi meni gumon qilinuvchi sifatida chaqirdi va himoyachi ishtiroki kerak.',
+    });
     assert.strictEqual(r.action, 'attorney_request');
     assert.strictEqual(r.escalate, true);
     assert.ok(/Master Adminga yuborildi/.test(r.reply));
+    assert.strictEqual(d.calls.attorneyCriteria.strictField, true);
+    assert.strictEqual(d.calls.attorneyCriteria.strictRegion, true);
+    stubMemory();
   });
 
   console.log('\ntelegram-agent — answering\n');
+
+  await test('button-selected legal questions bypass intent classification', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    dbState.state = 'legal_question_intake';
+    dbState.context = {};
+    const r = await agent.handleUserMessage({
+      chatId: 1,
+      text: 'Ish beruvchi meni ishdan bo\'shatdi, lekin buyruq nusxasini bermadi. Nima qilaman?',
+    });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(d.calls.intent, 0, 'service menu already supplied the intent');
+    assert.strictEqual(d.calls.answer, 1);
+    stubMemory();
+  });
 
   await test('a clear legal question is answered with sources and a disclaimer', async () => {
     const d = deps();
@@ -404,6 +548,33 @@ function stubMemory(clarifyCount = 0) {
     assert.deepStrictEqual(agent.splitForTelegram('qisqa javob'), ['qisqa javob']);
   });
 
+  await test('service menu exposes the three supported request types', async () => {
+    const callbacks = intakeMenus.serviceKeyboard().inline_keyboard.flat().map(button => button.callback_data);
+    assert.deepStrictEqual(callbacks, ['svc_legal', 'svc_attorney', 'svc_document']);
+  });
+
+  await test('attorney menu callbacks collect field and region before the problem', async () => {
+    const field = intakeMenus.resolveIntakeCallback('atf_labor', {});
+    assert.strictEqual(field.state, 'attorney_region');
+    assert.strictEqual(field.context.fieldLabel, 'Mehnat huquqi');
+    assert.strictEqual(field.context.category, 'Mehnat va aholining bandligi');
+    assert.strictEqual(field.context.strictField, true);
+
+    const region = intakeMenus.resolveIntakeCallback('atr_tashkent_city', field.context);
+    assert.strictEqual(region.state, 'attorney_problem');
+    assert.strictEqual(region.context.region, 'Toshkent shahar');
+    assert.strictEqual(region.context.strictRegion, true);
+    assert.ok(/faqat shu ma'lumotlardan keyin tanlanadi/i.test(region.message));
+  });
+
+  await test('document menu records the selected paid service without AI', async () => {
+    const action = intakeMenus.resolveIntakeCallback('doc_claim', {});
+    assert.strictEqual(action.state, 'document_details');
+    assert.strictEqual(action.context.serviceSlug, 'claim');
+    assert.strictEqual(action.context.category, 'Odil sudlov');
+    assert.ok(/pullik xizmat/i.test(action.message));
+  });
+
   await test('/start reset clears a stale attorney-choice state', async () => {
     dbState.state = 'awaiting_attorney_choice';
     dbState.context = { attorneyOptions: [{ attorney_ref: 'eadvokat:1' }] };
@@ -423,6 +594,8 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/Men inson yurist emasman/.test(botSource));
     assert.ok(/Har kuni \$\{dailyAiLimit\} ta bepul AI huquqiy javob/.test(botSource));
     assert.ok(/await telegramAgent\.resetConversation\(chatId\)/.test(botSource), 'bare /start must clear stale agent state');
+    assert.ok(/reply_markup: startKeyboard\(false\)/.test(botSource), 'bare /start must show the deterministic service menu');
+    assert.ok(/categoryFromAgentMeta\(agentMeta\)/.test(botSource), 'guided intake category must reach the Master Admin queue without another classifier');
     assert.ok(/'identity', 'quota_exceeded', 'quota_unavailable'/.test(botSource), 'non-legal guardrail replies must not create queue rows');
   });
 
