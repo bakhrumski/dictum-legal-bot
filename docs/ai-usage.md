@@ -13,9 +13,9 @@ Defined in `src/api/server.js` (`MODELS`). Every name is env-overridable.
 | Tier | Model | Env override | Input $/1M | Output $/1M | Cached input $/1M |
 |---|---|---|---|---|---|
 | premium | `gpt-5.6-sol` | `MODEL_PREMIUM` | 5.00 | 30.00 | 0.50 |
-| standard | `gpt-5.6-terra` | `MODEL_STANDARD` | 2.50 | 15.00 | 0.25 |
-| cheap | `gpt-5.6-luna` | `MODEL_CHEAP` | 1.00 | 6.00 | 0.10 |
-| fallback | `gemini-2.5-flash` | — | 0.30 | 2.50 | 0.075 |
+| standard | `gpt-5.6-terra` | `MODEL_STANDARD` | 2.00 | 12.00 | 0.20 |
+| cheap | `gpt-5.6-luna` | `MODEL_CHEAP` | 0.20 | 1.20 | 0.02 |
+| fallback | `gemini-2.5-flash` | — | 0.30 | 2.50 | 0.03 |
 
 `gpt-5.6` is registered as an alias priced identically to Sol.
 
@@ -51,7 +51,7 @@ The most expensive tier, used in exactly one place.
 **Per plan** (`OPINION_MODELS`): sinov → Luna; **silver, gold, platinum → Sol**.
 Overrides: `OPINION_MODEL`, `OPINION_MODEL_<PLAN>`, `OPINION_MODEL_STAFF`.
 
-### Terra — `gpt-5.6-terra` ($2.50 / $15)
+### Terra — `gpt-5.6-terra` ($2 / $12)
 
 The workhorse. Everything that calls `callAI` without a model override.
 
@@ -66,7 +66,7 @@ The workhorse. Everything that calls `callAI` without a model override.
 | Enterprise module | `src/enterprise/index.js` |
 | Master tools (ai-analysis, ai-chat, qa enrich, style audit) | various, master-only |
 
-### Luna — `gpt-5.6-luna` ($1 / $6)
+### Luna — `gpt-5.6-luna` ($0.20 / $1.20)
 
 Bulk and mechanical work where quality per token matters least.
 
@@ -99,33 +99,31 @@ synthesis understates it by roughly half.
 
 | Operation | Model | Typical tokens | Cost |
 |---|---|---|---|
-| **Legal opinion, all-in** (79k-char document) | mixed | — | **~$0.44** |
-| — reference extraction (3 × 30k windows) | Terra | ~36k in / ~4.5k out | ~$0.158 |
-| — document digest (map-reduce) | Luna | ~32k in / ~9k out | ~$0.086 |
+| **Legal opinion, all-in** (79k-char document) | mixed | — | **~$0.39** |
+| — reference extraction (3 × 30k windows) | Terra | ~36k in / ~4.5k out | ~$0.126 |
+| — document digest (map-reduce) | Luna | ~32k in / ~9k out | ~$0.017 |
 | — synthesis | Sol | ~17k in / ~5k out | ~$0.24 |
-| — topic classification | Terra | ~1k in / 16 out | ~$0.003 |
+| — topic classification | Terra | ~1k in / 16 out | ~$0.002 |
 | — citation correction (only when triggered) | Sol | ~12k in / ~5k out | ~$0.21 |
 | **Legal opinion, typical contract** (<14k chars) | Sol | — | **~$0.15–0.20** |
-| **Chat answer** | **Luna** | ~4k in / ~0.3k out | **~$0.006** |
-| **Telegram answer** | **Luna** | ~4.6k in / ~0.36k out | **~$0.007** |
+| **Chat answer** | **Luna** | ~4k in / ~0.3k out | **~$0.0012** |
+| **Telegram legal answer, full free-text path** | **Luna + Terra + Luna** | intent + topic + answer | **~$0.0035** |
 | — Telegram greeting | none (regex) | 0 | **$0.00** |
 | — Telegram service menu / advocate intake / document intake | none (buttons + state machine) | 0 | **$0.00** |
-| — Telegram clarifying question | Luna | ~0.6k in / 60 out | ~$0.001 |
-| — Telegram answer from qa-korpus | embedding only | — | ~$0.0001 |
+| — Telegram vague-message clarification | Luna classifier | ~0.7k in / 20 out | ~$0.00016 |
+| — Telegram answer from qa-korpus | embedding only | — | ~$0 with free embedding; < $0.00001 with OpenAI |
 | Document explanation | Terra | varies | ~$0.01–0.03 |
-| Topic classification | Terra | ~1k in / 16 out | ~$0.003 |
+| Topic classification | Terra | ~1k in / 16 out | ~$0.002 |
 
 A document under ~14,000 chars skips the digest entirely and needs one
 reference window instead of three, so a normal contract costs a third of the
 79k-char stress-test document these figures come from.
 
 **Worst case** — large document, all four stages plus a correction pass —
-lands near **$0.65**.
+lands near **$0.60**.
 
-Verified against the real invoice: five logged opinion runs on the same 79k
-document sum to $0.953 of synthesis; adding the three support stages
-($0.246 each) predicts **$2.19** total. The OpenAI account showed **$2.22**
-spent at that point. The model is accurate to about 1%.
+These are planning estimates. Provider-reported token usage written to
+`llm_spend_log` is the source of truth for actual invoices.
 
 ### Output caps in code
 
@@ -278,6 +276,12 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 | `AGENT_ESCALATE_WEAK` | true | Queue a lawyer on low-confidence answers |
 | `AGENT_MAX_CLARIFY` | 2 | Clarifying questions before answering anyway |
 | `AGENT_DAILY_AI_LIMIT` | 3 | Successful Telegram legal answers per chat per Tashkent day; greetings, FAQ and clarification do not consume it |
+| `HERMES_SHADOW_ENABLED` | false | Runs Hermes privately without changing Telegram replies |
+| `HERMES_SHADOW_URL` | — | Private Hermes OpenAI-compatible API base URL |
+| `HERMES_SHADOW_API_KEY` | — | Separate secret for the Hermes service |
+| `HERMES_SHADOW_MODEL` | `hermes-agent` | Model name sent to Hermes |
+| `HERMES_SHADOW_SAMPLE_RATE` | 1 | Fraction of completed Telegram routes evaluated in shadow |
+| `HERMES_SHADOW_TIMEOUT_MS` | 8000 | Shadow timeout; never delays the production reply |
 
 ---
 
@@ -286,10 +290,9 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 1. **Monitor the Telegram cap** — anonymous chats receive three successful
    legal answers per Tashkent day by default. Adjust `AGENT_DAILY_AI_LIMIT`
    only after measuring answer quality, repeat usage and conversion.
-2. **Grow `qa_korpus`** — a verified answer reused costs ~$0.0001 instead of
-   ~$0.015, and it is *higher* quality than generation. The lawyer-correction
-   loop already feeds it; nothing else gives a 100× cost reduction and a
-   quality gain at the same time.
+2. **Grow `qa_korpus`** — a verified answer reuses an embedding-only lookup
+   instead of a ~$0.0035 generation path, and it is *higher* quality than
+   generation. The lawyer-correction loop already feeds it.
 3. **Set `LLM_DAILY_BUDGET_USD`** — not a saving, but it converts a runaway
    bill into a quality degradation.
 

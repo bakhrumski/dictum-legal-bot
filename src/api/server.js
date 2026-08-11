@@ -1461,6 +1461,20 @@ app.get('/api/admin/telegram-conversations', requireMasterAdmin, async (req, res
   }
 });
 
+// Hermes is a private shadow evaluator: this endpoint exposes comparisons to
+// Master Admins, but no Hermes decision is ever used for a user-facing reply.
+app.get('/api/admin/hermes-shadow', requireMasterAdmin, async (req, res) => {
+  try {
+    const { getHermesShadowReport } = require('../agents/hermes-shadow');
+    const days = Math.max(1, Math.min(parseInt(req.query.days, 10) || 7, 90));
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 25, 100));
+    res.json(await getHermesShadowReport({ days, limit }));
+  } catch (error) {
+    console.error('[HERMES-SHADOW] report failed:', error.message);
+    res.status(500).json({ error: 'Hermes shadow hisobotini olishda xatolik' });
+  }
+});
+
 app.patch('/api/admin/telegram-conversations/:chatId', requireMasterAdmin, async (req, res) => {
   try {
     const chatId = String(req.params.chatId || '').trim();
@@ -3407,28 +3421,16 @@ const MODELS = {
   chat:     process.env.MODEL_CHAT     || 'gpt-5.6-luna',
 };
 
-// Official per-1M-token prices, used for spend logging and the budget guard.
-const MODEL_PRICING = {
-  // `cached` = price for input tokens served from the prompt cache. OpenAI
-  // bills these at ~10% of the normal input rate; ignoring that made our
-  // estimate higher than the real invoice on repeated/long prompts.
-  'gpt-5.6-sol':      { in: 5.00, out: 30.00, cached: 0.50 },
-  'gpt-5.6':          { in: 5.00, out: 30.00, cached: 0.50 },   // alias -> Sol
-  'gpt-5.6-terra':    { in: 2.50, out: 15.00, cached: 0.25 },
-  'gpt-5.6-luna':     { in: 1.00, out:  6.00, cached: 0.10 },
-  'gemini-2.5-flash': { in: 0.30, out:  2.50, cached: 0.075 },
-};
+// One shared price source keeps the spend log, budget guard, shadow report,
+// and tests aligned with the current provider rates.
+const { calculateTokenCost } = require('../ai/model-pricing');
 
 // Record every main-path AI call into llm_spend_log. Previously only the R&D
 // hybrid pipeline logged spend, so the master spend report saw almost nothing
 // and there was no way to know what a user actually costs.
 function recordSpend({ model, inTokens = 0, outTokens = 0, cachedTokens = 0, userId = null, endpoint = null }) {
   try {
-    const price = MODEL_PRICING[model] || { in: 0, out: 0, cached: 0 };
-    const fresh = Math.max(0, inTokens - cachedTokens);
-    const costUsd = (fresh / 1e6) * price.in
-      + (cachedTokens / 1e6) * (price.cached != null ? price.cached : price.in)
-      + (outTokens / 1e6) * price.out;
+    const costUsd = calculateTokenCost(model, { inTokens, outTokens, cachedTokens }) || 0;
     _spendToday.usd += costUsd;
     const now = new Date();
     pool.query(
@@ -3545,20 +3547,20 @@ async function callOpenAI(messages, options = {}) {
     userId: options.userId || null, endpoint: options.endpoint || null });
   // Report the model actually used (a hardcoded label previously hid which
   // model answered) plus token usage, so callers can surface real cost.
-  const price = MODEL_PRICING[usedModel] || { in: 0, out: 0, cached: 0 };
-  const freshTok = Math.max(0, inTok - cachedTok);
   return { text, provider: usedModel, usage: {
     inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok,
-    costUsd: (freshTok / 1e6) * price.in
-      + (cachedTok / 1e6) * (price.cached != null ? price.cached : price.in)
-      + (outTok / 1e6) * price.out } };
+    costUsd: calculateTokenCost(usedModel, {
+      inTokens: inTok,
+      outTokens: outTok,
+      cachedTokens: cachedTok,
+    }) || 0 } };
 }
 
 
 
 
 
-// Cheap lane: GPT-5.6 Luna ($1/$6) for high-volume, low-stakes calls —
+// Cheap lane: GPT-5.6 Luna ($0.20/$1.20) for high-volume, low-stakes calls —
 // per-chunk document digests, the plain-language explainer, Telegram answer
 // compaction, opinion anonymization. Falls back to the free Gemini tier.
 async function callCheapAI(messages, options = {}) {
@@ -3661,6 +3663,7 @@ initRunner(callAI);
 // above their definitions — is safe.)
 try {
   const { initTelegramAgent } = require('../agents/telegram-agent');
+  const { runHermesShadow } = require('../agents/hermes-shadow');
   const { searchKorpus } = require('../rag/qa-korpus');
   const {
     findMatchingAttorneys,
@@ -3678,6 +3681,7 @@ try {
     findAttorneys: findMatchingAttorneys,
     getAttorneyContact: revealAttorneyContactAfterConsent,
     recordAgentEvent: recordTelegramAgentEvent,
+    runShadowEvaluation: runHermesShadow,
     chatModel: MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
   });

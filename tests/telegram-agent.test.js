@@ -93,8 +93,8 @@ async function test(name, fn) {
  *   korpus   — a lawyer-verified answer to return from qa-korpus
  */
 function deps(o = {}) {
-  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, attorneyCriteria: null, contacts: 0, events: 0, quota: 0, release: 0 };
-  return {
+  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, attorneyCriteria: null, contacts: 0, events: 0, quota: 0, release: 0, shadow: 0, shadowPayload: null };
+  const dependencies = {
     calls,
     callCheapAI: async () => {
       calls.intent++;
@@ -129,6 +129,15 @@ function deps(o = {}) {
     },
     releaseDailyAnswer: async () => { calls.release++; },
   };
+  if (o.shadow) {
+    dependencies.runShadowEvaluation = async payload => {
+      calls.shadow++;
+      calls.shadowPayload = payload;
+      if (o.shadowError) throw new Error('shadow offline');
+      return { status: 'success' };
+    };
+  }
+  return dependencies;
 }
 
 /** Set how many clarifying questions this chat has already been asked. */
@@ -563,6 +572,18 @@ function stubMemory(clarifyCount = 0) {
     stubMemory(0);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasi haqida savol' });
     assert.strictEqual(r.action, 'answered');
+  });
+
+  await test('a failing Hermes shadow cannot change or delay the production reply', async () => {
+    const d = deps({ shadow: true, shadowError: true });
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Assalomu alaykum' });
+    assert.strictEqual(r.action, 'greeting');
+    assert.strictEqual(r.handled, true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.strictEqual(d.calls.shadow, 1);
+    assert.strictEqual(d.calls.shadowPayload.productionResult.action, 'greeting');
   });
 
   console.log('\ntelegram-agent — Telegram limits\n');

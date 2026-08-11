@@ -44,6 +44,7 @@ let D = null;
  *   searchKorpus, embeddingApiKey  — lawyer-verified answer bank (optional)
  *   findAttorneys                  — verified, explainable attorney matching
  *   recordAgentEvent               — operational telemetry (optional)
+ *   runShadowEvaluation            — private Hermes comparison (optional)
  */
 function initTelegramAgent(deps) {
   D = deps || null;
@@ -605,6 +606,30 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
       } catch (e) {
         console.warn('[TG-AGENT] event telemetry failed:', e.message);
       }
+    }
+    // Shadow evaluation is intentionally detached from the production reply.
+    // Hermes can time out, fail, or disagree without delaying or changing what
+    // the Telegram user receives. Only redacted context is sent by the shadow
+    // service, and its result is visible to Master Admins as telemetry.
+    if (D && D.runShadowEvaluation) {
+      const shadowPayload = {
+        chatId,
+        text: question,
+        turns,
+        productionResult: result,
+      };
+      setImmediate(() => {
+        let evaluation;
+        try {
+          evaluation = D.runShadowEvaluation(shadowPayload);
+        } catch (error) {
+          console.warn('[HERMES-SHADOW] detached evaluation failed:', error.message);
+          return;
+        }
+        Promise.resolve(evaluation).catch(error => {
+          console.warn('[HERMES-SHADOW] detached evaluation failed:', error.message);
+        });
+      });
     }
     return result;
   };
