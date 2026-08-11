@@ -243,7 +243,10 @@ const HELP_RE     = /^\s*(menga\s+)?yordam\s+(kerak|bering|qiling)(\s+iltimos)?[
 const IDENTITY_RE = /(siz\s+)?(yurist|advokat)\s*(?:e?mas)?misiz|(?:siz\s+)?(yurist|advokat)\s*mi|kimsiz|kim\s+siz|o['’]?zingiz\s+kim|robotmisiz|ai\s*misiz|sun['’]?iy\s+intellektmisiz|вы\s+(юрист|адвокат)|кто\s+вы/iu;
 const ATTORNEY_RE = /(advokat\s+(kerak|top|izla)|yurist\s+(kerak|top|izla)|адвокат\s+(нужен|найти)|найти\s+(адвоката|юриста))/iu;
 const HUMAN_RE    = /(inson\s+bilan|jonli\s+odam|operator|real\s+yurist|yurist\s+bilan\s+gaplash|человек|оператор|юрист(ом)?\s+связ)/iu;
-const DOCUMENT_RE = /(hujjat|ariza|da['’]?vo|shikoyat|shartnoma|iltimosnoma|e['’]?tiroz|претензи|иск|жалоб|договор|заявлен).*\b(tayyor|yoz|tuz|kerak|состав|подготов)/iu;
+// Only shortcut clear drafting orders. A legal case can legitimately mention
+// both a document and something being "written" (for example, police wrote a
+// fine after checking an ID). Those facts must still reach legal Q&A.
+const DOCUMENT_RE = /(?:hujjat|ariza|da['’]?vo|shikoyat|shartnoma|iltimosnoma|e['’]?tiroz|претензи|иск|жалоб|договор|заявлен)(?:\s+\S+){0,3}\s+(?:(?:tayyorlab|yozib|tuzib)\s+ber(?:ing|asizmi|a\s+olasizmi)?|(?:tayyorlash|yozish|tuzish)(?:ni|im)?\s+(?:kerak|xohlayman|istayman)|(?:tayyorlamoqchi|yozmoqchi|tuzmoqchi)(?:man|miz)?|(?:состав|подготов|напис)(?:ить|ьте))/iu;
 const ACCOUNT_RE  = /(ro['’]?yxat|registrat|login|kirish|parol|otp|kod\s+kelm|hisob|аккаунт|регистрац|парол|войти)/iu;
 const CANCEL_RE   = /^(yo['’]?q|kerak\s+emas|bekor|rad\s+etaman|hech\s+qaysi(?:sini)?(?:\s+(?:tanlamayman|xohlamayman))?|нет|отмена)[.!\s]*$/iu;
 const ATTORNEY_COMPARE_RE = /(qaysi(?:si|\s+biri)?.*(?:maslahat|tavsiya|mos)|solishtir|farqi|tanimayman|eng\s+mosi)/iu;
@@ -269,7 +272,8 @@ intent qiymatlari:
 "missing": agar intent "noaniq" bo'lsa, javob uchun zarur bo'lgan 1-3 ta faktni yozing (o'zbekcha, qisqa). Aks holda [].
 Imkon bo'lsa legal_field, legal_subfield, region va language (uz/ru) maydonlarini ham qaytaring.
 
-Muhim: bot faqat O'zbekiston qonunchiligiga javob beradi, shuning uchun foydalanuvchidan davlatni so'ramang. Agar savol umumiy bo'lsa-yu, umumiy huquqiy javob berish mumkin bo'lsa — bu "huquqiy_savol". "noaniq" ni faqat javob berish HAQIQATAN mumkin bo'lmaganda tanlang.`;
+Muhim: bot faqat O'zbekiston qonunchiligiga javob beradi, shuning uchun foydalanuvchidan davlatni so'ramang. Agar savol umumiy bo'lsa-yu, umumiy huquqiy javob berish mumkin bo'lsa — bu "huquqiy_savol". "noaniq" ni faqat javob berish HAQIQATAN mumkin bo'lmaganda tanlang.
+Hujjat, ariza, bayonnoma yoki jarima vaziyatning fakti sifatida tilga olinsa, buni "hujjat_tayyorlash" deb belgilamang. Bu intent faqat foydalanuvchi hujjatni tayyorlab, yozib yoki tuzib berishni aniq so'raganda qo'llanadi.`;
 
 async function classifyIntent(text, turns) {
   const t = String(text || '').trim();
