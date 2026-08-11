@@ -124,8 +124,10 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
     endpoint: normalizeEndpoint(env.HERMES_SHADOW_URL),
     apiKey: String(env.HERMES_SHADOW_API_KEY || ''),
     model: String(env.HERMES_SHADOW_MODEL || 'hermes-agent'),
+    pricingModel: String(env.HERMES_SHADOW_PRICING_MODEL || '').trim(),
     sampleRate: clamp(env.HERMES_SHADOW_SAMPLE_RATE, 0, 1, 1),
-    timeoutMs: clamp(env.HERMES_SHADOW_TIMEOUT_MS, 1000, 30000, 8000),
+    timeoutMs: clamp(env.HERMES_SHADOW_TIMEOUT_MS, 1000, 60000, 8000),
+    maxAttempts: Math.round(clamp(env.HERMES_SHADOW_MAX_ATTEMPTS, 1, 2, 2)),
   });
   let tableReady = false;
 
@@ -136,9 +138,26 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
       configured,
       status: !config.enabled ? 'disabled' : (configured ? 'ready' : 'misconfigured'),
       model: config.model,
+      pricingModel: config.pricingModel || null,
       sampleRate: config.sampleRate,
       timeoutMs: config.timeoutMs,
+      maxAttempts: config.maxAttempts,
     };
+  }
+
+  async function backfillKnownCosts() {
+    if (!config.pricingModel) return;
+    const inputPerMillion = calculateTokenCost(config.pricingModel, { inTokens: 1_000_000 });
+    const outputPerMillion = calculateTokenCost(config.pricingModel, { outTokens: 1_000_000 });
+    if (inputPerMillion == null || outputPerMillion == null) return;
+    await db.query(`
+      UPDATE tg_agent_shadow_runs
+         SET estimated_cost_usd = (prompt_tokens / 1000000.0) * $1
+                                + (completion_tokens / 1000000.0) * $2
+       WHERE estimated_cost_usd IS NULL
+         AND model = $3
+         AND (prompt_tokens > 0 OR completion_tokens > 0)
+    `, [inputPerMillion, outputPerMillion, config.model]);
   }
 
   async function ensureTable() {
@@ -171,6 +190,7 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
     `);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_tg_shadow_created_at ON tg_agent_shadow_runs(created_at DESC)`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_tg_shadow_chat_id ON tg_agent_shadow_runs(telegram_chat_id, created_at DESC)`);
+    await backfillKnownCosts();
     tableReady = true;
   }
 
@@ -238,8 +258,6 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
       },
     };
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), config.timeoutMs);
     let row = {
       chatId,
       messagePreview,
@@ -250,39 +268,73 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
       model: config.model,
       status: 'failed',
     };
+    let model = config.model;
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let totalTokens = 0;
+    let attempts = 0;
 
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
-      const response = await fetchImpl(config.endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: config.model,
-          messages: [
-            { role: 'system', content: SHADOW_SYSTEM_PROMPT },
-            { role: 'user', content: JSON.stringify(input) },
-          ],
-          temperature: 0,
-          max_tokens: 300,
-        }),
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        throw new Error(`Hermes ${response.status}: ${body.slice(0, 240)}`);
+      let decision;
+
+      while (attempts < config.maxAttempts) {
+        attempts += 1;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+        let payload;
+        try {
+          const retryInstruction = attempts > 1
+            ? '\nPrevious output was not valid JSON. Begin with {, end with }, and return no other text.'
+            : '';
+          const response = await fetchImpl(config.endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              model: config.model,
+              messages: [
+                { role: 'system', content: SHADOW_SYSTEM_PROMPT + retryInstruction },
+                { role: 'user', content: JSON.stringify(input) + '\nReturn the JSON object now.' },
+              ],
+              temperature: 0,
+              max_tokens: 220,
+            }),
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            const body = await response.text().catch(() => '');
+            throw new Error(`Hermes ${response.status}: ${body.slice(0, 240)}`);
+          }
+          payload = await response.json();
+        } catch (error) {
+          if (error && error.name === 'AbortError') {
+            throw new Error(`timeout after ${config.timeoutMs}ms`);
+          }
+          throw error;
+        } finally {
+          clearTimeout(timer);
+        }
+
+        const usage = payload.usage || {};
+        const attemptPromptTokens = Number(usage.prompt_tokens || usage.input_tokens) || 0;
+        const attemptCompletionTokens = Number(usage.completion_tokens || usage.output_tokens) || 0;
+        promptTokens += attemptPromptTokens;
+        completionTokens += attemptCompletionTokens;
+        totalTokens += Number(usage.total_tokens) || (attemptPromptTokens + attemptCompletionTokens);
+        model = String(payload.model || model);
+        const choice = payload && payload.choices && payload.choices[0];
+        try {
+          decision = validateDecision(extractJson(choice && choice.message && choice.message.content));
+          break;
+        } catch (error) {
+          if (attempts >= config.maxAttempts) throw error;
+        }
       }
 
-      const payload = await response.json();
-      const choice = payload && payload.choices && payload.choices[0];
-      const decision = validateDecision(extractJson(choice && choice.message && choice.message.content));
-      const usage = payload.usage || {};
-      const promptTokens = Number(usage.prompt_tokens || usage.input_tokens) || 0;
-      const completionTokens = Number(usage.completion_tokens || usage.output_tokens) || 0;
-      const totalTokens = Number(usage.total_tokens) || (promptTokens + completionTokens);
-      const model = String(payload.model || config.model);
       const agreement = decision.recommendedAction === productionRoute
         && decision.shouldEscalate === productionEscalate;
+      const pricingModel = config.pricingModel || model;
 
       row = {
         ...row,
@@ -296,25 +348,32 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
         promptTokens,
         completionTokens,
         totalTokens,
-        estimatedCostUsd: calculateTokenCost(model, { inTokens: promptTokens, outTokens: completionTokens }),
+        estimatedCostUsd: calculateTokenCost(pricingModel, { inTokens: promptTokens, outTokens: completionTokens }),
         latencyMs: Date.now() - startedAt,
-        rawResult: decision,
+        rawResult: { ...decision, attempts },
       };
       await persist(row);
       return { status: row.status, agreement, decision, usage: { promptTokens, completionTokens, totalTokens } };
     } catch (error) {
+      const pricingModel = config.pricingModel || model;
       row = {
         ...row,
+        model,
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        estimatedCostUsd: totalTokens > 0
+          ? calculateTokenCost(pricingModel, { inTokens: promptTokens, outTokens: completionTokens })
+          : null,
         latencyMs: Date.now() - startedAt,
-        error: error && error.name === 'AbortError' ? `timeout after ${config.timeoutMs}ms` : error.message,
+        error: error.message,
+        rawResult: attempts ? { attempts } : null,
       };
       try { await persist(row); } catch (dbError) {
         console.warn('[HERMES-SHADOW] could not persist failure:', dbError.message);
       }
       console.warn('[HERMES-SHADOW] evaluation failed:', row.error);
       return { status: 'failed', error: row.error };
-    } finally {
-      clearTimeout(timer);
     }
   }
 
