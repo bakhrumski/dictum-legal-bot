@@ -355,7 +355,7 @@ function stubMemory(clarifyCount = 0) {
     stubMemory();
   });
 
-  await test('natural-language uncertainty compares candidates instead of forcing a number', async () => {
+  await test('the advertised "qaysi biri mos?" phrase compares candidates instead of forcing a number', async () => {
     dbState.state = 'awaiting_attorney_choice';
     dbState.context = {
       criteria: { fieldLabel: 'Mehnat huquqi', regionLabel: 'Toshkent shahri' },
@@ -366,7 +366,7 @@ function stubMemory(clarifyCount = 0) {
     };
     const d = deps();
     agent.initTelegramAgent(d);
-    const r = await agent.handleUserMessage({ chatId: 1, text: 'Men ularni tanimayman, qaysi birini maslahat berasan?' });
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'qaysi biri mos?' });
     assert.strictEqual(r.action, 'attorney_compare');
     assert.ok(/xizmat sifatini kafolatlay olmayman/i.test(r.reply));
     assert.ok(/Aziza Karimova/.test(r.reply));

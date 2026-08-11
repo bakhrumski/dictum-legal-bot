@@ -246,7 +246,7 @@ const HUMAN_RE    = /(inson\s+bilan|jonli\s+odam|operator|real\s+yurist|yurist\s
 const DOCUMENT_RE = /(hujjat|ariza|da['’]?vo|shikoyat|shartnoma|iltimosnoma|e['’]?tiroz|претензи|иск|жалоб|договор|заявлен).*\b(tayyor|yoz|tuz|kerak|состав|подготов)/iu;
 const ACCOUNT_RE  = /(ro['’]?yxat|registrat|login|kirish|parol|otp|kod\s+kelm|hisob|аккаунт|регистрац|парол|войти)/iu;
 const CANCEL_RE   = /^(yo['’]?q|kerak\s+emas|bekor|rad\s+etaman|hech\s+qaysi(?:sini)?(?:\s+(?:tanlamayman|xohlamayman))?|нет|отмена)[.!\s]*$/iu;
-const ATTORNEY_COMPARE_RE = /(qaysi(si|\s+biri)?.*(maslahat|tavsiya)|solishtir|farqi|tanimayman|eng\s+mosi)/iu;
+const ATTORNEY_COMPARE_RE = /(qaysi(?:si|\s+biri)?.*(?:maslahat|tavsiya|mos)|solishtir|farqi|tanimayman|eng\s+mosi)/iu;
 const ATTORNEY_RESTART_RE = /(boshqa(\s+advokat)?|yana\s+(advokat|nomzod)|mezon(ni)?\s+o['’]?zgartir|hudud(ni)?\s+o['’]?zgartir|orqaga)/iu;
 
 const INTENT_PROMPT = `Siz Telegram yuridik botining niyat aniqlovchi modulisiz. Foydalanuvchi xabarini tasniflang.
