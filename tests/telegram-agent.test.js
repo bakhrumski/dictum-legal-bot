@@ -232,6 +232,20 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(d.calls.intent, 0, 'document keyword routing must not use AI');
   });
 
+  await test('a legal case mentioning documents and a written fine stays in legal Q&A', async () => {
+    stubMemory();
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({
+      chatId: 1,
+      text: "GAI meni to'xtatib hujjatlarimni so'radi, men mygov mobil ilovasidan ID-kartamni ko'rsatsam tan olmadi va menga jarima yozib mashinamni stoyanka qildi. Shu to'g'rimi?",
+    });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(r.meta.intent, 'huquqiy_savol');
+    assert.strictEqual(d.calls.intent, 1, 'the legal facts must reach intent classification');
+    assert.strictEqual(d.calls.answer, 1, 'the legal question must reach RAG answering');
+  });
+
   await test('completed document intake creates a lawyer-approved paid service', async () => {
     const d = deps();
     agent.initTelegramAgent(d);
