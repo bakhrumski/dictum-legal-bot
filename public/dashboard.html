@@ -6652,6 +6652,23 @@
         .admin-data-row input, .admin-data-row select { min-height: 36px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--card-bg); color: var(--text-primary); padding: 0 9px; }
         .admin-data-row button { min-height: 36px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--text-primary); color: var(--bg-primary); padding: 0 11px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
         .admin-data-status { display: inline-flex; width: fit-content; padding: 4px 7px; border: 1px solid var(--border-color); border-radius: 999px; font-size: 10px !important; font-weight: 700; }
+        .shadow-panel { margin: 0 0 16px; padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-primary); }
+        .shadow-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .shadow-panel-head h3 { margin: 0; color: var(--text-primary); font-size: 14px; }
+        .shadow-panel-head p { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.45; }
+        .shadow-refresh { min-height: 34px; padding: 0 11px; border: 1px solid var(--border-color); border-radius: 9px; background: transparent; color: var(--text-primary); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .shadow-summary { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; margin-top: 12px; }
+        .shadow-metric { min-width: 0; padding: 10px; border: 1px solid var(--border-color); border-radius: 9px; }
+        .shadow-metric strong { display: block; color: var(--text-primary); font-size: 15px; }
+        .shadow-metric span { display: block; margin-top: 4px; color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+        .shadow-runs { margin-top: 12px; border-top: 1px solid var(--border-color); }
+        .shadow-run { display: grid; grid-template-columns: minmax(180px, 1.5fr) minmax(120px, .75fr) minmax(120px, .75fr) 70px 90px; gap: 10px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--border-color); }
+        .shadow-run:last-child { border-bottom: 0; }
+        .shadow-run-copy { min-width: 0; }
+        .shadow-run-message { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font-size: 11px; }
+        .shadow-run-reason { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .shadow-run small { color: var(--text-muted); font-size: 10px; }
+        .shadow-result { width: fit-content; padding: 3px 6px; border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-secondary); font-size: 9px; font-weight: 700; }
         @media (max-width: 1120px) {
             .filter-section { grid-template-columns: repeat(6, minmax(0, 1fr)); }
             .queue-search { grid-column: 1 / -1; }
@@ -6659,6 +6676,9 @@
             .ops-request { grid-template-columns: 5px minmax(0, 1fr) minmax(110px, .5fr) auto; }
             .ops-request-time { display: none; }
             .management-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .shadow-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .shadow-run { grid-template-columns: minmax(160px, 1fr) minmax(105px, .7fr) minmax(105px, .7fr) 65px; }
+            .shadow-run-time { display: none; }
         }
         @media (max-width: 720px) {
             .operations-heading, .stats, .operations-health-shell, .main-content-area, .management-heading, .management-grid { padding-left: 14px; padding-right: 14px; }
@@ -6675,6 +6695,9 @@
             .ops-status { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
             .management-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .admin-data-row { grid-template-columns: 1fr; }
+            .shadow-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .shadow-run { grid-template-columns: minmax(0, 1fr) auto; }
+            .shadow-run-route, .shadow-run-time { display: none; }
         }
     </style>
 </head>
@@ -7396,6 +7419,16 @@
             </div>
             <div class="reg-section-body">
                 <p class="management-note">Avtomatik rejim huquqiy savollarni platforma orqali javoblaydi. Murakkab holatda suhbatni operator rejimiga o'tkazib, keyin yana agentga qaytarish mumkin.</p>
+                <div class="shadow-panel">
+                    <div class="shadow-panel-head">
+                        <div>
+                            <h3>Hermes shadow taqqoslash</h3>
+                            <p>Hermes faqat qarorni baholaydi. Foydalanuvchiga doim amaldagi JuristAI javobi yuboriladi.</p>
+                        </div>
+                        <button type="button" class="shadow-refresh" onclick="loadHermesShadowAdmin()">Yangilash</button>
+                    </div>
+                    <div id="hermesShadowContent"><div class="reg-empty">Bo'limni oching</div></div>
+                </div>
                 <div id="telegramAgentContent"><div class="reg-empty">Bo'limni oching</div></div>
             </div>
         </div>
@@ -14314,9 +14347,82 @@
             } catch (error) { alert(error.message); }
         }
 
+        function formatShadowRoute(value) {
+            const labels = {
+                answer: 'AI javob',
+                clarify: 'Aniqlashtirish',
+                social: 'Ijtimoiy',
+                identity: 'Bot haqida',
+                account_help: 'Hisob yordami',
+                attorney_intake: 'Advokat qabuli',
+                document_intake: 'Hujjat qabuli',
+                human_review: 'Yurist tekshiruvi',
+                reject_offtopic: 'Mavzudan tashqari'
+            };
+            return labels[value] || value || '—';
+        }
+
+        async function loadHermesShadowAdmin() {
+            const container = document.getElementById('hermesShadowContent');
+            if (!container) return;
+            container.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
+            try {
+                const response = await fetch('/api/admin/hermes-shadow?days=7&limit=20');
+                if (!response.ok) throw new Error('Server ' + response.status);
+                const data = await response.json();
+                const stats = data.stats || {};
+                const items = Array.isArray(data.items) ? data.items : [];
+                const statusLabels = { ready: 'Faol', disabled: "O'chirilgan", misconfigured: 'Sozlanmagan' };
+                const statusLabel = statusLabels[data.status] || data.status || 'Noma\'lum';
+                const agreement = stats.agreement_rate == null ? '—' : Number(stats.agreement_rate).toFixed(1) + '%';
+                const tokenCount = Number(stats.total_tokens) || 0;
+                const cost = Number(stats.estimated_cost_usd) || 0;
+                const unknownCosts = Number(stats.unknown_cost_runs) || 0;
+                const costLabel = unknownCosts
+                    ? (cost > 0 ? '$' + cost.toFixed(6) + ' + noma\'lum' : 'Noma\'lum')
+                    : '$' + cost.toFixed(6);
+                const summary = `<div class="shadow-summary">
+                    <div class="shadow-metric"><strong>${escapeHtml(statusLabel)}</strong><span>Holat</span></div>
+                    <div class="shadow-metric"><strong>${Number(stats.successful) || 0}</strong><span>Baholandi</span></div>
+                    <div class="shadow-metric"><strong>${escapeHtml(agreement)}</strong><span>Moslik</span></div>
+                    <div class="shadow-metric"><strong>${Number(stats.failed) || 0}</strong><span>Xato</span></div>
+                    <div class="shadow-metric"><strong>${tokenCount.toLocaleString()}</strong><span>Token</span></div>
+                    <div class="shadow-metric"><strong>${escapeHtml(costLabel)}</strong><span>Taxminiy narx</span></div>
+                    <div class="shadow-metric"><strong>${Number(stats.average_latency_ms) || 0} ms</strong><span>O'rtacha vaqt</span></div>
+                </div>`;
+                const modelLine = `<p style="margin:9px 0 0;color:var(--text-muted);font-size:10px;">Model: ${escapeHtml(data.model || '—')} · Namuna: ${Math.round((Number(data.sampleRate) || 0) * 100)}% · So'nggi ${Number(data.days) || 7} kun</p>`;
+                if (!items.length) {
+                    const emptyText = data.status === 'disabled'
+                        ? "Shadow rejimi o'chirilgan. Render sozlamalarida yoqilgach, natijalar shu yerda ko'rinadi."
+                        : data.status === 'misconfigured'
+                            ? 'Hermes manzili sozlanmagan.'
+                            : "Hali baholash yo'q. Telegram botga test xabari yuboring.";
+                    container.innerHTML = summary + modelLine + `<div class="reg-empty">${escapeHtml(emptyText)}</div>`;
+                    return;
+                }
+                const rows = items.map(function(item) {
+                    const resultLabel = item.status !== 'success' ? 'Xato' : (item.agreement ? 'Mos' : 'Farq');
+                    return `<div class="shadow-run">
+                        <div class="shadow-run-copy">
+                            <div class="shadow-run-message" title="${escapeHtml(item.message_preview || '')}">${escapeHtml(item.message_preview || 'Matn saqlanmagan')}</div>
+                            <small class="shadow-run-reason" title="${escapeHtml(item.hermes_reason || '')}">${escapeHtml(item.hermes_reason || (item.error ? 'Hermes baholashi bajarilmadi' : 'Sabab ko\'rsatilmagan'))}</small>
+                        </div>
+                        <small class="shadow-run-route">JuristAI: ${escapeHtml(formatShadowRoute(item.production_route))}</small>
+                        <small class="shadow-run-route">Hermes: ${escapeHtml(formatShadowRoute(item.hermes_action))}</small>
+                        <span class="shadow-result">${escapeHtml(resultLabel)}</span>
+                        <small class="shadow-run-time">${escapeHtml(formatQueueTimestamp(item.created_at))}</small>
+                    </div>`;
+                }).join('');
+                container.innerHTML = summary + modelLine + '<div class="shadow-runs">' + rows + '</div>';
+            } catch (error) {
+                container.innerHTML = '<div class="reg-empty">Hermes shadow hisobotini yuklashda xatolik</div>';
+            }
+        }
+
         async function loadTelegramAgentAdmin() {
             const container = document.getElementById('telegramAgentContent');
             if (!container) return;
+            void loadHermesShadowAdmin();
             container.innerHTML = '<div class="reg-empty">Yuklanmoqda...</div>';
             try {
                 const response = await fetch('/api/admin/telegram-conversations?limit=100');
