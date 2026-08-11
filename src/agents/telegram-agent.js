@@ -239,7 +239,7 @@ function historyToText(turns) {
 // down the paid answer path.
 const GREETING_RE = /^\s*(assalomu?\s+alayku?m|assalom\w*|salom\w*|salam|(?:x|h)ayrli\s+(kun|tong|kech)|hello|hi|привет|здравствуйте)[\s!.,]*$/iu;
 const THANKS_RE   = /^\s*(rahmat|raxmat|tashakkur|katta\s+rahmat|thanks|thank\s*you|спасибо)[\s!.,)]*$/iu;
-const HELP_RE     = /^\s*(menga\s+)?yordam\s+(kerak|bering|qiling)(\s+iltimos)?[\s!?.]*$/iu;
+const HELP_RE     = /^\s*(menga\s+)?(?:(?:huquqiy|yuridik)\s+)?(?:yordam|maslahat)\s+(kerak|bering|qiling)(\s+iltimos)?[\s!?.]*$/iu;
 const IDENTITY_RE = /(siz\s+)?(yurist|advokat)\s*(?:e?mas)?misiz|(?:siz\s+)?(yurist|advokat)\s*mi|kimsiz|kim\s+siz|o['’]?zingiz\s+kim|robotmisiz|ai\s*misiz|sun['’]?iy\s+intellektmisiz|вы\s+(юрист|адвокат)|кто\s+вы/iu;
 const ATTORNEY_RE = /(advokat\s+(kerak|top|izla)|yurist\s+(kerak|top|izla)|адвокат\s+(нужен|найти)|найти\s+(адвоката|юриста))/iu;
 const HUMAN_RE    = /(inson\s+bilan|jonli\s+odam|operator|real\s+yurist|yurist\s+bilan\s+gaplash|человек|оператор|юрист(ом)?\s+связ)/iu;

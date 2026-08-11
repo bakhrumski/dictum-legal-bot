@@ -431,6 +431,23 @@ function stubMemory(clarifyCount = 0) {
     stubMemory();
   });
 
+  await test('generic legal-help wording clarifies without AI, sources, or quota use', async () => {
+    stubMemory();
+    const d = deps({ korpus: 'This verified answer must not be reached.' });
+    agent.initTelegramAgent(d);
+    dbState.state = 'legal_question_intake';
+    dbState.context = {};
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'menga huquqiy yordam kerak' });
+    assert.strictEqual(r.action, 'clarify');
+    assert.ok(/nima sodir bo['’]ldi/i.test(r.reply));
+    assert.ok(!/Manbalar|yuridik kuchga ega emas|bepul AI javob/i.test(r.reply));
+    assert.strictEqual(d.calls.intent, 0, 'generic help needs no intent-model call');
+    assert.strictEqual(d.calls.korpus, 0, 'generic help must not search the answer bank');
+    assert.strictEqual(d.calls.answer, 0, 'generic help must not generate an answer');
+    assert.strictEqual(d.calls.quota, 0, 'clarification must not consume the daily allowance');
+    stubMemory();
+  });
+
   await test('a clear legal question is answered with sources and a disclaimer', async () => {
     const d = deps();
     agent.initTelegramAgent(d);
