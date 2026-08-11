@@ -46,6 +46,12 @@ assert.strictEqual(rankAttorney({ ...base, is_published: false }, {}), null, 'pr
 const weaker = rankAttorney({ ...base, region: 'Samarqand', languages: ['ru'] }, { legalField: 'Mehnat huquqi', region: 'Toshkent', language: 'uz' });
 assert.ok(weaker.match_score < matched.match_score, 'region and language matches must improve rank');
 
+const apostropheRegion = rankAttorney(
+  { ...base, region: "Qoraqalpogʼiston Respublikasi" },
+  { legalField: 'Mehnat huquqi', region: "Qoraqalpog'iston" }
+);
+assert.ok(apostropheRegion.match_reasons.includes('hudud mos keladi'), 'Uzbek apostrophe variants must not break region matching');
+
 const publicProfile = publicAttorney({ ...base, contact_phone: '+998 90 000-00-00', contact_ref: 'eadvokat:7' });
 assert.strictEqual(publicProfile.contact_phone, undefined, 'public matching results must never contain the phone');
 assert.strictEqual(publicProfile.contact_ref, 'eadvokat:7', 'the opaque consent reference must remain available');

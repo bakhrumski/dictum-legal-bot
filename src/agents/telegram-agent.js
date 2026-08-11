@@ -245,6 +245,9 @@ const ATTORNEY_RE = /(advokat\s+(kerak|top|izla)|yurist\s+(kerak|top|izla)|ад�
 const HUMAN_RE    = /(inson\s+bilan|jonli\s+odam|operator|real\s+yurist|yurist\s+bilan\s+gaplash|человек|оператор|юрист(ом)?\s+связ)/iu;
 const DOCUMENT_RE = /(hujjat|ariza|da['’]?vo|shikoyat|shartnoma|iltimosnoma|e['’]?tiroz|претензи|иск|жалоб|договор|заявлен).*\b(tayyor|yoz|tuz|kerak|состав|подготов)/iu;
 const ACCOUNT_RE  = /(ro['’]?yxat|registrat|login|kirish|parol|otp|kod\s+kelm|hisob|аккаунт|регистрац|парол|войти)/iu;
+const CANCEL_RE   = /^(yo['’]?q|kerak\s+emas|bekor|rad\s+etaman|hech\s+qaysi(?:sini)?(?:\s+(?:tanlamayman|xohlamayman))?|нет|отмена)[.!\s]*$/iu;
+const ATTORNEY_COMPARE_RE = /(qaysi(si|\s+biri)?.*(maslahat|tavsiya)|solishtir|farqi|tanimayman|eng\s+mosi)/iu;
+const ATTORNEY_RESTART_RE = /(boshqa(\s+advokat)?|yana\s+(advokat|nomzod)|mezon(ni)?\s+o['’]?zgartir|hudud(ni)?\s+o['’]?zgartir|orqaga)/iu;
 
 const INTENT_PROMPT = `Siz Telegram yuridik botining niyat aniqlovchi modulisiz. Foydalanuvchi xabarini tasniflang.
 
@@ -325,7 +328,7 @@ async function setConversationState(chatId, state, context) {
 
 function formatAttorneyRecommendations(attorneys) {
   if (!Array.isArray(attorneys) || !attorneys.length) return '';
-  const rows = attorneys.slice(0, 5).map((attorney, index) => {
+  const rows = attorneys.slice(0, 3).map((attorney, index) => {
     const reasons = Array.isArray(attorney.match_reasons) ? attorney.match_reasons.join(', ') : 'soha mos keladi';
     const practice = Array.isArray(attorney.practice_areas)
       ? attorney.practice_areas.slice(0, 3).map(area => area.name_uz).filter(Boolean).join(', ')
@@ -344,11 +347,38 @@ function formatAttorneyRecommendations(attorneys) {
 
 function parseAttorneyChoice(text, options) {
   const value = String(text || '').trim();
-  if (/^(yo['’]?q|kerak emas|bekor|rad etaman|hech qaysi|нет|отмена)[.!\s]*$/iu.test(value)) return { cancelled: true };
-  const number = value.match(/(?:^|\s)([1-5])(?:\s|$|[-.)])/);
+  if (CANCEL_RE.test(value)) return { cancelled: true };
+  const number = value.match(/(?:^|\s)([1-9])(?:\s|$|[-.)])/);
   if (!number) return null;
   const index = Number(number[1]) - 1;
   return options[index] ? { option: options[index], index } : null;
+}
+
+function isUsefulCaseDescription(text) {
+  const value = String(text || '').trim();
+  const words = value.split(/\s+/).filter(Boolean);
+  if (value.length < 18 || words.length < 3) return false;
+  if (HELP_RE.test(value) || ATTORNEY_RE.test(value) || CANCEL_RE.test(value)) return false;
+  return true;
+}
+
+function formatAttorneyComparison(options, criteria = {}) {
+  const rows = options.slice(0, 3).map(option => {
+    const reasons = Array.isArray(option.reasons) && option.reasons.length
+      ? option.reasons.join(', ')
+      : 'litsenziyasi faol';
+    return `${option.index}. *${option.name}* — ${[option.region, reasons].filter(Boolean).join('; ')}`;
+  });
+  const selected = [criteria.fieldLabel, criteria.regionLabel].filter(Boolean).join(', ');
+  return [
+    "Men advokatning xizmat sifatini kafolatlay olmayman va shaxsiy tavsiya bermayman.",
+    selected ? `Tanlangan mezonlar: *${selected}*.` : '',
+    "Ro'yxat faqat rasmiy litsenziya, yo'nalish va hudud mosligiga ko'ra tartiblangan:",
+    '',
+    ...rows,
+    '',
+    "Aloqa raqamini ochish uchun raqamni yuboring. Yangi qidiruv uchun “mezonni o'zgartirish”, bekor qilish uchun “yo'q” deb yozing.",
+  ].filter(line => line !== '').join('\n');
 }
 
 function detectServiceSlug(text) {
@@ -513,14 +543,31 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     };
   }
 
+  // Button-selected states already tell us the user's intent. Do not spend an
+  // LLM call reclassifying a number, a document intake, or an advocate case.
   let intent;
-  try {
-    intent = await classifyIntent(question, turns);
-  } catch (e) {
-    console.warn('[TG-AGENT] intent failed:', e.message);
+  if (state === 'awaiting_attorney_choice' || state === 'attorney_problem') {
+    intent = {
+      intent: 'advokat_kerak',
+      missing: [],
+      legalField: String(context.legalField || ''),
+      legalSubfield: String(context.fieldLabel || ''),
+      region: String(context.region || ''),
+    };
+  } else if (state === 'document_details') {
+    intent = { intent: 'hujjat_tayyorlash', missing: [] };
+  } else if (state === 'legal_question_intake' && isUsefulCaseDescription(question)) {
     intent = { intent: 'huquqiy_savol', missing: [] };
+  } else if (['attorney_intake', 'attorney_field', 'attorney_region', 'document_type', 'legal_question_intake'].includes(state)) {
+    intent = { intent: 'noaniq', missing: [] };
+  } else {
+    try {
+      intent = await classifyIntent(question, turns);
+    } catch (e) {
+      console.warn('[TG-AGENT] intent failed:', e.message);
+      intent = { intent: 'huquqiy_savol', missing: [] };
+    }
   }
-  if (state === 'attorney_intake') intent = { ...intent, intent: 'advokat_kerak' };
 
   const complete = async (result) => {
     try {
@@ -566,12 +613,108 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     );
   };
 
+  if (state !== 'idle' && state !== 'awaiting_attorney_choice' && CANCEL_RE.test(question)) {
+    const reply = "Amal bekor qilindi. Kerakli xizmatni bosh menyudan qayta tanlashingiz mumkin.";
+    await resetConversation(chatId);
+    await remember(reply, 0);
+    return complete({
+      handled: true,
+      reply,
+      action: 'intake_cancelled',
+      escalate: false,
+      meta: { intent: intent.intent, conversationState: 'idle' },
+    });
+  }
+
+  // Text cannot replace a required menu choice because that would reintroduce
+  // fuzzy classification. Re-show the relevant deterministic menu instead.
+  if (['attorney_intake', 'attorney_field', 'attorney_region', 'document_type'].includes(state)) {
+    const normalizedState = state === 'attorney_intake' ? 'attorney_field' : state;
+    const menu = normalizedState === 'document_type' ? 'document_type' : normalizedState;
+    const reply = normalizedState === 'attorney_region'
+      ? "Hududni quyidagi tugmalardan tanlang. Bekor qilish uchun “bekor” deb yozishingiz mumkin."
+      : normalizedState === 'document_type'
+        ? "Hujjat turini quyidagi tugmalardan tanlang. Bekor qilish uchun “bekor” deb yozishingiz mumkin."
+        : "Huquq yo'nalishini quyidagi tugmalardan tanlang. Advokatlar yo'nalishsiz tavsiya qilinmaydi.";
+    if (state === 'attorney_intake') await setConversationState(chatId, 'attorney_field', {});
+    await remember(reply, 0);
+    return complete({
+      handled: true,
+      reply,
+      action: 'menu_selection_required',
+      escalate: false,
+      meta: { intent: intent.intent, menu, conversationState: normalizedState },
+    });
+  }
+
+  if (state === 'legal_question_intake' && !isUsefulCaseDescription(question)) {
+    const reply = "Iltimos, huquqiy vaziyatni aniqroq yozing: nima sodir bo'ldi, qachon va qanday natija xohlaysiz?";
+    await remember(reply, clarifyCount);
+    return complete({
+      handled: true,
+      reply,
+      action: 'clarify',
+      escalate: false,
+      meta: { intent: 'huquqiy_savol', conversationState: 'legal_question_intake' },
+    });
+  }
+
+  if (state === 'attorney_problem' && !isUsefulCaseDescription(question)) {
+    const reply = "Advokatni masalangizga mos tanlash uchun muammoni kamida 1–3 gapda yozing: nima sodir bo'ldi, ish qaysi bosqichda va qanday yordam kerak?";
+    await remember(reply, 0);
+    return complete({
+      handled: true,
+      reply,
+      action: 'attorney_problem_required',
+      escalate: false,
+      meta: { intent: 'advokat_kerak', conversationState: 'attorney_problem' },
+    });
+  }
+
+  if (state === 'document_details' && !isUsefulCaseDescription(question)) {
+    const reply = "Hujjat buyurtmasini yuristga yuborish uchun vaziyatni batafsilroq yozing: tomonlar, voqea, mavjud hujjatlar va muhim muddatlar.";
+    await remember(reply, 0);
+    return complete({
+      handled: true,
+      reply,
+      action: 'clarify',
+      escalate: false,
+      meta: { intent: 'hujjat_tayyorlash', conversationState: 'document_details' },
+    });
+  }
+
   // ── Social ──────────────────────────────────────────────────────────────
   // The initial recommendation never contains a phone. A numbered choice is
   // treated as explicit consent to reveal that one public directory contact;
   // it does not authorize sharing the user's case or identity with anyone.
   if (state === 'awaiting_attorney_choice') {
-    const options = Array.isArray(context && context.attorneyOptions) ? context.attorneyOptions.slice(0, 5) : [];
+    const options = Array.isArray(context && context.attorneyOptions) ? context.attorneyOptions.slice(0, 3) : [];
+
+    if (ATTORNEY_COMPARE_RE.test(question) && options.length) {
+      const reply = formatAttorneyComparison(options, context && context.criteria);
+      await remember(reply, 0);
+      return complete({
+        handled: true,
+        reply,
+        action: 'attorney_compare',
+        escalate: false,
+        meta: { intent: 'advokat_kerak', conversationState: 'awaiting_attorney_choice' },
+      });
+    }
+
+    if (ATTORNEY_RESTART_RE.test(question)) {
+      const reply = "Albatta. Yangi qidiruv uchun huquq yo'nalishini qayta tanlang:";
+      await setConversationState(chatId, 'attorney_field', {});
+      await remember(reply, 0);
+      return complete({
+        handled: true,
+        reply,
+        action: 'attorney_intake_started',
+        escalate: false,
+        meta: { intent: 'advokat_kerak', conversationState: 'attorney_field' },
+      });
+    }
+
     const choice = parseAttorneyChoice(question, options);
     if (choice && choice.cancelled) {
       const reply = "Tushunarli. Hech qaysi advokatning aloqa raqami ochilmadi. Keyinroq kerak bo'lsa yana yozishingiz mumkin.";
@@ -579,18 +722,27 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
       await remember(reply, 0);
       return complete({ handled: true, reply, action: 'attorney_contact_cancelled', escalate: false, meta: { intent: 'advokat_kerak' } });
     }
+    if (!options.length) {
+      const reply = "Oldingi advokat tanlovi eskirgan. Yangi qidiruv uchun huquq yo'nalishini tanlang:";
+      await setConversationState(chatId, 'attorney_field', {});
+      await remember(reply, 0);
+      return complete({
+        handled: true,
+        reply,
+        action: 'attorney_intake_started',
+        escalate: false,
+        meta: { intent: 'advokat_kerak', conversationState: 'attorney_field' },
+      });
+    }
     if (!choice || !choice.option) {
-      const reply = options.length
-        ? `Aloqa raqamini olish uchun 1 dan ${options.length} gacha bo'lgan raqamni yuboring. Masalan: *1*. Bekor qilish uchun “yo'q” deb yozing.`
-        : "Advokat tanlovi eskirgan. Iltimos, qaysi yo'nalish va hudud bo'yicha advokat kerakligini qayta yozing.";
-      if (!options.length) await setConversationState(chatId, 'idle', {});
+      const reply = `Aloqa raqamini olish uchun 1 dan ${options.length} gacha bo'lgan raqamni yuboring. Solishtirish uchun “qaysi biri mos?”, yangi qidiruv uchun “mezonni o'zgartirish”, bekor qilish uchun “yo'q” deb yozing.`;
       await remember(reply, 0);
       return complete({
         handled: true,
         reply,
         action: 'attorney_choice_required',
         escalate: false,
-        meta: { intent: 'advokat_kerak', conversationState: options.length ? 'awaiting_attorney_choice' : 'idle' },
+        meta: { intent: 'advokat_kerak', conversationState: 'awaiting_attorney_choice' },
       });
     }
 
@@ -646,23 +798,77 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
 
   // ── Paid document preparation ──────────────────────────────────────────
   if (intent.intent === 'hujjat_tayyorlash') {
-    const serviceSlug = detectServiceSlug(question);
-    const reply = "Hujjat tayyorlash JuristAI'da pullik xizmat hisoblanadi. Buyurtma faqat mas'ul yurist ko'rib chiqib, ruxsat berganidan keyin ishga olinadi.\n\nHozircha murojaatingizni yurist tekshiruviga yuboraman. Narx va bajarish shartlari tasdiqlangach sizga alohida xabar beriladi.";
+    if (state !== 'document_details') {
+      const reply = "Hujjat tayyorlash pullik xizmat hisoblanadi va buyurtma mas'ul yurist tasdig'idan keyin qabul qilinadi. Kerakli hujjat turini quyidagi tugmalardan tanlang:";
+      await setConversationState(chatId, 'document_type', {});
+      await remember(reply, 0);
+      return complete({
+        handled: true,
+        reply,
+        action: 'document_intake_started',
+        escalate: false,
+        meta: { intent: intent.intent, conversationState: 'document_type' },
+      });
+    }
+
+    const serviceSlug = String(context.serviceSlug || detectServiceSlug(question));
+    const documentTypeLabel = String(context.documentTypeLabel || 'Yuridik hujjat');
+    const reply = `*${documentTypeLabel}* bo'yicha ma'lumotlaringiz qabul qilindi. Bu pullik xizmat hisoblanadi. Buyurtma faqat mas'ul yurist ko'rib chiqib, ruxsat berganidan keyin ishga olinadi.\n\nNarx va bajarish shartlari tasdiqlangach sizga alohida xabar beriladi.`;
     await remember(reply, 0);
     return complete({
       handled: true,
       reply,
       action: 'paid_service',
       escalate: true,
-      meta: { intent: intent.intent, serviceSlug, paidService: true, requiresLawyerApproval: true },
+      meta: {
+        intent: intent.intent,
+        serviceSlug,
+        documentTypeLabel,
+        category: String(context.category || 'Boshqa'),
+        intakeClassified: true,
+        paidService: true,
+        requiresLawyerApproval: true,
+      },
     });
   }
 
   // ── Verified attorney matching ─────────────────────────────────────────
   if (intent.intent === 'advokat_kerak') {
-    let legalField = intent.legalField || '';
-    if (!legalField && D.classifyLegalTopic) {
-      try { legalField = String(await D.classifyLegalTopic(question, { forcePick: true }) || ''); } catch (_) { /* optional */ }
+    // A generic "Menga yurist kerak" is not evidence of legal specialism or
+    // location. Begin deterministic intake instead of forcing the classifier
+    // to invent a field and presenting arbitrary directory entries.
+    if (state !== 'attorney_problem') {
+      const reply = "Mos advokatni topish uchun avval huquq yo'nalishi va hududni tanlash, keyin muammoni qisqacha yozish kerak. Huquq yo'nalishini tanlang:";
+      await setConversationState(chatId, 'attorney_field', {});
+      await remember(reply, 0);
+      return complete({
+        handled: true,
+        reply,
+        action: 'attorney_intake_started',
+        escalate: false,
+        meta: { intent: intent.intent, conversationState: 'attorney_field' },
+      });
+    }
+
+    const legalField = String(context.legalField || '');
+    const fieldLabel = String(context.fieldLabel || '');
+    const region = String(context.region || '');
+    const regionLabel = String(context.regionLabel || (region || 'Barcha hududlar'));
+    const category = String(context.category || 'Boshqa');
+
+    if (!legalField || context.needsHumanFieldReview) {
+      const reply = "Huquq yo'nalishi aniq tanlanmagani uchun tasodifiy advokat tavsiya qilmayman. Muammo tavsifi Master Adminga yuborildi; yo'nalish tekshirilgach mos mutaxassislar shu yerda taklif qilinadi.";
+      await remember(reply, 0);
+      await setConversationState(chatId, 'awaiting_lawyer', {
+        attorneyIntake: { fieldLabel, region, regionLabel, problem: question },
+      });
+      return complete({
+        handled: true,
+        reply,
+        action: 'attorney_request',
+        escalate: true,
+        meta: { intent: intent.intent, legalField: '', region, category, attorneyIds: [] },
+      });
     }
 
     let attorneys = [];
@@ -671,10 +877,11 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
         attorneys = await D.findAttorneys({
           query: question,
           legalField,
-          legalSubfield: intent.legalSubfield || '',
-          region: intent.region || '',
-          language: intent.language || 'uz',
-          limit: 5,
+          legalSubfield: fieldLabel,
+          region,
+          strictField: Boolean(context.strictField),
+          strictRegion: Boolean(context.strictRegion),
+          limit: 3,
         });
       } catch (e) {
         console.warn('[TG-AGENT] attorney matching failed:', e.message);
@@ -682,15 +889,22 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     }
 
     if (attorneys.length) {
-      const attorneyOptions = attorneys.slice(0, 5).map((item, index) => ({
+      const attorneyOptions = attorneys.slice(0, 3).map((item, index) => ({
         index: index + 1,
         ref: item.contact_ref || `local:${item.id}`,
         name: item.full_name,
         organization: item.organization_name || '',
+        region: item.region || '',
+        licenseNumber: item.license_number || '',
+        reasons: Array.isArray(item.match_reasons) ? item.match_reasons : [],
+        practices: Array.isArray(item.practice_areas)
+          ? item.practice_areas.map(area => area.name_uz).filter(Boolean).slice(0, 3)
+          : [],
       }));
-      const reply = `Sizning murojaatingizga mos, litsenziyasi tasdiqlangan advokatlar:\n\n${formatAttorneyRecommendations(attorneys)}\n\nTelefon raqamlari tanlovingizgacha yopiq saqlanadi. Bog'lanmoqchi bo'lgan advokat raqamini yuboring: masalan, *1*.\n\nJuristAI advokat xizmatining narxini belgilamaydi va narx bo'yicha muzokara olib bormaydi. Xizmat shartlari advokat bilan alohida kelishiladi.`;
+      const criteria = { fieldLabel, regionLabel, legalField, region, problem: question };
+      const reply = `Tanlangan mezonlar: *${fieldLabel} · ${regionLabel}*.\n\nRasmiy litsenziyasi faol va shu mezonlarga mos kelgan advokatlar:\n\n${formatAttorneyRecommendations(attorneys)}\n\nBu tartib xizmat sifatiga shaxsiy kafolat emas; u rasmiy yo'nalish va hudud mosligiga asoslangan. Solishtirish uchun “qaysi biri mos?” deb yozing.\n\nTelefon raqami faqat aniq tanlovingizdan keyin ochiladi. Bog'lanmoqchi bo'lgan advokat raqamini yuboring: masalan, *1*.\n\nJuristAI xizmat narxini belgilamaydi va narx bo'yicha muzokara olib bormaydi.`;
       await remember(reply, 0);
-      await setConversationState(chatId, 'awaiting_attorney_choice', { attorneyOptions });
+      await setConversationState(chatId, 'awaiting_attorney_choice', { attorneyOptions, criteria });
       return complete({
         handled: true,
         reply,
@@ -699,6 +913,10 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
         meta: {
           intent: intent.intent,
           legalField,
+          region,
+          fieldLabel,
+          category,
+          intakeClassified: true,
           attorneyIds: attorneys.map(item => item.id),
           attorneyRefs: attorneyOptions.map(item => item.ref),
           conversationState: 'awaiting_attorney_choice',
@@ -706,7 +924,7 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
       });
     }
 
-    const reply = "Hozircha ushbu yo'nalish bo'yicha tasdiqlangan mos advokat topilmadi. Murojaatingiz Master Adminga yuborildi — mos mutaxassis topilganda shu yerda xabar beramiz.\n\nJuristAI advokat xizmatlari narxini belgilamaydi va narx bo'yicha muzokara olib bormaydi.";
+    const reply = `Hozircha *${fieldLabel} · ${regionLabel}* mezonlari bo'yicha litsenziyasi tasdiqlangan mos advokat topilmadi. Murojaatingiz Master Adminga yuborildi — mezonlar qo'lda tekshirilgach shu yerda xabar beramiz.\n\nJuristAI advokat xizmatlari narxini belgilamaydi va narx bo'yicha muzokara olib bormaydi.`;
     await remember(reply, 0);
     await setConversationState(chatId, 'idle');
     return complete({
@@ -714,7 +932,7 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
       reply,
       action: 'attorney_request',
       escalate: true,
-      meta: { intent: intent.intent, legalField, attorneyIds: [] },
+      meta: { intent: intent.intent, legalField, region, fieldLabel, category, intakeClassified: true, attorneyIds: [] },
     });
   }
 

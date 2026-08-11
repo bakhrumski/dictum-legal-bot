@@ -10,6 +10,13 @@ const https = require('https');
 const path = require('path');
 
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
+const {
+  serviceKeyboard,
+  attorneyFieldKeyboard,
+  attorneyRegionKeyboard,
+  documentTypeKeyboard,
+  resolveIntakeCallback,
+} = require('./intake-menus');
 
 // Auto-answering used to run through `askJustify`, an external service whose
 // URL defaults to http://localhost:8000. In production that host does not
@@ -23,6 +30,39 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
 const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
 const LEGAL_BOT_AUTH_FALLBACK_ENABLED = false;
+const TELEGRAM_TOPIC_CATEGORIES = Object.freeze({
+  konstitutsiya: 'Konstitutsiyaviy tuzum',
+  'davlat-boshqaruvi': 'Davlat boshqaruvi',
+  fuqarolik: 'Fuqarolik qonunchiligi',
+  oila: 'Oila qonunchiligi',
+  mehnat: 'Mehnat va aholining bandligi',
+  ijtimoiy: "Ijtimoiy ta'minot va ijtimoiy himoya",
+  moliya: 'Moliya va kredit',
+  soliq: 'Soliq qonunchiligi',
+  bank: 'Bank faoliyati',
+  'uy-joy': "Uy-joy qonunchiligi. Kommunal xo'jalik",
+  tadbirkorlik: "Tadbirkorlik va xo'jalik faoliyati",
+  'tashqi-iqtisod': 'Tashqi iqtisodiy faoliyat. Bojxona ishi',
+  ekologiya: 'Atrof tabiiy muhit va tabiiy resurslar',
+  axborot: 'Axborot va axborotlashtirish',
+  talim: "Ta'lim. Fan. Madaniyat",
+  soglik: "Sog'liqni saqlash. Sport. Turizm",
+  mudofaa: 'Mudofaa',
+  jinoyat: 'Jinoyat qonunchiligi',
+  mamuriy: "Ma'muriy javobgarlik",
+  'yol-harakati': "Ma'muriy javobgarlik",
+  sudlov: 'Odil sudlov',
+  adliya: 'Prokuratura. Advokatura. Notariat. Adliya organlari',
+  xalqaro: 'Xalqaro munosabatlar. Xalqaro huquq',
+  shaxsiy: 'Shaxsiy tusdagi hujjatlar',
+});
+
+function categoryFromAgentMeta(meta = {}) {
+  const explicit = String(meta.category || '').trim();
+  if (explicit) return explicit.slice(0, 255);
+  const topic = String(meta.topic || '').trim();
+  return TELEGRAM_TOPIC_CATEGORIES[topic] || 'Boshqa';
+}
 
 function normalizeInstagramUrl(value) {
   if (!value) return '';
@@ -89,6 +129,28 @@ function freeAccessKeyboard(includeVerify) {
   if (includeVerify) rows.push([{ text: 'Tekshirish', callback_data: 'check_sub' }]);
   if (INSTAGRAM_URL) rows.push([{ text: 'Instagram sahifamiz', url: INSTAGRAM_URL }]);
   return rows;
+}
+
+function startKeyboard(includeVerify = false) {
+  return {
+    inline_keyboard: [
+      ...serviceKeyboard().inline_keyboard,
+      ...freeAccessKeyboard(includeVerify),
+    ],
+  };
+}
+
+function agentActionKeyboard(agentResult) {
+  if (!agentResult) return null;
+  if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
+  if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
+  if (agentResult.action === 'greeting' || agentResult.action === 'intake_cancelled') return serviceKeyboard();
+  if (agentResult.action !== 'menu_selection_required') return null;
+  const menu = agentResult.meta && agentResult.meta.menu;
+  if (menu === 'attorney_field') return attorneyFieldKeyboard();
+  if (menu === 'attorney_region') return attorneyRegionKeyboard();
+  if (menu === 'document_type') return documentTypeKeyboard();
+  return serviceKeyboard();
 }
 
 // Returns true if the user is a member of REQUIRED_CHANNEL.
@@ -240,12 +302,34 @@ bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
 
+  // Guided intake is deterministic: menu clicks update the conversation state
+  // without spending an LLM call or guessing the user's legal field.
+  if (/^(intake_home|svc_|atf_|atr_|doc_)/.test(data)) {
+    try {
+      const { loadConversation, resetConversation, setConversationState } = require('../agents/telegram-agent');
+      const current = await loadConversation(chatId);
+      const action = resolveIntakeCallback(data, current.context || {});
+      if (!action) {
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Tanlov eskirgan. /start ni bosing.' });
+        return;
+      }
+      if (action.reset) await resetConversation(chatId);
+      await setConversationState(chatId, action.state, action.context || {});
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'Tanlandi' });
+      await bot.sendMessage(chatId, action.message, action.replyMarkup ? { reply_markup: action.replyMarkup } : {});
+    } catch (error) {
+      console.error('[BOT] intake callback failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'Xatolik yuz berdi. /start ni qayta bosing.', show_alert: true });
+    }
+    return;
+  }
+
   // Handle channel-subscription re-check
   if (data === 'check_sub') {
     try {
       if (await isChannelMember(callbackQuery.from.id)) {
         bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Rahmat! Obuna tasdiqlandi.' });
-        bot.sendMessage(chatId, '✅ Obuna tasdiqlandi! Endi huquqiy savolingizni yuborishingiz mumkin.');
+        bot.sendMessage(chatId, '✅ Obuna tasdiqlandi! Kerakli xizmatni tanlang:', { reply_markup: serviceKeyboard() });
       } else {
         bot.answerCallbackQuery(callbackQuery.id, {
           text: 'Hali obuna bo\'lmadingiz. Iltimos, kanalga obuna bo\'ling.',
@@ -332,17 +416,15 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
 
   if (param === 'advokat') {
     try {
-      await pool.query(`
-        INSERT INTO tg_conversations (chat_id, state, updated_at)
-        VALUES ($1, 'attorney_intake', NOW())
-        ON CONFLICT (chat_id) DO UPDATE SET state = 'attorney_intake', updated_at = NOW()
-      `, [chatId]);
+      const { resetConversation, setConversationState } = require('../agents/telegram-agent');
+      await resetConversation(chatId);
+      await setConversationState(chatId, 'attorney_field', {});
     } catch (error) {
       console.warn('[BOT] attorney intake state could not be saved:', error.message);
     }
     await bot.sendMessage(chatId,
-      'Sizga mos advokat topishim uchun vaziyatni qisqacha yozing.\n\n' +
-      'Huquq sohasi, hudud va qaysi tilda maslahat kerakligini ko\'rsatsangiz, moslik aniqroq bo\'ladi. JuristAI narx belgilamaydi va xizmat narxi bo\'yicha muzokara olib bormaydi.'
+      "Sizga mos advokat topish uchun avval huquq yo'nalishini tanlang:",
+      { reply_markup: attorneyFieldKeyboard() }
     );
     return;
   }
@@ -613,7 +695,7 @@ JuristAIga xush kelibsiz. Men inson yurist emasman — O'zbekiston qonunchiligi 
 Javoblar umumiy huquqiy ma'lumot bo'lib, rasmiy yuridik xulosa hisoblanmaydi.`;
 
   bot.sendMessage(chatId, welcomeMessage, {
-    reply_markup: { inline_keyboard: freeAccessKeyboard(false) }
+    reply_markup: startKeyboard(false)
   });
   pendingRequests[chatId] = { username: username || 'Noma\'lum', messages: [] };
 });
@@ -945,14 +1027,20 @@ bot.on('message', async (msg) => {
         }
 
         if (agentResult && agentResult.handled && agentResult.reply) {
-          for (const part of splitForTelegram(agentResult.reply)) {
-            await bot.sendMessage(chatId, part, {
+          const replyParts = splitForTelegram(agentResult.reply);
+          const actionKeyboard = agentActionKeyboard(agentResult);
+          for (let partIndex = 0; partIndex < replyParts.length; partIndex++) {
+            const part = replyParts[partIndex];
+            const sendOptions = {
               parse_mode: 'Markdown',
               disable_web_page_preview: true,
-            }).catch(async () => {
+            };
+            if (partIndex === 0 && actionKeyboard) sendOptions.reply_markup = actionKeyboard;
+            await bot.sendMessage(chatId, part, sendOptions).catch(async () => {
               // Markdown in a legal answer breaks on stray * or _ — never let
               // a formatting failure swallow the answer itself.
-              await bot.sendMessage(chatId, part.replace(/[*_`\[\]]/g, '')).catch(() => {});
+              const fallbackOptions = partIndex === 0 && actionKeyboard ? { reply_markup: actionKeyboard } : {};
+              await bot.sendMessage(chatId, part.replace(/[*_`\[\]]/g, ''), fallbackOptions).catch(() => {});
             });
           }
         }
@@ -971,6 +1059,8 @@ bot.on('message', async (msg) => {
       'greeting', 'clarify', 'offtopic', 'account_help',
       'identity', 'quota_exceeded', 'quota_unavailable',
       'attorney_contact_shared', 'attorney_contact_cancelled', 'attorney_choice_required',
+      'attorney_intake_started', 'attorney_problem_required', 'attorney_compare',
+      'document_intake_started', 'menu_selection_required', 'intake_cancelled',
     ].includes(agentResult.action);
   if (conversational) return;
 
@@ -1084,6 +1174,7 @@ async function saveRequest(data, opts = {}) {
   const status = opts.status || 'pending';
   const agentReply = opts.agentReply || null;
   const agentMeta = opts.agentMeta || {};
+  const requestCategory = categoryFromAgentMeta(agentMeta);
   const client = await pool.connect();
 
   try {
@@ -1123,7 +1214,7 @@ async function saveRequest(data, opts = {}) {
         agent_action, requires_lawyer_review)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'telegram', $12, $13, $14) RETURNING id`,
       [userId, data.request_text, data.request_type, data.file_id, data.file_size, data.file_name,
-       status, 'Boshqa',
+       status, requestCategory,
        agentReply, agentReply ? 'JuristAI Telegram agenti' : null,
        status === 'ai_answered' ? new Date() : null,
        agentMeta.intent || null, agentMeta.action || null, status !== 'ai_answered']
@@ -1133,11 +1224,15 @@ async function saveRequest(data, opts = {}) {
 
     const requestId = insertResult.rows[0].id;
 
-    // Async triage — classify request without blocking the response
-    const { triageRequest } = require('../agents/triage');
-    triageRequest(requestId, data.request_text, data.request_type).catch(err =>
-      console.error('[TRIAGE] Async error:', err.message)
-    );
+    // Do not pay for a second classifier when the menu or legal RAG topic has
+    // already supplied a deterministic category. Unclassified free text and
+    // attachments still use async triage for the Master Admin queue.
+    if (requestCategory === 'Boshqa' && !agentMeta.intakeClassified) {
+      const { triageRequest } = require('../agents/triage');
+      triageRequest(requestId, data.request_text, data.request_type).catch(err =>
+        console.error('[TRIAGE] Async error:', err.message)
+      );
+    }
 
     return { success: true, requestId };
 

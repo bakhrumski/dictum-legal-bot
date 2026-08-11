@@ -261,9 +261,16 @@ async function initLegalMarketplaceSchema(db = pool) {
   }
 }
 
-function normalizedTerms(value) {
+function normalizeMatchText(value) {
   return String(value || '')
     .toLocaleLowerCase('uz')
+    .replace(/[ʻʼ’‘`´]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizedTerms(value) {
+  return normalizeMatchText(value)
     .replace(/[^a-z0-9а-яёўқғҳ\s'-]/giu, ' ')
     .split(/\s+/)
     .filter(term => term.length > 2);
@@ -284,7 +291,7 @@ function rankAttorney(attorney, criteria = {}) {
     reasons.push('soha mos keladi');
   }
 
-  if (criteria.region && attorney.region && attorney.region.toLocaleLowerCase('uz').includes(String(criteria.region).toLocaleLowerCase('uz'))) {
+  if (criteria.region && attorney.region && normalizeMatchText(attorney.region).includes(normalizeMatchText(criteria.region))) {
     score += 15;
     reasons.push('hudud mos keladi');
   }
@@ -422,8 +429,8 @@ async function findMatchingAttorneys(criteria = {}, db = pool) {
   }
 
   if (criteria.strictRegion && criteria.region) {
-    const region = String(criteria.region).toLocaleLowerCase('uz');
-    ranked = ranked.filter(item => String(item.region || '').toLocaleLowerCase('uz').includes(region));
+    const region = normalizeMatchText(criteria.region);
+    ranked = ranked.filter(item => normalizeMatchText(item.region).includes(region));
   }
   if (criteria.strictField && (criteria.legalField || criteria.legalSubfield)) {
     const wanted = normalizedTerms(`${criteria.legalField || ''} ${criteria.legalSubfield || ''}`);
