@@ -93,7 +93,7 @@ async function test(name, fn) {
  *   korpus   — a lawyer-verified answer to return from qa-korpus
  */
 function deps(o = {}) {
-  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, attorneyCriteria: null, contacts: 0, events: 0, quota: 0, release: 0, shadow: 0, shadowPayload: null };
+  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, attorneyCriteria: null, contacts: 0, events: 0, quota: 0, release: 0, shadow: 0, shadowPayload: null, retrieval: null };
   const dependencies = {
     calls,
     callCheapAI: async () => {
@@ -104,10 +104,13 @@ function deps(o = {}) {
       calls.answer++;
       return { text: o.answer !== undefined ? o.answer : 'Mehnat kodeksining 100-moddasiga ko\'ra ish beruvchi buyruq chiqarishi shart.', provider: 'test-model' };
     },
-    retrieveLegalContext: async () => ({
-      context: o.chunks && o.chunks.length ? 'kontekst' : '',
-      chunks: o.chunks !== undefined ? o.chunks : [{ law_name: 'Mehnat kodeksi', article_numbers: ['100'], source_url: 'https://lex.uz/docs/1', chunk_text: '100-modda ...' }],
-    }),
+    retrieveLegalContext: async (query, topic, language, options) => {
+      calls.retrieval = { query, topic, language, options };
+      return {
+        context: o.chunks && o.chunks.length ? 'kontekst' : '',
+        chunks: o.chunks !== undefined ? o.chunks : [{ law_name: 'Mehnat kodeksi', article_numbers: ['100'], source_url: 'https://lex.uz/docs/1', chunk_text: '100-modda ...' }],
+      };
+    },
     verifyCitations: () => ({ total: 1, unverified: o.unverified || [] }),
     buildTopicPrompt: () => 'SYSTEM',
     classifyLegalTopic: async () => 'mehnat',
@@ -468,6 +471,44 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/yuridik kuchga ega emas/.test(r.reply), 'disclaimer missing');
     assert.ok(/yana 2 ta bepul AI javob/i.test(r.reply), 'remaining daily allowance missing');
     assert.strictEqual(r.meta.remainingDailyAnswers, 2);
+  });
+
+  await test('a clarification answer retrieves the complete labor case with strict topic scope', async () => {
+    stubMemory(1);
+    dbState.state = 'clarifying';
+    dbState.turns = [
+      { role: 'user', text: "Meni ishdan bo'shatishdi va ikki oylik ish haqimni berishmadi. Mehnat shartnomam mavjud." },
+      { role: 'ai', text: "Buyruq asosi, sana va to'lanmagan oylarni yozing." },
+    ];
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({
+      chatId: 1,
+      text: "Asossiz, 10-avgustda. Iyun va iyul uchun to'lashmadi. Xabarnoma berishmadi.",
+    });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(d.calls.retrieval.topic, 'mehnat');
+    assert.strictEqual(d.calls.retrieval.options.strictTopic, true);
+    assert.match(d.calls.retrieval.query, /ishdan bo['’]shatishdi/i);
+    assert.match(d.calls.retrieval.query, /iyun va iyul/i);
+    stubMemory();
+  });
+
+  await test('Telegram Manbalar excludes retrieved laws not cited in the answer', async () => {
+    const d = deps({
+      answer: 'Mehnat kodeksining 100-moddasiga ko\'ra ish beruvchi yozma buyruq berishi shart.',
+      chunks: [
+        { law_name: 'Mehnat kodeksi', article_numbers: ['100'], source_url: 'https://lex.uz/docs/1', chunk_text: '100-modda ...' },
+        { law_name: "Ma'muriy sud ishlarini yuritish kodeksi", article_numbers: ['126'], source_url: 'https://lex.uz/docs/2', chunk_text: '126-modda ...' },
+        { law_name: 'Fuqarolik kodeksi', article_numbers: ['382'], source_url: 'https://lex.uz/docs/3', chunk_text: '382-modda ...' },
+      ],
+    });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: "Ish beruvchi meni ishdan bo'shatdi." });
+    assert.match(r.reply, /Manbalar/);
+    assert.match(r.reply, /Mehnat kodeksi/);
+    assert.doesNotMatch(r.reply, /Ma'muriy sud ishlarini yuritish kodeksi/);
+    assert.doesNotMatch(r.reply, /Fuqarolik kodeksi/);
   });
 
   await test('the fourth legal answer is blocked before retrieval or generation', async () => {
