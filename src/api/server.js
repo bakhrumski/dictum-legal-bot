@@ -4248,10 +4248,10 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       articleMatches = await articleNumberSearch(route.entities, { lawHint, category: topic || null, limit: 6 });
       // If a scoped search came up empty, retry unscoped — a cross-law article
       // hit beats nothing.
-      if (articleMatches.length === 0 && (topic || lawHint)) {
+      if (articleMatches.length === 0 && (topic || lawHint) && !opts.strictTopic) {
         articleMatches = await articleNumberSearch(route.entities, { lawHint, limit: 6 });
       }
-      if (articleMatches.length === 0 && lawHint) {
+      if (articleMatches.length === 0 && lawHint && !opts.strictTopic) {
         articleMatches = await articleNumberSearch(route.entities, { limit: 6 });
       }
     } catch (e) {
@@ -4275,7 +4275,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         // ingested under a different category than the question's topic would
         // otherwise never be retrieved — this is why freshly-added laws weren't
         // used. The reranker downstream still enforces relevance.
-        if (topic) {
+        if (topic && !opts.strictTopic) {
           try {
             const smU = await vectorSearch(query, { language, limit: 12, apiKey: embKey });
             const byId = new Map();
@@ -4451,7 +4451,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   }
 
   const totalFound = rawResults.length + guaranteedKeywordMatches.length + exactResults.length;
-  if (topic && totalFound < 2) {
+  if (topic && totalFound < 2 && !opts.strictTopic) {
     console.warn(`[RAG] Topic-scoped retrieval underflow (${totalFound} results) for "${topic}", retrying without category filter`);
     const fallbackResult = await retrieveLegalContext(query, null, null);
     const fallbackCount = Array.isArray(fallbackResult?.chunks)
@@ -4473,7 +4473,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // When user picked a topic but the question may span multiple legal fields,
   // include the top 1-2 chunks from outside the topic if they score high enough.
   let crossFieldResults = [];
-  if (topic && totalFound >= 1) {
+  if (topic && totalFound >= 1 && !opts.strictTopic) {
     try {
       const existingIds = new Set(rawResults.map(r => r.id));
       const unscopedExact = await exactMatchSearch(query, {
@@ -4589,7 +4589,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   if (goodChunks.length === 0) {
     try {
       const nuclearResults = await exactMatchSearch(query, {
-        category: null,
+        category: opts.strictTopic ? (topic || null) : null,
         language: null,
         limit: 5,
       });
@@ -4608,6 +4608,8 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // Under LEXUZ_ONLY the general-web leg is skipped entirely and retrieval
   // falls back to lex.uz alone, which is domain-restricted by construction.
   // opts.noWebFallback additionally forces this off for a specific caller.
+  if (opts.strictTopic && goodChunks.length < 2) needsWebSearch = false;
+
   let webResults = [];
   let lexLiveResults = [];
   if (needsWebSearch) {

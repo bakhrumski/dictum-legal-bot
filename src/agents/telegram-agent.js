@@ -27,6 +27,7 @@
  */
 
 const { pool } = require('../database/db');
+const { selectRelevantSourceRefs, getChunkArticleRefs } = require('../rag/citation-utils');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wiring
@@ -386,6 +387,33 @@ function formatAttorneyComparison(options, criteria = {}) {
   ].filter(line => line !== '').join('\n');
 }
 
+function deterministicLegalTopic(text = '') {
+  const normalized = String(text || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('uz')
+    .replace(/[\u02bb\u02bc\u2018\u2019`']/gu, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Unambiguous employment signals override model classification. This keeps
+  // short follow-up facts (dates, unpaid months, missing notice) anchored to
+  // the user's original labor-law problem.
+  if (/(?:mehnat shartnom|ish haqi|ish beruvchi|ishdan boshat|ishga tikla|xodim|oylik maosh)/u.test(normalized)) {
+    return 'mehnat';
+  }
+  return null;
+}
+
+function buildClarifiedQuestion(question, turns = []) {
+  const priorUserMessages = (Array.isArray(turns) ? turns : [])
+    .filter(turn => turn && turn.role === 'user' && String(turn.text || '').trim())
+    .slice(-3)
+    .map(turn => String(turn.text).trim());
+  if (!priorUserMessages.length) return question;
+  return `${priorUserMessages.join('\n\n')}\n\nQo'shimcha ma'lumot:\n${String(question || '').trim()}`;
+}
+
 function detectServiceSlug(text) {
   const value = String(text || '').toLocaleLowerCase('uz');
   if (/da['’]?vo|иск/iu.test(value)) return 'claim';
@@ -400,15 +428,15 @@ function detectServiceSlug(text) {
 // Answer generation
 // ─────────────────────────────────────────────────────────────────────────────
 
-function formatSources(chunks, limit = 3) {
+function formatSources(chunks, replyText, limit = 3) {
   const seen = new Set();
   const out = [];
-  for (const c of chunks || []) {
+  for (const sourceRef of selectRelevantSourceRefs(chunks, replyText)) {
+    const c = sourceRef.chunk;
     if (!c || c.is_active === false) continue;
-    const law = c.law_name || '';
+    const law = sourceRef.lawName || c.law_name || '';
     if (!law) continue;
-    const art = c.article_number_display
-      || (Array.isArray(c.article_numbers) && c.article_numbers.length ? `${c.article_numbers[0]}-modda` : '');
+    const art = sourceRef.articleRef ? `${sourceRef.articleRef}-modda` : '';
     const label = [law, art].filter(Boolean).join(', ');
     const key = label.toLowerCase();
     if (seen.has(key)) continue;
@@ -443,14 +471,18 @@ async function generateAnswer(question, turns) {
   }
 
   // ── 2. Retrieval over the legal corpus ──────────────────────────────────
-  let topic = null;
+  const deterministicTopic = deterministicLegalTopic(question);
+  let topic = deterministicTopic;
   try {
-    if (D.classifyLegalTopic) topic = await D.classifyLegalTopic(question, { forcePick: true });
+    if (!topic && D.classifyLegalTopic) topic = await D.classifyLegalTopic(question, { forcePick: true });
   } catch (_) { /* topic is an optimization, not a requirement */ }
 
   let ragContext = '', chunks = [];
   try {
-    const r = await D.retrieveLegalContext(question, topic, null, {});
+    const r = await D.retrieveLegalContext(question, topic, null, {
+      contextText: historyToText(turns),
+      strictTopic: Boolean(deterministicTopic),
+    });
     ragContext = typeof r === 'string' ? r : (r.context || '');
     chunks = (r && r.chunks) || [];
   } catch (e) {
@@ -484,6 +516,13 @@ TELEGRAM FORMATI (majburiy):
   });
   const text = String(res.text || '').trim();
 
+  // Never let a sourced legal answer cite a legal act that was outside the
+  // retrieved topic-scoped context. In that failure mode the old behavior sent
+  // a polished but ungrounded answer and then appended unrelated retrievals.
+  const relevantSourceRefs = selectRelevantSourceRefs(chunks, text);
+  const hasLawChunks = chunks.some(chunk => getChunkArticleRefs(chunk).length > 0);
+  const groundedToNamedSource = !hasLawChunks || relevantSourceRefs.length > 0;
+
   // ── 4. Confidence gate ──────────────────────────────────────────────────
   // Two independent failure signals: nothing retrieved, or the answer cites
   // articles that are not in what we retrieved. Either one means we cannot
@@ -493,7 +532,7 @@ TELEGRAM FORMATI (majburiy):
     if (D.verifyCitations) unverified = (D.verifyCitations(text, chunks) || {}).unverified || [];
   } catch (_) { /* treat as verified rather than blocking the answer */ }
 
-  const confidence = (chunks.length === 0 || unverified.length > 0) ? 'low' : 'high';
+  const confidence = (chunks.length === 0 || unverified.length > 0 || !groundedToNamedSource) ? 'low' : 'high';
   if (confidence === 'low') {
     console.log(`[TG-AGENT] low confidence — chunks=${chunks.length} unverified=[${unverified.join(', ')}]`);
   }
@@ -501,7 +540,7 @@ TELEGRAM FORMATI (majburiy):
   return {
     text,
     confidence,
-    sources: formatSources(chunks),
+    sources: formatSources(chunks, text),
     meta: { path: 'rag', topic, chunks: chunks.length, unverified, provider: res.provider },
   };
 }
@@ -1011,7 +1050,10 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
 
   let answer;
   try {
-    answer = await generateAnswer(question, turns);
+    const groundedQuestion = state === 'clarifying'
+      ? buildClarifiedQuestion(question, turns)
+      : question;
+    answer = await generateAnswer(groundedQuestion, turns);
   } catch (e) {
     if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId).catch(() => {});
     else await releaseDailyAiAnswer(chatId);
