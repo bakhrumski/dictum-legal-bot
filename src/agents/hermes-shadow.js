@@ -35,6 +35,9 @@ You do not speak to the user, provide legal advice, call tools, reveal contacts,
 Return one JSON object and nothing else:
 {"intent":"...","recommended_action":"...","needs_clarification":false,"should_use_ai_answer":false,"should_escalate":false,"confidence":0.0,"reason":"..."}
 
+If you cannot produce JSON, return exactly one compact line instead:
+ROUTE=<recommended_action>; INTENT=<intent>; ESCALATE=<true|false>; CONFIDENCE=<0.0-1.0>; REASON=<short reason>
+
 Allowed intent values: ${INTENTS.join(', ')}.
 Allowed recommended_action values: ${ROUTES.join(', ')}.
 
@@ -100,6 +103,37 @@ function extractJson(content) {
   const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Hermes did not return JSON');
   return JSON.parse(match[0]);
+}
+
+function extractCompactDecision(content) {
+  const raw = Array.isArray(content)
+    ? content.map(part => (part && (part.text || part.content)) || '').join('')
+    : String(content || '');
+  const route = raw.match(/\bROUTE\s*[=:]\s*([a-z_]+)/i);
+  const intent = raw.match(/\bINTENT\s*[=:]\s*([a-z_]+)/i);
+  if (!route || !intent || !ROUTES.includes(route[1].toLowerCase()) || !INTENTS.includes(intent[1].toLowerCase())) {
+    throw new Error('Hermes did not return a recognized decision');
+  }
+  const escalate = raw.match(/\bESCALATE\s*[=:]\s*(true|false)/i);
+  const confidence = raw.match(/\bCONFIDENCE\s*[=:]\s*(0(?:\.\d+)?|1(?:\.0+)?)/i);
+  const reason = raw.match(/\bREASON\s*[=:]\s*([^\r\n]{1,300})/i);
+  return {
+    intent: intent[1].toLowerCase(),
+    recommended_action: route[1].toLowerCase(),
+    needs_clarification: route[1].toLowerCase() === 'clarify',
+    should_use_ai_answer: route[1].toLowerCase() === 'answer',
+    should_escalate: escalate ? escalate[1].toLowerCase() === 'true' : route[1].toLowerCase() === 'human_review',
+    confidence: confidence ? Number(confidence[1]) : 0,
+    reason: reason ? reason[1].replace(/;\s*$/, '').trim() : 'Compact Hermes decision',
+  };
+}
+
+function extractDecision(content) {
+  try {
+    return { value: extractJson(content), format: 'json' };
+  } catch (_) {
+    return { value: extractCompactDecision(content), format: 'compact' };
+  }
 }
 
 function validateDecision(value) {
@@ -273,6 +307,8 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
     let completionTokens = 0;
     let totalTokens = 0;
     let attempts = 0;
+    let responseFormat = 'json';
+    let lastContentPreview = '';
 
     try {
       const headers = { 'Content-Type': 'application/json' };
@@ -286,7 +322,7 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
         let payload;
         try {
           const retryInstruction = attempts > 1
-            ? '\nPrevious output was not valid JSON. Begin with {, end with }, and return no other text.'
+            ? '\nPrevious output was not machine-readable. Return either the JSON object or the exact ROUTE=... compact line defined above. No explanation.'
             : '';
           const response = await fetchImpl(config.endpoint, {
             method: 'POST',
@@ -295,7 +331,7 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
               model: config.model,
               messages: [
                 { role: 'system', content: SHADOW_SYSTEM_PROMPT + retryInstruction },
-                { role: 'user', content: JSON.stringify(input) + '\nReturn the JSON object now.' },
+                { role: 'user', content: JSON.stringify(input) + '\nReturn the decision now. JSON is preferred; the exact ROUTE=... compact line is also accepted.' },
               ],
               temperature: 0,
               max_tokens: 220,
@@ -324,8 +360,15 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
         totalTokens += Number(usage.total_tokens) || (attemptPromptTokens + attemptCompletionTokens);
         model = String(payload.model || model);
         const choice = payload && payload.choices && payload.choices[0];
+        const content = choice && choice.message && choice.message.content;
+        lastContentPreview = redactSensitiveText(
+          Array.isArray(content) ? content.map(part => (part && (part.text || part.content)) || '').join('') : content,
+          500
+        );
         try {
-          decision = validateDecision(extractJson(choice && choice.message && choice.message.content));
+          const extracted = extractDecision(content);
+          decision = validateDecision(extracted.value);
+          responseFormat = extracted.format;
           break;
         } catch (error) {
           if (attempts >= config.maxAttempts) throw error;
@@ -350,7 +393,7 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
         totalTokens,
         estimatedCostUsd: calculateTokenCost(pricingModel, { inTokens: promptTokens, outTokens: completionTokens }),
         latencyMs: Date.now() - startedAt,
-        rawResult: { ...decision, attempts },
+        rawResult: { ...decision, attempts, responseFormat },
       };
       await persist(row);
       return { status: row.status, agreement, decision, usage: { promptTokens, completionTokens, totalTokens } };
@@ -367,7 +410,7 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
           : null,
         latencyMs: Date.now() - startedAt,
         error: error.message,
-        rawResult: attempts ? { attempts } : null,
+        rawResult: attempts ? { attempts, responsePreview: lastContentPreview } : null,
       };
       try { await persist(row); } catch (dbError) {
         console.warn('[HERMES-SHADOW] could not persist failure:', dbError.message);
@@ -404,6 +447,7 @@ function createHermesShadow({ env = process.env, fetchImpl = global.fetch, db = 
                  hermes_intent, hermes_should_escalate, hermes_confidence,
                  agreement, model, total_tokens, estimated_cost_usd,
                  latency_ms, status, error, raw_result->>'reason' AS hermes_reason,
+                 raw_result->>'responsePreview' AS response_preview,
                  created_at
             FROM tg_agent_shadow_runs
            ORDER BY created_at DESC
@@ -437,4 +481,5 @@ module.exports = {
   getHermesShadowStatus: () => getDefaultService().publicStatus(),
   normalizeProductionRoute,
   redactSensitiveText,
+  extractDecision,
 };
