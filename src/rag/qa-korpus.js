@@ -36,12 +36,151 @@
  */
 
 const { pool } = require('../database/db');
-const { getEmbedding, getEmbedDims } = require('./embeddings');
+const { getEmbedding, getEmbeddingsBatch, getEmbedDims, EMBED_MODEL } = require('./embeddings');
 
 const KORPUS_VERBATIM_THRESHOLD = 0.92;
 const KORPUS_CONTEXT_THRESHOLD = 0.78;
 
 let _initialized = false;
+let _qaEmbeddingDims = null;
+let _backfillStarted = false;
+
+function shouldMigrateEmbeddingColumn(storedDims, targetDims) {
+  const stored = Number(storedDims);
+  const target = Number(targetDims);
+  return Number.isInteger(stored) && stored > 0
+    && Number.isInteger(target) && target > 0
+    && stored !== target;
+}
+
+async function getQaEmbeddingDimensions(db = pool) {
+  const result = await db.query(`
+    SELECT atttypmod
+    FROM pg_attribute
+    JOIN pg_class ON pg_class.oid = pg_attribute.attrelid
+    WHERE pg_class.relname = 'qa_korpus'
+      AND pg_attribute.attname = 'embedding'
+      AND pg_attribute.attnum > 0
+  `);
+  if (!result.rows.length) return null;
+  const dims = parseInt(result.rows[0].atttypmod, 10);
+  return Number.isFinite(dims) && dims > 0 ? dims : null;
+}
+
+async function getLegalCorpusEmbeddingDimensions() {
+  try {
+    const result = await pool.query(`
+      SELECT pg_attribute.atttypmod
+      FROM pg_attribute
+      JOIN pg_class ON pg_class.oid = pg_attribute.attrelid
+      WHERE pg_class.relname = 'legal_chunks'
+        AND pg_attribute.attname = 'embedding'
+        AND pg_attribute.attnum > 0
+      LIMIT 1
+    `);
+    if (!result.rows.length) return null;
+    const dims = parseInt(result.rows[0].atttypmod, 10);
+    return Number.isFinite(dims) && dims > 0 ? dims : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function migrateQaEmbeddingColumn(storedDims, targetDims) {
+  const safeStored = parseInt(storedDims, 10);
+  const safeTarget = parseInt(targetDims, 10);
+  if (!shouldMigrateEmbeddingColumn(safeStored, safeTarget)) return false;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Multiple Render instances can start together. Only one may rename the
+    // shared column, and every waiter re-checks the schema after taking the lock.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('qa_korpus_embedding_migration'))`);
+    const currentDims = await getQaEmbeddingDimensions(client);
+    if (!shouldMigrateEmbeddingColumn(currentDims, safeTarget)) {
+      await client.query('COMMIT');
+      return false;
+    }
+
+    let legacyName = `embedding_legacy_${safeStored}`;
+    const existing = await client.query(`
+      SELECT attname FROM pg_attribute
+      JOIN pg_class ON pg_class.oid = pg_attribute.attrelid
+      WHERE pg_class.relname = 'qa_korpus'
+        AND pg_attribute.attname LIKE $1
+        AND pg_attribute.attnum > 0
+    `, [`${legacyName}%`]);
+    const names = new Set(existing.rows.map(row => row.attname));
+    let suffix = 2;
+    while (names.has(legacyName)) legacyName = `embedding_legacy_${safeStored}_${suffix++}`;
+
+    await client.query('DROP INDEX IF EXISTS idx_qa_korpus_embedding');
+    await client.query(`ALTER TABLE qa_korpus RENAME COLUMN embedding TO ${legacyName}`);
+    await client.query(`ALTER TABLE qa_korpus ADD COLUMN embedding vector(${safeTarget})`);
+    await client.query('COMMIT');
+    console.log(`[QA-KORPUS] Preserved ${safeStored}d vectors in ${legacyName}; active embedding column is now ${safeTarget}d`);
+    return true;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function backfillQaEmbeddings() {
+  if (_backfillStarted) return;
+  _backfillStarted = true;
+  let client = null;
+  let lockHeld = false;
+  try {
+    const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY
+      || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey || !_qaEmbeddingDims) return;
+
+    client = await pool.connect();
+    const lock = await client.query(`SELECT pg_try_advisory_lock(hashtext('qa_korpus_embedding_backfill')) AS acquired`);
+    lockHeld = lock.rows[0] && lock.rows[0].acquired === true;
+    if (!lockHeld) return;
+
+    while (true) {
+      const missing = await client.query(`
+        SELECT id, question
+        FROM qa_korpus
+        WHERE embedding IS NULL
+        ORDER BY id
+        LIMIT 50
+      `);
+      if (!missing.rows.length) break;
+
+      const vectors = await getEmbeddingsBatch(missing.rows.map(row => row.question), apiKey);
+      for (let i = 0; i < missing.rows.length; i++) {
+        const vector = vectors[i];
+        if (!Array.isArray(vector) || vector.length !== _qaEmbeddingDims) {
+          throw new Error(`Backfill vector dimension ${vector && vector.length} does not match qa_korpus ${_qaEmbeddingDims}`);
+        }
+        await client.query(`
+          UPDATE qa_korpus
+          SET embedding = $1::vector,
+              embedding_model = $2,
+              embedding_dims = $3,
+              updated_at = NOW()
+          WHERE id = $4 AND embedding IS NULL
+        `, [`[${vector.join(',')}]`, EMBED_MODEL, _qaEmbeddingDims, missing.rows[i].id]);
+      }
+      console.log(`[QA-KORPUS] Re-embedded ${missing.rows.length} legacy approved question(s) at ${_qaEmbeddingDims}d`);
+    }
+  } catch (err) {
+    console.warn(`[QA-KORPUS] Background re-embedding paused: ${err.message}`);
+  } finally {
+    if (client && lockHeld) {
+      await client.query(`SELECT pg_advisory_unlock(hashtext('qa_korpus_embedding_backfill'))`).catch(() => {});
+    }
+    if (client) client.release();
+    _backfillStarted = false;
+  }
+}
 
 /**
  * Normalize question for deduplication.
@@ -58,7 +197,18 @@ function normalizeQuestion(q) {
 async function initQaKorpus() {
   if (_initialized) return;
   try {
-    const dims = getEmbedDims();
+    const providerDims = getEmbedDims();
+    // The legal corpus is authoritative. qa_korpus must use the same vector
+    // space or the shared query embedding cannot be compared safely.
+    const dims = (await getLegalCorpusEmbeddingDimensions()) || providerDims;
+    if (dims !== providerDims) {
+      console.warn(
+        `[QA-KORPUS] Legal corpus is ${dims}d but active provider is ${providerDims}d. ` +
+        'QA semantic lookup will remain disabled until the provider matches the legal corpus.'
+      );
+    }
+    _qaEmbeddingDims = dims;
+    await pool.query(`CREATE EXTENSION IF NOT EXISTS vector`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS qa_korpus (
         id                SERIAL PRIMARY KEY,
@@ -76,6 +226,13 @@ async function initQaKorpus() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_qa_korpus_topic ON qa_korpus(topic)`);
+    await pool.query(`ALTER TABLE qa_korpus ADD COLUMN IF NOT EXISTS embedding_model TEXT`);
+    await pool.query(`ALTER TABLE qa_korpus ADD COLUMN IF NOT EXISTS embedding_dims INTEGER`);
+
+    const storedDims = await getQaEmbeddingDimensions();
+    if (shouldMigrateEmbeddingColumn(storedDims, dims)) {
+      await migrateQaEmbeddingColumn(storedDims, dims);
+    }
     // Vector index for fast similarity search
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_qa_korpus_embedding
@@ -86,9 +243,11 @@ async function initQaKorpus() {
     });
 
     _initialized = true;
-    console.log('[QA-KORPUS] qa_korpus schema ready');
+    console.log(`[QA-KORPUS] qa_korpus schema ready (${_qaEmbeddingDims}d)`);
+    setImmediate(() => backfillQaEmbeddings());
   } catch (err) {
     console.error('[QA-KORPUS] Init failed:', err.message);
+    throw err;
   }
 }
 
@@ -116,9 +275,13 @@ async function upsertKorpus({ question, correctedAnswer, originalAiAnswer, topic
   // similarity is measured against the question only)
   let embStr = null;
   try {
-    const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
+    const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY
+      || process.env.GPT_API_KEY || process.env.OPENAI_API_KEY;
     if (apiKey) {
-      const embedding = await getEmbedding(question, apiKey);
+      const [embedding] = await getEmbeddingsBatch([question], apiKey);
+      if (embedding.length !== _qaEmbeddingDims) {
+        throw new Error(`Embedding dimension ${embedding.length} does not match qa_korpus ${_qaEmbeddingDims}`);
+      }
       embStr = `[${embedding.join(',')}]`;
     }
   } catch (err) {
@@ -128,14 +291,17 @@ async function upsertKorpus({ question, correctedAnswer, originalAiAnswer, topic
   const result = await pool.query(`
     INSERT INTO qa_korpus (
       question, question_hash, corrected_answer, original_ai_answer,
-      topic, article_refs, embedding, created_by, created_by_name
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7::vector, $8, $9)
+      topic, article_refs, embedding, embedding_model, embedding_dims,
+      created_by, created_by_name
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7::vector, $8, $9, $10, $11)
     ON CONFLICT (question_hash) DO UPDATE SET
       corrected_answer   = EXCLUDED.corrected_answer,
       original_ai_answer = EXCLUDED.original_ai_answer,
       topic              = COALESCE(EXCLUDED.topic, qa_korpus.topic),
       article_refs       = COALESCE(EXCLUDED.article_refs, qa_korpus.article_refs),
       embedding          = COALESCE(EXCLUDED.embedding, qa_korpus.embedding),
+      embedding_model    = COALESCE(EXCLUDED.embedding_model, qa_korpus.embedding_model),
+      embedding_dims     = COALESCE(EXCLUDED.embedding_dims, qa_korpus.embedding_dims),
       created_by         = EXCLUDED.created_by,
       created_by_name    = EXCLUDED.created_by_name,
       updated_at         = NOW()
@@ -145,6 +311,8 @@ async function upsertKorpus({ question, correctedAnswer, originalAiAnswer, topic
     topic || null,
     articleRefs && articleRefs.length > 0 ? articleRefs : null,
     embStr,
+    embStr ? EMBED_MODEL : null,
+    embStr ? _qaEmbeddingDims : null,
     createdBy || null, createdByName || null,
   ]);
 
@@ -177,6 +345,10 @@ async function searchKorpus(query, opts = {}) {
   let qEmb;
   try {
     qEmb = await getEmbedding(query, apiKey);
+    if (qEmb.length !== _qaEmbeddingDims) {
+      console.warn(`[QA-KORPUS] Query vector ${qEmb.length}d does not match active column ${_qaEmbeddingDims}d; skipping semantic cache`);
+      return null;
+    }
   } catch (err) {
     console.warn(`[QA-KORPUS] Query embedding failed: ${err.message}`);
     return null;
@@ -273,4 +445,7 @@ module.exports = {
   normalizeQuestion,
   KORPUS_VERBATIM_THRESHOLD,
   KORPUS_CONTEXT_THRESHOLD,
+  __test: {
+    shouldMigrateEmbeddingColumn,
+  },
 };

@@ -22,7 +22,7 @@ const { expandLegalQueryAliases } = require('../rag/query-aliases');
 const { buildCorpusOnlyAnswer } = require('../rag/corpus-fallback');
 const tariffModule = require('../rag/subscription-tiers');
 const { sendEmailCode } = require('../auth/email-code');
-const { getChunkArticleRefs } = require('../rag/citation-utils');
+const { getChunkArticleRefs, selectRelevantSourceRefs } = require('../rag/citation-utils');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
@@ -5046,11 +5046,23 @@ function lexLangForText(text) {
 // unverified citation is a review signal, not proof of error — the article
 // may exist but sit outside the retrieved chunks).
 function verifyCitations(replyText, chunks = []) {
+  const reply = String(replyText || '');
   const artRx = /(\d{1,4}(?:[¹²³⁴⁵⁶⁷⁸⁹⁰]+)?)[-\s]?(?:modda|модда|статья|статьи|ст\.)/gi;
   const cited = new Set();
   let m;
-  while ((m = artRx.exec(String(replyText || ''))) !== null) cited.add(m[1]);
+  while ((m = artRx.exec(reply)) !== null) cited.add(m[1]);
   if (cited.size === 0) return { total: 0, unverified: [] };
+
+  // If the answer names a legal act, verify the complete act+article pair.
+  // Article-number-only verification can validate an unrelated code that has
+  // the same number.
+  const namesLegalAct = /(?:kodeks(?:i|ining)?|qonun(?:i|ning)?|qaror(?:i|ning)?|nizom(?:i|ning)?)/iu.test(reply);
+  if (namesLegalAct) {
+    const pairedRefs = new Set(
+      selectRelevantSourceRefs(chunks, reply).map(ref => String(ref.articleRef).split('-')[0])
+    );
+    return { total: cited.size, unverified: [...cited].filter(article => !pairedRefs.has(article)) };
+  }
 
   const inContext = new Set();
   for (const c of chunks) {
@@ -5103,49 +5115,37 @@ function auditOpinionCitations(html, contextText) {
 function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
   if (!chunks || chunks.length === 0) return '';
 
-  const reply = String(replyText || '');
   const seen = new Set();
   const lines = [];
 
-  for (const r of chunks) {
+  // A citation is a law+article pair. Article-number-only matching allowed an
+  // unrelated code with the same article number to enter the source footer.
+  for (const sourceRef of selectRelevantSourceRefs(chunks, replyText)) {
+    const r = sourceRef.chunk;
     if (!r.source_url || r.is_active === false) continue;
-    const articleRefs = getChunkArticleRefs(r);
-    if (articleRefs.length === 0) continue;
+    const art = sourceRef.articleRef;
+    const key = `${r.doc_id || sourceRef.lawName}_${art}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
 
-    for (const art of articleRefs) {
-      const key = `${r.doc_id || r.law_name}_${art}`;
-      if (seen.has(key)) continue;
-
-      // Only include if the article number is actually cited in the AI's reply.
-      // Matches "128-modda", "128-4-modda", "128-moddasi", "128 modda", etc.
-      // The (?!\d) guard is critical: without it, article "2" matches "20-modda"
-      // (the optional prim group swallows the "0"), linking the wrong article.
-      if (reply) {
-        const artNum = String(art).split('-')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const articleCited = new RegExp(`\\b${artNum}(?!\\d)(?:[-\\s]?\\d+)?[-\\s]?modda`, 'i').test(reply);
-        if (!articleCited) continue;
+    // Build Text Fragment from first meaningful clause of the chunk
+    let fragment = '';
+    const firstLine = (r.chunk_text || '').split('\n').find(l => l.trim().length > 20);
+    if (firstLine) {
+      const phrase = firstLine.trim().substring(0, 50).replace(/[#*\[\]|]/g, '').trim();
+      if (phrase.length > 10) {
+        fragment = '#:~:text=' + encodeURIComponent(phrase);
       }
-      seen.add(key);
-
-      // Build Text Fragment from first meaningful clause of the chunk
-      let fragment = '';
-      const firstLine = (r.chunk_text || '').split('\n').find(l => l.trim().length > 20);
-      if (firstLine) {
-        const phrase = firstLine.trim().substring(0, 50).replace(/[#*\[\]|]/g, '').trim();
-        if (phrase.length > 10) {
-          fragment = '#:~:text=' + encodeURIComponent(phrase);
-        }
-      }
+    }
 
       // Use the ingested source_url as-is — it's already the Uzbek-Latin lex.uz
       // document (lex.uz uses different doc IDs per language, so rewriting the
       // path segment would point at the wrong/Russian document). Only an explicit
       // /ru/ segment is downgraded to bare for an Uzbek question.
-      let rawUrl = r.source_url || '';
-      if (lang === 'uz') rawUrl = rawUrl.replace('lex.uz/ru/docs/', 'lex.uz/docs/');
-      const url = rawUrl + fragment;
-      lines.push(`- [${r.law_name}, ${art}-modda](${url})`);
-    }
+    let rawUrl = r.source_url || '';
+    if (lang === 'uz') rawUrl = rawUrl.replace('lex.uz/ru/docs/', 'lex.uz/docs/');
+    const url = rawUrl + fragment;
+    lines.push(`- [${sourceRef.lawName}, ${art}-modda](${url})`);
   }
 
   if (lines.length === 0) return '';
