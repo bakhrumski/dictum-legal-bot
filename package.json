@@ -38,7 +38,7 @@
     "test:lex-resolve": "node tests/lex-resolve.test.js",
     "test:lex-excerpt": "node tests/lex-excerpt.test.js",
     "test:opinion": "node tests/lex-resolve.test.js && node tests/lex-excerpt.test.js && node tests/legal-verify.test.js",
-    "test:agent": "node tests/telegram-agent.test.js",
+    "test:agent": "node tests/telegram-agent.test.js && node tests/telegram-economy.test.js",
     "test:hermes": "node tests/hermes-shadow.test.js && node tests/model-pricing.test.js",
     "test:marketplace": "node tests/legal-marketplace.test.js",
     "test:e-advokat": "node tests/e-advokat-registry.test.js",
@@ -49,7 +49,7 @@
     "test:tariff": "node tests/tariff-unlimited.test.js",
     "test:templates": "node tests/user-templates.test.js",
     "test:ui": "node tests/composer-modes.test.js && node tests/operations-filter.test.js",
-    "test:all": "node tests/lex-resolve.test.js && node tests/lex-excerpt.test.js && node tests/legal-verify.test.js && node tests/telegram-agent.test.js && node tests/hermes-shadow.test.js && node tests/model-pricing.test.js && node tests/legal-marketplace.test.js && node tests/e-advokat-registry.test.js && node tests/attorney-directory.test.js && node tests/query-aliases.test.js && node tests/source-restriction.test.js && node tests/rag-integrity.test.js && node tests/tariff-unlimited.test.js && node tests/user-templates.test.js && node tests/composer-modes.test.js && node tests/operations-filter.test.js && node tests/pricing-cards.test.js && node tests/answer-verification.test.js && node tests/ingest-queue.test.js",
+    "test:all": "node tests/lex-resolve.test.js && node tests/lex-excerpt.test.js && node tests/legal-verify.test.js && node tests/telegram-agent.test.js && node tests/telegram-economy.test.js && node tests/hermes-shadow.test.js && node tests/model-pricing.test.js && node tests/legal-marketplace.test.js && node tests/e-advokat-registry.test.js && node tests/attorney-directory.test.js && node tests/query-aliases.test.js && node tests/source-restriction.test.js && node tests/rag-integrity.test.js && node tests/tariff-unlimited.test.js && node tests/user-templates.test.js && node tests/composer-modes.test.js && node tests/operations-filter.test.js && node tests/pricing-cards.test.js && node tests/answer-verification.test.js && node tests/ingest-queue.test.js",
     "test:pricing": "node tests/pricing-cards.test.js"
   },
   "keywords": [],

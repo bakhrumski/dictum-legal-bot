@@ -28,6 +28,7 @@
 
 const { pool } = require('../database/db');
 const { extractAnalysisSection, selectRelevantSourceRefs, getChunkArticleRefs } = require('../rag/citation-utils');
+const telegramEconomy = require('../services/telegram-economy');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wiring
@@ -61,8 +62,11 @@ function isReady() { return !!(D && D.callAI && D.retrieveLegalContext); }
 const AUTO_ANSWER      = process.env.AGENT_AUTO_ANSWER !== 'false';   // master switch
 const ESCALATE_WEAK    = process.env.AGENT_ESCALATE_WEAK !== 'false'; // hand low-confidence to humans
 const MAX_CLARIFY      = parseInt(process.env.AGENT_MAX_CLARIFY, 10) || 2;
-const parsedDailyLimit = Number.parseInt(process.env.AGENT_DAILY_AI_LIMIT || '3', 10);
-const DAILY_AI_LIMIT   = Number.isFinite(parsedDailyLimit) && parsedDailyLimit >= 0 ? parsedDailyLimit : 3;
+const parsedFreeLimit  = Number.parseInt(process.env.AGENT_FREE_AI_LIMIT || '1', 10);
+const FREE_AI_LIMIT    = Number.isFinite(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 1;
+// Backwards-compatible export name used by bot.js. The entitlement is now a
+// lifetime allowance, not a daily allowance.
+const DAILY_AI_LIMIT   = FREE_AI_LIMIT;
 const HISTORY_TURNS    = 8;
 const HISTORY_TTL_H    = 48;
 const TG_LIMIT         = 3900;  // Telegram hard limit is 4096; leave headroom
@@ -76,7 +80,6 @@ const DISCLAIMER = "\n\n_Javob SI tomonidan tayyorlandi va yuridik kuchga ega em
 // a user mid-clarification would otherwise be asked the same question twice.
 
 let _tableReady = false;
-let _usageTableReady = false;
 async function ensureTable() {
   if (_tableReady) return;
   await pool.query(`
@@ -100,59 +103,22 @@ async function ensureTable() {
   _tableReady = true;
 }
 
-async function ensureUsageTable() {
-  if (_usageTableReady) return;
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS tg_agent_daily_usage (
-      chat_id    BIGINT  NOT NULL,
-      usage_day  DATE    NOT NULL,
-      ai_answers INTEGER NOT NULL DEFAULT 0 CHECK (ai_answers >= 0),
-      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (chat_id, usage_day)
-    )
-  `);
-  _usageTableReady = true;
-}
-
-/** Atomically reserve one legal answer for the current Tashkent day. */
+/** Atomically reserve the lifetime-free answer or a purchased answer credit. */
 async function claimDailyAiAnswer(chatId) {
-  if (DAILY_AI_LIMIT === 0) {
-    return { allowed: false, used: 0, remaining: 0, limit: 0 };
-  }
   try {
-    await ensureUsageTable();
-    const result = await pool.query(`
-      INSERT INTO tg_agent_daily_usage (chat_id, usage_day, ai_answers, updated_at)
-      VALUES ($1, timezone('Asia/Tashkent', NOW())::date, 1, NOW())
-      ON CONFLICT (chat_id, usage_day) DO UPDATE SET
-        ai_answers = tg_agent_daily_usage.ai_answers + 1,
-        updated_at = NOW()
-      WHERE tg_agent_daily_usage.ai_answers < $2
-      RETURNING ai_answers
-    `, [chatId, DAILY_AI_LIMIT]);
-    if (!result.rows.length) {
-      return { allowed: false, used: DAILY_AI_LIMIT, remaining: 0, limit: DAILY_AI_LIMIT };
-    }
-    const used = Number(result.rows[0].ai_answers) || 1;
-    return { allowed: true, used, remaining: Math.max(0, DAILY_AI_LIMIT - used), limit: DAILY_AI_LIMIT };
+    return await telegramEconomy.claimAnswerEntitlement(chatId, FREE_AI_LIMIT);
   } catch (error) {
-    console.error('[TG-AGENT] daily quota check failed:', error.message);
-    return { allowed: false, unavailable: true, used: 0, remaining: 0, limit: DAILY_AI_LIMIT };
+    console.error('[TG-AGENT] answer entitlement check failed:', error.message);
+    return { allowed: false, unavailable: true, used: 0, remaining: 0, limit: FREE_AI_LIMIT, paidCredits: 0 };
   }
 }
 
 /** Release a reservation when generation fails before an answer is delivered. */
-async function releaseDailyAiAnswer(chatId) {
+async function releaseDailyAiAnswer(chatId, reservation = {}) {
   try {
-    await ensureUsageTable();
-    await pool.query(`
-      UPDATE tg_agent_daily_usage
-         SET ai_answers = GREATEST(0, ai_answers - 1), updated_at = NOW()
-       WHERE chat_id = $1
-         AND usage_day = timezone('Asia/Tashkent', NOW())::date
-    `, [chatId]);
+    await telegramEconomy.releaseAnswerEntitlement(chatId, reservation);
   } catch (error) {
-    console.warn('[TG-AGENT] daily quota release failed:', error.message);
+    console.warn('[TG-AGENT] answer entitlement release failed:', error.message);
   }
 }
 
@@ -279,15 +245,8 @@ Hujjat, ariza, bayonnoma yoki jarima vaziyatning fakti sifatida tilga olinsa, bu
 
 async function classifyIntent(text, turns) {
   const t = String(text || '').trim();
-
-  if (GREETING_RE.test(t)) return { intent: 'salomlashuv', kind: 'greeting', missing: [] };
-  if (THANKS_RE.test(t))   return { intent: 'salomlashuv', kind: 'thanks',   missing: [] };
-  if (IDENTITY_RE.test(t)) return { intent: 'bot_haqida', missing: [] };
-  if (HELP_RE.test(t))     return { intent: 'noaniq', missing: ['Qanday huquqiy muammo yoki vaziyat bo\'yicha yordam kerak?'] };
-  if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
-  if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
-  if (ACCOUNT_RE.test(t))  return { intent: 'hisob_yordam', missing: [] };
-  if (HUMAN_RE.test(t))    return { intent: 'yurist_kerak', missing: [] };
+  const deterministic = classifyDeterministicIntent(t);
+  if (deterministic) return deterministic;
 
   const ask = D.callCheapAI || D.callAI;
   try {
@@ -315,6 +274,19 @@ async function classifyIntent(text, turns) {
     // costs one imperfect answer, a missed ANSWER costs the whole interaction.
     return { intent: 'huquqiy_savol', missing: [] };
   }
+}
+
+function classifyDeterministicIntent(text) {
+  const t = String(text || '').trim();
+  if (GREETING_RE.test(t)) return { intent: 'salomlashuv', kind: 'greeting', missing: [] };
+  if (THANKS_RE.test(t))   return { intent: 'salomlashuv', kind: 'thanks',   missing: [] };
+  if (IDENTITY_RE.test(t)) return { intent: 'bot_haqida', missing: [] };
+  if (HELP_RE.test(t))     return { intent: 'noaniq', missing: ['Qanday huquqiy muammo yoki vaziyat bo\'yicha yordam kerak?'] };
+  if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
+  if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
+  if (ACCOUNT_RE.test(t))  return { intent: 'hisob_yordam', missing: [] };
+  if (HUMAN_RE.test(t))    return { intent: 'yurist_kerak', missing: [] };
+  return null;
 }
 
 async function setConversationState(chatId, state, context) {
@@ -579,6 +551,14 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
   const started = Date.now();
   const { turns, clarifyCount, mode, state, context } = await loadConversation(chatId);
 
+  const paymentRequired = (status = {}) => ({
+    handled: true,
+    reply: `Bitta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi huquqiy javobni bir martalik to'lov bilan olishingiz mumkin.\n\nSalomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.`,
+    action: 'quota_exceeded',
+    escalate: false,
+    meta: { intent: 'huquqiy_savol', freeLimit: FREE_AI_LIMIT, paidCredits: status.paidCredits || 0 },
+  });
+
   // Master Admin can pause automation for an individual conversation. The
   // bot still records the message in the normal request queue, but it does not
   // classify or answer on the user's behalf until automatic mode is restored.
@@ -610,11 +590,32 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
   } else if (['attorney_intake', 'attorney_field', 'attorney_region', 'document_type', 'legal_question_intake'].includes(state)) {
     intent = { intent: 'noaniq', missing: [] };
   } else {
+    const deterministicIntent = classifyDeterministicIntent(question);
+    if (deterministicIntent) {
+      intent = deterministicIntent;
+    } else {
+      // Do not pay for an intent-model call when the user cannot receive a
+      // generated legal answer. Deterministic conversations above remain
+      // unlimited and cost-free.
+      try {
+        const entitlement = await telegramEconomy.getAnswerEntitlementStatus(chatId, FREE_AI_LIMIT);
+        if (!entitlement.allowed) return paymentRequired(entitlement);
+      } catch (error) {
+        console.warn('[TG-AGENT] preflight entitlement check failed:', error.message);
+        return {
+          handled: true,
+          reply: "AI huquqiy javob huquqingizni hozir tekshirib bo'lmadi. Iltimos, birozdan keyin qayta urinib ko'ring.",
+          action: 'quota_unavailable',
+          escalate: false,
+          meta: { intent: 'huquqiy_savol' },
+        };
+      }
     try {
       intent = await classifyIntent(question, turns);
     } catch (e) {
       console.warn('[TG-AGENT] intent failed:', e.message);
       intent = { intent: 'huquqiy_savol', missing: [] };
+    }
     }
   }
 
@@ -655,7 +656,7 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     // Hermes can time out, fail, or disagree without delaying or changing what
     // the Telegram user receives. Only redacted context is sent by the shadow
     // service, and its result is visible to Master Admins as telemetry.
-    if (D && D.runShadowEvaluation) {
+    if (D && D.runShadowEvaluation && result.action === 'answered') {
       const shadowPayload = {
         chatId,
         text: question,
@@ -1037,19 +1038,19 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
 
   // ── Answer ──────────────────────────────────────────────────────────────
   const quota = D.claimDailyAnswer
-    ? await D.claimDailyAnswer(chatId, DAILY_AI_LIMIT)
+    ? await D.claimDailyAnswer(chatId, FREE_AI_LIMIT)
     : await claimDailyAiAnswer(chatId);
 
   if (!quota.allowed) {
     const reply = quota.unavailable
-      ? "Kunlik bepul AI javob limitini hozir tekshirib bo'lmadi. Iltimos, birozdan keyin qayta urinib ko'ring."
-      : `Bugungi ${quota.limit} ta bepul AI huquqiy javob limitingiz tugadi. Yangi limit ertaga Toshkent vaqti bilan ochiladi.\n\nShoshilinch holatda “yurist kerak” deb yozishingiz mumkin.`;
+      ? "AI huquqiy javob huquqingizni hozir tekshirib bo'lmadi. Iltimos, birozdan keyin qayta urinib ko'ring."
+      : `Bitta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi huquqiy javobni bir martalik to'lov bilan olishingiz mumkin.\n\nSalomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.`;
     return complete({
       handled: true,
       reply,
       action: quota.unavailable ? 'quota_unavailable' : 'quota_exceeded',
       escalate: false,
-      meta: { intent: intent.intent, dailyLimit: quota.limit, remainingDailyAnswers: 0 },
+      meta: { intent: intent.intent, freeLimit: quota.limit, paidCredits: quota.paidCredits || 0 },
     });
   }
 
@@ -1060,15 +1061,15 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
       : question;
     answer = await generateAnswer(groundedQuestion, turns);
   } catch (e) {
-    if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId).catch(() => {});
-    else await releaseDailyAiAnswer(chatId);
+    if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId, quota).catch(() => {});
+    else await releaseDailyAiAnswer(chatId, quota);
     console.error('[TG-AGENT] answer generation failed:', e.message);
     return skip('generation failed: ' + e.message);
   }
 
   if (!answer.text || answer.text.length < 20) {
-    if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId).catch(() => {});
-    else await releaseDailyAiAnswer(chatId);
+    if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId, quota).catch(() => {});
+    else await releaseDailyAiAnswer(chatId, quota);
     return skip('empty answer');
   }
 
@@ -1081,9 +1082,9 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     ? '\n\n⚠️ _Bu dastlabki javob: ba\'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim. Yurist ko\'rib chiqib, aniqlashtiradi._'
     : '';
 
-  const allowance = quota.remaining > 0
-    ? `\n\n🎟 Bugun yana ${quota.remaining} ta bepul AI javob qolgan.`
-    : `\n\n🎟 Bugungi ${quota.limit} ta bepul AI javobdan foydalandingiz. Yangi limit ertaga Toshkent vaqti bilan ochiladi.`;
+  const allowance = quota.source === 'paid'
+    ? `\n\n🎟 Pullik javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`
+    : `\n\n🎁 Bepul huquqiy javobingizdan foydalandingiz. Keyingi javoblar bir martalik to'lov orqali olinadi.`;
   const reply = answer.text + answer.sources + banner + DISCLAIMER + allowance;
 
   await remember(answer.text, 0);
@@ -1098,8 +1099,9 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
       intent: intent.intent,
       ...answer.meta,
       confidence: answer.confidence,
-      dailyLimit: quota.limit,
-      remainingDailyAnswers: quota.remaining,
+      freeLimit: quota.limit,
+      entitlementSource: quota.source,
+      paidCredits: quota.paidCredits || 0,
       ms: Date.now() - started,
     },
   });
@@ -1139,5 +1141,6 @@ module.exports = {
   setConversationState,
   claimDailyAiAnswer,
   releaseDailyAiAnswer,
+  FREE_AI_LIMIT,
   DAILY_AI_LIMIT,
 };

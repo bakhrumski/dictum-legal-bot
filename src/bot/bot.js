@@ -8,6 +8,8 @@ const { pool } = require('../database/db');
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
+const crypto = require('crypto');
+const telegramEconomy = require('../services/telegram-economy');
 
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
 const {
@@ -30,6 +32,9 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
 const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
 const LEGAL_BOT_AUTH_FALLBACK_ENABLED = false;
+const PAID_ANSWER_STARS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_STARS || '1', 10) || 1);
+const PAID_ANSWER_CREDITS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_CREDITS || '4', 10) || 4);
+const ANSWER_INVOICE_PREFIX = 'juristai_answers_v1';
 const TELEGRAM_TOPIC_CATEGORIES = Object.freeze({
   konstitutsiya: 'Konstitutsiyaviy tuzum',
   'davlat-boshqaruvi': 'Davlat boshqaruvi',
@@ -87,6 +92,14 @@ bot.getMe().then((info) => {
     console.error(`[BOT] TELEGRAM_BOT_TOKEN must belong to @${LEGAL_BOT_USERNAME}; received @${info && info.username ? info.username : 'unknown'}`);
   }
 }).catch((err) => console.error('[BOT] Unable to verify legal bot identity:', err.message));
+bot.setMyCommands([
+  { command: 'start', description: 'Bosh menyuni ochish' },
+  { command: 'stats', description: 'Kunlik va oylik faol foydalanuvchilar' },
+  { command: 'balance', description: 'Huquqiy javob kreditlari' },
+  { command: 'terms', description: "To'lov shartlari" },
+  { command: 'paysupport', description: "To'lov bo'yicha yordam" },
+  { command: 'help', description: 'Botdan foydalanish bo\'yicha yordam' },
+]).catch(error => console.warn('[BOT] command menu could not be updated:', error.message));
 
 // If run directly (node bot.js) — start polling for local dev
 if (require.main === module) {
@@ -102,6 +115,7 @@ let pendingRequests = {};
 
 // Store pending admin responses: chatId -> { requestId, adminId, role, fullName }
 const pendingResponses = new Map();
+const pendingPaymentSupport = new Map();
 
 // Files sent WITHOUT a written description are held here until the user sends
 // the describing text, then the two are combined into one request.
@@ -135,13 +149,78 @@ function startKeyboard(includeVerify = false) {
   return {
     inline_keyboard: [
       ...serviceKeyboard().inline_keyboard,
+      [{ text: 'Statistika', callback_data: 'bot_stats' }],
       ...freeAccessKeyboard(includeVerify),
     ],
   };
 }
 
+function paidAnswerKeyboard() {
+  return {
+    inline_keyboard: [[{
+      text: `${PAID_ANSWER_CREDITS} ta qo'shimcha javob — ${PAID_ANSWER_STARS} ⭐`,
+      callback_data: 'buy_ai_answers',
+    }]],
+  };
+}
+
+function paymentTermsKeyboard() {
+  return {
+    inline_keyboard: [[
+      { text: 'Roziman va to\'lash', callback_data: 'confirm_ai_answers_payment' },
+      { text: 'Bekor qilish', callback_data: 'cancel_ai_answers_payment' },
+    ]],
+  };
+}
+
+function paymentTermsText() {
+  return [
+    '*Qo\'shimcha huquqiy javoblar shartlari*',
+    '',
+    `• Narx: *${PAID_ANSWER_STARS} Telegram Star* — *${PAID_ANSWER_CREDITS} ta* qo'shimcha AI huquqiy javob.`,
+    '• Bu obuna emas. Kreditlar muddati tugamaydi.',
+    '• Kredit faqat AI huquqiy javobi yuborilganda sarflanadi. Salomlashuv, aniqlashtirish, menyular va xizmat bo\'yicha suhbatlar bepul.',
+    '• Texnik xatoda sarflangan kredit avtomatik qaytariladi.',
+    '• Javob umumiy huquqiy ma\'lumot bo\'lib, rasmiy yuridik xulosa yoki natija kafolati emas.',
+    '• To\'lov muammolari uchun /paysupport buyrug\'idan foydalaning. Telegram qo\'llab-quvvatlashi JuristAI xaridlarini ko\'rib chiqmaydi.',
+    '',
+    '“Roziman va to\'lash” tugmasini bosib, ushbu shartlarga rozilik bildirasiz.',
+  ].join('\n');
+}
+
+function formatPublicStats(stats) {
+  return [
+    '*JuristAI bot statistikasi*',
+    '',
+    `Bugun faol foydalanuvchilar: *${stats.dailyUsers}*`,
+    `Shu oy faol foydalanuvchilar: *${stats.monthlyUsers}*`,
+    `Jami foydalanuvchilar: *${stats.totalUsers}*`,
+    '',
+    '_Faqat anonim, takrorlanmagan foydalanuvchilar soni ko\'rsatiladi. Xabarlar va shaxsiy ma\'lumotlar ochilmaydi._',
+  ].join('\n');
+}
+
+async function sendPublicStats(chatId) {
+  const stats = await telegramEconomy.getTelegramUserStats();
+  await bot.sendMessage(chatId, formatPublicStats(stats), { parse_mode: 'Markdown' });
+}
+
+async function sendPaidAnswerInvoice(chatId, telegramUserId) {
+  const payload = `${ANSWER_INVOICE_PREFIX}:${telegramUserId}:${crypto.randomBytes(8).toString('hex')}`;
+  return bot.sendInvoice(
+    chatId,
+    `${PAID_ANSWER_CREDITS} ta huquqiy javob`,
+    `JuristAI orqali ${PAID_ANSWER_CREDITS} ta qo'shimcha AI huquqiy javob. Obuna emas, muddati tugamaydi. Salomlashuv, aniqlashtirish va menyular bepul.`,
+    payload,
+    '',
+    'XTR',
+    [{ label: `${PAID_ANSWER_CREDITS} ta AI huquqiy javob`, amount: PAID_ANSWER_STARS }]
+  );
+}
+
 function agentActionKeyboard(agentResult) {
   if (!agentResult) return null;
+  if (agentResult.action === 'quota_exceeded') return paidAnswerKeyboard();
   if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
   if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
   if (agentResult.action === 'greeting' || agentResult.action === 'intake_cancelled') return serviceKeyboard();
@@ -302,6 +381,50 @@ bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
 
+  if (data === 'bot_stats') {
+    try {
+      await telegramEconomy.recordTelegramActivity(chatId);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'Yangilandi' });
+      await sendPublicStats(chatId);
+    } catch (error) {
+      console.error('[BOT] public stats failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'Statistikani hozir yuklab bo\'lmadi.', show_alert: true });
+    }
+    return;
+  }
+
+  if (data === 'buy_ai_answers') {
+    try {
+      await telegramEconomy.recordTelegramActivity(chatId);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'Shartlarni ko\'rib chiqing' });
+      await bot.sendMessage(chatId, paymentTermsText(), {
+        parse_mode: 'Markdown',
+        reply_markup: paymentTermsKeyboard(),
+      });
+    } catch (error) {
+      console.error('[BOT] answer invoice failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'To\'lov oynasini hozir ochib bo\'lmadi.', show_alert: true });
+    }
+    return;
+  }
+
+  if (data === 'confirm_ai_answers_payment') {
+    try {
+      await telegramEconomy.recordTelegramActivity(chatId);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'To\'lov oynasi ochildi' });
+      await sendPaidAnswerInvoice(chatId, callbackQuery.from.id);
+    } catch (error) {
+      console.error('[BOT] confirmed answer invoice failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'To\'lov oynasini hozir ochib bo\'lmadi.', show_alert: true });
+    }
+    return;
+  }
+
+  if (data === 'cancel_ai_answers_payment') {
+    await bot.answerCallbackQuery(callbackQuery.id, { text: 'To\'lov bekor qilindi' });
+    return;
+  }
+
   // Guided intake is deterministic: menu clicks update the conversation state
   // without spending an LLM call or guessing the user's legal field.
   if (/^(intake_home|svc_|atf_|atr_|doc_)/.test(data)) {
@@ -402,6 +525,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const username = msg.from.username || '';
   const param = (match[1] || '').trim();
+  await telegramEconomy.recordTelegramActivity(chatId);
 
   // Authentication never happens in the public legal-question bot. Preserve
   // the deep-link payload and send the user to the dedicated auth bot.
@@ -672,10 +796,10 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     } catch(e) { console.error('[Bot bare-start]', e.message); }
   }
 
-  let dailyAiLimit = 3;
+  let freeAiLimit = 1;
   try {
     const telegramAgent = require('../agents/telegram-agent');
-    dailyAiLimit = telegramAgent.DAILY_AI_LIMIT;
+    freeAiLimit = telegramAgent.FREE_AI_LIMIT;
     // A bare /start means "begin again". Clear stale clarification/service
     // states so the next message is classified normally. The reset deliberately
     // preserves human-takeover mode when an operator is handling the chat.
@@ -684,13 +808,22 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     console.warn('[BOT] conversation could not be reset on /start:', error.message);
   }
   pendingFiles.delete(chatId);
+  let communityLine = '';
+  try {
+    const publicStats = await telegramEconomy.getTelegramUserStats();
+    communityLine = `\n\n📊 Bugun ${publicStats.dailyUsers} ta, shu oy ${publicStats.monthlyUsers} ta faol foydalanuvchi.`;
+  } catch (error) {
+    console.warn('[BOT] welcome stats unavailable:', error.message);
+  }
   const welcomeMessage = `Assalomu alaykum, ${msg.from.first_name}! 👋
 
 JuristAIga xush kelibsiz. Men inson yurist emasman — O'zbekiston qonunchiligi bo'yicha ma'lumot beruvchi AI yordamchiman.
 
-📝 Huquqiy vaziyatingizni matn shaklida yozing. Har kuni ${dailyAiLimit} ta bepul AI huquqiy javob olishingiz mumkin. Salomlashuv, aniqlashtirish va xizmat bo'yicha murojaatlar bu limitga kirmaydi.
+📝 Huquqiy vaziyatingizni matn shaklida yozing. Har bir Telegram foydalanuvchisi ${freeAiLimit} ta AI huquqiy javobni bepul oladi. Keyingi javoblar obunasiz, bir martalik Telegram Stars to'lovi bilan olinadi.
 
-📎 Ovozli xabar, video yoki 5 MB gacha fayl ham yuborishingiz mumkin; bunday murojaatlarni yurist ko'rib chiqadi.
+Salomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.
+
+📎 Ovozli xabar, video yoki 5 MB gacha fayl ham yuborishingiz mumkin; bunday murojaatlarni yurist ko'rib chiqadi.${communityLine}
 
 Javoblar umumiy huquqiy ma'lumot bo'lib, rasmiy yuridik xulosa hisoblanmaydi.`;
 
@@ -703,13 +836,17 @@ Javoblar umumiy huquqiy ma'lumot bo'lib, rasmiy yuridik xulosa hisoblanmaydi.`;
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
 
-  const helpMessage = `
-📋 Yordam
+  const helpMessage = `📋 Yordam
 
-Murojaat yuborish uchun:
-1. /start buyrug'ini yuboring
-2. Masalangizni ixtiyoriy formatda yuboring (matn, ovoz, video, fayl)
-3. Yurist javobini kuting
+1. /start orqali xizmat turini tanlang.
+2. Huquqiy vaziyatingizni matn shaklida yozing.
+3. Bitta AI huquqiy javob bepul. Keyingi javoblar Telegram Stars orqali bir martalik to'lov bilan olinadi; obuna yo'q.
+4. Salomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar cheklanmagan.
+
+/stats — faol foydalanuvchilar soni
+/balance — javob kreditlari qoldig'i
+/terms — to'lov shartlari
+/paysupport — to'lov muammosi bo'yicha yordam
 
 👨‍💼 Admin buyruqlari:
 /link <username> <parol> - Telegram hisobni ulash
@@ -717,10 +854,54 @@ Murojaat yuborish uchun:
 /me - Hisob holatini ko'rish
 /cancel - Javob berishni bekor qilish
 
-Qo'shimcha savol bo'lsa: /start ni qayta bosing
-  `;
+Qo'shimcha savol bo'lsa: /start ni qayta bosing`;
 
   bot.sendMessage(chatId, helpMessage);
+});
+
+bot.onText(/\/stats/, async (msg) => {
+  try {
+    await telegramEconomy.recordTelegramActivity(msg.chat.id);
+    await sendPublicStats(msg.chat.id);
+  } catch (error) {
+    console.error('[BOT] /stats failed:', error.message);
+    await bot.sendMessage(msg.chat.id, 'Statistikani hozir yuklab bo\'lmadi. Keyinroq qayta urinib ko\'ring.');
+  }
+});
+
+bot.onText(/\/balance/, async (msg) => {
+  try {
+    await telegramEconomy.recordTelegramActivity(msg.chat.id);
+    const credits = await telegramEconomy.getPaidAnswerCredits(msg.chat.id);
+    await bot.sendMessage(msg.chat.id,
+      `Qo'shimcha huquqiy javob kreditlaringiz: ${credits}.\n\nBepul javob ishlatilgandan keyin har bir AI huquqiy javob bitta kredit sarflaydi.`
+    );
+  } catch (error) {
+    console.error('[BOT] /balance failed:', error.message);
+    await bot.sendMessage(msg.chat.id, 'Kredit qoldig\'ini hozir tekshirib bo\'lmadi.');
+  }
+});
+
+bot.onText(/\/paysupport/, async (msg) => {
+  await telegramEconomy.recordTelegramActivity(msg.chat.id);
+  pendingPaymentSupport.set(msg.chat.id, Date.now());
+  await bot.sendMessage(msg.chat.id,
+    'To\'lov bo\'yicha muammoni bitta xabarda yozing. Imkon bo\'lsa Telegram to\'lov cheki yoki tranzaksiya raqamini ham kiriting. Xabaringiz Master Adminga yuboriladi.\n\nTelegram qo\'llab-quvvatlashi JuristAI ichidagi xaridlarni ko\'rib chiqmaydi.'
+  );
+});
+
+bot.onText(/\/terms/, async (msg) => {
+  await telegramEconomy.recordTelegramActivity(msg.chat.id);
+  await bot.sendMessage(msg.chat.id, paymentTermsText(), { parse_mode: 'Markdown' });
+});
+
+bot.on('pre_checkout_query', async (query) => {
+  const valid = query.currency === 'XTR'
+    && query.total_amount === PAID_ANSWER_STARS
+    && String(query.invoice_payload || '').startsWith(`${ANSWER_INVOICE_PREFIX}:${query.from.id}:`);
+  await bot.answerPreCheckoutQuery(query.id, valid, valid ? {} : {
+    error_message: 'To\'lov ma\'lumotlari eskirgan. Botdagi tugma orqali yangi hisob oching.',
+  }).catch(error => console.error('[BOT] pre-checkout reply failed:', error.message));
 });
 
 // ========== MAIN MESSAGE HANDLER ==========
@@ -730,8 +911,86 @@ bot.on('message', async (msg) => {
   const username = msg.from.username || `user_${msg.from.id}`;
   const firstName = msg.from.first_name || 'Foydalanuvchi';
 
-  // Ignore commands
+  // Telegram sends a successful payment as a service message. Credit it once
+  // before normal request routing and never treat it as a legal question.
+  if (msg.successful_payment) {
+    await telegramEconomy.recordTelegramActivity(chatId);
+    const payment = msg.successful_payment;
+    const valid = payment.currency === 'XTR'
+      && payment.total_amount === PAID_ANSWER_STARS
+      && String(payment.invoice_payload || '').startsWith(`${ANSWER_INVOICE_PREFIX}:${msg.from.id}:`);
+    if (!valid) {
+      console.error('[BOT] rejected unexpected successful payment payload');
+      return;
+    }
+    try {
+      const granted = await telegramEconomy.grantPaidAnswers({
+        chatId,
+        telegramUserId: msg.from.id,
+        invoicePayload: payment.invoice_payload,
+        currency: payment.currency,
+        totalAmount: payment.total_amount,
+        credits: PAID_ANSWER_CREDITS,
+        telegramPaymentChargeId: payment.telegram_payment_charge_id,
+        providerPaymentChargeId: payment.provider_payment_charge_id,
+      });
+      if (granted.credited) {
+        await bot.sendMessage(chatId,
+          `To'lov qabul qilindi. Hisobingizga ${PAID_ANSWER_CREDITS} ta huquqiy javob qo'shildi. Hozirgi qoldiq: ${granted.credits}.\n\nHuquqiy savolingizni yozing.`
+        );
+      }
+    } catch (error) {
+      console.error('[BOT] paid answer credit failed:', error.message);
+      await bot.sendMessage(chatId,
+        `To'lov qabul qilindi, ammo kreditni avtomatik qo'shishda xatolik yuz berdi. /paysupport ga yozing. Tranzaksiya: ${payment.telegram_payment_charge_id}`
+      );
+    }
+    return;
+  }
+
+  await telegramEconomy.recordTelegramActivity(chatId);
+
+  // Ignore commands after recording anonymous activity. Their dedicated
+  // command handlers own the response.
   if (msg.text && msg.text.startsWith('/')) return;
+
+  if (pendingPaymentSupport.has(chatId)) {
+    const supportStartedAt = pendingPaymentSupport.get(chatId);
+    if (Date.now() - supportStartedAt > 15 * 60 * 1000) {
+      pendingPaymentSupport.delete(chatId);
+    } else {
+    pendingPaymentSupport.delete(chatId);
+    const supportText = String(msg.text || msg.caption || '').trim();
+    if (!supportText) {
+      await bot.sendMessage(chatId, 'Iltimos, to\'lov muammosini matn shaklida yozing.');
+      pendingPaymentSupport.set(chatId, Date.now());
+      return;
+    }
+    try {
+      const notified = new Set();
+      if (process.env.ADMIN_TELEGRAM_ID) {
+        await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID,
+          `To'lov bo'yicha yordam so'rovi\n\nFoydalanuvchi: ${firstName}\nTelegram ID: ${chatId}\nUsername: @${username}\n\n${supportText}`
+        );
+        notified.add(String(process.env.ADMIN_TELEGRAM_ID));
+      }
+      const masters = await pool.query(
+        "SELECT telegram_chat_id FROM admins WHERE role = 'master' AND telegram_chat_id IS NOT NULL"
+      );
+      for (const master of masters.rows) {
+        if (notified.has(String(master.telegram_chat_id))) continue;
+        await bot.sendMessage(master.telegram_chat_id,
+          `To'lov bo'yicha yordam so'rovi\n\nFoydalanuvchi: ${firstName}\nTelegram ID: ${chatId}\nUsername: @${username}\n\n${supportText}`
+        ).catch(() => {});
+      }
+      await bot.sendMessage(chatId, 'To\'lov bo\'yicha murojaatingiz qabul qilindi. Master Admin tekshirib, shu yerda javob beradi.');
+    } catch (error) {
+      console.error('[BOT] payment support routing failed:', error.message);
+      await bot.sendMessage(chatId, 'Murojaatni yuborib bo\'lmadi. Keyinroq /paysupport orqali qayta urinib ko\'ring.');
+    }
+    return;
+    }
+  }
 
   // ---- CHECK IF SENDER IS A LINKED ADMIN WITH PENDING RESPONSE ----
   if (pendingResponses.has(chatId)) {
@@ -1010,6 +1269,7 @@ bot.on('message', async (msg) => {
   // not transcribed — answering one anyway would be exactly the confident
   // guessing this platform exists to avoid.
   let agentResult = null;
+  let agentReplyDelivered = false;
   if (requestData.request_type === 'text') {
     try {
       const { handleUserMessage, splitForTelegram, isReady } = require('../agents/telegram-agent');
@@ -1029,19 +1289,35 @@ bot.on('message', async (msg) => {
         if (agentResult && agentResult.handled && agentResult.reply) {
           const replyParts = splitForTelegram(agentResult.reply);
           const actionKeyboard = agentActionKeyboard(agentResult);
+          let allReplyPartsDelivered = true;
           for (let partIndex = 0; partIndex < replyParts.length; partIndex++) {
             const part = replyParts[partIndex];
+            let partDelivered = false;
             const sendOptions = {
               parse_mode: 'Markdown',
               disable_web_page_preview: true,
             };
             if (partIndex === 0 && actionKeyboard) sendOptions.reply_markup = actionKeyboard;
-            await bot.sendMessage(chatId, part, sendOptions).catch(async () => {
+            await bot.sendMessage(chatId, part, sendOptions).then(() => {
+              partDelivered = true;
+            }).catch(async () => {
               // Markdown in a legal answer breaks on stray * or _ — never let
               // a formatting failure swallow the answer itself.
               const fallbackOptions = partIndex === 0 && actionKeyboard ? { reply_markup: actionKeyboard } : {};
-              await bot.sendMessage(chatId, part.replace(/[*_`\[\]]/g, ''), fallbackOptions).catch(() => {});
+              await bot.sendMessage(chatId, part.replace(/[*_`\[\]]/g, ''), fallbackOptions).then(() => {
+                partDelivered = true;
+              }).catch(() => {});
             });
+            if (!partDelivered) allReplyPartsDelivered = false;
+          }
+          agentReplyDelivered = allReplyPartsDelivered;
+          if (!agentReplyDelivered && agentResult.action === 'answered') {
+            const { releaseDailyAiAnswer } = require('../agents/telegram-agent');
+            await releaseDailyAiAnswer(chatId, {
+              source: agentResult.meta && agentResult.meta.entitlementSource,
+            });
+            console.warn(`[BOT] answer delivery failed; entitlement restored for chat=${chatId}`);
+            agentResult = null;
           }
         }
       }
@@ -1064,7 +1340,7 @@ bot.on('message', async (msg) => {
     ].includes(agentResult.action);
   if (conversational) return;
 
-  const agentDelivered = !!(agentResult && agentResult.handled && agentResult.reply);
+  const agentDelivered = !!(agentResult && agentResult.handled && agentResult.reply && agentReplyDelivered);
   const resolvedByAgent = !!(agentResult && agentResult.handled
     && ['answered', 'attorney_matches'].includes(agentResult.action)
     && !agentResult.escalate);

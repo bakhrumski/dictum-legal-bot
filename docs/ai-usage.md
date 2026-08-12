@@ -192,10 +192,13 @@ the following month's revenue, and only pays someone who stays.
 
 ### Telegram cost controls
 
-Each Telegram chat receives three successful AI legal answers per Tashkent
-day by default. The reservation is atomic in PostgreSQL and is released if
-generation fails, so concurrent messages cannot exceed the allowance and a
-failed provider does not consume it.
+Each Telegram account receives one successful AI legal answer free for the
+lifetime of the account. Additional answers are pay-as-you-go Telegram Stars
+credits, not a subscription. The reservation is atomic in PostgreSQL and is
+released if generation fails, so concurrent messages cannot overspend the
+wallet and a failed provider does not consume the free answer or a paid credit.
+Greetings, menus, FAQ and clarification remain unlimited because they do not
+enter the legal-answer generation path.
 
 The `/start` flow is deterministic and costs nothing: users select **Huquqiy
 savol**, **Advokat topish**, or **Hujjat tayyorlash**. Advocate matching does
@@ -207,7 +210,7 @@ the Master Admin queue, so guided requests skip the separate AI triage call.
 
 The remaining abuse risk is identity-based: a person can use multiple
 Telegram accounts. Monitor unique daily chat IDs and add phone/account linking
-before increasing `AGENT_DAILY_AI_LIMIT`.
+before increasing `AGENT_FREE_AI_LIMIT`.
 
 ---
 
@@ -275,7 +278,9 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 | `AGENT_AUTO_ANSWER` | true | `false` sends all Telegram requests to humans |
 | `AGENT_ESCALATE_WEAK` | true | Queue a lawyer on low-confidence answers |
 | `AGENT_MAX_CLARIFY` | 2 | Clarifying questions before answering anyway |
-| `AGENT_DAILY_AI_LIMIT` | 3 | Successful Telegram legal answers per chat per Tashkent day; greetings, FAQ and clarification do not consume it |
+| `AGENT_FREE_AI_LIMIT` | 1 | Lifetime-free Telegram legal answers per user; greetings, menus, FAQ and clarification do not consume it |
+| `TG_PAID_ANSWER_STARS` | 1 | Telegram Stars charged for one pay-as-you-go answer-credit package |
+| `TG_PAID_ANSWER_CREDITS` | 4 | Legal-answer credits granted per successful Stars payment; credits do not expire |
 | `HERMES_SHADOW_ENABLED` | false | Runs Hermes privately without changing Telegram replies |
 | `HERMES_SHADOW_URL` | — | Private Hermes OpenAI-compatible API base URL |
 | `HERMES_SHADOW_API_KEY` | — | Separate secret for the Hermes service |
@@ -287,8 +292,8 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 
 ## 7. Levers, in the order I would pull them
 
-1. **Monitor the Telegram cap** — anonymous chats receive three successful
-   legal answers per Tashkent day by default. Adjust `AGENT_DAILY_AI_LIMIT`
+1. **Monitor the Telegram cap** — anonymous chats receive one successful
+   lifetime-free legal answer by default. Adjust `AGENT_FREE_AI_LIMIT`
    only after measuring answer quality, repeat usage and conversion.
 2. **Grow `qa_korpus`** — a verified answer reuses an embedding-only lookup
    instead of a ~$0.0035 generation path, and it is *higher* quality than
