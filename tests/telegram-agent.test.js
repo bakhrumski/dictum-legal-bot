@@ -113,7 +113,7 @@ function deps(o = {}) {
     },
     verifyCitations: () => ({ total: 1, unverified: o.unverified || [] }),
     buildTopicPrompt: () => 'SYSTEM',
-    classifyLegalTopic: async () => 'mehnat',
+    classifyLegalTopic: async () => o.topic || 'mehnat',
     searchKorpus: o.korpus ? async () => { calls.korpus++; return { corrected_answer: o.korpus }; } : null,
     embeddingApiKey: o.korpus ? 'key' : null,
     findAttorneys: async (criteria) => {
@@ -509,6 +509,68 @@ function stubMemory(clarifyCount = 0) {
     assert.match(r.reply, /Mehnat kodeksi/);
     assert.doesNotMatch(r.reply, /Ma'muriy sud ishlarini yuritish kodeksi/);
     assert.doesNotMatch(r.reply, /Fuqarolik kodeksi/);
+  });
+
+  await test('non-labor legal fields use their classified topic and grounded sources', async () => {
+    const d = deps({
+      topic: 'oila',
+      answer: '**Tahlil**\nOila kodeksi 96-moddasiga ko\'ra aliment undiriladi.\n\n**Xulosa**\nSudga murojaat qiling.',
+      chunks: [
+        { law_name: 'Oila kodeksi', article_numbers: ['96'], source_url: 'https://lex.uz/docs/3', chunk_text: '96-modda ...' },
+      ],
+    });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Alimentni undirish tartibi qanday?' });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(d.calls.retrieval.topic, 'oila');
+    assert.match(r.reply, /Oila kodeksi, 96-modda/);
+  });
+
+  await test('Telegram Manbalar uses only law articles applied in Tahlil', async () => {
+    const d = deps({
+      topic: 'mamuriy',
+      answer: [
+        '**Huquqiy asos**',
+        "MJTK 128-moddasi va Ma'muriy sud ishlarini yuritish kodeksi 126-moddasi mavjud.",
+        '',
+        '**Tahlil**',
+        "Sizning jarima holatingizga Ma'muriy javobgarlik to'g'risidagi kodeks 128-moddasi qo'llanadi.",
+        '',
+        '**Xulosa**',
+        'Jarima qarorini tekshiring.',
+      ].join('\n'),
+      chunks: [
+        { law_name: "Ma'muriy javobgarlik to'g'risidagi kodeks", article_numbers: ['128'], source_url: 'https://lex.uz/docs/4', chunk_text: '128-modda ...' },
+        { law_name: "Ma'muriy sud ishlarini yuritish kodeksi", article_numbers: ['126'], source_url: 'https://lex.uz/docs/5', chunk_text: '126-modda ...' },
+      ],
+    });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: "Yo'l harakati jarimasiga qanday shikoyat qilaman?" });
+    assert.match(r.reply, /Ma'muriy javobgarlik to'g'risidagi kodeks, 128-modda/);
+    assert.doesNotMatch(r.reply, /Ma'muriy sud ishlarini yuritish kodeksi, 126-modda/);
+  });
+
+  await test('Telegram Manbalar includes every distinct article applied in Tahlil', async () => {
+    const d = deps({
+      topic: 'fuqarolik',
+      answer: [
+        '**Tahlil**',
+        'Fuqarolik kodeksi 382-moddasi shartnomani o\'zgartirishga, Fuqarolik kodeksi 384-moddasi esa uning tartibiga qo\'llanadi.',
+        '',
+        '**Xulosa**',
+        'Shartnomani yozma tartibda o\'zgartiring.',
+      ].join('\n'),
+      chunks: [
+        { law_name: 'Fuqarolik kodeksi', article_numbers: ['382'], source_url: 'https://lex.uz/docs/6', chunk_text: '382-modda ...' },
+        { law_name: 'Fuqarolik kodeksi', article_numbers: ['384'], source_url: 'https://lex.uz/docs/6', chunk_text: '384-modda ...' },
+        { law_name: 'Iqtisodiy protsessual kodeksi', article_numbers: ['134'], source_url: 'https://lex.uz/docs/7', chunk_text: '134-modda ...' },
+      ],
+    });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Shartnomani qanday o\'zgartirish mumkin?' });
+    assert.match(r.reply, /Fuqarolik kodeksi, 382-modda/);
+    assert.match(r.reply, /Fuqarolik kodeksi, 384-modda/);
+    assert.doesNotMatch(r.reply, /Iqtisodiy protsessual kodeksi/);
   });
 
   await test('the fourth legal answer is blocked before retrieval or generation', async () => {

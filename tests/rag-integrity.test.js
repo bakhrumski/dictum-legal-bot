@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { normalizeLawName, selectRelevantSourceRefs } = require('../src/rag/citation-utils');
+const { extractAnalysisSection, normalizeLawName, selectRelevantSourceRefs } = require('../src/rag/citation-utils');
 const { __test: qaKorpusTest } = require('../src/rag/qa-korpus');
 
 let passed = 0;
@@ -73,6 +73,33 @@ test('associates a shared article number with the nearest named act', () => {
       "O'zbekiston Respublikasining Mehnat kodeksi|260",
     ].sort()
   );
+});
+
+test('extracts Tahlil as the citation scope and excludes other sections', () => {
+  const reply = [
+    '**Huquqiy asos**',
+    'Fuqarolik kodeksi 382-moddasi eslatilgan.',
+    '',
+    '**Tahlil**',
+    'Mehnat kodeksi 154-moddasi foydalanuvchi holatiga qo\'llanadi.',
+    '',
+    '**Xulosa**',
+    'Ishga tiklashni talab qilish mumkin.',
+  ].join('\n');
+  const analysis = extractAnalysisSection(reply);
+  assert.match(analysis, /Mehnat kodeksi 154-moddasi/);
+  assert.doesNotMatch(analysis, /Fuqarolik kodeksi 382-moddasi/);
+  assert.doesNotMatch(analysis, /Ishga tiklashni talab/);
+});
+
+test('uses the complete answer when legacy content has no Tahlil heading', () => {
+  const reply = 'Oila kodeksi 96-moddasiga ko\'ra aliment undiriladi.';
+  assert.strictEqual(extractAnalysisSection(reply), reply);
+});
+
+test('extracts analysis when its heading and content share one line', () => {
+  const reply = '**Tahlil** — Oila kodeksi 96-moddasi qo\'llanadi.\n\n**Xulosa** — Sudga murojaat qiling.';
+  assert.strictEqual(extractAnalysisSection(reply), "Oila kodeksi 96-moddasi qo'llanadi.");
 });
 
 test('detects a legacy 1536d to active 1024d QA corpus migration', () => {
