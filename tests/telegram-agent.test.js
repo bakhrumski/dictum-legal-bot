@@ -21,21 +21,32 @@ const intakeMenus = require('../src/bot/intake-menus');
 // ── Load the agent with ../database/db stubbed (no DB in tests) ─────────────
 // The conversation store is DB-backed, so the fake pool is how a test controls
 // prior state (how many clarifying questions this chat has already had).
-const dbState = { clarifyCount: 0, turns: [], mode: 'automatic', state: 'idle', context: {}, aiAnswers: 0 };
+const dbState = { clarifyCount: 0, turns: [], mode: 'automatic', state: 'idle', context: {}, aiAnswers: 0, paidCredits: 0 };
 const fakePool = {
   query: async (sql, params = []) => {
     if (/SELECT\s+turns/i.test(sql)) {
       return { rows: [{ turns: dbState.turns, clarify_count: dbState.clarifyCount, mode: dbState.mode, state: dbState.state, language: 'uz', context: dbState.context }] };
     }
-    if (/INSERT INTO\s+tg_agent_daily_usage/i.test(sql)) {
+    if (/INSERT INTO\s+tg_agent_free_usage/i.test(sql) && /VALUES/i.test(sql)) {
       const limit = Number(params[1]) || 0;
       if (dbState.aiAnswers >= limit) return { rows: [] };
       dbState.aiAnswers++;
-      return { rows: [{ ai_answers: dbState.aiAnswers }] };
+      return { rows: [{ free_answers: dbState.aiAnswers }] };
     }
-    if (/UPDATE\s+tg_agent_daily_usage/i.test(sql)) {
+    if (/UPDATE\s+tg_agent_free_usage/i.test(sql)) {
       dbState.aiAnswers = Math.max(0, dbState.aiAnswers - 1);
       return { rows: [] };
+    }
+    if (/AS\s+free_used/i.test(sql) && /AS\s+paid_credits/i.test(sql)) {
+      return { rows: [{ free_used: dbState.aiAnswers, paid_credits: dbState.paidCredits }] };
+    }
+    if (/SELECT\s+credits\s+FROM\s+tg_answer_wallets/i.test(sql)) {
+      return { rows: dbState.paidCredits ? [{ credits: dbState.paidCredits }] : [] };
+    }
+    if (/UPDATE\s+tg_answer_wallets/i.test(sql)) {
+      if (dbState.paidCredits < 1) return { rows: [] };
+      dbState.paidCredits--;
+      return { rows: [{ credits: dbState.paidCredits }] };
     }
     if (/INSERT INTO\s+tg_conversations/i.test(sql) && /state\s*=\s*'idle'/i.test(sql)) {
       dbState.turns = [];
@@ -128,7 +139,7 @@ function deps(o = {}) {
     recordAgentEvent: async () => { calls.events++; },
     claimDailyAnswer: async () => {
       calls.quota++;
-      return o.quota || { allowed: true, used: 1, remaining: 2, limit: 3 };
+      return o.quota || { allowed: true, source: 'free', used: 1, remaining: 0, limit: 1, paidCredits: 0 };
     },
     releaseDailyAnswer: async () => { calls.release++; },
   };
@@ -456,7 +467,7 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(d.calls.intent, 0, 'generic help needs no intent-model call');
     assert.strictEqual(d.calls.korpus, 0, 'generic help must not search the answer bank');
     assert.strictEqual(d.calls.answer, 0, 'generic help must not generate an answer');
-    assert.strictEqual(d.calls.quota, 0, 'clarification must not consume the daily allowance');
+    assert.strictEqual(d.calls.quota, 0, 'clarification must not consume an answer entitlement');
     stubMemory();
   });
 
@@ -469,8 +480,8 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/Mehnat kodeksi/.test(r.reply), 'sources missing');
     assert.ok(/lex\.uz/.test(r.reply), 'source link missing');
     assert.ok(/yuridik kuchga ega emas/.test(r.reply), 'disclaimer missing');
-    assert.ok(/yana 2 ta bepul AI javob/i.test(r.reply), 'remaining daily allowance missing');
-    assert.strictEqual(r.meta.remainingDailyAnswers, 2);
+    assert.ok(/Bepul huquqiy javobingizdan foydalandingiz/i.test(r.reply), 'free entitlement notice missing');
+    assert.strictEqual(r.meta.entitlementSource, 'free');
   });
 
   await test('a clarification answer retrieves the complete labor case with strict topic scope', async () => {
@@ -573,24 +584,60 @@ function stubMemory(clarifyCount = 0) {
     assert.doesNotMatch(r.reply, /Iqtisodiy protsessual kodeksi/);
   });
 
-  await test('the fourth legal answer is blocked before retrieval or generation', async () => {
-    const d = deps({ quota: { allowed: false, used: 3, remaining: 0, limit: 3 } });
+  await test('a second unpaid legal answer is blocked before retrieval or generation', async () => {
+    const d = deps({ quota: { allowed: false, used: 1, remaining: 0, limit: 1, paidCredits: 0 } });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat ta\'tili necha kun?' });
     assert.strictEqual(r.action, 'quota_exceeded');
-    assert.ok(/3 ta bepul AI huquqiy javob/i.test(r.reply));
+    assert.ok(/Bitta bepul AI huquqiy javobingizdan foydalandingiz/i.test(r.reply));
     assert.strictEqual(d.calls.answer, 0, 'quota must block answer generation');
     assert.strictEqual(d.calls.korpus, 0, 'quota must block paid/verified answer work');
   });
 
-  await test('the database quota reservation is atomic and releasable', async () => {
-    dbState.aiAnswers = 2;
-    const third = await agent.claimDailyAiAnswer(77);
-    const fourth = await agent.claimDailyAiAnswer(77);
-    assert.strictEqual(third.allowed, true);
-    assert.strictEqual(third.remaining, 0);
-    assert.strictEqual(fourth.allowed, false);
-    await agent.releaseDailyAiAnswer(77);
+  await test('an exhausted user is blocked before model-based intent classification', async () => {
+    stubMemory();
+    dbState.aiAnswers = 1;
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Ishdagi murakkab vaziyat bo\'yicha nima qilaman?' });
+    assert.strictEqual(r.action, 'quota_exceeded');
+    assert.strictEqual(d.calls.intent, 0, 'no token may be spent before payment');
+    assert.strictEqual(d.calls.answer, 0);
+    stubMemory();
+  });
+
+  await test('an exhausted user can still greet without any model or credit', async () => {
+    stubMemory();
+    dbState.aiAnswers = 1;
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Assalomu alaykum', firstName: 'Malika' });
+    assert.strictEqual(r.action, 'greeting');
+    assert.strictEqual(d.calls.intent, 0);
+    assert.strictEqual(d.calls.answer, 0);
+    assert.strictEqual(dbState.aiAnswers, 1);
+    stubMemory();
+  });
+
+  await test('Hermes shadow never spends tokens on deterministic greetings', async () => {
+    stubMemory();
+    const d = deps({ shadow: true });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Assalomu alaykum', firstName: 'Malika' });
+    assert.strictEqual(r.action, 'greeting');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.strictEqual(d.calls.shadow, 0);
+  });
+
+  await test('the lifetime-free reservation is atomic and releasable', async () => {
+    dbState.aiAnswers = 0;
+    const first = await agent.claimDailyAiAnswer(77);
+    const second = await agent.claimDailyAiAnswer(77);
+    assert.strictEqual(first.allowed, true);
+    assert.strictEqual(first.source, 'free');
+    assert.strictEqual(first.remaining, 0);
+    assert.strictEqual(second.allowed, false);
+    await agent.releaseDailyAiAnswer(77, first);
     const retry = await agent.claimDailyAiAnswer(77);
     assert.strictEqual(retry.allowed, true, 'a failed answer reservation must be reusable');
     stubMemory();
@@ -665,7 +712,7 @@ function stubMemory(clarifyCount = 0) {
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Ishdan bo\'shatish tartibi qanday?' });
     assert.strictEqual(r.handled, false);
     assert.strictEqual(r.escalate, true);
-    assert.strictEqual(d.calls.release, 1, 'failed generation must refund the daily answer');
+    assert.strictEqual(d.calls.release, 1, 'failed generation must refund the answer entitlement');
   });
 
   await test('an intent-classifier failure still answers rather than stalling', async () => {
@@ -677,16 +724,16 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(r.action, 'answered');
   });
 
-  await test('a failing Hermes shadow cannot change or delay the production reply', async () => {
+  await test('a failing Hermes shadow cannot change or delay a production legal answer', async () => {
     const d = deps({ shadow: true, shadowError: true });
     agent.initTelegramAgent(d);
     stubMemory(0);
-    const r = await agent.handleUserMessage({ chatId: 1, text: 'Assalomu alaykum' });
-    assert.strictEqual(r.action, 'greeting');
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasini bekor qilish tartibi qanday?' });
+    assert.strictEqual(r.action, 'answered');
     assert.strictEqual(r.handled, true);
     await new Promise(resolve => setImmediate(resolve));
     assert.strictEqual(d.calls.shadow, 1);
-    assert.strictEqual(d.calls.shadowPayload.productionResult.action, 'greeting');
+    assert.strictEqual(d.calls.shadowPayload.productionResult.action, 'answered');
   });
 
   console.log('\ntelegram-agent — Telegram limits\n');
@@ -744,10 +791,18 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(dbState.clarifyCount, 0);
   });
 
-  await test('/start explains AI identity and the daily allowance', async () => {
+  await test('/start explains AI identity, the free answer and unlimited non-token conversation', async () => {
     const botSource = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
     assert.ok(/Men inson yurist emasman/.test(botSource));
-    assert.ok(/Har kuni \$\{dailyAiLimit\} ta bepul AI huquqiy javob/.test(botSource));
+    assert.ok(/Har bir Telegram foydalanuvchisi \$\{freeAiLimit\} ta AI huquqiy javobni bepul oladi/.test(botSource));
+    assert.ok(/bepul va cheklanmagan/.test(botSource));
+    assert.ok(/callback_data: 'bot_stats'/.test(botSource), 'public anonymous user statistics must be available');
+    assert.ok(/bot\.on\('pre_checkout_query'/.test(botSource), 'Telegram Stars checkout must be verified');
+    assert.ok(/telegram_payment_charge_id/.test(botSource), 'successful payments must store Telegram receipt IDs');
+    assert.ok(/setMyCommands\(\[/.test(botSource), 'payment support, terms and statistics must be discoverable');
+    assert.ok(/if \(!agentReplyDelivered && agentResult\.action === 'answered'\)/.test(botSource), 'undelivered answers must restore the entitlement');
+    assert.ok(/const PAID_ANSWER_STARS[^\n]*\|\| '1'/.test(botSource), 'the cheapest invoice must be one Telegram Star');
+    assert.ok(/const PAID_ANSWER_CREDITS[^\n]*\|\| '4'/.test(botSource), 'one Star must grant four cost-recovery answer credits');
     assert.ok(/await telegramAgent\.resetConversation\(chatId\)/.test(botSource), 'bare /start must clear stale agent state');
     assert.ok(/reply_markup: startKeyboard\(false\)/.test(botSource), 'bare /start must show the deterministic service menu');
     assert.ok(/categoryFromAgentMeta\(agentMeta\)/.test(botSource), 'guided intake category must reach the Master Admin queue without another classifier');

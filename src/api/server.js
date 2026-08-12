@@ -5712,7 +5712,7 @@ async function classifyLegalTopic(message, opts = {}) {
     ? `Siz huquqiy savollarni tasniflovchi yordamchisiz. Quyidagi ro'yxatdan savolga ENG MOS sohaning KALITINI faqat bitta so'z bilan qaytaring. HAR DOIM bitta soha tanlang — "unknown" yoki bo'sh javob QAYTARMANG. Aniq mos kelmasa ham, eng yaqin sohani tanlang. Hech qanday tushuntirish bermang.\n\nMavjud sohalar:\n${list}`
     : `Siz huquqiy savollarni tasniflovchi yordamchisiz. Quyidagi ro'yxatdan savolga eng mos sohaning KALITINI faqat bitta so'z bilan qaytaring. Agar aniq tasniflash mumkin bo'lmasa, faqat "unknown" deb yozing. Hech qanday tushuntirish bermang.\n\nMavjud sohalar:\n${list}`;
   try {
-    const result = await callAI(
+    const result = await callCheapAI(
       [{ role: 'system', text: sys }, { role: 'user', text: message }],
       // 16 is OpenAI's minimum max_output_tokens — 8 got a 400 and pushed
       // every topic classification onto the Gemini fallback.
