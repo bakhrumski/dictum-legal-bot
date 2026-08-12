@@ -27,7 +27,7 @@
  */
 
 const { pool } = require('../database/db');
-const { selectRelevantSourceRefs, getChunkArticleRefs } = require('../rag/citation-utils');
+const { extractAnalysisSection, selectRelevantSourceRefs, getChunkArticleRefs } = require('../rag/citation-utils');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wiring
@@ -428,10 +428,11 @@ function detectServiceSlug(text) {
 // Answer generation
 // ─────────────────────────────────────────────────────────────────────────────
 
-function formatSources(chunks, replyText, limit = 3) {
+function formatSources(chunks, replyText) {
   const seen = new Set();
   const out = [];
-  for (const sourceRef of selectRelevantSourceRefs(chunks, replyText)) {
+  const analysisText = extractAnalysisSection(replyText);
+  for (const sourceRef of selectRelevantSourceRefs(chunks, analysisText)) {
     const c = sourceRef.chunk;
     if (!c || c.is_active === false) continue;
     const law = sourceRef.lawName || c.law_name || '';
@@ -442,7 +443,6 @@ function formatSources(chunks, replyText, limit = 3) {
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(c.source_url ? `• [${label}](${c.source_url})` : `• ${label}`);
-    if (out.length >= limit) break;
   }
   return out.length ? `\n\n📎 *Manbalar:*\n${out.join('\n')}` : '';
 }
@@ -481,6 +481,10 @@ async function generateAnswer(question, turns) {
   try {
     const r = await D.retrieveLegalContext(question, topic, null, {
       contextText: historyToText(turns),
+      // Deterministic topics can be safely isolated. Model-classified topics
+      // retain cross-field retrieval because some cases legitimately rely on
+      // more than one legal field; the citation footer still remains strictly
+      // limited to the law/article pairs applied in Tahlil.
       strictTopic: Boolean(deterministicTopic),
     });
     ragContext = typeof r === 'string' ? r : (r.context || '');
@@ -502,6 +506,7 @@ TELEGRAM FORMATI (majburiy):
 - Javob 200 so'zdan oshmasin. Telegram — qisqa javob joyi.
 - Sarlavha, markdown jadval, "###" kabi belgilar ishlatmang.
 - Oddiy, tushunarli til. Har bir da'vo uchun modda raqamini ko'rsating.
+- Tahlil bo'limida qo'llanayotgan har bir qonun nomi va modda raqamini aniq ko'rsating. Manbalar faqat Tahlilda qo'llangan qonun va moddalardan tuziladi.
 - Agar KONTEKSTda javob yo'q bo'lsa — buni ochiq ayting, taxmin qilmang.` },
   ];
   if (hist) messages.push({ role: 'user', text: `Suhbat tarixi (kontekst uchun):\n${hist}` });
@@ -519,7 +524,7 @@ TELEGRAM FORMATI (majburiy):
   // Never let a sourced legal answer cite a legal act that was outside the
   // retrieved topic-scoped context. In that failure mode the old behavior sent
   // a polished but ungrounded answer and then appended unrelated retrievals.
-  const relevantSourceRefs = selectRelevantSourceRefs(chunks, text);
+  const relevantSourceRefs = selectRelevantSourceRefs(chunks, extractAnalysisSection(text));
   const hasLawChunks = chunks.some(chunk => getChunkArticleRefs(chunk).length > 0);
   const groundedToNamedSource = !hasLawChunks || relevantSourceRefs.length > 0;
 

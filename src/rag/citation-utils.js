@@ -110,6 +110,30 @@ function articleOffsets(text = '', articleRef = '') {
 }
 
 /**
+ * Return the part of a structured legal answer that applies the law to the
+ * user's facts. Source footers are derived from this section so that a law
+ * merely mentioned in the introductory legal-basis section is not presented
+ * as a relied-on source unless the analysis actually uses it.
+ *
+ * Older lawyer-approved answers may not contain section headings. In that
+ * case the complete answer remains the safest backwards-compatible scope.
+ */
+function extractAnalysisSection(text = '') {
+  const reply = String(text || '');
+  if (!reply.trim()) return '';
+
+  const heading = /(?:^|\n)[ \t]*(?:#{1,6}[ \t]*)?(?:\*{1,2}|_{1,2})?[ \t]*tahlil[ \t]*(?:\*{1,2}|_{1,2})?[ \t]*(?:(?::|[-–—])[ \t]*|\r?\n+|$)/iu;
+  const match = heading.exec(reply);
+  if (!match) return reply;
+
+  const start = match.index + match[0].length;
+  const remainder = reply.slice(start);
+  const nextHeading = /(?:^|\n)[ \t]*(?:#{1,6}[ \t]*)?(?:\*{1,2}|_{1,2})?[ \t]*(?:xulosa|manbalar|huquqiy[ \t]+asos)[ \t]*(?:\*{1,2}|_{1,2})?[ \t]*(?:(?::|[-–—])[ \t]*|\r?\n+|$)/iu;
+  const endMatch = nextHeading.exec(remainder);
+  return (endMatch ? remainder.slice(0, endMatch.index) : remainder).trim();
+}
+
+/**
  * Select only source/article pairs attributed to the same legal act in the
  * answer. Matching an article number alone is unsafe because many codes share
  * common article numbers.
@@ -185,6 +209,7 @@ function selectRelevantSourceRefs(chunks = [], replyText = '') {
 }
 
 module.exports = {
+  extractAnalysisSection,
   extractArticleRefsFromText,
   getChunkArticleRefs,
   normalizeArticleRef,

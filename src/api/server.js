@@ -22,7 +22,7 @@ const { expandLegalQueryAliases } = require('../rag/query-aliases');
 const { buildCorpusOnlyAnswer } = require('../rag/corpus-fallback');
 const tariffModule = require('../rag/subscription-tiers');
 const { sendEmailCode } = require('../auth/email-code');
-const { getChunkArticleRefs, selectRelevantSourceRefs } = require('../rag/citation-utils');
+const { extractAnalysisSection, getChunkArticleRefs, selectRelevantSourceRefs } = require('../rag/citation-utils');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
@@ -4830,6 +4830,7 @@ MUHIM: KONTEKSTda berilgan, savolga BEVOSITA taalluqli HAR BIR qonun/kodeksni ke
 QAT'IY: Savolga BEVOSITA taalluqli bo'lmagan qonun yoki moddani KELTIRMANG — hatto kontekstda bo'lsa ham. Qonunni faqat "bu qo'llanilmaydi" deyish uchun keltirish TAQIQLANADI (bu javobni chalkash qiladi). Agar savol milliy qonun bilan emas, balki ichki tartib-qoidalar, shartnoma yoki tashkilot nizomi bilan tartibga solinsa — buni OCHIQ ayting: "Bu masala bevosita milliy qonun bilan emas, ... bilan tartibga solinadi" — va tangens moddalar bilan to'ldirmang.
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha (jismoniy / mansabdor / yuridik shaxs) farq bo'lsa — har birini alohida jumlada ko'rsating. Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Foydalanuvchi savoliga to'g'ridan-to'g'ri aloqador holatlarni tahlil qiling.
+MANBA QOIDASI: Tahlilda qo'llanayotgan HAR BIR norma uchun qonun/kodeks nomi va modda raqamini shu bo'limning o'zida aniq yozing. Avtomatik "Manbalar" ro'yxati faqat Tahlilda amalda qo'llangan qonun va moddalardan tuziladi.
 
 **Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
 
@@ -4882,6 +4883,7 @@ ${definitionHint}
 **Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism? Qonun nomi va modda raqamini **qalin** yozing. Bir nechta norma bo'lsa — hammasini keltiring. Format: (**Qonun nomi, N-modda, M-qism**).
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha farq bo'lsa har birini alohida jumlada ko'rsating (jismoniy / mansabdor / yuridik shaxs). Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing.
+MANBA QOIDASI: Tahlilda qo'llanayotgan HAR BIR norma uchun qonun/kodeks nomi va modda raqamini shu bo'limning o'zida aniq yozing. Avtomatik "Manbalar" ro'yxati faqat Tahlilda amalda qo'llangan qonun va moddalardan tuziladi.
 
 **Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
 
@@ -5122,7 +5124,8 @@ function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
 
   // A citation is a law+article pair. Article-number-only matching allowed an
   // unrelated code with the same article number to enter the source footer.
-  for (const sourceRef of selectRelevantSourceRefs(chunks, replyText)) {
+  const analysisText = extractAnalysisSection(replyText);
+  for (const sourceRef of selectRelevantSourceRefs(chunks, analysisText)) {
     const r = sourceRef.chunk;
     if (!r.source_url || r.is_active === false) continue;
     const art = sourceRef.articleRef;
