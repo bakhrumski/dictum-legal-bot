@@ -14411,7 +14411,8 @@
                 }
                 const rows = items.map(function(item) {
                     const resultLabel = item.status !== 'success' ? 'Xato' : (item.agreement ? 'Mos' : 'Farq');
-                    const reason = item.hermes_reason || (item.error ? formatShadowError(item.error) : 'Sabab ko\'rsatilmagan');
+                    const diagnostic = item.response_preview ? ` — ${item.response_preview}` : '';
+                    const reason = item.hermes_reason || (item.error ? formatShadowError(item.error) + diagnostic : 'Sabab ko\'rsatilmagan');
                     return `<div class="shadow-run">
                         <div class="shadow-run-copy">
                             <div class="shadow-run-message" title="${escapeHtml(item.message_preview || '')}">${escapeHtml(item.message_preview || 'Matn saqlanmagan')}</div>

@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { createHermesShadow, normalizeProductionRoute, redactSensitiveText } = require('../src/agents/hermes-shadow');
+const { createHermesShadow, normalizeProductionRoute, redactSensitiveText, extractDecision } = require('../src/agents/hermes-shadow');
 
 let passed = 0;
 let failed = 0;
@@ -163,6 +163,55 @@ function fakeDb() {
     assert.strictEqual(result.agreement, true);
     assert.strictEqual(result.usage.totalTokens, 1100);
     assert.ok(Number(db.inserts[0][15]) > 0, 'pricing alias must use the configured backing model');
+  });
+
+  await test('compact fallback accepts only enumerated, explicit routing fields', async () => {
+    const extracted = extractDecision(
+      'ROUTE=clarify; INTENT=noaniq; ESCALATE=false; CONFIDENCE=0.93; REASON=The request is vague'
+    );
+    assert.strictEqual(extracted.format, 'compact');
+    assert.strictEqual(extracted.value.recommended_action, 'clarify');
+    assert.strictEqual(extracted.value.intent, 'noaniq');
+    assert.strictEqual(extracted.value.should_escalate, false);
+    assert.throws(
+      () => extractDecision('The user probably needs clarification.'),
+      /recognized decision/
+    );
+  });
+
+  await test('compact Hermes decision completes without a retry', async () => {
+    const db = fakeDb();
+    let calls = 0;
+    const service = createHermesShadow({
+      env: {
+        HERMES_SHADOW_ENABLED: 'true',
+        HERMES_SHADOW_URL: 'http://hermes:8642/v1',
+        HERMES_SHADOW_MODEL: 'hermes-agent',
+      },
+      db,
+      random: () => 0,
+      fetchImpl: async () => {
+        calls++;
+        return {
+          ok: true,
+          json: async () => ({
+            model: 'hermes-agent',
+            choices: [{ message: { content: 'ROUTE=clarify; INTENT=noaniq; ESCALATE=false; CONFIDENCE=0.94; REASON=Vague help request' } }],
+            usage: { prompt_tokens: 400, completion_tokens: 30, total_tokens: 430 },
+          }),
+        };
+      },
+    });
+    const result = await service.run({
+      chatId: 11,
+      text: 'Menga yordam kerak',
+      productionResult: { action: 'clarify', escalate: false, meta: { intent: 'noaniq' } },
+    });
+    assert.strictEqual(calls, 1);
+    assert.strictEqual(result.status, 'success');
+    assert.strictEqual(result.agreement, true);
+    const rawResult = JSON.parse(db.inserts[0][19]);
+    assert.strictEqual(rawResult.responseFormat, 'compact');
   });
 
   await test('timeout can be configured up to sixty seconds', async () => {
