@@ -129,6 +129,16 @@ async function releaseDailyAiAnswer(chatId, reservation = {}) {
   }
 }
 
+/** Mark the entitlement used only after Telegram confirms delivery. */
+async function finalizeDailyAiAnswer(chatId, reservation = {}) {
+  try {
+    return await telegramEconomy.finalizeAnswerEntitlement(chatId, reservation);
+  } catch (error) {
+    console.warn('[TG-AGENT] answer entitlement finalize failed:', error.message);
+    return false;
+  }
+}
+
 async function loadConversation(chatId) {
   try {
     await ensureTable();
@@ -562,7 +572,15 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
   const started = Date.now();
   const { turns, clarifyCount, mode, state, context } = await loadConversation(chatId);
 
-  const paymentRequired = (status = {}) => ({
+  const paymentRequired = (status = {}) => status.pending ? ({
+    handled: true,
+    reply: `Oldingi huquqiy savolingiz uchun javob hali tayyorlanmoqda. Javob yuborilguncha savolni qayta jo'natmang.
+
+Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
+    action: 'answer_pending',
+    escalate: false,
+    meta: { intent: 'huquqiy_savol', reservationPending: true },
+  }) : ({
     handled: true,
     reply: `Bitta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi huquqiy javobni bir martalik to'lov bilan olishingiz mumkin.\n\nSalomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.`,
     action: 'quota_exceeded',
@@ -1053,13 +1071,12 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
     : await claimDailyAiAnswer(chatId);
 
   if (!quota.allowed) {
-    const reply = quota.unavailable
-      ? "AI huquqiy javob huquqingizni hozir tekshirib bo'lmadi. Iltimos, birozdan keyin qayta urinib ko'ring."
-      : `Bitta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi huquqiy javobni bir martalik to'lov bilan olishingiz mumkin.\n\nSalomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.`;
+    if (!quota.unavailable) return complete(paymentRequired(quota));
+    const reply = "AI huquqiy javob huquqingizni hozir tekshirib bo'lmadi. Iltimos, birozdan keyin qayta urinib ko'ring.";
     return complete({
       handled: true,
       reply,
-      action: quota.unavailable ? 'quota_unavailable' : 'quota_exceeded',
+      action: 'quota_unavailable',
       escalate: false,
       meta: { intent: intent.intent, freeLimit: quota.limit, paidCredits: quota.paidCredits || 0 },
     });
@@ -1112,6 +1129,7 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
       confidence: answer.confidence,
       freeLimit: quota.limit,
       entitlementSource: quota.source,
+      reservationId: quota.reservationId,
       paidCredits: quota.paidCredits || 0,
       ms: Date.now() - started,
     },
@@ -1151,6 +1169,7 @@ module.exports = {
   resetConversation,
   setConversationState,
   claimDailyAiAnswer,
+  finalizeDailyAiAnswer,
   releaseDailyAiAnswer,
   FREE_AI_LIMIT,
   DAILY_AI_LIMIT,

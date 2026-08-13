@@ -1311,13 +1311,25 @@ bot.on('message', async (msg) => {
             if (!partDelivered) allReplyPartsDelivered = false;
           }
           agentReplyDelivered = allReplyPartsDelivered;
-          if (!agentReplyDelivered && agentResult.action === 'answered') {
-            const { releaseDailyAiAnswer } = require('../agents/telegram-agent');
-            await releaseDailyAiAnswer(chatId, {
+          if (agentResult.action === 'answered') {
+            const { finalizeDailyAiAnswer, releaseDailyAiAnswer } = require('../agents/telegram-agent');
+            const reservation = {
+              reservationId: agentResult.meta && agentResult.meta.reservationId,
               source: agentResult.meta && agentResult.meta.entitlementSource,
-            });
-            console.warn(`[BOT] answer delivery failed; entitlement restored for chat=${chatId}`);
-            agentResult = null;
+            };
+            if (agentReplyDelivered) {
+              const finalized = await finalizeDailyAiAnswer(chatId, reservation);
+              if (!finalized) {
+                // The user already has the answer. Never withdraw it or send a
+                // payment prompt because bookkeeping could not be finalized;
+                // an unfinished reservation will expire in their favour.
+                console.warn(`[BOT] answer delivered but entitlement finalize failed for chat=${chatId}`);
+              }
+            } else {
+              await releaseDailyAiAnswer(chatId, reservation);
+              console.warn(`[BOT] answer delivery failed; entitlement restored for chat=${chatId}`);
+              agentResult = null;
+            }
           }
         }
       }
@@ -1333,7 +1345,7 @@ bot.on('message', async (msg) => {
   const conversational = agentResult && agentResult.handled
     && [
       'greeting', 'clarify', 'offtopic', 'account_help',
-      'identity', 'quota_exceeded', 'quota_unavailable',
+      'identity', 'answer_pending', 'quota_exceeded', 'quota_unavailable',
       'attorney_contact_shared', 'attorney_contact_cancelled', 'attorney_choice_required',
       'attorney_intake_started', 'attorney_problem_required', 'attorney_compare',
       'document_intake_started', 'menu_selection_required', 'intake_cancelled',

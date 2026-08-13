@@ -21,9 +21,34 @@ const intakeMenus = require('../src/bot/intake-menus');
 // ── Load the agent with ../database/db stubbed (no DB in tests) ─────────────
 // The conversation store is DB-backed, so the fake pool is how a test controls
 // prior state (how many clarifying questions this chat has already had).
-const dbState = { clarifyCount: 0, turns: [], mode: 'automatic', state: 'idle', context: {}, aiAnswers: 0, paidCredits: 0 };
+const dbState = { clarifyCount: 0, turns: [], mode: 'automatic', state: 'idle', context: {}, aiAnswers: 0, paidCredits: 0, reservations: new Map() };
 const fakePool = {
   query: async (sql, params = []) => {
+    if (/BEGIN|COMMIT|ROLLBACK|pg_advisory_xact_lock/i.test(sql)) return { rows: [] };
+    if (/CREATE TABLE|CREATE UNIQUE INDEX|ALTER TABLE/i.test(sql)) return { rows: [] };
+    if (/UPDATE tg_agent_free_usage\s+usage/i.test(sql)) return { rows: [] };
+    if (/UPDATE tg_answer_reservations/i.test(sql) && /created_at\s*</i.test(sql)) return { rows: [] };
+    if (/SELECT reservation_id FROM tg_answer_reservations/i.test(sql)) {
+      const found = Array.from(dbState.reservations.values()).find(r => r.chatId === String(params[0]) && r.status === 'pending');
+      return { rows: found ? [{ reservation_id: found.id }] : [] };
+    }
+    if (/INSERT INTO tg_answer_reservations/i.test(sql)) {
+      const reservation = { id: String(params[0]), chatId: String(params[1]), source: /'paid'/i.test(sql) ? 'paid' : 'free', status: 'pending' };
+      dbState.reservations.set(reservation.id, reservation);
+      return { rows: [] };
+    }
+    if (/UPDATE tg_answer_reservations/i.test(sql) && /status = 'delivered'/i.test(sql)) {
+      const reservation = dbState.reservations.get(String(params[0]));
+      if (!reservation || reservation.status !== 'pending') return { rows: [] };
+      reservation.status = 'delivered';
+      return { rows: [{ reservation_id: reservation.id }] };
+    }
+    if (/UPDATE tg_answer_reservations/i.test(sql) && /RETURNING source/i.test(sql)) {
+      const reservation = dbState.reservations.get(String(params[0]));
+      if (!reservation || reservation.status !== 'pending') return { rows: [] };
+      reservation.status = 'released';
+      return { rows: [{ source: reservation.source }] };
+    }
     if (/SELECT\s+turns/i.test(sql)) {
       return { rows: [{ turns: dbState.turns, clarify_count: dbState.clarifyCount, mode: dbState.mode, state: dbState.state, language: 'uz', context: dbState.context }] };
     }
@@ -38,7 +63,8 @@ const fakePool = {
       return { rows: [] };
     }
     if (/AS\s+free_used/i.test(sql) && /AS\s+paid_credits/i.test(sql)) {
-      return { rows: [{ free_used: dbState.aiAnswers, paid_credits: dbState.paidCredits }] };
+      const pending = Array.from(dbState.reservations.values()).some(r => r.chatId === String(params[0]) && r.status === 'pending');
+      return { rows: [{ free_used: dbState.aiAnswers, paid_credits: dbState.paidCredits, answer_pending: pending }] };
     }
     if (/SELECT\s+credits\s+FROM\s+tg_answer_wallets/i.test(sql)) {
       return { rows: dbState.paidCredits ? [{ credits: dbState.paidCredits }] : [] };
@@ -72,6 +98,10 @@ const fakePool = {
     return { rows: [] };
   },
 };
+fakePool.connect = async () => ({
+  query: fakePool.query,
+  release() {},
+});
 
 const agentPath = require.resolve('../src/agents/telegram-agent');
 const src = fs.readFileSync(agentPath, 'utf8');
@@ -139,7 +169,7 @@ function deps(o = {}) {
     recordAgentEvent: async () => { calls.events++; },
     claimDailyAnswer: async () => {
       calls.quota++;
-      return o.quota || { allowed: true, source: 'free', used: 1, remaining: 0, limit: 1, paidCredits: 0 };
+      return o.quota || { allowed: true, reservationId: '00000000-0000-4000-8000-000000000001', source: 'free', used: 1, remaining: 0, limit: 1, paidCredits: 0 };
     },
     releaseDailyAnswer: async () => { calls.release++; },
   };
@@ -162,6 +192,7 @@ function stubMemory(clarifyCount = 0) {
   dbState.state = 'idle';
   dbState.context = {};
   dbState.aiAnswers = 0;
+  dbState.reservations = new Map();
 }
 
 (async () => {
@@ -595,6 +626,16 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(d.calls.korpus, 0, 'quota must block paid/verified answer work');
   });
 
+  await test('an in-flight answer never shows the used-free-answer payment prompt', async () => {
+    const d = deps({ quota: { allowed: false, pending: true, used: 1, remaining: 0, limit: 1, paidCredits: 0 } });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat ta\'tili necha kun?' });
+    assert.strictEqual(r.action, 'answer_pending');
+    assert.match(r.reply, /javob hali tayyorlanmoqda/i);
+    assert.doesNotMatch(r.reply, /bepul AI huquqiy javobingizdan foydalandingiz/i);
+    assert.strictEqual(d.calls.answer, 0, 'a duplicate in-flight request must not start another answer');
+  });
+
   await test('an exhausted user is blocked before model-based intent classification', async () => {
     stubMemory();
     dbState.aiAnswers = 1;
@@ -650,6 +691,7 @@ function stubMemory(clarifyCount = 0) {
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasi qanday bekor qilinadi?' });
     assert.strictEqual(r.action, 'answered');
     assert.strictEqual(r.meta.path, 'qa-korpus');
+    assert.ok(r.meta.reservationId, 'delivery must receive the reservation ID to finalize later');
     assert.strictEqual(d.calls.answer, 0, 'must not pay for generation when a verified answer exists');
   });
 
@@ -801,13 +843,14 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/bot\.on\('pre_checkout_query'/.test(botSource), 'Telegram Stars checkout must be verified');
     assert.ok(/telegram_payment_charge_id/.test(botSource), 'successful payments must store Telegram receipt IDs');
     assert.ok(/setMyCommands\(\[/.test(botSource), 'payment support, terms and statistics must be discoverable');
-    assert.ok(/if \(!agentReplyDelivered && agentResult\.action === 'answered'\)/.test(botSource), 'undelivered answers must restore the entitlement');
+    assert.ok(/if \(agentReplyDelivered\)[\s\S]*finalizeDailyAiAnswer[\s\S]*else[\s\S]*releaseDailyAiAnswer/.test(botSource), 'answers must finalize after delivery and refund when delivery fails');
+    assert.ok(/reservationId: agentResult\.meta && agentResult\.meta\.reservationId/.test(botSource), 'delivery accounting must use the exact reservation ID');
     assert.ok(/const PAID_ANSWER_STARS[^\n]*\|\| '1'/.test(botSource), 'the cheapest invoice must be one Telegram Star');
     assert.ok(/const PAID_ANSWER_CREDITS[^\n]*\|\| '4'/.test(botSource), 'one Star must grant four cost-recovery answer credits');
     assert.ok(/await telegramAgent\.resetConversation\(chatId\)/.test(botSource), 'bare /start must clear stale agent state');
     assert.ok(/reply_markup: startKeyboard\(false\)/.test(botSource), 'bare /start must show the deterministic service menu');
     assert.ok(/categoryFromAgentMeta\(agentMeta\)/.test(botSource), 'guided intake category must reach the Master Admin queue without another classifier');
-    assert.ok(/'identity', 'quota_exceeded', 'quota_unavailable'/.test(botSource), 'non-legal guardrail replies must not create queue rows');
+    assert.ok(/'identity', 'answer_pending', 'quota_exceeded', 'quota_unavailable'/.test(botSource), 'non-legal guardrail replies must not create queue rows');
   });
 
   console.log(`\n${passed} passed, ${failed} failed\n`);
