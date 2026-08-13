@@ -1559,37 +1559,28 @@
         [data-theme="dark"] .legal-section.section-conclusion { background: rgba(239,68,68,0.1); }
         [data-theme="dark"] .legal-section.section-action { background: rgba(6,182,212,0.1); }
         /* Auto-detected law citation links */
-        .law-citation-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            background: rgba(30,64,175,0.08);
+        .law-citation-link,
+        .legal-source-url {
+            display: inline;
             color: var(--navy-700);
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            text-decoration: none;
-            border: 1px solid rgba(30,64,175,0.15);
-            transition: all 0.2s;
-            white-space: nowrap;
+            font-weight: inherit;
+            text-decoration: underline;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 2px;
+            overflow-wrap: anywhere;
         }
-        .law-citation-link:hover {
-            background: rgba(30,64,175,0.15);
-            border-color: rgba(30,64,175,0.3);
-            text-decoration: none;
+        .law-citation-link:hover,
+        .legal-source-url:hover {
+            color: var(--navy-900);
+            text-decoration-thickness: 2px;
         }
-        .law-citation-link::before {
-            content: '\2696';
-            font-size: 12px;
-        }
-        [data-theme="dark"] .law-citation-link {
-            background: rgba(59,130,246,0.12);
+        [data-theme="dark"] .law-citation-link,
+        [data-theme="dark"] .legal-source-url {
             color: #60a5fa;
-            border-color: rgba(59,130,246,0.2);
         }
-        [data-theme="dark"] .law-citation-link:hover {
-            background: rgba(59,130,246,0.2);
+        [data-theme="dark"] .law-citation-link:hover,
+        [data-theme="dark"] .legal-source-url:hover {
+            color: #93c5fd;
         }
         .ai-analysis-content blockquote {
             margin: 12px 0;
@@ -10419,6 +10410,7 @@
             'soliq kodeksi': { url: 'https://lex.uz/docs/-4674902', name: 'Soliq kodeksi' },
             'sk': { url: 'https://lex.uz/docs/-4674902', name: 'SK' },
             'ma\'muriy javobgarlik': { url: 'https://lex.uz/docs/-97664', name: 'MJTK' },
+            'ma\'muriy javobgarlik to\'g\'risidagi kodeksi': { url: 'https://lex.uz/docs/-97664', name: 'Ma\'muriy javobgarlik to\'g\'risidagi kodeks' },
             'mjtk': { url: 'https://lex.uz/docs/-97664', name: 'MJTK' },
             'mjk': { url: 'https://lex.uz/docs/-97664', name: 'MJTK' },
             'iqtisodiy protsessual kodeks': { url: 'https://lex.uz/docs/-3523891', name: 'IPK' },
@@ -10432,23 +10424,45 @@
             'budjet kodeksi': { url: 'https://lex.uz/uz/docs/2304138', name: 'Budjet kodeksi' },
             'bojxona kodeksi': { url: 'https://lex.uz/docs/-2876354', name: 'Bojxona kodeksi' },
             'ma\'muriy sudlov': { url: 'https://lex.uz/docs/-3527353', name: 'MSK' },
+            'ma\'muriy sud ishlarini yuritish': { url: 'https://lex.uz/docs/-3527353', name: 'Ma\'muriy sud ishlarini yuritish to\'g\'risidagi kodeks' },
+            'o\'zbekiston respublikasi yo\'l harakati qoidalari': { url: 'https://lex.uz/docs/-5953883', name: 'O\'zbekiston Respublikasi Yo\'l harakati qoidalari' },
+            'yo\'l harakati qoidalari': { url: 'https://lex.uz/docs/-5953883', name: 'Yo\'l harakati qoidalari' },
+            'vmq-172-son qaror': { url: 'https://lex.uz/docs/-5953883', name: 'VMQ-172-son qaror' },
         };
+
+        function normalizeCitationKey(value) {
+            return String(value || '')
+                .toLocaleLowerCase('uz')
+                .replace(/[\u02BB\u02BC\u2018\u2019`\u00B4]/g, "'")
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/kodeks(?:ning|ining)$/i, 'kodeksi');
+        }
+
+        function exactLexCompatibilityUrl(sourceUrl, locatorNumber, locatorType, partNumber) {
+            return '/api/lex-anchor?url=' + encodeURIComponent(sourceUrl)
+                + '&article=' + encodeURIComponent(locatorNumber)
+                + '&type=' + encodeURIComponent(locatorType === 'band' ? 'band' : 'modda')
+                + (partNumber ? '&part=' + encodeURIComponent(partNumber) : '');
+        }
 
         /**
          * Auto-detect law citations and convert to clickable lex.uz links.
          * Patterns: "Mehnat kodeksi, 100-modda" / "FK 354-modda" / "Konstitutsiya 53-modda"
          */
         function autoLinkCitations(html) {
-            // Pattern: [Law Name][,]? [number]-modda (or moddasi)
-            const citationRegex = /(?:^|\b)((?:Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Ma'muriy javobgarlik|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma'muriy sud ishlarini yuritish|Ma'muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJTK|MJK|IPK|FPK|JPK|MSIK|MSK))(?:\s*,?\s*)(\d+)(?:\s*-\s*modda(?:si)?)(?:\s*,?\s*(\d+)\s*-\s*qism(?:i|iga|ga|da|dan)?)?/gi;
+            // Pattern: [Law Name][,]? [number]-modda/band, optionally [number]-qism.
+            // Apostrophe variants are accepted because Uzbek text may come from
+            // Lex.uz, Telegram, or an LLM with different Unicode punctuation.
+            const citationRegex = /((?:O['\u02BB\u02BC\u2018\u2019`\u00B4]zbekiston Respublikasi\s+)?Yo['\u02BB\u02BC\u2018\u2019`\u00B4]l harakati qoidalari|VMQ\s*-?\s*172-son qaror|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy javobgarlik(?:\s+to['\u02BB\u02BC\u2018\u2019`\u00B4]g['\u02BB\u02BC\u2018\u2019`\u00B4]risidagi kodeks(?:i|ning|ining)?)?|Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy sud ishlarini yuritish|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJTK|MJK|IPK|FPK|JPK|MSIK|MSK)(?:\s*,?\s*)(\d+)\s*-\s*(modda|band)[\p{L}'\u02BB\u02BC\u2018\u2019`\u00B4]*(?:\s*,?\s*(\d+)\s*-\s*qism[\p{L}'\u02BB\u02BC\u2018\u2019`\u00B4]*)?/giu;
 
             // Server-generated answers already contain exact clause links.
             // Never wrap their <a> elements a second time; apply this legacy
             // fallback only to plain text in older saved conversations.
             return html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/gi).map(function(segment) {
                 if (/^<a\b/i.test(segment)) return segment;
-                return segment.replace(citationRegex, function(match, lawName, articleNum, partNum) {
-                const key = lawName.toLowerCase().trim();
+                return segment.replace(citationRegex, function(match, lawName, articleNum, locatorType, partNum) {
+                const key = normalizeCitationKey(lawName).replace(/\s*-\s*/g, '-');
                 const lawInfo = LAW_CITATION_MAP[key];
                 if (lawInfo) {
                     // lawInfo.url is already the correct Uzbek-Latin lex.uz document.
@@ -10463,16 +10477,42 @@
                     // numeric element ID. Resolve it server-side on click; a
                     // text fragment is not reliable on Lex.uz and can leave the
                     // reader at the document root.
-                    const exactUrl = '/api/lex-anchor?url=' + encodeURIComponent(url)
-                        + '&article=' + encodeURIComponent(articleNum)
-                        + (partNum ? '&part=' + encodeURIComponent(partNum) : '');
-                    const citationLabel = lawInfo.name + ', ' + articleNum + '-modda'
-                        + (partNum ? ', ' + partNum + '-qism' : '');
-                    return `<a href="${exactUrl}" target="_blank" rel="noopener" class="law-citation-link">${citationLabel}</a>`;
+                    const type = locatorType.toLowerCase() === 'band' ? 'band' : 'modda';
+                    const exactUrl = exactLexCompatibilityUrl(url, articleNum, type, partNum);
+                    return `<a href="${exactUrl}" target="_blank" rel="noopener" class="law-citation-link">${match}</a>`;
                 }
                 return match;
                 });
             }).join('');
+        }
+
+        /** Convert plain Lex.uz URLs (including `Manba:` lines) to links.
+         * If the preceding sentence names a modda or band, clicking resolves
+         * the stable Lex.uz element ID instead of opening the document root.
+         */
+        function autoLinkBareLexUrls(html) {
+            const bareLexUrl = /https:\/\/(?:www\.)?lex\.uz\/(?:uz\/)?docs\/-?\d+(?:#[^\s<>"']*)?/gi;
+            const locatorRegex = /(\d+)\s*-\s*(modda|band)[\p{L}'\u02BB\u02BC\u2018\u2019`\u00B4]*(?:\s*,?\s*(\d+)\s*-\s*qism[\p{L}'\u02BB\u02BC\u2018\u2019`\u00B4]*)?/giu;
+            return html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/gi).map(function(segment) {
+                if (/^<a\b/i.test(segment)) return segment;
+                return segment.replace(bareLexUrl, function(rawUrl, offset) {
+                    const cleanUrl = rawUrl.replace(/[),.;:!?]+$/u, '');
+                    const trailing = rawUrl.slice(cleanUrl.length);
+                    const before = segment.slice(Math.max(0, offset - 900), offset)
+                        .replace(/<[^>]*>/g, ' ')
+                        .replace(/&nbsp;/g, ' ');
+                    let locator = null;
+                    for (const match of before.matchAll(locatorRegex)) locator = match;
+                    const href = locator
+                        ? exactLexCompatibilityUrl(cleanUrl, locator[1], locator[2].toLowerCase(), locator[3] || '')
+                        : cleanUrl;
+                    return `<a href="${href}" target="_blank" rel="noopener" class="legal-source-url">${cleanUrl}</a>${trailing}`;
+                });
+            }).join('');
+        }
+
+        function enhanceLegalLinks(html) {
+            return autoLinkCitations(autoLinkBareLexUrls(html));
         }
 
         function simpleMarkdown(text) {
@@ -10513,11 +10553,11 @@
                     const sectionClass = sectionMap[sectionName] || '';
                     result += `<div class="legal-section ${sectionClass}"><h2>${sectionName}</h2>${formatBlock(sectionContent)}</div>`;
                 }
-                return autoLinkCitations(result);
+                return enhanceLegalLinks(result);
             }
 
             // Fallback: regular markdown rendering (non-structured response)
-            return autoLinkCitations(formatBlock(html));
+            return enhanceLegalLinks(formatBlock(html));
         }
 
         function formatBlock(text) {

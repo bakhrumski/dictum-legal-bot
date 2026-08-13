@@ -3570,8 +3570,8 @@ async function callOpenAI(messages, options = {}) {
 // host validation also prevents open redirects and arbitrary URL requests.
 app.get('/api/lex-anchor', requireAuth, async (req, res) => {
   try {
-    const target = await resolveLexAnchorUrl(req.query.url, req.query.article, req.query.part);
-    if (!target) return res.status(404).send('Lex.uz moddasi topilmadi');
+    const target = await resolveLexAnchorUrl(req.query.url, req.query.article, req.query.part, req.query.type);
+    if (!target) return res.status(404).send('Lex.uz modda yoki bandi topilmadi');
     return res.redirect(302, target);
   } catch (error) {
     console.warn('[LEX-ANCHOR] Redirect resolution failed:', error.message);
