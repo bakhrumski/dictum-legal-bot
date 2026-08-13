@@ -23,6 +23,12 @@ const FETCH_TIMEOUT_MS = 8000;
 const MAX_CACHE_ENTRIES = 40;
 const anchorCache = new Map();
 const LEX_ELEMENT_ID_RX = /^-?\d+$/u;
+const KNOWN_LEX_ANCHORS = Object.freeze({
+  // Canonical Uzbek-Latin document URL and stable Lex.uz element IDs. These
+  // avoid a multi-megabyte live document download for the most common links.
+  '97664:modda:135': 'https://lex.uz/docs/-97664#-1781411',
+  '5953883:band:7': 'https://lex.uz/docs/-5953883#-5954624',
+});
 
 function normalizeSourceUrl(value = '') {
   const raw = String(value || '').split('#')[0].trim();
@@ -71,6 +77,30 @@ function buildAnchorIndexFromHtml(html, sourceUrl) {
   return index;
 }
 
+function getLexDocumentId(sourceUrl = '') {
+  const normalized = normalizeSourceUrl(sourceUrl);
+  const match = normalized.match(/\/docs\/(-?\d+)/u);
+  return match ? match[1].replace(/^-/, '') : '';
+}
+
+function resolveKnownLexAnchorUrl(sourceUrl, locatorRef, locatorType = 'modda') {
+  const docId = getLexDocumentId(sourceUrl);
+  const ref = normalizeArticleRef(locatorRef);
+  const type = String(locatorType || '').toLowerCase() === 'band' ? 'band' : 'modda';
+  return (docId && ref && KNOWN_LEX_ANCHORS[`${docId}:${type}:${ref}`]) || '';
+}
+
+function buildLexAnchorFallbackUrl(sourceUrl, locatorRef, locatorType = 'modda') {
+  const baseUrl = normalizeSourceUrl(sourceUrl);
+  const ref = normalizeArticleRef(locatorRef);
+  if (!baseUrl || !ref) return baseUrl;
+  const type = String(locatorType || '').toLowerCase() === 'band' ? 'band' : 'modda';
+  // Chromium text fragments are a best-effort fallback when Lex.uz cannot be
+  // reached by the server. They still take the reader to the named provision
+  // instead of exposing an application error or leaving them at the top.
+  return `${baseUrl}#:~:text=${encodeURIComponent(`${ref}-${type}`)}`;
+}
+
 function trimCache() {
   while (anchorCache.size > MAX_CACHE_ENTRIES) {
     anchorCache.delete(anchorCache.keys().next().value);
@@ -112,6 +142,8 @@ async function resolveLexAnchorUrl(sourceUrl, articleRef, partNumber = '', locat
   const ref = normalizeArticleRef(articleRef);
   const part = String(partNumber || '').match(/\d+/u)?.[0] || '';
   if (!baseUrl || !ref) return '';
+  const knownUrl = resolveKnownLexAnchorUrl(baseUrl, ref, locatorType);
+  if (knownUrl) return knownUrl;
   const index = await fetchAnchorIndex(baseUrl);
   const type = String(locatorType || '').toLowerCase() === 'band' ? 'band' : 'modda';
   const id = type === 'band'
@@ -162,9 +194,12 @@ async function hydrateLexAnchors(chunks = [], replyText = '') {
 }
 
 module.exports = {
+  buildLexAnchorFallbackUrl,
   buildAnchorIndexFromHtml,
   fetchAnchorIndex,
+  getLexDocumentId,
   hydrateLexAnchors,
   normalizeSourceUrl,
+  resolveKnownLexAnchorUrl,
   resolveLexAnchorUrl,
 };

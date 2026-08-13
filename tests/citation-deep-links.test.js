@@ -10,7 +10,12 @@ const {
   linkCitationsInMarkdown,
 } = require('../src/rag/citation-utils');
 const { parseLexStructured, chunkByArticle } = require('../src/rag/structural-chunker');
-const { buildAnchorIndexFromHtml, normalizeSourceUrl } = require('../src/rag/lex-anchor-resolver');
+const {
+  buildAnchorIndexFromHtml,
+  buildLexAnchorFallbackUrl,
+  normalizeSourceUrl,
+  resolveKnownLexAnchorUrl,
+} = require('../src/rag/lex-anchor-resolver');
 
 let passed = 0;
 function test(name, fn) {
@@ -156,6 +161,24 @@ test('older dashboard citations use the exact-anchor compatibility resolver', ()
   assert.doesNotMatch(dashboard, /url \+= '#:~:text='/u);
 });
 
+test('known high-traffic provisions resolve without a live Lex.uz fetch', () => {
+  assert.strictEqual(
+    resolveKnownLexAnchorUrl('https://lex.uz/uz/docs/97664', '135', 'modda'),
+    'https://lex.uz/docs/-97664#-1781411',
+  );
+  assert.strictEqual(
+    resolveKnownLexAnchorUrl('https://lex.uz/docs/-5953883', '7', 'band'),
+    'https://lex.uz/docs/-5953883#-5954624',
+  );
+});
+
+test('an unavailable live resolver falls back to the named provision', () => {
+  assert.strictEqual(
+    buildLexAnchorFallbackUrl('https://lex.uz/docs/-6257288', '253', 'modda'),
+    'https://lex.uz/docs/-6257288#:~:text=253-modda',
+  );
+});
+
 test('dashboard renders the cited provision and bare Manba URL as exact links', () => {
   const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
   const start = dashboard.indexOf('const LAW_CITATION_MAP');
@@ -170,8 +193,8 @@ test('dashboard renders the cited provision and bare Manba URL as exact links', 
   \`);`, context);
   assert.strictEqual((context.rendered.match(/class="law-citation-link"/gu) || []).length, 2);
   assert.strictEqual((context.rendered.match(/class="legal-source-url"/gu) || []).length, 2);
-  assert.match(context.rendered, /article=7&type=band/u);
-  assert.match(context.rendered, /article=135&type=modda/u);
+  assert.match(context.rendered, /https:\/\/lex\.uz\/docs\/-5953883#-5954624/u);
+  assert.match(context.rendered, /https:\/\/lex\.uz\/docs\/-97664#-1781411/u);
 });
 
 test('post-send progress uses monochrome SVGs instead of colorful emoji', () => {
