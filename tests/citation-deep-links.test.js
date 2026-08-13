@@ -1,12 +1,15 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const {
   buildLexDeepLink,
   findCitationPartNumber,
   linkCitationsInMarkdown,
 } = require('../src/rag/citation-utils');
 const { parseLexStructured, chunkByArticle } = require('../src/rag/structural-chunker');
+const { buildAnchorIndexFromHtml, normalizeSourceUrl } = require('../src/rag/lex-anchor-resolver');
 
 let passed = 0;
 function test(name, fn) {
@@ -95,6 +98,50 @@ test('structural ingest preserves article and qism element IDs', () => {
   });
   const children = chunks.filter(chunk => chunk.chunkType === 'child');
   assert.deepStrictEqual(children.map(chunk => chunk.metadata.lexElementId), ['6263814', '6263815']);
+});
+
+test('legacy rows use the resolved stable article/qism anchor map', () => {
+  const html = `
+    <div class="ACT_TITLE"><a id="6000000">Mehnat kodeksi</a></div>
+    <div id="divCont">
+      <div class="lx_elem CLAUSE_DEFAULT"><a id="6263813">253-modda. Ish haqi</a></div>
+      <div class="lx_elem ACT_TEXT"><a id="6263814">Birinchi qism.</a></div>
+      <div class="lx_elem ACT_TEXT"><a id="6263815">Ikkinchi qism.</a></div>
+    </div>`;
+  const index = buildAnchorIndexFromHtml(html, 'https://lex.uz/uz/docs/6257288');
+  assert.strictEqual(index['253'], '6263813');
+  assert.strictEqual(index['253:2'], '6263815');
+  assert.strictEqual(buildLexDeepLink({
+    source_url: 'https://lex.uz/uz/docs/6257288',
+    lex_anchor_ids: index,
+  }, { articleRef: '253', partNumber: '2' }), 'https://lex.uz/uz/docs/6257288#6263815');
+});
+
+test('the resolver accepts only HTTPS Lex.uz documents', () => {
+  assert.strictEqual(normalizeSourceUrl('https://lex.uz/uz/docs/6257288#old'), 'https://lex.uz/uz/docs/6257288');
+  assert.strictEqual(normalizeSourceUrl('http://lex.uz/docs/6257288'), '');
+  assert.strictEqual(normalizeSourceUrl('https://lex.uz.evil.example/docs/6257288'), '');
+});
+
+test('older dashboard citations use the exact-anchor compatibility resolver', () => {
+  const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+  assert.match(server, /app\.get\('\/api\/lex-anchor'/u);
+  assert.match(dashboard, /const exactUrl = '\/api\/lex-anchor\?url='/u);
+  assert.match(dashboard, /partNum \? '&part='/u);
+  assert.doesNotMatch(dashboard, /url \+= '#:~:text='/u);
+});
+
+test('post-send progress uses monochrome SVGs instead of colorful emoji', () => {
+  const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+  assert.match(server, /kind: 'search'/u);
+  assert.match(server, /kind: 'sources'/u);
+  assert.match(server, /kind: 'compose'/u);
+  assert.doesNotMatch(server, /type: 'status', text: '[🔍📚✍]/u);
+  assert.match(dashboard, /function streamStatusMarkup\(kind, text\)/u);
+  assert.match(dashboard, /class="ai-stream-status-icon"/u);
+  assert.match(dashboard, /stroke="currentColor"/u);
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);

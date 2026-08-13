@@ -289,6 +289,14 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
 
   const requestedPart = normalizePartNumber(opts.partNumber);
   const chunkPart = normalizePartNumber(chunk.part_number || chunk.partNumber);
+  const articleRef = normalizeArticleRef(opts.articleRef);
+  const resolvedAnchors = chunk.lex_anchor_ids || chunk.lexAnchorIds || {};
+  const resolvedId = requestedPart
+    ? resolvedAnchors[`${articleRef}:${requestedPart}`]
+    : resolvedAnchors[articleRef];
+  if (/^\d+$/u.test(String(resolvedId || ''))) {
+    return `${baseUrl}#${resolvedId}`;
+  }
   const elementId = String(
     chunk.lex_element_id || chunk.lexElementId ||
     (chunk.metadata && (chunk.metadata.lexElementId || chunk.metadata.lex_element_id)) || ''
@@ -307,7 +315,7 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   if (!excerpt) {
     excerpt = excerptFromLines(chunk.childText || chunk.chunk_text || chunk.parentText || '', '');
   }
-  if (!excerpt && opts.articleRef) excerpt = `${normalizeArticleRef(opts.articleRef)}-modda`;
+  if (!excerpt && articleRef) excerpt = `${articleRef}-modda`;
   return excerpt ? `${baseUrl}#:~:text=${encodeURIComponent(excerpt)}` : baseUrl;
 }
 
