@@ -30,7 +30,11 @@ const {
   buildLexDeepLink,
   linkCitationsInMarkdown,
 } = require('../rag/citation-utils');
-const { hydrateLexAnchors, resolveLexAnchorUrl } = require('../rag/lex-anchor-resolver');
+const {
+  buildLexAnchorFallbackUrl,
+  hydrateLexAnchors,
+  resolveLexAnchorUrl,
+} = require('../rag/lex-anchor-resolver');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
@@ -3575,7 +3579,9 @@ app.get('/api/lex-anchor', requireAuth, async (req, res) => {
     return res.redirect(302, target);
   } catch (error) {
     console.warn('[LEX-ANCHOR] Redirect resolution failed:', error.message);
-    return res.status(502).send('Lex.uz bandini hozir aniqlab bo\'lmadi');
+    const fallback = buildLexAnchorFallbackUrl(req.query.url, req.query.article, req.query.type);
+    if (fallback) return res.redirect(302, fallback);
+    return res.status(404).send('Lex.uz manbasi topilmadi');
   }
 });
 

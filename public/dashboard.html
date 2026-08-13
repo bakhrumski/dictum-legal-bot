@@ -10430,6 +10430,11 @@
             'vmq-172-son qaror': { url: 'https://lex.uz/docs/-5953883', name: 'VMQ-172-son qaror' },
         };
 
+        const KNOWN_EXACT_LEX_ANCHORS = {
+            '97664:modda:135': 'https://lex.uz/docs/-97664#-1781411',
+            '5953883:band:7': 'https://lex.uz/docs/-5953883#-5954624',
+        };
+
         function normalizeCitationKey(value) {
             return String(value || '')
                 .toLocaleLowerCase('uz')
@@ -10440,9 +10445,14 @@
         }
 
         function exactLexCompatibilityUrl(sourceUrl, locatorNumber, locatorType, partNumber) {
+            const docMatch = String(sourceUrl || '').match(/\/docs\/(-?\d+)/);
+            const documentId = docMatch ? docMatch[1].replace(/^-/, '') : '';
+            const type = locatorType === 'band' ? 'band' : 'modda';
+            const knownUrl = KNOWN_EXACT_LEX_ANCHORS[documentId + ':' + type + ':' + locatorNumber];
+            if (knownUrl && !partNumber) return knownUrl;
             return '/api/lex-anchor?url=' + encodeURIComponent(sourceUrl)
                 + '&article=' + encodeURIComponent(locatorNumber)
-                + '&type=' + encodeURIComponent(locatorType === 'band' ? 'band' : 'modda')
+                + '&type=' + encodeURIComponent(type)
                 + (partNumber ? '&part=' + encodeURIComponent(partNumber) : '');
         }
 
