@@ -27,7 +27,14 @@
  */
 
 const { pool } = require('../database/db');
-const { extractAnalysisSection, selectRelevantSourceRefs, getChunkArticleRefs } = require('../rag/citation-utils');
+const {
+  extractAnalysisSection,
+  selectRelevantSourceRefs,
+  getChunkArticleRefs,
+  findCitationPartNumber,
+  buildLexDeepLink,
+  linkCitationsInMarkdown,
+} = require('../rag/citation-utils');
 const telegramEconomy = require('../services/telegram-economy');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -409,12 +416,16 @@ function formatSources(chunks, replyText) {
     if (!c || c.is_active === false) continue;
     const law = sourceRef.lawName || c.law_name || '';
     if (!law) continue;
-    const art = sourceRef.articleRef ? `${sourceRef.articleRef}-modda` : '';
+    const partNumber = findCitationPartNumber(analysisText, sourceRef.articleRef) || c.part_number || c.partNumber || '';
+    const art = sourceRef.articleRef
+      ? `${sourceRef.articleRef}-modda${partNumber ? `, ${partNumber}-qism` : ''}`
+      : '';
     const label = [law, art].filter(Boolean).join(', ');
     const key = label.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(c.source_url ? `• [${label}](${c.source_url})` : `• ${label}`);
+    const url = buildLexDeepLink(c, { lang: 'uz', articleRef: sourceRef.articleRef, partNumber });
+    out.push(url ? `• [${label}](${url})` : `• ${label}`);
   }
   return out.length ? `\n\n📎 *Manbalar:*\n${out.join('\n')}` : '';
 }
@@ -515,7 +526,7 @@ TELEGRAM FORMATI (majburiy):
   }
 
   return {
-    text,
+    text: linkCitationsInMarkdown(text, chunks, 'uz'),
     confidence,
     sources: formatSources(chunks, text),
     meta: { path: 'rag', topic, chunks: chunks.length, unverified, provider: res.provider },

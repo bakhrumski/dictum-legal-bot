@@ -22,7 +22,14 @@ const { expandLegalQueryAliases } = require('../rag/query-aliases');
 const { buildCorpusOnlyAnswer } = require('../rag/corpus-fallback');
 const tariffModule = require('../rag/subscription-tiers');
 const { sendEmailCode } = require('../auth/email-code');
-const { extractAnalysisSection, getChunkArticleRefs, selectRelevantSourceRefs } = require('../rag/citation-utils');
+const {
+  extractAnalysisSection,
+  getChunkArticleRefs,
+  selectRelevantSourceRefs,
+  findCitationPartNumber,
+  buildLexDeepLink,
+  linkCitationsInMarkdown,
+} = require('../rag/citation-utils');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
@@ -4194,14 +4201,17 @@ function adaptParentChildChunk(r, idx, topic) {
     chunk_text,
     // preserve new-format fields for getChunkArticleRefs / buildManbalarFooter
     articleNumber: r.articleNumber || '',
+    partNumber: r.partNumber || null,
     childText: r.childText || '',
     parentText: r.parentText || '',
+    lex_element_id: r.lexElementId || null,
     // old-format equivalents
     law_name: r.lawName || '',
     source_url: r.sourceUrl || null,
     chapter: r.chapter || '',
     article_numbers: r.articleNumber ? [r.articleNumber] : [],
     article_number_display: r.articleNumber || '',
+    part_number: r.partNumber || null,
     cross_references: r.references || [],
     score: r.score || 0,
     source_type: 'law_text',
@@ -5129,28 +5139,16 @@ function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
     const r = sourceRef.chunk;
     if (!r.source_url || r.is_active === false) continue;
     const art = sourceRef.articleRef;
-    const key = `${r.doc_id || sourceRef.lawName}_${art}`;
+    const partNumber = findCitationPartNumber(analysisText, art) || r.part_number || r.partNumber || '';
+    const key = `${r.doc_id || sourceRef.lawName}_${art}_${partNumber}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
-    // Build Text Fragment from first meaningful clause of the chunk
-    let fragment = '';
-    const firstLine = (r.chunk_text || '').split('\n').find(l => l.trim().length > 20);
-    if (firstLine) {
-      const phrase = firstLine.trim().substring(0, 50).replace(/[#*\[\]|]/g, '').trim();
-      if (phrase.length > 10) {
-        fragment = '#:~:text=' + encodeURIComponent(phrase);
-      }
-    }
-
-      // Use the ingested source_url as-is — it's already the Uzbek-Latin lex.uz
-      // document (lex.uz uses different doc IDs per language, so rewriting the
-      // path segment would point at the wrong/Russian document). Only an explicit
-      // /ru/ segment is downgraded to bare for an Uzbek question.
-    let rawUrl = r.source_url || '';
-    if (lang === 'uz') rawUrl = rawUrl.replace('lex.uz/ru/docs/', 'lex.uz/docs/');
-    const url = rawUrl + fragment;
-    lines.push(`- [${sourceRef.lawName}, ${art}-modda](${url})`);
+    // The shared builder prefers a stable Lex element ID and falls back to an
+    // exact-clause Text Fragment for corpus rows ingested before this feature.
+    const url = buildLexDeepLink(r, { lang, articleRef: art, partNumber });
+    const partLabel = partNumber ? `, ${partNumber}-qism` : '';
+    lines.push(`- [${sourceRef.lawName}, ${art}-modda${partLabel}](${url})`);
   }
 
   if (lines.length === 0) return '';
@@ -6173,7 +6171,9 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
 
     // Append Manbalar footer with lex.uz Text Fragment links for lawyer citation
     // verification — opened in the language the user asked in.
-    const manbalarFooter = buildManbalarFooter(ragChunks, displayReply, lexLangForText(message));
+    const citationLanguage = lexLangForText(message);
+    displayReply = linkCitationsInMarkdown(displayReply, ragChunks, citationLanguage);
+    const manbalarFooter = buildManbalarFooter(ragChunks, displayReply, citationLanguage);
     if (manbalarFooter) displayReply += manbalarFooter;
 
     // Enrichment: suggest the laws the AI cited that aren't yet in the corpus

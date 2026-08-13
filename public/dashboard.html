@@ -10433,7 +10433,12 @@
             // Pattern: [Law Name][,]? [number]-modda (or moddasi)
             const citationRegex = /(?:^|\b)((?:Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Ma'muriy javobgarlik|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma'muriy sud ishlarini yuritish|Ma'muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJTK|MJK|IPK|FPK|JPK|MSIK|MSK))(?:\s*,?\s*)(\d+)(?:\s*-\s*modda(?:si)?)/gi;
 
-            return html.replace(citationRegex, function(match, lawName, articleNum) {
+            // Server-generated answers already contain exact clause links.
+            // Never wrap their <a> elements a second time; apply this legacy
+            // fallback only to plain text in older saved conversations.
+            return html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/gi).map(function(segment) {
+                if (/^<a\b/i.test(segment)) return segment;
+                return segment.replace(citationRegex, function(match, lawName, articleNum) {
                 const key = lawName.toLowerCase().trim();
                 const lawInfo = LAW_CITATION_MAP[key];
                 if (lawInfo) {
@@ -10445,10 +10450,12 @@
                     if ((key === 'fuqarolik kodeksi' || key === 'fk') && parseInt(articleNum, 10) >= 386) {
                         url = 'https://lex.uz/docs/-180552';
                     }
+                    url += '#:~:text=' + encodeURIComponent(articleNum + '-modda');
                     return `<a href="${url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
                 }
                 return match;
-            });
+                });
+            }).join('');
         }
 
         function simpleMarkdown(text) {

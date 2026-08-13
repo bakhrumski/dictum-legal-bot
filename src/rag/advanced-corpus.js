@@ -51,6 +51,7 @@ async function initAdvancedCorpus() {
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS part_number VARCHAR(20)`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS part_type VARCHAR(20) DEFAULT 'article'`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS cross_references TEXT[]`);
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS lex_element_id VARCHAR(40)`);
 
     // ── Index for parent-child lookups ──
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_legal_chunks_chunk_id ON legal_chunks(chunk_id) WHERE chunk_id IS NOT NULL`);
@@ -206,7 +207,7 @@ async function insertOneChunk(client, chunk) {
       article_numbers, chapter,
       chunk_type, chunk_id, parent_chunk_id,
       article_number_display, part_number, part_type,
-      cross_references,
+      cross_references, lex_element_id,
       enforcement_date, is_valid,
       is_active, status_label, adoption_date, document_number,
       language, source_type, quality_score, verified_by,
@@ -217,11 +218,11 @@ async function insertOneChunk(client, chunk) {
       $7, $8,
       $9, $10, $11,
       $12, $13, $14,
-      $15,
-      $16, TRUE,
-      $17, $18, $19, $20,
-      $21, $22, $23, $24,
-      $25::vector
+      $15, $16,
+      $17, TRUE,
+      $18, $19, $20, $21,
+      $22, $23, $24, $25,
+      $26::vector
     )
   `, [
     m.law_name || '',
@@ -239,6 +240,7 @@ async function insertOneChunk(client, chunk) {
     m.partNumber || null,
     m.partType || 'article',
     m.references && m.references.length > 0 ? m.references : null,
+    m.lexElementId || m.lex_element_id || null,
     m.enforcement_date || null,
     m.is_active !== false,
     m.status_label || null,
@@ -315,6 +317,7 @@ async function parentChildSearch(query, opts = {}) {
       lawName: r.law_name || '',
       score: r.score || 0,
       references: [],
+      lexElementId: r.lex_element_id || null,
       legacy: true,
     }));
   }
@@ -325,7 +328,7 @@ async function parentChildSearch(query, opts = {}) {
       id, chunk_text, chunk_id, parent_chunk_id,
       article_number_display, part_number, part_type,
       chapter, source_url, law_name, category,
-      cross_references,
+      cross_references, lex_element_id,
       1 - (embedding <=> $1::vector) AS score
     FROM legal_chunks
     WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)
@@ -347,7 +350,7 @@ async function parentChildSearch(query, opts = {}) {
     const parentSql = `
       SELECT
         id, chunk_text, chunk_id,
-        article_number_display, chapter, source_url, law_name,
+        article_number_display, chapter, source_url, law_name, lex_element_id,
         cross_references,
         1 - (embedding <=> $1::vector) AS score
       FROM legal_chunks
@@ -371,6 +374,7 @@ async function parentChildSearch(query, opts = {}) {
       lawName: r.law_name || '',
       score: parseFloat(r.score) || 0,
       references: r.cross_references || [],
+      lexElementId: r.lex_element_id || null,
     }));
   }
 
@@ -380,7 +384,7 @@ async function parentChildSearch(query, opts = {}) {
   let parentMap = {};
   if (parentIds.length > 0) {
     const parentResult = await pool.query(
-      `SELECT chunk_id, chunk_text, article_number_display, chapter, source_url, law_name
+      `SELECT chunk_id, chunk_text, article_number_display, chapter, source_url, law_name, lex_element_id
        FROM legal_chunks WHERE chunk_id = ANY($1)`,
       [parentIds]
     );
@@ -411,6 +415,7 @@ async function parentChildSearch(query, opts = {}) {
       lawName: child.law_name || parent?.law_name || '',
       score: parseFloat(child.score) || 0,
       references: child.cross_references || [],
+      lexElementId: child.lex_element_id || parent?.lex_element_id || null,
     });
 
     if (results.length >= limit) break;

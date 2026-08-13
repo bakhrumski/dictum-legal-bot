@@ -479,6 +479,7 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(r.escalate, false, 'a confident answer must not also queue a lawyer');
     assert.ok(/Mehnat kodeksi/.test(r.reply), 'sources missing');
     assert.ok(/lex\.uz/.test(r.reply), 'source link missing');
+    assert.ok(/#:~:text=/.test(r.reply), 'source must deep-link to the cited provision');
     assert.ok(/yuridik kuchga ega emas/.test(r.reply), 'disclaimer missing');
     assert.ok(/Bepul huquqiy javobingizdan foydalandingiz/i.test(r.reply), 'free entitlement notice missing');
     assert.strictEqual(r.meta.entitlementSource, 'free');
