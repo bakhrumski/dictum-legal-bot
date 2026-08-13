@@ -5,13 +5,16 @@
  *
  * The free entitlement is lifetime-based. Conversations, menus and
  * clarification turns are deliberately not recorded here because they must
- * remain unlimited. Paid answers are stored as credits and consumed only when
- * the legal-answer pipeline is about to run.
+ * remain unlimited. An answer is reserved before generation, finalized only
+ * after Telegram confirms delivery, and automatically restored if abandoned.
  */
 
 const { pool } = require('../database/db');
+const crypto = require('crypto');
 
 let tablesReadyPromise = null;
+const parsedReservationTtl = Number.parseInt(process.env.TG_ANSWER_RESERVATION_TTL_MIN || '10', 10);
+const RESERVATION_TTL_MS = Math.min(60, Math.max(2, parsedReservationTtl || 10)) * 60 * 1000;
 
 function ensureTables() {
   if (tablesReadyPromise) return tablesReadyPromise;
@@ -29,6 +32,22 @@ function ensureTables() {
         credits    INTEGER NOT NULL DEFAULT 0 CHECK (credits >= 0),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tg_answer_reservations (
+        reservation_id UUID PRIMARY KEY,
+        chat_id        BIGINT NOT NULL,
+        source         VARCHAR(8) NOT NULL CHECK (source IN ('free', 'paid')),
+        status         VARCHAR(12) NOT NULL DEFAULT 'pending'
+                       CHECK (status IN ('pending', 'delivered', 'released')),
+        created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+        finalized_at   TIMESTAMP
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS tg_answer_one_pending_per_chat
+        ON tg_answer_reservations (chat_id)
+        WHERE status = 'pending'
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tg_answer_payments (
@@ -89,6 +108,34 @@ function ensureTables() {
       // Fresh installations do not have the legacy table.
       if (error && error.code !== '42P01') throw error;
     });
+
+    // Repair reservations left behind by the pre-delivery accounting code.
+    // Before reservation IDs existed, a Render restart after generation but
+    // before bot.sendMessage() could consume the lifetime answer forever. A
+    // usage row with neither a delivered Telegram request nor any reservation
+    // is that legacy orphan and is safe to restore once.
+    await pool.query(`
+      UPDATE tg_agent_free_usage usage
+         SET free_answers = 0, updated_at = NOW()
+       WHERE usage.free_answers > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM tg_answer_reservations reservation
+            WHERE reservation.chat_id = usage.chat_id
+         )
+         AND NOT EXISTS (
+           SELECT 1
+             FROM users u
+             JOIN requests r ON r.user_id = u.id
+            WHERE u.telegram_id = usage.chat_id
+              AND r.source_channel = 'telegram'
+              AND r.agent_action = 'answered'
+              AND COALESCE(r.response_text, '') <> ''
+         )
+    `).catch(error => {
+      // Older/fresh schemas may not have the request audit columns yet. The
+      // reservation mechanism still works; only the one-time repair is skipped.
+      if (error && !['42P01', '42703'].includes(error.code)) throw error;
+    });
   })().catch(error => {
     tablesReadyPromise = null;
     throw error;
@@ -96,96 +143,32 @@ function ensureTables() {
   return tablesReadyPromise;
 }
 
-async function getPaidAnswerCredits(chatId) {
-  await ensureTables();
-  const result = await pool.query(
+async function inTransaction(work) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function getPaidAnswerCreditsFrom(db, chatId) {
+  const result = await db.query(
     'SELECT credits FROM tg_answer_wallets WHERE chat_id = $1',
     [chatId]
   );
   return result.rows.length ? Number(result.rows[0].credits) || 0 : 0;
 }
 
-/** Read-only availability check used before any model-based intent call. */
-async function getAnswerEntitlementStatus(chatId, freeLimit = 1) {
-  await ensureTables();
-  const safeLimit = Math.max(0, Number(freeLimit) || 0);
-  const result = await pool.query(`
-    SELECT
-      COALESCE((SELECT free_answers FROM tg_agent_free_usage WHERE chat_id = $1), 0)::int AS free_used,
-      COALESCE((SELECT credits FROM tg_answer_wallets WHERE chat_id = $1), 0)::int AS paid_credits
-  `, [chatId]);
-  const row = result.rows[0] || {};
-  const freeUsed = Number(row.free_used) || 0;
-  const paidCredits = Number(row.paid_credits) || 0;
-  return {
-    allowed: freeUsed < safeLimit || paidCredits > 0,
-    freeUsed,
-    freeRemaining: Math.max(0, safeLimit - freeUsed),
-    paidCredits,
-    limit: safeLimit,
-  };
-}
-
-/** Atomically reserve either a lifetime-free answer or one paid credit. */
-async function claimAnswerEntitlement(chatId, freeLimit = 1) {
-  await ensureTables();
-  const safeLimit = Math.max(0, Number(freeLimit) || 0);
-
-  if (safeLimit > 0) {
-    const free = await pool.query(`
-      INSERT INTO tg_agent_free_usage (chat_id, free_answers, updated_at)
-      VALUES ($1, 1, NOW())
-      ON CONFLICT (chat_id) DO UPDATE SET
-        free_answers = tg_agent_free_usage.free_answers + 1,
-        updated_at = NOW()
-      WHERE tg_agent_free_usage.free_answers < $2
-      RETURNING free_answers
-    `, [chatId, safeLimit]);
-    if (free.rows.length) {
-      const used = Number(free.rows[0].free_answers) || 1;
-      return {
-        allowed: true,
-        source: 'free',
-        used,
-        remaining: Math.max(0, safeLimit - used),
-        limit: safeLimit,
-        paidCredits: await getPaidAnswerCredits(chatId),
-      };
-    }
-  }
-
-  const paid = await pool.query(`
-    UPDATE tg_answer_wallets
-       SET credits = credits - 1, updated_at = NOW()
-     WHERE chat_id = $1 AND credits > 0
-     RETURNING credits
-  `, [chatId]);
-  if (paid.rows.length) {
-    return {
-      allowed: true,
-      source: 'paid',
-      used: safeLimit,
-      remaining: 0,
-      limit: safeLimit,
-      paidCredits: Number(paid.rows[0].credits) || 0,
-    };
-  }
-
-  return {
-    allowed: false,
-    source: null,
-    used: safeLimit,
-    remaining: 0,
-    limit: safeLimit,
-    paidCredits: 0,
-  };
-}
-
-/** Return a reservation if generation fails before an answer is delivered. */
-async function releaseAnswerEntitlement(chatId, reservation = {}) {
-  await ensureTables();
-  if (reservation.source === 'paid') {
-    await pool.query(`
+async function refundReservation(db, chatId, source) {
+  if (source === 'paid') {
+    await db.query(`
       INSERT INTO tg_answer_wallets (chat_id, credits, updated_at)
       VALUES ($1, 1, NOW())
       ON CONFLICT (chat_id) DO UPDATE SET
@@ -194,11 +177,164 @@ async function releaseAnswerEntitlement(chatId, reservation = {}) {
     `, [chatId]);
     return;
   }
-  await pool.query(`
+  await db.query(`
     UPDATE tg_agent_free_usage
        SET free_answers = GREATEST(0, free_answers - 1), updated_at = NOW()
      WHERE chat_id = $1
   `, [chatId]);
+}
+
+/** Release abandoned work so a restart/timeout cannot consume an answer. */
+async function releaseExpiredReservations(db, chatId) {
+  const expired = await db.query(`
+    UPDATE tg_answer_reservations
+       SET status = 'released', finalized_at = NOW()
+     WHERE status = 'pending'
+       AND created_at < NOW() - ($1 * INTERVAL '1 millisecond')
+       AND ($2::bigint IS NULL OR chat_id = $2)
+     RETURNING reservation_id, chat_id, source
+  `, [RESERVATION_TTL_MS, chatId == null ? null : chatId]);
+  for (const row of expired.rows) {
+    await refundReservation(db, row.chat_id, row.source);
+  }
+  return expired.rows.length;
+}
+
+async function getPaidAnswerCredits(chatId) {
+  await ensureTables();
+  return getPaidAnswerCreditsFrom(pool, chatId);
+}
+
+/** Read-only availability check used before any model-based intent call. */
+async function getAnswerEntitlementStatus(chatId, freeLimit = 1) {
+  await ensureTables();
+  const safeLimit = Math.max(0, Number(freeLimit) || 0);
+  return inTransaction(async client => {
+    await releaseExpiredReservations(client, chatId);
+    const result = await client.query(`
+      SELECT
+        COALESCE((SELECT free_answers FROM tg_agent_free_usage WHERE chat_id = $1), 0)::int AS free_used,
+        COALESCE((SELECT credits FROM tg_answer_wallets WHERE chat_id = $1), 0)::int AS paid_credits,
+        EXISTS(
+          SELECT 1 FROM tg_answer_reservations
+           WHERE chat_id = $1 AND status = 'pending'
+        ) AS answer_pending
+    `, [chatId]);
+    const row = result.rows[0] || {};
+    const freeUsed = Number(row.free_used) || 0;
+    const paidCredits = Number(row.paid_credits) || 0;
+    const pending = row.answer_pending === true;
+    return {
+      allowed: !pending && (freeUsed < safeLimit || paidCredits > 0),
+      pending,
+      freeUsed,
+      freeRemaining: Math.max(0, safeLimit - freeUsed),
+      paidCredits,
+      limit: safeLimit,
+    };
+  });
+}
+
+/** Atomically reserve either a lifetime-free answer or one paid credit. */
+async function claimAnswerEntitlement(chatId, freeLimit = 1) {
+  await ensureTables();
+  const safeLimit = Math.max(0, Number(freeLimit) || 0);
+  return inTransaction(async client => {
+    // Serialize entitlement changes for one Telegram chat across Render workers.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1::text))', [String(chatId)]);
+    await releaseExpiredReservations(client, chatId);
+
+    const active = await client.query(`
+      SELECT reservation_id FROM tg_answer_reservations
+       WHERE chat_id = $1 AND status = 'pending'
+       LIMIT 1
+    `, [chatId]);
+    if (active.rows.length) {
+      return {
+        allowed: false, pending: true, source: null,
+        used: safeLimit, remaining: 0, limit: safeLimit,
+        paidCredits: await getPaidAnswerCreditsFrom(client, chatId),
+      };
+    }
+
+    const reservationId = crypto.randomUUID();
+    if (safeLimit > 0) {
+      const free = await client.query(`
+        INSERT INTO tg_agent_free_usage (chat_id, free_answers, updated_at)
+        VALUES ($1, 1, NOW())
+        ON CONFLICT (chat_id) DO UPDATE SET
+          free_answers = tg_agent_free_usage.free_answers + 1,
+          updated_at = NOW()
+        WHERE tg_agent_free_usage.free_answers < $2
+        RETURNING free_answers
+      `, [chatId, safeLimit]);
+      if (free.rows.length) {
+        await client.query(`
+          INSERT INTO tg_answer_reservations (reservation_id, chat_id, source)
+          VALUES ($1, $2, 'free')
+        `, [reservationId, chatId]);
+        const used = Number(free.rows[0].free_answers) || 1;
+        return {
+          allowed: true, reservationId, source: 'free', used,
+          remaining: Math.max(0, safeLimit - used), limit: safeLimit,
+          paidCredits: await getPaidAnswerCreditsFrom(client, chatId),
+        };
+      }
+    }
+
+    const paid = await client.query(`
+      UPDATE tg_answer_wallets
+         SET credits = credits - 1, updated_at = NOW()
+       WHERE chat_id = $1 AND credits > 0
+       RETURNING credits
+    `, [chatId]);
+    if (paid.rows.length) {
+      await client.query(`
+        INSERT INTO tg_answer_reservations (reservation_id, chat_id, source)
+        VALUES ($1, $2, 'paid')
+      `, [reservationId, chatId]);
+      return {
+        allowed: true, reservationId, source: 'paid', used: safeLimit,
+        remaining: 0, limit: safeLimit,
+        paidCredits: Number(paid.rows[0].credits) || 0,
+      };
+    }
+
+    return {
+      allowed: false, pending: false, source: null, used: safeLimit,
+      remaining: 0, limit: safeLimit, paidCredits: 0,
+    };
+  });
+}
+
+/** Finalize only after every Telegram answer part was delivered successfully. */
+async function finalizeAnswerEntitlement(chatId, reservation = {}) {
+  await ensureTables();
+  if (!reservation.reservationId) return false;
+  const result = await pool.query(`
+    UPDATE tg_answer_reservations
+       SET status = 'delivered', finalized_at = NOW()
+     WHERE reservation_id = $1 AND chat_id = $2 AND status = 'pending'
+     RETURNING reservation_id
+  `, [reservation.reservationId, chatId]);
+  return result.rows.length > 0;
+}
+
+/** Return a reservation if generation or Telegram delivery fails. Idempotent. */
+async function releaseAnswerEntitlement(chatId, reservation = {}) {
+  await ensureTables();
+  if (!reservation.reservationId) return false;
+  return inTransaction(async client => {
+    const released = await client.query(`
+      UPDATE tg_answer_reservations
+         SET status = 'released', finalized_at = NOW()
+       WHERE reservation_id = $1 AND chat_id = $2 AND status = 'pending'
+       RETURNING source
+    `, [reservation.reservationId, chatId]);
+    if (!released.rows.length) return false;
+    await refundReservation(client, chatId, released.rows[0].source);
+    return true;
+  });
 }
 
 /**
@@ -291,6 +427,7 @@ async function getTelegramUserStats() {
 
 module.exports = {
   claimAnswerEntitlement,
+  finalizeAnswerEntitlement,
   getAnswerEntitlementStatus,
   releaseAnswerEntitlement,
   getPaidAnswerCredits,
