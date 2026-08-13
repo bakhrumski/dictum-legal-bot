@@ -3,6 +3,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const {
   buildLexDeepLink,
   findCitationPartNumber,
@@ -28,6 +29,15 @@ test('stable Lex.uz element IDs are preferred for an exact qism', () => {
     childText: 'Birinchi qism matni.',
   }, { articleRef: '253', partNumber: '1' });
   assert.strictEqual(url, 'https://lex.uz/uz/docs/6257288#6263814');
+});
+
+test('negative Lex.uz element IDs are valid deep-link anchors', () => {
+  const url = buildLexDeepLink({
+    source_url: 'https://lex.uz/docs/-5953883',
+    lex_element_id: '-5954624',
+    childText: '7. Mexanik transport vositasining haydovchisi.',
+  }, { articleRef: '7' });
+  assert.strictEqual(url, 'https://lex.uz/docs/-5953883#-5954624');
 });
 
 test('existing rows deep-link by the exact requested qism text', () => {
@@ -117,6 +127,17 @@ test('legacy rows use the resolved stable article/qism anchor map', () => {
   }, { articleRef: '253', partNumber: '2' }), 'https://lex.uz/uz/docs/6257288#6263815');
 });
 
+test('the resolver indexes numbered regulatory bands with negative Lex.uz IDs', () => {
+  const html = `
+    <div class="ACT_TITLE"><div id="-5953883">Yo'l harakati qoidalari</div></div>
+    <div id="divCont">
+      <div class="ACT_TEXT lx_elem"><div id="-5954624">7. Mexanik transport vositasining haydovchisi hujjatlarni taqdim etadi.</div></div>
+      <div class="ACT_TEXT lx_elem"><div id="-5954656">7. Raqamli hujjatlar ham qabul qilinadi.</div></div>
+    </div>`;
+  const index = buildAnchorIndexFromHtml(html, 'https://lex.uz/docs/-5953883');
+  assert.strictEqual(index['band:7'], '-5954624');
+});
+
 test('the resolver accepts only HTTPS Lex.uz documents', () => {
   assert.strictEqual(normalizeSourceUrl('https://lex.uz/uz/docs/6257288#old'), 'https://lex.uz/uz/docs/6257288');
   assert.strictEqual(normalizeSourceUrl('http://lex.uz/docs/6257288'), '');
@@ -127,9 +148,30 @@ test('older dashboard citations use the exact-anchor compatibility resolver', ()
   const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
   const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
   assert.match(server, /app\.get\('\/api\/lex-anchor'/u);
-  assert.match(dashboard, /const exactUrl = '\/api\/lex-anchor\?url='/u);
-  assert.match(dashboard, /partNum \? '&part='/u);
+  assert.match(dashboard, /return '\/api\/lex-anchor\?url=' \+ encodeURIComponent\(sourceUrl\)/u);
+  assert.match(dashboard, /partNumber \? '&part='/u);
+  assert.match(dashboard, /function autoLinkBareLexUrls\(html\)/u);
+  assert.match(dashboard, /&type=/u);
+  assert.match(dashboard, /class="legal-source-url"/u);
   assert.doesNotMatch(dashboard, /url \+= '#:~:text='/u);
+});
+
+test('dashboard renders the cited provision and bare Manba URL as exact links', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+  const start = dashboard.indexOf('const LAW_CITATION_MAP');
+  const end = dashboard.indexOf('function simpleMarkdown', start);
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(`${dashboard.slice(start, end)}\nrendered = enhanceLegalLinks(\`
+    <p><strong>O'zbekiston Respublikasi Yo'l harakati qoidalari, 7-bandiga</strong> ko'ra.</p>
+    <p>Manba: https://lex.uz/docs/-5953883</p>
+    <p><strong>Ma'muriy javobgarlik to'g'risidagi kodeksning 135-moddasi</strong>.</p>
+    <p>Manba: https://lex.uz/uz/docs/97664</p>
+  \`);`, context);
+  assert.strictEqual((context.rendered.match(/class="law-citation-link"/gu) || []).length, 2);
+  assert.strictEqual((context.rendered.match(/class="legal-source-url"/gu) || []).length, 2);
+  assert.match(context.rendered, /article=7&type=band/u);
+  assert.match(context.rendered, /article=135&type=modda/u);
 });
 
 test('post-send progress uses monochrome SVGs instead of colorful emoji', () => {

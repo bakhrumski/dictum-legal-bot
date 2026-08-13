@@ -294,7 +294,7 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   const resolvedId = requestedPart
     ? resolvedAnchors[`${articleRef}:${requestedPart}`]
     : resolvedAnchors[articleRef];
-  if (/^\d+$/u.test(String(resolvedId || ''))) {
+  if (/^-?\d+$/u.test(String(resolvedId || ''))) {
     return `${baseUrl}#${resolvedId}`;
   }
   const elementId = String(
@@ -304,7 +304,7 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
 
   // A child anchor is exact only when it represents the requested qism. An
   // article may contain several qism references in one answer.
-  if (/^\d+$/u.test(elementId) && (!requestedPart || (chunkPart && requestedPart === chunkPart))) {
+  if (/^-?\d+$/u.test(elementId) && (!requestedPart || (chunkPart && requestedPart === chunkPart))) {
     return `${baseUrl}#${elementId}`;
   }
 

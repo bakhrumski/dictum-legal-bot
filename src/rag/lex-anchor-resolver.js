@@ -11,6 +11,7 @@
 
 const { httpGet } = require('./fetch-lex');
 const { parseLexStructured } = require('./structural-chunker');
+const cheerio = require('cheerio');
 const {
   extractAnalysisSection,
   normalizeArticleRef,
@@ -21,6 +22,7 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_CACHE_ENTRIES = 40;
 const anchorCache = new Map();
+const LEX_ELEMENT_ID_RX = /^-?\d+$/u;
 
 function normalizeSourceUrl(value = '') {
   const raw = String(value || '').split('#')[0].trim();
@@ -40,17 +42,32 @@ function buildAnchorIndexFromHtml(html, sourceUrl) {
   for (const article of parsed.articles || []) {
     const articleRef = normalizeArticleRef(article.articleNumber);
     if (!articleRef) continue;
-    if (/^\d+$/u.test(String(article.lexElementId || ''))) {
+    if (LEX_ELEMENT_ID_RX.test(String(article.lexElementId || ''))) {
       index[articleRef] = String(article.lexElementId);
     }
     for (const part of article.parts || []) {
       const partNumber = String(part.partNumber || '').match(/\d+/u)?.[0] || '';
       const elementId = String(part.lexElementId || '');
-      if (partNumber && /^\d+$/u.test(elementId)) {
+      if (partNumber && LEX_ELEMENT_ID_RX.test(elementId)) {
         index[`${articleRef}:${partNumber}`] = elementId;
       }
     }
   }
+
+  // Regulations such as the Yo'l harakati qoidalari are organized as bands,
+  // not "modda" articles. Lex.uz renders each numbered band as an ACT_TEXT
+  // element whose visible text begins with "7." and whose stable DOM id may be
+  // negative (for example #-5954624). Index those locators independently.
+  const $ = cheerio.load(html);
+  $('#divCont > div.ACT_TEXT.lx_elem').each((_, element) => {
+    const row = $(element);
+    const content = row.find('> a[id], > div[id]').last();
+    const elementId = String(content.attr('id') || '');
+    if (!LEX_ELEMENT_ID_RX.test(elementId)) return;
+    const text = content.text().replace(/\s+/gu, ' ').trim();
+    const match = text.match(/^(\d{1,4})\.\s+/u);
+    if (match && !index[`band:${match[1]}`]) index[`band:${match[1]}`] = elementId;
+  });
   return index;
 }
 
@@ -90,14 +107,17 @@ async function fetchAnchorIndex(sourceUrl) {
   }
 }
 
-async function resolveLexAnchorUrl(sourceUrl, articleRef, partNumber = '') {
+async function resolveLexAnchorUrl(sourceUrl, articleRef, partNumber = '', locatorType = 'modda') {
   const baseUrl = normalizeSourceUrl(sourceUrl);
   const ref = normalizeArticleRef(articleRef);
   const part = String(partNumber || '').match(/\d+/u)?.[0] || '';
   if (!baseUrl || !ref) return '';
   const index = await fetchAnchorIndex(baseUrl);
-  const id = (part && index[`${ref}:${part}`]) || index[ref] || '';
-  return /^\d+$/u.test(String(id)) ? `${baseUrl}#${id}` : '';
+  const type = String(locatorType || '').toLowerCase() === 'band' ? 'band' : 'modda';
+  const id = type === 'band'
+    ? index[`band:${ref}`]
+    : ((part && index[`${ref}:${part}`]) || index[ref] || '');
+  return LEX_ELEMENT_ID_RX.test(String(id || '')) ? `${baseUrl}#${id}` : '';
 }
 
 /**
