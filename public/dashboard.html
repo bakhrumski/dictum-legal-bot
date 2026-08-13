@@ -1408,7 +1408,16 @@
             color: var(--text-secondary);
             font-style: italic;
             opacity: 0.85;
+            display: flex;
+            align-items: center;
+            gap: 9px;
             animation: aiStatusPulse 1.4s ease-in-out infinite;
+        }
+        .ai-stream-status-icon {
+            width: 17px;
+            height: 17px;
+            flex: 0 0 17px;
+            color: currentColor;
         }
         @keyframes aiStatusPulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
         .ai-analysis-content {
@@ -10431,14 +10440,14 @@
          */
         function autoLinkCitations(html) {
             // Pattern: [Law Name][,]? [number]-modda (or moddasi)
-            const citationRegex = /(?:^|\b)((?:Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Ma'muriy javobgarlik|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma'muriy sud ishlarini yuritish|Ma'muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJTK|MJK|IPK|FPK|JPK|MSIK|MSK))(?:\s*,?\s*)(\d+)(?:\s*-\s*modda(?:si)?)/gi;
+            const citationRegex = /(?:^|\b)((?:Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Ma'muriy javobgarlik|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma'muriy sud ishlarini yuritish|Ma'muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJTK|MJK|IPK|FPK|JPK|MSIK|MSK))(?:\s*,?\s*)(\d+)(?:\s*-\s*modda(?:si)?)(?:\s*,?\s*(\d+)\s*-\s*qism(?:i|iga|ga|da|dan)?)?/gi;
 
             // Server-generated answers already contain exact clause links.
             // Never wrap their <a> elements a second time; apply this legacy
             // fallback only to plain text in older saved conversations.
             return html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/gi).map(function(segment) {
                 if (/^<a\b/i.test(segment)) return segment;
-                return segment.replace(citationRegex, function(match, lawName, articleNum) {
+                return segment.replace(citationRegex, function(match, lawName, articleNum, partNum) {
                 const key = lawName.toLowerCase().trim();
                 const lawInfo = LAW_CITATION_MAP[key];
                 if (lawInfo) {
@@ -10450,8 +10459,16 @@
                     if ((key === 'fuqarolik kodeksi' || key === 'fk') && parseInt(articleNum, 10) >= 386) {
                         url = 'https://lex.uz/docs/-180552';
                     }
-                    url += '#:~:text=' + encodeURIComponent(articleNum + '-modda');
-                    return `<a href="${url}" target="_blank" rel="noopener" class="law-citation-link">${lawInfo.name}, ${articleNum}-modda</a>`;
+                    // Older saved conversations do not contain Lex.uz's stable
+                    // numeric element ID. Resolve it server-side on click; a
+                    // text fragment is not reliable on Lex.uz and can leave the
+                    // reader at the document root.
+                    const exactUrl = '/api/lex-anchor?url=' + encodeURIComponent(url)
+                        + '&article=' + encodeURIComponent(articleNum)
+                        + (partNum ? '&part=' + encodeURIComponent(partNum) : '');
+                    const citationLabel = lawInfo.name + ', ' + articleNum + '-modda'
+                        + (partNum ? ', ' + partNum + '-qism' : '');
+                    return `<a href="${exactUrl}" target="_blank" rel="noopener" class="law-citation-link">${citationLabel}</a>`;
                 }
                 return match;
                 });
@@ -12994,7 +13011,7 @@
                             // with a concrete step so the wait feels alive.
                             var live = ensureLive();
                             live.classList.add('ai-stream-status');
-                            live.textContent = ev.text || '';
+                            live.innerHTML = streamStatusMarkup(ev.kind, ev.text || '');
                             messagesEl.scrollTop = messagesEl.scrollHeight;
                         } else if (ev.type === 'status_clear') {
                             if (liveEl) { liveEl.classList.remove('ai-stream-status'); liveEl.textContent = ''; }
@@ -14148,6 +14165,17 @@
                     } else { tabBadge.style.display = 'none'; }
                 }
             } catch (e) {}
+        }
+
+        // One monochrome icon family for every post-send progress step. SVGs
+        // inherit the text color in light/dark mode and avoid colorful emoji.
+        function streamStatusMarkup(kind, text) {
+            var icons = {
+                search: '<svg class="ai-stream-status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>',
+                sources: '<svg class="ai-stream-status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M15 3v4h4"></path><path d="M9 11h6M9 15h6"></path></svg>',
+                compose: '<svg class="ai-stream-status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16z"></path><path d="m13.5 6.5 4 4"></path></svg>'
+            };
+            return (icons[kind] || icons.compose) + '<span>' + escapeHtml(text) + '</span>';
         }
 
         function openManagementSection(sectionId, loader, forceOpen) {

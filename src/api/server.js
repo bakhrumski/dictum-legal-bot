@@ -30,6 +30,7 @@ const {
   buildLexDeepLink,
   linkCitationsInMarkdown,
 } = require('../rag/citation-utils');
+const { hydrateLexAnchors, resolveLexAnchorUrl } = require('../rag/lex-anchor-resolver');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { correctiveFilter } = require('../rag/corrective');
@@ -230,7 +231,6 @@ if (WEBHOOK_DOMAIN) {
 
 // Health check endpoint for Railway
 app.get('/health', (req, res) => res.status(200).send('OK'));
-
 
 // Render/Railway terminate TLS at a proxy — trust exactly one hop so
 // req.secure, secure cookies, and rate-limit client IPs all work correctly.
@@ -3564,6 +3564,21 @@ async function callOpenAI(messages, options = {}) {
     }) || 0 } };
 }
 
+// Compatibility redirect for citations in conversations saved before stable
+// Lex element IDs were included in API responses. Keeping it authenticated
+// prevents third parties from using JuristAI as a Lex.uz fetch proxy; strict
+// host validation also prevents open redirects and arbitrary URL requests.
+app.get('/api/lex-anchor', requireAuth, async (req, res) => {
+  try {
+    const target = await resolveLexAnchorUrl(req.query.url, req.query.article, req.query.part);
+    if (!target) return res.status(404).send('Lex.uz moddasi topilmadi');
+    return res.redirect(302, target);
+  } catch (error) {
+    console.warn('[LEX-ANCHOR] Redirect resolution failed:', error.message);
+    return res.status(502).send('Lex.uz bandini hozir aniqlab bo\'lmadi');
+  }
+});
+
 
 
 
@@ -3690,6 +3705,7 @@ try {
     getAttorneyContact: revealAttorneyContactAfterConsent,
     recordAgentEvent: recordTelegramAgentEvent,
     runShadowEvaluation: runHermesShadow,
+    hydrateLexAnchors,
     chatModel: MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
   });
@@ -5752,7 +5768,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       // headers + first frame immediately (Render's front proxy can hold small
       // responses); harmless to the client SSE parser (lines starting with ':').
       res.write(':' + ' '.repeat(2048) + '\n\n');
-      sse({ type: 'status', text: '🔍 Qonunlar qidirilmoqda...' });
+      sse({ type: 'status', kind: 'search', text: 'Qonunlar qidirilmoqda...' });
     }
     // Optional attached-document text (OCR/PDF extract from the composer). When
     // present we give it to the model as context AND skip the verified-QA
@@ -5954,7 +5970,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       && (!Array.isArray(history) || history.length === 0);
     const cacheKey = cacheable
       ? require('crypto').createHash('sha256')
-          .update((topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          .update('exact-lex-anchor-v1|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
           .digest('hex')
       : null;
     if (cacheKey) {
@@ -5986,7 +6002,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     }
 
     // RAG retrieval: fetch relevant legal chunks for the user's query
-    if (sse) sse({ type: 'status', text: '📚 Manbalar tahlil qilinmoqda...' });
+    if (sse) sse({ type: 'status', kind: 'sources', text: 'Manbalar tahlil qilinmoqda...' });
     let ragContext = '';
     let ragMeta = null;
     let ragChunks = [];
@@ -6093,7 +6109,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         sse({ type: 'replace', text: displayReply });
       }
     } else if (wantStream) {
-      sse({ type: 'status', text: '✍️ Javob tayyorlanmoqda...' });
+      sse({ type: 'status', kind: 'compose', text: 'Javob tayyorlanmoqda...' });
       let firstToken = true;
       const emit = (t) => { if (firstToken) { sse({ type: 'status_clear' }); firstToken = false; } sse({ type: 'token', t }); };
       const streamOpts = { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' };
@@ -6169,9 +6185,11 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       ragMeta = Object.assign({}, ragMeta || {}, { citationCheck });
     }
 
-    // Append Manbalar footer with lex.uz Text Fragment links for lawyer citation
-    // verification — opened in the language the user asked in.
+    // Resolve Lex.uz's stable article/qism element IDs before linking inline
+    // citations and the Manbalar footer. This opens the exact provision rather
+    // than merely loading the legal document at its first page.
     const citationLanguage = lexLangForText(message);
+    await hydrateLexAnchors(ragChunks, displayReply);
     displayReply = linkCitationsInMarkdown(displayReply, ragChunks, citationLanguage);
     const manbalarFooter = buildManbalarFooter(ragChunks, displayReply, citationLanguage);
     if (manbalarFooter) displayReply += manbalarFooter;

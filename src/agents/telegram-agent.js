@@ -525,6 +525,8 @@ TELEGRAM FORMATI (majburiy):
     console.log(`[TG-AGENT] low confidence — chunks=${chunks.length} unverified=[${unverified.join(', ')}]`);
   }
 
+  if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, text);
+
   return {
     text: linkCitationsInMarkdown(text, chunks, 'uz'),
     confidence,
