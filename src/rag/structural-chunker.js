@@ -77,6 +77,7 @@ const SECTION_RU = /^(?:РАЗДЕЛ|ЧАСТЬ)\s+([IVXLC\d]+)/im;
  * @property {string} chapter          - parent chapter name
  * @property {string} section          - parent section name
  * @property {string[]} references     - cross-referenced article numbers
+ * @property {string} lexElementId     - stable Lex.uz DOM anchor for the article
  */
 
 /**
@@ -85,6 +86,7 @@ const SECTION_RU = /^(?:РАЗДЕЛ|ЧАСТЬ)\s+([IVXLC\d]+)/im;
  * @property {string} partType         - "qism" | "band" | "clause" | "paragraph"
  * @property {string} text             - part text content
  * @property {string[]} listItems      - items from <ul>/<ol> if present
+ * @property {string} lexElementId     - stable Lex.uz DOM anchor for this part
  */
 
 /**
@@ -167,15 +169,43 @@ function parseLexStructured(html, sourceUrl) {
   let currentSection = '';
   let currentArticle = null;
   let bodyBuffer = [];
+  let bodyElements = [];
 
   function flushArticle() {
     if (!currentArticle) return;
 
     currentArticle.fullText = bodyBuffer.join('\n').trim();
-    currentArticle.parts = splitIntoParts(currentArticle.fullText);
+    let parsedParts = splitIntoParts(currentArticle.fullText);
+
+    // Lex.uz assigns a stable id to every ACT_TEXT paragraph. Uzbek statutes
+    // commonly express qismlar as consecutive paragraphs without printing
+    // "1-qism", "2-qism" in the body. Preserve that structure explicitly so
+    // citations can land on the exact qism rather than merely the article.
+    if (bodyElements.length > 0 && parsedParts.length <= 1) {
+      parsedParts = bodyElements.map((entry, index) => ({
+        partNumber: String(index + 1),
+        partType: 'qism',
+        text: entry.text,
+        listItems: entry.listItems || [],
+        lexElementId: entry.lexElementId || '',
+      }));
+    } else if (bodyElements.length > 0) {
+      // Explicitly numbered clauses were split from the combined text. Match
+      // each one back to its originating Lex.uz element id.
+      for (const part of parsedParts) {
+        const needle = cleanText(part.text).slice(0, 80);
+        const match = bodyElements.find(entry => {
+          const haystack = cleanText(entry.text);
+          return needle && (haystack.includes(needle) || needle.includes(haystack.slice(0, 80)));
+        });
+        part.lexElementId = match ? match.lexElementId : '';
+      }
+    }
+    currentArticle.parts = parsedParts;
     currentArticle.references = extractReferences(currentArticle.fullText);
     articles.push(currentArticle);
     bodyBuffer = [];
+    bodyElements = [];
     currentArticle = null;
   }
 
@@ -231,6 +261,7 @@ function parseLexStructured(html, sourceUrl) {
       currentArticle = {
         articleNumber,
         articleTitle: text,
+        lexElementId: String(anchor.attr('id') || ''),
         fullText: '',
         parts: [],
         chapter: currentChapter,
@@ -242,10 +273,16 @@ function parseLexStructured(html, sourceUrl) {
 
     // ── Body text (ACT_TEXT) ──
     if (classes.includes('ACT_TEXT')) {
+      const bodyText = listItems.length > 0 ? listItems.join('\n') : text;
+      bodyElements.push({
+        text: bodyText,
+        listItems,
+        lexElementId: String(anchor.attr('id') || ''),
+      });
       if (listItems.length > 0) {
-        bodyBuffer.push(listItems.join('\n'));
+        bodyBuffer.push(bodyText);
       } else {
-        bodyBuffer.push(text);
+        bodyBuffer.push(bodyText);
       }
       return;
     }
@@ -411,6 +448,7 @@ function chunkByArticle(articles, docMeta = {}) {
           articleTitle: article.articleTitle,
           partNumber: null,
           partType: 'article',
+          lexElementId: article.lexElementId || '',
           chapter: article.chapter,
           section: article.section,
           references: article.references,
@@ -419,7 +457,7 @@ function chunkByArticle(articles, docMeta = {}) {
     }
 
     // ── CHILD CHUNKS: individual parts/clauses ──
-    if (article.parts.length > 1) {
+    if (article.parts.length > 0) {
       for (const part of article.parts) {
         if (part.partType === 'preamble' && part.text.length < 50) continue;
 
@@ -437,6 +475,7 @@ function chunkByArticle(articles, docMeta = {}) {
             articleTitle: article.articleTitle,
             partNumber: part.partNumber,
             partType: part.partType,
+            lexElementId: part.lexElementId || article.lexElementId || '',
             chapter: article.chapter,
             section: article.section,
             references: article.references,

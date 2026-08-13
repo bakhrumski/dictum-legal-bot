@@ -49,6 +49,7 @@ async function initLegalCorpus() {
         -- Article-level metadata
         article_numbers TEXT[],
         chapter TEXT,
+        lex_element_id VARCHAR(40),
 
         -- Document validity
         enforcement_date DATE,
@@ -76,6 +77,7 @@ async function initLegalCorpus() {
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS verified_by INTEGER`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS language VARCHAR(5) DEFAULT 'ru'`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS search_text TEXT`);
+    await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS lex_element_id VARCHAR(40)`);
     // Phase 1: document-level metadata for zero-hallucination grounding
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS status_label TEXT`);
@@ -412,6 +414,7 @@ async function denseSearchByEmbedding(embeddingStr, opts = {}) {
       document_number,
       article_number_display,
       part_number,
+      lex_element_id,
       is_active,
       1 - (embedding <=> $1::vector) AS vector_score
     FROM legal_chunks
@@ -465,6 +468,7 @@ async function keywordSearch(query, opts = {}) {
         lc.document_number,
         lc.article_number_display,
         lc.part_number,
+        lc.lex_element_id,
         lc.is_active,
         COALESCE(ts_rank_cd(lc.tsv, to_tsquery('simple', $1)), 0) AS keyword_score,
         CASE
@@ -761,6 +765,7 @@ async function textOnlySearch(query, opts = {}) {
         document_number,
         article_number_display,
         part_number,
+        lex_element_id,
         is_active,
         0.15 + CASE WHEN source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score,
         0 AS keyword_score,
@@ -1198,6 +1203,7 @@ async function exactMatchSearch(query, opts = {}) {
       document_number,
       article_number_display,
       part_number,
+      lex_element_id,
       is_active,
       0.8 + CASE WHEN source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score
     FROM legal_chunks
@@ -1245,7 +1251,7 @@ async function articleNumberSearch(articleNums, opts = {}) {
     SELECT
       id, law_name, chunk_text, article_numbers, chapter, source_url, category,
       source_type, language, verified_by, adoption_date, document_number,
-      article_number_display, part_number, is_active,
+      article_number_display, part_number, lex_element_id, is_active,
       0.95 + CASE WHEN source_type = 'verified_qa' THEN 0.05 ELSE 0 END AS score
     FROM legal_chunks
     WHERE ${extra.join(' AND ')} AND ${whereClause}
