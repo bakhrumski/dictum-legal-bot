@@ -34,6 +34,10 @@ const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
 const LEGAL_BOT_AUTH_FALLBACK_ENABLED = false;
 const PAID_ANSWER_STARS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_STARS || '1', 10) || 1);
 const PAID_ANSWER_CREDITS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_CREDITS || '4', 10) || 4);
+const parsedTelegramFreeLimit = Number.parseInt(process.env.AGENT_FREE_AI_LIMIT || '3', 10);
+const TELEGRAM_FREE_AI_LIMIT = Number.isFinite(parsedTelegramFreeLimit) && parsedTelegramFreeLimit >= 0
+  ? parsedTelegramFreeLimit
+  : 3;
 const ANSWER_INVOICE_PREFIX = 'juristai_answers_v1';
 const TELEGRAM_TOPIC_CATEGORIES = Object.freeze({
   konstitutsiya: 'Konstitutsiyaviy tuzum',
@@ -796,7 +800,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     } catch(e) { console.error('[Bot bare-start]', e.message); }
   }
 
-  let freeAiLimit = 1;
+  let freeAiLimit = TELEGRAM_FREE_AI_LIMIT;
   try {
     const telegramAgent = require('../agents/telegram-agent');
     freeAiLimit = telegramAgent.FREE_AI_LIMIT;
@@ -819,7 +823,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
 
 JuristAIga xush kelibsiz. Men inson yurist emasman — O'zbekiston qonunchiligi bo'yicha ma'lumot beruvchi AI yordamchiman.
 
-📝 Huquqiy vaziyatingizni matn shaklida yozing. Har bir Telegram foydalanuvchisi ${freeAiLimit} ta AI huquqiy javobni bepul oladi. Keyingi javoblar obunasiz, bir martalik Telegram Stars to'lovi bilan olinadi.
+📝 Huquqiy vaziyatingizni matn shaklida yozing. Har kuni ${freeAiLimit} ta AI huquqiy javobni bepul olasiz. Keyingi javoblar obunasiz, bir martalik Telegram Stars to'lovi bilan olinadi.
 
 Salomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.
 
@@ -840,7 +844,7 @@ bot.onText(/\/help/, (msg) => {
 
 1. /start orqali xizmat turini tanlang.
 2. Huquqiy vaziyatingizni matn shaklida yozing.
-3. Bitta AI huquqiy javob bepul. Keyingi javoblar Telegram Stars orqali bir martalik to'lov bilan olinadi; obuna yo'q.
+3. Har kuni ${TELEGRAM_FREE_AI_LIMIT} ta AI huquqiy javob bepul. Keyingi javoblar Telegram Stars orqali bir martalik to'lov bilan olinadi; obuna yo'q.
 4. Salomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar cheklanmagan.
 
 /stats — faol foydalanuvchilar soni
@@ -873,8 +877,10 @@ bot.onText(/\/balance/, async (msg) => {
   try {
     await telegramEconomy.recordTelegramActivity(msg.chat.id);
     const credits = await telegramEconomy.getPaidAnswerCredits(msg.chat.id);
+    const daily = await telegramEconomy.getAnswerEntitlementStatus(msg.chat.id, TELEGRAM_FREE_AI_LIMIT);
+    const pendingLine = daily.pending ? '\nHozir bitta huquqiy javob tayyorlanmoqda.' : '';
     await bot.sendMessage(msg.chat.id,
-      `Qo'shimcha huquqiy javob kreditlaringiz: ${credits}.\n\nBepul javob ishlatilgandan keyin har bir AI huquqiy javob bitta kredit sarflaydi.`
+      `Bugungi bepul AI huquqiy javoblar: ${daily.freeRemaining}/${daily.limit}.\nQo'shimcha huquqiy javob kreditlari: ${credits}.${pendingLine}\n\nBepul kunlik limit tugagandan keyin har bir AI huquqiy javob bitta kredit sarflaydi.`
     );
   } catch (error) {
     console.error('[BOT] /balance failed:', error.message);

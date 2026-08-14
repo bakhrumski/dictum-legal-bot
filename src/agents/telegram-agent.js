@@ -69,10 +69,9 @@ function isReady() { return !!(D && D.callAI && D.retrieveLegalContext); }
 const AUTO_ANSWER      = process.env.AGENT_AUTO_ANSWER !== 'false';   // master switch
 const ESCALATE_WEAK    = process.env.AGENT_ESCALATE_WEAK !== 'false'; // hand low-confidence to humans
 const MAX_CLARIFY      = parseInt(process.env.AGENT_MAX_CLARIFY, 10) || 2;
-const parsedFreeLimit  = Number.parseInt(process.env.AGENT_FREE_AI_LIMIT || '1', 10);
-const FREE_AI_LIMIT    = Number.isFinite(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 1;
-// Backwards-compatible export name used by bot.js. The entitlement is now a
-// lifetime allowance, not a daily allowance.
+const parsedFreeLimit  = Number.parseInt(process.env.AGENT_FREE_AI_LIMIT || '3', 10);
+const FREE_AI_LIMIT    = Number.isFinite(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 3;
+// Backwards-compatible export name used by bot.js.
 const DAILY_AI_LIMIT   = FREE_AI_LIMIT;
 const HISTORY_TURNS    = 8;
 const HISTORY_TTL_H    = 48;
@@ -110,7 +109,7 @@ async function ensureTable() {
   _tableReady = true;
 }
 
-/** Atomically reserve the lifetime-free answer or a purchased answer credit. */
+/** Atomically reserve one of today's free answers or a purchased answer credit. */
 async function claimDailyAiAnswer(chatId) {
   try {
     return await telegramEconomy.claimAnswerEntitlement(chatId, FREE_AI_LIMIT);
@@ -574,21 +573,30 @@ async function handleUserMessage({ chatId, text, firstName = '' }) {
   const started = Date.now();
   const { turns, clarifyCount, mode, state, context } = await loadConversation(chatId);
 
-  const paymentRequired = (status = {}) => status.pending ? ({
-    handled: true,
-    reply: `Oldingi huquqiy savolingiz uchun javob hali tayyorlanmoqda. Javob yuborilguncha savolni qayta jo'natmang.
+  const paymentRequired = (status = {}) => {
+    if (status.pending) {
+      return {
+        handled: true,
+        reply: `Oldingi huquqiy savolingiz uchun javob hali tayyorlanmoqda. Javob yuborilguncha savolni qayta jo'natmang.
 
 Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
-    action: 'answer_pending',
-    escalate: false,
-    meta: { intent: 'huquqiy_savol', reservationPending: true },
-  }) : ({
-    handled: true,
-    reply: `Bitta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi huquqiy javobni bir martalik to'lov bilan olishingiz mumkin.\n\nSalomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.`,
-    action: 'quota_exceeded',
-    escalate: false,
-    meta: { intent: 'huquqiy_savol', freeLimit: FREE_AI_LIMIT, paidCredits: status.paidCredits || 0 },
-  });
+        action: 'answer_pending',
+        escalate: false,
+        meta: { intent: 'huquqiy_savol', reservationPending: true },
+      };
+    }
+    const reportedLimit = Number(status.limit);
+    const dailyLimit = Number.isFinite(reportedLimit) && reportedLimit >= 0
+      ? reportedLimit
+      : FREE_AI_LIMIT;
+    return {
+      handled: true,
+      reply: `Bugungi ${dailyLimit} ta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi huquqiy javobni bir martalik to'lov bilan olishingiz mumkin.\n\nBepul limit Toshkent vaqti bilan soat 00:00 da yangilanadi. Salomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.`,
+      action: 'quota_exceeded',
+      escalate: false,
+      meta: { intent: 'huquqiy_savol', freeLimit: dailyLimit, paidCredits: status.paidCredits || 0 },
+    };
+  };
 
   // Master Admin can pause automation for an individual conversation. The
   // bot still records the message in the normal request queue, but it does not
@@ -1114,7 +1122,9 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
 
   const allowance = quota.source === 'paid'
     ? `\n\n🎟 Pullik javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`
-    : `\n\n🎁 Bepul huquqiy javobingizdan foydalandingiz. Keyingi javoblar bir martalik to'lov orqali olinadi.`;
+    : quota.remaining > 0
+      ? `\n\n🎁 Bugun yana ${quota.remaining} ta bepul AI huquqiy javobingiz qoldi.`
+      : `\n\n🎁 Bugungi ${quota.limit || FREE_AI_LIMIT} ta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi javobni bir martalik to'lov bilan olishingiz mumkin; bepul limit Toshkent vaqti bilan soat 00:00 da yangilanadi.`;
   const reply = answer.text + answer.sources + banner + DISCLAIMER + allowance;
 
   await remember(answer.text, 0);

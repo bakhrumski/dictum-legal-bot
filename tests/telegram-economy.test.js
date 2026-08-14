@@ -6,15 +6,20 @@ const path = require('path');
 const fs = require('fs');
 
 const state = {
-  free: 0,
+  currentDay: '2026-08-14',
+  freeByDay: new Map(),
   credits: 0,
   payments: new Set(),
   activity: new Map(),
   reservations: new Map(),
 };
 
+const freeKey = (chatId, day = state.currentDay) => `${day}:${chatId}`;
+const getFree = (chatId, day = state.currentDay) => state.freeByDay.get(freeKey(chatId, day)) || 0;
+const setFree = (chatId, value, day = state.currentDay) => state.freeByDay.set(freeKey(chatId, day), value);
+
 function query(sql, params = []) {
-  if (/CREATE TABLE|INSERT INTO tg_agent_free_usage[\s\S]*SELECT chat_id|INSERT INTO tg_bot_daily_activity[\s\S]*SELECT/i.test(sql)) return { rows: [] };
+  if (/CREATE TABLE|CREATE UNIQUE INDEX|ALTER TABLE|INSERT INTO tg_bot_daily_activity[\s\S]*SELECT/i.test(sql)) return { rows: [] };
   if (/BEGIN|COMMIT|ROLLBACK|pg_advisory_xact_lock/i.test(sql)) return { rows: [] };
   if (/UPDATE tg_agent_free_usage\s+usage/i.test(sql)) return { rows: [] };
   if (/UPDATE tg_answer_reservations/i.test(sql) && /created_at\s*</i.test(sql)) {
@@ -26,7 +31,7 @@ function query(sql, params = []) {
       if (chatId !== null && reservation.chatId !== chatId) continue;
       if (Date.now() - reservation.createdAt < ttlMs) continue;
       reservation.status = 'released';
-      rows.push({ reservation_id: reservation.id, chat_id: reservation.chatId, source: reservation.source });
+      rows.push({ reservation_id: reservation.id, chat_id: reservation.chatId, source: reservation.source, usage_day: reservation.usageDay });
     }
     return { rows };
   }
@@ -39,6 +44,7 @@ function query(sql, params = []) {
     const reservation = {
       id: String(params[0]), chatId: String(params[1]),
       source: /'paid'/i.test(sql) ? 'paid' : 'free',
+      usageDay: /usage_day/i.test(sql) && !/'paid'/i.test(sql) ? state.currentDay : null,
       status: 'pending', createdAt: Date.now(),
     };
     state.reservations.set(reservation.id, reservation);
@@ -54,23 +60,28 @@ function query(sql, params = []) {
     const reservation = state.reservations.get(String(params[0]));
     if (!reservation || reservation.chatId !== String(params[1]) || reservation.status !== 'pending') return { rows: [] };
     reservation.status = 'released';
-    return { rows: [{ source: reservation.source }] };
+    return { rows: [{ source: reservation.source, usage_day: reservation.usageDay }] };
   }
   if (/AS\s+free_used/i.test(sql) && /AS\s+paid_credits/i.test(sql)) {
     const chatId = String(params[0]);
     const pending = Array.from(state.reservations.values()).some(r => r.chatId === chatId && r.status === 'pending');
-    return { rows: [{ free_used: state.free, paid_credits: state.credits, answer_pending: pending }] };
+    return { rows: [{ free_used: getFree(chatId), paid_credits: state.credits, answer_pending: pending }] };
   }
-  if (/INSERT INTO tg_agent_free_usage/i.test(sql)) {
+  if (/INSERT INTO tg_agent_daily_free_usage/i.test(sql)) {
+    const chatId = String(params[0]);
     const limit = Number(params[1]) || 0;
-    if (state.free >= limit) return { rows: [] };
-    state.free++;
-    return { rows: [{ free_answers: state.free }] };
+    const used = getFree(chatId);
+    if (used >= limit) return { rows: [] };
+    setFree(chatId, used + 1);
+    return { rows: [{ free_answers: used + 1 }] };
   }
-  if (/UPDATE tg_agent_free_usage/i.test(sql)) {
-    state.free = Math.max(0, state.free - 1);
+  if (/UPDATE tg_agent_daily_free_usage/i.test(sql)) {
+    const chatId = String(params[0]);
+    const day = params[1] || state.currentDay;
+    setFree(chatId, Math.max(0, getFree(chatId, day) - 1), day);
     return { rows: [] };
   }
+  if (/UPDATE tg_agent_free_usage/i.test(sql)) return { rows: [] };
   if (/SELECT credits FROM tg_answer_wallets/i.test(sql)) {
     return { rows: state.credits ? [{ credits: state.credits }] : [] };
   }
@@ -124,19 +135,28 @@ Module.prototype.require = originalRequire;
 const economy = mod.exports;
 
 (async () => {
-  const first = await economy.claimAnswerEntitlement(1, 1);
+  const first = await economy.claimAnswerEntitlement(1, 3);
   assert.strictEqual(first.allowed, true);
   assert.strictEqual(first.source, 'free');
+  assert.strictEqual(first.remaining, 2);
   assert.ok(first.reservationId);
 
-  const blocked = await economy.claimAnswerEntitlement(1, 1);
+  const blocked = await economy.claimAnswerEntitlement(1, 3);
   assert.strictEqual(blocked.allowed, false);
   assert.strictEqual(blocked.pending, true, 'a simultaneous question must see the in-flight reservation');
-  const preflightPending = await economy.getAnswerEntitlementStatus(1, 1);
+  const preflightPending = await economy.getAnswerEntitlementStatus(1, 3);
   assert.strictEqual(preflightPending.pending, true);
   assert.strictEqual(await economy.finalizeAnswerEntitlement(1, first), true);
   assert.strictEqual(await economy.finalizeAnswerEntitlement(1, first), false, 'delivery finalization is idempotent');
-  const preflightBlocked = await economy.getAnswerEntitlementStatus(1, 1);
+
+  const second = await economy.claimAnswerEntitlement(1, 3);
+  assert.strictEqual(second.remaining, 1);
+  await economy.finalizeAnswerEntitlement(1, second);
+  const third = await economy.claimAnswerEntitlement(1, 3);
+  assert.strictEqual(third.remaining, 0);
+  await economy.finalizeAnswerEntitlement(1, third);
+
+  const preflightBlocked = await economy.getAnswerEntitlementStatus(1, 3);
   assert.strictEqual(preflightBlocked.allowed, false);
   assert.strictEqual(preflightBlocked.pending, false);
 
@@ -156,7 +176,7 @@ const economy = mod.exports;
   assert.strictEqual(duplicate.duplicate, true);
   assert.strictEqual(duplicate.credits, 4, 'duplicate receipt must not grant credits twice');
 
-  const paid = await economy.claimAnswerEntitlement(1, 1);
+  const paid = await economy.claimAnswerEntitlement(1, 3);
   assert.strictEqual(paid.source, 'paid');
   assert.strictEqual(paid.paidCredits, 3);
   await economy.releaseAnswerEntitlement(1, paid);
@@ -165,16 +185,21 @@ const economy = mod.exports;
   assert.strictEqual(await economy.getPaidAnswerCredits(1), 4, 'a repeated release must not double-refund');
 
   state.credits = 0;
-  state.free = 0;
-  const freeReservation = await economy.claimAnswerEntitlement(2, 1);
+  setFree('2', 0);
+  const freeReservation = await economy.claimAnswerEntitlement(2, 3);
   await economy.releaseAnswerEntitlement(2, freeReservation);
-  assert.strictEqual(state.free, 0, 'failed free answer must restore the lifetime entitlement');
+  assert.strictEqual(getFree('2'), 0, 'failed free answer must restore today\'s entitlement');
 
-  const staleReservation = await economy.claimAnswerEntitlement(3, 1);
+  const staleReservation = await economy.claimAnswerEntitlement(3, 3);
   state.reservations.get(staleReservation.reservationId).createdAt = Date.now() - (11 * 60 * 1000);
-  const restored = await economy.getAnswerEntitlementStatus(3, 1);
+  const restored = await economy.getAnswerEntitlementStatus(3, 3);
   assert.strictEqual(restored.allowed, true, 'an abandoned reservation must expire back into an available answer');
-  assert.strictEqual(state.free, 0);
+  assert.strictEqual(getFree('3'), 0);
+
+  state.currentDay = '2026-08-15';
+  const reset = await economy.getAnswerEntitlementStatus(1, 3);
+  assert.strictEqual(reset.allowed, true, 'the free allowance must reset on the next Tashkent calendar day');
+  assert.strictEqual(reset.freeRemaining, 3);
 
   await economy.recordTelegramActivity(1);
   await economy.recordTelegramActivity(1);
