@@ -33,7 +33,7 @@ const fakePool = {
       return { rows: found ? [{ reservation_id: found.id }] : [] };
     }
     if (/INSERT INTO tg_answer_reservations/i.test(sql)) {
-      const reservation = { id: String(params[0]), chatId: String(params[1]), source: /'paid'/i.test(sql) ? 'paid' : 'free', status: 'pending' };
+      const reservation = { id: String(params[0]), chatId: String(params[1]), source: /'paid'/i.test(sql) ? 'paid' : 'free', usageDay: /usage_day/i.test(sql) ? '2026-08-14' : null, status: 'pending' };
       dbState.reservations.set(reservation.id, reservation);
       return { rows: [] };
     }
@@ -47,18 +47,18 @@ const fakePool = {
       const reservation = dbState.reservations.get(String(params[0]));
       if (!reservation || reservation.status !== 'pending') return { rows: [] };
       reservation.status = 'released';
-      return { rows: [{ source: reservation.source }] };
+      return { rows: [{ source: reservation.source, usage_day: reservation.usageDay }] };
     }
     if (/SELECT\s+turns/i.test(sql)) {
       return { rows: [{ turns: dbState.turns, clarify_count: dbState.clarifyCount, mode: dbState.mode, state: dbState.state, language: 'uz', context: dbState.context }] };
     }
-    if (/INSERT INTO\s+tg_agent_free_usage/i.test(sql) && /VALUES/i.test(sql)) {
+    if (/INSERT INTO\s+tg_agent_daily_free_usage/i.test(sql) && /VALUES/i.test(sql)) {
       const limit = Number(params[1]) || 0;
       if (dbState.aiAnswers >= limit) return { rows: [] };
       dbState.aiAnswers++;
       return { rows: [{ free_answers: dbState.aiAnswers }] };
     }
-    if (/UPDATE\s+tg_agent_free_usage/i.test(sql)) {
+    if (/UPDATE\s+tg_agent_daily_free_usage/i.test(sql)) {
       dbState.aiAnswers = Math.max(0, dbState.aiAnswers - 1);
       return { rows: [] };
     }
@@ -169,7 +169,7 @@ function deps(o = {}) {
     recordAgentEvent: async () => { calls.events++; },
     claimDailyAnswer: async () => {
       calls.quota++;
-      return o.quota || { allowed: true, reservationId: '00000000-0000-4000-8000-000000000001', source: 'free', used: 1, remaining: 0, limit: 1, paidCredits: 0 };
+      return o.quota || { allowed: true, reservationId: '00000000-0000-4000-8000-000000000001', source: 'free', used: 1, remaining: 2, limit: 3, paidCredits: 0 };
     },
     releaseDailyAnswer: async () => { calls.release++; },
   };
@@ -512,7 +512,7 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/lex\.uz/.test(r.reply), 'source link missing');
     assert.ok(/#:~:text=/.test(r.reply), 'source must deep-link to the cited provision');
     assert.ok(/yuridik kuchga ega emas/.test(r.reply), 'disclaimer missing');
-    assert.ok(/Bepul huquqiy javobingizdan foydalandingiz/i.test(r.reply), 'free entitlement notice missing');
+    assert.ok(/Bugun yana 2 ta bepul AI huquqiy javobingiz qoldi/i.test(r.reply), 'daily free-answer balance missing');
     assert.strictEqual(r.meta.entitlementSource, 'free');
   });
 
@@ -616,18 +616,18 @@ function stubMemory(clarifyCount = 0) {
     assert.doesNotMatch(r.reply, /Iqtisodiy protsessual kodeksi/);
   });
 
-  await test('a second unpaid legal answer is blocked before retrieval or generation', async () => {
-    const d = deps({ quota: { allowed: false, used: 1, remaining: 0, limit: 1, paidCredits: 0 } });
+  await test('a fourth unpaid legal answer is blocked before retrieval or generation', async () => {
+    const d = deps({ quota: { allowed: false, used: 3, remaining: 0, limit: 3, paidCredits: 0 } });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat ta\'tili necha kun?' });
     assert.strictEqual(r.action, 'quota_exceeded');
-    assert.ok(/Bitta bepul AI huquqiy javobingizdan foydalandingiz/i.test(r.reply));
+    assert.ok(/Bugungi 3 ta bepul AI huquqiy javobingizdan foydalandingiz/i.test(r.reply));
     assert.strictEqual(d.calls.answer, 0, 'quota must block answer generation');
     assert.strictEqual(d.calls.korpus, 0, 'quota must block paid/verified answer work');
   });
 
   await test('an in-flight answer never shows the used-free-answer payment prompt', async () => {
-    const d = deps({ quota: { allowed: false, pending: true, used: 1, remaining: 0, limit: 1, paidCredits: 0 } });
+    const d = deps({ quota: { allowed: false, pending: true, used: 1, remaining: 2, limit: 3, paidCredits: 0 } });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat ta\'tili necha kun?' });
     assert.strictEqual(r.action, 'answer_pending');
@@ -638,7 +638,7 @@ function stubMemory(clarifyCount = 0) {
 
   await test('an exhausted user is blocked before model-based intent classification', async () => {
     stubMemory();
-    dbState.aiAnswers = 1;
+    dbState.aiAnswers = 3;
     const d = deps();
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Ishdagi murakkab vaziyat bo\'yicha nima qilaman?' });
@@ -650,14 +650,14 @@ function stubMemory(clarifyCount = 0) {
 
   await test('an exhausted user can still greet without any model or credit', async () => {
     stubMemory();
-    dbState.aiAnswers = 1;
+    dbState.aiAnswers = 3;
     const d = deps();
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Assalomu alaykum', firstName: 'Malika' });
     assert.strictEqual(r.action, 'greeting');
     assert.strictEqual(d.calls.intent, 0);
     assert.strictEqual(d.calls.answer, 0);
-    assert.strictEqual(dbState.aiAnswers, 1);
+    assert.strictEqual(dbState.aiAnswers, 3);
     stubMemory();
   });
 
@@ -671,13 +671,13 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(d.calls.shadow, 0);
   });
 
-  await test('the lifetime-free reservation is atomic and releasable', async () => {
+  await test('the daily-free reservation is atomic and releasable', async () => {
     dbState.aiAnswers = 0;
     const first = await agent.claimDailyAiAnswer(77);
     const second = await agent.claimDailyAiAnswer(77);
     assert.strictEqual(first.allowed, true);
     assert.strictEqual(first.source, 'free');
-    assert.strictEqual(first.remaining, 0);
+    assert.strictEqual(first.remaining, 2);
     assert.strictEqual(second.allowed, false);
     await agent.releaseDailyAiAnswer(77, first);
     const retry = await agent.claimDailyAiAnswer(77);
@@ -837,7 +837,8 @@ function stubMemory(clarifyCount = 0) {
   await test('/start explains AI identity, the free answer and unlimited non-token conversation', async () => {
     const botSource = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
     assert.ok(/Men inson yurist emasman/.test(botSource));
-    assert.ok(/Har bir Telegram foydalanuvchisi \$\{freeAiLimit\} ta AI huquqiy javobni bepul oladi/.test(botSource));
+    assert.ok(/Har kuni \$\{freeAiLimit\} ta AI huquqiy javobni bepul olasiz/.test(botSource));
+    assert.ok(/AGENT_FREE_AI_LIMIT \|\| '3'/.test(botSource), 'Telegram daily allowance must default to three');
     assert.ok(/bepul va cheklanmagan/.test(botSource));
     assert.ok(/callback_data: 'bot_stats'/.test(botSource), 'public anonymous user statistics must be available');
     assert.ok(/bot\.on\('pre_checkout_query'/.test(botSource), 'Telegram Stars checkout must be verified');

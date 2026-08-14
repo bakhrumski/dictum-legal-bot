@@ -3,7 +3,7 @@
 /**
  * Telegram answer entitlements, payment receipts and anonymous activity stats.
  *
- * The free entitlement is lifetime-based. Conversations, menus and
+ * The free entitlement resets at midnight in Asia/Tashkent. Conversations, menus and
  * clarification turns are deliberately not recorded here because they must
  * remain unlimited. An answer is reserved before generation, finalized only
  * after Telegram confirms delivery, and automatically restored if abandoned.
@@ -24,6 +24,15 @@ function ensureTables() {
         chat_id      BIGINT PRIMARY KEY,
         free_answers INTEGER NOT NULL DEFAULT 0 CHECK (free_answers >= 0),
         updated_at   TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tg_agent_daily_free_usage (
+        usage_day    DATE NOT NULL,
+        chat_id      BIGINT NOT NULL,
+        free_answers INTEGER NOT NULL DEFAULT 0 CHECK (free_answers >= 0),
+        updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (usage_day, chat_id)
       )
     `);
     await pool.query(`
@@ -48,6 +57,10 @@ function ensureTables() {
       CREATE UNIQUE INDEX IF NOT EXISTS tg_answer_one_pending_per_chat
         ON tg_answer_reservations (chat_id)
         WHERE status = 'pending'
+    `);
+    await pool.query(`
+      ALTER TABLE tg_answer_reservations
+        ADD COLUMN IF NOT EXISTS usage_day DATE
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tg_answer_payments (
@@ -94,48 +107,9 @@ function ensureTables() {
       if (error && error.code !== '42P01' && error.code !== '42703') throw error;
     });
 
-    // Preserve the old daily quota history when moving to one lifetime-free
-    // answer. Anyone who previously received an AI answer has already used the
-    // new free entitlement; this prevents a deployment from resetting access.
-    await pool.query(`
-      INSERT INTO tg_agent_free_usage (chat_id, free_answers, updated_at)
-      SELECT chat_id, 1, NOW()
-        FROM tg_agent_daily_usage
-       WHERE ai_answers > 0
-       GROUP BY chat_id
-      ON CONFLICT (chat_id) DO NOTHING
-    `).catch(error => {
-      // Fresh installations do not have the legacy table.
-      if (error && error.code !== '42P01') throw error;
-    });
-
-    // Repair reservations left behind by the pre-delivery accounting code.
-    // Before reservation IDs existed, a Render restart after generation but
-    // before bot.sendMessage() could consume the lifetime answer forever. A
-    // usage row with neither a delivered Telegram request nor any reservation
-    // is that legacy orphan and is safe to restore once.
-    await pool.query(`
-      UPDATE tg_agent_free_usage usage
-         SET free_answers = 0, updated_at = NOW()
-       WHERE usage.free_answers > 0
-         AND NOT EXISTS (
-           SELECT 1 FROM tg_answer_reservations reservation
-            WHERE reservation.chat_id = usage.chat_id
-         )
-         AND NOT EXISTS (
-           SELECT 1
-             FROM users u
-             JOIN requests r ON r.user_id = u.id
-            WHERE u.telegram_id = usage.chat_id
-              AND r.source_channel = 'telegram'
-              AND r.agent_action = 'answered'
-              AND COALESCE(r.response_text, '') <> ''
-         )
-    `).catch(error => {
-      // Older/fresh schemas may not have the request audit columns yet. The
-      // reservation mechanism still works; only the one-time repair is skipped.
-      if (error && !['42P01', '42703'].includes(error.code)) throw error;
-    });
+    // tg_agent_free_usage is intentionally retained for a safe rolling
+    // deployment. It held the former lifetime allowance, but new reservations
+    // use the day-keyed table exclusively, so the first new day starts cleanly.
   })().catch(error => {
     tablesReadyPromise = null;
     throw error;
@@ -166,7 +140,7 @@ async function getPaidAnswerCreditsFrom(db, chatId) {
   return result.rows.length ? Number(result.rows[0].credits) || 0 : 0;
 }
 
-async function refundReservation(db, chatId, source) {
+async function refundReservation(db, chatId, source, usageDay = null) {
   if (source === 'paid') {
     await db.query(`
       INSERT INTO tg_answer_wallets (chat_id, credits, updated_at)
@@ -177,6 +151,17 @@ async function refundReservation(db, chatId, source) {
     `, [chatId]);
     return;
   }
+  if (usageDay) {
+    await db.query(`
+      UPDATE tg_agent_daily_free_usage
+         SET free_answers = GREATEST(0, free_answers - 1), updated_at = NOW()
+       WHERE chat_id = $1 AND usage_day = $2::date
+    `, [chatId, usageDay]);
+    return;
+  }
+
+  // Compatibility for a pending reservation created by the previous
+  // lifetime-based release while a rolling deployment was in progress.
   await db.query(`
     UPDATE tg_agent_free_usage
        SET free_answers = GREATEST(0, free_answers - 1), updated_at = NOW()
@@ -192,10 +177,10 @@ async function releaseExpiredReservations(db, chatId) {
      WHERE status = 'pending'
        AND created_at < NOW() - ($1 * INTERVAL '1 millisecond')
        AND ($2::bigint IS NULL OR chat_id = $2)
-     RETURNING reservation_id, chat_id, source
+     RETURNING reservation_id, chat_id, source, usage_day
   `, [RESERVATION_TTL_MS, chatId == null ? null : chatId]);
   for (const row of expired.rows) {
-    await refundReservation(db, row.chat_id, row.source);
+    await refundReservation(db, row.chat_id, row.source, row.usage_day);
   }
   return expired.rows.length;
 }
@@ -206,14 +191,19 @@ async function getPaidAnswerCredits(chatId) {
 }
 
 /** Read-only availability check used before any model-based intent call. */
-async function getAnswerEntitlementStatus(chatId, freeLimit = 1) {
+async function getAnswerEntitlementStatus(chatId, freeLimit = 3) {
   await ensureTables();
   const safeLimit = Math.max(0, Number(freeLimit) || 0);
   return inTransaction(async client => {
     await releaseExpiredReservations(client, chatId);
     const result = await client.query(`
       SELECT
-        COALESCE((SELECT free_answers FROM tg_agent_free_usage WHERE chat_id = $1), 0)::int AS free_used,
+        COALESCE((
+          SELECT free_answers
+            FROM tg_agent_daily_free_usage
+           WHERE chat_id = $1
+             AND usage_day = timezone('Asia/Tashkent', NOW())::date
+        ), 0)::int AS free_used,
         COALESCE((SELECT credits FROM tg_answer_wallets WHERE chat_id = $1), 0)::int AS paid_credits,
         EXISTS(
           SELECT 1 FROM tg_answer_reservations
@@ -235,8 +225,8 @@ async function getAnswerEntitlementStatus(chatId, freeLimit = 1) {
   });
 }
 
-/** Atomically reserve either a lifetime-free answer or one paid credit. */
-async function claimAnswerEntitlement(chatId, freeLimit = 1) {
+/** Atomically reserve today's free answer or one paid credit. */
+async function claimAnswerEntitlement(chatId, freeLimit = 3) {
   await ensureTables();
   const safeLimit = Math.max(0, Number(freeLimit) || 0);
   return inTransaction(async client => {
@@ -260,18 +250,18 @@ async function claimAnswerEntitlement(chatId, freeLimit = 1) {
     const reservationId = crypto.randomUUID();
     if (safeLimit > 0) {
       const free = await client.query(`
-        INSERT INTO tg_agent_free_usage (chat_id, free_answers, updated_at)
-        VALUES ($1, 1, NOW())
-        ON CONFLICT (chat_id) DO UPDATE SET
-          free_answers = tg_agent_free_usage.free_answers + 1,
+        INSERT INTO tg_agent_daily_free_usage (usage_day, chat_id, free_answers, updated_at)
+        VALUES (timezone('Asia/Tashkent', NOW())::date, $1, 1, NOW())
+        ON CONFLICT (usage_day, chat_id) DO UPDATE SET
+          free_answers = tg_agent_daily_free_usage.free_answers + 1,
           updated_at = NOW()
-        WHERE tg_agent_free_usage.free_answers < $2
+        WHERE tg_agent_daily_free_usage.free_answers < $2
         RETURNING free_answers
       `, [chatId, safeLimit]);
       if (free.rows.length) {
         await client.query(`
-          INSERT INTO tg_answer_reservations (reservation_id, chat_id, source)
-          VALUES ($1, $2, 'free')
+          INSERT INTO tg_answer_reservations (reservation_id, chat_id, source, usage_day)
+          VALUES ($1, $2, 'free', timezone('Asia/Tashkent', NOW())::date)
         `, [reservationId, chatId]);
         const used = Number(free.rows[0].free_answers) || 1;
         return {
@@ -329,10 +319,10 @@ async function releaseAnswerEntitlement(chatId, reservation = {}) {
       UPDATE tg_answer_reservations
          SET status = 'released', finalized_at = NOW()
        WHERE reservation_id = $1 AND chat_id = $2 AND status = 'pending'
-       RETURNING source
+       RETURNING source, usage_day
     `, [reservation.reservationId, chatId]);
     if (!released.rows.length) return false;
-    await refundReservation(client, chatId, released.rows[0].source);
+    await refundReservation(client, chatId, released.rows[0].source, released.rows[0].usage_day);
     return true;
   });
 }
