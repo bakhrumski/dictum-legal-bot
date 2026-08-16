@@ -262,4 +262,12 @@ test('dashboard reuses drafting and verified-attorney flows for next actions', (
   assert.match(dashboard, /Aloqa ma\\'lumoti faqat aniq tanlov/u);
 });
 
+test('contextual document actions explain the details field without pre-filling the old question', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+  assert.match(dashboard, /function docFlowDetailsPlaceholder\(t\)/u);
+  assert.match(dashboard, /Qaysi majburiyat bajarilmaganini/u);
+  assert.match(dashboard, /detailsTarget\.placeholder = docFlowDetailsPlaceholder\(t\)/u);
+  assert.doesNotMatch(dashboard, /seedTarget\.value|docFlowSeedDetails/u);
+});
+
 console.log(`\n${passed} citation deep-link tests passed.\n`);
