@@ -12048,7 +12048,7 @@
             { k: 'recipient', label: 'Qabul qiluvchi / ikkinchi tomon (kimga)', ph: 'Masalan: Toshkent shahar sudi / "Beta" MChJ' },
             { k: 'dateplace', label: 'Sana va joy', ph: 'Masalan: 2026-yil 15-iyul, Toshkent' },
             { k: 'amount',    label: 'Pul miqdori (bo\'lsa)', ph: 'Masalan: 25 000 000 so\'m' },
-            { k: 'details',   label: 'Muhim shartlar va tafsilotlar', ph: 'Vaziyat, talablar, muddatlar, asoslar...', ta: true }
+            { k: 'details',   label: 'Muhim shartlar va tafsilotlar', ph: 'Nima sodir bo‘lganini, talabingizni, muhim sanalar va dalillarni yozing.', ta: true }
         ];
         function docFlowAI() {
             // Yuridik xulosa deliberately does NOT appear here. An opinion
@@ -12150,13 +12150,24 @@
         // no template exists yet for that type does it fall back to the
         // generic 5-question form above.
         var docFlowActiveFields = null;   // template fields used for the current form, or null (generic)
-        var docFlowSeedDetails = '';
-        async function docFlowPickType(t, seedDetails) {
+        async function docFlowPickType(t) {
             if (t === '__custom') { var v = prompt('Hujjat turini yozing:'); if (!v || !v.trim()) return; t = v.trim(); }
-            docFlowSeedDetails = String(seedDetails || '').trim();
             docStepCard('<div class="docflow-title">' + escapeHtml(t) + '</div><div style="padding:10px 0;color:var(--text-secondary);font-size:13px;">Yuklanmoqda…</div>');
             var tplFields = await findTemplateFieldsForType(t);
             renderDocTypeForm(t, tplFields);
+        }
+        function docFlowDetailsPlaceholder(t) {
+            var type = String(t || '').toLowerCase();
+            if (type.indexOf('talabnoma') !== -1) {
+                return "Qaysi majburiyat bajarilmaganini, nimani talab qilishingizni, summa (bo'lsa), muhim sanalar, dalillar va talabni bajarish uchun beriladigan muddatni yozing.";
+            }
+            if (type.indexOf("da'vo") !== -1) {
+                return "Nizo mazmuni, da'vo talabi, summa (bo'lsa), muhim sanalar, mavjud dalillar va suddan so'raladigan natijani yozing.";
+            }
+            if (type.indexOf('shikoyat') !== -1 || type.indexOf('apellyatsiya') !== -1) {
+                return "Qaysi qaror yoki harakatdan norozi ekaningizni, sanalar, dalillar, buzilgan huquq va so'ralayotgan natijani yozing.";
+            }
+            return "Nima sodir bo'lganini, kimlar ishtirok etganini, muhim sanalar, mavjud dalillar va qanday natija xohlayotganingizni yozing.";
         }
         async function findTemplateFieldsForType(t) {
             try {
@@ -12222,16 +12233,14 @@
                 '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowSubmit(' + attrArg(t) + ')">' + flowIcon('create') + 'Hujjatni yaratish</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowAI()">← Orqaga</button>' +
                 '</div>');
-            if (docFlowSeedDetails) {
-                var seedTarget = document.getElementById('docf_details');
-                if (!seedTarget && docFlowActiveFields) {
-                    var likely = docFlowActiveFields.find(function (f) {
-                        return f.type === 'textarea' || /vaziyat|tafsilot|mazmun|holat|talab/i.test(docbL(f.label) || f.key || '');
-                    });
-                    if (likely) seedTarget = document.getElementById('docf_' + likely.key);
-                }
-                if (seedTarget && !seedTarget.value) seedTarget.value = docFlowSeedDetails;
+            var detailsTarget = document.getElementById('docf_details');
+            if (!detailsTarget && docFlowActiveFields) {
+                var likely = docFlowActiveFields.find(function (f) {
+                    return f.type === 'textarea' || /vaziyat|tafsilot|mazmun|holat|talab/i.test(docbL(f.label) || f.key || '');
+                });
+                if (likely) detailsTarget = document.getElementById('docf_' + likely.key);
             }
+            if (detailsTarget) detailsTarget.placeholder = docFlowDetailsPlaceholder(t);
             var first = document.querySelector('#aiChatMessages .docform-input'); if (first) first.focus();
         }
         function docFlowSubmit(docType) {
@@ -13032,7 +13041,7 @@
                 return;
             }
             if (action.kind === 'document') {
-                docFlowPickType(action.documentType || 'Yuridik hujjat', group.question);
+                docFlowPickType(action.documentType || 'Yuridik hujjat');
                 return;
             }
             if (action.kind !== 'attorney') return;
