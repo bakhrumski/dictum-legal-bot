@@ -48,23 +48,53 @@ Rules:
 
 // Word-targeted HTML wrapper: Calibri 12pt body, and the mso XML block makes
 // Word open the .doc in Print Layout ("Разметка страницы") by default.
+function stripEmbeddedFonts(html) {
+  return String(html || '')
+    .replace(/\s+face\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s+style\s*=\s*(["'])([\s\S]*?)\1/gi, (full, quote, css) => {
+      const cleaned = String(css)
+        .split(';')
+        .map(rule => rule.trim())
+        .filter(Boolean)
+        .filter(rule => !/^(?:font|font-family|mso-(?:ascii|fareast|hansi|bidi)-font-family)\s*:/i.test(rule))
+        .join('; ');
+      return cleaned ? ` style=${quote}${cleaned}${quote}` : '';
+    });
+}
+
 function wrapDocumentHtml(title, bodyHtml, lang) {
+  const normalizedBody = stripEmbeddedFonts(bodyHtml);
   return `<!DOCTYPE html>
-<html lang="${lang || 'uz'}" xmlns:w="urn:schemas-microsoft-com:office:word">
+<html lang="${lang || 'uz'}" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
 <head>
-<meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="ProgId" content="Word.Document">
 <title>${title}</title>
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<!--[if gte mso 9]><xml>
+<w:WordDocument>
+  <w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/>
+  <w:Fonts><w:DefaultFonts w:Ascii="Calibri" w:Fareast="Calibri" w:H-Ansi="Calibri" w:CS="Calibri"/></w:Fonts>
+</w:WordDocument>
+</xml><![endif]-->
 <style>
   @page { size: A4; margin: 25mm 20mm; }
-  * { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-style: normal; }
-  body { color: #111; font-size: 12pt; line-height: 1.5; margin: 0; }
+  @font-face { font-family: Calibri; mso-font-alt: Arial; mso-font-charset: 0; mso-generic-font-family: swiss; mso-font-pitch: variable; }
+  html, body, p, div, span, a, h1, h2, h3, h4, h5, h6,
+  table, thead, tbody, tfoot, tr, th, td, ul, ol, li, strong, b, em, i {
+    font-family: Calibri, Arial, sans-serif !important;
+    mso-ascii-font-family: Calibri;
+    mso-fareast-font-family: Calibri;
+    mso-hansi-font-family: Calibri;
+    mso-bidi-font-family: Calibri;
+  }
+  body { color: #111; font-size: 12pt; line-height: 1.5; margin: 0; mso-ansi-language: UZ-LATIN; mso-fareast-language: EN-US; }
+  .MsoNormal, p.MsoNormal, li.MsoNormal, div.MsoNormal { margin: 0; font-size: 12pt; font-family: Calibri, Arial, sans-serif !important; mso-fareast-font-family: Calibri; }
   h1 { font-size: 14pt; } h2 { font-size: 13pt; font-weight: bold; } h3 { font-size: 12pt; font-weight: bold; }
   table { border-collapse: collapse; } td { padding: 0; } p { margin: 0 0 10pt; }
 </style>
 </head>
 <body>
-${bodyHtml}
+${normalizedBody}
 </body>
 </html>`;
 }
@@ -523,4 +553,4 @@ Rules:
   console.log('[DRAFT] Document drafting routes mounted');
 }
 
-module.exports = { mountDraftingRoutes, buildDocumentHtml };
+module.exports = { mountDraftingRoutes, buildDocumentHtml, wrapDocumentHtml, stripEmbeddedFonts };
