@@ -39,6 +39,7 @@ const PRACTICE_AREAS = [
 const SERVICE_CATALOG = [
   { slug: 'legal-document', name: 'Yuridik hujjat tayyorlash' },
   { slug: 'claim', name: "Da'vo arizasi tayyorlash" },
+  { slug: 'demand', name: 'Talabnoma tayyorlash' },
   { slug: 'complaint', name: 'Shikoyat tayyorlash' },
   { slug: 'contract', name: 'Shartnoma tayyorlash' },
   { slug: 'application', name: 'Ariza tayyorlash' },

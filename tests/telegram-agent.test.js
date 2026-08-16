@@ -514,6 +514,12 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/yuridik kuchga ega emas/.test(r.reply), 'disclaimer missing');
     assert.ok(/Bugun yana 2 ta bepul AI huquqiy javobingiz qoldi/i.test(r.reply), 'daily free-answer balance missing');
     assert.strictEqual(r.meta.entitlementSource, 'free');
+    assert.deepStrictEqual(
+      r.meta.nextActions.map(action => action.kind),
+      ['document', 'document', 'attorney', 'custom'],
+      'a completed answer must offer deterministic next steps'
+    );
+    assert.strictEqual(dbState.state, 'awaiting_next_action');
   });
 
   await test('a clarification answer retrieves the complete labor case with strict topic scope', async () => {
@@ -537,7 +543,7 @@ function stubMemory(clarifyCount = 0) {
     stubMemory();
   });
 
-  await test('Telegram Manbalar excludes retrieved laws not cited in the answer', async () => {
+  await test('Telegram uses inline named citations and no separate Manbalar footer', async () => {
     const d = deps({
       answer: 'Mehnat kodeksining 100-moddasiga ko\'ra ish beruvchi yozma buyruq berishi shart.',
       chunks: [
@@ -548,8 +554,8 @@ function stubMemory(clarifyCount = 0) {
     });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: "Ish beruvchi meni ishdan bo'shatdi." });
-    assert.match(r.reply, /Manbalar/);
-    assert.match(r.reply, /Mehnat kodeksi/);
+    assert.doesNotMatch(r.reply, /Manbalar/);
+    assert.match(r.reply, /\[\*\*Mehnat kodeksi, 100-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz/u);
     assert.doesNotMatch(r.reply, /Ma'muriy sud ishlarini yuritish kodeksi/);
     assert.doesNotMatch(r.reply, /Fuqarolik kodeksi/);
   });
@@ -569,7 +575,7 @@ function stubMemory(clarifyCount = 0) {
     assert.match(r.reply, /Oila kodeksi, 96-modda/);
   });
 
-  await test('Telegram Manbalar uses only law articles applied in Tahlil', async () => {
+  await test('Telegram links only law articles applied in Tahlil', async () => {
     const d = deps({
       topic: 'mamuriy',
       answer: [
@@ -589,11 +595,11 @@ function stubMemory(clarifyCount = 0) {
     });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: "Yo'l harakati jarimasiga qanday shikoyat qilaman?" });
-    assert.match(r.reply, /Ma'muriy javobgarlik to'g'risidagi kodeks, 128-modda/);
-    assert.doesNotMatch(r.reply, /Ma'muriy sud ishlarini yuritish kodeksi, 126-modda/);
+    assert.match(r.reply, /\[\*\*Ma'muriy javobgarlik to'g'risidagi kodeks, 128-modda, tegishli qism\*\*\]/u);
+    assert.doesNotMatch(r.reply, /\[\*\*Ma'muriy sud ishlarini yuritish kodeksi, 126-modda/u);
   });
 
-  await test('Telegram Manbalar includes every distinct article applied in Tahlil', async () => {
+  await test('Telegram links every distinct article applied in Tahlil', async () => {
     const d = deps({
       topic: 'fuqarolik',
       answer: [
@@ -611,9 +617,9 @@ function stubMemory(clarifyCount = 0) {
     });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Shartnomani qanday o\'zgartirish mumkin?' });
-    assert.match(r.reply, /Fuqarolik kodeksi, 382-modda/);
-    assert.match(r.reply, /Fuqarolik kodeksi, 384-modda/);
-    assert.doesNotMatch(r.reply, /Iqtisodiy protsessual kodeksi/);
+    assert.match(r.reply, /Fuqarolik kodeksi, 382-modda, tegishli qism/u);
+    assert.match(r.reply, /Fuqarolik kodeksi, 384-modda, tegishli qism/u);
+    assert.doesNotMatch(r.reply, /Iqtisodiy protsessual kodeksi/u);
   });
 
   await test('a fourth unpaid legal answer is blocked before retrieval or generation', async () => {

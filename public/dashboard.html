@@ -1764,6 +1764,63 @@
             opacity: 0; transition: opacity 0.15s;
         }
         .ai-msg-act:hover::after { opacity: 1; }
+        .legal-next-actions {
+            margin-top: 18px;
+            padding-top: 15px;
+            border-top: 1px solid var(--glass-border);
+        }
+        .legal-next-actions-title {
+            margin-bottom: 10px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 650;
+        }
+        .legal-next-actions-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .legal-next-action {
+            min-height: 44px;
+            padding: 10px 12px;
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text-primary);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 550;
+            line-height: 1.35;
+            text-align: left;
+            cursor: pointer;
+            transition: background .15s ease, border-color .15s ease;
+        }
+        .legal-next-action:hover,
+        .legal-next-action:focus-visible {
+            background: var(--bg-hover);
+            border-color: var(--navy-500);
+            outline: none;
+        }
+        .legal-next-action[disabled] { opacity: .55; cursor: wait; }
+        .legal-attorney-results {
+            grid-column: 1 / -1;
+            padding: 4px 0 0;
+        }
+        .legal-attorney-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 5px 12px;
+            padding: 10px 0;
+            border-top: 1px solid var(--glass-border);
+        }
+        .legal-attorney-item:first-child { border-top: 0; }
+        .legal-attorney-name { font-weight: 650; color: var(--text-primary); }
+        .legal-attorney-meta { color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
+        .legal-attorney-score { color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+        .legal-attorney-all { display: inline-block; margin-top: 8px; color: var(--navy-500); font-size: 12px; font-weight: 600; }
+        @media (max-width: 680px) {
+            .legal-next-actions-list { grid-template-columns: 1fr; }
+        }
         .ai-msg-toast {
             position: absolute; bottom: 100%; left: 0;
             padding: 5px 10px; border-radius: 7px;
@@ -10464,7 +10521,7 @@
             // Pattern: [Law Name][,]? [number]-modda/band, optionally [number]-qism.
             // Apostrophe variants are accepted because Uzbek text may come from
             // Lex.uz, Telegram, or an LLM with different Unicode punctuation.
-            const citationRegex = /((?:O['\u02BB\u02BC\u2018\u2019`\u00B4]zbekiston Respublikasi\s+)?Yo['\u02BB\u02BC\u2018\u2019`\u00B4]l harakati qoidalari|VMQ\s*-?\s*172-son qaror|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy javobgarlik(?:\s+to['\u02BB\u02BC\u2018\u2019`\u00B4]g['\u02BB\u02BC\u2018\u2019`\u00B4]risidagi kodeks(?:i|ning|ining)?)?|Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy sud ishlarini yuritish|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJTK|MJK|IPK|FPK|JPK|MSIK|MSK)(?:\s*,?\s*)(\d+)\s*-\s*(modda|band)[\p{L}'\u02BB\u02BC\u2018\u2019`\u00B4]*(?:\s*,?\s*(\d+)\s*-\s*qism[\p{L}'\u02BB\u02BC\u2018\u2019`\u00B4]*)?/giu;
+            const citationRegex = /((?:O['\u02BB\u02BC\u2018\u2019`\u00B4]zbekiston Respublikasi\s+)?Yo['\u02BB\u02BC\u2018\u2019`\u00B4]l harakati qoidalari|VMQ\s*-?\s*172-son qaror|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy javobgarlik(?:\s+to['\u02BB\u02BC\u2018\u2019`\u00B4]g['\u02BB\u02BC\u2018\u2019`\u00B4]risidagi kodeks(?:i|ning|ining)?)?|Konstitutsiya|Fuqarolik kodeksi|Mehnat kodeksi|Jinoyat kodeksi|Oila kodeksi|Soliq kodeksi|Iqtisodiy protsessual kodeks|Fuqarolik protsessual kodeks|Jinoyat-protsessual kodeks|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy sud ishlarini yuritish|Ma['\u02BB\u02BC\u2018\u2019`\u00B4]muriy sudlov|Uy-joy kodeksi|Yer kodeksi|Budjet kodeksi|Bojxona kodeksi|FK|MK|JK|OK|SK|MJTK|MJK|IPK|FPK|JPK|MSIK|MSK)(?:ning)?(?:\s*,?\s*)(\d+)\s*-\s*(modda|band)[\p{L}'\u02BB\u02BC\u2018\u2019`\u00B4]*(?:\s*,?\s*(\d+)\s*-\s*qism[\p{L}'\u02BB\u02BC\u2018\u2019`\u00B4]*)?/giu;
 
             // Server-generated answers already contain exact clause links.
             // Never wrap their <a> elements a second time; apply this legacy
@@ -10489,7 +10546,10 @@
                     // reader at the document root.
                     const type = locatorType.toLowerCase() === 'band' ? 'band' : 'modda';
                     const exactUrl = exactLexCompatibilityUrl(url, articleNum, type, partNum);
-                    return `<a href="${exactUrl}" target="_blank" rel="noopener" class="law-citation-link">${match}</a>`;
+                    const locator = type === 'band' ? 'band' : 'modda';
+                    const partLabel = partNum ? partNum + '-qism' : (locator === 'band' ? 'tegishli band' : 'tegishli qism');
+                    const label = lawInfo.name + ', ' + articleNum + '-' + locator + ', ' + partLabel;
+                    return `<a href="${exactUrl}" target="_blank" rel="noopener" class="law-citation-link"><strong>${label}</strong></a>`;
                 }
                 return match;
                 });
@@ -10522,13 +10582,18 @@
         }
 
         function enhanceLegalLinks(html) {
-            return autoLinkCitations(autoLinkBareLexUrls(html));
+            return autoLinkCitations(html);
         }
 
         function simpleMarkdown(text) {
             // Strip hidden reasoning blocks that may have leaked through (old archived results)
             text = text.replace(/<!--REASONING-->[\s\S]*?<!--\/REASONING-->\s*/g, '');
             text = text.replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->\s*/g, '');
+            // Old saved conversations may still contain the retired footer or
+            // raw Lex.uz attribution. New answers are sanitized server-side;
+            // this keeps history visually consistent without altering data.
+            text = text.replace(/(?:^|\n)\s*(?:---\s*\n\s*)?(?:#{1,6}\s*)?(?:\*{0,2})\s*(?:📎\s*)?Manbalar\s*(?:\*{0,2})\s*:?\s*[\s\S]*$/iu, '');
+            text = text.replace(/^\s*(?:Manba|lex\.uz)\s*:\s*https?:\/\/(?:www\.)?lex\.uz\/\S+\s*$/gimu, '');
             // Section mapping for Legal GPT structured response
             const sectionMap = {
                 'HUQUQIY MASALA': 'section-issue',
@@ -12085,8 +12150,10 @@
         // no template exists yet for that type does it fall back to the
         // generic 5-question form above.
         var docFlowActiveFields = null;   // template fields used for the current form, or null (generic)
-        async function docFlowPickType(t) {
+        var docFlowSeedDetails = '';
+        async function docFlowPickType(t, seedDetails) {
             if (t === '__custom') { var v = prompt('Hujjat turini yozing:'); if (!v || !v.trim()) return; t = v.trim(); }
+            docFlowSeedDetails = String(seedDetails || '').trim();
             docStepCard('<div class="docflow-title">' + escapeHtml(t) + '</div><div style="padding:10px 0;color:var(--text-secondary);font-size:13px;">Yuklanmoqda…</div>');
             var tplFields = await findTemplateFieldsForType(t);
             renderDocTypeForm(t, tplFields);
@@ -12155,6 +12222,16 @@
                 '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowSubmit(' + attrArg(t) + ')">' + flowIcon('create') + 'Hujjatni yaratish</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowAI()">← Orqaga</button>' +
                 '</div>');
+            if (docFlowSeedDetails) {
+                var seedTarget = document.getElementById('docf_details');
+                if (!seedTarget && docFlowActiveFields) {
+                    var likely = docFlowActiveFields.find(function (f) {
+                        return f.type === 'textarea' || /vaziyat|tafsilot|mazmun|holat|talab/i.test(docbL(f.label) || f.key || '');
+                    });
+                    if (likely) seedTarget = document.getElementById('docf_' + likely.key);
+                }
+                if (seedTarget && !seedTarget.value) seedTarget.value = docFlowSeedDetails;
+            }
             var first = document.querySelector('#aiChatMessages .docform-input'); if (first) first.focus();
         }
         function docFlowSubmit(docType) {
@@ -12925,11 +13002,79 @@
             saveAiChatSession();
         }
 
+        var legalNextActionStore = Object.create(null);
+
+        function renderLegalNextActions(actions, question) {
+            if (!Array.isArray(actions) || !actions.length) return '';
+            var groupId = 'nxa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+            legalNextActionStore[groupId] = {
+                question: String(question || ''),
+                actions: actions.slice(0, 4),
+            };
+            return '<div class="legal-next-actions" data-next-group="' + groupId + '">' +
+                '<div class="legal-next-actions-title">Keyingi qadamni tanlang</div>' +
+                '<div class="legal-next-actions-list">' + actions.slice(0, 4).map(function (action, index) {
+                    return '<button type="button" class="legal-next-action" onclick="runLegalNextAction(\'' + groupId + '\',' + index + ',this)">' +
+                        escapeHtml(action.label || 'Keyingi qadam') + '</button>';
+                }).join('') + '<div class="legal-attorney-results" hidden></div></div></div>';
+        }
+
+        async function runLegalNextAction(groupId, index, button) {
+            var group = legalNextActionStore[groupId];
+            var action = group && group.actions[index];
+            if (!action) return;
+            if (action.kind === 'custom') {
+                var input = document.getElementById('aiChatInput');
+                if (input) {
+                    input.focus();
+                    input.placeholder = "Keyingi savol yoki kerakli qadamni yozing";
+                }
+                return;
+            }
+            if (action.kind === 'document') {
+                docFlowPickType(action.documentType || 'Yuridik hujjat', group.question);
+                return;
+            }
+            if (action.kind !== 'attorney') return;
+
+            var wrap = button.closest('.legal-next-actions');
+            var results = wrap && wrap.querySelector('.legal-attorney-results');
+            if (!results) return;
+            button.disabled = true;
+            results.hidden = false;
+            results.innerHTML = '<div class="legal-attorney-meta">Litsenziyasi tasdiqlangan advokatlar qidirilmoqda...</div>';
+            try {
+                var params = new URLSearchParams({ q: group.question, limit: '3', language: 'uz' });
+                if (action.attorneyField) params.set('field', action.attorneyField);
+                var response = await fetch('/api/attorneys?' + params.toString(), { credentials: 'same-origin' });
+                var data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Advokatlar yuklanmadi');
+                var items = Array.isArray(data.items) ? data.items : [];
+                if (!items.length) {
+                    results.innerHTML = '<div class="legal-attorney-meta">Hozircha aynan shu mezonga mos, faol litsenziyasi tasdiqlangan advokat topilmadi.</div>';
+                    return;
+                }
+                results.innerHTML = items.map(function (item) {
+                    var practices = (item.practice_areas || []).map(function (area) { return area.name_uz; }).filter(Boolean).slice(0, 2).join(', ');
+                    var reasons = (item.match_reasons || []).join(', ');
+                    return '<div class="legal-attorney-item">' +
+                        '<div><div class="legal-attorney-name">' + escapeHtml(item.full_name || '') + '</div>' +
+                        '<div class="legal-attorney-meta">' + escapeHtml([item.region, practices, item.license_number ? 'Litsenziya: ' + item.license_number : '', reasons].filter(Boolean).join(' · ')) + '</div></div>' +
+                        '<div class="legal-attorney-score">' + (Number(item.match_score) || 0) + '% mos</div></div>';
+                }).join('') + '<a class="legal-attorney-all" href="/attorneys.html?' + params.toString() + '">Barcha mos advokatlarni ko\'rish</a>' +
+                    '<div class="legal-attorney-meta" style="margin-top:6px;">Aloqa ma\'lumoti faqat aniq tanlov va rozilikdan keyin ochiladi.</div>';
+            } catch (error) {
+                results.innerHTML = '<div class="legal-attorney-meta">' + escapeHtml(error.message || 'Advokatlarni yuklab bo\'lmadi') + '</div>';
+            } finally {
+                button.disabled = false;
+            }
+        }
+
         // Final render of an AI reply — shared by the JSON path (typewriter
         // animation) and the streaming path (instant: tokens already streamed
         // live, so the finished bubble renders markdown immediately).
         function renderAiChatReply(data, currentQuestion, messagesEl, instant) {
-            aiChatHistory.push({ role: 'model', text: data.reply });
+            aiChatHistory.push({ role: 'model', text: data.reply, nextActions: data.nextActions || [] });
             // ── RAG source info badge — ONLY visible to Master Admin ──
             var ragBadge = '';
             var isMasterAdmin = (typeof currentUser !== 'undefined' && currentUser.role === 'master');
@@ -13004,7 +13149,8 @@
 
             var qaIdAttr = (data.qaBank && data.qaBank.id) ? (' data-qa-id="' + data.qaBank.id + '"') : '';
             var twId = 'tw_' + Date.now();
-            messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + ragBadge + actionsHtml + verifyRow + '</div>';
+            var nextActionsHtml = renderLegalNextActions(data.nextActions || [], currentQuestion);
+            messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + nextActionsHtml + ragBadge + actionsHtml + verifyRow + '</div>';
             var twEl = document.getElementById(twId);
             if (twEl) {
                 twEl.removeAttribute('id');
@@ -13640,7 +13786,8 @@
                             '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
                             '</div></div>') : '';
 
-                        messagesEl.innerHTML += '<div class="ai-chat-msg ai" data-raw="' + escapeHtml(msg.text).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(lastUserText).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(msg.text) + '</div>' + actionsHtml + verifyRow + '</div>';
+                        var historyNextActions = renderLegalNextActions(msg.nextActions || [], lastUserText);
+                        messagesEl.innerHTML += '<div class="ai-chat-msg ai" data-raw="' + escapeHtml(msg.text).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(lastUserText).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(msg.text) + '</div>' + historyNextActions + actionsHtml + verifyRow + '</div>';
                     }
                 });
                 messagesEl.scrollTop = messagesEl.scrollHeight;

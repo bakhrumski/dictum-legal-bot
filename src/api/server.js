@@ -28,8 +28,9 @@ const {
   selectRelevantSourceRefs,
   findCitationPartNumber,
   buildLexDeepLink,
-  linkCitationsInMarkdown,
+  normalizeLegalAnswerCitations,
 } = require('../rag/citation-utils');
+const { buildLegalNextActions } = require('../services/legal-next-actions');
 const {
   buildLexAnchorFallbackUrl,
   hydrateLexAnchors,
@@ -4862,7 +4863,7 @@ MUHIM: KONTEKSTda berilgan, savolga BEVOSITA taalluqli HAR BIR qonun/kodeksni ke
 QAT'IY: Savolga BEVOSITA taalluqli bo'lmagan qonun yoki moddani KELTIRMANG — hatto kontekstda bo'lsa ham. Qonunni faqat "bu qo'llanilmaydi" deyish uchun keltirish TAQIQLANADI (bu javobni chalkash qiladi). Agar savol milliy qonun bilan emas, balki ichki tartib-qoidalar, shartnoma yoki tashkilot nizomi bilan tartibga solinsa — buni OCHIQ ayting: "Bu masala bevosita milliy qonun bilan emas, ... bilan tartibga solinadi" — va tangens moddalar bilan to'ldirmang.
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha (jismoniy / mansabdor / yuridik shaxs) farq bo'lsa — har birini alohida jumlada ko'rsating. Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Foydalanuvchi savoliga to'g'ridan-to'g'ri aloqador holatlarni tahlil qiling.
-MANBA QOIDASI: Tahlilda qo'llanayotgan HAR BIR norma uchun qonun/kodeks nomi va modda raqamini shu bo'limning o'zida aniq yozing. Avtomatik "Manbalar" ro'yxati faqat Tahlilda amalda qo'llangan qonun va moddalardan tuziladi.
+HAVOLA QOIDASI: Har bir qo'llanayotgan normani shu gapning o'zida faqat (**Qonun/kodeks nomi, N-modda, M-qism**) shaklida yozing. Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang.
 
 **Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
 
@@ -4915,7 +4916,7 @@ ${definitionHint}
 **Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism? Qonun nomi va modda raqamini **qalin** yozing. Bir nechta norma bo'lsa — hammasini keltiring. Format: (**Qonun nomi, N-modda, M-qism**).
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha farq bo'lsa har birini alohida jumlada ko'rsating (jismoniy / mansabdor / yuridik shaxs). Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing.
-MANBA QOIDASI: Tahlilda qo'llanayotgan HAR BIR norma uchun qonun/kodeks nomi va modda raqamini shu bo'limning o'zida aniq yozing. Avtomatik "Manbalar" ro'yxati faqat Tahlilda amalda qo'llangan qonun va moddalardan tuziladi.
+HAVOLA QOIDASI: Har bir qo'llanayotgan normani shu gapning o'zida faqat (**Qonun/kodeks nomi, N-modda, M-qism**) shaklida yozing. Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang.
 
 **Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
 
@@ -5954,12 +5955,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         // Also scrubbed: a lawyer-verified answer stored before the
         // restriction (or pasted from an aggregator during correction) must
         // not become the one path that can still publish an external link.
-        reply: normalizeResponseForUser(verifiedOverride),
+        reply: normalizeLegalAnswerCitations(normalizeResponseForUser(verifiedOverride), [], lexLangForText(message)),
         provider: 'verified-qa',
         databases: ['Korpus (tasdiqlangan)'],
         ragUsed: false,
         rag: null,
         qaBank: qaMatchInfo,
+        nextActions: buildLegalNextActions({ question: message, answer: verifiedOverride, topic }),
       };
       if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
       return res.json(payload);
@@ -5976,7 +5978,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       && (!Array.isArray(history) || history.length === 0);
     const cacheKey = cacheable
       ? require('crypto').createHash('sha256')
-          .update('exact-lex-anchor-v1|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          .update('contextual-next-actions-v1|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
           .digest('hex')
       : null;
     if (cacheKey) {
@@ -5993,13 +5995,14 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
             // bypassing the provider guard, the prompt rule and the scrubber
             // alike — which is exactly why a re-test after the fix returned
             // the same external citations.
-            reply: normalizeResponseForUser(c.rows[0].reply),
+            reply: normalizeLegalAnswerCitations(normalizeResponseForUser(c.rows[0].reply), [], lexLangForText(message)),
             provider: (c.rows[0].provider || 'AI'),
             databases: Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'],
             ragUsed: true,
             rag: c.rows[0].rag,
             qaBank: qaMatchInfo,
             cached: true,
+            nextActions: buildLegalNextActions({ question: message, answer: c.rows[0].reply, topic }),
           };
           if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
           return res.json(payload);
@@ -6008,7 +6011,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     }
 
     // RAG retrieval: fetch relevant legal chunks for the user's query
-    if (sse) sse({ type: 'status', kind: 'sources', text: 'Manbalar tahlil qilinmoqda...' });
+    if (sse) sse({ type: 'status', kind: 'sources', text: 'Qonun normalari tekshirilmoqda...' });
     let ragContext = '';
     let ragMeta = null;
     let ragChunks = [];
@@ -6196,9 +6199,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     // than merely loading the legal document at its first page.
     const citationLanguage = lexLangForText(message);
     await hydrateLexAnchors(ragChunks, displayReply);
-    displayReply = linkCitationsInMarkdown(displayReply, ragChunks, citationLanguage);
-    const manbalarFooter = buildManbalarFooter(ragChunks, displayReply, citationLanguage);
-    if (manbalarFooter) displayReply += manbalarFooter;
+    displayReply = normalizeLegalAnswerCitations(displayReply, ragChunks, citationLanguage);
 
     // Enrichment: suggest the laws the AI cited that aren't yet in the corpus
     // (Master-Admin reviews → one-click ingest). Fire-and-forget; never blocks.
@@ -6212,6 +6213,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       ragUsed: !!ragContext,
       rag: ragMeta,
       qaBank: qaMatchInfo,
+      nextActions: buildLegalNextActions({ question: message, answer: displayReply, topic }),
     };
 
     // Store in the answer cache (fire-and-forget; failed answers never cached).
@@ -6561,7 +6563,7 @@ Structure EXACTLY these five sections (classic legal-memo IRAC form), each as an
 3. Qo'llaniladigan huquq (Applicable law) — the O'zbekiston Respublikasi laws, codes, regulations, decrees (and court decisions, if present in the KONTEKST) that govern these facts. List EACH applicable norm on its own line with its precise locator (modda / qism / band, or document number+year), plus one sentence on what it requires. This section must reflect the LAW, not merely restate the document.
 4. Tahlil (Analysis) — apply each cited norm to the specific clauses/facts above: is each obligation/term lawful, enforceable, compliant? Where is the risk, the missing requirement, the deadline consequence? Connect law to fact explicitly — never analyse in the abstract.
 5. Xulosa (Conclusion) — the reasoned answer to the Masala + concrete numbered recommendations.
-(Manbalar will be appended automatically; do NOT write it yourself.)
+(Do not create a separate Manbalar/Sources section. Put every legal citation directly beside the claim it supports.)
 
 Rules:
 ${groundingRule}
@@ -6638,31 +6640,6 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
           audit.unverified.slice(0, 10).map(x => String(x).replace(/[<>&]/g, '')).join(', ') + '.</em></p>';
       }
     }
-
-    // Append the verified Manbalar footer as a clean HTML link list (NOT raw
-    // markdown — that rendered literal '**' and the "[Law]" labels got turned
-    // into empty [_____] fields by the doc renderer).
-    let manbalarHtml = manbalarFooterToHtml(buildManbalarFooter(ragChunks, html, lang));
-    // Manbalar lists ONLY sources the opinion actually relies on. Grounding
-    // material that reached the model but was never cited (a resolved act the
-    // opinion found irrelevant, a number-collision doc it dismissed) must not
-    // be presented as a source: a reader clicking through to an unrelated act
-    // stops trusting the whole document. A lex.uz doc qualifies when the
-    // opinion text cites its number ("306-son") or clearly names it.
-    if (lexLiveSources.length) {
-      const { prefixOverlap } = require('../rag/lex-resolve');
-      const escA = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      const plainOpinion = html.replace(/<[^>]+>/g, ' ');
-      const citedInOpinion = (s) => {
-        if (s.num && new RegExp(`(?<![\\p{L}\\p{N}])${s.num}\\s*[-–—]?\\s*(?:son|сон|qaror|Qonun)`, 'iu').test(plainOpinion)) return true;
-        return prefixOverlap(s.title, plainOpinion) >= 2;
-      };
-      const seenU = new Set();
-      const extra = lexLiveSources.filter(s => s.url && !s.offTopic && citedInOpinion(s) && !seenU.has(s.url) && seenU.add(s.url))
-        .map(s => `<li><a href="${escA(s.url)}" target="_blank" rel="noopener">${escA(s.title || s.url)} (lex.uz)</a></li>`).join('');
-      if (extra) manbalarHtml = (manbalarHtml ? manbalarHtml.replace('</ul>', extra + '</ul>') : '<ul>' + extra + '</ul>');
-    }
-    if (manbalarHtml) html += '<h2>Manbalar</h2>' + manbalarHtml;
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
     // Spend the credits only once the opinion actually exists — a failed
