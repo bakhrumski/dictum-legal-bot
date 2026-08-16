@@ -61,6 +61,7 @@ const ATTORNEY_REGIONS = Object.freeze({
 
 const DOCUMENT_TYPES = Object.freeze({
   claim: { label: "Da'vo arizasi", serviceSlug: 'claim', category: 'Odil sudlov' },
+  demand: { label: 'Talabnoma', serviceSlug: 'demand', category: 'Fuqarolik qonunchiligi' },
   complaint: { label: 'Shikoyat yoki apellyatsiya', serviceSlug: 'complaint', category: 'Odil sudlov' },
   application: { label: 'Ariza yoki iltimosnoma', serviceSlug: 'application', category: "Shaxsiy tusdagi hujjatlar" },
   contract: { label: 'Shartnoma', serviceSlug: 'contract', category: 'Fuqarolik qonunchiligi' },
@@ -185,6 +186,7 @@ function resolveIntakeCallback(data, currentContext = {}) {
         replyMarkup: attorneyFieldKeyboard(),
       };
     }
+    const hasPrefilledProblem = Boolean(currentContext.caseSummary);
     return {
       state: 'attorney_problem',
       context: {
@@ -198,9 +200,14 @@ function resolveIntakeCallback(data, currentContext = {}) {
         `Yo'nalish: ${currentContext.fieldLabel}`,
         `Hudud: ${region.label}`,
         '',
-        "Endi huquqiy muammoni 1–3 gapda yozing: nima sodir bo'ldi, ish qaysi bosqichda va qanday yordam kerak?",
-        "Advokatlar faqat shu ma'lumotlardan keyin tanlanadi.",
+        hasPrefilledProblem
+          ? "Huquqiy muammo oldingi savolingizdan olindi. Quyidagi tugma orqali shu mezonlar bo'yicha advokatlarni ko'ring."
+          : "Endi huquqiy muammoni 1–3 gapda yozing: nima sodir bo'ldi, ish qaysi bosqichda va qanday yordam kerak?",
+        hasPrefilledProblem ? '' : "Advokatlar faqat shu ma'lumotlardan keyin tanlanadi.",
       ].join('\n'),
+      replyMarkup: hasPrefilledProblem ? {
+        inline_keyboard: [[{ text: "Mos advokatlarni ko'rsatish", callback_data: 'nxt_attorney_go' }]],
+      } : undefined,
     };
   }
 

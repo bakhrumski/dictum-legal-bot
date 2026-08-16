@@ -92,11 +92,11 @@ Javob tuzilishi:
 2. **Tegishli qonun normalari** — aniq modda raqamlari bilan (tadqiqot manbalaridan)
 3. **Huquqiy tahlil** — normalar foydalanuvchi vaziyatiga qanday tatbiq etiladi
 4. **Tavsiya** — aniq amaliy maslahat
-5. **Manbalar** — foydalanilgan normalar ro'yxati
+5. Har bir norma uni qo'llagan gapning o'zida (**Qonun nomi, N-modda, M-qism**) shaklida ko'rsatiladi; alohida Manbalar bo'limi yozilmaydi
 
 Qoidalar:
 - O'zbek tilida yoz
-- Har bir da'voni manba bilan asoslang [1], [2] raqamlari bilan
+- Har bir da'voni uning yonidagi nomlangan norma bilan asoslang; [1], [2], "lex.uz:" va xom URL ishlatmang
 - Bu qoralama — student/yurist tahrir qiladi, keyin mentor tasdiqlaydi
 - Modda raqamlarini to'qima qilma — faqat tadqiqotda topilganlarini ishlatish
 

@@ -18,6 +18,7 @@ const {
   attorneyRegionKeyboard,
   documentTypeKeyboard,
   resolveIntakeCallback,
+  ATTORNEY_FIELDS,
 } = require('./intake-menus');
 
 // Auto-answering used to run through `askJustify`, an external service whose
@@ -224,6 +225,14 @@ async function sendPaidAnswerInvoice(chatId, telegramUserId) {
 
 function agentActionKeyboard(agentResult) {
   if (!agentResult) return null;
+  if (agentResult.action === 'answered' && agentResult.meta && Array.isArray(agentResult.meta.nextActions)) {
+    return {
+      inline_keyboard: agentResult.meta.nextActions.slice(0, 4).map(action => ([{
+        text: String(action.label || 'Keyingi qadam').slice(0, 64),
+        callback_data: `nxt_${String(action.id || 'custom').slice(0, 48)}`,
+      }])),
+    };
+  }
   if (agentResult.action === 'quota_exceeded') return paidAnswerKeyboard();
   if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
   if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
@@ -427,6 +436,109 @@ bot.on('callback_query', async (callbackQuery) => {
   if (data === 'cancel_ai_answers_payment') {
     await bot.answerCallbackQuery(callbackQuery.id, { text: 'To\'lov bekor qilindi' });
     return;
+  }
+
+  // Contextual follow-up actions are attached to a completed legal answer.
+  // They reuse the existing paid-document and verified-attorney workflows;
+  // no extra intent-classification model call is needed.
+  if (data.startsWith('nxt_')) {
+    try {
+      const telegramAgent = require('../agents/telegram-agent');
+      const current = await telegramAgent.loadConversation(chatId);
+
+      if (data === 'nxt_attorney_go') {
+        const caseSummary = String((current.context || {}).caseSummary || '').trim();
+        if (current.state !== 'attorney_problem' || !caseSummary) {
+          await bot.answerCallbackQuery(callbackQuery.id, { text: 'Tanlov eskirgan. Huquqiy savolni qayta yuboring.', show_alert: true });
+          return;
+        }
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Mos advokatlar qidirilmoqda' });
+        await bot.sendChatAction(chatId, 'typing').catch(() => {});
+        const result = await telegramAgent.handleUserMessage({
+          chatId,
+          text: caseSummary,
+          firstName: callbackQuery.from.first_name || '',
+        });
+        if (result && result.reply) {
+          const parts = telegramAgent.splitForTelegram(result.reply);
+          for (const part of parts) {
+            await bot.sendMessage(chatId, part, { parse_mode: 'Markdown', disable_web_page_preview: true })
+              .catch(() => bot.sendMessage(chatId, part.replace(/[*_`\[\]]/g, '')));
+          }
+        }
+        return;
+      }
+
+      const actionId = data.slice(4);
+      const actions = Array.isArray(current.context && current.context.nextActions)
+        ? current.context.nextActions
+        : [];
+      const action = actions.find(item => item && item.id === actionId);
+      if (!action) {
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Tanlov eskirgan. Huquqiy savolni qayta yuboring.', show_alert: true });
+        return;
+      }
+
+      if (action.kind === 'custom') {
+        await telegramAgent.setConversationState(chatId, 'legal_question_intake', {});
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Yozish maydoni tayyor' });
+        await bot.sendMessage(chatId, "Keyingi savol yoki kerakli qadamni yozing. Oddiy xabar yuborsangiz, JuristAI odatdagidek davom etadi.");
+        return;
+      }
+
+      if (action.kind === 'document') {
+        const typeCode = action.serviceSlug === 'claim'
+          ? 'claim'
+          : action.serviceSlug === 'demand'
+            ? 'demand'
+            : action.serviceSlug === 'complaint'
+              ? 'complaint'
+              : 'application';
+        const intake = resolveIntakeCallback(`doc_${typeCode}`, current.context || {});
+        if (!intake) throw new Error('document action is not configured');
+        const caseSummary = String((current.context || {}).nextActionQuestion || '').trim();
+        const questions = typeCode === 'demand'
+          ? "Qabul qiluvchi va yuboruvchi F.I.O./tashkilotini, undiriladigan summa yoki talabni, voqea sanalarini, dalillarni va bajarish uchun beriladigan muddatni yozing."
+          : "Sud yoki organ nomini (ma'lum bo'lsa), da'vogar va javobgarni, summa/talabni, muhim sanalarni hamda mavjud dalillarni yozing.";
+        await telegramAgent.setConversationState(chatId, intake.state, {
+          ...(intake.context || {}),
+          caseSummary,
+        });
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Hujjat turi tanlandi' });
+        await bot.sendMessage(chatId, [
+          `Tanlangan hujjat: *${intake.context.documentTypeLabel}*`,
+          "Bu pullik xizmat; buyurtma mas'ul yurist tasdig'idan keyin qabul qilinadi.",
+          caseSummary ? "Huquqiy vaziyatingiz oldingi savoldan olindi." : '',
+          '',
+          questions,
+          "Shaxsiy maxfiy ma'lumotlarni hozircha yubormang.",
+        ].filter(Boolean).join('\n'), { parse_mode: 'Markdown' });
+        return;
+      }
+
+      if (action.kind === 'attorney') {
+        const field = ATTORNEY_FIELDS[action.attorneyFieldCode] || ATTORNEY_FIELDS.unsure;
+        await telegramAgent.setConversationState(chatId, 'attorney_region', {
+          fieldCode: action.attorneyFieldCode || 'unsure',
+          fieldLabel: field.label,
+          legalField: field.registryField,
+          category: field.category,
+          strictField: Boolean(field.registryField),
+          needsHumanFieldReview: Boolean(field.needsHumanFieldReview),
+          caseSummary: String((current.context || {}).nextActionQuestion || '').trim(),
+        });
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Yo\'nalish tanlandi' });
+        await bot.sendMessage(chatId, `Yo'nalish: *${field.label}*\n\nQaysi hududdan advokat kerak?`, {
+          parse_mode: 'Markdown',
+          reply_markup: attorneyRegionKeyboard(),
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('[BOT] next-action callback failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: 'Keyingi qadamni ochib bo\'lmadi. Qayta urinib ko\'ring.', show_alert: true });
+      return;
+    }
   }
 
   // Guided intake is deterministic: menu clicks update the conversation state
@@ -1303,13 +1415,13 @@ bot.on('message', async (msg) => {
               parse_mode: 'Markdown',
               disable_web_page_preview: true,
             };
-            if (partIndex === 0 && actionKeyboard) sendOptions.reply_markup = actionKeyboard;
+            if (partIndex === replyParts.length - 1 && actionKeyboard) sendOptions.reply_markup = actionKeyboard;
             await bot.sendMessage(chatId, part, sendOptions).then(() => {
               partDelivered = true;
             }).catch(async () => {
               // Markdown in a legal answer breaks on stray * or _ — never let
               // a formatting failure swallow the answer itself.
-              const fallbackOptions = partIndex === 0 && actionKeyboard ? { reply_markup: actionKeyboard } : {};
+              const fallbackOptions = partIndex === replyParts.length - 1 && actionKeyboard ? { reply_markup: actionKeyboard } : {};
               await bot.sendMessage(chatId, part.replace(/[*_`\[\]]/g, ''), fallbackOptions).then(() => {
                 partDelivered = true;
               }).catch(() => {});
@@ -1366,6 +1478,9 @@ bot.on('message', async (msg) => {
 
   // Save to database
   try {
+    if (agentResult && agentResult.action === 'paid_service' && agentResult.meta && agentResult.meta.caseSummary) {
+      requestData.request_text = String(agentResult.meta.caseSummary);
+    }
     const result = await saveRequest(requestData, {
       agentReply: agentDelivered ? agentResult.reply : null,
       agentMeta: agentResult ? { action: agentResult.action, ...(agentResult.meta || {}) } : null,

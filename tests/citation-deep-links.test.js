@@ -8,6 +8,7 @@ const {
   buildLexDeepLink,
   findCitationPartNumber,
   linkCitationsInMarkdown,
+  normalizeLegalAnswerCitations,
 } = require('../src/rag/citation-utils');
 const { parseLexStructured, chunkByArticle } = require('../src/rag/structural-chunker');
 const {
@@ -16,6 +17,7 @@ const {
   normalizeSourceUrl,
   resolveKnownLexAnchorUrl,
 } = require('../src/rag/lex-anchor-resolver');
+const { buildLegalNextActions } = require('../src/services/legal-next-actions');
 
 let passed = 0;
 function test(name, fn) {
@@ -80,18 +82,49 @@ test('qism suffixes are detected and linked inside the answer', () => {
   };
   assert.strictEqual(findCitationPartNumber(answer, '253'), '2');
   const linked = linkCitationsInMarkdown(answer, [chunk], 'uz');
-  assert.match(linked, /\[253-moddasi, 2-qismiga\]\(https:\/\/lex\.uz\/uz\/docs\/6257288#:~:text=/u);
+  assert.match(linked, /\[\*\*Mehnat kodeksi, 253-modda, 2-qism\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/6257288#:~:text=/u);
+  assert.match(linked, /\)ga ko‘ra/u);
   assert.strictEqual((linked.match(/\]\(https:\/\/lex\.uz/gu) || []).length, 2);
 });
 
-test('existing Markdown citations are not linked a second time', () => {
-  const answer = 'Tahlil\nMehnat kodeksi [253-moddasi](https://lex.uz/docs/old) qo‘llanadi.';
+test('existing Markdown citations are normalized to the canonical named style', () => {
+  const answer = 'Tahlil\nMehnat kodeksi [253-moddasi](https://lex.uz/docs/111111) qo‘llanadi.';
   const chunk = {
     law_name: 'Mehnat kodeksi',
     article_numbers: ['253'],
     source_url: 'https://lex.uz/uz/docs/6257288',
   };
-  assert.strictEqual(linkCitationsInMarkdown(answer, [chunk]), answer);
+  const linked = linkCitationsInMarkdown(answer, [chunk]);
+  assert.match(linked, /\[\*\*Mehnat kodeksi, 253-modda, tegishli qism\*\*\]/u);
+  assert.doesNotMatch(linked, /https:\/\/lex\.uz\/docs\/111111/u);
+});
+
+test('raw Lex attributions and the separate Manbalar footer are removed', () => {
+  const answer = [
+    'Tahlil',
+    'Mehnat kodeksi, 253-moddasiga ko\'ra ish haqi to\'lanadi. (lex.uz: https://lex.uz/uz/docs/6257288)',
+    '',
+    'Xulosa',
+    'Yozma talab yuboring.',
+    '',
+    '---',
+    '**Manbalar:**',
+    '- [Mehnat kodeksi](https://lex.uz/uz/docs/6257288)',
+  ].join('\n');
+  const chunk = {
+    law_name: 'Mehnat kodeksi',
+    article_numbers: ['253'],
+    source_url: 'https://lex.uz/uz/docs/6257288',
+  };
+  const normalized = normalizeLegalAnswerCitations(answer, [chunk]);
+  assert.match(normalized, /\[\*\*Mehnat kodeksi, 253-modda, tegishli qism\*\*\]/u);
+  assert.doesNotMatch(normalized, /Manbalar|lex\.uz:/u);
+});
+
+test('canonical exact links survive cached answers without RAG chunks', () => {
+  const cached = 'Tahlil\n[**Mehnat kodeksi, 161-modda, tegishli qism**](https://lex.uz/uz/docs/6257288#6261450)ga ko‘ra bo‘shatish asoslangan bo‘lishi kerak.';
+  const normalized = normalizeLegalAnswerCitations(cached, []);
+  assert.strictEqual(normalized, cached);
 });
 
 test('structural ingest preserves article and qism element IDs', () => {
@@ -155,9 +188,8 @@ test('older dashboard citations use the exact-anchor compatibility resolver', ()
   assert.match(server, /app\.get\('\/api\/lex-anchor'/u);
   assert.match(dashboard, /return '\/api\/lex-anchor\?url=' \+ encodeURIComponent\(sourceUrl\)/u);
   assert.match(dashboard, /partNumber \? '&part='/u);
-  assert.match(dashboard, /function autoLinkBareLexUrls\(html\)/u);
   assert.match(dashboard, /&type=/u);
-  assert.match(dashboard, /class="legal-source-url"/u);
+  assert.match(dashboard, /return autoLinkCitations\(html\)/u);
   assert.doesNotMatch(dashboard, /url \+= '#:~:text='/u);
 });
 
@@ -179,7 +211,7 @@ test('an unavailable live resolver falls back to the named provision', () => {
   );
 });
 
-test('dashboard renders the cited provision and bare Manba URL as exact links', () => {
+test('dashboard renders citations with one canonical named style', () => {
   const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
   const start = dashboard.indexOf('const LAW_CITATION_MAP');
   const end = dashboard.indexOf('function simpleMarkdown', start);
@@ -192,7 +224,9 @@ test('dashboard renders the cited provision and bare Manba URL as exact links', 
     <p>Manba: https://lex.uz/uz/docs/97664</p>
   \`);`, context);
   assert.strictEqual((context.rendered.match(/class="law-citation-link"/gu) || []).length, 2);
-  assert.strictEqual((context.rendered.match(/class="legal-source-url"/gu) || []).length, 2);
+  assert.strictEqual((context.rendered.match(/class="legal-source-url"/gu) || []).length, 0);
+  assert.match(context.rendered, /Yo'l harakati qoidalari, 7-band, tegishli band/u);
+  assert.match(context.rendered, /Ma'muriy javobgarlik to'g'risidagi kodeks, 135-modda, tegishli qism/u);
   assert.match(context.rendered, /https:\/\/lex\.uz\/docs\/-5953883#-5954624/u);
   assert.match(context.rendered, /https:\/\/lex\.uz\/docs\/-97664#-1781411/u);
 });
@@ -207,6 +241,25 @@ test('post-send progress uses monochrome SVGs instead of colorful emoji', () => 
   assert.match(dashboard, /function streamStatusMarkup\(kind, text\)/u);
   assert.match(dashboard, /class="ai-stream-status-icon"/u);
   assert.match(dashboard, /stroke="currentColor"/u);
+});
+
+test('unpaid salary answers offer claim, demand, verified attorney and custom actions', () => {
+  const actions = buildLegalNextActions({
+    topic: 'mehnat',
+    question: "Ish beruvchi uch oylik ish haqimni bermadi.",
+  });
+  assert.deepStrictEqual(actions.map(item => item.kind), ['document', 'document', 'attorney', 'custom']);
+  assert.strictEqual(actions[0].documentType, "Da'vo arizasi");
+  assert.strictEqual(actions[1].documentType, 'Talabnoma');
+  assert.strictEqual(actions[2].attorneyFieldCode, 'labor');
+});
+
+test('dashboard reuses drafting and verified-attorney flows for next actions', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+  assert.match(dashboard, /function renderLegalNextActions\(actions, question\)/u);
+  assert.match(dashboard, /docFlowPickType\(action\.documentType/u);
+  assert.match(dashboard, /fetch\('\/api\/attorneys\?'/u);
+  assert.match(dashboard, /Aloqa ma\\'lumoti faqat aniq tanlov/u);
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);

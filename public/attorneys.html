@@ -143,6 +143,10 @@
           option.textContent = area.name_uz;
           select.appendChild(option);
         });
+        var requestedField = new URLSearchParams(location.search).get('field') || '';
+        if (requestedField && Array.from(select.options).some(function (option) { return option.value === requestedField; })) {
+          select.value = requestedField;
+        }
       } catch (_) {}
     }
     async function loadAttorneys() {
@@ -165,7 +169,10 @@
         document.getElementById('resultCount').textContent = '';
       }
     }
-    Promise.all([loadPracticeAreas(), loadAttorneys()]);
+    var initialParams = new URLSearchParams(location.search);
+    document.getElementById('searchInput').value = initialParams.get('q') || '';
+    document.getElementById('regionFilter').value = initialParams.get('region') || '';
+    loadPracticeAreas().then(loadAttorneys);
   </script>
 </body>
 </html>

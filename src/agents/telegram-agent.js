@@ -31,11 +31,10 @@ const {
   extractAnalysisSection,
   selectRelevantSourceRefs,
   getChunkArticleRefs,
-  findCitationPartNumber,
-  buildLexDeepLink,
-  linkCitationsInMarkdown,
+  normalizeLegalAnswerCitations,
 } = require('../rag/citation-utils');
 const telegramEconomy = require('../services/telegram-economy');
+const { buildLegalNextActions } = require('../services/legal-next-actions');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wiring
@@ -416,27 +415,10 @@ function detectServiceSlug(text) {
 // Answer generation
 // ─────────────────────────────────────────────────────────────────────────────
 
-function formatSources(chunks, replyText) {
-  const seen = new Set();
-  const out = [];
-  const analysisText = extractAnalysisSection(replyText);
-  for (const sourceRef of selectRelevantSourceRefs(chunks, analysisText)) {
-    const c = sourceRef.chunk;
-    if (!c || c.is_active === false) continue;
-    const law = sourceRef.lawName || c.law_name || '';
-    if (!law) continue;
-    const partNumber = findCitationPartNumber(analysisText, sourceRef.articleRef) || c.part_number || c.partNumber || '';
-    const art = sourceRef.articleRef
-      ? `${sourceRef.articleRef}-modda${partNumber ? `, ${partNumber}-qism` : ''}`
-      : '';
-    const label = [law, art].filter(Boolean).join(', ');
-    const key = label.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const url = buildLexDeepLink(c, { lang: 'uz', articleRef: sourceRef.articleRef, partNumber });
-    out.push(url ? `• [${label}](${url})` : `• ${label}`);
-  }
-  return out.length ? `\n\n📎 *Manbalar:*\n${out.join('\n')}` : '';
+function formatSources() {
+  // Backwards-compatible public helper. Citations now appear inline beside
+  // the claim they support; a duplicate footer is never generated.
+  return '';
 }
 
 /**
@@ -498,7 +480,7 @@ TELEGRAM FORMATI (majburiy):
 - Javob 200 so'zdan oshmasin. Telegram — qisqa javob joyi.
 - Sarlavha, markdown jadval, "###" kabi belgilar ishlatmang.
 - Oddiy, tushunarli til. Har bir da'vo uchun modda raqamini ko'rsating.
-- Tahlil bo'limida qo'llanayotgan har bir qonun nomi va modda raqamini aniq ko'rsating. Manbalar faqat Tahlilda qo'llangan qonun va moddalardan tuziladi.
+- Har bir qo'llanayotgan normani shu gapning o'zida (**Qonun/kodeks nomi, N-modda, M-qism**) shaklida yozing. Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang.
 - Agar KONTEKSTda javob yo'q bo'lsa — buni ochiq ayting, taxmin qilmang.` },
   ];
   if (hist) messages.push({ role: 'user', text: `Suhbat tarixi (kontekst uchun):\n${hist}` });
@@ -537,9 +519,9 @@ TELEGRAM FORMATI (majburiy):
   if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, text);
 
   return {
-    text: linkCitationsInMarkdown(text, chunks, 'uz'),
+    text: normalizeLegalAnswerCitations(text, chunks, 'uz'),
     confidence,
-    sources: formatSources(chunks, text),
+    sources: '',
     meta: { path: 'rag', topic, chunks: chunks.length, unverified, provider: res.provider },
   };
 }
@@ -926,6 +908,7 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
 
     const serviceSlug = String(context.serviceSlug || detectServiceSlug(question));
     const documentTypeLabel = String(context.documentTypeLabel || 'Yuridik hujjat');
+    const caseSummary = [context.caseSummary, question].filter(Boolean).join('\n\nQo\'shimcha ma\'lumot:\n');
     const reply = `*${documentTypeLabel}* bo'yicha ma'lumotlaringiz qabul qilindi. Bu pullik xizmat hisoblanadi. Buyurtma faqat mas'ul yurist ko'rib chiqib, ruxsat berganidan keyin ishga olinadi.\n\nNarx va bajarish shartlari tasdiqlangach sizga alohida xabar beriladi.`;
     await remember(reply, 0);
     return complete({
@@ -941,6 +924,7 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
         intakeClassified: true,
         paidService: true,
         requiresLawyerApproval: true,
+        caseSummary,
       },
     });
   }
@@ -1093,10 +1077,10 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
   }
 
   let answer;
+  const groundedQuestion = state === 'clarifying'
+    ? buildClarifiedQuestion(question, turns)
+    : question;
   try {
-    const groundedQuestion = state === 'clarifying'
-      ? buildClarifiedQuestion(question, turns)
-      : question;
     answer = await generateAnswer(groundedQuestion, turns);
   } catch (e) {
     if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId, quota).catch(() => {});
@@ -1125,9 +1109,19 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
     : quota.remaining > 0
       ? `\n\n🎁 Bugun yana ${quota.remaining} ta bepul AI huquqiy javobingiz qoldi.`
       : `\n\n🎁 Bugungi ${quota.limit || FREE_AI_LIMIT} ta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi javobni bir martalik to'lov bilan olishingiz mumkin; bepul limit Toshkent vaqti bilan soat 00:00 da yangilanadi.`;
-  const reply = answer.text + answer.sources + banner + DISCLAIMER + allowance;
+  const nextActions = buildLegalNextActions({
+    question: groundedQuestion,
+    answer: answer.text,
+    topic: answer.meta && answer.meta.topic,
+  });
+  const reply = answer.text + banner + DISCLAIMER + allowance;
 
   await remember(answer.text, 0);
+  await setConversationState(chatId, 'awaiting_next_action', {
+    nextActionQuestion: groundedQuestion,
+    nextActionTopic: answer.meta && answer.meta.topic,
+    nextActions,
+  });
   console.log(`[TG-AGENT] chat=${chatId} intent=${intent.intent} path=${answer.meta.path} conf=${answer.confidence} ${Date.now() - started}ms`);
 
   return complete({
@@ -1143,6 +1137,8 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
       entitlementSource: quota.source,
       reservationId: quota.reservationId,
       paidCredits: quota.paidCredits || 0,
+      nextActions,
+      conversationState: 'awaiting_next_action',
       ms: Date.now() - started,
     },
   });
