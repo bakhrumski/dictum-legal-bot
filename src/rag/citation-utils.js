@@ -106,7 +106,34 @@ function articleOffsets(text = '', articleRef = '') {
   const out = [];
   let match;
   while ((match = rx.exec(String(text || ''))) !== null) out.push(match.index);
-  return out;
+
+  // Grouped citations are common in Uzbek drafting: "4, 18 va 24-moddalar"
+  // or "283–289-moddalar". The old matcher saw only the final number, which
+  // meant selectRelevantSourceRefs() could not associate the full citation
+  // with its retrieved law and none of the provisions became links.
+  const grouped = /(\d+(?:\s*[-–—]\s*\d+)?(?:\s*,\s*\d+(?:\s*[-–—]\s*\d+)?)*(?:\s+(?:va|hamda)\s+\d+(?:\s*[-–—]\s*\d+)?)?)\s*[-–—]?\s*(?:modda|band)lar[\p{L}'’]*/giu;
+  while ((match = grouped.exec(String(text || ''))) !== null) {
+    if (expandArticleExpression(match[1]).includes(normalizedRef)) out.push(match.index);
+  }
+  return unique(out);
+}
+
+function expandArticleExpression(value = '') {
+  const refs = [];
+  const rx = /(\d+)(?:\s*[-–—]\s*(\d+))?/gu;
+  let match;
+  while ((match = rx.exec(String(value || ''))) !== null) {
+    const start = Number.parseInt(match[1], 10);
+    const end = match[2] ? Number.parseInt(match[2], 10) : start;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    if (end >= start && end - start <= 30) {
+      for (let ref = start; ref <= end; ref++) refs.push(String(ref));
+    } else {
+      refs.push(String(start));
+      if (end !== start) refs.push(String(end));
+    }
+  }
+  return unique(refs);
 }
 
 /**
@@ -374,6 +401,13 @@ function canonicalLawLabel(value = '') {
 function lawNameVariants(value = '') {
   const display = canonicalLawLabel(value);
   const variants = unique([String(value || '').trim(), display]);
+  const withoutTerminalI = display.replace(/\b(kodeks|qonun|nizom)i\b/giu, '$1');
+  if (withoutTerminalI !== display) variants.push(withoutTerminalI);
+  const vmq = display.match(/\bVMQ\s*-?\s*(\d+)\b/iu);
+  if (vmq) {
+    variants.push(`VMQ-${vmq[1]}`);
+    variants.push(`${vmq[1]}-son qaror`);
+  }
   const normalized = normalizeLawName(display);
   const abbreviations = {
     'mehnat kodeksi': 'MK',
@@ -388,6 +422,55 @@ function lawNameVariants(value = '') {
   };
   if (abbreviations[normalized]) variants.push(abbreviations[normalized]);
   return unique(variants).sort((a, b) => b.length - a.length);
+}
+
+function joinUzbekMarkdownLinks(links = []) {
+  if (links.length <= 1) return links[0] || '';
+  if (links.length === 2) return `${links[0]} va ${links[1]}`;
+  return `${links.slice(0, -1).join(', ')} va ${links[links.length - 1]}`;
+}
+
+function linkGroupedCitationLists(value = '', records = [], lang = 'uz') {
+  const groupedByLaw = new Map();
+  for (const item of records) {
+    const key = normalizeLawName(item.record.lawName);
+    if (!groupedByLaw.has(key)) groupedByLaw.set(key, []);
+    groupedByLaw.get(key).push(item);
+  }
+
+  let output = value;
+  for (const items of groupedByLaw.values()) {
+    if (items.length < 2) continue;
+    const lawName = items[0].record.lawName;
+    const lawPattern = lawNameVariants(lawName).map(flexibleLawPattern).join('|');
+    if (!lawPattern) continue;
+    const rx = new RegExp(
+      `(^|[^\\p{L}\\p{N}])(?:\\*{0,2})?(` + lawPattern + `)(?:\\*{0,2})?` +
+      `(?:ning)?\\s*,?\\s*(?:\\*{0,2})?` +
+      `(\\d+(?:\\s*[-–—]\\s*\\d+)?(?:\\s*,\\s*\\d+(?:\\s*[-–—]\\s*\\d+)?)*(?:\\s+(?:va|hamda)\\s+\\d+(?:\\s*[-–—]\\s*\\d+)?)?)` +
+      `\\s*[-–—]?\\s*(modda|band)lar[\\p{L}'’]*(?:\\*{0,2})?`,
+      'giu'
+    );
+    output = output.replace(rx, (match, prefix, _matchedLaw, expression, locatorType) => {
+      const mentionedRefs = expandArticleExpression(expression);
+      const byRef = new Map(items.map(item => [item.ref, item.record]));
+      // Never turn a partially grounded list into an authoritative-looking
+      // citation. Every provision in the written list must exist in the
+      // retrieved official source before the group is linked.
+      if (!mentionedRefs.length || mentionedRefs.some(ref => !byRef.has(ref))) return match;
+      const type = String(locatorType || 'modda').toLocaleLowerCase('uz');
+      const links = mentionedRefs.map(ref => {
+        const record = byRef.get(ref);
+        const url = buildLexDeepLink(record.chunk, { lang, articleRef: ref });
+        if (!url) return '';
+        const partLabel = type === 'band' ? 'tegishli band' : 'tegishli qism';
+        return `[**${canonicalLawLabel(record.lawName)}, ${ref}-${type}, ${partLabel}**](${url})`;
+      });
+      if (links.some(link => !link)) return match;
+      return prefix + joinUzbekMarkdownLinks(links);
+    });
+  }
+  return output;
 }
 
 function grammaticalCitationTail(value = '') {
@@ -448,7 +531,7 @@ function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
         return `${prefix}[**${label}**](${url})${tail}`;
       });
     }
-    return output;
+    return linkGroupedCitationLists(output, records, lang);
   }).join('');
 }
 
