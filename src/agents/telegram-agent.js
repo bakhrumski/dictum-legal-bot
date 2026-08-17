@@ -383,10 +383,19 @@ function deterministicLegalTopic(text = '') {
     .replace(/\s+/g, ' ')
     .trim();
 
+  // Traffic-police terminology is unambiguous. This check must precede labor
+  // law because "YPX xodimi" contains the generic word "xodim" but describes
+  // a road-traffic matter, not an employment relationship.
+  if (/(?:\bypx\b|\bgai\b|\bdyhxx\b|\byhxx\b|yol patrul xizmati|yol harakati xavfsizligi|patrul avtomobil|haydovchilik guvohnoma)/u.test(normalized)) {
+    return 'yol-harakati';
+  }
+
   // Unambiguous employment signals override model classification. This keeps
   // short follow-up facts (dates, unpaid months, missing notice) anchored to
-  // the user's original labor-law problem.
-  if (/(?:mehnat shartnom|ish haqi|ish beruvchi|ishdan boshat|ishga tikla|xodim|oylik maosh)/u.test(normalized)) {
+  // the user's original labor-law problem. A bare "xodim" is deliberately not
+  // a labor signal because it also occurs in YPX, IIO and other public-service
+  // questions.
+  if (/(?:mehnat shartnom|ish haqi|ish beruvchi|ishdan boshat|ishga tikla|oylik maosh|xodim(?:ni|ning|ga|dan)?\s+(?:boshat|ishga tikla|ish haqi|maosh|oylik|mehnat))/u.test(normalized)) {
     return 'mehnat';
   }
   return null;

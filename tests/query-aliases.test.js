@@ -9,6 +9,14 @@ assert.match(expanded, /haydovchilik guvohnomasi/i);
 assert.match(expanded, /YPX/);
 assert.match(expanded, /ID-karta/);
 
+const ypxIncident = expandLegalQueryAliases(
+  "YPX xodimi nimaga to'xtatganini tushuntirmadi, mashinadan tush dedi, planshetga qo'l qo'ymasam qamab qo'yishini aytdi."
+);
+assert.match(ypxIncident, /to'xtatish sababini tushuntirish/i);
+assert.match(ypxIncident, /kabinasidan chiqmasdan/i);
+assert.match(ypxIncident, /ma'muriy bayonnoma/i);
+assert.match(ypxIncident, /ushlab turish asoslari/i);
+
 const fallback = buildCorpusOnlyAnswer("Pravam yonimda emas", [{
   law_name: 'VMQ-172 Yo\'l harakati qoidalari',
   source_url: 'https://lex.uz/docs/-5953883',

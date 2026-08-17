@@ -9,7 +9,7 @@ function expandLegalQueryAliases(query) {
 
   const text = String(query);
   const lower = text.toLowerCase()
-    .replace(/[‘’`´]/g, "'")
+    .replace(/[\u02bb\u02bc\u2018\u2019`\u00b4]/gu, "'")
     .replace(/\s+/g, ' ')
     .trim();
   const aliases = [];
@@ -22,8 +22,27 @@ function expandLegalQueryAliases(query) {
     aliases.push('haydovchilik guvohnomasi transport vositasini boshqarish huquqini beruvchi hujjat');
   }
 
-  if (/\b(?:gai|dan|ypx|dyhxx|yhxx)\b/u.test(lower)) {
+  const trafficPolice = /\b(?:gai|dan|ypx|dyhxx|yhxx)\b/u.test(lower)
+    || /yo['’]?l[-\s]?patrul\s+xizmati/u.test(lower);
+
+  if (trafficPolice) {
     aliases.push("YPX DYHXX YHXX yo'l-patrul xizmati yo'l harakati xavfsizligi xizmati IIO xodimi");
+  }
+
+  if (trafficPolice && /(?:nimaga|nega|sabab|asos|tushuntir)/u.test(lower)) {
+    aliases.push("transport vositasini to'xtatish asoslari to'xtatish sababini tushuntirish");
+  }
+
+  if (trafficPolice && /(?:mashinadan|avtomobildan|kabina|tush(?:ing|irdi| dedi)?)/u.test(lower)) {
+    aliases.push("transport vositasi kabinasidan chiqmasdan qolish avtomobildan tushirish talabi");
+  }
+
+  if (trafficPolice && /(?:planshet|imzo|qo['’]?l\s+qo['’]?y|bayonnoma|qaror)/u.test(lower)) {
+    aliases.push("ma'muriy bayonnoma mazmuni tushuntirish e'tiroz imzo nusxa");
+  }
+
+  if (trafficPolice && /(?:qamab|qamoq|ushlab|tahdid)/u.test(lower)) {
+    aliases.push("ma'muriy ushlab turish asoslari qamoqqa olish bilan tahdid");
   }
 
   const physicalDocumentMissing = /(?:yon(?:im|ida)?da\s+(?:yo'q|emas)|uyda\s+qol|unut|olib\s+(?:chiq|yur)ma)/u.test(lower);
