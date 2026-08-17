@@ -12493,31 +12493,62 @@
 
         // ── Export an inline document (template → /api/draft/export with values
         //    read back from the page; AI doc → /api/draft/export-raw) ──
+        // Exporting is read-only, so transient gateway/network failures can be
+        // retried safely. This prevents a short service restart from making
+        // the user press Word or PDF several times manually.
+        async function docExportFetch(url, options, onAttempt) {
+            var maxAttempts = 3;
+            var lastError = null;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+                if (onAttempt) onAttempt(attempt, maxAttempts);
+                try {
+                    var response = await fetch(url, options);
+                    if ([502, 503, 504].indexOf(response.status) === -1 || attempt === maxAttempts) return response;
+                    lastError = new Error('Server vaqtincha javob bermadi (' + response.status + ')');
+                } catch (err) {
+                    lastError = err;
+                    if (attempt === maxAttempts) throw err;
+                }
+                await new Promise(function (resolve) {
+                    setTimeout(resolve, attempt === 1 ? 900 : 1800);
+                });
+            }
+            throw lastError || new Error('Eksport amalga oshmadi');
+        }
+
         async function docMsgExport(id, format, btn) {
             var card = document.getElementById(id); if (!card) return;
             var page = card.querySelector('.docb-page');
             var tplId = card.getAttribute('data-tpl-id');
             var title = card.getAttribute('data-title') || 'Hujjat';
-            var orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
+            var originalHtml = btn.innerHTML;
+            var exportIcon = btn.querySelector('svg');
+            var iconHtml = exportIcon ? exportIcon.outerHTML : '';
+            btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
+            var showAttempt = function (attempt, total) {
+                var label = attempt > 1 ? 'Qayta urinilmoqda (' + attempt + '/' + total + ')' : 'Tayyorlanmoqda';
+                btn.innerHTML = iconHtml + '<span>' + label + '</span>';
+            };
             try {
-                var r;
+                var endpoint, payload;
                 if (tplId) {
                     var values = {};
                     page.querySelectorAll('.docfld[data-k]').forEach(function (sp) { values[sp.dataset.k] = sp.textContent || ''; });
-                    r = await fetch('/api/draft/export', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                        body: JSON.stringify({ templateId: tplId, values: values, format: format })
-                    });
+                    endpoint = '/api/draft/export';
+                    payload = { templateId: tplId, values: values, format: format };
                 } else {
                     var clone = page.cloneNode(true);
                     clone.querySelectorAll('.docfld').forEach(function (sp) {
                         sp.replaceWith(document.createTextNode(sp.textContent || '[_____]'));
                     });
-                    r = await fetch('/api/draft/export-raw', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                        body: JSON.stringify({ title: title, html: clone.innerHTML, format: format })
-                    });
+                    endpoint = '/api/draft/export-raw';
+                    payload = { title: title, html: clone.innerHTML, format: format };
                 }
+                var r = await docExportFetch(endpoint, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                }, showAttempt);
                 if (r.status === 429) { alert('Kunlik limit tugadi'); return; }
                 var ct = r.headers.get('Content-Type') || '';
                 if (ct.indexOf('application/json') !== -1) {
@@ -12525,13 +12556,20 @@
                     if (d.mode === 'client-print' && d.html) { var w = window.open('', '_blank'); if (w) { w.document.write(d.html); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400); } return; }
                     alert(d.error || 'Eksport xatoligi'); return;
                 }
+                if (!r.ok) throw new Error('Eksport xatoligi (' + r.status + ')');
                 var blob = await r.blob();
+                if (!blob || blob.size === 0) throw new Error('Server bo\'sh fayl qaytardi');
                 var url = URL.createObjectURL(blob);
                 var a = document.createElement('a'); a.href = url;
                 a.download = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (format === 'pdf' ? '.pdf' : '.doc');
-                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
             } catch (e) { alert('Xatolik: ' + e.message); }
-            finally { btn.disabled = false; btn.textContent = orig; }
+            finally {
+                btn.disabled = false;
+                btn.removeAttribute('aria-busy');
+                btn.innerHTML = originalHtml;
+            }
         }
 
         // ── Composer attachments: OCR + PDF extraction merged into the message ──
