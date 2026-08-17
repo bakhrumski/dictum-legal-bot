@@ -129,13 +129,17 @@ const pendingFiles = new Map();
 const PENDING_FILE_TTL = 60 * 60 * 1000; // 1 hour
 const MIN_FILE_DESC = 200; // min chars of description required with a file
 
-// ========== REQUIRED CHANNEL SUBSCRIPTION ==========
-// Users must join this channel before they can send a legal request.
-// Set REQUIRED_CHANNEL='' to disable the gate. The bot MUST be an
-// administrator of the channel for membership checks to work.
+// ========== OPTIONAL CHANNEL SUBSCRIPTION ==========
+// The channel remains available as a promotional link, but ordinary Telegram
+// requests must not be blocked by it. Re-enable the gate only deliberately by
+// setting TELEGRAM_CHANNEL_GATE_ENABLED=true; REQUIRED_CHANNEL on its own is
+// not enough to interrupt a user's legal question.
 const REQUIRED_CHANNEL = process.env.REQUIRED_CHANNEL !== undefined
   ? process.env.REQUIRED_CHANNEL
   : '@eng_sara_huquqiy_yangiliklar';
+const TELEGRAM_CHANNEL_GATE_ENABLED = /^(?:1|true|yes|on)$/i.test(
+  String(process.env.TELEGRAM_CHANNEL_GATE_ENABLED || '').trim()
+);
 
 function channelLink() {
   const c = (REQUIRED_CHANNEL || '').trim();
@@ -1232,8 +1236,9 @@ bot.on('message', async (msg) => {
     console.error('Error checking user block status:', error);
   }
 
-  // Require channel subscription before accepting a request
-  if (!(await isChannelMember(msg.from.id))) {
+  // Channel membership is an explicit opt-in gate. It is disabled by default
+  // so a legal question is never discarded after the user has typed it.
+  if (TELEGRAM_CHANNEL_GATE_ENABLED && !(await isChannelMember(msg.from.id))) {
     sendJoinPrompt(chatId);
     return;
   }

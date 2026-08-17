@@ -543,6 +543,28 @@ function stubMemory(clarifyCount = 0) {
     stubMemory();
   });
 
+  await test('a YPX officer question is routed to traffic law, not labor law', async () => {
+    const d = deps({
+      topic: 'mehnat', // A wrong model guess must not override explicit YPX facts.
+      answer: "Yo'l-patrul xizmati xodimi to'xtatish sababini tushuntirishi kerak.",
+      chunks: [{
+        law_name: "VMQ-975 Yo'l-patrul xizmati nizomi",
+        article_numbers: ['18'],
+        source_url: 'https://lex.uz/uz/docs/-4089917',
+        chunk_text: "18-band. Yo'l harakati qatnashchisi to'xtatish asosini tushuntirishni talab qilishga haqli.",
+      }],
+    });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({
+      chatId: 1,
+      text: "Meni YPX xodimi to'xtatdi, sababini tushuntirmay mashinadan tush dedi va planshetdagi hujjatga qo'l qo'ymasam qamash bilan tahdid qildi. Bu to'g'rimi?",
+    });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(d.calls.retrieval.topic, 'yol-harakati');
+    assert.strictEqual(d.calls.retrieval.options.strictTopic, true);
+    assert.notStrictEqual(d.calls.retrieval.topic, 'mehnat');
+  });
+
   await test('Telegram uses inline named citations and no separate Manbalar footer', async () => {
     const d = deps({
       answer: 'Mehnat kodeksining 100-moddasiga ko\'ra ish beruvchi yozma buyruq berishi shart.',
