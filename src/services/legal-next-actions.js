@@ -1,5 +1,7 @@
 'use strict';
 
+const { deterministicLegalTopic } = require('./legal-topic-routing');
+
 // Contextual follow-up actions are deliberately deterministic. The legal
 // answer model explains the law; this module turns the already-classified
 // topic and the user's facts into safe product actions without another model
@@ -65,11 +67,33 @@ function attorneyAction(topic, label) {
  * verified attorney directory, and the fourth simply returns focus to chat.
  */
 function buildLegalNextActions({ question = '', answer = '', topic = '' } = {}) {
-  const legalTopic = String(topic || '').toLocaleLowerCase('uz');
+  // Re-check the completed question/answer instead of trusting UI topic state.
+  // Explicit facts in the current question win, then the completed answer,
+  // while the supplied topic remains a fallback for ambiguous wording.
+  const legalTopic = deterministicLegalTopic(question)
+    || deterministicLegalTopic(answer)
+    || String(topic || '').toLocaleLowerCase('uz');
   const text = normalized(`${question} ${answer}`);
   let actions;
 
-  if (legalTopic === 'mehnat' || /(ish haqi|oylik|maosh|ishdan bo'shat|mehnat shartnoma)/u.test(text)) {
+  if (legalTopic === 'talim' || /(talaba|student|yakuniy nazorat|oraliq nazorat|imtihon|universitet|dekanat|akademik halollik)/u.test(text)) {
+    const assessment = /(yakuniy nazorat|oraliq nazorat|imtihon|baho|baholash|chetlat)/u.test(text);
+    actions = [
+      documentAction(
+        'document_application',
+        assessment ? "Chetlashtirish asosi va dalolatnoma nusxasini so'rab ariza" : "Ta'lim tashkilotiga yozma ariza",
+        'Ariza',
+        'application'
+      ),
+      documentAction(
+        'document_complaint',
+        assessment ? "Yakuniy nazorat bo'yicha apellyatsiya yoki shikoyat" : "Ta'lim tashkiloti qarori ustidan shikoyat",
+        'Shikoyat arizasi',
+        'complaint'
+      ),
+      attorneyAction('talim', "Ta'lim huquqi bo'yicha advokat topish"),
+    ];
+  } else if (legalTopic === 'mehnat' || /(ish haqi|oylik|maosh|ishdan bo'shat|mehnat shartnoma)/u.test(text)) {
     const unpaid = /(ish haqi|oylik|maosh).*(ber|to'la|undir)|to'lanmagan/u.test(text);
     const dismissed = /ishdan bo'shat|ishga tikla/u.test(text);
     actions = [
@@ -112,23 +136,6 @@ function buildLegalNextActions({ question = '', answer = '', topic = '' } = {}) 
       documentAction('document_complaint', "Soliq qarori ustidan shikoyat", 'Shikoyat arizasi', 'complaint'),
       documentAction('document_demand', "Soliq organiga yozma talabnoma", 'Talabnoma', 'demand'),
       attorneyAction('soliq', "Soliq nizolari bo'yicha advokat topish"),
-    ];
-  } else if (legalTopic === 'talim' || /(talaba|student|yakuniy nazorat|oraliq nazorat|imtihon|universitet|dekanat|akademik halollik)/u.test(text)) {
-    const assessment = /(yakuniy nazorat|oraliq nazorat|imtihon|baho|baholash|chetlat)/u.test(text);
-    actions = [
-      documentAction(
-        'document_application',
-        assessment ? "Chetlashtirish asosi va dalolatnoma nusxasini so'rab ariza" : "Ta'lim tashkilotiga yozma ariza",
-        'Ariza',
-        'application'
-      ),
-      documentAction(
-        'document_complaint',
-        assessment ? "Yakuniy nazorat bo'yicha apellyatsiya yoki shikoyat" : "Ta'lim tashkiloti qarori ustidan shikoyat",
-        'Shikoyat arizasi',
-        'complaint'
-      ),
-      attorneyAction('talim', "Ta'lim huquqi bo'yicha advokat topish"),
     ];
   } else {
     const debt = /(qarz|undirish|to'lamadi|majburiyat)/u.test(text);

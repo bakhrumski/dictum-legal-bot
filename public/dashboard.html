@@ -3162,6 +3162,12 @@
             font-weight: 700; font-size: 15px; color: var(--text-primary);
             margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-1);
         }
+        .docflow-context-note {
+            margin: 0 0 18px; padding: 11px 13px; border-left: 2px solid var(--navy-500);
+            background: var(--bg-1); color: var(--text-secondary); border-radius: 8px;
+            font-size: 13px; line-height: 1.55;
+        }
+        .docflow-context-note strong { color: var(--text-primary); }
         .docflow-opts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
         .docflow-opt {
             display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -11987,8 +11993,9 @@
             messagesEl.innerHTML += '<div class="ai-chat-msg ai docflow-card">' + html + '</div>';
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
-        function docFlowClose() {
+        function docFlowClose(preserveContinuation) {
             document.querySelectorAll('#aiChatMessages .docflow-step').forEach(function (c) { c.remove(); });
+            if (!preserveContinuation) docFlowContinuationContext = null;
         }
 
         function flowIcon(name) {
@@ -12007,6 +12014,7 @@
 
         function openDocBuilder() {
             closeAttachMenu();
+            docFlowContinuationContext = null;
             docStepCard('<div class="docflow-title">Hujjat yaratish</div>Qaysi usulni tanlaysiz?' +
                 '<div class="docflow-opts">' +
                 '<button class="docflow-opt" type="button" onclick="docFlowTemplates()">' + flowIcon('template') + 'Shablon</button>' +
@@ -12151,7 +12159,15 @@
         // no template exists yet for that type does it fall back to the
         // generic 5-question form above.
         var docFlowActiveFields = null;   // template fields used for the current form, or null (generic)
-        async function docFlowPickType(t) {
+        var docFlowContinuationContext = null; // originating legal Q&A + selected next action
+        async function docFlowPickType(t, continuationContext) {
+            if (continuationContext && typeof continuationContext === 'object') {
+                docFlowContinuationContext = {
+                    question: String(continuationContext.question || '').slice(0, 5000),
+                    answer: String(continuationContext.answer || '').slice(0, 12000),
+                    selectedAction: String(continuationContext.selectedAction || '').slice(0, 300)
+                };
+            }
             if (t === '__custom') { var v = prompt('Hujjat turini yozing:'); if (!v || !v.trim()) return; t = v.trim(); }
             docStepCard('<div class="docflow-title">' + escapeHtml(t) + '</div><div style="padding:10px 0;color:var(--text-secondary);font-size:13px;">Yuklanmoqda…</div>');
             var tplFields = await findTemplateFieldsForType(t);
@@ -12229,7 +12245,11 @@
                     return { html: html, isTextarea: !!f.ta };
                 });
             }
-            docStepCard('<div class="docflow-title">' + escapeHtml(t) + ' — kerakli ma\'lumotlar</div>' + buildDocFormGrid(rowObjs) +
+            var continuationNote = docFlowContinuationContext
+                ? '<div class="docflow-context-note"><strong>Tanlangan qadam:</strong> ' + escapeHtml(docFlowContinuationContext.selectedAction || t) +
+                  '<br>Oldingi savol va huquqiy javob hisobga olinadi. Faqat hujjat uchun yetishmayotgan ma\'lumotlarni kiriting.</div>'
+                : '';
+            docStepCard('<div class="docflow-title">' + escapeHtml(t) + ' — kerakli ma\'lumotlar</div>' + continuationNote + buildDocFormGrid(rowObjs) +
                 '<div class="docform-actions">' +
                 '<button class="docflow-opt docflow-primary" type="button" onclick="docFlowSubmit(' + attrArg(t) + ')">' + flowIcon('create') + 'Hujjatni yaratish</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowAI()">← Orqaga</button>' +
@@ -12260,10 +12280,12 @@
                 });
             }
             if (!parts.length) { alert('Kamida bitta maydonni to\'ldiring.'); return; }
-            docFlowClose();
-            docFlowGenerate(docType, parts.join('\n'));
+            var continuation = docFlowContinuationContext;
+            docFlowClose(true);
+            docFlowGenerate(docType, parts.join('\n'), continuation);
         }
-        async function docFlowGenerate(docType, details) {
+        async function docFlowGenerate(docType, details, continuation) {
+            docFlowContinuationContext = null;
             var messagesEl = document.getElementById('aiChatMessages');
             messagesEl.innerHTML += '<div class="ai-chat-msg user">📄 ' + escapeHtml(docType) + '<br>' + escapeHtml(details).replace(/\n/g, '<br>') + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
@@ -12271,7 +12293,7 @@
             try {
                 var r = await fetch('/api/draft/ai-generate', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ docType: docType, details: details })
+                    body: JSON.stringify({ docType: docType, details: details, continuation: continuation || null })
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
@@ -13052,11 +13074,12 @@
 
         var legalNextActionStore = Object.create(null);
 
-        function renderLegalNextActions(actions, question) {
+        function renderLegalNextActions(actions, question, answer) {
             if (!Array.isArray(actions) || !actions.length) return '';
             var groupId = 'nxa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
             legalNextActionStore[groupId] = {
                 question: String(question || ''),
+                answer: String(answer || ''),
                 actions: actions.slice(0, 4),
             };
             return '<div class="legal-next-actions" data-next-group="' + groupId + '">' +
@@ -13080,7 +13103,11 @@
                 return;
             }
             if (action.kind === 'document') {
-                docFlowPickType(action.documentType || 'Yuridik hujjat');
+                docFlowPickType(action.documentType || 'Yuridik hujjat', {
+                    question: group.question,
+                    answer: group.answer,
+                    selectedAction: action.label || action.documentType || 'Yuridik hujjat'
+                });
                 return;
             }
             if (action.kind !== 'attorney') return;
@@ -13092,7 +13119,8 @@
             results.hidden = false;
             results.innerHTML = '<div class="legal-attorney-meta">Litsenziyasi tasdiqlangan advokatlar qidirilmoqda...</div>';
             try {
-                var params = new URLSearchParams({ q: group.question, limit: '3', language: 'uz' });
+                var caseContext = [group.question, group.answer, action.label].filter(Boolean).join('\n').slice(0, 3000);
+                var params = new URLSearchParams({ q: caseContext, limit: '3', language: 'uz' });
                 if (action.attorneyField) params.set('field', action.attorneyField);
                 var response = await fetch('/api/attorneys?' + params.toString(), { credentials: 'same-origin' });
                 var data = await response.json();
@@ -13197,7 +13225,7 @@
 
             var qaIdAttr = (data.qaBank && data.qaBank.id) ? (' data-qa-id="' + data.qaBank.id + '"') : '';
             var twId = 'tw_' + Date.now();
-            var nextActionsHtml = renderLegalNextActions(data.nextActions || [], currentQuestion);
+            var nextActionsHtml = renderLegalNextActions(data.nextActions || [], currentQuestion, data.reply);
             messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + nextActionsHtml + ragBadge + actionsHtml + verifyRow + '</div>';
             var twEl = document.getElementById(twId);
             if (twEl) {
@@ -13834,7 +13862,7 @@
                             '<button class="ai-verify-btn ai-cancel-btn" onclick="closeVerifyEditor(\'' + msgId + '\')">Bekor qilish</button>' +
                             '</div></div>') : '';
 
-                        var historyNextActions = renderLegalNextActions(msg.nextActions || [], lastUserText);
+                        var historyNextActions = renderLegalNextActions(msg.nextActions || [], lastUserText, msg.text);
                         messagesEl.innerHTML += '<div class="ai-chat-msg ai" data-raw="' + escapeHtml(msg.text).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(lastUserText).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content">' + simpleMarkdown(msg.text) + '</div>' + historyNextActions + actionsHtml + verifyRow + '</div>';
                     }
                 });

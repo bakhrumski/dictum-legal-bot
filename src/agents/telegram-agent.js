@@ -933,6 +933,9 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
         paidService: true,
         requiresLawyerApproval: true,
         caseSummary,
+        sourceQuestion: String(context.caseSummary || ''),
+        sourceLegalAnswer: String(context.sourceLegalAnswer || ''),
+        selectedNextAction: String(context.selectedNextAction || documentTypeLabel),
       },
     });
   }
@@ -1127,6 +1130,7 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
   await remember(answer.text, 0);
   await setConversationState(chatId, 'awaiting_next_action', {
     nextActionQuestion: groundedQuestion,
+    nextActionAnswer: answer.text,
     nextActionTopic: answer.meta && answer.meta.topic,
     nextActions,
   });

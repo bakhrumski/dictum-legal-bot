@@ -313,6 +313,23 @@ test('education questions route to education and receive education-specific acti
   assert.match(actions[2].label, /ta'lim huquqi/iu);
 });
 
+test('current education facts override a stale labor topic in next actions', () => {
+  const question = "Men studentman. Meni yakuniy nazoratdan chetlatishdi. Qayerda yozilgan?";
+  const answer = "824-son qaror bilan tasdiqlangan nizomning 41-bandi qo'llanadi.";
+  const actions = buildLegalNextActions({ question, answer, topic: 'mehnat' });
+  const labels = actions.map(action => action.label).join(' | ');
+  assert.match(labels, /Chetlashtirish asosi/u);
+  assert.match(labels, /Yakuniy nazorat/u);
+  assert.match(labels, /Ta'lim huquqi/u);
+  assert.doesNotMatch(labels, /Ish haqi|Ish beruvchi|Mehnat nizolari/u);
+});
+
+test('server replaces stale selected topics with an unambiguous current-question route', () => {
+  const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+  assert.match(server, /if \(deterministicTopic && topic !== deterministicTopic\)/u);
+  assert.match(server, /topic = deterministicTopic;/u);
+});
+
 test('Lex.uz result parsing prefers canonical Uzbek-Latin document links', () => {
   const html = [
     '<a href="/docs/5013007?query=talim#sr-1">Cyrillic</a>',
@@ -346,8 +363,9 @@ test('unpaid salary answers offer claim, demand, verified attorney and custom ac
 
 test('dashboard reuses drafting and verified-attorney flows for next actions', () => {
   const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
-  assert.match(dashboard, /function renderLegalNextActions\(actions, question\)/u);
-  assert.match(dashboard, /docFlowPickType\(action\.documentType/u);
+  assert.match(dashboard, /function renderLegalNextActions\(actions, question, answer\)/u);
+  assert.match(dashboard, /answer: String\(answer \|\| ''\)/u);
+  assert.match(dashboard, /docFlowPickType\(action\.documentType[\s\S]*?question: group\.question,[\s\S]*?answer: group\.answer,[\s\S]*?selectedAction:/u);
   assert.match(dashboard, /fetch\('\/api\/attorneys\?'/u);
   assert.match(dashboard, /Aloqa ma\\'lumoti faqat aniq tanlov/u);
 });
@@ -358,6 +376,18 @@ test('contextual document actions explain the details field without pre-filling 
   assert.match(dashboard, /Qaysi majburiyat bajarilmaganini/u);
   assert.match(dashboard, /detailsTarget\.placeholder = docFlowDetailsPlaceholder\(t\)/u);
   assert.doesNotMatch(dashboard, /seedTarget\.value|docFlowSeedDetails/u);
+});
+
+test('selected document actions continue the exact question and answer without pre-filling fields', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+  const drafting = fs.readFileSync(path.join(__dirname, '../src/drafting/routes.js'), 'utf8');
+  assert.match(dashboard, /var docFlowContinuationContext = null/u);
+  assert.match(dashboard, /Oldingi savol va huquqiy javob hisobga olinadi/u);
+  assert.match(dashboard, /continuation: continuation \|\| null/u);
+  assert.match(drafting, /CONTINUATION OF THE LEGAL CHAT/u);
+  assert.match(drafting, /Original legal question/u);
+  assert.match(drafting, /Verified legal answer\/conclusion/u);
+  assert.match(drafting, /User-selected next step/u);
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);
