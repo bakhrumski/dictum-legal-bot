@@ -313,6 +313,23 @@ test('education questions route to education and receive education-specific acti
   assert.match(actions[2].label, /ta'lim huquqi/iu);
 });
 
+test('current education facts override a stale labor topic in next actions', () => {
+  const question = "Men studentman. Meni yakuniy nazoratdan chetlatishdi. Qayerda yozilgan?";
+  const answer = "824-son qaror bilan tasdiqlangan nizomning 41-bandi qo'llanadi.";
+  const actions = buildLegalNextActions({ question, answer, topic: 'mehnat' });
+  const labels = actions.map(action => action.label).join(' | ');
+  assert.match(labels, /Chetlashtirish asosi/u);
+  assert.match(labels, /Yakuniy nazorat/u);
+  assert.match(labels, /Ta'lim huquqi/u);
+  assert.doesNotMatch(labels, /Ish haqi|Ish beruvchi|Mehnat nizolari/u);
+});
+
+test('server replaces stale selected topics with an unambiguous current-question route', () => {
+  const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+  assert.match(server, /if \(deterministicTopic && topic !== deterministicTopic\)/u);
+  assert.match(server, /topic = deterministicTopic;/u);
+});
+
 test('Lex.uz result parsing prefers canonical Uzbek-Latin document links', () => {
   const html = [
     '<a href="/docs/5013007?query=talim#sr-1">Cyrillic</a>',

@@ -5902,6 +5902,20 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       }
     }
 
+    // Strong fact-specific routing wins over a stale picker value. The topic
+    // picker is conversation UI state and may still contain the field from a
+    // previous question; it must not turn an exam dispute into a labour-law
+    // retrieval or produce labour next steps. deterministicLegalTopic only
+    // returns a value for explicit signals, so ambiguous questions still
+    // respect the user's picker.
+    if (deterministicTopic && topic !== deterministicTopic) {
+      const displacedTopic = topic;
+      topic = deterministicTopic;
+      priorityTopics = priorityTopics
+        .filter((value, index, values) => value && value !== topic && value !== displacedTopic && values.indexOf(value) === index);
+      console.log(`[Legal Chat] deterministic route ${deterministicTopic} replaced stale topic ${displacedTopic || 'none'}`);
+    }
+
     // SAFETY NET: legal-chat must ALWAYS run the RAG-grounded buildTopicPrompt,
     // never the web-search buildLegalSearchPrompt (which can cite hallucinated
     // lex.uz URLs). If no topic resolved above — user didn't select one and the
