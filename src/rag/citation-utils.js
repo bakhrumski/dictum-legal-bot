@@ -403,6 +403,11 @@ function lawNameVariants(value = '') {
   const variants = unique([String(value || '').trim(), display]);
   const withoutTerminalI = display.replace(/\b(kodeks|qonun|nizom)i\b/giu, '$1');
   if (withoutTerminalI !== display) variants.push(withoutTerminalI);
+  if (/to['\u02bb\u02bc\u2018\u2019`]?g['\u02bb\u02bc\u2018\u2019`]?risida$/iu.test(display)) {
+    variants.push(`${display}gi Qonun`);
+    variants.push(`${display}gi Qonuni`);
+    variants.push(`${display} Qonuni`);
+  }
   const vmq = display.match(/\bVMQ\s*-?\s*(\d+)\b/iu);
   if (vmq) {
     variants.push(`VMQ-${vmq[1]}`);
@@ -486,7 +491,10 @@ function grammaticalCitationTail(value = '') {
  */
 function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
   const reply = stripRawLexAttributions(stripGeneratedSourceSections(replyText));
-  const selected = selectRelevantSourceRefs(chunks, extractAnalysisSection(reply));
+  // Every grounded provision written anywhere in the answer must behave like
+  // a source link. Previously only the Tahlil section was inspected, leaving
+  // the same verified law plain in Huquqiy asos and Xulosa.
+  const selected = selectRelevantSourceRefs(chunks, reply);
   if (!reply || selected.length === 0) return reply;
 
   const records = selected

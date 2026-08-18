@@ -134,7 +134,7 @@ async function test(name, fn) {
  *   korpus   — a lawyer-verified answer to return from qa-korpus
  */
 function deps(o = {}) {
-  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, attorneyCriteria: null, contacts: 0, events: 0, quota: 0, release: 0, shadow: 0, shadowPayload: null, retrieval: null };
+  const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, attorneyCriteria: null, contacts: 0, events: 0, quota: 0, release: 0, shadow: 0, shadowPayload: null, lexCrossCheck: 0, retrieval: null };
   const dependencies = {
     calls,
     callCheapAI: async () => {
@@ -179,6 +179,12 @@ function deps(o = {}) {
       calls.shadowPayload = payload;
       if (o.shadowError) throw new Error('shadow offline');
       return { status: 'success' };
+    };
+  }
+  if (o.crossCheck) {
+    dependencies.crossCheckLegalAnswer = async ({ answer }) => {
+      calls.lexCrossCheck++;
+      return o.crossCheckResult || { answer, status: 'pass', checked: true };
     };
   }
   return dependencies;
@@ -597,7 +603,7 @@ function stubMemory(clarifyCount = 0) {
     assert.match(r.reply, /Oila kodeksi, 96-modda/);
   });
 
-  await test('Telegram links only law articles applied in Tahlil', async () => {
+  await test('Telegram makes every grounded source in the answer clickable', async () => {
     const d = deps({
       topic: 'mamuriy',
       answer: [
@@ -618,7 +624,7 @@ function stubMemory(clarifyCount = 0) {
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: "Yo'l harakati jarimasiga qanday shikoyat qilaman?" });
     assert.match(r.reply, /\[\*\*Ma'muriy javobgarlik to'g'risidagi kodeks, 128-modda, tegishli qism\*\*\]/u);
-    assert.doesNotMatch(r.reply, /\[\*\*Ma'muriy sud ishlarini yuritish kodeksi, 126-modda/u);
+    assert.match(r.reply, /\[\*\*Ma'muriy sud ishlarini yuritish kodeksi, 126-modda, tegishli qism\*\*\]/u);
   });
 
   await test('Telegram links every distinct article applied in Tahlil', async () => {
@@ -642,6 +648,16 @@ function stubMemory(clarifyCount = 0) {
     assert.match(r.reply, /Fuqarolik kodeksi, 382-modda, tegishli qism/u);
     assert.match(r.reply, /Fuqarolik kodeksi, 384-modda, tegishli qism/u);
     assert.doesNotMatch(r.reply, /Iqtisodiy protsessual kodeksi/u);
+  });
+
+  await test('a generated Telegram legal answer receives the independent Lex check', async () => {
+    const d = deps({ crossCheck: true });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: "Ish beruvchi meni asossiz ishdan bo'shatdi." });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(d.calls.lexCrossCheck, 1);
+    assert.strictEqual(r.meta.lexCrossCheck.status, 'pass');
+    assert.strictEqual(r.meta.lexCrossCheck.checked, true);
   });
 
   await test('a fourth unpaid legal answer is blocked before retrieval or generation', async () => {

@@ -43,6 +43,12 @@ const { correctiveFilter } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
+const {
+  getUniversalLegalResearchPlaybook,
+  buildQuestionResearchDirective,
+  buildLexResearchQueries,
+} = require('../rag/legal-research-playbook');
+const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
 const { parentChildSearch } = require('../rag/advanced-corpus');
 // ── Justify RAG (optional external service, kept as bonus fallback) ──
 const {
@@ -3388,7 +3394,7 @@ async function callGeminiStream(messages, options = {}, onToken) {
 // ── GPT-5.6 model family (single source of truth) ────────────────────────────
 // Sol   $5 /$30  — highest reasoning, frontier: legal-opinion synthesis
 // Terra $2.50/$15 — balanced: main legal chat / general generation
-// Luna  $1 /$6   — cost-sensitive, high volume: digests, explainer, compaction
+// Luna  $0.20/$1.20 — cost-sensitive, high volume: digests, explainer, compaction
 // All: 1.05M context, 128k max output, reasoning-token support.
 // Each id is env-overridable; Gemini (free tier) is the only fallback.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3713,6 +3719,7 @@ try {
     getAttorneyContact: revealAttorneyContactAfterConsent,
     recordAgentEvent: recordTelegramAgentEvent,
     runShadowEvaluation: runHermesShadow,
+    crossCheckLegalAnswer,
     hydrateLexAnchors,
     chatModel: MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
@@ -4085,7 +4092,7 @@ const LEGAL_DATABASES = {
   }
 };
 
-function buildLegalSearchPrompt(databases) {
+function buildLegalSearchPrompt(databases, userQuestion = '') {
   const dbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
   const validDbs = dbs.filter(db => LEGAL_DATABASES[db]);
   if (validDbs.length === 0) validDbs.push('lex.uz');
@@ -4098,6 +4105,11 @@ function buildLegalSearchPrompt(databases) {
   const searchSites = validDbs.map(db => LEGAL_DATABASES[db].searchHint).join(' OR ');
 
   return `Siz O'zbekiston huquqi bo'yicha qonun qidirish yordamchisisiz.
+
+UNIVERSAL TADQIQOT PLAYBOOKI (ichki, foydalanuvchiga ko'rsatmang):
+${getUniversalLegalResearchPlaybook()}
+
+${buildQuestionResearchDirective({ question: userQuestion, topic: '', language: 'uz' })}
 
 VAZIFANGIZ:
 Foydalanuvchi savoliga quyidagi ma'lumot bazalari asosida javob bering:
@@ -4256,6 +4268,7 @@ const { detectLawHint } = require('../rag/law-hints');
 async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   const apiKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
   const isUz = language !== 'ru';
+  const originalQuestion = String(query || '');
   // Category slugs are stored lowercase; normalize the topic so a stray
   // "Soliq" vs "soliq" can never silently fall back to unscoped retrieval.
   if (topic) topic = String(topic).toLowerCase();
@@ -4485,21 +4498,23 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   }
 
   const totalFound = rawResults.length + guaranteedKeywordMatches.length + exactResults.length;
-  if (topic && totalFound < 2 && !opts.strictTopic) {
-    console.warn(`[RAG] Topic-scoped retrieval underflow (${totalFound} results) for "${topic}", retrying without category filter`);
-    const fallbackResult = await retrieveLegalContext(query, null, null);
-    const fallbackCount = Array.isArray(fallbackResult?.chunks)
-      ? fallbackResult.chunks.length
-      : Number(fallbackResult?.meta?.chunks || 0);
+  if (topic && totalFound < 2) {
+    if (!opts.strictTopic) {
+      console.warn(`[RAG] Topic-scoped retrieval underflow (${totalFound} results) for "${topic}", retrying without category filter`);
+      const fallbackResult = await retrieveLegalContext(query, null, null);
+      const fallbackCount = Array.isArray(fallbackResult?.chunks)
+        ? fallbackResult.chunks.length
+        : Number(fallbackResult?.meta?.chunks || 0);
 
-    if (fallbackCount > rawResults.length) {
-      if (fallbackResult?.meta) {
-        fallbackResult.meta = {
-          ...fallbackResult.meta,
-          searchMode: `topic-fallback(${topic})->${fallbackResult.meta.searchMode || 'unscoped'}`,
-        };
+      if (fallbackCount > rawResults.length) {
+        if (fallbackResult?.meta) {
+          fallbackResult.meta = {
+            ...fallbackResult.meta,
+            searchMode: `topic-fallback(${topic})->${fallbackResult.meta.searchMode || 'unscoped'}`,
+          };
+        }
+        return fallbackResult;
       }
-      return fallbackResult;
     }
   }
 
@@ -4642,16 +4657,42 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // Under LEXUZ_ONLY the general-web leg is skipped entirely and retrieval
   // falls back to lex.uz alone, which is domain-restricted by construction.
   // opts.noWebFallback additionally forces this off for a specific caller.
-  if (opts.strictTopic && goodChunks.length < 2) needsWebSearch = false;
+  // A strict topic limits *corpus* scope; it must not disable the official
+  // Lex.uz fallback. That old coupling left niche/education answers without
+  // any source even though the authoritative site was available.
+  const hasCitationReadyCorpus = goodChunks.some(r =>
+    r && r.is_active === true && r.source_url && getChunkArticleRefs(r).length > 0
+  );
+  // Every generated legal answer receives fresh official-source evidence.
+  // Corpus retrieval remains first and fast, but a seemingly good corpus hit
+  // must not prevent discovery of a more specific Cabinet resolution, annexed
+  // regulation or current Lex.uz version.
+  const alwaysCrossCheckLex = process.env.LEX_CROSSCHECK_EVERY_ANSWER !== 'false';
+  const needsOfficialSearch = alwaysCrossCheckLex || needsWebSearch || !hasCitationReadyCorpus;
 
   let webResults = [];
   let lexLiveResults = [];
-  if (needsWebSearch) {
+  if (needsOfficialSearch && !opts.noWebFallback) {
     const allowWeb = !opts.noWebFallback && webSearchAllowed(true);
     if (!allowWeb) console.log('[SOURCE-GUARD] Tavily web search skipped — lex.uz only');
+    const lexQueries = buildLexResearchQueries(originalQuestion, topic);
     const [tavilyRes, lexRes] = await Promise.all([
       allowWeb ? webSearch(query).catch(() => []) : Promise.resolve([]),
-      searchLexUz(query, { maxDocs: 2, maxChars: 4000 }).catch(() => []),
+      Promise.all(lexQueries.map((lexQuery, queryIndex) => searchLexUz(lexQuery, {
+        topic,
+        scoreText: originalQuestion,
+        includeRegistry: queryIndex === 0,
+        maxDocs: 3,
+        maxChars: 4000,
+      }).catch(() => []))).then((groups) => {
+        const seen = new Set();
+        return groups.flat().filter((entry) => {
+          const key = String(entry && entry.url || '');
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).slice(0, 4);
+      }),
     ]);
     webResults = tavilyRes;
     lexLiveResults = lexRes;
@@ -4662,6 +4703,29 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
 
 
   if (goodChunks.length === 0 && webResults.length === 0 && lexLiveResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, lexLiveResults: 0, sources: [] } };
+
+  // Lex.uz live results used to exist only as prompt text. Citation checking
+  // and link rendering received `goodChunks` alone, so every source found by
+  // the fallback was subsequently treated as unverified and remained plain
+  // text. Adapt official live excerpts into the same evidence shape as corpus
+  // chunks and carry them through the complete citation pipeline.
+  const lexLiveChunks = lexLiveResults.map((r, index) => ({
+    id: `lex_live_${index}_${String(r.url || '').replace(/\D/gu, '').slice(-12)}`,
+    chunk_text: r.content || '',
+    childText: r.content || '',
+    parentText: r.content || '',
+    law_name: r.lawName || r.title || 'Lex.uz hujjati',
+    source_url: r.url || '',
+    article_numbers: Array.isArray(r.provisionRefs) ? r.provisionRefs : [],
+    provision_type: r.provisionType || 'modda',
+    category: topic || null,
+    source_type: 'lex_live',
+    language: 'uz',
+    is_active: true,
+    adoption_date: r.metadata && r.metadata.adoption_date,
+    document_number: r.metadata && r.metadata.document_number,
+  })).filter(r => r.source_url && getChunkArticleRefs(r).length > 0);
+  const citationChunks = [...goodChunks, ...lexLiveChunks];
 
   // ── 5. Format context for prompt ──
   // Max chars per chunk: verified_qa gets more space, law text is trimmed
@@ -4684,7 +4748,10 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
 
     return [
       `[${i + 1}] ${r.law_name}${verifiedBadge}${crossFieldBadge}${categoryTag}${langTag}${scoreTag}`,
-      arts ? (isUz ? `  Moddalar: ${arts}` : `  Статьи: ${arts}`) : '',
+      arts ? (isUz
+        ? `  Normalar: ${arts} (${r.provision_type === 'band' ? 'band' : 'modda'})`
+        : `  Нормы: ${arts} (${r.provision_type === 'band' ? 'пункт' : 'статья'})`)
+        : '',
       r.chapter ? `  ${r.chapter}` : '',
       text,
       (r.is_active === true && r.source_url) ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.source_url})` : '',
@@ -4716,7 +4783,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
 
   const meta = {
     searchMode,
-    chunks: goodChunks.length,
+    chunks: citationChunks.length,
     webResults: webResults.length,
     lexLiveResults: lexLiveResults.length,
     sources,
@@ -4739,7 +4806,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // ── Build a clean source reference list (no box-drawings, no instructions) ──
   const sourceRefLines = [];
   const seenSourceRefs = new Set();
-  for (const r of goodChunks) {
+  for (const r of citationChunks) {
     const articleRefs = getChunkArticleRefs(r);
     if (articleRefs.length === 0) continue;
     for (const art of articleRefs) {
@@ -4753,7 +4820,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       sourceRefLines.push(
         `- ${r.law_name}` +
         (meta ? ` (${meta})` : '') +
-        `, ${art}-modda` +
+        `, ${art}-${r.provision_type === 'band' ? 'band' : 'modda'}` +
         (safeUrl ? ` | ${safeUrl}` : '')
       );
     }
@@ -4766,18 +4833,18 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // ── Build clean data-only context (no instructions, no box-drawings) ──
   let context;
   if (isUz) {
-    context = `\nQONUNCHILIK KONTEKSTI (${goodChunks.length} natija):\n`
+    context = `\nQONUNCHILIK KONTEKSTI (${citationChunks.length} natija):\n`
       + sourceBlock
       + `\n` + chunksText + webText + lexLiveText
       + `\n\n--- JAVOB SHU YERDAN BOSHLANSIN ---`;
   } else {
-    context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${goodChunks.length} результатов):\n`
+    context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${citationChunks.length} результатов):\n`
       + sourceBlock
       + `\n` + chunksText + webText + lexLiveText
       + `\n\n--- ОТВЕТ НАЧИНАЕТСЯ ЗДЕСЬ ---`;
   }
 
-  return { context, meta, chunks: goodChunks };
+  return { context, meta, chunks: citationChunks };
 }
 
 function buildTopicPrompt(topic, ragContext, userQuestion = '') {
@@ -4878,14 +4945,35 @@ JIDDIY TAQIQLAR:
 - KONTEKSTdagi MANBALAR ro'yxatidan TASHQARI URL TO'QIB CHIQARMANG.
 - "DEFINITSIYA SAVOLI" yoki ichki ko'rsatmalarning matnini javobga YOZMANG.`;
 
-  // ── ASSEMBLE: system rules + output format + context data ──
-  return systemRules + '\n' + outputFormat + '\n' + (ragContext ? ragContext + '\n' : '');
+  const researchDirective = buildQuestionResearchDirective({
+    question: userQuestion,
+    topic,
+    language: 'uz',
+  });
+
+  // Static playbook precedes dynamic question data. Apart from making the
+  // instruction hierarchy explicit, this ordering allows model-side prompt
+  // caching to reuse the policy prefix between different users' questions.
+  return systemRules
+    + '\n\nUNIVERSAL TADQIQOT PLAYBOOKI (ichki, foydalanuvchiga ko\'rsatmang):\n'
+    + getUniversalLegalResearchPlaybook()
+    + '\n'
+    + outputFormat
+    + '\n'
+    + researchDirective
+    + '\n'
+    + (ragContext ? ragContext + '\n' : '');
 }
 
 function buildGeminiFallbackPrompt(topicLabel, userQuestion = '', ragContext = '') {
   const definitionHint = getDefinitionPromptAddendum(userQuestion);
 
   return `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz. Foydalanuvchilar — yuristlar va advokat stajyorlari. Ular tez, aniq, tekshirib bo'ladigan huquqiy javob izlaydi.
+
+UNIVERSAL TADQIQOT PLAYBOOKI (ichki, foydalanuvchiga ko'rsatmang):
+${getUniversalLegalResearchPlaybook()}
+
+${buildQuestionResearchDirective({ question: userQuestion, topic: topicLabel, language: 'uz' })}
 
 VAZIFA: O'zbekiston qonunchiligi asosida ANIQ, RAQAMLI va TUZILMALI javob bering.
 
@@ -5983,7 +6071,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       && (!Array.isArray(history) || history.length === 0);
     const cacheKey = cacheable
       ? require('crypto').createHash('sha256')
-          .update('grounded-clickable-citations-v2|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          .update('lex-always-cross-check-v4|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
           .digest('hex')
       : null;
     if (cacheKey) {
@@ -6041,7 +6129,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       // for laws the AI cited that aren't in the corpus) — see below.
     }
 
-    let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases);
+    let systemPrompt = topic ? buildTopicPrompt(topic, ragContext, message) : buildLegalSearchPrompt(databases, message);
     if (priorityTopics.length > 0) {
       const labels = priorityTopics.map(t => LEGAL_TOPICS[t]).filter(Boolean);
       if (labels.length > 0) {
@@ -6190,6 +6278,42 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       } catch (fallbackErr) {
         console.warn(`[Legal Chat] Gemini fallback failed: ${fallbackErr.message}`);
       }
+    }
+
+    // Independent second-pass verification. Generation and verification are
+    // deliberately separate calls: the verifier sees the drafted answer plus
+    // the freshly retrieved Lex.uz excerpts and may either approve it, replace
+    // unsupported claims, or report insufficient official evidence. A verifier
+    // outage never hides an otherwise grounded answer, but is exposed in RAG
+    // metadata and the normal citation confidence checks still run below.
+    if (hasAiProvider) {
+      if (sse) sse({ type: 'status', kind: 'verify', text: 'Javob Lex.uz bilan qayta tekshirilmoqda...' });
+      const lexCheck = await crossCheckLegalAnswer({
+        question: message,
+        answer: displayReply,
+        chunks: ragChunks,
+        callAI,
+        model: MODELS.chat,
+        userId: _chatUserId,
+        endpoint: '/api/legal-chat/lex-cross-check',
+      });
+      if (lexCheck.status === 'revised') {
+        displayReply = normalizeResponseForUser(lexCheck.answer);
+        finalProvider = `${finalProvider} + Lex QA`;
+        if (sse) sse({ type: 'replace', text: displayReply });
+      } else if (lexCheck.status === 'error' || lexCheck.status === 'insufficient') {
+        console.warn(`[Legal Chat] Lex cross-check ${lexCheck.status}: ${lexCheck.reason}`);
+      }
+      ragMeta = Object.assign({}, ragMeta || {}, {
+        lexCrossCheck: {
+          status: lexCheck.status,
+          checked: lexCheck.checked,
+          reason: lexCheck.reason || null,
+          unsupportedClaims: lexCheck.unsupportedClaims || [],
+          estimatedCostUsd: lexCheck.estimatedCostUsd,
+        },
+      });
+      if (sse) sse({ type: 'status_clear' });
     }
 
     // Citation post-check (before the footer append — the footer's own

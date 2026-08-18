@@ -22,6 +22,14 @@ function deterministicLegalTopic(text = '') {
     return 'yol-harakati';
   }
 
+  // Education questions frequently contain words such as "chetlashtirish" or
+  // "tashkilot" that a broad classifier can confuse with dismissal from
+  // employment. Exam, student and academic-assessment language is much more
+  // specific and therefore wins before the labor-law rule below.
+  if (/(?:talaba|student|yakuniy nazorat|oraliq nazorat|imtihon|akademik halollik|dekanat|rektorat|universitet|institut|kontrakt asosida oqish|oqishdan chetlat)/u.test(normalized)) {
+    return 'talim';
+  }
+
   if (/(?:mehnat shartnom|ish haqi|ish beruvchi|ishdan boshat|ishga tikla|oylik maosh|xodim(?:ni|ning|ga|dan)?\s+(?:boshat|ishga tikla|ish haqi|maosh|oylik|mehnat))/u.test(normalized)) {
     return 'mehnat';
   }
