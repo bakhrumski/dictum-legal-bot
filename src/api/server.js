@@ -31,6 +31,7 @@ const {
   normalizeLegalAnswerCitations,
 } = require('../rag/citation-utils');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
+const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const {
   buildLexAnchorFallbackUrl,
   hydrateLexAnchors,
@@ -4881,7 +4882,7 @@ JIDDIY TAQIQLAR:
   return systemRules + '\n' + outputFormat + '\n' + (ragContext ? ragContext + '\n' : '');
 }
 
-function buildGeminiFallbackPrompt(topicLabel, userQuestion = '') {
+function buildGeminiFallbackPrompt(topicLabel, userQuestion = '', ragContext = '') {
   const definitionHint = getDefinitionPromptAddendum(userQuestion);
 
   return `Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI siz. Foydalanuvchilar — yuristlar va advokat stajyorlari. Ular tez, aniq, tekshirib bo'ladigan huquqiy javob izlaydi.
@@ -4891,9 +4892,11 @@ VAZIFA: O'zbekiston qonunchiligi asosida ANIQ, RAQAMLI va TUZILMALI javob bering
 QOIDALAR (foydalanuvchiga KO'RSATMANG, faqat amal qiling):
 - FAQAT o'zbek (lotin) tilida yozing.
 - O'zbekiston Respublikasi HOZIRGI AMAL QILUVCHI qonun va kodekslariga asoslaning.
-- Har bir huquqiy tasdiq uchun manba: qonun nomi + modda raqami.
+- Har bir huquqiy tasdiq uchun manba: qonun nomi + aniq modda yoki band raqami.
+- Agar quyida KONTEKST berilgan bo'lsa, FAQAT undagi qonun, modda va bandlardan foydalaning. Kontekstdan tashqari manba yoki raqam yozmang.
+- Har bir manbani alohida (**Qonun nomi, N-modda yoki N-band, M-qism**) shaklida yozing. "Tegishli bandlar", modda diapazoni yoki bir qavsda bir nechta modda yozmang.
 - DEFINITSIYA savollarida ham albatta manba modda raqamini qavsda yozing — masalan: "Mehnat nizosi — bu... (MK, 541-modda)".
-- Modda raqamlariga ishonchingiz komil bo'lsa keltiring; yo'q bo'lsa, "aniq modda raqamini lex.uz dan tekshirish tavsiya etiladi" deb qo'shing.
+- Kontekstda aniq modda yoki band bo'lmasa, raqamli manba keltirmang va qaysi ma'lumot yetishmayotganini qisqa ayting.
 - URL keltirmang — faqat "lex.uz dan ko'ring" deb yozing.
 - Prim moddalarni to'g'ri yozing: "N-modda prim M".
 
@@ -4912,6 +4915,7 @@ YOZISH USLUBI:
 
 JAVOB FORMATI (3 bo'lim, MAJBURIY):
 ${definitionHint}
+${ragContext ? `\nKONTEKST — FAQAT SHU MANBALARGA TAYANING:\n${ragContext}\n` : ''}
 
 **Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism? Qonun nomi va modda raqamini **qalin** yozing. Bir nechta norma bo'lsa — hammasini keltiring. Format: (**Qonun nomi, N-modda, M-qism**).
 
@@ -5792,14 +5796,15 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     //   • autoDetect=true  → run the lightweight classifier; null if it can't pick (RAG searches all).
     //   • topics[]         → first item is the primary; remaining items are priority hints.
     //   • topic (legacy)   → unchanged single-topic behavior.
+    const deterministicTopic = deterministicLegalTopic(message);
     let topic = rawTopic || null;
     let priorityTopics = [];
     if (autoDetect === true) {
       // User chose "Bilmayman" (don't know) in the picker → the system must pick
       // the single most relevant field automatically. Force a non-null result so
       // we never fall through to the unconstrained web-search prompt.
-      const detected = await classifyLegalTopic(message, { forcePick: true });
-      console.log(`[Legal Chat] autoDetect: classifier force-picked ${detected}`);
+      const detected = deterministicTopic || await classifyLegalTopic(message, { forcePick: true });
+      console.log(`[Legal Chat] autoDetect: ${deterministicTopic ? 'deterministic route' : 'classifier force-picked'} ${detected}`);
       topic = detected;
     } else if (Array.isArray(topics) && topics.length > 0) {
       const valid = topics.filter(t => typeof t === 'string' && LEGAL_TOPICS[t]);
@@ -5814,8 +5819,8 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     // lex.uz URLs). If no topic resolved above — user didn't select one and the
     // frontend somehow dispatched anyway — force-classify the most relevant field.
     if (!topic && priorityTopics.length === 0) {
-      topic = await classifyLegalTopic(message, { forcePick: true });
-      console.log(`[Legal Chat] no topic resolved — force-classified to ${topic}`);
+      topic = deterministicTopic || await classifyLegalTopic(message, { forcePick: true });
+      console.log(`[Legal Chat] no topic resolved — ${deterministicTopic ? 'deterministically routed' : 'force-classified'} to ${topic}`);
     }
 
     // ── VERIFIED ANSWER OVERRIDE ──
@@ -5978,7 +5983,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       && (!Array.isArray(history) || history.length === 0);
     const cacheKey = cacheable
       ? require('crypto').createHash('sha256')
-          .update('contextual-next-actions-v1|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          .update('grounded-clickable-citations-v2|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
           .digest('hex')
       : null;
     if (cacheKey) {
@@ -6022,7 +6027,10 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         ? history.filter(m => m && (m.role === 'user' || m.role === 'model' || m.role === 'assistant'))
             .slice(-4).map(m => m.text || m.content || '').join(' ')
         : '';
-      const ragResult = await retrieveLegalContext(message, topic, null, { contextText });
+      const ragResult = await retrieveLegalContext(message, topic, null, {
+        contextText,
+        strictTopic: Boolean(deterministicTopic && topic === deterministicTopic),
+      });
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragMeta = ragResult.meta || null;
       ragChunks = ragResult.chunks || [];
@@ -6160,12 +6168,18 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       console.warn(`[Legal Chat] RAG answer failed ("topilmadi"), retrying with Gemini pretrained knowledge...`);
       try {
         const topicLabel = LEGAL_TOPICS[topic] || topic || 'huquq';
-        const geminiPrompt = buildGeminiFallbackPrompt(topicLabel, message);
+        const geminiPrompt = buildGeminiFallbackPrompt(topicLabel, message, ragContext);
         const fallbackMessages = [
           { role: 'system', text: geminiPrompt },
           { role: 'user', text: message },
         ];
-        const fallbackResult = await callAI(fallbackMessages, { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat/fallback' });
+        const fallbackResult = await callAI(fallbackMessages, {
+          model: MODELS.chat,
+          useSearch: !ragContext,
+          maxTokens: 8192,
+          userId: _chatUserId,
+          endpoint: '/api/legal-chat/fallback',
+        });
         const fallbackReply = normalizeResponseForUser(fallbackResult.text);
         if (!isFailedAnswer(fallbackReply)) {
           displayReply = fallbackReply;

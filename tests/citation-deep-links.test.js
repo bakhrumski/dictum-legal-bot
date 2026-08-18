@@ -87,6 +87,24 @@ test('qism suffixes are detected and linked inside the answer', () => {
   assert.strictEqual((linked.match(/\]\(https:\/\/lex\.uz/gu) || []).length, 2);
 });
 
+test('grouped law provisions are rendered as separate grounded links', () => {
+  const answer = [
+    'Tahlil',
+    "Ma'muriy javobgarlik to'g'risidagi kodeksi, 281 va 294-moddalar qo'llanadi.",
+  ].join('\n');
+  const chunks = ['281', '294'].map(article => ({
+    law_name: "Ma'muriy javobgarlik to'g'risidagi kodeksi",
+    article_numbers: [article],
+    source_url: 'https://lex.uz/docs/-97664',
+    chunk_text: `${article}-modda. Rasmiy norma matni.`,
+  }));
+  const linked = linkCitationsInMarkdown(answer, chunks, 'uz');
+  assert.strictEqual((linked.match(/\[\*\*Ma'muriy javobgarlik/gu) || []).length, 2);
+  assert.match(linked, /281-modda, tegishli qism/u);
+  assert.match(linked, /294-modda, tegishli qism/u);
+  assert.strictEqual((linked.match(/\]\(https:\/\/lex\.uz\/docs\/-97664#:~:text=/gu) || []).length, 2);
+});
+
 test('existing Markdown citations are normalized to the canonical named style', () => {
   const answer = 'Tahlil\nMehnat kodeksi [253-moddasi](https://lex.uz/docs/111111) qo‘llanadi.';
   const chunk = {
@@ -229,6 +247,20 @@ test('dashboard renders citations with one canonical named style', () => {
   assert.match(context.rendered, /Ma'muriy javobgarlik to'g'risidagi kodeks, 135-modda, tegishli qism/u);
   assert.match(context.rendered, /https:\/\/lex\.uz\/docs\/-5953883#-5954624/u);
   assert.match(context.rendered, /https:\/\/lex\.uz\/docs\/-97664#-1781411/u);
+});
+
+test('the answer flag guide aligns with the same 820px conversation column', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+  assert.match(dashboard, /\.flag-guide\s*\{[\s\S]*?width:min\(100%, 820px\); box-sizing:border-box; align-self:center;/u);
+  assert.match(dashboard, /border-radius:12px; padding:13px 15px; margin:0 auto 14px;/u);
+});
+
+test('dashboard legal chat uses deterministic routing and grounded fallback context', () => {
+  const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+  assert.match(server, /const deterministicTopic = deterministicLegalTopic\(message\)/u);
+  assert.match(server, /buildGeminiFallbackPrompt\(topicLabel, message, ragContext\)/u);
+  assert.match(server, /useSearch: !ragContext/u);
+  assert.match(server, /grounded-clickable-citations-v2/u);
 });
 
 test('post-send progress uses monochrome SVGs instead of colorful emoji', () => {

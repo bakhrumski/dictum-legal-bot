@@ -3891,9 +3891,10 @@
         /* One-time "how to flag an error" guide shown in the AI chat */
         .flag-guide {
             display:flex; gap:13px; align-items:flex-start;
+            width:min(100%, 820px); box-sizing:border-box; align-self:center;
             background:linear-gradient(135deg, rgba(1,156,224,0.08), rgba(14,34,54,0.05));
             border:1px solid var(--border-1,rgba(0,0,0,0.1)); border-left:4px solid var(--navy-700,#0e2236);
-            border-radius:12px; padding:13px 15px; margin:0 0 14px;
+            border-radius:12px; padding:13px 15px; margin:0 auto 14px;
         }
         [data-theme="dark"] .flag-guide { background:linear-gradient(135deg, rgba(0,185,242,0.08), rgba(255,255,255,0.03)); }
         .flag-guide-art { flex:none; }

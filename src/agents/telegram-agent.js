@@ -33,6 +33,7 @@ const {
   getChunkArticleRefs,
   normalizeLegalAnswerCitations,
 } = require('../rag/citation-utils');
+const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const telegramEconomy = require('../services/telegram-economy');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
 
@@ -372,33 +373,6 @@ function formatAttorneyComparison(options, criteria = {}) {
     '',
     "Aloqa raqamini ochish uchun raqamni yuboring. Yangi qidiruv uchun “mezonni o'zgartirish”, bekor qilish uchun “yo'q” deb yozing.",
   ].filter(line => line !== '').join('\n');
-}
-
-function deterministicLegalTopic(text = '') {
-  const normalized = String(text || '')
-    .normalize('NFKC')
-    .toLocaleLowerCase('uz')
-    .replace(/[\u02bb\u02bc\u2018\u2019`']/gu, '')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Traffic-police terminology is unambiguous. This check must precede labor
-  // law because "YPX xodimi" contains the generic word "xodim" but describes
-  // a road-traffic matter, not an employment relationship.
-  if (/(?:\bypx\b|\bgai\b|\bdyhxx\b|\byhxx\b|yol patrul xizmati|yol harakati xavfsizligi|patrul avtomobil|haydovchilik guvohnoma)/u.test(normalized)) {
-    return 'yol-harakati';
-  }
-
-  // Unambiguous employment signals override model classification. This keeps
-  // short follow-up facts (dates, unpaid months, missing notice) anchored to
-  // the user's original labor-law problem. A bare "xodim" is deliberately not
-  // a labor signal because it also occurs in YPX, IIO and other public-service
-  // questions.
-  if (/(?:mehnat shartnom|ish haqi|ish beruvchi|ishdan boshat|ishga tikla|oylik maosh|xodim(?:ni|ning|ga|dan)?\s+(?:boshat|ishga tikla|ish haqi|maosh|oylik|mehnat))/u.test(normalized)) {
-    return 'mehnat';
-  }
-  return null;
 }
 
 function buildClarifiedQuestion(question, turns = []) {
