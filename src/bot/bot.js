@@ -501,18 +501,21 @@ bot.on('callback_query', async (callbackQuery) => {
         const intake = resolveIntakeCallback(`doc_${typeCode}`, current.context || {});
         if (!intake) throw new Error('document action is not configured');
         const caseSummary = String((current.context || {}).nextActionQuestion || '').trim();
+        const sourceLegalAnswer = String((current.context || {}).nextActionAnswer || '').trim();
         const questions = typeCode === 'demand'
           ? "Qabul qiluvchi va yuboruvchi F.I.O./tashkilotini, undiriladigan summa yoki talabni, voqea sanalarini, dalillarni va bajarish uchun beriladigan muddatni yozing."
           : "Sud yoki organ nomini (ma'lum bo'lsa), da'vogar va javobgarni, summa/talabni, muhim sanalarni hamda mavjud dalillarni yozing.";
         await telegramAgent.setConversationState(chatId, intake.state, {
           ...(intake.context || {}),
           caseSummary,
+          sourceLegalAnswer,
+          selectedNextAction: String(action.label || intake.context.documentTypeLabel || ''),
         });
         await bot.answerCallbackQuery(callbackQuery.id, { text: 'Hujjat turi tanlandi' });
         await bot.sendMessage(chatId, [
           `Tanlangan hujjat: *${intake.context.documentTypeLabel}*`,
           "Bu pullik xizmat; buyurtma mas'ul yurist tasdig'idan keyin qabul qilinadi.",
-          caseSummary ? "Huquqiy vaziyatingiz oldingi savoldan olindi." : '',
+          caseSummary ? "Huquqiy vaziyatingiz va xulosa oldingi savol-javobdan olindi. Faqat yetishmayotgan ma'lumotlarni yozing." : '',
           '',
           questions,
           "Shaxsiy maxfiy ma'lumotlarni hozircha yubormang.",
@@ -530,6 +533,8 @@ bot.on('callback_query', async (callbackQuery) => {
           strictField: Boolean(field.registryField),
           needsHumanFieldReview: Boolean(field.needsHumanFieldReview),
           caseSummary: String((current.context || {}).nextActionQuestion || '').trim(),
+          sourceLegalAnswer: String((current.context || {}).nextActionAnswer || '').trim(),
+          selectedNextAction: String(action.label || ''),
         });
         await bot.answerCallbackQuery(callbackQuery.id, { text: 'Yo\'nalish tanlandi' });
         await bot.sendMessage(chatId, `Yo'nalish: *${field.label}*\n\nQaysi hududdan advokat kerak?`, {
@@ -1502,7 +1507,13 @@ bot.on('message', async (msg) => {
             requestId: result.requestId,
             telegramChatId: chatId,
             serviceSlug: agentResult.meta && agentResult.meta.serviceSlug,
-            intakeData: { originalText: requestData.request_text, source: 'telegram' },
+            intakeData: {
+              originalText: requestData.request_text,
+              source: 'telegram',
+              sourceQuestion: agentResult.meta && agentResult.meta.sourceQuestion,
+              sourceLegalAnswer: agentResult.meta && agentResult.meta.sourceLegalAnswer,
+              selectedNextAction: agentResult.meta && agentResult.meta.selectedNextAction,
+            },
           });
         } catch (e) {
           console.error('[BOT] paid service order creation failed:', e.message);

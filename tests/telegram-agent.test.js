@@ -526,6 +526,8 @@ function stubMemory(clarifyCount = 0) {
       'a completed answer must offer deterministic next steps'
     );
     assert.strictEqual(dbState.state, 'awaiting_next_action');
+    assert.match(dbState.context.nextActionQuestion, /Ish beruvchi/u);
+    assert.match(dbState.context.nextActionAnswer, /Mehnat kodeksi/u);
   });
 
   await test('a clarification answer retrieves the complete labor case with strict topic scope', async () => {
