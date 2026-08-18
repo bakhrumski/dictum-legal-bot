@@ -22,7 +22,7 @@ const MAX_DOCS_TO_FETCH = 2;
 const MAX_EXCERPT_CHARS = 4000;
 const SEARCH_TIMEOUT_MS = 15000;
 const TOPIC_SCORE_HINTS = Object.freeze({
-  talim: "ta'lim oluvchi talaba huquqlari majburiyatlari baholash nazorat ichki tartib 47-modda 48-modda",
+  talim: "ta'lim oluvchi talaba huquqlari majburiyatlari baholash yakuniy nazorat chetlashtirish sababsiz qoldirish akademik qarzdor ichki tartib 47-modda 48-modda 41-band",
 });
 
 /**
@@ -37,10 +37,19 @@ const TOPIC_SCORE_HINTS = Object.freeze({
  *   the act; the number is then useless for choosing sections inside it (it
  *   only appears in the preamble), so callers that know what they are looking
  *   for — the claims a report makes about the act — pass that here instead.
+ * @param {boolean} opts.includeRegistry - include curated topic acts (default true).
+ *   Parallel query expansions set this false after the first query to avoid
+ *   downloading the same large registry documents more than once.
  * @returns {Promise<Array<{ title, url, content, source, metadata }>>}
  */
 async function searchLexUz(query, opts = {}) {
-  const { maxDocs = MAX_DOCS_TO_FETCH, maxChars = MAX_EXCERPT_CHARS, scoreText = '', topic = '' } = opts;
+  const {
+    maxDocs = MAX_DOCS_TO_FETCH,
+    maxChars = MAX_EXCERPT_CHARS,
+    scoreText = '',
+    topic = '',
+    includeRegistry = true,
+  } = opts;
   const effectiveScoreText = [scoreText || query, TOPIC_SCORE_HINTS[String(topic || '').toLowerCase()] || '']
     .filter(Boolean)
     .join(' ');
@@ -65,7 +74,7 @@ async function searchLexUz(query, opts = {}) {
   // try its primary official acts first, then fill any remaining slots from
   // the live search page. Every registry URL is fetched and title-checked;
   // stale/wrong registry entries therefore cannot silently become evidence.
-  const registryCandidates = topic
+  const registryCandidates = topic && includeRegistry
     ? getLawsForCategory(String(topic).toLowerCase()).slice(0, Math.max(maxDocs, 2)).map(law => ({
         url: canonicalLexUrl(law.lex_url),
         expectedTitle: law.law_name,
@@ -74,7 +83,11 @@ async function searchLexUz(query, opts = {}) {
     : [];
   const dynamicCandidates = docUrls.map(url => ({ url, expectedTitle: '', source: 'lex.uz-live' }));
   const seenCandidates = new Set();
-  const candidates = [...registryCandidates, ...dynamicCandidates].filter(candidate => {
+  // Search results come first: they are question-specific and may be a Cabinet
+  // resolution, annexed regulation or ministry order. The registry is a safe
+  // fallback, not a reason to fill every slot with broad codes/laws before the
+  // implementing act is even inspected.
+  const candidates = [...dynamicCandidates, ...registryCandidates].filter(candidate => {
     if (!candidate.url || seenCandidates.has(candidate.url)) return false;
     seenCandidates.add(candidate.url);
     return true;
@@ -92,7 +105,7 @@ async function searchLexUz(query, opts = {}) {
 
       // Skip if still a historical version after the auto-follow attempt
       // (fetchLexDocument already tried to follow current_version_url)
-      if (doc.metadata.current_version_url) {
+      if (doc.metadata.current_version_url || doc.metadata.is_active === false) {
         console.warn(`[LEX-LIVE] Skipping historical version: ${docUrl}`);
         continue;
       }
@@ -107,6 +120,7 @@ async function searchLexUz(query, opts = {}) {
         console.warn(`[LEX-LIVE] Search result has no meaningful query overlap, skipped: ${docUrl}`);
         continue;
       }
+      const provision = inferExcerptProvision(excerpt);
       results.push({
         title: doc.title || 'Nomsiz hujjat',
         lawName: candidate.expectedTitle || doc.title || 'Nomsiz hujjat',
@@ -121,6 +135,8 @@ async function searchLexUz(query, opts = {}) {
         tail: String(doc.body || '').slice(-800),
         source: candidate.source,
         metadata: doc.metadata,
+        provisionRefs: provision.refs,
+        provisionType: provision.type,
       });
     } catch (err) {
       console.warn(`[LEX-LIVE] Failed to fetch ${docUrl}: ${err.message}`);
@@ -196,6 +212,7 @@ function extractRelevantSections(body, query, maxChars) {
   // section outranks any keyword overlap — otherwise a long act returns its
   // preamble and the cited article never reaches the model.
   const wantedArticles = new Set();
+  const wantedBands = new Set();
   const qs = String(query || '');
   for (const m of qs.matchAll(/(\d{1,4})\s*[-–—]?\s*(?:modda|статья|ст\.)/giu)) {
     wantedArticles.add(m[1]);
@@ -205,18 +222,28 @@ function extractRelevantSections(body, query, maxChars) {
   for (const m of qs.matchAll(/\d{1,4}(?:\s*(?:,|va|и|[-–])\s*\d{1,4})+\s*[-–—]?\s*(?:modda|статья)/giu)) {
     for (const n of m[0].matchAll(/\d{1,4}/g)) wantedArticles.add(n[0]);
   }
+  for (const m of qs.matchAll(/(\d{1,4})\s*[-–—]?\s*band[\p{L}'’]*/giu)) {
+    wantedBands.add(m[1]);
+  }
 
-  if (keywords.length === 0 && wantedArticles.size === 0) return body.substring(0, maxChars);
+  if (keywords.length === 0 && wantedArticles.size === 0 && wantedBands.size === 0) return body.substring(0, maxChars);
 
-  // Split at article boundaries (Uzbek + Russian patterns)
+  // Split at article boundaries AND numbered regulation paragraphs. Many
+  // Cabinet resolutions put the operative rule in an annexed Nizom whose
+  // units are "41.", "42." bands rather than "41-modda". Treating the whole
+  // annex as one section caused the preamble to crowd the relevant band out.
   const SUPER = '\u2070\u00B9\u00B2\u00B3\u2074\u2075\u2076\u2077\u2078\u2079';
   const articleSplitRe = new RegExp(
-    `\\n(?=\\d+[${SUPER}]*[\\s-]*(?:-\\s*)?modda[\\s.:]|Статья\\s+\\d+)`, 'i'
+    `\\n(?=(?:\\d+[${SUPER}]*[\\s-]*(?:-\\s*)?modda[\\s.:]|Статья\\s+\\d+|\\d{1,4}\\.\\s+))`, 'i'
   );
   const sections = body.split(articleSplitRe);
 
   const articleNumOf = (sec) => {
-    const m = sec.match(/^\s*(?:Статья\s+)?(\d{1,4})/);
+    const m = sec.match(/^\s*(?:(?:Статья\s+)?(\d{1,4})[^\n]{0,20}(?:modda|статья))/iu);
+    return m ? m[1] : null;
+  };
+  const bandNumOf = (sec) => {
+    const m = sec.match(/^\s*(\d{1,4})\.\s+/u);
     return m ? m[1] : null;
   };
 
@@ -227,6 +254,8 @@ function extractRelevantSections(body, query, maxChars) {
     // An explicitly requested article dominates the ranking.
     const artNum = articleNumOf(sec);
     if (artNum && wantedArticles.has(artNum)) score += 100;
+    const bandNum = bandNumOf(sec);
+    if (bandNum && wantedBands.has(bandNum)) score += 100;
     for (const kw of keywords) {
       const idx = lower.indexOf(kw);
       if (idx !== -1) {
@@ -257,6 +286,14 @@ function extractRelevantSections(body, query, maxChars) {
   return result || body.substring(0, maxChars);
 }
 
+function inferExcerptProvision(excerpt = '') {
+  const text = String(excerpt || '');
+  const articleRefs = Array.from(text.matchAll(/(?:^|\n)\s*(\d{1,4})(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+)?[\s-]*(?:-\s*)?modda\b/gimu), m => m[1]);
+  if (articleRefs.length > 0) return { type: 'modda', refs: Array.from(new Set(articleRefs)) };
+  const bandRefs = Array.from(text.matchAll(/(?:^|\n)\s*(\d{1,4})\.\s+/gmu), m => m[1]);
+  return { type: bandRefs.length ? 'band' : '', refs: Array.from(new Set(bandRefs)) };
+}
+
 /**
  * Format lex.uz live search results as context block for the LLM prompt.
  */
@@ -277,4 +314,11 @@ function formatLexSearchResults(results, language = 'uz') {
   return header + body;
 }
 
-module.exports = { searchLexUz, formatLexSearchResults, parseSearchResults, canonicalLexUrl };
+module.exports = {
+  searchLexUz,
+  formatLexSearchResults,
+  parseSearchResults,
+  canonicalLexUrl,
+  extractRelevantSections,
+  inferExcerptProvision,
+};

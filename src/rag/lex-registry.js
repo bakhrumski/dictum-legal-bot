@@ -433,16 +433,10 @@ const LEX_REGISTRY = {
       enforcement_date: null
     },
     {
-      doc_id: 'maktabgacha-talim-qonun',
-      law_name: "Maktabgacha ta'lim to'g'risida",
-      lex_url: 'https://lex.uz/uz/docs/5765458',      // [QONUN — VERIFY]
-      enforcement_date: null
-    },
-    {
-      doc_id: 'oliy-talim-qonun',
-      law_name: "Oliy ta'lim to'g'risida",
-      lex_url: 'https://lex.uz/uz/docs/5765460',      // [QONUN — VERIFY]
-      enforcement_date: null
+      doc_id: 'vmq-824-oliy-talim-jarayoni',
+      law_name: "Oliy ta'lim muassasalarida ta'lim jarayonini tashkil etish bilan bog'liq tizimni takomillashtirish chora-tadbirlari to'g'risida",
+      lex_url: 'https://lex.uz/uz/docs/-5193564',     // [VMQ-824, amaldagi]
+      enforcement_date: '2020-12-31'
     },
   ],
 
