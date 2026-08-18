@@ -48,6 +48,7 @@ const {
   buildQuestionResearchDirective,
   buildLexResearchQueries,
 } = require('../rag/legal-research-playbook');
+const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
 const { parentChildSearch } = require('../rag/advanced-corpus');
 // ── Justify RAG (optional external service, kept as bonus fallback) ──
 const {
@@ -3718,6 +3719,7 @@ try {
     getAttorneyContact: revealAttorneyContactAfterConsent,
     recordAgentEvent: recordTelegramAgentEvent,
     runShadowEvaluation: runHermesShadow,
+    crossCheckLegalAnswer,
     hydrateLexAnchors,
     chatModel: MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
@@ -4661,7 +4663,12 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   const hasCitationReadyCorpus = goodChunks.some(r =>
     r && r.is_active === true && r.source_url && getChunkArticleRefs(r).length > 0
   );
-  const needsOfficialSearch = needsWebSearch || !hasCitationReadyCorpus;
+  // Every generated legal answer receives fresh official-source evidence.
+  // Corpus retrieval remains first and fast, but a seemingly good corpus hit
+  // must not prevent discovery of a more specific Cabinet resolution, annexed
+  // regulation or current Lex.uz version.
+  const alwaysCrossCheckLex = process.env.LEX_CROSSCHECK_EVERY_ANSWER !== 'false';
+  const needsOfficialSearch = alwaysCrossCheckLex || needsWebSearch || !hasCitationReadyCorpus;
 
   let webResults = [];
   let lexLiveResults = [];
@@ -6064,7 +6071,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       && (!Array.isArray(history) || history.length === 0);
     const cacheKey = cacheable
       ? require('crypto').createHash('sha256')
-          .update('lex-live-clickable-citations-v3|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          .update('lex-always-cross-check-v4|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
           .digest('hex')
       : null;
     if (cacheKey) {
@@ -6271,6 +6278,42 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       } catch (fallbackErr) {
         console.warn(`[Legal Chat] Gemini fallback failed: ${fallbackErr.message}`);
       }
+    }
+
+    // Independent second-pass verification. Generation and verification are
+    // deliberately separate calls: the verifier sees the drafted answer plus
+    // the freshly retrieved Lex.uz excerpts and may either approve it, replace
+    // unsupported claims, or report insufficient official evidence. A verifier
+    // outage never hides an otherwise grounded answer, but is exposed in RAG
+    // metadata and the normal citation confidence checks still run below.
+    if (hasAiProvider) {
+      if (sse) sse({ type: 'status', kind: 'verify', text: 'Javob Lex.uz bilan qayta tekshirilmoqda...' });
+      const lexCheck = await crossCheckLegalAnswer({
+        question: message,
+        answer: displayReply,
+        chunks: ragChunks,
+        callAI,
+        model: MODELS.chat,
+        userId: _chatUserId,
+        endpoint: '/api/legal-chat/lex-cross-check',
+      });
+      if (lexCheck.status === 'revised') {
+        displayReply = normalizeResponseForUser(lexCheck.answer);
+        finalProvider = `${finalProvider} + Lex QA`;
+        if (sse) sse({ type: 'replace', text: displayReply });
+      } else if (lexCheck.status === 'error' || lexCheck.status === 'insufficient') {
+        console.warn(`[Legal Chat] Lex cross-check ${lexCheck.status}: ${lexCheck.reason}`);
+      }
+      ragMeta = Object.assign({}, ragMeta || {}, {
+        lexCrossCheck: {
+          status: lexCheck.status,
+          checked: lexCheck.checked,
+          reason: lexCheck.reason || null,
+          unsupportedClaims: lexCheck.unsupportedClaims || [],
+          estimatedCostUsd: lexCheck.estimatedCostUsd,
+        },
+      });
+      if (sse) sse({ type: 'status_clear' });
     }
 
     // Citation post-check (before the footer append — the footer's own

@@ -21,6 +21,12 @@ const LEX_SEARCH_URL = 'https://lex.uz/search/nat';
 const MAX_DOCS_TO_FETCH = 2;
 const MAX_EXCERPT_CHARS = 4000;
 const SEARCH_TIMEOUT_MS = 15000;
+const DOCUMENT_CACHE_TTL_MS = Math.max(
+  60_000,
+  Number.parseInt(process.env.LEX_DOCUMENT_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10) || 24 * 60 * 60 * 1000
+);
+const DOCUMENT_CACHE_LIMIT = 128;
+const documentCache = new Map();
 const TOPIC_SCORE_HINTS = Object.freeze({
   talim: "ta'lim oluvchi talaba huquqlari majburiyatlari baholash yakuniy nazorat chetlashtirish sababsiz qoldirish akademik qarzdor ichki tartib 47-modda 48-modda 41-band",
 });
@@ -100,7 +106,7 @@ async function searchLexUz(query, opts = {}) {
     if (results.length >= maxDocs) break;
     const docUrl = candidate.url;
     try {
-      const doc = await fetchLexDocument(docUrl);
+      const doc = await fetchCachedLexDocument(docUrl);
       if (!doc.body || doc.body.trim().length === 0) continue;
 
       // Skip if still a historical version after the auto-follow attempt
@@ -168,6 +174,28 @@ function parseSearchResults(html) {
   });
 
   return Array.from(byDocument.values());
+}
+
+async function fetchCachedLexDocument(url) {
+  const key = canonicalLexUrl(url);
+  const cached = documentCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.document;
+  if (cached) documentCache.delete(key);
+
+  const document = await fetchLexDocument(key);
+  if (documentCache.size >= DOCUMENT_CACHE_LIMIT) {
+    const oldest = documentCache.keys().next().value;
+    if (oldest) documentCache.delete(oldest);
+  }
+  documentCache.set(key, {
+    document,
+    expiresAt: Date.now() + DOCUMENT_CACHE_TTL_MS,
+  });
+  return document;
+}
+
+function clearLexDocumentCache() {
+  documentCache.clear();
 }
 
 function canonicalLexUrl(value = '') {
@@ -321,4 +349,6 @@ module.exports = {
   canonicalLexUrl,
   extractRelevantSections,
   inferExcerptProvision,
+  fetchCachedLexDocument,
+  clearLexDocumentCache,
 };

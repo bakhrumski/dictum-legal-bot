@@ -298,7 +298,7 @@ test('dashboard legal chat uses deterministic routing and grounded fallback cont
   assert.match(server, /const deterministicTopic = deterministicLegalTopic\(message\)/u);
   assert.match(server, /buildGeminiFallbackPrompt\(topicLabel, message, ragContext\)/u);
   assert.match(server, /useSearch: !ragContext/u);
-  assert.match(server, /lex-live-clickable-citations-v3/u);
+  assert.match(server, /lex-always-cross-check-v4/u);
   assert.doesNotMatch(server, /opts\.strictTopic && goodChunks\.length < 2\) needsWebSearch = false/u);
   assert.match(server, /const citationChunks = \[\.\.\.goodChunks, \.\.\.lexLiveChunks\]/u);
 });

@@ -54,6 +54,7 @@ let D = null;
  *   findAttorneys                  — verified, explainable attorney matching
  *   recordAgentEvent               — operational telemetry (optional)
  *   runShadowEvaluation            — private Hermes comparison (optional)
+ *   crossCheckLegalAnswer          — independent Lex.uz answer verifier
  */
 function initTelegramAgent(deps) {
   D = deps || null;
@@ -476,7 +477,19 @@ TELEGRAM FORMATI (majburiy):
     model: D.chatModel || undefined,
     useSearch: false, maxTokens: 900, endpoint: '/tg-agent/answer',
   });
-  const text = String(res.text || '').trim();
+  let text = String(res.text || '').trim();
+  let lexCrossCheck = { status: 'skipped', checked: false };
+  if (D.crossCheckLegalAnswer) {
+    lexCrossCheck = await D.crossCheckLegalAnswer({
+      question,
+      answer: text,
+      chunks,
+      callAI: D.callAI,
+      model: D.chatModel || undefined,
+      endpoint: '/tg-agent/lex-cross-check',
+    });
+    if (lexCrossCheck && lexCrossCheck.answer) text = String(lexCrossCheck.answer).trim();
+  }
 
   // Never let a sourced legal answer cite a legal act that was outside the
   // retrieved topic-scoped context. In that failure mode the old behavior sent
@@ -494,7 +507,8 @@ TELEGRAM FORMATI (majburiy):
     if (D.verifyCitations) unverified = (D.verifyCitations(text, chunks) || {}).unverified || [];
   } catch (_) { /* treat as verified rather than blocking the answer */ }
 
-  const confidence = (chunks.length === 0 || unverified.length > 0 || !groundedToNamedSource) ? 'low' : 'high';
+  const lexCheckWeak = ['error', 'insufficient'].includes(String(lexCrossCheck.status || ''));
+  const confidence = (chunks.length === 0 || unverified.length > 0 || !groundedToNamedSource || lexCheckWeak) ? 'low' : 'high';
   if (confidence === 'low') {
     console.log(`[TG-AGENT] low confidence — chunks=${chunks.length} unverified=[${unverified.join(', ')}]`);
   }
@@ -505,7 +519,18 @@ TELEGRAM FORMATI (majburiy):
     text: normalizeLegalAnswerCitations(text, chunks, 'uz'),
     confidence,
     sources: '',
-    meta: { path: 'rag', topic, chunks: chunks.length, unverified, provider: res.provider },
+    meta: {
+      path: 'rag',
+      topic,
+      chunks: chunks.length,
+      unverified,
+      provider: res.provider,
+      lexCrossCheck: {
+        status: lexCrossCheck.status || 'skipped',
+        checked: lexCrossCheck.checked === true,
+        reason: lexCrossCheck.reason || null,
+      },
+    },
   };
 }
 
