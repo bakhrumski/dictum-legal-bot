@@ -17,6 +17,7 @@ const ATTORNEY_FIELDS = Object.freeze({
   mamuriy_huquq: 'administrative',
   'davlat-boshqaruvi': 'administrative',
   'yol-harakati': 'administrative',
+  talim: 'administrative',
   jinoyat: 'criminal',
 });
 
@@ -32,6 +33,7 @@ const ATTORNEY_FIELD_CODES = Object.freeze({
   mamuriy_huquq: 'administrative',
   'davlat-boshqaruvi': 'administrative',
   'yol-harakati': 'administrative',
+  talim: 'administrative',
   jinoyat: 'criminal',
 });
 
@@ -110,6 +112,23 @@ function buildLegalNextActions({ question = '', answer = '', topic = '' } = {}) 
       documentAction('document_complaint', "Soliq qarori ustidan shikoyat", 'Shikoyat arizasi', 'complaint'),
       documentAction('document_demand', "Soliq organiga yozma talabnoma", 'Talabnoma', 'demand'),
       attorneyAction('soliq', "Soliq nizolari bo'yicha advokat topish"),
+    ];
+  } else if (legalTopic === 'talim' || /(talaba|student|yakuniy nazorat|oraliq nazorat|imtihon|universitet|dekanat|akademik halollik)/u.test(text)) {
+    const assessment = /(yakuniy nazorat|oraliq nazorat|imtihon|baho|baholash|chetlat)/u.test(text);
+    actions = [
+      documentAction(
+        'document_application',
+        assessment ? "Chetlashtirish asosi va dalolatnoma nusxasini so'rab ariza" : "Ta'lim tashkilotiga yozma ariza",
+        'Ariza',
+        'application'
+      ),
+      documentAction(
+        'document_complaint',
+        assessment ? "Yakuniy nazorat bo'yicha apellyatsiya yoki shikoyat" : "Ta'lim tashkiloti qarori ustidan shikoyat",
+        'Shikoyat arizasi',
+        'complaint'
+      ),
+      attorneyAction('talim', "Ta'lim huquqi bo'yicha advokat topish"),
     ];
   } else {
     const debt = /(qarz|undirish|to'lamadi|majburiyat)/u.test(text);

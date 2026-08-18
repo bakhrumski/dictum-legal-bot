@@ -15,11 +15,15 @@
 
 const cheerio = require('cheerio');
 const { httpGet, fetchLexDocument } = require('./fetch-lex');
+const { getLawsForCategory } = require('./lex-registry');
 
 const LEX_SEARCH_URL = 'https://lex.uz/search/nat';
 const MAX_DOCS_TO_FETCH = 2;
 const MAX_EXCERPT_CHARS = 4000;
 const SEARCH_TIMEOUT_MS = 15000;
+const TOPIC_SCORE_HINTS = Object.freeze({
+  talim: "ta'lim oluvchi talaba huquqlari majburiyatlari baholash nazorat ichki tartib 47-modda 48-modda",
+});
 
 /**
  * Search lex.uz and return relevant document excerpts.
@@ -36,31 +40,52 @@ const SEARCH_TIMEOUT_MS = 15000;
  * @returns {Promise<Array<{ title, url, content, source, metadata }>>}
  */
 async function searchLexUz(query, opts = {}) {
-  const { maxDocs = MAX_DOCS_TO_FETCH, maxChars = MAX_EXCERPT_CHARS, scoreText = '' } = opts;
+  const { maxDocs = MAX_DOCS_TO_FETCH, maxChars = MAX_EXCERPT_CHARS, scoreText = '', topic = '' } = opts;
+  const effectiveScoreText = [scoreText || query, TOPIC_SCORE_HINTS[String(topic || '').toLowerCase()] || '']
+    .filter(Boolean)
+    .join(' ');
 
   if (!query || query.trim().length < 3) return [];
 
   const searchUrl = `${LEX_SEARCH_URL}?Query=${encodeURIComponent(query.trim())}`;
   console.log(`[LEX-LIVE] Searching lex.uz: "${query.substring(0, 60)}"`);
 
-  let html;
+  let html = '';
   try {
     html = await httpGet(searchUrl);
   } catch (err) {
     console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
-    return [];
   }
 
-  const docUrls = parseSearchResults(html);
-  if (docUrls.length === 0) {
-    console.log('[LEX-LIVE] No document links found in search results');
-    return [];
-  }
+  const docUrls = html ? parseSearchResults(html) : [];
+  if (docUrls.length === 0) console.log('[LEX-LIVE] No document links found in search results');
 
-  console.log(`[LEX-LIVE] Found ${docUrls.length} document links, fetching top ${Math.min(maxDocs, docUrls.length)}`);
+  // Search results on lex.uz are often ordered by publication date rather
+  // than legal relevance. When the platform already knows the legal field,
+  // try its primary official acts first, then fill any remaining slots from
+  // the live search page. Every registry URL is fetched and title-checked;
+  // stale/wrong registry entries therefore cannot silently become evidence.
+  const registryCandidates = topic
+    ? getLawsForCategory(String(topic).toLowerCase()).slice(0, Math.max(maxDocs, 2)).map(law => ({
+        url: canonicalLexUrl(law.lex_url),
+        expectedTitle: law.law_name,
+        source: 'lex.uz-registry',
+      }))
+    : [];
+  const dynamicCandidates = docUrls.map(url => ({ url, expectedTitle: '', source: 'lex.uz-live' }));
+  const seenCandidates = new Set();
+  const candidates = [...registryCandidates, ...dynamicCandidates].filter(candidate => {
+    if (!candidate.url || seenCandidates.has(candidate.url)) return false;
+    seenCandidates.add(candidate.url);
+    return true;
+  });
+
+  console.log(`[LEX-LIVE] ${registryCandidates.length} registry + ${docUrls.length} search candidates, fetching up to ${maxDocs}`);
 
   const results = [];
-  for (const docUrl of docUrls.slice(0, maxDocs)) {
+  for (const candidate of candidates) {
+    if (results.length >= maxDocs) break;
+    const docUrl = candidate.url;
     try {
       const doc = await fetchLexDocument(docUrl);
       if (!doc.body || doc.body.trim().length === 0) continue;
@@ -72,10 +97,20 @@ async function searchLexUz(query, opts = {}) {
         continue;
       }
 
-      const excerpt = extractRelevantSections(doc.body, scoreText || query, maxChars);
+      if (candidate.expectedTitle && !titlesMatch(candidate.expectedTitle, doc.title || '')) {
+        console.warn(`[LEX-LIVE] Registry title mismatch, skipped: "${candidate.expectedTitle}" -> "${doc.title || ''}"`);
+        continue;
+      }
+
+      const excerpt = extractRelevantSections(doc.body, effectiveScoreText, maxChars);
+      if (!candidate.expectedTitle && relevanceScore(`${doc.title || ''}\n${excerpt}`, effectiveScoreText) === 0) {
+        console.warn(`[LEX-LIVE] Search result has no meaningful query overlap, skipped: ${docUrl}`);
+        continue;
+      }
       results.push({
         title: doc.title || 'Nomsiz hujjat',
-        url: doc.metadata.source_url || docUrl,
+        lawName: candidate.expectedTitle || doc.title || 'Nomsiz hujjat',
+        url: canonicalLexUrl(doc.metadata.source_url || docUrl),
         content: excerpt,
         // The unexcerpted head and tail of the act, for callers that must
         // confirm the document's identity (its own number/date) rather than
@@ -84,7 +119,7 @@ async function searchLexUz(query, opts = {}) {
         // block at the END of the document, not in the header.
         head: String(doc.body || '').slice(0, 1200),
         tail: String(doc.body || '').slice(-800),
-        source: 'lex.uz-live',
+        source: candidate.source,
         metadata: doc.metadata,
       });
     } catch (err) {
@@ -101,27 +136,48 @@ async function searchLexUz(query, opts = {}) {
  */
 function parseSearchResults(html) {
   const $ = cheerio.load(html);
-  const seen = new Set();
-  const urls = [];
+  const byDocument = new Map();
 
-  // lex.uz search results contain links to /docs/<numeric_id> or /ru/docs/<id>
+  // Lex.uz commonly emits both /docs/123 and /docs/-123 for one result.
+  // Prefer the negative form because it is the Uzbek-Latin document view.
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href') || '';
-    const match = href.match(/\/(?:ru\/)?docs\/(\d+)/);
+    const match = href.match(/\/(?:uz\/|ru\/)?docs\/(-?\d+)/);
     if (!match) return;
 
-    const docId = match[1];
-    if (seen.has(docId)) return;
-    seen.add(docId);
-
-    const fullUrl = href.startsWith('http')
-      ? href
-      : `https://lex.uz${href.startsWith('/') ? '' : '/'}${href}`;
-
-    urls.push(fullUrl);
+    const signedId = match[1];
+    const key = signedId.replace(/^-/, '');
+    const candidate = canonicalLexUrl(`https://lex.uz/docs/${signedId}`);
+    if (!byDocument.has(key) || signedId.startsWith('-')) byDocument.set(key, candidate);
   });
 
-  return urls;
+  return Array.from(byDocument.values());
+}
+
+function canonicalLexUrl(value = '') {
+  return String(value || '').split('#')[0].split('?')[0].trim();
+}
+
+function comparableWords(value = '') {
+  const stop = new Set(['ozbekiston', 'respublikasi', 'togrisida', 'haqida', 'uchun', 'bilan', 'hamda', 'ning']);
+  return String(value || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('uz')
+    .replace(/[\u02bb\u02bc\u2018\u2019`']/gu, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/u)
+    .filter(word => word.length > 3 && !stop.has(word));
+}
+
+function titlesMatch(expected = '', actual = '') {
+  const expectedWords = comparableWords(expected);
+  const actualSet = new Set(comparableWords(actual));
+  return expectedWords.length > 0 && expectedWords.some(word => actualSet.has(word));
+}
+
+function relevanceScore(value = '', query = '') {
+  const haystack = new Set(comparableWords(value));
+  return comparableWords(query).reduce((score, word) => score + (haystack.has(word) ? 1 : 0), 0);
 }
 
 /**
@@ -221,4 +277,4 @@ function formatLexSearchResults(results, language = 'uz') {
   return header + body;
 }
 
-module.exports = { searchLexUz, formatLexSearchResults };
+module.exports = { searchLexUz, formatLexSearchResults, parseSearchResults, canonicalLexUrl };

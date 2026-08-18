@@ -20,7 +20,7 @@ const log = require('../utils/logger').createLogger('HYBRID');
  *   - Per-day spend cap tracked in-process via `spendTracker`
  *
  * Pricing ($/1M tokens):
- *   gpt-5.6-luna         : $1.00 in / $6.00 out   (cost-sensitive, high volume)
+ *   gpt-5.6-luna         : $0.20 in / $1.20 out   (cost-sensitive, high volume)
  *   gpt-5.6-terra        : $2.50 in / $15.00 out  (balanced)
  *   gpt-5.6-sol          : $5.00 in / $30.00 out  (frontier reasoning)
  *   gemini-2.5-flash     : $0.30 in / $2.50 out   (free-tier fallback)
@@ -42,7 +42,7 @@ const CLASSIFY_MAX_OUTPUT_TOKENS = 200;
 // Rough price table ($ per 1M tokens). Used for spend tracking.
 const PRICING = {
   // GPT-5.6 family (official per-1M pricing)
-  'gpt-5.6-luna':     { in: 1.00, out: 6.00 },
+  'gpt-5.6-luna':     { in: 0.20, out: 1.20 },
   'gpt-5.6-terra':    { in: 2.50, out: 15.00 },
   'gpt-5.6-sol':      { in: 5.00, out: 30.00 },
   'gpt-5.6':          { in: 5.00, out: 30.00 },   // alias -> Sol

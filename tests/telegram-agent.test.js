@@ -597,7 +597,7 @@ function stubMemory(clarifyCount = 0) {
     assert.match(r.reply, /Oila kodeksi, 96-modda/);
   });
 
-  await test('Telegram links only law articles applied in Tahlil', async () => {
+  await test('Telegram makes every grounded source in the answer clickable', async () => {
     const d = deps({
       topic: 'mamuriy',
       answer: [
@@ -618,7 +618,7 @@ function stubMemory(clarifyCount = 0) {
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: "Yo'l harakati jarimasiga qanday shikoyat qilaman?" });
     assert.match(r.reply, /\[\*\*Ma'muriy javobgarlik to'g'risidagi kodeks, 128-modda, tegishli qism\*\*\]/u);
-    assert.doesNotMatch(r.reply, /\[\*\*Ma'muriy sud ishlarini yuritish kodeksi, 126-modda/u);
+    assert.match(r.reply, /\[\*\*Ma'muriy sud ishlarini yuritish kodeksi, 126-modda, tegishli qism\*\*\]/u);
   });
 
   await test('Telegram links every distinct article applied in Tahlil', async () => {

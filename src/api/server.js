@@ -3388,7 +3388,7 @@ async function callGeminiStream(messages, options = {}, onToken) {
 // ── GPT-5.6 model family (single source of truth) ────────────────────────────
 // Sol   $5 /$30  — highest reasoning, frontier: legal-opinion synthesis
 // Terra $2.50/$15 — balanced: main legal chat / general generation
-// Luna  $1 /$6   — cost-sensitive, high volume: digests, explainer, compaction
+// Luna  $0.20/$1.20 — cost-sensitive, high volume: digests, explainer, compaction
 // All: 1.05M context, 128k max output, reasoning-token support.
 // Each id is env-overridable; Gemini (free tier) is the only fallback.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4642,16 +4642,22 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // Under LEXUZ_ONLY the general-web leg is skipped entirely and retrieval
   // falls back to lex.uz alone, which is domain-restricted by construction.
   // opts.noWebFallback additionally forces this off for a specific caller.
-  if (opts.strictTopic && goodChunks.length < 2) needsWebSearch = false;
+  // A strict topic limits *corpus* scope; it must not disable the official
+  // Lex.uz fallback. That old coupling left niche/education answers without
+  // any source even though the authoritative site was available.
+  const hasCitationReadyCorpus = goodChunks.some(r =>
+    r && r.is_active === true && r.source_url && getChunkArticleRefs(r).length > 0
+  );
+  const needsOfficialSearch = needsWebSearch || !hasCitationReadyCorpus;
 
   let webResults = [];
   let lexLiveResults = [];
-  if (needsWebSearch) {
+  if (needsOfficialSearch && !opts.noWebFallback) {
     const allowWeb = !opts.noWebFallback && webSearchAllowed(true);
     if (!allowWeb) console.log('[SOURCE-GUARD] Tavily web search skipped — lex.uz only');
     const [tavilyRes, lexRes] = await Promise.all([
       allowWeb ? webSearch(query).catch(() => []) : Promise.resolve([]),
-      searchLexUz(query, { maxDocs: 2, maxChars: 4000 }).catch(() => []),
+      searchLexUz(query, { topic, maxDocs: 2, maxChars: 4000 }).catch(() => []),
     ]);
     webResults = tavilyRes;
     lexLiveResults = lexRes;
@@ -4662,6 +4668,28 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
 
 
   if (goodChunks.length === 0 && webResults.length === 0 && lexLiveResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, lexLiveResults: 0, sources: [] } };
+
+  // Lex.uz live results used to exist only as prompt text. Citation checking
+  // and link rendering received `goodChunks` alone, so every source found by
+  // the fallback was subsequently treated as unverified and remained plain
+  // text. Adapt official live excerpts into the same evidence shape as corpus
+  // chunks and carry them through the complete citation pipeline.
+  const lexLiveChunks = lexLiveResults.map((r, index) => ({
+    id: `lex_live_${index}_${String(r.url || '').replace(/\D/gu, '').slice(-12)}`,
+    chunk_text: r.content || '',
+    childText: r.content || '',
+    parentText: r.content || '',
+    law_name: r.lawName || r.title || 'Lex.uz hujjati',
+    source_url: r.url || '',
+    article_numbers: [],
+    category: topic || null,
+    source_type: 'lex_live',
+    language: 'uz',
+    is_active: true,
+    adoption_date: r.metadata && r.metadata.adoption_date,
+    document_number: r.metadata && r.metadata.document_number,
+  })).filter(r => r.source_url && getChunkArticleRefs(r).length > 0);
+  const citationChunks = [...goodChunks, ...lexLiveChunks];
 
   // ── 5. Format context for prompt ──
   // Max chars per chunk: verified_qa gets more space, law text is trimmed
@@ -4716,7 +4744,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
 
   const meta = {
     searchMode,
-    chunks: goodChunks.length,
+    chunks: citationChunks.length,
     webResults: webResults.length,
     lexLiveResults: lexLiveResults.length,
     sources,
@@ -4739,7 +4767,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // ── Build a clean source reference list (no box-drawings, no instructions) ──
   const sourceRefLines = [];
   const seenSourceRefs = new Set();
-  for (const r of goodChunks) {
+  for (const r of citationChunks) {
     const articleRefs = getChunkArticleRefs(r);
     if (articleRefs.length === 0) continue;
     for (const art of articleRefs) {
@@ -4766,18 +4794,18 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // ── Build clean data-only context (no instructions, no box-drawings) ──
   let context;
   if (isUz) {
-    context = `\nQONUNCHILIK KONTEKSTI (${goodChunks.length} natija):\n`
+    context = `\nQONUNCHILIK KONTEKSTI (${citationChunks.length} natija):\n`
       + sourceBlock
       + `\n` + chunksText + webText + lexLiveText
       + `\n\n--- JAVOB SHU YERDAN BOSHLANSIN ---`;
   } else {
-    context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${goodChunks.length} результатов):\n`
+    context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${citationChunks.length} результатов):\n`
       + sourceBlock
       + `\n` + chunksText + webText + lexLiveText
       + `\n\n--- ОТВЕТ НАЧИНАЕТСЯ ЗДЕСЬ ---`;
   }
 
-  return { context, meta, chunks: goodChunks };
+  return { context, meta, chunks: citationChunks };
 }
 
 function buildTopicPrompt(topic, ragContext, userQuestion = '') {
@@ -5983,7 +6011,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       && (!Array.isArray(history) || history.length === 0);
     const cacheKey = cacheable
       ? require('crypto').createHash('sha256')
-          .update('grounded-clickable-citations-v2|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          .update('lex-live-clickable-citations-v3|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
           .digest('hex')
       : null;
     if (cacheKey) {

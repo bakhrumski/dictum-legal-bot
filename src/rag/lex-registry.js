@@ -429,7 +429,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'talim-qonun',
       law_name: "Ta'lim to'g'risida",
-      lex_url: 'https://lex.uz/uz/docs/5013009',      // [QONUN]
+      lex_url: 'https://lex.uz/uz/docs/-5013007',     // [QONUN, o'zbek-lotin]
       enforcement_date: null
     },
     {

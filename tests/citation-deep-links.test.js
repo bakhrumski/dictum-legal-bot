@@ -18,6 +18,8 @@ const {
   resolveKnownLexAnchorUrl,
 } = require('../src/rag/lex-anchor-resolver');
 const { buildLegalNextActions } = require('../src/services/legal-next-actions');
+const { deterministicLegalTopic } = require('../src/services/legal-topic-routing');
+const { parseSearchResults } = require('../src/rag/lex-live-search');
 
 let passed = 0;
 function test(name, fn) {
@@ -85,6 +87,42 @@ test('qism suffixes are detected and linked inside the answer', () => {
   assert.match(linked, /\[\*\*Mehnat kodeksi, 253-modda, 2-qism\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/6257288#:~:text=/u);
   assert.match(linked, /\)ga ko‘ra/u);
   assert.strictEqual((linked.match(/\]\(https:\/\/lex\.uz/gu) || []).length, 2);
+});
+
+test('every grounded provision is clickable across all answer sections', () => {
+  const answer = [
+    'Huquqiy asos',
+    "Ta'lim to'g'risida Qonuni 47-moddasi talabaning huquqlarini belgilaydi.",
+    '',
+    'Tahlil',
+    "Ta'lim to'g'risida Qonuni 48-moddasi majburiyatlarni belgilaydi.",
+    '',
+    'Xulosa',
+    'Yozma asosni talab qiling.',
+  ].join('\n');
+  const chunks = ['47', '48'].map(article => ({
+    law_name: "Ta'lim to'g'risida Qonuni",
+    article_numbers: [article],
+    source_url: 'https://lex.uz/uz/docs/-5013007',
+    chunk_text: `${article}-modda. Rasmiy norma matni.`,
+  }));
+  const linked = linkCitationsInMarkdown(answer, chunks, 'uz');
+  assert.strictEqual((linked.match(/\]\(https:\/\/lex\.uz\/uz\/docs\/-5013007#:~:text=/gu) || []).length, 2);
+});
+
+test('live Lex titles link natural Uzbek law-name variants', () => {
+  const answer = [
+    'Huquqiy asos',
+    "Ta'lim to'g'risidagi Qonun, 47-moddasiga ko'ra talaba sifatli ta'lim olish huquqiga ega.",
+  ].join('\n');
+  const chunk = {
+    law_name: "Ta'lim to'g'risida",
+    article_numbers: ['47'],
+    source_url: 'https://lex.uz/uz/docs/-5013007',
+    chunk_text: "47-modda. Ta'lim oluvchilarning huquqlari.",
+  };
+  const linked = linkCitationsInMarkdown(answer, [chunk], 'uz');
+  assert.match(linked, /\[\*\*Ta'lim to'g'risida, 47-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5013007#:~:text=/u);
 });
 
 test('grouped law provisions are rendered as separate grounded links', () => {
@@ -260,7 +298,27 @@ test('dashboard legal chat uses deterministic routing and grounded fallback cont
   assert.match(server, /const deterministicTopic = deterministicLegalTopic\(message\)/u);
   assert.match(server, /buildGeminiFallbackPrompt\(topicLabel, message, ragContext\)/u);
   assert.match(server, /useSearch: !ragContext/u);
-  assert.match(server, /grounded-clickable-citations-v2/u);
+  assert.match(server, /lex-live-clickable-citations-v3/u);
+  assert.doesNotMatch(server, /opts\.strictTopic && goodChunks\.length < 2\) needsWebSearch = false/u);
+  assert.match(server, /const citationChunks = \[\.\.\.goodChunks, \.\.\.lexLiveChunks\]/u);
+});
+
+test('education questions route to education and receive education-specific actions', () => {
+  const question = "Men studentman. Meni yakuniy nazoratdan chetlatishdi. Shu qonuniymi?";
+  assert.strictEqual(deterministicLegalTopic(question), 'talim');
+  const actions = buildLegalNextActions({ question, answer: '', topic: 'talim' });
+  assert.deepStrictEqual(actions.slice(0, 3).map(action => action.kind), ['document', 'document', 'attorney']);
+  assert.match(actions[0].label, /chetlashtirish asosi|dalolatnoma/u);
+  assert.match(actions[1].label, /yakuniy nazorat|apellyatsiya/u);
+  assert.match(actions[2].label, /ta'lim huquqi/iu);
+});
+
+test('Lex.uz result parsing prefers canonical Uzbek-Latin document links', () => {
+  const html = [
+    '<a href="/docs/5013007?query=talim#sr-1">Cyrillic</a>',
+    '<a href="/docs/-5013007?query=talim#sr-1">Latin</a>',
+  ].join('');
+  assert.deepStrictEqual(parseSearchResults(html), ['https://lex.uz/docs/-5013007']);
 });
 
 test('post-send progress uses monochrome SVGs instead of colorful emoji', () => {
