@@ -290,6 +290,13 @@ function excerptFromLines(value = '', partNumber = '') {
   const lines = String(value || '')
     .split(/\r?\n/u)
     .map(cleanFragmentLine)
+    // Some corpus rows keep the article heading and its first qism on the
+    // same line. Remove only the heading so the legal sentence remains usable
+    // as an exact browser Text Fragment instead of discarding the whole row.
+    .map(line => partNumber ? line : (line.replace(
+      /^\d+[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*\s*[-\u2013\u2014]?\s*(?:modda|\u043C\u043E\u0434\u0434\u0430)[\p{L}'\u2019]*\s*[.:\-\u2013\u2014]?\s*/iu,
+      ''
+    ).trim() || line))
     .filter(line => line && !isStructuralLine(line));
   if (lines.length === 0) return '';
 
@@ -306,9 +313,11 @@ function excerptFromLines(value = '', partNumber = '') {
 /**
  * Create a deep Lex.uz URL for one retrieved clause.
  *
- * Newly ingested documents retain Lex.uz's stable element id and use #<id>.
- * Existing corpus rows fall back to a standards-based Text Fragment made from
- * the exact child clause, so this works immediately without a corpus rebuild.
+ * When exact provision text is available, combine Lex.uz's stable element id
+ * with a standards-based Text Fragment. The stable id supplies a reliable
+ * scroll target; Chromium-compatible browsers additionally highlight the
+ * exact sentence. Existing corpus rows without an id use the same Text
+ * Fragment directly, so highlighting works without a corpus rebuild.
  */
 function buildLexDeepLink(chunk = {}, opts = {}) {
   const baseUrl = normalizeLexSourceUrl(chunk.source_url || chunk.sourceUrl || '', opts.lang || 'uz');
@@ -317,12 +326,26 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   const requestedPart = normalizePartNumber(opts.partNumber);
   const chunkPart = normalizePartNumber(chunk.part_number || chunk.partNumber);
   const articleRef = normalizeArticleRef(opts.articleRef);
+  const locatorType = String(opts.locatorType || 'modda').toLocaleLowerCase('uz') === 'band' ? 'band' : 'modda';
+  let excerpt = '';
+  if (requestedPart && chunk.parentText) {
+    excerpt = excerptFromLines(chunk.parentText, requestedPart);
+  }
+  if (!excerpt) {
+    excerpt = excerptFromLines(chunk.childText || chunk.chunk_text || chunk.parentText || '', '');
+  }
+  if (!excerpt && articleRef) excerpt = `${articleRef}-${locatorType}`;
+  const highlightedUrl = (elementId = '') => {
+    const anchor = /^-?\d+$/u.test(String(elementId || '')) ? String(elementId) : '';
+    if (excerpt) return `${baseUrl}#${anchor}:~:text=${encodeURIComponent(excerpt)}`;
+    return anchor ? `${baseUrl}#${anchor}` : baseUrl;
+  };
   const resolvedAnchors = chunk.lex_anchor_ids || chunk.lexAnchorIds || {};
   const resolvedId = requestedPart
     ? resolvedAnchors[`${articleRef}:${requestedPart}`]
     : resolvedAnchors[articleRef];
   if (/^-?\d+$/u.test(String(resolvedId || ''))) {
-    return `${baseUrl}#${resolvedId}`;
+    return highlightedUrl(resolvedId);
   }
   const elementId = String(
     chunk.lex_element_id || chunk.lexElementId ||
@@ -332,18 +355,9 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   // A child anchor is exact only when it represents the requested qism. An
   // article may contain several qism references in one answer.
   if (/^-?\d+$/u.test(elementId) && (!requestedPart || (chunkPart && requestedPart === chunkPart))) {
-    return `${baseUrl}#${elementId}`;
+    return highlightedUrl(elementId);
   }
-
-  let excerpt = '';
-  if (requestedPart && chunk.parentText) {
-    excerpt = excerptFromLines(chunk.parentText, requestedPart);
-  }
-  if (!excerpt) {
-    excerpt = excerptFromLines(chunk.childText || chunk.chunk_text || chunk.parentText || '', '');
-  }
-  if (!excerpt && articleRef) excerpt = `${articleRef}-modda`;
-  return excerpt ? `${baseUrl}#:~:text=${encodeURIComponent(excerpt)}` : baseUrl;
+  return highlightedUrl();
 }
 
 function stripGeneratedSourceSections(value = '') {
@@ -466,7 +480,7 @@ function linkGroupedCitationLists(value = '', records = [], lang = 'uz') {
       const type = String(locatorType || 'modda').toLocaleLowerCase('uz');
       const links = mentionedRefs.map(ref => {
         const record = byRef.get(ref);
-        const url = buildLexDeepLink(record.chunk, { lang, articleRef: ref });
+        const url = buildLexDeepLink(record.chunk, { lang, articleRef: ref, locatorType: type });
         if (!url) return '';
         const partLabel = type === 'band' ? 'tegishli band' : 'tegishli qism';
         return `[**${canonicalLawLabel(record.lawName)}, ${ref}-${type}, ${partLabel}**](${url})`;
@@ -528,6 +542,7 @@ function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
           lang,
           articleRef: ref,
           partNumber: partNumber || '',
+          locatorType,
         });
         if (!url) return match;
         const type = String(locatorType || 'modda').toLocaleLowerCase('uz');

@@ -46,8 +46,10 @@ test('the versioned Markdown playbook exists and covers every authority class', 
     "avval tanlangan qadamlarning mantiqiy davomi",
     "aynan tanlangan qadam uchun zarur ma'lumot kiritish maydonlarini",
     "Umumiy yoki nomi o'xshash boshqa shablon avtomatik tanlanmaydi",
+    "brauzer Text Fragment'ini",
+    "ajratib ko'rsatadi",
   ]) assert.ok(text.includes(required), `missing playbook rule: ${required}`);
-  assert.strictEqual(getPlaybookVersion(), '1.1.0');
+  assert.strictEqual(getPlaybookVersion(), '1.2.0');
 });
 
 test('a question gets a unique directive and remains untrusted data', () => {
@@ -106,7 +108,7 @@ test('advanced RAG uses the same playbook and three-section answer contract', ()
     topicLabel: "Ta'lim huquqi",
     userQuestion: 'Yakuniy nazoratdan chetlatish mumkinmi?',
   });
-  assert.ok(prompt.includes('Playbook-Version: 1.1.0'));
+  assert.ok(prompt.includes('Playbook-Version: 1.2.0'));
   assert.ok(prompt.includes('MAJBURIY 3-QISMLI JAVOB TUZILMASI'));
   assert.ok(prompt.includes('Alohida "Manbalar"'));
   assert.ok(!prompt.includes('MAJBURIY 4-QISMLI JAVOB TUZILMASI'));

@@ -30,23 +30,23 @@ function test(name, fn) {
 
 console.log('\ncitation deep links\n');
 
-test('stable Lex.uz element IDs are preferred for an exact qism', () => {
+test('stable Lex.uz element IDs retain exact-text highlighting for a qism', () => {
   const url = buildLexDeepLink({
     source_url: 'https://lex.uz/uz/docs/6257288#old',
     part_number: '1',
     lex_element_id: '6263814',
     childText: 'Birinchi qism matni.',
   }, { articleRef: '253', partNumber: '1' });
-  assert.strictEqual(url, 'https://lex.uz/uz/docs/6257288#6263814');
+  assert.strictEqual(url, 'https://lex.uz/uz/docs/6257288#6263814:~:text=Birinchi%20qism%20matni.');
 });
 
-test('negative Lex.uz element IDs are valid deep-link anchors', () => {
+test('negative Lex.uz element IDs are valid highlighted deep-link anchors', () => {
   const url = buildLexDeepLink({
     source_url: 'https://lex.uz/docs/-5953883',
     lex_element_id: '-5954624',
     childText: '7. Mexanik transport vositasining haydovchisi.',
   }, { articleRef: '7' });
-  assert.strictEqual(url, 'https://lex.uz/docs/-5953883#-5954624');
+  assert.strictEqual(url, 'https://lex.uz/docs/-5953883#-5954624:~:text=7.%20Mexanik%20transport%20vositasining%20haydovchisi.');
 });
 
 test('existing rows deep-link by the exact requested qism text', () => {
@@ -218,7 +218,20 @@ test('legacy rows use the resolved stable article/qism anchor map', () => {
   assert.strictEqual(buildLexDeepLink({
     source_url: 'https://lex.uz/uz/docs/6257288',
     lex_anchor_ids: index,
-  }, { articleRef: '253', partNumber: '2' }), 'https://lex.uz/uz/docs/6257288#6263815');
+    parentText: '253-modda. Sarlavha\nBirinchi qism.\nIkkinchi qism.',
+  }, { articleRef: '253', partNumber: '2' }), 'https://lex.uz/uz/docs/6257288#6263815:~:text=Ikkinchi%20qism.');
+});
+
+test('an article element anchor and exact provision text are combined for highlighting', () => {
+  const url = buildLexDeepLink({
+    source_url: "https://lex.uz/uz/docs/-5013007",
+    lex_element_id: '-5013954',
+    chunk_text: "48-modda. Ta'lim oluvchilar mashg'ulotlarga qatnashishi va topshiriqlarni bajarishi shart.",
+  }, { articleRef: '48' });
+  assert.strictEqual(
+    url,
+    "https://lex.uz/uz/docs/-5013007#-5013954:~:text=Ta'lim%20oluvchilar%20mashg'ulotlarga%20qatnashishi%20va%20topshiriqlarni%20bajarishi%20shart."
+  );
 });
 
 test('the resolver indexes numbered regulatory bands with negative Lex.uz IDs', () => {
