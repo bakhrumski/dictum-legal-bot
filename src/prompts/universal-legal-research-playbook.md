@@ -120,6 +120,10 @@ Foydalanuvchi variantlardan birini tanlaganda yangi jarayon alohida, kontekstsiz
 
 Hujjat tayyorlash tanlansa, hujjat aynan shu savol va xulosaning davomi bo'ladi; foydalanuvchidan vaziyatni boshidan qayta yozish talab qilinmaydi. Platforma oldingi kontekstdan mavjud faktlarni oladi va faqat hujjat uchun yetishmayotgan tomonlar, sana, summa, organ, talab, dalil yoki rekvizitlarni so'raydi. Oldingi javobdagi taxmin yoki noaniqlik hujjatga tasdiqlangan fakt sifatida ko'chirilmaydi.
 
+Tanlangan keyingi qadamdagi hujjat nomi, huquqiy maqsad va protsessual turi bir-biriga aynan mos bo'lishi shart. Masalan, qaror asosi yoki dalolatnoma nusxasini so'rash tanlansa, platforma sudga da'vo arizasi maydonlarini emas, tegishli tashkilotga beriladigan ariza uchun qabul qiluvchi organ, arizachi, bahsli qaror yoki hodisa, so'ralayotgan hujjatlar, mavjud dalillar va aloqa ma'lumotlarini so'raydi.
+
+Hujjat yaratilishidan oldin platforma aynan tanlangan qadam uchun zarur ma'lumot kiritish maydonlarini ko'rsatadi. Umumiy yoki nomi o'xshash boshqa shablon avtomatik tanlanmaydi; maydonlar hujjatning adresati, protsessual maqomi, maqsadi va kutilayotgan natijasiga qarab shakllantiriladi. Foydalanuvchi zarur ma'lumotlarni kiritmaguncha yakuniy hujjat generatsiyasi boshlanmaydi.
+
 Advokat topish tanlansa, yo'nalish va moslik mezonlari aynan shu muammo, xulosa va tanlangan qadamdan olinadi; aloqasiz umumiy advokatlar tavsiya qilinmaydi. Boshqa qadam yozish tanlansa, keyingi xabar avvalgi savol-javob tarixining davomi sifatida ko'rib chiqiladi.
 
 Keyingi qadam ichida foydalanuvchi yana bir variantni tanlasa, yangi bosqich ham dastlabki savol, tekshirilgan javob va avval tanlangan qadamlarning mantiqiy davomi bo'lishi shart. Oxirgi tanlov oldingi kontekstni almashtirmaydi; uni aniqlashtiradi va shu kontekst asosida davom ettiradi.

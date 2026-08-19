@@ -44,6 +44,8 @@ test('the versioned Markdown playbook exists and covers every authority class', 
     "vaziyatni boshidan qayta yozish talab qilinmaydi",
     "aynan o'sha javob kartasidan olinadi",
     "avval tanlangan qadamlarning mantiqiy davomi",
+    "aynan tanlangan qadam uchun zarur ma'lumot kiritish maydonlarini",
+    "Umumiy yoki nomi o'xshash boshqa shablon avtomatik tanlanmaydi",
   ]) assert.ok(text.includes(required), `missing playbook rule: ${required}`);
   assert.strictEqual(getPlaybookVersion(), '1.1.0');
 });
