@@ -47,8 +47,71 @@ function normalized(value) {
     .trim();
 }
 
-function documentAction(id, label, documentType, serviceSlug) {
-  return { id, kind: 'document', label, documentType, serviceSlug };
+function inputField(key, label, type, placeholder, required = true) {
+  return { key, label, type, placeholder, required };
+}
+
+// Each next-step document carries its own intake contract. This prevents a
+// short shared word such as "ariza" from opening an unrelated court-claim
+// template and lets the UI ask only for information that document needs.
+const DOCUMENT_INPUT_SCHEMAS = Object.freeze({
+  'decision-copy-request': Object.freeze([
+    inputField('recipient', 'Qabul qiluvchi ta\'lim tashkiloti yoki mansabdor shaxs', 'text', 'Masalan: universitet rektori yoki fakultet dekani'),
+    inputField('applicant', 'Arizachi (F.I.O.)', 'text', 'Familiya, ism va otasining ismi'),
+    inputField('applicant_details', 'Talaba va aloqa ma\'lumotlari', 'textarea', 'Fakultet, yo\'nalish, bosqich, guruh, telefon yoki elektron pochta'),
+    inputField('assessment_details', 'Chetlashtirish holati', 'textarea', 'Fan nomi, nazorat turi, sana, kim chetlashtirgani va sizga aytilgan sabab'),
+    inputField('requested_records', 'So\'ralayotgan asos va hujjatlar', 'textarea', 'Masalan: chetlashtirishning yozma asosi, dalolatnoma, buyruq yoki qaror nusxasi'),
+    inputField('available_evidence', 'Mavjud dalillar', 'textarea', 'Xabarnoma, yozishma, guvoh, foto yoki boshqa dalillar', false),
+    inputField('date', 'Ariza sanasi', 'date', '', true),
+  ]),
+  application: Object.freeze([
+    inputField('recipient', 'Qabul qiluvchi organ yoki mansabdor shaxs', 'text', 'Ariza kimga yuboriladi'),
+    inputField('applicant', 'Arizachi (F.I.O. yoki tashkilot)', 'text', 'To\'liq nomi'),
+    inputField('applicant_details', 'Manzil va aloqa ma\'lumotlari', 'textarea', 'Manzil, telefon yoki elektron pochta'),
+    inputField('circumstances', 'Muhim holatlar', 'textarea', 'Nima sodir bo\'ldi, qachon va qaysi hujjat yoki harakatga taalluqli'),
+    inputField('request', 'Arizada so\'ralayotgan natija', 'textarea', 'Organdan nimani so\'raysiz'),
+    inputField('attachments', 'Ilova qilinadigan dalillar', 'textarea', 'Mavjud hujjat va dalillar ro\'yxati', false),
+    inputField('date', 'Ariza sanasi', 'date', '', true),
+  ]),
+  complaint: Object.freeze([
+    inputField('recipient', 'Shikoyat beriladigan organ', 'text', 'Vakolatli organ yoki mansabdor shaxs'),
+    inputField('applicant', 'Shikoyat beruvchi (F.I.O.)', 'text', 'Familiya, ism va otasining ismi'),
+    inputField('applicant_details', 'Manzil va aloqa ma\'lumotlari', 'textarea', 'Manzil, telefon yoki elektron pochta'),
+    inputField('challenged_act', 'Shikoyat qilinayotgan qaror yoki harakat', 'textarea', 'Qaror raqami va sanasi, uni chiqargan organ yoki sodir etilgan harakat'),
+    inputField('grounds', 'Norozilik sabablari va dalillar', 'textarea', 'Nima uchun qaror yoki harakatni noto\'g\'ri deb hisoblaysiz'),
+    inputField('request', 'Shikoyat talabi', 'textarea', 'Bekor qilish, qayta ko\'rib chiqish yoki boshqa so\'ralayotgan natija'),
+    inputField('date', 'Shikoyat sanasi', 'date', '', true),
+  ]),
+  demand: Object.freeze([
+    inputField('recipient', 'Talabnoma yuboriladigan shaxs yoki tashkilot', 'text', 'Qarzdor yoki majburiyatni bajarishi kerak bo\'lgan tomon'),
+    inputField('sender', 'Talabnoma yuboruvchi', 'text', 'F.I.O. yoki tashkilot nomi'),
+    inputField('obligation', 'Bajarilmagan majburiyat', 'textarea', 'Nima bajarilmadi, qachondan beri va qaysi hujjatga asoslanadi'),
+    inputField('amount', 'Talab qilinayotgan summa', 'text', 'Summa (agar tegishli bo\'lsa)', false),
+    inputField('deadline', 'Bajarish uchun muddat', 'text', 'Masalan: talabnoma olinganidan keyin 10 kun'),
+    inputField('evidence', 'Mavjud dalillar', 'textarea', 'Shartnoma, hisob-kitob, yozishma yoki boshqa dalillar', false),
+    inputField('date', 'Talabnoma sanasi', 'date', '', true),
+  ]),
+  claim: Object.freeze([
+    inputField('court_name', 'Sud nomi', 'text', 'Vakolatli sudning to\'liq nomi'),
+    inputField('plaintiff', 'Da\'vogar va aloqa ma\'lumotlari', 'textarea', 'F.I.O., manzil va telefon'),
+    inputField('defendant', 'Javobgar va uning manzili', 'textarea', 'F.I.O. yoki tashkilotning to\'liq nomi va manzili'),
+    inputField('circumstances', 'Nizo holatlari', 'textarea', 'Muhim voqealar, sanalar va mavjud dalillar'),
+    inputField('claim_amount', 'Da\'vo summasi', 'text', 'Summa (agar tegishli bo\'lsa)', false),
+    inputField('demands', 'Suddan so\'ralayotgan talablar', 'textarea', 'Sud qanday qaror chiqarishini so\'raysiz'),
+    inputField('date', 'Da\'vo sanasi', 'date', '', true),
+  ]),
+});
+
+function documentAction(id, label, documentType, serviceSlug, inputSchema = serviceSlug) {
+  return {
+    id,
+    kind: 'document',
+    label,
+    documentType,
+    serviceSlug,
+    inputSchema,
+    inputFields: DOCUMENT_INPUT_SCHEMAS[inputSchema] || DOCUMENT_INPUT_SCHEMAS.application,
+  };
 }
 
 function attorneyAction(topic, label) {
@@ -83,7 +146,8 @@ function buildLegalNextActions({ question = '', answer = '', topic = '' } = {}) 
         'document_application',
         assessment ? "Chetlashtirish asosi va dalolatnoma nusxasini so'rab ariza" : "Ta'lim tashkilotiga yozma ariza",
         'Ariza',
-        'application'
+        'application',
+        assessment ? 'decision-copy-request' : 'application'
       ),
       documentAction(
         'document_complaint',

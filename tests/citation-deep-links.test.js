@@ -361,13 +361,36 @@ test('unpaid salary answers offer claim, demand, verified attorney and custom ac
   assert.strictEqual(actions[2].attorneyFieldCode, 'labor');
 });
 
+test('education record requests carry their own application intake instead of court-claim fields', () => {
+  const actions = buildLegalNextActions({
+    topic: 'talim',
+    question: 'Meni yakuniy nazoratdan chetlashtirishdi. Asosi va dalolatnoma nusxasi kerak.',
+  });
+  const application = actions[0];
+  const labels = application.inputFields.map(field => field.label).join(' ');
+  assert.strictEqual(application.documentType, 'Ariza');
+  assert.strictEqual(application.inputSchema, 'decision-copy-request');
+  assert.match(labels, /Qabul qiluvchi ta'lim tashkiloti/u);
+  assert.match(labels, /Chetlashtirish holati/u);
+  assert.match(labels, /So'ralayotgan asos va hujjatlar/u);
+  assert.doesNotMatch(labels, /Sud nomi|Da'vogar|Javobgar|Da'vo summasi/u);
+});
+
 test('dashboard reuses drafting and verified-attorney flows for next actions', () => {
   const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
   assert.match(dashboard, /function renderLegalNextActions\(actions, question, answer\)/u);
   assert.match(dashboard, /answer: String\(answer \|\| ''\)/u);
-  assert.match(dashboard, /docFlowPickType\(action\.documentType[\s\S]*?question: group\.question,[\s\S]*?answer: group\.answer,[\s\S]*?selectedAction:/u);
+  assert.match(dashboard, /docFlowPickType\(action\.documentType[\s\S]*?question: group\.question,[\s\S]*?answer: group\.answer,[\s\S]*?selectedAction:[\s\S]*?inputFields: action\.inputFields/u);
   assert.match(dashboard, /fetch\('\/api\/attorneys\?'/u);
   assert.match(dashboard, /Aloqa ma\\'lumoti faqat aniq tanlov/u);
+});
+
+test('document intake prefers the selected action schema and requires its mandatory fields', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+  assert.match(dashboard, /actionFields && actionFields\.length \? actionFields : await findTemplateFieldsForType\(t\)/u);
+  assert.match(dashboard, /words\.length > 1 && words\.every/u);
+  assert.match(dashboard, /else if \(f\.required\) missing\.push/u);
+  assert.match(dashboard, /Majburiy maydonlarni to\\'ldiring/u);
 });
 
 test('contextual document actions explain the details field without pre-filling the old question', () => {

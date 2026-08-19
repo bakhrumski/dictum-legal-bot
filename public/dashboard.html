@@ -11967,7 +11967,10 @@
         //    Step cards replace each other (only the current step is visible);
         //    finished documents render inline as Word-style pages in the chat.
         var DOCB = { lang: 'uz', seq: 0 };
-        function docbL(o) { return (o && (o[DOCB.lang] || o.uz || o.ru)) || ''; }
+        function docbL(o) {
+            if (typeof o === 'string') return o;
+            return (o && (o[DOCB.lang] || o.uz || o.ru)) || '';
+        }
 
         // Append a step card, replacing any previous step card so switching
         // between Shablon / AI (and steps inside them) shows only the current UI.
@@ -12161,6 +12164,18 @@
         var docFlowActiveFields = null;   // template fields used for the current form, or null (generic)
         var docFlowContinuationContext = null; // originating legal Q&A + selected next action
         async function docFlowPickType(t, continuationContext) {
+            var actionFields = continuationContext && Array.isArray(continuationContext.inputFields)
+                ? continuationContext.inputFields.slice(0, 14).map(function (field, index) {
+                    return {
+                        key: String(field.key || ('field_' + index)).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 60),
+                        label: String(field.label || field.key || ('Ma\'lumot ' + (index + 1))).slice(0, 180),
+                        type: ['text', 'textarea', 'date', 'number', 'select'].indexOf(field.type) !== -1 ? field.type : 'text',
+                        placeholder: String(field.placeholder || '').slice(0, 500),
+                        required: field.required !== false,
+                        options: Array.isArray(field.options) ? field.options.slice(0, 30) : null
+                    };
+                })
+                : null;
             if (continuationContext && typeof continuationContext === 'object') {
                 docFlowContinuationContext = {
                     question: String(continuationContext.question || '').slice(0, 5000),
@@ -12169,9 +12184,10 @@
                 };
             }
             if (t === '__custom') { var v = prompt('Hujjat turini yozing:'); if (!v || !v.trim()) return; t = v.trim(); }
-            docStepCard('<div class="docflow-title">' + escapeHtml(t) + '</div><div style="padding:10px 0;color:var(--text-secondary);font-size:13px;">Yuklanmoqda…</div>');
-            var tplFields = await findTemplateFieldsForType(t);
-            renderDocTypeForm(t, tplFields);
+            var requestedDocument = (docFlowContinuationContext && docFlowContinuationContext.selectedAction) || t;
+            docStepCard('<div class="docflow-title">' + escapeHtml(requestedDocument) + '</div><div style="padding:10px 0;color:var(--text-secondary);font-size:13px;">Yuklanmoqda…</div>');
+            var tplFields = actionFields && actionFields.length ? actionFields : await findTemplateFieldsForType(t);
+            renderDocTypeForm(requestedDocument, tplFields);
         }
         function docFlowDetailsPlaceholder(t) {
             var type = String(t || '').toLowerCase();
@@ -12195,7 +12211,7 @@
                 var words = tl.split(/\s+/).filter(function (w) { return w.length > 3; });
                 var hit = tpls.find(function (x) {
                     var n = (((x.name && x.name.uz) || '') + ' ' + ((x.name && x.name.ru) || '')).toLowerCase();
-                    return n && (n.indexOf(tl) !== -1 || words.some(function (w) { return n.indexOf(w) !== -1; }));
+                    return n && (n === tl || (words.length > 1 && words.every(function (w) { return n.indexOf(w) !== -1; })));
                 });
                 if (!hit) return null;
                 var fr = await fetch('/api/templates/' + encodeURIComponent(hit.id), { credentials: 'same-origin' });
@@ -12266,11 +12282,13 @@
         }
         function docFlowSubmit(docType) {
             var parts = [];
+            var missing = [];
             if (docFlowActiveFields) {
                 docFlowActiveFields.forEach(function (f) {
                     var el = document.getElementById('docf_' + f.key);
                     var v = el ? el.value.trim() : '';
                     if (v) parts.push((docbL(f.label) || f.key) + ': ' + v);
+                    else if (f.required) missing.push(docbL(f.label) || f.key);
                 });
             } else {
                 DOC_FORM_FIELDS.forEach(function (f) {
@@ -12278,6 +12296,10 @@
                     var v = el ? el.value.trim() : '';
                     if (v) parts.push(f.label + ': ' + v);
                 });
+            }
+            if (missing.length) {
+                alert('Majburiy maydonlarni to\'ldiring:\n• ' + missing.join('\n• '));
+                return;
             }
             if (!parts.length) { alert('Kamida bitta maydonni to\'ldiring.'); return; }
             var continuation = docFlowContinuationContext;
@@ -13106,7 +13128,8 @@
                 docFlowPickType(action.documentType || 'Yuridik hujjat', {
                     question: group.question,
                     answer: group.answer,
-                    selectedAction: action.label || action.documentType || 'Yuridik hujjat'
+                    selectedAction: action.label || action.documentType || 'Yuridik hujjat',
+                    inputFields: action.inputFields || []
                 });
                 return;
             }
