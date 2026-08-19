@@ -9,6 +9,8 @@ const {
   getPlaybookVersion,
   buildQuestionResearchDirective,
   buildLexResearchQueries,
+  buildExactActQueryVariants,
+  buildConceptQueries,
   significantTerms,
 } = require('../src/rag/legal-research-playbook');
 const {
@@ -21,6 +23,8 @@ const {
 const {
   extractRelevantSections,
   inferExcerptProvision,
+  parseSearchCandidates,
+  rankSearchCandidates,
 } = require('../src/rag/lex-live-search');
 const { buildAdvancedPrompt } = require('../src/rag/system-prompt');
 const { getLawsForCategory } = require('../src/rag/lex-registry');
@@ -110,10 +114,63 @@ test('Lex research expands beyond laws and codes to implementing acts', () => {
     'Talabani yakuniy nazoratdan qaysi asosda chetlashtirish mumkin?',
     'talim'
   );
-  assert.strictEqual(queries.length, 2);
-  assert.ok(queries[1].includes('Vazirlar Mahkamasi qarori'));
-  assert.ok(queries[1].includes('nizom'));
-  assert.ok(queries[1].includes('yakuniy'));
+  assert.ok(queries.length >= 4);
+  assert.ok(queries.some(query => query.includes('Vazirlar Mahkamasi qarori')));
+  assert.ok(queries.some(query => query.includes('nizom')));
+  assert.ok(queries.some(query => query.includes('yakuniy')));
+  assert.ok(queries.some(query => /якуний/iu.test(query)), 'Cyrillic search fallback is missing');
+});
+
+test('foreign-specialist questions fan out to the official statutory concept', () => {
+  const cases = [
+    {
+      question: 'xorijdan ishchi kuchini jalb qilishda malakali mutaxassis nima degani?',
+      expected: 'malakali chet ellik mutaxassis',
+    },
+    {
+      question: 'yuqori malakali chet ellik mutaxassis qanday aniqlanadi qayerda yozilgan?',
+      expected: 'yuqori malakali chet ellik mutaxassis',
+    },
+    {
+      question: "yuqori malakali chet ellik mutaxassis ish haqi qancha bo'lishi kerak?",
+      expected: 'yuqori malakali chet ellik mutaxassis',
+    },
+  ];
+  for (const { question, expected } of cases) {
+    const concepts = buildConceptQueries(question);
+    assert.ok(concepts.includes(expected), `${question} did not produce ${expected}`);
+    const queries = buildLexResearchQueries(question, 'mehnat');
+    assert.strictEqual(queries[0], expected);
+    assert.ok(queries.some(query => /[а-яёўқғҳ]/iu.test(query)), 'Cyrillic variant is missing');
+  }
+});
+
+test('an exact act-number question searches all Lex.uz naming variants', () => {
+  assert.deepStrictEqual(buildExactActQueryVariants('PQ 4008 chi?'), [
+    'PQ-4008',
+    'ПҚ-4008',
+    'ПП-4008',
+  ]);
+  const queries = buildLexResearchQueries('PQ 4008 chi?', 'mehnat');
+  assert.deepStrictEqual(queries.slice(0, 3), ['PQ-4008', 'ПҚ-4008', 'ПП-4008']);
+});
+
+test('the original numbered act outranks amendments that merely mention it', () => {
+  const html = `
+    <table><tbody>
+      <tr><td><a href="/docs/-7000001">PQ-4008ga o'zgartirish kiritish to'g'risida</a>
+        <span class="badge">O'zbekiston Respublikasi Prezidentining qarori, 01.01.2025 yildagi PQ-99-son</span>
+        <i class="status_code_y"></i></td></tr>
+      <tr><td><a href="/docs/-4045557">O'zbekiston Respublikasi hududida xorijiy davlatlarning malakali mutaxassislari tomonidan mehnat faoliyatini amalga oshirishi uchun qulay shart-sharoitlar yaratish chora-tadbirlari to'g'risida</a>
+        <span class="badge">O'zbekiston Respublikasi Prezidentining qarori, 07.11.2018 yildagi PQ-4008-son</span>
+        <i class="status_code_y"></i></td></tr>
+    </tbody></table>`;
+  const candidates = parseSearchCandidates(html);
+  assert.strictEqual(candidates.length, 2);
+  const ranked = rankSearchCandidates(candidates, 'PQ 4008 chi?');
+  assert.ok(/-4045557$/.test(ranked[0].url));
+  assert.strictEqual(ranked[0]._exactIdentityMatch, true);
+  assert.strictEqual(ranked[1]._exactIdentityMatch, false);
 });
 
 test('numbered Cabinet-regulation bands are extracted as independent evidence', () => {
@@ -152,6 +209,14 @@ test('advanced RAG uses the same playbook and three-section answer contract', ()
   assert.ok(prompt.indexOf('Constitution-Version:') < prompt.indexOf('Playbook-Version:'));
   assert.ok(prompt.indexOf('Playbook-Version:') < prompt.indexOf('IMKONIYAT SHARTNOMASI'));
   assert.ok(prompt.indexOf('IMKONIYAT SHARTNOMASI') < prompt.indexOf('<user_question_data'));
+});
+
+test('labour registry contains the active special rule in Presidential Decision PQ-4008', () => {
+  const laws = getLawsForCategory('mehnat');
+  const decision = laws.find((law) => /-4045557/.test(law.lex_url));
+  assert.ok(decision, 'PQ-4008 is missing from labour registry');
+  assert.strictEqual(decision.enforcement_date, '2018-11-08');
+  assert.ok(/xorijiy davlatlarning malakali mutaxassislari/iu.test(decision.law_name));
 });
 
 test('dashboard, Telegram, drafting and opinion paths inherit the policy composer', () => {

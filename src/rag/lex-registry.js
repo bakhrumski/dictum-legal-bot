@@ -171,6 +171,12 @@ const LEX_REGISTRY = {
       enforcement_date: null
     },
     {
+      doc_id: 'pq-4008-xorijiy-malakali-mutaxassislar',
+      law_name: "O'zbekiston Respublikasi hududida xorijiy davlatlarning malakali mutaxassislari tomonidan mehnat faoliyatini amalga oshirishi uchun qulay shart-sharoitlar yaratish chora-tadbirlari to'g'risida",
+      lex_url: 'https://lex.uz/docs/-4045557',         // [PQ-4008, amaldagi]
+      enforcement_date: '2018-11-08'
+    },
+    {
       doc_id: 'bandlik-qonun',
       law_name: "Aholini ish bilan ta'minlash to'g'risida",
       lex_url: 'https://lex.uz/uz/docs/5765424',      // [QONUN]

@@ -28,6 +28,71 @@ const STOP_WORDS = new Set([
   'ammo', 'lekin', 'agar', 'hamda', 'yoki', 'uning', 'ushbu', 'shu',
 ]);
 
+const ACT_QUERY_PREFIXES = Object.freeze({
+  PQ: ['PQ', '\u041f\u049a', '\u041f\u041f'],
+  PF: ['PF', '\u041f\u0424', '\u0423\u041f'],
+  VMQ: ['VMQ', '\u0412\u041c\u049a', '\u041f\u041a\u041c'],
+  ORQ: ["O'RQ", '\u040e\u0420\u049a', '\u0417\u0420\u0423'],
+});
+
+const ACT_PREFIX_CANON = Object.freeze({
+  pq: 'PQ', '\u043f\u049b': 'PQ', '\u043f\u043f': 'PQ',
+  pf: 'PF', '\u043f\u0444': 'PF', '\u0443\u043f': 'PF',
+  vmq: 'VMQ', vm: 'VMQ', '\u0432\u043c\u049b': 'VMQ', '\u043f\u043a\u043c': 'VMQ',
+  orq: 'ORQ', '\u045e\u0440\u049b': 'ORQ', '\u0437\u0440\u0443': 'ORQ',
+});
+
+const UZ_LAT_TO_CYR_DIGRAPHS = [
+  [/o['`\u2018\u2019\u02bb]/gi, '\u045e'], [/g['`\u2018\u2019\u02bb]/gi, '\u0493'], [/sh/gi, '\u0448'], [/ch/gi, '\u0447'],
+  [/yo/gi, '\u0451'], [/yu/gi, '\u044e'], [/ya/gi, '\u044f'],
+];
+const UZ_LAT_TO_CYR = Object.freeze({
+  a: '\u0430', b: '\u0431', d: '\u0434', e: '\u0435', f: '\u0444', g: '\u0433', h: '\u04b3', i: '\u0438', j: '\u0436',
+  k: '\u043a', l: '\u043b', m: '\u043c', n: '\u043d', o: '\u043e', p: '\u043f', q: '\u049b', r: '\u0440', s: '\u0441',
+  t: '\u0442', u: '\u0443', v: '\u0432', x: '\u0445', y: '\u0439', z: '\u0437',
+});
+
+function translitQueryToCyr(value = '') {
+  let text = String(value || '').toLowerCase().replace(/[\u2018\u2019`\u00b4\u02bc\u02bb]/gu, "'");
+  for (const [pattern, replacement] of UZ_LAT_TO_CYR_DIGRAPHS) text = text.replace(pattern, replacement);
+  let output = '';
+  for (const char of text) output += UZ_LAT_TO_CYR[char] || char;
+  return output;
+}
+
+function canonicalQueryPrefix(value = '') {
+  const normalized = String(value || '').toLocaleLowerCase('uz').replace(/['`\u2018\u2019\u02bb]/gu, '');
+  return ACT_PREFIX_CANON[normalized] || String(value || '').toUpperCase();
+}
+
+function buildExactActQueryVariants(value = '') {
+  const variants = [];
+  const seen = new Set();
+  const re = /(?<![\p{L}\p{N}])(PQ|PF|VMQ|VM|O['`\u2018\u2019\u02bb]?RQ|\u041f\u049a|\u041f\u041f|\u041f\u0424|\u0423\u041f|\u0412\u041c\u049a|\u041f\u041a\u041c|\u040e\u0420\u049a|\u0417\u0420\u0423)\s*[-\u2013\u2014]?\s*(\d{1,6})/giu;
+  for (const match of String(value || '').matchAll(re)) {
+    const prefix = canonicalQueryPrefix(match[1]);
+    const forms = ACT_QUERY_PREFIXES[prefix] || [prefix];
+    for (const form of forms) {
+      const query = `${form}-${match[2]}`;
+      if (seen.has(query)) continue;
+      seen.add(query);
+      variants.push(query);
+    }
+  }
+  return variants;
+}
+
+function buildConceptQueries(question = '') {
+  const normalized = String(question || '').toLocaleLowerCase('uz');
+  const queries = [];
+  if (/(?:xorij|chet\s*el)[\p{L}'\u2019\u02bb-]*.*mutaxassis|mutaxassis.*(?:xorij|chet\s*el)/iu.test(normalized)) {
+    queries.push(/yuqori\s+malakali/iu.test(normalized)
+      ? 'yuqori malakali chet ellik mutaxassis'
+      : 'malakali chet ellik mutaxassis');
+  }
+  return queries;
+}
+
 function getUniversalLegalResearchPlaybook() {
   return getLegalResearchPlaybook();
 }
@@ -98,12 +163,25 @@ function buildLexResearchQueries(question = '', topic = '') {
   if (original.length < 3) return [];
   const terms = significantTerms(original, 12);
   const topicLabel = TOPIC_LABELS[topic] || String(topic || '').replace(/[-_]/g, ' ');
+  const concise = terms.join(' ');
   const regulatory = [
-    terms.join(' '),
+    concise,
     topicLabel,
     "Vazirlar Mahkamasi qarori nizom tartib yo'riqnoma buyruq",
   ].filter(Boolean).join(' ').trim();
-  return Array.from(new Set([original, regulatory])).filter(q => q.length >= 3).slice(0, 2);
+  const exactActs = buildExactActQueryVariants(original);
+  const concepts = buildConceptQueries(original);
+  const cyrillicConcepts = concepts.map(translitQueryToCyr);
+  const cyrillicConcise = concise ? translitQueryToCyr(concise) : '';
+  return Array.from(new Set([
+    ...exactActs,
+    ...concepts,
+    ...cyrillicConcepts,
+    original,
+    concise,
+    cyrillicConcise,
+    regulatory,
+  ])).filter(q => q.length >= 3).slice(0, 7);
 }
 
 module.exports = {
@@ -112,5 +190,8 @@ module.exports = {
   getPlaybookVersion,
   buildQuestionResearchDirective,
   buildLexResearchQueries,
+  buildExactActQueryVariants,
+  buildConceptQueries,
+  translitQueryToCyr,
   significantTerms,
 };
