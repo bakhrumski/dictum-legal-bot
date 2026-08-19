@@ -27,6 +27,10 @@ const DOCUMENT_CACHE_TTL_MS = Math.max(
 );
 const DOCUMENT_CACHE_LIMIT = 128;
 const documentCache = new Map();
+const documentInFlight = new Map();
+const SEARCH_PAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const searchPageCache = new Map();
+const searchPageInFlight = new Map();
 const TOPIC_SCORE_HINTS = Object.freeze({
   talim: "ta'lim oluvchi talaba huquqlari majburiyatlari baholash yakuniy nazorat chetlashtirish sababsiz qoldirish akademik qarzdor ichki tartib 47-modda 48-modda 41-band",
 });
@@ -55,6 +59,8 @@ async function searchLexUz(query, opts = {}) {
     scoreText = '',
     topic = '',
     includeRegistry = true,
+    preferredPrefixes = [],
+    maxCandidatesToInspect = 0,
   } = opts;
   const effectiveScoreText = [scoreText || query, TOPIC_SCORE_HINTS[String(topic || '').toLowerCase()] || '']
     .filter(Boolean)
@@ -62,18 +68,19 @@ async function searchLexUz(query, opts = {}) {
 
   if (!query || query.trim().length < 3) return [];
 
-  const searchUrl = `${LEX_SEARCH_URL}?Query=${encodeURIComponent(query.trim())}`;
+  const requestedActs = extractActIdentifiers(query);
+  const searchUrl = buildLexSearchUrl(query);
   console.log(`[LEX-LIVE] Searching lex.uz: "${query.substring(0, 60)}"`);
 
   let html = '';
   try {
-    html = await httpGet(searchUrl);
+    html = await fetchCachedSearchPage(searchUrl);
   } catch (err) {
     console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
   }
 
-  const docUrls = html ? parseSearchResults(html) : [];
-  if (docUrls.length === 0) console.log('[LEX-LIVE] No document links found in search results');
+  const searchCandidates = html ? parseSearchCandidates(html) : [];
+  if (searchCandidates.length === 0) console.log('[LEX-LIVE] No document links found in search results');
 
   // Search results on lex.uz are often ordered by publication date rather
   // than legal relevance. When the platform already knows the legal field,
@@ -87,7 +94,20 @@ async function searchLexUz(query, opts = {}) {
         source: 'lex.uz-registry',
       }))
     : [];
-  const dynamicCandidates = docUrls.map(url => ({ url, expectedTitle: '', source: 'lex.uz-live' }));
+  const dynamicCandidates = rankSearchCandidates(searchCandidates, effectiveScoreText, {
+    preferredPrefixes,
+    requestedActs,
+  }).map(candidate => ({
+    url: candidate.url,
+    // Lex.uz exposes the canonical title and the act's OWN number in the
+    // search result. Carrying the title forward prevents a recent amendment
+    // that merely mentions the requested act from displacing the act itself.
+    expectedTitle: candidate.title || '',
+    ownDocumentNumber: candidate.documentNumber || '',
+    exactIdentityMatch: candidate._exactIdentityMatch === true,
+    searchRankScore: candidate._rankScore || 0,
+    source: 'lex.uz-live',
+  }));
   const seenCandidates = new Set();
   // Search results come first: they are question-specific and may be a Cabinet
   // resolution, annexed regulation or ministry order. The registry is a safe
@@ -99,11 +119,20 @@ async function searchLexUz(query, opts = {}) {
     return true;
   });
 
-  console.log(`[LEX-LIVE] ${registryCandidates.length} registry + ${docUrls.length} search candidates, fetching up to ${maxDocs}`);
+  console.log(`[LEX-LIVE] ${registryCandidates.length} registry + ${searchCandidates.length} search candidates, fetching up to ${maxDocs}`);
 
   const results = [];
+  const inspectionLimit = Number.isFinite(Number(maxCandidatesToInspect)) && Number(maxCandidatesToInspect) > 0
+    ? Math.floor(Number(maxCandidatesToInspect))
+    : Math.max(6, maxDocs * 4);
+  let inspectedCandidates = 0;
   for (const candidate of candidates) {
     if (results.length >= maxDocs) break;
+    if (inspectedCandidates >= inspectionLimit) {
+      console.warn(`[LEX-LIVE] Candidate inspection capped at ${inspectionLimit}`);
+      break;
+    }
+    inspectedCandidates += 1;
     const docUrl = candidate.url;
     try {
       const doc = await fetchCachedLexDocument(docUrl);
@@ -122,7 +151,13 @@ async function searchLexUz(query, opts = {}) {
       }
 
       const excerpt = extractRelevantSections(doc.body, effectiveScoreText, maxChars);
-      if (!candidate.expectedTitle && relevanceScore(`${doc.title || ''}\n${excerpt}`, effectiveScoreText) === 0) {
+      // A search-row title is used to verify document identity, but it must
+      // not automatically make an unrelated result relevant. The sole safe
+      // exception is an exact match between the requested act number and the
+      // act's OWN number (rather than a body reference in an amendment).
+      if (candidate.source === 'lex.uz-live'
+        && !candidate.exactIdentityMatch
+        && relevanceScore(`${doc.title || ''}\n${excerpt}`, effectiveScoreText) === 0) {
         console.warn(`[LEX-LIVE] Search result has no meaningful query overlap, skipped: ${docUrl}`);
         continue;
       }
@@ -140,6 +175,9 @@ async function searchLexUz(query, opts = {}) {
         head: String(doc.body || '').slice(0, 1200),
         tail: String(doc.body || '').slice(-800),
         source: candidate.source,
+        ownDocumentNumber: candidate.ownDocumentNumber || null,
+        exactIdentityMatch: candidate.exactIdentityMatch === true,
+        searchRankScore: candidate.searchRankScore || 0,
         metadata: doc.metadata,
         provisionRefs: provision.refs,
         provisionType: provision.type,
@@ -157,6 +195,98 @@ async function searchLexUz(query, opts = {}) {
  * Parse lex.uz search results HTML and extract unique document URLs.
  */
 function parseSearchResults(html) {
+  return parseSearchCandidates(html).map(candidate => candidate.url);
+}
+
+/**
+ * Build the official Lex.uz search URL.
+ *
+ * Full-text `Query=PF-60`/`PQ-4008` searches are unreliable because Lex.uz
+ * treats the identifier as ordinary text and may rank recent amendments
+ * first. Its advanced-search form has a dedicated `actnum` field. Once an
+ * identifier is known, search by its numeric component and constrain the
+ * document form: Presidential decrees are Farmon (3973), while Presidential
+ * and Cabinet decisions are Qaror (3972). Issuing-body/type verification is
+ * still performed against each result row's own badge.
+ */
+function buildLexSearchUrl(query = '') {
+  const rawQuery = String(query || '').trim();
+  const exact = extractActIdentifiers(rawQuery)[0];
+  if (!exact) return `${LEX_SEARCH_URL}?Query=${encodeURIComponent(rawQuery)}`;
+
+  const formId = exact.prefix === 'PF'
+    ? '3973'
+    : (exact.prefix === 'PQ' || exact.prefix === 'VMQ' ? '3972' : (exact.prefix === 'ORQ' ? '3968' : ''));
+  const params = new URLSearchParams({
+    actnum: exact.number,
+    lang: '4',
+    status: 'Y',
+  });
+  if (formId) params.set('form_id', formId);
+  return `${LEX_SEARCH_URL}?${params.toString()}`;
+}
+
+function normalizeSearchText(value = '') {
+  return String(value || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('uz')
+    .replace(/[\u02bb\u02bc\u2018\u2019`']/gu, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+const ACT_PREFIX_CANON = Object.freeze({
+  pq: 'PQ', 'пқ': 'PQ', 'пп': 'PQ',
+  pf: 'PF', 'пф': 'PF', 'уп': 'PF',
+  vmq: 'VMQ', vm: 'VMQ', 'вмқ': 'VMQ', 'пкм': 'VMQ',
+  orq: 'ORQ', 'ўрқ': 'ORQ', 'зру': 'ORQ',
+});
+
+function canonicalActPrefix(value = '') {
+  return ACT_PREFIX_CANON[normalizeSearchText(value).replace(/\s/gu, '')] || String(value || '').toUpperCase();
+}
+
+function extractActIdentifiers(value = '') {
+  const text = String(value || '');
+  const refs = [];
+  const seen = new Set();
+  const re = /(?<![\p{L}\p{N}])(PQ|PF|VMQ|VM|O['`\u2018\u2019\u02bb]?RQ|\u041f\u049a|\u041f\u041f|\u041f\u0424|\u0423\u041f|\u0412\u041c\u049a|\u041f\u041a\u041c|\u040e\u0420\u049a|\u0417\u0420\u0423)\s*[-\u2013\u2014]?\s*(\d{1,6})(?:\s*[-\u2013\u2014]?\s*(?:son|\u0441\u043e\u043d))?/giu;
+  for (const match of text.matchAll(re)) {
+    const prefix = canonicalActPrefix(match[1]);
+    const number = match[2];
+    const key = `${prefix}-${number}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push({ prefix, number });
+  }
+  return refs;
+}
+
+function parseOwnDocumentIdentifier(value = '') {
+  const refs = extractActIdentifiers(value);
+  if (refs.length) return refs[refs.length - 1];
+
+  // Lex.uz badges often write the issuing body and a bare "824-son"
+  // instead of the UI shorthand "VMQ-824". Infer the prefix only from the
+  // badge's explicit act type; never infer it from the document body.
+  const text = String(value || '');
+  let prefix = '';
+  if (/(?:Vazirlar\s+Mahkamasi|\u0412\u0430\u0437\u0438\u0440\u043b\u0430\u0440\s+\u041c\u0430\u04b3\u043a\u0430\u043c\u0430\u0441\u0438|\u041a\u0430\u0431\u0438\u043d\u0435\u0442\u0430\s+\u041c\u0438\u043d\u0438\u0441\u0442\u0440\u043e\u0432).*?(?:qaror|\u049b\u0430\u0440\u043e\u0440|\u043f\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d)/iu.test(text)) prefix = 'VMQ';
+  else if (/(?:Prezident|\u041f\u0440\u0435\u0437\u0438\u0434\u0435\u043d\u0442).*?(?:farmon|\u0444\u0430\u0440\u043c\u043e\u043d|\u0443\u043a\u0430\u0437)/iu.test(text)) prefix = 'PF';
+  else if (/(?:Prezident|\u041f\u0440\u0435\u0437\u0438\u0434\u0435\u043d\u0442).*?(?:qaror|\u049b\u0430\u0440\u043e\u0440|\u043f\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d)/iu.test(text)) prefix = 'PQ';
+  if (!prefix) return null;
+
+  const numbers = Array.from(text.matchAll(/(?<!\d)(\d{1,6})\s*[-\u2013\u2014]?\s*(?:son|\u0441\u043e\u043d|\u043d\u043e\u043c\u0435\u0440)/giu), match => match[1]);
+  return numbers.length ? { prefix, number: numbers[numbers.length - 1] } : null;
+}
+
+/**
+ * Parse search-result metadata without downloading every full Lex.uz act.
+ * The result row contains the canonical title, status and the act's own
+ * number. That metadata is more reliable for ranking than a body mention.
+ */
+function parseSearchCandidates(html) {
   const $ = cheerio.load(html);
   const byDocument = new Map();
 
@@ -169,11 +299,90 @@ function parseSearchResults(html) {
 
     const signedId = match[1];
     const key = signedId.replace(/^-/, '');
-    const candidate = canonicalLexUrl(`https://lex.uz/docs/${signedId}`);
-    if (!byDocument.has(key) || signedId.startsWith('-')) byDocument.set(key, candidate);
+    const td = $(el).closest('td');
+    const title = $(el).text().replace(/\s+/gu, ' ').trim();
+    const badge = td.find('.badge').first().text().replace(/\s+/gu, ' ').trim();
+    const active = td.find('.status_code_y').length > 0
+      ? true
+      : (td.find('.status_code_n').length > 0 ? false : null);
+    const previous = byDocument.get(key) || {};
+    const preferUrl = !previous.url || signedId.startsWith('-');
+    byDocument.set(key, {
+      url: preferUrl ? canonicalLexUrl(`https://lex.uz/docs/${signedId}`) : previous.url,
+      title: title || previous.title || '',
+      badge: badge || previous.badge || '',
+      isActive: active == null ? previous.isActive ?? null : active,
+      documentNumber: (parseOwnDocumentIdentifier(badge) || previous.documentNumber || null),
+      order: previous.order == null ? byDocument.size : previous.order,
+    });
   });
 
   return Array.from(byDocument.values());
+}
+
+function searchRoots(value = '') {
+  const stop = new Set(['ozbekiston', 'respublikasi', 'togrisida', 'haqida', 'uchun', 'bilan', 'hamda', 'qanday', 'qayerda', 'nima', 'degani', 'kerak']);
+  return normalizeSearchText(value)
+    .split(/\s+/u)
+    .filter(word => word.length > 3 && !stop.has(word))
+    .map(word => word.slice(0, Math.min(6, word.length)));
+}
+
+function rankSearchCandidates(candidates = [], query = '', opts = {}) {
+  const requestedActs = Array.isArray(opts.requestedActs)
+    ? opts.requestedActs
+    : extractActIdentifiers(query);
+  const preferredPrefixes = new Set(
+    (Array.isArray(opts.preferredPrefixes) ? opts.preferredPrefixes : [])
+      .map(canonicalActPrefix)
+      .filter(Boolean)
+  );
+  const queryRoots = new Set(searchRoots(query));
+  return (Array.isArray(candidates) ? candidates : [])
+    .map((candidate, index) => {
+      const titleRoots = new Set(searchRoots(candidate.title));
+      let score = 0;
+      let exactIdentityMatch = false;
+      for (const root of queryRoots) if (titleRoots.has(root)) score += 12;
+      if (candidate.isActive === false) score -= 1000;
+      if (/o['`\u2018\u2019\u02bb]?zgartirish|qo['`\u2018\u2019\u02bb]?shimcha|\u045e\u0437\u0433\u0430\u0440\u0442\u0438\u0440\u0438\u0448|\u0438\u0437\u043c\u0435\u043d\u0435\u043d/iu.test(candidate.title)) score -= 18;
+      if (preferredPrefixes.size > 0 && candidate.documentNumber) {
+        if (preferredPrefixes.has(candidate.documentNumber.prefix)) score += 250;
+        else score -= 25;
+      }
+      for (const requested of requestedActs) {
+        const own = candidate.documentNumber;
+        if (own && own.prefix === requested.prefix && own.number === requested.number) {
+          score += 10_000;
+          exactIdentityMatch = true;
+        }
+        else if (own && own.number === requested.number) score += 2_000;
+      }
+      return {
+        ...candidate,
+        _rankScore: score,
+        _exactIdentityMatch: exactIdentityMatch,
+        _originalOrder: candidate.order ?? index,
+      };
+    })
+    .sort((a, b) => b._rankScore - a._rankScore || a._originalOrder - b._originalOrder);
+}
+
+async function fetchCachedSearchPage(searchUrl) {
+  const key = String(searchUrl || '');
+  const cached = searchPageCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.html;
+  if (cached) searchPageCache.delete(key);
+  if (searchPageInFlight.has(key)) return searchPageInFlight.get(key);
+
+  const pending = httpGet(key).then((html) => {
+    searchPageCache.set(key, { html, expiresAt: Date.now() + SEARCH_PAGE_CACHE_TTL_MS });
+    return html;
+  }).finally(() => {
+    searchPageInFlight.delete(key);
+  });
+  searchPageInFlight.set(key, pending);
+  return pending;
 }
 
 async function fetchCachedLexDocument(url) {
@@ -181,21 +390,30 @@ async function fetchCachedLexDocument(url) {
   const cached = documentCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.document;
   if (cached) documentCache.delete(key);
+  if (documentInFlight.has(key)) return documentInFlight.get(key);
 
-  const document = await fetchLexDocument(key);
-  if (documentCache.size >= DOCUMENT_CACHE_LIMIT) {
-    const oldest = documentCache.keys().next().value;
-    if (oldest) documentCache.delete(oldest);
-  }
-  documentCache.set(key, {
-    document,
-    expiresAt: Date.now() + DOCUMENT_CACHE_TTL_MS,
+  const pending = fetchLexDocument(key).then((document) => {
+    if (documentCache.size >= DOCUMENT_CACHE_LIMIT) {
+      const oldest = documentCache.keys().next().value;
+      if (oldest) documentCache.delete(oldest);
+    }
+    documentCache.set(key, {
+      document,
+      expiresAt: Date.now() + DOCUMENT_CACHE_TTL_MS,
+    });
+    return document;
+  }).finally(() => {
+    documentInFlight.delete(key);
   });
-  return document;
+  documentInFlight.set(key, pending);
+  return pending;
 }
 
 function clearLexDocumentCache() {
   documentCache.clear();
+  documentInFlight.clear();
+  searchPageCache.clear();
+  searchPageInFlight.clear();
 }
 
 function canonicalLexUrl(value = '') {
@@ -344,8 +562,12 @@ function formatLexSearchResults(results, language = 'uz') {
 
 module.exports = {
   searchLexUz,
+  buildLexSearchUrl,
   formatLexSearchResults,
   parseSearchResults,
+  parseSearchCandidates,
+  rankSearchCandidates,
+  extractActIdentifiers,
   canonicalLexUrl,
   extractRelevantSections,
   inferExcerptProvision,

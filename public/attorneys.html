@@ -26,8 +26,10 @@
     .shell{width:min(1160px,calc(100% - 40px));margin:0 auto}
     .topbar{height:72px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--page) 92%,transparent);position:sticky;top:0;z-index:10;backdrop-filter:blur(14px)}
     .topbar .shell{height:100%;display:flex;align-items:center;gap:24px}
-    .brand{display:flex;align-items:center;min-width:142px}.brand img{height:38px;width:auto}
-    [data-theme="dark"] .brand img{filter:grayscale(1) brightness(0) invert(1);opacity:.9}
+    .brand{display:flex;align-items:center;gap:8px;min-width:142px}.brand img{height:38px;width:auto;display:block}
+    .brand .brand-wordmark-dark{display:none}
+    [data-theme="dark"] .brand .brand-wordmark-light{display:none}
+    [data-theme="dark"] .brand .brand-wordmark-dark{display:block}
     .toplinks{display:flex;align-items:center;gap:22px;margin-left:auto;font-size:14px}.toplinks a:hover{text-decoration:underline;text-underline-offset:4px}
     .theme{width:38px;height:38px;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer}
     .login{padding:10px 16px;border:1px solid var(--line);border-radius:10px;font-weight:650}
@@ -51,14 +53,18 @@
     .state{grid-column:1/-1;padding:56px 22px;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:16px;color:var(--muted)}.state strong{display:block;color:var(--ink);font-size:18px;margin-bottom:8px}.spinner{width:24px;height:24px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite;margin:0 auto 14px}@keyframes spin{to{transform:rotate(360deg)}}
     .notice{margin-top:28px;padding:17px 18px;border-left:3px solid var(--accent);background:var(--surface-2);color:var(--muted);font-size:13px;line-height:1.55}.notice strong{color:var(--ink)}
     @media(max-width:820px){.filters{grid-template-columns:1fr 1fr}.search-wrap{grid-column:1/-1}.find{grid-column:1/-1}.results{grid-template-columns:1fr}.toplinks a:not(.login){display:none}}
-    @media(max-width:520px){.shell{width:min(100% - 24px,1160px)}.topbar{height:62px}.brand img{height:32px}.filters{grid-template-columns:1fr}.search-wrap,.find{grid-column:auto}main{padding-top:44px}.attorney{grid-template-columns:42px minmax(0,1fr);padding:17px}.avatar{width:42px;height:42px}.verified{white-space:normal}.results-head{align-items:start;flex-direction:column}}
+    @media(max-width:520px){.shell{width:min(100% - 24px,1160px)}.topbar{height:62px}.brand{min-width:auto}.brand img{height:32px}.brand .brand-wordmark{display:none!important}.filters{grid-template-columns:1fr}.search-wrap,.find{grid-column:auto}main{padding-top:44px}.attorney{grid-template-columns:42px minmax(0,1fr);padding:17px}.avatar{width:42px;height:42px}.verified{white-space:normal}.results-head{align-items:start;flex-direction:column}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
   </style>
 </head>
 <body>
   <header class="topbar">
     <div class="shell">
-      <a class="brand" href="/index.html" aria-label="JuristAI bosh sahifasi"><img src="./juristAI_logo.png" alt="JuristAI"></a>
+      <a class="brand" href="/index.html" aria-label="JuristAI bosh sahifasi">
+        <img src="./icon-1024.png" alt="" aria-hidden="true" class="brand-icon">
+        <img src="./wordmark-primary-2048.png" alt="JuristAI" class="brand-wordmark brand-wordmark-light">
+        <img src="./wordmark-primary-2048-light.png" alt="JuristAI" class="brand-wordmark brand-wordmark-dark">
+      </a>
       <nav class="toplinks" aria-label="Asosiy navigatsiya">
         <a href="/index.html">Bosh sahifa</a>
         <a href="/tariff.html">Tariflar</a>
