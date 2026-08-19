@@ -310,7 +310,12 @@ test('education questions route to education and receive education-specific acti
   assert.deepStrictEqual(actions.slice(0, 3).map(action => action.kind), ['document', 'document', 'attorney']);
   assert.match(actions[0].label, /chetlashtirish asosi|dalolatnoma/u);
   assert.match(actions[1].label, /yakuniy nazorat|apellyatsiya/u);
-  assert.match(actions[2].label, /ta'lim huquqi/iu);
+  assert.strictEqual(actions[2].label, "Soha bo'yicha advokat topish");
+  assert.strictEqual(actions[2].attorneyFieldCode, undefined);
+  assert.strictEqual(actions[2].attorneyField, undefined);
+  assert.strictEqual(actions[2].userSelectsField, true);
+  assert.strictEqual(actions[2].userSelectsRegion, true);
+  assert.strictEqual(actions[2].nationwideAvailable, true);
 });
 
 test('current education facts override a stale labor topic in next actions', () => {
@@ -320,7 +325,7 @@ test('current education facts override a stale labor topic in next actions', () 
   const labels = actions.map(action => action.label).join(' | ');
   assert.match(labels, /Chetlashtirish asosi/u);
   assert.match(labels, /Yakuniy nazorat/u);
-  assert.match(labels, /Ta'lim huquqi/u);
+  assert.match(labels, /Soha bo'yicha advokat topish/u);
   assert.doesNotMatch(labels, /Ish haqi|Ish beruvchi|Mehnat nizolari/u);
 });
 
@@ -350,15 +355,17 @@ test('post-send progress uses monochrome SVGs instead of colorful emoji', () => 
   assert.match(dashboard, /stroke="currentColor"/u);
 });
 
-test('unpaid salary answers offer claim, demand, verified attorney and custom actions', () => {
+test('unpaid salary answers offer two documents and user-controlled attorney search', () => {
   const actions = buildLegalNextActions({
     topic: 'mehnat',
     question: "Ish beruvchi uch oylik ish haqimni bermadi.",
   });
-  assert.deepStrictEqual(actions.map(item => item.kind), ['document', 'document', 'attorney', 'custom']);
+  assert.deepStrictEqual(actions.map(item => item.kind), ['document', 'document', 'attorney']);
   assert.strictEqual(actions[0].documentType, "Da'vo arizasi");
   assert.strictEqual(actions[1].documentType, 'Talabnoma');
-  assert.strictEqual(actions[2].attorneyFieldCode, 'labor');
+  assert.strictEqual(actions[2].attorneyFieldCode, undefined);
+  assert.strictEqual(actions[2].attorneyField, undefined);
+  assert.ok(actions.every(item => item.kind !== 'custom'));
 });
 
 test('education record requests carry their own application intake instead of court-claim fields', () => {
@@ -376,13 +383,14 @@ test('education record requests carry their own application intake instead of co
   assert.doesNotMatch(labels, /Sud nomi|Da'vogar|Javobgar|Da'vo summasi/u);
 });
 
-test('dashboard reuses drafting and verified-attorney flows for next actions', () => {
+test('dashboard reuses drafting and opens nationwide attorney filters for next actions', () => {
   const dashboard = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
   assert.match(dashboard, /function renderLegalNextActions\(actions, question, answer\)/u);
   assert.match(dashboard, /answer: String\(answer \|\| ''\)/u);
   assert.match(dashboard, /docFlowPickType\(action\.documentType[\s\S]*?question: group\.question,[\s\S]*?answer: group\.answer,[\s\S]*?selectedAction:[\s\S]*?inputFields: action\.inputFields/u);
-  assert.match(dashboard, /fetch\('\/api\/attorneys\?'/u);
-  assert.match(dashboard, /Aloqa ma\\'lumoti faqat aniq tanlov/u);
+  assert.match(dashboard, /actions: actions\.slice\(0, 3\)/u);
+  assert.match(dashboard, /window\.location\.assign\('\/attorneys\.html\?source=legal-next-step'\)/u);
+  assert.doesNotMatch(dashboard, /action\.kind === 'custom'/u);
 });
 
 test('document intake prefers the selected action schema and requires its mandatory fields', () => {

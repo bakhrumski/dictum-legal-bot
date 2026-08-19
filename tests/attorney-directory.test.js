@@ -9,6 +9,12 @@ const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.
 
 assert.ok(html.includes("fetch('/api/practice-areas')"), 'directory must load the verified taxonomy');
 assert.ok(html.includes("fetch('/api/attorneys?'"), 'directory must use the public matching endpoint');
+assert.ok(/<select[^>]+id="areaFilter"/u.test(html), 'the user must choose the legal field');
+assert.ok(/<select[^>]+id="regionFilter"/u.test(html), 'the user must choose the search region');
+assert.ok(html.includes('<option value="">Butun O\'zbekiston</option>'), 'nationwide search must be the default');
+assert.ok(html.includes('Qoraqalpog\'iston Respublikasi') && html.includes('Toshkent shahar'), 'users must be able to search outside their own region');
+assert.ok(/if \(field\) params\.set\('field', field\)/u.test(html), 'field filtering must be controlled by the user');
+assert.ok(/if \(region\) params\.set\('region', region\)/u.test(html), 'region filtering must be controlled by the user');
 assert.ok(html.includes('license_status') === false, 'the client must not decide whether a licence is valid');
 assert.ok(html.includes('yuristga_savolbot?start=advokat'), 'consultation CTA must continue through the legal bot');
 assert.ok(/narxini belgilamaydi|narxini belgilamaydi/i.test(html), 'directory must explain that JuristAI does not set attorney prices');

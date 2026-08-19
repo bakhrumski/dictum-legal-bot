@@ -1802,6 +1802,7 @@
             outline: none;
         }
         .legal-next-action[disabled] { opacity: .55; cursor: wait; }
+        .legal-next-actions-list .legal-next-action:last-child:nth-child(odd) { grid-column: 1 / -1; }
         .legal-attorney-results {
             grid-column: 1 / -1;
             padding: 4px 0 0;
@@ -13102,28 +13103,20 @@
             legalNextActionStore[groupId] = {
                 question: String(question || ''),
                 answer: String(answer || ''),
-                actions: actions.slice(0, 4),
+                actions: actions.slice(0, 3),
             };
             return '<div class="legal-next-actions" data-next-group="' + groupId + '">' +
                 '<div class="legal-next-actions-title">Keyingi qadamni tanlang</div>' +
-                '<div class="legal-next-actions-list">' + actions.slice(0, 4).map(function (action, index) {
+                '<div class="legal-next-actions-list">' + actions.slice(0, 3).map(function (action, index) {
                     return '<button type="button" class="legal-next-action" onclick="runLegalNextAction(\'' + groupId + '\',' + index + ',this)">' +
                         escapeHtml(action.label || 'Keyingi qadam') + '</button>';
-                }).join('') + '<div class="legal-attorney-results" hidden></div></div></div>';
+                }).join('') + '</div></div>';
         }
 
         async function runLegalNextAction(groupId, index, button) {
             var group = legalNextActionStore[groupId];
             var action = group && group.actions[index];
             if (!action) return;
-            if (action.kind === 'custom') {
-                var input = document.getElementById('aiChatInput');
-                if (input) {
-                    input.focus();
-                    input.placeholder = "Keyingi savol yoki kerakli qadamni yozing";
-                }
-                return;
-            }
             if (action.kind === 'document') {
                 docFlowPickType(action.documentType || 'Yuridik hujjat', {
                     question: group.question,
@@ -13134,39 +13127,10 @@
                 return;
             }
             if (action.kind !== 'attorney') return;
-
-            var wrap = button.closest('.legal-next-actions');
-            var results = wrap && wrap.querySelector('.legal-attorney-results');
-            if (!results) return;
-            button.disabled = true;
-            results.hidden = false;
-            results.innerHTML = '<div class="legal-attorney-meta">Litsenziyasi tasdiqlangan advokatlar qidirilmoqda...</div>';
-            try {
-                var caseContext = [group.question, group.answer, action.label].filter(Boolean).join('\n').slice(0, 3000);
-                var params = new URLSearchParams({ q: caseContext, limit: '3', language: 'uz' });
-                if (action.attorneyField) params.set('field', action.attorneyField);
-                var response = await fetch('/api/attorneys?' + params.toString(), { credentials: 'same-origin' });
-                var data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Advokatlar yuklanmadi');
-                var items = Array.isArray(data.items) ? data.items : [];
-                if (!items.length) {
-                    results.innerHTML = '<div class="legal-attorney-meta">Hozircha aynan shu mezonga mos, faol litsenziyasi tasdiqlangan advokat topilmadi.</div>';
-                    return;
-                }
-                results.innerHTML = items.map(function (item) {
-                    var practices = (item.practice_areas || []).map(function (area) { return area.name_uz; }).filter(Boolean).slice(0, 2).join(', ');
-                    var reasons = (item.match_reasons || []).join(', ');
-                    return '<div class="legal-attorney-item">' +
-                        '<div><div class="legal-attorney-name">' + escapeHtml(item.full_name || '') + '</div>' +
-                        '<div class="legal-attorney-meta">' + escapeHtml([item.region, practices, item.license_number ? 'Litsenziya: ' + item.license_number : '', reasons].filter(Boolean).join(' · ')) + '</div></div>' +
-                        '<div class="legal-attorney-score">' + (Number(item.match_score) || 0) + '% mos</div></div>';
-                }).join('') + '<a class="legal-attorney-all" href="/attorneys.html?' + params.toString() + '">Barcha mos advokatlarni ko\'rish</a>' +
-                    '<div class="legal-attorney-meta" style="margin-top:6px;">Aloqa ma\'lumoti faqat aniq tanlov va rozilikdan keyin ochiladi.</div>';
-            } catch (error) {
-                results.innerHTML = '<div class="legal-attorney-meta">' + escapeHtml(error.message || 'Advokatlarni yuklab bo\'lmadi') + '</div>';
-            } finally {
-                button.disabled = false;
-            }
+            // Do not guess a specialty or lock the user to their own region.
+            // The directory starts with all of Uzbekistan and lets the user
+            // explicitly choose both the field and any region.
+            window.location.assign('/attorneys.html?source=legal-next-step');
         }
 
         // Final render of an AI reply — shared by the JSON path (typewriter

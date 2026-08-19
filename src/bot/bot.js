@@ -18,7 +18,6 @@ const {
   attorneyRegionKeyboard,
   documentTypeKeyboard,
   resolveIntakeCallback,
-  ATTORNEY_FIELDS,
 } = require('./intake-menus');
 
 // Auto-answering used to run through `askJustify`, an external service whose
@@ -231,9 +230,9 @@ function agentActionKeyboard(agentResult) {
   if (!agentResult) return null;
   if (agentResult.action === 'answered' && agentResult.meta && Array.isArray(agentResult.meta.nextActions)) {
     return {
-      inline_keyboard: agentResult.meta.nextActions.slice(0, 4).map(action => ([{
+      inline_keyboard: agentResult.meta.nextActions.slice(0, 3).map(action => ([{
         text: String(action.label || 'Keyingi qadam').slice(0, 64),
-        callback_data: `nxt_${String(action.id || 'custom').slice(0, 48)}`,
+        callback_data: `nxt_${String(action.id || 'action').slice(0, 48)}`,
       }])),
     };
   }
@@ -483,13 +482,6 @@ bot.on('callback_query', async (callbackQuery) => {
         return;
       }
 
-      if (action.kind === 'custom') {
-        await telegramAgent.setConversationState(chatId, 'legal_question_intake', {});
-        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Yozish maydoni tayyor' });
-        await bot.sendMessage(chatId, "Keyingi savol yoki kerakli qadamni yozing. Oddiy xabar yuborsangiz, JuristAI odatdagidek davom etadi.");
-        return;
-      }
-
       if (action.kind === 'document') {
         const typeCode = action.serviceSlug === 'claim'
           ? 'claim'
@@ -524,22 +516,14 @@ bot.on('callback_query', async (callbackQuery) => {
       }
 
       if (action.kind === 'attorney') {
-        const field = ATTORNEY_FIELDS[action.attorneyFieldCode] || ATTORNEY_FIELDS.unsure;
-        await telegramAgent.setConversationState(chatId, 'attorney_region', {
-          fieldCode: action.attorneyFieldCode || 'unsure',
-          fieldLabel: field.label,
-          legalField: field.registryField,
-          category: field.category,
-          strictField: Boolean(field.registryField),
-          needsHumanFieldReview: Boolean(field.needsHumanFieldReview),
+        await telegramAgent.setConversationState(chatId, 'attorney_field', {
           caseSummary: String((current.context || {}).nextActionQuestion || '').trim(),
           sourceLegalAnswer: String((current.context || {}).nextActionAnswer || '').trim(),
           selectedNextAction: String(action.label || ''),
         });
-        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Yo\'nalish tanlandi' });
-        await bot.sendMessage(chatId, `Yo'nalish: *${field.label}*\n\nQaysi hududdan advokat kerak?`, {
-          parse_mode: 'Markdown',
-          reply_markup: attorneyRegionKeyboard(),
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Qidiruv mezonlarini tanlang' });
+        await bot.sendMessage(chatId, "Advokat qidirish uchun huquq yo'nalishini o'zingiz tanlang. Keyingi bosqichda istalgan hududni yoki “Barcha hududlar”ni tanlashingiz mumkin.", {
+          reply_markup: attorneyFieldKeyboard(),
         });
         return;
       }

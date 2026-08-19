@@ -101,14 +101,15 @@ Ichki tahlil, yashirin mulohaza yoki dalillar xaritasi foydalanuvchiga chiqarilm
 
 ## 9. Keyingi qadamlar
 
-Javob oxirida foydalanuvchining muammosi va xulosaga bevosita bog'langan uchta amaliy variant hamda o'z qadamini yozish varianti yaratiladi. Variantlar tasodifiy yoki faqat huquq sohasi nomiga qarab tanlanmaydi.
+Javob oxirida foydalanuvchining muammosi va xulosaga bevosita bog'langan uchta amaliy variant yaratiladi. Variantlar tasodifiy yoki faqat huquq sohasi nomiga qarab tanlanmaydi.
 
 Variantlar mavjud platforma imkoniyatlariga mos bo'lishi mumkin:
 
 - aynan shu nizo uchun kerakli ariza, talabnoma, shikoyat yoki da'vo hujjatini boshlash;
 - muhim dalillar yoki qaror nusxasini so'rash;
-- tegishli tajribaga ega advokatni topish;
-- foydalanuvchining boshqa keyingi qadamni yozishi.
+- **Soha bo'yicha advokat topish** orqali advokatlar katalogini ochish.
+
+`Boshqa keyingi qadamni o'zim yozaman` degan alohida variant yaratilmaydi. Foydalanuvchi taklif qilingan variantlardan boshqa ishni xohlasa, odatdagi xabar kiritish maydoniga savol yoki topshiriqni bevosita yozadi; platforma uni shu savol-javobning davomi sifatida ko'rib chiqadi.
 
 Har bir variant javobdagi aniqlangan huquqiy natijadan kelib chiqishi shart.
 
@@ -124,7 +125,9 @@ Tanlangan keyingi qadamdagi hujjat nomi, huquqiy maqsad va protsessual turi bir-
 
 Hujjat yaratilishidan oldin platforma aynan tanlangan qadam uchun zarur ma'lumot kiritish maydonlarini ko'rsatadi. Umumiy yoki nomi o'xshash boshqa shablon avtomatik tanlanmaydi; maydonlar hujjatning adresati, protsessual maqomi, maqsadi va kutilayotgan natijasiga qarab shakllantiriladi. Foydalanuvchi zarur ma'lumotlarni kiritmaguncha yakuniy hujjat generatsiyasi boshlanmaydi.
 
-Advokat topish tanlansa, yo'nalish va moslik mezonlari aynan shu muammo, xulosa va tanlangan qadamdan olinadi; aloqasiz umumiy advokatlar tavsiya qilinmaydi. Boshqa qadam yozish tanlansa, keyingi xabar avvalgi savol-javob tarixining davomi sifatida ko'rib chiqiladi.
+**Soha bo'yicha advokat topish** tanlansa, platforma ta'lim huquqi kabi rasmiy advokat ixtisosligi bo'lmagan tor nomni o'zi tayinlamaydi va avtomatik ravishda bir nechta advokatni tavsiya qilmaydi. Advokatlar katalogi ochiladi; huquq yo'nalishi va hudud filtrlarini foydalanuvchining o'zi tanlaydi. Ta'limga oid masala uchun foydalanuvchi, masalan, fuqarolik yo'nalishini tanlashi mumkin, lekin bu tanlov majburan oldindan belgilanmaydi.
+
+Hudud filtri foydalanuvchining yashash joyi yoki aniqlangan geolokatsiyasi bilan cheklanmaydi. Dastlab **Butun O'zbekiston** ko'rsatiladi; foydalanuvchi istalgan viloyat, Qoraqalpog'iston Respublikasi yoki Toshkent shahrini mustaqil tanlay oladi. Keyinchalik Master Admin belgilaydigan ustuvorlik ro'yxati faqat foydalanuvchi tanlagan yo'nalish va hudud filtrlari qo'llangandan keyin natijalarni tartiblash uchun ishlatiladi; u boshqa hududlarni yashirmaydi.
 
 Keyingi qadam ichida foydalanuvchi yana bir variantni tanlasa, yangi bosqich ham dastlabki savol, tekshirilgan javob va avval tanlangan qadamlarning mantiqiy davomi bo'lishi shart. Oxirgi tanlov oldingi kontekstni almashtirmaydi; uni aniqlashtiradi va shu kontekst asosida davom ettiradi.
 
