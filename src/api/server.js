@@ -45,7 +45,11 @@ const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 const {
   buildQuestionResearchDirective,
-  buildLexResearchQueries,
+  buildLexResearchPlan,
+  buildLexQueryPlannerPrompt,
+  parseLexQueryPlannerResponse,
+  mergeLexResearchPlans,
+  selectLexResearchResults,
 } = require('../rag/legal-research-playbook');
 const {
   buildCoreLegalPolicyPrefix,
@@ -4679,24 +4683,41 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   if (needsOfficialSearch && !opts.noWebFallback) {
     const allowWeb = !opts.noWebFallback && webSearchAllowed(true);
     if (!allowWeb) console.log('[SOURCE-GUARD] Tavily web search skipped — lex.uz only');
-    const lexQueries = buildLexResearchQueries(originalQuestion, topic);
+    const deterministicLexPlan = buildLexResearchPlan(originalQuestion, topic);
+    let lexPlan = deterministicLexPlan;
+    if (process.env.LEX_AI_QUERY_PLANNER !== 'false') {
+      try {
+        const plannerResult = await callAI(
+          [{ role: 'user', text: buildLexQueryPlannerPrompt(originalQuestion, topic) }],
+          {
+            useSearch: false,
+            maxTokens: 700,
+            temperature: 0,
+            endpoint: '/rag/lex-query-plan',
+          }
+        );
+        const aiLexPlan = parseLexQueryPlannerResponse(plannerResult && plannerResult.text);
+        lexPlan = mergeLexResearchPlans(aiLexPlan, deterministicLexPlan);
+        if (aiLexPlan.length > 0) {
+          console.log(`[LEX-PLAN] ${aiLexPlan.length} AI + ${deterministicLexPlan.length} deterministic search steps`);
+        }
+      } catch (error) {
+        console.warn(`[LEX-PLAN] AI query planning failed; deterministic plan retained: ${error.message}`);
+      }
+    }
     const [tavilyRes, lexRes] = await Promise.all([
       allowWeb ? webSearch(query).catch(() => []) : Promise.resolve([]),
-      Promise.all(lexQueries.map((lexQuery, queryIndex) => searchLexUz(lexQuery, {
-        topic,
-        scoreText: originalQuestion,
-        includeRegistry: queryIndex === 0,
-        maxDocs: 3,
-        maxChars: 4000,
-      }).catch(() => []))).then((groups) => {
-        const seen = new Set();
-        return groups.flat().filter((entry) => {
-          const key = String(entry && entry.url || '');
-          if (!key || seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        }).slice(0, 4);
-      }),
+      Promise.all(lexPlan.map(async (step) => ({
+        step,
+        results: await searchLexUz(step.query, {
+          topic,
+          scoreText: originalQuestion,
+          includeRegistry: step.includeRegistry,
+          preferredPrefixes: step.preferredPrefixes,
+          maxDocs: step.maxDocs,
+          maxChars: 4000,
+        }).catch(() => []),
+      }))).then((groups) => selectLexResearchResults(groups, originalQuestion, 6)),
     ]);
     webResults = tavilyRes;
     lexLiveResults = lexRes;
@@ -4988,22 +5009,24 @@ function extractLawMentions(text) {
   return out;
 }
 
-// Dedicated relevant-law identifier (deterministic, independent of the answer).
-// A small LLM call lists candidate Uzbek laws for the question; lex.uz then
-// verifies each actually exists, so a fabricated name simply finds nothing and
-// is dropped — zero hallucination, with Master-Admin review as the final gate.
+// Dedicated relevant-act identifier (deterministic, independent of the answer).
+// A small LLM call lists candidate Uzbek normative acts for the question;
+// lex.uz then verifies each actually exists, so a fabricated name simply finds
+// nothing and is dropped — zero hallucination, with Master-Admin review as the
+// final gate. This enrichment path mirrors the live retrieval hierarchy instead
+// of stopping at laws and codes.
 async function identifyRelevantLaws(question, topic) {
   if (typeof callAI !== 'function') return [];
   try {
     const label = LEGAL_TOPICS[topic] ? ` (soha: ${LEGAL_TOPICS[topic]})` : '';
-    const prompt = `Quyidagi huquqiy savolga eng tegishli O'zbekiston Respublikasining REAL, amaldagi qonun yoki kodekslarini sanab bering${label}. FAQAT qonun/kodeks NOMLARINI yozing — har birini yangi qatorda, maksimal 6 ta. Modda raqami, sana, tushuntirish yoki izoh BERMANG. Mavjud bo'lmagan hujjatni TO'QIB CHIQARMANG.\n\nSavol: ${question}`;
+    const prompt = `Quyidagi huquqiy savolga bevosita tatbiq etilishi mumkin bo'lgan O'zbekiston Respublikasining REAL, amaldagi normativ-huquqiy hujjatlarini sanab bering${label}. Qonun va kodeks bilan cheklanmang: tegishli Prezident qarori (PQ), Prezident farmoni (PF), Vazirlar Mahkamasi qarori (VMQ), nizom, tartib, yo'riqnoma va idoraviy buyruqni ham ko'ring. FAQAT hujjat NOMINI va ishonchingiz komil bo'lsa raqamini yozing — har birini yangi qatorda, maksimal 8 ta. Modda raqami, tushuntirish yoki izoh BERMANG. Bu faqat qidiruv gipotezasi; mavjud bo'lmagan hujjatni TO'QIB CHIQARMANG.\n\nSavol: ${question}`;
     const res = await callAI([{ role: 'user', text: prompt }], { useSearch: false, maxTokens: 300, temperature: 0 });
     const text = (res && res.text) || '';
     return String(text)
       .split('\n')
       .map(s => s.replace(/^[-*•\d.\)\s]+/, '').trim())
       .filter(s => s.length > 5 && /qonun|kodeks|nizom|qaror|farmon/i.test(s))
-      .slice(0, 6);
+      .slice(0, 8);
   } catch (e) {
     return [];
   }

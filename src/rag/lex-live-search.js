@@ -27,6 +27,10 @@ const DOCUMENT_CACHE_TTL_MS = Math.max(
 );
 const DOCUMENT_CACHE_LIMIT = 128;
 const documentCache = new Map();
+const documentInFlight = new Map();
+const SEARCH_PAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const searchPageCache = new Map();
+const searchPageInFlight = new Map();
 const TOPIC_SCORE_HINTS = Object.freeze({
   talim: "ta'lim oluvchi talaba huquqlari majburiyatlari baholash yakuniy nazorat chetlashtirish sababsiz qoldirish akademik qarzdor ichki tartib 47-modda 48-modda 41-band",
 });
@@ -55,6 +59,8 @@ async function searchLexUz(query, opts = {}) {
     scoreText = '',
     topic = '',
     includeRegistry = true,
+    preferredPrefixes = [],
+    maxCandidatesToInspect = 0,
   } = opts;
   const effectiveScoreText = [scoreText || query, TOPIC_SCORE_HINTS[String(topic || '').toLowerCase()] || '']
     .filter(Boolean)
@@ -62,12 +68,13 @@ async function searchLexUz(query, opts = {}) {
 
   if (!query || query.trim().length < 3) return [];
 
-  const searchUrl = `${LEX_SEARCH_URL}?Query=${encodeURIComponent(query.trim())}`;
+  const requestedActs = extractActIdentifiers(query);
+  const searchUrl = buildLexSearchUrl(query);
   console.log(`[LEX-LIVE] Searching lex.uz: "${query.substring(0, 60)}"`);
 
   let html = '';
   try {
-    html = await httpGet(searchUrl);
+    html = await fetchCachedSearchPage(searchUrl);
   } catch (err) {
     console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
   }
@@ -87,7 +94,10 @@ async function searchLexUz(query, opts = {}) {
         source: 'lex.uz-registry',
       }))
     : [];
-  const dynamicCandidates = rankSearchCandidates(searchCandidates, query).map(candidate => ({
+  const dynamicCandidates = rankSearchCandidates(searchCandidates, effectiveScoreText, {
+    preferredPrefixes,
+    requestedActs,
+  }).map(candidate => ({
     url: candidate.url,
     // Lex.uz exposes the canonical title and the act's OWN number in the
     // search result. Carrying the title forward prevents a recent amendment
@@ -95,6 +105,7 @@ async function searchLexUz(query, opts = {}) {
     expectedTitle: candidate.title || '',
     ownDocumentNumber: candidate.documentNumber || '',
     exactIdentityMatch: candidate._exactIdentityMatch === true,
+    searchRankScore: candidate._rankScore || 0,
     source: 'lex.uz-live',
   }));
   const seenCandidates = new Set();
@@ -111,8 +122,17 @@ async function searchLexUz(query, opts = {}) {
   console.log(`[LEX-LIVE] ${registryCandidates.length} registry + ${searchCandidates.length} search candidates, fetching up to ${maxDocs}`);
 
   const results = [];
+  const inspectionLimit = Number.isFinite(Number(maxCandidatesToInspect)) && Number(maxCandidatesToInspect) > 0
+    ? Math.floor(Number(maxCandidatesToInspect))
+    : Math.max(6, maxDocs * 4);
+  let inspectedCandidates = 0;
   for (const candidate of candidates) {
     if (results.length >= maxDocs) break;
+    if (inspectedCandidates >= inspectionLimit) {
+      console.warn(`[LEX-LIVE] Candidate inspection capped at ${inspectionLimit}`);
+      break;
+    }
+    inspectedCandidates += 1;
     const docUrl = candidate.url;
     try {
       const doc = await fetchCachedLexDocument(docUrl);
@@ -155,6 +175,9 @@ async function searchLexUz(query, opts = {}) {
         head: String(doc.body || '').slice(0, 1200),
         tail: String(doc.body || '').slice(-800),
         source: candidate.source,
+        ownDocumentNumber: candidate.ownDocumentNumber || null,
+        exactIdentityMatch: candidate.exactIdentityMatch === true,
+        searchRankScore: candidate.searchRankScore || 0,
         metadata: doc.metadata,
         provisionRefs: provision.refs,
         provisionType: provision.type,
@@ -173,6 +196,34 @@ async function searchLexUz(query, opts = {}) {
  */
 function parseSearchResults(html) {
   return parseSearchCandidates(html).map(candidate => candidate.url);
+}
+
+/**
+ * Build the official Lex.uz search URL.
+ *
+ * Full-text `Query=PF-60`/`PQ-4008` searches are unreliable because Lex.uz
+ * treats the identifier as ordinary text and may rank recent amendments
+ * first. Its advanced-search form has a dedicated `actnum` field. Once an
+ * identifier is known, search by its numeric component and constrain the
+ * document form: Presidential decrees are Farmon (3973), while Presidential
+ * and Cabinet decisions are Qaror (3972). Issuing-body/type verification is
+ * still performed against each result row's own badge.
+ */
+function buildLexSearchUrl(query = '') {
+  const rawQuery = String(query || '').trim();
+  const exact = extractActIdentifiers(rawQuery)[0];
+  if (!exact) return `${LEX_SEARCH_URL}?Query=${encodeURIComponent(rawQuery)}`;
+
+  const formId = exact.prefix === 'PF'
+    ? '3973'
+    : (exact.prefix === 'PQ' || exact.prefix === 'VMQ' ? '3972' : (exact.prefix === 'ORQ' ? '3968' : ''));
+  const params = new URLSearchParams({
+    actnum: exact.number,
+    lang: '4',
+    status: 'Y',
+  });
+  if (formId) params.set('form_id', formId);
+  return `${LEX_SEARCH_URL}?${params.toString()}`;
 }
 
 function normalizeSearchText(value = '') {
@@ -214,7 +265,20 @@ function extractActIdentifiers(value = '') {
 
 function parseOwnDocumentIdentifier(value = '') {
   const refs = extractActIdentifiers(value);
-  return refs.length ? refs[refs.length - 1] : null;
+  if (refs.length) return refs[refs.length - 1];
+
+  // Lex.uz badges often write the issuing body and a bare "824-son"
+  // instead of the UI shorthand "VMQ-824". Infer the prefix only from the
+  // badge's explicit act type; never infer it from the document body.
+  const text = String(value || '');
+  let prefix = '';
+  if (/(?:Vazirlar\s+Mahkamasi|\u0412\u0430\u0437\u0438\u0440\u043b\u0430\u0440\s+\u041c\u0430\u04b3\u043a\u0430\u043c\u0430\u0441\u0438|\u041a\u0430\u0431\u0438\u043d\u0435\u0442\u0430\s+\u041c\u0438\u043d\u0438\u0441\u0442\u0440\u043e\u0432).*?(?:qaror|\u049b\u0430\u0440\u043e\u0440|\u043f\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d)/iu.test(text)) prefix = 'VMQ';
+  else if (/(?:Prezident|\u041f\u0440\u0435\u0437\u0438\u0434\u0435\u043d\u0442).*?(?:farmon|\u0444\u0430\u0440\u043c\u043e\u043d|\u0443\u043a\u0430\u0437)/iu.test(text)) prefix = 'PF';
+  else if (/(?:Prezident|\u041f\u0440\u0435\u0437\u0438\u0434\u0435\u043d\u0442).*?(?:qaror|\u049b\u0430\u0440\u043e\u0440|\u043f\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d)/iu.test(text)) prefix = 'PQ';
+  if (!prefix) return null;
+
+  const numbers = Array.from(text.matchAll(/(?<!\d)(\d{1,6})\s*[-\u2013\u2014]?\s*(?:son|\u0441\u043e\u043d|\u043d\u043e\u043c\u0435\u0440)/giu), match => match[1]);
+  return numbers.length ? { prefix, number: numbers[numbers.length - 1] } : null;
 }
 
 /**
@@ -264,8 +328,15 @@ function searchRoots(value = '') {
     .map(word => word.slice(0, Math.min(6, word.length)));
 }
 
-function rankSearchCandidates(candidates = [], query = '') {
-  const requestedActs = extractActIdentifiers(query);
+function rankSearchCandidates(candidates = [], query = '', opts = {}) {
+  const requestedActs = Array.isArray(opts.requestedActs)
+    ? opts.requestedActs
+    : extractActIdentifiers(query);
+  const preferredPrefixes = new Set(
+    (Array.isArray(opts.preferredPrefixes) ? opts.preferredPrefixes : [])
+      .map(canonicalActPrefix)
+      .filter(Boolean)
+  );
   const queryRoots = new Set(searchRoots(query));
   return (Array.isArray(candidates) ? candidates : [])
     .map((candidate, index) => {
@@ -275,6 +346,10 @@ function rankSearchCandidates(candidates = [], query = '') {
       for (const root of queryRoots) if (titleRoots.has(root)) score += 12;
       if (candidate.isActive === false) score -= 1000;
       if (/o['`\u2018\u2019\u02bb]?zgartirish|qo['`\u2018\u2019\u02bb]?shimcha|\u045e\u0437\u0433\u0430\u0440\u0442\u0438\u0440\u0438\u0448|\u0438\u0437\u043c\u0435\u043d\u0435\u043d/iu.test(candidate.title)) score -= 18;
+      if (preferredPrefixes.size > 0 && candidate.documentNumber) {
+        if (preferredPrefixes.has(candidate.documentNumber.prefix)) score += 250;
+        else score -= 25;
+      }
       for (const requested of requestedActs) {
         const own = candidate.documentNumber;
         if (own && own.prefix === requested.prefix && own.number === requested.number) {
@@ -293,26 +368,52 @@ function rankSearchCandidates(candidates = [], query = '') {
     .sort((a, b) => b._rankScore - a._rankScore || a._originalOrder - b._originalOrder);
 }
 
+async function fetchCachedSearchPage(searchUrl) {
+  const key = String(searchUrl || '');
+  const cached = searchPageCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.html;
+  if (cached) searchPageCache.delete(key);
+  if (searchPageInFlight.has(key)) return searchPageInFlight.get(key);
+
+  const pending = httpGet(key).then((html) => {
+    searchPageCache.set(key, { html, expiresAt: Date.now() + SEARCH_PAGE_CACHE_TTL_MS });
+    return html;
+  }).finally(() => {
+    searchPageInFlight.delete(key);
+  });
+  searchPageInFlight.set(key, pending);
+  return pending;
+}
+
 async function fetchCachedLexDocument(url) {
   const key = canonicalLexUrl(url);
   const cached = documentCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.document;
   if (cached) documentCache.delete(key);
+  if (documentInFlight.has(key)) return documentInFlight.get(key);
 
-  const document = await fetchLexDocument(key);
-  if (documentCache.size >= DOCUMENT_CACHE_LIMIT) {
-    const oldest = documentCache.keys().next().value;
-    if (oldest) documentCache.delete(oldest);
-  }
-  documentCache.set(key, {
-    document,
-    expiresAt: Date.now() + DOCUMENT_CACHE_TTL_MS,
+  const pending = fetchLexDocument(key).then((document) => {
+    if (documentCache.size >= DOCUMENT_CACHE_LIMIT) {
+      const oldest = documentCache.keys().next().value;
+      if (oldest) documentCache.delete(oldest);
+    }
+    documentCache.set(key, {
+      document,
+      expiresAt: Date.now() + DOCUMENT_CACHE_TTL_MS,
+    });
+    return document;
+  }).finally(() => {
+    documentInFlight.delete(key);
   });
-  return document;
+  documentInFlight.set(key, pending);
+  return pending;
 }
 
 function clearLexDocumentCache() {
   documentCache.clear();
+  documentInFlight.clear();
+  searchPageCache.clear();
+  searchPageInFlight.clear();
 }
 
 function canonicalLexUrl(value = '') {
@@ -461,6 +562,7 @@ function formatLexSearchResults(results, language = 'uz') {
 
 module.exports = {
   searchLexUz,
+  buildLexSearchUrl,
   formatLexSearchResults,
   parseSearchResults,
   parseSearchCandidates,

@@ -1,6 +1,6 @@
 # JuristAI universal legal research playbook
 
-Playbook-Version: 1.2.0
+Playbook-Version: 1.3.0
 
 Bu hujjat O'zbekiston huquqi bo'yicha maslahat va tadqiqotning majburiy ichki ish tartibidir. U `core-legal-constitution.md`ga bo'ysunadi, huquqiy manba emas va foydalanuvchiga ko'rsatilmaydi. Konstitutsiyadagi umumiy manba, aniqlik, iqtibos, til, xavfsizlik va noaniqlik qoidalari bu yerda takrorlanmaydi.
 
@@ -20,11 +20,32 @@ Qidiruv faqat qonun yoki kodeks bilan cheklanmaydi. Muammoga qarab Konstitutsiya
 
 Qidiruv savoldagi oddiy so'zlar bilan birga rasmiy yuridik atama, sinonim, subyekt, harakat, hujjat turi va huquqiy oqibat bo'yicha kengaytiriladi. Keng qonun topilgach to'xtab qolish taqiqlanadi: maxsus tartibni belgilovchi qaror, nizom yoki yo'riqnoma ham qidiriladi.
 
+Oddiy foydalanuvchi iborasi rasmiy hujjat tiliga mos kelmasa, alohida qidiruv rejalashtiruvchi AI undan 3-8 ta qisqa rasmiy tushuncha yoki ehtimoliy hujjat identifikatori yaratadi. Bu natijalar faqat **qidiruv gipotezasi** hisoblanadi: ular javob uchun dalil bo'lmaydi va Lex.uz asl hujjatining o'z raqami, turi, amaldagi matni hamda aniq normasi bilan tasdiqlanmaguncha foydalanuvchiga huquqiy fakt sifatida chiqarilmaydi. Rejalashtiruvchi ishlamasa, deterministik ko'p sinfli qidiruv majburiy zaxira yo'li bo'lib qoladi.
+
+Quyidagi Lex.uz qidiruv voronkasi **har bir huquqiy savol** uchun bajariladi; u faqat oldindan ma'lum hujjatlar yoki alohida sohalar bilan cheklanmaydi:
+
+- foydalanuvchining tabiiy tildagi to'liq savoli;
+- savoldan ajratilgan rasmiy yuridik tushuncha, subyekt, harakat, shart, miqdor va oqibat;
+- shu tushuncha bilan Prezident qarori, Prezident farmoni va Vazirlar Mahkamasi qarori sinflari bo'yicha alohida qidiruv;
+- ilova, nizom, tartib, qoida, yo'riqnoma va idoraviy buyruq bo'yicha alohida qidiruv;
+- o'zbek lotin, o'zbek kirill va Lex.uz indeksida zarur bo'lgan ruscha hujjat prefiksi variantlari;
+- umumiy qonun yoki kodeks hamda topilgan maxsus hujjatni birgalikda tatbiq etish tekshiruvi.
+
+Foydalanuvchi `PQ-XXXX`, `PF-XX` yoki `VMQ-XXX` raqamini ko'rsatmagan bo'lsa ham, qidiruv savolning mazmunidan tegishli maxsus hujjatni topishi kerak. Raqam biror natijada aniqlangach, ikkinchi identifikatsiya bosqichi o'tkaziladi: `PQ/ПҚ/ПП`, `PF/ПФ/УП` va `VMQ/ВМҚ/ПКМ` ko'rinishlarida aynan shu raqam qayta qidiriladi.
+
+Raqam bo'yicha natijalarni tanlashda qidiruv tartibiga ko'r-ko'rona ishonilmaydi. Qidiruv kartasidagi hujjatning **o'z raqami** so'ralgan raqamga teng bo'lgan asl hujjat birinchi o'ringa qo'yiladi. Sarlavhasida “o'zgartirish”, “qo'shimcha”, “bekor qilish” kabi iboralar bo'lgan yoki matnida raqamni shunchaki tilga olgan hujjat asl hujjat sifatida qabul qilinmaydi. O'zgartiruvchi hujjat zarur bo'lsa alohida tarixiy dalil bo'lishi mumkin, biroq u asl normani almashtirmaydi.
+
+Barcha qidiruv yo'llaridan topilgan hujjatlar bitta umumiy ro'yxatda qayta baholanadi. Dastlabki umumiy qidiruv natijalari son chegarasini to'ldirgani sabab keyinroq topilgan maxsus `PQ`, `PF`, `VMQ` yoki nizom tashlab yuborilmaydi. Saralashda savol bilan mazmuniy moslik, hujjatning o'z turi va raqami, maxsuslik, amaldagi holat va aniq norma mavjudligi ustun turadi.
+
+Korpus, sohaga biriktirilgan hujjatlar reyestri va oldindan yozilgan tushuncha aliaslari qidiruvni tezlashtiradi, lekin oq ro'yxat emas. Mexanizm alohida `PQ-4008`, `PF-60`, `VMQ-824` yoki boshqa test hujjatiga bog'lanmaydi: u savoldan kelib chiqadigan istalgan `PQ-XXXX`, `PF-XX`, `VMQ-XXX` hamda quyi hujjatni topish uchun bir xil ishlaydi. Ularning hech biri mustaqil Lex.uz qidiruvi va yuqoridagi manba sinflarini tekshirishni bekor qilmaydi.
+
 ## 4. Hujjatni qo'llashdan oldingi nazorat
 
 Har bir hujjat uchun Lex.uz manbasi, amaldagi holati yoki hodisa sanasidagi tahriri, shaxs, tashkilot turi, hudud va vaqt bo'yicha tatbiq etilishi, umumiy va maxsus norma munosabati, istisno, o'tish qoidasi, ilova hamda aniq modda, qism, band, kichik band yoki xatboshi tekshiriladi.
 
 Hujjat nomi yoki mavzusi mos kelishi yetarli emas. Norma foydalanuvchi holatiga bevosita tatbiq etilishi kerak; kuchini yo'qotgan, almashtirilgan yoki tegishli subyektga tatbiq etilmaydigan hujjat yakuniy asos bo'lmaydi.
+
+Savolga javob beruvchi maxsus hujjat topilmaguncha “maxsus nizom mavjud bo'lishi mumkin” degan taxmin bilan tadqiqotni yakunlash taqiqlanadi. Yuqoridagi qidiruv voronkasi bajarilib ham topilmasa, qaysi qidiruv sinflari tekshirilgani va aniq norma tasdiqlanmagani ochiq qayd etiladi; mavjud bo'lmagan mezon yoki raqam to'qib chiqarilmaydi.
 
 ## 5. Dalillar xaritasi
 
@@ -38,7 +59,7 @@ Har bir norma konstitutsiyadagi yagona iqtibos uslubida o'sha huquqiy da'vo gapi
 
 ## 7. Yakuniy sifat tekshiruvi
 
-Yuborishdan oldin savolning muhim qismlari qamrab olingani, faqat bevosita aloqador normalar ishlatilgani, raqam va vakolatlar dalil bilan tasdiqlangani, barcha zarur hujjat sinflari ko'rilgani, tahrir va tatbiq etilish tekshirilgani, havola kerakli normagacha olib borishi hamda xulosa tahlildan kelib chiqishi tekshiriladi.
+Yuborishdan oldin savolning muhim qismlari qamrab olingani, faqat bevosita aloqador normalar ishlatilgani, raqam va vakolatlar dalil bilan tasdiqlangani, barcha zarur hujjat sinflari ko'rilgani, `PQ/PF/VMQ` va quyi tartibga soluvchi hujjatlar bo'yicha qidiruv bajarilgani, topilgan raqam asl hujjatning o'z raqami bilan tasdiqlangani, tahrir va tatbiq etilish tekshirilgani, havola kerakli normagacha olib borishi hamda xulosa tahlildan kelib chiqishi tekshiriladi.
 
 ## 8. Keyingi qadamlar
 
