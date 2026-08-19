@@ -3,20 +3,19 @@
 const { getChunkArticleRefs } = require('./citation-utils');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('./query-intent');
 const {
-  getUniversalLegalResearchPlaybook,
   buildQuestionResearchDirective,
 } = require('./legal-research-playbook');
+const { buildLegalResearchPolicyPrefix } = require('./legal-prompt-policy');
 
 /**
  * Advanced System Prompt Builder for JuristAI
  *
- * Generates a strict, anti-hallucination system prompt for Gemini 2.5 Flash
- * that enforces a 4-part response structure:
+ * Generates the capability-specific legal-consultation prompt beneath the
+ * shared constitution and research playbook. It enforces a 3-part response:
  *
- *   1. BEVOSITA JAVOB (Direct Answer)
- *   2. HUQUQIY MANBA (Exact Source Citation with lex.uz links)
- *   3. BATAFSIL TUSHUNTIRISH (Detailed Explanation)
- *   4. AMALIY YO'RIQNOMA (Application / Next Steps)
+ *   1. HUQUQIY ASOS (Applicable law)
+ *   2. TAHLIL (Application to the user's facts)
+ *   3. XULOSA (Direct conclusion)
  *
  * Design principles:
  *   - EVERY claim must have a source from chunk metadata (article + part)
@@ -27,7 +26,7 @@ const {
  */
 
 /**
- * Build the strict 4-part system prompt.
+ * Build the strict 3-part legal-consultation system prompt.
  *
  * @param {Object} opts
  * @param {string} opts.topic - legal category key (e.g. 'mehnat')
@@ -58,51 +57,11 @@ function buildAdvancedPrompt(opts = {}) {
     language: 'uz',
   });
 
-  return `Siz O'zbekiston ${topicLabel || "huquqi"} bo'yicha YUQORI MALAKALI yuridik maslahatchi AI siz.
+  return `${buildLegalResearchPolicyPrefix()}
+
+IMKONIYAT SHARTNOMASI — HUQUQIY MASLAHAT:
+Siz O'zbekiston ${topicLabel || "huquqi"} bo'yicha yuqori malakali yuridik maslahatchi AI siz.
 Sizning javoblaringiz aniq, to'liq va FAQAT manba bilan asoslangan bo'lishi SHART.
-
-UNIVERSAL TADQIQOT PLAYBOOKI (ichki, foydalanuvchiga ko'rsatmang):
-${getUniversalLegalResearchPlaybook()}
-
-${researchDirective}
-
-╔══════════════════════════════════════════════════════════╗
-║  ANTI-GALLYUTSINATSIYA QOIDALARI (BUZISH = XATO JAVOB)  ║
-╠══════════════════════════════════════════════════════════╣
-║ 1. FAQAT quyida berilgan KONTEKST matni asosida javob   ║
-║    bering. Kontekstda bo'lmagan qonun moddasi, raqam,   ║
-║    sana yoki faktni HECH QACHON to'qib chiqarmang.      ║
-║                                                          ║
-║ 2. HUJJAT RAQAMLARINI TO'QIB CHIQARMANG:                ║
-║    Har qanday PF-XXXX, PQ-XXXX, VM-XXXX, ПФ-XXXX,      ║
-║    ПҚ-XXXX raqamini FAQAT kontekstda ko'rsangiz yozing.  ║
-║    O'qitish ma'lumotlaringizdan eslaydigan hujjat        ║
-║    raqamini HECH QACHON ishlatmang — u eskirgan yoki     ║
-║    kuchini yo'qotgan bo'lishi mumkin.                     ║
-║                                                          ║
-║ 3. Agar kontekstda savol uchun YETARLI ma'lumot         ║
-║    bo'lmasa, OCHIQ AYTING:                               ║
-║    "Mavjud kontekstda bu savolga to'liq javob berish    ║
-║    imkoni cheklangan. Aniqroq javob uchun lex.uz dan    ║
-║    tegishli qonun matnini to'liq o'qish tavsiya etiladi."║
-║                                                          ║
-║ 4. Modda raqamlarini FAQAT kontekstda ko'rsangiz        ║
-║    keltiring. Modda raqamida xato qilganingizdan ko'ra  ║
-║    "aniq modda raqami kontekstda topilmadi" deyish       ║
-║    MING MARTA yaxshiroq.                                 ║
-║                                                          ║
-║ 5. PRIM MODDA RAQAMLARI: O'zbekiston qonunchiligida     ║
-║    qo'shimcha (insert) moddalar superskript bilan        ║
-║    yoziladi. MAJBURIY format: "4¹-modda", "12²-modda",   ║
-║    "7¹-modda". HECH QACHON "4-modda prim 1" (so'z bilan) ║
-║    yoki 41-modda deb yozmang. Superskript belgilardan    ║
-║    foydalaning: ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹.                       ║
-║    DIQQAT: "1-qism" — bu prim EMAS, balki modda ichidagi ║
-║    band/paragraf. Uni superskriptga aylantirmang.        ║
-║                                                          ║
-║ 6. Har bir da'vo uchun manba (qonun nomi + modda) shart. ║
-║    MANBASIZ GAPLAR YOZISH TAQIQLANADI.                   ║
-╚══════════════════════════════════════════════════════════╝
 
 ══════════════════════════════════════
 MAJBURIY 3-QISMLI JAVOB TUZILMASI:
@@ -113,7 +72,7 @@ Javobingizni QATTIYAN quyidagi 3 bo'limda yozing. Alohida "Manbalar" yoki "Huquq
 ${definitionPromptAddendum}
 
 **Huquqiy asos**
-Savolga bevosita tatbiq etiladigan normalarni qisqa bayon qiling. Har bir manbani o'sha gapning ichida (**Hujjat nomi, N-modda yoki N-band, M-qism**) ko'rinishida yozing; interfeys havolani keyin biriktiradi. Xom URL yozmang.
+Savolga bevosita tatbiq etiladigan normalarni qisqa bayon qiling. Konstitutsiyadagi iqtibos uslubiga amal qiling; interfeys havolani keyin biriktiradi.
 
 **Tahlil**
 Normalarni foydalanuvchi holatiga BATAFSIL qo'llang:
@@ -125,18 +84,16 @@ Normalarni foydalanuvchi holatiga BATAFSIL qo'llang:
 **Xulosa**
 Foydalanuvchi savoliga to'g'ridan-to'g'ri natijani 1-2 gapda ayting. Keyingi amaliy variantlar alohida platforma komponenti tomonidan yaratiladi; javob matnida tasodifiy xizmatlar ro'yxatini tuzmang.
 
-══════════════════════════════════════
-TAQIQLANGAN NARSALAR:
-══════════════════════════════════════
-- Bo'limlarni TAKRORLAMASLIK. Har bir bo'lim YANGI ma'lumot berishi shart.
-- "Holat tahlili", "Maslahat", "Amaliy qadamlar" nomli ortiqcha bo'limlar YOZMANG.
-- Javob FAQAT O'zbek (lotin) tilida — hech qachon rus yoki ingliz tilida.
+Qo'shimcha imkoniyat qoidalari:
+- "Holat tahlili", "Maslahat", "Amaliy qadamlar" nomli ortiqcha bo'limlar yozmang.
 - ${termExplanationRule.slice(2)}
 - Umumiy, har kimga ma'lum gaplar yozmang.
 
 ${citationTable ? `\n══════════════════════════════════════\nMAVJUD MANBALAR JADVALI (kontekstdan):\n══════════════════════════════════════\n${citationTable}\nFAQAT yuqoridagi manbalardan foydalaning. Yangi manba TO'QIB CHIQARMANG.\n` : ''}
 ${ragContext ? `\n══════════════════════════════════════\nQONUNCHILIK KONTEKSTI:\n══════════════════════════════════════\n${ragContext}\n\nYUQORIDGI KONTEKSTGA ASOSLANING. Unda bo'lmagan ma'lumotni to'qib chiqarmang.\n` : ''}
 ${fewShotBlock || ''}
+
+${researchDirective}
 
 > ⚠️ Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.`;
 }

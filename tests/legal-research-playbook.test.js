@@ -12,6 +12,13 @@ const {
   significantTerms,
 } = require('../src/rag/legal-research-playbook');
 const {
+  CONSTITUTION_PATH,
+  getCoreLegalConstitution,
+  getConstitutionVersion,
+  getLegalPolicyVersions,
+  buildLegalResearchPolicyPrefix,
+} = require('../src/rag/legal-prompt-policy');
+const {
   extractRelevantSections,
   inferExcerptProvision,
 } = require('../src/rag/lex-live-search');
@@ -27,10 +34,20 @@ function test(name, fn) {
 
 console.log('\nuniversal legal research playbook\n');
 
-test('the versioned Markdown playbook exists and covers every authority class', () => {
+test('the versioned constitution and research playbook are separate policy layers', () => {
+  assert.strictEqual(path.extname(CONSTITUTION_PATH), '.md');
+  assert.ok(fs.existsSync(CONSTITUTION_PATH));
   assert.strictEqual(path.extname(PLAYBOOK_PATH), '.md');
   assert.ok(fs.existsSync(PLAYBOOK_PATH));
+  const constitution = getCoreLegalConstitution();
   const text = getUniversalLegalResearchPlaybook();
+  for (const required of [
+    'Yagona rasmiy manba',
+    'Har bir huquqiy da\'vo aniq normaga bog\'lanadi',
+    'Hujjat nomi, N-modda yoki N-band, M-qism',
+    'Ma\'lumot va buyruq chegarasi',
+    'Imkoniyat chegarasi va shakl',
+  ]) assert.ok(constitution.includes(required), `missing constitution rule: ${required}`);
   for (const required of [
     'Vazirlar Mahkamasining qarorlari',
     "nizom, qoida, tartib",
@@ -40,7 +57,7 @@ test('the versioned Markdown playbook exists and covers every authority class', 
     'modda, qism, band, kichik band yoki xatboshi',
     'Lex.uz',
     'Keyingi qadamlar',
-    "savol va xulosaning davomi bo'ladi",
+    "savol va xulosaning davomi sifatida ko'radi",
     "vaziyatni boshidan qayta yozish talab qilinmaydi",
     "aynan o'sha javob kartasidan olinadi",
     "avval tanlangan qadamlarning mantiqiy davomi",
@@ -51,7 +68,21 @@ test('the versioned Markdown playbook exists and covers every authority class', 
     "Butun O'zbekiston",
     "hudud filtrlarini foydalanuvchining o'zi tanlaydi",
   ]) assert.ok(text.includes(required), `missing playbook rule: ${required}`);
-  assert.strictEqual(getPlaybookVersion(), '1.1.0');
+  assert.strictEqual(getConstitutionVersion(), '1.1.0');
+  assert.strictEqual(getPlaybookVersion(), '1.2.0');
+  assert.deepStrictEqual(getLegalPolicyVersions(), {
+    constitution: '1.1.0',
+    legalResearch: '1.2.0',
+  });
+});
+
+test('policy composer puts the stable constitution before the capability playbook', () => {
+  const prefix = buildLegalResearchPolicyPrefix();
+  const constitutionAt = prefix.indexOf('# JuristAI asosiy huquqiy konstitutsiya');
+  const playbookAt = prefix.indexOf('# JuristAI universal legal research playbook');
+  assert.ok(constitutionAt >= 0);
+  assert.ok(playbookAt > constitutionAt);
+  assert.ok(!prefix.includes('<user_question_data'));
 });
 
 test('a question gets a unique directive and remains untrusted data', () => {
@@ -110,19 +141,36 @@ test('advanced RAG uses the same playbook and three-section answer contract', ()
     topicLabel: "Ta'lim huquqi",
     userQuestion: 'Yakuniy nazoratdan chetlatish mumkinmi?',
   });
-  assert.ok(prompt.includes('Playbook-Version: 1.1.0'));
+  assert.ok(prompt.startsWith('ASOSIY HUQUQIY KONSTITUTSIYA'));
+  assert.ok(prompt.includes('Constitution-Version: 1.1.0'));
+  assert.ok(prompt.includes('Playbook-Version: 1.2.0'));
   assert.ok(prompt.includes('MAJBURIY 3-QISMLI JAVOB TUZILMASI'));
   assert.ok(prompt.includes('Alohida "Manbalar"'));
   assert.ok(!prompt.includes('MAJBURIY 4-QISMLI JAVOB TUZILMASI'));
+  assert.strictEqual((prompt.match(/# JuristAI asosiy huquqiy konstitutsiya/g) || []).length, 1);
+  assert.strictEqual((prompt.match(/# JuristAI universal legal research playbook/g) || []).length, 1);
+  assert.ok(prompt.indexOf('Constitution-Version:') < prompt.indexOf('Playbook-Version:'));
+  assert.ok(prompt.indexOf('Playbook-Version:') < prompt.indexOf('IMKONIYAT SHARTNOMASI'));
+  assert.ok(prompt.indexOf('IMKONIYAT SHARTNOMASI') < prompt.indexOf('<user_question_data'));
 });
 
-test('dashboard and Telegram shared prompt path load the playbook', () => {
+test('dashboard, Telegram, drafting and opinion paths inherit the policy composer', () => {
   const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
   const telegram = fs.readFileSync(path.join(__dirname, '..', 'src', 'agents', 'telegram-agent.js'), 'utf8');
-  assert.ok(server.includes("require('../rag/legal-research-playbook')"));
+  const drafting = fs.readFileSync(path.join(__dirname, '..', 'src', 'drafting', 'routes.js'), 'utf8');
+  const advancedRoutes = fs.readFileSync(path.join(__dirname, '..', 'src', 'rag', 'advanced-routes.js'), 'utf8');
+  assert.ok(server.includes("require('../rag/legal-prompt-policy')"));
   assert.ok(server.includes('buildLexResearchQueries(originalQuestion, topic)'));
-  assert.ok(server.includes('getUniversalLegalResearchPlaybook()'));
+  assert.ok(server.includes('buildLegalResearchPolicyPrefix()'));
+  assert.ok(server.includes('buildCoreLegalPolicyPrefix()'));
+  assert.ok(server.includes('policyVersions'));
+  assert.ok(!server.includes("korpusGroundTruth + '\\n\\n' + systemPrompt"));
+  assert.ok(!server.includes("qaFewShotBlock + '\\n\\n' + systemPrompt"));
   assert.ok(telegram.includes('D.buildTopicPrompt(topic, ragContext, question)'));
+  assert.ok(drafting.includes("require('../rag/legal-prompt-policy')"));
+  assert.ok(drafting.includes('withCoreLegalPolicy'));
+  assert.ok(advancedRoutes.includes('getLegalPolicyVersions()'));
+  assert.ok(!advancedRoutes.includes("korpusGroundTruth + '\\n\\n' + systemPrompt"));
 });
 
 console.log(`\n${passed} passed\n`);

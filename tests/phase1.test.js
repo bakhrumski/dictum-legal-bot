@@ -318,6 +318,9 @@ const ingestLexSrc = fs.readFileSync(
 const systemPromptSrc = fs.readFileSync(
   path.join(__dirname, '../src/rag/system-prompt.js'), 'utf8'
 );
+const coreLegalConstitutionSrc = fs.readFileSync(
+  path.join(__dirname, '../src/prompts/core-legal-constitution.md'), 'utf8'
+);
 const advancedRoutesSrc = fs.readFileSync(
   path.join(__dirname, '../src/rag/advanced-routes.js'), 'utf8'
 );
@@ -468,7 +471,9 @@ test('buildTopicPrompt MUST NOT contain pretrained topicKnowledge leakage', () =
 });
 
 test('buildTopicPrompt restricts legal claims to RAG context and lex.uz', () => {
-  assertMatch(serverSrc, /Faqat KONTEKSTdagi ma'lumot va lex\.uz havolalariga tayaning/, 'context-only declaration');
+  assertMatch(serverSrc, /buildLegalResearchPolicyPrefix\(\)/, 'shared policy composer is loaded');
+  assertMatch(coreLegalConstitutionSrc, /Yagona rasmiy manba — \*\*lex\.uz\*\*/, 'Lex.uz-only declaration');
+  assertMatch(coreLegalConstitutionSrc, /Modda, band, qism raqamlari FAQAT kontekstda mavjud bo'lsa/, 'context-only legal locators');
 });
 
 test('query-intent detects true definition questions without matching action queries', () => {
@@ -545,7 +550,8 @@ test('buildAdvancedPrompt switches off the blanket no-redefinition rule for defi
 
 test('mandatory citation instructions require law, article, and part', () => {
   assertMatch(serverSrc, /Har bir norma uchun: \(\*\*Qonun nomi, N-modda, M-qism\*\*\)/, 'mandatory citation shape');
-  assertMatch(serverSrc, /FAQAT KONTEKSTdagi MANBALAR ro'yxatida ko'rsatilgan URL'larni keltiring/, 'URL allowlist instruction');
+  assertMatch(coreLegalConstitutionSrc, /Javob matnida xom URL, `lex\.uz:` prefiksi yoki alohida `Manbalar` bo'limi yozilmaydi/, 'canonical citation output');
+  assertMatch(coreLegalConstitutionSrc, /Boshqa hech qanday sayt huquqiy manba sifatida ishlatilmaydi/, 'URL allowlist instruction');
 });
 
 test('source references preserve official date and document-number metadata', () => {

@@ -16,11 +16,12 @@
  * The advanced-chat route adds:
  *   1. QA bank few-shot injection
  *   2. Parent-child retrieval
- *   3. Strict 4-part system prompt
+ *   3. Versioned constitution + research playbook + 3-part answer contract
  */
 
 const { saveToQaBank, voteQaBankEntry, findSimilarQA, formatQaFewShot, parentChildSearch, getAdvancedStats, initAdvancedCorpus, insertStructuredChunks } = require('./advanced-corpus');
 const { buildAdvancedPrompt, formatAdvancedContext } = require('./system-prompt');
+const { getLegalPolicyVersions } = require('./legal-prompt-policy');
 const { chunkLegalDocumentStructured } = require('./structural-chunker');
 const { fetchLexDocument, parseLexHtml } = require('./fetch-lex');
 const { getEmbeddingsBatch, detectProvider } = require('./embeddings');
@@ -565,9 +566,11 @@ function mountAdvancedRoutes(app, deps) {
         retrievedChunks: searchResults,
         userQuestion: message,
       });
-      // Inject korpus ground truth (sim 0.78-0.92) ABOVE the normal prompt
+      // Dynamic evidence follows the stable constitution/playbook prefix so
+      // lower-priority data cannot precede policy and prompt caching can reuse
+      // the same exact prefix across requests.
       if (korpusGroundTruth) {
-        systemPrompt = korpusGroundTruth + '\n\n' + systemPrompt;
+        systemPrompt += '\n\n' + korpusGroundTruth;
       }
 
       // ── 4. Build message array ──
@@ -597,6 +600,7 @@ function mountAdvancedRoutes(app, deps) {
         provider: aiResult.provider,
         ragUsed: !!ragContext,
         rag: ragMeta,
+        policyVersions: getLegalPolicyVersions(),
         fewShotCount: qaMatches.length,
       });
 

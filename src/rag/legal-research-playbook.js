@@ -1,10 +1,12 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const {
+  LEGAL_RESEARCH_PLAYBOOK_PATH,
+  getLegalResearchPlaybook,
+  getLegalResearchPlaybookVersion,
+} = require('./legal-prompt-policy');
 
-const PLAYBOOK_PATH = path.join(__dirname, '..', 'prompts', 'universal-legal-research-playbook.md');
-let cachedPlaybook = null;
+const PLAYBOOK_PATH = LEGAL_RESEARCH_PLAYBOOK_PATH;
 
 const TOPIC_LABELS = Object.freeze({
   talim: "ta'lim, yakuniy nazorat, baholash va talaba huquqlari",
@@ -27,15 +29,11 @@ const STOP_WORDS = new Set([
 ]);
 
 function getUniversalLegalResearchPlaybook() {
-  if (cachedPlaybook === null) {
-    cachedPlaybook = fs.readFileSync(PLAYBOOK_PATH, 'utf8').trim();
-  }
-  return cachedPlaybook;
+  return getLegalResearchPlaybook();
 }
 
 function getPlaybookVersion() {
-  const match = getUniversalLegalResearchPlaybook().match(/^Playbook-Version:\s*([^\s]+)$/mi);
-  return match ? match[1] : 'unknown';
+  return getLegalResearchPlaybookVersion();
 }
 
 function escapeXml(value = '') {
@@ -116,4 +114,3 @@ module.exports = {
   buildLexResearchQueries,
   significantTerms,
 };
-
