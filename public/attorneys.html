@@ -73,7 +73,7 @@
   <main class="shell">
     <p class="eyebrow">Tekshirilgan mutaxassislar</p>
     <h1>Masalangizga mos advokatni toping</h1>
-    <p class="lead">Huquq yo'nalishi va hudud bo'yicha litsenziyasi tasdiqlangan advokatlarni ko'ring. JuristAI moslikni profil ma'lumotlari asosida tushuntiradi.</p>
+    <p class="lead">Huquq yo'nalishi va o'zingiz tanlagan hudud bo'yicha litsenziyasi tasdiqlangan advokatlarni ko'ring. Qidiruvni butun O'zbekiston bo'yicha yoki istalgan boshqa hududda amalga oshirish mumkin.</p>
     <div class="trust" aria-label="Ishonch mezonlari">
       <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg>Litsenziya tekshirilgan</span>
       <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg>Moslik sababi ochiq</span>
@@ -86,7 +86,23 @@
         <input class="control" id="searchInput" type="search" placeholder="Masala yoki kalit so'z" aria-label="Advokat qidirish">
       </label>
       <select class="control" id="areaFilter" aria-label="Huquq yo'nalishi"><option value="">Barcha yo'nalishlar</option></select>
-      <input class="control" id="regionFilter" type="text" placeholder="Hudud" aria-label="Hudud">
+      <select class="control" id="regionFilter" aria-label="Hudud">
+        <option value="">Butun O'zbekiston</option>
+        <option value="Toshkent shahar">Toshkent shahri</option>
+        <option value="Toshkent viloyati">Toshkent viloyati</option>
+        <option value="Qoraqalpog'iston Respublikasi">Qoraqalpog'iston Respublikasi</option>
+        <option value="Andijon viloyati">Andijon viloyati</option>
+        <option value="Buxoro viloyati">Buxoro viloyati</option>
+        <option value="Farg'ona viloyati">Farg'ona viloyati</option>
+        <option value="Jizzax viloyati">Jizzax viloyati</option>
+        <option value="Xorazm viloyati">Xorazm viloyati</option>
+        <option value="Namangan viloyati">Namangan viloyati</option>
+        <option value="Navoiy viloyati">Navoiy viloyati</option>
+        <option value="Qashqadaryo viloyati">Qashqadaryo viloyati</option>
+        <option value="Samarqand viloyati">Samarqand viloyati</option>
+        <option value="Sirdaryo viloyati">Sirdaryo viloyati</option>
+        <option value="Surxondaryo viloyati">Surxondaryo viloyati</option>
+      </select>
       <button class="find" type="submit">Topish</button>
     </form>
 

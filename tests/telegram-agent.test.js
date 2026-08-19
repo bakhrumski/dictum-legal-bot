@@ -522,7 +522,7 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(r.meta.entitlementSource, 'free');
     assert.deepStrictEqual(
       r.meta.nextActions.map(action => action.kind),
-      ['document', 'document', 'attorney', 'custom'],
+      ['document', 'document', 'attorney'],
       'a completed answer must offer deterministic next steps'
     );
     assert.strictEqual(dbState.state, 'awaiting_next_action');
@@ -844,18 +844,24 @@ function stubMemory(clarifyCount = 0) {
     assert.deepStrictEqual(callbacks, ['svc_legal', 'svc_attorney', 'svc_document']);
   });
 
-  await test('attorney menu callbacks collect field and region before the problem', async () => {
-    const field = intakeMenus.resolveIntakeCallback('atf_labor', {});
+  await test('attorney menu callbacks preserve the case while users choose field and any region', async () => {
+    const field = intakeMenus.resolveIntakeCallback('atf_labor', { caseSummary: 'Oldingi huquqiy savol' });
     assert.strictEqual(field.state, 'attorney_region');
     assert.strictEqual(field.context.fieldLabel, 'Mehnat huquqi');
     assert.strictEqual(field.context.category, 'Mehnat va aholining bandligi');
     assert.strictEqual(field.context.strictField, true);
+    assert.strictEqual(field.context.caseSummary, 'Oldingi huquqiy savol');
 
     const region = intakeMenus.resolveIntakeCallback('atr_tashkent_city', field.context);
     assert.strictEqual(region.state, 'attorney_problem');
     assert.strictEqual(region.context.region, 'Toshkent shahar');
     assert.strictEqual(region.context.strictRegion, true);
-    assert.ok(/faqat shu ma'lumotlardan keyin tanlanadi/i.test(region.message));
+    assert.ok(/oldingi savolingizdan olindi/i.test(region.message));
+
+    const nationwide = intakeMenus.resolveIntakeCallback('atr_any', field.context);
+    assert.strictEqual(nationwide.context.region, '');
+    assert.strictEqual(nationwide.context.strictRegion, false);
+    assert.strictEqual(nationwide.context.regionLabel, 'Barcha hududlar');
   });
 
   await test('document menu records the selected paid service without AI', async () => {

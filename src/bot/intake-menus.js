@@ -162,6 +162,7 @@ function resolveIntakeCallback(data, currentContext = {}) {
     return {
       state: 'attorney_region',
       context: {
+        ...currentContext,
         fieldCode: code,
         fieldLabel: field.label,
         legalField: field.registryField,
