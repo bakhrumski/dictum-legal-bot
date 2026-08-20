@@ -372,7 +372,10 @@ function stripGeneratedSourceSections(value = '') {
 function stripRawLexAttributions(value = '') {
   return String(value || '')
     // Cached links from the old style are unwrapped, then relinked below with
-    // the law name, article and qism in one canonical label.
+    // the law name, public act identifier, article and qism in one canonical
+    // label. A current canonical root link is also valid when no individual
+    // provision was asserted, so preserve it instead of relinking its title
+    // and identifier as two separate mentions.
     .replace(
       /\[([^\]]+)\]\((?:https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/)?docs\/-?\d+[^)]*|\/api\/lex-anchor\?[^)]*)\)/giu,
       (whole, label) => {
@@ -380,8 +383,9 @@ function stripRawLexAttributions(value = '') {
         // Preserve that canonical link when the cache row no longer includes
         // the original RAG chunks needed to reconstruct it.
         const plain = String(label || '').replace(/[*_]/gu, '').trim();
-        const canonical = /\p{L}[\s\S]*\d+\s*[-–—]\s*(?:modda|band)\s*,\s*(?:\d+\s*[-–—]\s*qism|tegishli\s+(?:qism|band))/iu.test(plain);
-        return canonical ? whole : label;
+        const canonicalProvision = /\p{L}[\s\S]*\d+\s*[-–—]\s*(?:modda|band)\s*,\s*(?:\d+\s*[-–—]\s*qism|tegishli\s+(?:qism|band))/iu.test(plain);
+        const canonicalAct = /\p{L}[\s\S]*\((?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)-\d+(?:-[IVXLCDM]+)?\)/iu.test(plain);
+        return canonicalProvision || canonicalAct ? whole : label;
       }
     )
     // Remove standalone source-attribution lines and prose parentheses such
@@ -711,16 +715,72 @@ function upgradeLinkedCitationIdentifiers(value = '', chunks = [], lang = 'uz') 
   );
 }
 
+/**
+ * Collapse two adjacent links to the same Lex.uz document when one is merely
+ * the document root and the other identifies an exact article/band. Models
+ * occasionally write both forms in a single citation, for example:
+ *
+ *   [Qaror (VMQ-428)](root)"gi [Qaror (VMQ-428), 3-band](deep)
+ *
+ * Keeping both is noisy and reads as though two authorities were cited. The
+ * exact provision is the stronger citation, so retain only that link. A real
+ * conjunction ("va", "hamda", etc.) is deliberately not treated as an
+ * adjacent duplicate because it can connect two distinct propositions.
+ */
+function collapseDuplicateLexCitations(value = '') {
+  let output = String(value || '');
+  const lexLinkRx = /\[([^\]]+)\]\((https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\/-?\d+[^)]*)\)/giu;
+  const ignorableSeparator = /^\s*[\u00ab\u00bb\u201c\u201d"']?\s*(?:(?:gi|dagi|ning|ga|da|dan)\b)?\s*[,;:]?\s*$/iu;
+
+  // A bounded loop handles a rare three-link sequence without risking an
+  // accidental infinite rewrite if malformed Markdown reaches this layer.
+  for (let pass = 0; pass < 4; pass++) {
+    const matches = Array.from(output.matchAll(lexLinkRx));
+    let replacement = null;
+    for (let index = 0; index < matches.length - 1; index++) {
+      const first = matches[index];
+      const second = matches[index + 1];
+      const firstStart = first.index;
+      const firstEnd = firstStart + first[0].length;
+      const secondStart = second.index;
+      const secondEnd = secondStart + second[0].length;
+      const separator = output.slice(firstEnd, secondStart);
+      if (!ignorableSeparator.test(separator)) continue;
+      if (lexDocumentIdentity(first[2]) !== lexDocumentIdentity(second[2])) continue;
+
+      const isExact = (label, url) =>
+        /(?:\d+[\u2070\u00b9\u00b2\u00b3\u2074-\u2079]*\s*[-\u2013\u2014]\s*(?:modda|band)|tegishli\s+(?:qism|band))/iu.test(
+          String(label || '').replace(/[*_]/gu, '')
+        ) || /(?:#|%23|:~:text=)/iu.test(String(url || ''));
+      const firstExact = isExact(first[1], first[2]);
+      const secondExact = isExact(second[1], second[2]);
+      if (firstExact === secondExact) continue;
+
+      replacement = {
+        start: firstStart,
+        end: secondEnd,
+        text: firstExact ? first[0] : second[0],
+      };
+      break;
+    }
+    if (!replacement) break;
+    output = output.slice(0, replacement.start) + replacement.text + output.slice(replacement.end);
+  }
+  return output;
+}
+
 function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz') {
   const linked = linkCitationsInMarkdown(
     stripRawLexAttributions(stripGeneratedSourceSections(replyText)),
     chunks,
     lang
   );
-  return linkRemainingGroundedActMentions(
-    upgradeLinkedCitationIdentifiers(linked, chunks, lang),
-    chunks,
-    lang
+  return collapseDuplicateLexCitations(
+    linkRemainingGroundedActMentions(
+      upgradeLinkedCitationIdentifiers(linked, chunks, lang),
+      chunks,
+      lang
+    )
   );
 }
 
@@ -759,6 +819,7 @@ module.exports = {
   canonicalCitationActLabel,
   linkCitationsInMarkdown,
   linkRemainingGroundedActMentions,
+  collapseDuplicateLexCitations,
   normalizeLegalAnswerCitations,
   hasCanonicalOfficialCitations,
 };
