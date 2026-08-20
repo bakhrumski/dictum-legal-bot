@@ -495,6 +495,26 @@ test('existing Lex links receive the official identifier across URL language var
   assert.match(normalized, /\[\*\*Ta'lim to'g'risida \(O'RQ-637\), 48-modda, tegishli qism\*\*\]/u);
 });
 
+test('an adjacent document-root link and exact provision link collapse into one citation', () => {
+  const title = "Tashqi reklama va ijtimoiy axborotning aylanish sohasidagi munosabatlarni tartibga solishni yanada takomillashtirish chora-tadbirlari to'g'risida";
+  const normalized = normalizeLegalAnswerCitations(
+    `Ushbu tartib [${title} (VMQ-428)](https://lex.uz/docs/-6591657)”gi ` +
+    `[${title} (VMQ-428), 3-band, tegishli band](https://lex.uz/docs/-6591657#:~:text=3.%20Vazirlar) ` +
+    `bilan joriy etilgan.`,
+    [{
+      law_name: title,
+      document_number: 'VMQ-428',
+      article_numbers: ['3'],
+      provision_type: 'band',
+      source_url: 'https://lex.uz/docs/-6591657',
+      chunk_text: '3. Vazirlar Mahkamasining qarorida tashqi reklama tartibi belgilangan.',
+    }]
+  );
+  assert.strictEqual((normalized.match(/lex\.uz\/docs\/-6591657/gu) || []).length, 1);
+  assert.match(normalized, /\[(?:\*\*)?Tashqi reklama[\s\S]+\(VMQ-428\), 3-band, tegishli band(?:\*\*)?\]\(https:\/\/lex\.uz\/docs\/-6591657#:~:text=/u);
+  assert.doesNotMatch(normalized, /\)”gi\s+\[/u);
+});
+
 test('an unverified act mention is never turned into a source link', () => {
   const answer = "Noma'lum qaror (PQ-999999) ham qo'llanadi.";
   assert.strictEqual(normalizeLegalAnswerCitations(answer, []), answer);
