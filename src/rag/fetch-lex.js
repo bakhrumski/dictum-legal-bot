@@ -33,6 +33,7 @@ if (typeof globalThis.File === 'undefined') {
 
 const cheerio = require('cheerio');
 const https = require('https');
+const { normalizeOfficialDocumentIdentifier } = require('./citation-utils');
 const http = require('http');
 const { enrichForIngest } = require('./prim-notation');
 
@@ -448,6 +449,10 @@ function extractTitleMetadata(title) {
       result.document_number = m[1].replace(/-son$/i, '');
       break;
     }
+  }
+
+  if (result.document_number) {
+    result.document_number = normalizeOfficialDocumentIdentifier(result.document_number, title);
   }
 
   return result;

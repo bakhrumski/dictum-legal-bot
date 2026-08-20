@@ -92,7 +92,7 @@ Javob tuzilishi:
 2. **Tegishli qonun normalari** — aniq modda raqamlari bilan (tadqiqot manbalaridan)
 3. **Huquqiy tahlil** — normalar foydalanuvchi vaziyatiga qanday tatbiq etiladi
 4. **Tavsiya** — aniq amaliy maslahat
-5. Har bir norma uni qo'llagan gapning o'zida (**Qonun nomi, N-modda, M-qism**) shaklida ko'rsatiladi; alohida Manbalar bo'limi yozilmaydi
+5. Har bir norma uni qo'llagan gapning o'zida (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) shaklida ko'rsatiladi; hujjat raqami faqat Lex.uz tasdiqlasa yoziladi va alohida Manbalar bo'limi yozilmaydi
 
 Qoidalar:
 - O'zbek tilida yoz

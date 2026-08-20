@@ -243,7 +243,19 @@ test('document_number: "PQ-4624" wins even when a date precedes it', () => {
 test('document_number: Cyrillic "ПП-123" alpha prefix', () => {
   const html = buildHtml({ title: 'Постановление Президента ПП-123' });
   const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/5');
-  assertEq(metadata.document_number, 'ПП-123', 'Cyrillic alpha prefix');
+  assertEq(metadata.document_number, 'PQ-123', 'Cyrillic prefix normalized for public Uzbek citation');
+});
+
+test('document_number adds VMQ and O\'RQ public prefixes from official act form', () => {
+  const cabinet = parseLexHtml(buildHtml({
+    title: "O'zbekiston Respublikasi Vazirlar Mahkamasining 2020-yil 31-dekabrdagi 824-son qarori",
+  }), 'https://lex.uz/docs/5193564');
+  assertEq(cabinet.metadata.document_number, 'VMQ-824', 'Cabinet decision prefix');
+
+  const law = parseLexHtml(buildHtml({
+    title: "O'zbekiston Respublikasining 2020-yil 23-sentabrdagi O'RQ-637-son Qonuni",
+  }), 'https://lex.uz/docs/5013007');
+  assertEq(law.metadata.document_number, "O'RQ-637", 'law prefix');
 });
 
 test('document_number strips "-son" suffix', () => {
@@ -430,7 +442,7 @@ const serverSrc = fs.readFileSync(
 test('retrieveLegalContext builds source references with metadata (date, number, URL)', () => {
   assertMatch(serverSrc, /sourceRefLines\s*=\s*\[\]/, 'source reference array declared');
   assertMatch(serverSrc, /r\.adoption_date/, 'reads adoption_date from chunk');
-  assertMatch(serverSrc, /r\.document_number/, 'reads document_number from chunk');
+  assertMatch(serverSrc, /getChunkDocumentIdentifier\(r\)/, 'normalizes document_number from chunk');
   assertMatch(serverSrc, /formatDate/, 'date formatter helper present');
 });
 
@@ -549,14 +561,14 @@ test('buildAdvancedPrompt switches off the blanket no-redefinition rule for defi
 });
 
 test('mandatory citation instructions require law, article, and part', () => {
-  assertMatch(serverSrc, /Har bir norma uchun: \(\*\*Qonun nomi, N-modda, M-qism\*\*\)/, 'mandatory citation shape');
+  assertMatch(serverSrc, /Har bir norma uchun: \(\*\*Hujjatning to'liq nomi \(O'RQ\/PQ\/PF\/VMQ-raqami\), N-modda yoki N-band, M-qism\*\*\)/, 'mandatory citation shape');
   assertMatch(coreLegalConstitutionSrc, /Javob matnida xom URL, `lex\.uz:` prefiksi yoki alohida `Manbalar` bo'limi yozilmaydi/, 'canonical citation output');
   assertMatch(coreLegalConstitutionSrc, /Boshqa hech qanday sayt huquqiy manba sifatida ishlatilmaydi/, 'URL allowlist instruction');
 });
 
 test('source references preserve official date and document-number metadata', () => {
   assertMatch(serverSrc, /const dateStr = formatDate\(r\.adoption_date\)/, 'official date included');
-  assertMatch(serverSrc, /const docNum = r\.document_number/, 'document number included');
+  assertMatch(serverSrc, /const docNum = getChunkDocumentIdentifier\(r\)/, 'document number included');
   assertMatch(serverSrc, /docNum \? `\\u2116 \$\{docNum\}` : null/, 'document number format');
 });
 

@@ -1,6 +1,6 @@
 # JuristAI universal legal research playbook
 
-Playbook-Version: 1.3.0
+Playbook-Version: 1.4.0
 
 Bu hujjat O'zbekiston huquqi bo'yicha maslahat va tadqiqotning majburiy ichki ish tartibidir. U `core-legal-constitution.md`ga bo'ysunadi, huquqiy manba emas va foydalanuvchiga ko'rsatilmaydi. Konstitutsiyadagi umumiy manba, aniqlik, iqtibos, til, xavfsizlik va noaniqlik qoidalari bu yerda takrorlanmaydi.
 
@@ -55,11 +55,11 @@ Javobdan oldin har bir asosiy huquqiy xulosa tegishli hujjat, aniq norma, Lex.uz
 
 Maslahat javobi oqimli paragraflarda va odatda uch qismda yoziladi: **Huquqiy asos** tatbiq etiladigan normalarni, **Tahlil** ularning faktlarga qo'llanishini, **Xulosa** esa aniq natijani beradi. Bullet nuqtalar (•, ·, *, ●) va raqamli ro'yxatlar ishlatilmaydi; zarur amaliy sanash uchun qisqa tireli ro'yxat mumkin.
 
-Har bir norma konstitutsiyadagi yagona iqtibos uslubida o'sha huquqiy da'vo gapining ichida beriladi. Xom URL, `lex.uz:` prefiksi yoki alohida `Manbalar` bo'limi yozilmaydi. Maxsus norma topilgan bo'lsa, u kengroq umumiy hujjatdan oldin tushuntiriladi.
+Har bir norma konstitutsiyadagi yagona iqtibos uslubida o'sha huquqiy da'vo gapining ichida beriladi. Hujjatning to'liq nomi bilan birga uning Lex.uz'da tasdiqlangan rasmiy raqami ham yoziladi: qonun — `O'RQ-XXX`, Prezident qarori — `PQ-XXX`, Prezident farmoni — `PF-XXX`, Vazirlar Mahkamasi qarori — `VMQ-XXX`. Har bir shunday iqtibos Lex.uz'dagi aynan qo'llangan norma bilan bog'lanishi shart; norma raqamisiz asosli hujjat eslatmasi kamida hujjatning rasmiy Lex.uz sahifasiga bog'lanadi. Xom URL, `lex.uz:` prefiksi yoki alohida `Manbalar` bo'limi yozilmaydi. Maxsus norma topilgan bo'lsa, u kengroq umumiy hujjatdan oldin tushuntiriladi.
 
 ## 7. Yakuniy sifat tekshiruvi
 
-Yuborishdan oldin savolning muhim qismlari qamrab olingani, faqat bevosita aloqador normalar ishlatilgani, raqam va vakolatlar dalil bilan tasdiqlangani, barcha zarur hujjat sinflari ko'rilgani, `PQ/PF/VMQ` va quyi tartibga soluvchi hujjatlar bo'yicha qidiruv bajarilgani, topilgan raqam asl hujjatning o'z raqami bilan tasdiqlangani, tahrir va tatbiq etilish tekshirilgani, havola kerakli normagacha olib borishi hamda xulosa tahlildan kelib chiqishi tekshiriladi.
+Yuborishdan oldin savolning muhim qismlari qamrab olingani, faqat bevosita aloqador normalar ishlatilgani, raqam va vakolatlar dalil bilan tasdiqlangani, barcha zarur hujjat sinflari ko'rilgani, `O'RQ/PQ/PF/VMQ` va quyi tartibga soluvchi hujjatlar bo'yicha qidiruv bajarilgani, topilgan raqam asl hujjatning o'z raqami bilan tasdiqlangani, har bir tilga olingan O'zbekiston normativ-huquqiy hujjati bosiladigan Lex.uz havolasiga aylangani, tahrir va tatbiq etilish tekshirilgani, havola kerakli normagacha olib borishi hamda xulosa tahlildan kelib chiqishi tekshiriladi.
 
 ## 8. Keyingi qadamlar
 

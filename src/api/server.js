@@ -28,7 +28,10 @@ const {
   selectRelevantSourceRefs,
   findCitationPartNumber,
   buildLexDeepLink,
+  getChunkDocumentIdentifier,
+  canonicalCitationActLabel,
   normalizeLegalAnswerCitations,
+  hasCanonicalOfficialCitations,
 } = require('../rag/citation-utils');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
@@ -3817,6 +3820,7 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
     // ========== RAG CORPUS: RETRIEVE RELEVANT LAW TEXT ==========
     let ragCorpusBlock = '';
     let ragMeta = null;
+    let ragCitationChunks = [];
     try {
       const ragResult = await retrieveLegalContext(requestText, detectedField !== 'Boshqa' ? detectedField : null);
       if (typeof ragResult === 'string') {
@@ -3824,6 +3828,7 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
       } else {
         ragCorpusBlock = ragResult.context || '';
         ragMeta = ragResult.meta || null;
+        ragCitationChunks = Array.isArray(ragResult.chunks) ? ragResult.chunks : [];
       }
       if (ragCorpusBlock) {
         console.log(`[AI] RAG: ${ragMeta?.strategy || '?'} / ${ragMeta?.searchMode || '?'} — ${ragMeta?.chunks || 0} chunks`);
@@ -3833,7 +3838,10 @@ app.post('/api/ai-analysis', requireMasterAdmin, async (req, res) => {
     }
 
     // ========== LEGAL REASONING ENGINE — SYSTEM PROMPT ==========
-    const systemPrompt = `You are a professional legal assistant specialized in the legislation of the Republic of Uzbekistan.
+    const systemPrompt = `${buildLegalResearchPolicyPrefix()}
+
+IMKONIYAT SHARTNOMASI — MASTER ADMIN MUROJAAT TAHLILI:
+You are a professional legal assistant specialized in the legislation of the Republic of Uzbekistan.
 
 Your task is to analyze legal requests submitted by users and provide precise, well-structured legal answers.
 
@@ -3890,12 +3898,13 @@ PRIMARY LEGAL SOURCES:
 
 CITATION FORMAT (MAJBURIY):
 Har bir huquqiy da'vo uchun quyidagi formatda manba keltiring:
-[Qonun nomi], [raqam]-modda (Manba: lex.uz)
+[Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism]
 
 Misollar:
-- Mehnat kodeksi, 100-modda (Manba: lex.uz)
-- Fuqarolik kodeksi, 354-modda (Manba: lex.uz)
-- Oila kodeksi, 38-modda (Manba: lex.uz)
+- Mehnat kodeksi (O'RQ-798), 100-modda, tegishli qism
+- O'zbekiston hududida xorijiy malakali mutaxassislar uchun sharoitlar yaratish to'g'risida (PQ-4008), 2-band, tegishli band
+
+Hujjatning rasmiy raqami va Lex.uz manbasi tasdiqlanmasa, uni huquqiy asos sifatida ishlatmang. Alohida "Manbalar" bo'limi yoki xom URL yozmang; interfeys tasdiqlangan inline iqtiboslarni Lex.uz havolasiga aylantiradi.
 
 MANBASIZ BAYONOT QILISH QATTIYAN TAQIQLANADI.
 Agar qonun normasi web search orqali topilmasa — uni keltirmang.
@@ -3952,7 +3961,7 @@ Javob strukturasini murojaat turiga moslang.`;
     // ========== STRUCTURED RESPONSE FORMAT ==========
     const responseFormat = `JAVOB FORMATI (3 bo'lim, MAJBURIY — boshqa sarlavha qo'shmang):
 
-**Huquqiy asos** — Qaysi qonun, qaysi modda qo'llanadi? Faqat AMALDAGI normalarni keltiring. Qonun nomi va modda raqamini **qalin** yozing. Modda raqamini FAQAT kontekst yoki web search tasdiqlasa keltiring — taxmin qilmang.
+**Huquqiy asos** — Qaysi hujjat va qaysi aniq norma qo'llanadi? Faqat AMALDAGI normalarni keltiring. Hujjatning to'liq nomi, tasdiqlangan rasmiy raqami (O'RQ, PQ, PF, VMQ) va modda/band/qismni **qalin** yozing. Raqamlarni FAQAT kontekst yoki Lex.uz tasdiqlasa keltiring — taxmin qilmang.
 
 **Tahlil** — Norma foydalanuvchi vaziyatiga qanday tatbiq etiladi? Jismoniy / mansabdor / yuridik shaxs uchun farq bo'lsa — har birini alohida ko'rsating. Aniq BHM ko'paytmasi, aniq muddatlar, aniq foizlar — noaniq iboralar TAQIQLANGAN.
 
@@ -4037,6 +4046,15 @@ ${feedbackNote}`;
         console.error('[AI] Failed to parse yurxizmat suggestions:', e.message);
       }
     }
+
+    // Apply the same platform-wide verified citation renderer used by Web chat
+    // and Telegram before this Master Admin analysis is stored or displayed.
+    await hydrateLexAnchors(ragCitationChunks, analysis);
+    analysis = normalizeLegalAnswerCitations(
+      normalizeResponseForUser(analysis),
+      ragCitationChunks,
+      lexLangForText(requestText)
+    );
 
     // Archive the analysis (including internal reasoning for audit)
     let archiveId = null;
@@ -4133,7 +4151,7 @@ QOIDALAR:
 - Javob qisqa, aniq va strukturali bo'lsin
 
 JAVOB FORMATI:
-${validDbs.indexOf('lex.uz') > -1 ? '1. **Tegishli qonunlar:** (lex.uz dan)\n   - Qonun/kodeks nomi, modda raqami, qisqa mazmun, havola\n' : ''}${validDbs.indexOf('public.sud.uz') > -1 ? '2. **Sud amaliyoti:** (public.sud.uz dan)\n   - Sud ishi, qaror, mohiyat, havola\n' : ''}${validDbs.indexOf('my.sud.uz') > -1 ? '3. **Sud ishi holati:** (my.sud.uz dan)\n   - Ish holati, ma\'lumot\n' : ''}${validDbs.indexOf('mib.uz') > -1 ? '4. **Ijro ma\'lumotlari:** (mib.uz dan)\n   - Ijro hujjati, holat, ma\'lumot\n' : ''}${validDbs.indexOf('soliq.uz') > -1 ? '5. **Soliq ma\'lumotlari:** (soliq.uz dan)\n   - Soliq qoidasi, ma\'lumot, havola\n' : ''}${validDbs.indexOf('ihamkor.uz') > -1 ? '6. **Ijtimoiy himoya:** (ihamkor.uz dan)\n   - Ma\'lumot, havola\n' : ''}
+${validDbs.indexOf('lex.uz') > -1 ? '1. **Tegishli huquqiy hujjatlar:** (Lex.uz)\n   - Hujjatning to\'liq nomi va rasmiy raqami (O\'RQ/PQ/PF/VMQ), aniq modda/band/qism, qisqa mazmun; nomning o\'zi Lex.uz havolasi bo\'lsin\n' : ''}${validDbs.indexOf('public.sud.uz') > -1 ? '2. **Sud amaliyoti:** (public.sud.uz dan)\n   - Sud ishi, qaror, mohiyat, havola\n' : ''}${validDbs.indexOf('my.sud.uz') > -1 ? '3. **Sud ishi holati:** (my.sud.uz dan)\n   - Ish holati, ma\'lumot\n' : ''}${validDbs.indexOf('mib.uz') > -1 ? '4. **Ijro ma\'lumotlari:** (mib.uz dan)\n   - Ijro hujjati, holat, ma\'lumot\n' : ''}${validDbs.indexOf('soliq.uz') > -1 ? '5. **Soliq ma\'lumotlari:** (soliq.uz dan)\n   - Soliq qoidasi, ma\'lumot, havola\n' : ''}${validDbs.indexOf('ihamkor.uz') > -1 ? '6. **Ijtimoiy himoya:** (ihamkor.uz dan)\n   - Ma\'lumot, havola\n' : ''}
 **Xulosa:** Qisqa huquqiy fikr
 
 > "Bu javob AI asosida shakllantirilgan. Aniq ma'lumotlar uchun tegishli saytlardan tekshiring."`;
@@ -4252,6 +4270,7 @@ function adaptParentChildChunk(r, idx, topic) {
     // old-format equivalents
     law_name: r.lawName || '',
     source_url: r.sourceUrl || null,
+    document_number: r.documentNumber || null,
     chapter: r.chapter || '',
     article_numbers: r.articleNumber ? [r.articleNumber] : [],
     article_number_display: r.articleNumber || '',
@@ -4524,6 +4543,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         return fallbackResult;
       }
     }
+
   }
 
   // ── 3a. Cross-field augmentation: pull high-relevance chunks from OTHER categories ──
@@ -4727,7 +4747,9 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   }
 
 
-  if (goodChunks.length === 0 && webResults.length === 0 && lexLiveResults.length === 0) return { context: '', meta: { searchMode, chunks: 0, webResults: 0, lexLiveResults: 0, sources: [] } };
+  if (goodChunks.length === 0 && webResults.length === 0 && lexLiveResults.length === 0) {
+    return { context: '', meta: { searchMode, chunks: 0, webResults: 0, lexLiveResults: 0, sources: [] }, chunks: [] };
+  }
 
   // Lex.uz live results used to exist only as prompt text. Citation checking
   // and link rendering received `goodChunks` alone, so every source found by
@@ -4748,8 +4770,41 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     language: 'uz',
     is_active: true,
     adoption_date: r.metadata && r.metadata.adoption_date,
-    document_number: r.metadata && r.metadata.document_number,
-  })).filter(r => r.source_url && getChunkArticleRefs(r).length > 0);
+    document_number: getChunkDocumentIdentifier({
+      ownDocumentNumber: r.ownDocumentNumber,
+      document_number: r.metadata && r.metadata.document_number,
+      law_name: r.lawName || r.title,
+      metadata: r.metadata,
+    }) || null,
+    ownDocumentNumber: r.ownDocumentNumber || null,
+    metadata: r.metadata || {},
+  })).filter(r => r.source_url);
+
+  // Parent-child rows keep the exact qism/article anchor, while live Lex.uz
+  // search rows carry the act's canonical public identifier (PQ/PF/VMQ/O'RQ).
+  // Merge the identity metadata by Lex document id so the best deep link and
+  // the best public label are both retained in one evidence record.
+  const lexDocumentKey = (value = '') => {
+    const match = String(value || '').match(/lex\.uz\/(?:uz\/|ru\/)?docs\/(-?\d+)/iu);
+    return match ? match[1].replace(/^-/, '') : '';
+  };
+  const liveIdentityByDocument = new Map();
+  for (const chunk of lexLiveChunks) {
+    const key = lexDocumentKey(chunk.source_url);
+    if (key && getChunkDocumentIdentifier(chunk)) liveIdentityByDocument.set(key, chunk);
+  }
+  for (const chunk of goodChunks) {
+    const live = liveIdentityByDocument.get(lexDocumentKey(chunk.source_url));
+    const currentIdentifier = getChunkDocumentIdentifier(chunk);
+    const liveIdentifier = live ? getChunkDocumentIdentifier(live) : '';
+    // A bare numeric value from an older corpus row (for example "824") is
+    // incomplete public metadata, not a reason to discard a newly confirmed
+    // VMQ-824/PQ/PF/O'RQ identity from the official search result.
+    if (!liveIdentifier || (currentIdentifier && !/^\d+$/u.test(currentIdentifier))) continue;
+    chunk.document_number = liveIdentifier;
+    chunk.ownDocumentNumber = live.ownDocumentNumber || null;
+    chunk.metadata = Object.assign({}, chunk.metadata || {}, live.metadata || {});
+  }
   const citationChunks = [...goodChunks, ...lexLiveChunks];
 
   // ── 5. Format context for prompt ──
@@ -4839,7 +4894,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       if (seenSourceRefs.has(key)) continue;
       seenSourceRefs.add(key);
       const dateStr = formatDate(r.adoption_date);
-      const docNum = r.document_number;
+      const docNum = getChunkDocumentIdentifier(r);
       const meta = [dateStr, docNum ? `\u2116 ${docNum}` : null].filter(Boolean).join(', ');
       const safeUrl = (r.is_active === true && r.source_url) ? r.source_url : null;
       sourceRefLines.push(
@@ -4905,7 +4960,7 @@ SOHA: MA'MURIY HUQUQ (regulatory/tartibga soluvchi)
 JAVOB FORMATI (3 bo'lim, MAJBURIY):
 ${definitionHint}
 
-**Huquqiy asos** — Qaysi qonun, qaysi modda, qaysi qism qo'llanadi? Qonun nomi va modda raqamini **qalin** yozing. Har bir norma uchun: (**Qonun nomi, N-modda, M-qism**).
+**Huquqiy asos** — Qaysi hujjat, qaysi modda yoki band va qaysi qism qo'llanadi? Hujjatning to'liq nomi, Lex.uz'da tasdiqlangan rasmiy raqami va normani **qalin** yozing. Har bir norma uchun: (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**).
 Kontekstdagi savolga bevosita tatbiq etiladigan barcha normalarni qamrab oling. Ichki tartib, shartnoma yoki tashkilot nizomi hal qiluvchi bo'lsa, aynan qaysi hujjat kerakligini ayting.
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha (jismoniy / mansabdor / yuridik shaxs) farq bo'lsa — har birini alohida jumlada ko'rsating. Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Foydalanuvchi savoliga to'g'ridan-to'g'ri aloqador holatlarni tahlil qiling.
@@ -5182,6 +5237,42 @@ function auditOpinionCitations(html, contextText) {
     if (digits && !new RegExp('\\b' + digits + '\\b').test(ctx)) unverified.push(raw);
   }
   return { unverified };
+}
+
+// Presentation is part of citation correctness: a reader must be able to open
+// the exact official source, and the link label must identify the instrument
+// unambiguously. This audit catches model output that cites a real provision
+// but leaves it as plain text or omits the public O'RQ/PQ/PF/VMQ identifier.
+function auditOpinionCitationPresentation(html) {
+  const source = String(html || '');
+  const lexLinkRx = /<a\b[^>]*href=["']https?:\/\/(?:www\.)?lex\.uz\/[^"']+["'][^>]*>([\s\S]*?)<\/a>/giu;
+  const officialIdRx = /(?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)-\d+(?:-[IVXLCDM]+)?|\b\d+-[IVXLCDM]+\b/iu;
+  const linkLabels = [];
+  let match;
+  while ((match = lexLinkRx.exec(source)) !== null) {
+    const label = String(match[1] || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    linkLabels.push(label);
+  }
+
+  const linksWithoutOfficialId = linkLabels.filter(label => !officialIdRx.test(label));
+  const outsideLinks = source
+    .replace(lexLinkRx, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/giu, ' ');
+  const plainOfficialIds = Array.from(outsideLinks.matchAll(
+    /(?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)-\d+(?:-[IVXLCDM]+)?/giu
+  )).map(item => item[0]);
+  const plainLocatedActs = Array.from(outsideLinks.matchAll(
+    /(?:kodeks(?:i|ining)?|qonun(?:i|ning)?|qaror(?:i|ning)?|farmon(?:i|ning)?|nizom(?:i|ning)?)[^.!?\n]{0,180}?\b\d+\s*[-\u2013\u2014]?\s*(?:modda|band|qism)\b/giu
+  )).map(item => item[0].replace(/\s+/g, ' ').trim());
+
+  return {
+    linkCount: linkLabels.length,
+    linksWithoutOfficialId,
+    plainOfficialIds,
+    plainLocatedActs,
+    invalid: linksWithoutOfficialId.length > 0 || plainOfficialIds.length > 0 || plainLocatedActs.length > 0,
+  };
 }
 
 function buildManbalarFooter(chunks = [], replyText = '', lang = 'uz') {
@@ -5888,6 +5979,10 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       if (stageOneApiKey) {
         const korpusResult = await searchKorpus(message, { apiKey: stageOneApiKey, topic });
         if (korpusResult) {
+          // Keep the lawyer-approved answer as grounding even when a legacy
+          // verbatim row must be regenerated to satisfy today's citation
+          // contract (clickable Lex.uz + official act identifier).
+          korpusGroundTruth = formatKorpusGroundTruth(korpusResult);
           qaMatchInfo = {
             id: korpusResult.id,
             similarity: korpusResult.similarity,
@@ -5917,14 +6012,34 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     }
 
     if (korpusOverride) {
-      return res.json({
-        reply: korpusOverride,
-        provider: 'qa-korpus',
-        databases: ['Korpus (tasdiqlangan)'],
-        ragUsed: false,
-        rag: null,
-        qaBank: qaMatchInfo,
-      });
+      try {
+        const overrideEvidence = await retrieveLegalContext(message, topic, null, { strictTopic: true });
+        const overrideChunks = Array.isArray(overrideEvidence && overrideEvidence.chunks)
+          ? overrideEvidence.chunks : [];
+        await hydrateLexAnchors(overrideChunks, korpusOverride);
+        const normalizedOverride = normalizeLegalAnswerCitations(
+          korpusOverride,
+          overrideChunks,
+          lexLangForText(message)
+        );
+        if (hasCanonicalOfficialCitations(normalizedOverride)) {
+          const payload = {
+            reply: normalizedOverride,
+            provider: 'qa-korpus',
+            databases: ['Korpus (tasdiqlangan)', 'Lex.uz'],
+            ragUsed: overrideChunks.length > 0,
+            rag: overrideEvidence.meta || null,
+            qaBank: qaMatchInfo,
+            nextActions: buildLegalNextActions({ question: message, answer: normalizedOverride, topic }),
+          };
+          if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
+          return res.json(payload);
+        }
+        console.warn('[Legal Chat] KORPUS VERBATIM citation contract incomplete — regenerating with Lex.uz evidence');
+      } catch (overrideCitationError) {
+        console.warn(`[Legal Chat] KORPUS VERBATIM citation normalization failed — regenerating: ${overrideCitationError.message}`);
+      }
+      korpusOverride = null;
     }
 
     try {
@@ -6001,20 +6116,35 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
 
     // ── Short-circuit: return verified answer directly ──
     if (verifiedOverride) {
-      const payload = {
-        // Also scrubbed: a lawyer-verified answer stored before the
-        // restriction (or pasted from an aggregator during correction) must
-        // not become the one path that can still publish an external link.
-        reply: normalizeLegalAnswerCitations(normalizeResponseForUser(verifiedOverride), [], lexLangForText(message)),
-        provider: 'verified-qa',
-        databases: ['Korpus (tasdiqlangan)'],
-        ragUsed: false,
-        rag: null,
-        qaBank: qaMatchInfo,
-        nextActions: buildLegalNextActions({ question: message, answer: verifiedOverride, topic }),
-      };
-      if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
-      return res.json(payload);
+      try {
+        const overrideEvidence = await retrieveLegalContext(message, topic, null, { strictTopic: true });
+        const overrideChunks = Array.isArray(overrideEvidence && overrideEvidence.chunks)
+          ? overrideEvidence.chunks : [];
+        await hydrateLexAnchors(overrideChunks, verifiedOverride);
+        const normalizedOverride = normalizeLegalAnswerCitations(
+          normalizeResponseForUser(verifiedOverride),
+          overrideChunks,
+          lexLangForText(message)
+        );
+        if (hasCanonicalOfficialCitations(normalizedOverride)) {
+          const payload = {
+            reply: normalizedOverride,
+            provider: 'verified-qa',
+            databases: ['Korpus (tasdiqlangan)', 'Lex.uz'],
+            ragUsed: overrideChunks.length > 0,
+            rag: overrideEvidence.meta || null,
+            qaBank: qaMatchInfo,
+            nextActions: buildLegalNextActions({ question: message, answer: normalizedOverride, topic }),
+          };
+          if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
+          return res.json(payload);
+        }
+        console.warn('[Legal Chat] VERIFIED OVERRIDE citation contract incomplete — regenerating with Lex.uz evidence');
+      } catch (overrideCitationError) {
+        console.warn(`[Legal Chat] VERIFIED OVERRIDE citation normalization failed — regenerating: ${overrideCitationError.message}`);
+      }
+      qaFewShotBlock += `\n\n<TASDIQLANGAN_JAVOB_DATA>\n${verifiedOverride}\n</TASDIQLANGAN_JAVOB_DATA>`;
+      verifiedOverride = null;
     }
 
     // ── Answer cache ─────────────────────────────────────────────────────────
@@ -6028,7 +6158,9 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       && (!Array.isArray(history) || history.length === 0);
     const cacheKey = cacheable
       ? require('crypto').createHash('sha256')
-          .update('lex-always-cross-check-v4|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          // v5 invalidates answers cached before canonical O'RQ/PQ/PF/VMQ
+          // labels became mandatory on every inline legal citation.
+          .update('lex-official-id-citations-v5|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
           .digest('hex')
       : null;
     if (cacheKey) {
@@ -6562,7 +6694,7 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // constraint "qa-korpus + lex.uz ONLY": no general web search anywhere in
     // this endpoint.
     const ragWeak = !ragContext || ragContext.trim().length < 400 || ragChunks.length < 2;
-    const lexLiveSources = [];   // {title, url} — listed in Manbalar
+    const lexLiveSources = [];   // verified official identity + Lex.uz URL
     // ALWAYS supplement with live lex.uz (not only when the corpus is thin):
     // a legal opinion must rest on the current in-force text of the actual
     // laws/decrees the document touches, with article and clause numbers.
@@ -6613,8 +6745,20 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
             // A same-number act of a different body (yearly numbering
             // collision) stays in the context with a caution label, but is
             // NOT presented as a source of the opinion.
+            const liveCitationChunk = {
+              law_name: h.title,
+              source_url: h.url,
+              document_number: (h.metadata && h.metadata.document_number) || r.ref.number || '',
+              ownDocumentNumber: h.metadata && h.metadata.document_number,
+              metadata: h.metadata || {},
+            };
+            const officialNumber = getChunkDocumentIdentifier(liveCitationChunk);
+            const officialLabel = canonicalCitationActLabel(h.title, liveCitationChunk);
             lexLiveSources.push({
-              title: h.title, url: h.url,
+              title: h.title,
+              label: officialLabel,
+              officialNumber,
+              url: h.url,
               num: String(r.ref.number || '').replace(/\D/g, ''),
               offTopic: h.confirmed && h.overlap === 0 && (r.ref.claims || []).length > 0,
             });
@@ -6628,7 +6772,7 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
                   ? `raqami mos (${label}), lekin mazmuni hujjat da'volariga mos kelmasligi mumkin — ehtiyot bo'ling`
                   : `raqami tasdiqlandi: ${label}`)
               : `raqami tasdiqlanmadi — mavzu boʻyicha mos keldi (${label})`;
-            ragContext += `\n\n[lex.uz (jonli): ${h.title} — ${badge}]\n${excerpt}`;
+            ragContext += `\n\n[lex.uz (jonli): ${officialLabel} — ${h.url} — ${badge}]\n${excerpt}`;
           }
           const rej = (r.rejected || []).length;
           const conf = r.hits.every(h => h.confirmed) ? '✓' : '~';
@@ -6638,14 +6782,34 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
       } catch (e) { console.warn('[Legal Opinion] lex.uz-live supplement failed:', e.message); }
     }
 
+    const verifiedSourceDirectory = [];
+    const sourceDirectorySeen = new Set();
+    const registerVerifiedSource = (label, url) => {
+      const cleanUrl = String(url || '').trim();
+      const cleanLabel = String(label || '').trim();
+      if (!cleanUrl || !cleanLabel || !/^https:\/\/(?:www\.)?lex\.uz\//iu.test(cleanUrl)) return;
+      const key = cleanUrl.split('#')[0];
+      if (sourceDirectorySeen.has(key)) return;
+      sourceDirectorySeen.add(key);
+      verifiedSourceDirectory.push(`- ${cleanLabel} — ${cleanUrl}`);
+    };
+    for (const chunk of ragChunks) {
+      const label = canonicalCitationActLabel(chunk.law_name || chunk.lawName || '', chunk);
+      const firstArticle = getChunkArticleRefs(chunk)[0] || '';
+      const url = buildLexDeepLink(chunk, { lang, articleRef: firstArticle }) || chunk.source_url || chunk.sourceUrl;
+      registerVerifiedSource(label, url);
+    }
+    for (const source of lexLiveSources) registerVerifiedSource(source.label || source.title, source.url);
+
     const langName = lang === 'ru' ? 'Russian (Cyrillic)' : 'Uzbek (Latin script)';
     const groundingRule =
       `- Ground EVERY legal claim ONLY on the KONTEKST below (internal qa-korpus excerpts + live lex.uz excerpts). These are the ONLY permitted sources — no other website, no memory.
 - CITATION PRECISION (required): for every norm you rely on, give the most precise locator the KONTEKST supports, in this order of preference:
-    1) Qonun/kodeks nomi + modda + qism/band  — e.g. (**Fuqarolik kodeksi, 234-modda, 2-qism**)
-    2) Qonun/kodeks nomi + modda            — e.g. (**Mehnat kodeksi, 100-modda**)
-    3) If no article number is available: the document type, number, name and year — e.g. (**Vazirlar Mahkamasining 2021-yil 306-son qarori**)
+    1) Hujjatning to'liq nomi + tasdiqlangan rasmiy raqami + modda/band + qism.
+    2) Qism topilmasa: to'liq nom + rasmiy raqam + modda/band + "tegishli qism/band".
+    3) If no article/band number is available: full document name + confirmed official number.
   Never state a norm without at least option 3. Never invent an article, clause or number that is not in the KONTEKST.
+- Every Uzbek legal-act mention must be a clickable HTML <a href="verified Lex.uz URL"><strong>full name (official number), locator</strong></a>. Use O'RQ for laws, PQ for Presidential decisions, PF for Presidential decrees and VMQ for Cabinet decisions. Never leave a relied-on act as plain text.
 - Use ONLY currently in-force (amaldagi) legislation. If the KONTEKST shows a document is repealed or superseded, say so and do not rely on it.
 - If a claim in the document cannot be verified against the KONTEKST, write "KONTEKSTda tasdiqlanmadi" instead of guessing. When the act is listed under TEKSHIRILMAGAN HAVOLALAR below, say WHY (lex.uz'da topilmadi / xorijiy manba) rather than leaving a bare "tasdiqlanmadi".
 - Foreign instruments (Turkish, EU, OECD, etc.) are outside lex.uz by definition. Describe them from the document's own account, label them clearly as "xorijiy manba — lex.uz orqali tasdiqlanmaydi", and never treat them as O'zbekiston normative basis. Do NOT group them with Uzbek acts that simply failed to resolve.`
@@ -6660,7 +6824,7 @@ Output ONLY clean simple HTML (<h2>, <h3>, <p>, <strong>, <br>, <table>) — no 
 Structure EXACTLY these five sections (classic legal-memo IRAC form), each as an <h2> heading (in ${lang === 'ru' ? 'Russian' : 'Uzbek'}):
 1. Masala (Issue) — what legal question(s) this document raises; why an opinion is needed (2-4 sentences).
 2. Faktlar (Facts) — the material facts, CLAUSE BY CLAUSE where relevant: every clause that establishes an obligation, right, date, term/period, deadline, requirement or condition — who owes/holds it, exact amounts and dates. Use a "- " list. Cover the WHOLE document.
-3. Qo'llaniladigan huquq (Applicable law) — the O'zbekiston Respublikasi laws, codes, regulations, decrees (and court decisions, if present in the KONTEKST) that govern these facts. List EACH applicable norm on its own line with its precise locator (modda / qism / band, or document number+year), plus one sentence on what it requires. This section must reflect the LAW, not merely restate the document.
+3. Qo'llaniladigan huquq (Applicable law) — the O'zbekiston Respublikasi laws, codes, regulations, decrees (and court decisions, if present in the KONTEKST) that govern these facts. List EACH applicable norm as a clickable Lex.uz HTML link whose label includes the act's full name, canonical official number (O'RQ, PQ, PF, VMQ) and precise locator (modda / qism / band), plus one sentence on what it requires. Use only the URLs listed in TASDIQLANGAN LEX.UZ MANBALARI. This section must reflect the LAW, not merely restate the document.
 4. Tahlil (Analysis) — apply each cited norm to the specific clauses/facts above: is each obligation/term lawful, enforceable, compliant? Where is the risk, the missing requirement, the deadline consequence? Connect law to fact explicitly — never analyse in the abstract.
 5. Xulosa (Conclusion) — the reasoned answer to the Masala + concrete numbered recommendations.
 (Do not create a separate Manbalar/Sources section. Put every legal citation directly beside the claim it supports.)
@@ -6679,7 +6843,7 @@ ${groundingRule}
       ? `\n\nXORIJIY MANBALAR (O'zbekiston qonunchiligi emas — lex.uz'da bo'lishi mumkin emas; hujjatning o'z bayoniga tayanib tavsiflang, normativ asos sifatida ishlatmang):\n${lexForeign.map(l => `- ${l}`).join('\n')}`
       : '');
     const userText =
-`KONTEKST (O'zbekiston qonunchiligidan tegishli parchalar):\n${ragContext || '(kontekst topilmadi — faqat ishonchli umumiy normalarga tayaning, modda raqamini taxmin qilmang)'}${unresolvedBlock}\n\n─── YUKLANGAN HUJJAT (yoki uning to'liq dayjesti) ───\n${docForAnalysis}\n─── HUJJAT TUGADI ───\n\nYuqoridagi hujjat bo'yicha to'liq yuridik xulosa tayyorlang.`;
+`KONTEKST (O'zbekiston qonunchiligidan tegishli parchalar):\n${ragContext || '(kontekst topilmadi — faqat ishonchli umumiy normalarga tayaning, modda raqamini taxmin qilmang)'}${unresolvedBlock}\n\nTASDIQLANGAN LEX.UZ MANBALARI (havola va rasmiy identifikatorni aynan shu ro'yxatdan oling):\n${verifiedSourceDirectory.join('\n') || '- Tasdiqlangan Lex.uz manbasi topilmadi; huquqiy manba yoki raqam o\'ylab topmang.'}\n\n─── YUKLANGAN HUJJAT (yoki uning to'liq dayjesti) ───\n${docForAnalysis}\n─── HUJJAT TUGADI ───\n\nYuqoridagi hujjat bo'yicha to'liq yuridik xulosa tayyorlang.`;
 
     console.log(`[Legal Opinion] topic=${topic} ragChunks=${ragChunks.length} ragWeak=${ragWeak} lexLive=${lexLiveSources.length} digest=${docForAnalysis === documentText ? 'no' : 'yes'}`);
     // Premium model for the synthesis (Claude via callPremiumAI when
@@ -6706,18 +6870,27 @@ ${groundingRule}
     // opinion must never present an unverified article as authority.
     const sourceText = ragContext || '';
     let audit = auditOpinionCitations(html, sourceText);
-    if (audit.unverified.length > 0) {
-      console.warn(`[Legal Opinion] unverified citations: ${audit.unverified.join(', ')} — running correction pass`);
+    let presentationAudit = auditOpinionCitationPresentation(html);
+    if (audit.unverified.length > 0 || presentationAudit.invalid) {
+      const citationProblems = [
+        ...audit.unverified.map(item => `tasdiqlanmagan norma: ${item}`),
+        ...presentationAudit.linksWithoutOfficialId.map(item => `rasmiy raqamsiz Lex.uz havolasi: ${item}`),
+        ...presentationAudit.plainOfficialIds.map(item => `havolasiz rasmiy raqam: ${item}`),
+        ...presentationAudit.plainLocatedActs.map(item => `havolasiz huquqiy manba: ${item}`),
+      ];
+      console.warn(`[Legal Opinion] citation correction required: ${citationProblems.slice(0, 12).join(' | ')}`);
       try {
         const fix = await callPremiumAI([
           { role: 'system', text:
-`You are correcting a legal opinion. The following citations do NOT appear in the permitted sources and are therefore unverified: ${audit.unverified.join(', ')}.
+`You are correcting a legal opinion. Its citation problems are: ${citationProblems.join('; ')}.
 
 Rewrite the opinion so that:
 - Every unverified citation is REMOVED, or replaced with a norm that genuinely appears in the KONTEKST, or restated without the invented locator.
+- EVERY relied-on Uzbek legal-act mention is a clickable HTML link to its verified Lex.uz URL. Its visible label MUST contain the full document name, canonical official number (O'RQ/PQ/PF/VMQ) and precise locator when available.
+- Use only the URLs and official identifiers in TASDIQLANGAN LEX.UZ MANBALARI. Never invent an identifier or URL.
 - Nothing else changes: keep the same language, structure (<h2> sections) and all verified content.
 Return ONLY the corrected HTML body — no fences, no commentary.` },
-          { role: 'user', text: `KONTEKST:\n${sourceText.slice(0, 12000)}\n\n─── XULOSA ───\n${html}` },
+          { role: 'user', text: `KONTEKST:\n${sourceText.slice(0, 12000)}\n\nTASDIQLANGAN LEX.UZ MANBALARI:\n${verifiedSourceDirectory.join('\n') || '- Yo\'q'}\n\n─── XULOSA ───\n${html}` },
         ], { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens + 1000, premiumRetries: 1,
              userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion/fix-citations' });
         const fixed = tidyDocumentHtml((fix.text || '').trim().replace(/```(?:html)?/gi, '').trim());
@@ -6729,6 +6902,7 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
         } else if (fixed && fixed.length > 200) {
           html = fixed;
           audit = auditOpinionCitations(html, sourceText);
+          presentationAudit = auditOpinionCitationPresentation(html);
         }
       } catch (e) {
         console.warn('[Legal Opinion] citation correction failed:', e.message);
@@ -6738,6 +6912,9 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
       if (audit.unverified.length > 0) {
         html += '<p><em>Diqqat: quyidagi manbalar tekshirilgan manbalar ro\'yxatidan topilmadi va mustaqil tasdiqlashni talab qiladi: ' +
           audit.unverified.slice(0, 10).map(x => String(x).replace(/[<>&]/g, '')).join(', ') + '.</em></p>';
+      }
+      if (presentationAudit.invalid) {
+        html += '<p><em>Diqqat: ayrim huquqiy manbalarning Lex.uz havolasi yoki rasmiy identifikatori avtomatik tasdiqlanmadi; ularga qaror qabul qilishdan oldin mustaqil aniqlik kiriting.</em></p>';
       }
     }
 
