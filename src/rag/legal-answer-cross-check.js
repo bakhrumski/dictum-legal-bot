@@ -1,5 +1,7 @@
 'use strict';
 
+const { canonicalCitationActLabel } = require('./citation-utils');
+
 const MAX_EVIDENCE_CHARS = 16_000;
 
 function isLexUrl(value = '') {
@@ -21,7 +23,7 @@ function buildOfficialEvidence(chunks = [], maxChars = MAX_EVIDENCE_CHARS) {
       ? `${chunk.article_numbers.join(', ')}-${chunk.provision_type === 'band' ? 'band' : 'modda'}`
       : 'aniq norma';
     const block = [
-      `[LEX-${index + 1}] ${chunk.law_name || 'Lex.uz hujjati'} — ${locator}`,
+      `[LEX-${index + 1}] ${canonicalCitationActLabel(chunk.law_name || 'Lex.uz hujjati', chunk)} — ${locator}`,
       `URL: ${chunk.source_url}`,
       String(chunk.chunk_text || chunk.childText || '').trim(),
     ].filter(Boolean).join('\n');
@@ -90,7 +92,7 @@ QOIDALAR:
 - Javob to'liq to'g'ri bo'lsa status="pass".
 - Tuzatish kerak va dalil yetarli bo'lsa status="revise" hamda corrected_answer ichida to'liq tuzatilgan javobni qaytaring.
 - Dalil yetarli bo'lmasa status="insufficient"; taxminiy corrected_answer yozmang.
-- Corrected_answer bo'lsa, Huquqiy asos / Tahlil / Xulosa tuzilmasini, o'zbek lotin tilini va inline (**Hujjat nomi, N-modda yoki N-band, tegishli qism**) uslubini saqlang. Alohida Manbalar bo'limi va xom URL yozmang.
+- Corrected_answer bo'lsa, Huquqiy asos / Tahlil / Xulosa tuzilmasini, o'zbek lotin tilini va inline (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, tegishli qism**) uslubini saqlang. Rasmiy raqam faqat LEX.UZ DALILLARI ichida tasdiqlansa yoziladi. Alohida Manbalar bo'limi va xom URL yozmang; interfeys tasdiqlangan iqtiboslarni Lex.uz havolasiga aylantiradi.
 - FAQAT JSON qaytaring.
 
 JSON SHAKLI:

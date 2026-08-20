@@ -32,6 +32,7 @@ const {
   selectRelevantSourceRefs,
   getChunkArticleRefs,
   normalizeLegalAnswerCitations,
+  hasCanonicalOfficialCitations,
 } = require('../rag/citation-utils');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const telegramEconomy = require('../services/telegram-economy');
@@ -411,17 +412,14 @@ function formatSources() {
  */
 async function generateAnswer(question, turns) {
   // ── 1. Lawyer-verified answer bank first ────────────────────────────────
-  // A human-approved answer beats anything generated, and costs one embedding.
+  // A human-approved answer beats anything generated, but legacy rows still
+  // pass through current Lex.uz citation enrichment before being sent.
+  let korpusAnswer = '';
   if (D.searchKorpus && D.embeddingApiKey) {
     try {
       const hit = await D.searchKorpus(question, { apiKey: D.embeddingApiKey });
       if (hit && hit.corrected_answer && String(hit.corrected_answer).trim().length > 40) {
-        return {
-          text: String(hit.corrected_answer).trim(),
-          confidence: 'high',
-          sources: '',
-          meta: { path: 'qa-korpus', verified: true },
-        };
+        korpusAnswer = String(hit.corrected_answer).trim();
       }
     } catch (e) {
       console.warn('[TG-AGENT] qa-korpus lookup failed:', e.message);
@@ -451,10 +449,25 @@ async function generateAnswer(question, turns) {
     console.warn('[TG-AGENT] retrieval failed:', e.message);
   }
 
+  if (korpusAnswer) {
+    if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, korpusAnswer);
+    const normalizedKorpusAnswer = normalizeLegalAnswerCitations(korpusAnswer, chunks, 'uz');
+    if (hasCanonicalOfficialCitations(normalizedKorpusAnswer)) {
+      return {
+        text: normalizedKorpusAnswer,
+        confidence: 'high',
+        sources: '',
+        meta: { path: 'qa-korpus', verified: true, chunks: chunks.length },
+      };
+    }
+    console.warn('[TG-AGENT] qa-korpus citation contract incomplete — using it as grounding for regeneration');
+  }
+
   // ── 3. Generate, using the SAME prompt as the dashboard chat ────────────
-  const systemPrompt = D.buildTopicPrompt
+  const systemPrompt = (D.buildTopicPrompt
     ? D.buildTopicPrompt(topic, ragContext, question)
-    : `Siz O'zbekiston qonunchiligi bo'yicha yuridik maslahatchisiz. Faqat quyidagi KONTEKSTga tayaning va modda raqamlarini o'ylab topmang.\n\nKONTEKST:\n${ragContext}`;
+    : `Siz O'zbekiston qonunchiligi bo'yicha yuridik maslahatchisiz. Faqat quyidagi KONTEKSTga tayaning va modda raqamlarini o'ylab topmang.\n\nKONTEKST:\n${ragContext}`)
+    + (korpusAnswer ? `\n\nYURIST TASDIQLAGAN JAVOB DATA (mazmunini saqlang, lekin joriy iqtibos formatida yozing):\n${korpusAnswer}` : '');
 
   const hist = historyToText(turns);
   const messages = [
@@ -464,7 +477,7 @@ TELEGRAM FORMATI (majburiy):
 - Javob 200 so'zdan oshmasin. Telegram — qisqa javob joyi.
 - Sarlavha, markdown jadval, "###" kabi belgilar ishlatmang.
 - Oddiy, tushunarli til. Har bir da'vo uchun modda raqamini ko'rsating.
-- Har bir qo'llanayotgan normani shu gapning o'zida (**Qonun/kodeks nomi, N-modda, M-qism**) shaklida yozing. Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang.
+- Har bir qo'llanayotgan normani shu gapning o'zida (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) shaklida yozing. Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. Hujjat raqamini faqat Lex.uz konteksti tasdiqlasa yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang; interfeys har bir tasdiqlangan hujjat eslatmasini Lex.uz havolasiga aylantiradi.
 - Agar KONTEKSTda javob yo'q bo'lsa — buni ochiq ayting, taxmin qilmang.` },
   ];
   if (hist) messages.push({ role: 'user', text: `Suhbat tarixi (kontekst uchun):\n${hist}` });

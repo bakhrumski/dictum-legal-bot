@@ -20,6 +20,8 @@ const officialChunk = {
   source_type: 'lex_live',
   law_name: 'Vazirlar Mahkamasining 824-son qarori bilan tasdiqlangan Nizom',
   source_url: 'https://lex.uz/uz/docs/-5193564',
+  document_number: '824',
+  metadata: { act_form: "O'zbekiston Respublikasi Vazirlar Mahkamasining qarori" },
   article_numbers: ['41'],
   provision_type: 'band',
   chunk_text: '41. Auditoriya soatining 25 foizini sababsiz qoldirgan talaba yakuniy nazoratga kiritilmaydi.',
@@ -35,6 +37,7 @@ const officialChunk = {
       { ...officialChunk, source_url: 'https://example.com/fake' },
     ]);
     assert.match(evidence, /41-band/);
+    assert.match(evidence, /\(VMQ-824\)/);
     assert.match(evidence, /lex\.uz\/uz\/docs\/-5193564/);
     assert.strictEqual((evidence.match(/\[LEX-/g) || []).length, 1);
   });
@@ -100,7 +103,7 @@ const officialChunk = {
     assert.match(server, /endpoint: '\/api\/legal-chat\/lex-cross-check'/);
     assert.match(server, /crossCheckLegalAnswer,\s*\n\s*hydrateLexAnchors/);
     assert.match(telegram, /endpoint: '\/tg-agent\/lex-cross-check'/);
-    assert.match(server, /lex-always-cross-check-v4/);
+    assert.match(server, /lex-official-id-citations-v5/);
   });
 
   console.log(`\n${passed} passed\n`);

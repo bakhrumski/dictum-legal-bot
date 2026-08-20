@@ -1,6 +1,6 @@
 'use strict';
 
-const { getChunkArticleRefs } = require('./citation-utils');
+const { getChunkArticleRefs, canonicalCitationActLabel } = require('./citation-utils');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('./query-intent');
 const {
   buildQuestionResearchDirective,
@@ -121,12 +121,12 @@ function buildCitationTable(chunks) {
     const partStr = part ? `, ${part}-qism` : '';
     const urlStr = url ? ` (${url})` : '';
 
-    rows.push(`| ${law} | ${art}-modda${partStr} | ${urlStr} |`);
+    rows.push(`| ${canonicalCitationActLabel(law, chunk)} | ${art}-modda${partStr} | ${urlStr} |`);
   }
 
   if (rows.length === 0) return '';
 
-  return `| Qonun | Modda | Havola |\n|---|---|---|\n${rows.join('\n')}`;
+  return `| Hujjat nomi va rasmiy raqami | Norma | Havola |\n|---|---|---|\n${rows.join('\n')}`;
 }
 
 /**

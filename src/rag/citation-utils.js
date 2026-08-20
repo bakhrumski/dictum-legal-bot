@@ -174,12 +174,17 @@ function selectRelevantSourceRefs(chunks = [], replyText = '') {
   for (const chunk of chunks || []) {
     const lawName = chunk && chunk.law_name;
     if (!lawName) continue;
-    const aliases = getLawNameAliases(lawName);
-    if (aliases.length === 0) continue;
+    const lawAliases = getLawNameAliases(lawName);
+    if (lawAliases.length === 0) continue;
+    const identifier = getChunkDocumentIdentifier(chunk);
+    const aliases = unique([
+      ...lawAliases,
+      ...documentIdentifierVariants(identifier).map(normalizeLawName),
+    ]).sort((a, b) => b.length - a.length);
     records.push({
       chunk,
       lawName,
-      lawKey: aliases[aliases.length - 1],
+      lawKey: lawAliases[lawAliases.length - 1],
       aliases,
       articleRefs: getChunkArticleRefs(chunk),
     });
@@ -243,6 +248,14 @@ function normalizeLexSourceUrl(value = '', lang = 'uz') {
   let url = stripFragment(value).trim();
   if (lang === 'uz') url = url.replace('lex.uz/ru/docs/', 'lex.uz/docs/');
   return url;
+}
+
+/** Canonical key used only to match the same Lex document across /docs and /uz/docs URLs. */
+function lexDocumentIdentity(value = '') {
+  return stripFragment(value)
+    .split('?')[0]
+    .replace(/https:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\//iu, 'https://lex.uz/docs/')
+    .trim();
 }
 
 function normalizePartNumber(value = '') {
@@ -398,9 +411,104 @@ function canonicalLawLabel(value = '') {
     .trim();
 }
 
-function lawNameVariants(value = '') {
+const OFFICIAL_ACT_PREFIXES = Object.freeze({
+  pq: 'PQ', 'пқ': 'PQ', 'пп': 'PQ',
+  pf: 'PF', 'пф': 'PF', 'уп': 'PF',
+  vmq: 'VMQ', vm: 'VMQ', 'вмқ': 'VMQ', 'вм': 'VMQ', 'пкм': 'VMQ',
+  orq: "O'RQ", 'ўрқ': "O'RQ", 'зру': "O'RQ",
+});
+
+function canonicalOfficialPrefix(value = '') {
+  const key = String(value || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('uz')
+    .replace(/[\u02bb\u02bc\u2018\u2019`']/gu, '')
+    .replace(/\s+/gu, '');
+  return OFFICIAL_ACT_PREFIXES[key] || '';
+}
+
+function explicitOfficialDocumentIdentifier(value = '') {
+  const match = String(value || '').match(
+    /(?<![\p{L}\p{N}])(PQ|PF|VMQ|VM|O['`\u2018\u2019\u02bb]?RQ|ПҚ|ПП|ПФ|УП|ВМҚ|ВМ|ПКМ|ЎРҚ|ЗРУ)\s*[-\u2013\u2014]?\s*(\d{1,6}(?:-[IVXLCDM]+)?)/iu
+  );
+  if (!match) return '';
+  const prefix = canonicalOfficialPrefix(match[1]);
+  return prefix ? `${prefix}-${match[2].toUpperCase()}` : '';
+}
+
+function inferOfficialPrefix(context = '') {
+  const text = String(context || '');
+  if (/(?:Vazirlar\s+Mahkamasi|Вазирлар\s+Маҳкамаси|Кабинета\s+Министров).*?(?:qaror|қарор|постановлен)/iu.test(text)) return 'VMQ';
+  if (/(?:Prezident|Президент).*?(?:farmon|фармон|указ)/iu.test(text)) return 'PF';
+  if (/(?:Prezident|Президент).*?(?:qaror|қарор|постановлен)/iu.test(text)) return 'PQ';
+  if (/(?:O['`\u2018\u2019\u02bb]?zbekiston\s+Respublikasining\s+Qonuni|Ўзбекистон\s+Республикасининг\s+Қонуни|Закон\s+Республики\s+Узбекистан)/iu.test(text)) return "O'RQ";
+  return '';
+}
+
+/** Normalize official identifiers to the public Uzbek-Latin citation form. */
+function normalizeOfficialDocumentIdentifier(value = '', context = '') {
+  if (value && typeof value === 'object') {
+    const prefix = canonicalOfficialPrefix(value.prefix);
+    const number = String(value.number || '').match(/\d{1,6}(?:-[IVXLCDM]+)?/iu);
+    if (prefix && number) return `${prefix}-${number[0].toUpperCase()}`;
+  }
+
+  const explicit = explicitOfficialDocumentIdentifier(value) || explicitOfficialDocumentIdentifier(context);
+  if (explicit) return explicit;
+
+  const raw = String(value || '').trim().replace(/^(?:№|N)\s*/iu, '').replace(/-son$/iu, '');
+  const number = raw.match(/^\d{1,6}(?:-[IVXLCDM]+)?$/iu);
+  if (!number) return raw;
+  // Historical law numbers such as 349-I are official as written; adding a
+  // modern O'RQ prefix would be inaccurate.
+  if (/-[IVXLCDM]+$/iu.test(number[0])) return number[0].toUpperCase();
+  const inferredPrefix = inferOfficialPrefix(context);
+  return inferredPrefix ? `${inferredPrefix}-${number[0]}` : number[0];
+}
+
+function getChunkDocumentIdentifier(chunk = {}) {
+  const metadata = chunk.metadata || {};
+  const context = [
+    chunk.law_name || chunk.lawName,
+    chunk.act_form || chunk.actForm,
+    metadata.act_form || metadata.actForm,
+    metadata.publication,
+  ].filter(Boolean).join(' ');
+  const own = chunk.ownDocumentNumber || chunk.own_document_number || metadata.ownDocumentNumber;
+  if (own) {
+    const normalizedOwn = normalizeOfficialDocumentIdentifier(own, context);
+    if (normalizedOwn) return normalizedOwn;
+  }
+  return normalizeOfficialDocumentIdentifier(
+    chunk.document_number || chunk.documentNumber || metadata.document_number || metadata.documentNumber || '',
+    context
+  );
+}
+
+function canonicalCitationActLabel(lawName = '', chunk = {}) {
+  const display = canonicalLawLabel(lawName);
+  const identifier = getChunkDocumentIdentifier(chunk);
+  if (!identifier || normalizeLawName(display).includes(normalizeLawName(identifier))) return display;
+  return `${display} (${identifier})`;
+}
+
+function documentIdentifierVariants(identifier = '') {
+  const normalized = normalizeOfficialDocumentIdentifier(identifier);
+  if (!normalized) return [];
+  const match = normalized.match(/^(.+?)-(\d{1,6}(?:-[IVXLCDM]+)?)$/u);
+  if (!match) return [normalized];
+  const [, prefix, number] = match;
+  const type = prefix === 'PF' ? 'farmon' : (prefix === "O'RQ" ? 'qonun' : 'qaror');
+  return unique([normalized, `${normalized}-son`, `${normalized}-son ${type}`, `${number}-son ${type}`]);
+}
+
+function lawNameVariants(value = '', documentIdentifier = '') {
   const display = canonicalLawLabel(value);
-  const variants = unique([String(value || '').trim(), display]);
+  const variants = unique([
+    String(value || '').trim(),
+    display,
+    ...documentIdentifierVariants(documentIdentifier),
+  ]);
   const withoutTerminalI = display.replace(/\b(kodeks|qonun|nizom)i\b/giu, '$1');
   if (withoutTerminalI !== display) variants.push(withoutTerminalI);
   if (/to['\u02bb\u02bc\u2018\u2019`]?g['\u02bb\u02bc\u2018\u2019`]?risida$/iu.test(display)) {
@@ -447,7 +555,8 @@ function linkGroupedCitationLists(value = '', records = [], lang = 'uz') {
   for (const items of groupedByLaw.values()) {
     if (items.length < 2) continue;
     const lawName = items[0].record.lawName;
-    const lawPattern = lawNameVariants(lawName).map(flexibleLawPattern).join('|');
+    const lawPattern = lawNameVariants(lawName, getChunkDocumentIdentifier(items[0].record.chunk))
+      .map(flexibleLawPattern).join('|');
     if (!lawPattern) continue;
     const rx = new RegExp(
       `(^|[^\\p{L}\\p{N}])(?:\\*{0,2})?(` + lawPattern + `)(?:\\*{0,2})?` +
@@ -469,7 +578,7 @@ function linkGroupedCitationLists(value = '', records = [], lang = 'uz') {
         const url = buildLexDeepLink(record.chunk, { lang, articleRef: ref });
         if (!url) return '';
         const partLabel = type === 'band' ? 'tegishli band' : 'tegishli qism';
-        return `[**${canonicalLawLabel(record.lawName)}, ${ref}-${type}, ${partLabel}**](${url})`;
+        return `[**${canonicalCitationActLabel(record.lawName, record.chunk)}, ${ref}-${type}, ${partLabel}**](${url})`;
       });
       if (links.some(link => !link)) return match;
       return prefix + joinUzbekMarkdownLinks(links);
@@ -480,7 +589,7 @@ function linkGroupedCitationLists(value = '', records = [], lang = 'uz') {
 
 function grammaticalCitationTail(value = '') {
   const normalized = String(value || '').replace(/[*_]/gu, '');
-  const matches = Array.from(normalized.matchAll(/(?:(?:modda|band)(?:si)?|qism(?:i)?)(ning|dan|ga|da)\b/giu));
+  const matches = Array.from(normalized.matchAll(/(?:modda(?:si)?|band(?:i)?|qism(?:i)?)(ning|dan|ga|da)\b/giu));
   return matches.length ? matches[matches.length - 1][1].toLocaleLowerCase('uz') : '';
 }
 
@@ -511,7 +620,7 @@ function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
     let output = part;
     for (const { ref, record } of records) {
       const escaped = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const lawPattern = lawNameVariants(record.lawName)
+      const lawPattern = lawNameVariants(record.lawName, getChunkDocumentIdentifier(record.chunk))
         .map(flexibleLawPattern)
         .join('|');
       if (!lawPattern) continue;
@@ -534,7 +643,7 @@ function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
         const partLabel = partNumber
           ? `${partNumber}-qism`
           : (type === 'band' ? 'tegishli band' : 'tegishli qism');
-        const label = `${canonicalLawLabel(record.lawName)}, ${ref}-${type}, ${partLabel}`;
+        const label = `${canonicalCitationActLabel(record.lawName, record.chunk)}, ${ref}-${type}, ${partLabel}`;
         const tail = grammaticalCitationTail(citation);
         return `${prefix}[**${label}**](${url})${tail}`;
       });
@@ -543,12 +652,94 @@ function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
   }).join('');
 }
 
+/**
+ * Link a verified act name that the model mentioned without a provision.
+ * Exact provision citations are already protected Markdown links at this
+ * point; this fallback never invents an article and therefore links only to
+ * the official document root.
+ */
+function linkRemainingGroundedActMentions(value = '', chunks = [], lang = 'uz') {
+  const bySource = new Map();
+  for (const chunk of chunks || []) {
+    const lawName = chunk && (chunk.law_name || chunk.lawName);
+    const sourceUrl = normalizeLexSourceUrl(chunk && (chunk.source_url || chunk.sourceUrl), lang);
+    const sourceKey = lexDocumentIdentity(sourceUrl);
+    if (!lawName || !sourceUrl || !sourceKey || bySource.has(sourceKey)) continue;
+    bySource.set(sourceKey, { chunk, lawName, sourceUrl });
+  }
+  if (bySource.size === 0) return value;
+
+  const protectedParts = String(value || '').split(/(\[[^\]]+\]\([^)]+\))/gu);
+  return protectedParts.map((part, index) => {
+    if (index % 2 === 1) return part;
+    let output = part;
+    for (const { chunk, lawName, sourceUrl } of bySource.values()) {
+      const variants = lawNameVariants(lawName, getChunkDocumentIdentifier(chunk))
+        .filter(variant => normalizeLawName(variant).length >= 5)
+        .map(flexibleLawPattern)
+        .join('|');
+      if (!variants) continue;
+      const rx = new RegExp(`(^|[^\\p{L}\\p{N}])(?:\\*{0,2}|[\u00ab»“”\"']{0,1})(${variants})(?:\\*{0,2}|[\u00ab»“”\"']{0,1})(?![\\p{L}\\p{N}])`, 'giu');
+      output = output.replace(rx, (match, prefix) =>
+        `${prefix}[**${canonicalCitationActLabel(lawName, chunk)}**](${sourceUrl})`
+      );
+    }
+    return output;
+  }).join('');
+}
+
+function upgradeLinkedCitationIdentifiers(value = '', chunks = [], lang = 'uz') {
+  const bySource = new Map();
+  for (const chunk of chunks || []) {
+    const sourceUrl = normalizeLexSourceUrl(chunk && (chunk.source_url || chunk.sourceUrl), lang);
+    const sourceKey = lexDocumentIdentity(sourceUrl);
+    if (sourceKey && !bySource.has(sourceKey)) bySource.set(sourceKey, chunk);
+  }
+  if (bySource.size === 0) return value;
+  return String(value || '').replace(
+    /\[([^\]]+)\]\((https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/)?docs\/-?\d+[^)]*)\)/giu,
+    (whole, rawLabel, url) => {
+      const chunk = bySource.get(lexDocumentIdentity(normalizeLexSourceUrl(url, lang)));
+      if (!chunk) return whole;
+      const identifier = getChunkDocumentIdentifier(chunk);
+      if (!identifier || normalizeLawName(rawLabel).includes(normalizeLawName(identifier))) return whole;
+      const locator = String(rawLabel).replace(/[*_]/gu, '').match(/,\s*\d+[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*\s*[-\u2013\u2014]\s*(?:modda|band)\b[\s\S]*$/iu);
+      const label = canonicalCitationActLabel(chunk.law_name || chunk.lawName || '', chunk)
+        + (locator ? locator[0] : '');
+      return `[**${label}**](${url})`;
+    }
+  );
+}
+
 function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz') {
-  return linkCitationsInMarkdown(
+  const linked = linkCitationsInMarkdown(
     stripRawLexAttributions(stripGeneratedSourceSections(replyText)),
     chunks,
     lang
   );
+  return linkRemainingGroundedActMentions(
+    upgradeLinkedCitationIdentifiers(linked, chunks, lang),
+    chunks,
+    lang
+  );
+}
+
+/**
+ * Gate legacy/cached answer shortcuts. They may bypass the current prompt and
+ * therefore are returned verbatim only when every Lex link already carries a
+ * canonical public act identifier and no plain identifier/provision remains.
+ */
+function hasCanonicalOfficialCitations(value = '') {
+  const text = String(value || '');
+  const links = Array.from(text.matchAll(
+    /\[([^\]]+)\]\((https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\/-?\d+[^)]*)\)/giu
+  ));
+  if (links.length === 0) return false;
+  const officialLabel = /\((?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)-\d+(?:-[IVXLCDM]+)?\)|\(\d+-[IVXLCDM]+\)/iu;
+  if (links.some(match => !officialLabel.test(String(match[1] || '').replace(/[*_]/gu, '')))) return false;
+
+  const withoutLinks = text.replace(/\[[^\]]+\]\([^)]+\)/gu, ' ');
+  return !/(?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)\s*-\s*\d+|\b\d+\s*[-\u2013\u2014]?\s*(?:modda|band)\b/iu.test(withoutLinks);
 }
 
 module.exports = {
@@ -563,6 +754,11 @@ module.exports = {
   buildLexDeepLink,
   stripGeneratedSourceSections,
   stripRawLexAttributions,
+  normalizeOfficialDocumentIdentifier,
+  getChunkDocumentIdentifier,
+  canonicalCitationActLabel,
   linkCitationsInMarkdown,
+  linkRemainingGroundedActMentions,
   normalizeLegalAnswerCitations,
+  hasCanonicalOfficialCitations,
 };

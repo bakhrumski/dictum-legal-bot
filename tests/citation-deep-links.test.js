@@ -8,6 +8,8 @@ const {
   buildLexDeepLink,
   findCitationPartNumber,
   linkCitationsInMarkdown,
+  normalizeOfficialDocumentIdentifier,
+  getChunkDocumentIdentifier,
   normalizeLegalAnswerCitations,
 } = require('../src/rag/citation-utils');
 const { parseLexStructured, chunkByArticle } = require('../src/rag/structural-chunker');
@@ -298,7 +300,7 @@ test('dashboard legal chat uses deterministic routing and grounded fallback cont
   assert.match(server, /const deterministicTopic = deterministicLegalTopic\(message\)/u);
   assert.match(server, /buildGeminiFallbackPrompt\(topicLabel, message, ragContext\)/u);
   assert.match(server, /useSearch: !ragContext/u);
-  assert.match(server, /lex-always-cross-check-v4/u);
+  assert.match(server, /lex-official-id-citations-v5/u);
   assert.doesNotMatch(server, /opts\.strictTopic && goodChunks\.length < 2\) needsWebSearch = false/u);
   assert.match(server, /const citationChunks = \[\.\.\.goodChunks, \.\.\.lexLiveChunks\]/u);
 });
@@ -391,6 +393,111 @@ test('dashboard reuses drafting and opens nationwide attorney filters for next a
   assert.match(dashboard, /actions: actions\.slice\(0, 3\)/u);
   assert.match(dashboard, /window\.location\.assign\('\/attorneys\.html\?source=legal-next-step'\)/u);
   assert.doesNotMatch(dashboard, /action\.kind === 'custom'/u);
+});
+
+test('official act identifiers are normalized to Uzbek-Latin public labels', () => {
+  assert.strictEqual(normalizeOfficialDocumentIdentifier('ПҚ-4008'), 'PQ-4008');
+  assert.strictEqual(normalizeOfficialDocumentIdentifier('УП-60'), 'PF-60');
+  assert.strictEqual(normalizeOfficialDocumentIdentifier('ПКМ-824'), 'VMQ-824');
+  assert.strictEqual(normalizeOfficialDocumentIdentifier('ЎРҚ-637'), "O'RQ-637");
+  assert.strictEqual(normalizeOfficialDocumentIdentifier('349-I'), '349-I');
+  assert.strictEqual(getChunkDocumentIdentifier({
+    document_number: '824',
+    metadata: { act_form: "O'zbekiston Respublikasi Vazirlar Mahkamasining qarori" },
+  }), 'VMQ-824');
+});
+
+test('a Cabinet decision citation includes VMQ number and exact clickable band', () => {
+  const title = "Oliy ta'lim muassasalarida ta'lim jarayonini tashkil etish bilan bog'liq tizimni takomillashtirish chora-tadbirlari to'g'risida";
+  const normalized = normalizeLegalAnswerCitations(
+    `${title}, 41-bandiga ko'ra talaba yakuniy nazoratga kiritilmaydi.`,
+    [{
+      law_name: title,
+      document_number: '824',
+      metadata: { act_form: "O'zbekiston Respublikasi Vazirlar Mahkamasining qarori" },
+      article_numbers: ['41'],
+      provision_type: 'band',
+      source_url: 'https://lex.uz/uz/docs/-5193564',
+      chunk_text: '41. Bir fanga ajratilgan auditoriya soatining 25 foizi va undan ortiq soatni sababsiz qoldirgan talaba.',
+    }]
+  );
+  assert.match(normalized, /\[\*\*Oliy ta'lim[\s\S]+\(VMQ-824\), 41-band, tegishli band\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5193564#:~:text=/u);
+  assert.match(normalized, /\)ga ko'ra/u);
+});
+
+test("a law citation includes its O'RQ number and exact clickable article", () => {
+  const normalized = normalizeLegalAnswerCitations(
+    "Ta'lim to'g'risida, 48-moddasiga ko'ra talaba ichki qoidalarga rioya qiladi.",
+    [{
+      law_name: "Ta'lim to'g'risida",
+      document_number: '637',
+      metadata: { act_form: "O'zbekiston Respublikasining Qonuni" },
+      article_numbers: ['48'],
+      source_url: 'https://lex.uz/uz/docs/-5013007',
+      chunk_text: "48-modda. Ta'lim oluvchilarning majburiyatlari.",
+    }]
+  );
+  assert.match(normalized, /\[\*\*Ta'lim to'g'risida \(O'RQ-637\), 48-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5013007#:~:text=/u);
+});
+
+test('a PQ shorthand is expanded to the full official title and linked provision', () => {
+  const title = "O'zbekiston Respublikasi hududida xorijiy davlatlarning malakali mutaxassislari tomonidan mehnat faoliyatini amalga oshirishi uchun qulay shart-sharoitlar yaratish chora-tadbirlari to'g'risida";
+  const normalized = normalizeLegalAnswerCitations(
+    "PQ-4008, 2-bandiga ko'ra malakali mutaxassislar alohida toifa hisoblanadi.",
+    [{
+      law_name: title,
+      ownDocumentNumber: { prefix: 'PQ', number: '4008' },
+      article_numbers: ['2'],
+      provision_type: 'band',
+      source_url: 'https://lex.uz/docs/-4045557',
+      chunk_text: "2. Belgilansinki, malakali mutaxassislar uchun alohida tartib qo'llanadi.",
+    }]
+  );
+  assert.match(normalized, /\[\*\*O'zbekiston Respublikasi hududida[\s\S]+\(PQ-4008\), 2-band, tegishli band\*\*\]\(https:\/\/lex\.uz\/docs\/-4045557#:~:text=/u);
+});
+
+test('a Presidential decree citation includes its PF number and Lex link', () => {
+  const title = "O'zbekiston — 2030 strategiyasi to'g'risida";
+  const normalized = normalizeLegalAnswerCitations(
+    `${title}, 1-bandiga ko'ra strategiya tasdiqlangan.`,
+    [{
+      law_name: title,
+      document_number: 'ПФ-158',
+      article_numbers: ['1'],
+      provision_type: 'band',
+      source_url: 'https://lex.uz/docs/-6600413',
+      chunk_text: "1. O'zbekiston — 2030 strategiyasi tasdiqlansin.",
+    }]
+  );
+  assert.match(normalized, /\[\*\*O'zbekiston — 2030 strategiyasi to'g'risida \(PF-158\), 1-band, tegishli band\*\*\]\(https:\/\/lex\.uz\/docs\/-6600413#:~:text=/u);
+});
+
+test('a grounded act mention without a locator links to its official Lex document', () => {
+  const title = "O'zbekiston Respublikasi hududida xorijiy davlatlarning malakali mutaxassislari tomonidan mehnat faoliyatini amalga oshirishi uchun qulay shart-sharoitlar yaratish chora-tadbirlari to'g'risida";
+  const normalized = normalizeLegalAnswerCitations(
+    `Masala ${title} asosida ham tartibga solinadi.`,
+    [{
+      law_name: title,
+      ownDocumentNumber: { prefix: 'PQ', number: '4008' },
+      source_url: 'https://lex.uz/docs/-4045557',
+    }]
+  );
+  assert.match(normalized, /\[\*\*O'zbekiston Respublikasi hududida[\s\S]+\(PQ-4008\)\*\*\]\(https:\/\/lex\.uz\/docs\/-4045557\)/u);
+});
+
+test('existing Lex links receive the official identifier across URL language variants', () => {
+  const answer = "[**Ta'lim to'g'risida, 48-modda, tegishli qism**](https://lex.uz/uz/docs/-5013007#-5013954) qo'llanadi.";
+  const normalized = normalizeLegalAnswerCitations(answer, [{
+    law_name: "Ta'lim to'g'risida",
+    document_number: "O'RQ-637",
+    source_url: 'https://lex.uz/docs/-5013007',
+  }]);
+  assert.match(normalized, /\[\*\*Ta'lim to'g'risida \(O'RQ-637\), 48-modda, tegishli qism\*\*\]/u);
+});
+
+test('an unverified act mention is never turned into a source link', () => {
+  const answer = "Noma'lum qaror (PQ-999999) ham qo'llanadi.";
+  assert.strictEqual(normalizeLegalAnswerCitations(answer, []), answer);
 });
 
 test('document intake prefers the selected action schema and requires its mandatory fields', () => {

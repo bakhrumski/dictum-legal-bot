@@ -315,6 +315,7 @@ async function parentChildSearch(query, opts = {}) {
       chapter: r.chapter || '',
       sourceUrl: r.source_url || '',
       lawName: r.law_name || '',
+      documentNumber: r.document_number || null,
       score: r.score || 0,
       references: [],
       lexElementId: r.lex_element_id || null,
@@ -328,6 +329,7 @@ async function parentChildSearch(query, opts = {}) {
       id, chunk_text, chunk_id, parent_chunk_id,
       article_number_display, part_number, part_type,
       chapter, source_url, law_name, category,
+      document_number,
       cross_references, lex_element_id,
       1 - (embedding <=> $1::vector) AS score
     FROM legal_chunks
@@ -350,7 +352,7 @@ async function parentChildSearch(query, opts = {}) {
     const parentSql = `
       SELECT
         id, chunk_text, chunk_id,
-        article_number_display, chapter, source_url, law_name, lex_element_id,
+        article_number_display, chapter, source_url, law_name, document_number, lex_element_id,
         cross_references,
         1 - (embedding <=> $1::vector) AS score
       FROM legal_chunks
@@ -372,6 +374,7 @@ async function parentChildSearch(query, opts = {}) {
       chapter: r.chapter || '',
       sourceUrl: r.source_url || '',
       lawName: r.law_name || '',
+      documentNumber: r.document_number || null,
       score: parseFloat(r.score) || 0,
       references: r.cross_references || [],
       lexElementId: r.lex_element_id || null,
@@ -384,7 +387,7 @@ async function parentChildSearch(query, opts = {}) {
   let parentMap = {};
   if (parentIds.length > 0) {
     const parentResult = await pool.query(
-      `SELECT chunk_id, chunk_text, article_number_display, chapter, source_url, law_name, lex_element_id
+      `SELECT chunk_id, chunk_text, article_number_display, chapter, source_url, law_name, document_number, lex_element_id
        FROM legal_chunks WHERE chunk_id = ANY($1)`,
       [parentIds]
     );
@@ -413,6 +416,7 @@ async function parentChildSearch(query, opts = {}) {
       chapter: child.chapter || '',
       sourceUrl: child.source_url || parent?.source_url || '',
       lawName: child.law_name || parent?.law_name || '',
+      documentNumber: child.document_number || parent?.document_number || null,
       score: parseFloat(child.score) || 0,
       references: child.cross_references || [],
       lexElementId: child.lex_element_id || parent?.lex_element_id || null,

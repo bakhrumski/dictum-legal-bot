@@ -53,7 +53,12 @@ test('the versioned constitution and research playbook are separate policy layer
   for (const required of [
     'Yagona rasmiy manba',
     'Har bir huquqiy da\'vo aniq normaga bog\'lanadi',
-    'Hujjat nomi, N-modda yoki N-band, M-qism',
+    "Hujjatning to'liq nomi (rasmiy raqami), N-modda yoki N-band, M-qism",
+    "O'zbekiston Respublikasi qonuni uchun `O'RQ-XXX`",
+    "Prezident qarori uchun `PQ-XXX`",
+    "Prezident farmoni uchun `PF-XXX`",
+    "Vazirlar Mahkamasi qarori uchun `VMQ-XXX`",
+    "biror O'zbekiston normativ-huquqiy hujjati oddiy, bosilmaydigan matn bo'lib qolmaydi",
     'Ma\'lumot va buyruq chegarasi',
     'Imkoniyat chegarasi va shakl',
     'Har bir huquqiy savolda Korpus natijasidan qat\'i nazar',
@@ -87,12 +92,14 @@ test('the versioned constitution and research playbook are separate policy layer
     "VMQ/ВМҚ/ПКМ",
     "bitta umumiy ro'yxatda qayta baholanadi",
     "Mexanizm alohida `PQ-4008`, `PF-60`, `VMQ-824` yoki boshqa test hujjatiga bog'lanmaydi",
+    "Har bir shunday iqtibos Lex.uz'dagi aynan qo'llangan norma bilan bog'lanishi shart",
+    "har bir tilga olingan O'zbekiston normativ-huquqiy hujjati bosiladigan Lex.uz havolasiga aylangani",
   ]) assert.ok(text.includes(required), `missing playbook rule: ${required}`);
-  assert.strictEqual(getConstitutionVersion(), '1.2.0');
-  assert.strictEqual(getPlaybookVersion(), '1.3.0');
+  assert.strictEqual(getConstitutionVersion(), '1.3.0');
+  assert.strictEqual(getPlaybookVersion(), '1.4.0');
   assert.deepStrictEqual(getLegalPolicyVersions(), {
-    constitution: '1.2.0',
-    legalResearch: '1.3.0',
+    constitution: '1.3.0',
+    legalResearch: '1.4.0',
   });
 });
 
@@ -370,8 +377,8 @@ test('advanced RAG uses the same playbook and three-section answer contract', ()
     userQuestion: 'Yakuniy nazoratdan chetlatish mumkinmi?',
   });
   assert.ok(prompt.startsWith('ASOSIY HUQUQIY KONSTITUTSIYA'));
-  assert.ok(prompt.includes('Constitution-Version: 1.2.0'));
-  assert.ok(prompt.includes('Playbook-Version: 1.3.0'));
+  assert.ok(prompt.includes('Constitution-Version: 1.3.0'));
+  assert.ok(prompt.includes('Playbook-Version: 1.4.0'));
   assert.ok(prompt.includes('MAJBURIY 3-QISMLI JAVOB TUZILMASI'));
   assert.ok(prompt.includes('Alohida "Manbalar"'));
   assert.ok(!prompt.includes('MAJBURIY 4-QISMLI JAVOB TUZILMASI'));

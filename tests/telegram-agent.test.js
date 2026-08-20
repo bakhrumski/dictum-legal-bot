@@ -732,13 +732,50 @@ function stubMemory(clarifyCount = 0) {
   });
 
   await test('a lawyer-verified corpus answer is preferred over generation', async () => {
-    const d = deps({ korpus: 'Yurist tomonidan tasdiqlangan javob matni, yetarlicha uzun.' });
+    const d = deps({
+      korpus: "Mehnat kodeksi, 100-moddasiga ko'ra yurist tomonidan tasdiqlangan javob berildi.",
+      chunks: [{
+        law_name: 'Mehnat kodeksi',
+        document_number: "O'RQ-798",
+        article_numbers: ['100'],
+        source_url: 'https://lex.uz/docs/-6257288',
+        chunk_text: '100-modda. Tasdiqlangan norma.',
+      }],
+    });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasi qanday bekor qilinadi?' });
     assert.strictEqual(r.action, 'answered');
     assert.strictEqual(r.meta.path, 'qa-korpus');
     assert.ok(r.meta.reservationId, 'delivery must receive the reservation ID to finalize later');
     assert.strictEqual(d.calls.answer, 0, 'must not pay for generation when a verified answer exists');
+  });
+
+  await test('a legacy lawyer answer without canonical Lex citations is regenerated under the current contract', async () => {
+    const d = deps({
+      korpus: "Noma'lum qaror (PQ-999999) asosida eski tasdiqlangan javob.",
+      answer: [
+        '**Huquqiy asos**',
+        "Mehnat kodeksi 100-moddasiga ko'ra mehnat shartnomasi qonuniy tartibda bekor qilinadi.",
+        '**Tahlil**',
+        "Mehnat kodeksi 100-moddasi foydalanuvchi holatiga tatbiq etiladi.",
+        '**Xulosa**',
+        "Buyruq nusxasini oling.",
+      ].join('\n\n'),
+      chunks: [{
+        law_name: 'Mehnat kodeksi',
+        document_number: "O'RQ-798",
+        article_numbers: ['100'],
+        source_url: 'https://lex.uz/docs/-6257288',
+        chunk_text: '100-modda. Tasdiqlangan norma.',
+      }],
+    });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasi qanday bekor qilinadi?' });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(r.meta.path, 'rag');
+    assert.strictEqual(d.calls.answer, 1, 'legacy content must be grounding, not a verbatim bypass');
+    assert.match(r.reply, /Mehnat kodeksi \(O'RQ-798\), 100-modda/u);
+    assert.match(r.reply, /https:\/\/lex\.uz\/docs\/-6257288/u);
   });
 
   console.log('\ntelegram-agent — the confidence gate\n');
