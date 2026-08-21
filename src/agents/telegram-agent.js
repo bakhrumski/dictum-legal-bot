@@ -56,6 +56,7 @@ let D = null;
  *   recordAgentEvent               — operational telemetry (optional)
  *   runShadowEvaluation            — private Hermes comparison (optional)
  *   crossCheckLegalAnswer          — independent Lex.uz answer verifier
+ *   hydrateMentionedOfficialActChunks — resolve grounded O'RQ/PQ/PF/VMQ links
  */
 function initTelegramAgent(deps) {
   D = deps || null;
@@ -450,6 +451,10 @@ async function generateAnswer(question, turns) {
   }
 
   if (korpusAnswer) {
+    if (D.hydrateMentionedOfficialActChunks) {
+      const hydrated = await D.hydrateMentionedOfficialActChunks(korpusAnswer, chunks, { topic });
+      chunks = hydrated.chunks;
+    }
     if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, korpusAnswer);
     const normalizedKorpusAnswer = normalizeLegalAnswerCitations(korpusAnswer, chunks, 'uz');
     if (hasCanonicalOfficialCitations(normalizedKorpusAnswer)) {
@@ -491,6 +496,10 @@ TELEGRAM FORMATI (majburiy):
     useSearch: false, maxTokens: 900, endpoint: '/tg-agent/answer',
   });
   let text = String(res.text || '').trim();
+  if (D.hydrateMentionedOfficialActChunks) {
+    const hydrated = await D.hydrateMentionedOfficialActChunks(text, chunks, { topic });
+    chunks = hydrated.chunks;
+  }
   let lexCrossCheck = { status: 'skipped', checked: false };
   if (D.crossCheckLegalAnswer) {
     lexCrossCheck = await D.crossCheckLegalAnswer({

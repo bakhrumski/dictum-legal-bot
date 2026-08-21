@@ -60,6 +60,7 @@ const {
   getLegalPolicyVersions,
 } = require('../rag/legal-prompt-policy');
 const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
+const { hydrateMentionedOfficialActChunks } = require('../rag/official-citation-hydrator');
 const { parentChildSearch } = require('../rag/advanced-corpus');
 // ── Justify RAG (optional external service, kept as bonus fallback) ──
 const {
@@ -3731,6 +3732,7 @@ try {
     recordAgentEvent: recordTelegramAgentEvent,
     runShadowEvaluation: runHermesShadow,
     crossCheckLegalAnswer,
+    hydrateMentionedOfficialActChunks,
     hydrateLexAnchors,
     chatModel: MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
@@ -4046,6 +4048,14 @@ ${feedbackNote}`;
         console.error('[AI] Failed to parse yurxizmat suggestions:', e.message);
       }
     }
+
+    // Resolve any canonical O'RQ/PQ/PF/VMQ reference introduced during
+    // generation but absent from the initial retrieval. Only an active,
+    // identity-matched Lex.uz result is admitted as citation evidence.
+    const mentionedActs = await hydrateMentionedOfficialActChunks(analysis, ragCitationChunks, {
+      topic: detectedField || category || null,
+    });
+    ragCitationChunks = mentionedActs.chunks;
 
     // Apply the same platform-wide verified citation renderer used by Web chat
     // and Telegram before this Master Admin analysis is stored or displayed.
@@ -6366,6 +6376,27 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       } catch (fallbackErr) {
         console.warn(`[Legal Chat] Gemini fallback failed: ${fallbackErr.message}`);
       }
+    }
+
+    // A model can correctly identify a special official act that the
+    // pre-generation search did not rank into its bounded result set. Resolve
+    // those canonical O'RQ/PQ/PF/VMQ mentions against Lex.uz now, before the
+    // independent verifier and citation renderer run. Same-number acts are
+    // accepted only when title/year identity also matches the written answer.
+    const mentionedActs = await hydrateMentionedOfficialActChunks(displayReply, ragChunks, {
+      topic,
+    });
+    ragChunks = mentionedActs.chunks;
+    if (mentionedActs.added.length || mentionedActs.unresolved.length) {
+      ragMeta = Object.assign({}, ragMeta || {}, {
+        officialCitationHydration: {
+          added: mentionedActs.added.map((chunk) => ({
+            identifier: getChunkDocumentIdentifier(chunk),
+            url: chunk.source_url,
+          })),
+          unresolved: mentionedActs.unresolved,
+        },
+      });
     }
 
     // Independent second-pass verification. Generation and verification are

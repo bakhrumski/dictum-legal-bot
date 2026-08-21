@@ -8,6 +8,11 @@ const {
   parseVerifierJson,
   crossCheckLegalAnswer,
 } = require('../src/rag/legal-answer-cross-check');
+const {
+  extractOfficialActMentions,
+  hydrateMentionedOfficialActChunks,
+} = require('../src/rag/official-citation-hydrator');
+const { normalizeLegalAnswerCitations } = require('../src/rag/citation-utils');
 
 let passed = 0;
 async function test(name, fn) {
@@ -96,12 +101,61 @@ const officialChunk = {
     assert.strictEqual(called, false);
   });
 
+  await test('a generated VMQ mention missing from initial retrieval is resolved and linked', async () => {
+    const title = 'Oʻzbekiston Respublikasiga xorijdan ishchi kuchini jalb qilish va undan foydalanish tartibi toʻgʻrisidagi nizomni tasdiqlash haqida';
+    const answer = `Umumiy maʼmuriy tartib O‘zbekiston Respublikasi Vazirlar Mahkamasining 2019-yil 25-martdagi “${title}”gi qarori (VMQ-244) bilan belgilanadi.`;
+    assert.deepStrictEqual(extractOfficialActMentions(answer).map((item) => item.identifier), ['VMQ-244']);
+    let query = '';
+    const hydrated = await hydrateMentionedOfficialActChunks(answer, [], {
+      search: async (value) => {
+        query = value;
+        return [
+          {
+            title: 'Ayrim turdagi tovarlarni olib o‘tish tartibi to‘g‘risida',
+            lawName: 'Ayrim turdagi tovarlarni olib o‘tish tartibi to‘g‘risida',
+            url: 'https://lex.uz/docs/-7484114',
+            ownDocumentNumber: { prefix: 'VMQ', number: '244' },
+            metadata: { adoption_date: '2025-04-19', is_active: true, document_number: '244' },
+          },
+          {
+            title,
+            lawName: title,
+            url: 'https://lex.uz/docs/-4251564',
+            content: 'Xorijiy ishchi kuchini jalb qilish tartibi.',
+            ownDocumentNumber: { prefix: 'VMQ', number: '244' },
+            exactIdentityMatch: true,
+            metadata: { adoption_date: '2019-03-26', is_active: true, document_number: '244' },
+          },
+        ];
+      },
+    });
+    assert.match(query, /^VMQ-244\s/u);
+    assert.strictEqual(hydrated.added.length, 1);
+    assert.strictEqual(hydrated.added[0].source_url, 'https://lex.uz/docs/-4251564');
+    const linked = normalizeLegalAnswerCitations(answer, hydrated.chunks);
+    assert.match(linked, /\]\(https:\/\/lex\.uz\/docs\/-4251564\)/u);
+    assert.strictEqual((linked.match(/lex\.uz\/docs\/-4251564/gu) || []).length, 1);
+    assert.doesNotMatch(linked, /qarori\s*\(VMQ-244\)/u);
+  });
+
+  await test('an already retrieved official identifier does not trigger another live lookup', async () => {
+    let searched = false;
+    const hydrated = await hydrateMentionedOfficialActChunks(
+      'VMQ-244 ushbu masalaga tatbiq etiladi.',
+      [{ document_number: 'VMQ-244', source_url: 'https://lex.uz/docs/-4251564' }],
+      { search: async () => { searched = true; return []; } }
+    );
+    assert.strictEqual(searched, false);
+    assert.strictEqual(hydrated.chunks.length, 1);
+  });
+
   await test('Web and Telegram production paths invoke the independent verifier', async () => {
     const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
     const telegram = fs.readFileSync(path.join(__dirname, '..', 'src', 'agents', 'telegram-agent.js'), 'utf8');
     assert.match(server, /LEX_CROSSCHECK_EVERY_ANSWER[^\n]*!== 'false'/);
     assert.match(server, /endpoint: '\/api\/legal-chat\/lex-cross-check'/);
-    assert.match(server, /crossCheckLegalAnswer,\s*\n\s*hydrateLexAnchors/);
+    assert.match(server, /crossCheckLegalAnswer,\s*\n\s*hydrateMentionedOfficialActChunks,\s*\n\s*hydrateLexAnchors/);
+    assert.match(telegram, /D\.hydrateMentionedOfficialActChunks\(text, chunks, \{ topic \}\)/);
     assert.match(telegram, /endpoint: '\/tg-agent\/lex-cross-check'/);
     assert.match(server, /lex-official-id-citations-v5/);
   });

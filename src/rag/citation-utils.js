@@ -678,7 +678,20 @@ function linkRemainingGroundedActMentions(value = '', chunks = [], lang = 'uz') 
     if (index % 2 === 1) return part;
     let output = part;
     for (const { chunk, lawName, sourceUrl } of bySource.values()) {
-      const variants = lawNameVariants(lawName, getChunkDocumentIdentifier(chunk))
+      const identifier = getChunkDocumentIdentifier(chunk);
+      let variantList = lawNameVariants(lawName, identifier);
+      const fullNamePattern = flexibleLawPattern(canonicalLawLabel(lawName));
+      const fullNamePresent = fullNamePattern && new RegExp(fullNamePattern, 'iu').test(output);
+      if (fullNamePresent && identifier) {
+        const identifierVariants = new Set(
+          documentIdentifierVariants(identifier).map(normalizeLawName)
+        );
+        // If the full official title is written, link that title once. Do not
+        // independently relink the trailing shorthand `(VMQ-244)`, which
+        // would render the same source twice in one sentence.
+        variantList = variantList.filter((variant) => !identifierVariants.has(normalizeLawName(variant)));
+      }
+      const variants = variantList
         .filter(variant => normalizeLawName(variant).length >= 5)
         .map(flexibleLawPattern)
         .join('|');
@@ -690,6 +703,25 @@ function linkRemainingGroundedActMentions(value = '', chunks = [], lang = 'uz') 
     }
     return output;
   }).join('');
+}
+
+/**
+ * A formal Uzbek citation often wraps a title as:
+ *   `“Hujjat nomi”gi qarori (VMQ-244)`.
+ * Once the title itself has become the canonical `[Hujjat (VMQ-244)]` link,
+ * the closing quote, legal-form suffix and repeated identifier are redundant.
+ */
+function stripDuplicateOfficialIdentifierWrappers(value = '') {
+  const officialId = /(?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)\s*-\s*\d+(?:-[IVXLCDM]+)?/iu;
+  return String(value || '').replace(
+    /(\[([^\]]+)\]\(https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\/-?\d+[^)]*\))\s*[\u00ab\u00bb\u201c\u201d"']?\s*(?:(?:gi|dagi)\b\s*)?(?:(?:qarori|farmoni|qonuni)\b\s*)?\(\s*((?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)\s*-\s*\d+(?:-[IVXLCDM]+)?)\s*\)/giu,
+    (whole, link, label, trailingIdentifier) => {
+      const labelMatch = String(label || '').match(officialId);
+      const labelIdentifier = labelMatch ? normalizeOfficialDocumentIdentifier(labelMatch[0]) : '';
+      const normalizedTrailing = normalizeOfficialDocumentIdentifier(trailingIdentifier);
+      return labelIdentifier && labelIdentifier === normalizedTrailing ? link : whole;
+    }
+  );
 }
 
 function upgradeLinkedCitationIdentifiers(value = '', chunks = [], lang = 'uz') {
@@ -775,11 +807,13 @@ function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz')
     chunks,
     lang
   );
-  return collapseDuplicateLexCitations(
-    linkRemainingGroundedActMentions(
+  return stripDuplicateOfficialIdentifierWrappers(
+    collapseDuplicateLexCitations(
+      linkRemainingGroundedActMentions(
       upgradeLinkedCitationIdentifiers(linked, chunks, lang),
       chunks,
       lang
+      )
     )
   );
 }
@@ -820,6 +854,7 @@ module.exports = {
   linkCitationsInMarkdown,
   linkRemainingGroundedActMentions,
   collapseDuplicateLexCitations,
+  stripDuplicateOfficialIdentifierWrappers,
   normalizeLegalAnswerCitations,
   hasCanonicalOfficialCitations,
 };
