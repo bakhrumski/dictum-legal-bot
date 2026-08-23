@@ -228,6 +228,72 @@ async function initLegalCorpus() {
       FOR EACH ROW EXECUTE FUNCTION legal_chunks_tsv_trigger()
     `);
 
+    // Workspace AI answers are reused only while their legal corpus snapshot is
+    // current. The checked-in Workspace migration creates this state too; this
+    // guarded setup also covers standalone corpus initialization and fresh DBs.
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS juristai_private`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS juristai_private.legal_corpus_state (
+        singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+        revision BIGINT NOT NULL DEFAULT 0 CHECK (revision >= 0),
+        last_transaction BIGINT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      INSERT INTO juristai_private.legal_corpus_state (singleton, revision)
+      VALUES (TRUE, 0)
+      ON CONFLICT (singleton) DO NOTHING
+    `);
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION juristai_private.bump_legal_corpus_revision()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $$
+      DECLARE
+        current_transaction BIGINT := txid_current();
+      BEGIN
+        INSERT INTO juristai_private.legal_corpus_state
+          (singleton, revision, last_transaction, updated_at)
+        VALUES (TRUE, 1, current_transaction, NOW())
+        ON CONFLICT (singleton) DO UPDATE
+          SET revision = juristai_private.legal_corpus_state.revision + 1,
+              last_transaction = EXCLUDED.last_transaction,
+              updated_at = NOW()
+        WHERE juristai_private.legal_corpus_state.last_transaction
+              IS DISTINCT FROM EXCLUDED.last_transaction;
+        RETURN NULL;
+      END;
+      $$
+    `);
+    await pool.query(`DROP TRIGGER IF EXISTS legal_chunks_workspace_revision ON legal_chunks`);
+    await pool.query(`
+      CREATE TRIGGER legal_chunks_workspace_revision
+      AFTER INSERT OR UPDATE OR DELETE ON legal_chunks
+      FOR EACH STATEMENT
+      EXECUTE FUNCTION juristai_private.bump_legal_corpus_revision()
+    `);
+    await pool.query(`
+      REVOKE ALL ON TABLE juristai_private.legal_corpus_state
+      FROM PUBLIC, anon, authenticated
+    `).catch((error) => {
+      // Plain local Postgres may not define Supabase's anon/authenticated roles.
+      if (error.code !== '42704') throw error;
+      return pool.query(`REVOKE ALL ON TABLE juristai_private.legal_corpus_state FROM PUBLIC`);
+    });
+    await pool.query(`
+      REVOKE ALL ON FUNCTION juristai_private.bump_legal_corpus_revision()
+      FROM PUBLIC, anon, authenticated
+    `).catch((error) => {
+      if (error.code !== '42704') throw error;
+      return pool.query(`
+        REVOKE ALL ON FUNCTION juristai_private.bump_legal_corpus_revision()
+        FROM PUBLIC
+      `);
+    });
+
     // Backfill normalized search_text for older rows so Uzbek queries use the same surface everywhere.
     await pool.query(`
       UPDATE legal_chunks

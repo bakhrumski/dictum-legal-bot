@@ -8,6 +8,7 @@ const multer = require('multer');
 const os = require('os');
 const fs = require('fs');
 const { pool } = require('../database/db');
+const { runVersionedMigrations } = require('../database/migrations');
 
 // Shared in-memory store for Telegram verification codes (used by bot.js too)
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
@@ -9053,13 +9054,21 @@ app.get('/auth/google/callback', async (req, res) => {
       const randomPwd = await bcrypt.hash(Math.random().toString(36), 10);
       const fullName = name || `${given_name || ''} ${family_name || ''}`.trim() || email;
       const ins = await pool.query(
-        `INSERT INTO admins (username, password, full_name, role, email, email_verified, google_id, device_fingerprint)
-         VALUES ($1, $2, $3, 'user', $4, TRUE, $5, $6) RETURNING *`,
+      `INSERT INTO admins
+         (username, password, full_name, role, email, email_verified,
+          email_verification_source, google_id, device_fingerprint)
+         VALUES ($1, $2, $3, 'user', $4, TRUE, 'google', $5, $6) RETURNING *`,
         [email.split('@')[0] + '_g' + Date.now().toString(36), randomPwd, fullName, email, googleId, gDfp || null]
       );
       user = ins.rows[0];
     } else if (!user.google_id) {
-      await pool.query('UPDATE admins SET google_id = $1, email_verified = TRUE WHERE id = $2', [googleId, user.id]);
+      await pool.query(
+        `UPDATE admins
+            SET google_id = $1, email = $3, email_verified = TRUE,
+                email_verification_source = 'google'
+          WHERE id = $2`,
+        [googleId, user.id, email]
+      );
     }
 
     req.session.isAuthenticated = true;
@@ -9176,6 +9185,7 @@ app.post('/api/register/common', async (req, res) => {
 
     // Telegram OTP path (new) — requires verified telegramUserId
     let applicantChatId = null;
+    let emailWasVerified = false;
     if (tgUserId) {
       // Check sinov abuse: if this Telegram user already used bepul plan
       const existing = await pool.query('SELECT id, bepul_used FROM admins WHERE telegram_user_id = $1', [tgUserId]);
@@ -9201,6 +9211,7 @@ app.post('/api/register/common', async (req, res) => {
       if (storedCode.channel === 'email' && storedCode.email !== cleanEmail) {
         return res.status(400).json({ error: 'Tasdiqlash kodi boshqa email uchun yuborilgan' });
       }
+      emailWasVerified = storedCode.channel === 'email' && storedCode.email === cleanEmail;
       applicantChatId = storedCode.chatId || null;
       verificationTokens.delete(verification_token);
     }
@@ -9238,8 +9249,9 @@ app.post('/api/register/common', async (req, res) => {
     const insert = await pool.query(
       `INSERT INTO admins
          (username, password, full_name, role,
-          telegram_username, telegram_chat_id, telegram_user_id, email, email_verified, phone, device_fingerprint)
-       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8, $9, $10)
+          telegram_username, telegram_chat_id, telegram_user_id, email, email_verified,
+          email_verification_source, phone, device_fingerprint)
+       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id, username, full_name, role`,
       [
         username, passwordHash, fullName,
@@ -9247,7 +9259,8 @@ app.post('/api/register/common', async (req, res) => {
         applicantChatId,
         tgUserId ? BigInt(tgUserId) : null,
         cleanEmail || null,
-        !!(cleanEmail),
+        emailWasVerified,
+        emailWasVerified ? 'email_otp' : null,
         cleanPhone || null,
         dfp || null,
       ]
@@ -9735,30 +9748,10 @@ async function runMigrations() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP DEFAULT NOW()`);
 
-    // Drop ALL FK constraints referencing admins, re-add with ON DELETE SET NULL
-    try {
-      const fks = await pool.query(`
-        SELECT con.conname, rel.relname AS table_name
-        FROM pg_constraint con
-        JOIN pg_class rel ON con.conrelid = rel.oid
-        JOIN pg_class ref ON con.confrelid = ref.oid
-        WHERE con.contype = 'f' AND ref.relname = 'admins'
-      `);
-      for (const fk of fks.rows) {
-        const action = fk.table_name === 'chat_messages' ? 'CASCADE' : 'SET NULL';
-        // Find the column(s) for this constraint
-        const colResult = await pool.query(`
-          SELECT a.attname FROM pg_constraint c
-          JOIN pg_attribute a ON a.attnum = ANY(c.conkey) AND a.attrelid = c.conrelid
-          WHERE c.conname = $1
-        `, [fk.conname]);
-        const col = colResult.rows[0]?.attname;
-        if (!col) continue;
-        await pool.query(`ALTER TABLE ${fk.table_name} DROP CONSTRAINT ${fk.conname}`);
-        await pool.query(`ALTER TABLE ${fk.table_name} ADD CONSTRAINT ${fk.conname} FOREIGN KEY (${col}) REFERENCES admins(id) ON DELETE ${action}`);
-        console.log(`[DB] Fixed FK: ${fk.table_name}.${col} -> ON DELETE ${action}`);
-      }
-    } catch(e) { console.log('[DB] FK constraint migration:', e.message); }
+    // Foreign-key delete behaviour is owned by explicit versioned migrations.
+    // Never rewrite every relationship to admins on boot: Workspace audit and
+    // immutable-version ownership deliberately use RESTRICT, SET NULL and
+    // CASCADE for different legal-retention reasons.
 
     // Requests table migrations (ensure all columns exist)
     await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS category VARCHAR(255) DEFAULT 'Boshqa'`);
@@ -10237,8 +10230,57 @@ async function runMigrations() {
       const { initQaKorpus } = require('../rag/qa-korpus');
       await initQaKorpus();
     } catch (e) { console.log('[QA-KORPUS] Init skipped:', e.message); }
+
+    // Workspace is the first subsystem managed exclusively by checked-in,
+    // immutable SQL migrations. A migration failure is fatal for startup: the
+    // API must never run against half-created RLS or retention rules.
+    try {
+      const migrationResult = await runVersionedMigrations(pool);
+      console.log(
+        `[WORKSPACE] Versioned migrations: ${migrationResult.applied.length} applied, `
+        + `${migrationResult.skipped.length} already current`
+      );
+
+      const { createWorkspaceLegalAnswerGenerator } = require('../workspace/legal-answer-generator');
+      const { createWorkspaceAiService } = require('../workspace/ai-service');
+      const { mountWorkspaceRoutes } = require('../workspace/routes');
+      const generateWorkspaceAnswer = createWorkspaceLegalAnswerGenerator({
+        pool,
+        callAI,
+        retrieveLegalContext,
+        buildTopicPrompt,
+        classifyLegalTopic,
+        chatModel: MODELS.chat,
+        topicLabels: LEGAL_TOPICS,
+        hasAiProvider: () => Boolean(process.env.GPT_API_KEY || process.env.GEMINI_API_KEY),
+        isFailedAnswer,
+        hasCriticalTermMismatch,
+        hasAnswerTopicMismatch,
+        buildFallbackPrompt: buildGeminiFallbackPrompt,
+        verifyCitations,
+        logCoverage,
+        generateSourceSuggestions,
+      });
+      const workspaceAiService = createWorkspaceAiService({
+        pool,
+        generateAnswer: generateWorkspaceAnswer,
+      });
+      await workspaceAiService.recoverStaleRuns();
+      mountWorkspaceRoutes(app, {
+        pool,
+        requireAuth,
+        aiLimiter,
+        aiService: workspaceAiService,
+        verificationTokens,
+      });
+      console.log('[WORKSPACE] API, Realtime bridge and shared AI memory mounted');
+    } catch (error) {
+      error.workspaceMigrationFatal = true;
+      throw error;
+    }
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
+    if (err.workspaceMigrationFatal) throw err;
   }
 }
 
@@ -10276,8 +10318,13 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-runMigrations().then(() => {
-  app.listen(PORT, () => {
-    console.log(`[SERVER] Dashboard running on port ${PORT} | Node ${process.version}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
+runMigrations()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`[SERVER] Dashboard running on port ${PORT} | Node ${process.version}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
+    });
+  })
+  .catch((error) => {
+    console.error('[SERVER] Startup aborted:', error.message);
+    process.exitCode = 1;
   });
-});

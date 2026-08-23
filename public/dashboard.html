@@ -17,6 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
     <link rel="stylesheet" href="./css/design-tokens.css">
+    <link rel="stylesheet" href="./css/workspace.css">
     <style>
         /* ========== JURISTAI DESIGN SYSTEM (Phase 2.2) ==========
            Legacy variable names retained for compatibility — values
@@ -6765,6 +6766,8 @@
             .shadow-run-route, .shadow-run-time { display: none; }
         }
     </style>
+    <link rel="stylesheet" href="/css/redesign-v2.css">
+    <script src="/js/redesign-v2.js" defer></script>
 </head>
 <body>
     <!-- Theme saved state applied in inline script below -->
@@ -6882,47 +6885,14 @@
         </div>
         </div><!-- /tab-view home: stats -->
 
-        <!-- TAB: Jamoa (Team) -->
+        <!-- TAB: Workspace (replaces the legacy Jamoa administration table) -->
         <div class="tab-view" id="tabJamoa" data-tab="jamoa">
-        <!-- Admin Management Section -->
-        <div class="admin-management" id="adminManagementSection">
-            <div class="admin-management-header">
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <h2>Jamoa</h2>
+            <main class="workspace-app" id="workspaceApp" aria-live="polite">
+                <div class="workspace-boot">
+                    <span class="workspace-spinner" aria-hidden="true"></span>
+                    <span>Workspace yuklanmoqda…</span>
                 </div>
-                <button class="add-member-btn" id="addMemberBtn" style="display:none;" onclick="event.stopPropagation(); openAddMemberModal()" title="Yangi a'zo qo'shish"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button>
-            </div>
-            <div class="jamoa-content">
-                <div class="admin-table-wrapper">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Ism</th>
-                            <th>Username</th>
-                            <th>Rol</th>
-                            <th>Ish vaqti (Smena)</th>
-                            <th>Holati</th>
-                        </tr>
-                    </thead>
-                    <tbody id="adminTableBody">
-                        <tr><td colspan="7" style="text-align:center; color:var(--fg-3);">Yuklanmoqda...</td></tr>
-                    </tbody>
-                </table>
-                </div>
-                <!-- Rankings Sidebar (inside Jamoa) -->
-                <div class="rankings-sidebar">
-                    <div class="ranking-card">
-                        <h3>Yuristlar reytingi</h3>
-                        <div id="lawyerRankings"><div style="color:var(--fg-3); font-size:12px;">Yuklanmoqda...</div></div>
-                    </div>
-                    <div class="ranking-card">
-                        <h3 class="student-title">Studentlar reytingi</h3>
-                        <div id="studentRankings"><div style="color:var(--fg-3); font-size:12px;">Yuklanmoqda...</div></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+            </main>
         </div><!-- /tab-view jamoa -->
 
         <!-- TAB: AI (Master only) -->
@@ -7727,8 +7697,8 @@
             <span class="tab-label">Asosiy</span>
         </button>
         <button class="tab-bar-item" data-tab="jamoa" onclick="switchTab('jamoa')">
-            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <span class="tab-label">Jamoa</span>
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4V2M16 4V2M3 9h18"/><path d="M8 13h3M8 17h6"/></svg>
+            <span class="tab-label">Workspace</span>
         </button>
         <button class="tab-bar-item" data-tab="chat" onclick="switchTab('chat')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -7937,6 +7907,7 @@
     <!-- Old chat panel kept as hidden placeholder for JS compatibility -->
     <div class="chat-panel" id="chatPanel" style="display:none !important;"></div>
 
+    <script src="./js/workspace.js"></script>
     <script>
         // ========== TAB NAVIGATION SYSTEM ==========
         let currentTab = 'home';
@@ -7984,6 +7955,10 @@
                 if (typeof aiHistoryLoaded !== 'undefined' && !aiHistoryLoaded && typeof loadAiChatHistory === 'function') {
                     loadAiChatHistory();
                 }
+            }
+
+            if (tabName === 'jamoa' && window.JuristWorkspace) {
+                window.JuristWorkspace.activate();
             }
 
             if (tabName === 'sorov') {
@@ -8100,6 +8075,7 @@
                 const data = await response.json();
                 if (!data || !data.role) return;
                 currentUser = data;
+                if (window.JuristWorkspace) window.JuristWorkspace.setCurrentUser(data);
 
                 const name = data.fullName || data.username || '';
                 const initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
@@ -12181,7 +12157,10 @@
                 docFlowContinuationContext = {
                     question: String(continuationContext.question || '').slice(0, 5000),
                     answer: String(continuationContext.answer || '').slice(0, 12000),
-                    selectedAction: String(continuationContext.selectedAction || '').slice(0, 300)
+                    selectedAction: String(continuationContext.selectedAction || '').slice(0, 300),
+                    workspaceId: /^[0-9a-f-]{36}$/i.test(String(continuationContext.workspaceId || '')) ? String(continuationContext.workspaceId) : null,
+                    taskId: /^[0-9a-f-]{36}$/i.test(String(continuationContext.taskId || '')) ? String(continuationContext.taskId) : null,
+                    sourceAiRunId: /^[0-9a-f-]{36}$/i.test(String(continuationContext.sourceAiRunId || '')) ? String(continuationContext.sourceAiRunId) : null
                 };
             }
             if (t === '__custom') { var v = prompt('Hujjat turini yozing:'); if (!v || !v.trim()) return; t = v.trim(); }
@@ -12322,6 +12301,29 @@
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
                 if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring')); return; }
                 renderDocMessage({ rawTitle: docType, html: d.html });
+                if (continuation && continuation.workspaceId) {
+                    try {
+                        var plainHolder = document.createElement('div');
+                        plainHolder.innerHTML = d.html;
+                        var workspaceSave = await fetch('/api/workspaces/' + encodeURIComponent(continuation.workspaceId) + '/documents', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({
+                                taskId: continuation.taskId || null,
+                                title: docType,
+                                kind: 'generated',
+                                contentText: (plainHolder.textContent || plainHolder.innerText || '').trim(),
+                                contentJson: { html: d.html, continuation: { question: continuation.question, selectedAction: continuation.selectedAction } },
+                                sourceAiRunId: continuation.sourceAiRunId || null
+                            })
+                        });
+                        if (workspaceSave.ok) docInfoCard('Hujjat Workspace vazifasiga avtomatik biriktirildi.');
+                        else console.warn('[Workspace] Generated document could not be attached:', await workspaceSave.text());
+                    } catch (workspaceSaveError) {
+                        console.warn('[Workspace] Generated document attachment failed:', workspaceSaveError.message);
+                    }
+                }
             } catch (e) {
                 var t2 = document.getElementById('aiChatTyping'); if (t2) t2.remove();
                 docInfoCard('❌ Tarmoq xatoligi — qayta urinib ko\'ring.');
