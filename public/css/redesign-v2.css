@@ -349,6 +349,8 @@ input::placeholder, textarea::placeholder { color: var(--jai-muted-dim) !importa
 .cta-band .hero-actions { width: min(100%, 300px); margin-inline: auto; }
 .cta-band .btn-primary {
   width: 100%;
+  justify-content: center;
+  text-align: center;
   color: #10203a !important;
   border-color: rgba(255,255,255,.84) !important;
   background: #f8fafc !important;
@@ -468,8 +470,31 @@ main.shell h1 { max-width: 760px; font-size: clamp(42px, 5.5vw, 68px) !important
     linear-gradient(145deg, #0b1021, #10182d) !important;
 }
 .hero-panel::before, .hero-panel::after { opacity: .55 !important; filter: blur(12px); }
+.hero-panel::before,
+.hero-panel::after { pointer-events: none; }
+html:not([data-theme="dark"]) .hero-panel::before {
+  background: rgba(91, 140, 255, .11) !important;
+  border-color: rgba(147, 183, 201, .10) !important;
+  opacity: .42 !important;
+  filter: blur(20px) !important;
+}
+html:not([data-theme="dark"]) .hero-panel::after {
+  background: rgba(31, 194, 170, .075) !important;
+  border-color: rgba(31, 194, 170, .08) !important;
+  opacity: .34 !important;
+  filter: blur(22px) !important;
+}
 .hero-tagline, .hero-seal { color: #aeb8cb !important; }
-.form-panel { color: var(--jai-ink) !important; background: transparent !important; }
+.form-panel {
+  display: flex !important;
+  flex-direction: column;
+  color: var(--jai-ink) !important;
+  background: transparent !important;
+}
+.form-panel > .login-container {
+  width: 100%;
+  margin-block: auto;
+}
 .form-heading { color: var(--jai-ink) !important; font-family: 'Space Grotesk', sans-serif !important; font-weight: 600 !important; letter-spacing: -.045em !important; }
 .form-subtitle, .switch-link, .reg-divider { color: var(--jai-muted) !important; }
 .form-group input, .login-card input[type="text"], .login-card input[type="password"] {
@@ -487,6 +512,20 @@ main.shell h1 { max-width: 760px; font-size: clamp(42px, 5.5vw, 68px) !important
   border-color: var(--jai-line) !important;
   border-radius: 14px !important;
   background: color-mix(in srgb, var(--jai-panel-hover) 46%, transparent) !important;
+}
+.register-form .agreement-item {
+  min-height: 46px;
+  padding: 10px 14px !important;
+  gap: 10px;
+  box-sizing: border-box;
+}
+.register-form .agreement-item .check-icon {
+  flex: 0 0 20px;
+}
+[data-theme="dark"] .register-form .agreement-item input:checked + .check-icon {
+  color: var(--jai-canvas) !important;
+  border-color: var(--jai-brand) !important;
+  background: var(--jai-brand) !important;
 }
 .google-reg-toggle:hover, .reg-social-btn:hover:not(:disabled), .telegram-btn:hover {
   color: var(--jai-brand) !important;
@@ -833,6 +872,10 @@ body > .container > header {
   .search-wrap, .find { grid-column: auto !important; }
   .login-card { display: block !important; width: min(100% - 20px, 620px) !important; margin-block: 10px !important; }
   .hero-panel { min-height: 180px !important; border-right: 0 !important; border-bottom: 1px solid var(--jai-line) !important; }
+  .login-card:has(.login-container[data-view="register"]) .hero-panel {
+    align-items: center !important;
+    text-align: center;
+  }
   .hero-logo .img-icon { height: 44px !important; }
   .form-panel { padding: 36px 22px 32px !important; }
   .btn-row, .login-form [style*="display:flex"], .register-form [style*="display:flex"] { flex-wrap: wrap; }
