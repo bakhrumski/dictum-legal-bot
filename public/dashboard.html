@@ -7973,6 +7973,8 @@
 
             if (tabName === 'jamoa' && window.JuristWorkspace) {
                 window.JuristWorkspace.activate();
+            } else if (window.JuristWorkspace && typeof window.JuristWorkspace.deactivate === 'function') {
+                window.JuristWorkspace.deactivate();
             }
 
             if (tabName === 'sorov') {

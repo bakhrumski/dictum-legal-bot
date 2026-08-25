@@ -757,6 +757,7 @@
     function render() {
         if (!root) root = document.getElementById('workspaceApp');
         if (!root) return;
+        document.body.classList.toggle('workspace-chat-open', !!(state.workspace && state.chatOpen));
         if (state.loading && !state.activated) {
             root.innerHTML='<div class="workspace-boot"><span class="workspace-spinner" aria-hidden="true"></span><span>'+esc(t('loading'))+'</span></div>';
             return;
@@ -2016,6 +2017,7 @@
 
     global.JuristWorkspace={
         activate:activate,
+        deactivate:function(){document.body.classList.remove('workspace-chat-open');},
         setCurrentUser:setCurrentUser,
         isPreviewMode:function(){return previewMode;},
         openTask:openTask,

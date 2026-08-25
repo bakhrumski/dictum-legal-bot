@@ -297,6 +297,7 @@ function transactionalPool(handler) {
       '20260825_004_workspace_entitlements_chat.sql',
       '20260825_005_workspace_master_owner.sql',
       '20260825_006_workspace_open_invitations.sql',
+      '20260825_007_workspace_invitation_membership_guard.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
@@ -332,6 +333,9 @@ function transactionalPool(handler) {
     const openInvitations = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260825_006_workspace_open_invitations.sql'), 'utf8');
     assert.ok(openInvitations.includes('num_nonnulls(target_email, target_username) <= 1'));
     assert.ok(openInvitations.includes('(NEW.target_email IS NULL AND NEW.target_username IS NULL)'));
+    const invitationGuard = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260825_007_workspace_invitation_membership_guard.sql'), 'utf8');
+    assert.ok(invitationGuard.includes('Account is already a workspace member'));
+    assert.ok(invitationGuard.includes('wm.workspace_id = NEW.workspace_id'));
   });
 
   await test('Phase 1 routes and fatal migration guard are mounted without legacy FK rewrites', () => {
@@ -357,6 +361,7 @@ function transactionalPool(handler) {
     const dashboard = fs.readFileSync(path.join(__dirname, '..', 'public', 'dashboard.html'), 'utf8');
     const frontend = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'workspace.js'), 'utf8');
     const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'workspace.css'), 'utf8');
+    const redesignStyles = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'redesign-v2.css'), 'utf8');
     const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'workspace', 'routes.js'), 'utf8');
     assert.ok(dashboard.includes('id="workspaceApp"'));
     assert.ok(dashboard.includes('./js/workspace.js'));
@@ -384,6 +389,17 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes('function datePickerField('), 'Workspace date fields need the shared custom date picker');
     assert.ok(styles.includes('.ws-date-menu {'), 'Workspace date popovers need dashboard-native styling');
     assert.ok(!frontend.includes('type="date"'), 'browser-localized native date popovers must not be used');
+    assert.ok(frontend.includes("document.body.classList.toggle('workspace-chat-open'"), 'open team chat must reserve space for the bottom navigation');
+    assert.ok(styles.includes('.ws-workspace-layout.chat-open .ws-filters'), 'chat-open filters need their own responsive row');
+    assert.ok(styles.includes('white-space: nowrap; cursor: pointer;'), 'view labels must not wrap when chat is open');
+    assert.ok(redesignStyles.includes('body.workspace-chat-open .bottom-tab-bar'), 'open chat must move or hide the redesigned bottom navigation');
+
+    const invitePage = fs.readFileSync(path.join(__dirname, '..', 'public', 'workspace-invite.html'), 'utf8');
+    assert.ok(invitePage.includes('Ushbu hisob bilan qo‘shilish'), 'invite acceptance must require explicit account confirmation');
+    assert.ok(invitePage.includes('Boshqa hisob bilan kirish'), 'invitees must be able to switch accounts before acceptance');
+    assert.ok(!invitePage.includes("return request('/api/workspace-invitations/'+encodeURIComponent(token)+'/accept"), 'invite inspection must not auto-accept a bearer link');
+    assert.ok(routes.includes('workspace_already_member'), 'the API must reject invitations accepted by existing members');
+    assert.ok(routes.includes('acceptingAccount'), 'invite inspection must identify the currently authenticated account');
     assert.ok(routes.includes("zoomLevels: ['day', 'week', 'month', 'quarter']"), 'timeline API must advertise daily zoom');
     assert.ok(frontend.includes('workspace-ai-next-action'), 'Workspace AI must expose the main legal next-step flow');
     assert.ok(frontend.includes("api('POST','/jurist-feedback'"), 'Workspace AI must use the platform feedback loop');
