@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Workspace taklifnomasi — JuristAI</title>
+  <link rel="stylesheet" href="/css/design-tokens.css">
+  <style>
+    :root{color-scheme:light;--page:#f5f7fb;--card:#fff;--ink:#121a2a;--muted:#68748a;--line:#dfe4ed;--brand:#2d6cff}
+    [data-theme=dark]{color-scheme:dark;--page:#080c19;--card:#0e1424;--ink:#f7f9ff;--muted:#99a4b9;--line:#242d41;--brand:#69a7ff}
+    *{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at 20% 10%,rgba(45,108,255,.12),transparent 38%),var(--page);color:var(--ink);font-family:var(--font-sans,Inter,Arial,sans-serif)}
+    .card{width:min(620px,100%);padding:clamp(28px,6vw,54px);border:1px solid var(--line);border-radius:26px;background:var(--card);box-shadow:0 26px 80px -46px rgba(10,24,54,.5);text-align:center}.logo{height:52px;width:auto;margin-bottom:26px}.mark{width:58px;height:58px;display:grid;place-items:center;margin:0 auto 18px;border-radius:18px;background:rgba(45,108,255,.1);color:var(--brand);font-size:28px}h1{margin:0;font-size:clamp(27px,5vw,40px);letter-spacing:-.04em}p{margin:13px auto 0;max-width:480px;color:var(--muted);line-height:1.62}.actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:26px}.btn{min-height:48px;display:inline-flex;align-items:center;justify-content:center;padding:0 20px;border:1px solid var(--line);border-radius:13px;color:var(--ink);background:transparent;text-decoration:none;font:inherit;font-weight:700;cursor:pointer}.btn.primary{border-color:var(--brand);color:#fff;background:#2d6cff}.btn[disabled]{opacity:.5;cursor:wait}.status{margin-top:18px;padding:12px;border-radius:12px;background:rgba(45,108,255,.08);font-size:13px}.status.error{color:#a82438;background:rgba(168,36,56,.1)}.status.success{color:#05705b;background:rgba(5,112,91,.1)}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <img class="logo" src="/juristAI_logo.png" alt="JuristAI">
+    <div class="mark" aria-hidden="true">◇</div>
+    <h1>Workspace taklifnomasi</h1>
+    <p>Siz JuristAI jamoaviy ish maydoniga taklif qilindingiz. Taklif qilingan a’zo uchun kamida faol Silver tarifi talab qilinadi.</p>
+    <div id="status" class="status">Taklif tekshirilmoqda…</div>
+    <div class="actions" id="actions"></div>
+  </main>
+  <script>
+    (function(){
+      if(localStorage.getItem('dictum-theme')==='dark')document.documentElement.setAttribute('data-theme','dark');
+      var token=new URLSearchParams(location.search).get('token')||'';
+      var status=document.getElementById('status'),actions=document.getElementById('actions');
+      function loginUrl(register){var returnTo='/workspace-invite.html?token='+encodeURIComponent(token);return '/login.html?'+(register?'register=1&':'')+'invite='+encodeURIComponent(token)+'&redirect='+encodeURIComponent(returnTo);}
+      function show(message,kind,buttons){status.textContent=message;status.className='status '+(kind||'');actions.innerHTML=buttons||'';}
+      if(!token){show('Taklif havolasi noto‘g‘ri.','error','<a class="btn" href="/index.html">Bosh sahifa</a>');return;}
+      sessionStorage.setItem('juristai-workspace-invite',token);
+      fetch('/api/workspace-invitations/'+encodeURIComponent(token)+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin'})
+        .then(async function(r){var d=await r.json().catch(function(){return {}});if(r.ok)return d;var e=new Error(d.message||d.error||'Taklifni qabul qilib bo‘lmadi');e.status=r.status;e.code=d.code;e.details=d.details;throw e;})
+        .then(function(){sessionStorage.removeItem('juristai-workspace-invite');show('Taklif qabul qilindi. Workspace ochilmoqda…','success');setTimeout(function(){location.href='/dashboard.html?tab=jamoa'},800);})
+        .catch(function(e){
+          if(e.status===401){show('Davom etish uchun JuristAI hisobiga kiring yoki Telegram orqali ro‘yxatdan o‘ting.','', '<a class="btn primary" href="'+loginUrl(false)+'">Telegram orqali kirish</a><a class="btn" href="'+loginUrl(true)+'">Ro‘yxatdan o‘tish</a>');return;}
+          if(e.status===402){show('Workspace’ga qo‘shilish uchun kamida Silver tarifini faollashtiring. Taklif saqlanadi.','', '<a class="btn primary" href="/tariff.html?invite='+encodeURIComponent(token)+'&minimum=silver">Silver tarifini tanlash</a>');return;}
+          show(e.message,'error','<a class="btn" href="/index.html">Bosh sahifa</a>');
+        });
+    })();
+  </script>
+</body>
+</html>

@@ -866,6 +866,13 @@
     </script>
     <link rel="stylesheet" href="/css/redesign-v2.css">
     <script src="/js/redesign-v2.js" defer></script>
+    <style>
+        .legacy-otp-controls { display: none !important; }
+        [data-theme="dark"] #loginOtpVerifyBtn,
+        [data-theme="dark"] #otpVerifyBtn { color: #071326 !important; background: #77a9ff !important; }
+        [data-theme="dark"] #twofaBtn { color: #071326 !important; background: #77a9ff !important; }
+        [data-theme="dark"] .agreement-item input:checked + .check-icon { color: #071326 !important; background: #77a9ff !important; border-color: #77a9ff !important; }
+    </style>
 </head>
 <body>
     <div class="login-card">
@@ -931,8 +938,8 @@
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
                                 Telegram botni oching
                             </a>
-                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Botdan kelgan 4 raqamli kodni kiriting:</p>
-                            <div style="display:flex;gap:8px;align-items:center;justify-content:center;">
+                            <p class="legacy-otp-controls" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Botdan kelgan 4 raqamli kodni kiriting:</p>
+                            <div class="legacy-otp-controls" style="display:flex;gap:8px;align-items:center;justify-content:center;">
                                 <input type="text" id="loginOtpInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000"
                                     style="width:140px;font-size:24px;text-align:center;letter-spacing:8px;padding:10px 8px;border:2px solid var(--border,rgba(0,0,0,0.15));border-radius:10px;background:var(--input-bg,#fff);color:var(--text-main,#111);outline:none;"
                                     onkeydown="if(event.key==='Enter')verifyLoginOtp()">
@@ -994,7 +1001,7 @@
                                 Telegram botni oching
                             </a>
                             <div id="otpStatus" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
-                            <div style="display:flex;gap:8px;align-items:center;justify-content:center;">
+                            <div class="legacy-otp-controls" style="display:flex;gap:8px;align-items:center;justify-content:center;">
                                 <input type="text" id="otpInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000"
                                     style="width:140px;font-size:24px;text-align:center;letter-spacing:8px;padding:10px 8px;border:2px solid var(--border,rgba(0,0,0,0.15));border-radius:10px;background:var(--input-bg,#fff);color:var(--text-main,#111);outline:none;"
                                     onkeydown="if(event.key==='Enter')verifyTelegramOtp()">
@@ -1388,6 +1395,7 @@
             const params = new URLSearchParams(window.location.search);
             const recoverToken = params.get('recover');
             const err = params.get('error');
+            if (params.get('register') === '1') showView('register');
             if (recoverToken) {
                 recoveryToken = recoverToken;
                 showView('recovery');
@@ -1600,6 +1608,37 @@
 
         // Telegram login (OTP via @juristAI_registration_bot)
         var _loginToken = null;
+        var _telegramAuthPoll = null;
+
+        function postAuthDestination(defaultPath) {
+            const params = new URLSearchParams(window.location.search);
+            const invite = params.get('invite');
+            const requested = params.get('redirect');
+            if (invite) sessionStorage.setItem('juristai-workspace-invite', invite);
+            if (requested && requested.charAt(0) === '/' && !requested.startsWith('//')) return requested;
+            if (invite) return '/workspace-invite.html?token=' + encodeURIComponent(invite);
+            return defaultPath;
+        }
+
+        function pollTelegramApproval(mode, token, onApproved, statusEl) {
+            clearInterval(_telegramAuthPoll);
+            var attempts = 0;
+            _telegramAuthPoll = setInterval(async function () {
+                attempts += 1;
+                try {
+                    const resp = await fetch('/api/telegram-auth/status/' + mode + '/' + token);
+                    const data = await resp.json();
+                    if (data.approved) {
+                        clearInterval(_telegramAuthPoll);
+                        if (statusEl) statusEl.textContent = 'Tasdiqlandi. Kirish yakunlanmoqda…';
+                        onApproved();
+                    } else if (data.expired || attempts > 120) {
+                        clearInterval(_telegramAuthPoll);
+                        if (statusEl) statusEl.textContent = 'Tasdiqlash muddati tugadi. Qayta urinib ko‘ring.';
+                    }
+                } catch (_error) { /* transient network errors are retried */ }
+            }, 1500);
+        }
 
         async function startTelegramLogin() {
             const otpBlock = document.getElementById('loginOtpBlock');
@@ -1616,19 +1655,20 @@
                 const botUsername = data.botUsername || 'juristAI_registration_bot';
                 const deepLink = 'https://t.me/' + botUsername + '?start=login_' + _loginToken;
                 document.getElementById('loginBotLink').href = deepLink;
-                otpStatus.textContent = 'Botdan kelgan 4 raqamli kodni kiriting:';
-                document.getElementById('loginOtpInput').value = '';
+                otpStatus.textContent = 'Telegramda “Start” ni bosing va ruxsat bering. Bu sahifa avtomatik davom etadi.';
+                window.open(deepLink, '_blank', 'noopener');
+                pollTelegramApproval('login', _loginToken, function(){ verifyLoginOtp('APPROVED'); }, otpStatus);
             } catch(err) {
                 otpStatus.innerHTML = '<span style="color:#d9534f;">' + (err.message || 'Xatolik') + '</span>';
             }
         }
 
-        async function verifyLoginOtp() {
-            const code = document.getElementById('loginOtpInput').value.trim();
+        async function verifyLoginOtp(approvedCode) {
+            const code = approvedCode || document.getElementById('loginOtpInput').value.trim();
             const otpError = document.getElementById('loginOtpError');
             const verifyBtn = document.getElementById('loginOtpVerifyBtn');
             otpError.style.display = 'none';
-            if (!code || code.length !== 4) {
+            if (!approvedCode && (!code || code.length !== 4)) {
                 otpError.textContent = '4 raqamli kodni to\'liq kiriting';
                 otpError.style.display = 'block';
                 return;
@@ -1648,7 +1688,7 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    window.location.href = data.redirect || '/dashboard.html';
+                    window.location.href = postAuthDestination(data.redirect || '/dashboard.html');
                 } else {
                     otpError.textContent = data.error || 'Xatolik yuz berdi';
                     otpError.style.display = 'block';
@@ -1688,11 +1728,12 @@
                 const botUsername = data.botUsername || 'juristAI_registration_bot';
                 const deepLink = 'https://t.me/' + botUsername + '?start=reg_' + _regToken;
                 document.getElementById('regBotLink').href = deepLink;
-                otpStatus.textContent = 'Botdan kelgan 4 raqamli kodni kiriting:';
-                document.getElementById('otpInput').value = '';
+                otpStatus.textContent = 'Telegramda “Start” ni bosing va ruxsat bering. Bu sahifa avtomatik davom etadi.';
                 otpBlock.style.display = 'block';
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
+                window.open(deepLink, '_blank', 'noopener');
+                pollTelegramApproval('register', _regToken, function(){ verifyTelegramOtp('APPROVED'); }, otpStatus);
             } catch(err) {
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
@@ -1701,12 +1742,12 @@
             }
         }
 
-        async function verifyTelegramOtp() {
-            const code = document.getElementById('otpInput').value.trim();
+        async function verifyTelegramOtp(approvedCode) {
+            const code = approvedCode || document.getElementById('otpInput').value.trim();
             const otpError = document.getElementById('otpError');
             const verifyBtn = document.getElementById('otpVerifyBtn');
             otpError.style.display = 'none';
-            if (!code || code.length !== 4) {
+            if (!approvedCode && (!code || code.length !== 4)) {
                 otpError.textContent = '4 raqamli kodni to\'liq kiriting';
                 otpError.style.display = 'block';
                 return;
@@ -1726,7 +1767,11 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    window.location.href = data.redirect || '/tariff.html';
+                    const params = new URLSearchParams(window.location.search);
+                    const invite = params.get('invite');
+                    window.location.href = invite
+                        ? '/tariff.html?invite=' + encodeURIComponent(invite) + '&minimum=silver'
+                        : postAuthDestination(data.redirect || '/tariff.html');
                 } else {
                     otpError.textContent = data.error === 'sinov_used'
                         ? 'Bu qurilmada yoki Telegram hisobda Sinov tarifi allaqachon ishlatilgan.'

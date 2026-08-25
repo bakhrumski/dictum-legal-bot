@@ -10,6 +10,16 @@ function isActivePlatinum(row) {
   return new Date(row.tariff_expires_at).getTime() >= Date.now();
 }
 
+function planWeight(plan) {
+  return { silver: 1, gold: 2, platinum: 3 }[String(plan || '').toLowerCase()] || 0;
+}
+
+function isActivePaidPlan(row, minimumPlan = 'silver') {
+  if (!row || planWeight(row.member_tariff_plan || row.tariff_plan) < planWeight(minimumPlan)) return false;
+  const expiresAt = row.member_tariff_expires_at || row.tariff_expires_at;
+  return !expiresAt || new Date(expiresAt).getTime() >= Date.now();
+}
+
 async function getWorkspaceAccess(db, workspaceId, userId) {
   const result = await db.query(
     `SELECT w.id,
@@ -20,11 +30,14 @@ async function getWorkspaceAccess(db, workspaceId, userId) {
             w.deleted_at,
             wm.role,
             owner.tariff_plan,
-            owner.tariff_expires_at
+            owner.tariff_expires_at,
+            member_account.tariff_plan AS member_tariff_plan,
+            member_account.tariff_expires_at AS member_tariff_expires_at
        FROM workspaces w
        JOIN workspace_members wm
          ON wm.workspace_id = w.id AND wm.user_id = $2
        JOIN admins owner ON owner.id = w.owner_id
+       JOIN admins member_account ON member_account.id = wm.user_id
       WHERE w.id = $1`,
     [workspaceId, userId]
   );
@@ -34,12 +47,14 @@ async function getWorkspaceAccess(db, workspaceId, userId) {
     throw new WorkspaceError(404, 'workspace_not_found', 'Workspace topilmadi');
   }
 
-  return { ...access, isActive: isActivePlatinum(access) };
+  const ownerActive = isActivePlatinum(access);
+  const memberActive = access.role === 'owner' || isActivePaidPlan(access, 'silver');
+  return { ...access, ownerActive, memberActive, isActive: ownerActive && memberActive };
 }
 
 async function requireWorkspaceAccess(db, workspaceId, userId, options = {}) {
   const minimumRole = options.minimumRole || 'viewer';
-  const requireActive = options.requireActive === true;
+  const requireActive = options.requireActive !== false;
   const access = await getWorkspaceAccess(db, workspaceId, userId);
 
   if ((ROLE_WEIGHT[access.role] || 0) < ROLE_WEIGHT[minimumRole]) {
@@ -50,7 +65,9 @@ async function requireWorkspaceAccess(db, workspaceId, userId, options = {}) {
     throw new WorkspaceError(
       402,
       'workspace_platinum_required',
-      'Workspace’da o‘zgartirish kiritish uchun Owner’ning faol Platinum tarifi kerak'
+      access.ownerActive
+        ? 'Workspace’dan foydalanish uchun kamida faol Silver tarifi kerak'
+        : 'Workspace’dan foydalanish uchun Owner’ning faol Platinum tarifi kerak'
     );
   }
 
@@ -91,6 +108,7 @@ async function withWorkspaceTransaction(pool, actorId, callback) {
 module.exports = {
   ROLE_WEIGHT,
   getWorkspaceAccess,
+  isActivePaidPlan,
   isActivePlatinum,
   requireTask,
   requireWorkspaceAccess,
