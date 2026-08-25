@@ -1636,6 +1636,14 @@
             return defaultPath;
         }
 
+        // Keep an open Workspace invitation alive while the user completes any
+        // authentication method, including OAuth providers that return directly
+        // to the dashboard.
+        (function preserveWorkspaceInvitation() {
+            const invite = new URLSearchParams(window.location.search).get('invite');
+            if (invite) sessionStorage.setItem('juristai-workspace-invite', invite);
+        })();
+
         function pollTelegramApproval(mode, token, onApproved, statusEl) {
             clearInterval(_telegramAuthPoll);
             var attempts = 0;
@@ -1783,11 +1791,7 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    const params = new URLSearchParams(window.location.search);
-                    const invite = params.get('invite');
-                    window.location.href = invite
-                        ? '/tariff.html?invite=' + encodeURIComponent(invite) + '&minimum=silver'
-                        : postAuthDestination(data.redirect || '/tariff.html');
+                    window.location.href = postAuthDestination(data.redirect || '/dashboard.html');
                 } else {
                     otpError.textContent = data.error === 'sinov_used'
                         ? 'Bu qurilmada yoki Telegram hisobda Sinov tarifi allaqachon ishlatilgan.'

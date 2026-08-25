@@ -296,6 +296,7 @@ function transactionalPool(handler) {
       '20260822_003_workspace_corpus_revision.sql',
       '20260825_004_workspace_entitlements_chat.sql',
       '20260825_005_workspace_master_owner.sql',
+      '20260825_006_workspace_open_invitations.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
@@ -328,6 +329,9 @@ function transactionalPool(handler) {
     const masterOwner = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260825_005_workspace_master_owner.sql'), 'utf8');
     assert.ok(masterOwner.includes("a.role IN ('user', 'master')"));
     assert.ok(masterOwner.includes("lower(COALESCE(a.tariff_plan, '')) = 'platinum'"));
+    const openInvitations = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260825_006_workspace_open_invitations.sql'), 'utf8');
+    assert.ok(openInvitations.includes('num_nonnulls(target_email, target_username) <= 1'));
+    assert.ok(openInvitations.includes('(NEW.target_email IS NULL AND NEW.target_username IS NULL)'));
   });
 
   await test('Phase 1 routes and fatal migration guard are mounted without legacy FK rewrites', () => {
@@ -357,6 +361,7 @@ function transactionalPool(handler) {
     assert.ok(dashboard.includes('id="workspaceApp"'));
     assert.ok(dashboard.includes('./js/workspace.js'));
     assert.ok(dashboard.includes('<span class="tab-label">Workspace</span>'));
+    assert.ok(dashboard.includes("hasPendingWorkspaceInvite ? 'jamoa'"), 'pending invitations must resume in Workspace after login');
     assert.ok(frontend.includes("channel.on('postgres_changes'"));
     assert.ok(frontend.includes("channel.on('presence'"));
     assert.ok(frontend.includes("storage.from('workspace-documents').upload"));

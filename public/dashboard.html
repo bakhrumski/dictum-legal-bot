@@ -17489,8 +17489,13 @@
                 if (addBtn) addBtn.style.display = 'inline-block';
                 loadOperationsOverview();
             }
-            // Restore last active tab (validate it exists and is visible)
-            var savedTab = localStorage.getItem('dictum-active-tab');
+            // An invitation must resume in Workspace after every supported
+            // authentication path. A direct ?tab= request takes precedence over
+            // the last tab the user visited.
+            var requestedTab = new URLSearchParams(window.location.search).get('tab');
+            var hasPendingWorkspaceInvite = !!sessionStorage.getItem('juristai-workspace-invite')
+                || !!localStorage.getItem('juristai-pending-workspace-invite');
+            var savedTab = requestedTab || (hasPendingWorkspaceInvite ? 'jamoa' : localStorage.getItem('dictum-active-tab'));
             if (savedTab && savedTab !== 'home') {
                 var tabBtn = document.querySelector('.tab-bar-item[data-tab="' + savedTab + '"]');
                 if (tabBtn && tabBtn.style.display !== 'none') {

@@ -159,14 +159,20 @@
         documentsEmpty:'Jamoa uchun birinchi umumiy hujjatni yuklang. Har bir yangi nusxa versiya sifatida saqlanadi.',
         graphEmpty:'Vazifalar yaratilgach, ular va ijrochilar orasidagi bog‘lanish shu yerda ko‘rinadi.',
         graphHint:'Tugunni bosing — vazifa yoki a’zo tafsilotlari ochiladi.', onTime:'Muddatida', approaching:'Muddat yaqin',
-        memberProfile:'A’zo profili', activeTasks:'Faol vazifalar', sendMessage:'Xabar yuborish'
+        memberProfile:'A’zo profili', activeTasks:'Faol vazifalar', sendMessage:'Xabar yuborish',
+        openInviteLabel:'Ochiq taklif havolasi', openInviteHint:'Email yoki username shart emas. Havolani nusxalab Telegram orqali yuboring — undan faqat bir marta foydalaniladi.',
+        invitedWorkspaceTitle:'Workspace taklifnomasi saqlandi', invitedWorkspaceBody:'Siz “{workspace}” Workspace’iga taklif qilindingiz. Qo‘shilish uchun kamida Silver tarifini faollashtiring.',
+        activateInvite:'Taklifni faollashtirish', expiresAt:'Taklif muddati', closeChat:'Jamoa chatini yopish', onlineNow:'hozir onlayn',
+        you:'Siz', inviteAccepted:'Taklif qabul qilindi', viewSilver:'Silver tarifini ko‘rish'
     });
     Object.assign(COPY.ru, {
         graphView:'График', teamChat:'Чат команды', sharedDocuments:'Общие документы', workspaceLockedTitle:'Workspace доступен Platinum или приглашённым активным участникам', workspaceLockedBody:'Чтобы активировать Workspace, оформите Platinum или примите приглашение участника Platinum.', minimumSilver:'Приглашённому участнику нужен активный тариф не ниже Silver.', expiredSubscription:'Подписка истекла', ownerExpired:'Platinum владельца истёк. Workspace временно закрыт для всей команды.', memberExpired:'Ваша подписка истекла. Для доступа нужен активный Silver или выше.', shareTelegram:'Отправить в Telegram', copyInvite:'Копировать ссылку', notifications:'Уведомления', noNotifications:'Новых уведомлений пока нет.', memberSubscriptionExpiredNotice:'Подписка участника истекла', memberSubscriptionExpiredMessage:'Доступ к Workspace заблокирован. После активации тарифа доступ восстановится автоматически.', chatEmpty:'Начните командный чат и при необходимости закрепите задачу.', chatPlaceholder:'Сообщение команде…', pinnedTask:'Закреплённая задача', noPinnedTask:'Без задачи', documentsEmpty:'Загрузите первый общий документ. Новые копии сохраняются как версии.', graphEmpty:'После создания задач здесь появятся связи между задачами и исполнителями.', graphHint:'Нажмите на узел, чтобы открыть задачу или профиль.', onTime:'В срок', approaching:'Срок близко', memberProfile:'Профиль участника', activeTasks:'Активные задачи', sendMessage:'Отправить'
     });
+    Object.assign(COPY.ru, {openInviteLabel:'Открытая ссылка-приглашение',openInviteHint:'Email и username не нужны. Скопируйте ссылку и отправьте её в Telegram — она используется только один раз.',invitedWorkspaceTitle:'Приглашение в Workspace сохранено',invitedWorkspaceBody:'Вас пригласили в Workspace «{workspace}». Для вступления активируйте тариф Silver или выше.',activateInvite:'Активировать приглашение',expiresAt:'Срок приглашения',closeChat:'Закрыть чат команды',onlineNow:'сейчас онлайн',you:'Вы',inviteAccepted:'Приглашение принято',viewSilver:'Посмотреть Silver'});
     Object.assign(COPY.en, {
         graphView:'Graph', teamChat:'Team chat', sharedDocuments:'Shared documents', workspaceLockedTitle:'Workspace is for Platinum or invited active members', workspaceLockedBody:'You must be a Platinum member to activate Workspace or be added by a Platinum member user.', minimumSilver:'An invited member needs an active Silver plan or higher.', expiredSubscription:'Expired subscription', ownerExpired:'The Owner’s Platinum plan expired. Workspace is temporarily unavailable to everyone.', memberExpired:'Your subscription expired. Activate Silver or higher to restore Workspace access.', shareTelegram:'Share via Telegram', copyInvite:'Copy link', notifications:'Notifications', noNotifications:'There are no new notifications yet.', memberSubscriptionExpiredNotice:'A member’s subscription expired', memberSubscriptionExpiredMessage:'Workspace access is blocked. It will be restored automatically after the plan is activated.', chatEmpty:'Start the team conversation and optionally pin a task.', chatPlaceholder:'Message your team…', pinnedTask:'Pinned task', noPinnedTask:'No pinned task', documentsEmpty:'Upload the first shared document. Every update is kept as a new version.', graphEmpty:'Task and assignee relationships will appear here after tasks are created.', graphHint:'Click a node to open the task or member profile.', onTime:'On time', approaching:'Due soon', memberProfile:'Member profile', activeTasks:'Active tasks', sendMessage:'Send'
     });
+    Object.assign(COPY.en, {openInviteLabel:'Open invitation link',openInviteHint:'No email or username is needed. Copy the link and send it through Telegram — it can only be used once.',invitedWorkspaceTitle:'Workspace invitation saved',invitedWorkspaceBody:'You were invited to “{workspace}”. Activate Silver or higher to join.',activateInvite:'Activate invitation',expiresAt:'Invitation expiry',closeChat:'Close team chat',onlineNow:'online now',you:'You',inviteAccepted:'Invitation accepted',viewSilver:'View Silver'});
 
     var state = {
         language: localStorage.getItem('juristai-workspace-language') || 'uz',
@@ -185,7 +191,10 @@
         memory: [],
         threads: [],
         messages: [],
+        chatOpen: false,
         notifications: [],
+        pendingInvite: null,
+        pendingInviteChecked: false,
         currentTask: null,
         detail: null,
         view: 'list',
@@ -489,6 +498,28 @@
         if (!value) return '';
         var seconds = Math.round((new Date(value).getTime() - Date.now()) / 1000);
         var locale = state.language === 'ru' ? 'ru' : state.language === 'en' ? 'en' : 'uz';
+
+        // Chromium's Uzbek RelativeTimeFormat may fall back to abbreviated
+        // units (for example, "-1 h"). Keep the primary UI language explicit
+        // and natural instead of exposing that locale fallback to users.
+        if (locale === 'uz') {
+            var absoluteSeconds = Math.abs(seconds);
+            var amount;
+            var unit;
+            if (absoluteSeconds < 45) return seconds > 5 ? 'bir necha soniyadan keyin' : 'hozir';
+            if (absoluteSeconds < 3600) {
+                amount = Math.max(1, Math.round(absoluteSeconds / 60));
+                unit = 'daqiqa';
+            } else if (absoluteSeconds < 86400) {
+                amount = Math.max(1, Math.round(absoluteSeconds / 3600));
+                unit = 'soat';
+            } else {
+                amount = Math.max(1, Math.round(absoluteSeconds / 86400));
+                unit = 'kun';
+            }
+            return amount + ' ' + unit + (seconds < 0 ? ' oldin' : 'dan keyin');
+        }
+
         var rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
         if (Math.abs(seconds) < 60) return rtf.format(seconds, 'second');
         var minutes = Math.round(seconds / 60);
@@ -614,7 +645,8 @@
         if (method === 'GET' && path === '/workspaces/' + workspaceId + '/invitations') return { invitations:clone(DEMO.invitations) };
         if (method === 'POST' && path === '/workspaces/' + workspaceId + '/invitations') {
             var invitation = {id:'inv'+Date.now(),role:body.role,status:'pending',expires_at:new Date(Date.now()+Number(body.expiresInHours||72)*3600000).toISOString()};
-            if (String(body.email||'').includes('@')) invitation.invitee_email=body.email; else invitation.invitee_username=body.username;
+            if (body.email) invitation.target_email=body.email;
+            if (body.username) invitation.target_username=body.username;
             DEMO.invitations.unshift(invitation);
             var inviteUrl=global.location.origin+'/workspace-invite/'+invitation.id+'-preview';
             return { invitation:clone(invitation), inviteUrl:inviteUrl, telegramShareUrl:'https://t.me/share/url?url='+encodeURIComponent(inviteUrl) };
@@ -730,13 +762,15 @@
             return;
         }
         if (!state.workspace) {
-            root.innerHTML=renderWorkspaceGate()+renderModal()+renderToastsAnchor();
+            root.innerHTML=renderPendingInvitation()+renderWorkspaceGate()+renderModal()+renderToastsAnchor();
+            enhanceDropdowns(root);
             return;
         }
         var open = state.tasks.filter(function(task){return !['done','cancelled'].includes(task.status);}).length;
         var overdue = state.tasks.filter(isOverdue).length;
         var complete = state.tasks.filter(function(task){return task.status==='done';}).length;
         var unreadNotifications=(state.notifications||[]).filter(function(item){return !item.read_at;}).length;
+        var pendingInviteBanner=renderPendingInvitation();
         root.innerHTML = '<div class="ws-shell">'+
             '<header class="ws-topbar">'+
                 '<div class="ws-topbar-main">'+
@@ -748,7 +782,7 @@
                 '<div class="ws-topbar-actions">'+
                     '<span class="ws-live-badge '+esc(state.realtimeStatus)+'">'+esc(t(state.realtimeStatus==='online'?'live':state.realtimeStatus==='connecting'?'connecting':state.realtimeStatus==='preview'?'preview':'offline'))+'</span>'+
                     '<select class="ws-select ws-language-select" data-action="language" aria-label="'+esc(t('language'))+'"><option value="uz" '+(state.language==='uz'?'selected':'')+'>UZ</option><option value="ru" '+(state.language==='ru'?'selected':'')+'>RU</option><option value="en" '+(state.language==='en'?'selected':'')+'>EN</option></select>'+
-                    '<button class="ws-btn" type="button" data-action="open-chat">'+svg('chat')+'<span>'+esc(t('teamChat'))+'</span></button>'+
+                    '<button class="ws-btn '+(state.chatOpen?'active':'')+'" type="button" data-action="open-chat" aria-expanded="'+state.chatOpen+'">'+svg('chat')+'<span>'+esc(t('teamChat'))+'</span></button>'+
                     '<button class="ws-btn" type="button" data-action="open-shared-documents">'+svg('document')+'<span>'+esc(t('sharedDocuments'))+'</span></button>'+
                     '<button class="ws-btn" type="button" data-action="open-members">'+svg('members')+'<span>'+esc(t('members'))+'</span></button>'+
                     '<button class="ws-btn icon ghost ws-notification-button" type="button" data-action="open-notifications" aria-label="'+esc(t('notifications'))+'" title="'+esc(t('notifications'))+'">'+svg('history')+(unreadNotifications?'<span class="ws-notification-count">'+unreadNotifications+'</span>':'')+'</button>'+
@@ -757,6 +791,8 @@
                     '<button class="ws-btn icon ghost" type="button" data-action="shortcuts" aria-label="'+esc(t('shortcuts'))+'">'+svg('help')+'</button>'+
                 '</div>'+
             '</header>'+
+            pendingInviteBanner+
+            '<div class="ws-workspace-layout '+(state.chatOpen?'chat-open':'')+'"><main class="ws-workspace-main">'+
             (previewMode?'<div class="ws-conflict">'+svg('help',16)+esc(t('previewNotice'))+'</div>':'')+
             (!canWrite()?'<div class="ws-conflict">'+svg('history',16)+'<div><strong>'+esc(t('readOnly'))+'</strong> — '+esc(t('readOnlyReason'))+'</div></div>':'')+
             '<section class="ws-summary" aria-label="'+esc(t('workspace'))+'">'+
@@ -771,11 +807,20 @@
                 renderFilters()+
             '</div>'+
             (state.view==='timeline'?renderTimeline():state.view==='graph'?renderGraph():renderTaskList())+
+            '</main>'+renderChatSidebar()+'</div>'+
         '</div>'+renderTaskDetail()+renderAiPanel()+renderModal()+renderToastsAnchor();
         enhanceDropdowns(root);
+        if(state.chatOpen)scrollChatToLatest();
     }
 
     function renderToastsAnchor() { return ''; }
+
+    function renderPendingInvitation() {
+        var invite=state.pendingInvite;
+        if(!invite)return '';
+        var body=String(t('invitedWorkspaceBody')).replace('{workspace}',invite.workspaceName||t('workspace'));
+        return '<aside class="ws-pending-invite" role="status"><span class="ws-pending-invite-mark">'+svg('members',18)+'</span><div><strong>'+esc(t('invitedWorkspaceTitle'))+'</strong><p>'+esc(body)+'</p><small>'+esc(t('expiresAt'))+': '+esc(isoDate(invite.expiresAt))+'</small></div><div class="ws-pending-invite-actions"><a class="ws-btn" href="/tariff.html?minimum=silver&invite='+encodeURIComponent(invite.token||'')+'">'+esc(t('viewSilver'))+'</a><button class="ws-btn primary" type="button" data-action="activate-pending-invite">'+esc(t('activateInvite'))+'</button></div></aside>';
+    }
 
     function renderWorkspaceGate() {
         var platinum = state.workspaceGate === 'platinum';
@@ -980,7 +1025,6 @@
         if (!state.modal) return '';
         if (state.modal==='task') return renderTaskModal();
         if (state.modal==='members') return renderMembersModal();
-        if (state.modal==='chat') return renderChatModal();
         if (state.modal==='shared-documents') return renderSharedDocumentsModal();
         if (state.modal==='member-profile') return renderMemberProfileModal();
         if (state.modal==='versions') return renderVersionsModal();
@@ -989,8 +1033,8 @@
         return '';
     }
 
-    function modalFrame(title, body, actions) {
-        return '<div class="ws-modal-backdrop" data-action="close-modal"><section class="ws-modal-card" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="ws-modal-header"><h2>'+esc(title)+'</h2><button class="ws-btn icon ghost" type="button" data-action="close-modal" aria-label="'+esc(t('close'))+'">'+svg('close')+'</button></header><div class="ws-modal-body">'+body+'</div>'+(actions?'<footer class="ws-modal-actions">'+actions+'</footer>':'')+'</section></div>';
+    function modalFrame(title, body, actions, extraClass) {
+        return '<div class="ws-modal-backdrop" data-action="close-modal"><section class="ws-modal-card '+esc(extraClass||'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="ws-modal-header"><h2>'+esc(title)+'</h2><button class="ws-btn icon ghost" type="button" data-action="close-modal" aria-label="'+esc(t('close'))+'">'+svg('close')+'</button></header><div class="ws-modal-body">'+body+'</div>'+(actions?'<footer class="ws-modal-actions">'+actions+'</footer>':'')+'</section></div>';
     }
 
     function renderTaskModal() {
@@ -1005,23 +1049,31 @@
             '<div class="ws-field full"><label>'+esc(t('assignees'))+'</label>'+renderPeoplePicker('assigneeIds',[], '')+'</div>'+
             '<label class="ws-person-chip"><input type="checkbox" name="isMilestone">'+esc(t('milestone'))+'</label>'+
         '</div></form>';
-        return modalFrame(t('createTask'),body,'<button class="ws-btn" type="button" data-action="close-modal">'+esc(t('cancel'))+'</button><button class="ws-btn primary" type="submit" form="wsCreateTaskForm">'+esc(t('createTask'))+'</button>');
+        return modalFrame(t('createTask'),body,'<button class="ws-btn" type="button" data-action="close-modal">'+esc(t('cancel'))+'</button><button class="ws-btn primary" type="submit" form="wsCreateTaskForm">'+esc(t('createTask'))+'</button>','ws-task-modal-card');
     }
 
     function renderMembersModal() {
         var inviteResult=state.inviteUrl?'<div class="ws-invite-output"><strong>'+esc(t('invite'))+'</strong><p class="ws-help">'+esc(t('minimumSilver'))+'</p><div class="ws-invite-link"><input class="ws-input" readonly value="'+esc(state.inviteUrl)+'"><button class="ws-btn" type="button" data-action="copy-invite">'+esc(t('copyInvite'))+'</button></div><a class="ws-btn primary ws-telegram-share" target="_blank" rel="noopener" href="'+esc(state.telegramShareUrl||('https://t.me/share/url?url='+encodeURIComponent(state.inviteUrl)))+'">'+svg('send',14)+esc(t('shareTelegram'))+'</a></div>':'';
-        var inviteForm=isOwner()?'<section class="ws-section" style="margin-top:0;padding-top:0;border-top:0"><div class="ws-section-head"><h3>'+esc(t('inviteMember'))+'</h3></div><form data-form="invite"><div class="ws-detail-grid"><div class="ws-field full"><label>'+esc(t('emailOrUsername'))+'</label><input class="ws-input" name="target" required></div><div class="ws-field"><label>'+esc(t('role'))+'</label><select class="ws-select" name="role"><option value="member">'+esc(t('member'))+'</option><option value="viewer">'+esc(t('viewer'))+'</option></select></div><div class="ws-field"><label>'+esc(t('expires'))+'</label><select class="ws-select" name="expiresInHours"><option value="72">'+esc(t('hours72'))+'</option><option value="168">'+esc(t('days7'))+'</option><option value="720">'+esc(t('days30'))+'</option></select></div></div><button class="ws-btn primary" style="margin-top:12px" type="submit">'+esc(t('createInvite'))+'</button></form>'+inviteResult+'</section>':'';
+        var inviteForm=isOwner()?'<section class="ws-section ws-invite-section" style="margin-top:0;padding-top:0;border-top:0"><div class="ws-section-head"><div><h3>'+esc(t('inviteMember'))+'</h3><p class="ws-help">'+esc(t('openInviteHint'))+'</p></div></div><form data-form="invite"><div class="ws-detail-grid"><div class="ws-field"><label>'+esc(t('role'))+'</label><select class="ws-select" name="role"><option value="member">'+esc(t('member'))+'</option><option value="viewer">'+esc(t('viewer'))+'</option></select></div><div class="ws-field"><label>'+esc(t('expires'))+'</label><select class="ws-select" name="expiresInHours"><option value="72">'+esc(t('hours72'))+'</option><option value="168">'+esc(t('days7'))+'</option><option value="720">'+esc(t('days30'))+'</option></select></div></div><button class="ws-btn primary" style="margin-top:12px" type="submit">'+esc(t('createInvite'))+'</button></form>'+inviteResult+'</section>':'';
         var members='<section class="ws-section"><div class="ws-section-head"><h3>'+esc(t('memberManagement'))+'</h3><span class="ws-pill">'+state.members.length+'</span></div>'+state.members.map(function(person){var expired=person.subscription_active===false;return '<div class="ws-document ws-member-row '+(expired?'expired':'')+'"><button class="ws-inline ws-member-identity ws-link-button" type="button" data-action="open-member-profile" data-member-id="'+esc(person.id)+'"><span class="ws-avatar" style="margin:0">'+esc(initials(person))+'</span><div class="ws-member-copy"><div class="ws-document-title">'+esc(personName(person))+'</div><div class="ws-document-meta">@'+esc(person.username||'')+(expired?' · <strong>'+esc(t('expiredSubscription'))+'</strong>':'')+'</div></div></button>'+(isOwner()&&person.role!=='owner'?'<select class="ws-select" style="width:120px;min-height:36px" data-action="change-member-role" data-member-id="'+person.id+'" '+(expired?'disabled':'')+'><option value="member" '+(person.role==='member'?'selected':'')+'>'+esc(t('member'))+'</option><option value="viewer" '+(person.role==='viewer'?'selected':'')+'>'+esc(t('viewer'))+'</option></select>':'<span class="ws-role-badge">'+esc(t(person.role))+'</span>')+'</div>';}).join('')+'</section>';
         var pendingInvitations=(state.invitations||[]).filter(function(inv){return inv.status==='pending';});
-        var invites=isOwner()?'<section class="ws-section"><div class="ws-section-head"><h3>'+esc(t('pendingInvites'))+'</h3></div>'+(pendingInvitations.length?pendingInvitations.map(function(inv){return '<div class="ws-document"><div><div class="ws-document-title">'+esc(inv.invitee_email||('@'+inv.invitee_username))+'</div><div class="ws-document-meta">'+esc(t(inv.role))+' · '+esc(isoDate(inv.expires_at))+'</div></div></div>';}).join(''):'<p class="ws-help">'+esc(t('noPendingInvites'))+'</p>')+'</section>':'';
+        var invites=isOwner()?'<section class="ws-section"><div class="ws-section-head"><h3>'+esc(t('pendingInvites'))+'</h3></div>'+(pendingInvitations.length?pendingInvitations.map(function(inv){var target=inv.target_email||inv.target_username||inv.invitee_email||inv.invitee_username;return '<div class="ws-document"><div><div class="ws-document-title">'+esc(target?('@'+String(target).replace(/^@/,'')):t('openInviteLabel'))+'</div><div class="ws-document-meta">'+esc(t(inv.role))+' · '+esc(isoDate(inv.expires_at))+'</div></div></div>';}).join(''):'<p class="ws-help">'+esc(t('noPendingInvites'))+'</p>')+'</section>':'';
         return modalFrame(t('members'),inviteForm+members+invites,'');
     }
 
-    function renderChatModal() {
-        var messages=state.messages||[];
-        var body='<div class="ws-chat-list">'+(messages.length?messages.map(function(message){return '<article class="ws-chat-message"><span class="ws-avatar">'+esc(initials(message))+'</span><div><div class="ws-comment-head"><strong>'+esc(personName(message))+'</strong><time>'+esc(relativeTime(message.created_at))+'</time></div><div class="ws-comment-body">'+esc(message.body)+'</div>'+(message.pinned_task_id?'<button class="ws-pinned-task" type="button" data-action="open-task-from-modal" data-task-id="'+esc(message.pinned_task_id)+'">'+svg('list',13)+esc(message.pinned_task_title||t('pinnedTask'))+'</button>':'')+'</div></article>';}).join(''):'<div class="ws-empty compact"><p>'+esc(t('chatEmpty'))+'</p></div>')+'</div>'+
-            (canWrite()?'<form class="ws-chat-form" data-form="workspace-message"><textarea class="ws-textarea" name="body" required maxlength="4000" placeholder="'+esc(t('chatPlaceholder'))+'"></textarea><select class="ws-select" name="pinnedTaskId"><option value="">'+esc(t('noPinnedTask'))+'</option>'+state.tasks.map(function(task){return '<option value="'+esc(task.id)+'">'+esc(task.title)+'</option>';}).join('')+'</select><button class="ws-btn primary" type="submit">'+svg('send',14)+esc(t('sendMessage'))+'</button></form>':'');
-        return modalFrame(t('teamChat'),body,'');
+    function renderChatSidebar() {
+        if(!state.chatOpen)return '';
+        var messages=state.messages||[],activeMembers=(state.members||[]).filter(function(member){return member.subscription_active!==false;});
+        return '<div class="ws-chat-mobile-backdrop" data-action="close-chat"></div><aside class="ws-chat-sidebar" aria-label="'+esc(t('teamChat'))+'">'+
+            '<header class="ws-chat-sidebar-header"><div><span class="ws-kicker">JURISTAI WORKSPACE</span><h2>'+esc(t('teamChat'))+'</h2><p>'+activeMembers.length+' '+esc(t('members')).toLowerCase()+' · '+Math.max(1,state.realtimeStatus==='online'?1:0)+' '+esc(t('onlineNow'))+'</p></div><button class="ws-btn icon ghost" type="button" data-action="close-chat" aria-label="'+esc(t('closeChat'))+'">'+svg('close')+'</button></header>'+
+            '<div class="ws-chat-people" aria-label="'+esc(t('members'))+'">'+activeMembers.slice(0,12).map(function(member){return '<button class="ws-chat-person" type="button" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span></button>';}).join('')+(activeMembers.length>12?'<span class="ws-pill">+'+(activeMembers.length-12)+'</span>':'')+'</div>'+
+            '<div class="ws-chat-list" id="wsChatMessageList">'+(messages.length?messages.map(function(message){var own=Number(message.author_id||message.created_by||0)===currentUserId();return '<article class="ws-chat-message '+(own?'own':'')+'"><span class="ws-avatar">'+esc(initials(message))+'</span><div class="ws-chat-bubble"><div class="ws-comment-head"><strong>'+esc(own?t('you'):personName(message))+'</strong><time>'+esc(relativeTime(message.created_at))+'</time></div><div class="ws-comment-body">'+esc(message.body)+'</div>'+(message.pinned_task_id?'<button class="ws-pinned-task" type="button" data-action="open-task-from-chat" data-task-id="'+esc(message.pinned_task_id)+'">'+svg('list',13)+esc(message.pinned_task_title||t('pinnedTask'))+'</button>':'')+'</div></article>';}).join(''):'<div class="ws-empty compact"><div class="ws-empty-icon">'+svg('chat',22)+'</div><p>'+esc(t('chatEmpty'))+'</p></div>')+'</div>'+
+            (canWrite()?'<form class="ws-chat-form" data-form="workspace-message"><textarea class="ws-textarea" name="body" required maxlength="4000" rows="2" placeholder="'+esc(t('chatPlaceholder'))+'"></textarea><div class="ws-chat-compose-actions"><select class="ws-select" name="pinnedTaskId"><option value="">'+esc(t('noPinnedTask'))+'</option>'+state.tasks.map(function(task){return '<option value="'+esc(task.id)+'">'+esc(task.title)+'</option>';}).join('')+'</select><button class="ws-btn primary icon" type="submit" aria-label="'+esc(t('sendMessage'))+'">'+svg('send',17)+'</button></div></form>':'')+
+        '</aside>';
+    }
+
+    function scrollChatToLatest() {
+        global.requestAnimationFrame(function(){var list=root&&root.querySelector('#wsChatMessageList');if(list)list.scrollTop=list.scrollHeight;});
     }
 
     function renderSharedDocumentsModal() {
@@ -1071,14 +1123,63 @@
         currentUser=user||null;
     }
 
-    async function activate() {
+    function clearPendingInvitation() {
+        sessionStorage.removeItem('juristai-workspace-invite');
+        localStorage.removeItem('juristai-pending-workspace-invite');
+        state.pendingInvite=null;
+    }
+
+    function storedPendingInvitation() {
+        var token=sessionStorage.getItem('juristai-workspace-invite')||'';
+        var saved=null;
+        try{saved=JSON.parse(localStorage.getItem('juristai-pending-workspace-invite')||'null');}catch(_error){}
+        if(!token&&saved&&saved.token)token=saved.token;
+        if(saved&&saved.expiresAt&&new Date(saved.expiresAt).getTime()<=Date.now()){clearPendingInvitation();return null;}
+        return token?Object.assign({},saved||{},{token:token}):null;
+    }
+
+    async function resolvePendingInvitation(force) {
+        if(previewMode)return false;
+        if(state.pendingInviteChecked&&!force)return false;
+        state.pendingInviteChecked=true;
+        var stored=storedPendingInvitation();
+        if(!stored||!stored.token)return false;
+        try{
+            var inspectionResponse=await fetch('/api/workspace-invitations/'+encodeURIComponent(stored.token),{headers:{Accept:'application/json'},credentials:'same-origin'});
+            var inspection=await inspectionResponse.json().catch(function(){return{};});
+            var invitation=inspection.invitation||{};
+            if(!inspectionResponse.ok||invitation.available===false){clearPendingInvitation();return false;}
+            try{
+                await api('POST','/workspace-invitations/'+encodeURIComponent(stored.token)+'/accept',{});
+                clearPendingInvitation();
+                toast(t('inviteAccepted'),'success');
+                return true;
+            }catch(error){
+                if(error.status===402){
+                    var details=(error.payload&&error.payload.details)||{};
+                    state.pendingInvite={token:stored.token,workspaceName:details.workspaceName||invitation.workspaceName||stored.workspaceName,workspaceId:details.workspaceId||invitation.workspaceId,expiresAt:details.expiresAt||invitation.expiresAt||stored.expiresAt,minimumPlan:'silver'};
+                    localStorage.setItem('juristai-pending-workspace-invite',JSON.stringify(state.pendingInvite));
+                    return false;
+                }
+                if(error.status===401){state.pendingInvite=Object.assign({},stored,invitation);return false;}
+                if([404,409,410].includes(error.status)){clearPendingInvitation();return false;}
+                throw error;
+            }
+        }catch(error){
+            if(!force)console.warn('[Workspace invitation]',error);
+            return false;
+        }
+    }
+
+    async function activate(force) {
         if (activationPromise) return activationPromise;
         root=document.getElementById('workspaceApp');
         if (!root) return Promise.resolve();
         bindEvents();
+        if(state.activated&&!force){render();return Promise.resolve();}
         state.loading=true;
         render();
-        activationPromise=loadWorkspaces().catch(function(error){
+        activationPromise=(async function(){await resolvePendingInvitation(false);await loadWorkspaces();})().catch(function(error){
             state.loading=false;
             state.workspace=null;
             render();
@@ -1090,6 +1191,11 @@
 
     function entitlementExpiryTimes() {
         var values=[];
+        if(state.pendingInvite&&state.pendingInvite.expiresAt){
+            var invitationExpiry=new Date(state.pendingInvite.expiresAt).getTime();
+            if(Number.isFinite(invitationExpiry)&&invitationExpiry>Date.now())values.push(invitationExpiry);
+            else if(Number.isFinite(invitationExpiry))clearPendingInvitation();
+        }
         (state.workspaces||[]).forEach(function(workspace){
             [workspace.tariff_expires_at,workspace.member_tariff_expires_at].forEach(function(value){
                 var time=value?new Date(value).getTime():NaN;
@@ -1337,7 +1443,15 @@
         }
         if (action==='open-members') {openMembers();return;}
         if (action==='open-notifications') {openNotifications();return;}
-        if (action==='open-chat') {state.modal='chat';render();return;}
+        if (action==='open-chat') {state.chatOpen=!state.chatOpen;render();return;}
+        if (action==='close-chat') {state.chatOpen=false;render();return;}
+        if (action==='open-task-from-chat') {openTask(target.dataset.taskId);return;}
+        if (action==='activate-pending-invite') {
+            var invitedWorkspaceId=state.pendingInvite&&state.pendingInvite.workspaceId;
+            state.pendingInviteChecked=false;
+            resolvePendingInvitation(true).then(function(accepted){if(accepted)return loadWorkspaces(invitedWorkspaceId);render();});
+            return;
+        }
         if (action==='open-shared-documents') {state.modal='shared-documents';render();return;}
         if (action==='open-member-profile') {var member=state.members.find(function(item){return String(item.id)===String(target.dataset.memberId);});if(member){state.modal='member-profile';state.modalData={member:member};render();}return;}
         if (action==='open-task-from-modal') {state.modal=null;state.modalData=null;openTask(target.dataset.taskId);return;}
@@ -1412,6 +1526,7 @@
             if(root&&root.querySelector('.ws-date-picker.open')){closeDatePickers();return;}
             if(state.modal){state.modal=null;state.modalData=null;render();}
             else if(state.ai.open){state.ai.open=false;render();}
+            else if(state.chatOpen){state.chatOpen=false;render();}
             else if(state.currentTask)closeTaskDetail();
             return;
         }
@@ -1527,11 +1642,10 @@
 
     async function createInvitation(form) {
         if(!isOwner())return;
-        var values=formValues(form),target=String(values.target||'').trim(),button=form.querySelector('button[type="submit"]');
+        var values=formValues(form),button=form.querySelector('button[type="submit"]');
         try {
             if(button)button.disabled=true;
             var payload={role:values.role,expiresInHours:Number(values.expiresInHours||72)};
-            if(target.includes('@'))payload.email=target;else payload.username=target.replace(/^@/,'');
             var result=await api('POST','/workspaces/'+state.workspace.id+'/invitations',payload);
             state.inviteUrl=result.inviteUrl;
             state.telegramShareUrl=result.telegramShareUrl||('https://t.me/share/url?url='+encodeURIComponent(result.inviteUrl));

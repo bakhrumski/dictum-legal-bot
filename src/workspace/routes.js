@@ -201,6 +201,33 @@ function mountWorkspaceRoutes(app, options) {
     throw new TypeError('Workspace routes require app, pool, requireAuth and aiService');
   }
 
+  app.get('/api/workspace-invitations/:token', asyncRoute(async (req, res) => {
+    const rawToken = requiredString(req.params.token, 'token', { min: 20, max: 200 });
+    const invitation = (await pool.query(
+      `SELECT i.workspace_id,i.role,i.expires_at,i.accepted_at,i.revoked_at,
+              w.name AS workspace_name,
+              juristai_private.has_workspace_entitlement(w.owner_id) AS workspace_active
+         FROM workspace_invitations i
+         JOIN workspaces w ON w.id=i.workspace_id AND w.deleted_at IS NULL
+        WHERE i.token_hash=$1`,
+      [tokenHash(rawToken)]
+    )).rows[0];
+    if (!invitation) throw new WorkspaceError(404, 'invitation_not_found', 'Taklif topilmadi');
+    const available = !invitation.revoked_at && !invitation.accepted_at
+      && new Date(invitation.expires_at) > new Date();
+    res.json({
+      invitation: {
+        workspaceId: invitation.workspace_id,
+        workspaceName: invitation.workspace_name,
+        role: invitation.role,
+        expiresAt: invitation.expires_at,
+        available,
+        workspaceActive: invitation.workspace_active,
+        minimumPlan: 'silver',
+      },
+    });
+  }));
+
   const router = express.Router();
   router.use(requireAuth);
 
@@ -382,7 +409,13 @@ function mountWorkspaceRoutes(app, options) {
     await requireWorkspaceAccess(pool, workspaceId, actorId(req), { minimumRole: 'owner' });
     const result = await pool.query(
       `SELECT id, target_email, target_username, role, invited_by, expires_at,
-              accepted_by, accepted_at, revoked_at, created_at
+              accepted_by, accepted_at, revoked_at, created_at,
+              CASE
+                WHEN accepted_at IS NOT NULL THEN 'accepted'
+                WHEN revoked_at IS NOT NULL THEN 'revoked'
+                WHEN expires_at <= now() THEN 'expired'
+                ELSE 'pending'
+              END AS status
          FROM workspace_invitations WHERE workspace_id=$1 ORDER BY created_at DESC`,
       [workspaceId]
     );
@@ -394,7 +427,7 @@ function mountWorkspaceRoutes(app, options) {
     const userId = actorId(req);
     const email = optionalString(req.body.email, 'email', { max: 255 });
     const username = optionalString(req.body.username, 'username', { max: 100 });
-    if ((email ? 1 : 0) + (username ? 1 : 0) !== 1) {
+    if ((email ? 1 : 0) + (username ? 1 : 0) > 1) {
       throw new WorkspaceError(400, 'invitation_target', 'Email yoki username’dan faqat bittasini kiriting');
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -402,7 +435,7 @@ function mountWorkspaceRoutes(app, options) {
     }
     const role = oneOf(req.body.role || 'member', 'role', MEMBER_ROLES);
     const expiresInHours = req.body.expiresInHours == null
-      ? 72 : integer(req.body.expiresInHours, 'expiresInHours', { min: 1, max: 168 });
+      ? 72 : integer(req.body.expiresInHours, 'expiresInHours', { min: 1, max: 720 });
     const rawToken = crypto.randomBytes(32).toString('base64url');
     const invitation = await withWorkspaceTransaction(pool, userId, async (db) => {
       await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'owner', requireActive: true });
@@ -411,7 +444,9 @@ function mountWorkspaceRoutes(app, options) {
           WHERE workspace_id=$1 AND accepted_at IS NULL AND revoked_at IS NULL
             AND expires_at<=now()
             AND (($2::text IS NOT NULL AND lower(target_email::text)=lower($2))
-              OR ($3::text IS NOT NULL AND lower(target_username::text)=lower($3)))`,
+              OR ($3::text IS NOT NULL AND lower(target_username::text)=lower($3))
+              OR ($2::text IS NULL AND $3::text IS NULL
+                  AND target_email IS NULL AND target_username IS NULL))`,
         [workspaceId, email, username]
       );
       return (await db.query(
@@ -457,6 +492,7 @@ function mountWorkspaceRoutes(app, options) {
     const accepted = await withWorkspaceTransaction(pool, userId, async (db) => {
       const invite = (await db.query(
         `SELECT i.id,i.workspace_id,i.role,i.expires_at,i.accepted_at,i.revoked_at,
+                w.name AS workspace_name,
                 juristai_private.has_workspace_entitlement(w.owner_id) AS workspace_active
            FROM workspace_invitations i
            JOIN workspaces w ON w.id=i.workspace_id AND w.deleted_at IS NULL
@@ -479,7 +515,11 @@ function mountWorkspaceRoutes(app, options) {
           402,
           'workspace_paid_plan_required',
           'Workspace taklifini faollashtirish uchun kamida faol Silver tarifi kerak',
-          { minimumPlan: 'silver', invitationToken: rawToken }
+          {
+            minimumPlan: 'silver', invitationToken: rawToken,
+            workspaceId: invite.workspace_id, workspaceName: invite.workspace_name,
+            expiresAt: invite.expires_at,
+          }
         );
       }
       const result = await db.query(
