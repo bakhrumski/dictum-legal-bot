@@ -759,6 +759,20 @@ body > .container > header {
   box-shadow: 0 28px 70px -34px rgba(15,23,42,.45) !important;
   backdrop-filter: blur(22px) saturate(145%);
 }
+@media (min-width: 1181px) {
+  body.workspace-chat-open .bottom-tab-bar {
+    left: calc(50% - 230px) !important;
+    transition: left .24s ease !important;
+  }
+}
+@media (max-width: 1180px) {
+  body.workspace-chat-open .bottom-tab-bar {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translate(-50%, calc(100% + 28px)) !important;
+    transition: opacity .18s ease, transform .24s ease !important;
+  }
+}
 .bottom-tab { color: var(--jai-muted) !important; border-radius: 12px !important; }
 .bottom-tab.active { color: var(--jai-brand) !important; background: var(--jai-brand-soft) !important; }
 

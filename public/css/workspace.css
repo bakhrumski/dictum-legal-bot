@@ -498,7 +498,7 @@
     margin-bottom: 14px;
 }
 .ws-view-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--ws-line); border-radius: 13px; background: var(--ws-panel); }
-.ws-view-tab { min-height: 34px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding: 0 13px; border: 0; border-radius: 9px; color: var(--ws-muted); background: transparent; font-size: 12px; font-weight: 600; cursor: pointer; }
+.ws-view-tab { min-height: 34px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding: 0 13px; border: 0; border-radius: 9px; color: var(--ws-muted); background: transparent; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .ws-view-tab.active { color: var(--ws-ink); background: var(--ws-panel-hover); box-shadow: inset 0 0 0 1px var(--ws-line); }
 
 .ws-filters { flex: 1; display: grid; grid-template-columns: minmax(250px, 1.65fr) repeat(3, minmax(160px, .8fr)); gap: 10px; }
@@ -658,13 +658,15 @@
 .ws-workspace-layout { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
 .ws-workspace-layout.chat-open { grid-template-columns: minmax(0, 1fr) minmax(340px, 410px); }
 .ws-workspace-main { min-width: 0; }
+.ws-workspace-layout.chat-open .ws-toolbar { align-items: stretch; flex-wrap: wrap; }
+.ws-workspace-layout.chat-open .ws-filters { flex-basis: 100%; grid-template-columns: minmax(220px, 1.55fr) repeat(3, minmax(124px, .8fr)); }
 .ws-chat-mobile-backdrop { display: none; }
 .ws-chat-sidebar {
     position: sticky;
     z-index: 7;
     top: 14px;
-    height: min(720px, calc(100dvh - 180px));
-    min-height: 520px;
+    height: min(720px, calc(100dvh - 220px));
+    min-height: min(520px, calc(100dvh - 220px));
     display: none;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     overflow: hidden;
@@ -800,9 +802,13 @@
 .ws-sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
 
 @media (max-width: 1500px) {
-    .ws-topbar { align-items: flex-start; }
-    .ws-topbar-main { flex-basis: 320px; }
-    .ws-topbar-actions { max-width: 980px; flex-wrap: wrap; }
+    .ws-topbar {
+        display: grid;
+        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+        align-items: start;
+    }
+    .ws-topbar-main { width: 100%; max-width: 340px; }
+    .ws-topbar-actions { width: 100%; max-width: none; flex-wrap: wrap; }
 }
 
 @media (max-width: 1180px) {
@@ -814,8 +820,8 @@
         top: 0;
         right: 0;
         width: min(430px, 100vw);
-        height: 100dvh;
-        min-height: 0;
+        height: min(720px, calc(100dvh - 154px));
+        min-height: min(520px, calc(100dvh - 154px));
         border-block: 0;
         border-right: 0;
         border-radius: 22px 0 0 22px;
@@ -824,7 +830,14 @@
 
 @media (max-width: 1100px) {
     .workspace-app { padding-inline: 20px; }
-    .ws-topbar { align-items: flex-start; flex-direction: column; }
+    .ws-topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        align-items: start;
+        height: max-content;
+        min-height: max-content;
+    }
     .ws-topbar-main, .ws-topbar-actions { width: 100%; max-width: none; }
     .ws-topbar-actions { justify-content: flex-start; }
     .ws-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -839,6 +852,15 @@
     .ws-shell { min-height: 0; }
     .ws-workspace-main > .ws-panel:last-child { min-height: 300px; }
     .ws-workspace-select, .ws-workspace-dropdown { width: min(100%, 320px); }
+    .ws-topbar-main { min-width: 0; }
+    .ws-title-row { align-items: stretch; flex-wrap: wrap; }
+    .ws-title-row .ws-role-badge { align-self: center; }
+    .ws-topbar-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ws-topbar-actions .ws-btn { width: 100%; min-width: 0; justify-content: center; }
+    .ws-topbar-actions .ws-live-badge { align-self: center; justify-self: start; }
+    .ws-topbar-actions .ws-language-select,
+    .ws-topbar-actions .ws-language-dropdown { width: 100%; min-width: 0; }
+    .ws-topbar-actions .ws-btn.primary { grid-column: 1 / -1; }
     .ws-title { font-size: 27px; }
     .ws-subtitle { font-size: 12px; }
     .ws-summary { gap: 8px; }

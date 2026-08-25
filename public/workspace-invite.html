@@ -14,6 +14,7 @@
     .mark{width:58px;height:58px;display:grid;place-items:center;margin:0 auto 18px;border-radius:18px;background:var(--soft);color:var(--brand)}.mark svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
     h1{margin:0;font-size:clamp(27px,5vw,40px);line-height:1.08;letter-spacing:-.04em}p{margin:13px auto 0;max-width:480px;color:var(--muted);line-height:1.62}.workspace-name{color:var(--ink);font-weight:750}
     .actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:26px}.btn{min-height:48px;display:inline-flex;align-items:center;justify-content:center;padding:0 20px;border:1px solid var(--line);border-radius:13px;color:var(--ink);background:transparent;text-decoration:none;font:inherit;font-weight:700;cursor:pointer}.btn.primary{border-color:transparent;color:#fff;background:linear-gradient(135deg,#2d6cff,#5b98ff)}.btn[disabled]{opacity:.5;cursor:wait}
+    .account{display:none;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:center;margin-top:22px;padding:14px 16px;border:1px solid var(--line);border-radius:15px;background:var(--soft);text-align:left}.account.visible{display:grid}.account-mark{width:44px;height:44px;display:grid;place-items:center;border-radius:13px;color:#fff;background:linear-gradient(135deg,#183e88,#2d6cff);font-weight:800}.account strong,.account span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account strong{font-size:14px}.account span{margin-top:4px;color:var(--muted);font-size:12px}
     .status{margin-top:20px;padding:13px 15px;border:1px solid transparent;border-radius:13px;color:var(--muted);background:var(--soft);font-size:13px;line-height:1.5}.status.error{border-color:color-mix(in srgb,var(--danger) 28%,transparent);color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent)}.status.success{border-color:color-mix(in srgb,var(--success) 25%,transparent);color:var(--success);background:color-mix(in srgb,var(--success) 9%,transparent)}
     @media(max-width:520px){body{padding:12px}.card{padding:28px 20px;border-radius:22px}.brand{margin-bottom:25px}.actions{display:grid}.btn{width:100%}}
   </style>
@@ -28,6 +29,7 @@
     <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14.4 9.6 21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4L12 3Z"/></svg></div>
     <h1>Workspace taklifnomasi</h1>
     <p id="description">Taklif ma’lumotlari tekshirilmoqda…</p>
+    <div id="account" class="account" aria-live="polite"><span id="accountMark" class="account-mark"></span><div><strong id="accountName"></strong><span id="accountMeta"></span></div></div>
     <div id="status" class="status" role="status" aria-live="polite">Iltimos, kuting…</div>
     <div class="actions" id="actions"></div>
   </main>
@@ -35,9 +37,23 @@
     (function(){
       if(localStorage.getItem('dictum-theme')==='dark')document.documentElement.setAttribute('data-theme','dark');
       var token=new URLSearchParams(location.search).get('token')||'';
-      var status=document.getElementById('status'),actions=document.getElementById('actions'),description=document.getElementById('description');
+      var status=document.getElementById('status'),actions=document.getElementById('actions'),description=document.getElementById('description'),accountBox=document.getElementById('account'),accountMark=document.getElementById('accountMark'),accountName=document.getElementById('accountName'),accountMeta=document.getElementById('accountMeta');
       function loginUrl(){var returnTo='/workspace-invite.html?token='+encodeURIComponent(token);return '/login.html?invite='+encodeURIComponent(token)+'&redirect='+encodeURIComponent(returnTo);}
       function show(message,kind,buttons){status.textContent=message;status.className='status '+(kind||'');actions.innerHTML=buttons||'';}
+      function accountInitials(account){var value=(account.fullName||account.username||'JA').trim().split(/\s+/).slice(0,2).map(function(part){return part.charAt(0);}).join('');return value.toUpperCase()||'JA';}
+      function showAccount(account){
+        var role=account.platformRole==='master'?'Master Admin':account.platformRole==='lawyer'?'Yurist':'JuristAI foydalanuvchisi';
+        accountMark.textContent=accountInitials(account);
+        accountName.textContent=account.fullName||account.username||'JuristAI foydalanuvchisi';
+        accountMeta.textContent=(account.username?'@'+account.username+' · ':'')+role;
+        accountBox.classList.add('visible');
+      }
+      function openWorkspace(){location.replace('/dashboard.html?tab=jamoa');}
+      function switchAccount(){
+        Array.prototype.forEach.call(actions.querySelectorAll('button'),function(button){button.disabled=true;});
+        request('/api/logout',{method:'POST'}).catch(function(){return null;}).then(function(){location.replace(loginUrl());});
+      }
+      function bindAction(id,handler){var button=document.getElementById(id);if(button)button.addEventListener('click',handler);}
       function savePending(invitation,details){var pending={token:token,workspaceId:(details&&details.workspaceId)||invitation.workspaceId,workspaceName:(details&&details.workspaceName)||invitation.workspaceName,expiresAt:(details&&details.expiresAt)||invitation.expiresAt,minimumPlan:'silver'};sessionStorage.setItem('juristai-workspace-invite',token);localStorage.setItem('juristai-pending-workspace-invite',JSON.stringify(pending));}
       function request(url,options){return fetch(url,Object.assign({credentials:'same-origin',headers:{Accept:'application/json'}},options||{})).then(async function(response){var payload=await response.json().catch(function(){return{}});if(response.ok)return payload;var error=new Error(payload.message||payload.error||'Taklifni tekshirib bo‘lmadi');error.status=response.status;error.code=payload.code;error.details=payload.details||{};throw error;});}
       if(!token){show('Taklif havolasi noto‘g‘ri.','error','<a class="btn" href="/index.html">Bosh sahifa</a>');return;}
@@ -47,14 +63,28 @@
         if(!invitation.available)throw Object.assign(new Error('Taklif muddati tugagan yoki u avval ishlatilgan.'),{status:410});
         description.innerHTML='Siz <span class="workspace-name"></span> Workspace’iga taklif qilindingiz. Kirish uchun hisobingizga kiring yoki odatdagidek ro‘yxatdan o‘ting.';
         description.querySelector('.workspace-name').textContent='“'+(invitation.workspaceName||'JuristAI Workspace')+'”';
-        return request('/api/workspace-invitations/'+encodeURIComponent(token)+'/accept',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:'{}'}).then(function(){
+        if(!result.acceptingAccount){show('JuristAI hisobingizni tanlash uchun kirish sahifasiga yo‘naltirilmoqda…');setTimeout(function(){location.replace(loginUrl());},450);return;}
+        showAccount(result.acceptingAccount);
+        if(result.existingMembership){
+          var isOwner=result.existingMembership.role==='owner';
+          show(isOwner?'Bu hisob ushbu Workspace egasi. Taklifni boshqa hisobda oching.':'Bu hisob ushbu Workspace’ga allaqachon qo‘shilgan.','', '<button class="btn primary" id="openWorkspace" type="button">Workspace’ni ochish</button><button class="btn" id="switchAccount" type="button">Boshqa hisob bilan kirish</button>');
+          bindAction('openWorkspace',openWorkspace);bindAction('switchAccount',switchAccount);return;
+        }
+        show('Taklif yuqorida ko‘rsatilgan hisobga Member sifatida biriktiriladi. Bu hisobning platformadagi rolini o‘zgartirmaydi.','', '<button class="btn primary" id="acceptInvite" type="button">Ushbu hisob bilan qo‘shilish</button><button class="btn" id="switchAccount" type="button">Boshqa hisob bilan kirish</button>');
+        bindAction('switchAccount',switchAccount);
+        bindAction('acceptInvite',function(){
+          var button=document.getElementById('acceptInvite');if(button)button.disabled=true;
+          show('Taklif qabul qilinmoqda…');
+          request('/api/workspace-invitations/'+encodeURIComponent(token)+'/accept',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:'{}'}).then(function(){
           sessionStorage.removeItem('juristai-workspace-invite');localStorage.removeItem('juristai-pending-workspace-invite');
           show('Taklif qabul qilindi. Workspace ochilmoqda…','success');
           setTimeout(function(){location.replace('/dashboard.html?tab=jamoa');},650);
-        }).catch(function(error){
-          if(error.status===401){show('Hisobingizga yo‘naltirilmoqda…');setTimeout(function(){location.replace(loginUrl());},300);return;}
-          if(error.status===402){savePending(invitation,error.details);show('Taklif saqlandi. Workspace’ga qo‘shilish uchun Silver yoki undan yuqori tarif kerak. Dashboard ochilmoqda…');setTimeout(function(){location.replace('/dashboard.html?tab=jamoa&workspaceInvite=pending');},750);return;}
-          throw error;
+          }).catch(function(error){
+            if(error.status===401){show('Hisobingizga yo‘naltirilmoqda…');setTimeout(function(){location.replace(loginUrl());},300);return;}
+            if(error.status===402){savePending(invitation,error.details);show('Taklif saqlandi. Workspace’ga qo‘shilish uchun Silver yoki undan yuqori tarif kerak. Dashboard ochilmoqda…');setTimeout(function(){location.replace('/dashboard.html?tab=jamoa&workspaceInvite=pending');},750);return;}
+            if(error.status===409&&error.code==='workspace_already_member'){show(error.message,'', '<button class="btn primary" id="openWorkspace" type="button">Workspace’ni ochish</button><button class="btn" id="switchAccount" type="button">Boshqa hisob bilan kirish</button>');bindAction('openWorkspace',openWorkspace);bindAction('switchAccount',switchAccount);return;}
+            show(error.message||'Taklifni qabul qilib bo‘lmadi.','error','<button class="btn" id="switchAccount" type="button">Boshqa hisob bilan kirish</button>');bindAction('switchAccount',switchAccount);
+          });
         });
       }).catch(function(error){
         if(error.status===401){location.replace(loginUrl());return;}

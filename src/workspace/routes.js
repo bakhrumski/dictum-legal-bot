@@ -215,6 +215,32 @@ function mountWorkspaceRoutes(app, options) {
     if (!invitation) throw new WorkspaceError(404, 'invitation_not_found', 'Taklif topilmadi');
     const available = !invitation.revoked_at && !invitation.accepted_at
       && new Date(invitation.expires_at) > new Date();
+    let acceptingAccount = null;
+    let existingMembership = null;
+    const sessionUserId = Number(req.session && req.session.isAuthenticated && req.session.adminId);
+    if (Number.isInteger(sessionUserId) && sessionUserId > 0) {
+      const account = (await pool.query(
+        `SELECT id,username,full_name,role
+           FROM admins
+          WHERE id=$1`,
+        [sessionUserId]
+      )).rows[0];
+      if (account) {
+        acceptingAccount = {
+          id: account.id,
+          username: account.username,
+          fullName: account.full_name,
+          platformRole: account.role,
+        };
+        const membership = (await pool.query(
+          `SELECT role
+             FROM workspace_members
+            WHERE workspace_id=$1 AND user_id=$2`,
+          [invitation.workspace_id, sessionUserId]
+        )).rows[0];
+        if (membership) existingMembership = { role: membership.role };
+      }
+    }
     res.json({
       invitation: {
         workspaceId: invitation.workspace_id,
@@ -225,6 +251,8 @@ function mountWorkspaceRoutes(app, options) {
         workspaceActive: invitation.workspace_active,
         minimumPlan: 'silver',
       },
+      acceptingAccount,
+      existingMembership,
     });
   }));
 
@@ -505,6 +533,26 @@ function mountWorkspaceRoutes(app, options) {
       }
       if (!invite.workspace_active) {
         throw new WorkspaceError(402, 'workspace_platinum_required', 'Taklifni qabul qilish uchun Workspace Platinum tarifi faol bo‘lishi kerak');
+      }
+      const existingMembership = (await db.query(
+        `SELECT role
+           FROM workspace_members
+          WHERE workspace_id=$1 AND user_id=$2`,
+        [invite.workspace_id, userId]
+      )).rows[0];
+      if (existingMembership) {
+        throw new WorkspaceError(
+          409,
+          'workspace_already_member',
+          existingMembership.role === 'owner'
+            ? 'Siz bu Workspace egasisiz. Taklif havolasini boshqa JuristAI hisobida oching.'
+            : 'Bu JuristAI hisobi allaqachon Workspace a’zosi.',
+          {
+            workspaceId: invite.workspace_id,
+            workspaceName: invite.workspace_name,
+            role: existingMembership.role,
+          }
+        );
       }
       const account = (await db.query(
         'SELECT tariff_plan,tariff_expires_at FROM admins WHERE id=$1',
