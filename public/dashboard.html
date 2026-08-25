@@ -7294,7 +7294,7 @@
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                             <input id="requestSearch" type="search" placeholder="Murojaat yoki foydalanuvchini qidiring" oninput="scheduleRequestFilter()">
                         </label>
-                        <select id="categoryFilter" onchange="filterRequests()">
+                        <select id="categoryFilter" class="no-jai-select" onchange="filterRequests()">
                             <option value="">Barcha yo'nalishlar</option>
                             <option value="Konstitutsiyaviy tuzum">Konstitutsiyaviy tuzum</option>
                             <option value="Davlat boshqaruvi">Davlat boshqaruvi</option>
@@ -7322,11 +7322,11 @@
                             <option value="Boshqa">Boshqa</option>
                         </select>
 
-                        <select id="assigneeFilter" onchange="filterRequests()">
+                        <select id="assigneeFilter" class="no-jai-select" onchange="filterRequests()">
                             <option value="">Barcha javob beruvchilar</option>
                         </select>
 
-                        <select id="statusFilter" onchange="filterRequests()">
+                        <select id="statusFilter" class="no-jai-select" onchange="filterRequests()">
                             <option value="open">Ochiq murojaatlar</option>
                             <option value="pending">Kutilmoqda</option>
                             <option value="lawyer_approved">Yurist tasdig'i</option>
@@ -7337,7 +7337,7 @@
                             <option value="">Barcha statuslar</option>
                         </select>
 
-                        <select id="urgencyFilter" onchange="filterRequests()">
+                        <select id="urgencyFilter" class="no-jai-select" onchange="filterRequests()">
                             <option value="">Barcha ustuvorliklar</option>
                             <option value="critical">Kritik</option>
                             <option value="high">Yuqori</option>
@@ -7345,19 +7345,19 @@
                             <option value="low">Past</option>
                         </select>
 
-                        <select id="sourceFilter" onchange="filterRequests()">
+                        <select id="sourceFilter" class="no-jai-select" onchange="filterRequests()">
                             <option value="">Barcha kanallar</option>
                             <option value="telegram">Telegram</option>
                             <option value="web">Platforma</option>
                         </select>
 
-                        <select id="assignedFilter" onchange="filterRequests()">
+                        <select id="assignedFilter" class="no-jai-select" onchange="filterRequests()">
                             <option value="">Barcha tayinlovlar</option>
                             <option value="unassigned">Tayinlanmagan</option>
                             <option value="assigned">Tayinlangan</option>
                         </select>
 
-                        <select id="sortFilter" onchange="filterRequests()">
+                        <select id="sortFilter" class="no-jai-select" onchange="filterRequests()">
                             <option value="priority">Muhimligi bo'yicha</option>
                             <option value="newest">Eng yangi</option>
                             <option value="oldest">Eng eski</option>

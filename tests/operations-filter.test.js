@@ -81,6 +81,21 @@ test('queue filters use the accessible JuristAI dropdown instead of the native p
   assert.ok(/\.queue-native-select\s*\{[^}]*opacity:\s*0\s*!important;/.test(dashboard));
 });
 
+test('queue filters are enhanced exactly once by the dashboard component', () => {
+  const queueFilterIds = [
+    'categoryFilter', 'assigneeFilter', 'statusFilter', 'urgencyFilter',
+    'sourceFilter', 'assignedFilter', 'sortFilter',
+  ];
+  for (const id of queueFilterIds) {
+    assert.ok(
+      new RegExp(`<select\\s+id="${id}"\\s+class="no-jai-select"`).test(dashboard),
+      `${id} must opt out of the global dropdown enhancer`,
+    );
+  }
+  const redesign = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'redesign-v2.js'), 'utf8');
+  assert.ok(redesign.includes("select.closest('.filter-section')"));
+});
+
 test('new management panels collapse and reopen like registration requests', () => {
   for (const id of ['attorneyAdminSection', 'paidServicesSection', 'telegramAgentSection']) {
     assert.ok(dashboard.includes(`#${id}.collapsed .reg-section-body`), `${id} body must hide when collapsed`);
