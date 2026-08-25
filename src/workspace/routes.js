@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { WorkspaceError, sendWorkspaceError } = require('./errors');
 const {
+  canCreateWorkspace,
   isActivePaidPlan,
   isActivePlatinum,
   requireTask,
@@ -278,7 +279,7 @@ function mountWorkspaceRoutes(app, options) {
         'SELECT role, tariff_plan, tariff_expires_at FROM admins WHERE id=$1 FOR UPDATE',
         [userId]
       )).rows[0];
-      if (!account || account.role !== 'user' || !isActivePlatinum(account)) {
+      if (!canCreateWorkspace(account)) {
         throw new WorkspaceError(402, 'workspace_platinum_required', 'Workspace yaratish faqat faol Platinum tarifi bilan mavjud');
       }
       return (await db.query(

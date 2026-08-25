@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
-const { isActivePlatinum } = require('../src/workspace/authz');
+const { canCreateWorkspace, isActivePlatinum } = require('../src/workspace/authz');
 const { createWorkspaceAiService, loadContext, normalizeQuestion, sha256 } = require('../src/workspace/ai-service');
 const { issueRealtimeToken } = require('../src/workspace/realtime-auth');
 const { makeSlug, tokenHash } = require('../src/workspace/routes');
@@ -47,6 +47,15 @@ function transactionalPool(handler) {
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'PlAtInUm', tariff_expires_at: new Date(Date.now() + 60000) }), true);
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'gold', tariff_expires_at: null }), false);
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'platinum', tariff_expires_at: new Date(Date.now() - 1) }), false);
+  });
+
+  await test('active Platinum users and Master Admins can create a Workspace', () => {
+    const activePlan = { tariff_plan: 'platinum', tariff_expires_at: new Date(Date.now() + 60000) };
+    assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'user' }), true);
+    assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'master' }), true);
+    assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'lawyer' }), false);
+    assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'student' }), false);
+    assert.strictEqual(canCreateWorkspace({ role: 'master', tariff_plan: 'gold', tariff_expires_at: null }), false);
   });
 
   await test('invitation tokens are stored as one-way hashes', () => {

@@ -3,6 +3,7 @@
 const { WorkspaceError } = require('./errors');
 
 const ROLE_WEIGHT = Object.freeze({ viewer: 1, member: 2, owner: 3 });
+const WORKSPACE_CREATOR_ACCOUNT_ROLES = new Set(['user', 'master']);
 
 function isActivePlatinum(row) {
   if (!row || String(row.tariff_plan || '').toLowerCase() !== 'platinum') return false;
@@ -18,6 +19,14 @@ function isActivePaidPlan(row, minimumPlan = 'silver') {
   if (!row || planWeight(row.member_tariff_plan || row.tariff_plan) < planWeight(minimumPlan)) return false;
   const expiresAt = row.member_tariff_expires_at || row.tariff_expires_at;
   return !expiresAt || new Date(expiresAt).getTime() >= Date.now();
+}
+
+function canCreateWorkspace(row) {
+  return Boolean(
+    row
+    && WORKSPACE_CREATOR_ACCOUNT_ROLES.has(String(row.role || '').toLowerCase())
+    && isActivePlatinum(row)
+  );
 }
 
 async function getWorkspaceAccess(db, workspaceId, userId) {
@@ -107,6 +116,7 @@ async function withWorkspaceTransaction(pool, actorId, callback) {
 
 module.exports = {
   ROLE_WEIGHT,
+  canCreateWorkspace,
   getWorkspaceAccess,
   isActivePaidPlan,
   isActivePlatinum,
