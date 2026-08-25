@@ -285,6 +285,7 @@ function transactionalPool(handler) {
       '20260822_001_workspace_core.sql',
       '20260822_002_workspace_rls_realtime_storage.sql',
       '20260822_003_workspace_corpus_revision.sql',
+      '20260825_004_workspace_entitlements_chat.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

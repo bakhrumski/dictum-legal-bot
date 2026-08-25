@@ -121,12 +121,29 @@ function mountDraftingRoutes(app, deps) {
 
   /** Pull plain text out of an uploaded .docx/.doc/.pdf. */
   async function extractDocText(filePath, file) {
-    const isDoc = /\.(docx|doc)$/i.test(file.originalname) ||
-      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      file.mimetype === 'application/msword';
-    if (isDoc) {
+    const legacyDoc = /\.doc$/i.test(file.originalname) || file.mimetype === 'application/msword';
+    if (legacyDoc) {
+      const error = new Error('Eski .doc formati qo‘llab-quvvatlanmaydi. Faylni Word’da .docx qilib saqlang va qayta yuklang.');
+      error.statusCode = 415;
+      throw error;
+    }
+    const isDocx = /\.docx$/i.test(file.originalname) ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (isDocx) {
+      const signature = fs.readFileSync(filePath, { encoding: null, flag: 'r' }).subarray(0, 4).toString('hex');
+      if (!signature.startsWith('504b')) {
+        const error = new Error('Bu haqiqiy DOCX fayl emas yoki fayl buzilgan. Word’da qayta saqlab yuklang.');
+        error.statusCode = 422;
+        throw error;
+      }
       const mammoth = require('mammoth');
-      return ((await mammoth.extractRawText({ path: filePath })).value || '').trim();
+      try {
+        return ((await mammoth.extractRawText({ path: filePath })).value || '').trim();
+      } catch (mammothError) {
+        const error = new Error('DOCX faylini o‘qib bo‘lmadi. Fayl buzilmaganini tekshiring yoki Word’da qayta saqlang.');
+        error.statusCode = 422;
+        throw error;
+      }
     }
     const pdfParse = require('pdf-parse');
     const parsed = await pdfParse(fs.readFileSync(filePath));
@@ -502,7 +519,7 @@ Rules:
       });
     } catch (err) {
       console.error('[DRAFT] analyze error:', err.message);
-      res.status(500).json({ error: 'Tahlil xatoligi: ' + err.message });
+      res.status(err.statusCode || 500).json({ error: err.message || 'Faylni tahlil qilib bo‘lmadi' });
     } finally {
       fs.unlink(filePath, () => {});
     }
@@ -569,7 +586,7 @@ Rules:
       res.json({ template: tplData, provider: tplData.provider, charCount: extractedText.length });
     } catch (err) {
       console.error('[DRAFT] import-file error:', err.message);
-      res.status(500).json({ error: 'Import xatoligi: ' + err.message });
+      res.status(err.statusCode || 500).json({ error: err.message || 'Faylni import qilib bo‘lmadi' });
     } finally {
       fs.unlink(filePath, () => {});
     }

@@ -591,6 +591,9 @@
 .ws-document-title { color: var(--ws-ink); font-size: 12px; font-weight: 600; }
 .ws-document-meta { margin-top: 4px; color: var(--ws-muted); font-size: 10px; }
 .ws-member-row { min-width: 0; }
+.ws-member-row.expired { opacity: .56; filter: grayscale(.45); }
+.ws-link-button { border: 0; padding: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+.ws-expired-banner { margin: 12px 0; padding: 10px 12px; border: 1px solid rgba(168,36,56,.28); border-radius: 11px; color: var(--ws-danger); background: var(--ws-danger-soft); font-size: 12px; font-weight: 700; }
 .ws-member-identity { min-width: 0; flex: 1 1 auto; gap: 10px; }
 .ws-member-copy { min-width: 0; }
 .ws-member-copy .ws-document-title,
@@ -614,6 +617,62 @@
 
 .ws-invite-output { margin-top: 14px; padding: 12px; border: 1px solid rgba(111,231,201,.2); border-radius: 12px; background: var(--ws-success-soft); }
 .ws-invite-link { display: grid; grid-template-columns: 1fr auto; gap: 7px; margin-top: 8px; }
+.ws-telegram-share { margin-top: 8px; justify-content: center; text-decoration: none; }
+.ws-chat-list { display: grid; gap: 14px; max-height: 50dvh; overflow-y: auto; }
+.ws-chat-message { display: grid; grid-template-columns: 34px minmax(0,1fr); gap: 10px; }
+.ws-pinned-task { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; padding: 6px 9px; border: 1px solid var(--ws-line); border-radius: 9px; color: var(--ws-brand); background: var(--ws-brand-soft); cursor: pointer; }
+.ws-chat-form { display: grid; gap: 9px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--ws-line); }
+.ws-shared-upload { display: grid; place-items: center; gap: 6px; min-height: 128px; margin-bottom: 16px; padding: 18px; border: 1px dashed var(--ws-line-strong); border-radius: 15px; color: var(--ws-muted); background: var(--ws-panel-hover); cursor: pointer; text-align: center; }
+.ws-shared-upload strong { color: var(--ws-ink); }
+.ws-member-profile { text-align: center; }
+.ws-avatar.large { width: 58px; height: 58px; margin: 0 auto 10px; font-size: 18px; }
+.ws-profile-task { width: 100%; display: flex; align-items: center; gap: 9px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--ws-line); color: var(--ws-ink); background: transparent; text-align: left; cursor: pointer; }
+
+.ws-graph-shell { position: relative; min-height: 560px; overflow: hidden; border-radius: 18px; background: radial-gradient(circle at 50% 42%, var(--ws-brand-soft), transparent 48%), var(--ws-panel-solid); }
+.ws-graph-hint { position: absolute; z-index: 3; left: 16px; top: 14px; margin: 0; color: var(--ws-muted); font-size: 11px; }
+.ws-graph-canvas { position: relative; min-width: 780px; min-height: 560px; }
+.ws-graph-edge { position: absolute; z-index: 0; height: 1px; transform-origin: left center; background: var(--ws-line-strong); opacity: .8; }
+.ws-graph-node { position: absolute; z-index: 2; display: grid; place-items: center; transform: translate(-50%,-50%); border: 1px solid var(--ws-line-strong); color: var(--ws-ink); background: var(--ws-panel-solid); box-shadow: var(--ws-shadow); cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
+.ws-graph-node:hover,.ws-graph-node:focus-visible { z-index: 4; transform: translate(-50%,-50%) scale(1.05); box-shadow: 0 12px 34px rgba(19,37,66,.18); outline: 2px solid var(--ws-brand-border); }
+.ws-graph-node.task { width: 154px; min-height: 68px; padding: 10px 12px; border-radius: 15px; text-align: left; }
+.ws-graph-node.member { width: 52px; height: 52px; border-radius: 50%; color: #fff; background: var(--ws-brand); font-weight: 800; }
+.ws-graph-node.task.overdue { border-color: rgba(168,36,56,.6); box-shadow: 0 0 0 3px var(--ws-danger-soft); }
+.ws-graph-node.task.approaching { border-color: rgba(179,119,8,.65); box-shadow: 0 0 0 3px var(--ws-warning-soft); }
+.ws-graph-node.task.on-time { border-color: rgba(5,112,91,.42); }
+.ws-graph-node-title { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 700; line-height: 1.35; }
+.ws-graph-node-meta { margin-top: 5px; color: var(--ws-muted); font-size: 9px; }
+
+/* Phase-1 workload graph.  The stage deliberately scrolls on narrow screens;
+   compressing a relationship map would make labels and tap targets unusable. */
+.ws-graph { overflow: hidden; }
+.ws-graph-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; border-bottom: 1px solid var(--ws-line); color: var(--ws-muted); font-size: 11px; }
+.ws-graph-legend { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
+.ws-graph-legend i { width: 9px; height: 9px; margin-left: 5px; border-radius: 50%; background: var(--ws-success); box-shadow: 0 0 0 3px var(--ws-success-soft); }
+.ws-graph-legend i.approaching { background: var(--ws-warning); box-shadow: 0 0 0 3px var(--ws-warning-soft); }
+.ws-graph-legend i.overdue { background: var(--ws-danger); box-shadow: 0 0 0 3px var(--ws-danger-soft); }
+.ws-graph-scroll { max-width: 100%; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.ws-graph-stage { position: relative; isolation: isolate; min-width: 760px; background: radial-gradient(circle at 50% 32%, var(--ws-brand-soft), transparent 42%), radial-gradient(circle at 17% 82%, var(--ws-success-soft), transparent 30%), var(--ws-panel-solid); }
+.ws-graph-stage > svg { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.ws-graph-stage > svg path,
+.ws-graph-stage > svg line { fill: none; stroke: var(--ws-line-strong); stroke-width: 1.15; vector-effect: non-scaling-stroke; }
+.ws-graph-member,
+.ws-graph-task { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-family: inherit; cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, opacity .18s ease; }
+.ws-graph-member { width: 104px; display: grid; justify-items: center; gap: 5px; border: 0; color: var(--ws-ink); background: transparent; font-size: 10px; font-weight: 700; text-align: center; }
+.ws-graph-member .ws-avatar { width: 45px; height: 45px; margin: 0; border: 3px solid var(--ws-panel-solid); box-shadow: 0 0 0 1px var(--ws-line-strong), 0 10px 28px -16px rgba(31,77,160,.7); font-size: 13px; }
+.ws-graph-member small { max-width: 98px; color: var(--ws-danger); font-size: 8px; line-height: 1.25; }
+.ws-graph-member.expired { opacity: .48; filter: grayscale(.8); }
+.ws-graph-task { width: 176px; min-height: 76px; display: grid; align-content: center; gap: 6px; padding: 11px 13px; border: 1px solid rgba(5,112,91,.44); border-radius: 15px; color: var(--ws-ink); background: color-mix(in srgb, var(--ws-panel-solid) 94%, var(--ws-success-soft)); box-shadow: 0 14px 34px -25px rgba(7,49,40,.8); text-align: left; }
+.ws-graph-task strong { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 11px; line-height: 1.35; }
+.ws-graph-task > span { color: var(--ws-muted); font-size: 9px; }
+.ws-graph-task.approaching { border-color: rgba(179,119,8,.62); background: color-mix(in srgb, var(--ws-panel-solid) 91%, var(--ws-warning-soft)); box-shadow: 0 0 0 3px var(--ws-warning-soft); }
+.ws-graph-task.overdue { border-color: rgba(168,36,56,.6); background: color-mix(in srgb, var(--ws-panel-solid) 91%, var(--ws-danger-soft)); box-shadow: 0 0 0 3px var(--ws-danger-soft); }
+.ws-graph-task.done { opacity: .78; border-color: rgba(5,112,91,.45); }
+.ws-graph-task:hover,
+.ws-graph-task:focus-visible,
+.ws-graph-member:hover,
+.ws-graph-member:focus-visible { z-index: 5; transform: translate(-50%, -50%) scale(1.045); outline: 2px solid var(--ws-brand-border); outline-offset: 3px; box-shadow: 0 18px 42px -22px rgba(31,77,160,.58); }
+.ws-graph-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.ws-graph-badges b { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 1px solid var(--ws-line); border-radius: 999px; color: var(--ws-ink-soft); background: var(--ws-panel-hover); font-size: 8px; font-weight: 650; }
 
 .ws-timeline { overflow: auto; }
 .ws-timeline-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--ws-line); }
@@ -733,7 +792,24 @@
     .ws-ai-next-grid { grid-template-columns: 1fr; }
     .ws-ai-next-grid .ws-ai-next-action:last-child:nth-child(odd) { grid-column: auto; }
     .ws-timeline-hint { display: block; }
+    .ws-graph-shell { min-height: 420px; overflow: auto; }
+    .ws-graph-canvas { min-width: 720px; min-height: 500px; }
+    .ws-graph-toolbar { align-items: flex-start; flex-direction: column; }
+    .ws-graph-legend { justify-content: flex-start; }
+    .ws-graph-stage { min-width: 760px; }
+    .ws-chat-form .ws-btn { justify-content: center; }
+    .ws-invite-link { grid-template-columns: 1fr; }
 }
+
+.ws-notification-button { position: relative; }
+.ws-notification-count { position: absolute; right: 1px; top: 0; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: #dc5b68; color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: center; border: 2px solid var(--ws-surface); }
+.ws-notification-list { display: grid; gap: 10px; }
+.ws-notification { display: grid; grid-template-columns: auto 1fr; gap: 11px; padding: 14px; border: 1px solid var(--ws-border); border-radius: 16px; background: var(--ws-surface-soft); }
+.ws-notification.unread { border-color: rgba(55,112,255,.32); background: rgba(55,112,255,.07); }
+.ws-notification-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; background: rgba(55,112,255,.1); color: var(--ws-accent); }
+.ws-notification strong { display: block; margin-bottom: 3px; }
+.ws-notification p { margin: 0; color: var(--ws-muted); line-height: 1.45; }
+.ws-notification time { display: block; margin-top: 6px; color: var(--ws-muted); font-size: 12px; }
 
 @media (prefers-reduced-motion: reduce) {
     .workspace-app *, .workspace-app *::before, .workspace-app *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }

@@ -3055,6 +3055,20 @@
         .ai-attach-chip .chip-remove:hover { color: var(--danger-700); }
         .ai-attach-chip.err { border-color: var(--danger-700); }
         .ai-attach-chip.err .chip-status { color: var(--danger-700); }
+        .ai-attach-chip.err {
+            width: 100%; max-width: 100%; align-items: flex-start;
+            background: color-mix(in srgb, var(--danger-700) 7%, var(--bg-card));
+        }
+        .ai-attach-chip.err .chip-name { max-width: 28%; }
+        .ai-attach-chip.err .chip-status {
+            min-width: 0; flex: 1 1 auto; white-space: normal;
+            overflow-wrap: anywhere; line-height: 1.4;
+        }
+        @media (max-width: 640px) {
+            .ai-attach-chip.err { display: grid; grid-template-columns: auto minmax(0,1fr) auto; }
+            .ai-attach-chip.err .chip-name { max-width: 100%; }
+            .ai-attach-chip.err .chip-status { grid-column: 1 / -1; padding-left: 22px; }
+        }
         /* documents persisting for the whole conversation */
         .ai-attach-chip.session { background: var(--navy-100, #E1ECF6); border-color: var(--navy-300); }
         .ai-attach-chip.session .chip-status { color: var(--navy-700); font-weight: 600; }
@@ -7021,7 +7035,7 @@
                                 </div>
                                 <div id="docFilePanel" style="display:none">
                                     <label class="ai-doc-file-label">
-                                        <input type="file" id="docFileInput" accept=".pdf,.txt,.docx,.doc" onchange="onDocFileSelected(this)">
+                                        <input type="file" id="docFileInput" accept=".pdf,.txt,.docx" onchange="onDocFileSelected(this)">
                                         Fayl tanlash (PDF / TXT / DOCX)
                                     </label>
                                     <div id="docSelectedFile" class="ai-doc-selected-file" style="display:none"></div>
@@ -7254,7 +7268,7 @@
                         <button class="ai-chat-send-btn" id="aiChatSendBtn" type="button" onclick="sendAiChat()" title="Yuborish" aria-label="Xabarni yuborish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
                     </div>
                     <p class="ai-composer-note">JuristAI xatolarga yo'l qo'yishi mumkin. Muhim ma'lumotlarni birlamchi manbadan tekshiring.</p>
-                    <input type="file" id="aiFileDoc" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple style="display:none" onchange="onAttachSelected(this)">
+                    <input type="file" id="aiFileDoc" accept=".pdf,.jpg,.jpeg,.png,.docx" multiple style="display:none" onchange="onAttachSelected(this)">
                 </div>
             </div>
 
@@ -7692,15 +7706,15 @@
 
     <!-- Bottom Tab Bar -->
     <nav class="bottom-tab-bar" id="bottomTabBar">
-        <button class="tab-bar-item active" data-tab="home" onclick="switchTab('home')">
+        <button class="tab-bar-item active" id="tabBarHome" data-tab="home" onclick="switchTab('home')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <span class="tab-label">Asosiy</span>
         </button>
-        <button class="tab-bar-item" data-tab="jamoa" onclick="switchTab('jamoa')">
+        <button class="tab-bar-item" id="tabBarWorkspace" data-tab="jamoa" onclick="switchTab('jamoa')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4V2M16 4V2M3 9h18"/><path d="M8 13h3M8 17h6"/></svg>
             <span class="tab-label">Workspace</span>
         </button>
-        <button class="tab-bar-item" data-tab="chat" onclick="switchTab('chat')">
+        <button class="tab-bar-item" id="tabBarChat" data-tab="chat" onclick="switchTab('chat')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span class="tab-label">Chat</span>
             <span class="tab-badge" id="tabChatBadge" style="display:none;">0</span>
@@ -8214,13 +8228,33 @@
                     if (rs) rs.style.display = '';
                 }
 
-                // Common users (role='user'): hide entire bottom-tab-bar, force AI tab
+                // Common users use the AI + Workspace surfaces. Workspace itself
+                // explains and enforces Platinum/invitation eligibility.
                 if (data.role === 'user') {
                     var bar = document.getElementById('bottomTabBar');
-                    if (bar) bar.style.display = 'none';
-                    // Remove body padding reserved for the fixed tab bar.
-                    // Class-based !important beats all media-query !important rules.
-                    document.body.classList.add('no-tab-bar');
+                    if (bar) bar.style.display = '';
+                    document.body.classList.remove('no-tab-bar');
+                    var homeTab = document.getElementById('tabBarHome');
+                    var chatTab = document.getElementById('tabBarChat');
+                    var workspaceTab = document.getElementById('tabBarWorkspace');
+                    if (homeTab) homeTab.style.display = 'none';
+                    if (chatTab) chatTab.style.display = 'none';
+                    if (workspaceTab) workspaceTab.style.display = 'flex';
+                    // Keep Workspace discoverable for every account.  It is
+                    // muted until the user has Platinum or an active invite.
+                    try {
+                        var workspaceResponse = await fetch('/api/workspaces', { credentials: 'same-origin' });
+                        var workspacePayload = await workspaceResponse.json().catch(function() { return {}; });
+                        var workspaceRows = Array.isArray(workspacePayload.workspaces) ? workspacePayload.workspaces : [];
+                        var hasWorkspaceMembership = workspaceResponse.ok && workspaceRows.some(function(item) { return item.is_active !== false; });
+                        var isPlatinum = String(data.tariffPlan || data.tariff_plan || '').toLowerCase() === 'platinum';
+                        if (workspaceTab) {
+                            workspaceTab.classList.toggle('workspace-locked', !hasWorkspaceMembership && !isPlatinum);
+                            workspaceTab.setAttribute('aria-description', (!hasWorkspaceMembership && !isPlatinum) ? 'Platinum obunasi yoki Workspace taklifi talab qilinadi' : '');
+                        }
+                    } catch (workspaceEntitlementError) {
+                        if (workspaceTab) workspaceTab.classList.add('workspace-locked');
+                    }
                     // Force-switch to AI tab so they see the chat workspace
                     if (typeof switchTab === 'function') switchTab('ai');
                     // Redirect to /tariff.html if no plan selected yet
@@ -12065,7 +12099,7 @@
                     '<div class="opinion-drop-ic">' + flowIcon('upload') + '</div>' +
                     '<div id="opinionDropLabel">Hujjat yuklash (PDF, Word) — bosing</div>' +
                 '</div>' +
-                '<input type="file" id="opinionFile" accept=".pdf,.doc,.docx" style="display:none" onchange="onOpinionFile(this)">' +
+                '<input type="file" id="opinionFile" accept=".pdf,.docx" style="display:none" onchange="onOpinionFile(this)">' +
                 '<div id="opinionStatus" class="afp-status"></div>' +
                 '<div class="docform-actions">' +
                 '<button class="docflow-opt docflow-primary" id="opinionGenBtn" type="button" onclick="docFlowGenerateOpinion()" disabled>' + flowIcon('opinion') + 'Xulosa tayyorlash</button>' +
@@ -12678,7 +12712,7 @@
                     '<div class="opinion-drop-ic">' + flowIcon('upload') + '</div>' +
                     '<div id="analyzerDropLabel">Hujjat yuklash (PDF, Word, rasm) — bosing</div>' +
                 '</div>' +
-                '<input type="file" id="analyzerFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display:none" onchange="onAnalyzerFile(this)">' +
+                '<input type="file" id="analyzerFile" accept=".pdf,.docx,.jpg,.jpeg,.png" style="display:none" onchange="onAnalyzerFile(this)">' +
                 '<div class="docform-actions">' +
                 '<button class="docflow-opt" type="button" onclick="docFlowClose()">Bekor qilish</button>' +
                 '</div>');
@@ -12722,7 +12756,7 @@
                 '<button class="docflow-opt docflow-primary" type="button" onclick="document.getElementById(\'tplUploadFile\').click()">' + flowIcon('upload') + 'Shablon yuklash</button>' +
                 '<button class="docflow-opt" type="button" onclick="docFlowClose()">Yopish</button>' +
                 '</div>' +
-                '<input type="file" id="tplUploadFile" accept=".pdf,.doc,.docx" style="display:none" onchange="onTplUpload(this)">');
+                '<input type="file" id="tplUploadFile" accept=".pdf,.docx" style="display:none" onchange="onTplUpload(this)">');
             try {
                 var r = await fetch('/api/templates/mine', { credentials: 'same-origin' });
                 var d = await r.json();

@@ -924,3 +924,36 @@ body > .container > header {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+/* One quiet, borderless theme control across public surfaces. */
+.thm,
+.preview-theme,
+.theme-toggle,
+.theme-toggle-header,
+.theme-toggle-login,
+button[data-theme-toggle] {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline-offset: 3px;
+}
+.thm:hover,
+.preview-theme:hover,
+.theme-toggle:hover,
+.theme-toggle-header:hover,
+.theme-toggle-login:hover,
+button[data-theme-toggle]:hover { background: transparent !important; }
+
+/* Workspace remains discoverable before upgrade, but visually communicates
+   that an entitlement is required.  It stays clickable so the gate can teach
+   the user how to unlock it. */
+.tab-bar-item.workspace-locked { opacity: .5; filter: grayscale(1); }
+.tab-bar-item.workspace-locked .tab-label::after { content: ' · Platinum'; font-size: .72em; }
+
+/* Public navigation is shared and intentionally free of browser underlines. */
+.nav-links a,
+.toplinks a,
+.public-nav a {
+  text-decoration: none !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}

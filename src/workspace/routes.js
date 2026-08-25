@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { WorkspaceError, sendWorkspaceError } = require('./errors');
 const {
+  isActivePaidPlan,
   isActivePlatinum,
   requireTask,
   requireWorkspaceAccess,
@@ -241,17 +242,30 @@ function mountWorkspaceRoutes(app, options) {
       `SELECT w.id, w.name, w.slug, w.default_language, w.owner_id,
               w.created_at, w.updated_at, wm.role,
               owner.tariff_plan, owner.tariff_expires_at,
+              member_account.tariff_plan AS member_tariff_plan,
+              member_account.tariff_expires_at AS member_tariff_expires_at,
               juristai_private.has_workspace_entitlement(w.owner_id) AS is_active,
               (SELECT count(*)::int FROM workspace_members m WHERE m.workspace_id=w.id) AS member_count,
               (SELECT count(*)::int FROM workspace_tasks t WHERE t.workspace_id=w.id AND t.deleted_at IS NULL) AS task_count
          FROM workspace_members wm
          JOIN workspaces w ON w.id=wm.workspace_id
          JOIN admins owner ON owner.id=w.owner_id
+         JOIN admins member_account ON member_account.id=wm.user_id
         WHERE wm.user_id=$1 AND w.deleted_at IS NULL
         ORDER BY w.updated_at DESC`,
       [actorId(req)]
     );
-    res.json({ workspaces: result.rows });
+    res.json({ workspaces: result.rows.map((workspace) => ({
+      ...workspace,
+      ownerActive: isActivePlatinum(workspace),
+      memberActive: workspace.role === 'owner' || isActivePaidPlan(workspace, 'silver'),
+      is_active: isActivePlatinum(workspace)
+        && (workspace.role === 'owner' || isActivePaidPlan(workspace, 'silver')),
+      unavailableReason: !isActivePlatinum(workspace)
+        ? 'owner_subscription_expired'
+        : (workspace.role !== 'owner' && !isActivePaidPlan(workspace, 'silver')
+          ? 'member_subscription_expired' : null),
+    })) });
   }));
 
   router.post('/workspaces', asyncRoute(async (req, res) => {
@@ -323,7 +337,7 @@ function mountWorkspaceRoutes(app, options) {
     const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
     const userId = actorId(req);
     await withWorkspaceTransaction(pool, userId, async (db) => {
-      await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'owner' });
+      await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'owner', requireActive: false });
       await db.query('UPDATE workspaces SET deleted_at=now(), deleted_by=$2 WHERE id=$1', [workspaceId, userId]);
     });
     res.status(204).end();
@@ -334,13 +348,31 @@ function mountWorkspaceRoutes(app, options) {
     const access = await requireWorkspaceAccess(pool, workspaceId, actorId(req));
     const result = await pool.query(
       `SELECT wm.user_id AS id, wm.role, wm.joined_at, a.username, a.full_name, a.email,
-              a.last_active_at
+              a.last_active_at, a.tariff_plan, a.tariff_expires_at,
+              CASE WHEN wm.role='owner' THEN juristai_private.has_workspace_entitlement(a.id)
+                   ELSE juristai_private.has_active_paid_entitlement(a.id, 'silver') END AS subscription_active
          FROM workspace_members wm JOIN admins a ON a.id=wm.user_id
         WHERE wm.workspace_id=$1
         ORDER BY CASE wm.role WHEN 'owner' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,
                  COALESCE(a.full_name,a.username)`,
       [workspaceId]
     );
+    if (access.role === 'owner') {
+      const expired = result.rows.filter((member) => member.role !== 'owner' && !member.subscription_active);
+      for (const member of expired) {
+        const expiryKey = member.tariff_expires_at
+          ? new Date(member.tariff_expires_at).toISOString().slice(0, 10) : 'no-plan';
+        await pool.query(
+          `INSERT INTO workspace_notifications
+             (workspace_id,recipient_id,notification_type,subject_user_id,payload,dedupe_key)
+           VALUES ($1,$2,'member_subscription_expired',$3,$4::jsonb,$5)
+           ON CONFLICT (recipient_id,dedupe_key) DO NOTHING`,
+          [workspaceId, access.owner_id, member.id,
+            JSON.stringify({ fullName: member.full_name, username: member.username, expiresAt: member.tariff_expires_at }),
+            `member-subscription-expired:${workspaceId}:${member.id}:${expiryKey}`]
+        );
+      }
+    }
     res.json({ members: result.rows, currentRole: access.role });
   }));
 
@@ -391,7 +423,13 @@ function mountWorkspaceRoutes(app, options) {
       )).rows[0];
     });
     const baseUrl = (process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-    res.status(201).json({ invitation, inviteUrl: `${baseUrl}/workspace-invite.html?token=${encodeURIComponent(rawToken)}` });
+    const inviteUrl = `${baseUrl}/workspace-invite.html?token=${encodeURIComponent(rawToken)}`;
+    res.status(201).json({
+      invitation,
+      inviteUrl,
+      telegramShareUrl: `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent('JuristAI Workspace taklifnomasi')}`,
+      minimumPlan: 'silver',
+    });
   }));
 
   router.delete('/workspaces/:workspaceId/invitations/:invitationId', asyncRoute(async (req, res) => {
@@ -430,6 +468,18 @@ function mountWorkspaceRoutes(app, options) {
       }
       if (!invite.workspace_active) {
         throw new WorkspaceError(402, 'workspace_platinum_required', 'Taklifni qabul qilish uchun Workspace Platinum tarifi faol bo‘lishi kerak');
+      }
+      const account = (await db.query(
+        'SELECT tariff_plan,tariff_expires_at FROM admins WHERE id=$1',
+        [userId]
+      )).rows[0];
+      if (!isActivePaidPlan(account, 'silver')) {
+        throw new WorkspaceError(
+          402,
+          'workspace_paid_plan_required',
+          'Workspace taklifini faollashtirish uchun kamida faol Silver tarifi kerak',
+          { minimumPlan: 'silver', invitationToken: rawToken }
+        );
       }
       const result = await db.query(
         `UPDATE workspace_invitations SET accepted_by=$2,accepted_at=now()
@@ -795,6 +845,70 @@ function mountWorkspaceRoutes(app, options) {
         ORDER BY d.updated_at DESC`, [workspaceId]
     );
     res.json({ documents: result.rows });
+  }));
+
+  router.get('/workspaces/:workspaceId/messages', asyncRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    await requireWorkspaceAccess(pool, workspaceId, actorId(req));
+    const limit = integer(req.query.limit || 100, 'limit', { min: 1, max: 200 });
+    const result = await pool.query(
+      `SELECT m.id,m.body,m.pinned_task_id,m.created_at,m.updated_at,
+              a.id AS author_id,a.username,a.full_name,
+              t.title AS pinned_task_title
+         FROM workspace_messages m
+         JOIN admins a ON a.id=m.author_id
+         LEFT JOIN workspace_tasks t ON t.id=m.pinned_task_id AND t.workspace_id=m.workspace_id
+        WHERE m.workspace_id=$1 AND m.deleted_at IS NULL
+        ORDER BY m.created_at DESC LIMIT $2`,
+      [workspaceId, limit]
+    );
+    res.json({ messages: result.rows.reverse() });
+  }));
+
+  router.post('/workspaces/:workspaceId/messages', asyncRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const userId = actorId(req);
+    const body = requiredString(req.body.body, 'body', { min: 1, max: 4000 });
+    const pinnedTaskId = req.body.pinnedTaskId ? uuid(req.body.pinnedTaskId, 'pinnedTaskId') : null;
+    const message = await withWorkspaceTransaction(pool, userId, async (db) => {
+      await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'member' });
+      if (pinnedTaskId) await requireTask(db, workspaceId, pinnedTaskId);
+      return (await db.query(
+        `INSERT INTO workspace_messages(workspace_id,author_id,body,pinned_task_id)
+         VALUES ($1,$2,$3,$4) RETURNING *`,
+        [workspaceId, userId, body, pinnedTaskId]
+      )).rows[0];
+    });
+    res.status(201).json({ message });
+  }));
+
+  router.get('/workspaces/:workspaceId/notifications', asyncRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const userId = actorId(req);
+    await requireWorkspaceAccess(pool, workspaceId, userId);
+    const result = await pool.query(
+      `SELECT n.*,a.username AS subject_username,a.full_name AS subject_full_name
+         FROM workspace_notifications n
+         LEFT JOIN admins a ON a.id=n.subject_user_id
+        WHERE n.workspace_id=$1 AND n.recipient_id=$2
+        ORDER BY n.created_at DESC LIMIT 100`,
+      [workspaceId, userId]
+    );
+    res.json({ notifications: result.rows });
+  }));
+
+  router.patch('/workspaces/:workspaceId/notifications/:notificationId/read', asyncRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const notificationId = uuid(req.params.notificationId, 'notificationId');
+    const userId = actorId(req);
+    await requireWorkspaceAccess(pool, workspaceId, userId);
+    const row = (await pool.query(
+      `UPDATE workspace_notifications SET read_at=COALESCE(read_at,now())
+        WHERE id=$1 AND workspace_id=$2 AND recipient_id=$3 RETURNING *`,
+      [notificationId, workspaceId, userId]
+    )).rows[0];
+    if (!row) throw new WorkspaceError(404, 'notification_not_found', 'Bildirishnoma topilmadi');
+    res.json({ notification: row });
   }));
 
   router.post('/workspaces/:workspaceId/documents', asyncRoute(async (req, res) => {

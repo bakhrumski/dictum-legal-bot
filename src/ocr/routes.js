@@ -232,12 +232,25 @@ function mountAnalyzerRoutes(app, deps) {
   app.post('/api/analyze/extract', requireAuth, analyzeUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     let filePath = req.file.path;
-    const isDoc = /\.(docx|doc)$/i.test(req.file.originalname || '') ||
-      req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      req.file.mimetype === 'application/msword';
+    const fileName = String(req.file.originalname || '');
+    const isLegacyDoc = /\.doc$/i.test(fileName) || req.file.mimetype === 'application/msword';
+    const isDocx = /\.docx$/i.test(fileName) ||
+      req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     try {
-      if (isDoc) {
-        // Word (.docx) — extract text via mammoth (already a dependency).
+      if (isLegacyDoc) {
+        return res.status(415).json({
+          error: 'Eski .doc formati qo\'llab-quvvatlanmaydi. Word faylni “.docx” sifatida saqlab, qayta yuklang.'
+        });
+      }
+      if (isDocx) {
+        // A DOCX is a ZIP package. Reject renamed/corrupt files before Mammoth
+        // emits the confusing JSZip "central directory" implementation error.
+        const signature = fs.readFileSync(filePath, { encoding: null, flag: 'r' }).subarray(0, 4);
+        if (signature.length < 4 || signature[0] !== 0x50 || signature[1] !== 0x4b) {
+          return res.status(422).json({
+            error: 'Word fayli haqiqiy .docx emas yoki shikastlangan. Uni Microsoft Word orqali qayta “.docx” formatida saqlang.'
+          });
+        }
         const mammoth = require('mammoth');
         const result = await mammoth.extractRawText({ path: filePath });
         const text = (result.value || '').trim();
@@ -256,7 +269,12 @@ function mountAnalyzerRoutes(app, deps) {
       });
     } catch (e) {
       console.error('[ANALYZE] extract error:', e.message);
-      res.status(500).json({ error: 'Faylni o\'qib bo\'lmadi: ' + e.message });
+      const corruptDocx = /central directory|zip file|end of central/i.test(String(e.message || ''));
+      res.status(corruptDocx ? 422 : 500).json({
+        error: corruptDocx
+          ? 'Word fayli shikastlangan yoki haqiqiy .docx emas. Uni Microsoft Word orqali qayta saqlang.'
+          : 'Faylni o\'qib bo\'lmadi: ' + e.message
+      });
     } finally {
       fs.unlink(filePath, () => {});
     }

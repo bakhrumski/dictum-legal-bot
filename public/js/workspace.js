@@ -7,6 +7,7 @@
     var searchTimer = null;
     var refreshTimer = null;
     var tokenTimer = null;
+    var entitlementTimer = null;
     var taskPresenceChannel = null;
     var supabaseLoader = null;
     var dropdownSerial = 0;
@@ -36,6 +37,9 @@
         thumbDown: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v12M15 5.9l-1 4.1h5.8a2 2 0 0 1 1.9 2.6l-2.3 7A2 2 0 0 1 17.5 21H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3l4-7a3 3 0 0 1 4 2.9Z" transform="rotate(180 12 12)"/></svg>',
         thumbUp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v12M15 5.9l-1 4.1h5.8a2 2 0 0 1 1.9 2.6l-2.3 7A2 2 0 0 1 17.5 21H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3l4-7a3 3 0 0 1 4 2.9Z"/></svg>',
         upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14"/></svg>'
+        ,graph: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="8" cy="18" r="2"/><circle cx="18" cy="17" r="2"/><path d="m8 7 8 0M7 8l1 8m2 1 6 0m1-8v6M8 8l8 7"/></svg>'
+        ,chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>'
+        ,lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>'
     };
 
     var COPY = {
@@ -141,6 +145,29 @@
     COPY.en.clearDate = 'Clear';
     COPY.en.invalidDate = 'Enter the date as dd.mm.yyyy';
 
+    Object.assign(COPY.uz, {
+        graphView:'Grafik', teamChat:'Jamoa chati', sharedDocuments:'Umumiy hujjatlar',
+        workspaceLockedTitle:'Workspace faqat Platinum yoki taklif qilingan faol a’zolar uchun',
+        workspaceLockedBody:'Workspace’ni faollashtirish uchun Platinum a’zo bo‘lishingiz yoki Platinum a’zo tomonidan qo‘shilishingiz kerak.',
+        minimumSilver:'Taklif qilingan a’zo Workspace’ga kirish uchun kamida faol Silver tarifiga ega bo‘lishi kerak.',
+        expiredSubscription:'Obuna muddati tugagan', ownerExpired:'Workspace egasining Platinum obunasi tugagan. Workspace barcha a’zolar uchun vaqtincha yopildi.',
+        memberExpired:'Obunangiz tugagan. Workspace’ni qayta ochish uchun kamida Silver tarifini faollashtiring.',
+        shareTelegram:'Telegram orqali yuborish', copyInvite:'Havolani nusxalash', notifications:'Bildirishnomalar', noNotifications:'Hozircha yangi bildirishnoma yo‘q.',
+        memberSubscriptionExpiredNotice:'A’zoning obunasi tugadi', memberSubscriptionExpiredMessage:'Workspace kirishi bloklandi. Tarif faollashtirilgach, kirish avtomatik tiklanadi.',
+        chatEmpty:'Jamoa suhbatini boshlang. Muhim vazifani xabarga biriktirib qo‘yishingiz mumkin.',
+        chatPlaceholder:'Jamoaga xabar yozing…', pinnedTask:'Biriktirilgan vazifa', noPinnedTask:'Vazifa biriktirilmagan',
+        documentsEmpty:'Jamoa uchun birinchi umumiy hujjatni yuklang. Har bir yangi nusxa versiya sifatida saqlanadi.',
+        graphEmpty:'Vazifalar yaratilgach, ular va ijrochilar orasidagi bog‘lanish shu yerda ko‘rinadi.',
+        graphHint:'Tugunni bosing — vazifa yoki a’zo tafsilotlari ochiladi.', onTime:'Muddatida', approaching:'Muddat yaqin',
+        memberProfile:'A’zo profili', activeTasks:'Faol vazifalar', sendMessage:'Xabar yuborish'
+    });
+    Object.assign(COPY.ru, {
+        graphView:'График', teamChat:'Чат команды', sharedDocuments:'Общие документы', workspaceLockedTitle:'Workspace доступен Platinum или приглашённым активным участникам', workspaceLockedBody:'Чтобы активировать Workspace, оформите Platinum или примите приглашение участника Platinum.', minimumSilver:'Приглашённому участнику нужен активный тариф не ниже Silver.', expiredSubscription:'Подписка истекла', ownerExpired:'Platinum владельца истёк. Workspace временно закрыт для всей команды.', memberExpired:'Ваша подписка истекла. Для доступа нужен активный Silver или выше.', shareTelegram:'Отправить в Telegram', copyInvite:'Копировать ссылку', notifications:'Уведомления', noNotifications:'Новых уведомлений пока нет.', memberSubscriptionExpiredNotice:'Подписка участника истекла', memberSubscriptionExpiredMessage:'Доступ к Workspace заблокирован. После активации тарифа доступ восстановится автоматически.', chatEmpty:'Начните командный чат и при необходимости закрепите задачу.', chatPlaceholder:'Сообщение команде…', pinnedTask:'Закреплённая задача', noPinnedTask:'Без задачи', documentsEmpty:'Загрузите первый общий документ. Новые копии сохраняются как версии.', graphEmpty:'После создания задач здесь появятся связи между задачами и исполнителями.', graphHint:'Нажмите на узел, чтобы открыть задачу или профиль.', onTime:'В срок', approaching:'Срок близко', memberProfile:'Профиль участника', activeTasks:'Активные задачи', sendMessage:'Отправить'
+    });
+    Object.assign(COPY.en, {
+        graphView:'Graph', teamChat:'Team chat', sharedDocuments:'Shared documents', workspaceLockedTitle:'Workspace is for Platinum or invited active members', workspaceLockedBody:'You must be a Platinum member to activate Workspace or be added by a Platinum member user.', minimumSilver:'An invited member needs an active Silver plan or higher.', expiredSubscription:'Expired subscription', ownerExpired:'The Owner’s Platinum plan expired. Workspace is temporarily unavailable to everyone.', memberExpired:'Your subscription expired. Activate Silver or higher to restore Workspace access.', shareTelegram:'Share via Telegram', copyInvite:'Copy link', notifications:'Notifications', noNotifications:'There are no new notifications yet.', memberSubscriptionExpiredNotice:'A member’s subscription expired', memberSubscriptionExpiredMessage:'Workspace access is blocked. It will be restored automatically after the plan is activated.', chatEmpty:'Start the team conversation and optionally pin a task.', chatPlaceholder:'Message your team…', pinnedTask:'Pinned task', noPinnedTask:'No pinned task', documentsEmpty:'Upload the first shared document. Every update is kept as a new version.', graphEmpty:'Task and assignee relationships will appear here after tasks are created.', graphHint:'Click a node to open the task or member profile.', onTime:'On time', approaching:'Due soon', memberProfile:'Member profile', activeTasks:'Active tasks', sendMessage:'Send'
+    });
+
     var state = {
         language: localStorage.getItem('juristai-workspace-language') || 'uz',
         activated: false,
@@ -157,6 +184,8 @@
         activity: [],
         memory: [],
         threads: [],
+        messages: [],
+        notifications: [],
         currentTask: null,
         detail: null,
         view: 'list',
@@ -479,6 +508,15 @@
 
     function isOwner() { return state.role === 'owner'; }
 
+    function currentPlan() {
+        return String((currentUser && (currentUser.tariffPlan || currentUser.tariff_plan)) || '').toLowerCase();
+    }
+
+    function hasPlatinum() {
+        var expiry=currentUser&&(currentUser.tariffExpiresAt||currentUser.tariff_expires_at);
+        return currentPlan()==='platinum' && (!expiry || new Date(expiry).getTime()>=Date.now());
+    }
+
     function debounceRefresh(callback, delay) {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(callback, delay || 220);
@@ -526,10 +564,10 @@
     var DEMO = (function buildDemoData() {
         var workspaceId = '10000000-0000-4000-8000-000000000001';
         var members = [
-            { id: 9001, role: 'owner', username: 'bakhromski', full_name: 'Bakhrom Abdimuminov', email: 'bakhrom@juristai.uz', last_active_at: new Date().toISOString() },
-            { id: 9002, role: 'member', username: 'malika', full_name: 'Malika Karimova', email: 'malika@example.uz', last_active_at: new Date(Date.now() - 190000).toISOString() },
-            { id: 9003, role: 'member', username: 'azizbek', full_name: 'Azizbek Namozov', email: 'azizbek@example.uz', last_active_at: new Date(Date.now() - 760000).toISOString() },
-            { id: 9004, role: 'viewer', username: 'dilnoza', full_name: 'Dilnoza Tursunova', email: 'dilnoza@example.uz', last_active_at: new Date(Date.now() - 7200000).toISOString() }
+            { id: 9001, role: 'owner', username: 'bakhromski', full_name: 'Bakhrom Abdimuminov', email: 'bakhrom@juristai.uz', last_active_at: new Date().toISOString(), subscription_active:true, tariff_plan:'platinum' },
+            { id: 9002, role: 'member', username: 'malika', full_name: 'Malika Karimova', email: 'malika@example.uz', last_active_at: new Date(Date.now() - 190000).toISOString(), subscription_active:true, tariff_plan:'silver' },
+            { id: 9003, role: 'member', username: 'azizbek', full_name: 'Azizbek Namozov', email: 'azizbek@example.uz', last_active_at: new Date(Date.now() - 760000).toISOString(), subscription_active:true, tariff_plan:'gold' },
+            { id: 9004, role: 'viewer', username: 'dilnoza', full_name: 'Dilnoza Tursunova', email: 'dilnoza@example.uz', last_active_at: new Date(Date.now() - 7200000).toISOString(), subscription_active:false, tariff_plan:'silver', tariff_expires_at:'2026-08-01' }
         ];
         var tasks = [
             { id:'20000000-0000-4000-8000-000000000001', workspace_id:workspaceId, title:'Xodimlar uchun yangi mehnat shartnomasini tekshirish', description:'HR jamoasi tayyorlagan shartnoma loyihasidagi xavfli bandlarni tekshirish va yakuniy tavsiya tayyorlash.', status:'in_progress', priority:'high', start_date:'2026-08-20', due_date:'2026-08-26', is_milestone:false, revision:4, updated_at:new Date(Date.now()-90000).toISOString(), assignees:[{id:9002,username:'malika',fullName:'Malika Karimova'},{id:9003,username:'azizbek',fullName:'Azizbek Namozov'}], watchers:[{id:9001,username:'bakhromski',fullName:'Bakhrom Abdimuminov'}], document_count:2, memory_count:1 },
@@ -555,6 +593,8 @@
         return {
             workspace:{ id:workspaceId, name:'Abdimuminov Legal Team', slug:'abdimuminov-legal-team', default_language:'uz', owner_id:9001, role:'owner', is_active:true, member_count:members.length, task_count:tasks.length },
             members:members, tasks:tasks, comments:comments, documents:documents, activity:activity, threads:[], aiMessages:{},
+            messages:[{id:'msg1',body:'Mehnat shartnomasi bo‘yicha yakuniy tekshiruvni bugun qilamiz.',author_id:9002,full_name:'Malika Karimova',username:'malika',pinned_task_id:tasks[0].id,pinned_task_title:tasks[0].title,created_at:new Date(Date.now()-3600000).toISOString()}],
+            notifications:[],
             invitations:[{id:'inv1',invitee_username:'yangi-yurist',role:'member',status:'pending',expires_at:new Date(Date.now()+604800000).toISOString()}]
         };
     })();
@@ -576,7 +616,8 @@
             var invitation = {id:'inv'+Date.now(),role:body.role,status:'pending',expires_at:new Date(Date.now()+Number(body.expiresInHours||72)*3600000).toISOString()};
             if (String(body.email||'').includes('@')) invitation.invitee_email=body.email; else invitation.invitee_username=body.username;
             DEMO.invitations.unshift(invitation);
-            return { invitation:clone(invitation), inviteUrl:global.location.origin+'/workspace-invite/'+invitation.id+'-preview' };
+            var inviteUrl=global.location.origin+'/workspace-invite/'+invitation.id+'-preview';
+            return { invitation:clone(invitation), inviteUrl:inviteUrl, telegramShareUrl:'https://t.me/share/url?url='+encodeURIComponent(inviteUrl) };
         }
         if (method === 'PATCH' && /\/members\/\d+$/.test(path)) {
             var memberId = Number(path.split('/').pop());
@@ -627,6 +668,12 @@
             (DEMO.comments[commentMatch[1]]||(DEMO.comments[commentMatch[1]]=[])).push(comment); return {comment:clone(comment)};
         }
         if (method === 'GET' && path === '/workspaces/' + workspaceId + '/documents') return {documents:clone(DEMO.documents)};
+        if (method === 'GET' && path === '/workspaces/' + workspaceId + '/messages') return {messages:clone(DEMO.messages)};
+        if (method === 'POST' && path === '/workspaces/' + workspaceId + '/messages') {
+            var chatMessage={id:crypto.randomUUID(),body:body.body,author_id:9001,full_name:'Bakhrom Abdimuminov',username:'bakhromski',pinned_task_id:body.pinnedTaskId||null,pinned_task_title:(DEMO.tasks.find(function(task){return task.id===body.pinnedTaskId;})||{}).title||null,created_at:new Date().toISOString()};
+            DEMO.messages.push(chatMessage);return{message:clone(chatMessage)};
+        }
+        if (method === 'GET' && path === '/workspaces/' + workspaceId + '/notifications') return {notifications:clone(DEMO.notifications)};
         if (method === 'POST' && path === '/workspaces/' + workspaceId + '/documents') {
             var document={id:crypto.randomUUID(),workspace_id:workspaceId,origin_task_id:body.taskId||null,title:body.title,kind:body.kind||'upload',version_number:1,latest_version_id:crypto.randomUUID(),version_created_at:new Date().toISOString(),files:[]};
             DEMO.documents.unshift(document);
@@ -689,6 +736,7 @@
         var open = state.tasks.filter(function(task){return !['done','cancelled'].includes(task.status);}).length;
         var overdue = state.tasks.filter(isOverdue).length;
         var complete = state.tasks.filter(function(task){return task.status==='done';}).length;
+        var unreadNotifications=(state.notifications||[]).filter(function(item){return !item.read_at;}).length;
         root.innerHTML = '<div class="ws-shell">'+
             '<header class="ws-topbar">'+
                 '<div class="ws-topbar-main">'+
@@ -700,7 +748,10 @@
                 '<div class="ws-topbar-actions">'+
                     '<span class="ws-live-badge '+esc(state.realtimeStatus)+'">'+esc(t(state.realtimeStatus==='online'?'live':state.realtimeStatus==='connecting'?'connecting':state.realtimeStatus==='preview'?'preview':'offline'))+'</span>'+
                     '<select class="ws-select ws-language-select" data-action="language" aria-label="'+esc(t('language'))+'"><option value="uz" '+(state.language==='uz'?'selected':'')+'>UZ</option><option value="ru" '+(state.language==='ru'?'selected':'')+'>RU</option><option value="en" '+(state.language==='en'?'selected':'')+'>EN</option></select>'+
+                    '<button class="ws-btn" type="button" data-action="open-chat">'+svg('chat')+'<span>'+esc(t('teamChat'))+'</span></button>'+
+                    '<button class="ws-btn" type="button" data-action="open-shared-documents">'+svg('document')+'<span>'+esc(t('sharedDocuments'))+'</span></button>'+
                     '<button class="ws-btn" type="button" data-action="open-members">'+svg('members')+'<span>'+esc(t('members'))+'</span></button>'+
+                    '<button class="ws-btn icon ghost ws-notification-button" type="button" data-action="open-notifications" aria-label="'+esc(t('notifications'))+'" title="'+esc(t('notifications'))+'">'+svg('history')+(unreadNotifications?'<span class="ws-notification-count">'+unreadNotifications+'</span>':'')+'</button>'+
                     '<button class="ws-btn" type="button" data-action="open-ai">'+svg('ai')+'<span>'+esc(t('aiAssistant'))+'</span></button>'+
                     '<button class="ws-btn primary" type="button" data-action="new-task" '+(!canWrite()?'disabled':'')+'>'+svg('add')+'<span>'+esc(t('newTask'))+'</span></button>'+
                     '<button class="ws-btn icon ghost" type="button" data-action="shortcuts" aria-label="'+esc(t('shortcuts'))+'">'+svg('help')+'</button>'+
@@ -715,10 +766,11 @@
                 '<div class="ws-view-tabs" role="tablist" aria-label="'+esc(t('tasks'))+'">'+
                     '<button class="ws-view-tab '+(state.view==='list'?'active':'')+'" type="button" role="tab" aria-selected="'+(state.view==='list')+'" data-action="view-list">'+svg('list',15)+esc(t('listView'))+'</button>'+
                     '<button class="ws-view-tab '+(state.view==='timeline'?'active':'')+'" type="button" role="tab" aria-selected="'+(state.view==='timeline')+'" data-action="view-timeline">'+svg('timeline',15)+esc(t('timelineView'))+'</button>'+
+                    '<button class="ws-view-tab '+(state.view==='graph'?'active':'')+'" type="button" role="tab" aria-selected="'+(state.view==='graph')+'" data-action="view-graph">'+svg('graph',15)+esc(t('graphView'))+'</button>'+
                 '</div>'+
                 renderFilters()+
             '</div>'+
-            (state.view==='timeline'?renderTimeline():renderTaskList())+
+            (state.view==='timeline'?renderTimeline():state.view==='graph'?renderGraph():renderTaskList())+
         '</div>'+renderTaskDetail()+renderAiPanel()+renderModal()+renderToastsAnchor();
         enhanceDropdowns(root);
     }
@@ -727,17 +779,19 @@
 
     function renderWorkspaceGate() {
         var platinum = state.workspaceGate === 'platinum';
+        var locked = state.workspaceGate === 'locked' || state.workspaceGate === 'owner-expired' || state.workspaceGate === 'member-expired';
+        var lockedBody=state.workspaceGate==='owner-expired'?t('ownerExpired'):state.workspaceGate==='member-expired'?t('memberExpired'):t('workspaceLockedBody');
         return '<div class="ws-gate"><section class="ws-gate-card">'+
-            '<div class="ws-gate-mark">'+svg(platinum?'ai':'members',26)+'</div>'+
+            '<div class="ws-gate-mark">'+svg(locked?'lock':platinum?'ai':'members',26)+'</div>'+
             '<p class="ws-kicker">JURISTAI WORKSPACE</p>'+
-            '<h2>'+esc(t(platinum?'platinumTitle':'noWorkspaceTitle'))+'</h2>'+
-            '<p>'+esc(t(platinum?'platinumBody':'noWorkspaceBody'))+'</p>'+
-            '<form class="ws-create-form" data-form="create-workspace">'+
+            '<h2>'+esc(locked?t('workspaceLockedTitle'):t(platinum?'platinumTitle':'noWorkspaceTitle'))+'</h2>'+
+            '<p>'+esc(locked?lockedBody:t(platinum?'platinumBody':'noWorkspaceBody'))+'</p>'+
+            (!locked?'<form class="ws-create-form" data-form="create-workspace">'+
                 '<label class="ws-sr-only" for="wsCreateName">'+esc(t('workspaceName'))+'</label>'+
                 '<input class="ws-input" id="wsCreateName" name="name" required minlength="2" maxlength="120" placeholder="'+esc(t('workspaceName'))+'">'+
                 '<button class="ws-btn primary" type="submit">'+svg('add')+esc(t('createWorkspace'))+'</button>'+
-            '</form>'+
-            (platinum?'<a class="ws-btn ghost" style="margin-top:12px;text-decoration:none" href="/tariff.html">'+esc(t('upgradePlatinum'))+'</a>':'')+
+            '</form>':'')+
+            ((platinum||locked)?'<a class="ws-btn ghost" style="margin-top:12px;text-decoration:none" href="/tariff.html">'+esc(t('upgradePlatinum'))+'</a>':'')+
         '</section></div>';
     }
 
@@ -759,6 +813,37 @@
             return '<section class="ws-panel ws-empty"><div class="ws-empty-icon">'+svg('list',25)+'</div><h3>'+esc(t('noTasksTitle'))+'</h3><p>'+esc(t('noTasksBody'))+'</p><button class="ws-btn primary" type="button" data-action="new-task" '+(!canWrite()?'disabled':'')+'>'+svg('add')+esc(t('createTask'))+'</button></section>';
         }
         return '<section class="ws-panel"><div class="ws-list-head"><span>'+esc(t('task'))+'</span><span>'+esc(t('status'))+'</span><span>'+esc(t('assignees'))+'</span><span>'+esc(t('dueDate'))+'</span><span></span></div>'+state.tasks.map(renderTaskRow).join('')+'</section>';
+    }
+
+    function graphTone(task) {
+        if (task.status==='done') return 'done';
+        if (isOverdue(task)) return 'overdue';
+        if (task.priority==='urgent') return 'approaching';
+        if (task.due_date) {
+            var days=Math.ceil((new Date(task.due_date+'T23:59:59').getTime()-Date.now())/86400000);
+            if(days>=0&&days<=3)return 'approaching';
+        }
+        return 'active';
+    }
+
+    function renderGraph() {
+        if (!state.tasks.length) return '<section class="ws-panel ws-empty"><div class="ws-empty-icon">'+svg('graph',25)+'</div><h3>'+esc(t('graphView'))+'</h3><p>'+esc(t('graphEmpty'))+'</p></section>';
+        var width=Math.max(980,Math.min(2400,980+Math.ceil(state.tasks.length/3)*95));
+        var taskPositions={},memberPositions={};
+        state.members.forEach(function(member,index){memberPositions[String(member.id)]={x:110+index*150,y:82};});
+        state.tasks.forEach(function(task,index){taskPositions[task.id]={x:90+(index%5)*205,y:220+Math.floor(index/5)*145};});
+        var height=Math.max(520,340+Math.ceil(state.tasks.length/5)*145);
+        var edges=[];
+        state.tasks.forEach(function(task){
+            var from=taskPositions[task.id];
+            (task.assignees||[]).slice(0,4).forEach(function(member){
+                var to=memberPositions[String(member.id)];
+                if(to)edges.push('<path d="M '+(from.x+76)+' '+(from.y-26)+' C '+(from.x+76)+' '+(from.y-86)+', '+(to.x+34)+' '+(to.y+70)+', '+(to.x+34)+' '+(to.y+38)+'"/>');
+            });
+        });
+        var memberNodes=state.members.map(function(member){var p=memberPositions[String(member.id)],expired=member.subscription_active===false;return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';}).join('');
+        var taskNodes=state.tasks.map(function(task){var p=taskPositions[task.id],tone=graphTone(task);return '<button type="button" class="ws-graph-task '+tone+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';}).join('');
+        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+memberNodes+taskNodes+'</div></div></section>';
     }
 
     function renderTaskRow(task) {
@@ -838,7 +923,7 @@
 
     function renderDocumentsSection() {
         var docs=state.detail.documents||[];
-        return '<section class="ws-section"><div class="ws-section-head"><div><h3>'+esc(t('documents'))+'</h3><span class="ws-help">'+esc(t('taskLinkHint'))+'</span></div>'+ (canWrite()?'<label class="ws-btn small" for="wsDocumentUpload">'+svg('upload',14)+esc(t('uploadDocument'))+'</label><input class="ws-file-input" id="wsDocumentUpload" type="file" data-action="upload-document" accept=".pdf,.docx,.doc,.odt,.rtf,.txt,.jpg,.jpeg,.png">':'')+'</div>'+
+        return '<section class="ws-section"><div class="ws-section-head"><div><h3>'+esc(t('documents'))+'</h3><span class="ws-help">'+esc(t('taskLinkHint'))+'</span></div>'+ (canWrite()?'<label class="ws-btn small" for="wsDocumentUpload">'+svg('upload',14)+esc(t('uploadDocument'))+'</label><input class="ws-file-input" id="wsDocumentUpload" type="file" data-action="upload-document" accept=".pdf,.docx,.rtf,.txt,.jpg,.jpeg,.png">':'')+'</div>'+
             (docs.length?docs.map(function(doc){return '<article class="ws-document"><div><div class="ws-document-title">'+esc(doc.title)+'</div><div class="ws-document-meta">v'+Number(doc.version_number||1)+' · '+esc(isoDate(doc.version_created_at||doc.updated_at))+'</div></div><div class="ws-inline" style="gap:6px"><button class="ws-btn small" type="button" data-action="versions" data-document-id="'+esc(doc.id)+'">'+svg('history',14)+esc(t('versions'))+'</button>'+((doc.files||[]).length?'<button class="ws-btn icon small" type="button" data-action="download-file" data-path="'+esc(doc.files[0].path||doc.files[0].storage_object_path)+'" aria-label="'+esc(t('download'))+'">'+svg('download',14)+'</button>':'')+'</div></article>';}).join(''):'<p class="ws-help">'+esc(t('noDocuments'))+'</p>')+
         '</section>';
     }
@@ -895,7 +980,11 @@
         if (!state.modal) return '';
         if (state.modal==='task') return renderTaskModal();
         if (state.modal==='members') return renderMembersModal();
+        if (state.modal==='chat') return renderChatModal();
+        if (state.modal==='shared-documents') return renderSharedDocumentsModal();
+        if (state.modal==='member-profile') return renderMemberProfileModal();
         if (state.modal==='versions') return renderVersionsModal();
+        if (state.modal==='notifications') return renderNotificationsModal();
         if (state.modal==='shortcuts') return renderShortcutsModal();
         return '';
     }
@@ -920,18 +1009,57 @@
     }
 
     function renderMembersModal() {
-        var inviteResult=state.inviteUrl?'<div class="ws-invite-output"><strong>'+esc(t('invite'))+'</strong><div class="ws-invite-link"><input class="ws-input" readonly value="'+esc(state.inviteUrl)+'"><button class="ws-btn" type="button" data-action="copy-invite">'+esc(t('copyLink'))+'</button></div></div>':'';
+        var inviteResult=state.inviteUrl?'<div class="ws-invite-output"><strong>'+esc(t('invite'))+'</strong><p class="ws-help">'+esc(t('minimumSilver'))+'</p><div class="ws-invite-link"><input class="ws-input" readonly value="'+esc(state.inviteUrl)+'"><button class="ws-btn" type="button" data-action="copy-invite">'+esc(t('copyInvite'))+'</button></div><a class="ws-btn primary ws-telegram-share" target="_blank" rel="noopener" href="'+esc(state.telegramShareUrl||('https://t.me/share/url?url='+encodeURIComponent(state.inviteUrl)))+'">'+svg('send',14)+esc(t('shareTelegram'))+'</a></div>':'';
         var inviteForm=isOwner()?'<section class="ws-section" style="margin-top:0;padding-top:0;border-top:0"><div class="ws-section-head"><h3>'+esc(t('inviteMember'))+'</h3></div><form data-form="invite"><div class="ws-detail-grid"><div class="ws-field full"><label>'+esc(t('emailOrUsername'))+'</label><input class="ws-input" name="target" required></div><div class="ws-field"><label>'+esc(t('role'))+'</label><select class="ws-select" name="role"><option value="member">'+esc(t('member'))+'</option><option value="viewer">'+esc(t('viewer'))+'</option></select></div><div class="ws-field"><label>'+esc(t('expires'))+'</label><select class="ws-select" name="expiresInHours"><option value="72">'+esc(t('hours72'))+'</option><option value="168">'+esc(t('days7'))+'</option><option value="720">'+esc(t('days30'))+'</option></select></div></div><button class="ws-btn primary" style="margin-top:12px" type="submit">'+esc(t('createInvite'))+'</button></form>'+inviteResult+'</section>':'';
-        var members='<section class="ws-section"><div class="ws-section-head"><h3>'+esc(t('memberManagement'))+'</h3><span class="ws-pill">'+state.members.length+'</span></div>'+state.members.map(function(person){return '<div class="ws-document ws-member-row"><div class="ws-inline ws-member-identity"><span class="ws-avatar" style="margin:0">'+esc(initials(person))+'</span><div class="ws-member-copy"><div class="ws-document-title">'+esc(personName(person))+'</div><div class="ws-document-meta">@'+esc(person.username||'')+'</div></div></div>'+(isOwner()&&person.role!=='owner'?'<select class="ws-select" style="width:120px;min-height:36px" data-action="change-member-role" data-member-id="'+person.id+'"><option value="member" '+(person.role==='member'?'selected':'')+'>'+esc(t('member'))+'</option><option value="viewer" '+(person.role==='viewer'?'selected':'')+'>'+esc(t('viewer'))+'</option></select>':'<span class="ws-role-badge">'+esc(t(person.role))+'</span>')+'</div>';}).join('')+'</section>';
+        var members='<section class="ws-section"><div class="ws-section-head"><h3>'+esc(t('memberManagement'))+'</h3><span class="ws-pill">'+state.members.length+'</span></div>'+state.members.map(function(person){var expired=person.subscription_active===false;return '<div class="ws-document ws-member-row '+(expired?'expired':'')+'"><button class="ws-inline ws-member-identity ws-link-button" type="button" data-action="open-member-profile" data-member-id="'+esc(person.id)+'"><span class="ws-avatar" style="margin:0">'+esc(initials(person))+'</span><div class="ws-member-copy"><div class="ws-document-title">'+esc(personName(person))+'</div><div class="ws-document-meta">@'+esc(person.username||'')+(expired?' · <strong>'+esc(t('expiredSubscription'))+'</strong>':'')+'</div></div></button>'+(isOwner()&&person.role!=='owner'?'<select class="ws-select" style="width:120px;min-height:36px" data-action="change-member-role" data-member-id="'+person.id+'" '+(expired?'disabled':'')+'><option value="member" '+(person.role==='member'?'selected':'')+'>'+esc(t('member'))+'</option><option value="viewer" '+(person.role==='viewer'?'selected':'')+'>'+esc(t('viewer'))+'</option></select>':'<span class="ws-role-badge">'+esc(t(person.role))+'</span>')+'</div>';}).join('')+'</section>';
         var pendingInvitations=(state.invitations||[]).filter(function(inv){return inv.status==='pending';});
         var invites=isOwner()?'<section class="ws-section"><div class="ws-section-head"><h3>'+esc(t('pendingInvites'))+'</h3></div>'+(pendingInvitations.length?pendingInvitations.map(function(inv){return '<div class="ws-document"><div><div class="ws-document-title">'+esc(inv.invitee_email||('@'+inv.invitee_username))+'</div><div class="ws-document-meta">'+esc(t(inv.role))+' · '+esc(isoDate(inv.expires_at))+'</div></div></div>';}).join(''):'<p class="ws-help">'+esc(t('noPendingInvites'))+'</p>')+'</section>':'';
         return modalFrame(t('members'),inviteForm+members+invites,'');
+    }
+
+    function renderChatModal() {
+        var messages=state.messages||[];
+        var body='<div class="ws-chat-list">'+(messages.length?messages.map(function(message){return '<article class="ws-chat-message"><span class="ws-avatar">'+esc(initials(message))+'</span><div><div class="ws-comment-head"><strong>'+esc(personName(message))+'</strong><time>'+esc(relativeTime(message.created_at))+'</time></div><div class="ws-comment-body">'+esc(message.body)+'</div>'+(message.pinned_task_id?'<button class="ws-pinned-task" type="button" data-action="open-task-from-modal" data-task-id="'+esc(message.pinned_task_id)+'">'+svg('list',13)+esc(message.pinned_task_title||t('pinnedTask'))+'</button>':'')+'</div></article>';}).join(''):'<div class="ws-empty compact"><p>'+esc(t('chatEmpty'))+'</p></div>')+'</div>'+
+            (canWrite()?'<form class="ws-chat-form" data-form="workspace-message"><textarea class="ws-textarea" name="body" required maxlength="4000" placeholder="'+esc(t('chatPlaceholder'))+'"></textarea><select class="ws-select" name="pinnedTaskId"><option value="">'+esc(t('noPinnedTask'))+'</option>'+state.tasks.map(function(task){return '<option value="'+esc(task.id)+'">'+esc(task.title)+'</option>';}).join('')+'</select><button class="ws-btn primary" type="submit">'+svg('send',14)+esc(t('sendMessage'))+'</button></form>':'');
+        return modalFrame(t('teamChat'),body,'');
+    }
+
+    function renderSharedDocumentsModal() {
+        var docs=state.documents||[];
+        var body=(canWrite()?'<label class="ws-shared-upload" for="wsSharedDocumentUpload">'+svg('upload',22)+'<strong>'+esc(t('uploadDocument'))+'</strong><span>'+esc(t('documentsEmpty'))+'</span></label><input class="ws-file-input" id="wsSharedDocumentUpload" type="file" data-action="upload-shared-document" accept=".pdf,.docx,.rtf,.txt,.jpg,.jpeg,.png">':'')+
+            '<div class="ws-shared-doc-list">'+(docs.length?docs.map(function(doc){return '<article class="ws-document"><div><div class="ws-document-title">'+esc(doc.title)+'</div><div class="ws-document-meta">v'+Number(doc.version_number||1)+' · '+esc(isoDate(doc.version_created_at||doc.updated_at||doc.created_at))+(doc.origin_task_id?' · '+esc(t('task')):'')+'</div></div><button class="ws-btn small" type="button" data-action="versions" data-document-id="'+esc(doc.id)+'">'+svg('history',14)+esc(t('versions'))+'</button></article>';}).join(''):'<div class="ws-empty compact"><p>'+esc(t('documentsEmpty'))+'</p></div>')+'</div>';
+        return modalFrame(t('sharedDocuments'),body,'');
+    }
+
+    function renderMemberProfileModal() {
+        var person=state.modalData&&state.modalData.member;
+        if(!person)return '';
+        var tasks=state.tasks.filter(function(task){return !['done','cancelled'].includes(task.status)&&(task.assignees||[]).some(function(member){return String(member.id)===String(person.id);});});
+        var body='<div class="ws-member-profile"><span class="ws-avatar large">'+esc(initials(person))+'</span><h3>'+esc(personName(person))+'</h3><p>@'+esc(person.username||'')+' · '+esc(t(person.role||'member'))+'</p>'+(person.subscription_active===false?'<div class="ws-expired-banner">'+esc(t('expiredSubscription'))+'</div>':'')+'<div class="ws-section"><div class="ws-section-head"><h3>'+esc(t('activeTasks'))+'</h3><span class="ws-pill">'+tasks.length+'</span></div>'+tasks.map(function(task){return '<button class="ws-profile-task" type="button" data-action="open-task-from-modal" data-task-id="'+esc(task.id)+'"><span class="ws-status '+esc(task.status)+'">'+esc(t(task.status))+'</span><strong>'+esc(task.title)+'</strong></button>';}).join('')+'</div></div>';
+        return modalFrame(t('memberProfile'),body,'');
     }
 
     function renderVersionsModal() {
         var data=state.modalData||{}, versions=data.versions||[];
         var body=versions.length?versions.map(function(version){return '<article class="ws-document"><div><div class="ws-document-title">v'+Number(version.version_number||1)+'</div><div class="ws-document-meta">'+esc(isoDate(version.created_at))+'</div></div><div class="ws-inline" style="gap:6px">'+(version.files||[]).map(function(file){return '<button class="ws-btn small" type="button" data-action="download-file" data-path="'+esc(file.storage_object_path||file.path)+'">'+svg('download',14)+esc((file.file_format||file.format||'file').toUpperCase())+' · '+esc(formatBytes(file.byte_size||file.byteSize))+'</button>';}).join('')+'</div></article>';}).join(''):'<p class="ws-help">'+esc(t('noDocuments'))+'</p>';
         return modalFrame(t('versions'),body,'<button class="ws-btn" type="button" data-action="close-modal">'+esc(t('close'))+'</button>');
+    }
+
+    function renderNotificationsModal() {
+        var items=state.notifications||[];
+        var body=items.length?'<div class="ws-notification-list">'+items.map(function(item){
+            var payload=item.payload||{};
+            if(typeof payload==='string'){try{payload=JSON.parse(payload);}catch(ignore){payload={};}}
+            var title=item.title||t('notifications');
+            var message=item.message||'';
+            if(item.notification_type==='member_subscription_expired'){
+                var memberName=payload.fullName||payload.full_name||payload.username||'';
+                title=(memberName?memberName+' — ':'')+t('memberSubscriptionExpiredNotice');
+                message=t('memberSubscriptionExpiredMessage');
+            }
+            return '<article class="ws-notification '+(item.read_at?'':'unread')+'"><span class="ws-notification-mark">'+svg('history',15)+'</span><div><strong>'+esc(title)+'</strong><p>'+esc(message)+'</p><time>'+esc(relativeTime(item.created_at))+'</time></div></article>';
+        }).join('')+'</div>':'<div class="ws-empty compact"><p>'+esc(t('noNotifications'))+'</p></div>';
+        return modalFrame(t('notifications'),body,'');
     }
 
     function renderShortcutsModal() {
@@ -956,7 +1084,65 @@
             render();
             toast(apiErrorMessage(error),'error');
         }).finally(function(){activationPromise=null;});
+        scheduleEntitlementRefresh();
         return activationPromise;
+    }
+
+    function entitlementExpiryTimes() {
+        var values=[];
+        (state.workspaces||[]).forEach(function(workspace){
+            [workspace.tariff_expires_at,workspace.member_tariff_expires_at].forEach(function(value){
+                var time=value?new Date(value).getTime():NaN;
+                if(Number.isFinite(time)&&time>Date.now())values.push(time);
+            });
+        });
+        (state.members||[]).forEach(function(member){
+            var time=member.tariff_expires_at?new Date(member.tariff_expires_at).getTime():NaN;
+            if(Number.isFinite(time)&&time>Date.now())values.push(time);
+        });
+        return values;
+    }
+
+    function scheduleEntitlementRefresh() {
+        if(entitlementTimer){clearTimeout(entitlementTimer);entitlementTimer=null;}
+        if(previewMode||!state.activated)return;
+        var expiries=entitlementExpiryTimes();
+        if(!expiries.length)return;
+        var delay=Math.max(1000,Math.min(2147483000,Math.min.apply(Math,expiries)-Date.now()+1000));
+        entitlementTimer=setTimeout(function(){
+            entitlementTimer=null;
+            refreshWorkspaceEntitlements();
+        },delay);
+    }
+
+    async function refreshWorkspaceEntitlements() {
+        if(previewMode||!state.activated)return;
+        try {
+            var data=await api('GET','/workspaces');
+            var latest=data.workspaces||[];
+            state.workspaces=latest;
+            if(!state.workspace)return;
+            var current=latest.find(function(item){return item.id===state.workspace.id;});
+            if(!current){await loadWorkspaces();return;}
+            var wasActive=state.isActive;
+            state.workspace=Object.assign({},state.workspace,current);
+            state.isActive=current.is_active!==false;
+            if(wasActive&&!state.isActive){await selectWorkspace(current.id);return;}
+            if(!wasActive&&state.isActive){await selectWorkspace(current.id);return;}
+            if(state.isActive&&state.role==='owner') {
+                var members=await api('GET','/workspaces/'+current.id+'/members');
+                var previous=JSON.stringify((state.members||[]).map(function(item){return [item.id,item.subscription_active];}));
+                var previousNotifications=JSON.stringify((state.notifications||[]).map(function(item){return [item.id,item.read_at];}));
+                state.members=members.members||[];
+                var notifications=await api('GET','/workspaces/'+current.id+'/notifications').catch(function(){return{notifications:state.notifications||[]};});
+                state.notifications=notifications.notifications||[];
+                if(previous!==JSON.stringify(state.members.map(function(item){return [item.id,item.subscription_active];}))||previousNotifications!==JSON.stringify(state.notifications.map(function(item){return [item.id,item.read_at];})))render();
+            }
+        } catch(error) {
+            if(error&&[401,402,403].includes(error.status)&&state.workspace) await selectWorkspace(state.workspace.id).catch(function(){});
+        } finally {
+            scheduleEntitlementRefresh();
+        }
     }
 
     async function loadWorkspaces(preferredId) {
@@ -966,7 +1152,7 @@
         state.activated=true;
         if (!state.workspaces.length) {
             state.workspace=null;
-            state.workspaceGate='empty';
+            state.workspaceGate=hasPlatinum()?'empty':'locked';
             render();
             return;
         }
@@ -983,12 +1169,23 @@
         state.isActive=state.workspace.is_active!==undefined?!!state.workspace.is_active:state.workspace.isActive!==undefined?!!state.workspace.isActive:true;
         state.currentTask=null; state.detail=null; state.conflict=null; state.ai={open:false,taskId:null,threadId:null,messages:[],loading:false,lastResult:null};
         localStorage.setItem('juristai-workspace-id',workspaceId);
+        if (!state.isActive) {
+            var reason=String(state.workspace.unavailable_reason||state.workspace.unavailableReason||'');
+            state.workspaceGate=reason==='owner_subscription_expired'?'owner-expired':reason==='member_subscription_expired'?'member-expired':'locked';
+            state.loading=false;
+            state.tasks=[];state.members=[];state.documents=[];state.messages=[];state.notifications=[];
+            render();
+            return;
+        }
+        state.workspaceGate=null;
         state.loading=true; render();
         var base='/workspaces/'+workspaceId;
         var responses=await Promise.all([
             api('GET',base), api('GET',base+'/members'), loadTasks(false),
             api('GET',base+'/documents'), api('GET',base+'/activity?limit=100'),
-            api('GET',base+'/memory'), api('GET',base+'/assistant/threads').catch(function(){return{threads:[]};})
+            api('GET',base+'/memory'), api('GET',base+'/assistant/threads').catch(function(){return{threads:[]};}),
+            api('GET',base+'/messages').catch(function(){return{messages:[]};}),
+            api('GET',base+'/notifications').catch(function(){return{notifications:[]};})
         ]);
         var metadata=responses[0], memberData=responses[1];
         state.workspace=Object.assign({},state.workspace,metadata.workspace||{});
@@ -1000,7 +1197,10 @@
         state.activity=responses[4].activity||[];
         state.memory=responses[5].memory||[];
         state.threads=responses[6].threads||[];
+        state.messages=responses[7].messages||[];
+        state.notifications=responses[8].notifications||[];
         state.loading=false;
+        scheduleEntitlementRefresh();
         render();
         connectRealtime().catch(function(error){
             state.realtimeStatus='offline'; render();
@@ -1067,6 +1267,10 @@
         root.addEventListener('pointerdown',handleTimelineDrag);
         document.addEventListener('keydown',handleKeyboard);
         document.addEventListener('click',handleDocumentClick);
+        global.addEventListener('focus',refreshWorkspaceEntitlements);
+        document.addEventListener('visibilitychange',function(){
+            if(document.visibilityState==='visible')refreshWorkspaceEntitlements();
+        });
     }
 
     function handleDocumentClick(event) {
@@ -1125,13 +1329,18 @@
         if (action==='close-detail') { if(target===event.currentTarget||target.closest('.ws-detail-panel')||target.classList.contains('ws-detail-backdrop')) closeTaskDetail(); return; }
         if (action==='open-task') {openTask(target.dataset.taskId);return;}
         if (action==='new-task') {state.modal='task';state.modalData={};render();return;}
-        if (action==='view-list'||action==='view-timeline') {state.view=action==='view-list'?'list':'timeline';loadTasks();return;}
+        if (action==='view-list'||action==='view-timeline'||action==='view-graph') {state.view=action==='view-list'?'list':action==='view-timeline'?'timeline':'graph';loadTasks();return;}
         if (action==='timeline-zoom') {state.timelineZoom=target.dataset.zoom;render();return;}
         if (action==='close-modal') {
             if (target.classList.contains('ws-modal-backdrop') && event.target !== target) return;
             state.modal=null;state.modalData=null;state.inviteUrl=null;render();return;
         }
         if (action==='open-members') {openMembers();return;}
+        if (action==='open-notifications') {openNotifications();return;}
+        if (action==='open-chat') {state.modal='chat';render();return;}
+        if (action==='open-shared-documents') {state.modal='shared-documents';render();return;}
+        if (action==='open-member-profile') {var member=state.members.find(function(item){return String(item.id)===String(target.dataset.memberId);});if(member){state.modal='member-profile';state.modalData={member:member};render();}return;}
+        if (action==='open-task-from-modal') {state.modal=null;state.modalData=null;openTask(target.dataset.taskId);return;}
         if (action==='open-ai') {openAi(target.dataset.taskId||null);return;}
         if (action==='new-ai-conversation') {newAiConversation();return;}
         if (action==='close-ai') {state.ai.open=false;render();return;}
@@ -1155,6 +1364,7 @@
         if (target.dataset.action==='ai-thread') {if(target.value)loadAiThread(target.value);return;}
         if (target.dataset.action==='change-member-role') {changeMemberRole(target.dataset.memberId,target.value);return;}
         if (target.dataset.action==='upload-document'&&target.files&&target.files[0]) {uploadDocument(target.files[0]);return;}
+        if (target.dataset.action==='upload-shared-document'&&target.files&&target.files[0]) {uploadSharedDocument(target.files[0]);return;}
         if (target.dataset.filter&&target.dataset.filter!=='search') {state.filters[target.dataset.filter]=target.value;loadTasks().catch(function(error){toast(apiErrorMessage(error),'error');});return;}
         if (target.type==='checkbox'&&target.closest('.ws-person-chip')) target.closest('.ws-person-chip').classList.toggle('selected',target.checked);
     }
@@ -1179,6 +1389,7 @@
         else if (type==='update-task') updateTask(form);
         else if (type==='comment') createComment(form);
         else if (type==='invite') createInvitation(form);
+        else if (type==='workspace-message') createWorkspaceMessage(form);
         else if (type==='ai') askAssistant(form);
     }
 
@@ -1297,6 +1508,23 @@
         } catch(error){toast(apiErrorMessage(error),'error');}
     }
 
+    async function openNotifications() {
+        state.modal='notifications';
+        render();
+        var unread=(state.notifications||[]).filter(function(item){return !item.read_at;});
+        if(!unread.length)return;
+        try {
+            await Promise.all(unread.map(function(item){
+                return api('PATCH','/workspaces/'+state.workspace.id+'/notifications/'+item.id+'/read',{});
+            }));
+            var readAt=new Date().toISOString();
+            state.notifications=(state.notifications||[]).map(function(item){
+                return item.read_at||!unread.some(function(unreadItem){return unreadItem.id===item.id;})?item:Object.assign({},item,{read_at:readAt});
+            });
+            render();
+        } catch(error){toast(apiErrorMessage(error),'error');}
+    }
+
     async function createInvitation(form) {
         if(!isOwner())return;
         var values=formValues(form),target=String(values.target||'').trim(),button=form.querySelector('button[type="submit"]');
@@ -1306,6 +1534,7 @@
             if(target.includes('@'))payload.email=target;else payload.username=target.replace(/^@/,'');
             var result=await api('POST','/workspaces/'+state.workspace.id+'/invitations',payload);
             state.inviteUrl=result.inviteUrl;
+            state.telegramShareUrl=result.telegramShareUrl||('https://t.me/share/url?url='+encodeURIComponent(result.inviteUrl));
             var data=await api('GET','/workspaces/'+state.workspace.id+'/invitations');
             state.invitations=data.invitations||[];
             render();
@@ -1334,7 +1563,7 @@
     }
 
     var FILE_TYPES={
-        'application/pdf':'pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx','application/msword':'doc','application/vnd.oasis.opendocument.text':'odt','application/rtf':'rtf','text/rtf':'rtf','text/plain':'txt','image/jpeg':'jpg','image/png':'png'
+        'application/pdf':'pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx','application/rtf':'rtf','text/rtf':'rtf','text/plain':'txt','image/jpeg':'jpg','image/png':'png'
     };
 
     async function fileSha256(file) {
@@ -1346,24 +1575,39 @@
         return String(name||'file').normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/^-+|-+$/g,'').slice(-180)||'file';
     }
 
-    async function uploadDocument(file) {
-        if(!state.detail||!canWrite())return;
+    async function uploadWorkspaceFile(file,taskId) {
+        if(!canWrite())return;
         if(file.size>52428800){toast(t('fileTooLarge'),'error');return;}
         var format=FILE_TYPES[file.type];
         if(!format){toast(t('unsupportedFile'),'error');return;}
         try {
             toast(t('loading'));
-            var created=await api('POST','/workspaces/'+state.workspace.id+'/documents',{taskId:state.detail.task.id,title:file.name,kind:'upload'});
+            var created=await api('POST','/workspaces/'+state.workspace.id+'/documents',{taskId:taskId||null,title:file.name,kind:'upload'});
             var objectPath=created.storagePathPrefix+Date.now()+'-'+safeFileName(file.name);
             if(!previewMode) {
                 var client=await ensureSupabase();
                 var upload=await client.storage.from('workspace-documents').upload(objectPath,file,{contentType:file.type,upsert:false,cacheControl:'3600'});
                 if(upload.error)throw upload.error;
             }
-            await api('POST','/workspaces/'+state.workspace.id+'/documents/'+created.document.id+'/versions/'+created.version.id+'/files',{fileFormat:format,objectPath:objectPath,mimeType:file.type,byteSize:file.size,sha256:await fileSha256(file)});
-            await Promise.all([refreshCurrentTask(false),loadTasks(false)]);
+            await api('POST','/workspaces/'+state.workspace.id+'/documents/'+created.document.id+'/versions/'+created.version.id+'/files',{fileFormat:'original',objectPath:objectPath,mimeType:file.type,byteSize:file.size,sha256:await fileSha256(file)});
+            var docs=await api('GET','/workspaces/'+state.workspace.id+'/documents');state.documents=docs.documents||[];
+            await Promise.all([taskId&&state.currentTask===taskId?refreshCurrentTask(false):Promise.resolve(),loadTasks(false)]);
             render();toast(t('uploadComplete'),'success');
         } catch(error){toast(t('uploadFailed')+': '+apiErrorMessage(error),'error');}
+    }
+
+    function uploadDocument(file) { return uploadWorkspaceFile(file,state.detail&&state.detail.task&&state.detail.task.id); }
+    function uploadSharedDocument(file) { return uploadWorkspaceFile(file,null); }
+
+    async function createWorkspaceMessage(form) {
+        if(!canWrite())return;
+        var values=formValues(form),body=String(values.body||'').trim(),button=form.querySelector('button[type="submit"]');
+        if(!body)return;
+        try{
+            if(button)button.disabled=true;
+            await api('POST','/workspaces/'+state.workspace.id+'/messages',{body:body,pinnedTaskId:values.pinnedTaskId||null});
+            var data=await api('GET','/workspaces/'+state.workspace.id+'/messages');state.messages=data.messages||[];render();
+        }catch(error){toast(apiErrorMessage(error),'error');if(button)button.disabled=false;}
     }
 
     async function downloadFile(path) {
@@ -1579,7 +1823,7 @@
         var client=await ensureSupabase();
         if(state.realtimeChannel)await client.removeChannel(state.realtimeChannel);
         var channel=client.channel('workspace:'+state.workspace.id+':changes');
-        ['workspace_tasks','workspace_task_assignees','workspace_task_watchers','workspace_task_comments','workspace_task_links','workspace_task_documents','workspace_documents','workspace_document_versions','workspace_document_files','workspace_memory_items','workspace_activity_log'].forEach(function(table){
+        ['workspace_tasks','workspace_task_assignees','workspace_task_watchers','workspace_task_comments','workspace_task_links','workspace_task_documents','workspace_documents','workspace_document_versions','workspace_document_files','workspace_memory_items','workspace_activity_log','workspace_messages','workspace_notifications'].forEach(function(table){
             channel.on('postgres_changes',{event:'*',schema:'public',table:table,filter:'workspace_id=eq.'+state.workspace.id},function(payload){handleRealtimeChange(table,payload);});
         });
         state.realtimeChannel=channel;
@@ -1603,6 +1847,9 @@
         var fromOther=Number(record.updated_by||record.author_id||record.created_by||0)!==currentUserId();
         debounceRefresh(async function(){
             try {
+                if(table==='workspace_messages'){var messages=await api('GET','/workspaces/'+state.workspace.id+'/messages');state.messages=messages.messages||[];render();return;}
+                if(table==='workspace_notifications'){var notifications=await api('GET','/workspaces/'+state.workspace.id+'/notifications');state.notifications=notifications.notifications||[];render();return;}
+                if(table.indexOf('workspace_document')===0){var docs=await api('GET','/workspaces/'+state.workspace.id+'/documents');state.documents=docs.documents||[];}
                 await loadTasks(false);
                 if(state.currentTask)await refreshCurrentTask(fromOther);
                 else render();

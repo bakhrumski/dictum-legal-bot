@@ -36,45 +36,39 @@ function startRegBot() {
     const chatId = msg.chat.id;
     const param = (match[1] || '').trim();
 
-    // /start reg_TOKEN — registration OTP
+    // /start reg_TOKEN — one-tap Telegram authorization
     if (param.startsWith('reg_')) {
       const token = param.replace('reg_', '').trim();
       const session = regSessions.get(token);
-      if (session && !session.otp) {
-        const otp = String(Math.floor(1000 + Math.random() * 9000));
-        session.otp = otp;
+      if (session && !session.approved) {
+        session.otp = 'APPROVED';
+        session.approved = true;
         session.telegramUserId = String(msg.from.id);
         session.firstName = msg.from.first_name || '';
         session.lastName = msg.from.last_name || '';
         session.username = msg.from.username || '';
         session.otpSentAt = Date.now();
-        regBot.sendMessage(chatId,
-          `🔐 *JuristAI ro'yxatdan o'tish kodi:*\n\n*${otp}*\n\nUshbu 4 raqamli kodni saytdagi maydoniga kiriting.\nKod 10 daqiqa amal qiladi.`,
-          { parse_mode: 'Markdown' }
-        );
-      } else if (session && session.otp) {
-        regBot.sendMessage(chatId, `⚠️ Kod allaqachon yuborilgan. Saytga qayting va kodni kiriting.\n\nAgar muammo bo'lsa, sahifani yangilab qayta urinib ko'ring.`);
+        regBot.sendMessage(chatId, `✅ JuristAI ro'yxatdan o'tishiga ruxsat berildi. Saytga qayting — jarayon avtomatik davom etadi.`);
+      } else if (session && session.approved) {
+        regBot.sendMessage(chatId, `✅ Ruxsat avval tasdiqlangan. Saytga qayting.`);
       } else {
         regBot.sendMessage(chatId, '⏳ Sessiya topilmadi yoki muddati o\'tgan.\nIltimos, saytda qayta ro\'yxatdan o\'tishni boshlang.');
       }
       return;
     }
 
-    // /start login_TOKEN — login OTP
+    // /start login_TOKEN — one-tap Telegram authorization
     if (param.startsWith('login_')) {
       const token = param.replace('login_', '').trim();
       const session = loginSessions.get(token);
-      if (session && !session.otp) {
-        const otp = String(Math.floor(1000 + Math.random() * 9000));
-        session.otp = otp;
+      if (session && !session.approved) {
+        session.otp = 'APPROVED';
+        session.approved = true;
         session.telegramUserId = String(msg.from.id);
         session.otpSentAt = Date.now();
-        regBot.sendMessage(chatId,
-          `🔑 *JuristAI kirish kodi:*\n\n*${otp}*\n\nUshbu 4 raqamli kodni saytdagi maydoniga kiriting.\nKod 10 daqiqa amal qiladi.`,
-          { parse_mode: 'Markdown' }
-        );
-      } else if (session && session.otp) {
-        regBot.sendMessage(chatId, `⚠️ Kirish kodi allaqachon yuborilgan. Saytga qayting va kodni kiriting.`);
+        regBot.sendMessage(chatId, `✅ JuristAI hisobiga kirishga ruxsat berildi. Saytga qayting — kirish avtomatik yakunlanadi.`);
+      } else if (session && session.approved) {
+        regBot.sendMessage(chatId, `✅ Kirish avval tasdiqlangan. Saytga qayting.`);
       } else {
         regBot.sendMessage(chatId, '⏳ Sessiya topilmadi yoki muddati o\'tgan.\nIltimos, saytda qayta urinib ko\'ring.');
       }
@@ -109,52 +103,11 @@ function startRegBot() {
       return;
     }
 
-    // Bare /start — Telegram sometimes strips the parameter on existing chats.
-    // Find the most recently created pending session (within 2 min) and send OTP.
-    if (!param) {
-      const WINDOW_MS = 120000;
-      const now = Date.now();
-      let bestReg = null, bestRegTime = 0;
-      for (const [t, s] of regSessions.entries()) {
-        if (!s.otp && (now - s.createdAt) < WINDOW_MS && s.createdAt > bestRegTime) {
-          bestReg = { t, s }; bestRegTime = s.createdAt;
-        }
-      }
-      let bestLogin = null, bestLoginTime = 0;
-      for (const [t, s] of loginSessions.entries()) {
-        if (!s.otp && (now - s.createdAt) < WINDOW_MS && s.createdAt > bestLoginTime) {
-          bestLogin = { t, s }; bestLoginTime = s.createdAt;
-        }
-      }
-
-      if (bestReg && bestRegTime >= bestLoginTime) {
-        const otp = String(Math.floor(1000 + Math.random() * 9000));
-        bestReg.s.otp = otp;
-        bestReg.s.telegramUserId = String(msg.from.id);
-        bestReg.s.firstName = msg.from.first_name || '';
-        bestReg.s.lastName = msg.from.last_name || '';
-        bestReg.s.username = msg.from.username || '';
-        bestReg.s.otpSentAt = now;
-        regBot.sendMessage(chatId,
-          `🔐 *JuristAI ro'yxatdan o'tish kodi:*\n\n*${otp}*\n\nUshbu 4 raqamli kodni saytdagi maydoniga kiriting.\nKod 10 daqiqa amal qiladi.`,
-          { parse_mode: 'Markdown' });
-        return;
-      }
-      if (bestLogin) {
-        const otp = String(Math.floor(1000 + Math.random() * 9000));
-        bestLogin.s.otp = otp;
-        bestLogin.s.telegramUserId = String(msg.from.id);
-        bestLogin.s.otpSentAt = now;
-        regBot.sendMessage(chatId,
-          `🔑 *JuristAI kirish kodi:*\n\n*${otp}*\n\nUshbu 4 raqamli kodni saytdagi maydoniga kiriting.\nKod 10 daqiqa amal qiladi.`,
-          { parse_mode: 'Markdown' });
-        return;
-      }
-    }
-
-    // Default welcome
+    // A bare /start is intentionally not matched to the newest anonymous web
+    // session. Doing that could bind the wrong visitor when several people are
+    // signing in at once. The signed deep link above is the one-tap approval.
     regBot.sendMessage(chatId,
-      `Assalomu aleykum, ${msg.from.first_name}! 👋\n\nJuristAIga xush kelibsiz!\n\nRo'yxatdan o'tish yoki kirish uchun saytdagi tugmani bosing.`
+      `Assalomu aleykum, ${msg.from.first_name}! 👋\n\nJuristAIga xush kelibsiz!\n\nKirish yoki ro'yxatdan o'tish uchun JuristAI saytidagi “Telegram bilan davom eting” tugmasini bosing. Tasdiqlash avtomatik bajariladi — kod kiritish shart emas.`
     );
   });
 

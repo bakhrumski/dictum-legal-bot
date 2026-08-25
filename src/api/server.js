@@ -776,13 +776,25 @@ app.get('/api/admin/audit-log', requireMasterAdmin, async (req, res) => {
 });
 
 // Get current user info
-app.get('/api/user-info', requireAuth, (req, res) => {
-  res.json({
-    adminId: req.session.adminId,
-    username: req.session.username,
-    role: req.session.role,
-    fullName: req.session.fullName
-  });
+app.get('/api/user-info', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT tariff_plan, tariff_expires_at FROM admins WHERE id = $1 LIMIT 1`,
+      [req.session.adminId]
+    );
+    const account = result.rows[0] || {};
+    res.json({
+      adminId: req.session.adminId,
+      username: req.session.username,
+      role: req.session.role,
+      fullName: req.session.fullName,
+      tariffPlan: account.tariff_plan || null,
+      tariffExpiresAt: account.tariff_expires_at || null
+    });
+  } catch (error) {
+    console.error('[user-info]', error.message);
+    res.status(500).json({ error: 'Foydalanuvchi ma’lumotlarini yuklab bo‘lmadi' });
+  }
 });
 
 // Corpus diagnostic (master only): is a given law's article actually ingested
@@ -8853,6 +8865,14 @@ app.post('/api/login-session', (req, res) => {
   loginSessions.set(token, { otp: null, telegramUserId: null, createdAt: Date.now() });
   setTimeout(() => loginSessions.delete(token), 10 * 60 * 1000);
   res.json({ token, botUsername: AUTH_BOT_USERNAME });
+});
+
+app.get('/api/telegram-auth/status/:mode/:token', (req, res) => {
+  const store = req.params.mode === 'register' ? regSessions : req.params.mode === 'login' ? loginSessions : null;
+  if (!store) return res.status(400).json({ error: 'Noto‘g‘ri tasdiqlash turi' });
+  const authSession = store.get(req.params.token);
+  if (!authSession) return res.json({ approved: false, expired: true });
+  res.json({ approved: !!authSession.approved, expired: Date.now() > authSession.createdAt + 10 * 60 * 1000 });
 });
 
 // POST /api/login/telegram-otp — verify OTP and log user in
