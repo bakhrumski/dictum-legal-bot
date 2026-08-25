@@ -295,6 +295,7 @@ function transactionalPool(handler) {
       '20260822_002_workspace_rls_realtime_storage.sql',
       '20260822_003_workspace_corpus_revision.sql',
       '20260825_004_workspace_entitlements_chat.sql',
+      '20260825_005_workspace_master_owner.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
@@ -324,6 +325,9 @@ function transactionalPool(handler) {
     assert.ok(corpusRevision.includes('legal_corpus_state'));
     assert.ok(corpusRevision.includes('FOR EACH STATEMENT'));
     assert.ok(corpusRevision.includes('last_transaction'));
+    const masterOwner = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260825_005_workspace_master_owner.sql'), 'utf8');
+    assert.ok(masterOwner.includes("a.role IN ('user', 'master')"));
+    assert.ok(masterOwner.includes("lower(COALESCE(a.tariff_plan, '')) = 'platinum'"));
   });
 
   await test('Phase 1 routes and fatal migration guard are mounted without legacy FK rewrites', () => {
