@@ -76,7 +76,10 @@
 
   function enhance(select) {
     if (!select || select.dataset.jaiSelect || select.multiple || select.size > 1) return;
-    if (select.closest('.workspace-app') || select.classList.contains('ws-select') || select.classList.contains('no-jai-select')) return;
+    // The operations queue owns its own accessible dropdown implementation.
+    // Enhancing those selects here as well would render two visible controls for
+    // every filter and break the dashboard grid.
+    if (select.closest('.filter-section') || select.closest('.workspace-app') || select.classList.contains('ws-select') || select.classList.contains('no-jai-select')) return;
     select.dataset.jaiSelect = '1';
 
     var wrapper = document.createElement('span');
