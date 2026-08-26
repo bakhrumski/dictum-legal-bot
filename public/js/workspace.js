@@ -1007,7 +1007,24 @@
 
         var matterNode='<button type="button" class="ws-graph-matter" data-graph-node data-graph-matter data-graph-key="matter" data-action="open-task" data-task-id="'+esc(matterTask.id)+'" data-x="'+matterPosition.x+'" data-y="'+matterPosition.y+'" style="left:'+matterPosition.x+'px;top:'+matterPosition.y+'px" aria-label="'+esc(t('matter'))+': '+esc(matterTask.title)+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(matterTask.title)+'</strong><small>'+esc(graphMatterSummary(matterTask))+'</small></button>';
         var memberNodes=state.members.map(function(member){var p=memberPositions[String(member.id)],expired=member.subscription_active===false;return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';}).join('');
-        var taskNodes=relatedTasks.map(function(task){var p=taskPositions[String(task.id)],tone=graphTone(task);return '<button type="button" class="ws-graph-task '+tone+'" data-graph-node data-graph-key="task:'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';}).join('');
+        var taskNodes=relatedTasks.map(function(task){
+            var p=taskPositions[String(task.id)],tone=graphTone(task);
+            // Ownership rides on the card instead of a line crossing the stage:
+            // members sit far left and tasks far right, so every assignment edge
+            // had to traverse the whole canvas, flattening into an untraceable
+            // horizontal run that got worse with each task added.
+            var assignees=task.assignees||[];
+            var owners=assignees.slice(0,3).map(function(assignee){
+                // Task assignees are selected as (id, username, full_name) only —
+                // subscription state lives on state.members, so resolve there or
+                // the expired chip silently never renders.
+                var member=state.members.find(function(item){return String(item.id)===String(assignee.id);})||assignee;
+                return '<i class="ws-graph-owner'+(member.subscription_active===false?' expired':'')+'" title="'+esc(personName(member))+'">'+esc(initials(member))+'</i>';
+            }).join('');
+            if(assignees.length>3)owners+='<i class="ws-graph-owner more">+'+(assignees.length-3)+'</i>';
+            var ownerBlock=owners?'<span class="ws-graph-owners">'+owners+'</span>':'';
+            return '<button type="button" class="ws-graph-task '+tone+'" data-graph-node data-graph-key="task:'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'">'+ownerBlock+'<strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';
+        }).join('');
         return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNode+memberNodes+taskNodes+'</div></div></section>';
     }
 
@@ -2166,6 +2183,9 @@
         var scroll=root.querySelector('.ws-graph-scroll');
         var matter=scroll&&scroll.querySelector('[data-graph-matter]');
         if(!scroll||!matter)return;
+        // Re-anchor to the real node boxes now that they are measurable; the
+        // server-rendered paths are still centre-to-centre at this point.
+        updateGraphEdges(matter.closest('.ws-graph-stage'));
         var key=String(state.workspace&&state.workspace.id||'')+':'+String(state.tasks[0]&&state.tasks[0].id||'')+':'+state.tasks.length+':'+state.members.length;
         if(scroll.dataset.centeredFor===key)return;
         scroll.dataset.centeredFor=key;
@@ -2200,8 +2220,39 @@
         var nodeRect=node.getBoundingClientRect();
         return {
             x:nodeRect.left-stageRect.left+(nodeRect.width/2),
-            y:nodeRect.top-stageRect.top+(nodeRect.height/2)
+            y:nodeRect.top-stageRect.top+(nodeRect.height/2),
+            hw:nodeRect.width/2,
+            hh:nodeRect.height/2
         };
+    }
+
+    /**
+     * Point on a node's border, in the direction of `toward`.
+     *
+     * Edges drawn centre-to-centre vanish underneath the cards they connect —
+     * the matter card alone is 220x112 — so neither end ever visibly meets a
+     * node. Each end is pulled out to its own node's perimeter first, which is
+     * what makes one curve read as matter->this task rather than a line passing
+     * through the middle of everything.
+     *
+     * Falls back to the bare point when the node box is unknown, which is the
+     * case for the server-rendered markup before it is measured in the DOM.
+     */
+    function graphAnchor(point,toward) {
+        var halfWidth=Number(point.hw||0),halfHeight=Number(point.hh||0);
+        var dx=toward.x-point.x,dy=toward.y-point.y;
+        if((!dx&&!dy)||(!halfWidth&&!halfHeight))return {x:point.x,y:point.y};
+        var scale=Math.min(dx?halfWidth/Math.abs(dx):Infinity,dy?halfHeight/Math.abs(dy):Infinity);
+        var length=Math.sqrt(dx*dx+dy*dy)||1;
+        var pad=3;
+        return {
+            x:point.x+dx*scale+(dx/length)*pad,
+            y:point.y+dy*scale+(dy/length)*pad
+        };
+    }
+
+    function graphEdgePath(from,to) {
+        return graphCurve(graphAnchor(from,to),graphAnchor(to,from));
     }
 
     function updateGraphEdges(stage) {
@@ -2212,7 +2263,7 @@
         });
         stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
             var from=positions[path.dataset.fromKey],to=positions[path.dataset.toKey];
-            if(from&&to)path.setAttribute('d',graphCurve(from,to));
+            if(from&&to)path.setAttribute('d',graphEdgePath(from,to));
         });
     }
 
@@ -2272,14 +2323,14 @@
             });
             current.x=originX+dx;
             current.y=originY+dy;
-            animateGraphEdges(stage,560);
+            animateGraphEdges(stage,260);
         }
         function up(){
             document.removeEventListener('pointermove',move);
             document.removeEventListener('pointerup',up);
             document.removeEventListener('pointercancel',up);
             matter.classList.remove('dragging');
-            global.setTimeout(function(){origins.forEach(function(item){item.node.classList.remove('ws-graph-following');});updateGraphEdges(stage);},540);
+            global.setTimeout(function(){origins.forEach(function(item){item.node.classList.remove('ws-graph-following');});updateGraphEdges(stage);},240);
             try{localStorage.setItem(graphMatterPositionKey(matter.dataset.taskId),JSON.stringify(current));}catch(_error){}
         }
         document.addEventListener('pointermove',move);
