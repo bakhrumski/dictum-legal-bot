@@ -731,8 +731,8 @@
 .ws-graph-legend i { width: 9px; height: 9px; margin-left: 5px; border-radius: 50%; background: var(--ws-success); box-shadow: 0 0 0 3px var(--ws-success-soft); }
 .ws-graph-legend i.approaching { background: var(--ws-warning); box-shadow: 0 0 0 3px var(--ws-warning-soft); }
 .ws-graph-legend i.overdue { background: var(--ws-danger); box-shadow: 0 0 0 3px var(--ws-danger-soft); }
-.ws-graph-scroll { flex: 1 1 auto; min-height: 0; max-width: 100%; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.ws-graph-stage { position: relative; isolation: isolate; min-width: 760px; min-height: 100%; background: radial-gradient(circle at 50% 32%, var(--ws-brand-soft), transparent 42%), radial-gradient(circle at 17% 82%, var(--ws-success-soft), transparent 30%), var(--ws-panel-solid); }
+.ws-graph-scroll { position: relative; flex: 1 1 auto; min-height: 0; max-width: 100%; overflow: auto; overscroll-behavior: contain; scroll-padding: 28px; scrollbar-width: thin; }
+.ws-graph-stage { position: relative; isolation: isolate; min-width: 760px; min-height: 100%; box-sizing: border-box; background: radial-gradient(circle at 50% 32%, var(--ws-brand-soft), transparent 42%), radial-gradient(circle at 17% 82%, var(--ws-success-soft), transparent 30%), var(--ws-panel-solid); }
 .ws-graph-stage > svg { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .ws-graph-stage > svg path,
 .ws-graph-stage > svg line { fill: none; stroke: var(--ws-line-strong); stroke-width: 1.15; vector-effect: non-scaling-stroke; }
