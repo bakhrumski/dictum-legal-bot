@@ -945,7 +945,6 @@
         var viewportWidth=root?Math.floor(root.getBoundingClientRect().width):0;
         var width=Math.max(1120,viewportWidth,outerRadius*2+620,760+Math.ceil(relatedTasks.length/8)*120);
         var height=Math.max(680,outerRadius*2+360);
-        var layoutCenter={x:Math.round(width/2),y:Math.round(height/2)};
         var matterPosition=getGraphMatterPosition(width,height,matterTask.id);
         var memberPositions={},taskPositions={},memberTaskIndex={};
 
@@ -955,8 +954,8 @@
             var angle=(-Math.PI/2)+(Math.PI*2*((index-ringStart)/Math.max(1,countInRing)));
             var radius=220+ring*145;
             memberPositions[String(member.id)]={
-                x:Math.round(layoutCenter.x+Math.cos(angle)*radius),
-                y:Math.round(layoutCenter.y+Math.sin(angle)*radius),
+                x:clampNumber(matterPosition.x+Math.cos(angle)*radius,70,width-70),
+                y:clampNumber(matterPosition.y+Math.sin(angle)*radius,70,height-70),
                 angle:angle
             };
         });
@@ -983,8 +982,8 @@
                 var unassignedAngle=(Math.PI/2)+(unassignedIndex%7-3)*.18;
                 var unassignedRadius=185+Math.floor(unassignedIndex/7)*110;
                 taskPositions[String(task.id)]={
-                    x:clampNumber(layoutCenter.x+Math.cos(unassignedAngle)*unassignedRadius+(unassignedIndex%7-3)*120,105,width-105),
-                    y:clampNumber(layoutCenter.y+Math.sin(unassignedAngle)*unassignedRadius,72,height-72),
+                    x:clampNumber(matterPosition.x+Math.cos(unassignedAngle)*unassignedRadius+(unassignedIndex%7-3)*120,105,width-105),
+                    y:clampNumber(matterPosition.y+Math.sin(unassignedAngle)*unassignedRadius,72,height-72),
                     assigned:[]
                 };
             }
@@ -993,32 +992,36 @@
         var edges=[];
         state.members.forEach(function(member){
             var target=memberPositions[String(member.id)];
-            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-target-x="'+target.x+'" data-target-y="'+target.y+'" d="'+graphCurve(matterPosition,target)+'"/>');
+            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="matter" data-to-key="member:'+esc(member.id)+'" d="'+graphCurve(matterPosition,target)+'"/>');
         });
         relatedTasks.forEach(function(task){
             var taskPosition=taskPositions[String(task.id)];
             var assignees=(task.assignees||[]).map(function(member){return memberPositions[String(member.id)];}).filter(Boolean);
-            if(!assignees.length){
-                edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-target-x="'+taskPosition.x+'" data-target-y="'+taskPosition.y+'" d="'+graphCurve(matterPosition,taskPosition)+'"/>');
-                return;
-            }
-            assignees.forEach(function(memberPosition){
-                edges.push('<path class="ws-graph-link task" d="'+graphCurve(memberPosition,taskPosition)+'"/>');
+            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="matter" data-to-key="task:'+esc(task.id)+'" d="'+graphCurve(matterPosition,taskPosition)+'"/>');
+            (task.assignees||[]).forEach(function(member,index){
+                var memberPosition=memberPositions[String(member.id)];
+                if(!memberPosition)return;
+                edges.push('<path class="ws-graph-link task" data-from-key="member:'+esc(member.id)+'" data-to-key="task:'+esc(task.id)+'" d="'+graphCurve(memberPosition,taskPosition)+'"/>');
             });
         });
 
-        var matterNode='<button type="button" class="ws-graph-matter" data-graph-node data-graph-matter data-action="open-task" data-task-id="'+esc(matterTask.id)+'" data-x="'+matterPosition.x+'" data-y="'+matterPosition.y+'" style="left:'+matterPosition.x+'px;top:'+matterPosition.y+'px" aria-label="'+esc(t('matter'))+': '+esc(matterTask.title)+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(matterTask.title)+'</strong><small>'+esc(graphMatterSummary(matterTask))+'</small></button>';
-        var memberNodes=state.members.map(function(member){var p=memberPositions[String(member.id)],expired=member.subscription_active===false;return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';}).join('');
-        var taskNodes=relatedTasks.map(function(task){var p=taskPositions[String(task.id)],tone=graphTone(task);return '<button type="button" class="ws-graph-task '+tone+'" data-graph-node style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';}).join('');
+        var matterNode='<button type="button" class="ws-graph-matter" data-graph-node data-graph-matter data-graph-key="matter" data-action="open-task" data-task-id="'+esc(matterTask.id)+'" data-x="'+matterPosition.x+'" data-y="'+matterPosition.y+'" style="left:'+matterPosition.x+'px;top:'+matterPosition.y+'px" aria-label="'+esc(t('matter'))+': '+esc(matterTask.title)+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(matterTask.title)+'</strong><small>'+esc(graphMatterSummary(matterTask))+'</small></button>';
+        var memberNodes=state.members.map(function(member){var p=memberPositions[String(member.id)],expired=member.subscription_active===false;return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';}).join('');
+        var taskNodes=relatedTasks.map(function(task){var p=taskPositions[String(task.id)],tone=graphTone(task);return '<button type="button" class="ws-graph-task '+tone+'" data-graph-node data-graph-key="task:'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';}).join('');
         return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNode+memberNodes+taskNodes+'</div></div></section>';
     }
 
     function renderTaskRow(task) {
+        var description=String(task.description||'').trim();
+        var commentCount=Number(task.comment_count||task.comments_count||0);
+        var watcherCount=Number(task.watcher_count||task.watchers_count||0);
+        var startLabel=task.start_date?isoDate(task.start_date):'';
+        var dueLabel=task.due_date?isoDate(task.due_date):t('unscheduled');
         return '<button class="ws-task-row" type="button" data-action="open-task" data-task-id="'+esc(task.id)+'">'+
-            '<div class="ws-task-main"><span class="ws-priority-line '+esc(task.priority)+'"></span><div style="min-width:0"><p class="ws-task-title">'+esc(task.title)+'</p><div class="ws-task-meta">'+(task.is_milestone?'<span class="ws-pill">'+esc(t('milestone'))+'</span>':'')+'<span>'+esc(t(task.priority))+'</span><span class="ws-task-counts">'+svg('document',13)+Number(task.document_count||0)+' · '+svg('ai',13)+Number(task.memory_count||0)+'</span></div></div></div>'+
+            '<div class="ws-task-main"><span class="ws-priority-line '+esc(task.priority)+'"></span><div class="ws-task-copy"><p class="ws-task-title">'+esc(task.title)+'</p>'+(description?'<p class="ws-task-description">'+esc(description)+'</p>':'')+'<div class="ws-task-meta">'+(task.is_milestone?'<span class="ws-pill">'+esc(t('milestone'))+'</span>':'')+'<span>'+esc(t(task.priority))+'</span><span class="ws-task-counts" title="'+esc(t('documents'))+' / '+esc(t('sharedMemory'))+'">'+svg('document',13)+Number(task.document_count||0)+' · '+svg('ai',13)+Number(task.memory_count||0)+(commentCount?' · '+svg('chat',13)+commentCount:'')+(watcherCount?' · '+svg('members',13)+watcherCount:'')+'</span></div></div></div>'+
             '<span class="ws-status '+esc(task.status)+'">'+esc(t(task.status))+'</span>'+
             renderAvatars(task.assignees||[])+
-            '<time class="ws-due '+(isOverdue(task)?'overdue':'')+'" datetime="'+esc(task.due_date||'')+'">'+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</time>'+
+            '<span class="ws-task-date-range">'+(startLabel?'<small>'+esc(t('startDate'))+': '+esc(startLabel)+'</small>':'')+'<time class="ws-due '+(isOverdue(task)?'overdue':'')+'" datetime="'+esc(task.due_date||'')+'">'+esc(dueLabel)+'</time></span>'+
             '<span>'+svg('arrow',17)+'</span>'+
         '</button>';
     }
@@ -1563,7 +1566,6 @@
             var nextView=action==='view-list'?'list':action==='view-timeline'?'timeline':'graph';
             state.view=nextView;
             render();
-            loadTasks(false).then(function(){if(state.view===nextView)render();}).catch(function(error){toast(apiErrorMessage(error),'error');});
             return;
         }
         if (action==='timeline-zoom') {state.timelineZoom=target.dataset.zoom;render();return;}
@@ -2193,6 +2195,42 @@
         scroll.scrollTop=Math.max(0,Math.min(maxTop,nextTop));
     }
 
+    function graphNodeCenter(stage,node) {
+        var stageRect=stage.getBoundingClientRect();
+        var nodeRect=node.getBoundingClientRect();
+        return {
+            x:nodeRect.left-stageRect.left+(nodeRect.width/2),
+            y:nodeRect.top-stageRect.top+(nodeRect.height/2)
+        };
+    }
+
+    function updateGraphEdges(stage) {
+        if(!stage)return;
+        var positions={};
+        stage.querySelectorAll('[data-graph-key]').forEach(function(node){
+            positions[node.dataset.graphKey]=graphNodeCenter(stage,node);
+        });
+        stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
+            var from=positions[path.dataset.fromKey],to=positions[path.dataset.toKey];
+            if(from&&to)path.setAttribute('d',graphCurve(from,to));
+        });
+    }
+
+    function animateGraphEdges(stage,duration) {
+        if(!stage)return;
+        stage.__edgeAnimationUntil=Math.max(stage.__edgeAnimationUntil||0,performance.now()+(duration||280));
+        if(stage.__edgeAnimationFrame)return;
+        function frame(now){
+            updateGraphEdges(stage);
+            if(now<stage.__edgeAnimationUntil){
+                stage.__edgeAnimationFrame=requestAnimationFrame(frame);
+            }else{
+                stage.__edgeAnimationFrame=null;
+            }
+        }
+        stage.__edgeAnimationFrame=requestAnimationFrame(frame);
+    }
+
     function handleGraphMatterDrag(event) {
         var matter=event.target.closest&&event.target.closest('[data-graph-matter]');
         if(!matter||!root||!root.contains(matter)||event.button!==0)return;
@@ -2201,28 +2239,47 @@
         event.preventDefault();
         event.stopPropagation();
         var startX=event.clientX,startY=event.clientY;
-        var originX=Number(matter.dataset.x||matter.offsetLeft),originY=Number(matter.dataset.y||matter.offsetTop);
+        var nodes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]'));
+        var origins=nodes.map(function(node){return{
+            node:node,
+            x:Number(node.dataset.x||node.offsetLeft),
+            y:Number(node.dataset.y||node.offsetTop),
+            halfWidth:node.offsetWidth/2,
+            halfHeight:node.offsetHeight/2
+        };});
+        var matterOrigin=origins.find(function(item){return item.node===matter;});
+        var originX=matterOrigin.x,originY=matterOrigin.y;
         var width=stage.offsetWidth,height=stage.offsetHeight;
         var current={x:originX,y:originY};
+        var padding=18;
+        var minDx=Math.max.apply(Math,origins.map(function(item){return padding+item.halfWidth-item.x;}));
+        var maxDx=Math.min.apply(Math,origins.map(function(item){return width-padding-item.halfWidth-item.x;}));
+        var minDy=Math.max.apply(Math,origins.map(function(item){return padding+item.halfHeight-item.y;}));
+        var maxDy=Math.min.apply(Math,origins.map(function(item){return height-padding-item.halfHeight-item.y;}));
         matter.classList.add('dragging');
+        origins.forEach(function(item){if(item.node!==matter)item.node.classList.add('ws-graph-following');});
         matter.setPointerCapture&&matter.setPointerCapture(event.pointerId);
 
         function move(moveEvent){
-            current.x=clampNumber(originX+(moveEvent.clientX-startX),135,width-135);
-            current.y=clampNumber(originY+(moveEvent.clientY-startY),105,height-105);
-            matter.style.left=current.x+'px';
-            matter.style.top=current.y+'px';
-            matter.dataset.x=String(current.x);
-            matter.dataset.y=String(current.y);
-            stage.querySelectorAll('[data-matter-edge]').forEach(function(path){
-                path.setAttribute('d',graphCurve(current,{x:Number(path.dataset.targetX),y:Number(path.dataset.targetY)}));
+            var dx=clampNumber(moveEvent.clientX-startX,minDx,maxDx);
+            var dy=clampNumber(moveEvent.clientY-startY,minDy,maxDy);
+            origins.forEach(function(item){
+                var x=item.x+dx,y=item.y+dy;
+                item.node.style.left=x+'px';
+                item.node.style.top=y+'px';
+                item.node.dataset.x=String(x);
+                item.node.dataset.y=String(y);
             });
+            current.x=originX+dx;
+            current.y=originY+dy;
+            animateGraphEdges(stage,560);
         }
         function up(){
             document.removeEventListener('pointermove',move);
             document.removeEventListener('pointerup',up);
             document.removeEventListener('pointercancel',up);
             matter.classList.remove('dragging');
+            global.setTimeout(function(){origins.forEach(function(item){item.node.classList.remove('ws-graph-following');});updateGraphEdges(stage);},540);
             try{localStorage.setItem(graphMatterPositionKey(matter.dataset.taskId),JSON.stringify(current));}catch(_error){}
         }
         document.addEventListener('pointermove',move);
