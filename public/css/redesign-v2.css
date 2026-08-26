@@ -714,6 +714,15 @@ body > .container > header {
   background: color-mix(in srgb, var(--jai-panel-solid) 88%, transparent) !important;
   box-shadow: var(--jai-shadow) !important;
 }
+.tab-view[data-tab="home"] > .stats,
+.tab-view[data-tab="home"] > .operations-health-shell,
+.tab-view[data-tab="home"] > .stats::before,
+.tab-view[data-tab="home"] > .stats::after,
+.tab-view[data-tab="home"] > .operations-health-shell::before,
+.tab-view[data-tab="home"] > .operations-health-shell::after {
+  background: transparent !important;
+  background-image: none !important;
+}
 .stat-card { transition: transform .22s cubic-bezier(.2,.8,.2,1), border-color .22s, box-shadow .22s; }
 .stat-card:hover { transform: translateY(-2px); border-color: var(--jai-brand-border) !important; box-shadow: var(--jai-shadow-hover) !important; }
 .stat-icon { color: var(--jai-brand) !important; background: var(--jai-brand-soft) !important; }
