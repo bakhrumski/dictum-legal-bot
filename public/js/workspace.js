@@ -2267,20 +2267,8 @@
         });
     }
 
-    function animateGraphEdges(stage,duration) {
-        if(!stage)return;
-        stage.__edgeAnimationUntil=Math.max(stage.__edgeAnimationUntil||0,performance.now()+(duration||280));
-        if(stage.__edgeAnimationFrame)return;
-        function frame(now){
-            updateGraphEdges(stage);
-            if(now<stage.__edgeAnimationUntil){
-                stage.__edgeAnimationFrame=requestAnimationFrame(frame);
-            }else{
-                stage.__edgeAnimationFrame=null;
-            }
-        }
-        stage.__edgeAnimationFrame=requestAnimationFrame(frame);
-    }
+    var GRAPH_FOLLOW_LAG_MS=50;
+    var GRAPH_DRAG_THRESHOLD=4;
 
     function handleGraphMatterDrag(event) {
         var matter=event.target.closest&&event.target.closest('[data-graph-matter]');
@@ -2299,6 +2287,7 @@
             halfHeight:node.offsetHeight/2
         };});
         var matterOrigin=origins.find(function(item){return item.node===matter;});
+        var satellites=origins.filter(function(item){return item.node!==matter;});
         var originX=matterOrigin.x,originY=matterOrigin.y;
         var width=stage.offsetWidth,height=stage.offsetHeight;
         var current={x:originX,y:originY};
@@ -2307,30 +2296,80 @@
         var maxDx=Math.min.apply(Math,origins.map(function(item){return width-padding-item.halfWidth-item.x;}));
         var minDy=Math.max.apply(Math,origins.map(function(item){return padding+item.halfHeight-item.y;}));
         var maxDy=Math.min.apply(Math,origins.map(function(item){return height-padding-item.halfHeight-item.y;}));
+
+        // Honour the OS setting: no trailing motion, satellites track exactly.
+        var reduceMotion=global.matchMedia&&global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var lag=reduceMotion?0:GRAPH_FOLLOW_LAG_MS;
+
+        // Where the matter has been. Satellites read this buffer `lag` ms late,
+        // which is what makes them trail the card instead of moving in lockstep
+        // with it. A CSS transition cannot express this: every pointermove would
+        // restart it mid-flight, which stutters and drops the constellation into
+        // rigid-body motion.
+        var history=[{t:performance.now(),x:originX,y:originY}];
+        var frameHandle=null;
+        var dragging=true;
+        var moved=false;
+
         matter.classList.add('dragging');
-        origins.forEach(function(item){if(item.node!==matter)item.node.classList.add('ws-graph-following');});
         matter.setPointerCapture&&matter.setPointerCapture(event.pointerId);
 
-        function move(moveEvent){
-            var dx=clampNumber(moveEvent.clientX-startX,minDx,maxDx);
-            var dy=clampNumber(moveEvent.clientY-startY,minDy,maxDy);
-            origins.forEach(function(item){
+        function sampleHistory(when){
+            var last=history[history.length-1];
+            if(when>=last.t)return last;
+            for(var i=history.length-1;i>0;i--){
+                if(history[i-1].t<=when&&history[i].t>=when){
+                    var a=history[i-1],b=history[i],span=b.t-a.t;
+                    var progress=span>0?(when-a.t)/span:1;
+                    return {x:a.x+(b.x-a.x)*progress,y:a.y+(b.y-a.y)*progress};
+                }
+            }
+            return history[0];
+        }
+
+        function frame(now){
+            while(history.length>2&&history[1].t<now-lag-50)history.shift();
+            var delayed=sampleHistory(now-lag);
+            var dx=delayed.x-originX,dy=delayed.y-originY;
+            satellites.forEach(function(item){
                 var x=item.x+dx,y=item.y+dy;
                 item.node.style.left=x+'px';
                 item.node.style.top=y+'px';
                 item.node.dataset.x=String(x);
                 item.node.dataset.y=String(y);
             });
+            updateGraphEdges(stage);
+            var settled=!dragging&&Math.abs(delayed.x-current.x)<0.5&&Math.abs(delayed.y-current.y)<0.5;
+            frameHandle=settled?null:requestAnimationFrame(frame);
+        }
+
+        function move(moveEvent){
+            var dx=clampNumber(moveEvent.clientX-startX,minDx,maxDx);
+            var dy=clampNumber(moveEvent.clientY-startY,minDy,maxDy);
+            if(!moved&&Math.max(Math.abs(moveEvent.clientX-startX),Math.abs(moveEvent.clientY-startY))>GRAPH_DRAG_THRESHOLD)moved=true;
             current.x=originX+dx;
             current.y=originY+dy;
-            animateGraphEdges(stage,260);
+            // The matter tracks the pointer with no delay; only satellites lag.
+            matter.style.left=current.x+'px';
+            matter.style.top=current.y+'px';
+            matter.dataset.x=String(current.x);
+            matter.dataset.y=String(current.y);
+            history.push({t:performance.now(),x:current.x,y:current.y});
+            if(!frameHandle)frameHandle=requestAnimationFrame(frame);
         }
         function up(){
             document.removeEventListener('pointermove',move);
             document.removeEventListener('pointerup',up);
             document.removeEventListener('pointercancel',up);
+            dragging=false;
             matter.classList.remove('dragging');
-            global.setTimeout(function(){origins.forEach(function(item){item.node.classList.remove('ws-graph-following');});updateGraphEdges(stage);},240);
+            if(!frameHandle)frameHandle=requestAnimationFrame(frame);
+            if(!moved)return;
+            // A drag must not also open the task. Swallow only the click that
+            // this pointerup is about to produce.
+            var swallowClick=function(clickEvent){clickEvent.preventDefault();clickEvent.stopPropagation();};
+            document.addEventListener('click',swallowClick,true);
+            global.setTimeout(function(){document.removeEventListener('click',swallowClick,true);},0);
             try{localStorage.setItem(graphMatterPositionKey(matter.dataset.taskId),JSON.stringify(current));}catch(_error){}
         }
         document.addEventListener('pointermove',move);

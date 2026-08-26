@@ -799,22 +799,10 @@
 .ws-graph-matter small { color: var(--ws-muted); font-size: 10px; }
 .ws-graph-member,
 .ws-graph-task { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-family: inherit; cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, opacity .18s ease; }
-/* Satellites trail the matter card by 50ms. Longer delays read as a separate
-   object being towed rather than a constellation that is attached to it. */
-.ws-graph-member.ws-graph-following,
-.ws-graph-task.ws-graph-following {
-    transition:
-        left .16s ease-out .05s,
-        top .16s ease-out .05s,
-        transform .18s ease,
-        border-color .18s ease,
-        box-shadow .18s ease,
-        opacity .18s ease;
-}
-@media (prefers-reduced-motion: reduce) {
-    .ws-graph-member.ws-graph-following,
-    .ws-graph-task.ws-graph-following { transition: none; }
-}
+/* Satellites trail the matter card by 50ms, driven per-frame from the drag's
+   position history in handleGraphMatterDrag(). Deliberately no left/top
+   transition here: a transition restarts on every pointermove, which stutters
+   and collapses the trail into rigid-body motion. */
 .ws-graph-member { width: 104px; display: grid; justify-items: center; gap: 5px; border: 0; color: var(--ws-ink); background: transparent; font-size: 10px; font-weight: 700; text-align: center; }
 .ws-graph-member .ws-avatar { width: 45px; height: 45px; margin: 0; border: 3px solid var(--ws-panel-solid); box-shadow: 0 0 0 1px var(--ws-line-strong), 0 10px 28px -16px rgba(31,77,160,.7); font-size: 13px; }
 .ws-graph-member small { max-width: 98px; color: var(--ws-danger); font-size: 8px; line-height: 1.25; }
