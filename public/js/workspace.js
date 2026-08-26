@@ -900,8 +900,8 @@
         return 'active';
     }
 
-    function graphMatterPositionKey() {
-        return 'juristai-workspace-matter-position:' + String(state.workspace && state.workspace.id || 'default');
+    function graphMatterPositionKey(taskId) {
+        return 'juristai-workspace-matter-position:' + String(state.workspace && state.workspace.id || 'default') + ':' + String(taskId || 'default');
     }
 
     function clampNumber(value, min, max) {
@@ -914,16 +914,15 @@
         return 'M ' + from.x + ' ' + from.y + ' C ' + (from.x + dx * direction) + ' ' + from.y + ', ' + (to.x - dx * direction) + ' ' + to.y + ', ' + to.x + ' ' + to.y;
     }
 
-    function graphMatterSummary() {
-        return String(t('matterSummary'))
-            .replace('{tasks}', String(state.tasks.length))
-            .replace('{members}', String(state.members.length));
+    function graphMatterSummary(task) {
+        if (!task) return '';
+        return t(task.status) + ' · ' + (task.due_date ? isoDate(task.due_date) : t('unscheduled'));
     }
 
-    function getGraphMatterPosition(width, height) {
+    function getGraphMatterPosition(width, height, taskId) {
         var fallback = { x: Math.round(width / 2), y: Math.round(height / 2) };
         try {
-            var saved = JSON.parse(localStorage.getItem(graphMatterPositionKey()) || 'null');
+            var saved = JSON.parse(localStorage.getItem(graphMatterPositionKey(taskId)) || 'null');
             if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
                 return {
                     x: clampNumber(saved.x, 135, width - 135),
@@ -935,14 +934,19 @@
     }
 
     function renderGraph() {
+        if (!state.tasks.length) {
+            return '<section class="ws-panel ws-graph"><div class="ws-empty"><div class="ws-empty-icon">'+svg('graph',24)+'</div><h3>'+esc(t('graphEmpty'))+'</h3></div></section>';
+        }
+        var matterTask=state.tasks[0];
+        var relatedTasks=state.tasks.slice(1);
         var memberCount=Math.max(1,state.members.length);
         var ringCount=Math.max(1,Math.ceil(memberCount/10));
         var outerRadius=220+(ringCount-1)*145;
         var viewportWidth=root?Math.floor(root.getBoundingClientRect().width):0;
-        var width=Math.max(1120,viewportWidth,outerRadius*2+620,760+Math.ceil(state.tasks.length/8)*120);
+        var width=Math.max(1120,viewportWidth,outerRadius*2+620,760+Math.ceil(relatedTasks.length/8)*120);
         var height=Math.max(680,outerRadius*2+360);
         var layoutCenter={x:Math.round(width/2),y:Math.round(height/2)};
-        var matterPosition=getGraphMatterPosition(width,height);
+        var matterPosition=getGraphMatterPosition(width,height,matterTask.id);
         var memberPositions={},taskPositions={},memberTaskIndex={};
 
         state.members.forEach(function(member,index){
@@ -957,7 +961,7 @@
             };
         });
 
-        state.tasks.forEach(function(task,index){
+        relatedTasks.forEach(function(task,index){
             var assigned=(task.assignees||[]).map(function(member){return memberPositions[String(member.id)];}).filter(Boolean);
             var primaryMember=(task.assignees||[]).map(function(member){return String(member.id);}).find(function(id){return !!memberPositions[id];});
             if(primaryMember){
@@ -975,7 +979,7 @@
                     assigned:assigned
                 };
             } else {
-                var unassignedIndex=state.tasks.slice(0,index).filter(function(item){return !(item.assignees||[]).some(function(member){return !!memberPositions[String(member.id)];});}).length;
+                var unassignedIndex=relatedTasks.slice(0,index).filter(function(item){return !(item.assignees||[]).some(function(member){return !!memberPositions[String(member.id)];});}).length;
                 var unassignedAngle=(Math.PI/2)+(unassignedIndex%7-3)*.18;
                 var unassignedRadius=185+Math.floor(unassignedIndex/7)*110;
                 taskPositions[String(task.id)]={
@@ -991,7 +995,7 @@
             var target=memberPositions[String(member.id)];
             edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-target-x="'+target.x+'" data-target-y="'+target.y+'" d="'+graphCurve(matterPosition,target)+'"/>');
         });
-        state.tasks.forEach(function(task){
+        relatedTasks.forEach(function(task){
             var taskPosition=taskPositions[String(task.id)];
             var assignees=(task.assignees||[]).map(function(member){return memberPositions[String(member.id)];}).filter(Boolean);
             if(!assignees.length){
@@ -1003,9 +1007,9 @@
             });
         });
 
-        var matterNode='<button type="button" class="ws-graph-matter" data-graph-matter data-x="'+matterPosition.x+'" data-y="'+matterPosition.y+'" style="left:'+matterPosition.x+'px;top:'+matterPosition.y+'px" aria-label="'+esc(t('matter'))+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(state.workspace.name)+'</strong><small>'+esc(graphMatterSummary())+'</small></button>';
-        var memberNodes=state.members.map(function(member){var p=memberPositions[String(member.id)],expired=member.subscription_active===false;return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';}).join('');
-        var taskNodes=state.tasks.map(function(task){var p=taskPositions[String(task.id)],tone=graphTone(task);return '<button type="button" class="ws-graph-task '+tone+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';}).join('');
+        var matterNode='<button type="button" class="ws-graph-matter" data-graph-node data-graph-matter data-action="open-task" data-task-id="'+esc(matterTask.id)+'" data-x="'+matterPosition.x+'" data-y="'+matterPosition.y+'" style="left:'+matterPosition.x+'px;top:'+matterPosition.y+'px" aria-label="'+esc(t('matter'))+': '+esc(matterTask.title)+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(matterTask.title)+'</strong><small>'+esc(graphMatterSummary(matterTask))+'</small></button>';
+        var memberNodes=state.members.map(function(member){var p=memberPositions[String(member.id)],expired=member.subscription_active===false;return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';}).join('');
+        var taskNodes=relatedTasks.map(function(task){var p=taskPositions[String(task.id)],tone=graphTone(task);return '<button type="button" class="ws-graph-task '+tone+'" data-graph-node style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';}).join('');
         return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNode+memberNodes+taskNodes+'</div></div></section>';
     }
 
@@ -2160,11 +2164,33 @@
         var scroll=root.querySelector('.ws-graph-scroll');
         var matter=scroll&&scroll.querySelector('[data-graph-matter]');
         if(!scroll||!matter)return;
-        var key=String(state.workspace&&state.workspace.id||'')+':'+state.tasks.length+':'+state.members.length;
+        var key=String(state.workspace&&state.workspace.id||'')+':'+String(state.tasks[0]&&state.tasks[0].id||'')+':'+state.tasks.length+':'+state.members.length;
         if(scroll.dataset.centeredFor===key)return;
         scroll.dataset.centeredFor=key;
-        scroll.scrollLeft=Math.max(0,matter.offsetLeft-(scroll.clientWidth/2));
-        scroll.scrollTop=Math.max(0,matter.offsetTop-(scroll.clientHeight/2));
+        var nodes=Array.prototype.slice.call(scroll.querySelectorAll('[data-graph-node]'));
+        var bounds=nodes.reduce(function(result,node){
+            var halfWidth=node.offsetWidth/2,halfHeight=node.offsetHeight/2;
+            result.left=Math.min(result.left,node.offsetLeft-halfWidth);
+            result.right=Math.max(result.right,node.offsetLeft+halfWidth);
+            result.top=Math.min(result.top,node.offsetTop-halfHeight);
+            result.bottom=Math.max(result.bottom,node.offsetTop+halfHeight);
+            return result;
+        },{left:matter.offsetLeft,right:matter.offsetLeft,top:matter.offsetTop,bottom:matter.offsetTop});
+        var centerX=(bounds.left+bounds.right)/2;
+        var centerY=(bounds.top+bounds.bottom)/2;
+        var inset=28;
+        var horizontalSpan=bounds.right-bounds.left;
+        var verticalSpan=bounds.bottom-bounds.top;
+        var maxLeft=Math.max(0,scroll.scrollWidth-scroll.clientWidth);
+        var maxTop=Math.max(0,scroll.scrollHeight-scroll.clientHeight);
+        var nextLeft=horizontalSpan<=scroll.clientWidth-(inset*2)
+            ? centerX-(scroll.clientWidth/2)
+            : matter.offsetLeft-(scroll.clientWidth/2);
+        var nextTop=verticalSpan<=scroll.clientHeight-(inset*2)
+            ? centerY-(scroll.clientHeight/2)
+            : bounds.top-inset;
+        scroll.scrollLeft=Math.max(0,Math.min(maxLeft,nextLeft));
+        scroll.scrollTop=Math.max(0,Math.min(maxTop,nextTop));
     }
 
     function handleGraphMatterDrag(event) {
@@ -2197,7 +2223,7 @@
             document.removeEventListener('pointerup',up);
             document.removeEventListener('pointercancel',up);
             matter.classList.remove('dragging');
-            try{localStorage.setItem(graphMatterPositionKey(),JSON.stringify(current));}catch(_error){}
+            try{localStorage.setItem(graphMatterPositionKey(matter.dataset.taskId),JSON.stringify(current));}catch(_error){}
         }
         document.addEventListener('pointermove',move);
         document.addEventListener('pointerup',up);
