@@ -105,9 +105,10 @@
 
 @keyframes ws-spin { to { transform: rotate(360deg); } }
 @keyframes ws-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ws-shell-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ws-pulse { 50% { opacity: .48; } }
 
-.ws-shell { width: 100%; min-height: calc(100dvh - 228px); margin: 0 auto; animation: ws-rise .34s cubic-bezier(.2,.8,.2,1); }
+.ws-shell { width: 100%; min-height: calc(100dvh - 228px); margin: 0 auto; animation: ws-shell-fade .34s ease; }
 
 .ws-topbar {
     position: relative;
@@ -559,6 +560,11 @@
     backdrop-filter: blur(5px);
     animation: ws-rise .18s ease;
 }
+.ws-detail-backdrop {
+    width: 100vw;
+    height: 100dvh;
+    min-height: 100dvh;
+}
 .ws-detail-panel, .ws-ai-panel {
     position: fixed;
     z-index: 10021;
@@ -566,6 +572,9 @@
     right: 0;
     width: min(680px, 94vw);
     height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     border-width: 0 0 0 1px;
