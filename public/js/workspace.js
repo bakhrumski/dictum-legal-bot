@@ -174,6 +174,22 @@
     });
     Object.assign(COPY.en, {openInviteLabel:'Open invitation link',openInviteHint:'No email or username is needed. Copy the link and send it through Telegram — it can only be used once.',invitedWorkspaceTitle:'Workspace invitation saved',invitedWorkspaceBody:'You were invited to “{workspace}”. Activate Silver or higher to join.',activateInvite:'Activate invitation',expiresAt:'Invitation expiry',closeChat:'Close team chat',onlineNow:'online now',you:'You',inviteAccepted:'Invitation accepted',viewSilver:'View Silver'});
 
+    Object.assign(COPY.uz, {
+        matter:'Masala',
+        matterSummary:'{tasks} vazifa · {members} a’zo',
+        graphHint:'Masalani surish uchun bosib torting. A’zo yoki vazifani bosing — tafsilotlari ochiladi.'
+    });
+    Object.assign(COPY.ru, {
+        matter:'Дело',
+        matterSummary:'{tasks} задач · {members} участников',
+        graphHint:'Перетащите дело мышью. Нажмите на участника или задачу, чтобы открыть детали.'
+    });
+    Object.assign(COPY.en, {
+        matter:'Matter',
+        matterSummary:'{tasks} tasks · {members} members',
+        graphHint:'Drag the matter to reposition it. Click a member or task to open details.'
+    });
+
     var state = {
         language: localStorage.getItem('juristai-workspace-language') || 'uz',
         activated: false,
@@ -775,10 +791,9 @@
         root.innerHTML = '<div class="ws-shell">'+
             '<header class="ws-topbar">'+
                 '<div class="ws-topbar-main">'+
-                    '<div><p class="ws-kicker">JURISTAI '+esc(t('workspace'))+'</p><div class="ws-title-row">'+
+                    '<div class="ws-title-row">'+
                         '<select class="ws-select ws-workspace-select" data-action="switch-workspace" aria-label="'+esc(t('workspace'))+'">'+state.workspaces.map(function(item){return '<option value="'+esc(item.id)+'" '+(item.id===state.workspace.id?'selected':'')+'>'+esc(item.name)+'</option>';}).join('')+'</select>'+
                         '<span class="ws-role-badge">'+esc(t(state.role||'viewer'))+'</span></div>'+
-                        '<p class="ws-subtitle">'+esc(t('sharedWork'))+'</p></div>'+
                 '</div>'+
                 '<div class="ws-topbar-actions">'+
                     '<span class="ws-live-badge '+esc(state.realtimeStatus)+'">'+esc(t(state.realtimeStatus==='online'?'live':state.realtimeStatus==='connecting'?'connecting':state.realtimeStatus==='preview'?'preview':'offline'))+'</span>'+
@@ -812,6 +827,19 @@
         '</div>'+renderTaskDetail()+renderAiPanel()+renderModal()+renderToastsAnchor();
         enhanceDropdowns(root);
         if(state.chatOpen)scrollChatToLatest();
+        global.requestAnimationFrame(function(){
+            syncWorkspaceViewportHeight();
+            if(state.view==='graph')centerGraphViewport();
+            global.requestAnimationFrame(function(){
+                syncWorkspaceViewportHeight();
+                if(state.view==='graph')centerGraphViewport();
+            });
+        });
+        global.clearTimeout(state.viewportSyncTimer);
+        state.viewportSyncTimer=global.setTimeout(function(){
+            syncWorkspaceViewportHeight();
+            if(state.view==='graph')centerGraphViewport();
+        },180);
     }
 
     function renderToastsAnchor() { return ''; }
@@ -872,24 +900,113 @@
         return 'active';
     }
 
+    function graphMatterPositionKey() {
+        return 'juristai-workspace-matter-position:' + String(state.workspace && state.workspace.id || 'default');
+    }
+
+    function clampNumber(value, min, max) {
+        return Math.max(min, Math.min(max, Number(value) || 0));
+    }
+
+    function graphCurve(from, to) {
+        var dx = Math.max(46, Math.abs(to.x - from.x) * .42);
+        var direction = to.x >= from.x ? 1 : -1;
+        return 'M ' + from.x + ' ' + from.y + ' C ' + (from.x + dx * direction) + ' ' + from.y + ', ' + (to.x - dx * direction) + ' ' + to.y + ', ' + to.x + ' ' + to.y;
+    }
+
+    function graphMatterSummary() {
+        return String(t('matterSummary'))
+            .replace('{tasks}', String(state.tasks.length))
+            .replace('{members}', String(state.members.length));
+    }
+
+    function getGraphMatterPosition(width, height) {
+        var fallback = { x: Math.round(width / 2), y: Math.round(height / 2) };
+        try {
+            var saved = JSON.parse(localStorage.getItem(graphMatterPositionKey()) || 'null');
+            if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
+                return {
+                    x: clampNumber(saved.x, 135, width - 135),
+                    y: clampNumber(saved.y, 105, height - 105)
+                };
+            }
+        } catch (_error) {}
+        return fallback;
+    }
+
     function renderGraph() {
-        if (!state.tasks.length) return '<section class="ws-panel ws-empty"><div class="ws-empty-icon">'+svg('graph',25)+'</div><h3>'+esc(t('graphView'))+'</h3><p>'+esc(t('graphEmpty'))+'</p></section>';
-        var width=Math.max(980,Math.min(2400,980+Math.ceil(state.tasks.length/3)*95));
-        var taskPositions={},memberPositions={};
-        state.members.forEach(function(member,index){memberPositions[String(member.id)]={x:110+index*150,y:82};});
-        state.tasks.forEach(function(task,index){taskPositions[task.id]={x:90+(index%5)*205,y:220+Math.floor(index/5)*145};});
-        var height=Math.max(520,340+Math.ceil(state.tasks.length/5)*145);
+        var memberCount=Math.max(1,state.members.length);
+        var ringCount=Math.max(1,Math.ceil(memberCount/10));
+        var outerRadius=220+(ringCount-1)*145;
+        var viewportWidth=root?Math.floor(root.getBoundingClientRect().width):0;
+        var width=Math.max(1120,viewportWidth,outerRadius*2+620,760+Math.ceil(state.tasks.length/8)*120);
+        var height=Math.max(680,outerRadius*2+360);
+        var layoutCenter={x:Math.round(width/2),y:Math.round(height/2)};
+        var matterPosition=getGraphMatterPosition(width,height);
+        var memberPositions={},taskPositions={},memberTaskIndex={};
+
+        state.members.forEach(function(member,index){
+            var ring=Math.floor(index/10),ringStart=ring*10;
+            var countInRing=Math.min(10,state.members.length-ringStart);
+            var angle=(-Math.PI/2)+(Math.PI*2*((index-ringStart)/Math.max(1,countInRing)));
+            var radius=220+ring*145;
+            memberPositions[String(member.id)]={
+                x:Math.round(layoutCenter.x+Math.cos(angle)*radius),
+                y:Math.round(layoutCenter.y+Math.sin(angle)*radius),
+                angle:angle
+            };
+        });
+
+        state.tasks.forEach(function(task,index){
+            var assigned=(task.assignees||[]).map(function(member){return memberPositions[String(member.id)];}).filter(Boolean);
+            var primaryMember=(task.assignees||[]).map(function(member){return String(member.id);}).find(function(id){return !!memberPositions[id];});
+            if(primaryMember){
+                var memberPosition=memberPositions[primaryMember];
+                var order=memberTaskIndex[primaryMember]||0;
+                memberTaskIndex[primaryMember]=order+1;
+                var tier=Math.floor(order/3),slot=(order%3)-1;
+                var radial=145+tier*105;
+                var tangent=slot*190;
+                var ux=Math.cos(memberPosition.angle),uy=Math.sin(memberPosition.angle);
+                var tx=-uy,ty=ux;
+                taskPositions[String(task.id)]={
+                    x:clampNumber(memberPosition.x+ux*radial+tx*tangent,105,width-105),
+                    y:clampNumber(memberPosition.y+uy*radial+ty*tangent,72,height-72),
+                    assigned:assigned
+                };
+            } else {
+                var unassignedIndex=state.tasks.slice(0,index).filter(function(item){return !(item.assignees||[]).some(function(member){return !!memberPositions[String(member.id)];});}).length;
+                var unassignedAngle=(Math.PI/2)+(unassignedIndex%7-3)*.18;
+                var unassignedRadius=185+Math.floor(unassignedIndex/7)*110;
+                taskPositions[String(task.id)]={
+                    x:clampNumber(layoutCenter.x+Math.cos(unassignedAngle)*unassignedRadius+(unassignedIndex%7-3)*120,105,width-105),
+                    y:clampNumber(layoutCenter.y+Math.sin(unassignedAngle)*unassignedRadius,72,height-72),
+                    assigned:[]
+                };
+            }
+        });
+
         var edges=[];
+        state.members.forEach(function(member){
+            var target=memberPositions[String(member.id)];
+            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-target-x="'+target.x+'" data-target-y="'+target.y+'" d="'+graphCurve(matterPosition,target)+'"/>');
+        });
         state.tasks.forEach(function(task){
-            var from=taskPositions[task.id];
-            (task.assignees||[]).slice(0,4).forEach(function(member){
-                var to=memberPositions[String(member.id)];
-                if(to)edges.push('<path d="M '+(from.x+76)+' '+(from.y-26)+' C '+(from.x+76)+' '+(from.y-86)+', '+(to.x+34)+' '+(to.y+70)+', '+(to.x+34)+' '+(to.y+38)+'"/>');
+            var taskPosition=taskPositions[String(task.id)];
+            var assignees=(task.assignees||[]).map(function(member){return memberPositions[String(member.id)];}).filter(Boolean);
+            if(!assignees.length){
+                edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-target-x="'+taskPosition.x+'" data-target-y="'+taskPosition.y+'" d="'+graphCurve(matterPosition,taskPosition)+'"/>');
+                return;
+            }
+            assignees.forEach(function(memberPosition){
+                edges.push('<path class="ws-graph-link task" d="'+graphCurve(memberPosition,taskPosition)+'"/>');
             });
         });
+
+        var matterNode='<button type="button" class="ws-graph-matter" data-graph-matter data-x="'+matterPosition.x+'" data-y="'+matterPosition.y+'" style="left:'+matterPosition.x+'px;top:'+matterPosition.y+'px" aria-label="'+esc(t('matter'))+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(state.workspace.name)+'</strong><small>'+esc(graphMatterSummary())+'</small></button>';
         var memberNodes=state.members.map(function(member){var p=memberPositions[String(member.id)],expired=member.subscription_active===false;return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';}).join('');
-        var taskNodes=state.tasks.map(function(task){var p=taskPositions[task.id],tone=graphTone(task);return '<button type="button" class="ws-graph-task '+tone+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';}).join('');
-        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+memberNodes+taskNodes+'</div></div></section>';
+        var taskNodes=state.tasks.map(function(task){var p=taskPositions[String(task.id)],tone=graphTone(task);return '<button type="button" class="ws-graph-task '+tone+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';}).join('');
+        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNode+memberNodes+taskNodes+'</div></div></section>';
     }
 
     function renderTaskRow(task) {
@@ -1372,9 +1489,11 @@
         root.addEventListener('input',handleInput);
         root.addEventListener('submit',handleSubmit);
         root.addEventListener('pointerdown',handleTimelineDrag);
+        root.addEventListener('pointerdown',handleGraphMatterDrag);
         document.addEventListener('keydown',handleKeyboard);
         document.addEventListener('click',handleDocumentClick);
         global.addEventListener('focus',refreshWorkspaceEntitlements);
+        global.addEventListener('resize',syncWorkspaceViewportHeight);
         document.addEventListener('visibilitychange',function(){
             if(document.visibilityState==='visible')refreshWorkspaceEntitlements();
         });
@@ -1436,7 +1555,13 @@
         if (action==='close-detail') { if(target===event.currentTarget||target.closest('.ws-detail-panel')||target.classList.contains('ws-detail-backdrop')) closeTaskDetail(); return; }
         if (action==='open-task') {openTask(target.dataset.taskId);return;}
         if (action==='new-task') {state.modal='task';state.modalData={};render();return;}
-        if (action==='view-list'||action==='view-timeline'||action==='view-graph') {state.view=action==='view-list'?'list':action==='view-timeline'?'timeline':'graph';loadTasks();return;}
+        if (action==='view-list'||action==='view-timeline'||action==='view-graph') {
+            var nextView=action==='view-list'?'list':action==='view-timeline'?'timeline':'graph';
+            state.view=nextView;
+            render();
+            loadTasks(false).then(function(){if(state.view===nextView)render();}).catch(function(error){toast(apiErrorMessage(error),'error');});
+            return;
+        }
         if (action==='timeline-zoom') {state.timelineZoom=target.dataset.zoom;render();return;}
         if (action==='close-modal') {
             if (target.classList.contains('ws-modal-backdrop') && event.target !== target) return;
@@ -1992,6 +2117,91 @@
         var date=new Date(dateString+'T00:00:00Z');
         date.setUTCDate(date.getUTCDate()+days);
         return date.toISOString().slice(0,10);
+    }
+
+    function syncWorkspaceViewportHeight() {
+        if(!root||!state.workspace)return;
+        var main=root.querySelector('.ws-workspace-main');
+        if(!main)return;
+        var panels=main.querySelectorAll(':scope > .ws-panel');
+        var panel=panels.length?panels[panels.length-1]:null;
+        if(!panel)return;
+        var bottomNav=document.getElementById('bottomTabBar');
+        var navTop=bottomNav?bottomNav.getBoundingClientRect().top:global.innerHeight;
+        var mobile=global.innerWidth<=760;
+        var minimum=mobile?260:320;
+        var layout=main.closest('.ws-workspace-layout');
+        if(layout){
+            var layoutTop=layout.getBoundingClientRect().top;
+            var layoutHeight=Math.max(minimum,Math.floor(navTop-layoutTop));
+            layout.style.height=layoutHeight+'px';
+            layout.style.minHeight=layoutHeight+'px';
+            layout.style.maxHeight=layoutHeight+'px';
+        }
+        var available=minimum;
+        for(var pass=0;pass<6;pass++){
+            var rect=panel.getBoundingClientRect();
+            var gap=navTop-rect.bottom;
+            available=Math.max(minimum,Math.floor(rect.height+gap));
+            panel.style.height=available+'px';
+            panel.style.minHeight=available+'px';
+            panel.style.maxHeight=available+'px';
+            if(Math.abs(gap)<1)break;
+        }
+        var graphStage=panel.querySelector('.ws-graph-stage');
+        if(graphStage){
+            var layoutHeight=Number(graphStage.dataset.layoutHeight||680);
+            graphStage.style.height=layoutHeight+'px';
+        }
+    }
+
+    function centerGraphViewport() {
+        if(!root)return;
+        var scroll=root.querySelector('.ws-graph-scroll');
+        var matter=scroll&&scroll.querySelector('[data-graph-matter]');
+        if(!scroll||!matter)return;
+        var key=String(state.workspace&&state.workspace.id||'')+':'+state.tasks.length+':'+state.members.length;
+        if(scroll.dataset.centeredFor===key)return;
+        scroll.dataset.centeredFor=key;
+        scroll.scrollLeft=Math.max(0,matter.offsetLeft-(scroll.clientWidth/2));
+        scroll.scrollTop=Math.max(0,matter.offsetTop-(scroll.clientHeight/2));
+    }
+
+    function handleGraphMatterDrag(event) {
+        var matter=event.target.closest&&event.target.closest('[data-graph-matter]');
+        if(!matter||!root||!root.contains(matter)||event.button!==0)return;
+        var stage=matter.closest('.ws-graph-stage');
+        if(!stage)return;
+        event.preventDefault();
+        event.stopPropagation();
+        var startX=event.clientX,startY=event.clientY;
+        var originX=Number(matter.dataset.x||matter.offsetLeft),originY=Number(matter.dataset.y||matter.offsetTop);
+        var width=stage.offsetWidth,height=stage.offsetHeight;
+        var current={x:originX,y:originY};
+        matter.classList.add('dragging');
+        matter.setPointerCapture&&matter.setPointerCapture(event.pointerId);
+
+        function move(moveEvent){
+            current.x=clampNumber(originX+(moveEvent.clientX-startX),135,width-135);
+            current.y=clampNumber(originY+(moveEvent.clientY-startY),105,height-105);
+            matter.style.left=current.x+'px';
+            matter.style.top=current.y+'px';
+            matter.dataset.x=String(current.x);
+            matter.dataset.y=String(current.y);
+            stage.querySelectorAll('[data-matter-edge]').forEach(function(path){
+                path.setAttribute('d',graphCurve(current,{x:Number(path.dataset.targetX),y:Number(path.dataset.targetY)}));
+            });
+        }
+        function up(){
+            document.removeEventListener('pointermove',move);
+            document.removeEventListener('pointerup',up);
+            document.removeEventListener('pointercancel',up);
+            matter.classList.remove('dragging');
+            try{localStorage.setItem(graphMatterPositionKey(),JSON.stringify(current));}catch(_error){}
+        }
+        document.addEventListener('pointermove',move);
+        document.addEventListener('pointerup',up);
+        document.addEventListener('pointercancel',up);
     }
 
     function handleTimelineDrag(event) {
