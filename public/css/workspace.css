@@ -108,7 +108,7 @@
 @keyframes ws-shell-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ws-pulse { 50% { opacity: .48; } }
 
-.ws-shell { width: 100%; min-height: calc(100dvh - 228px); margin: 0 auto; animation: ws-shell-fade .34s ease; }
+.ws-shell { width: 100%; min-height: calc(100dvh - 228px); margin: 0 auto; background: transparent; animation: ws-shell-fade .34s ease; }
 
 .ws-topbar {
     position: relative;
