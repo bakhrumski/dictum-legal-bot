@@ -47,7 +47,7 @@
             loading: 'Workspace yuklanmoqda…', workspace: 'Workspace', sharedWork: 'Jamoaviy huquqiy ish maydoni',
             newTask: 'Yangi vazifa', invite: 'A’zo taklif qilish', members: 'A’zolar', owner: 'Egasi', member: 'A’zo', viewer: 'Kuzatuvchi',
             live: 'Jonli', connecting: 'Ulanmoqda', offline: 'Ulanmagan', preview: 'Preview',
-            tasks: 'Vazifalar', openTasks: 'Ochiq vazifalar', overdue: 'Muddati o‘tgan', completed: 'Yakunlangan', sharedMemory: 'Umumiy AI xotirasi',
+            tasks: 'Vazifalar', openTasks: 'Ochiq vazifalar', overdue: 'Muddati o‘tgan', completed: 'Yakunlangan', sharedMemory: 'Umumiy AI xotirasi', benchTitle: 'Masalaga biriktirilmagan',
             listView: 'Ro‘yxat', timelineView: 'Vaqt jadvali', searchTasks: 'Vazifa yoki tavsifni qidiring', allStatuses: 'Barcha holatlar', allPriorities: 'Barcha ustuvorliklar', allAssignees: 'Barcha ijrochilar',
             task: 'Vazifa', status: 'Holat', assignees: 'Ijrochilar', dueDate: 'Muddat', priority: 'Ustuvorlik',
             noTasksTitle: 'Birinchi umumiy vazifani yarating', noTasksBody: 'Masalan, shartnoma tahlili yoki xodim hujjatini vazifa qilib yarating. A’zolar, hujjatlar va AI natijalari bir joyda saqlanadi.',
@@ -77,10 +77,10 @@
             previewNotice: 'Bu xavfsiz UI preview — server ma’lumotlari o‘zgarmaydi.'
         },
         ru: {
-            loading:'Workspace загружается…', workspace:'Workspace', sharedWork:'Общее юридическое рабочее пространство', newTask:'Новая задача', invite:'Пригласить участника', members:'Участники', owner:'Владелец', member:'Участник', viewer:'Наблюдатель', live:'Онлайн', connecting:'Подключение', offline:'Нет связи', preview:'Preview', tasks:'Задачи', openTasks:'Открытые задачи', overdue:'Просрочено', completed:'Завершено', sharedMemory:'Общая память AI', listView:'Список', timelineView:'Лента', searchTasks:'Поиск задачи или описания', allStatuses:'Все статусы', allPriorities:'Все приоритеты', allAssignees:'Все исполнители', task:'Задача', status:'Статус', assignees:'Исполнители', dueDate:'Срок', priority:'Приоритет', noTasksTitle:'Создайте первую общую задачу', noTasksBody:'Создайте задачу по договору или кадровому документу. Участники, документы и результаты AI сохраняются вместе.', createTask:'Создать задачу', editTask:'Редактировать задачу', title:'Название', description:'Описание', startDate:'Дата начала', milestone:'Веха', watchers:'Наблюдатели', save:'Сохранить', cancel:'Отмена', delete:'Удалить', todo:'Запланировано', in_progress:'В работе', in_review:'На проверке', done:'Завершено', cancelled:'Отменено', low:'Низкий', normal:'Средний', high:'Высокий', urgent:'Срочный', comments:'Комментарии', writeComment:'Напишите комментарий…', send:'Отправить', noComments:'Комментариев пока нет. Поделитесь решением или обновлением.', documents:'Документы', uploadDocument:'Загрузить документ', noDocuments:'Прикрепите документ или результат AI к этой задаче.', versions:'Версии', version:'версия', download:'Скачать', activity:'История действий', noActivity:'Изменения появятся здесь по порядку.', aiAssistant:'Workspace AI', askAi:'Спросить AI', askPlaceholder:'Задайте вопрос с учетом задачи, документов и памяти команды…', aiContextTask:'Контекст задачи загружен', aiContextWorkspace:'Память Workspace и контекст Lex.uz', reused:'Использован готовый результат — без новых расходов API', generated:'Создан новый ответ', saveAsDocument:'Сохранить как документ', aiSaved:'Ответ AI сохранен как документ задачи', taskUpdated:'Задача обновлена', someoneUpdated:'Другой участник только что обновил задачу. Показана последняя версия.', taskCreated:'Задача создана', taskDeleted:'Задача удалена', platinumTitle:'Создайте Platinum Workspace', platinumBody:'Workspace доступен только с активным тарифом Platinum. Он объединяет задачи, общую память AI и историю документов.', workspaceName:'Название Workspace', createWorkspace:'Создать Workspace', upgradePlatinum:'Посмотреть Platinum', noWorkspaceTitle:'Создайте Workspace для команды', noWorkspaceBody:'Вы станете Владельцем и сможете приглашать по username или email.', inviteMember:'Пригласить участника', emailOrUsername:'Email или username', role:'Роль', expires:'Срок действия', hours72:'72 часа', days7:'7 дней', days30:'30 дней', createInvite:'Создать ссылку', copyLink:'Копировать', copied:'Ссылка скопирована', pendingInvites:'Ожидающие приглашения', noPendingInvites:'Нет ожидающих приглашений.', readOnly:'Только чтение', readOnlyReason:'Platinum Владельца истек или у вас роль Наблюдателя.', error:'Ошибка', tryAgain:'Повторить', close:'Закрыть', required:'Обязательное поле', day:'День', week:'Неделя', month:'Месяц', quarter:'Квартал', timelineEmpty:'Задачи с датами появятся здесь.', timelineMobile:'Для удобной работы с лентой используйте компьютер.', shortcuts:'Горячие клавиши', shortcutNew:'Новая задача', shortcutSearch:'Поиск задач', shortcutHelp:'Окно помощи', confirmDeleteTask:'Удалить эту задачу?', uploadFailed:'Не удалось загрузить файл', uploadComplete:'Документ загружен', noAccess:'Нет доступа к Workspace', unauthorizedBody:'Примите приглашение или запросите доступ у Владельца.', updatedNow:'только что обновил(а)', unscheduled:'Без даты', taskDetails:'Детали задачи', morePeople:'еще', language:'Язык', workspaceError:'Не удалось загрузить Workspace', memberManagement:'Участники и роли', activePlanRequired:'Требуется активный Platinum', fileTooLarge:'Файл должен быть меньше 50 МБ', unsupportedFile:'Этот тип файла не поддерживается', aiThinking:'Проверяем память команды и правовые источники…', aiFailed:'Не удалось получить ответ AI', threadHistory:'История чата', newConversation:'Новый чат', taskLinkHint:'Ответ сохраняется вместе с задачей, документами и результатами команды.', previewNotice:'Безопасный UI preview — данные сервера не изменяются.'
+            loading:'Workspace загружается…', workspace:'Workspace', sharedWork:'Общее юридическое рабочее пространство', newTask:'Новая задача', invite:'Пригласить участника', members:'Участники', owner:'Владелец', member:'Участник', viewer:'Наблюдатель', live:'Онлайн', connecting:'Подключение', offline:'Нет связи', preview:'Preview', tasks:'Задачи', openTasks:'Открытые задачи', overdue:'Просрочено', completed:'Завершено', sharedMemory:'Общая память AI', benchTitle:'Не закреплены за делом', listView:'Список', timelineView:'Лента', searchTasks:'Поиск задачи или описания', allStatuses:'Все статусы', allPriorities:'Все приоритеты', allAssignees:'Все исполнители', task:'Задача', status:'Статус', assignees:'Исполнители', dueDate:'Срок', priority:'Приоритет', noTasksTitle:'Создайте первую общую задачу', noTasksBody:'Создайте задачу по договору или кадровому документу. Участники, документы и результаты AI сохраняются вместе.', createTask:'Создать задачу', editTask:'Редактировать задачу', title:'Название', description:'Описание', startDate:'Дата начала', milestone:'Веха', watchers:'Наблюдатели', save:'Сохранить', cancel:'Отмена', delete:'Удалить', todo:'Запланировано', in_progress:'В работе', in_review:'На проверке', done:'Завершено', cancelled:'Отменено', low:'Низкий', normal:'Средний', high:'Высокий', urgent:'Срочный', comments:'Комментарии', writeComment:'Напишите комментарий…', send:'Отправить', noComments:'Комментариев пока нет. Поделитесь решением или обновлением.', documents:'Документы', uploadDocument:'Загрузить документ', noDocuments:'Прикрепите документ или результат AI к этой задаче.', versions:'Версии', version:'версия', download:'Скачать', activity:'История действий', noActivity:'Изменения появятся здесь по порядку.', aiAssistant:'Workspace AI', askAi:'Спросить AI', askPlaceholder:'Задайте вопрос с учетом задачи, документов и памяти команды…', aiContextTask:'Контекст задачи загружен', aiContextWorkspace:'Память Workspace и контекст Lex.uz', reused:'Использован готовый результат — без новых расходов API', generated:'Создан новый ответ', saveAsDocument:'Сохранить как документ', aiSaved:'Ответ AI сохранен как документ задачи', taskUpdated:'Задача обновлена', someoneUpdated:'Другой участник только что обновил задачу. Показана последняя версия.', taskCreated:'Задача создана', taskDeleted:'Задача удалена', platinumTitle:'Создайте Platinum Workspace', platinumBody:'Workspace доступен только с активным тарифом Platinum. Он объединяет задачи, общую память AI и историю документов.', workspaceName:'Название Workspace', createWorkspace:'Создать Workspace', upgradePlatinum:'Посмотреть Platinum', noWorkspaceTitle:'Создайте Workspace для команды', noWorkspaceBody:'Вы станете Владельцем и сможете приглашать по username или email.', inviteMember:'Пригласить участника', emailOrUsername:'Email или username', role:'Роль', expires:'Срок действия', hours72:'72 часа', days7:'7 дней', days30:'30 дней', createInvite:'Создать ссылку', copyLink:'Копировать', copied:'Ссылка скопирована', pendingInvites:'Ожидающие приглашения', noPendingInvites:'Нет ожидающих приглашений.', readOnly:'Только чтение', readOnlyReason:'Platinum Владельца истек или у вас роль Наблюдателя.', error:'Ошибка', tryAgain:'Повторить', close:'Закрыть', required:'Обязательное поле', day:'День', week:'Неделя', month:'Месяц', quarter:'Квартал', timelineEmpty:'Задачи с датами появятся здесь.', timelineMobile:'Для удобной работы с лентой используйте компьютер.', shortcuts:'Горячие клавиши', shortcutNew:'Новая задача', shortcutSearch:'Поиск задач', shortcutHelp:'Окно помощи', confirmDeleteTask:'Удалить эту задачу?', uploadFailed:'Не удалось загрузить файл', uploadComplete:'Документ загружен', noAccess:'Нет доступа к Workspace', unauthorizedBody:'Примите приглашение или запросите доступ у Владельца.', updatedNow:'только что обновил(а)', unscheduled:'Без даты', taskDetails:'Детали задачи', morePeople:'еще', language:'Язык', workspaceError:'Не удалось загрузить Workspace', memberManagement:'Участники и роли', activePlanRequired:'Требуется активный Platinum', fileTooLarge:'Файл должен быть меньше 50 МБ', unsupportedFile:'Этот тип файла не поддерживается', aiThinking:'Проверяем память команды и правовые источники…', aiFailed:'Не удалось получить ответ AI', threadHistory:'История чата', newConversation:'Новый чат', taskLinkHint:'Ответ сохраняется вместе с задачей, документами и результатами команды.', previewNotice:'Безопасный UI preview — данные сервера не изменяются.'
         },
         en: {
-            loading:'Loading Workspace…', workspace:'Workspace', sharedWork:'Shared legal work surface', newTask:'New task', invite:'Invite member', members:'Members', owner:'Owner', member:'Member', viewer:'Viewer', live:'Live', connecting:'Connecting', offline:'Offline', preview:'Preview', tasks:'Tasks', openTasks:'Open tasks', overdue:'Overdue', completed:'Completed', sharedMemory:'Shared AI memory', listView:'List', timelineView:'Timeline', searchTasks:'Search task or description', allStatuses:'All statuses', allPriorities:'All priorities', allAssignees:'All assignees', task:'Task', status:'Status', assignees:'Assignees', dueDate:'Due date', priority:'Priority', noTasksTitle:'Create the first shared task', noTasksBody:'Create a contract review or HR document task. People, documents and AI outputs stay together.', createTask:'Create task', editTask:'Edit task', title:'Title', description:'Description', startDate:'Start date', milestone:'Milestone', watchers:'Watchers', save:'Save', cancel:'Cancel', delete:'Delete', todo:'To do', in_progress:'In progress', in_review:'In review', done:'Done', cancelled:'Cancelled', low:'Low', normal:'Normal', high:'High', urgent:'Urgent', comments:'Comments', writeComment:'Write a comment…', send:'Send', noComments:'No comments yet. Share a decision or update here.', documents:'Documents', uploadDocument:'Upload document', noDocuments:'Attach a document or AI output to this task.', versions:'Versions', version:'version', download:'Download', activity:'Activity log', noActivity:'Changes will appear here in order.', aiAssistant:'Workspace AI', askAi:'Ask AI', askPlaceholder:'Ask with the task, documents and team memory in context…', aiContextTask:'Task context loaded', aiContextWorkspace:'Workspace memory and Lex.uz context', reused:'Existing validated result reused — no new API cost', generated:'New answer generated', saveAsDocument:'Save as document', aiSaved:'AI answer saved as a task document', taskUpdated:'Task updated', someoneUpdated:'Another member just updated this task. You are viewing the latest version.', taskCreated:'Task created', taskDeleted:'Task deleted', platinumTitle:'Create a Platinum Workspace', platinumBody:'Workspace requires an active Platinum plan. It combines team tasks, shared AI memory and document history.', workspaceName:'Workspace name', createWorkspace:'Create Workspace', upgradePlatinum:'View Platinum', noWorkspaceTitle:'Create a Workspace for your team', noWorkspaceBody:'You become Owner and can invite members by username or email.', inviteMember:'Invite member', emailOrUsername:'Email or username', role:'Role', expires:'Expiry', hours72:'72 hours', days7:'7 days', days30:'30 days', createInvite:'Create invite link', copyLink:'Copy', copied:'Link copied', pendingInvites:'Pending invitations', noPendingInvites:'No pending invitations.', readOnly:'Read only', readOnlyReason:'The Owner’s Platinum expired or your role is Viewer.', error:'Error', tryAgain:'Try again', close:'Close', required:'Required field', day:'Day', week:'Week', month:'Month', quarter:'Quarter', timelineEmpty:'Tasks with dates will appear here.', timelineMobile:'Use a desktop device to manage the timeline comfortably.', shortcuts:'Keyboard shortcuts', shortcutNew:'New task', shortcutSearch:'Search tasks', shortcutHelp:'Help overlay', confirmDeleteTask:'Delete this task?', uploadFailed:'Could not upload the file', uploadComplete:'Document uploaded', noAccess:'No Workspace access', unauthorizedBody:'Accept an invitation or ask the Owner for access.', updatedNow:'updated just now', unscheduled:'No date', taskDetails:'Task details', morePeople:'more', language:'Language', workspaceError:'Could not load Workspace', memberManagement:'Members and roles', activePlanRequired:'Active Platinum required', fileTooLarge:'File must be under 50 MB', unsupportedFile:'This file type is not supported', aiThinking:'Checking team memory and legal sources…', aiFailed:'Could not get an AI answer', threadHistory:'Conversation history', newConversation:'New conversation', taskLinkHint:'This answer stays with the task, its documents and team results.', previewNotice:'Safe UI preview — no server data is changed.'
+            loading:'Loading Workspace…', workspace:'Workspace', sharedWork:'Shared legal work surface', newTask:'New task', invite:'Invite member', members:'Members', owner:'Owner', member:'Member', viewer:'Viewer', live:'Live', connecting:'Connecting', offline:'Offline', preview:'Preview', tasks:'Tasks', openTasks:'Open tasks', overdue:'Overdue', completed:'Completed', sharedMemory:'Shared AI memory', benchTitle:'Not assigned to a matter', listView:'List', timelineView:'Timeline', searchTasks:'Search task or description', allStatuses:'All statuses', allPriorities:'All priorities', allAssignees:'All assignees', task:'Task', status:'Status', assignees:'Assignees', dueDate:'Due date', priority:'Priority', noTasksTitle:'Create the first shared task', noTasksBody:'Create a contract review or HR document task. People, documents and AI outputs stay together.', createTask:'Create task', editTask:'Edit task', title:'Title', description:'Description', startDate:'Start date', milestone:'Milestone', watchers:'Watchers', save:'Save', cancel:'Cancel', delete:'Delete', todo:'To do', in_progress:'In progress', in_review:'In review', done:'Done', cancelled:'Cancelled', low:'Low', normal:'Normal', high:'High', urgent:'Urgent', comments:'Comments', writeComment:'Write a comment…', send:'Send', noComments:'No comments yet. Share a decision or update here.', documents:'Documents', uploadDocument:'Upload document', noDocuments:'Attach a document or AI output to this task.', versions:'Versions', version:'version', download:'Download', activity:'Activity log', noActivity:'Changes will appear here in order.', aiAssistant:'Workspace AI', askAi:'Ask AI', askPlaceholder:'Ask with the task, documents and team memory in context…', aiContextTask:'Task context loaded', aiContextWorkspace:'Workspace memory and Lex.uz context', reused:'Existing validated result reused — no new API cost', generated:'New answer generated', saveAsDocument:'Save as document', aiSaved:'AI answer saved as a task document', taskUpdated:'Task updated', someoneUpdated:'Another member just updated this task. You are viewing the latest version.', taskCreated:'Task created', taskDeleted:'Task deleted', platinumTitle:'Create a Platinum Workspace', platinumBody:'Workspace requires an active Platinum plan. It combines team tasks, shared AI memory and document history.', workspaceName:'Workspace name', createWorkspace:'Create Workspace', upgradePlatinum:'View Platinum', noWorkspaceTitle:'Create a Workspace for your team', noWorkspaceBody:'You become Owner and can invite members by username or email.', inviteMember:'Invite member', emailOrUsername:'Email or username', role:'Role', expires:'Expiry', hours72:'72 hours', days7:'7 days', days30:'30 days', createInvite:'Create invite link', copyLink:'Copy', copied:'Link copied', pendingInvites:'Pending invitations', noPendingInvites:'No pending invitations.', readOnly:'Read only', readOnlyReason:'The Owner’s Platinum expired or your role is Viewer.', error:'Error', tryAgain:'Try again', close:'Close', required:'Required field', day:'Day', week:'Week', month:'Month', quarter:'Quarter', timelineEmpty:'Tasks with dates will appear here.', timelineMobile:'Use a desktop device to manage the timeline comfortably.', shortcuts:'Keyboard shortcuts', shortcutNew:'New task', shortcutSearch:'Search tasks', shortcutHelp:'Help overlay', confirmDeleteTask:'Delete this task?', uploadFailed:'Could not upload the file', uploadComplete:'Document uploaded', noAccess:'No Workspace access', unauthorizedBody:'Accept an invitation or ask the Owner for access.', updatedNow:'updated just now', unscheduled:'No date', taskDetails:'Task details', morePeople:'more', language:'Language', workspaceError:'Could not load Workspace', memberManagement:'Members and roles', activePlanRequired:'Active Platinum required', fileTooLarge:'File must be under 50 MB', unsupportedFile:'This file type is not supported', aiThinking:'Checking team memory and legal sources…', aiFailed:'Could not get an AI answer', threadHistory:'Conversation history', newConversation:'New conversation', taskLinkHint:'This answer stays with the task, its documents and team results.', previewNotice:'Safe UI preview — no server data is changed.'
         }
     };
 
@@ -808,7 +808,7 @@
                 '</div>'+
             '</header>'+
             pendingInviteBanner+
-            '<div class="ws-workspace-layout '+(state.chatOpen?'chat-open':'')+'"><main class="ws-workspace-main">'+
+            '<div class="ws-workspace-layout '+(state.chatOpen?'chat-open':'')+'"><main class="ws-workspace-main'+(state.view==='graph'?' graph-view':'')+'">'+
             (previewMode?'<div class="ws-conflict">'+svg('help',16)+esc(t('previewNotice'))+'</div>':'')+
             (!canWrite()?'<div class="ws-conflict">'+svg('history',16)+'<div><strong>'+esc(t('readOnly'))+'</strong> — '+esc(t('readOnlyReason'))+'</div></div>':'')+
             '<section class="ws-summary" aria-label="'+esc(t('workspace'))+'">'+
@@ -958,30 +958,19 @@
         // The stage therefore carries one hub per matter, each orbited by the
         // people assigned to it.
         var matters=state.tasks;
-        var memberCount=Math.max(1,state.members.length);
-        var satelliteRadius=matters.length>3?190:210;
-        var ringRadius=matters.length<2?0:Math.max(330,matters.length*82,memberCount*26);
         var viewportWidth=root?Math.floor(root.getBoundingClientRect().width):0;
-        var span=(ringRadius+satelliteRadius)*2;
-        var width=Math.max(1120,viewportWidth,span+460);
-        var height=Math.max(680,span+320);
-        var centreX=Math.round(width/2),centreY=Math.round(height/2);
 
-        // Matters sit on a ring (a single matter takes the centre). Each keeps
-        // its own outward bearing so its people orbit away from the crowd.
-        var matterPositions={},matterAngles={};
-        matters.forEach(function(task,index){
-            var angle=(-Math.PI/2)+(Math.PI*2*(index/Math.max(1,matters.length)));
-            var seat=matters.length<2
-                ? {x:centreX,y:centreY}
-                : {x:Math.round(centreX+Math.cos(angle)*ringRadius),y:Math.round(centreY+Math.sin(angle)*ringRadius)};
-            matterAngles[String(task.id)]=matters.length<2?(-Math.PI/2):angle;
-            matterPositions[String(task.id)]=getGraphMatterPosition(width,height,task.id,seat);
-        });
+        // Matters are laid out in columns rather than on a ring. A ring spans a
+        // canvas roughly twice its radius in both directions, so even two
+        // matters produced a stage far taller than the content and left anyone
+        // unassigned stranded at the bottom of it, hundreds of pixels from the
+        // nearest card. Columns keep the stage close to the size of the work,
+        // and put each matter directly above its own people, which also makes
+        // the cords short and vertical instead of long diagonals.
+        var COLUMN=306,MATTER_HALF=118,PERSON_ROW=142,ROW_GAP=60;
+        var perRow=Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/COLUMN));
+        perRow=Math.min(perRow,Math.max(1,matters.length));
 
-        // A person is placed against the matters they actually work on: one
-        // matter puts them on its outward arc, several puts them between those
-        // matters, none leaves them on a bench along the bottom.
         var memberMatters={};
         matters.forEach(function(task){
             (task.assignees||[]).forEach(function(assignee){
@@ -989,37 +978,93 @@
                 (memberMatters[key]=memberMatters[key]||[]).push(String(task.id));
             });
         });
-        var seatIndex={},benchIndex=0;
-        var memberPositions={};
+        // A person shared across matters is drawn once, under the first of them,
+        // with a cord running to each — never duplicated.
+        var homeMatter={};
         state.members.forEach(function(member){
-            var key=String(member.id);
-            var owned=(memberMatters[key]||[]).filter(function(id){return matterPositions[id];});
-            var point;
-            if(!owned.length){
-                var column=benchIndex%6,row=Math.floor(benchIndex/6);
-                benchIndex+=1;
-                point={x:centreX+(column-2.5)*150,y:height-96-row*104};
-            } else if(owned.length===1){
-                var host=owned[0],angle=matterAngles[host];
-                var seat=seatIndex[host]=(seatIndex[host]||0)+1;
-                var slot=Math.ceil(seat/2)*(seat%2?1:-1);
-                var spread=angle+slot*0.42;
-                point={
-                    x:matterPositions[host].x+Math.cos(spread)*satelliteRadius,
-                    y:matterPositions[host].y+Math.sin(spread)*satelliteRadius
-                };
-            } else {
-                var sum=owned.reduce(function(acc,id){return {x:acc.x+matterPositions[id].x,y:acc.y+matterPositions[id].y};},{x:0,y:0});
-                point={x:sum.x/owned.length,y:sum.y/owned.length};
-                // Nudge off the centroid so a shared person never lands on the
-                // straight line between their two matters.
-                var away=Math.atan2(point.y-centreY,point.x-centreX);
-                point={x:point.x+Math.cos(away)*74,y:point.y+Math.sin(away)*74};
-            }
-            memberPositions[key]={
-                x:clampNumber(Math.round(point.x),70,width-70),
-                y:clampNumber(Math.round(point.y),70,height-70)
+            var owned=(memberMatters[String(member.id)]||[]);
+            if(owned.length)homeMatter[String(member.id)]=owned[0];
+        });
+        var rosterFor={};
+        state.members.forEach(function(member){
+            var host=homeMatter[String(member.id)];
+            if(host)(rosterFor[host]=rosterFor[host]||[]).push(member);
+        });
+
+        var rowCount=Math.ceil(matters.length/perRow)||1;
+        var rowHasPeople=[];
+        matters.forEach(function(task,index){
+            if((rosterFor[String(task.id)]||[]).length)rowHasPeople[Math.floor(index/perRow)]=true;
+        });
+
+        var rowTop=[],cursor=52;
+        for(var r=0;r<rowCount;r+=1){
+            rowTop[r]=cursor;
+            cursor+=MATTER_HALF*2+(rowHasPeople[r]?PERSON_ROW:0)+ROW_GAP;
+        }
+
+        var matterPositions={};
+        matters.forEach(function(task,index){
+            var column=index%perRow,row=Math.floor(index/perRow);
+            var columnsInRow=Math.min(perRow,matters.length-row*perRow);
+            var rowWidth=columnsInRow*COLUMN;
+            var seat={
+                x:Math.round(48+(Math.max(viewportWidth,980)-96-rowWidth)/2+column*COLUMN+COLUMN/2),
+                y:Math.round(rowTop[row]+MATTER_HALF)
             };
+            matterPositions[String(task.id)]=seat;
+        });
+
+        // People sit under their matter. Anyone not on a matter yet keeps a row
+        // of their own directly below the board, close enough to read as part of
+        // the same picture rather than exiled to the far edge of the canvas.
+        var memberPositions={},unassigned=[];
+        state.members.forEach(function(member){
+            if(!homeMatter[String(member.id)])unassigned.push(member);
+        });
+        matters.forEach(function(task){
+            var roster=rosterFor[String(task.id)]||[];
+            if(!roster.length)return;
+            var anchor=matterPositions[String(task.id)];
+            roster.forEach(function(member,index){
+                var offset=(index-(roster.length-1)/2)*118;
+                memberPositions[String(member.id)]={
+                    x:Math.round(anchor.x+offset),
+                    y:Math.round(anchor.y+MATTER_HALF+72)
+                };
+            });
+        });
+        var benchTop=cursor-ROW_GAP+72;
+        unassigned.forEach(function(member,index){
+            var perBench=Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/132));
+            var column=index%perBench,row=Math.floor(index/perBench);
+            var rowWidth=Math.min(perBench,unassigned.length-row*perBench)*132;
+            memberPositions[String(member.id)]={
+                x:Math.round(48+(Math.max(viewportWidth,980)-96-rowWidth)/2+column*132+66),
+                y:Math.round(benchTop+row*118)
+            };
+        });
+        if(unassigned.length)cursor=benchTop+Math.ceil(unassigned.length/Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/132)))*118;
+
+        var width=Math.max(980,viewportWidth);
+        var height=Math.max(520,cursor+72);
+
+        // A matter the user dragged keeps where they put it. Applied after the
+        // canvas is sized, since the saved value is clamped against it.
+        matters.forEach(function(task){
+            var key=String(task.id);
+            var seat=matterPositions[key];
+            var placed=getGraphMatterPosition(width,height,task.id,seat);
+            if(placed.x===seat.x&&placed.y===seat.y)return;
+            var shiftX=placed.x-seat.x,shiftY=placed.y-seat.y;
+            matterPositions[key]=placed;
+            // Move that matter's people with it, or the cords stretch across the
+            // board to a roster still sitting under the empty column.
+            (rosterFor[key]||[]).forEach(function(member){
+                var spot=memberPositions[String(member.id)];
+                if(!spot)return;
+                memberPositions[String(member.id)]={x:spot.x+shiftX,y:spot.y+shiftY};
+            });
         });
 
         var edges=[];
@@ -1044,7 +1089,14 @@
             return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';
         }).join('');
 
-        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+'</div></div></section>';
+        // Someone on no matter has no cord to draw, so the row is labelled
+        // instead. Without it a disconnected avatar reads as a broken edge
+        // rather than as the real state: nobody has given them work yet.
+        var benchLabel=unassigned.length
+            ? '<p class="ws-graph-bench" style="top:'+(benchTop-64)+'px">'+esc(t('benchTitle'))+'</p>'
+            : '';
+
+        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
     }
 
     function renderTaskRow(task) {
