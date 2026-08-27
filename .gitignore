@@ -50,3 +50,10 @@ nul
 
 # Claude Code
 .claude/
+
+# Agent skills installed by `npx skills add`. The skill bodies are vendored
+# third-party instruction files, so they stay out of the repository; the
+# versions the project expects are pinned by hash in skills-lock.json, which
+# is tracked. Reinstall with:
+#   npx skills add https://github.com/Leonxlnx/taste-skill
+.agents/
