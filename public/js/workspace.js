@@ -900,8 +900,12 @@
         return 'active';
     }
 
-    function graphMatterPositionKey(taskId) {
-        return 'juristai-workspace-matter-position:' + String(state.workspace && state.workspace.id || 'default') + ':' + String(taskId || 'default');
+    // Keyed by graph key ("task:<id>" / "member:<id>") so people keep a hand
+    // placed position too. The namespace is versioned: coordinates saved by the
+    // old ring layout describe a canvas that no longer exists, and replaying
+    // them would scatter nodes across the new board.
+    function graphMatterPositionKey(graphKey) {
+        return 'juristai-workspace-node-position:v2:' + String(state.workspace && state.workspace.id || 'default') + ':' + String(graphKey || 'default');
     }
 
     function clampNumber(value, min, max) {
@@ -930,12 +934,12 @@
         return t(task.status) + ' · ' + (task.due_date ? isoDate(task.due_date) : t('unscheduled'));
     }
 
-    function getGraphMatterPosition(width, height, taskId, defaultPosition) {
+    function getGraphMatterPosition(width, height, graphKey, defaultPosition) {
         // The centre is only a sensible default for a single matter. With several
         // on the stage each needs its own computed slot, or they all stack.
         var fallback = defaultPosition || { x: Math.round(width / 2), y: Math.round(height / 2) };
         try {
-            var saved = JSON.parse(localStorage.getItem(graphMatterPositionKey(taskId)) || 'null');
+            var saved = JSON.parse(localStorage.getItem(graphMatterPositionKey(graphKey)) || 'null');
             if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
                 return {
                     x: clampNumber(saved.x, 135, width - 135),
@@ -971,10 +975,29 @@
         var perRow=Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/COLUMN));
         perRow=Math.min(perRow,Math.max(1,matters.length));
 
+        // Every stored link between a person and a matter earns a cord, not just
+        // assignment: the workspace owner who opened a matter and put nobody on
+        // it yet is genuinely connected to it, and drawing only assignees left
+        // them floating with no cord at all. All three come back from the API
+        // already — assignees and watchers as arrays, created_by via SELECT t.*.
+        var memberIds={};
+        state.members.forEach(function(member){memberIds[String(member.id)]=true;});
+        function relatedMemberIds(task){
+            var seen={},list=[];
+            function add(id){
+                var key=String(id==null?'':id);
+                if(!key||seen[key]||!memberIds[key])return;
+                seen[key]=true;list.push(key);
+            }
+            (task.assignees||[]).forEach(function(person){add(person.id);});
+            (task.watchers||[]).forEach(function(person){add(person.id);});
+            add(task.created_by);
+            return list;
+        }
+
         var memberMatters={};
         matters.forEach(function(task){
-            (task.assignees||[]).forEach(function(assignee){
-                var key=String(assignee.id);
+            relatedMemberIds(task).forEach(function(key){
                 (memberMatters[key]=memberMatters[key]||[]).push(String(task.id));
             });
         });
@@ -1051,10 +1074,11 @@
 
         // A matter the user dragged keeps where they put it. Applied after the
         // canvas is sized, since the saved value is clamped against it.
+        var pinnedMembers={};
         matters.forEach(function(task){
             var key=String(task.id);
             var seat=matterPositions[key];
-            var placed=getGraphMatterPosition(width,height,task.id,seat);
+            var placed=getGraphMatterPosition(width,height,'task:'+key,seat);
             if(placed.x===seat.x&&placed.y===seat.y)return;
             var shiftX=placed.x-seat.x,shiftY=placed.y-seat.y;
             matterPositions[key]=placed;
@@ -1066,14 +1090,24 @@
                 memberPositions[String(member.id)]={x:spot.x+shiftX,y:spot.y+shiftY};
             });
         });
+        // A person dropped somewhere by hand stays there, and stops being
+        // carried by the matter above them.
+        state.members.forEach(function(member){
+            var key=String(member.id),spot=memberPositions[key];
+            if(!spot)return;
+            var placed=getGraphMatterPosition(width,height,'member:'+key,spot);
+            if(placed.x===spot.x&&placed.y===spot.y)return;
+            memberPositions[key]=placed;
+            pinnedMembers[key]=true;
+        });
 
         var edges=[];
         matters.forEach(function(task){
             var from=matterPositions[String(task.id)];
-            (task.assignees||[]).forEach(function(assignee){
-                var to=memberPositions[String(assignee.id)];
+            relatedMemberIds(task).forEach(function(memberId){
+                var to=memberPositions[memberId];
                 if(!to)return;
-                edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(assignee.id)+'" d="'+graphCurve(from,to)+'"/>');
+                edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(memberId)+'" d="'+graphCurve(from,to)+'"/>');
             });
         });
 
@@ -1086,7 +1120,7 @@
 
         var memberNodes=state.members.map(function(member){
             var p=memberPositions[String(member.id)],expired=member.subscription_active===false;
-            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';
+            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'"'+(pinnedMembers[String(member.id)]?' data-graph-pinned="1"':'')+' data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';
         }).join('');
 
         // Someone on no matter has no cord to draw, so the row is labelled
@@ -2342,7 +2376,9 @@
     var GRAPH_DRAG_THRESHOLD=4;
 
     function handleGraphMatterDrag(event) {
-        var matter=event.target.closest&&event.target.closest('[data-graph-matter]');
+        // Any node on the stage can be repositioned, not only a matter. A person
+        // moves alone; a matter still takes its own people with it.
+        var matter=event.target.closest&&event.target.closest('[data-graph-node]');
         if(!matter||!root||!root.contains(matter)||event.button!==0)return;
         var stage=matter.closest('.ws-graph-stage');
         if(!stage)return;
@@ -2364,7 +2400,9 @@
         stage.querySelectorAll('path[data-from-key="'+matter.dataset.graphKey+'"]').forEach(function(path){
             tethered[path.dataset.toKey]=true;
         });
-        var satellites=origins.filter(function(item){return item.node!==matter&&tethered[item.node.dataset.graphKey];});
+        var satellites=origins.filter(function(item){
+            return item.node!==matter&&tethered[item.node.dataset.graphKey]&&!item.node.dataset.graphPinned;
+        });
         var originX=matterOrigin.x,originY=matterOrigin.y;
         var width=stage.offsetWidth,height=stage.offsetHeight;
         var current={x:originX,y:originY};
@@ -2445,12 +2483,15 @@
             matter.classList.remove('dragging');
             if(!frameHandle)frameHandle=requestAnimationFrame(frame);
             if(!moved)return;
+            // Members trail their matter, so once one has been placed by hand it
+            // must stop being dragged around by the matter it belongs to.
+            if(!matter.hasAttribute('data-graph-matter'))matter.dataset.graphPinned='1';
             // A drag must not also open the task. Swallow only the click that
             // this pointerup is about to produce.
             var swallowClick=function(clickEvent){clickEvent.preventDefault();clickEvent.stopPropagation();};
             document.addEventListener('click',swallowClick,true);
             global.setTimeout(function(){document.removeEventListener('click',swallowClick,true);},0);
-            try{localStorage.setItem(graphMatterPositionKey(matter.dataset.taskId),JSON.stringify(current));}catch(_error){}
+            try{localStorage.setItem(graphMatterPositionKey(matter.dataset.graphKey),JSON.stringify(current));}catch(_error){}
         }
         document.addEventListener('pointermove',move);
         document.addEventListener('pointerup',up);
