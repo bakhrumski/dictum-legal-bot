@@ -771,7 +771,7 @@
 .ws-graph-stage > svg { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .ws-graph-stage > svg path,
 .ws-graph-stage > svg line { fill: none; stroke: var(--ws-line-strong); stroke-width: 1.15; vector-effect: non-scaling-stroke; }
-.ws-graph-stage > svg path.ws-graph-link.matter { stroke: var(--ws-gold); stroke-width: 1.9; opacity: .85; stroke-linecap: round; }
+.ws-graph-stage > svg path.ws-graph-link.matter { stroke: var(--ws-gold); stroke-width: 1.9; opacity: .85; stroke-linecap: round; stroke-dasharray: 7 6; }
 /* Member -> task assignment is shown as an avatar chip on the task card
    (.ws-graph-owners) rather than a line spanning the stage. The paths are
    still emitted, so restoring them is a one-line change here. */
@@ -822,7 +822,8 @@
    position history in handleGraphMatterDrag(). Deliberately no left/top
    transition here: a transition restarts on every pointermove, which stutters
    and collapses the trail into rigid-body motion. */
-.ws-graph-member { width: 104px; display: grid; justify-items: center; gap: 5px; border: 0; color: var(--ws-ink); background: transparent; font-size: 10px; font-weight: 700; text-align: center; }
+.ws-graph-member { width: 104px; display: grid; justify-items: center; gap: 5px; border: 0; color: var(--ws-ink); background: transparent; font-size: 10px; font-weight: 700; text-align: center; cursor: grab; touch-action: none; user-select: none; }
+.ws-graph-member.dragging { z-index: 8; cursor: grabbing; }
 .ws-graph-member .ws-avatar { width: 45px; height: 45px; margin: 0; border: 3px solid var(--ws-panel-solid); box-shadow: 0 0 0 1px var(--ws-line-strong), 0 10px 28px -16px rgba(31,77,160,.7); font-size: 13px; }
 .ws-graph-member small { max-width: 98px; color: var(--ws-danger); font-size: 8px; line-height: 1.25; }
 .ws-graph-member.expired { opacity: .48; filter: grayscale(.8); }
