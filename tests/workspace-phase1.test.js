@@ -412,6 +412,8 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes('data-from-key="matter" data-to-key="member:'), 'matter must link directly to every Workspace member');
     assert.ok(frontend.includes('data-from-key="matter" data-to-key="task:'), 'matter must link directly to every related task');
     assert.ok(frontend.includes('function updateGraphEdges(stage)'), 'graph links must be recalculated while nodes move');
+    assert.ok(frontend.includes('function graphEdgeAnchor(from, to)'), 'graph links must connect at node edges instead of disappearing below node centers');
+    assert.ok(frontend.includes("if(distance<=150)return prefix+' L '"), 'nearby graph nodes must use short straight connectors instead of curled paths');
     assert.ok(frontend.includes('ws-task-description'), 'list view must expose each task description');
     assert.ok(styles.includes('.ws-graph-following'), 'graph followers need the delayed movement treatment');
     assert.ok(styles.includes('scrollbar-width: none;'), 'graph scrolling must remain usable without visible scrollbars');

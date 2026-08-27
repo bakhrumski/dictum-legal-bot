@@ -919,10 +919,46 @@
         return Math.max(min, Math.min(max, Number(value) || 0));
     }
 
-    function graphCurve(from, to) {
-        var dx = Math.max(46, Math.abs(to.x - from.x) * .42);
-        var direction = to.x >= from.x ? 1 : -1;
-        return 'M ' + from.x + ' ' + from.y + ' C ' + (from.x + dx * direction) + ' ' + from.y + ', ' + (to.x - dx * direction) + ' ' + to.y + ', ' + to.x + ' ' + to.y;
+    function graphNodeBox(point, kind) {
+        var sizes={
+            matter:{halfWidth:110,halfHeight:56},
+            member:{halfWidth:52,halfHeight:42},
+            task:{halfWidth:88,halfHeight:38}
+        };
+        var size=sizes[kind]||sizes.task;
+        return {x:Number(point.x)||0,y:Number(point.y)||0,halfWidth:size.halfWidth,halfHeight:size.halfHeight};
+    }
+
+    function graphEdgeAnchor(from, to) {
+        var dx=to.x-from.x,dy=to.y-from.y;
+        var absX=Math.abs(dx),absY=Math.abs(dy);
+        if(absX<.01&&absY<.01)return{x:from.x,y:from.y};
+        var xScale=absX<.01?Infinity:Math.max(1,from.halfWidth||0)/absX;
+        var yScale=absY<.01?Infinity:Math.max(1,from.halfHeight||0)/absY;
+        var scale=Math.min(xScale,yScale);
+        return{x:from.x+(dx*scale),y:from.y+(dy*scale)};
+    }
+
+    function graphConnector(from, to) {
+        var start=graphEdgeAnchor(from,to);
+        var end=graphEdgeAnchor(to,from);
+        var dx=end.x-start.x,dy=end.y-start.y;
+        var distance=Math.hypot(dx,dy);
+        var point=function(value){return Math.round(value*10)/10;};
+        var prefix='M '+point(start.x)+' '+point(start.y);
+
+        // A curve between nearby cards is mostly hidden underneath the nodes and
+        // leaves hook-shaped fragments visible.  A short edge-to-edge line keeps
+        // the relationship legible as nodes approach one another.
+        if(distance<=150)return prefix+' L '+point(end.x)+' '+point(end.y);
+
+        var bend=Math.min(150,Math.max(42,distance*.34));
+        if(Math.abs(dy)>Math.abs(dx)){
+            var verticalDirection=dy>=0?1:-1;
+            return prefix+' C '+point(start.x)+' '+point(start.y+(bend*verticalDirection))+', '+point(end.x)+' '+point(end.y-(bend*verticalDirection))+', '+point(end.x)+' '+point(end.y);
+        }
+        var horizontalDirection=dx>=0?1:-1;
+        return prefix+' C '+point(start.x+(bend*horizontalDirection))+' '+point(start.y)+', '+point(end.x-(bend*horizontalDirection))+' '+point(end.y)+', '+point(end.x)+' '+point(end.y);
     }
 
     function graphMatterSummary(task) {
@@ -1003,16 +1039,16 @@
         var edges=[];
         state.members.forEach(function(member){
             var target=memberPositions[String(member.id)];
-            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="matter" data-to-key="member:'+esc(member.id)+'" d="'+graphCurve(matterPosition,target)+'"/>');
+            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="matter" data-to-key="member:'+esc(member.id)+'" d="'+graphConnector(graphNodeBox(matterPosition,'matter'),graphNodeBox(target,'member'))+'"/>');
         });
         relatedTasks.forEach(function(task){
             var taskPosition=taskPositions[String(task.id)];
             var assignees=(task.assignees||[]).map(function(member){return memberPositions[String(member.id)];}).filter(Boolean);
-            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="matter" data-to-key="task:'+esc(task.id)+'" d="'+graphCurve(matterPosition,taskPosition)+'"/>');
+            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="matter" data-to-key="task:'+esc(task.id)+'" d="'+graphConnector(graphNodeBox(matterPosition,'matter'),graphNodeBox(taskPosition,'task'))+'"/>');
             (task.assignees||[]).forEach(function(member,index){
                 var memberPosition=memberPositions[String(member.id)];
                 if(!memberPosition)return;
-                edges.push('<path class="ws-graph-link task" data-from-key="member:'+esc(member.id)+'" data-to-key="task:'+esc(task.id)+'" d="'+graphCurve(memberPosition,taskPosition)+'"/>');
+                edges.push('<path class="ws-graph-link task" data-from-key="member:'+esc(member.id)+'" data-to-key="task:'+esc(task.id)+'" d="'+graphConnector(graphNodeBox(memberPosition,'member'),graphNodeBox(taskPosition,'task'))+'"/>');
             });
         });
 
@@ -2178,6 +2214,7 @@
         var scroll=root.querySelector('.ws-graph-scroll');
         var matter=scroll&&scroll.querySelector('[data-graph-matter]');
         if(!scroll||!matter)return;
+        updateGraphEdges(matter.closest('.ws-graph-stage'));
         var key=String(state.workspace&&state.workspace.id||'')+':'+String(state.tasks[0]&&state.tasks[0].id||'')+':'+state.tasks.length+':'+state.members.length;
         if(scroll.dataset.centeredFor===key)return;
         scroll.dataset.centeredFor=key;
@@ -2212,7 +2249,9 @@
         var nodeRect=node.getBoundingClientRect();
         return {
             x:nodeRect.left-stageRect.left+(nodeRect.width/2),
-            y:nodeRect.top-stageRect.top+(nodeRect.height/2)
+            y:nodeRect.top-stageRect.top+(nodeRect.height/2),
+            halfWidth:nodeRect.width/2,
+            halfHeight:nodeRect.height/2
         };
     }
 
@@ -2224,7 +2263,7 @@
         });
         stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
             var from=positions[path.dataset.fromKey],to=positions[path.dataset.toKey];
-            if(from&&to)path.setAttribute('d',graphCurve(from,to));
+            if(from&&to)path.setAttribute('d',graphConnector(from,to));
         });
     }
 
