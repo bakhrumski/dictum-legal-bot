@@ -753,6 +753,12 @@
 
 /* Phase-1 workload graph.  The stage deliberately scrolls on narrow screens;
    compressing a relationship map would make labels and tap targets unusable. */
+/* The graph is a canvas, not a list: the metric cards and the task filters cost
+   it roughly 190px of height and neither applies to it — the stage draws every
+   matter regardless of the search box or the status dropdowns. That height goes
+   to the stage instead. */
+.ws-workspace-main.graph-view > .ws-summary,
+.ws-workspace-main.graph-view .ws-filters { display: none; }
 .ws-graph { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .ws-graph-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; border-bottom: 1px solid var(--ws-line); color: var(--ws-muted); font-size: 11px; }
 .ws-graph-legend { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
@@ -792,7 +798,8 @@
     user-select: none;
     transition: transform .18s ease;
 }
-.ws-graph-matter:hover,
+/* Focus keeps its ring — hover does not. Dropping the focus outline too would
+   leave keyboard users with no idea where they are on the stage. */
 .ws-graph-matter:focus-visible { outline: 3px solid color-mix(in srgb, var(--ws-gold) 30%, transparent); outline-offset: 4px; }
 /* Matches the lift on member and task nodes. Suppressed while dragging: the
    pointer sits on the card for the whole drag, so it would otherwise stay
@@ -831,13 +838,16 @@
 .ws-graph-task.approaching { border-color: rgba(179,119,8,.62); background: color-mix(in srgb, var(--ws-panel-solid) 91%, var(--ws-warning-soft)); box-shadow: 0 0 0 3px var(--ws-warning-soft); }
 .ws-graph-task.overdue { border-color: rgba(168,36,56,.6); background: color-mix(in srgb, var(--ws-panel-solid) 91%, var(--ws-danger-soft)); box-shadow: 0 0 0 3px var(--ws-danger-soft); }
 .ws-graph-task.done { opacity: .78; border-color: rgba(5,112,91,.45); }
-/* Hover lifts and outlines only — no box-shadow. The shadow that used to sit
-   here also overrode the status rings on .approaching and .overdue, so an
-   overdue task lost its red ring at exactly the moment you pointed at it. */
+/* Hover lifts only — no shadow, no outline. The shadow that used to sit here
+   also overrode the status rings on .approaching and .overdue, so an overdue
+   task lost its red ring at exactly the moment you pointed at it. */
 .ws-graph-task:hover,
 .ws-graph-task:focus-visible,
 .ws-graph-member:hover,
-.ws-graph-member:focus-visible { z-index: 5; transform: translate(-50%, -50%) scale(1.045); outline: 2px solid var(--ws-brand-border); outline-offset: 3px; }
+.ws-graph-member:focus-visible { z-index: 5; transform: translate(-50%, -50%) scale(1.045); }
+.ws-graph-task:focus-visible,
+.ws-graph-member:focus-visible { outline: 2px solid var(--ws-brand-border); outline-offset: 3px; }
+.ws-graph-bench { position: absolute; z-index: 1; left: 0; right: 0; margin: 0; padding-top: 14px; border-top: 1px dashed var(--ws-line); color: var(--ws-muted); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-align: center; text-transform: uppercase; pointer-events: none; }
 .ws-graph-badges { display: flex; flex-wrap: wrap; gap: 5px; }
 .ws-graph-badges b { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 1px solid var(--ws-line); border-radius: 999px; color: var(--ws-ink-soft); background: var(--ws-panel-hover); font-size: 8px; font-weight: 650; }
 
