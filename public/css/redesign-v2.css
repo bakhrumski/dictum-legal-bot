@@ -329,7 +329,12 @@ input::placeholder, textarea::placeholder { color: var(--jai-muted-dim) !importa
 .trial-strip[data-card-click-ready="1"] { cursor: pointer; }
 .plans { align-items: stretch; }
 .plans .plan { height: 100%; }
-.bc-icon { color: var(--jai-brand) !important; background: var(--jai-brand-soft) !important; }
+.bc-icon {
+  color: var(--jai-brand) !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
 .bcard h3, .step h3, .plan-name, .tname, .qi button { color: var(--jai-ink) !important; }
 .bcard p, .step p, .plan-for, .plan-per, .plan-features, .trole, .qi-ans, blockquote { color: var(--jai-muted) !important; }
 .b-chip, .b-res, .b-sec, .b-badge { border-color: var(--jai-line) !important; background: var(--jai-panel-hover) !important; }
