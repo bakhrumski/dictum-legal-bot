@@ -1120,7 +1120,8 @@
 
         var memberNodes=state.members.map(function(member){
             var p=memberPositions[String(member.id)],expired=member.subscription_active===false;
-            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'"'+(pinnedMembers[String(member.id)]?' data-graph-pinned="1"':'')+' data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';
+            var home=homeMatter[String(member.id)];
+            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'"'+(home?' data-graph-home="task:'+esc(home)+'"':'')+(pinnedMembers[String(member.id)]?' data-graph-pinned="1"':'')+' data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';
         }).join('');
 
         // Someone on no matter has no cord to draw, so the row is labelled
@@ -2394,26 +2395,28 @@
             halfHeight:node.offsetHeight/2
         };});
         var matterOrigin=origins.find(function(item){return item.node===matter;});
-        // Only this matter's own people trail it. With several matters on the
-        // stage, dragging one must not haul another matter's team along.
-        var tethered={};
-        stage.querySelectorAll('path[data-from-key="'+matter.dataset.graphKey+'"]').forEach(function(path){
-            tethered[path.dataset.toKey]=true;
-        });
+        // Only the people this matter hosts trail it — the ones drawn beneath it.
+        // Tethering by edge instead would drag anyone merely *linked* to this
+        // matter, and someone who works on two matters sits under one of them:
+        // dragging the other would tear them away from their own column.
         var satellites=origins.filter(function(item){
-            return item.node!==matter&&tethered[item.node.dataset.graphKey]&&!item.node.dataset.graphPinned;
+            return item.node!==matter
+                && item.node.dataset.graphHome===matter.dataset.graphKey
+                && !item.node.dataset.graphPinned;
         });
         var originX=matterOrigin.x,originY=matterOrigin.y;
         var width=stage.offsetWidth,height=stage.offsetHeight;
         var current={x:originX,y:originY};
         var padding=18;
-        // Bounds come from the group that actually moves, not every node on the
-        // stage — an unrelated matter parked at the edge must not pin this one.
-        var moving=[matterOrigin].concat(satellites);
-        var minDx=Math.max.apply(Math,moving.map(function(item){return padding+item.halfWidth-item.x;}));
-        var maxDx=Math.min.apply(Math,moving.map(function(item){return width-padding-item.halfWidth-item.x;}));
-        var minDy=Math.max.apply(Math,moving.map(function(item){return padding+item.halfHeight-item.y;}));
-        var maxDy=Math.min.apply(Math,moving.map(function(item){return height-padding-item.halfHeight-item.y;}));
+        // Bounds come from the dragged node alone. Taking the tightest limit
+        // across the whole moving group let one satellite sitting near an edge
+        // decide how far the matter could travel — with a person parked at the
+        // left of the board, a matter on the right could not be moved left at
+        // all. Satellites are clamped individually as they follow.
+        var minDx=padding+matterOrigin.halfWidth-matterOrigin.x;
+        var maxDx=width-padding-matterOrigin.halfWidth-matterOrigin.x;
+        var minDy=padding+matterOrigin.halfHeight-matterOrigin.y;
+        var maxDy=height-padding-matterOrigin.halfHeight-matterOrigin.y;
 
         // Honour the OS setting: no trailing motion, satellites track exactly.
         var reduceMotion=global.matchMedia&&global.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2450,7 +2453,8 @@
             var delayed=sampleHistory(now-lag);
             var dx=delayed.x-originX,dy=delayed.y-originY;
             satellites.forEach(function(item){
-                var x=item.x+dx,y=item.y+dy;
+                var x=clampNumber(item.x+dx,padding+item.halfWidth,width-padding-item.halfWidth);
+                var y=clampNumber(item.y+dy,padding+item.halfHeight,height-padding-item.halfHeight);
                 item.node.style.left=x+'px';
                 item.node.style.top=y+'px';
                 item.node.dataset.x=String(x);
@@ -2459,6 +2463,47 @@
             updateGraphEdges(stage);
             var settled=!dragging&&Math.abs(delayed.x-current.x)<0.5&&Math.abs(delayed.y-current.y)<0.5;
             frameHandle=settled?null:requestAnimationFrame(frame);
+        }
+
+        /**
+         * Matters may sit side by side but never on top of one another. On drop,
+         * push the dragged card out of any card it landed on, along whichever
+         * axis needs the least movement, so releasing it beside a neighbour
+         * settles it flush against that neighbour rather than over it.
+         */
+        function separateFromOtherMatters(){
+            if(!matter.hasAttribute('data-graph-matter'))return;
+            var GAP=16;
+            var halfWidth=matter.offsetWidth/2,halfHeight=matter.offsetHeight/2;
+            var others=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-matter]'))
+                .filter(function(node){return node!==matter;})
+                .map(function(node){return {
+                    x:Number(node.dataset.x||node.offsetLeft),
+                    y:Number(node.dataset.y||node.offsetTop),
+                    halfWidth:node.offsetWidth/2,
+                    halfHeight:node.offsetHeight/2
+                };});
+            for(var pass=0;pass<8;pass+=1){
+                var hit=null;
+                for(var i=0;i<others.length;i+=1){
+                    var other=others[i];
+                    if(Math.abs(current.x-other.x)<halfWidth+other.halfWidth+GAP
+                        &&Math.abs(current.y-other.y)<halfHeight+other.halfHeight+GAP){hit=other;break;}
+                }
+                if(!hit)break;
+                var needX=halfWidth+hit.halfWidth+GAP-Math.abs(current.x-hit.x);
+                var needY=halfHeight+hit.halfHeight+GAP-Math.abs(current.y-hit.y);
+                if(needX<=needY)current.x+=(current.x>=hit.x?1:-1)*needX;
+                else current.y+=(current.y>=hit.y?1:-1)*needY;
+            }
+            current.x=clampNumber(current.x,padding+halfWidth,width-padding-halfWidth);
+            current.y=clampNumber(current.y,padding+halfHeight,height-padding-halfHeight);
+            matter.style.left=current.x+'px';
+            matter.style.top=current.y+'px';
+            matter.dataset.x=String(current.x);
+            matter.dataset.y=String(current.y);
+            // Let the roster trail to the corrected spot, not the dropped one.
+            history.push({t:performance.now(),x:current.x,y:current.y});
         }
 
         function move(moveEvent){
@@ -2481,6 +2526,7 @@
             document.removeEventListener('pointercancel',up);
             dragging=false;
             matter.classList.remove('dragging');
+            if(moved)separateFromOtherMatters();
             if(!frameHandle)frameHandle=requestAnimationFrame(frame);
             if(!moved)return;
             // Members trail their matter, so once one has been placed by hand it
