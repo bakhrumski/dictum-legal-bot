@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const { canCreateWorkspace, isActivePlatinum } = require('../src/workspace/authz');
 const { createWorkspaceAiService, loadContext, normalizeQuestion, sha256 } = require('../src/workspace/ai-service');
 const { issueRealtimeToken } = require('../src/workspace/realtime-auth');
+const { projectRefFromDatabaseUrl, storageConfiguration } = require('../src/workspace/storage');
 const { makeSlug, tokenHash } = require('../src/workspace/routes');
 const { combineUsage } = require('../src/workspace/legal-answer-generator');
 const { migrationFiles, stripOuterTransaction } = require('../src/database/migrations');
@@ -41,6 +42,24 @@ function transactionalPool(handler) {
 
 (async () => {
   console.log('\nworkspace — entitlement and identity bridge\n');
+
+  await test('Workspace Storage config is server-only and can infer the Supabase project URL', () => {
+    assert.strictEqual(
+      projectRefFromDatabaseUrl('postgresql://postgres.projectref:password@pooler.supabase.com:5432/postgres'),
+      'projectref'
+    );
+    assert.deepStrictEqual(storageConfiguration({
+      DATABASE_URL: 'postgresql://postgres.projectref:password@pooler.supabase.com:5432/postgres',
+      SUPABASE_SERVICE_ROLE_KEY: 'server-secret',
+    }), {
+      supabaseUrl: 'https://projectref.supabase.co',
+      serviceRoleKey: 'server-secret',
+    });
+    assert.throws(
+      () => storageConfiguration({ SUPABASE_URL: 'https://project.supabase.co' }),
+      (error) => error.code === 'workspace_storage_not_configured'
+    );
+  });
 
   await test('only active Platinum accounts qualify', () => {
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'platinum', tariff_expires_at: null }), true);
@@ -344,6 +363,7 @@ function transactionalPool(handler) {
     for (const endpoint of [
       '/workspaces', '/invitations', '/tasks', '/timeline', '/comments', '/links',
       '/documents', '/versions', '/assistant/ask', '/assistant/runs', '/memory',
+      '/document-uploads', '/document-download-url',
       '/workspace-realtime/token',
       '/workspace-account/email/verify',
     ]) assert.ok(routes.includes(endpoint), `missing route ${endpoint}`);
@@ -369,7 +389,11 @@ function transactionalPool(handler) {
     assert.ok(dashboard.includes("hasPendingWorkspaceInvite ? 'jamoa'"), 'pending invitations must resume in Workspace after login');
     assert.ok(frontend.includes("channel.on('postgres_changes'"));
     assert.ok(frontend.includes("channel.on('presence'"));
-    assert.ok(frontend.includes("storage.from('workspace-documents').upload"));
+    assert.ok(frontend.includes("apiForm('/workspaces/'+state.workspace.id+'/document-uploads'"));
+    assert.ok(frontend.includes("'/document-download-url'"));
+    assert.ok(!frontend.includes("storage.from('workspace-documents').upload"), 'file upload must not depend on Realtime setup');
+    assert.ok(routes.includes('uploadWorkspaceObject(objectPath'));
+    assert.ok(routes.includes('createWorkspaceDownloadUrl(objectPath'));
     assert.ok(frontend.includes('var COPY = {'));
     assert.ok(frontend.includes('uz: {') && frontend.includes('ru: {') && frontend.includes('en: {'));
     assert.ok(!frontend.includes('setInterval('), 'Workspace live sync must not poll');

@@ -770,6 +770,17 @@
         return payload;
     }
 
+    async function apiForm(path, formData) {
+        var response=await fetch('/api'+path,{method:'POST',headers:{'Accept':'application/json'},body:formData});
+        var payload=await response.json().catch(function(){return {};});
+        if(!response.ok){
+            var error=new Error(payload.message||payload.error||('HTTP '+response.status));
+            error.status=response.status;error.code=payload.code||payload.errorCode;error.payload=payload;
+            throw error;
+        }
+        return payload;
+    }
+
     function render() {
         if (!root) root = document.getElementById('workspaceApp');
         if (!root) return;
@@ -1828,14 +1839,17 @@
         if(!format){toast(t('unsupportedFile'),'error');return;}
         try {
             toast(t('loading'));
-            var created=await api('POST','/workspaces/'+state.workspace.id+'/documents',{taskId:taskId||null,title:file.name,kind:'upload'});
-            var objectPath=created.storagePathPrefix+Date.now()+'-'+safeFileName(file.name);
-            if(!previewMode) {
-                var client=await ensureSupabase();
-                var upload=await client.storage.from('workspace-documents').upload(objectPath,file,{contentType:file.type,upsert:false,cacheControl:'3600'});
-                if(upload.error)throw upload.error;
+            if(previewMode){
+                var created=await api('POST','/workspaces/'+state.workspace.id+'/documents',{taskId:taskId||null,title:file.name,kind:'upload'});
+                var objectPath=created.storagePathPrefix+Date.now()+'-'+safeFileName(file.name);
+                await api('POST','/workspaces/'+state.workspace.id+'/documents/'+created.document.id+'/versions/'+created.version.id+'/files',{fileFormat:'original',objectPath:objectPath,mimeType:file.type,byteSize:file.size,sha256:await fileSha256(file)});
+            }else{
+                var formData=new FormData();
+                formData.append('file',file,file.name);
+                formData.append('title',file.name);
+                if(taskId)formData.append('taskId',taskId);
+                await apiForm('/workspaces/'+state.workspace.id+'/document-uploads',formData);
             }
-            await api('POST','/workspaces/'+state.workspace.id+'/documents/'+created.document.id+'/versions/'+created.version.id+'/files',{fileFormat:'original',objectPath:objectPath,mimeType:file.type,byteSize:file.size,sha256:await fileSha256(file)});
             var docs=await api('GET','/workspaces/'+state.workspace.id+'/documents');state.documents=docs.documents||[];
             await Promise.all([taskId&&state.currentTask===taskId?refreshCurrentTask(false):Promise.resolve(),loadTasks(false)]);
             render();toast(t('uploadComplete'),'success');
@@ -1860,10 +1874,8 @@
         if(!path)return;
         try {
             if(previewMode){toast(t('previewNotice'),'success');return;}
-            var client=await ensureSupabase();
-            var result=await client.storage.from('workspace-documents').createSignedUrl(path,120);
-            if(result.error)throw result.error;
-            global.open(result.data.signedUrl,'_blank','noopener');
+            var result=await api('POST','/workspaces/'+state.workspace.id+'/document-download-url',{objectPath:path});
+            global.open(result.signedUrl,'_blank','noopener,noreferrer');
         } catch(error){toast(apiErrorMessage(error),'error');}
     }
 

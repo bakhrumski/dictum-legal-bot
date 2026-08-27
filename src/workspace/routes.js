@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const express = require('express');
+const multer = require('multer');
 const { WorkspaceError, sendWorkspaceError } = require('./errors');
 const {
   canCreateWorkspace,
@@ -12,6 +13,11 @@ const {
   withWorkspaceTransaction,
 } = require('./authz');
 const { issueRealtimeToken } = require('./realtime-auth');
+const {
+  createWorkspaceDownloadUrl,
+  removeWorkspaceObject,
+  uploadWorkspaceObject,
+} = require('./storage');
 const {
   booleanValue,
   integer,
@@ -45,6 +51,48 @@ const UPLOAD_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
 ]);
+const MAX_WORKSPACE_FILE_SIZE = 50 * 1024 * 1024;
+const workspaceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { files: 1, fileSize: MAX_WORKSPACE_FILE_SIZE },
+  fileFilter: (_req, file, callback) => {
+    if (!UPLOAD_MIME_TYPES.has(file.mimetype)) {
+      const error = new Error('Bu fayl turi Workspace hujjatlari uchun qo‘llab-quvvatlanmaydi');
+      error.code = 'unsupported_file_type';
+      return callback(error);
+    }
+    return callback(null, true);
+  },
+});
+
+function workspaceUploadMiddleware(req, res, next) {
+  workspaceUpload.single('file')(req, res, (error) => {
+    if (!error) return next();
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return sendWorkspaceError(res, new WorkspaceError(413, 'file_too_large', 'Fayl hajmi 50 MB dan oshmasligi kerak'));
+    }
+    return sendWorkspaceError(res, new WorkspaceError(400, error.code || 'upload_invalid', error.message || 'Faylni o‘qib bo‘lmadi'));
+  });
+}
+
+function storageRouteError(error) {
+  if (error instanceof WorkspaceError) return error;
+  if (error && error.code === 'workspace_storage_not_configured') {
+    return new WorkspaceError(503, error.code, error.message);
+  }
+  if (error && String(error.code || '').startsWith('workspace_storage')) {
+    return new WorkspaceError(502, error.code, `Fayl saqlash xizmati xatosi: ${error.message}`);
+  }
+  return error;
+}
+
+function safeStorageFileName(name) {
+  return String(name || 'file')
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(-180) || 'file';
+}
 
 function actorId(req) {
   return integer(req.session && req.session.adminId, 'session.adminId', { min: 1 });
@@ -77,6 +125,12 @@ function translateDatabaseError(error) {
 function asyncRoute(handler) {
   return (req, res) => Promise.resolve(handler(req, res)).catch((error) => {
     sendWorkspaceError(res, translateDatabaseError(error));
+  });
+}
+
+function asyncStorageRoute(handler) {
+  return (req, res) => Promise.resolve(handler(req, res)).catch((error) => {
+    sendWorkspaceError(res, storageRouteError(translateDatabaseError(error)));
   });
 }
 
@@ -1035,6 +1089,75 @@ function mountWorkspaceRoutes(app, options) {
       return { document, version };
     });
     res.status(201).json({ ...created, storagePathPrefix: `${workspaceId}/${created.document.id}/${created.version.id}/` });
+  }));
+
+  router.post(
+    '/workspaces/:workspaceId/document-uploads',
+    workspaceUploadMiddleware,
+    asyncStorageRoute(async (req, res) => {
+      const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+      const userId = actorId(req);
+      if (!req.file) throw new WorkspaceError(400, 'file_required', 'Yuklanadigan fayl tanlanmagan');
+      const taskId = req.body.taskId ? uuid(req.body.taskId, 'taskId') : null;
+      const title = requiredString(req.body.title || req.file.originalname, 'title', { max: 240 });
+      const documentId = crypto.randomUUID();
+      const versionId = crypto.randomUUID();
+      const fileId = crypto.randomUUID();
+      const objectPath = `${workspaceId}/${documentId}/${versionId}/${Date.now()}-${safeStorageFileName(title)}`;
+      const digest = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
+
+      await withWorkspaceTransaction(pool, userId, async (db) => {
+        await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'member', requireActive: true });
+        if (taskId) await requireTask(db, workspaceId, taskId);
+      });
+
+      await uploadWorkspaceObject(objectPath, req.file.buffer, req.file.mimetype);
+      try {
+        const created = await withWorkspaceTransaction(pool, userId, async (db) => {
+          await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'member', requireActive: true });
+          if (taskId) await requireTask(db, workspaceId, taskId);
+          const document = (await db.query(
+            `INSERT INTO workspace_documents (id,workspace_id,origin_task_id,title,kind,created_by)
+             VALUES ($1,$2,$3,$4,'upload',$5) RETURNING *`,
+            [documentId, workspaceId, taskId, title, userId]
+          )).rows[0];
+          const version = (await db.query(
+            `INSERT INTO workspace_document_versions
+               (id,workspace_id,document_id,version_number,created_by)
+             VALUES ($1,$2,$3,1,$4) RETURNING *`,
+            [versionId, workspaceId, documentId, userId]
+          )).rows[0];
+          const file = (await db.query(
+            `INSERT INTO workspace_document_files
+               (id,workspace_id,document_version_id,file_format,storage_object_path,mime_type,byte_size,sha256,created_by)
+             VALUES ($1,$2,$3,'original',$4,$5,$6,$7,$8) RETURNING *`,
+            [fileId, workspaceId, versionId, objectPath, req.file.mimetype, req.file.size, digest, userId]
+          )).rows[0];
+          return { document, version, file };
+        });
+        res.status(201).json(created);
+      } catch (error) {
+        await removeWorkspaceObject(objectPath).catch((cleanupError) => {
+          console.warn('[WORKSPACE-STORAGE] Orphan cleanup failed:', cleanupError.message);
+        });
+        throw error;
+      }
+    })
+  );
+
+  router.post('/workspaces/:workspaceId/document-download-url', asyncStorageRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const userId = actorId(req);
+    const objectPath = requiredString(req.body.objectPath, 'objectPath', { max: 1000 });
+    await requireWorkspaceAccess(pool, workspaceId, userId, { requireActive: true });
+    const file = (await pool.query(
+      `SELECT id FROM workspace_document_files
+        WHERE workspace_id=$1 AND storage_object_path=$2`,
+      [workspaceId, objectPath]
+    )).rows[0];
+    if (!file) throw new WorkspaceError(404, 'document_file_not_found', 'Hujjat fayli topilmadi');
+    const signedUrl = await createWorkspaceDownloadUrl(objectPath, 120);
+    res.json({ signedUrl, expiresIn: 120 });
   }));
 
   router.get('/workspaces/:workspaceId/documents/:documentId/versions', asyncRoute(async (req, res) => {

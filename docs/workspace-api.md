@@ -67,11 +67,15 @@ browser RLS.
 | `PATCH/DELETE` | `/api/workspaces/:id/documents/:documentId` | Member+, active | Renames or archives a logical document without deleting its versions. |
 | `POST` | `/api/workspaces/:id/documents/:documentId/versions` | Member+, active | Adds a version; never overwrites an old one. An optional `sourceAiRunId` must identify a completed result from the same Workspace. |
 | `POST` | `/api/workspaces/:id/documents/:documentId/versions/:versionId/files` | Member+, active | Registers an already-uploaded private Storage object after verifying its exact path, allowed MIME type, format and Storage metadata. |
+| `POST` | `/api/workspaces/:id/document-uploads` | Member+, active | Multipart upload (`file`, optional `taskId`, optional `title`). The authenticated API streams the file to private Supabase Storage and atomically records document v1 and its immutable file metadata. Realtime availability does not block this endpoint. |
+| `POST` | `/api/workspaces/:id/document-download-url` | Viewer+, active | `{objectPath}`. Verifies that the private object belongs to the Workspace, then returns a two-minute signed URL. |
 
-Browser upload order is: request/create a version → upload with the Realtime
-bridge JWT to bucket `workspace-documents` under the returned path → register
-the file metadata. Storage RLS allows no browser update/delete, making a version
-artifact immutable.
+Browser uploads and downloads go through the authenticated JuristAI API. The
+server uses its Supabase service role only after the normal Workspace membership
+and role checks; that key is never exposed to the browser. Realtime remains an
+independent enhancement for instant refresh and presence, so a Realtime outage
+does not stop document work. Storage RLS still protects any direct client access,
+and no browser update/delete policy exists, making a version artifact immutable.
 
 ## Shared AI and the reuse rule
 
@@ -131,6 +135,7 @@ Required server-only environment variables:
 SUPABASE_URL
 SUPABASE_PUBLISHABLE_KEY
 SUPABASE_JWT_SIGNING_SECRET
+SUPABASE_SERVICE_ROLE_KEY
 ```
 
 `SUPABASE_JWT_SIGNING_SECRET` is an imported Supabase signing key that JuristAI
@@ -140,6 +145,13 @@ browser or committed. `SUPABASE_JWT_KEY_ID` plus a PEM
 key is public by design; access comes from the signed user JWT plus the complete
 RLS policies in migration `002`. Existing projects may temporarily use legacy
 `SUPABASE_ANON_KEY` and `SUPABASE_JWT_SECRET` as fallbacks.
+
+`SUPABASE_SERVICE_ROLE_KEY` is used only by authenticated Workspace upload and
+signed-download endpoints. It bypasses Storage RLS and therefore must exist only
+in local `.env` and Render Environment settings. Never prefix it with
+`NEXT_PUBLIC_`, expose it in HTML/JavaScript, or commit it. `SUPABASE_URL` may be
+inferred from the project reference in `DATABASE_URL`, but setting it explicitly
+is recommended.
 
 ## Migration and deployment order
 
