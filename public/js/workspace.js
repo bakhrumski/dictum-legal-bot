@@ -908,10 +908,21 @@
         return Math.max(min, Math.min(max, Number(value) || 0));
     }
 
+    /**
+     * Curve between two points, bending along whichever axis actually separates
+     * them. Fixed horizontal control points put an S-bend into every vertical
+     * connection — two nodes stacked above one another got a curve that left
+     * sideways, doubled back, and arrived sideways again. Nodes here are placed
+     * radially, so vertical pairs are common.
+     */
     function graphCurve(from, to) {
-        var dx = Math.max(46, Math.abs(to.x - from.x) * .42);
-        var direction = to.x >= from.x ? 1 : -1;
-        return 'M ' + from.x + ' ' + from.y + ' C ' + (from.x + dx * direction) + ' ' + from.y + ', ' + (to.x - dx * direction) + ' ' + to.y + ', ' + to.x + ' ' + to.y;
+        var dx = to.x - from.x, dy = to.y - from.y;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            var ox = Math.max(46, Math.abs(dx) * .42) * (dx >= 0 ? 1 : -1);
+            return 'M ' + from.x + ' ' + from.y + ' C ' + (from.x + ox) + ' ' + from.y + ', ' + (to.x - ox) + ' ' + to.y + ', ' + to.x + ' ' + to.y;
+        }
+        var oy = Math.max(46, Math.abs(dy) * .42) * (dy >= 0 ? 1 : -1);
+        return 'M ' + from.x + ' ' + from.y + ' C ' + from.x + ' ' + (from.y + oy) + ', ' + to.x + ' ' + (to.y - oy) + ', ' + to.x + ' ' + to.y;
     }
 
     function graphMatterSummary(task) {
@@ -919,8 +930,10 @@
         return t(task.status) + ' · ' + (task.due_date ? isoDate(task.due_date) : t('unscheduled'));
     }
 
-    function getGraphMatterPosition(width, height, taskId) {
-        var fallback = { x: Math.round(width / 2), y: Math.round(height / 2) };
+    function getGraphMatterPosition(width, height, taskId, defaultPosition) {
+        // The centre is only a sensible default for a single matter. With several
+        // on the stage each needs its own computed slot, or they all stack.
+        var fallback = defaultPosition || { x: Math.round(width / 2), y: Math.round(height / 2) };
         try {
             var saved = JSON.parse(localStorage.getItem(graphMatterPositionKey(taskId)) || 'null');
             if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
@@ -937,95 +950,101 @@
         if (!state.tasks.length) {
             return '<section class="ws-panel ws-graph"><div class="ws-empty"><div class="ws-empty-icon">'+svg('graph',24)+'</div><h3>'+esc(t('graphEmpty'))+'</h3></div></section>';
         }
-        var matterTask=state.tasks[0];
-        var relatedTasks=state.tasks.slice(1);
+        // Every workspace task is a matter in its own right. workspace_tasks has
+        // no is_matter flag and no parent/child link, so there is no basis for
+        // promoting one row to the centre and demoting the rest — which is what
+        // taking state.tasks[0] did, handing the centre to whichever task
+        // happened to sort first and silently reassigning it on every create.
+        // The stage therefore carries one hub per matter, each orbited by the
+        // people assigned to it.
+        var matters=state.tasks;
         var memberCount=Math.max(1,state.members.length);
-        var ringCount=Math.max(1,Math.ceil(memberCount/10));
-        var outerRadius=220+(ringCount-1)*145;
+        var satelliteRadius=matters.length>3?190:210;
+        var ringRadius=matters.length<2?0:Math.max(330,matters.length*82,memberCount*26);
         var viewportWidth=root?Math.floor(root.getBoundingClientRect().width):0;
-        var width=Math.max(1120,viewportWidth,outerRadius*2+620,760+Math.ceil(relatedTasks.length/8)*120);
-        var height=Math.max(680,outerRadius*2+360);
-        var matterPosition=getGraphMatterPosition(width,height,matterTask.id);
-        var memberPositions={},taskPositions={},memberTaskIndex={};
+        var span=(ringRadius+satelliteRadius)*2;
+        var width=Math.max(1120,viewportWidth,span+460);
+        var height=Math.max(680,span+320);
+        var centreX=Math.round(width/2),centreY=Math.round(height/2);
 
-        state.members.forEach(function(member,index){
-            var ring=Math.floor(index/10),ringStart=ring*10;
-            var countInRing=Math.min(10,state.members.length-ringStart);
-            var angle=(-Math.PI/2)+(Math.PI*2*((index-ringStart)/Math.max(1,countInRing)));
-            var radius=220+ring*145;
-            memberPositions[String(member.id)]={
-                x:clampNumber(matterPosition.x+Math.cos(angle)*radius,70,width-70),
-                y:clampNumber(matterPosition.y+Math.sin(angle)*radius,70,height-70),
-                angle:angle
+        // Matters sit on a ring (a single matter takes the centre). Each keeps
+        // its own outward bearing so its people orbit away from the crowd.
+        var matterPositions={},matterAngles={};
+        matters.forEach(function(task,index){
+            var angle=(-Math.PI/2)+(Math.PI*2*(index/Math.max(1,matters.length)));
+            var seat=matters.length<2
+                ? {x:centreX,y:centreY}
+                : {x:Math.round(centreX+Math.cos(angle)*ringRadius),y:Math.round(centreY+Math.sin(angle)*ringRadius)};
+            matterAngles[String(task.id)]=matters.length<2?(-Math.PI/2):angle;
+            matterPositions[String(task.id)]=getGraphMatterPosition(width,height,task.id,seat);
+        });
+
+        // A person is placed against the matters they actually work on: one
+        // matter puts them on its outward arc, several puts them between those
+        // matters, none leaves them on a bench along the bottom.
+        var memberMatters={};
+        matters.forEach(function(task){
+            (task.assignees||[]).forEach(function(assignee){
+                var key=String(assignee.id);
+                (memberMatters[key]=memberMatters[key]||[]).push(String(task.id));
+            });
+        });
+        var seatIndex={},benchIndex=0;
+        var memberPositions={};
+        state.members.forEach(function(member){
+            var key=String(member.id);
+            var owned=(memberMatters[key]||[]).filter(function(id){return matterPositions[id];});
+            var point;
+            if(!owned.length){
+                var column=benchIndex%6,row=Math.floor(benchIndex/6);
+                benchIndex+=1;
+                point={x:centreX+(column-2.5)*150,y:height-96-row*104};
+            } else if(owned.length===1){
+                var host=owned[0],angle=matterAngles[host];
+                var seat=seatIndex[host]=(seatIndex[host]||0)+1;
+                var slot=Math.ceil(seat/2)*(seat%2?1:-1);
+                var spread=angle+slot*0.42;
+                point={
+                    x:matterPositions[host].x+Math.cos(spread)*satelliteRadius,
+                    y:matterPositions[host].y+Math.sin(spread)*satelliteRadius
+                };
+            } else {
+                var sum=owned.reduce(function(acc,id){return {x:acc.x+matterPositions[id].x,y:acc.y+matterPositions[id].y};},{x:0,y:0});
+                point={x:sum.x/owned.length,y:sum.y/owned.length};
+                // Nudge off the centroid so a shared person never lands on the
+                // straight line between their two matters.
+                var away=Math.atan2(point.y-centreY,point.x-centreX);
+                point={x:point.x+Math.cos(away)*74,y:point.y+Math.sin(away)*74};
+            }
+            memberPositions[key]={
+                x:clampNumber(Math.round(point.x),70,width-70),
+                y:clampNumber(Math.round(point.y),70,height-70)
             };
         });
 
-        relatedTasks.forEach(function(task,index){
-            var assigned=(task.assignees||[]).map(function(member){return memberPositions[String(member.id)];}).filter(Boolean);
-            var primaryMember=(task.assignees||[]).map(function(member){return String(member.id);}).find(function(id){return !!memberPositions[id];});
-            if(primaryMember){
-                var memberPosition=memberPositions[primaryMember];
-                var order=memberTaskIndex[primaryMember]||0;
-                memberTaskIndex[primaryMember]=order+1;
-                var tier=Math.floor(order/3),slot=(order%3)-1;
-                var radial=145+tier*105;
-                var tangent=slot*190;
-                var ux=Math.cos(memberPosition.angle),uy=Math.sin(memberPosition.angle);
-                var tx=-uy,ty=ux;
-                taskPositions[String(task.id)]={
-                    x:clampNumber(memberPosition.x+ux*radial+tx*tangent,105,width-105),
-                    y:clampNumber(memberPosition.y+uy*radial+ty*tangent,72,height-72),
-                    assigned:assigned
-                };
-            } else {
-                var unassignedIndex=relatedTasks.slice(0,index).filter(function(item){return !(item.assignees||[]).some(function(member){return !!memberPositions[String(member.id)];});}).length;
-                var unassignedAngle=(Math.PI/2)+(unassignedIndex%7-3)*.18;
-                var unassignedRadius=185+Math.floor(unassignedIndex/7)*110;
-                taskPositions[String(task.id)]={
-                    x:clampNumber(matterPosition.x+Math.cos(unassignedAngle)*unassignedRadius+(unassignedIndex%7-3)*120,105,width-105),
-                    y:clampNumber(matterPosition.y+Math.sin(unassignedAngle)*unassignedRadius,72,height-72),
-                    assigned:[]
-                };
-            }
-        });
-
         var edges=[];
-        state.members.forEach(function(member){
-            var target=memberPositions[String(member.id)];
-            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="matter" data-to-key="member:'+esc(member.id)+'" d="'+graphCurve(matterPosition,target)+'"/>');
-        });
-        relatedTasks.forEach(function(task){
-            var taskPosition=taskPositions[String(task.id)];
-            var assignees=(task.assignees||[]).map(function(member){return memberPositions[String(member.id)];}).filter(Boolean);
-            edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="matter" data-to-key="task:'+esc(task.id)+'" d="'+graphCurve(matterPosition,taskPosition)+'"/>');
-            (task.assignees||[]).forEach(function(member,index){
-                var memberPosition=memberPositions[String(member.id)];
-                if(!memberPosition)return;
-                edges.push('<path class="ws-graph-link task" data-from-key="member:'+esc(member.id)+'" data-to-key="task:'+esc(task.id)+'" d="'+graphCurve(memberPosition,taskPosition)+'"/>');
+        matters.forEach(function(task){
+            var from=matterPositions[String(task.id)];
+            (task.assignees||[]).forEach(function(assignee){
+                var to=memberPositions[String(assignee.id)];
+                if(!to)return;
+                edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(assignee.id)+'" d="'+graphCurve(from,to)+'"/>');
             });
         });
 
-        var matterNode='<button type="button" class="ws-graph-matter" data-graph-node data-graph-matter data-graph-key="matter" data-action="open-task" data-task-id="'+esc(matterTask.id)+'" data-x="'+matterPosition.x+'" data-y="'+matterPosition.y+'" style="left:'+matterPosition.x+'px;top:'+matterPosition.y+'px" aria-label="'+esc(t('matter'))+': '+esc(matterTask.title)+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(matterTask.title)+'</strong><small>'+esc(graphMatterSummary(matterTask))+'</small></button>';
-        var memberNodes=state.members.map(function(member){var p=memberPositions[String(member.id)],expired=member.subscription_active===false;return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';}).join('');
-        var taskNodes=relatedTasks.map(function(task){
-            var p=taskPositions[String(task.id)],tone=graphTone(task);
-            // Ownership rides on the card instead of a line crossing the stage:
-            // members sit far left and tasks far right, so every assignment edge
-            // had to traverse the whole canvas, flattening into an untraceable
-            // horizontal run that got worse with each task added.
-            var assignees=task.assignees||[];
-            var owners=assignees.slice(0,3).map(function(assignee){
-                // Task assignees are selected as (id, username, full_name) only —
-                // subscription state lives on state.members, so resolve there or
-                // the expired chip silently never renders.
-                var member=state.members.find(function(item){return String(item.id)===String(assignee.id);})||assignee;
-                return '<i class="ws-graph-owner'+(member.subscription_active===false?' expired':'')+'" title="'+esc(personName(member))+'">'+esc(initials(member))+'</i>';
-            }).join('');
-            if(assignees.length>3)owners+='<i class="ws-graph-owner more">+'+(assignees.length-3)+'</i>';
-            var ownerBlock=owners?'<span class="ws-graph-owners">'+owners+'</span>':'';
-            return '<button type="button" class="ws-graph-task '+tone+'" data-graph-node data-graph-key="task:'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'">'+ownerBlock+'<strong>'+esc(task.title)+'</strong><span>'+esc(t(task.status))+' · '+esc(task.due_date?isoDate(task.due_date):t('unscheduled'))+'</span><span class="ws-graph-badges">'+(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')+(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'')+'</span></button>';
+        var matterNodes=matters.map(function(task){
+            var p=matterPositions[String(task.id)],tone=graphTone(task);
+            var badges=(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')
+                +(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'');
+            return '<button type="button" class="ws-graph-matter '+tone+'" data-graph-node data-graph-matter data-graph-key="task:'+esc(task.id)+'" data-action="open-task" data-task-id="'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" aria-label="'+esc(t('matter'))+': '+esc(task.title)+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(task.title)+'</strong><small>'+esc(graphMatterSummary(task))+'</small>'+(badges?'<span class="ws-graph-badges">'+badges+'</span>':'')+'</button>';
         }).join('');
-        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNode+memberNodes+taskNodes+'</div></div></section>';
+
+        var memberNodes=state.members.map(function(member){
+            var p=memberPositions[String(member.id)],expired=member.subscription_active===false;
+            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';
+        }).join('');
+
+        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+'</div></div></section>';
     }
 
     function renderTaskRow(task) {
@@ -2287,15 +2306,24 @@
             halfHeight:node.offsetHeight/2
         };});
         var matterOrigin=origins.find(function(item){return item.node===matter;});
-        var satellites=origins.filter(function(item){return item.node!==matter;});
+        // Only this matter's own people trail it. With several matters on the
+        // stage, dragging one must not haul another matter's team along.
+        var tethered={};
+        stage.querySelectorAll('path[data-from-key="'+matter.dataset.graphKey+'"]').forEach(function(path){
+            tethered[path.dataset.toKey]=true;
+        });
+        var satellites=origins.filter(function(item){return item.node!==matter&&tethered[item.node.dataset.graphKey];});
         var originX=matterOrigin.x,originY=matterOrigin.y;
         var width=stage.offsetWidth,height=stage.offsetHeight;
         var current={x:originX,y:originY};
         var padding=18;
-        var minDx=Math.max.apply(Math,origins.map(function(item){return padding+item.halfWidth-item.x;}));
-        var maxDx=Math.min.apply(Math,origins.map(function(item){return width-padding-item.halfWidth-item.x;}));
-        var minDy=Math.max.apply(Math,origins.map(function(item){return padding+item.halfHeight-item.y;}));
-        var maxDy=Math.min.apply(Math,origins.map(function(item){return height-padding-item.halfHeight-item.y;}));
+        // Bounds come from the group that actually moves, not every node on the
+        // stage — an unrelated matter parked at the edge must not pin this one.
+        var moving=[matterOrigin].concat(satellites);
+        var minDx=Math.max.apply(Math,moving.map(function(item){return padding+item.halfWidth-item.x;}));
+        var maxDx=Math.min.apply(Math,moving.map(function(item){return width-padding-item.halfWidth-item.x;}));
+        var minDy=Math.max.apply(Math,moving.map(function(item){return padding+item.halfHeight-item.y;}));
+        var maxDy=Math.min.apply(Math,moving.map(function(item){return height-padding-item.halfHeight-item.y;}));
 
         // Honour the OS setting: no trailing motion, satellites track exactly.
         var reduceMotion=global.matchMedia&&global.matchMedia('(prefers-reduced-motion: reduce)').matches;
