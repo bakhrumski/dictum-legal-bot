@@ -770,6 +770,17 @@
         return payload;
     }
 
+    async function apiForm(path, formData) {
+        var response=await fetch('/api'+path,{method:'POST',headers:{'Accept':'application/json'},body:formData});
+        var payload=await response.json().catch(function(){return {};});
+        if(!response.ok){
+            var error=new Error(payload.message||payload.error||('HTTP '+response.status));
+            error.status=response.status;error.code=payload.code||payload.errorCode;error.payload=payload;
+            throw error;
+        }
+        return payload;
+    }
+
     function render() {
         if (!root) root = document.getElementById('workspaceApp');
         if (!root) return;
@@ -912,21 +923,46 @@
         return Math.max(min, Math.min(max, Number(value) || 0));
     }
 
-    /**
-     * Curve between two points, bending along whichever axis actually separates
-     * them. Fixed horizontal control points put an S-bend into every vertical
-     * connection — two nodes stacked above one another got a curve that left
-     * sideways, doubled back, and arrived sideways again. Nodes here are placed
-     * radially, so vertical pairs are common.
-     */
-    function graphCurve(from, to) {
-        var dx = to.x - from.x, dy = to.y - from.y;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-            var ox = Math.max(46, Math.abs(dx) * .42) * (dx >= 0 ? 1 : -1);
-            return 'M ' + from.x + ' ' + from.y + ' C ' + (from.x + ox) + ' ' + from.y + ', ' + (to.x - ox) + ' ' + to.y + ', ' + to.x + ' ' + to.y;
+    function graphNodeBox(point, kind) {
+        var sizes={
+            matter:{halfWidth:110,halfHeight:56},
+            member:{halfWidth:52,halfHeight:42},
+            task:{halfWidth:88,halfHeight:38}
+        };
+        var size=sizes[kind]||sizes.task;
+        return {x:Number(point.x)||0,y:Number(point.y)||0,halfWidth:size.halfWidth,halfHeight:size.halfHeight};
+    }
+
+    function graphEdgeAnchor(from, to) {
+        var dx=to.x-from.x,dy=to.y-from.y;
+        var absX=Math.abs(dx),absY=Math.abs(dy);
+        if(absX<.01&&absY<.01)return{x:from.x,y:from.y};
+        var xScale=absX<.01?Infinity:Math.max(1,from.halfWidth||0)/absX;
+        var yScale=absY<.01?Infinity:Math.max(1,from.halfHeight||0)/absY;
+        var scale=Math.min(xScale,yScale);
+        return{x:from.x+(dx*scale),y:from.y+(dy*scale)};
+    }
+
+    function graphConnector(from, to) {
+        var start=graphEdgeAnchor(from,to);
+        var end=graphEdgeAnchor(to,from);
+        var dx=end.x-start.x,dy=end.y-start.y;
+        var distance=Math.hypot(dx,dy);
+        var point=function(value){return Math.round(value*10)/10;};
+        var prefix='M '+point(start.x)+' '+point(start.y);
+
+        // A curve between nearby cards is mostly hidden underneath the nodes and
+        // leaves hook-shaped fragments visible.  A short edge-to-edge line keeps
+        // the relationship legible as nodes approach one another.
+        if(distance<=150)return prefix+' L '+point(end.x)+' '+point(end.y);
+
+        var bend=Math.min(150,Math.max(42,distance*.34));
+        if(Math.abs(dy)>Math.abs(dx)){
+            var verticalDirection=dy>=0?1:-1;
+            return prefix+' C '+point(start.x)+' '+point(start.y+(bend*verticalDirection))+', '+point(end.x)+' '+point(end.y-(bend*verticalDirection))+', '+point(end.x)+' '+point(end.y);
         }
-        var oy = Math.max(46, Math.abs(dy) * .42) * (dy >= 0 ? 1 : -1);
-        return 'M ' + from.x + ' ' + from.y + ' C ' + from.x + ' ' + (from.y + oy) + ', ' + to.x + ' ' + (to.y - oy) + ', ' + to.x + ' ' + to.y;
+        var horizontalDirection=dx>=0?1:-1;
+        return prefix+' C '+point(start.x+(bend*horizontalDirection))+' '+point(start.y)+', '+point(end.x-(bend*horizontalDirection))+' '+point(end.y)+', '+point(end.x)+' '+point(end.y);
     }
 
     function graphMatterSummary(task) {
@@ -1107,7 +1143,7 @@
             relatedMemberIds(task).forEach(function(memberId){
                 var to=memberPositions[memberId];
                 if(!to)return;
-                edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(memberId)+'" d="'+graphCurve(from,to)+'"/>');
+                edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(memberId)+'" d="'+graphConnector(graphNodeBox(from,'matter'),graphNodeBox(to,'member'))+'"/>');
             });
         });
 
@@ -1951,14 +1987,17 @@
         if(!format){toast(t('unsupportedFile'),'error');return;}
         try {
             toast(t('loading'));
-            var created=await api('POST','/workspaces/'+state.workspace.id+'/documents',{taskId:taskId||null,title:file.name,kind:'upload'});
-            var objectPath=created.storagePathPrefix+Date.now()+'-'+safeFileName(file.name);
-            if(!previewMode) {
-                var client=await ensureSupabase();
-                var upload=await client.storage.from('workspace-documents').upload(objectPath,file,{contentType:file.type,upsert:false,cacheControl:'3600'});
-                if(upload.error)throw upload.error;
+            if(previewMode){
+                var created=await api('POST','/workspaces/'+state.workspace.id+'/documents',{taskId:taskId||null,title:file.name,kind:'upload'});
+                var objectPath=created.storagePathPrefix+Date.now()+'-'+safeFileName(file.name);
+                await api('POST','/workspaces/'+state.workspace.id+'/documents/'+created.document.id+'/versions/'+created.version.id+'/files',{fileFormat:'original',objectPath:objectPath,mimeType:file.type,byteSize:file.size,sha256:await fileSha256(file)});
+            }else{
+                var formData=new FormData();
+                formData.append('file',file,file.name);
+                formData.append('title',file.name);
+                if(taskId)formData.append('taskId',taskId);
+                await apiForm('/workspaces/'+state.workspace.id+'/document-uploads',formData);
             }
-            await api('POST','/workspaces/'+state.workspace.id+'/documents/'+created.document.id+'/versions/'+created.version.id+'/files',{fileFormat:'original',objectPath:objectPath,mimeType:file.type,byteSize:file.size,sha256:await fileSha256(file)});
             var docs=await api('GET','/workspaces/'+state.workspace.id+'/documents');state.documents=docs.documents||[];
             await Promise.all([taskId&&state.currentTask===taskId?refreshCurrentTask(false):Promise.resolve(),loadTasks(false)]);
             render();toast(t('uploadComplete'),'success');
@@ -1983,10 +2022,8 @@
         if(!path)return;
         try {
             if(previewMode){toast(t('previewNotice'),'success');return;}
-            var client=await ensureSupabase();
-            var result=await client.storage.from('workspace-documents').createSignedUrl(path,120);
-            if(result.error)throw result.error;
-            global.open(result.data.signedUrl,'_blank','noopener');
+            var result=await api('POST','/workspaces/'+state.workspace.id+'/document-download-url',{objectPath:path});
+            global.open(result.signedUrl,'_blank','noopener,noreferrer');
         } catch(error){toast(apiErrorMessage(error),'error');}
     }
 
@@ -2289,8 +2326,7 @@
         var scroll=root.querySelector('.ws-graph-scroll');
         var matter=scroll&&scroll.querySelector('[data-graph-matter]');
         if(!scroll||!matter)return;
-        // Re-anchor to the real node boxes now that they are measurable; the
-        // server-rendered paths are still centre-to-centre at this point.
+        // Re-anchor to the measured node boxes before centering the viewport.
         updateGraphEdges(matter.closest('.ws-graph-stage'));
         var key=String(state.workspace&&state.workspace.id||'')+':'+String(state.tasks[0]&&state.tasks[0].id||'')+':'+state.tasks.length+':'+state.members.length;
         if(scroll.dataset.centeredFor===key)return;
@@ -2327,38 +2363,9 @@
         return {
             x:nodeRect.left-stageRect.left+(nodeRect.width/2),
             y:nodeRect.top-stageRect.top+(nodeRect.height/2),
-            hw:nodeRect.width/2,
-            hh:nodeRect.height/2
+            halfWidth:nodeRect.width/2,
+            halfHeight:nodeRect.height/2
         };
-    }
-
-    /**
-     * Point on a node's border, in the direction of `toward`.
-     *
-     * Edges drawn centre-to-centre vanish underneath the cards they connect —
-     * the matter card alone is 220x112 — so neither end ever visibly meets a
-     * node. Each end is pulled out to its own node's perimeter first, which is
-     * what makes one curve read as matter->this task rather than a line passing
-     * through the middle of everything.
-     *
-     * Falls back to the bare point when the node box is unknown, which is the
-     * case for the server-rendered markup before it is measured in the DOM.
-     */
-    function graphAnchor(point,toward) {
-        var halfWidth=Number(point.hw||0),halfHeight=Number(point.hh||0);
-        var dx=toward.x-point.x,dy=toward.y-point.y;
-        if((!dx&&!dy)||(!halfWidth&&!halfHeight))return {x:point.x,y:point.y};
-        var scale=Math.min(dx?halfWidth/Math.abs(dx):Infinity,dy?halfHeight/Math.abs(dy):Infinity);
-        var length=Math.sqrt(dx*dx+dy*dy)||1;
-        var pad=3;
-        return {
-            x:point.x+dx*scale+(dx/length)*pad,
-            y:point.y+dy*scale+(dy/length)*pad
-        };
-    }
-
-    function graphEdgePath(from,to) {
-        return graphCurve(graphAnchor(from,to),graphAnchor(to,from));
     }
 
     function updateGraphEdges(stage) {
@@ -2369,7 +2376,7 @@
         });
         stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
             var from=positions[path.dataset.fromKey],to=positions[path.dataset.toKey];
-            if(from&&to)path.setAttribute('d',graphEdgePath(from,to));
+            if(from&&to)path.setAttribute('d',graphConnector(from,to));
         });
     }
 
