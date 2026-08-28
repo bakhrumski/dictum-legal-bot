@@ -409,13 +409,12 @@ function transactionalPool(handler) {
     assert.ok(styles.includes('.ws-task-row { width: 100%; min-width: 0;'), 'task rows must span the same grid width as their list header');
     assert.ok(frontend.includes("day: 'Kunlik'"), 'Uzbek timeline controls need the daily zoom label');
     assert.ok(frontend.includes("['day','week','month','quarter']"), 'timeline must expose all four zoom levels');
-    assert.ok(frontend.includes('data-from-key="matter" data-to-key="member:'), 'matter must link directly to every Workspace member');
-    assert.ok(frontend.includes('data-from-key="matter" data-to-key="task:'), 'matter must link directly to every related task');
+    assert.ok(frontend.includes(`data-from-key="task:'+esc(task.id)+'" data-to-key="member:`), 'each task matter must link directly to its assigned members');
     assert.ok(frontend.includes('function updateGraphEdges(stage)'), 'graph links must be recalculated while nodes move');
     assert.ok(frontend.includes('function graphEdgeAnchor(from, to)'), 'graph links must connect at node edges instead of disappearing below node centers');
     assert.ok(frontend.includes("if(distance<=150)return prefix+' L '"), 'nearby graph nodes must use short straight connectors instead of curled paths');
     assert.ok(frontend.includes('ws-task-description'), 'list view must expose each task description');
-    assert.ok(styles.includes('.ws-graph-following'), 'graph followers need the delayed movement treatment');
+    assert.ok(frontend.includes('GRAPH_FOLLOW_LAG_MS=50'), 'graph followers need the buffered delayed movement treatment');
     assert.ok(styles.includes('scrollbar-width: none;'), 'graph scrolling must remain usable without visible scrollbars');
     assert.ok(styles.includes('#tabJamoa::before'), 'Workspace containers and their pseudo-elements must stay transparent');
     assert.ok(frontend.includes("COPY.uz.dateFormat = 'kk.oo.yyyy'"), 'Workspace dates need the Uzbek numeric format');

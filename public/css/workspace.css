@@ -753,6 +753,12 @@
 
 /* Phase-1 workload graph.  The stage deliberately scrolls on narrow screens;
    compressing a relationship map would make labels and tap targets unusable. */
+/* The graph is a canvas, not a list: the metric cards and the task filters cost
+   it roughly 190px of height and neither applies to it — the stage draws every
+   matter regardless of the search box or the status dropdowns. That height goes
+   to the stage instead. */
+.ws-workspace-main.graph-view > .ws-summary,
+.ws-workspace-main.graph-view .ws-filters { display: none; }
 .ws-graph { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .ws-graph-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; border-bottom: 1px solid var(--ws-line); color: var(--ws-muted); font-size: 11px; }
 .ws-graph-legend { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
@@ -765,8 +771,11 @@
 .ws-graph-stage > svg { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .ws-graph-stage > svg path,
 .ws-graph-stage > svg line { fill: none; stroke: var(--ws-line-strong); stroke-width: 1.15; vector-effect: non-scaling-stroke; }
-.ws-graph-stage > svg path.ws-graph-link.matter { stroke: var(--ws-gold); stroke-width: 1.8; opacity: .72; }
-.ws-graph-stage > svg path.ws-graph-link.task { stroke: var(--ws-brand); stroke-width: 1.25; opacity: .48; }
+.ws-graph-stage > svg path.ws-graph-link.matter { stroke: var(--ws-gold); stroke-width: 1.9; opacity: .85; stroke-linecap: round; stroke-dasharray: 7 6; }
+/* Member -> task assignment is shown as an avatar chip on the task card
+   (.ws-graph-owners) rather than a line spanning the stage. The paths are
+   still emitted, so restoring them is a one-line change here. */
+.ws-graph-stage > svg path.ws-graph-link.task { display: none; }
 .ws-graph-matter {
     position: absolute;
     z-index: 4;
@@ -787,39 +796,59 @@
     cursor: grab;
     touch-action: none;
     user-select: none;
+    transition: transform .18s ease;
 }
-.ws-graph-matter:hover,
+/* Focus keeps its ring — hover does not. Dropping the focus outline too would
+   leave keyboard users with no idea where they are on the stage. */
 .ws-graph-matter:focus-visible { outline: 3px solid color-mix(in srgb, var(--ws-gold) 30%, transparent); outline-offset: 4px; }
+/* Matches the lift on member and task nodes. Suppressed while dragging: the
+   pointer sits on the card for the whole drag, so it would otherwise stay
+   scaled up the entire time. */
+.ws-graph-matter:hover:not(.dragging),
+.ws-graph-matter:focus-visible:not(.dragging) { transform: translate(-50%, -50%) scale(1.045); }
 .ws-graph-matter.dragging { z-index: 8; cursor: grabbing; box-shadow: 0 28px 72px -28px color-mix(in srgb, var(--ws-gold) 68%, transparent), var(--ws-shadow); }
+/* Deadline state on the matter itself. Each matter is now a hub rather than one
+   promoted card, so its own status has to read without opening it. */
+.ws-graph-matter.approaching { border-color: color-mix(in srgb, var(--ws-warning) 62%, transparent); }
+.ws-graph-matter.overdue { border-color: color-mix(in srgb, var(--ws-danger) 60%, transparent); }
+.ws-graph-matter.done { opacity: .82; }
+.ws-graph-matter .ws-graph-badges { justify-content: center; margin-top: 2px; }
 .ws-graph-matter span { color: var(--ws-gold); font-size: 9px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 .ws-graph-matter strong { overflow: hidden; text-overflow: ellipsis; color: var(--ws-ink); font-size: 16px; line-height: 1.25; }
 .ws-graph-matter small { color: var(--ws-muted); font-size: 10px; }
 .ws-graph-member,
 .ws-graph-task { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-family: inherit; cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, opacity .18s ease; }
-.ws-graph-member.ws-graph-following,
-.ws-graph-task.ws-graph-following {
-    transition:
-        left .25s ease-out .25s,
-        top .25s ease-out .25s,
-        transform .18s ease,
-        border-color .18s ease,
-        box-shadow .18s ease,
-        opacity .18s ease;
-}
-.ws-graph-member { width: 104px; display: grid; justify-items: center; gap: 5px; border: 0; color: var(--ws-ink); background: transparent; font-size: 10px; font-weight: 700; text-align: center; }
+/* Satellites trail the matter card by 50ms, driven per-frame from the drag's
+   position history in handleGraphMatterDrag(). Deliberately no left/top
+   transition here: a transition restarts on every pointermove, which stutters
+   and collapses the trail into rigid-body motion. */
+.ws-graph-member { width: 104px; display: grid; justify-items: center; gap: 5px; border: 0; color: var(--ws-ink); background: transparent; font-size: 10px; font-weight: 700; text-align: center; cursor: grab; touch-action: none; user-select: none; }
+.ws-graph-member.dragging { z-index: 8; cursor: grabbing; }
 .ws-graph-member .ws-avatar { width: 45px; height: 45px; margin: 0; border: 3px solid var(--ws-panel-solid); box-shadow: 0 0 0 1px var(--ws-line-strong), 0 10px 28px -16px rgba(31,77,160,.7); font-size: 13px; }
 .ws-graph-member small { max-width: 98px; color: var(--ws-danger); font-size: 8px; line-height: 1.25; }
 .ws-graph-member.expired { opacity: .48; filter: grayscale(.8); }
 .ws-graph-task { width: 176px; min-height: 76px; display: grid; align-content: center; gap: 6px; padding: 11px 13px; border: 1px solid rgba(5,112,91,.44); border-radius: 15px; color: var(--ws-ink); background: color-mix(in srgb, var(--ws-panel-solid) 94%, var(--ws-success-soft)); box-shadow: 0 14px 34px -25px rgba(7,49,40,.8); text-align: left; }
+.ws-graph-task > strong { padding-right: 26px; }
+.ws-graph-owners { position: absolute; z-index: 1; top: 8px; right: 9px; display: inline-flex; flex-direction: row-reverse; }
+.ws-graph-owner { display: grid; place-items: center; width: 21px; height: 21px; border: 2px solid var(--ws-panel-solid); border-radius: 50%; background: var(--ws-brand); box-shadow: 0 0 0 1px var(--ws-line-strong); color: #fff; font-size: 8px; font-style: normal; font-weight: 800; letter-spacing: .01em; }
+.ws-graph-owner + .ws-graph-owner { margin-right: -7px; }
+.ws-graph-owner.expired { background: var(--ws-danger); }
+.ws-graph-owner.more { background: var(--ws-muted); }
 .ws-graph-task strong { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 11px; line-height: 1.35; }
 .ws-graph-task > span { color: var(--ws-muted); font-size: 9px; }
 .ws-graph-task.approaching { border-color: rgba(179,119,8,.62); background: color-mix(in srgb, var(--ws-panel-solid) 91%, var(--ws-warning-soft)); box-shadow: 0 0 0 3px var(--ws-warning-soft); }
 .ws-graph-task.overdue { border-color: rgba(168,36,56,.6); background: color-mix(in srgb, var(--ws-panel-solid) 91%, var(--ws-danger-soft)); box-shadow: 0 0 0 3px var(--ws-danger-soft); }
 .ws-graph-task.done { opacity: .78; border-color: rgba(5,112,91,.45); }
+/* Hover lifts only — no shadow, no outline. The shadow that used to sit here
+   also overrode the status rings on .approaching and .overdue, so an overdue
+   task lost its red ring at exactly the moment you pointed at it. */
 .ws-graph-task:hover,
 .ws-graph-task:focus-visible,
 .ws-graph-member:hover,
-.ws-graph-member:focus-visible { z-index: 5; transform: translate(-50%, -50%) scale(1.045); outline: 2px solid var(--ws-brand-border); outline-offset: 3px; box-shadow: 0 18px 42px -22px rgba(31,77,160,.58); }
+.ws-graph-member:focus-visible { z-index: 5; transform: translate(-50%, -50%) scale(1.045); }
+.ws-graph-task:focus-visible,
+.ws-graph-member:focus-visible { outline: 2px solid var(--ws-brand-border); outline-offset: 3px; }
+.ws-graph-bench { position: absolute; z-index: 1; left: 0; right: 0; margin: 0; padding-top: 14px; border-top: 1px dashed var(--ws-line); color: var(--ws-muted); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-align: center; text-transform: uppercase; pointer-events: none; }
 .ws-graph-badges { display: flex; flex-wrap: wrap; gap: 5px; }
 .ws-graph-badges b { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 1px solid var(--ws-line); border-radius: 999px; color: var(--ws-ink-soft); background: var(--ws-panel-hover); font-size: 8px; font-weight: 650; }
 
