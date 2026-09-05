@@ -30,37 +30,42 @@
 }
 
 .workspace-app {
-    --ws-canvas: #f6f8fc;
-    --ws-panel: rgba(255, 255, 255, 0.92);
-    --ws-panel-solid: #ffffff;
-    --ws-panel-hover: #f1f5fb;
-    --ws-ink: #111827;
-    --ws-ink-soft: #344054;
-    --ws-muted: #667085;
-    --ws-muted-dim: #7b8496;
-    --ws-line: rgba(15, 23, 42, 0.10);
-    --ws-line-strong: rgba(15, 23, 42, 0.16);
-    --ws-brand: #2d6cff;
-    --ws-brand-2: #4d86ff;
-    --ws-brand-soft: rgba(45, 108, 255, 0.10);
-    --ws-brand-border: rgba(45, 108, 255, 0.34);
+    /* Obsidian ground, teal primary, violet secondary — the same
+       palette as design-tokens.css. Kept as literals rather than
+       var() references because workspace-preview.html loads this
+       stylesheet on its own, without design-tokens.css. */
+    --ws-canvas: #070707;
+    --ws-panel: rgba(16, 16, 20, 0.86);
+    --ws-panel-solid: #101014;
+    --ws-panel-hover: #16161c;
+    --ws-ink: #ededed;
+    --ws-ink-soft: #b7b7c0;
+    --ws-muted: #8a8a96;
+    --ws-muted-dim: #62626e;
+    --ws-line: rgba(255, 255, 255, 0.09);
+    --ws-line-strong: rgba(255, 255, 255, 0.17);
+    --ws-brand: #2dd4bf;
+    --ws-brand-2: #7fe7da;
+    --ws-brand-soft: rgba(45, 212, 191, 0.12);
+    --ws-brand-border: rgba(45, 212, 191, 0.34);
     --ws-accent: var(--ws-brand);
     --ws-border: var(--ws-line);
     --ws-surface: var(--ws-panel-solid);
     --ws-surface-soft: var(--ws-panel-hover);
-    --ws-navy: #0e2236;
-    --ws-gold: #caa54b;
-    --ws-success: #05705b;
-    --ws-success-soft: rgba(5, 112, 91, 0.10);
-    --ws-warning: #8a5800;
-    --ws-warning-soft: rgba(202, 165, 75, 0.15);
-    --ws-danger: #a82438;
-    --ws-danger-soft: rgba(168, 36, 56, 0.10);
-    --ws-shadow: 0 26px 70px -44px rgba(15, 23, 42, 0.34), inset 0 1px rgba(255, 255, 255, 0.88);
+    --ws-navy: #101014;
+    /* The matter cords read as the secondary brand hue now, not brass. */
+    --ws-gold: #a78bfa;
+    --ws-success: #34d399;
+    --ws-success-soft: rgba(52, 211, 153, 0.14);
+    --ws-warning: #fbbf24;
+    --ws-warning-soft: rgba(251, 191, 36, 0.14);
+    --ws-danger: #f87171;
+    --ws-danger-soft: rgba(248, 113, 113, 0.14);
+    --ws-shadow: 0 26px 70px -44px rgba(0, 0, 0, 0.9), inset 0 1px rgba(255, 255, 255, 0.05);
     --ws-aurora:
-        radial-gradient(50% 42% at 78% -6%, rgba(45, 108, 255, 0.13), transparent 68%),
-        radial-gradient(40% 38% at 8% 22%, rgba(96, 73, 230, 0.08), transparent 74%),
-        radial-gradient(32% 40% at 80% 72%, rgba(31, 194, 170, 0.06), transparent 76%);
+        radial-gradient(50% 42% at 78% -6%, rgba(45, 212, 191, 0.14), transparent 68%),
+        radial-gradient(40% 38% at 8% 22%, rgba(139, 92, 246, 0.10), transparent 74%),
+        radial-gradient(32% 40% at 80% 72%, rgba(167, 139, 250, 0.07), transparent 76%);
     position: relative;
     min-height: 0;
     padding: 0;
@@ -72,30 +77,35 @@
 }
 
 [data-theme="dark"] .workspace-app {
-    --ws-canvas: #060814;
-    --ws-panel: rgba(13, 15, 29, 0.88);
-    --ws-panel-solid: #0d0f1d;
-    --ws-panel-hover: #14182a;
-    --ws-ink: #f7f8fb;
-    --ws-ink-soft: #d7dbe5;
-    --ws-muted: #a1a8b7;
-    --ws-muted-dim: #919aad;
+    /* Dark is the default in the block above; this exists so an explicit
+       dark choice still resolves, and so the values cannot drift apart. */
+    --ws-canvas: #070707;
+    --ws-panel: rgba(16, 16, 20, 0.86);
+    --ws-panel-solid: #101014;
+    --ws-panel-hover: #16161c;
+    --ws-ink: #ededed;
+    --ws-ink-soft: #b7b7c0;
+    --ws-muted: #8a8a96;
+    --ws-muted-dim: #62626e;
     --ws-line: rgba(255, 255, 255, 0.09);
-    --ws-line-strong: rgba(255, 255, 255, 0.15);
-    --ws-brand-soft: rgba(77, 134, 255, 0.14);
-    --ws-navy: #f7f8fb;
-    --ws-gold: #d7b65d;
-    --ws-success: #6fe7c9;
-    --ws-success-soft: rgba(111, 231, 201, 0.10);
-    --ws-warning: #f3cd66;
-    --ws-warning-soft: rgba(243, 205, 102, 0.10);
-    --ws-danger: #fda4af;
-    --ws-danger-soft: rgba(253, 164, 175, 0.10);
-    --ws-shadow: 0 28px 80px -46px rgba(0, 0, 0, 0.76), inset 0 1px rgba(255, 255, 255, 0.04);
+    --ws-line-strong: rgba(255, 255, 255, 0.17);
+    --ws-brand: #2dd4bf;
+    --ws-brand-2: #7fe7da;
+    --ws-brand-soft: rgba(45, 212, 191, 0.14);
+    --ws-brand-border: rgba(45, 212, 191, 0.34);
+    --ws-navy: #ededed;
+    --ws-gold: #a78bfa;
+    --ws-success: #34d399;
+    --ws-success-soft: rgba(52, 211, 153, 0.14);
+    --ws-warning: #fbbf24;
+    --ws-warning-soft: rgba(251, 191, 36, 0.14);
+    --ws-danger: #f87171;
+    --ws-danger-soft: rgba(248, 113, 113, 0.14);
+    --ws-shadow: 0 28px 80px -46px rgba(0, 0, 0, 0.86), inset 0 1px rgba(255, 255, 255, 0.05);
     --ws-aurora:
-        radial-gradient(56% 46% at 76% -6%, rgba(45, 108, 255, 0.20), transparent 68%),
-        radial-gradient(44% 40% at 10% 22%, rgba(94, 66, 255, 0.14), transparent 74%),
-        radial-gradient(35% 42% at 82% 74%, rgba(31, 194, 170, 0.08), transparent 76%);
+        radial-gradient(56% 46% at 76% -6%, rgba(45, 212, 191, 0.18), transparent 68%),
+        radial-gradient(44% 40% at 10% 22%, rgba(139, 92, 246, 0.13), transparent 74%),
+        radial-gradient(34% 42% at 82% 74%, rgba(167, 139, 250, 0.08), transparent 76%);
 }
 
 .workspace-app *, .workspace-app *::before, .workspace-app *::after { box-sizing: border-box; }

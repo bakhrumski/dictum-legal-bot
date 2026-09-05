@@ -4,21 +4,22 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>JuristAI Workspace Preview</title>
-    <link rel="icon" href="./favicon-256.png">
+    <link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
+    <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
     <link rel="stylesheet" href="./css/workspace.css">
     <style>
         :root { color-scheme: light; }
         [data-theme="dark"] { color-scheme: dark; }
         * { box-sizing: border-box; }
-        body { width: 100%; min-width: 0; margin: 0; overflow-x: hidden; background: #f6f8fc; }
-        [data-theme="dark"] body { background: #060814; }
-        .preview-header { position: sticky; top: 0; z-index: 100; height: 82px; display:flex;align-items:center;justify-content:space-between;padding:0 clamp(16px,4vw,46px);border-bottom:1px solid rgba(15,23,42,.1);background:rgba(255,255,255,.84);backdrop-filter:blur(18px); }
-        [data-theme="dark"] .preview-header { border-color:rgba(255,255,255,.08);background:rgba(6,8,20,.82); }
+        body { width: 100%; min-width: 0; margin: 0; overflow-x: hidden; background: #070707; }
+        [data-theme="dark"] body { background: #070707; }
+        .preview-header { position: sticky; top: 0; z-index: 100; height: 82px; display:flex;align-items:center;justify-content:space-between;padding:0 clamp(16px,4vw,46px);border-bottom:1px solid rgba(255,255,255,.09);background:rgba(16,16,20,.84);backdrop-filter:blur(18px); }
+        [data-theme="dark"] .preview-header { border-color:rgba(255,255,255,.08);background:rgba(16,16,20,.82); }
         .preview-logo { height: 42px; width:auto; display:block; }
         .preview-logo.dark { display:none; }
         [data-theme="dark"] .preview-logo.light { display:none; }
         [data-theme="dark"] .preview-logo.dark { display:block; }
-        .preview-theme { width:42px;height:42px;border:1px solid rgba(15,23,42,.12);border-radius:13px;color:#344054;background:rgba(255,255,255,.5);cursor:pointer;font:600 12px 'Space Grotesk',sans-serif; }
+        .preview-theme { width:42px;height:42px;border:1px solid rgba(255,255,255,.11);border-radius:13px;color:#ededed;background:rgba(255,255,255,.04);cursor:pointer;font:600 12px 'Space Grotesk',sans-serif; }
         [data-theme="dark"] .preview-theme {border-color:rgba(255,255,255,.11);color:#f7f8fb;background:rgba(255,255,255,.03)}
         .workspace-app { min-height:calc(100vh - 82px); }
     </style>
@@ -26,8 +27,8 @@
 <body data-workspace-standalone="true">
     <header class="preview-header">
         <div>
-            <img class="preview-logo light" src="./wordmark-primary-2048.png" alt="JuristAI">
-            <img class="preview-logo dark" src="./wordmark-primary-2048-light.png" alt="JuristAI">
+            <img class="preview-logo light" src="./brand/lockup-horizontal-mono-black.svg" alt="JuristAI">
+            <img class="preview-logo dark" src="./brand/lockup-horizontal-glow.svg" alt="JuristAI">
         </div>
         <button class="preview-theme" id="previewTheme" type="button" aria-label="Rejimni o‘zgartirish">☀</button>
     </header>

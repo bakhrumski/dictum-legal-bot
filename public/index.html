@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="uz" data-theme="light">
+<html lang="uz" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>JuristAI — Sun'iy intellekt asosidagi huquqiy yordamchi</title>
 <meta name="description" content="JuristAI — O'zbekiston qonunchiligi bo'yicha sun'iy intellekt yordamchisi.">
-<link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
-<link rel="apple-touch-icon" href="./favicon-256.png">
+<link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
+    <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
+<link rel="apple-touch-icon" href="./brand/app-icon.svg">
 <link rel="stylesheet" href="./css/design-tokens.css">
 <script>
   (function(){
@@ -16,7 +17,8 @@
     }catch(_error){
       /* Some browsers restrict storage for file:// previews. */
     }
-    if(savedTheme==='dark') document.documentElement.setAttribute('data-theme','dark');
+    /* Dark is the brand default; only an explicit stored 'light' opts out. */
+    document.documentElement.setAttribute('data-theme', savedTheme==='light' ? 'light' : 'dark');
     if(location.protocol==='file:'){
       document.addEventListener('DOMContentLoaded',function(){
         document.querySelectorAll('a[href^="/"]').forEach(function(link){
@@ -382,7 +384,8 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
   .foot-bottom{flex-direction:column}
   .ls{display:none}
   .brand-wordmark{display:none!important}
-  .brand-icon{display:block!important}
+  /* Below 32px the hairlines vanish, so use the compact geometry here. */
+  .brand-icon{display:block!important;width:34px!important;height:34px!important}
 }
 /* JuristAI product pass — the public site follows the same quiet, flat visual
    language as the legal workspace. Decoration never competes with the task. */
@@ -523,9 +526,9 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
   <div class="wrap">
     <nav>
       <a href="#" class="brand" aria-label="JuristAI">
-        <img src="./icon-1024.png"                   alt="JuristAI" class="brand-img brand-icon">
-        <img src="./wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img logo-on-dark brand-wordmark">
-        <img src="./wordmark-primary-2048.png"       alt="JuristAI" class="brand-img logo-on-light brand-wordmark">
+        <img src="./brand/mark-compact-small-sizes.svg"                   alt="JuristAI" class="brand-img brand-icon">
+        <img src="./brand/lockup-horizontal-glow.svg" alt="JuristAI" class="brand-img logo-on-dark brand-wordmark">
+        <img src="./brand/lockup-horizontal-mono-black.svg"       alt="JuristAI" class="brand-img logo-on-light brand-wordmark">
       </a>
       <div class="nav-links">
         <a href="#features" data-i18n="nav_features">Imkoniyatlar</a>
@@ -842,7 +845,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
   <div class="wrap">
     <div class="foot-grid">
       <div class="foot-col">
-        <div class="brand" style="margin-bottom:6px"><img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img"></div>
+        <div class="brand" style="margin-bottom:6px"><img src="/brand/lockup-horizontal-glow.svg" alt="JuristAI" class="brand-img"></div>
         <p class="foot-brand-desc" data-i18n="foot_desc">O'zbekiston qonunchiligi bo'yicha sun'iy intellekt asosidagi huquqiy yordamchi.</p>
       </div>
       <div class="foot-col">
@@ -1000,7 +1003,7 @@ ru:{
 }};
 
 let curLang=localStorage.getItem('jlang')||'uz';
-let curTheme=localStorage.getItem('dictum-theme')||localStorage.getItem('jtheme')||'light';
+let curTheme=localStorage.getItem('dictum-theme')||localStorage.getItem('jtheme')||'dark';
 let heroAnimDone=false;
 
 const ICON_MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>';

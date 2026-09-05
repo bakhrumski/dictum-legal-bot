@@ -15,77 +15,107 @@
 }
 
 :root {
-  /* ── Core neutrals: warm parchment & ink ─────────────────── */
-  --parchment-50:  #F6F5F1;
-  --parchment-100: #ECEFEC;
-  --parchment-200: #E3E5E1;
-  --parchment-300: #D8DAD6;
-  --ink-900:       #182027;
-  --ink-700:       #343D44;
-  --ink-500:       #60686F;
-  --ink-300:       #8A9299;
+  /* ── Brand ground: obsidian ──────────────────────────────────
+     The identity is dark-first. brand/README.md is explicit that the
+     glow marks are for #0A0A0A–#050505 only and must never sit on
+     white, so the surfaces are built around that ground rather than
+     the mark being fitted to a light UI afterwards.            */
+  --obsidian-900:  #070707;   /* page, deepest                   */
+  --obsidian-800:  #0A0A0A;   /* brand ground, the canonical one */
+  --obsidian-700:  #101014;   /* panel                           */
+  --obsidian-600:  #16161C;   /* panel hover, raised surface     */
+  --obsidian-500:  #1F1F27;   /* wells, pressed states           */
 
-  /* ── Brand: navy primary, supported by brass & burgundy ──── */
-  --navy-900:      #102B38;
-  --navy-700:      #173B4D;
-  --navy-600:      #1F5263;
-  --navy-500:      #477F8A;
-  --navy-300:      #8DB6C4;
-  --navy-100:      #E4ECEC;
+  /* ── Primary: teal ───────────────────────────────────────── */
+  --teal-600:      #14B8A6;   /* pressed                         */
+  --teal-500:      #2DD4BF;   /* primary accent                  */
+  --teal-400:      #7FE7DA;   /* hover, links on dark            */
 
-  --winter-100:    #ECEFEC;
-  --winter-200:    #D8DAD6;
-  --winter-400:    #8A9299;
-  --winter-600:    #60686F;
-  --winter-800:    #343D44;
+  /* ── Secondary: violet ───────────────────────────────────── */
+  --violet-600:    #7C4DEF;
+  --violet-500:    #8B5CF6;
+  --violet-400:    #A78BFA;
+  --violet-300:    #C4B5FD;
+  --violet-050:    #F5F3FF;
 
-  --brass-500:     #9A7A45;
-  --brass-600:     #755B31;
-  --brass-300:     #C3A66E;
-  --brass-100:     #F0E9DA;
+  /* ── Text on obsidian ────────────────────────────────────── */
+  --chalk-100:     #EDEDED;   /* primary text                    */
+  --chalk-300:     #B7B7C0;   /* body                            */
+  --chalk-500:     #8A8A96;   /* secondary                       */
+  --chalk-700:     #62626E;   /* muted, captions                 */
 
-  --burgundy-700:  #6B1F2A;
-  --burgundy-500:  #8E2A38;
-  --burgundy-100:  #F5E1E3;
+  /* Retained so existing rules keep resolving. The warm palette is
+     no longer the brand; these now read as neutrals on obsidian. */
+  --parchment-50:  var(--obsidian-900);
+  --parchment-100: var(--obsidian-700);
+  --parchment-200: var(--obsidian-600);
+  --parchment-300: var(--obsidian-500);
+  --ink-900:       var(--chalk-100);
+  --ink-700:       var(--chalk-300);
+  --ink-500:       var(--chalk-500);
+  --ink-300:       var(--chalk-700);
 
-  --plum-700:      #4A1F8C;
-  --plum-500:      #6E3CC9;
-  --gold-500:      #C99A3D;
+  --navy-900:      var(--chalk-100);
+  --navy-700:      var(--teal-500);
+  --navy-600:      var(--teal-400);
+  --navy-500:      var(--teal-400);
+  --navy-300:      var(--violet-300);
+  --navy-100:      var(--obsidian-600);
 
-  /* ── Semantic (warm-tuned) ───────────────────────────────── */
-  --success-700:   #2F6B43;
-  --success-100:   #DCEFE1;
-  --warning-700:   #8A5A0E;
-  --warning-100:   #FBEFD0;
-  --danger-700:    #8E2A2A;
-  --danger-100:    #F4DCDC;
-  --info-700:      #2C4A6B;
-  --info-100:      #DCE6F0;
+  --winter-100:    var(--obsidian-700);
+  --winter-200:    var(--obsidian-600);
+  --winter-400:    var(--chalk-500);
+  --winter-600:    var(--chalk-300);
+  --winter-800:    var(--chalk-100);
 
-  /* ── Dark mode (warm) ────────────────────────────────────── */
-  --dark-bg-1:     #10161B;
-  --dark-bg-2:     #181E24;
-  --dark-bg-3:     #202830;
-  --dark-border:   #303A43;
-  --dark-fg-1:     #EDF0F2;
-  --dark-fg-2:     #C7CDD2;
-  --dark-fg-3:     #AAB2BA;
-  --dark-accent:   #93B7C9;
+  /* Brass survives only as the legal-seal idiom (citations, trust
+     marks); violet carries the secondary brand role instead. */
+  --brass-500:     var(--violet-400);
+  --brass-600:     var(--violet-500);
+  --brass-300:     var(--violet-300);
+  --brass-100:     rgba(167, 139, 250, 0.14);
+
+  --burgundy-700:  #F87171;
+  --burgundy-500:  #F87171;
+  --burgundy-100:  rgba(248, 113, 113, 0.14);
+
+  --plum-700:      var(--violet-500);
+  --plum-500:      var(--violet-400);
+  --gold-500:      var(--teal-500);
+
+  /* ── Semantic, tuned for legibility on obsidian ──────────── */
+  --success-700:   #34D399;
+  --success-100:   rgba(52, 211, 153, 0.14);
+  --warning-700:   #FBBF24;
+  --warning-100:   rgba(251, 191, 36, 0.14);
+  --danger-700:    #F87171;
+  --danger-100:    rgba(248, 113, 113, 0.14);
+  --info-700:      var(--violet-400);
+  --info-100:      rgba(167, 139, 250, 0.14);
+
+  --dark-bg-1:     var(--obsidian-900);
+  --dark-bg-2:     var(--obsidian-700);
+  --dark-bg-3:     var(--obsidian-600);
+  --dark-border:   rgba(255, 255, 255, 0.10);
+  --dark-fg-1:     var(--chalk-100);
+  --dark-fg-2:     var(--chalk-300);
+  --dark-fg-3:     var(--chalk-500);
+  --dark-accent:   var(--teal-500);
 
   /* ── Semantic foreground/background tokens ───────────────── */
-  --fg-1: var(--ink-900);
-  --fg-2: var(--ink-700);
-  --fg-3: var(--ink-500);
-  --fg-4: var(--ink-300);
-  --bg-1: var(--parchment-50);
-  --bg-2: #FFFFFF;
-  --bg-3: var(--parchment-100);
-  --border-1: var(--parchment-300);
-  --border-2: var(--parchment-200);
-  --accent: var(--navy-700);
-  --accent-hover: var(--navy-600);
-  --accent-fg: #FFFFFF;
-  --link: var(--navy-700);
+  --fg-1: var(--chalk-100);
+  --fg-2: var(--chalk-300);
+  --fg-3: var(--chalk-500);
+  --fg-4: var(--chalk-700);
+  --bg-1: var(--obsidian-900);
+  --bg-2: var(--obsidian-700);
+  --bg-3: var(--obsidian-600);
+  --border-1: rgba(255, 255, 255, 0.10);
+  --border-2: rgba(255, 255, 255, 0.06);
+  --accent: var(--teal-500);
+  --accent-hover: var(--teal-400);
+  --accent-fg: var(--obsidian-800);
+  --link: var(--teal-400);
 
   /* ── Type families ───────────────────────────────────────── */
   --font-serif:   "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -136,7 +166,7 @@
   /* ── Elevation ───────────────────────────────────────────── */
   --shadow-1: none;
   --shadow-2: none;
-  --shadow-3: 0 18px 48px rgba(16, 22, 27, 0.18);
+  --shadow-3: 0 24px 60px rgba(0, 0, 0, 0.62);
   --shadow-seal: none;
 
   /* ── Motion ──────────────────────────────────────────────── */
@@ -148,19 +178,42 @@
 }
 
 [data-theme="dark"] {
-  --fg-1: var(--dark-fg-1);
-  --fg-2: var(--dark-fg-2);
-  --fg-3: var(--dark-fg-3);
-  --fg-4: var(--dark-fg-3);
-  --bg-1: var(--dark-bg-1);
-  --bg-2: var(--dark-bg-2);
-  --bg-3: var(--dark-bg-3);
-  --border-1: var(--dark-border);
-  --border-2: var(--dark-border);
-  --accent: var(--dark-accent);
-  --accent-hover: #B8CFD8;
-  --accent-fg: var(--dark-bg-1);
-  --link: #B8CFD8;
+  color-scheme: dark;
+}
+
+/* Light is now the deliberate exception, not the default. Per
+   brand/README.md the glow marks may not appear here — pages that opt
+   into light must use the mono-black lockups. */
+[data-theme="light"] {
+  color-scheme: light;
+  --fg-1: #101014;
+  --fg-2: #33333D;
+  --fg-3: #5C5C68;
+  --fg-4: #8A8A96;
+  --bg-1: #FAFAFA;
+  --bg-2: #FFFFFF;
+  --bg-3: #F2F2F4;
+  --border-1: rgba(16, 16, 20, 0.12);
+  --border-2: rgba(16, 16, 20, 0.07);
+  --accent: #0F9E8D;
+  --accent-hover: #0B8375;
+  --accent-fg: #FFFFFF;
+  --link: #0B8375;
+
+  --parchment-50: #FAFAFA;
+  --parchment-100: #F2F2F4;
+  --parchment-200: #E6E6EA;
+  --parchment-300: #D5D5DC;
+  --ink-900: #101014;
+  --ink-700: #33333D;
+  --ink-500: #5C5C68;
+  --ink-300: #8A8A96;
+  --navy-900: #101014;
+  --navy-700: #0F9E8D;
+  --navy-600: #0B8375;
+  --brass-500: #7C4DEF;
+  --brass-300: #A78BFA;
+  --shadow-3: 0 18px 48px rgba(16, 16, 20, 0.14);
 }
 
 html,

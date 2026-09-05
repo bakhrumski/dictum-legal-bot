@@ -6,32 +6,33 @@
  * presentation; existing identifiers, handlers and API-bound controls remain intact.
  */
 :root {
-  color-scheme: light;
-  --jai-canvas: #f6f8fc;
-  --jai-ink: #111827;
-  --jai-panel: #ffffff;
-  --jai-panel-solid: #ffffff;
-  --jai-panel-hover: #f3f6fb;
-  --jai-muted: #5f6b7a;
-  --jai-muted-dim: #758197;
-  --jai-line: rgba(15, 23, 42, .10);
-  --jai-line-strong: rgba(15, 23, 42, .17);
-  --jai-brand: #2d6cff;
-  --jai-brand-2: #58a5ff;
-  --jai-brand-soft: rgba(45, 108, 255, .09);
-  --jai-brand-border: rgba(45, 108, 255, .24);
-  --jai-success: #087d69;
-  --jai-warning: #9a6400;
-  --jai-danger: #be344c;
-  --jai-shadow: 0 28px 70px -48px rgba(15, 23, 42, .42);
-  --jai-shadow-hover: 0 30px 76px -44px rgba(45, 108, 255, .26);
+  color-scheme: dark;
+  --jai-canvas: #070707;
+  --jai-ink: #ededed;
+  --jai-panel: rgba(16, 16, 20, .86);
+  --jai-panel-solid: #101014;
+  --jai-panel-hover: #16161c;
+  --jai-muted: #b7b7c0;
+  --jai-muted-dim: #8a8a96;
+  --jai-line: rgba(255, 255, 255, .09);
+  --jai-line-strong: rgba(255, 255, 255, .16);
+  --jai-brand: #2dd4bf;
+  --jai-brand-2: #7fe7da;
+  --jai-brand-soft: rgba(45, 212, 191, .12);
+  --jai-brand-border: rgba(45, 212, 191, .30);
+  --jai-success: #34d399;
+  --jai-warning: #fbbf24;
+  --jai-danger: #f87171;
+  --jai-shadow: 0 30px 80px -48px rgba(0, 0, 0, .92);
+  --jai-shadow-hover: 0 32px 80px -46px rgba(45, 212, 191, .26);
   --jai-radius-sm: 10px;
   --jai-radius: 16px;
   --jai-radius-lg: 24px;
+  /* Teal leads, violet supports — the two glow hues from the mark. */
   --jai-aurora:
-    radial-gradient(54% 44% at 76% -4%, rgba(45, 108, 255, .14), transparent 67%),
-    radial-gradient(42% 38% at 12% 20%, rgba(115, 91, 255, .09), transparent 72%),
-    radial-gradient(34% 42% at 82% 76%, rgba(31, 194, 170, .07), transparent 76%);
+    radial-gradient(56% 46% at 74% -4%, rgba(45, 212, 191, .16), transparent 66%),
+    radial-gradient(44% 40% at 14% 22%, rgba(139, 92, 246, .13), transparent 74%),
+    radial-gradient(35% 42% at 82% 74%, rgba(167, 139, 250, .08), transparent 76%);
 
   /* Legacy token bridge. */
   --parchment-50: var(--jai-canvas);
@@ -59,38 +60,18 @@
   --font-serif: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
 }
 
+/* Dark is the default now, so this block only needs to bridge the
+   design-tokens names that page-level rules still reach for. */
 [data-theme="dark"] {
   color-scheme: dark;
-  --jai-canvas: #060814;
-  --jai-ink: #f7f8fb;
-  --jai-panel: rgba(11, 13, 25, .88);
-  --jai-panel-solid: #0b0d19;
-  --jai-panel-hover: #15182a;
-  --jai-muted: #a1a8b7;
-  --jai-muted-dim: #8d96aa;
-  --jai-line: rgba(255, 255, 255, .09);
-  --jai-line-strong: rgba(255, 255, 255, .16);
-  --jai-brand: #5b8cff;
-  --jai-brand-2: #78b5ff;
-  --jai-brand-soft: rgba(91, 140, 255, .12);
-  --jai-brand-border: rgba(91, 140, 255, .30);
-  --jai-success: #6fe7c9;
-  --jai-warning: #f5cc68;
-  --jai-danger: #f49aaa;
-  --jai-shadow: 0 30px 80px -48px rgba(0, 0, 0, .92);
-  --jai-shadow-hover: 0 32px 80px -46px rgba(91, 140, 255, .28);
-  --jai-aurora:
-    radial-gradient(56% 46% at 74% -4%, rgba(45, 108, 255, .20), transparent 66%),
-    radial-gradient(44% 40% at 14% 22%, rgba(94, 66, 255, .14), transparent 74%),
-    radial-gradient(35% 42% at 82% 74%, rgba(31, 194, 170, .08), transparent 76%);
 
   --parchment-50: var(--jai-canvas);
-  --parchment-100: #101421;
-  --cream-100: #111625;
-  --navy-600: #f0f3f8;
-  --navy-700: #ffffff;
-  --brass-500: var(--jai-brand);
-  --brass-400: var(--jai-brand-2);
+  --parchment-100: var(--jai-panel-solid);
+  --cream-100: var(--jai-panel-hover);
+  --navy-600: var(--jai-brand-2);
+  --navy-700: var(--jai-brand);
+  --brass-500: #a78bfa;
+  --brass-400: #c4b5fd;
   --brass-100: var(--jai-brand-border);
   --border-1: var(--jai-line);
   --border: var(--jai-line);
@@ -204,8 +185,22 @@ input::placeholder, textarea::placeholder { color: var(--jai-muted-dim) !importa
   gap: 10px;
   text-decoration: none;
 }
-.brand-img.brand-icon, #hdr .brand-icon { width: 38px !important; height: 38px !important; border-radius: 12px; }
-.brand-img.brand-wordmark, #hdr .brand-wordmark { width: auto !important; height: 34px !important; max-width: 124px; }
+/* The horizontal lockup already contains the mark, so the separate icon is
+   redundant beside it — it stays in the markup for the narrow breakpoint,
+   where the wordmark is hidden and the mark carries the brand alone. */
+.brand-img.brand-icon, #hdr .brand-icon { display: none; }
+/* brand/README.md: horizontal lockup no smaller than 96px wide. The lockup
+   is 307.8x124, so 40px tall lands at ~99px — just clear of the floor. */
+.brand-img.brand-wordmark, #hdr .brand-wordmark { width: auto !important; height: 40px !important; max-width: 168px; }
+
+/* Narrow viewports cannot give the lockup its 96px, so the mark takes over
+   rather than the lockup being squeezed under its minimum. This lives here,
+   not in the page's inline styles, because this sheet loads last and so is
+   the one that actually decides. */
+@media (max-width: 580px) {
+  .brand-img.brand-wordmark, #hdr .brand-wordmark { display: none !important; }
+  .brand-img.brand-icon, #hdr .brand-icon { display: block !important; width: 34px !important; height: 34px !important; }
+}
 .logo-on-dark { display: none !important; }
 .logo-on-light { display: block !important; }
 [data-theme="dark"] .logo-on-dark { display: block !important; }

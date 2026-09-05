@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="uz" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,8 +9,9 @@
         }
     </script>
     <title>JuristAI - Murojaatlar Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
     <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
-    <link rel="apple-touch-icon" href="./favicon-256.png">
+    <link rel="apple-touch-icon" href="./brand/app-icon.svg">
     <!-- PDF & Chart Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
@@ -6789,16 +6790,16 @@
         // Apply saved theme immediately to prevent flash
         (function() {
             const saved = localStorage.getItem('dictum-theme');
-            if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
         })();
     </script>
     <div class="container">
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="brandClick()">
-                    <img src="./icon-1024.png"                   alt="JuristAI" class="header-logo header-logo-icon">
-                    <img src="./wordmark-primary-2048.png"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
-                    <img src="./wordmark-primary-2048-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
+                    <img src="./brand/mark-glow.svg"                   alt="JuristAI" class="header-logo header-logo-icon">
+                    <img src="./brand/lockup-horizontal-mono-black.svg"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
+                    <img src="./brand/lockup-horizontal-glow.svg" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
@@ -7180,7 +7181,7 @@
                 <div class="ai-chat-messages" id="aiChatMessages" role="log" aria-live="polite" aria-relevant="additions">
                     <div class="ai-chat-welcome" id="aiChatWelcome">
                         <div class="ai-welcome-mark" aria-hidden="true">
-                            <img src="./icon-1024.png" alt="">
+                            <img src="./brand/mark-glow.svg" alt="">
                         </div>
                         <div class="ai-welcome-copy">
                             <h1>Bugun qanday huquqiy masalada yordam kerak?</h1>

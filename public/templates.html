@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="uz" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -9,7 +9,8 @@
   }
 </script>
 <title>Shablonlar — JuristAI</title>
-<link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
+<link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
+    <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
 <link rel="stylesheet" href="./css/design-tokens.css">
 <style>
 :root{
@@ -189,7 +190,7 @@ header b{font-family:var(--font-sans);color:var(--txt)}
 </style>
 <script>
   (function(){
-    if(localStorage.getItem('dictum-theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+    document.documentElement.setAttribute('data-theme', localStorage.getItem('dictum-theme')==='light' ? 'light' : 'dark');
   })();
 </script>
 <link rel="stylesheet" href="/css/redesign-v2.css">

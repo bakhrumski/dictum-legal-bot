@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="uz" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,8 +9,9 @@
         }
     </script>
     <title>Kirish - JuristAI</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
     <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
-    <link rel="apple-touch-icon" href="./favicon-256.png">
+    <link rel="apple-touch-icon" href="./brand/app-icon.svg">
     <link rel="stylesheet" href="./css/design-tokens.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -861,7 +862,7 @@
     <script>
         (function() {
             const saved = localStorage.getItem('dictum-theme');
-            if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
         })();
     </script>
     <link rel="stylesheet" href="/css/redesign-v2.css">
@@ -879,9 +880,9 @@
         <!-- LEFT HERO PANEL -->
         <div class="hero-panel">
             <div class="hero-logo">
-                <img class="img-icon" src="./icon-1024.png" alt="JuristAI">
-                <img class="img-light" src="/wordmark-primary-2048.png" alt="JuristAI">
-                <img class="img-dark" src="/wordmark-primary-2048-light.png" alt="JuristAI">
+                <img class="img-icon" src="./brand/mark-glow.svg" alt="JuristAI">
+                <img class="img-light" src="/brand/lockup-horizontal-mono-black.svg" alt="JuristAI">
+                <img class="img-dark" src="/brand/lockup-horizontal-glow.svg" alt="JuristAI">
                 <div class="hero-tagline" id="heroTagline"><span id="typeText"></span><span class="type-cursor blinking" id="typeCursor">|</span></div>
                 <div class="hero-seal">O'zbekiston huquqi</div>
             </div>
