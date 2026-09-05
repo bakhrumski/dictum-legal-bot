@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uz" data-theme="dark">
+<html lang="uz">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -478,13 +478,13 @@
 
         .header-brand { cursor: pointer; display: flex; align-items: center; gap: 8px; }
         .header-logo {
-            height: 42px;
+            height: 30px;
+            max-width: 118px;
             width: auto;
+            object-fit: contain;
             display: block;
             margin-bottom: 2px;
         }
-        /* Show icon-1024 at all sizes; wordmarks follow on desktop. */
-        .header-logo-icon { display: block; }
         .header-logo-wordmark.header-logo-dark { display: none; }
         [data-theme="dark"] .header-logo-wordmark.header-logo-light { display: none; }
         [data-theme="dark"] .header-logo-wordmark.header-logo-dark  { display: block; }
@@ -5618,10 +5618,8 @@
             /* --- Mobile header --- */
             header { height: 70px; max-height: 70px; padding: 8px 10px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow: hidden; }
             .header-left { padding-left: 8px; flex-shrink: 0; min-width: 0; }
-            .header-logo { height: 32px; }
-            /* Mobile: hide wordmarks, show square icon-1024. */
-            .header-logo-wordmark { display: none !important; }
-            .header-logo-icon { display: block !important; }
+            /* The canvas keeps the wordmark at every width and narrows it. */
+            .header-logo { height: 28px; max-width: 116px; }
             .header-left .subtitle { font-size: 7px; letter-spacing: 1px; }
             .header-center {
                 position: static !important;
@@ -6794,16 +6792,15 @@
         // Apply saved theme immediately to prevent flash
         (function() {
             const saved = localStorage.getItem('dictum-theme');
-            document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
+            if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
         })();
     </script>
     <div class="container">
         <header>
             <div class="header-left">
                 <div class="header-brand" onclick="brandClick()">
-                    <img src="./brand/mark-glow.svg"                   alt="JuristAI" class="header-logo header-logo-icon">
-                    <img src="./brand/lockup-horizontal-mono-black.svg"       alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
-                    <img src="./brand/lockup-horizontal-glow.svg" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
+                    <img src="./brand/wordmark-filled-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
+                    <img src="./brand/wordmark-filled-dark.png"  alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
                 </div>
             </div>
             <div class="header-center" style="display:flex; align-items:center; gap:12px;">
@@ -7185,7 +7182,7 @@
                 <div class="ai-chat-messages" id="aiChatMessages" role="log" aria-live="polite" aria-relevant="additions">
                     <div class="ai-chat-welcome" id="aiChatWelcome">
                         <div class="ai-welcome-mark" aria-hidden="true">
-                            <img src="./brand/mark-glow.svg" alt="">
+                            <img src="./icon-1024.png" alt="">
                         </div>
                         <div class="ai-welcome-copy">
                             <h1>Bugun qanday huquqiy masalada yordam kerak?</h1>
