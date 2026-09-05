@@ -213,7 +213,7 @@
             font-family: var(--font-sans);
             background: var(--bg-gradient);
             background-attachment: fixed;
-            min-height: 100vh;
+            min-height: 100vh; min-height: 100dvh;
             padding: 20px 0;
             padding-bottom: calc(64px + 20px + env(safe-area-inset-bottom, 0px));
             overflow-x: clip;   /* kill accidental horizontal scroll on phones; 'clip' keeps position:sticky working */
@@ -348,11 +348,11 @@
         }
 
         /* ========== CHAT AS TAB ========== */
-        body.chat-tab-active { overflow: hidden !important; height: 100vh !important; }
+        body.chat-tab-active { overflow: hidden !important; height: 100vh; height: 100dvh !important; }
         #tabChat.tab-view.active {
             overflow: hidden;
             /* 86px header + 16px header-mb + 20px body-pt + 64px tab-bar + 4px buffer */
-            height: calc(100vh - 190px - env(safe-area-inset-bottom, 0px));
+            height: calc(100vh; height: calc(100dvh - 190px - env(safe-area-inset-bottom, 0px));
             height: calc(100dvh - 190px - env(safe-area-inset-bottom, 0px));
         }
         .chat-tab-wrapper {
@@ -2173,7 +2173,7 @@
             width: 100%;
             padding: 0;
             display: flex;
-            height: calc(100vh - 190px - env(safe-area-inset-bottom, 0px));
+            height: calc(100vh; height: calc(100dvh - 190px - env(safe-area-inset-bottom, 0px));
             height: calc(100dvh - 190px - env(safe-area-inset-bottom, 0px));
             border-radius: var(--ios-radius-lg);
             overflow: hidden;
@@ -2181,7 +2181,7 @@
         }
         /* No tab bar (common users): reclaim the space the hidden bar reserved. */
         body.no-tab-bar .ai-workspace {
-            height: calc(100vh - 126px - env(safe-area-inset-bottom, 0px));
+            height: calc(100vh; height: calc(100dvh - 126px - env(safe-area-inset-bottom, 0px));
             height: calc(100dvh - 126px - env(safe-area-inset-bottom, 0px));
         }
 
@@ -2473,7 +2473,7 @@
             min-width: 260px;
             /* Reserve room for the header AND the fixed bottom tab bar (64px)
                so the last rows don't hide behind it on touch layouts. */
-            max-height: calc(100vh - 210px - env(safe-area-inset-bottom, 0px));
+            max-height: calc(100vh; max-height: calc(100dvh - 210px - env(safe-area-inset-bottom, 0px));
             max-height: calc(100dvh - 210px - env(safe-area-inset-bottom, 0px));
             overflow-y: auto; scrollbar-width: thin; box-sizing: border-box;
         }
@@ -3028,7 +3028,7 @@
             position: absolute; bottom: 46px; left: 0; z-index: 60; display: none;
             background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 16px;
             box-shadow: 0 12px 32px rgba(14,34,54,0.18); padding: 6px; min-width: 226px;
-            max-height: calc(100vh - 140px); overflow-y: auto;
+            max-height: calc(100vh; max-height: calc(100dvh - 140px); overflow-y: auto;
         }
         /* Separates the mode picker from the plain attach action below it. */
         .ai-attach-sep { height: 1px; background: var(--border-1); margin: 6px 8px; }
@@ -3315,11 +3315,11 @@
         /* Mobile responsive */
         @media (max-width: 768px) {
             .ai-workspace {
-                height: calc(100vh - 166px - env(safe-area-inset-bottom, 0px));
+                height: calc(100vh; height: calc(100dvh - 166px - env(safe-area-inset-bottom, 0px));
                 height: calc(100dvh - 166px - env(safe-area-inset-bottom, 0px));
             }
             body.no-tab-bar .ai-workspace {
-                height: calc(100vh - 110px - env(safe-area-inset-bottom, 0px));
+                height: calc(100vh; height: calc(100dvh - 110px - env(safe-area-inset-bottom, 0px));
                 height: calc(100dvh - 110px - env(safe-area-inset-bottom, 0px));
             }
             .ai-sidebar {
@@ -3411,13 +3411,13 @@
         }
         @media (max-width: 480px) {
             .ai-workspace {
-                height: calc(100vh - 147px - env(safe-area-inset-bottom, 0px));
+                height: calc(100vh; height: calc(100dvh - 147px - env(safe-area-inset-bottom, 0px));
                 height: calc(100dvh - 147px - env(safe-area-inset-bottom, 0px));
                 border-radius: 0;
                 border: none;
             }
             body.no-tab-bar .ai-workspace {
-                height: calc(100vh - 97px - env(safe-area-inset-bottom, 0px));
+                height: calc(100vh; height: calc(100dvh - 97px - env(safe-area-inset-bottom, 0px));
                 height: calc(100dvh - 97px - env(safe-area-inset-bottom, 0px));
             }
             .ai-chat-input-bar { padding: 10px 12px 14px; }
@@ -3567,7 +3567,7 @@
         }
         .reg-detail-approve { background: linear-gradient(135deg, var(--success-700), var(--success-700)); }
         .reg-detail-reject { background: linear-gradient(135deg, var(--danger-700), var(--danger-700)); }
-        .reg-detail-close { background: var(--border-1); color: #000 !important; border: 1px solid var(--border-1) !important; }
+        .reg-detail-close { background: var(--border-1); color: var(--fg-1) !important; border: 1px solid var(--border-1) !important; }
         .reg-detail-close:hover { background: #d0d0d0; }
         .reg-cred-box {
             margin-top: 16px; padding: 14px; background: rgba(39, 174, 96, 0.08);
@@ -3577,7 +3577,7 @@
         [data-theme="dark"] .reg-cred-box code { background: rgba(255,255,255,0.08); }
         .reg-copy-btn {
             margin-top: 10px; padding: 8px 16px; border: 1px solid var(--glass-border);
-            border-radius: 8px; background: var(--glass-bg); color: #000 !important;
+            border-radius: 8px; background: var(--glass-bg); color: var(--fg-1) !important;
             font-size: 12px; font-family: inherit; cursor: pointer;
         }
         [data-theme="dark"] .reg-copy-btn { color: #fff !important; }
@@ -3826,7 +3826,7 @@
         .answer-flag-pop {
             position: fixed; z-index: 100001; display: none;
             width: 300px; max-width: calc(100vw - 24px);
-            max-height: calc(100vh - 20px); overflow-y: auto;
+            max-height: calc(100vh; max-height: calc(100dvh - 20px); overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             background: var(--bg-1, #fff); color: var(--text-primary, #1a1410);
             border: 1px solid var(--border-1, rgba(0,0,0,0.12)); border-radius: 12px;
@@ -4513,7 +4513,7 @@
         [data-theme="dark"] .chat-msg-notif-close:hover { background: rgba(255,255,255,0.12); color: #c9d1d9; }
 
         .chat-panel {
-            position: fixed; top: 0; right: -410px; width: 400px; height: 100vh;
+            position: fixed; top: 0; right: -410px; width: 400px; height: 100vh; height: 100dvh;
             background: var(--glass-bg-strong);
             backdrop-filter: blur(var(--glass-blur-strong));
             -webkit-backdrop-filter: blur(var(--glass-blur-strong));
@@ -5609,7 +5609,7 @@
             body { padding-bottom: calc(56px + 12px + env(safe-area-inset-bottom, 0px)) !important; }
             body.no-tab-bar { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important; }
             /* 70px header + 16px header-mb + 20px body-pt + 56px tab-bar + 16px buffer */
-            #tabChat.tab-view.active { height: calc(100vh - 178px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 178px - env(safe-area-inset-bottom, 0px)); }
+            #tabChat.tab-view.active { height: calc(100vh; height: calc(100dvh - 178px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 178px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius); }
 
             /* --- Mobile header --- */
@@ -5660,7 +5660,7 @@
             body { padding-bottom: calc(50px + 8px + env(safe-area-inset-bottom, 0px)) !important; }
             body.no-tab-bar { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important; }
             /* 57px header + 16px header-mb + 20px body-pt + 50px tab-bar + 16px buffer */
-            #tabChat.tab-view.active { height: calc(100vh - 159px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 159px - env(safe-area-inset-bottom, 0px)); }
+            #tabChat.tab-view.active { height: calc(100vh; height: calc(100dvh - 159px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 159px - env(safe-area-inset-bottom, 0px)); }
             .chat-tab-wrapper { height: 100%; border-radius: var(--ios-radius-sm); }
 
             header { height: 57px; max-height: 57px; padding: 6px 8px; }
@@ -5737,7 +5737,7 @@
             /* Mobile: cap height so action buttons are never pushed off-screen */
             display: flex;
             flex-direction: column;
-            max-height: calc(100vh - 40px);
+            max-height: calc(100vh; max-height: calc(100dvh - 40px);
             max-height: calc(100dvh - 40px);
             overflow: hidden;
         }
@@ -6283,7 +6283,7 @@
         body.no-tab-bar .container > header { display: none; }
         body.no-tab-bar #tabAi { height: 100%; }
         body.no-tab-bar .ai-workspace {
-            height: 100vh;
+            height: 100vh; height: 100dvh;
             height: 100dvh;
             border: 0;
             border-radius: 0;

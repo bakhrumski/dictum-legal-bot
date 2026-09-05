@@ -36,10 +36,10 @@
 
   /* Legacy token bridge. */
   --parchment-50: var(--jai-canvas);
-  --parchment-100: #f1f4f9;
-  --cream-100: #eef3fb;
-  --navy-600: #17243b;
-  --navy-700: #111827;
+  --parchment-100: var(--jai-panel-solid);
+  --cream-100: var(--jai-panel-hover);
+  --navy-600: var(--jai-brand-2);
+  --navy-700: var(--jai-brand);
   --brass-500: var(--jai-brand);
   --brass-400: var(--jai-brand-2);
   --brass-100: var(--jai-brand-border);
@@ -52,9 +52,9 @@
   --fg-1: var(--jai-ink);
   --fg-2: var(--jai-muted);
   --bg-card: var(--jai-panel);
-  --input-bg: rgba(255,255,255,.76);
+  --input-bg: rgba(255,255,255,.035);
   --accent: var(--jai-brand);
-  --accent-fg: #fff;
+  --accent-fg: var(--jai-canvas);
   --font-body: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
   --font-ui: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
   --font-serif: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
@@ -93,7 +93,7 @@ html {
 
 body {
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   color: var(--jai-ink);
   background-color: var(--jai-canvas) !important;
   background-image: var(--jai-aurora) !important;
@@ -106,13 +106,26 @@ body {
 body, button, input, select, textarea { font-family: inherit !important; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button, a { transition: transform .22s cubic-bezier(.2,.8,.2,1), border-color .22s ease, background-color .22s ease, color .22s ease, box-shadow .22s ease, opacity .22s ease; }
+/* Tactile feedback: a control that moves under the finger confirms the press
+   landed. Without it a tap on a slow connection reads as a dead button and
+   gets pressed again. Transform only, so it stays on the compositor. */
+button:active:not(:disabled), a.btn:active, .btn:active:not(:disabled),
+.plan-btn:active, .find:active, .request:active, .bottom-tab:active {
+  transform: scale(.978);
+  transition-duration: .08s;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, a, .btn { transition: none !important; }
+  button:active:not(:disabled), a.btn:active, .btn:active:not(:disabled),
+  .plan-btn:active, .find:active, .request:active, .bottom-tab:active { transform: none; }
+}
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 0 !important;
   border-color: var(--jai-brand) !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--jai-brand) 18%, transparent) !important;
 }
 
-::selection { color: #fff; background: var(--jai-brand); }
+::selection { color: var(--jai-canvas); background: var(--jai-brand); }
 input::placeholder, textarea::placeholder { color: var(--jai-muted-dim) !important; opacity: .82; }
 
 /* Shared polished surfaces and controls. */
@@ -122,15 +135,15 @@ input::placeholder, textarea::placeholder { color: var(--jai-muted-dim) !importa
 }
 .btn-primary, .find, .request, .btn-confirm, .plan-card.featured .plan-btn,
 .login-card .btn:not(.btn-outline) {
-  color: #fff !important;
+  color: var(--jai-canvas) !important;
   border-color: transparent !important;
   background: linear-gradient(135deg, var(--jai-brand), var(--jai-brand-2)) !important;
-  box-shadow: 0 16px 34px -22px rgba(45, 108, 255, .72) !important;
+  box-shadow: 0 16px 34px -22px rgba(45, 212, 191, .42) !important;
 }
 .btn-primary:hover, .find:hover, .request:hover, .btn-confirm:hover:not(:disabled),
 .login-card .btn:not(.btn-outline):hover {
   transform: translateY(-1px);
-  box-shadow: 0 22px 42px -24px rgba(45, 108, 255, .82) !important;
+  box-shadow: 0 22px 42px -24px rgba(45, 212, 191, .52) !important;
 }
 .btn-ghost, .btn-outline, .plan-btn, .btn-cancel, .theme, .thm,
 .theme-toggle, .theme-toggle-header, .hicon, .header-icon-btn {
@@ -269,10 +282,10 @@ input::placeholder, textarea::placeholder { color: var(--jai-muted-dim) !importa
 }
 .ht { font-size: clamp(48px, 6vw, 78px) !important; line-height: .99 !important; max-width: 760px; }
 .gt {
-  color: transparent !important;
-  background: linear-gradient(100deg, var(--jai-ink) 8%, var(--jai-brand-2) 96%) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
+  /* Solid accent, not a text-fill gradient: gradients on display type wash out
+     against the ground and read as a stock AI treatment. Weight and colour
+     carry the emphasis instead. */
+  color: var(--jai-brand) !important;
 }
 .hero-sub, .sh-sub, .pricing-intro > p, main.shell .lead { color: var(--jai-muted) !important; line-height: 1.75 !important; }
 .hero-stats { border-color: var(--jai-line) !important; }
@@ -455,7 +468,7 @@ main.shell h1 { max-width: 760px; font-size: clamp(42px, 5.5vw, 68px) !important
 /* Login and registration. */
 .login-card {
   width: min(1080px, calc(100% - 32px)) !important;
-  min-height: min(740px, calc(100vh - 48px)) !important;
+  min-height: min(740px, calc(100vh; min-height: min(740px, calc(100dvh - 48px)) !important;
   border: 1px solid var(--jai-line) !important;
   border-radius: 28px !important;
   background: color-mix(in srgb, var(--jai-panel-solid) 90%, transparent) !important;
@@ -765,13 +778,15 @@ body > .container > header {
   border: 1px solid var(--jai-line) !important;
   border-radius: 18px !important;
   background: color-mix(in srgb, var(--jai-panel-solid) 88%, transparent) !important;
-  box-shadow: 0 28px 70px -34px rgba(15,23,42,.45) !important;
+  box-shadow: 0 28px 70px -34px rgba(0, 0, 0, .72) !important;
   backdrop-filter: blur(22px) saturate(145%);
 }
 @media (min-width: 1181px) {
   body.workspace-chat-open .bottom-tab-bar {
-    left: calc(50% - 230px) !important;
-    transition: left .24s ease !important;
+    /* Offset via transform rather than `left`: animating a layout property
+       reflows the document on every frame, transform does not. */
+    transform: translateX(calc(-50% - 230px)) !important;
+    transition: transform .24s cubic-bezier(.16, 1, .3, 1) !important;
   }
 }
 @media (max-width: 1180px) {
@@ -938,7 +953,7 @@ body > .container > header {
   .pricing-intro h1, main.shell h1 { font-size: 38px !important; }
   .trial-strip { align-items: stretch !important; }
   .trial-btn { width: 100%; }
-  .login-card { width: 100% !important; min-height: 100vh !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; }
+  .login-card { width: 100% !important; min-height: 100vh; min-height: 100dvh !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; }
   .hero-panel { min-height: 142px !important; }
   .form-panel { padding-inline: 18px !important; }
   .form-options { gap: 12px; align-items: flex-start !important; }
