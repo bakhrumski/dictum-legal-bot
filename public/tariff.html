@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uz" data-theme="dark">
+<html lang="uz">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -431,9 +431,8 @@
         <div class="wrap">
             <nav aria-label="Asosiy navigatsiya">
                 <a href="/index.html" class="brand" aria-label="JuristAI bosh sahifasi">
-                    <img src="./brand/mark-compact-small-sizes.svg" alt="" aria-hidden="true" class="brand-img brand-icon">
-                    <img src="./brand/lockup-horizontal-glow.svg" alt="JuristAI" class="brand-img logo-on-dark brand-wordmark">
-                    <img src="./brand/lockup-horizontal-mono-black.svg" alt="JuristAI" class="brand-img logo-on-light brand-wordmark">
+                    <img src="./brand/wordmark-filled-dark.png" alt="JuristAI" class="brand-img logo-on-dark brand-wordmark">
+                    <img src="./brand/wordmark-filled-light.png" alt="JuristAI" class="brand-img logo-on-light brand-wordmark">
                 </a>
                 <div class="nav-links">
                     <a href="/index.html#features">Imkoniyatlar</a>
@@ -558,7 +557,7 @@
         // ── Theme toggle (matches login/dashboard) ──
         (function () {
             const saved = localStorage.getItem('dictum-theme');
-            document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
+            if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
         })();
         function toggleTheme() {
             const html = document.documentElement;
