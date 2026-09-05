@@ -1,0 +1,301 @@
+/*
+ * Login — port of docs/brand/login.dc.html.
+ *
+ * The canvas is a static mockup of the login view only; the live page also
+ * carries registration, OTP, password recovery and the policy overlay. So this
+ * restyles the existing markup to the canvas's values rather than replacing it,
+ * which keeps every one of those flows and their handlers intact.
+ *
+ * The canvas predates the obsidian identity and uses the earlier navy/blue
+ * palette (#070a14 ground, #5b8cff brand). That is deliberate here: the canvas
+ * was chosen over the identity for this page. It therefore overrides
+ * design-tokens.css and redesign-v2.css and must load after both.
+ */
+
+#loginPage,
+body:has(.login-card) {
+  --lg-page: linear-gradient(128deg, #070a14 0%, #0a0e1c 48%, #070a14 100%);
+  --lg-card: #0b0d19;
+  --lg-ink: #f7f8fb;
+  --lg-ink2: #cfd5e2;
+  --lg-muted: #a8afbe;
+  --lg-muted-dim: #949db0;
+  --lg-line: rgba(255, 255, 255, .09);
+  --lg-field: #13172a;
+  --lg-field-line: rgba(255, 255, 255, .08);
+  --lg-brand: #5b8cff;
+  --lg-brand-2: #78b5ff;
+  --lg-brand-hover: #4a7cf5;
+  --lg-shadow: 0 40px 90px -46px rgba(0, 0, 0, .85);
+}
+
+body:has(.login-card) {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  color: var(--lg-ink);
+  background: var(--lg-page) !important;
+  background-attachment: fixed !important;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+/* ── Card ─────────────────────────────────────────────────── */
+.login-card {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: 1150px;
+  min-height: 820px;
+  padding: 0;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 14px !important;
+  background: var(--lg-card) !important;
+  box-shadow: var(--lg-shadow) !important;
+}
+
+/* The photograph sits behind both halves at half strength, so the card reads
+   as one surface rather than two panels bolted together. */
+.login-card::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: url('../media/login-hero-bg.jpg');
+  background-size: cover;
+  background-position: left center;
+  opacity: .5;
+  pointer-events: none;
+}
+
+.login-card > * { position: relative; z-index: 1; }
+
+/* ── Hero half ────────────────────────────────────────────── */
+.hero-panel {
+  flex: 0 0 50%;
+  min-width: 0;
+  width: auto !important;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 24px !important;
+  border-right: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+.hero-panel::before { content: none !important; }
+
+.hero-logo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding-left: 100px;
+}
+
+.lg-wordmark {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 886 / 292;
+}
+.lg-wordmark img,
+.lg-wordmark video {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left center;
+  transition: opacity 300ms ease;
+}
+.lg-wordmark video { opacity: 0; }
+/* The motion file takes over on hover; the still stays underneath so there is
+   never a blank frame while the video buffers. */
+.lg-wordmark:hover video { opacity: 1; }
+.lg-wordmark:hover img { opacity: 0; }
+
+.lg-sheen {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lg-sheen::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .16) 46%, transparent);
+  filter: blur(14px);
+  animation: lg-sheen 4.6s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes lg-sheen {
+  0%        { transform: translateX(-120%); }
+  60%, 100% { transform: translateX(220%); }
+}
+
+.hero-tagline {
+  color: var(--lg-ink2) !important;
+  font-size: 19px !important;
+  font-style: italic;
+  line-height: 1.5;
+  text-align: left;
+}
+.hero-seal { display: none; }
+
+/* ── Form half ────────────────────────────────────────────── */
+.form-panel {
+  flex: 0 0 50%;
+  min-width: 0;
+  width: auto !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 44px 40px !important;
+  background: transparent !important;
+}
+
+.form-heading {
+  margin: 0 0 8px !important;
+  color: var(--lg-ink) !important;
+  font-size: 29px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.03em !important;
+  line-height: 1.15 !important;
+}
+.form-sub, .login-form > p {
+  margin: 0 0 24px !important;
+  color: var(--lg-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+.form-sub strong { color: var(--lg-ink2); font-weight: 600; }
+
+.login-card input[type="text"],
+.login-card input[type="password"],
+.login-card input[type="email"],
+.login-card input[type="tel"],
+.login-card select,
+.login-card textarea {
+  width: 100%;
+  padding: 13px 14px !important;
+  border: 1px solid var(--lg-field-line) !important;
+  border-radius: 10px !important;
+  outline: none;
+  color: var(--lg-ink) !important;
+  background: var(--lg-field) !important;
+  font-family: inherit;
+  font-size: 13.5px !important;
+}
+.login-card .has-icon input,
+.login-card .input-icon ~ input { padding-left: 42px !important; }
+.login-card .input-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  transform: translateY(-50%);
+  color: var(--lg-muted-dim);
+  pointer-events: none;
+}
+.login-card .form-group { position: relative; margin-bottom: 14px; }
+.login-card input::placeholder { color: var(--lg-muted-dim) !important; }
+.login-card input:focus {
+  border-color: var(--lg-brand) !important;
+  box-shadow: 0 0 0 3px rgba(45, 108, 255, .14) !important;
+}
+
+.login-card a { color: var(--lg-brand); text-decoration: none; }
+.login-card a:hover { color: var(--lg-brand-hover); }
+
+/* redesign-v2.css targets `.login-card .btn:not(.btn-outline)` — three classes.
+   These selectors have to match or beat that, or the teal gradient wins. */
+.login-card .btn.btn-primary,
+.login-card .btn:not(.btn-outline):not(.google-reg-toggle),
+.login-card button[type="submit"] {
+  padding: 14px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--lg-brand), var(--lg-brand-2)) !important;
+  box-shadow: 0 18px 34px -22px rgba(45, 108, 255, .7) !important;
+  font-family: inherit;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+}
+.login-card .btn.btn-outline,
+.login-card .btn-outline,
+.login-card .google-reg-toggle,
+.login-card .social-btn {
+  padding: 13px 14px !important;
+  border: 1px solid var(--lg-field-line) !important;
+  border-radius: 10px !important;
+  color: var(--lg-ink) !important;
+  background: var(--lg-field) !important;
+  box-shadow: none !important;
+  font-family: inherit;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+}
+
+.login-card .divider,
+.login-card .or-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  color: var(--lg-muted-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .14em;
+}
+.login-card .divider::before, .login-card .divider::after,
+.login-card .or-row::before, .login-card .or-row::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--lg-line);
+}
+
+.theme-toggle {
+  position: absolute;
+  z-index: 2;
+  top: 20px;
+  right: 22px;
+  padding: 6px;
+  border: 0 !important;
+  border-radius: 9px;
+  color: var(--lg-muted) !important;
+  background: transparent !important;
+  line-height: 0;
+  cursor: pointer;
+}
+
+/* ── Responsive, matching the canvas breakpoints ──────────── */
+@media (max-width: 900px) {
+  .login-card { display: block; min-height: 0; }
+  .hero-panel { min-height: 240px; padding: 32px 26px !important; }
+  .hero-logo { padding-left: 0; }
+  .form-panel { padding: 34px 28px !important; }
+}
+@media (max-width: 480px) {
+  body:has(.login-card) { padding: 0 !important; }
+  .login-card { min-height: 100vh; min-height: 100dvh; border-radius: 0 !important; }
+  .form-panel { padding: 28px 18px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lg-sheen::before { animation: none; }
+  .login-card * { transition-duration: .01ms !important; }
+}
