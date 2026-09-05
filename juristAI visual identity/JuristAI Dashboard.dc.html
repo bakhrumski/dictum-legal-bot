@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="_ds/juristai-design-system-dadff2d6-01b1-4a6a-87cf-c621c8a66f44/colors_and_type.css">
+<script src="_ds/juristai-design-system-dadff2d6-01b1-4a6a-87cf-c621c8a66f44/_ds_bundle.js"></script>
+<style>
+  html, body { margin:0; padding:0; }
+  #db-root {
+    --canvas:#f6f8fc; --ink:#111827; --panel-solid:#ffffff; --panel-hover:#f3f6fb;
+    --muted:#5f6b7a; --muted-dim:#6b7688; --line:rgba(15,23,42,.10);
+    --brand:#2d6cff; --brand-2:#58a5ff; --brand-soft:rgba(45,108,255,.09); --brand-border:rgba(45,108,255,.24);
+    --shadow:0 28px 70px -48px rgba(15,23,42,.42); --shadow-hover:0 30px 76px -44px rgba(45,108,255,.26);
+    --danger:#c0392b; --warn:#b7791f; --ok:#1f7a4d; --danger-solid:#c0392b; --on-danger:#ffffff;
+    --grp:#2d6cff; --grp-soft:rgba(45,108,255,.08); --grp-line:rgba(45,108,255,.22);
+    --prv:#7c3aed; --prv-soft:rgba(124,58,237,.07); --prv-line:rgba(124,58,237,.22);
+    --aurora:none;
+  }
+  #db-root[data-theme="dark"] {
+    --canvas:#060814; --ink:#f7f8fb; --panel-solid:#0b0d19; --panel-hover:#15182a;
+    --muted:#a1a8b7; --muted-dim:#8d96aa; --line:rgba(255,255,255,.09);
+    --brand:#5b8cff; --brand-2:#78b5ff; --brand-soft:rgba(91,140,255,.12); --brand-border:rgba(91,140,255,.30);
+    --shadow:0 30px 80px -48px rgba(0,0,0,.92); --shadow-hover:0 32px 80px -46px rgba(91,140,255,.28);
+    --danger:#f08a80; --warn:#e0b457; --ok:#5fc59a; --danger-solid:#f08a80; --on-danger:#2a0f0c;
+    --grp:#5b8cff; --grp-soft:rgba(91,140,255,.10); --grp-line:rgba(91,140,255,.26);
+    --prv:#b79cff; --prv-soft:rgba(183,156,255,.08); --prv-line:rgba(183,156,255,.22);
+    --aurora:radial-gradient(56% 46% at 74% -4%, rgba(45,108,255,.16), transparent 66%);
+  }
+  #db-root h1, #db-root h2, #db-root h3 { font-family:'Source Serif 4', Georgia, serif; font-weight:600; letter-spacing:-.012em; }
+  #db-root [data-mono] { font-family:'JetBrains Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+  #db-root [data-hide-sb] { scrollbar-width:none; -ms-overflow-style:none; }
+  #db-root [data-hide-sb]::-webkit-scrollbar { width:0; height:0; display:none; }
+  #db-root a { color:var(--brand); text-decoration:none; }
+  #db-root a:hover { color:var(--brand-2); }
+  @keyframes db-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  @keyframes db-blink { 0%,60%,100%{opacity:.25} 30%{opacity:1} }
+  @keyframes db-spin { to { transform:rotate(360deg) } }
+  @media (max-width: 1080px) {
+    #db-root [data-r="stats"] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+    #db-root [data-r="ai"] { grid-template-columns:1fr !important; }
+    #db-root [data-r="ai-side"] { display:none !important; }
+    #db-root [data-r="mgrid"] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+    #db-root [data-r="wsgrid"] { grid-template-columns:minmax(0,1fr) !important; }
+    #db-root [data-r="chatgrid"] { grid-template-columns:minmax(0,1fr) !important; height:auto !important; }
+  }
+  @media (max-width: 760px) {
+    #db-root [data-r="stats"] { grid-template-columns:1fr !important; }
+    #db-root [data-r="head"] { min-height:66px !important; padding-inline:12px !important; border-radius:16px !important; }
+    #db-root [data-r="wordmark"] { max-width:116px !important; }
+    #db-root [data-r="profile-info"] { display:none !important; }
+    #db-root [data-r="row"] { grid-template-columns:auto minmax(0,1fr) !important; }
+    #db-root [data-r="row-person"], #db-root [data-r="row-time"] { display:none !important; }
+    #db-root [data-r="tabbar"] { bottom:8px !important; width:calc(100% - 12px) !important; }
+    #db-root [data-r="tab-label"] { font-size:10px !important; }
+    #db-root [data-r="mgrid"] { grid-template-columns:1fr !important; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #db-root *, #db-root *::before, #db-root *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+  }
+</style>
+</helmet>
+<div id="db-root" data-theme="{{ theme }}" style="box-sizing:border-box; min-height:100vh; background-color:var(--canvas); background-image:var(--aurora); background-attachment:fixed; color:var(--ink); font-family:Inter, system-ui, sans-serif; -webkit-font-smoothing:antialiased; padding-bottom:96px;">
+  <div style="width:min(100% - 24px, 1520px); margin:0 auto; padding-top:16px;">
+
+    <header data-r="head" style="position:sticky; top:12px; z-index:100; display:flex; align-items:center; gap:16px; min-height:72px; padding:0 20px; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);">
+      <div style="display:flex; align-items:center; gap:9px; flex-shrink:0; cursor:pointer;">
+        <sc-if value="{{ isLight }}" hint-placeholder-val="{{ true }}">
+          <img src="brand/wordmark-filled-light.png" alt="JuristAI" data-r="wordmark" style="height:30px; max-width:118px; width:auto; object-fit:contain; display:block;">
+        </sc-if>
+        <sc-if value="{{ isDark }}" hint-placeholder-val="{{ false }}">
+          <img src="brand/wordmark-filled-dark.png" alt="JuristAI" data-r="wordmark" style="height:30px; max-width:118px; width:auto; object-fit:contain; display:block;">
+        </sc-if>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
+        <button onClick="{{ toggleTheme }}" title="Rejimni almashtirish" style="width:38px; height:38px; border-radius:12px; border:1px solid transparent; background:transparent; color:var(--muted); display:grid; place-items:center; cursor:pointer; padding:0;">{{ themeIcon }}</button>
+        <button style="display:flex; align-items:center; gap:10px; padding:5px 12px 5px 6px; border:1px solid var(--line); border-radius:999px; background:transparent; cursor:pointer; font-family:inherit;">
+          <span style="width:30px; height:30px; border-radius:999px; background:var(--brand); color:#fff; display:grid; place-items:center; font-size:13px; font-weight:700;">A</span>
+          <span data-r="profile-info" style="display:flex; flex-direction:column; align-items:flex-start; line-height:1.25;">
+            <span style="font-size:13.5px; font-weight:600; color:var(--ink);">Baxrom A.</span>
+            <span style="font-size:11.5px; color:var(--muted-dim);">Master Admin</span>
+          </span>
+          <span title="Chiqish" style="color:var(--muted-dim); display:grid; place-items:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg></span>
+        </button>
+      </div>
+    </header>
+
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+      <div style="padding-top:28px; display:flex; flex-direction:column; gap:20px;">
+        <section style="display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+          <div>
+            <h1 style="margin:0 0 6px; font-size:clamp(27px,3.2vw,37px); letter-spacing:-.02em; line-height:1.12; color:var(--ink);">Bugungi boshqaruv</h1>
+          </div>
+          <button style="display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); color:var(--ink); font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Yangilash
+          </button>
+        </section>
+
+        <div style="display:flex; align-items:stretch; gap:0; overflow-x:auto;">
+          <sc-for list="{{ stateBits }}" as="b" hint-placeholder-count="4">
+            <button onClick="{{ b.pick }}" title="{{ b.label }}" style="flex:{{ b.grow }} 1 0%; min-width:132px; display:flex; flex-direction:column; align-items:flex-start; gap:7px; padding:2px 18px 0; border:0; border-left:1px solid var(--line); background:transparent; font-family:inherit; text-align:left; cursor:pointer; text-decoration:none;" style-hover="background:color-mix(in srgb, var(--panel-hover) 60%, transparent);">
+              <span style="display:flex; align-items:baseline; gap:8px;">
+                <b data-mono style="font-size:30px; font-weight:600; line-height:1; color:{{ b.color }};">{{ b.n }}</b>
+                <span style="font-size:12.5px; color:var(--muted); white-space:nowrap;">{{ b.label }}</span>
+              </span>
+              <span style="width:100%; height:6px; border-radius:999px; background:color-mix(in srgb, var(--line) 70%, transparent); overflow:hidden;">
+                <span style="display:block; height:100%; width:{{ b.pct }}; border-radius:999px; background:{{ b.color }};"></span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="padding:12px 2px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); display:flex; gap:32px; flex-wrap:wrap;">
+          <sc-for list="{{ health }}" as="h" hint-placeholder-count="3">
+            <div style="display:flex; align-items:baseline; gap:8px; font-size:13px; color:var(--muted-dim);">
+              <span style="width:6px; height:6px; border-radius:999px; background:{{ h.color }}; align-self:center;"></span>
+              <span>{{ h.label }}</span>
+              <strong data-mono style="color:var(--ink); font-weight:500; font-size:12.5px;">{{ h.value }}</strong>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+          <div style="padding:22px 22px 0; display:flex; align-items:flex-start; justify-content:space-between; gap:16px;">
+            <div>
+              <h2 style="margin:0 0 4px; font-size:20px; font-weight:600; letter-spacing:-.03em; color:var(--ink);">Ish navbati</h2>
+              <p style="margin:0; font-size:13.5px; color:var(--muted);">{{ queueSummary }}</p>
+            </div>
+            <button title="Navbatni yangilash" style="width:36px; height:36px; border-radius:11px; border:1px solid var(--line); background:transparent; color:var(--muted); display:grid; place-items:center; cursor:pointer; flex-shrink:0; padding:0;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+          </div>
+          <div style="padding:18px 22px 0; display:flex; gap:7px; flex-wrap:wrap;">
+            <sc-for list="{{ views }}" as="v" hint-placeholder-count="6">
+              <button onClick="{{ v.pick }}" style="padding:8px 14px; border-radius:999px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; border:1px solid {{ v.border }}; background:{{ v.bg }}; color:{{ v.color }};">{{ v.label }}</button>
+            </sc-for>
+          </div>
+          <div style="padding:16px 22px 18px; display:flex; gap:10px; flex-wrap:wrap;">
+            <label style="flex:1 1 280px; display:flex; align-items:center; gap:9px; padding:0 14px; height:42px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--muted-dim);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input type="search" placeholder="Murojaat yoki foydalanuvchini qidiring" style="flex:1; min-width:0; border:0; background:transparent; outline:none; font-family:inherit; font-size:14px; color:var(--ink);">
+            </label>
+          </div>
+          <div style="border-top:1px solid var(--line);">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+              <article data-r="row" style="display:grid; grid-template-columns:auto minmax(0,1fr) 150px 96px 118px; align-items:center; gap:16px; padding:16px 22px; border-bottom:1px solid var(--line); cursor:pointer;">
+                <span title="{{ r.urgency }}" style="width:6px; height:6px; border-radius:999px; background:{{ r.urgencyColor }};"></span>
+                <div style="min-width:0;">
+                  <div style="font-size:14.5px; font-weight:600; color:var(--ink); line-height:1.4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.title }}</div>
+                  <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:5px; font-size:12px; color:var(--muted-dim);">
+                    <span>{{ r.category }}</span>
+                    <span>{{ r.channel }}</span>
+                    <span>{{ r.assignee }}</span>
+                  </div>
+                </div>
+                <div data-r="row-person" style="display:flex; flex-direction:column; min-width:0; line-height:1.35;">
+                  <strong style="font-size:13.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.person }}</strong>
+                  <span style="font-size:12px; color:var(--muted-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.username }}</span>
+                </div>
+                <div data-r="row-time" style="display:flex; flex-direction:column; line-height:1.35;">
+                  <strong style="font-size:13.5px; font-weight:600; color:var(--ink);">{{ r.age }}</strong>
+                  <span style="font-size:12px; color:var(--muted-dim);">{{ r.time }}</span>
+                </div>
+                <span style="justify-self:start; padding-left:10px; border-left:2px solid {{ r.statusColor }}; font-size:12.5px; font-weight:600; white-space:nowrap; color:{{ r.statusColor }};">{{ r.status }}</span>
+              </article>
+            </sc-for>
+          </div>
+          <div style="padding:16px 22px; display:flex; align-items:center; justify-content:center; gap:14px; font-size:13px; color:var(--muted);">
+            <button style="padding:8px 14px; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--muted); font-family:inherit; font-size:13px; cursor:pointer;">Oldingi</button>
+            <span data-mono style="font-size:12.5px;">1 / 4</span>
+            <button style="padding:8px 14px; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--ink); font-family:inherit; font-size:13px; cursor:pointer;">Keyingi</button>
+          </div>
+        </div>
+      </div>
+
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isJamoa }}" hint-placeholder-val="{{ false }}">
+      <div style="padding-top:28px; box-sizing:border-box; display:flex; gap:14px; height:calc(100vh - 186px); overflow:hidden;">
+      <div style="flex:1 1 0%; min-width:0; box-sizing:border-box; display:flex; flex-direction:column; gap:14px; overflow:hidden;">
+
+        <div data-r="wsbar" ref="{{ barRef }}" style="flex-shrink:0; display:flex; align-items:center; gap:10px; flex-wrap:nowrap; overflow:visible; padding:12px 16px; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow);">
+          <button title="juristAI jamoasi · Egasi · Platinum" style="display:inline-flex; align-items:center; gap:8px; flex-shrink:0; padding:9px 12px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--ink); font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+            <sc-if value="{{ showBarLabels }}" hint-placeholder-val="{{ true }}">
+              <span style="white-space:nowrap;">juristAI jamoasi</span>
+            </sc-if>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div style="display:flex; gap:4px; padding:4px; flex-shrink:0; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent);">
+            <sc-for list="{{ wsViews }}" as="v" hint-placeholder-count="3">
+              <button onClick="{{ v.pick }}" title="{{ v.label }}" style="display:inline-flex; align-items:center; gap:7px; padding:8px {{ v.padX }}; border:0; border-radius:9px; background:{{ v.bg }}; color:{{ v.color }}; font-family:inherit; font-size:12.5px; font-weight:600; white-space:nowrap; cursor:pointer;">
+                {{ v.icon }}
+                <sc-if value="{{ showBarLabels }}" hint-placeholder-val="{{ true }}">
+                  <span>{{ v.label }}</span>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+          <div style="flex:1; min-width:8px;"></div>
+          <div style="position:relative; flex-shrink:0;">
+            <button onClick="{{ toggleWsMenu }}" title="Boshqa amallar" style="display:inline-flex; align-items:center; gap:8px; padding:9px 13px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb, var(--panel-solid) 92%, transparent); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+              <sc-if value="{{ showBarLabels }}" hint-placeholder-val="{{ true }}">
+                <span>Amallar</span>
+              </sc-if>
+            </button>
+            <sc-if value="{{ wsMenuOpen }}" hint-placeholder-val="{{ false }}">
+              <div ref="{{ wsMenuRef }}" style="position:absolute; right:0; top:calc(100% + 8px); z-index:20; min-width:236px; padding:6px; border:1px solid var(--line); border-radius:14px; background:var(--panel-solid); box-shadow:var(--shadow-hover); display:flex; flex-direction:column;">
+                <sc-for list="{{ wsActions }}" as="a" hint-placeholder-count="5">
+                  <button onClick="{{ a.run }}" style="display:flex; align-items:center; gap:10px; padding:10px 12px; border:0; border-radius:10px; background:transparent; color:{{ a.color }}; font-family:inherit; font-size:13px; font-weight:600; text-align:left; cursor:pointer;" style-hover="background:var(--panel-hover);">
+                    {{ a.icon }}
+                    <span style="min-width:0;">{{ a.label }}</span>
+                  </button>
+                </sc-for>
+                <div style="padding:8px 12px 6px; font-size:11px; line-height:1.5; color:var(--muted-dim); border-top:1px solid var(--line); margin-top:4px;">Workspace yaratish — faqat Platinum. Silver va yuqori tarif egalari taklif havolasi orqali qo'shiladi.</div>
+              </div>
+            </sc-if>
+          </div>
+          <button style="display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border:0; border-radius:12px; background:var(--brand); color:#fff; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Yangi vazifa
+          </button>
+        </div>
+
+        <sc-if value="{{ isWsGraph }}" hint-placeholder-val="{{ true }}">
+          <section data-r="wsgsec" style="flex:1 1 0%; min-height:0; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+            <header style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; padding:13px 20px; border-bottom:1px solid var(--line);">
+              <span style="font-size:12.5px; color:var(--muted);">Masalani surish uchun bosib torting — bog'langan a'zo va chiziqlar ergashadi</span>
+              <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                <sc-for list="{{ wsLegend }}" as="l" hint-placeholder-count="3">
+                  <span style="display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--muted);">
+                    <span style="width:8px; height:8px; border-radius:50%; background:{{ l.color }};"></span>{{ l.label }}
+                  </span>
+                </sc-for>
+              </div>
+            </header>
+            <div ref="{{ scrollRef }}" data-r="wsscroll" data-hide-sb style="flex:1 1 0%; min-height:0; overflow-x:hidden; overflow-y:auto; touch-action:none;">
+            <div ref="{{ canvasRef }}" data-r="wsgraph" style="position:relative; width:100%; height:{{ graphContentH }};">
+              <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; overflow:visible;">
+                <sc-for list="{{ graphPaths }}" as="p" hint-placeholder-count="5">
+                  <path d="{{ p.d }}" fill="none" stroke="{{ p.color }}" stroke-width="1.4" stroke-dasharray="5 5" opacity="0.75"></path>
+                </sc-for>
+              </svg>
+              <sc-for list="{{ graphNodes }}" as="t" hint-placeholder-count="5">
+                <article onPointerDown="{{ t.onDown }}" style="position:absolute; left:{{ t.left }}; top:{{ t.top }}; z-index:{{ t.z }}; width:168px; height:158px; box-sizing:border-box; display:flex; flex-direction:column; gap:8px; padding:14px 12px; border:1px solid {{ t.line }}; border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 96%, transparent); box-shadow:{{ t.shadow }}; text-align:center; cursor:{{ t.grab }}; user-select:none;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                    <span style="width:18px; height:2px; border-radius:2px; background:{{ t.accent }};"></span>
+                    <sc-if value="{{ t.hasSaved }}" hint-placeholder-val="{{ false }}">
+                      <span data-mono title="Saqlangan AI javoblari" style="margin-left:auto; margin-right:2px; display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:999px; background:var(--brand-soft); color:var(--brand); font-size:10px; font-weight:600;">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg>{{ t.savedN }}
+                      </span>
+                    </sc-if>
+                    <button onPointerDown="{{ t.askDown }}" onClick="{{ t.ask }}" title="Shu masala bo'yicha AI'dan so'rash" style="width:22px; height:22px; flex-shrink:0; padding:0; display:grid; place-items:center; border:1px solid var(--line); border-radius:7px; background:color-mix(in srgb, var(--panel-hover) 60%, transparent); color:var(--brand); cursor:pointer;" style-hover="background:var(--brand-soft); border-color:var(--brand-border);">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg>
+                    </button>
+                  </div>
+                  <h4 style="margin:0; font-size:14px; font-weight:600; line-height:1.35; color:var(--ink); text-wrap:pretty;">{{ t.title }}</h4>
+                  <div data-mono style="font-size:11px; color:var(--muted);">{{ t.due }}</div>
+                  <div style="display:flex; justify-content:center; align-items:center; gap:7px; flex-wrap:nowrap; margin-top:auto;">
+                    <span style="min-width:0; padding:4px 9px; border-radius:999px; border:1px solid var(--line); font-size:10.5px; font-weight:600; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.tag }}</span>
+                    <span style="flex-shrink:0; display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:999px; border:1px solid var(--line); font-size:10.5px; font-weight:700; color:var(--muted);">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg>
+                      {{ t.docs }}
+                    </span>
+                  </div>
+                </article>
+              </sc-for>
+              <sc-for list="{{ graphMembers }}" as="c" hint-placeholder-count="3">
+                <div onPointerDown="{{ c.onDown }}" style="position:absolute; left:{{ c.left }}; top:{{ c.top }}; z-index:{{ c.z }}; width:152px; height:98px; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; gap:8px; cursor:{{ c.grab }}; user-select:none;">
+                  <span style="width:46px; height:46px; flex-shrink:0; border-radius:999px; display:grid; place-items:center; font-size:15px; font-weight:700; color:#fff; background:{{ c.nodeBg }}; box-shadow:var(--shadow);">{{ c.init }}</span>
+                  <div style="text-align:center; min-width:0;">
+                    <div style="font-size:13px; font-weight:600; line-height:1.3; color:var(--ink);">{{ c.name }}</div>
+                    <div style="font-size:11px; color:var(--muted); margin-top:2px;">{{ c.role }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            </div>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{ isWsTimeline }}" hint-placeholder-val="{{ false }}">
+          <section style="flex:1 1 0%; min-height:0; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+            <header style="flex-shrink:0; display:grid; grid-template-columns:minmax(0,300px) minmax(0,1fr); gap:16px; padding:13px 20px; border-bottom:1px solid var(--line);">
+              <span style="font-size:12px; font-weight:600; letter-spacing:.01em; color:var(--muted);">Masala va mas'ul a'zo</span>
+              <div style="display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); font-size:11.5px; color:var(--muted-dim);">
+                <sc-for list="{{ wsDays }}" as="d" hint-placeholder-count="6">
+                  <span>{{ d.d }}</span>
+                </sc-for>
+              </div>
+            </header>
+            <div style="flex:1 1 0%; min-height:0; overflow-y:auto; display:flex; flex-direction:column;">
+              <sc-for list="{{ wsTimeline }}" as="t" hint-placeholder-count="5">
+                <div style="display:grid; grid-template-columns:minmax(0,300px) minmax(0,1fr); gap:16px; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line);">
+                  <div style="min-width:0;">
+                    <div style="font-size:13.5px; font-weight:600; color:var(--ink); line-height:1.35; text-wrap:pretty;">{{ t.title }}</div>
+                    <div style="display:flex; align-items:center; gap:7px; margin-top:6px; min-width:0;">
+                      <span style="width:22px; height:22px; flex-shrink:0; border-radius:999px; display:grid; place-items:center; font-size:9.5px; font-weight:700; background:var(--brand-soft); border:1px solid var(--brand-border); color:var(--brand);">{{ t.who }}</span>
+                      <span style="font-size:11.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.whoName }} · {{ t.whoRole }}</span>
+                    </div>
+                  </div>
+                  <div style="position:relative; height:26px; border-radius:8px; background:color-mix(in srgb, var(--panel-hover) 60%, transparent);">
+                    <span style="position:absolute; top:4px; bottom:4px; left:{{ t.left }}; width:{{ t.width }}; border-radius:6px; background:{{ t.color }};"></span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{ isWsList }}" hint-placeholder-val="{{ false }}">
+          <div data-r="wsgrid" data-hide-sb style="flex:1 1 0%; min-height:0; overflow-y:auto; display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:16px; align-items:start;">
+            <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+              <section style="border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+                <header style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px; border-bottom:1px solid var(--line);">
+                  <h3 style="margin:0; font-size:15px; font-weight:600; color:var(--ink);">Masalalar</h3>
+                  <span style="font-size:12px; color:var(--muted);">5 ta faol</span>
+                </header>
+                <div style="display:flex; flex-direction:column;">
+                  <sc-for list="{{ wsMatters }}" as="t" hint-placeholder-count="5">
+                    <article style="display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:10px 14px; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line); cursor:pointer;">
+                      <div style="min-width:0;">
+                        <h4 style="margin:0 0 5px; font-size:14px; font-weight:600; line-height:1.4; color:var(--ink); text-wrap:pretty;">{{ t.title }}</h4>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--muted);">
+                          <span>{{ t.meta }}</span>
+                          <span style="width:3px; height:3px; border-radius:50%; background:var(--muted-dim);"></span>
+                          <span style="color:{{ t.dueColor }}; font-weight:600;">{{ t.due }}</span>
+                        </div>
+                      </div>
+                      <span style="justify-self:start; padding-left:10px; border-left:2px solid {{ t.stateColor }}; font-size:12.5px; font-weight:600; white-space:nowrap; color:{{ t.stateColor }};">{{ t.state }}</span>
+                      <button onClick="{{ t.ask }}" title="AI'dan so'rash" style="justify-self:end; width:28px; height:28px; display:grid; place-items:center; padding:0; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--brand); cursor:pointer;" style-hover="background:var(--brand-soft); border-color:var(--brand-border);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg>
+                      </button>
+                      <sc-if value="{{ t.hasSaved }}" hint-placeholder-val="{{ false }}">
+                        <div style="grid-column:1 / -1; display:flex; flex-direction:column; gap:5px; padding-left:12px; border-left:2px solid var(--brand-border);">
+                          <sc-for list="{{ t.savedList }}" as="sv" hint-placeholder-count="0">
+                            <div style="display:flex; align-items:baseline; gap:8px; font-size:12px; color:var(--muted);">
+                              <span style="color:var(--brand); font-weight:600;">{{ sv.label }}</span>
+                              <span data-mono style="font-size:10.5px; color:var(--muted-dim);">{{ sv.when }}</span>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </article>
+                  </sc-for>
+                </div>
+              </section>
+
+              <section style="border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+                <header style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px; border-bottom:1px solid var(--line);">
+                  <h3 style="margin:0; font-size:15px; font-weight:600; color:var(--ink);">Jamoa suhbatlari</h3>
+                  <button onClick="{{ openAiSection }}" style="display:inline-flex; align-items:center; gap:6px; padding:0; border:0; background:transparent; color:var(--brand); font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;">
+                    AI bo'limida ochish
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                  </button>
+                </header>
+                <div style="display:flex; flex-direction:column;">
+                  <sc-for list="{{ wsTeamThreads }}" as="a" hint-placeholder-count="3">
+                    <article style="display:flex; flex-direction:column; gap:8px; padding:16px 20px; border-bottom:1px solid var(--line); cursor:pointer;">
+                      <h4 style="margin:0; font-size:14px; font-weight:600; line-height:1.45; color:var(--ink); text-wrap:pretty;">{{ a.q }}</h4>
+                      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--muted);">
+                        <span>{{ a.by }} · {{ a.time }}</span>
+                        <span style="width:3px; height:3px; border-radius:50%; background:var(--muted-dim);"></span>
+                        <span>Token {{ a.by }} hisobidan · {{ a.cost }}</span>
+                        <span style="width:3px; height:3px; border-radius:50%; background:var(--muted-dim);"></span>
+                        <span style="color:var(--ok); font-weight:600;">{{ a.shared }} a'zoga token sarfsiz</span>
+                      </div>
+                    </article>
+                  </sc-for>
+                </div>
+              </section>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+              <section style="border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+                <header style="padding:16px 20px; border-bottom:1px solid var(--line);">
+                  <h3 style="margin:0; font-size:15px; font-weight:600; color:var(--ink);">Jamoa yuklamasi</h3>
+                </header>
+                <div style="display:flex; flex-direction:column; gap:16px; padding:18px 20px;">
+                  <sc-for list="{{ wsTeam }}" as="p" hint-placeholder-count="4">
+                    <div style="display:grid; grid-template-columns:34px minmax(0,1fr) auto; gap:12px; align-items:center;">
+                      <span style="width:34px; height:34px; border-radius:999px; display:grid; place-items:center; font-size:12px; font-weight:700; background:var(--brand-soft); border:1px solid var(--brand-border); color:var(--brand);">{{ p.init }}</span>
+                      <div style="min-width:0;">
+                        <div style="font-size:13.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.name }}</div>
+                        <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px;">{{ p.role }} · {{ p.open }} ish</div>
+                        <span style="display:block; height:4px; border-radius:999px; background:var(--panel-hover); overflow:hidden;">
+                          <span style="display:block; height:100%; width:{{ p.load }}; background:{{ p.loadColor }};"></span>
+                        </span>
+                      </div>
+                      <span style="font-size:12px; font-weight:700; color:{{ p.loadColor }};">{{ p.load }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </section>
+
+              <section style="border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+                <header style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px; border-bottom:1px solid var(--line);">
+                  <h3 style="margin:0; font-size:15px; font-weight:600; color:var(--ink);">Hujjat loyihalari</h3>
+                  <a href="#" style="font-size:12px; font-weight:600;">Barchasi</a>
+                </header>
+                <div style="display:flex; flex-direction:column;">
+                  <sc-for list="{{ wsDrafts }}" as="d" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:flex-start; gap:12px; padding:15px 20px; border-bottom:1px solid var(--line); cursor:pointer;">
+                      <span style="flex-shrink:0; color:var(--muted); margin-top:1px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg>
+                      </span>
+                      <div style="min-width:0; flex:1;">
+                        <div style="font-size:13.5px; font-weight:600; color:var(--ink); line-height:1.4; text-wrap:pretty;">{{ d.name }}</div>
+                        <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">{{ d.meta }}</div>
+                        <div style="font-size:11.5px; font-weight:600; margin-top:6px; color:{{ d.stateColor }};">{{ d.state }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </section>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ dockOpen }}" hint-placeholder-val="{{ false }}">
+        <aside style="flex:0 1 {{ dockWidth }}; min-width:320px; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--brand-border); border-radius:14px; background:var(--panel-solid); box-shadow:var(--shadow-hover); overflow:hidden;">
+          <header style="flex-shrink:0; display:flex; align-items:flex-start; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line);">
+            <span style="width:30px; height:30px; flex-shrink:0; display:grid; place-items:center; border-radius:9px; background:var(--brand-soft); color:var(--brand);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg>
+            </span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:14px; font-weight:600; line-height:1.35; color:var(--ink); text-wrap:pretty;">{{ dockTitle }}</div>
+              <div style="display:flex; align-items:center; gap:7px; margin-top:3px;">
+                <span style="font-size:11.5px; font-weight:600; color:var(--brand);">{{ dockScopeLabel }}</span>
+                <span data-mono style="font-size:10.5px; color:var(--muted-dim);">{{ dockSaveNote }}</span>
+              </div>
+            </div>
+            <button onClick="{{ dockToggleWide }}" title="{{ wideLabel }}" style="width:28px; height:28px; flex-shrink:0; display:grid; place-items:center; padding:0; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--muted); cursor:pointer;" style-hover="background:var(--panel-hover);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 3 12 9 18"/><polyline points="15 6 21 12 15 18"/></svg>
+            </button>
+            <button onClick="{{ dockExpand }}" title="To'liq ekranda ochish" style="width:28px; height:28px; flex-shrink:0; display:grid; place-items:center; padding:0; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--muted); cursor:pointer;" style-hover="background:var(--panel-hover);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            </button>
+            <button onClick="{{ dockClose }}" title="Yopish" style="width:28px; height:28px; flex-shrink:0; display:grid; place-items:center; padding:0; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--muted); cursor:pointer;" style-hover="background:var(--panel-hover);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+
+          <div data-hide-sb style="display:{{ chipsDisplay }}; flex-shrink:0; gap:6px; flex-wrap:nowrap; overflow-x:auto; padding:10px 16px; border-bottom:1px solid var(--line);">
+            <sc-for list="{{ dockActions }}" as="qa" hint-placeholder-count="5">
+              <button onClick="{{ qa.run }}" style="flex-shrink:0; padding:6px 11px; border:1px solid {{ qa.border }}; border-radius:999px; background:{{ qa.bg }}; color:{{ qa.color }}; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;" style-hover="border-color:var(--brand-border);">{{ qa.label }}</button>
+            </sc-for>
+          </div>
+
+          <div data-hide-sb style="flex:1 1 0%; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding:16px;">
+            <sc-if value="{{ dockEmpty }}" hint-placeholder-val="{{ true }}">
+              <p style="margin:0; font-size:13px; line-height:1.6; color:var(--muted); text-wrap:pretty;">Yuqoridagi amallardan birini tanlang yoki savolingizni yozing — javob shu masalaga biriktiriladi.</p>
+            </sc-if>
+            <sc-for list="{{ dockMsgs }}" as="m" hint-placeholder-count="0">
+              <div style="align-self:{{ m.align }}; flex:{{ m.flex }}; min-height:0; max-width:{{ m.max }}; display:flex; flex-direction:column; padding:{{ m.pad }}; border:1px solid {{ m.border }}; border-radius:12px; background:{{ m.bg }};">
+                <sc-if value="{{ m.isDoc }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--panel-hover) 55%, transparent);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg>
+                    <span style="flex:1; min-width:0; font-size:12.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.docTitle }}</span>
+                    <span data-mono style="font-size:10.5px; color:var(--muted-dim);">tahrirlanadi</span>
+                  </div>
+                  <div contenteditable="true" style="padding:16px 18px; font-size:13.5px; line-height:1.75; color:var(--ink); white-space:pre-line; outline:none; text-wrap:pretty;">{{ m.text }}</div>
+                </sc-if>
+                <sc-if value="{{ m.isChat }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:13px; line-height:1.6; color:{{ m.color }}; text-wrap:pretty; white-space:pre-line;">{{ m.text }}</div>
+                </sc-if>
+                <sc-if value="{{ m.hasCite }}" hint-placeholder-val="{{ false }}">
+                  <div data-mono style="margin:{{ m.citeMargin }}; padding:{{ m.citePad }}; border-top:1px solid var(--line); font-size:10.5px; color:var(--muted);">{{ m.cite }}</div>
+                </sc-if>
+                <sc-if value="{{ m.canSave }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ m.save }}" style="margin:{{ m.saveMargin }}; display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border:1px solid var(--brand-border); border-radius:9px; background:var(--brand-soft); color:var(--brand); font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;">{{ m.saveLabel }}</button>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ dockShowSaved }}" hint-placeholder-val="{{ false }}">
+            <div style="flex-shrink:0; border-top:1px solid var(--line); background:color-mix(in srgb, var(--panel-hover) 45%, transparent);">
+              <button onClick="{{ toggleSaved }}" style="width:100%; display:flex; align-items:center; gap:8px; padding:10px 16px; border:0; background:transparent; font-family:inherit; font-size:11.5px; font-weight:600; color:var(--muted-dim); cursor:pointer; text-align:left;">
+                <span style="flex:1;">Masalaga saqlangan javoblar · {{ dockSavedN }}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate({{ savedRot }}); flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div style="display:{{ savedDisplay }}; flex-direction:column; gap:6px; max-height:110px; overflow-y:auto; padding:0 16px 12px;">
+                <sc-for list="{{ dockSaved }}" as="sv" hint-placeholder-count="0">
+                  <div style="display:flex; align-items:baseline; gap:8px; font-size:12.5px; color:var(--ink);">
+                    <span style="width:5px; height:5px; flex-shrink:0; border-radius:50%; background:var(--brand);"></span>
+                    <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ sv.label }}</span>
+                    <span data-mono style="font-size:10.5px; color:var(--muted-dim);">{{ sv.when }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="flex-shrink:0; display:flex; align-items:center; gap:9px; padding:12px 16px; border-top:1px solid var(--line);">
+            <input placeholder="Savolingizni yozing..." style="flex:1; min-width:0; height:38px; padding:0 12px; border:1px solid var(--line); border-radius:10px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--ink); font-family:inherit; font-size:13px; outline:none;">
+            <button title="Yuborish" style="width:38px; height:38px; flex-shrink:0; display:grid; place-items:center; padding:0; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </button>
+          </div>
+        </aside>
+      </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isChat }}" hint-placeholder-val="{{ false }}">
+      <div style="padding-top:28px; display:flex; flex-direction:column; gap:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+          <div>
+            <h2 style="margin:0; font-size:20px; font-weight:600; letter-spacing:-.03em; color:var(--ink);">Suhbatlar</h2>
+            <p style="margin:4px 0 0; font-size:13px; color:var(--muted);">Jamoa muhokamasi va shaxsiy yozishmalar bir ekranda</p>
+          </div>
+          <div style="display:flex; gap:6px; padding:5px; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent);">
+            <sc-for list="{{ chatModes }}" as="m" hint-placeholder-count="3">
+              <button onClick="{{ m.pick }}" style="display:inline-flex; align-items:center; gap:8px; padding:9px 15px; border:0; border-radius:10px; background:{{ m.bg }}; color:{{ m.color }}; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:background 220ms cubic-bezier(.4,0,.2,1), color 220ms cubic-bezier(.4,0,.2,1);">
+                <span style="width:8px; height:8px; border-radius:50%; background:{{ m.dot }};"></span>{{ m.label }}
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div data-r="chatgrid" style="display:grid; grid-template-columns:{{ chatCols }}; gap:16px; height:calc(100vh - 292px); min-height:420px;">
+          <sc-if value="{{ showGroup }}" hint-placeholder-val="{{ true }}">
+            <section style="display:flex; flex-direction:column; min-width:0; min-height:0; border:1px solid var(--grp-line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+              <header style="flex-shrink:0; display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--grp-line); background:var(--grp-soft);">
+                <div style="width:38px; height:38px; flex-shrink:0; border-radius:12px; background:color-mix(in srgb, var(--grp) 16%, transparent); display:grid; place-items:center; color:var(--grp);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div style="min-width:0; flex:1;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:10px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--grp);">Guruh</span>
+                  </div>
+                  <h3 style="margin:2px 0 0; font-size:15.5px; font-weight:600; letter-spacing:-.02em; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Yuristlar jamoasi</h3>
+                </div>
+                <span style="flex-shrink:0; padding:5px 11px; border-radius:999px; border:1px solid var(--grp-line); font-size:11.5px; font-weight:600; color:var(--grp);">12 a'zo</span>
+              </header>
+              <div style="flex:1 1 0%; min-height:0; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px;">
+                <sc-for list="{{ groupMsgs }}" as="m" hint-placeholder-count="4">
+                  <div style="display:flex; gap:10px; flex-direction:{{ m.dir }}; align-items:flex-end;">
+                    <span style="width:30px; height:30px; flex-shrink:0; border-radius:999px; display:grid; place-items:center; font-size:11px; font-weight:700; background:var(--grp-soft); border:1px solid var(--grp-line); color:var(--grp);">{{ m.init }}</span>
+                    <div style="max-width:78%; min-width:0;">
+                      <div style="display:flex; gap:8px; align-items:baseline; margin-bottom:4px; justify-content:{{ m.just }};">
+                        <span style="font-size:12px; font-weight:600; color:var(--ink);">{{ m.who }}</span>
+                        <span style="font-size:11px; color:var(--muted-dim);">{{ m.time }}</span>
+                      </div>
+                      <div style="padding:10px 13px; border-radius:14px; font-size:13.5px; line-height:1.55; color:{{ m.txtColor }}; background:{{ m.bubble }}; border:1px solid {{ m.bubbleLine }}; text-wrap:pretty;">{{ m.txt }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="flex-shrink:0; padding:12px 16px 16px; border-top:1px solid var(--line);">
+                <div style="display:flex; align-items:flex-end; gap:8px; padding:6px; border:1px solid var(--line); border-radius:16px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent);">
+                  <textarea placeholder="Jamoaga yozing… (@ bilan mention)" rows="1" style="flex:1; min-width:0; min-height:26px; max-height:120px; padding:8px 10px; border:0; background:transparent; outline:none; resize:none; font-family:inherit; font-size:14px; line-height:1.6; color:var(--ink);"></textarea>
+                  <button title="Yuborish" style="width:38px; height:38px; flex-shrink:0; border-radius:11px; border:0; background:var(--grp); color:#fff; display:grid; place-items:center; cursor:pointer; padding:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                </div>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{ showPrivate }}" hint-placeholder-val="{{ true }}">
+            <section style="display:flex; flex-direction:column; min-width:0; min-height:0; border:1px solid var(--prv-line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+              <header style="flex-shrink:0; display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--prv-line); background:var(--prv-soft);">
+                <div style="position:relative; width:38px; height:38px; flex-shrink:0;">
+                  <span style="width:38px; height:38px; border-radius:999px; background:color-mix(in srgb, var(--prv) 16%, transparent); display:grid; place-items:center; font-size:13px; font-weight:700; color:var(--prv);">SN</span>
+                  <span style="position:absolute; right:-1px; bottom:-1px; width:11px; height:11px; border-radius:50%; background:var(--prv); border:2px solid var(--panel-solid);"></span>
+                </div>
+                <div style="min-width:0; flex:1;">
+                  <span style="font-size:10px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--prv);">Shaxsiy</span>
+                  <h3 style="margin:2px 0 0; font-size:15.5px; font-weight:600; letter-spacing:-.02em; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Sardor Nazarov</h3>
+                </div>
+                <span style="flex-shrink:0; font-size:11.5px; font-weight:600; color:var(--prv);">Onlayn</span>
+              </header>
+              <div style="flex:1 1 0%; min-height:0; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:12px;">
+                <sc-for list="{{ privMsgs }}" as="m" hint-placeholder-count="4">
+                  <div style="display:flex; flex-direction:column; align-items:{{ m.align }};">
+                    <div style="max-width:80%; padding:10px 13px; border-radius:14px; font-size:13.5px; line-height:1.55; color:{{ m.txtColor }}; background:{{ m.bubble }}; border:1px solid {{ m.bubbleLine }}; text-wrap:pretty;">{{ m.txt }}</div>
+                    <span style="margin-top:4px; font-size:11px; color:var(--muted-dim);">{{ m.time }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="flex-shrink:0; padding:12px 16px 16px; border-top:1px solid var(--line);">
+                <div style="display:flex; align-items:flex-end; gap:8px; padding:6px; border:1px solid var(--line); border-radius:16px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent);">
+                  <textarea placeholder="Sardorga yozing…" rows="1" style="flex:1; min-width:0; min-height:26px; max-height:120px; padding:8px 10px; border:0; background:transparent; outline:none; resize:none; font-family:inherit; font-size:14px; line-height:1.6; color:var(--ink);"></textarea>
+                  <button title="Yuborish" style="width:38px; height:38px; flex-shrink:0; border-radius:11px; border:0; background:var(--prv); color:#fff; display:grid; place-items:center; cursor:pointer; padding:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                </div>
+              </div>
+            </section>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAi }}" hint-placeholder-val="{{ false }}">
+      <div style="padding-top:28px; box-sizing:border-box; height:calc(100vh - 186px);">
+        <div data-r="ai" style="display:grid; grid-template-columns:280px minmax(0,1fr); height:100%; min-height:0; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+          <aside data-r="ai-side" style="border-right:1px solid var(--line); padding:18px; display:flex; flex-direction:column; gap:16px; min-width:0;">
+            <button style="display:flex; align-items:center; justify-content:center; gap:9px; padding:12px; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--ink); font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+              Yangi suhbat
+            </button>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="font-size:11.5px; font-weight:600; letter-spacing:.02em; color:var(--muted-dim); padding:0 2px;">Suhbat doirasi</div>
+              <sc-for list="{{ aiScopes }}" as="s" hint-placeholder-count="2">
+                <button onClick="{{ s.pick }}" style="display:flex; flex-direction:column; gap:2px; align-items:flex-start; padding:9px 12px; border:1px solid {{ s.border }}; border-radius:12px; background:{{ s.bg }}; cursor:pointer; font-family:inherit; text-align:left;">
+                  <span style="font-size:13px; font-weight:600; color:{{ s.color }};">{{ s.label }}</span>
+                  <small style="font-size:11px; line-height:1.35; color:var(--muted-dim);">{{ s.sub }}</small>
+                </button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ isTeamScope }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:7px; padding:11px 12px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent);">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+                  <span style="font-size:11.5px; font-weight:600; letter-spacing:.02em; color:var(--muted-dim);">Workspace balansi</span>
+                  <span style="font-size:11.5px; color:var(--muted-dim);">{{ budgetPct }}</span>
+                </div>
+                <div style="height:5px; border-radius:999px; background:var(--line); overflow:hidden;">
+                  <div style="height:100%; width:{{ budgetPct }}; border-radius:999px; background:var(--brand);"></div>
+                </div>
+                <small data-mono style="font-size:11px; color:var(--muted);">{{ budgetUsed }} / {{ budgetLimit }}</small>
+              </div>
+            </sc-if>
+            <div style="display:flex; flex-direction:column; gap:10px; min-height:0;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:0 2px;">
+                <span style="font-size:11.5px; font-weight:600; letter-spacing:.02em; color:var(--muted-dim);">Suhbatlar</span>
+                <span style="font-size:11.5px; color:var(--muted-dim);">{{ aiThreadCount }}</span>
+              </div>
+              <label style="display:flex; align-items:center; gap:9px; padding:0 12px; height:40px; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--muted-dim);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/></svg>
+                <input type="search" placeholder="Suhbatlarni qidirish" style="flex:1; min-width:0; border:0; background:transparent; outline:none; font-family:inherit; font-size:13px; color:var(--ink);">
+              </label>
+              <div style="flex:1 1 0%; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:7px; margin:0 -4px; padding:0 4px;">
+                <sc-for list="{{ aiThreads }}" as="th" hint-placeholder-count="3">
+                  <button style="display:flex; flex-direction:column; gap:5px; align-items:flex-start; padding:10px 11px; border:1px solid var(--line); border-radius:12px; background:transparent; cursor:pointer; font-family:inherit; text-align:left;" style-hover="background:var(--panel-hover);">
+                    <span style="font-size:12.5px; font-weight:600; line-height:1.4; color:var(--ink); text-wrap:pretty;">{{ th.q }}</span>
+                    <sc-if value="{{ th.hasMatter }}" hint-placeholder-val="{{ true }}">
+                      <span style="display:inline-flex; align-items:center; gap:5px; max-width:100%; padding:2px 7px; border-radius:999px; border:1px solid var(--brand-border); background:var(--brand-soft); color:var(--brand); font-size:10.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ th.matterTitle }}</span>
+                    </sc-if>
+                    <small data-mono style="font-size:10.5px; color:var(--muted-dim);">{{ th.by }} · {{ th.when }} · {{ th.cost }}</small>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </aside>
+          <div style="display:flex; flex-direction:column; min-width:0; min-height:0;">
+            <div style="flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 16px; border-bottom:1px solid var(--line); min-height:56px; box-sizing:border-box;">
+              <button title="Suhbatlar" style="width:36px; height:36px; border-radius:11px; border:1px solid var(--line); background:transparent; color:var(--muted); display:grid; place-items:center; cursor:pointer; padding:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+              <div role="group" aria-label="Suhbat doirasi" style="display:flex; gap:3px; flex-shrink:0; padding:3px; border:1px solid var(--line); border-radius:999px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent);">
+                <sc-for list="{{ aiScopes }}" as="s" hint-placeholder-count="2">
+                  <button onClick="{{ s.pick }}" title="{{ s.sub }}" style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:0; border-radius:999px; background:{{ s.bg }}; color:{{ s.color }}; font-family:inherit; font-size:12.5px; font-weight:600; white-space:nowrap; cursor:pointer;">{{ s.short }}</button>
+                </sc-for>
+              </div>
+              <sc-if value="{{ isTeamScope }}" hint-placeholder-val="{{ false }}">
+                <span title="Workspace token balansi" style="display:inline-flex; align-items:center; gap:7px; flex-shrink:0; padding:7px 12px; border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--muted); font-size:12px; font-weight:600; white-space:nowrap;">
+                  <span style="width:34px; height:5px; border-radius:999px; background:var(--line); overflow:hidden; display:inline-block;">
+                    <span style="display:block; height:100%; width:{{ budgetPct }}; border-radius:999px; background:var(--brand);"></span>
+                  </span>
+                  <span data-mono style="font-size:11.5px;">{{ budgetUsed }} / {{ budgetLimit }}</span>
+                </span>
+              </sc-if>
+              <button title="Yangi suhbat" style="width:34px; height:34px; flex-shrink:0; border-radius:11px; border:1px solid var(--line); background:transparent; color:var(--muted); display:grid; place-items:center; cursor:pointer; padding:0;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+              <sc-if value="{{ isTeamScope }}" hint-placeholder-val="{{ false }}">
+                <div style="position:relative; flex-shrink:0;">
+                  <button onClick="{{ toggleMatterMenu }}" style="display:inline-flex; align-items:center; gap:8px; max-width:260px; padding:7px 12px; border:1px solid var(--line); border-radius:999px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;">
+                    <span style="color:var(--muted);">Masala</span>
+                    <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; color:var(--ink);">{{ aiMatterLabel }}</span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-dim); flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <sc-if value="{{ matterMenuOpen }}" hint-placeholder-val="{{ false }}">
+                    <div ref="{{ matterMenuRef }}" style="position:absolute; left:0; top:calc(100% + 8px); z-index:20; min-width:280px; padding:6px; border:1px solid var(--line); border-radius:14px; background:var(--panel-solid); box-shadow:var(--shadow-hover); display:flex; flex-direction:column; gap:2px;">
+                      <sc-for list="{{ aiMatterOpts }}" as="am" hint-placeholder-count="6">
+                        <button onClick="{{ am.pick }}" style="display:flex; align-items:center; gap:9px; padding:9px 11px; border:0; border-radius:10px; background:{{ am.bg }}; color:{{ am.color }}; font-family:inherit; font-size:13px; font-weight:{{ am.weight }}; text-align:left; cursor:pointer;" style-hover="background:var(--panel-hover);">
+                          <span style="width:7px; height:7px; flex-shrink:0; border-radius:50%; background:{{ am.dot }};"></span>
+                          <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ am.title }}</span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+                <button title="Bu suhbatni jamoadan yashirish" style="display:inline-flex; align-items:center; gap:6px; padding:7px 11px; border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--muted); font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>
+                  Yashirish
+                </button>
+              </sc-if>
+              <div style="display:flex; gap:7px; margin-left:auto; flex-wrap:wrap;">
+                <sc-for list="{{ hdrDd }}" as="d" hint-placeholder-count="4">
+                  <button style="display:inline-flex; align-items:center; gap:7px; padding:8px 13px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb, var(--panel-solid) 92%, transparent); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;">
+                    {{ d.label }}
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 0%; min-height:0; padding:24px clamp(18px,4vw,48px); display:flex; overflow-y:auto;">
+              <div style="width:min(100%,720px); margin:auto; display:flex; flex-direction:column; align-items:center; gap:22px;">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;">
+                  <h1 style="margin:0; font-size:clamp(22px,3vw,29px); font-weight:600; letter-spacing:-.04em; line-height:1.15; color:var(--ink);">Bugun qanday huquqiy masalada yordam kerak?</h1>
+                  <p style="margin:0; font-size:14.5px; line-height:1.6; color:var(--muted);">Savolingizni oddiy tilda yozing yoki hujjat biriktiring.</p>
+                </div>
+                <div style="width:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;">
+                  <sc-for list="{{ starters }}" as="s" hint-placeholder-count="4">
+                    <button style="min-width:0; min-height:74px; display:flex; align-items:center; gap:11px; padding:12px 14px; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--ink); text-align:left; cursor:pointer; font-family:inherit;">
+                      <span style="flex-shrink:0; color:var(--brand); display:grid; place-items:center;">{{ s.icon }}</span>
+                      <span style="min-width:0; display:flex; flex-direction:column; gap:3px;">
+                        <strong style="font-size:13.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.h }}</strong>
+                        <small style="font-size:11.5px; line-height:1.25; color:var(--muted-dim);">{{ s.sub }}</small>
+                      </span>
+                    </button>
+                  </sc-for>
+                </div>
+                <button onClick="{{ toggleTopics }}" style="display:inline-flex; align-items:center; gap:8px; padding:9px 15px; border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--muted); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                  Huquqiy sohani oldindan tanlash
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform:{{ topicsChev }}; transition:transform .18s ease;"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <sc-if value="{{ topicsOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="width:100%;">
+                    <p style="margin:0 0 12px; font-size:12.5px; color:var(--muted-dim); text-align:center;">Aniq sohani bilsangiz, javobni yo'naltirish uchun tanlang.</p>
+                    <div style="display:flex; flex-wrap:wrap; gap:7px; justify-content:center;">
+                      <sc-for list="{{ topics }}" as="tp" hint-placeholder-count="12">
+                        <button style="padding:7px 13px; border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--muted); font-family:inherit; font-size:12.5px; font-weight:500; cursor:pointer;">{{ tp }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+            <div style="flex-shrink:0; padding:14px clamp(18px,4vw,48px) 20px; border-top:1px solid var(--line);">
+              <div style="width:min(100%,820px); margin:0 auto; display:flex; align-items:flex-end; gap:4px; min-height:52px; padding:6px; border:1px solid var(--line); border-radius:16px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); box-sizing:border-box;">
+                <button title="Biriktirish" style="width:38px; height:38px; flex-shrink:0; border-radius:11px; border:0; background:transparent; color:var(--muted-dim); display:grid; place-items:center; cursor:pointer; padding:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78"/></svg></button>
+                <textarea placeholder="Huquqiy savolingizni yozing..." rows="1" style="flex:1; min-width:0; min-height:26px; max-height:120px; padding:8px 4px; border:0; background:transparent; outline:none; resize:none; font-family:inherit; font-size:14.5px; line-height:1.6; color:var(--ink);"></textarea>
+                <button style="width:38px; height:38px; flex-shrink:0; border-radius:11px; border:0; background:var(--brand); color:#fff; display:grid; place-items:center; cursor:pointer; padding:0;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+              </div>
+              <p style="width:min(100%,820px); margin:7px auto 0; font-size:11px; line-height:1.6; color:var(--muted-dim); text-align:center;">Jurist AI xatolarga yo'l qo'yishi mumkin. Muhim masalalarda mutaxassis bilan maslahatlashing.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSorov }}" hint-placeholder-val="{{ false }}">
+      <div style="padding-top:28px; display:flex; flex-direction:column; gap:20px;">
+        <section>
+          <h1 style="margin:0 0 6px; font-size:clamp(27px,3.2vw,37px); letter-spacing:-.02em; line-height:1.12; color:var(--ink);">Boshqaruv</h1>
+        </section>
+        <div data-r="mgrid" aria-label="Boshqaruv bo'limlari" style="display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px;">
+          <sc-for list="{{ mgmt }}" as="m" hint-placeholder-count="8">
+            <button onClick="{{ m.pick }}" style="position:relative; min-height:104px; display:flex; flex-direction:column; align-items:flex-start; gap:5px; padding:18px; border:1px solid {{ m.border }}; border-radius:18px; background:{{ m.bg }}; box-shadow:var(--shadow); cursor:pointer; text-align:left; font-family:inherit;">
+              <span style="font-size:15.5px; font-weight:600; letter-spacing:-.02em; color:var(--ink);">{{ m.label }}</span>
+              <small style="font-size:12.5px; line-height:1.45; color:var(--muted);">{{ m.sub }}</small>
+              <sc-if value="{{ m.hasCount }}" hint-placeholder-val="{{ true }}">
+                <b style="position:absolute; top:14px; right:16px; min-width:24px; padding:3px 8px; border-radius:999px; background:var(--brand-soft); border:1px solid var(--brand-border); color:var(--brand); font-size:12px; font-weight:700; text-align:center;">{{ m.count }}</b>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="4">
+            <div style="border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-solid) 88%, transparent); box-shadow:var(--shadow); overflow:hidden;">
+              <div onClick="{{ sec.toggle }}" style="display:flex; align-items:center; gap:8px; padding:18px 22px; cursor:pointer;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-dim); flex-shrink:0; transform:{{ sec.chev }}; transition:transform .2s ease;"><polyline points="6 9 12 15 18 9"/></svg>
+                <h2 style="margin:0; font-size:16.5px; font-weight:600; letter-spacing:-.02em; color:var(--ink);">{{ sec.h }}</h2>
+                <sc-if value="{{ sec.hasBadge }}" hint-placeholder-val="{{ false }}">
+                  <span style="padding:3px 9px; border-radius:999px; background:rgba(217,119,6,.12); border:1px solid rgba(217,119,6,.30); color:var(--warn); font-size:11.5px; font-weight:700;">{{ sec.badge }}</span>
+                </sc-if>
+              </div>
+              <sc-if value="{{ sec.open }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:0 22px 22px; display:flex; flex-direction:column; gap:14px;">
+                  <sc-if value="{{ sec.hasNote }}" hint-placeholder-val="{{ false }}">
+                    <p style="margin:0; font-size:13px; line-height:1.65; color:var(--muted);">{{ sec.note }}</p>
+                  </sc-if>
+                  <sc-if value="{{ sec.isKanban }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;">
+                      <sc-for list="{{ sec.columns }}" as="col" hint-placeholder-count="3">
+                        <div style="border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); padding:14px; min-height:120px;">
+                          <div style="font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted-dim); margin-bottom:10px;">{{ col }}</div>
+                          <div style="font-size:12.5px; color:var(--muted-dim);">So'rovlarni ko'rish uchun bo'limni oching</div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ sec.hasControl }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex; gap:8px; align-items:center;">
+                      <label style="font-size:12px; color:var(--muted);">{{ sec.controlLabel }}</label>
+                      <select style="padding:6px 10px; border:1px solid var(--line); border-radius:10px; background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--ink); font-family:inherit; font-size:12.5px;">
+                        <sc-for list="{{ sec.controlOptions }}" as="opt" hint-placeholder-count="3">
+                          <option selected="{{ opt.sel }}">{{ opt.o }}</option>
+                        </sc-for>
+                      </select>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ sec.isEmpty }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:24px; border:1px dashed var(--line); border-radius:14px; text-align:center; font-size:13px; color:var(--muted-dim);">Bo'limni oching</div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+  <nav data-r="tabbar" style="position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:150; width:min(720px, calc(100% - 24px)); display:grid; grid-template-columns:repeat(5,1fr); gap:4px; padding:8px; border:1px solid var(--line); border-radius:18px; background:var(--panel-solid); box-shadow:var(--shadow-hover);">
+    <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="5">
+      <button onClick="{{ tb.pick }}" style="position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; padding:9px 4px; border:0; border-radius:13px; cursor:pointer; font-family:inherit; background:{{ tb.bg }}; color:{{ tb.color }};">
+        {{ tb.icon }}
+        <span data-r="tab-label" style="font-size:11px; font-weight:600; letter-spacing:.01em;">{{ tb.label }}</span>
+        <sc-if value="{{ tb.hasBadge }}" hint-placeholder-val="{{ false }}">
+          <span style="position:absolute; top:4px; right:calc(50% - 22px); min-width:16px; height:16px; padding:0 4px; border-radius:999px; background:var(--danger-solid); color:var(--on-danger); font-size:9.5px; font-weight:700; line-height:16px; text-align:center;">{{ tb.badge }}</span>
+        </sc-if>
+      </button>
+    </sc-for>
+  </nav>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;},&quot;tab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;ai&quot;,&quot;sorov&quot;],&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;'home' | 'ai' | 'sorov'&quot;}}">
+const ic = (d, extra) => React.createElement("svg", Object.assign({ width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }, extra || {}), d.map((p, i) => React.createElement("path", { key: i, d: p })));
+
+const TAB_ICONS = {
+  home: ["M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", "M9 22V12h6v10"],
+  jamoa: ["M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", "M8 4V2M16 4V2M3 9h18M8 13h3M8 17h6"],
+  chat: ["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
+  ai: ["M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"],
+  sorov: ["M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2", "M9 2h6v4H9zM9 14l2 2 4-4"]
+};
+
+const TABS = [
+  { id: "home", label: "Asosiy" },
+  { id: "jamoa", label: "Workspace" },
+  { id: "chat", label: "Chat", badge: 2 },
+  { id: "ai", label: "AI" },
+  { id: "sorov", label: "Boshqaruv", badge: 5 }
+];
+
+const STATS = [
+  { n: "7", h: "SLA o'tgan", sub: "4 soatdan ko'p", danger: true, icon: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M12 7v5l3 2"] },
+  { n: "12", h: "Tayinlanmagan", sub: "Egasi belgilanmagan", icon: ["M9 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M3 20a6 6 0 0 1 12 0", "M18 8v6M15 11h6"] },
+  { n: "9", h: "Tekshiruvda", sub: "Yurist qarori kerak", icon: ["M9 11l3 3L22 4", "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"] },
+  { n: "34", h: "Bugun yakunlandi", sub: "AI va yurist javoblari", icon: ["M20 6L9 17l-5-5"] }
+];
+
+const VIEWS = [
+  ["priority", "Muhim"], ["overdue", "SLA o'tgan"], ["unassigned", "Tayinlanmagan"],
+  ["review", "Tekshiruv"], ["paid", "Pullik xizmatlar"], ["attorney", "Advokat so'ralgan"]
+];
+
+const ROWS = [
+  { title: "Ish beruvchi ish haqini uch oydan beri to'lamayapti, qanday chora ko'rsam bo'ladi?", category: "Mehnat va bandlik · Ish haqi", channel: "Telegram", assignee: "Sardor N.", person: "Dilnoza M.", username: "@dilnoza_m", age: "5 soat", time: "09:12", urgency: "high", status: "Tekshiruvda" },
+  { title: "Uy-joyni sotib olishda notarial shartnoma majburiymi?", category: "Fuqarolik qonunchiligi · Mulk", channel: "Platforma", assignee: "Tayinlanmagan", person: "Sarvar T.", username: "@sarvar_t", age: "2 soat", time: "12:40", urgency: "medium", status: "Navbatda" },
+  { title: "Nikohdan ajralishda bola bilan ko'rishish tartibi qanday belgilanadi?", category: "Oila qonunchiligi", channel: "Telegram", assignee: "Nilufar R.", person: "Baxrom A.", username: "@bakhrom", age: "26 daqiqa", time: "14:18", urgency: "high", status: "Yurist javobi" },
+  { title: "Yakka tartibdagi tadbirkor uchun soliq stavkasi 2026 yilda o'zgardimi?", category: "Soliq", channel: "Platforma", assignee: "Tayinlanmagan", person: "Kamola S.", username: "@kamola", age: "1 kun", time: "Kecha 17:02", urgency: "low", status: "Yakunlandi" },
+  { title: "Shartnomani bir tomonlama bekor qilish uchun asos yetarlimi?", category: "Fuqarolik qonunchiligi · Shartnoma", channel: "Telegram", assignee: "Sardor N.", person: "Jasur X.", username: "Telegram foydalanuvchisi", age: "3 soat", time: "11:26", urgency: "medium", status: "Pullik hujjat" }
+];
+
+const CHATS = [
+  { label: "Bugun", items: ["Mehnat shartnomasi bekor qilinishi", "Ish haqi kechikishi bo'yicha kompensatsiya"] },
+  { label: "Shu hafta", items: ["Ijara shartnomasi tahlili", "Notarial tasdiqlash talablari", "YaTT soliq rejimi"] }
+];
+
+const CHAT_MODES = [
+  { id: "both", label: "Ikkisi" },
+  { id: "group", label: "Guruh" },
+  { id: "private", label: "Shaxsiy" }
+];
+
+const GROUP_MSGS = [
+  { who: "Nilufar R.", init: "NR", time: "09:12", txt: "Ish haqi kechikishi bo'yicha yangi murojaat keldi — MK 333-modda asosida javob tayyorlayapman." },
+  { who: "Sardor N.", init: "SN", time: "09:18", txt: "Kompensatsiya hisobini ilova qil, foydalanuvchi aniq summani so'ragan." },
+  { who: "Siz", init: "SZ", time: "09:24", me: true, txt: "Korpusda 2026 yil tahriri bor, havolani qo'shdim." },
+  { who: "Nilufar R.", init: "NR", time: "09:26", txt: "Rahmat. Tekshiruvga yuboraman." }
+];
+
+const PRIV_MSGS = [
+  { time: "10:02", txt: "Notarial shartnoma bo'yicha murojaatni senga tayinladim." },
+  { time: "10:05", me: true, txt: "Ko'rdim, bugun tushdan keyin javob beraman." },
+  { time: "10:06", txt: "SLA 4 soat — ulgurasanmi?" },
+  { time: "10:07", me: true, txt: "Ha, korpusdan modda topildi. Loyihani tayyorlab qo'ydim." }
+];
+
+const WS_VIEWS = [
+  { id: "list", label: "Ro'yxat", icon: ["M8 6h13M8 12h13M8 18h13", "M3 6h.01M3 12h.01M3 18h.01"] },
+  { id: "timeline", label: "Vaqt jadvali", icon: ["M3 7h9M3 12h14M3 17h6"] },
+  { id: "graph", label: "Grafik", icon: ["M5 5h5v5H5zM14 14h5v5h-5z", "M10 7.5h4a2 2 0 0 1 2 2V14"] }
+];
+
+const WS_MEMBERS = [
+  { id: "u1", name: "Bakhrom Abdimuminov", init: "BA", role: "Egasi · Platinum", owner: true },
+  { id: "u2", name: "Sardor Nazarov", init: "SN", role: "Katta yurist" },
+  { id: "u3", name: "Nilufar Rasulova", init: "NR", role: "Yurist" }
+];
+
+const MATTERS = [
+  { id: "m1", title: "Mehnat shartnomasi xulosasi", due: "Rejada · 31.08.2026", tag: "Muhim bosqich", docs: 3, tone: "ok", owner: "u1", start: 0, span: 4, state: "Ishda" },
+  { id: "m2", title: "Da'vo arizasi loyihasi", due: "Muddat · 04.09.2026", tag: "Ko'rikda", docs: 1, tone: "soon", owner: "u1", start: 3, span: 5, state: "Tekshiruvda" },
+  { id: "m3", title: "Notarial shartnoma javobi", due: "Kechikdi · 28.08.2026", tag: "SLA", docs: 2, tone: "late", owner: "u2", start: 0, span: 2, state: "SLA o'tgan" },
+  { id: "m4", title: "YaTT soliq hisoboti", due: "Rejada · 06.09.2026", tag: "Tahlil", docs: 4, tone: "ok", owner: "u2", start: 5, span: 4, state: "Ishda" },
+  { id: "m5", title: "Bola bilan ko'rishish tartibi", due: "Muddat · 03.09.2026", tag: "Ariza", docs: 1, tone: "soon", owner: "u3", start: 2, span: 3, state: "Navbatda" }
+];
+
+const CARD_W = 168, CARD_H = 158, NODE_W = 152, NODE_H = 98;
+
+const WS_LEGEND = [["Muddatida", "ok"], ["Muddat yaqin", "soon"], ["Muddati o'tgan", "late"]];
+
+const WS_DAYS = ["01.09", "03.09", "05.09", "07.09", "09.09", "11.09"];
+
+const AI_THREADS = [
+  { id: "t1", q: "Ish haqi kechiktirilganda kompensatsiya qanday hisoblanadi?", scope: "team", by: "u2", matter: "m1", cost: 1240, when: "09:24", hidden: false },
+  { id: "t2", q: "Notarial shartnoma majburiy bo'lgan holatlar ro'yxati", scope: "team", by: "u3", matter: "m3", cost: 980, when: "Kecha", hidden: false },
+  { id: "t3", q: "Da'vo arizasiga qanday dalillar ilova qilinadi?", scope: "team", by: "u1", matter: "m2", cost: 1510, when: "Kecha", hidden: false },
+  { id: "t4", q: "YaTT uchun soliq hisobotini kim topshiradi?", scope: "personal", by: "u1", matter: null, cost: 620, when: "08:10", hidden: false },
+  { id: "t5", q: "Mehnat shartnomasini bekor qilish tartibi", scope: "personal", by: "u1", matter: null, cost: 430, when: "31.08", hidden: false }
+];
+
+const QUICK = [
+  { id: "sum", label: "Xulosa tayyorla", q: "Shu masala bo'yicha qisqa xulosa tayyorlang.",
+    a: "Masala bo'yicha uchta asosiy nuqta:\n1. Shartnoma shakli yozma bo'lishi shart.\n2. Sinov muddati 3 oydan oshmasligi kerak.\n3. Bekor qilishda 2 oy oldin yozma ogohlantirish talab etiladi.",
+    cite: "Mehnat kodeksi 76, 84, 161-moddalar" },
+  { id: "risk", label: "Xavfli bandlarni top", q: "Hujjatdagi xavfli bandlarni toping.",
+    a: "Ikkita band e'tibor talab qiladi:\n· 4.2-band — javobgarlik chegarasi qonun talabidan past.\n· 7.1-band — bir tomonlama bekor qilish muddati ko'rsatilmagan.",
+    cite: "FK 354-modda · MK 161-modda" },
+  { id: "due", label: "Muddat va jarimalar", q: "Muddatlar va mumkin bo'lgan jarimalarni hisoblang.",
+    a: "Hisobot muddati — 06.09.2026. Kechikkan har bir kun uchun 0.1 BHM, lekin umumiy summa 5 BHM dan oshmaydi.",
+    cite: "MJtK 175-modda" },
+  { id: "draft", label: "Hujjat loyihasi", q: "Hujjat loyihasini tuzing.", perMatter: true,
+    doc: true, docTitle: "Mehnat shartnomasi — loyiha v1",
+    a: "MEHNAT SHARTNOMASI\n\nToshkent shahri\t\t\t05.09.2026\n\n1. TOMONLAR\n1.1. Ish beruvchi: \u00abJuristAI\u00bb MChJ, direktor B. Abdimuminov nomidan.\n1.2. Xodim: F.I.Sh., pasport seriyasi va raqami.\n\n2. SHARTNOMA PREDMETI\n2.1. Xodim 2-band bo'yicha lavozimga qabul qilinadi va ichki mehnat tartibiga rioya qiladi.\n2.2. Ish joyi: Toshkent sh., ish beruvchi manzili.\n\n3. MEHNAT SHARTLARI\n3.1. Ish vaqti: haftasiga 40 soat, 5 kunlik ish haftasi.\n3.2. Sinov muddati 3 oydan oshmaydi.\n3.3. Yillik ta'til \u2014 kamida 15 ish kuni.\n\n4. MEHNAT HAQI\n4.1. Lavozim maoshi oyiga ____ so'm, oyiga ikki marta to'lanadi.\n4.2. Kechiktirilgan har bir kun uchun kompensatsiya to'lanadi.\n\n5. SHARTNOMANI BEKOR QILISH\n5.1. Tomonlar kelishuviga binoan yoki qonunda nazarda tutilgan asoslarda.\n5.2. Xodim 2 oy oldin yozma ogohlantiradi.",
+    cite: "MK 72, 76, 84, 161-moddalar asosida" }
+];
+
+const DRAFTS = {
+  m1: { title: "Mehnat shartnomasi — loyiha v1", cite: "MK 72, 76, 84, 161-moddalar asosida",
+    body: "MEHNAT SHARTNOMASI\n\nToshkent shahri\t\t\t05.09.2026\n\n1. TOMONLAR\n1.1. Ish beruvchi: \u00abJuristAI\u00bb MChJ, direktor B. Abdimuminov nomidan.\n1.2. Xodim: F.I.Sh., pasport seriyasi va raqami.\n\n2. SHARTNOMA PREDMETI\n2.1. Xodim lavozimga qabul qilinadi va ichki mehnat tartibiga rioya qiladi.\n2.2. Ish joyi: Toshkent sh., ish beruvchi manzili.\n\n3. MEHNAT SHARTLARI\n3.1. Ish vaqti: haftasiga 40 soat, 5 kunlik ish haftasi.\n3.2. Sinov muddati 3 oydan oshmaydi.\n3.3. Yillik ta'til \u2014 kamida 15 ish kuni.\n\n4. MEHNAT HAQI\n4.1. Lavozim maoshi oyiga ____ so'm, oyiga ikki marta to'lanadi.\n4.2. Kechiktirilgan har bir kun uchun kompensatsiya to'lanadi.\n\n5. SHARTNOMANI BEKOR QILISH\n5.1. Tomonlar kelishuviga binoan yoki qonunda nazarda tutilgan asoslarda.\n5.2. Xodim 2 oy oldin yozma ogohlantiradi." },
+  m2: { title: "Da'vo arizasi — loyiha v1", cite: "FPK 189, 190-moddalar asosida",
+    body: "DA'VO ARIZASI\n\nToshkent shahar fuqarolik ishlari bo'yicha sudiga\n\nDa'vogar: F.I.Sh., manzil, telefon.\nJavobgar: F.I.Sh. / tashkilot nomi, manzil.\nDa'vo qiymati: ____ so'm.\n\n1. HOLATLAR\n1.1. Tomonlar o'rtasida ____ sanada shartnoma tuzilgan.\n1.2. Javobgar shartnomaning ____ bandidagi majburiyatini bajarmadi.\n\n2. HUQUQIY ASOS\n2.1. Majburiyat lozim darajada bajarilishi shart.\n2.2. Bajarmaslik natijasida yetkazilgan zarar qoplanishi lozim.\n\n3. DALILLAR\n3.1. Shartnoma nusxasi.\n3.2. To'lov hujjatlari.\n3.3. Yozishmalar.\n\n4. SO'RALADI\n4.1. Javobgardan ____ so'm asosiy qarzni undirish.\n4.2. Davlat boji xarajatlarini javobgar zimmasiga yuklash." },
+  m3: { title: "Notarial shartnomaga javob — loyiha v1", cite: "FK 110, 116-moddalar asosida",
+    body: "JAVOB XATI\n\nKimga: notarius / qarshi tomon\nKimdan: F.I.Sh.\nSana: 05.09.2026\n\n1. Sizning ____ sanadagi murojaatingiz ko'rib chiqildi.\n2. Bitimning notarial tasdiqlanishi qonunda nazarda tutilgan hollarda majburiydir.\n3. Taqdim etilgan hujjatlar bo'yicha quyidagi e'tirozlar bildiriladi:\n   3.1. ____\n   3.2. ____\n4. Javob muddati: xat olingan kundan boshlab 10 kun." },
+  m4: { title: "YaTT soliq hisoboti — tushuntirish xati", cite: "Soliq kodeksi 83, 88-moddalar asosida",
+    body: "TUSHUNTIRISH XATI\n\nDavlat soliq inspeksiyasiga\n\nSoliq to'lovchi: YaTT F.I.Sh., STIR ____\nHisobot davri: 2026-yil III chorak\n\n1. Hisobot ____ sanada taqdim etildi.\n2. Quyidagi ko'rsatkichlar bo'yicha aniqlik kiritiladi:\n   2.1. Tushum summasi — ____ so'm.\n   2.2. Chegirmalar — ____ so'm.\n3. Kechikish sababi: ____\n4. Ilova: hisobot nusxasi, to'lov topshiriqnomalari." },
+  m5: { title: "Bola bilan ko'rishish tartibi — ariza loyihasi", cite: "Oila kodeksi 76, 78-moddalar asosida",
+    body: "ARIZA\n\nToshkent shahar ____ tuman sudiga\n\nArizachi: F.I.Sh., manzil.\nQarshi tomon: F.I.Sh., manzil.\n\n1. Tomonlar nikohi ____ sanada bekor qilingan.\n2. Voyaga yetmagan farzand ____ bilan yashaydi.\n3. Alohida yashovchi ota-ona farzand bilan muloqot qilish huquqiga ega.\n\nSO'RALADI:\n4.1. Ko'rishish tartibini belgilash: har hafta shanba va yakshanba, 10:00\u201318:00.\n4.2. Ta'til davrida kamida 14 kun birga bo'lish imkonini berish." }
+};
+
+const WS_BUDGET = { used: 18400, limit: 40000 };
+
+const WS_TEAM = [
+  { name: "Sardor Nazarov", init: "SN", role: "Katta yurist", load: 82, open: 9 },
+  { name: "Nilufar Rasulova", init: "NR", role: "Yurist", load: 64, open: 7 },
+  { name: "Jamshid Umarov", init: "JU", role: "Yurist", load: 41, open: 4 },
+  { name: "Malika Yo'ldosheva", init: "MY", role: "Student", load: 23, open: 2 }
+];
+
+const WS_DRAFTS = [
+  { name: "Mehnat shartnomasi — loyiha", meta: "AI tayyorladi · 3 daqiqa oldin", state: "Yurist ko'rigi kutilmoqda" },
+  { name: "Da'vo arizasi (ish haqi)", meta: "Sardor N. · 1 soat oldin", state: "Tahrirda" },
+  { name: "Ijara shartnomasi tahlili", meta: "AI tayyorladi · bugun 08:40", state: "Tasdiqlangan" }
+];
+
+const MGMT = [
+  { label: "Qabul", sub: "Advokat va student arizalari", count: 6, target: "reg" },
+  { label: "Advokatlar", sub: "Tekshiruv va katalog", count: 4, target: "attorney" },
+  { label: "Pullik xizmatlar", sub: "Hujjat buyurtmalari va narxlar", count: 2, target: "paid" },
+  { label: "Telegram agent", sub: "24/7 suhbatlar va operator rejimi", count: 9, target: "telegram" },
+  { label: "Sifat", sub: "Javob xatolari va tekshiruv", target: "quality" },
+  { label: "Korpus", sub: "Bo'shliqlar va yangi manbalar", target: "corpus" },
+  { label: "Xavfsizlik", sub: "Audit va muhim hodisalar", target: "audit" },
+  { label: "Xarajat", sub: "AI token va API sarfi", target: "spend" }
+];
+
+const SECTIONS = [
+  { id: "reg", h: "Qabul arizalari", badge: "6 kutilmoqda", kanban: ["Yangi", "Ko'rib chiqilmoqda", "Yakunlangan"] },
+  { id: "attorney", h: "Advokatlar katalogi", note: "Profil faqat litsenziya rasmiy reyestrdan tekshirilgandan keyin e'lon qilinadi." },
+  { id: "paid", h: "Pullik hujjat xizmatlari", note: "Telegram agent narx o'ylab topmaydi. Faqat shu katalogda saqlangan narxlar ishlatiladi va har bir buyurtma yurist tasdig'ini kutadi." },
+  { id: "telegram", h: "Telegram agent suhbatlari", note: "Avtomatik rejim huquqiy savollarni platforma orqali javoblaydi. Murakkab holatda suhbatni operator rejimiga o'tkazib, keyin yana agentga qaytarish mumkin." },
+  { id: "quality", h: "Javob xatolari", badge: "3 kutilmoqda", note: "Foydalanuvchilar javobning noto'g'ri qismini belgilab yuborgan xabarlar. Har biri grammatik yoki mazmun xatosi sifatida belgilangan; taklif bo'lsa, u ham ko'rsatiladi." },
+  { id: "corpus", h: "Korpus qamrovi", note: "Foydalanuvchi savollari bo'yicha korpusdan yetarlicha qonun topilmagan holatlar. Bu ro'yxat qaysi sohalar va savollarni lex.uz dan boyitish kerakligini ko'rsatadi. (Hech qanday matn yaratilmaydi — faqat o'lchov.)", control: { label: "Davr:", options: ["7 kun", "30 kun", "90 kun"], selected: 1 } },
+  { id: "audit", h: "Audit jurnali", note: "Kim qachon qaysi mijoz ma'lumotiga kirgani va kirish (login/2FA) hodisalari. Maxfiylik nazorati uchun — har bir murojaat ko'rish, fayl ochish va korpus o'zgarishi qayd etiladi." },
+  { id: "spend", h: "API xarajatlari", note: "Barcha AI so'rovlari (chat, yuridik xulosa, tushuntirish, OCR) bo'yicha real token va xarajat hisoboti. Faqat Master Admin ko'radi.", control: { label: "Oy:", options: ["2026-06", "2026-07", "2026-08"], selected: 2 } }
+];
+
+const STARTERS = [
+  { h: "Mehnat shartnomasi", sub: "Bekor qilish tartibi", icon: [["rect", { x: 4, y: 5, width: 16, height: 15, rx: 2 }], ["path", { d: "M9 5V3h6v2M8 10h8M8 14h5" }]] },
+  { h: "Jarimani tekshirish", sub: "Miqdor va asoslar", icon: [["circle", { cx: 12, cy: 12, r: 9 }], ["path", { d: "M12 7v5l3 2" }]] },
+  { h: "Shartnomani tahlil qilish", sub: "Xavfli bandlarni topish", icon: [["path", { d: "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" }], ["path", { d: "M14 3v6h6M8 14h8M8 17h5" }]] },
+  { h: "Ariza tayyorlash", sub: "Loyiha tuzish", icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" }]] }
+];
+
+const TOPICS = [
+  "Advokatura. Notariat. Adliya", "Axborot", "Bank", "Davlat boshqaruvi", "Ekologiya",
+  "Fuqarolik qonunchiligi", "Ijtimoiy himoya", "Jinoyat qonunchiligi", "Konstitutsiyaviy tuzum",
+  "Ma'muriy javobgarlik", "Mehnat va bandlik", "Moliya va kredit", "Mudofaa", "Odil sudlov",
+  "Oila qonunchiligi", "Shaxsiy hujjatlar", "Sog'liqni saqlash", "Soliq", "Ta'lim. Fan. Madaniyat",
+  "Tadbirkorlik", "Tashqi iqtisod. Bojxona", "Uy-joy qonunchiligi", "Xalqaro huquq", "Yo'l-harakati qoidalari"
+];
+
+const HDR_DD = ["Navbat", "Korpus", "Jamoa", "Hisobot"];
+
+const TONE = { ok: "var(--ok)", soon: "var(--warn)", late: "var(--danger)" };
+
+const STATUS_STYLE = {
+  "Tekshiruvda": ["var(--warn)", "rgba(217,119,6,.10)", "rgba(217,119,6,.30)"],
+  "Navbatda": ["var(--muted)", "transparent", "var(--line)"],
+  "Yurist javobi": ["var(--brand)", "var(--brand-soft)", "var(--brand-border)"],
+  "Yakunlandi": ["var(--ok)", "rgba(15,157,110,.10)", "rgba(15,157,110,.28)"],
+  "Pullik hujjat": ["var(--warn)", "rgba(217,119,6,.10)", "rgba(217,119,6,.30)"]
+};
+
+const URGENCY = { high: "var(--danger)", medium: "var(--warn)", low: "var(--ok)" };
+
+const SUMMARY = {
+  priority: "",
+  overdue: "SLA muddati o'tgan murojaatlar",
+  unassigned: "Egasi belgilanmagan murojaatlar",
+  review: "Yurist qarori kutilayotgan javoblar",
+  paid: "Pullik hujjat so'rovlari",
+  attorney: "Advokat so'ralgan murojaatlar"
+};
+
+class Component extends DCLogic {
+  state = { theme: "light", tab: "home", view: "priority", openSection: "reg", topicsOpen: false, chatMode: "both", wsView: "graph", gpos: null, dragId: null, contentH: 0, wsMenu: false, aiScope: "personal", aiMatter: "", matterMenu: false, dock: null, dockScope: "team", dockMsgs: [], saved: {}, savedOpen: false, dockWide: false, barNarrow: false };
+
+  canvasRef = React.createRef();
+  scrollRef = React.createRef();
+  wsMenuRef = React.createRef();
+  matterMenuRef = React.createRef();
+  barRef = React.createRef();
+
+  componentDidMount() {
+    this.setState({ theme: this.props.theme || "light", tab: this.props.tab || "home" });
+    this.onMove = (e) => {
+      if (!this.drag) return;
+      const box = this.canvasRef.current;
+      if (!box) return;
+      const r = box.getBoundingClientRect();
+      const d = this.drag;
+      const H = this.state.contentH || r.height;
+      let x = e.clientX - r.left - d.dx;
+      let y = e.clientY - r.top - d.dy;
+      x = Math.max(0, Math.min(x, r.width - d.w));
+      y = Math.max(0, Math.min(y, H - d.h));
+      const next = Object.assign({}, this.state.gpos);
+      next[d.id] = { x, y };
+      d.kids.forEach(k => {
+        next[k.id] = {
+          x: Math.max(0, Math.min(x + k.ox, r.width - CARD_W)),
+          y: Math.max(0, Math.min(y + k.oy, H - CARD_H))
+        };
+      });
+      this.setState({ gpos: next });
+    };
+    this.onUp = () => {
+      if (!this.drag) return;
+      this.drag = null;
+      this.setState({ dragId: null }, () => this.separate());
+    };
+    window.addEventListener("pointermove", this.onMove);
+    window.addEventListener("pointerup", this.onUp);
+    this.onResize = () => { this._laidFor = null; this.ensureLayout(); this.measureBar(); };
+    window.addEventListener("resize", this.onResize);
+    this.onDocDown = (e) => {
+      const inside = (ref) => {
+        const n = ref.current;
+        return n && (n.contains(e.target) || (n.parentElement && n.parentElement.contains(e.target)));
+      };
+      if (this.state.wsMenu && !inside(this.wsMenuRef)) this.setState({ wsMenu: false });
+      if (this.state.matterMenu && !inside(this.matterMenuRef)) this.setState({ matterMenu: false });
+    };
+    document.addEventListener("pointerdown", this.onDocDown, true);
+    this.ensureLayout();
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener("pointermove", this.onMove);
+    window.removeEventListener("pointerup", this.onUp);
+    window.removeEventListener("resize", this.onResize);
+    document.removeEventListener("pointerdown", this.onDocDown, true);
+  }
+
+  componentDidUpdate() { this.ensureLayout(); this.measureBar(); }
+
+  measureBar() {
+    const b = this.barRef.current;
+    if (!b) return;
+    const narrow = b.clientWidth < 560;
+    if (narrow !== this.state.barNarrow) this.setState({ barNarrow: narrow });
+  }
+
+  openDock(id, quick) {
+    this.setState({ dock: id, dockScope: "team", dockMsgs: [], wsMenu: false }, () => { if (quick) this.runQuick(quick); });
+  }
+
+  runQuick(q) {
+    const draft = q.perMatter ? (DRAFTS[this.state.dock] || DRAFTS.m1) : null;
+    if (draft && !this.state.dockWide) this.setState({ dockWide: true });
+    const now = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    const auto = this.state.dockScope === "team";
+    this.setState(s => ({
+      dockMsgs: s.dockMsgs.concat([{ role: "user", text: q.q }])
+    }));
+    clearTimeout(this._qt);
+    this._qt = setTimeout(() => {
+      this.setState(s => {
+        const saved = Object.assign({}, s.saved);
+        if (auto) {
+          const list = (saved[s.dock] || []).slice();
+          list.push({ label: q.label, when: now });
+          saved[s.dock] = list;
+        }
+        return {
+          dockMsgs: s.dockMsgs.concat([{ role: "ai", text: draft ? draft.body : q.a, cite: draft ? draft.cite : q.cite, label: q.label, saved: auto, doc: !!draft, docTitle: draft ? draft.title : "" }]),
+          saved: saved
+        };
+      });
+    }, 620);
+  }
+
+  saveAnswer(i) {
+    const now = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    this.setState(s => {
+      const msgs = s.dockMsgs.slice();
+      if (!msgs[i] || msgs[i].saved) return null;
+      msgs[i] = Object.assign({}, msgs[i], { saved: true });
+      const saved = Object.assign({}, s.saved);
+      const list = (saved[s.dock] || []).slice();
+      list.push({ label: msgs[i].label || "AI javobi", when: now });
+      saved[s.dock] = list;
+      return { dockMsgs: msgs, saved: saved };
+    });
+  }
+
+  memberName(id) { const u = WS_MEMBERS.find(m => m.id === id); return u ? u.name : ""; }
+  memberInit(id) { const u = WS_MEMBERS.find(m => m.id === id); return u ? u.init : ""; }
+  memberRole(id) { const u = WS_MEMBERS.find(m => m.id === id); return u ? u.role : ""; }
+
+  isMember(id) { return WS_MEMBERS.some(u => u.id === id); }
+  sizeOf(id) { return this.isMember(id) ? { w: NODE_W, h: NODE_H } : { w: CARD_W, h: CARD_H }; }
+
+  layout() {
+    const box = this.canvasRef.current;
+    if (!box || !box.clientWidth) return null;
+    const w = box.clientWidth;
+    const view = this.scrollRef.current ? this.scrollRef.current.clientHeight : 460;
+
+    /* one band: every matter side by side, grouped by owner, avatars under each group's centre */
+    const groups = WS_MEMBERS.map(u => ({ u: u, ms: MATTERS.filter(m => m.owner === u.id) })).filter(g => g.ms.length);
+    const n = MATTERS.length;
+    const edge = 10;
+    let gap = 14, gGap = 46;
+    const fits = (g1, g2) => n * CARD_W + (n - groups.length) * g1 + (groups.length - 1) * g2 + edge * 2 <= w;
+    if (!fits(gap, gGap)) { gap = 10; gGap = 30; }
+    if (!fits(gap, gGap)) { gap = 6; gGap = 18; }
+
+    const out = {};
+    if (fits(gap, gGap)) {
+      const total = n * CARD_W + (n - groups.length) * gap + (groups.length - 1) * gGap;
+      let x = Math.round((w - total) / 2);
+      const cardY = 14;
+      const nodeY = cardY + CARD_H + 26;
+      groups.forEach((g, gi) => {
+        const start = x;
+        g.ms.forEach((m, j) => {
+          out[m.id] = { x: Math.round(x), y: cardY };
+          x += CARD_W + (j < g.ms.length - 1 ? gap : 0);
+        });
+        const bandW = x - start;
+        out[g.u.id] = { x: Math.round(start + bandW / 2 - NODE_W / 2), y: nodeY };
+        x += gGap;
+        void gi;
+      });
+      const h = Math.max(view, nodeY + NODE_H + 16);
+      Object.keys(out).forEach(id => {
+        const sz = this.sizeOf(id);
+        out[id] = {
+          x: Math.round(Math.max(0, Math.min(out[id].x, w - sz.w))),
+          y: Math.round(Math.max(0, Math.min(out[id].y, h - sz.h)))
+        };
+      });
+      return { pos: out, h: h };
+    }
+
+    /* narrow canvas: wrap the band into as few rows as fit, avatars under their own row segment */
+    const per = Math.max(1, Math.floor((w - edge * 2 + gap) / (CARD_W + gap)));
+    let row = 0, col = 0;
+    const rowH = CARD_H + 26 + NODE_H + 22;
+    groups.forEach(g => {
+      if (col && col + g.ms.length > per) { row++; col = 0; }
+      const startCol = col;
+      g.ms.forEach(m => {
+        out[m.id] = { x: Math.round(edge + col * (CARD_W + gap)), y: 14 + row * rowH };
+        col++;
+      });
+      const segW = (col - startCol) * CARD_W + (col - startCol - 1) * gap;
+      out[g.u.id] = {
+        x: Math.round(edge + startCol * (CARD_W + gap) + segW / 2 - NODE_W / 2),
+        y: 14 + row * rowH + CARD_H + 26
+      };
+      if (col >= per) { row++; col = 0; }
+    });
+    const h = Math.max(view, 14 + (row + (col ? 1 : 0)) * rowH);
+    Object.keys(out).forEach(id => {
+      const sz = this.sizeOf(id);
+      out[id] = {
+        x: Math.round(Math.max(0, Math.min(out[id].x, w - sz.w))),
+        y: Math.round(Math.max(0, out[id].y))
+      };
+    });
+    return { pos: out, h: h };
+  }
+
+  pos(id) {
+    const g = this.state.gpos;
+    if (g && g[id]) return g[id];
+    return { x: -9999, y: -9999 };
+  }
+
+  ensureLayout() {
+    const box = this.canvasRef.current;
+    if (!box) return;
+    const sv = this.scrollRef.current;
+    const key = box.clientWidth + "x" + (sv ? sv.clientHeight : 0);
+    if (!box.clientWidth) return;
+    if (this._laidFor === key) return;
+    if (this._dragged && this.state.gpos && this._laidW === box.clientWidth) { this._laidFor = key; return; }
+    this._laidW = box.clientWidth;
+    const L = this.layout();
+    if (!L) return;
+    this._laidFor = key;
+    this.setState({ gpos: L.pos, contentH: L.h }, () => this.separate());
+  }
+
+  onDown(id) {
+    return (e) => {
+      const box = this.canvasRef.current;
+      if (!box) return;
+      e.preventDefault();
+      const r = box.getBoundingClientRect();
+      const base = this.state.gpos && Object.keys(this.state.gpos).length ? this.state.gpos : this.layout();
+      const gpos = Object.assign({}, base);
+      const p = gpos[id] || this.pos(id);
+      const sz = this.sizeOf(id);
+      this.drag = {
+        id, w: sz.w, h: sz.h,
+        dx: e.clientX - r.left - p.x,
+        dy: e.clientY - r.top - p.y,
+        kids: this.isMember(id)
+          ? MATTERS.filter(m => m.owner === id).map(m => {
+              const q = gpos[m.id] || this.pos(m.id);
+              return { id: m.id, ox: q.x - p.x, oy: q.y - p.y };
+            })
+          : []
+      };
+      this._dragged = true;
+      this.setState({ gpos, dragId: id });
+    };
+  }
+
+  separate() {
+    const box = this.canvasRef.current;
+    if (!box) return;
+    const r = box.getBoundingClientRect();
+    const ids = MATTERS.map(m => m.id).concat(WS_MEMBERS.map(u => u.id));
+    const pos = Object.assign({}, this.state.gpos);
+    ids.forEach(id => { if (!pos[id]) pos[id] = Object.assign({}, this.pos(id)); });
+    const pad = 12;
+    const clampAll = () => {
+      ids.forEach(id => {
+        const sz = this.sizeOf(id);
+        pos[id].x = Math.max(0, Math.min(pos[id].x, Math.max(0, r.width - sz.w)));
+        pos[id].y = Math.max(0, pos[id].y);
+      });
+    };
+    clampAll();
+    for (let it = 0; it < 120; it++) {
+      let moved = false;
+      for (let a = 0; a < ids.length; a++) {
+        for (let b = a + 1; b < ids.length; b++) {
+          const ia = ids[a], ib = ids[b];
+          const sa = this.sizeOf(ia), sb = this.sizeOf(ib);
+          const pa = pos[ia], pb = pos[ib];
+          const ox = Math.min(pa.x + sa.w + pad, pb.x + sb.w + pad) - Math.max(pa.x, pb.x);
+          const oy = Math.min(pa.y + sa.h + pad, pb.y + sb.h + pad) - Math.max(pa.y, pb.y);
+          if (ox <= 0 || oy <= 0) continue;
+          moved = true;
+          if (ox < oy) {
+            const lo = pa.x <= pb.x ? pa : pb, hi = pa.x <= pb.x ? pb : pa;
+            const loSz = pa.x <= pb.x ? sa : sb, hiSz = pa.x <= pb.x ? sb : sa;
+            const room = Math.max(0, r.width - hiSz.w - hi.x);
+            const loRoom = lo.x;
+            let toLo = ox / 2, toHi = ox / 2;
+            if (loRoom < toLo) { toHi += toLo - loRoom; toLo = loRoom; }
+            if (room < toHi) { toLo = Math.min(loRoom, toLo + (toHi - room)); toHi = room; }
+            lo.x -= toLo; hi.x += toHi;
+            void loSz;
+          } else {
+            const lo = pa.y <= pb.y ? pa : pb, hi = pa.y <= pb.y ? pb : pa;
+            let toLo = oy / 2, toHi = oy / 2;
+            if (lo.y < toLo) { toHi += toLo - lo.y; toLo = lo.y; }
+            lo.y -= toLo; hi.y += toHi;
+          }
+        }
+      }
+      clampAll();
+      if (!moved) break;
+    }
+    let maxY = 0;
+    ids.forEach(id => {
+      const sz = this.sizeOf(id);
+      pos[id] = {
+        x: Math.round(Math.max(0, Math.min(pos[id].x, r.width - sz.w))),
+        y: Math.round(Math.max(0, pos[id].y))
+      };
+      maxY = Math.max(maxY, pos[id].y + sz.h);
+    });
+    this.setState({ gpos: pos, contentH: Math.max(this.state.contentH || 0, maxY + 16) });
+  }
+
+  renderVals() {
+    const dark = this.state.theme === "dark";
+    const tab = this.state.tab;
+    const view = this.state.view;
+
+    return {
+      theme: this.state.theme,
+      isDark: dark, isLight: !dark,
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      themeIcon: dark
+        ? ic(["M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"], { width: 18, height: 18, strokeWidth: 1.8 })
+        : React.createElement("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" },
+            React.createElement("circle", { cx: 12, cy: 12, r: 4 }),
+            React.createElement("path", { d: "M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" })),
+
+      isHome: tab === "home",
+      isJamoa: tab === "jamoa",
+      isChat: tab === "chat",
+      isAi: tab === "ai",
+      isSorov: tab === "sorov",
+
+      hdrDd: HDR_DD.map(label => ({ label })),
+
+      topicsOpen: this.state.topicsOpen,
+      topicsChev: this.state.topicsOpen ? "rotate(180deg)" : "rotate(0deg)",
+      toggleTopics: () => this.setState(s => ({ topicsOpen: !s.topicsOpen })),
+      topics: TOPICS,
+
+      starters: STARTERS.map(s => ({
+        h: s.h, sub: s.sub,
+        icon: React.createElement("svg", { width: 21, height: 21, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" },
+          s.icon.map(([tag, props], i) => React.createElement(tag, Object.assign({ key: i }, props))))
+      })),
+
+      sections: SECTIONS.map(s => ({
+        h: s.h,
+        open: this.state.openSection === s.id,
+        chev: this.state.openSection === s.id ? "rotate(0deg)" : "rotate(-90deg)",
+        hasBadge: !!s.badge,
+        badge: s.badge || "",
+        hasNote: !!s.note,
+        note: s.note || "",
+        isKanban: !!s.kanban,
+        columns: s.kanban || [],
+        isEmpty: !s.kanban,
+        hasControl: !!s.control,
+        controlLabel: s.control ? s.control.label : "",
+        controlOptions: s.control ? s.control.options.map((o, i) => ({ o, sel: i === s.control.selected })) : [],
+        toggle: () => this.setState(st => ({ openSection: st.openSection === s.id ? "" : s.id }))
+      })),
+
+      tabs: TABS.map(t => ({
+        label: t.label,
+        icon: ic(TAB_ICONS[t.id], { width: 22, height: 22, strokeWidth: 1.8 }),
+        bg: tab === t.id ? "var(--brand-soft)" : "transparent",
+        color: tab === t.id ? "var(--brand)" : "var(--muted-dim)",
+        hasBadge: !!t.badge,
+        badge: t.badge || "",
+        pick: () => this.setState({ tab: t.id })
+      })),
+
+      chatCols: this.state.chatMode === "both" ? "repeat(2,minmax(0,1fr))" : "minmax(0,1fr)",
+      showGroup: this.state.chatMode !== "private",
+      showPrivate: this.state.chatMode !== "group",
+      chatModes: CHAT_MODES.map(m => ({
+        label: m.label,
+        bg: this.state.chatMode === m.id ? "var(--brand-soft)" : "transparent",
+        color: this.state.chatMode === m.id ? "var(--brand)" : "var(--muted)",
+        dot: m.id === "group" ? "var(--grp)" : (m.id === "private" ? "var(--prv)" : "var(--muted-dim)"),
+        pick: () => this.setState({ chatMode: m.id })
+      })),
+      groupMsgs: GROUP_MSGS.map(m => ({
+        who: m.who, init: m.init, time: m.time, txt: m.txt,
+        dir: m.me ? "row-reverse" : "row",
+        just: m.me ? "flex-end" : "flex-start",
+        bubble: m.me ? "var(--grp)" : "color-mix(in srgb, var(--panel-hover) 62%, transparent)",
+        bubbleLine: m.me ? "var(--grp)" : "var(--line)",
+        txtColor: m.me ? "#fff" : "var(--ink)"
+      })),
+      privMsgs: PRIV_MSGS.map(m => ({
+        time: m.time, txt: m.txt,
+        align: m.me ? "flex-end" : "flex-start",
+        bubble: m.me ? "var(--prv)" : "color-mix(in srgb, var(--panel-hover) 62%, transparent)",
+        bubbleLine: m.me ? "var(--prv)" : "var(--line)",
+        txtColor: m.me ? "#fff" : "var(--ink)"
+      })),
+
+      wsView: this.state.wsView,
+      isWsList: this.state.wsView === "list",
+      isWsTimeline: this.state.wsView === "timeline",
+      isWsGraph: this.state.wsView === "graph",
+      showBarLabels: !this.state.barNarrow,
+      barRef: this.barRef,
+      wsViews: WS_VIEWS.map(v => ({
+        label: v.label,
+        padX: this.state.barNarrow ? "10px" : "12px",
+        icon: ic(v.icon, { width: 15, height: 15, strokeWidth: 1.9 }),
+        bg: this.state.wsView === v.id ? "var(--brand-soft)" : "transparent",
+        color: this.state.wsView === v.id ? "var(--brand)" : "var(--muted)",
+        pick: () => this.setState({ wsView: v.id })
+      })),
+      wsLegend: WS_LEGEND.map(([label, tone]) => ({ label, color: TONE[tone] })),
+      wsMenuOpen: this.state.wsMenu,
+      wsMenuRef: this.wsMenuRef,
+      toggleWsMenu: () => this.setState(s => ({ wsMenu: !s.wsMenu })),
+      wsActions: [
+        { label: "Jamoa chati", color: "var(--ink)", icon: ic(["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"], { width: 16, height: 16, strokeWidth: 1.8 }) },
+        { label: "Umumiy hujjatlar", color: "var(--ink)", icon: ic(["M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z", "M14 3v6h6"], { width: 16, height: 16, strokeWidth: 1.8 }) },
+        { label: "A'zolar · 12", color: "var(--ink)", icon: React.createElement("svg", { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", style: { flexShrink: 0 } }, React.createElement("path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" }), React.createElement("circle", { cx: 9, cy: 7, r: 4 }), React.createElement("path", { d: "M22 21v-2a4 4 0 0 0-3-3.87" }), React.createElement("path", { d: "M16 3.13a4 4 0 0 1 0 7.75" })) },
+      ],
+
+      wsMatters: MATTERS.map(m => ({
+        ask: () => this.openDock(m.id),
+        savedList: (this.state.saved[m.id] || []).map(s => ({ label: s.label, when: s.when })),
+        hasSaved: !!(this.state.saved[m.id] || []).length,
+        title: m.title, due: m.due, tag: m.tag, docs: m.docs, state: m.state,
+        meta: this.memberName(m.owner) + " · " + m.tag,
+        stateColor: TONE[m.tone] || "var(--muted)",
+        stateLine: "color-mix(in srgb, " + (TONE[m.tone] || "var(--muted)") + " 34%, transparent)",
+        dueColor: m.tone === "late" ? "var(--danger)" : "var(--muted)"
+      })),
+
+      wsTimeline: MATTERS.map(m => ({
+        title: m.title,
+        who: this.memberInit(m.owner),
+        whoName: this.memberName(m.owner),
+        whoRole: this.memberRole(m.owner),
+        left: ((m.start / 10) * 100).toFixed(2) + "%",
+        width: ((m.span / 10) * 100).toFixed(2) + "%",
+        color: TONE[m.tone]
+      })),
+      wsDays: WS_DAYS.map(d => ({ d })),
+      wsTeamThreads: AI_THREADS.filter(t => t.scope === "team" && !t.hidden).map(t => ({
+        q: t.q,
+        by: this.memberName(t.by),
+        cost: t.cost.toLocaleString("ru-RU") + " token",
+        time: t.when,
+        shared: WS_MEMBERS.length,
+        open: () => this.setState({ tab: "ai", aiScope: "team" })
+      })),
+
+      isTeamScope: this.state.aiScope === "team",
+      aiScopes: [
+        { id: "personal", label: "Shaxsiy", short: "Shaxsiy", sub: "Faqat siz ko'rasiz" },
+        { id: "team", label: "juristAI jamoasi", short: "Jamoa", sub: "Jamoa ko'radi · workspace hisobidan" }
+      ].map(s => ({
+        label: s.label, short: s.short, sub: s.sub,
+        bg: this.state.aiScope === s.id ? "var(--brand-soft)" : "transparent",
+        border: this.state.aiScope === s.id ? "var(--brand-border)" : "var(--line)",
+        color: this.state.aiScope === s.id ? "var(--brand)" : "var(--muted)",
+        pick: () => this.setState({ aiScope: s.id })
+      })),
+      aiScopeLabel: this.state.aiScope === "team" ? "juristAI jamoasi" : "Shaxsiy",
+      aiThreads: AI_THREADS.filter(t => t.scope === this.state.aiScope).map(t => ({
+        q: t.q,
+        when: t.when,
+        cost: t.cost.toLocaleString("ru-RU") + " token",
+        by: this.memberName(t.by).split(" ")[0],
+        isTeam: t.scope === "team",
+        matterTitle: t.matter ? (MATTERS.find(m => m.id === t.matter) || {}).title : "",
+        hasMatter: !!t.matter,
+        continueLabel: t.by === "u1" ? "Davom ettirish" : "Javobni davom ettirish"
+      })),
+      aiThreadCount: AI_THREADS.filter(t => t.scope === this.state.aiScope).length,
+      aiMatterLabel: this.state.aiMatter ? (MATTERS.find(m => m.id === this.state.aiMatter) || {}).title : "Biriktirilmagan",
+      matterMenuOpen: this.state.matterMenu,
+      matterMenuRef: this.matterMenuRef,
+      toggleMatterMenu: () => this.setState(s => ({ matterMenu: !s.matterMenu })),
+      aiMatterOpts: [{ id: "", title: "Biriktirilmagan", tone: null }].concat(MATTERS.map(m => ({ id: m.id, title: m.title, tone: m.tone }))).map(o => ({
+        title: o.title,
+        dot: o.tone ? TONE[o.tone] : "var(--muted-dim)",
+        bg: this.state.aiMatter === o.id ? "var(--brand-soft)" : "transparent",
+        color: this.state.aiMatter === o.id ? "var(--brand)" : "var(--ink)",
+        weight: this.state.aiMatter === o.id ? 700 : 600,
+        pick: () => this.setState({ aiMatter: o.id, matterMenu: false })
+      })),
+      budgetUsed: WS_BUDGET.used.toLocaleString("ru-RU"),
+      budgetLimit: WS_BUDGET.limit.toLocaleString("ru-RU"),
+      budgetPct: Math.round((WS_BUDGET.used / WS_BUDGET.limit) * 100) + "%",
+      openTeamAi: () => this.openDock(MATTERS[0].id),
+      openAiSection: () => this.setState({ tab: "ai", aiScope: "team", wsMenu: false }),
+      dockOpen: !!this.state.dock,
+      dockWidth: this.state.dockWide ? "min(50%, 780px)" : "min(38%, 440px)",
+      dockToggleWide: () => this.setState(s => ({ dockWide: !s.dockWide })),
+      wideLabel: this.state.dockWide ? "Torroq" : "Kengaytirish",
+      dockTitle: this.state.dock ? (MATTERS.find(m => m.id === this.state.dock) || {}).title : "",
+      dockScopeLabel: this.state.dockScope === "team" ? "juristAI jamoasi" : "Shaxsiy",
+      dockSaveNote: this.state.dockScope === "team" ? "javob avtomatik saqlanadi" : "saqlash qo'lda",
+      dockEmpty: !this.state.dockMsgs.length,
+      chipsDisplay: this.state.dockMsgs.some(m => m.doc) ? "none" : "flex",
+      dockShowSaved: !!(this.state.saved[this.state.dock] || []).length && !this.state.dockMsgs.some(m => m.doc),
+      dockClose: () => this.setState({ dock: null, dockMsgs: [] }),
+      dockExpand: () => this.setState({ tab: "ai", aiScope: this.state.dockScope, aiMatter: this.state.dock, dock: null }),
+      dockActions: QUICK.map(q => ({
+        label: q.label,
+        bg: "transparent", border: "var(--line)", color: "var(--ink)",
+        run: () => this.runQuick(q)
+      })),
+      dockMsgs: this.state.dockMsgs.map((m, i) => ({
+        text: m.text,
+        align: m.role === "user" ? "flex-end" : "flex-start",
+        max: m.role === "user" ? "84%" : "100%",
+        pad: m.doc ? "0" : "11px 13px",
+        flex: "0 0 auto",
+        bg: m.doc ? "var(--panel-solid)" : (m.role === "user" ? "var(--brand-soft)" : "color-mix(in srgb, var(--panel-hover) 55%, transparent)"),
+        border: m.role === "user" ? "var(--brand-border)" : "var(--line)",
+        color: "var(--ink)",
+        hasCite: !!m.cite,
+        citeMargin: m.doc ? "0" : "9px 0 0",
+        citePad: m.doc ? "9px 18px 12px" : "8px 0 0",
+        cite: m.cite,
+        isDoc: !!m.doc,
+        isChat: !m.doc,
+        docTitle: m.docTitle,
+        canSave: m.role === "ai" && !m.saved,
+        saveLabel: "Masalaga saqlash",
+        saveMargin: m.doc ? "0 18px 14px" : "10px 0 0",
+        save: () => this.saveAnswer(i)
+      })),
+      dockSaved: (this.state.saved[this.state.dock] || []).map(s => ({ label: s.label, when: s.when })),
+      dockHasSaved: !!(this.state.saved[this.state.dock] || []).length,
+      dockSavedN: (this.state.saved[this.state.dock] || []).length,
+      savedDisplay: this.state.savedOpen ? "flex" : "none",
+      savedRot: this.state.savedOpen ? "180deg" : "0deg",
+      toggleSaved: () => this.setState(s => ({ savedOpen: !s.savedOpen })),
+
+      canvasRef: this.canvasRef,
+      scrollRef: this.scrollRef,
+      graphContentH: (this.state.contentH || 460) + "px",
+      graphNodes: MATTERS.map(m => {
+        const p = this.pos(m.id);
+        return {
+          title: m.title, due: m.due, tag: m.tag, docs: m.docs,
+          accent: TONE[m.tone],
+          line: "color-mix(in srgb, " + TONE[m.tone] + " 34%, transparent)",
+          left: p.x + "px", top: p.y + "px",
+          z: this.state.dragId === m.id ? 6 : 3,
+          shadow: this.state.dragId === m.id ? "var(--shadow-hover)" : "var(--shadow)",
+          grab: this.state.dragId === m.id ? "grabbing" : "grab",
+          onDown: this.onDown(m.id),
+          askDown: (e) => e.stopPropagation(),
+          ask: (e) => { e.stopPropagation(); this.openDock(m.id); },
+          savedN: (this.state.saved[m.id] || []).length,
+          hasSaved: !!(this.state.saved[m.id] || []).length
+        };
+      }),
+      graphMembers: WS_MEMBERS.map(u => {
+        const p = this.pos(u.id);
+        return {
+          name: u.name, init: u.init, role: u.role,
+          nodeBg: u.owner ? "var(--brand)" : "color-mix(in srgb, var(--brand) 74%, transparent)",
+          left: p.x + "px", top: p.y + "px",
+          z: this.state.dragId === u.id ? 6 : 4,
+          grab: this.state.dragId === u.id ? "grabbing" : "grab",
+          onDown: this.onDown(u.id)
+        };
+      }),
+      graphPaths: MATTERS.map(m => {
+        const a = this.pos(m.id), b = this.pos(m.owner);
+        const R = 25;
+        const cx = b.x + NODE_W / 2, cy = b.y + 23;
+        const ax = a.x + CARD_W / 2, ay = a.y + CARD_H / 2;
+        let vx = cx - ax, vy = cy - ay;
+        const len = Math.hypot(vx, vy) || 1;
+        vx /= len; vy /= len;
+        const sx = Math.abs(vx) > 1e-6 ? (CARD_W / 2) / Math.abs(vx) : Infinity;
+        const sy = Math.abs(vy) > 1e-6 ? (CARD_H / 2) / Math.abs(vy) : Infinity;
+        const t = Math.min(sx, sy);
+        const x1 = ax + vx * t, y1 = ay + vy * t;
+        const x2 = cx - vx * R, y2 = cy - vy * R;
+        const k = Math.max(18, Math.hypot(x2 - x1, y2 - y1) * 0.3);
+        return {
+          d: "M" + x1.toFixed(1) + "," + y1.toFixed(1) +
+             " C" + (x1 + vx * k).toFixed(1) + "," + (y1 + vy * k).toFixed(1) +
+             " " + (x2 - vx * k).toFixed(1) + "," + (y2 - vy * k).toFixed(1) +
+             " " + x2.toFixed(1) + "," + y2.toFixed(1),
+          color: TONE[m.tone]
+        };
+      }),
+
+      wsTeam: WS_TEAM.map(p => ({
+        name: p.name, init: p.init, role: p.role, open: p.open,
+        load: p.load + "%",
+        loadColor: p.load >= 80 ? "var(--danger)" : (p.load >= 60 ? "var(--warn)" : "var(--ok)")
+      })),
+      wsDrafts: WS_DRAFTS.map(d => ({
+        name: d.name, meta: d.meta, state: d.state,
+        stateColor: d.state === "Tasdiqlangan" ? "var(--ok)" : (d.state === "Tahrirda" ? "var(--brand)" : "var(--warn)")
+      })),
+
+      stateBits: (() => {
+        const bits = [
+          { n: 7, label: "SLA'dan oshgan", view: "overdue", tone: "var(--danger)" },
+          { n: 12, label: "tayinlanmagan", view: "unassigned", tone: "var(--warn)" },
+          { n: 9, label: "yurist qaroriga", view: "review", tone: "var(--brand)" },
+          { n: 34, label: "bugun yakunlandi", view: "priority", tone: "var(--ok)" }
+        ];
+        const max = Math.max.apply(null, bits.map(b => b.n));
+        return bits.map(b => ({
+          n: b.n, label: b.label, color: b.tone,
+          grow: 1,
+          pct: Math.round((b.n / max) * 100) + "%",
+          pick: () => this.setState({ view: b.view })
+        }));
+      })(),
+      doneToday: "34",
+      stats: STATS.map(s => ({
+        n: s.n, h: s.h, sub: s.sub,
+        icon: ic(s.icon),
+        border: s.danger ? "rgba(220,38,38,.26)" : "var(--line)",
+        iconColor: s.danger ? "var(--danger)" : "var(--brand)",
+        iconBg: s.danger ? "rgba(220,38,38,.10)" : "var(--brand-soft)"
+      })),
+
+      health: [
+        { label: "Telegram agent", value: "Ishlayapti", color: "var(--ok)" },
+        { label: "Huquqiy korpus", value: "Sinxron", color: "var(--ok)" },
+        { label: "Jamoa navbati", value: "Yuklangan", color: "var(--warn)" }
+      ],
+
+      queueSummary: SUMMARY[view],
+
+      views: VIEWS.map(([id, label]) => ({
+        label,
+        border: view === id ? "var(--brand-border)" : "var(--line)",
+        bg: view === id ? "var(--brand-soft)" : "transparent",
+        color: view === id ? "var(--brand)" : "var(--muted)",
+        pick: () => this.setState({ view: id })
+      })),
+
+      rows: ROWS.map(r => {
+        const st = STATUS_STYLE[r.status] || STATUS_STYLE["Navbatda"];
+        return Object.assign({}, r, {
+          urgencyColor: URGENCY[r.urgency],
+          statusColor: st[0], statusBg: st[1], statusBorder: st[2]
+        });
+      }),
+
+      chatGroups: CHATS.map((g, gi) => ({
+        label: g.label,
+        items: g.items.map((title, i) => {
+          const active = gi === 0 && i === 0;
+          return {
+            title,
+            border: active ? "var(--brand-border)" : "transparent",
+            bg: active ? "var(--brand-soft)" : "transparent",
+            color: active ? "var(--brand)" : "var(--muted)"
+          };
+        })
+      })),
+
+      mgmt: MGMT.map(m => ({
+        label: m.label, sub: m.sub,
+        hasCount: m.count != null,
+        count: m.count != null ? m.count : "",
+        border: this.state.openSection === m.target ? "var(--brand-border)" : "var(--line)",
+        bg: this.state.openSection === m.target
+          ? "linear-gradient(150deg, color-mix(in srgb, var(--panel-solid) 94%, transparent), var(--brand-soft))"
+          : "color-mix(in srgb, var(--panel-solid) 88%, transparent)",
+        pick: () => this.setState({ openSection: m.target })
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

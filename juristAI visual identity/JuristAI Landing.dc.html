@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+  html, body { margin:0; padding:0; }
+  #jai-root {
+    --canvas:#f6f8fc; --ink:#111827; --panel:#ffffff; --panel-solid:#ffffff; --panel-hover:#f3f6fb;
+    --mq-bg:#ffffff; --mq-fg:#0b1533;
+    --muted:#5f6b7a; --muted-dim:#758197; --line:rgba(15,23,42,.10); --line-strong:rgba(15,23,42,.17);
+    --brand:#2d6cff; --brand-2:#58a5ff; --brand-soft:rgba(45,108,255,.09); --brand-border:rgba(45,108,255,.24);
+    --shadow:0 28px 70px -48px rgba(15,23,42,.42); --shadow-hover:0 30px 76px -44px rgba(45,108,255,.26);
+    --aurora:
+      radial-gradient(54% 44% at 76% -4%, rgba(45,108,255,.14), transparent 67%),
+      radial-gradient(42% 38% at 12% 20%, rgba(115,91,255,.09), transparent 72%),
+      radial-gradient(34% 42% at 82% 76%, rgba(31,194,170,.07), transparent 76%);
+    --cta:
+      radial-gradient(56% 130% at 84% 18%, rgba(45,108,255,.34), transparent 68%),
+      radial-gradient(46% 110% at 12% 88%, rgba(31,194,170,.12), transparent 72%),
+      linear-gradient(135deg,#0a1020 0%,#101b35 52%,#0a1020 100%);
+  }
+  #jai-root[data-theme="dark"] {
+    --canvas:#060814; --ink:#f7f8fb; --panel:rgba(11,13,25,.88); --panel-solid:#0b0d19; --panel-hover:#15182a;
+    --mq-bg:#0b1533; --mq-fg:#ffffff;
+    --muted:#a1a8b7; --muted-dim:#8d96aa; --line:rgba(255,255,255,.09); --line-strong:rgba(255,255,255,.16);
+    --brand:#5b8cff; --brand-2:#78b5ff; --brand-soft:rgba(91,140,255,.12); --brand-border:rgba(91,140,255,.30);
+    --shadow:0 30px 80px -48px rgba(0,0,0,.92); --shadow-hover:0 32px 80px -46px rgba(91,140,255,.28);
+    --aurora:
+      radial-gradient(56% 46% at 74% -4%, rgba(45,108,255,.20), transparent 66%),
+      radial-gradient(44% 40% at 14% 22%, rgba(94,66,255,.14), transparent 74%),
+      radial-gradient(35% 42% at 82% 74%, rgba(31,194,170,.08), transparent 76%);
+    --cta:
+      radial-gradient(56% 130% at 84% 18%, rgba(91,140,255,.28), transparent 68%),
+      radial-gradient(46% 110% at 12% 88%, rgba(31,194,170,.08), transparent 72%),
+      linear-gradient(135deg,#070a14 0%,#0b1327 52%,#070a14 100%);
+  }
+  #jai-root a { color:inherit; text-decoration:none; }
+  #jai-root footer, #jai-root footer h4, #jai-root footer p, #jai-root footer a, #jai-root footer span {
+    font-family:'Space Grotesk', Inter, 'Segoe UI', sans-serif; text-decoration:none; font-style:normal;
+  }
+  #jai-root footer a, #jai-root footer a:link, #jai-root footer a:visited, #jai-root footer a:hover, #jai-root footer a:active, #jai-root footer a * {
+    text-decoration:none !important; text-decoration-line:none !important; border-bottom:0 !important; background-image:none !important;
+  }
+  #jai-root footer a { transition:color 220ms cubic-bezier(.2,.8,.2,1); }
+  #jai-root footer a:hover { color:var(--brand-2); text-decoration:none; }
+  #jai-root a:hover { color:var(--brand); }
+  @keyframes jai-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.3)} }
+  @keyframes jai-blink { 0%,60%,100%{opacity:.25} 30%{opacity:1} }
+  @keyframes jai-scroll { to { transform:translateX(-50%) } }
+  #jai-root, #jai-root *, #jai-root *::before, #jai-root *::after { box-sizing: border-box; }
+  #jai-root [data-r="mq"] { background:var(--mq-bg) !important; border-top-color:var(--mq-fg) !important; border-bottom-color:var(--mq-fg) !important; }
+  #jai-root [data-r="mq"] span { color:var(--mq-fg) !important; }
+  #jai-root [data-r="mq"] span[data-mq-label] { background:transparent !important; color:var(--mq-fg) !important; }
+  #jai-root [data-tilt] { transform-style:preserve-3d; transition:transform 300ms cubic-bezier(.2,.8,.2,1), box-shadow 300ms cubic-bezier(.2,.8,.2,1), border-color 300ms; will-change:transform; }
+  #jai-root [data-tilt]:hover { box-shadow:0 22px 60px -22px color-mix(in srgb, var(--brand) 45%, transparent); border-color:var(--brand-border); }
+  @keyframes jai-ledfloat {
+    0%, 100% { transform:rotateY(-19deg) rotateX(7deg) rotateZ(-2.5deg) translateY(0) }
+    50% { transform:rotateY(-16deg) rotateX(5.5deg) rotateZ(-2deg) translateY(-10px) }
+  }
+  @keyframes jai-keyart { from { transform:scale(1) } to { transform:scale(1.07) } }
+  @keyframes jai-barfill { from { width:0% } to { width:100% } }
+  @keyframes jai-glare { 0% { transform:translateX(-60%) } 55%, 100% { transform:translateX(120%) } }
+  @keyframes jai-scan { 0% { transform:translateY(0); opacity:0 } 12% { opacity:1 } 88% { opacity:1 } 100% { transform:translateY(calc(100% + 170px)); opacity:0 } }
+  @keyframes jai-scanline { 0% { transform:translateY(0); opacity:0 } 10% { opacity:1 } 90% { opacity:1 } 100% { transform:translateY(calc(100% + 172px)); opacity:0 } }
+  @keyframes jai-pool { from { transform:translate(0,0) scale(1) } to { transform:translate(16%,-12%) scale(1.16) } }
+  @keyframes jai-pool2 { from { transform:translate(0,0) scale(1.1) } to { transform:translate(-14%,14%) scale(.94) } }
+  @keyframes jai-flapcell { 0%, 88%, 100% { opacity:.5; transform:scaleY(1) } 92% { opacity:.9; transform:scaleY(.2) } 96% { opacity:.6; transform:scaleY(1) } }
+  @keyframes jai-sweep {
+    0% { transform:translateX(0) rotate(14deg); opacity:0 }
+    8% { opacity:1 }
+    82% { opacity:1 }
+    100% { transform:translateX(390%) rotate(14deg); opacity:0 }
+  }
+  @keyframes jai-ctaglow { 0%, 100% { opacity:.45 } 50% { opacity:1 } }
+  @keyframes jai-flapout { from { transform:rotateX(0deg) } to { transform:rotateX(-88deg) } }
+  @keyframes jai-flapin { from { transform:rotateX(88deg) } to { transform:rotateX(0deg) } }
+  @keyframes jai-flipboard {
+    0% { transform:rotateX(-92deg); opacity:0 }
+    55% { transform:rotateX(12deg); opacity:1 }
+    78% { transform:rotateX(-5deg) }
+    100% { transform:rotateX(0); opacity:1 }
+  }
+  @keyframes jai-breathe {
+    0%, 100% { transform:scale(1); box-shadow:var(--shadow) }
+    50% { transform:scale(1.014); box-shadow:0 26px 60px -30px color-mix(in srgb, var(--brand) 32%, transparent) }
+  }
+  @keyframes jai-shockwave {
+    0% { opacity:0; transform:translate(18%, 18%) scale(.28) }
+    12% { opacity:.9 }
+    70% { opacity:.5 }
+    100% { opacity:0; transform:translate(-18%, -18%) scale(1.5) }
+  }
+  @keyframes jai-shock {
+    0%, 62% { box-shadow:0 0 0 0 color-mix(in srgb, var(--brand) 55%, transparent) }
+    78% { box-shadow:0 0 34px 10px color-mix(in srgb, var(--brand) 26%, transparent) }
+    100% { box-shadow:0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent) }
+  }
+  @keyframes jai-shockring {
+    0%, 62% { transform:scale(1); opacity:0 }
+    68% { opacity:.85 }
+    100% { transform:scale(1.075); opacity:0 }
+  }
+  @keyframes jai-tickdraw { from { stroke-dashoffset:26 } to { stroke-dashoffset:0 } }
+  @keyframes jai-tickpop { 0%,100% { transform:scale(1) } 45% { transform:scale(1.18) } }
+  @keyframes jai-numroll {
+    0% { transform:rotateX(-90deg) scale(.7); opacity:0 }
+    45% { transform:rotateX(12deg) scale(1.12); opacity:1 }
+    70% { transform:rotateX(-5deg) scale(.97) }
+    100% { transform:rotateX(0) scale(1); opacity:1 }
+  }
+  @keyframes jai-numglow { 0%,100% { box-shadow:0 0 0 0 color-mix(in srgb, var(--brand) 42%, transparent) } 55% { box-shadow:0 0 0 14px transparent } }
+  @keyframes jai-cardfloat { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-8px) } }
+  @keyframes jai-rise { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+  @keyframes jai-zoom-a {
+    0%   { opacity:0; transform:translate(-50%,-50%) translate3d(0,0,-1400px) scale(.10); filter:blur(3px) }
+    12%  { opacity:.85 }
+    62%  { opacity:.55; filter:blur(0) }
+    100% { opacity:0; transform:translate(-50%,-50%) translate3d(-14vw,-9vh,520px) scale(2.6); filter:blur(2.4px) }
+  }
+  @keyframes jai-zoom-b {
+    0%   { opacity:0; transform:translate(-50%,-50%) translate3d(0,0,-1600px) scale(.08); filter:blur(3px) }
+    14%  { opacity:.8 }
+    60%  { opacity:.5; filter:blur(0) }
+    100% { opacity:0; transform:translate(-50%,-50%) translate3d(16vw,7vh,560px) scale(2.9); filter:blur(2.6px) }
+  }
+  @keyframes jai-zoom-c {
+    0%   { opacity:0; transform:translate(-50%,-50%) translate3d(0,0,-1200px) scale(.12); filter:blur(2.6px) }
+    16%  { opacity:.75 }
+    64%  { opacity:.48; filter:blur(0) }
+    100% { opacity:0; transform:translate(-50%,-50%) translate3d(4vw,-13vh,480px) scale(2.4); filter:blur(2.2px) }
+  }
+  @keyframes jai-zoom-d {
+    0%   { opacity:0; transform:translate(-50%,-50%) translate3d(0,0,-1500px) scale(.09); filter:blur(3px) }
+    13%  { opacity:.78 }
+    58%  { opacity:.46; filter:blur(0) }
+    100% { opacity:0; transform:translate(-50%,-50%) translate3d(-9vw,12vh,540px) scale(2.7); filter:blur(2.5px) }
+  }
+  @keyframes jai-dash { to { stroke-dashoffset:-2200 } }
+  @keyframes jai-gl-a {
+    0%,7%,100% { transform:translate(0,0); clip-path:inset(0 0 62% 0) }
+    8% { transform:translate(-3px,-1px); clip-path:inset(6% 0 70% 0) }
+    10% { transform:translate(2px,1px); clip-path:inset(28% 0 46% 0) }
+    12% { transform:translate(-2px,0); clip-path:inset(0 0 62% 0) }
+    47% { transform:translate(0,0) }
+    48% { transform:translate(3px,-2px); clip-path:inset(14% 0 68% 0) }
+    50% { transform:translate(-1px,1px); clip-path:inset(0 0 62% 0) }
+  }
+  @keyframes jai-gl-b {
+    0%,17%,100% { transform:translate(0,0); clip-path:inset(58% 0 0 0) }
+    18% { transform:translate(3px,1px); clip-path:inset(66% 0 0 0) }
+    20% { transform:translate(-3px,-1px); clip-path:inset(50% 0 22% 0) }
+    22% { transform:translate(1px,0); clip-path:inset(58% 0 0 0) }
+    71% { transform:translate(0,0) }
+    72% { transform:translate(-4px,1px); clip-path:inset(74% 0 0 0) }
+    74% { transform:translate(2px,-1px); clip-path:inset(58% 0 0 0) }
+  }
+  @keyframes jai-gl-skew {
+    0%,92%,100% { transform:skewX(0deg) }
+    93% { transform:skewX(1.2deg) }
+    94% { transform:skewX(-0.8deg) }
+    95% { transform:skewX(0deg) }
+  }
+  @keyframes jai-trailglow { 0%,100% { opacity:.03 } 50% { opacity:.10 } }
+  @keyframes jai-sc-a { from { transform:translate3d(0,0,0) rotate(-8deg) scale(1) } to { transform:translate3d(-3%,4%,0) rotate(14deg) scale(1.06) } }
+  @keyframes jai-sc-b { from { transform:translate3d(0,0,0) rotate(6deg) } to { transform:translate3d(4%,-5%,0) rotate(-16deg) } }
+  @keyframes jai-sc-c { from { transform:translate3d(0,0,0) rotate(-18deg) } to { transform:translate3d(-4%,3%,0) rotate(-11deg) } }
+  @keyframes jai-kenburns { from { transform:scale(1.12) } to { transform:scale(1.3) } }
+  @media (max-width: 720px) {
+    #jai-root [data-r="carousel"] { height: 420px !important; }
+    #jai-root [data-r="carousel"] > div { width: min(360px, 92%) !important; }
+  }
+  #jai-root [data-r="hero-h1"] { font-size: clamp(34px, 4.1vw, 54px) !important; letter-spacing: -.04em !important; line-height: 1.06 !important; }
+  @media (max-width: 1080px) {
+    #jai-root [data-r="grid12"] > * { grid-column: auto / span 6 !important; grid-row: auto !important; }
+  }
+  @media (max-width: 980px) {
+    #jai-root [data-r="nav-links"] { display: none !important; }
+    #jai-root [data-r="hero"] { grid-template-columns: 1fr !important; }
+    #jai-root [data-r="hero"] > * { max-width: 760px !important; }
+    #jai-root [data-r="split"] { grid-template-columns: 1fr !important; gap: 32px !important; }
+    #jai-root [data-r="g4"] { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+    #jai-root [data-r="foot"] { grid-template-columns: 1fr 1fr !important; }
+  }
+  @media (max-width: 760px) {
+    #jai-root { background-attachment: scroll !important; }
+    #jai-root [data-r="navbar"] { height: 64px !important; }
+    #jai-root [data-r="hsm"] { display: none !important; }
+    #jai-root [data-r="hero-sec"] { min-height: auto !important; padding: 104px 0 64px !important; }
+    #jai-root [data-r="grid12"] > *, #jai-root [data-r="g3"], #jai-root [data-r="g4"] { grid-column: auto !important; grid-template-columns: 1fr !important; }
+    #jai-root [data-r="g3"], #jai-root [data-r="g4"] { display: grid !important; }
+    #jai-root [data-r="carousel"] { height: 400px !important; }
+    #jai-root [data-r="carousel"] > div { width: min(460px, 84%) !important; }
+    #jai-root [data-r="sec"] { padding: 64px 0 !important; }
+    #jai-root [data-r="foot"] { grid-template-columns: 1fr !important; gap: 28px !important; }
+  }
+  @media (max-width: 480px) {
+    #jai-root [data-r="wrap"] { padding-inline: 14px !important; }
+    #jai-root [data-r="wordmark"] { max-width: 92px !important; }
+    #jai-root [data-r="nav-end"] { gap: 4px !important; }
+    #jai-root [data-r="hero-actions"] { flex-direction: column !important; align-items: stretch !important; }
+    #jai-root [data-r="hero-actions"] > * { width: 100% !important; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #jai-root *, #jai-root *::before, #jai-root *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+</style>
+</helmet>
+<div id="jai-root" data-theme="{{ theme }}" data-lang="{{ lang }}" style="min-width:320px; min-height:100vh; background-color:var(--canvas); background-image:var(--aurora); background-attachment:fixed; color:var(--ink); font-family:'Space Grotesk', Inter, 'Segoe UI', sans-serif; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;">
+
+  <header style="position:sticky; top:0; z-index:200; background:color-mix(in srgb, var(--canvas) 94%, transparent); border-bottom:1px solid var(--line); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);">
+    <div style="max-width:1180px; margin:0 auto; padding:0 24px;">
+      <nav data-r="navbar" style="display:flex; align-items:center; height:72px; gap:20px;">
+        <a href="#" style="display:inline-flex; align-items:center; gap:10px; flex-shrink:0; line-height:1;">
+          <sc-if value="{{ isLight }}" hint-placeholder-val="{{ true }}">
+            <img src="brand/wordmark-filled-light.png" alt="JuristAI" data-r="wordmark" style="height:34px; max-width:124px; width:auto; object-fit:contain; display:block;">
+          </sc-if>
+          <sc-if value="{{ isDark }}" hint-placeholder-val="{{ false }}">
+            <img src="brand/wordmark-filled-dark.png" alt="JuristAI" data-r="wordmark" style="height:34px; max-width:124px; width:auto; object-fit:contain; display:block;">
+          </sc-if>
+        </a>
+        <div data-r="nav-links" style="display:flex; align-items:center; justify-content:center; gap:6px; flex:1;">
+          <a href="#features" style="color:var(--muted); font-size:14.5px; font-weight:500; padding:9px 13px; border-radius:10px;">{{ t.nav_features }}</a>
+          <a href="#how" style="color:var(--muted); font-size:14.5px; font-weight:500; padding:9px 13px; border-radius:10px;">{{ t.nav_how }}</a>
+          <a href="public/attorneys.html" style="color:var(--muted); font-size:14.5px; font-weight:500; padding:9px 13px; border-radius:10px;">{{ t.nav_attorneys }}</a>
+          <a href="#pricing" style="color:var(--muted); font-size:14.5px; font-weight:500; padding:9px 13px; border-radius:10px;">{{ t.nav_pricing }}</a>
+          <a href="#faq" style="color:var(--muted); font-size:14.5px; font-weight:500; padding:9px 13px; border-radius:10px;">{{ t.nav_faq }}</a>
+        </div>
+        <div data-r="nav-end" style="display:flex; align-items:center; justify-content:flex-end; gap:7px; flex-shrink:0;">
+          <div style="display:flex; align-items:center; border:0; border-radius:999px; padding:3px 4px; gap:2px;">
+            <button onClick="{{ setUz }}" style="background:{{ uzBg }}; border:0; color:{{ uzColor }}; font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px; cursor:pointer; letter-spacing:.4px; font-family:inherit;">UZ</button>
+            <button onClick="{{ setRu }}" style="background:{{ ruBg }}; border:0; color:{{ ruColor }}; font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px; cursor:pointer; letter-spacing:.4px; font-family:inherit;">RU</button>
+          </div>
+          <button onClick="{{ toggleTheme }}" title="Theme" style="width:40px; height:40px; border-radius:999px; background:transparent; border:0; color:var(--muted); cursor:pointer; display:grid; place-items:center; padding:0;">{{ themeIcon }}</button>
+          <a href="JuristAI Login.dc.html" style="display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 16px; border-radius:12px; border:0; color:var(--ink); font-size:15px; font-weight:600; white-space:nowrap;" style-hover="background:var(--panel-hover)">{{ t.nav_login }}</a>
+          <a href="JuristAI Login.dc.html" style="display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 16px; border-radius:12px; background:var(--brand); border:1px solid var(--brand); color:#fff; font-size:15px; font-weight:600; white-space:nowrap; box-shadow:0 16px 34px -22px rgba(45,108,255,.72);">{{ t.nav_cta }}</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <section data-r="hero-sec" style="position:relative; min-height:680px; display:flex; align-items:center; padding:112px 0 84px; overflow:hidden;">
+    <sc-if value="{{ heroMotion }}" hint-placeholder-val="{{ true }}">
+      <div aria-hidden="true" style="position:absolute; top:-200px; left:-4%; right:52%; bottom:0; pointer-events:none; z-index:0; overflow:hidden; mask-image:linear-gradient(180deg, #000 0, #000 76%, transparent), linear-gradient(90deg, #000 78%, transparent); -webkit-mask-image:linear-gradient(180deg, #000 0, #000 76%, transparent), linear-gradient(90deg, #000 78%, transparent); -webkit-mask-composite:source-in; mask-composite:intersect;">
+        <img src="media/hero-scales.jpg" alt="" style="position:absolute; top:150px; left:-16%; width:min(980px, 140%); height:auto; object-fit:contain; opacity:.1; filter:contrast(1.25) saturate(.8); mask-image:radial-gradient(58% 58% at 52% 52%, #000 20%, transparent 92%); -webkit-mask-image:radial-gradient(58% 58% at 52% 52%, #000 20%, transparent 92%); transform-origin:60% 55%; animation:jai-kenburns 26s cubic-bezier(.4,0,.2,1) infinite alternate;">
+      </div>
+      <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; z-index:0; overflow:hidden; mask-image:linear-gradient(180deg, transparent, #000 18%, #000 74%, transparent); -webkit-mask-image:linear-gradient(180deg, transparent, #000 18%, #000 74%, transparent);">
+        <div style="position:absolute; inset:0; background-image:repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink) 6%, transparent) 0 1px, transparent 1px 34px); opacity:.5;"></div>
+        <div style="position:absolute; inset:0; perspective:900px; perspective-origin:52% 46%; transform-style:preserve-3d; font-family:ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size:13px; font-weight:500; letter-spacing:.04em; color:color-mix(in srgb, var(--ink) 30%, transparent); white-space:nowrap;">
+          <sc-for list="{{ codeRefs }}" as="r" hint-placeholder-count="10">
+            <span style="position:absolute; left:{{ r.x }}; top:{{ r.y }}; opacity:0; will-change:transform, opacity; animation:{{ r.anim }} {{ r.dur }} cubic-bezier(.32,0,.62,1) {{ r.delay }} infinite;">{{ r.label }}</span>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <div data-r="hero" style="position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:0 24px; display:grid; grid-template-columns:minmax(0,.95fr) minmax(420px,.85fr); gap:clamp(48px,7vw,92px); align-items:center; width:100%;">
+      <div>
+        <div style="display:inline-flex; align-items:center; gap:9px; color:var(--brand); font-size:13px; font-weight:600; letter-spacing:.13em; line-height:1.5; margin-bottom:24px; text-transform:uppercase;">
+          <span style="width:7px; height:7px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px color-mix(in srgb, var(--brand) 58%, transparent); animation:jai-pulse 2s ease infinite;"></span>
+          <span>{{ t.hero_pill }}</span>
+        </div>
+        <h1 data-r="hero-h1" style="font-size:clamp(48px,6vw,78px); line-height:.99; font-weight:600; letter-spacing:-.055em; color:var(--ink); margin:0 0 24px; max-width:min(760px,100%); overflow-wrap:break-word; text-wrap:pretty;">{{ t.hero_title_a }} <span data-txt="{{ t.hero_title_em }}" style="position:relative; display:inline-block; background:linear-gradient(100deg, var(--ink) 8%, var(--brand-2) 96%); -webkit-background-clip:text; background-clip:text; color:transparent; animation:jai-gl-skew 5.2s steps(1) infinite;" style-before="content:attr(data-txt); position:absolute; left:0; top:0; color:#2d6cff; opacity:.55; mix-blend-mode:multiply; clip-path:inset(0 0 62% 0); animation:jai-gl-a 3.1s steps(1) infinite; pointer-events:none;" style-after="content:attr(data-txt); position:absolute; left:0; top:0; color:#d94a4a; opacity:.42; mix-blend-mode:multiply; clip-path:inset(58% 0 0 0); animation:jai-gl-b 2.4s steps(1) infinite; pointer-events:none;">{{ t.hero_title_em }}</span> {{ t.hero_title_b }}</h1>
+        <p style="font-size:18px; line-height:1.75; color:var(--muted); max-width:min(580px,100%); margin:0 0 36px;">{{ t.hero_sub }}</p>
+        <div data-r="hero-actions" style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:36px;">
+          <a href="JuristAI Login.dc.html" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:16px 34px; border-radius:12px; background:var(--brand); border:1px solid var(--brand); color:#fff; font-size:17px; font-weight:600; box-shadow:0 16px 34px -22px rgba(45,108,255,.72);">{{ t.hero_btn1 }}</a>
+          <a href="#how" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:16px 34px; border-radius:12px; background:transparent; border:1px solid var(--line); color:var(--ink); font-size:17px; font-weight:600;">{{ t.hero_btn2 }}</a>
+        </div>
+        <div style="display:flex; gap:28px; flex-wrap:wrap;">
+          <div style="color:var(--muted); font-size:13.5px;"><strong style="display:block; font-size:20px; font-weight:700; color:var(--ink); letter-spacing:-.5px; margin-bottom:2px;">{{ t.hs1_n }}</strong><span>{{ t.hs1 }}</span></div>
+          <div style="color:var(--muted); font-size:13.5px;"><strong style="display:block; font-size:20px; font-weight:700; color:var(--ink); letter-spacing:-.5px; margin-bottom:2px;">{{ t.hs2_n }}</strong><span>{{ t.hs2 }}</span></div>
+          <div style="color:var(--muted); font-size:13.5px;"><strong style="display:block; font-size:20px; font-weight:700; color:var(--ink); letter-spacing:-.5px; margin-bottom:2px;">{{ t.hs3_n }}</strong><span>{{ t.hs3 }}</span></div>
+        </div>
+      </div>
+      <div style="position:relative; display:flex; justify-content:center;">
+        <div style="position:relative; width:min(360px,100%); border-radius:46px; padding:11px; background:linear-gradient(160deg, color-mix(in srgb, var(--ink) 22%, transparent), color-mix(in srgb, var(--ink) 8%, transparent)); box-shadow:0 40px 90px -40px rgba(15,23,42,.55), 0 0 0 1px var(--line);">
+          <div style="position:relative; border-radius:36px; overflow:hidden; background:var(--panel-solid); display:flex; flex-direction:column; height:660px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 22px 6px; font-size:11.5px; font-weight:700; color:var(--muted-dim);">
+              <span>9:41</span>
+              <span style="position:absolute; left:50%; transform:translateX(-50%); top:8px; width:96px; height:22px; border-radius:999px; background:var(--ink); opacity:.9;"></span>
+              <span>JuristAI</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line);">
+              <div style="width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg, var(--brand), var(--brand-2)); display:grid; place-items:center; color:#fff; font-size:12px; font-weight:700;">AI</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13px; font-weight:600; color:var(--ink);">JuristAI</div>
+                <div style="font-size:10.5px; color:var(--brand); font-weight:600;">online</div>
+              </div>
+            </div>
+            <div style="flex:1; padding:14px 14px 8px; display:flex; flex-direction:column; justify-content:flex-end; gap:10px; overflow:hidden; mask-image:linear-gradient(180deg, transparent, #000 14%); -webkit-mask-image:linear-gradient(180deg, transparent, #000 14%);">
+              <sc-for list="{{ chatHistory }}" as="m" hint-placeholder-count="0">
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  <div style="align-self:flex-end; max-width:84%; padding:9px 13px; border-radius:14px 14px 4px 14px; font-size:12.5px; line-height:1.5; color:#fff; background:linear-gradient(135deg, var(--brand), var(--brand-2));">{{ m.q }}</div>
+                  <div style="align-self:flex-start; max-width:88%; padding:9px 13px; border-radius:14px 14px 14px 4px; font-size:12.5px; line-height:1.5; color:var(--ink); background:var(--panel-hover); border:1px solid var(--line);">
+                    <span>{{ m.a }}</span>
+                    <div style="display:inline-flex; align-items:center; gap:6px; margin-top:7px; font-size:10.5px; font-weight:700; color:var(--brand); background:var(--brand-soft); border:1px solid var(--brand-border); padding:3px 8px; border-radius:6px;">{{ m.src }}</div>
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ showQ }}" hint-placeholder-val="{{ false }}">
+                <div style="align-self:flex-end; max-width:84%; padding:9px 13px; border-radius:14px 14px 4px 14px; font-size:12.5px; line-height:1.5; color:#fff; background:linear-gradient(135deg, var(--brand), var(--brand-2)); animation:jai-rise .3s ease both;">{{ chatQ }}</div>
+              </sc-if>
+              <sc-if value="{{ chatDots }}" hint-placeholder-val="{{ false }}">
+                <div style="align-self:flex-start; display:flex; gap:5px; padding:10px 13px; background:var(--panel-hover); border:1px solid var(--line); border-radius:14px;">
+                  <span style="width:5px; height:5px; border-radius:50%; background:var(--muted-dim); animation:jai-blink 1.2s ease-in-out infinite;"></span>
+                  <span style="width:5px; height:5px; border-radius:50%; background:var(--muted-dim); animation:jai-blink 1.2s ease-in-out .2s infinite;"></span>
+                  <span style="width:5px; height:5px; border-radius:50%; background:var(--muted-dim); animation:jai-blink 1.2s ease-in-out .4s infinite;"></span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ showA }}" hint-placeholder-val="{{ false }}">
+                <div style="align-self:flex-start; max-width:88%; padding:9px 13px; border-radius:14px 14px 14px 4px; font-size:12.5px; line-height:1.5; color:var(--ink); background:var(--panel-hover); border:1px solid var(--line); animation:jai-rise .3s ease both;">
+                  <span>{{ chatA }}</span>
+                  <sc-if value="{{ showSrc }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:inline-flex; align-items:center; gap:6px; margin-top:7px; font-size:10.5px; font-weight:700; color:var(--brand); background:var(--brand-soft); border:1px solid var(--brand-border); padding:3px 8px; border-radius:6px; animation:jai-rise .3s ease both;">{{ chatSrc }}</div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+            <div style="display:flex; align-items:flex-end; gap:8px; padding:8px 12px 10px; border-top:1px solid var(--line);">
+              <div style="flex:1; min-height:34px; border-radius:17px; background:var(--panel-hover); border:1px solid var(--line); padding:8px 12px; font-size:12px; line-height:1.4; color:var(--ink); text-align:left; word-break:break-word;">
+                <span>{{ draft }}</span><span style="display:inline-block; width:1.5px; height:12px; vertical-align:-2px; background:var(--brand); margin-left:1px; animation:jai-blink 1s steps(1) infinite;"></span>
+              </div>
+              <div style="width:34px; height:34px; flex-shrink:0; border-radius:50%; background:var(--brand); display:grid; place-items:center; color:#fff; transform:scale({{ sendScale }}); transition:transform 140ms cubic-bezier(.2,.8,.2,1);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </div>
+            </div>
+            <div style="background:color-mix(in srgb, var(--panel-hover) 70%, transparent); border-top:1px solid var(--line); padding:8px 5px 12px; display:flex; flex-direction:column; gap:6px;">
+              <sc-for list="{{ keyRows }}" as="row" hint-placeholder-count="3">
+                <div style="display:flex; gap:4px; justify-content:center; padding:0 {{ row.pad }};">
+                  <sc-for list="{{ row.keys }}" as="k" hint-placeholder-count="10">
+                    <div style="flex:1; height:30px; border-radius:6px; display:grid; place-items:center; font-size:12px; font-weight:600; color:{{ k.fg }}; background:{{ k.bg }}; box-shadow:0 1px 0 var(--line); transition:background 90ms linear, color 90ms linear, transform 90ms linear; transform:scale({{ k.scale }});">{{ k.ch }}</div>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <div style="display:flex; gap:4px; justify-content:center; padding:0 4px;">
+                <div style="width:34px; height:30px; border-radius:6px; background:var(--panel-solid); box-shadow:0 1px 0 var(--line);"></div>
+                <div style="flex:1; height:30px; border-radius:6px; background:{{ spaceBg }}; box-shadow:0 1px 0 var(--line); transition:background 90ms linear;"></div>
+                <div style="width:34px; height:30px; border-radius:6px; background:var(--panel-solid); box-shadow:0 1px 0 var(--line);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div data-r="mq" style="border-top:1px solid var(--mq-fg); border-bottom:1px solid var(--mq-fg); background:var(--mq-bg); overflow:hidden;">
+    <div style="display:flex; align-items:stretch; min-height:46px;">
+      <span data-mq-label="1" style="flex-shrink:0; font-size:12px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--mq-fg); display:flex; align-items:center; padding:0 32px 0 24px; border-right:1px solid var(--line); white-space:nowrap;">{{ t.trust_label }}</span>
+      <div style="flex:1; display:flex; align-items:center; overflow:hidden; white-space:nowrap;">
+        <div style="display:inline-flex; gap:44px; animation:jai-scroll 32s linear infinite;">
+          <sc-for list="{{ marquee }}" as="item" hint-placeholder-count="11">
+            <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;">{{ item }}</span>
+          </sc-for>
+          <sc-for list="{{ marquee }}" as="item" hint-placeholder-count="11">
+            <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;">{{ item }}</span>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:color-mix(in srgb, var(--panel-solid) 38%, transparent); border-bottom:1px solid var(--line); padding:56px 0;">
+    <div data-r="g4" style="max-width:1180px; margin:0 auto; padding:0 24px; display:grid; grid-template-columns:repeat(4,1fr); gap:32px; text-align:center;">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+        <div>
+          <div style="font-size:52px; font-weight:600; color:var(--ink); letter-spacing:-2px; line-height:1;">{{ s.num }}</div>
+          <div style="color:var(--muted); margin-top:8px; font-size:14.5px;">{{ s.lbl }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div data-r="solve" ref="{{ solveRef }}" style="position:relative;">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; z-index:0;">
+      <canvas ref="{{ fieldRef }}" style="position:sticky; top:0; display:block; width:100%; height:100vh; opacity:.10;"></canvas>
+    </div>
+    <div style="position:relative; z-index:1;">
+  <section id="features" data-r="sec" style="position:relative; padding:88px 0;">
+    <div style="position:relative; max-width:1180px; margin:0 auto; padding:0 24px;">
+      <p style="text-align:center; font-size:11px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--brand); margin:0 0 14px;">{{ t.feat_ey }}</p>
+      <h2 style="text-align:center; font-size:clamp(30px,4vw,46px); font-weight:600; letter-spacing:-.055em; line-height:1.08; margin:0 0 16px; color:var(--ink);">{{ t.feat_h_a }} <span style="background:linear-gradient(100deg, var(--ink) 8%, var(--brand-2) 96%); -webkit-background-clip:text; background-clip:text; color:transparent;">{{ t.feat_h_em }}</span></h2>
+      <p style="text-align:center; color:var(--muted); font-size:17.5px; max-width:620px; margin:0 auto 48px; line-height:1.75;">{{ t.feat_sub }}</p>
+      <div data-r="grid12" style="display:grid; grid-template-columns:repeat(12,1fr); gap:16px;">
+        <div data-tilt="1" style="grid-column:1/8; background:radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%), color-mix(in srgb, var(--panel-solid) 88%, transparent); border:1px solid var(--line); border-radius:24px; padding:28px; box-shadow:var(--shadow); overflow:hidden;">
+          <div style="width:34px; height:34px; display:grid; place-items:center; margin-bottom:16px; color:var(--brand);"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></div>
+          <h3 style="font-size:18px; font-weight:600; margin:0 0 8px; color:var(--ink); letter-spacing:-.02em;">{{ t.feat1_h }}</h3>
+          <p style="color:var(--muted); font-size:14.5px; line-height:1.6; margin:0;">{{ t.feat1_p }}</p>
+          <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--line);">
+            <div style="display:flex; flex-wrap:wrap; gap:7px; margin-bottom:14px;">
+              <span style="background:var(--brand-soft); border:1px solid var(--brand-border); color:var(--brand); font-size:12.5px; font-weight:600; padding:5px 11px; border-radius:999px;">{{ t.bc1 }}</span>
+              <span style="background:var(--panel-hover); border:1px solid var(--line); color:var(--muted); font-size:12.5px; font-weight:600; padding:5px 11px; border-radius:999px;">{{ t.bc2 }}</span>
+              <span style="background:var(--panel-hover); border:1px solid var(--line); color:var(--muted); font-size:12.5px; font-weight:600; padding:5px 11px; border-radius:999px;">{{ t.bc3 }}</span>
+            </div>
+            <div style="height:4px; background:var(--line); border-radius:2px; overflow:hidden; margin-bottom:6px;"><div style="height:100%; border-radius:2px; background:var(--brand); width:{{ progW }}; transition:width 1.4s cubic-bezier(.4,0,.2,1);"></div></div>
+            <div style="font-size:12px; color:var(--muted-dim); font-weight:600;">{{ t.b_match }}</div>
+          </div>
+        </div>
+        <div data-tilt="1" style="grid-column:8/13; grid-row:1/3; background:radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%), color-mix(in srgb, var(--panel-solid) 88%, transparent); border:1px solid var(--line); border-radius:24px; padding:28px; box-shadow:var(--shadow); overflow:hidden;">
+          <div style="width:34px; height:34px; display:grid; place-items:center; margin-bottom:16px; color:var(--brand);"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"/></svg></div>
+          <h3 style="font-size:18px; font-weight:600; margin:0 0 8px; color:var(--ink); letter-spacing:-.02em;">{{ t.feat2_h }}</h3>
+          <p style="color:var(--muted); font-size:14.5px; line-height:1.6; margin:0;">{{ t.feat2_p }}</p>
+          <div style="margin-top:18px; display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:10px; background:var(--brand-soft); border:1px solid var(--brand-border); font-size:13px;"><span style="font-size:11px; font-weight:700; color:var(--brand); background:var(--panel-hover); border:1px solid var(--line); padding:2px 7px; border-radius:5px; flex-shrink:0;">lex.uz</span><span style="color:var(--ink); font-size:12.5px;">{{ t.br1 }}</span></div>
+            <div style="display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:10px; background:var(--panel-hover); border:1px solid var(--line); font-size:13px;"><span style="font-size:11px; font-weight:700; color:var(--muted); background:var(--panel-hover); border:1px solid var(--line); padding:2px 7px; border-radius:5px; flex-shrink:0;">lex.uz</span><span style="color:var(--muted); font-size:12.5px;">{{ t.br2 }}</span></div>
+            <div style="display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:10px; background:var(--panel-hover); border:1px solid var(--line); font-size:13px;"><span style="font-size:11px; font-weight:700; color:var(--muted); background:var(--panel-hover); border:1px solid var(--line); padding:2px 7px; border-radius:5px; flex-shrink:0;">lex.uz</span><span style="color:var(--muted); font-size:12.5px;">{{ t.br3 }}</span></div>
+          </div>
+          <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--line);">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+              <span style="font-size:10.5px; font-weight:700; letter-spacing:.9px; text-transform:uppercase; color:var(--brand);">{{ t.rag_an_ey }}</span>
+              <span style="flex:1; height:1px; background:var(--line);"></span>
+              <span style="font-size:10.5px; font-weight:700; color:var(--brand); background:var(--brand-soft); border:1px solid var(--brand-border); padding:2px 7px; border-radius:5px;">{{ t.br1 }}</span>
+            </div>
+            <p style="margin:0 0 10px; font-size:13px; line-height:1.62; color:var(--muted);">{{ t.rag_an_p }}</p>
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <sc-for list="{{ ragAnalysis }}" as="ra" hint-placeholder-count="2">
+                <div style="display:flex; align-items:flex-start; gap:10px; padding:9px 11px; border-radius:10px; background:var(--panel-hover); border:1px solid var(--line);">
+                  <span style="font-size:12px; font-weight:700; color:var(--brand); flex-shrink:0;">{{ ra.fine }}</span>
+                  <span style="font-size:12.5px; line-height:1.5; color:var(--muted);">{{ ra.act }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <div data-tilt="1" style="grid-column:1/5; background:radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%), color-mix(in srgb, var(--panel-solid) 88%, transparent); border:1px solid var(--line); border-radius:24px; padding:28px; box-shadow:var(--shadow); overflow:hidden;">
+          <div style="width:34px; height:34px; display:grid; place-items:center; margin-bottom:16px; color:var(--brand);"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg></div>
+          <h3 style="font-size:18px; font-weight:600; margin:0 0 8px; color:var(--ink); letter-spacing:-.02em;">{{ t.feat3_h }}</h3>
+          <p style="color:var(--muted); font-size:14.5px; line-height:1.6; margin:0;">{{ t.feat3_p }}</p>
+          <div style="display:inline-flex; align-items:center; gap:6px; margin-top:16px; padding:8px 14px; border-radius:10px; background:var(--brand-soft); border:1px solid var(--brand-border); font-size:13px; font-weight:600; color:var(--brand);">{{ t.b_src_badge }}</div>
+        </div>
+        <div data-tilt="1" style="grid-column:5/8; background:radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%), color-mix(in srgb, var(--panel-solid) 88%, transparent); border:1px solid var(--line); border-radius:24px; padding:28px; box-shadow:var(--shadow); overflow:hidden;">
+          <div style="width:34px; height:34px; display:grid; place-items:center; margin-bottom:16px; color:var(--brand);"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></div>
+          <h3 style="font-size:18px; font-weight:600; margin:0 0 8px; color:var(--ink); letter-spacing:-.02em;">{{ t.feat4_h }}</h3>
+          <p style="color:var(--muted); font-size:14.5px; line-height:1.6; margin:0;">{{ t.feat4_p }}</p>
+        </div>
+        <div data-tilt="1" style="grid-column:1/7; background:radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%), color-mix(in srgb, var(--panel-solid) 88%, transparent); border:1px solid var(--line); border-radius:24px; padding:28px; box-shadow:var(--shadow); overflow:hidden;">
+          <div style="width:34px; height:34px; display:grid; place-items:center; margin-bottom:16px; color:var(--brand);"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5a8.4 8.4 0 1 1 16.1-4.5Z"/></svg></div>
+          <h3 style="font-size:18px; font-weight:600; margin:0 0 8px; color:var(--ink); letter-spacing:-.02em;">{{ t.feat5_h }}</h3>
+          <p style="color:var(--muted); font-size:14.5px; line-height:1.6; margin:0;">{{ t.feat5_p }}</p>
+          <div style="margin-top:16px; display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--panel-hover); border:1px solid var(--line); border-radius:10px; font-size:13px; font-weight:600; color:var(--muted);"><span>@juristAI_registration_bot</span><span style="font-size:12px; font-weight:500; color:var(--muted-dim); margin-left:auto;">● online</span></div>
+        </div>
+        <div data-tilt="1" style="grid-column:7/13; background:radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%), color-mix(in srgb, var(--panel-solid) 88%, transparent); border:1px solid var(--line); border-radius:24px; padding:28px; box-shadow:var(--shadow); overflow:hidden;">
+          <div style="width:34px; height:34px; display:grid; place-items:center; margin-bottom:16px; color:var(--brand);"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg></div>
+          <h3 style="font-size:18px; font-weight:600; margin:0 0 8px; color:var(--ink); letter-spacing:-.02em;">{{ t.feat6_h }}</h3>
+          <p style="color:var(--muted); font-size:14.5px; line-height:1.6; margin:0;">{{ t.feat6_p }}</p>
+          <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
+            <span style="padding:6px 12px; border-radius:8px; font-size:12.5px; font-weight:600; background:var(--panel-hover); border:1px solid var(--line); color:var(--muted);">{{ t.bs1 }}</span>
+            <span style="padding:6px 12px; border-radius:8px; font-size:12.5px; font-weight:600; background:var(--panel-hover); border:1px solid var(--line); color:var(--muted);">{{ t.bs2 }}</span>
+            <span style="padding:6px 12px; border-radius:8px; font-size:12.5px; font-weight:600; background:var(--panel-hover); border:1px solid var(--line); color:var(--muted);">{{ t.bs3 }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" data-r="sec" style="padding:88px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--panel-solid) 38%, transparent);">
+    <div style="max-width:1180px; margin:0 auto; padding:0 24px;">
+      <p style="text-align:center; font-size:11px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--brand); margin:0 0 14px;">{{ t.how_ey }}</p>
+      <h2 style="text-align:center; font-size:clamp(30px,4vw,46px); font-weight:600; letter-spacing:-.055em; line-height:1.08; margin:0 0 16px; color:var(--ink);">{{ t.how_h }}</h2>
+      <p style="text-align:center; color:var(--muted); font-size:17.5px; max-width:620px; margin:0 auto 48px; line-height:1.75;">{{ t.how_sub }}</p>
+      <div data-r="carousel" style="position:relative; height:470px; max-width:1180px; margin:0 auto; perspective:1900px; overflow:hidden; padding:0 12px;">
+        <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+          <div style="position:absolute; top:34px; left:50%; width:min(646px,70%); transform:{{ st.tf }}; filter:{{ st.blur }}; opacity:{{ st.op }}; z-index:{{ st.z }}; transition:transform 1000ms cubic-bezier(.2,.8,.2,1), filter 1000ms cubic-bezier(.2,.8,.2,1), opacity 1000ms cubic-bezier(.2,.8,.2,1);">
+            <div style="position:relative; background:radial-gradient(120% 90% at 8% 104%, color-mix(in srgb, var(--brand) 30%, transparent) 0%, transparent 60%), var(--panel-solid); border:1px solid var(--line); border-radius:30px; padding:56px 46px; box-shadow:var(--shadow); min-height:322px; animation:{{ st.anim }};">
+              <div style="position:absolute; top:-26px; left:44px; width:62px; height:62px; border-radius:18px; background:var(--brand); color:#fff; font-weight:700; font-size:26px; display:grid; place-items:center; transform-style:preserve-3d; animation:{{ st.numAnim }};">{{ st.n }}</div>
+              <h3 style="margin:30px 0 16px; font-size:29px; font-weight:600; letter-spacing:-.02em; color:var(--ink);">{{ st.h }}</h3>
+              <p style="color:var(--muted); font-size:22px; line-height:1.6; margin:0;">{{ st.p }}</p>
+            </div>
+          </div>
+        </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-r="sec" style="padding:88px 0;">
+    <div style="max-width:1180px; margin:0 auto; padding:0 24px;">
+      <p style="text-align:center; font-size:11px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--brand); margin:0 0 14px;">{{ t.testi_ey }}</p>
+      <h2 style="text-align:center; font-size:clamp(30px,4vw,46px); font-weight:600; letter-spacing:-.055em; line-height:1.08; margin:0 0 48px; color:var(--ink);">{{ t.testi_h }}</h2>
+      <div data-r="g3" ref="{{ testiRef }}" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; align-items:stretch;">
+        <sc-for list="{{ testimonials }}" as="tc" hint-placeholder-count="3">
+          <div style="height:100%; background:radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%), color-mix(in srgb, var(--panel-solid) 88%, transparent); border:1px solid var(--line); border-radius:24px; padding:28px; box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column; gap:16px;">
+            <div style="display:flex; gap:3px; color:var(--brand);"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+            <blockquote style="position:relative; flex:1; margin:0; font-style:italic; font-size:15.5px; line-height:1.7; color:var(--muted);">
+              <span style="visibility:hidden;">{{ tc.q }}</span>
+              <span style="position:absolute; inset:0;"><span data-typed="1"></span><span data-caret="1" style="display:inline-block; width:1.5px; height:14px; vertical-align:-2px; margin-left:2px; background:var(--brand); opacity:0; animation:jai-blink 1s steps(1) infinite;"></span></span>
+            </blockquote>
+            <div style="display:flex; align-items:center; gap:12px; margin-top:auto; padding-top:16px; border-top:1px solid var(--line);">
+              <div style="width:42px; height:42px; border-radius:999px; display:grid; place-items:center; font-weight:700; font-size:15px; color:var(--ink); background:var(--panel-hover); border:1px solid var(--line); flex-shrink:0;">{{ tc.initials }}</div>
+              <div><div style="font-weight:700; font-size:15px; color:var(--ink);">{{ tc.name }}</div><div style="font-size:13px; color:var(--muted); margin-top:1px;">{{ tc.role }}</div></div>
+            </div>
+          </div>
+        </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-r="sec" style="position:relative; padding:88px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--panel-solid) 38%, transparent); overflow:hidden;">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; overflow:hidden;">
+      <div style="position:absolute; inset:0; background-image:linear-gradient(90deg, color-mix(in srgb, var(--ink) 2%, transparent) 0 1px, transparent 1px 64px), linear-gradient(180deg, color-mix(in srgb, var(--ink) 2%, transparent) 0 1px, transparent 1px 64px); mask-image:radial-gradient(120% 100% at 50% 50%, #000 30%, transparent 90%); -webkit-mask-image:radial-gradient(120% 100% at 50% 50%, #000 30%, transparent 90%);"></div>
+      <div style="position:absolute; left:0; right:0; height:170px; top:-170px; background:linear-gradient(180deg, transparent, color-mix(in srgb, var(--brand) 4.5%, transparent) 62%, color-mix(in srgb, var(--brand) 11%, transparent) 96%, transparent); animation:jai-scan 7.5s cubic-bezier(.4,0,.2,1) infinite;"></div>
+      <div style="position:absolute; left:0; right:0; top:0; height:100%; animation:jai-scanline 7.5s cubic-bezier(.4,0,.2,1) infinite;"><div style="position:absolute; left:0; right:0; top:-1px; height:1px; background:color-mix(in srgb, var(--brand) 20%, transparent); box-shadow:0 0 18px 2px color-mix(in srgb, var(--brand) 13%, transparent);"></div></div>
+    </div>
+    <div data-r="split" style="position:relative; max-width:1180px; margin:0 auto; padding:0 24px; display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:center;">
+      <div>
+        <h2 style="font-size:clamp(28px,3.5vw,40px); font-weight:600; letter-spacing:-.055em; line-height:1.12; margin:0 0 18px; color:var(--ink); text-align:left;">{{ t.sc_h_a }} <span style="background:linear-gradient(100deg, var(--ink) 8%, var(--brand-2) 96%); -webkit-background-clip:text; background-clip:text; color:transparent;">{{ t.sc_h_em }}</span> {{ t.sc_h_b }}</h2>
+        <p style="color:var(--muted); font-size:16.5px; line-height:1.75; margin:0 0 22px;">{{ t.sc_p }}</p>
+        <ul ref="{{ checksRef }}" style="list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:14px;">
+          <sc-for list="{{ checks }}" as="c" hint-placeholder-count="4">
+            <li data-chk="1" style="display:flex; align-items:flex-start; gap:12px; font-size:15.5px; line-height:1.5;">
+              <span data-chkbox="1" style="width:22px; height:22px; border-radius:6px; background:transparent; border:1px solid var(--line); display:grid; place-items:center; flex-shrink:0; margin-top:1px; color:var(--brand); transition:border-color 260ms ease, background 260ms ease, transform 260ms cubic-bezier(.2,.8,.2,1);"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path data-chkpath="1" d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span data-chktext="1" style="color:var(--muted); transition:color 320ms ease;">{{ c }}</span>
+            </li>
+          </sc-for>
+        </ul>
+      </div>
+      <div style="perspective:1500px; perspective-origin:60% 45%;">
+        <div style="position:relative; transform:rotateY(-19deg) rotateX(7deg) rotateZ(-2.5deg); transform-style:preserve-3d; animation:jai-ledfloat 9s cubic-bezier(.4,0,.2,1) infinite;">
+          <div style="position:absolute; inset:8% 4% -8% 6%; border-radius:20px; background:radial-gradient(60% 60% at 50% 60%, color-mix(in srgb, var(--brand) 30%, transparent), transparent 72%); filter:blur(34px); z-index:0;"></div>
+          <div style="position:relative; z-index:1; border-radius:10px; padding:9px 9px 11px; background:linear-gradient(160deg, #23262f, #0d0f15 62%, #191c24); box-shadow:0 46px 90px -44px rgba(9,14,30,.75), 0 0 0 1px rgba(255,255,255,.06), inset 0 1px 0 rgba(255,255,255,.12);">
+            <div style="position:relative; aspect-ratio:16/9; border-radius:4px; overflow:hidden; background:#050914;">
+              <div style="position:absolute; inset:0; background:radial-gradient(80% 70% at 26% 18%, rgba(45,108,255,.3), transparent 68%), radial-gradient(70% 60% at 82% 92%, rgba(88,165,255,.22), transparent 70%), #050914;"></div>
+              <div style="position:absolute; inset:0; background-image:linear-gradient(90deg, rgba(255,255,255,.045) 0 1px, transparent 1px 52px), linear-gradient(180deg, rgba(255,255,255,.045) 0 1px, transparent 1px 52px); mask-image:radial-gradient(110% 90% at 50% 50%, #000 20%, transparent 90%); -webkit-mask-image:radial-gradient(110% 90% at 50% 50%, #000 20%, transparent 90%);"></div>
+              <video data-led-video="media/led-ad.webm" autoPlay="{{ true }}" muted="{{ true }}" loop="{{ true }}" playsInline="{{ true }}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; z-index:4; opacity:0; transition:opacity 400ms ease;"></video>
+
+              <div style="position:absolute; right:0; top:0; bottom:0; width:44%; z-index:1; overflow:hidden;">
+                <sc-for list="{{ adFrames }}" as="ad" hint-placeholder-count="1">
+                  <div style="position:absolute; inset:0; display:grid; place-items:center; opacity:{{ ad.op }}; z-index:{{ ad.z }}; transition:opacity 900ms cubic-bezier(.4,0,.2,1);">
+                    <img src="{{ ad.pic }}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; display:block; animation:jai-keyart 14s cubic-bezier(.4,0,.2,1) infinite alternate;">
+                  </div>
+                </sc-for>
+                <div style="position:absolute; inset:0; pointer-events:none; background:linear-gradient(90deg, #050914, rgba(5,9,20,.5) 40%, transparent 78%);"></div>
+              </div>
+
+              <div style="position:absolute; left:0; right:0; top:0; height:96px; z-index:2; pointer-events:none; background:linear-gradient(180deg, rgba(5,9,20,.82), rgba(5,9,20,.34) 62%, transparent);"></div>
+              <div style="position:absolute; left:0; right:0; bottom:0; height:132px; z-index:2; pointer-events:none; background:linear-gradient(0deg, rgba(5,9,20,.88), rgba(5,9,20,.42) 58%, transparent);"></div>
+              <div style="position:absolute; left:0; right:0; top:0; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 22px; z-index:3; pointer-events:none;">
+                <img src="brand/wordmark-filled-dark.png" alt="JuristAI" style="height:24px; width:auto; object-fit:contain; display:block;">
+                <span style="display:inline-flex; align-items:center; gap:7px; font-size:9.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#8fbaff;">
+                  <span style="width:6px; height:6px; border-radius:50%; background:#8fbaff; box-shadow:0 0 9px 2px rgba(143,186,255,.55); animation:jai-pulse 2.4s ease-in-out infinite;"></span>{{ t.led_live }}
+                </span>
+              </div>
+
+              <div style="position:absolute; left:22px; top:50%; transform:translateY(-50%); width:52%; z-index:3; pointer-events:none;">
+                <div style="font-size:9.5px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:#8fbaff; margin-bottom:10px;">{{ adEy }}</div>
+                <div style="font-size:clamp(19px,2.1vw,27px); font-weight:600; letter-spacing:-.03em; line-height:1.16; color:#fff;">{{ adH }}</div>
+                <div style="margin-top:9px; font-size:12.5px; line-height:1.55; color:rgba(255,255,255,.66);">{{ adP }}</div>
+              </div>
+
+              <div style="position:absolute; left:0; right:0; bottom:0; z-index:3; padding:0 22px 16px;">
+                <div style="display:flex; gap:5px; margin-bottom:12px;">
+                  <sc-for list="{{ adFrames }}" as="ad" hint-placeholder-count="3">
+                    <span style="flex:1; height:2px; border-radius:999px; background:rgba(255,255,255,.2); overflow:hidden;">
+                      <span style="display:block; height:100%; width:{{ ad.barW }}; background:#fff; animation:{{ ad.barAnim }};"></span>
+                    </span>
+                  </sc-for>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                  <span style="display:inline-flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:rgba(255,255,255,.72);">
+                    <span style="width:15px; height:15px; flex-shrink:0; background:#8fbaff; -webkit-mask:url(icons/sparkles.svg) center/contain no-repeat; mask:url(icons/sparkles.svg) center/contain no-repeat;"></span>
+                    Generated by AI
+                  </span>
+                  <span style="display:inline-flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:rgba(255,255,255,.72);">
+                    <span style="width:15px; height:15px; flex-shrink:0; background:#8fbaff; -webkit-mask:url(icons/fingerprint-pattern.svg) center/contain no-repeat; mask:url(icons/fingerprint-pattern.svg) center/contain no-repeat;"></span>
+                    Verified by human
+                  </span>
+                </div>
+              </div>
+
+              <div style="position:absolute; inset:0; pointer-events:none; z-index:5; background:linear-gradient(115deg, transparent 32%, rgba(255,255,255,.07) 46%, transparent 60%); animation:jai-glare 8s cubic-bezier(.4,0,.2,1) infinite;"></div>
+              <div style="position:absolute; inset:0; pointer-events:none; z-index:5; background-image:repeating-linear-gradient(180deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" data-r="sec" style="position:relative; padding:88px 0;">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; overflow:hidden;">
+      <div style="position:absolute; left:-10%; bottom:-30%; width:70%; height:80%; border-radius:50%; background:radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--brand) 16%, transparent), transparent 66%); filter:blur(26px); animation:jai-pool 26s cubic-bezier(.4,0,.2,1) infinite alternate;"></div>
+      <div style="position:absolute; right:-12%; top:-24%; width:64%; height:74%; border-radius:50%; background:radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--brand-2) 14%, transparent), transparent 66%); filter:blur(30px); animation:jai-pool2 32s cubic-bezier(.4,0,.2,1) infinite alternate;"></div>
+    </div>
+    <div style="position:relative; max-width:1180px; margin:0 auto; padding:0 24px;">
+      <p style="text-align:center; font-size:11px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--brand); margin:0 0 14px;">{{ t.pr_ey }}</p>
+      <h2 style="text-align:center; font-size:clamp(30px,4vw,46px); font-weight:600; letter-spacing:-.055em; line-height:1.08; margin:0 0 16px; color:var(--ink);">{{ t.pr_h }}</h2>
+      <p style="text-align:center; color:var(--muted); font-size:17.5px; max-width:620px; margin:0 auto 30px; line-height:1.75;">{{ t.pr_sub }}</p>
+      <p style="max-width:720px; margin:0 auto 30px; text-align:center; font-size:13.5px; line-height:1.65; color:var(--muted); background:var(--panel-hover); border:0; border-radius:12px; padding:14px 18px;"><b style="color:var(--ink);">{{ t.pr_testing_b }}</b> {{ t.pr_testing }}</p>
+      <div data-r="g4" style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; align-items:stretch;">
+        <sc-for list="{{ plans }}" as="p" hint-placeholder-count="4">
+          <div style="position:relative; height:100%; display:flex; flex-direction:column; gap:4px; border-radius:24px; padding:28px 22px; border:1px solid {{ p.border }}; background:{{ p.bg }}; box-shadow:var(--shadow); opacity:{{ p.opacity }};">
+            <span aria-hidden="true" style="position:absolute; inset:-1px; border-radius:24px; pointer-events:none; overflow:hidden; opacity:{{ p.waveOn }};">
+              <span style="position:absolute; inset:-30%; border-radius:50%; background:radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 42%, transparent 70%); animation:{{ p.wave }};"></span>
+            </span>
+            <span style="position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:{{ p.tagBg }}; color:#fff; font-size:11.5px; font-weight:700; padding:4px 14px; border-radius:10px; white-space:nowrap;">{{ p.tag }}</span>
+            <div style="font-size:16px; font-weight:600; color:var(--ink); margin-bottom:4px; min-height:22px;">{{ p.name }}</div>
+            <div style="white-space:nowrap; font-size:36px; font-weight:700; color:var(--ink); letter-spacing:-1.5px; margin:8px 0 2px; line-height:1; min-height:44px; display:flex; align-items:baseline;">{{ p.price }}<small style="font-size:14px; font-weight:500; color:var(--muted); margin-left:4px;">{{ p.cur }}</small></div>
+            <div style="font-size:13.5px; color:var(--muted); margin-bottom:18px; min-height:20px;">{{ p.per }}</div>
+            <div style="font-size:12.5px; color:var(--muted); line-height:1.45; margin-bottom:14px; min-height:58px;">{{ p.for }}</div>
+            <ul style="list-style:none; margin:0 0 22px; padding:0; display:flex; flex-direction:column; gap:10px; flex:1;">
+              <sc-for list="{{ p.features }}" as="f" hint-placeholder-count="4">
+                <li style="font-size:14px; color:var(--muted); display:flex; align-items:flex-start; gap:9px; line-height:1.45;"><span style="color:var(--muted-dim); font-size:12px; flex-shrink:0;">✓</span><span>{{ f }}</span></li>
+              </sc-for>
+            </ul>
+            <a href="JuristAI Login.dc.html" style="display:inline-flex; align-items:center; justify-content:center; width:100%; padding:13px; border-radius:12px; font-size:15px; font-weight:600; background:{{ p.btnBg }}; border:1px solid {{ p.btnBorder }}; color:{{ p.btnColor }};">{{ p.btn }}</a>
+          </div>
+        </sc-for>
+      </div>
+      <p style="max-width:760px; margin:34px auto 0; text-align:center; font-size:13.5px; line-height:1.7; color:var(--muted);"><b style="color:color-mix(in srgb, var(--ink) 82%, var(--muted));">{{ t.pr_note_b }}</b> {{ t.pr_note }}</p>
+    </div>
+  </section>
+
+  <section id="faq" data-r="sec" style="position:relative; padding:88px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--panel-solid) 38%, transparent);">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; overflow:hidden; mask-image:radial-gradient(120% 90% at 50% 50%, #000 30%, transparent 88%); -webkit-mask-image:radial-gradient(120% 90% at 50% 50%, #000 30%, transparent 88%);">
+        <sc-for list="{{ flapCells }}" as="fc" hint-placeholder-count="0">
+          <span style="position:absolute; left:{{ fc.x }}; top:{{ fc.y }}; width:34px; height:20px; border-radius:3px; background:color-mix(in srgb, var(--ink) 5%, transparent); transform-origin:center; animation:jai-flapcell {{ fc.dur }} steps(1) {{ fc.delay }} infinite;"></span>
+        </sc-for>
+    </div>
+    <div style="position:relative; max-width:1180px; margin:0 auto; padding:0 24px;">
+      <p style="text-align:center; font-size:11px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--brand); margin:0 0 14px;">{{ t.faq_ey }}</p>
+      <h2 style="text-align:center; font-size:clamp(30px,4vw,46px); font-weight:600; letter-spacing:-.055em; line-height:1.08; margin:0 0 48px; color:var(--ink);">{{ t.faq_h }}</h2>
+      <div style="max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:10px;">
+        <div ref="{{ faqRef }}" style="display:flex; flex-direction:column; gap:10px; perspective:1200px;">
+        <sc-for list="{{ faqs }}" as="f" hint-placeholder-count="5">
+          <div data-faqrow="1" style="background:color-mix(in srgb, var(--panel-solid) 88%, transparent); border:1px solid var(--line); border-radius:24px; overflow:hidden; box-shadow:var(--shadow); transform-origin:center center; backface-visibility:hidden;">
+            <button onClick="{{ f.toggle }}" style="width:100%; text-align:left; background:none; border:0; padding:20px 22px; font-size:16px; font-weight:600; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:14px; color:var(--ink); font-family:inherit;">
+              <span data-faqq="1">{{ f.q }}</span>
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0; color:var(--muted-dim); transform:{{ f.chev }}; transition:transform .3s;"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div style="max-height:{{ f.maxH }}; overflow:hidden; transition:max-height .38s ease;">
+              <p data-faqa="1" style="padding:0 22px 20px; color:var(--muted); font-size:15px; line-height:1.68; margin:0;">{{ f.a }}</p>
+            </div>
+          </div>
+        </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div style="position:relative; overflow:hidden; padding:76px 20px; text-align:center; background:var(--cta); border-top:1px solid rgba(255,255,255,.09); border-bottom:1px solid rgba(255,255,255,.09);">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; overflow:hidden;">
+      <div style="position:absolute; top:-40%; bottom:-40%; left:-30%; width:34%; background:linear-gradient(100deg, transparent, rgba(255,255,255,.055) 34%, rgba(120,170,255,.13) 50%, rgba(255,255,255,.055) 66%, transparent); filter:blur(22px); transform:rotate(14deg); animation:jai-sweep 13s cubic-bezier(.4,0,.2,1) infinite;"></div>
+      <div style="position:absolute; inset:0; background:radial-gradient(60% 90% at 50% 120%, rgba(88,165,255,.16), transparent 70%); animation:jai-ctaglow 13s cubic-bezier(.4,0,.2,1) infinite;"></div>
+    </div>
+    <h2 style="position:relative; font-size:clamp(30px,4.5vw,50px); font-weight:600; color:#f8fafc; letter-spacing:-.055em; line-height:1.05; margin:0 0 18px;">{{ t.cta_h }}</h2>
+    <p style="position:relative; color:#cbd5e1; font-size:18px; margin:0 auto 34px; max-width:500px; line-height:1.75;">{{ t.cta_p }}</p>
+    <div style="position:relative; width:min(100%,300px); margin-inline:auto;">
+      <a href="JuristAI Login.dc.html" style="display:inline-flex; width:100%; align-items:center; justify-content:center; padding:16px 34px; border-radius:12px; background:#f8fafc; border:1px solid rgba(255,255,255,.84); color:#10203a; font-size:17px; font-weight:600; box-shadow:0 18px 44px -24px rgba(0,0,0,.72);">{{ t.cta_btn }}</a>
+    </div>
+  </div>
+
+  <footer style="background:#080b15; color:rgba(255,255,255,.55); padding:64px 0 32px; border-top:1px solid var(--line);">
+    <div style="max-width:1180px; margin:0 auto; padding:0 24px;">
+      <div data-r="foot" style="display:grid; grid-template-columns:1.8fr 1fr 1fr 1fr; gap:36px; margin-bottom:48px;">
+        <div>
+          <img src="brand/wordmark-filled-dark.png" alt="JuristAI" style="height:34px; width:auto; object-fit:contain; display:block; margin-bottom:6px;">
+          <p style="font-size:14px; line-height:1.65; margin-top:12px; max-width:280px; color:rgba(255,255,255,.42);">{{ t.foot_desc }}</p>
+        </div>
+        <div>
+          <h4 style="color:#f8fafc; font-size:14px; font-weight:600; margin:0 0 16px;">{{ t.foot_prod }}</h4>
+          <a href="#features" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.nav_features }}</a>
+          <a href="#how" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.nav_how }}</a>
+          <a href="#pricing" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.nav_pricing }}</a>
+        </div>
+        <div>
+          <h4 style="color:#f8fafc; font-size:14px; font-weight:600; margin:0 0 16px;">{{ t.foot_comp }}</h4>
+          <a href="#faq" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.nav_faq }}</a>
+          <a href="JuristAI Login.dc.html" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.nav_login }}</a>
+          <a href="https://t.me/yuristga_savolbot" target="_blank" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.foot_tg }}</a>
+        </div>
+        <div>
+          <h4 style="color:#f8fafc; font-size:14px; font-weight:600; margin:0 0 16px;">{{ t.foot_leg }}</h4>
+          <a href="oferta.html" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.foot_offer }}</a>
+          <a href="maxfiylik.html" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.foot_priv }}</a>
+          <a href="shartlar.html" style="display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none;">{{ t.foot_terms }}</a>
+        </div>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,.08); padding-top:24px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; font-size:13px; color:rgba(255,255,255,.4);">
+        <span>{{ t.foot_copy }}</span>
+        <span>{{ t.foot_disc }}</span>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;lang&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;uz&quot;,&quot;ru&quot;],&quot;default&quot;:&quot;uz&quot;,&quot;tsType&quot;:&quot;'uz' | 'ru'&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;},&quot;heroMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;}}">
+const STR = {
+  uz: {
+    nav_features:"Imkoniyatlar", nav_how:"Qanday ishlaydi", nav_attorneys:"Advokatlar", nav_pricing:"Tariflar", nav_faq:"Savollar", nav_login:"Kirish", nav_cta:"Bepul boshlash",
+    hero_pill:"Lex.uz dagi eng so'nggi qonunlar asosida",
+    hero_title_a:"O'zbekiston huquqi bo'yicha", hero_title_em:"sun'iy intellekt", hero_title_b:"yuristingiz",
+    hero_sub:"Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.",
+    hero_btn1:"Bepul sinab ko'rish", hero_btn2:"Qanday ishlaydi?",
+    hs1_n:"50 000+", hs1:"normativ hujjatlar bazasi", hs2_n:"lex.uz", hs2:"kunlik yangilanish", hs3_n:"3", hs3:"til: o‘zbek, rus, ingliz",
+    mock_q:"Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
+    mock_a1:"Svetoforning taqiqlovchi signalida o'tish ", mock_a_em:"ma'muriy huquqbuzarlik", mock_a2:" bo'lib, jarima belgilangan. Aniq miqdor amaldagi tahrirga bog'liq.",
+    mock_src:"Ma'muriy javobgarlik kodeksi, 128⁴-modda",
+    trust_label:"Qamrab oladi",
+    marquee:["Mehnat huquqi","Oila huquqi","Fuqarolik huquqi","Soliq huquqi","Jinoyat huquqi","Ma'muriy javobgarlik","Korporativ huquq","Tadbirkorlik","Uy-joy huquqi","Mulk huquqi","Notariat"],
+    stats:["Huquqiy soha","Manbaga asoslangan","Javob vaqti","Doimo ulangan"],
+    feat_ey:"Nima uchun JuristAI", feat_h_a:"Oddiy chatbot emas —", feat_h_em:"huquqiy aniqlik",
+    feat_sub:"Har bir javob amaldagi qonun matniga bog'lanadi. To'qib chiqarilgan havolalar yo'q.",
+    feat1_h:"AI huquqiy tahlil", feat1_p:"Murakkab savollarni tushunadi, qonun normalarini tahlil qilib, aniq xulosa beradi.",
+    feat2_h:"Lex.uz RAG qidiruv", feat2_p:"Javoblar bevosita amaldagi qonunlardan. Eski tahrirlar avtomatik chetlab o'tiladi.",
+    feat3_h:"Manbalar bilan", feat3_p:"Har bir javob ostida modda va lex.uz havolasi — o'zingiz tekshira olasiz.",
+    feat4_h:"Hujjat tahlili", feat4_p:"Shartnoma yoki hujjatni yuklang — JuristAI xavfli nuqtalarni ko'rsatadi.",
+    feat5_h:"Telegram orqali", feat5_p:"Ro'yxatdan o'tish va kirish Telegram orqali — parol kerak emas.",
+    feat6_h:"Maxfiy va xavfsiz", feat6_p:"Savollaringiz himoyalangan. Ma'lumotlar uchinchi shaxslarga berilmaydi.",
+    bc1:"128⁴-modda", bc2:"165-modda", bc3:"56-modda", b_match:"84% mos kelish darajasi",
+    br1:"Ma'muriy kodeks, 128⁴", br2:"Mehnat kodeksi, 165", br3:"Fuqarolik kodeksi, 56",
+    rag_an_ey:"Tahlil", rag_an_p:"128⁴-modda svetoforning taqiqlovchi signaliga yoki tartibga soluvchining ishorasiga bo‘ysunmaslikni ikki holatga ajratadi — jarima qaysi chegaradan o‘tganingizga bog‘liq.",
+    rag_analysis:[["0,5 BHM","To‘xtash chizig‘ini bosib kirish — chiziq yoki belgi bilan belgilangan joydan oshib ketish, lekin chorrahaga o‘tmaslik."],["3 BHM","Taqiqlovchi signal yoki ishoraga bo‘ysunmasdan butunlay o‘tib ketish."]],
+    b_src_badge:"128⁴-modda · lex.uz", bs1:"SSL/TLS", bs2:"Shifrlash", bs3:"✓ Xavfsiz",
+    how_ey:"3 oddiy qadam", how_h:"Daqiqada javob oling", how_sub:"Yurist qabuliga yozilish shart emas.",
+    steps:[["Savolingizni yozing","Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas."],["AI qonunni qidiradi","JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi."],["Manbali javob","Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda."]],
+    testi_ey:"Foydalanuvchilar fikri", testi_h:"Ular allaqachon ishlayapti",
+    testimonials:[["Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.","Sarvar T.","Kichik biznes egasi","ST"],["Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!","Dilnoza M.","Tadbirkor","DM"],["Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!","Бахром А.","Menejer","БА"]],
+    sc_h_a:"Har bir javob", sc_h_em:"tekshiriladigan", sc_h_b:"manbaga ega",
+    sc_p:"Boshqa AI lar havolani to'qib chiqarishi mumkin. JuristAI esa faqat lex.uz dagi haqiqiy qonun matnidan foydalanadi.",
+    checks:["Faqat amaldagi (eng so'nggi) qonun tahriri","Aniq modda va band ko'rsatiladi","To'g'ridan-to'g'ri lex.uz havolasi","O'zbek va rus tillarida"],
+    sc_mock_title:"Namuna javob", sc_q:"Ish haqi kechiktirilsa nima qilaman?",
+    sc_a1:"Ish beruvchi ish haqini o'z vaqtida to'lashi shart. ", sc_a_em:"Mehnat kodeksi", sc_a2:"ga ko'ra kechiktirilgan har bir kun uchun kompensatsiya talab qilishingiz mumkin.",
+    sc_src:"Mehnat kodeksi, 333-modda",
+    pr_ey:"Tariflar", pr_h:"Sizga mos rejani tanlang", pr_sub:"Bepul boshlang — karta kerak emas. Istalgan vaqtda bekor qilasiz.",
+    pr_testing_b:"Platforma sinov bosqichida.", pr_testing:"To‘lov tizimi hali ulanmagan — hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak bo‘lsa, «Xabar berish» tugmasini bosing.",
+    pr_note_b:"Kam ishlatdingizmi — kamroq to‘laysiz.", pr_note:"Har oy sarfingizni hisoblab boramiz: rejangizni to‘liq ishlatmagan bo‘lsangiz, farqi keyingi oy uchun chegirma sifatida qaytariladi. Ortiqcha to‘lov yo‘q.",
+    p_soon:"Tez orada", p_soon_btn:"Xabar berish", p1_tag:"Boshlash uchun", p_cur:" so'm", p_per:"oyiga",
+    plans:[
+      {name:"Bepul", price:"Bepul", cur:"", per:"Doimo bepul", tag:"Boshlash uchun", featured:true, btn:"Bepul boshlash", forWhom:"Platformani sinab ko‘rish va kundalik oddiy savollar uchun.", features:["Kuniga 10 ta savol — 30 kun","So‘ngra kuniga 3 ta, muddatsiz","Har bir javob lex.uz manbasi bilan","Karta talab qilinmaydi"]},
+      {name:"Silver", price:"199 000", cur:" so'm", per:"oyiga", tag:"Tez orada", featured:false, btn:"Xabar berish", forWhom:"Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.", features:["Cheksiz AI chat","Oyiga ~39 ta yuridik xulosa krediti","Oyiga ~95 ta hujjat tayyorlash","O‘z shablonlaringizni yuklash"]},
+      {name:"Gold", price:"399 000", cur:" so'm", per:"oyiga", tag:"Tez orada", featured:false, btn:"Xabar berish", forWhom:"Yuridik bo‘lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.", features:["Cheksiz AI chat","Oyiga ~74 ta yuridik xulosa krediti","Oyiga ~217 ta hujjat","Skan va rasmdan hujjat tahlili","Ustuvor navbat — tezroq javob"]},
+      {name:"Platinum", price:"999 000", cur:" so'm", per:"oyiga", tag:"Tez orada", featured:false, btn:"Xabar berish", forWhom:"Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya.", features:["Cheksiz AI chat","Oyiga ~182 ta yuridik xulosa krediti","Oyiga ~542 ta hujjat","Shaxsiy konsierj va o‘qitish","API orqali integratsiya"]}
+    ],
+    faq_ey:"Savol-javob", faq_h:"Tez-tez beriladigan savollar",
+    faqs:[["JuristAI yuristning o'rnini bosadimi?","JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz."],["Javoblar qanchalik ishonchli?","Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi. Siz manbani o'zingiz tekshirishingiz mumkin."],["Qanday ro'yxatdan o'taman?","Telegram yoki Google orqali bir necha soniyada. Parol kerak emas."],["Eski qonunga asoslangan javob bermaymi?","Yo'q. Tizim eski tahrirlarni avtomatik aniqlab, har doim amaldagi versiyaga o'tadi."],["Qaysi tillarda ishlaydi?","O'zbek va rus tillarida savol berishingiz va javob olishingiz mumkin."]],
+    faqs2:[["Hujjat loyihasini tuzib bera oladimi?","Ha. Shartnoma, ariza va da'vo loyihalarini kiritgan ma'lumotlaringiz asosida tayyorlaydi va tahrirlash uchun beradi."],["Ma'lumotlarim maxfiy saqlanadimi?","Suhbatlar shifrlangan holda saqlanadi va uchinchi shaxslarga berilmaydi. Istagan vaqtda o'chirishingiz mumkin."],["Jarima miqdorini hisoblab beradimi?","Ha. BHM asosida amaldagi stavka bo'yicha aniq summani va jarima ballini ko'rsatadi."],["Sud amaliyotini ham ko'rsatadimi?","Tegishli hollarda o'xshash ishlar bo'yicha sud qarorlariga havola qiladi."],["Telegram bot bilan farqi bormi?","Bot tezkor savollar uchun, portal esa hujjat tayyorlash va uzoq suhbatlar uchun mo'ljallangan."]],
+    cta_h:"Huquqiy savolingiz bormi?", cta_p:"Hoziroq bepul sinab ko'ring — bir soniyada manbali javob oling.", cta_btn:"Bepul boshlash",
+    led_live:"Efirda",
+    led_ads:[
+      ["Huquqiy tahlil","Savolingizga bir soniyada javob","Amaldagi qonun matnidan, manba havolasi bilan."],
+      ["Hujjat tayyorlash","Shartnoma va da'vo loyihalari","Ma'lumotlaringizni kiriting — loyihani JuristAI yozadi."],
+      ["Manbali javob","Har bir xulosa lex.uz ga bog'langan","Moddani o'zingiz ochib tekshirishingiz mumkin."],
+      ["Ekspert nazorati","Yurist tomonidan tasdiqlangan","Muhim javoblar mutaxassis ko'rigidan o'tadi."]
+    ],
+    foot_desc:"O'zbekiston qonunchiligi bo'yicha sun'iy intellekt asosidagi huquqiy yordamchi. Lex.uz dagi amaldagi qonunlar asosida.",
+    foot_prod:"Mahsulot", foot_comp:"Kompaniya", foot_leg:"Huquqiy", foot_tg:"Telegram bot", foot_offer:"Oferta", foot_priv:"Maxfiylik", foot_terms:"Shartlar",
+    foot_copy:"© 2026 JuristAI. Barcha huquqlar himoyalangan.", foot_disc:"Eslatma: JuristAI javoblari ma'lumot xarakterida — rasmiy yuridik maslahat o'rnini bosmaydi."
+  },
+  ru: {
+    nav_features:"Возможности", nav_how:"Как работает", nav_attorneys:"Адвокаты", nav_pricing:"Тарифы", nav_faq:"Вопросы", nav_login:"Войти", nav_cta:"Начать бесплатно",
+    hero_pill:"На основе актуальных законов с Lex.uz",
+    hero_title_a:"Ваш юрист на базе", hero_title_em:"искусственного интеллекта", hero_title_b:"по законодательству Узбекистана",
+    hero_sub:"Задайте вопрос на простом языке — JuristAI даст точный ответ со ссылками на действующие законы. 24/7, за секунду.",
+    hero_btn1:"Попробовать бесплатно", hero_btn2:"Как это работает?",
+    hs1_n:"50 000+", hs1:"нормативных документов в базе", hs2_n:"lex.uz", hs2:"ежедневное обновление", hs3_n:"3", hs3:"языка: узбекский, русский, английский",
+    mock_q:"Сколько штраф за проезд на красный свет?",
+    mock_a1:"Проезд на запрещающий сигнал светофора является ", mock_a_em:"административным правонарушением", mock_a2:" и влечёт штраф. Точный размер зависит от действующей редакции.",
+    mock_src:"Кодекс об административной ответственности, ст. 128⁴",
+    trust_label:"Охватывает",
+    marquee:["Трудовое право","Семейное право","Гражданское право","Налоговое право","Уголовное право","Административная ответственность","Корпоративное право","Предпринимательство","Жилищное право","Право собственности","Нотариат"],
+    stats:["Правовых сфер","На основе источников","Время ответа","Всегда онлайн"],
+    feat_ey:"Почему JuristAI", feat_h_a:"Не просто чатбот —", feat_h_em:"юридическая точность",
+    feat_sub:"Каждый ответ привязан к тексту действующего закона. Никаких выдуманных ссылок.",
+    feat1_h:"Правовой анализ ИИ", feat1_p:"Понимает сложные вопросы, анализирует нормы закона и даёт понятное заключение.",
+    feat2_h:"Поиск по Lex.uz (RAG)", feat2_p:"Ответы напрямую из действующих законов. Устаревшие редакции автоматически обходятся.",
+    feat3_h:"Со ссылками", feat3_p:"Под каждым ответом — соответствующая статья и ссылка на Lex.uz.",
+    feat4_h:"Анализ документов", feat4_p:"Загрузите договор — JuristAI прочитает и укажет рискованные пункты.",
+    feat5_h:"Через Telegram", feat5_p:"Регистрация и вход через Telegram — без пароля, за несколько секунд.",
+    feat6_h:"Конфиденциально", feat6_p:"Ваши вопросы защищены. Данные не передаются третьим лицам.",
+    bc1:"Ст. 128⁴", bc2:"Ст. 165", bc3:"Ст. 56", b_match:"84% релевантность",
+    br1:"Адм. кодекс, ст. 128⁴", br2:"Трудовой кодекс, ст. 165", br3:"Гражданский кодекс, ст. 56",
+    rag_an_ey:"Анализ", rag_an_p:"Статья 128⁴ разделяет неподчинение запрещающему сигналу светофора или жесту регулировщика на два случая — размер штрафа зависит от того, какую границу вы пересекли.",
+    rag_analysis:[["0,5 БРВ","Выезд за стоп-линию, обозначенную разметкой или знаком, без проезда перекрёстка."],["3 БРВ","Полный проезд на запрещающий сигнал светофора или жест регулировщика."]],
+    b_src_badge:"Ст. 128⁴ · lex.uz", bs1:"SSL/TLS", bs2:"Шифрование", bs3:"✓ Защищено",
+    how_ey:"3 простых шага", how_h:"Получите ответ за минуту", how_sub:"Не нужно записываться к юристу.",
+    steps:[["Задайте вопрос","Опишите ситуацию на простом языке — юридические термины не нужны."],["ИИ ищет в законах","JuristAI находит наиболее релевантные нормы из действующих законов Lex.uz."],["Ответ с источниками","Чёткий вывод с нужными статьями и ссылками — за секунду."]],
+    testi_ey:"Отзывы пользователей", testi_h:"Уже используют JuristAI",
+    testimonials:[["Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.","Sarvar T.","Владелец малого бизнеса","ST"],["Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!","Dilnoza M.","Предприниматель","DM"],["Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!","Бахром А.","Менеджер","БА"]],
+    sc_h_a:"Каждый ответ имеет", sc_h_em:"проверяемый", sc_h_b:"источник",
+    sc_p:"Другие ИИ могут выдумывать ссылки. JuristAI использует только реальный текст законов с Lex.uz.",
+    checks:["Только актуальная (последняя) редакция закона","Указывается точная статья и пункт","Прямая ссылка на Lex.uz","На узбекском и русском языках"],
+    sc_mock_title:"Пример ответа", sc_q:"Что делать, если задержали зарплату?",
+    sc_a1:"Работодатель обязан выплачивать зарплату вовремя. По ", sc_a_em:"Трудовому кодексу", sc_a2:" за каждый день задержки вы вправе требовать компенсацию.",
+    sc_src:"Трудовой кодекс, статья 333",
+    pr_ey:"Тарифы", pr_h:"Выберите подходящий план", pr_sub:"Начните бесплатно — карта не нужна. Отмена в любой момент.",
+    pr_testing_b:"Платформа в стадии тестирования.", pr_testing:"Платёжная система ещё не подключена — сейчас все возможности открыты на бесплатном тарифе. Нужен платный — нажмите «Сообщить мне».",
+    pr_note_b:"Меньше используете — меньше платите.", pr_note:"Мы считаем ваш расход каждый месяц: если вы не выбрали тариф полностью, разница возвращается скидкой на следующий месяц. Никаких переплат.",
+    p_soon:"Скоро", p_soon_btn:"Сообщить мне", p1_tag:"Для старта", p_cur:" сум", p_per:"в месяц",
+    plans:[
+      {name:"Бесплатный", price:"Бесплатно", cur:"", per:"Навсегда бесплатно", tag:"Для старта", featured:true, btn:"Начать бесплатно", forWhom:"Чтобы попробовать платформу и для простых повседневных вопросов.", features:["10 вопросов в день — 30 дней","Далее 3 в день, бессрочно","Каждый ответ со ссылкой на lex.uz","Без привязки карты"]},
+      {name:"Silver", price:"199 000", cur:" сум", per:"в месяц", tag:"Скоро", featured:false, btn:"Сообщить мне", forWhom:"Для частных юристов, предпринимателей и небольших офисов.", features:["Безлимитный AI-чат","~39 кредитов на юрзаключения в месяц","~95 документов в месяц","Загрузка своих шаблонов"]},
+      {name:"Gold", price:"399 000", cur:" сум", per:"в месяц", tag:"Скоро", featured:false, btn:"Сообщить мне", forWhom:"Для юротдела, HR и бухгалтерии — тем, кто работает с документами каждый день.", features:["Безлимитный AI-чат","~74 кредита на заключения в месяц","~217 документов в месяц","Анализ сканов и фото документов","Приоритетная очередь"]},
+      {name:"Platinum", price:"999 000", cur:" сум", per:"в месяц", tag:"Скоро", featured:false, btn:"Сообщить мне", forWhom:"Для компаний и адвокатских бюро — большие объёмы и интеграция.", features:["Безлимитный AI-чат","~182 кредита на заключения в месяц","~542 документа в месяц","Персональный консьерж и обучение","Интеграция по API"]}
+    ],
+    faq_ey:"Вопросы и ответы", faq_h:"Часто задаваемые вопросы",
+    faqs:[["Заменяет ли JuristAI юриста?","JuristAI предоставляет быструю информацию с источниками, но для сложных дел рекомендуем консультироваться с квалифицированным юристом."],["Насколько надёжны ответы?","Каждый ответ основан на тексте действующего закона с Lex.uz. Вы можете проверить источник самостоятельно."],["Как зарегистрироваться?","Через Telegram или Google за несколько секунд. Пароль не нужен."],["Не даст ли ответ на основе устаревшего закона?","Нет. Система автоматически определяет устаревшие редакции и переходит к действующей версии."],["На каких языках работает?","Вы можете задавать вопросы и получать ответы на узбекском и русском языках."]],
+    faqs2:[["Может ли составить проект документа?","Да. Готовит проекты договоров, заявлений и исков на основе введённых вами данных и отдаёт на правку."],["Мои данные хранятся конфиденциально?","Переписка хранится в зашифрованном виде и не передаётся третьим лицам. Вы можете удалить её в любой момент."],["Рассчитает ли размер штрафа?","Да. Указывает точную сумму по действующей ставке БРВ и количество штрафных баллов."],["Показывает ли судебную практику?","В соответствующих случаях ссылается на решения судов по аналогичным делам."],["Чем отличается от Telegram-бота?","Бот — для быстрых вопросов, портал — для подготовки документов и длинных консультаций."]],
+    cta_h:"Есть юридический вопрос?", cta_p:"Попробуйте прямо сейчас — получите ответ с источниками за секунду.", cta_btn:"Начать бесплатно",
+    led_live:"В эфире",
+    led_ads:[
+      ["Юридический анализ","Ответ на ваш вопрос за секунду","Из текста действующего закона, со ссылкой на источник."],
+      ["Подготовка документов","Проекты договоров и исков","Введите данные — проект напишет JuristAI."],
+      ["Ответ с источником","Каждый вывод привязан к lex.uz","Вы можете открыть статью и проверить сами."],
+      ["Экспертный контроль","Подтверждено юристом","Важные ответы проходят проверку специалиста."]
+    ],
+    foot_desc:"Юридический помощник на базе ИИ по законодательству Узбекистана. На основе действующих законов Lex.uz.",
+    foot_prod:"Продукт", foot_comp:"Компания", foot_leg:"Правовое", foot_tg:"Telegram-бот", foot_offer:"Оферта", foot_priv:"Конфиденциальность", foot_terms:"Условия",
+    foot_copy:"© 2026 JuristAI. Все права защищены.", foot_disc:"Примечание: ответы JuristAI носят информационный характер и не являются официальной юридической консультацией."
+  }
+};
+
+const STAT_NUMS = ["13+", "100%", "<1s", "24/7"];
+
+const CHAT = {
+  uz: [
+    { q: "Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
+      a: "Svetoforning taqiqlovchi signalida toʻxtash chizigʻini bosib kirishga 0.5 BHM, svetoforning taqiqlovchi signaliga boʻysunmasdan oʻtishi 3 BHM jarimaga va 1 jarima balliga sabab bo'ladi.",
+      src: "Ma'muriy javobgarlik kodeksi, 128⁴-modda" },
+    { q: "IT-park rezidentiman, chet eldan mutaxassisni ishga olish uchun tasdiqnoma kerakmi?",
+      a: "Yo'q, shart emas.",
+      src: "VMQ-589 Nizomi, 17-bandi" },
+    { q: "Maʼmuriy yoʻl bilan ushlab turish qancha vaqt bo'lishi mumkin?",
+      a: "3 soatdan oshiq bo'lishi mumkin emas.",
+      src: "MJTK 288-modda, 1-qism" },
+  ],
+  ru: [
+    { q: "Сколько штраф за проезд на красный свет?",
+      a: "Выезд за стоп-линию на запрещающий сигнал — 2 БРВ, проезд на запрещающий сигнал светофора — 3 БРВ штрафа и 1 штрафной балл.",
+      src: "Кодекс об административной ответственности, ст. 128⁴" },
+    { q: "Я резидент IT-park — нужно ли подтверждение для найма иностранного специалиста?",
+      a: "Нет, не требуется.",
+      src: "Положение ПКМ-589, пункт 17" },
+    { q: "Сколько может длиться административное задержание?",
+      a: "Не более 3 часов.",
+      src: "КАО, ст. 288, часть 1" },
+  ],
+};
+
+const CODE_REFS = [
+  { label: "FK 1102-modda",          x: "44%", y: "42%", dur: "11s", delay: "0s",    anim: "jai-zoom-a" },
+  { label: "MK 333-modda",           x: "56%", y: "50%", dur: "13s", delay: "1.6s",  anim: "jai-zoom-b" },
+  { label: "JK 168-modda",           x: "50%", y: "38%", dur: "12s", delay: "3.1s",  anim: "jai-zoom-c" },
+  { label: "JIK 128⁴",               x: "47%", y: "55%", dur: "14s", delay: "4.7s",  anim: "jai-zoom-d" },
+  { label: "lex.uz",                 x: "58%", y: "44%", dur: "10s", delay: "6.2s",  anim: "jai-zoom-a" },
+  { label: "FK 415-modda",           x: "42%", y: "52%", dur: "13s", delay: "7.8s",  anim: "jai-zoom-b" },
+  { label: "SK 25-modda",            x: "53%", y: "34%", dur: "12s", delay: "9.4s",  anim: "jai-zoom-c" },
+  { label: "MK 106-modda",           x: "46%", y: "48%", dur: "15s", delay: "11s",   anim: "jai-zoom-d" },
+  { label: "SK 45-modda",            x: "55%", y: "58%", dur: "13s", delay: "12.6s", anim: "jai-zoom-a" },
+  { label: "FK 234-modda",           x: "49%", y: "46%", dur: "11s", delay: "14.2s", anim: "jai-zoom-b" },
+  { label: "JK 97-modda",            x: "57%", y: "40%", dur: "14s", delay: "15.8s", anim: "jai-zoom-c" },
+  { label: "MJTK 135-modda",         x: "45%", y: "36%", dur: "12s", delay: "17.4s", anim: "jai-zoom-d" },
+  { label: "PQ-10",                  x: "59%", y: "53%", dur: "10s", delay: "19s",   anim: "jai-zoom-a" },
+  { label: "VMQ-426",                x: "43%", y: "45%", dur: "13s", delay: "20.6s", anim: "jai-zoom-b" },
+];
+
+class Component extends DCLogic {
+  state = { ad: 0, car: 0, lang: "uz", theme: "light", answered: false, openFaq: -1, prog: 0, ci: 0, qLen: 0, aLen: 0, dots: false, showSrc: false, sent: false, send: false, history: [] };
+
+  solve = React.createRef();
+  testiEl = React.createRef();
+  checksEl = React.createRef();
+  mockEl = React.createRef();
+  faqEl = React.createRef();
+  rafs = [];
+  fieldEl = React.createRef();
+
+  componentDidMount() {
+    this.setState({
+      lang: this.props.lang || "uz",
+      theme: this.props.theme || "light"
+    });
+    this.answerTimer = setTimeout(() => this.setState({ answered: true }), 2400);
+    this.progTimer = setTimeout(() => this.setState({ prog: 84 }), 700);
+    this.restartChat(0);
+    // shared typewriter: types each target, returns a promise-ish via callback
+    this.runType = (cards, cps, onDone) => {
+      const t0 = performance.now();
+      const tick = (now) => {
+        if (this.dead) return;
+        let done = true;
+        for (const c of cards) {
+          const n = Math.max(0, Math.min(c.full.length, Math.floor((now - t0 - (c.delay || 0)) / 1000 * cps)));
+          if (c.out.textContent.length !== n) c.out.textContent = c.full.slice(0, n);
+          if (c.caret) c.caret.style.opacity = (n > 0 && n < c.full.length) ? "1" : "0";
+          if (n < c.full.length) done = false;
+        }
+        if (done) { if (onDone) onDone(); return; }
+        (this.rafs = this.rafs || []).push(requestAnimationFrame(tick));
+      };
+      (this.rafs = this.rafs || []).push(requestAnimationFrame(tick));
+    };
+
+    // 3. testimonials — loop with a 3s break after the last quote finishes
+    this.startTesti = () => {
+      if (this.dead || this.typingTesti) return;
+      const root = this.testiEl.current || document.querySelector("#jai-root [data-r='g3']");
+      if (!root || !root.querySelector("[data-typed]")) return;
+      const r = root.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > (window.innerHeight || 800)) return;
+      this.typingTesti = true;
+      const cards = Array.prototype.map.call(root.querySelectorAll("blockquote"), (bq, i) => ({
+        out: bq.querySelector("[data-typed]"),
+        caret: bq.querySelector("[data-caret]"),
+        full: (bq.firstElementChild && bq.firstElementChild.textContent) || "",
+        delay: i * 320
+      })).filter(c => c.out);
+      const cycle = () => {
+        if (this.dead) return;
+        for (const c of cards) { c.out.textContent = ""; }
+        this.runType(cards, 42, () => {
+          this.testiLoopT = setTimeout(cycle, 3000);
+        });
+      };
+      cycle();
+    };
+
+    // 1. checklist — repeat with a 2s break after the last tick
+    this.checksIO = new IntersectionObserver((entries) => {
+      if (!entries.some(e => e.isIntersecting) || this.tickedChecks) return;
+      this.tickedChecks = true;
+      const root = this.checksEl.current;
+      if (!root) return;
+      const items = Array.prototype.slice.call(root.querySelectorAll("[data-chk]"));
+      const gap = 520;
+      const cycle = () => {
+        if (this.dead) return;
+        this.checkTs = [];
+        for (const li of items) {
+          const box = li.querySelector("[data-chkbox]");
+          const path = li.querySelector("[data-chkpath]");
+          const txt = li.querySelector("[data-chktext]");
+          if (path) { path.style.animation = "none"; path.style.strokeDashoffset = "26"; }
+          if (box) { box.style.animation = "none"; box.style.borderColor = "var(--line)"; box.style.background = "transparent"; }
+          if (txt) txt.style.color = "var(--muted)";
+        }
+        items.forEach((li, i) => {
+          this.checkTs.push(setTimeout(() => {
+            if (this.dead) return;
+            const box = li.querySelector("[data-chkbox]");
+            const path = li.querySelector("[data-chkpath]");
+            const txt = li.querySelector("[data-chktext]");
+            if (path) { path.style.strokeDashoffset = ""; path.style.animation = "jai-tickdraw 420ms cubic-bezier(.2,.8,.2,1) forwards"; }
+            if (box) {
+              box.style.borderColor = "var(--brand-border)";
+              box.style.background = "var(--brand-soft)";
+              box.style.animation = "jai-tickpop 420ms cubic-bezier(.2,.8,.2,1)";
+            }
+            if (txt) this.checkTs.push(setTimeout(() => { if (!this.dead) txt.style.color = "var(--ink)"; }, 180));
+          }, 260 + i * gap));
+        });
+        this.checkTs.push(setTimeout(cycle, 260 + items.length * gap + 420 + 2000));
+      };
+      cycle();
+    }, { threshold: 0.35 });
+    this.attachChecks = () => {
+      if (this.dead || this.checksObserved) return;
+      const root = this.checksEl.current;
+      if (root) { this.checksIO.observe(root); this.checksObserved = true; return; }
+      this.checksAttachT = setTimeout(this.attachChecks, 200);
+    };
+    this.attachChecks();
+    [0, 400, 1500].forEach(d => setTimeout(() => { if (!this.dead) this.playLedVideo(); }, d));
+
+    // 2. "Namuna javob" mock — question types, then the answer, then repeats
+    this.startMock = () => {
+      if (this.dead || this.mockRunning) return;
+      let root = this.mockEl.current;
+      if (!root) { const q = document.querySelector("#jai-root [data-mockq]"); root = q && q.parentElement && q.parentElement.parentElement; }
+      if (!root || !root.querySelector("[data-mockq-out]")) return;
+      const r = root.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > (window.innerHeight || 800)) return;
+      this.mockRunning = true;
+      const qEl = root.querySelector("[data-mockq-out]");
+      const qCaret = root.querySelector("[data-mockq-caret]");
+      const aEl = root.querySelector("[data-mocka-out]");
+      const aCaret = root.querySelector("[data-mocka-caret]");
+      const srcEl = root.querySelector("[data-mocka-src]");
+      const qFull = (root.querySelector("[data-mockq] > span") || {}).textContent || "";
+      const ghost = root.querySelector("[data-mocka] > span");
+      const aFull = ghost ? Array.prototype.slice.call(ghost.childNodes)
+        .filter(n => n.nodeName !== "DIV")
+        .map(n => n.textContent).join("") : "";
+      if (!qEl || !aEl) return;
+      const cycle = () => {
+        if (this.dead) return;
+        qEl.textContent = ""; aEl.textContent = "";
+        if (srcEl) srcEl.style.opacity = "0";
+        this.runType([{ out: qEl, caret: qCaret, full: qFull }], 26, () => {
+          this.mockT = setTimeout(() => {
+            if (this.dead) return;
+            this.runType([{ out: aEl, caret: aCaret, full: aFull }], 46, () => {
+              if (srcEl) srcEl.style.opacity = "1";
+              this.mockT = setTimeout(cycle, 3200);
+            });
+          }, 700);
+        });
+      };
+      cycle();
+    };
+    // FAQ flipboard reveal — each row starts at 50% of the previous
+    this.startFaq = () => {
+      if (this.dead || this.faqDone) return;
+      const root = this.faqEl.current;
+      if (!root) return;
+      const rows = Array.prototype.slice.call(root.querySelectorAll("[data-faqrow]"));
+      if (!rows.length) return;
+      const r = root.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > (window.innerHeight || 800) * 0.9) return;
+      this.faqDone = true;
+      const dur = 900;
+      rows.forEach((row, i) => {
+        row.style.animation = "jai-flipboard " + dur + "ms cubic-bezier(.2,.8,.2,1) " + (i * dur * 0.5) + "ms both";
+      });
+      const intro = rows.length * dur * 0.5 + dur;
+      this.faqBatch = 0;
+      this.faqTs = [];
+      const flap = () => {
+        if (this.dead) return;
+        const lang = this.state.lang === "ru" ? "ru" : "uz";
+        const batches = [STR[lang].faqs, STR[lang].faqs2].filter(Boolean);
+        this.faqBatch = (this.faqBatch + 1) % batches.length;
+        const next = batches[this.faqBatch];
+        rows.forEach((row, i) => {
+          const d = i * 90;
+          this.faqTs.push(setTimeout(() => {
+            if (this.dead) return;
+            row.style.animation = "jai-flapout 300ms cubic-bezier(.4,0,.2,1) forwards";
+            this.faqTs.push(setTimeout(() => {
+              if (this.dead) return;
+              const pair = next[i % next.length];
+              const q = row.querySelector("[data-faqq]");
+              const a = row.querySelector("[data-faqa]");
+              if (q) q.textContent = pair[0];
+              if (a) a.textContent = pair[1];
+              row.style.animation = "jai-flapin 320ms cubic-bezier(.2,.8,.2,1) forwards";
+            }, 300));
+          }, d));
+        });
+        this.faqTs.push(setTimeout(flap, 4000));
+      };
+      this.faqTs.push(setTimeout(flap, intro + 4000));
+    };
+    this.visPoll = setInterval(() => {
+      if (this.startTesti) this.startTesti();
+
+      if (this.startFaq) this.startFaq();
+      if (this.typingTesti && this.faqDone) clearInterval(this.visPoll);
+    }, 400);
+    this.adT = setInterval(() => this.setState(s => ({ ad: (s.ad + 1) % 4 })), 4200);
+    this.carT = setInterval(() => this.setState(s => ({ car: (s.car + 1) % 3 })), 4000);
+
+    this.mouse = { x: 0, y: 0, tx: 0, ty: 0 };
+    this.onResize = () => this.sizeField();
+    this.onMove = (e) => {
+      const w = window.innerWidth || 1, h = window.innerHeight || 1;
+      this.mouse.tx = (e.clientX / w) * 2 - 1;
+      this.mouse.ty = (e.clientY / h) * 2 - 1;
+    };
+    this.onLeave = () => { this.mouse.tx = 0; this.mouse.ty = 0; };
+    window.addEventListener("resize", this.onResize);
+    window.addEventListener("scroll", this.onResize, { passive: true });
+    window.addEventListener("pointermove", this.onMove, { passive: true });
+    window.addEventListener("pointerleave", this.onLeave);
+    [0, 120, 500].forEach(d => setTimeout(() => this.sizeField(), d));
+    this.tiltMove = (e) => {
+      const card = e.target && e.target.closest && e.target.closest("[data-tilt]");
+      if (!card) return;
+      if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const r = card.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = "perspective(900px) rotateX(" + (py * 7).toFixed(2) + "deg) rotateY(" + (-px * 8).toFixed(2) + "deg) translateY(-3px) scale(1.012)";
+      card.style.setProperty("--gx", ((px + 0.5) * 100).toFixed(1) + "%");
+      card.style.setProperty("--gy", ((py + 0.5) * 100).toFixed(1) + "%");
+    };
+    this.tiltOut = (e) => {
+      const card = e.target && e.target.closest && e.target.closest("[data-tilt]");
+      if (!card) return;
+      if (e.relatedTarget && card.contains(e.relatedTarget)) return;
+      card.style.transform = "";
+      card.style.removeProperty("--gx");
+      card.style.removeProperty("--gy");
+    };
+    document.addEventListener("pointermove", this.tiltMove, { passive: true });
+    document.addEventListener("pointerout", this.tiltOut, { passive: true });
+    this.tick = 0;
+    const loop = () => { if (this.dead) return; this.drawField(); this.fieldRaf = requestAnimationFrame(loop); };
+    this.fieldRaf = requestAnimationFrame(loop);
+  }
+
+  fieldNode() {
+    let c = this.fieldEl && this.fieldEl.current;
+    if (!c) c = document.querySelector("[data-r='solve'] canvas");
+    return c;
+  }
+
+  sizeField() {
+    const c = this.fieldNode();
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    const dpr = 1;
+    this.fieldW = r.width; this.fieldH = r.height;
+    const cw = Math.round(r.width * dpr), ch = Math.round(r.height * dpr);
+    if (c.width !== cw || c.height !== ch) {
+      c.width = cw; c.height = ch;
+      c.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+  }
+
+  buildLadder(w, h) {
+    const rnd = (() => { let s = 20260829; return () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648; })();
+    const steps = 132, perRung = 9;
+    const pts = [];
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      pts.push({ t: t, k: 0, strand: true });
+      pts.push({ t: t, k: 1, strand: true });
+      if (i % 3 === 0) for (let j = 1; j < perRung; j++) pts.push({ t: t, k: j / perRung, strand: false });
+    }
+    for (const p of pts) {
+      p.sx = rnd() * w * 1.4 - w * 0.2;
+      p.sy = rnd() * h * 1.4 - h * 0.2;
+      p.ph = rnd() * Math.PI * 2;
+      p.sp = 0.4 + rnd() * 0.9;
+    }
+    this.ladder = pts;
+    this.ladderKey = Math.round(w) + "x" + Math.round(h);
+  }
+
+  drawField() {
+    const c = this.fieldNode();
+    if (!c) return;
+    if (!this.fieldW) { this.sizeField(); if (!this.fieldW) return; }
+    const w = this.fieldW, h = this.fieldH;
+    if (!this.ladder || this.ladderKey !== Math.round(w) + "x" + Math.round(h)) this.buildLadder(w, h);
+    const ctx = c.getContext("2d");
+    ctx.clearRect(0, 0, w, h);
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const sy = window.scrollY || window.pageYOffset || 0;
+    const wrap = this.solve && this.solve.current;
+    const vh = window.innerHeight || 800;
+    let p = 0;
+    if (wrap) {
+      const r = wrap.getBoundingClientRect();
+      p = (vh - r.top) / (r.height + vh);
+    }
+    // scroll position (not velocity) drives assembly: 0 at section entry, 1 by mid-section
+    let target = (p - 0.06) / 0.44;
+    target = Math.max(0, Math.min(1, target));
+    if (reduce) target = 1;
+    if (this.gather === undefined) this.gather = target;
+    this.gather += (target - this.gather) * 0.18;
+    const g = this.gather;
+    const ease = g * g * (3 - 2 * g);
+    this.tick = (this.tick || 0) + (reduce ? 0 : 0.01);
+
+    // diagonal helix axis, like the reference
+    const ang = -0.62;
+    const cs = Math.cos(ang), sn = Math.sin(ang);
+    const cx = w * 0.5, cy = h * 0.5;
+    const L = Math.hypot(w, h) * 1.15;
+    const R = Math.min(w, h) * 0.34;
+    const turns = 3.1;
+    const spin = this.tick * 0.55 + sy * 0.0016;
+
+    const dark = this.state.theme === "dark";
+    const blue = dark ? "128,176,255" : "37,88,214";
+    const pts = this.ladder;
+
+    for (const p of pts) {
+      const u = (p.t - 0.5) * L;
+      const a = p.t * Math.PI * 2 * turns + spin;
+      const off = Math.cos(a + p.k * Math.PI) * R;
+      const dep = (Math.sin(a + p.k * Math.PI) + 1) / 2;
+      const tx = cx + u * cs - off * sn;
+      const ty = cy + u * sn + off * cs;
+      const drift = 1 - ease;
+      p.x = p.sx + (tx - p.sx) * ease + Math.cos(this.tick * p.sp * 2 + p.ph) * 30 * drift;
+      p.y = p.sy + (ty - p.sy) * ease + Math.sin(this.tick * p.sp * 1.6 + p.ph) * 26 * drift;
+      p.dep = dep;
+    }
+
+    for (const p of pts) {
+      const base = p.strand ? 3.6 : 2.4;
+      const r = base * (0.45 + p.dep * 0.85) * (0.6 + ease * 0.6);
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(" + blue + "," + (0.3 + p.dep * 0.5 + ease * 0.2).toFixed(3) + ")";
+      ctx.arc(p.x, p.y, Math.max(0.6, r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  playLedVideo() {
+    document.querySelectorAll("#jai-root video[data-led-video]").forEach(v => {
+      v.muted = true; v.loop = true; v.playsInline = true;
+      const want = v.getAttribute("data-led-video");
+      this.ledCache = this.ledCache || {};
+      if (!v.dataset.ledBound) {
+        v.dataset.ledBound = "1";
+        v.addEventListener("ended", () => { v.currentTime = 0; v.play().catch(() => {}); });
+        v.addEventListener("playing", () => { v.style.opacity = "1"; });
+        v.addEventListener("pause", () => { if (!this.dead) v.play().catch(() => {}); });
+      }
+      if (!v.dataset.ledLoading) {
+        v.dataset.ledLoading = "1";
+        const use = (url) => { v.src = url; v.load(); const p = v.play(); if (p && p.catch) p.catch(() => { setTimeout(() => v.play().catch(() => {}), 300); }); };
+        if (this.ledCache[want]) use(this.ledCache[want]);
+        else fetch(want).then(r => { if (!r.ok) throw new Error("no asset"); return r.blob(); }).then(bl => {
+          if (this.dead) return;
+          this.ledCache[want] = URL.createObjectURL(bl);
+          use(this.ledCache[want]);
+        }).catch(() => {});
+      } else if (v.paused) {
+        v.play().catch(() => {});
+      }
+    });
+  }
+
+  componentDidUpdate() {
+    this.playLedVideo();
+    if (this.attachTesti) this.attachTesti();
+    if (this.attachChecks) this.attachChecks();
+  }
+
+  componentWillUnmount() {
+    clearTimeout(this.answerTimer);
+    clearTimeout(this.progTimer);
+    clearTimeout(this.chatT);
+    clearInterval(this.adT);
+    clearInterval(this.carT);
+    clearTimeout(this.testiAttachT);
+    clearTimeout(this.checksAttachT);
+    clearTimeout(this.testiLoopT);
+    clearTimeout(this.mockT);
+    clearInterval(this.visPoll);
+    (this.faqTs || []).forEach(clearTimeout);
+    (this.checkTs || []).forEach(clearTimeout);
+    (this.rafs || []).forEach(cancelAnimationFrame);
+    if (this.checksIO) this.checksIO.disconnect();
+
+    window.removeEventListener("resize", this.onResize);
+    window.removeEventListener("scroll", this.onResize);
+    window.removeEventListener("pointermove", this.onMove);
+    window.removeEventListener("pointerleave", this.onLeave);
+    document.removeEventListener("pointermove", this.tiltMove);
+    document.removeEventListener("pointerout", this.tiltOut);
+    if (this.fieldRaf) cancelAnimationFrame(this.fieldRaf);
+    this.dead = true;
+  }
+
+  activeChar() {
+    if (this.state.sent || this.state.qLen === 0) return null;
+    const q = this.pair().q;
+    return (q[this.state.qLen - 1] || "").toLowerCase();
+  }
+
+  flapCells() {
+    if (this._cells) return this._cells;
+    const cells = [];
+    const cols = 22, rows = 11;
+    let s = 77771;
+    const rnd = () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (rnd() > 0.55) continue;
+        cells.push({
+          x: (c * (100 / cols) + rnd() * 1.2).toFixed(2) + "%",
+          y: (r * (100 / rows) + rnd() * 1.2).toFixed(2) + "%",
+          dur: (7 + Math.floor(rnd() * 9)) + "s",
+          delay: (rnd() * 9).toFixed(1) + "s"
+        });
+      }
+    }
+    this._cells = cells;
+    return cells;
+  }
+
+  keyRows() {
+    const rows = [["q","w","e","r","t","y","u","i","o","p"], ["a","s","d","f","g","h","j","k","l"], ["z","x","c","v","b","n","m"]];
+    const pads = ["4px", "16px", "34px"];
+    const act = this.activeChar();
+    return rows.map((keys, i) => ({
+      pad: pads[i],
+      keys: keys.map(ch => {
+        const on = ch === act;
+        return {
+          ch: ch,
+          bg: on ? "var(--brand)" : "var(--panel-solid)",
+          fg: on ? "#fff" : "var(--ink)",
+          scale: on ? 1.14 : 1
+        };
+      })
+    }));
+  }
+
+  pair(lang) {
+    const list = CHAT[lang || this.state.lang] || CHAT.uz;
+    return list[this.state.ci % list.length];
+  }
+
+  restartChat(ci) {
+    clearTimeout(this.chatT);
+    this.setState({ ci: ci || 0, qLen: 0, aLen: 0, dots: false, showSrc: false, sent: false, send: false, history: [] });
+    this.chatT = setTimeout(() => this.typeQ(), 700);
+  }
+
+  typeQ() {
+    if (this.dead) return;
+    const q = this.pair().q;
+    if (this.state.qLen < q.length) {
+      this.setState(s => ({ qLen: Math.min(s.qLen + 1, q.length), sent: false }));
+      this.chatT = setTimeout(() => this.typeQ(), 46);
+    } else {
+      this.setState({ send: true });
+      this.chatT = setTimeout(() => {
+        this.setState({ sent: true, send: false });
+        this.chatT = setTimeout(() => {
+          this.setState({ dots: true });
+          this.chatT = setTimeout(() => { this.setState({ dots: false }); this.typeA(); }, 1200);
+        }, 420);
+      }, 420);
+    }
+  }
+
+  typeA() {
+    if (this.dead) return;
+    const a = this.pair().a;
+    if (this.state.aLen < a.length) {
+      this.setState(s => ({ aLen: Math.min(s.aLen + 1, a.length) }));
+      this.chatT = setTimeout(() => this.typeA(), 19);
+    } else {
+      this.setState({ showSrc: true });
+      this.chatT = setTimeout(() => this.nextPair(), 3600);
+    }
+  }
+
+  nextPair() {
+    if (this.dead) return;
+    const len = (CHAT[this.state.lang] || CHAT.uz).length;
+    const done = this.pair();
+    this.setState(s => ({
+      history: [...s.history, { q: done.q, a: done.a, src: done.src }].slice(-4),
+      ci: (s.ci + 1) % len, qLen: 0, aLen: 0, dots: false, showSrc: false, sent: false, send: false
+    }));
+    this.chatT = setTimeout(() => this.typeQ(), 800);
+  }
+
+  setLang(l) {
+    this.setState({ lang: l, answered: false });
+    clearTimeout(this.answerTimer);
+    this.answerTimer = setTimeout(() => this.setState({ answered: true }), 1800);
+    this.chatLang = l;
+    clearTimeout(this.chatT);
+    this.setState({ qLen: 0, aLen: 0, dots: false, showSrc: false, sent: false, send: false, history: [] });
+    this.chatT = setTimeout(() => this.typeQ(), 500);
+  }
+
+  renderVals() {
+    const lang = this.state.lang === "ru" ? "ru" : "uz";
+    const t = STR[lang];
+    const dark = this.state.theme === "dark";
+    const on = { bg: "var(--brand)", color: "#fff" };
+    const off = { bg: "transparent", color: "var(--muted-dim)" };
+    const uz = lang === "uz" ? on : off;
+    const ru = lang === "ru" ? on : off;
+
+    return {
+      t,
+      theme: this.state.theme,
+      lang: this.state.lang,
+      heroMotion: this.props.heroMotion !== false,
+      chatQ: this.pair().q,
+      chatA: this.pair().a.slice(0, this.state.aLen),
+      chatSrc: this.pair().src,
+      chatHistory: this.state.history,
+      solveRef: this.solve,
+      fieldRef: this.fieldEl,
+      draft: this.state.sent ? "" : this.pair().q.slice(0, this.state.qLen),
+      sendScale: this.state.send ? 0.86 : 1,
+      keyRows: this.keyRows(),
+      spaceBg: this.activeChar() === " " ? "var(--brand)" : "var(--panel-solid)",
+      showQ: this.state.sent,
+      showA: this.state.aLen > 0,
+      chatDots: this.state.dots,
+      showSrc: this.state.showSrc,
+      codeRefs: CODE_REFS,
+      isDark: dark,
+      isLight: !dark,
+      themeIcon: dark
+        ? React.createElement("svg", { width: 17, height: 17, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" },
+            React.createElement("circle", { cx: 12, cy: 12, r: 4 }),
+            React.createElement("path", { d: "M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" }))
+        : React.createElement("svg", { width: 17, height: 17, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" },
+            React.createElement("path", { d: "M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" })),
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      setUz: () => this.setLang("uz"),
+      setRu: () => this.setLang("ru"),
+      uzBg: uz.bg, uzColor: uz.color, ruBg: ru.bg, ruColor: ru.color,
+      typing: !this.state.answered,
+      answered: this.state.answered,
+      progW: this.state.prog + "%",
+      marquee: t.marquee,
+      stats: STAT_NUMS.map((num, i) => ({ num, lbl: t.stats[i] })),
+      steps: t.steps.map((s, i) => {
+        const r = (i - this.state.car + 3) % 3;
+        const slot = r === 0
+          ? { x: "-50%", z: 0, sc: 1, rot: 0, op: 1, blur: "none", zi: 3, anim: "jai-cardfloat 4.2s ease-in-out infinite" }
+          : r === 1
+            ? { x: "-16%", z: -330, sc: .86, rot: -14, op: .62, blur: "blur(3px)", zi: 2, anim: "none" }
+            : { x: "-84%", z: -330, sc: .86, rot: 14, op: .62, blur: "blur(3px)", zi: 2, anim: "none" };
+        return {
+          n: i + 1, h: s[0], p: s[1],
+          tf: "translateX(" + slot.x + ") translateZ(" + slot.z + "px) rotateY(" + slot.rot + "deg) scale(" + slot.sc + ")",
+          blur: slot.blur, op: slot.op, z: slot.zi, anim: slot.anim,
+          numAnim: r === 0 ? "jai-numroll 900ms cubic-bezier(.2,.8,.2,1) both, jai-numglow 2.6s ease-out 900ms infinite" : "none"
+        };
+      }),
+      testiRef: this.testiEl,
+      checksRef: this.checksEl,
+      faqRef: this.faqEl,
+      mockRef: this.mockEl,
+      testimonials: t.testimonials.map(x => ({ q: x[0], name: x[1], role: x[2], initials: x[3] })),
+      checks: t.checks,
+      adEy: ((t.led_ads || [])[this.state.ad] || [])[0],
+      adH: ((t.led_ads || [])[this.state.ad] || [])[1],
+      adP: ((t.led_ads || [])[this.state.ad] || [])[2],
+      adFrames: (t.led_ads || []).map((x, i) => ({
+        pic: ["media/ad-1-legal-analysis.png", "media/ad-2-document-drafting.png", "media/ad-3-sourced-answer.png", "media/ad-4-expert-review.png"][i],
+        op: this.state.ad === i ? 1 : 0,
+        pe: this.state.ad === i ? "auto" : "none",
+        z: this.state.ad === i ? 2 : 1,
+        sc: this.state.ad === i ? 1.06 : 1,
+        barW: this.state.ad > i ? "100%" : "0%",
+        barAnim: this.state.ad === i ? "jai-barfill 4200ms linear forwards" : "none"
+      })),
+      ragAnalysis: (t.rag_analysis || []).map(x => ({ fine: x[0], act: x[1] })),
+      plans: t.plans.map(p => ({
+        name: p.name, price: p.price, cur: p.cur, per: p.per, for: p.forWhom, features: p.features, tag: p.tag, btn: p.btn,
+        waveOn: p.featured ? 1 : 0,
+        wave: p.featured ? "jai-shockwave 3000ms cubic-bezier(.4,0,.2,1) infinite" : "none",
+        border: p.featured ? "var(--brand-border)" : "var(--line)",
+        bg: p.featured
+          ? "linear-gradient(150deg, color-mix(in srgb, var(--panel-solid) 94%, transparent), var(--brand-soft))"
+          : "color-mix(in srgb, var(--panel-solid) 88%, transparent)",
+        opacity: p.featured ? 1 : 0.72,
+        tagBg: p.featured ? "var(--brand)" : "var(--muted-dim)",
+        btnBg: p.featured ? "var(--brand)" : "transparent",
+        btnBorder: p.featured ? "var(--brand)" : "var(--line)",
+        btnColor: p.featured ? "#fff" : "var(--ink)"
+      })),
+      flapCells: this.flapCells(),
+      faqs: t.faqs.map((f, i) => ({
+        q: f[0], a: f[1],
+        chev: this.state.openFaq === i ? "rotate(180deg)" : "rotate(0deg)",
+        maxH: this.state.openFaq === i ? "220px" : "0px",
+        toggle: () => this.setState(s => ({ openFaq: s.openFaq === i ? -1 : i }))
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

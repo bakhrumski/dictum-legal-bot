@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+  html, body { margin:0; padding:0; height:100%; }
+  #lg-root, #lg-root *, #lg-root *::before, #lg-root *::after { box-sizing:border-box; }
+  #lg-root {
+    --page:linear-gradient(128deg,#070a14 0%,#0a0e1c 48%,#070a14 100%);
+    --card:#0b0d19; --ink:#f7f8fb; --ink2:#cfd5e2; --muted:#a8afbe; --muted-dim:#949db0;
+    --line:rgba(255,255,255,.09); --field:#13172a; --field-line:rgba(255,255,255,.08);
+    --brand:#5b8cff; --brand-2:#78b5ff; --brand-hover:#4a7cf5;
+    --hero-solid:#070b16;
+    --shadow:0 40px 90px -46px rgba(0,0,0,.85);
+  }
+  #lg-root[data-theme="light"] {
+    --page:linear-gradient(128deg,#e9eef8 0%,#f2f1f7 42%,#e7eefb 100%);
+  }
+  #lg-root a { color:var(--brand); text-decoration:none; }
+  #lg-root a:hover { color:var(--brand-hover); }
+  #lg-root input::placeholder { color:var(--muted-dim); }
+  #lg-root input:focus { border-color:var(--brand) !important; box-shadow:0 0 0 3px rgba(45,108,255,.14); }
+  @keyframes lg-appear { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+  @keyframes lg-sheen { 0% { transform:translateX(-120%) } 60%, 100% { transform:translateX(220%) } }
+  @media (max-width: 900px) {
+    #lg-root [data-r="card"] { display:block !important; min-height:0 !important; }
+    #lg-root [data-r="hero"] { max-width:none !important; min-height:240px !important; padding:32px 26px !important; }
+    #lg-root [data-r="form"] { flex:1 1 auto !important; }
+    #lg-root [data-r="hero"] { flex:1 1 auto !important; }
+    #lg-root [data-r="card"] { min-height:0 !important; }
+    #lg-root [data-r="form"] { padding:34px 28px !important; }
+  }
+  @media (max-width: 480px) {
+    #lg-root { padding:0 !important; }
+    #lg-root [data-r="card"] { border-radius:0 !important; min-height:100vh !important; }
+    #lg-root [data-r="form"] { padding:28px 18px !important; }
+    #lg-root [data-r="btnrow"] > * { flex:1 1 100% !important; }
+    #lg-root [data-r="btnrow"], #lg-root [data-r="socrow"] { flex-wrap:wrap !important; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #lg-root *, #lg-root *::before, #lg-root *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+  }
+</style>
+</helmet>
+<div id="lg-root" data-theme="{{ theme }}" style="min-height:100vh; background:var(--page); color:var(--ink); font-family:'Space Grotesk', system-ui, sans-serif; -webkit-font-smoothing:antialiased; display:flex; align-items:center; justify-content:center; padding:40px 24px;">
+  <div data-r="card" style="display:flex; width:100%; max-width:1150px; min-height:820px; background:var(--card); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; padding:0; position:relative; animation:lg-appear .5s cubic-bezier(.2,.8,.2,1) both;">
+
+    <div aria-hidden="true" style="position:absolute; inset:0; background-image:url(media/login-hero-bg.jpg); background-size:cover; background-position:left center; opacity:.5; pointer-events:none; z-index:0;"></div>
+
+    <div data-r="hero" style="position:relative; z-index:1; flex:0 0 50%; min-width:0; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding:48px 24px;">
+      <div style="position:relative; width:100%; padding-left:100px; display:flex; flex-direction:column; align-items:center; gap:14px;">
+        <div style="position:relative; width:100%; max-width:560px; aspect-ratio:886/292;">
+          <div data-wm-sheen style="position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:2;">
+            <div style="position:absolute; top:0; bottom:0; width:34%; background:linear-gradient(100deg, transparent, rgba(255,255,255,.16) 46%, transparent); filter:blur(14px); animation:lg-sheen 4.6s cubic-bezier(.4,0,.2,1) infinite;"></div>
+          </div>
+          <img src="brand/wordmark-filled-onnavy.png" alt="JuristAI" style="position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:left center; display:block; transition:opacity 300ms ease;">
+          <video data-wm="brand/wordmark-motion-white.webm" muted="{{ true }}" loop="{{ true }}" playsInline="{{ true }}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:left center; display:block; opacity:0; transition:opacity 300ms ease;"></video>
+        </div>
+        <div style="font-size:19px; font-style:italic; color:var(--ink2); line-height:1.5; text-align:left;">Sizning shaxsiy AI yordamchingiz</div>
+      </div>
+    </div>
+
+    <div data-r="form" style="position:relative; z-index:1; flex:0 0 50%; min-width:0; padding:44px 40px; display:flex; flex-direction:column; justify-content:center;">
+      <button onClick="{{ toggleTheme }}" title="Rejimni almashtirish" style="position:absolute; z-index:2; top:20px; right:22px; background:transparent; border:0; cursor:pointer; color:var(--muted); padding:6px; border-radius:9px; line-height:0;">{{ themeIcon }}</button>
+
+      <sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+        <div style="position:relative; z-index:1;">
+          <h1 style="font-size:29px; font-weight:700; letter-spacing:-.03em; line-height:1.15; margin:0 0 8px; color:var(--ink);">Xush kelibsiz</h1>
+          <p style="font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 24px;">Davom etish uchun <strong style="color:var(--ink2); font-weight:600;">JuristAI</strong> hisobingizga kiring!</p>
+
+          <div style="position:relative; margin-bottom:14px;">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); width:15px; height:15px; color:var(--muted-dim); pointer-events:none;"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
+            <input type="text" placeholder="admin" style="width:100%; padding:13px 14px 13px 42px; border:1px solid var(--field-line); border-radius:10px; font-size:13.5px; font-family:inherit; background:var(--field); color:var(--ink); outline:none;">
+          </div>
+          <div style="position:relative; margin-bottom:14px;">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); width:15px; height:15px; color:var(--muted-dim); pointer-events:none;"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+            <input type="password" placeholder="parol" style="width:100%; padding:13px 14px 13px 42px; border:1px solid var(--field-line); border-radius:10px; font-size:13.5px; font-family:inherit; background:var(--field); color:var(--ink); outline:none;">
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; font-size:12.5px;">
+            <label style="display:flex; align-items:center; gap:8px; color:var(--ink2); cursor:pointer; font-weight:500;"><input type="checkbox" checked="{{ remember }}" onChange="{{ toggleRemember }}" style="width:15px; height:15px; accent-color:var(--brand); cursor:pointer;"> Eslab qolish</label>
+            <a href="#" onClick="{{ showRecovery }}" style="color:var(--ink); font-weight:700;">Parolni unutdingizmi?</a>
+          </div>
+
+          <div data-r="btnrow" style="display:flex; gap:12px; margin-bottom:22px;">
+            <button style="flex:1; padding:14px; border:0; border-radius:10px; font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer; background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; box-shadow:0 18px 34px -22px rgba(45,108,255,.7);">Kirish</button>
+            <button onClick="{{ showRegister }}" style="flex:1; padding:14px; border:1px solid var(--line); border-radius:10px; font-size:13.5px; font-weight:600; font-family:inherit; cursor:pointer; background:var(--card); color:var(--ink);">Ro'yxatdan o'tish</button>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:12px; margin:0 0 14px; font-size:10px; font-weight:600; letter-spacing:.14em; color:var(--muted-dim);">
+            <span style="flex:1; height:1px; background:var(--line);"></span><span>YOKI</span><span style="flex:1; height:1px; background:var(--line);"></span>
+          </div>
+
+          <div data-r="socrow" style="display:flex; gap:12px;">
+            <button style="flex:1 1 0; min-width:0; padding:13px 14px; background:var(--field); border:1px solid var(--field-line); border-radius:10px; color:var(--ink); display:flex; align-items:center; justify-content:center; gap:9px; cursor:pointer; font-family:inherit; font-weight:500; font-size:12.5px; white-space:nowrap;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+              <span>Telegram</span>
+            </button>
+            <button style="flex:1 1 0; min-width:0; padding:13px 14px; background:var(--field); border:1px solid var(--field-line); border-radius:10px; color:var(--ink); display:flex; align-items:center; justify-content:center; gap:9px; cursor:pointer; font-family:inherit; font-weight:500; font-size:12.5px; white-space:nowrap;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
+              <span>Google</span>
+            </button>
+          </div>
+
+          <p style="font-size:12.5px; color:var(--muted); line-height:1.6; margin:38px 0 14px;">Huquqiy maslahat kerak bo'lsa quyidagi Telegram bot orqali murojaat qiling</p>
+          <a href="https://t.me/yuristga_savolbot" target="_blank" style="width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:14px; border:1px solid var(--field-line); border-radius:10px; background:var(--field); color:var(--ink); font-size:13px; font-weight:500;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+            @yuristga_savolbot
+          </a>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRegister }}" hint-placeholder-val="{{ false }}">
+        <div style="position:relative; z-index:1;">
+          <h1 style="font-size:29px; font-weight:700; letter-spacing:-.03em; line-height:1.15; margin:0 0 8px; color:var(--ink);">Ro'yxatdan o'tish</h1>
+          <p style="font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 26px;"><strong style="color:var(--ink2); font-weight:600;">JuristAI</strong> jamoasiga qo'shiling</p>
+
+          <div style="display:flex; gap:12px; margin-bottom:24px;">
+            <label style="flex:1; display:flex; align-items:center; gap:9px; padding:12px 14px; border:1px solid var(--field-line); background:var(--field); border-radius:10px; cursor:pointer; font-size:13px; color:var(--ink2);">
+              <input type="checkbox" checked="{{ agrPrivacy }}" onChange="{{ togglePrivacy }}" style="width:15px; height:15px; accent-color:var(--brand); cursor:pointer;">
+              <span><a href="#">Shartlar</a></span>
+            </label>
+            <label style="flex:1; display:flex; align-items:center; gap:9px; padding:12px 14px; border:1px solid var(--field-line); background:var(--field); border-radius:10px; cursor:pointer; font-size:13px; color:var(--ink2);">
+              <input type="checkbox" checked="{{ agrOferta }}" onChange="{{ toggleOferta }}" style="width:15px; height:15px; accent-color:var(--brand); cursor:pointer;">
+              <span><a href="#">Oferta</a></span>
+            </label>
+          </div>
+
+          <button disabled="{{ regDisabled }}" style="width:100%; padding:15px 20px; border-radius:10px; border:1px solid var(--field-line); background:var(--field); color:var(--ink); display:flex; align-items:center; justify-content:center; gap:10px; font-family:inherit; font-weight:600; font-size:13.5px; cursor:pointer; opacity:{{ regOpacity }};">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+            Telegram bilan davom eting
+          </button>
+
+          <div style="display:flex; align-items:center; gap:12px; margin:20px 0; font-size:10px; font-weight:600; letter-spacing:.14em; color:var(--muted-dim);">
+            <span style="flex:1; height:1px; background:var(--line);"></span><span>YOKI</span><span style="flex:1; height:1px; background:var(--line);"></span>
+          </div>
+
+          <button disabled="{{ regDisabled }}" style="width:100%; padding:15px 20px; border-radius:10px; border:1px solid var(--field-line); background:var(--field); color:var(--ink); display:flex; align-items:center; justify-content:center; gap:10px; font-family:inherit; font-weight:600; font-size:13.5px; cursor:pointer; opacity:{{ regOpacity }};">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
+            Google bilan davom eting
+          </button>
+
+          <div style="text-align:center; margin-top:22px; font-size:13px; color:var(--muted);">
+            Hisobingiz bormi? <a href="#" onClick="{{ showLogin }}" style="font-weight:700;">Kirish</a>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRecovery }}" hint-placeholder-val="{{ false }}">
+        <div style="position:relative; z-index:1;">
+          <h1 style="font-size:29px; font-weight:700; letter-spacing:-.03em; line-height:1.15; margin:0 0 8px; color:var(--ink);">Parolni tiklash</h1>
+          <p style="font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 24px;">Hisobingizni tasdiqlash uchun ro'yxatdan o'tgan usulni tanlang</p>
+          <div style="display:flex; gap:12px; margin-bottom:16px;">
+            <button style="flex:1 1 0; padding:16px; border:1px solid var(--field-line); background:var(--field); border-radius:10px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:9px; font-size:12.5px; font-weight:500; color:var(--ink); font-family:inherit;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+              Telegram orqali
+            </button>
+            <button style="flex:1 1 0; padding:16px; border:1px solid var(--field-line); background:var(--field); border-radius:10px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:9px; font-size:12.5px; font-weight:500; color:var(--ink); font-family:inherit;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
+              Google orqali
+            </button>
+          </div>
+          <div style="position:relative; margin:0 0 16px;">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); width:15px; height:15px; color:var(--muted-dim); pointer-events:none;"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+            <input type="text" placeholder="4 raqamli kod" maxlength="4" style="width:100%; padding:13px 14px 13px 42px; border:1px solid var(--field-line); border-radius:10px; font-size:13.5px; font-family:inherit; background:var(--field); color:var(--ink); outline:none;">
+          </div>
+          <button style="width:100%; padding:14px; border:0; border-radius:10px; font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer; background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; box-shadow:0 18px 34px -22px rgba(45,108,255,.7);">Tasdiqlash</button>
+          <div style="text-align:center; margin-top:22px; font-size:13px; color:var(--muted);">
+            <a href="#" onClick="{{ showLogin }}" style="font-weight:700;">Kirish sahifasiga qaytish</a>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200,&quot;height&quot;:820},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;},&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;login&quot;,&quot;register&quot;,&quot;recovery&quot;],&quot;default&quot;:&quot;login&quot;,&quot;tsType&quot;:&quot;'login' | 'register' | 'recovery'&quot;}}">
+class Component extends DCLogic {
+  state = { theme: "light", view: "login", remember: true, agrPrivacy: false, agrOferta: false };
+
+  componentDidMount() {
+    this.setState({ theme: this.props.theme || "light", view: this.props.view || "login" });
+    [0, 400, 1500, 3500, 6000].forEach(d => setTimeout(() => { if (!this.dead) this.playWordmark(); }, d));
+  }
+  componentWillUnmount() { this.dead = true; }
+
+  playWordmark() {
+    document.querySelectorAll("#lg-root video[data-wm]").forEach(v => {
+      v.muted = true; v.loop = true; v.playsInline = true;
+      if (!v.dataset.bound) {
+        v.dataset.bound = "1";
+        v.addEventListener("playing", () => {
+          v.style.opacity = "1";
+          const wrap = v.parentElement;
+          const img = wrap && wrap.querySelector("img");
+          if (img) img.style.opacity = "0";
+          const sheen = wrap && wrap.querySelector("[data-wm-sheen]");
+          if (sheen) sheen.style.display = "none";
+        });
+        v.addEventListener("pause", () => { if (!this.dead) v.play().catch(() => {}); });
+        fetch(v.getAttribute("data-wm")).then(r => { if (!r.ok) throw new Error("no asset"); return r.blob(); }).then(bl => {
+          if (this.dead) return;
+          v.src = URL.createObjectURL(bl);
+          v.load();
+          const p = v.play();
+          if (p && p.catch) p.catch(() => setTimeout(() => v.play().catch(() => {}), 300));
+        }).catch(() => {});
+      } else if (v.src) {
+        if (v.paused) v.play().catch(() => {});
+        if (v.readyState === 0) this.retryWordmark(v);
+      }
+    });
+  }
+  retryWordmark(v) {
+    const tries = +(v.dataset.tries || 0);
+    if (tries >= 4 || v.dataset.retrying) return;
+    v.dataset.retrying = "1";
+    v.dataset.tries = tries + 1;
+    setTimeout(() => {
+      delete v.dataset.retrying;
+      if (this.dead || v.readyState > 0) return;
+      v.load();
+      const p = v.play();
+      if (p && p.catch) p.catch(() => {});
+      this.retryWordmark(v);
+    }, 1200);
+  }
+
+  componentDidUpdate() { this.playWordmark(); }
+
+  renderVals() {
+    const dark = this.state.theme === "dark";
+    const view = this.state.view;
+    const ready = this.state.agrPrivacy && this.state.agrOferta;
+    return {
+      theme: this.state.theme,
+      isDark: dark, isLight: !dark,
+      isLogin: view === "login", isRegister: view === "register", isRecovery: view === "recovery",
+      showLogin: e => { if (e) e.preventDefault(); this.setState({ view: "login" }); },
+      showRegister: e => { if (e) e.preventDefault(); this.setState({ view: "register" }); },
+      showRecovery: e => { if (e) e.preventDefault(); this.setState({ view: "recovery" }); },
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      remember: this.state.remember,
+      toggleRemember: () => this.setState(s => ({ remember: !s.remember })),
+      agrPrivacy: this.state.agrPrivacy,
+      agrOferta: this.state.agrOferta,
+      togglePrivacy: () => this.setState(s => ({ agrPrivacy: !s.agrPrivacy })),
+      toggleOferta: () => this.setState(s => ({ agrOferta: !s.agrOferta })),
+      regDisabled: !ready,
+      regOpacity: ready ? 1 : 0.5,
+      themeIcon: dark
+        ? React.createElement("svg", { width: 17, height: 17, viewBox: "0 0 24 24", fill: "currentColor" },
+            React.createElement("path", { d: "M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" }))
+        : React.createElement("svg", { width: 17, height: 17, viewBox: "0 0 24 24", fill: "currentColor" },
+            React.createElement("circle", { cx: 12, cy: 12, r: 5 }),
+            React.createElement("path", { d: "M11 1h2v2h-2zM11 21h2v2h-2zM1 11h2v2H1zM21 11h2v2h-2zM3.5 4.9 4.9 3.5l1.5 1.4-1.4 1.5zM17.6 19.1l1.5-1.5 1.4 1.5-1.4 1.4zM4.9 20.5 3.5 19.1l1.4-1.5 1.5 1.4zM19.1 6.4l-1.5-1.5 1.5-1.4 1.4 1.4z" })),
+    };
+  }
+}
+</script>
+</body>
+</html>
