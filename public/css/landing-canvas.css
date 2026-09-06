@@ -804,20 +804,19 @@
 @keyframes jai-pool  { from { transform: translate(0, 0) scale(1);   } to { transform: translate(16%, -12%) scale(1.16); } }
 @keyframes jai-pool2 { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-14%, 14%) scale(.94);  } }
 
-/* The wave sweeps bottom-right to top-left across the free plan, then the
-   card's edge answers with a single pulse. */
-.plan.is-shock { position: relative; animation: jai-shock 3s cubic-bezier(.4, 0, .2, 1) infinite; }
-.plan.is-shock::before,
-.plan.is-shock::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; }
+/* The wave sweeps bottom-right to top-left across the featured (free) plan.
+   Only this one keyframe: the canvas's jai-shock and jai-shockring are
+   leftovers from an earlier iteration and are applied to nothing. */
+.plan.is-shock { position: relative; }
 .plan.is-shock::before {
+  content: '';
+  position: absolute;
   z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
   background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--jai-brand) 30%, transparent), transparent 62%);
-  animation: jai-shockwave 3s cubic-bezier(.4, 0, .2, 1) infinite;
-}
-.plan.is-shock::after {
-  z-index: 0;
-  border: 1px solid color-mix(in srgb, var(--jai-brand) 55%, transparent);
-  animation: jai-shockring 3s cubic-bezier(.4, 0, .2, 1) infinite;
+  animation: jai-shockwave 3000ms cubic-bezier(.4, 0, .2, 1) infinite;
 }
 .plan.is-shock > * { position: relative; z-index: 1; }
 @keyframes jai-shockwave {
@@ -825,16 +824,6 @@
   12%  { opacity: .9; }
   70%  { opacity: .5; }
   100% { opacity: 0;  transform: translate(-18%, -18%) scale(1.5); }
-}
-@keyframes jai-shock {
-  0%, 62% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--jai-brand) 55%, transparent) !important; }
-  78%     { box-shadow: 0 0 34px 10px color-mix(in srgb, var(--jai-brand) 26%, transparent) !important; }
-  100%    { box-shadow: 0 0 0 0 transparent !important; }
-}
-@keyframes jai-shockring {
-  0%, 62% { transform: scale(1);     opacity: 0; }
-  68%     { opacity: .85; }
-  100%    { transform: scale(1.075); opacity: 0; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -864,8 +853,8 @@
   92%           { opacity: .9; transform: scaleY(.2); }
   96%           { opacity: .6; transform: scaleY(1); }
 }
-.faq-list, .qi-wrap { perspective: 1200px; }
-.qi.open .qi-ans { animation: jai-flipboard 620ms cubic-bezier(.2, .8, .2, 1) both; transform-origin: top center; }
+.faq-list, .qi-wrap, #faq .wrap > div { perspective: 1200px; }
+.qi { transform-origin: top center; backface-visibility: hidden; }
 @keyframes jai-flipboard {
   0%   { transform: rotateX(-92deg); opacity: 0; }
   55%  { transform: rotateX(12deg);  opacity: 1; }
@@ -906,8 +895,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .jp-pools i, .jf-flaps span, .jt-sweep, .jt-glow,
-  .plan.is-shock, .plan.is-shock::before, .plan.is-shock::after,
-  .qi.open .qi-ans { animation: none !important; }
+  .plan.is-shock::before, .qi { animation: none !important; }
   .bcard, .tcard { transition: none; }
 }
 
@@ -928,3 +916,34 @@
   opacity: .10;
 }
 .jw-field-body { position: relative; z-index: 1; }
+
+@keyframes jai-flapout { from { transform: rotateX(0deg);  } to { transform: rotateX(-88deg); } }
+@keyframes jai-flapin  { from { transform: rotateX(88deg); } to { transform: rotateX(0deg);   } }
+
+/* Testimonial quotes type themselves. A hidden copy holds the final size so
+   the card never resizes while the text arrives. */
+.tcard blockquote { position: relative; }
+.tcard blockquote .tq-ghost { visibility: hidden; }
+.tcard blockquote .tq-live { position: absolute; inset: 0; }
+.tq-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--jai-brand);
+  opacity: 0;
+  animation: jai-blink 1s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) { .tq-caret { animation: none; opacity: 0; } }
+
+/* ── Footer ───────────────────────────────────────────────────────────────
+   The band is dark at every theme, so its type is white-on-dark regardless.
+   The link colours here were still the old parchment brass. */
+footer a {
+  color: rgba(255, 255, 255, .45) !important;
+  text-decoration: none !important;
+}
+footer a:hover { color: var(--jai-brand-2) !important; }
+footer h4 { color: #f8fafc !important; }
+footer, footer p, .foot-brand-desc { color: rgba(255, 255, 255, .42) !important; }
