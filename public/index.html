@@ -378,7 +378,8 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
   .bento{grid-template-columns:1fr}.b1,.b2,.b3,.b4,.b5,.b6{grid-column:1/-1;grid-row:auto}
   nav{height:62px}
   .hero{padding:100px 0 70px;min-height:auto}
-  .hs{display:none}
+  /* The canvas keeps the hero stats at every width; they wrap rather than go. */
+  .hero-stats{gap:20px}
   .btn-ghost.hsm{display:none}
   .fb1,.fb2{display:none}
   .foot-bottom{flex-direction:column}
@@ -517,6 +518,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 }
 </style>
 <link rel="stylesheet" href="/css/redesign-v2.css">
+<link rel="stylesheet" href="/css/landing-hero.css">
 <script src="/js/redesign-v2.js" defer></script>
 </head>
 <body>
@@ -551,32 +553,44 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 
 <!-- ═══ HERO ═══ -->
 <section class="hero">
+  <!-- Scales plate behind the copy column, masked to a soft pool. Decorative. -->
+  <div class="jh-plate" aria-hidden="true"><img src="./media/hero-scales.jpg" alt=""></div>
+  <!-- Code references drifting toward the viewer through the copy column. -->
+  <div class="jh-refs" aria-hidden="true"><div class="jh-refs-rule"></div><div class="jh-refs-space" id="heroRefs"></div></div>
   <div class="wrap hero-inner">
     <div>
       <div class="hero-eyebrow"><span class="hero-dot"></span><span data-i18n="hero_pill">Lex.uz dagi eng so'nggi qonunlar asosida</span></div>
-      <h1 class="ht" data-i18n="hero_title">O'zbekiston huquqi bo'yicha <span class="gt">sun'iy intellekt</span> yuristingiz</h1>
+      <h1 class="ht" data-i18n="hero_title">O'zbekiston huquqi bo'yicha <span class="gt" data-txt="sun'iy intellekt">sun'iy intellekt</span> yuristingiz</h1>
       <p class="hero-sub" data-i18n="hero_sub">Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.</p>
       <div class="hero-actions">
         <a href="/login.html" class="btn btn-primary btn-lg" data-i18n="hero_btn1">Bepul sinab ko'rish</a>
         <a href="#how" class="btn btn-ghost btn-lg" data-i18n="hero_btn2">Qanday ishlaydi?</a>
       </div>
       <div class="hero-stats">
-        <div class="hs"><strong>13+</strong><span data-i18n="hs1">huquqiy soha</span></div>
-        <div class="hs"><strong>24/7</strong><span data-i18n="hs2">doimo ulangan</span></div>
-        <div class="hs"><strong data-i18n="hs3_n">&lt;1s</strong><span data-i18n="hs3">javob vaqti</span></div>
+        <div class="hs"><strong data-i18n="hs1_n">50 000+</strong><span data-i18n="hs1">normativ hujjatlar bazasi</span></div>
+        <div class="hs"><strong data-i18n="hs2_n">lex.uz</strong><span data-i18n="hs2">kunlik yangilanish</span></div>
+        <div class="hs"><strong data-i18n="hs3_n">3</strong><span data-i18n="hs3">til: o'zbek, rus, ingliz</span></div>
       </div>
     </div>
     <div class="browser">
-      <div class="fbadge fb1"><span class="fb-dot"></span><span data-i18n="fb1">✓ Manba tasdiqlandi</span></div>
-      <div class="fbadge fb2"><span class="fb-dot"></span><span data-i18n="fb2">Shifrlangan</span></div>
-      <div class="browser-wrap">
-        <div class="br-bar">
-          <div class="br-dots"><i class="br-dot"></i><i class="br-dot"></i><i class="br-dot"></i></div>
-          <div class="br-url">juristai.uz/chat</div>
-        </div>
-        <div class="br-body" id="mockBody">
-          <div class="bbl u" style="animation-delay:.3s;opacity:0;animation:rise .5s .3s ease forwards" data-i18n="mock_q">Qizil chiroqda o'tib ketsam qancha jarima to'layman?</div>
-          <div class="btyp" id="typing"><span></span><span></span><span></span></div>
+      <div class="jh-phone">
+        <div class="jh-screen">
+          <div class="jh-status"><span>9:41</span><span class="jh-notch"></span><span>JuristAI</span></div>
+          <div class="jh-appbar">
+            <div class="jh-avatar">AI</div>
+            <div class="jh-appbar-txt"><div class="jh-appbar-name">JuristAI</div><div class="jh-appbar-state">online</div></div>
+          </div>
+          <div class="jh-thread" id="heroThread">
+            <div class="jh-history" id="heroHistory"></div>
+            <div class="jh-msg jh-q" id="heroQ" hidden></div>
+            <div class="jh-dots" id="heroDots" hidden><span></span><span></span><span></span></div>
+            <div class="jh-msg jh-a" id="heroA" hidden><span id="heroAText"></span><div class="jh-src" id="heroSrc" hidden></div></div>
+          </div>
+          <div class="jh-compose">
+            <div class="jh-input"><span id="heroDraft"></span><span class="jh-caret"></span></div>
+            <div class="jh-send" id="heroSend"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          </div>
+          <div class="jh-keyboard" id="heroKeys" aria-hidden="true"></div>
         </div>
       </div>
     </div>
@@ -882,7 +896,7 @@ uz:{
   hero_title:"O'zbekiston huquqi bo'yicha <span class='gt'>sun'iy intellekt</span> yuristingiz",
   hero_sub:"Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.",
   hero_btn1:"Bepul sinab ko'rish",hero_btn2:"Qanday ishlaydi?",
-  hs1:"huquqiy soha",hs2:"doimo ulangan",hs3_n:"&lt;1s",hs3:"javob vaqti",
+  hs1_n:"50 000+",hs1:"normativ hujjatlar bazasi",hs2_n:"lex.uz",hs2:"kunlik yangilanish",hs3_n:"3",hs3:"til: o'zbek, rus, ingliz",
   fb1:"Manba tasdiqlandi",fb2:"Shifrlangan",
   mock_q:"Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
   mock_a:"Svetoforning taqiqlovchi signalida o'tish <strong>ma'muriy huquqbuzarlik</strong> bo'lib, jarima belgilangan. Aniq miqdor amaldagi tahrirga bog'liq.",
@@ -944,7 +958,7 @@ ru:{
   hero_title:"Ваш юрист на базе <span class='gt'>искусственного интеллекта</span> по законодательству Узбекистана",
   hero_sub:"Задайте вопрос на простом языке — JuristAI даст точный ответ со ссылками на действующие законы. 24/7, за секунду.",
   hero_btn1:"Попробовать бесплатно",hero_btn2:"Как это работает?",
-  hs1:"правовых сфер",hs2:"всегда онлайн",hs3_n:"&lt;1с",hs3:"время ответа",
+  hs1_n:"50 000+",hs1:"нормативных документов в базе",hs2_n:"lex.uz",hs2:"ежедневное обновление",hs3_n:"3",hs3:"языка: узбекский, русский, английский",
   fb1:"Источник подтверждён",fb2:"Зашифровано",
   mock_q:"Сколько штраф за проезд на красный свет?",
   mock_a:"Проезд на запрещающий сигнал светофора является <strong>административным правонарушением</strong> и влечёт штраф. Точный размер зависит от действующей редакции.",
@@ -1022,13 +1036,7 @@ function applyLang(l){
     if(T[l]&&T[l][k]!==undefined)el.innerHTML=T[l][k];
   });
   document.querySelectorAll('.ls-b').forEach(b=>b.classList.toggle('on',b.dataset.lang===l));
-  if(heroAnimDone){
-    const existing=document.querySelector('.br-body .bbl.a');
-    if(existing)existing.remove();
-    const tb=document.getElementById('typing');
-    if(!tb){const t=document.createElement('div');t.className='btyp';t.id='typing';t.innerHTML='<span></span><span></span><span></span>';document.getElementById('mockBody').appendChild(t);}
-    heroAnimDone=false;setTimeout(showHeroAI,1800);
-  }
+  if(window.heroChat)window.heroChat.setLang(l);
 }
 document.querySelectorAll('.ls-b').forEach(b=>b.addEventListener('click',()=>applyLang(b.dataset.lang)));
 
@@ -1049,15 +1057,166 @@ function countUp(el){
 const pio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.style.width=e.target.dataset.w+'%';pio.unobserve(e.target);}});},{threshold:.3});
 document.querySelectorAll('.b-prog-fill').forEach(el=>pio.observe(el));
 
-function showHeroAI(){
-  const t=document.getElementById('typing');if(!t)return;
-  const l=curLang;
-  const ai=document.createElement('div');
-  ai.className='bbl a';ai.style.cssText='opacity:0;animation:rise .5s ease forwards';
-  ai.innerHTML=(T[l].mock_a||'')+'<div class="bsrc">'+(T[l].mock_src||'')+'</div>';
-  t.replaceWith(ai);heroAnimDone=true;
-}
-setTimeout(showHeroAI,2400);
+/* ── Hero phone: types a question, sends it, answers with a source ────────
+   Ported from the hero in docs/brand/landing.dc.html. The canvas drives this
+   from React state; here it is a small timer machine over the same timings
+   (46ms a character while typing, 420ms to send, 1200ms of dots, 19ms a
+   character while answering, 3600ms to read before the next pair). */
+const HERO_CHAT={
+  uz:[
+    {q:"Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
+     a:"Svetoforning taqiqlovchi signalida toʻxtash chizigʻini bosib kirishga 0.5 BHM, svetoforning taqiqlovchi signaliga boʻysunmasdan oʻtishi 3 BHM jarimaga va 1 jarima balliga sabab bo'ladi.",
+     src:"Ma'muriy javobgarlik kodeksi, 128⁴-modda"},
+    {q:"IT-park rezidentiman, chet eldan mutaxassisni ishga olish uchun tasdiqnoma kerakmi?",
+     a:"Yo'q, shart emas.",
+     src:"VMQ-589 Nizomi, 17-bandi"},
+    {q:"Maʼmuriy yoʻl bilan ushlab turish qancha vaqt bo'lishi mumkin?",
+     a:"3 soatdan oshiq bo'lishi mumkin emas.",
+     src:"MJTK 288-modda, 1-qism"}
+  ],
+  ru:[
+    {q:"Сколько штраф за проезд на красный свет?",
+     a:"Выезд за стоп-линию на запрещающий сигнал — 2 БРВ, проезд на запрещающий сигнал светофора — 3 БРВ штрафа и 1 штрафной балл.",
+     src:"Кодекс об административной ответственности, ст. 128⁴"},
+    {q:"Я резидент IT-park — нужно ли подтверждение для найма иностранного специалиста?",
+     a:"Нет, не требуется.",
+     src:"Положение ПКМ-589, пункт 17"},
+    {q:"Сколько может длиться административное задержание?",
+     a:"Не более 3 часов.",
+     src:"КАО, ст. 288, часть 1"}
+  ]
+};
+const HERO_KEYS=[['q','w','e','r','t','y','u','i','o','p'],['a','s','d','f','g','h','j','k','l'],['z','x','c','v','b','n','m']];
+const HERO_REFS=[
+  ["FK 1102-modda","44%","42%","11s","0s","a"],["MK 333-modda","56%","50%","13s","1.6s","b"],
+  ["JK 168-modda","50%","38%","12s","3.1s","c"],["JIK 128⁴","47%","55%","14s","4.7s","d"],
+  ["lex.uz","58%","44%","10s","6.2s","a"],["FK 415-modda","42%","52%","13s","7.8s","b"],
+  ["SK 25-modda","53%","34%","12s","9.4s","c"],["MK 106-modda","46%","48%","15s","11s","d"],
+  ["SK 45-modda","55%","58%","13s","12.6s","a"],["FK 234-modda","49%","46%","11s","14.2s","b"],
+  ["JK 97-modda","57%","40%","14s","15.8s","c"],["MJTK 135-modda","45%","36%","12s","17.4s","d"],
+  ["PQ-10","59%","53%","10s","19s","a"],["VMQ-426","43%","45%","13s","20.6s","b"]
+];
+
+(function heroHero(){
+  const thread=document.getElementById('heroThread');
+  if(!thread)return;
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const refSpace=document.getElementById('heroRefs');
+  if(refSpace&&!reduced){
+    HERO_REFS.forEach(function(r){
+      const s=document.createElement('span');
+      s.textContent=r[0];
+      s.style.left=r[1];s.style.top=r[2];
+      s.style.animation='jai-zoom-'+r[5]+' '+r[3]+' cubic-bezier(.32,0,.62,1) '+r[4]+' infinite';
+      refSpace.appendChild(s);
+    });
+  }
+
+  const keyEls={};
+  const keyboard=document.getElementById('heroKeys');
+  HERO_KEYS.forEach(function(row){
+    const r=document.createElement('div');r.className='jh-krow';
+    row.forEach(function(ch){
+      const k=document.createElement('div');k.className='jh-key';k.textContent=ch;
+      keyEls[ch]=k;r.appendChild(k);
+    });
+    keyboard.appendChild(r);
+  });
+  const bottom=document.createElement('div');bottom.className='jh-krow';
+  const space=document.createElement('div');space.className='jh-key';
+  bottom.innerHTML='<div class="jh-key jh-key-mod"></div>';
+  bottom.appendChild(space);
+  bottom.insertAdjacentHTML('beforeend','<div class="jh-key jh-key-mod"></div>');
+  keyboard.appendChild(bottom);
+  keyEls[' ']=space;
+
+  const els={
+    history:document.getElementById('heroHistory'), q:document.getElementById('heroQ'),
+    dots:document.getElementById('heroDots'), a:document.getElementById('heroA'),
+    aText:document.getElementById('heroAText'), src:document.getElementById('heroSrc'),
+    draft:document.getElementById('heroDraft'), send:document.getElementById('heroSend')
+  };
+  let lang='uz', ci=0, timer=null, live=null;
+
+  function pair(){const l=HERO_CHAT[lang]||HERO_CHAT.uz;return l[ci%l.length];}
+  function at(ms,fn){timer=setTimeout(fn,ms);}
+  function highlight(ch){
+    if(live){live.classList.remove('is-on');live=null;}
+    const k=ch&&keyEls[ch.toLowerCase()];
+    if(k){k.classList.add('is-on');live=k;}
+  }
+  function reset(){
+    clearTimeout(timer);highlight(null);
+    els.q.hidden=els.dots.hidden=els.a.hidden=els.src.hidden=true;
+    els.q.textContent='';els.aText.textContent='';els.draft.textContent='';
+    els.send.classList.remove('is-pressed');
+  }
+
+  function typeQ(){
+    const q=pair().q;let i=0;
+    (function step(){
+      if(i<q.length){
+        i++;els.draft.textContent=q.slice(0,i);highlight(q[i-1]);
+        at(46,step);
+      }else{
+        highlight(null);els.send.classList.add('is-pressed');
+        at(420,function(){
+          els.send.classList.remove('is-pressed');
+          els.draft.textContent='';
+          els.q.textContent=q;els.q.hidden=false;
+          at(420,function(){
+            els.dots.hidden=false;
+            at(1200,function(){els.dots.hidden=true;typeA();});
+          });
+        });
+      }
+    })();
+  }
+
+  function typeA(){
+    const a=pair().a;let i=0;
+    els.a.hidden=false;
+    (function step(){
+      if(i<a.length){i++;els.aText.textContent=a.slice(0,i);at(19,step);}
+      else{
+        els.src.textContent=pair().src;els.src.hidden=false;
+        at(3600,next);
+      }
+    })();
+  }
+
+  function next(){
+    const done=pair();
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;flex-direction:column;gap:10px';
+    const q=document.createElement('div');q.className='jh-msg jh-q';q.textContent=done.q;
+    const a=document.createElement('div');a.className='jh-msg jh-a';
+    a.innerHTML='<span></span><div class="jh-src"></div>';
+    a.firstChild.textContent=done.a;a.lastChild.textContent=done.src;
+    row.appendChild(q);row.appendChild(a);
+    els.history.appendChild(row);
+    while(els.history.children.length>4)els.history.removeChild(els.history.firstChild);
+    ci=(ci+1)%(HERO_CHAT[lang]||HERO_CHAT.uz).length;
+    reset();at(800,typeQ);
+  }
+
+  function start(){reset();at(700,typeQ);}
+
+  window.heroChat={setLang:function(l){
+    lang=(l==='ru')?'ru':'uz';ci=0;els.history.innerHTML='';reset();at(500,typeQ);
+  }};
+
+  if(reduced){
+    /* No typing loop: show one finished exchange and leave it there. */
+    const p=pair();
+    els.q.textContent=p.q;els.q.hidden=false;
+    els.aText.textContent=p.a;els.a.hidden=false;
+    els.src.textContent=p.src;els.src.hidden=false;
+    return;
+  }
+  start();
+})();
 
 document.querySelectorAll('.qi button').forEach(b=>{
   b.addEventListener('click',()=>{
