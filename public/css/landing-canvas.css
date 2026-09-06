@@ -947,3 +947,15 @@ footer a {
 footer a:hover { color: var(--jai-brand-2) !important; }
 footer h4 { color: #f8fafc !important; }
 footer, footer p, .foot-brand-desc { color: rgba(255, 255, 255, .42) !important; }
+
+/* ── FAQ rows ─────────────────────────────────────────────────────────────
+   index.html's product pass set `.qi button { padding: 20px 0 }` for a
+   borderless list where the rows had no card edge to clear. redesign-v2.css
+   later gave `.qi` a border, a 24px radius and a panel background again, but
+   nothing restored the horizontal padding — so the question text and the
+   chevron sat flush against the card edges. The canvas's own values are
+   20px 22px on the button and 0 22px 20px on the answer. */
+.qi button { padding: 20px 22px !important; }
+.qi-ans p { padding: 0 22px 20px !important; }
+/* The canvas flips each row about its middle, not its top edge. */
+.qi { transform-origin: center center; }
