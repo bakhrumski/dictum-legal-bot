@@ -518,7 +518,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 }
 </style>
 <link rel="stylesheet" href="/css/redesign-v2.css">
-<link rel="stylesheet" href="/css/landing-hero.css">
+<link rel="stylesheet" href="/css/landing-canvas.css">
 <script src="/js/redesign-v2.js" defer></script>
 </head>
 <body>
@@ -615,7 +615,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
   <div class="wrap stats-grid">
     <div class="reveal"><div class="stat-num" data-count="13" data-suffix="+">0</div><div class="stat-lbl" data-i18n="stat1">Huquqiy soha</div></div>
     <div class="reveal" data-d="1"><div class="stat-num" data-count="100" data-suffix="%">0</div><div class="stat-lbl" data-i18n="stat2">Manbaga asoslangan</div></div>
-    <div class="reveal" data-d="2"><div class="stat-num" data-count="1" data-suffix="s<">0</div><div class="stat-lbl" data-i18n="stat3">Javob vaqti</div></div>
+    <div class="reveal" data-d="2"><div class="stat-num" data-count="1" data-prefix="&lt;" data-suffix="s">0</div><div class="stat-lbl" data-i18n="stat3">Javob vaqti</div></div>
     <div class="reveal" data-d="3"><div class="stat-num" data-count="24" data-suffix="/7">0</div><div class="stat-lbl" data-i18n="stat4">Doimo ulangan</div></div>
   </div>
 </div>
@@ -732,26 +732,47 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 
 <!-- ═══ SHOWCASE ═══ -->
 <section class="section alt">
+  <div class="jl-bg" aria-hidden="true"><div class="jl-bg-grid"></div><div class="jl-bg-sweep"></div><div class="jl-bg-line"></div></div>
   <div class="wrap split">
     <div class="reveal">
       <h2 data-i18n="sc_h">Har bir javob <span class="gt">tekshiriladigan</span> manbaga ega</h2>
       <p data-i18n="sc_p">Boshqa AI lar havolani to'qib chiqarishi mumkin. JuristAI esa faqat lex.uz dagi haqiqiy qonun matnidan foydalanadi.</p>
       <ul class="check-list">
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li1">Faqat amaldagi (eng so'nggi) qonun tahriri</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li2">Aniq modda va band ko'rsatiladi</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li3">To'g'ridan-to'g'ri lex.uz havolasi</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li4">O'zbek va rus tillarida</span></li>
+        <li data-chk><span class="check-ic" data-chkbox><svg fill="none" viewBox="0 0 24 24"><path data-chkpath d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26"/></svg></span><span data-chktext data-i18n="sc_li1">Faqat amaldagi (eng so'nggi) qonun tahriri</span></li>
+        <li data-chk><span class="check-ic" data-chkbox><svg fill="none" viewBox="0 0 24 24"><path data-chkpath d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26"/></svg></span><span data-chktext data-i18n="sc_li2">Aniq modda va band ko'rsatiladi</span></li>
+        <li data-chk><span class="check-ic" data-chkbox><svg fill="none" viewBox="0 0 24 24"><path data-chkpath d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26"/></svg></span><span data-chktext data-i18n="sc_li3">To'g'ridan-to'g'ri lex.uz havolasi</span></li>
+        <li data-chk><span class="check-ic" data-chkbox><svg fill="none" viewBox="0 0 24 24"><path data-chkpath d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26"/></svg></span><span data-chktext data-i18n="sc_li4">O'zbek va rus tillarida</span></li>
       </ul>
     </div>
-    <div class="sc-card reveal" data-d="1">
-      <div class="browser-wrap" style="animation:none">
-        <div class="br-bar">
-          <div class="br-dots"><i class="br-dot"></i><i class="br-dot"></i><i class="br-dot"></i></div>
-          <div class="br-url"><span data-i18n="sc_mock_title">Namuna javob</span></div>
-        </div>
-        <div class="br-body">
-          <div class="bbl u" style="opacity:1;animation:none" data-i18n="sc_q">Ish haqi kechiktirilsa nima qilaman?</div>
-          <div class="bbl a" style="opacity:1;animation:none"><span data-i18n="sc_a">Ish beruvchi ish haqini o'z vaqtida to'lashi shart. <strong>Mehnat kodeksi</strong>ga ko'ra kechiktirilgan har bir kun uchun kompensatsiya talab qilishingiz mumkin.</span><div class="bsrc" data-i18n="sc_src">Mehnat kodeksi, 333-modda</div></div>
+    <div class="jl-stage reveal" data-d="1">
+      <div class="jl-board">
+        <div class="jl-bloom" aria-hidden="true"></div>
+        <div class="jl-bezel">
+          <div class="jl-panel">
+            <div class="jl-wash" aria-hidden="true"></div>
+            <div class="jl-mesh" aria-hidden="true"></div>
+            <div class="jl-art" id="ledArt" aria-hidden="true"></div>
+            <div class="jl-top-fade" aria-hidden="true"></div>
+            <div class="jl-bot-fade" aria-hidden="true"></div>
+            <div class="jl-head">
+              <img src="./brand/wordmark-filled-dark.png" alt="JuristAI">
+              <span class="jl-live"><span class="jl-live-dot"></span><span data-i18n="led_live">Efirda</span></span>
+            </div>
+            <div class="jl-copy">
+              <div class="jl-ey" id="ledEy">Huquqiy tahlil</div>
+              <div class="jl-h" id="ledH">Savolingizga bir soniyada javob</div>
+              <div class="jl-p" id="ledP">Amaldagi qonun matnidan, manba havolasi bilan.</div>
+            </div>
+            <div class="jl-foot">
+              <div class="jl-bars" id="ledBars"></div>
+              <div class="jl-credits">
+                <span><i class="jl-ic jl-ic-ai"></i>Generated by AI</span>
+                <span><i class="jl-ic jl-ic-hum"></i>Verified by human</span>
+              </div>
+            </div>
+            <div class="jl-glare" aria-hidden="true"></div>
+            <div class="jl-scan" aria-hidden="true"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -898,6 +919,8 @@ uz:{
   hero_btn1:"Bepul sinab ko'rish",hero_btn2:"Qanday ishlaydi?",
   hs1_n:"50 000+",hs1:"normativ hujjatlar bazasi",hs2_n:"lex.uz",hs2:"kunlik yangilanish",hs3_n:"3",hs3:"til: o'zbek, rus, ingliz",
   fb1:"Manba tasdiqlandi",fb2:"Shifrlangan",
+  led_live:"Efirda",
+  led_ads:[["Huquqiy tahlil","Savolingizga bir soniyada javob","Amaldagi qonun matnidan, manba havolasi bilan."],["Hujjat tayyorlash","Shartnoma va da'vo loyihalari","Ma'lumotlaringizni kiriting — loyihani JuristAI yozadi."],["Manbali javob","Har bir xulosa lex.uz ga bog'langan","Moddani o'zingiz ochib tekshirishingiz mumkin."],["Ekspert nazorati","Yurist tomonidan tasdiqlangan","Muhim javoblar mutaxassis ko'rigidan o'tadi."]],
   mock_q:"Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
   mock_a:"Svetoforning taqiqlovchi signalida o'tish <strong>ma'muriy huquqbuzarlik</strong> bo'lib, jarima belgilangan. Aniq miqdor amaldagi tahrirga bog'liq.",
   mock_src:"Ma'muriy javobgarlik kodeksi, 128⁴-modda",
@@ -960,6 +983,8 @@ ru:{
   hero_btn1:"Попробовать бесплатно",hero_btn2:"Как это работает?",
   hs1_n:"50 000+",hs1:"нормативных документов в базе",hs2_n:"lex.uz",hs2:"ежедневное обновление",hs3_n:"3",hs3:"языка: узбекский, русский, английский",
   fb1:"Источник подтверждён",fb2:"Зашифровано",
+  led_live:"В эфире",
+  led_ads:[["Юридический анализ","Ответ на ваш вопрос за секунду","Из текста действующего закона, со ссылкой на источник."],["Подготовка документов","Проекты договоров и исков","Введите данные — проект напишет JuristAI."],["Ответ с источником","Каждый вывод привязан к lex.uz","Вы можете открыть статью и проверить сами."],["Экспертный контроль","Подтверждено юристом","Важные ответы проходят проверку специалиста."]],
   mock_q:"Сколько штраф за проезд на красный свет?",
   mock_a:"Проезд на запрещающий сигнал светофора является <strong>административным правонарушением</strong> и влечёт штраф. Точный размер зависит от действующей редакции.",
   mock_src:"Кодекс об административной ответственности, ст. 128⁴",
@@ -1037,6 +1062,7 @@ function applyLang(l){
   });
   document.querySelectorAll('.ls-b').forEach(b=>b.classList.toggle('on',b.dataset.lang===l));
   if(window.heroChat)window.heroChat.setLang(l);
+  if(window.ledBoard)window.ledBoard.repaint();
 }
 document.querySelectorAll('.ls-b').forEach(b=>b.addEventListener('click',()=>applyLang(b.dataset.lang)));
 
@@ -1049,13 +1075,95 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 const cio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){countUp(e.target);cio.unobserve(e.target);}});},{threshold:.5});
 document.querySelectorAll('[data-count]').forEach(el=>cio.observe(el));
 function countUp(el){
-  const target=+el.dataset.count,suf=el.dataset.suffix||'';
+  const target=+el.dataset.count,suf=el.dataset.suffix||'',pre=el.dataset.prefix||'';
   let n=0;const step=Math.max(1,target/45);
-  (function tick(){n+=step;if(n>=target){el.textContent=target+suf;}else{el.textContent=Math.floor(n)+suf;requestAnimationFrame(tick);}})();
+  (function tick(){n+=step;if(n>=target){el.textContent=pre+target+suf;}else{el.textContent=pre+Math.floor(n)+suf;requestAnimationFrame(tick);}})();
 }
 
 const pio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.style.width=e.target.dataset.w+'%';pio.unobserve(e.target);}});},{threshold:.3});
 document.querySelectorAll('.b-prog-fill').forEach(el=>pio.observe(el));
+
+/* ── LED billboard: four ad frames, 4.2s each, with a progress bar per frame
+   and the copy swapping with the art. Ported from the canvas's adFrames. */
+const LED_ART=['./media/ad-1-legal-analysis.png','./media/ad-2-document-drafting.png',
+               './media/ad-3-sourced-answer.png','./media/ad-4-expert-review.png'];
+(function ledBoard(){
+  const art=document.getElementById('ledArt'), bars=document.getElementById('ledBars');
+  if(!art||!bars)return;
+  const ey=document.getElementById('ledEy'), h=document.getElementById('ledH'), pp=document.getElementById('ledP');
+  const figs=LED_ART.map(function(src){
+    const f=document.createElement('figure');
+    const i=document.createElement('img');i.src=src;i.alt='';i.loading='lazy';
+    f.appendChild(i);art.appendChild(f);return f;
+  });
+  const barEls=LED_ART.map(function(){
+    const s=document.createElement('span');s.innerHTML='<i></i>';bars.appendChild(s);return s;
+  });
+  let at=0;
+  function paint(){
+    const ads=(T[curLang]&&T[curLang].led_ads)||(T.uz&&T.uz.led_ads)||[];
+    const ad=ads[at]||[];
+    if(ey)ey.textContent=ad[0]||'';
+    if(h)h.textContent=ad[1]||'';
+    if(pp)pp.textContent=ad[2]||'';
+    figs.forEach(function(f,i){f.classList.toggle('is-on',i===at);});
+    barEls.forEach(function(s,i){
+      s.classList.toggle('is-done',i<at);
+      s.classList.remove('is-on');
+      if(i===at){void s.offsetWidth;s.classList.add('is-on');}
+    });
+  }
+  window.ledBoard={repaint:paint};
+  paint();
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    setInterval(function(){at=(at+1)%LED_ART.length;paint();},4200);
+  }
+})();
+
+/* ── Checklist: the ticks draw one after another, then the set replays. ──── */
+(function checkTicks(){
+  const list=document.querySelector('.check-list');
+  if(!list)return;
+  const items=[].slice.call(list.querySelectorAll('[data-chk]'));
+  if(!items.length)return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){
+    items.forEach(function(li){
+      const path=li.querySelector('[data-chkpath]');
+      if(path)path.style.strokeDashoffset='0';
+      const box=li.querySelector('[data-chkbox]');
+      if(box){box.style.borderColor='var(--jai-brand-border)';box.style.background='var(--jai-brand-soft)';}
+      const txt=li.querySelector('[data-chktext]');
+      if(txt)txt.style.color='var(--jai-ink)';
+    });
+    return;
+  }
+  const GAP=520, timers=[];
+  function cycle(){
+    timers.forEach(clearTimeout);timers.length=0;
+    items.forEach(function(li){
+      const path=li.querySelector('[data-chkpath]'), box=li.querySelector('[data-chkbox]'), txt=li.querySelector('[data-chktext]');
+      if(path){path.style.animation='none';path.style.strokeDashoffset='26';}
+      if(box){box.style.animation='none';box.style.borderColor='';box.style.background='';}
+      if(txt)txt.style.color='';
+    });
+    items.forEach(function(li,i){
+      timers.push(setTimeout(function(){
+        const path=li.querySelector('[data-chkpath]'), box=li.querySelector('[data-chkbox]'), txt=li.querySelector('[data-chktext]');
+        if(path){path.style.strokeDashoffset='';path.style.animation='jai-tickdraw 420ms cubic-bezier(.2,.8,.2,1) forwards';}
+        if(box){box.style.borderColor='var(--jai-brand-border)';box.style.background='var(--jai-brand-soft)';box.style.animation='jai-tickpop 420ms cubic-bezier(.2,.8,.2,1)';}
+        if(txt)txt.style.color='var(--jai-ink)';
+      },GAP*i));
+    });
+    timers.push(setTimeout(cycle,GAP*items.length+3400));
+  }
+  /* Only run while the list is on screen, so it is seen from the start. */
+  let running=false;
+  new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting&&!running){running=true;cycle();}
+    });
+  },{threshold:.35}).observe(list);
+})();
 
 /* ── Hero phone: types a question, sends it, answers with a source ────────
    Ported from the hero in docs/brand/landing.dc.html. The canvas drives this

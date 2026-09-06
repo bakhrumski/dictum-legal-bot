@@ -383,3 +383,244 @@
   .jh-refs-space span, .jh-dots span, .jh-caret { animation: none !important; }
   .gt::before, .gt::after { opacity: 0; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Source-verification section — port of the LED billboard in the canvas.
+   The right column was a flat browser mock; the canvas has a 3D-rotated LED
+   panel running an ad carousel, so that is what this builds.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Scanning light over a faint grid, behind the whole section. */
+.section.alt:has(.jl-stage) { position: relative; overflow: hidden; }
+.jl-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.jl-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(90deg, color-mix(in srgb, var(--jai-ink) 2%, transparent) 0 1px, transparent 1px 64px),
+    linear-gradient(180deg, color-mix(in srgb, var(--jai-ink) 2%, transparent) 0 1px, transparent 1px 64px);
+  mask-image: radial-gradient(120% 100% at 50% 50%, #000 30%, transparent 90%);
+  -webkit-mask-image: radial-gradient(120% 100% at 50% 50%, #000 30%, transparent 90%);
+}
+.jl-bg-sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -170px;
+  height: 170px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--jai-brand) 4.5%, transparent) 62%, color-mix(in srgb, var(--jai-brand) 11%, transparent) 96%, transparent);
+  animation: jai-scan 7.5s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.jl-bg-line { position: absolute; left: 0; right: 0; top: 0; height: 100%; animation: jai-scanline 7.5s cubic-bezier(.4, 0, .2, 1) infinite; }
+.jl-bg-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  background: color-mix(in srgb, var(--jai-brand) 20%, transparent);
+  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--jai-brand) 13%, transparent) !important;
+}
+.section.alt:has(.jl-stage) > .wrap { position: relative; z-index: 1; }
+@keyframes jai-scan {
+  0%   { transform: translateY(0); opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateY(calc(100% + 170px)); opacity: 0; }
+}
+@keyframes jai-scanline {
+  0%   { transform: translateY(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(calc(100% + 172px)); opacity: 0; }
+}
+
+/* ── Checklist: each tick draws in turn ───────────────────────────────────── */
+.check-list [data-chkbox] {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border: 1px solid var(--jai-line);
+  border-radius: 6px;
+  color: var(--jai-brand);
+  background: transparent;
+  transition: border-color 260ms ease, background 260ms ease, transform 260ms cubic-bezier(.2, .8, .2, 1);
+}
+.check-list [data-chkbox] svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2.5; }
+.check-list [data-chkpath] { stroke-linecap: round; stroke-linejoin: round; }
+.check-list [data-chktext] { color: var(--jai-muted); transition: color 320ms ease; }
+@keyframes jai-tickdraw { from { stroke-dashoffset: 26; } to { stroke-dashoffset: 0; } }
+@keyframes jai-tickpop { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.18); } }
+
+/* ── The board ────────────────────────────────────────────────────────────── */
+.jl-stage { perspective: 1500px; perspective-origin: 60% 45%; }
+.jl-board {
+  position: relative;
+  transform-style: preserve-3d;
+  animation: jai-ledfloat 9s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes jai-ledfloat {
+  0%, 100% { transform: rotateY(-19deg) rotateX(7deg) rotateZ(-2.5deg) translateY(0); }
+  50%      { transform: rotateY(-16deg) rotateX(5.5deg) rotateZ(-2deg) translateY(-10px); }
+}
+.jl-bloom {
+  position: absolute;
+  z-index: 0;
+  inset: 8% 4% -8% 6%;
+  border-radius: 20px;
+  background: radial-gradient(60% 60% at 50% 60%, color-mix(in srgb, var(--jai-brand) 30%, transparent), transparent 72%);
+  filter: blur(34px);
+}
+.jl-bezel {
+  position: relative;
+  z-index: 1;
+  padding: 9px 9px 11px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #23262f, #0d0f15 62%, #191c24);
+  box-shadow: 0 46px 90px -44px rgba(9, 14, 30, .75), 0 0 0 1px rgba(255, 255, 255, .06), inset 0 1px 0 rgba(255, 255, 255, .12) !important;
+}
+.jl-panel {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #050914;
+}
+.jl-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(80% 70% at 26% 18%, rgba(45, 108, 255, .3), transparent 68%),
+    radial-gradient(70% 60% at 82% 92%, rgba(88, 165, 255, .22), transparent 70%),
+    #050914;
+}
+.jl-mesh {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 52px),
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 52px);
+  mask-image: radial-gradient(110% 90% at 50% 50%, #000 20%, transparent 90%);
+  -webkit-mask-image: radial-gradient(110% 90% at 50% 50%, #000 20%, transparent 90%);
+}
+
+/* Key art occupies the right 44%, fading between frames. */
+.jl-art { position: absolute; z-index: 1; right: 0; top: 0; bottom: 0; width: 44%; overflow: hidden; }
+.jl-art figure { position: absolute; inset: 0; margin: 0; opacity: 0; transition: opacity 900ms cubic-bezier(.4, 0, .2, 1); }
+.jl-art figure.is-on { opacity: 1; z-index: 2; }
+.jl-art img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  animation: jai-keyart 14s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+.jl-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, #050914, rgba(5, 9, 20, .5) 40%, transparent 78%);
+}
+@keyframes jai-keyart { from { transform: scale(1); } to { transform: scale(1.07); } }
+
+.jl-top-fade, .jl-bot-fade { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
+.jl-top-fade { top: 0; height: 96px; background: linear-gradient(180deg, rgba(5, 9, 20, .82), rgba(5, 9, 20, .34) 62%, transparent); }
+.jl-bot-fade { bottom: 0; height: 132px; background: linear-gradient(0deg, rgba(5, 9, 20, .88), rgba(5, 9, 20, .42) 58%, transparent); }
+
+.jl-head {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  pointer-events: none;
+}
+.jl-head img { height: 24px; width: auto; object-fit: contain; display: block; }
+.jl-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #8fbaff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.jl-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8fbaff;
+  box-shadow: 0 0 9px 2px rgba(143, 186, 255, .55) !important;
+  animation: jai-pulse 2.4s ease-in-out infinite;
+}
+@keyframes jai-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .6; transform: scale(1.3); } }
+
+.jl-copy {
+  position: absolute;
+  z-index: 3;
+  left: 22px;
+  top: 50%;
+  width: 52%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.jl-ey { margin-bottom: 10px; color: #8fbaff; font-size: 9.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.jl-h { color: #fff; font-size: clamp(19px, 2.1vw, 27px); font-weight: 600; letter-spacing: -.03em; line-height: 1.16; }
+.jl-p { margin-top: 9px; color: rgba(255, 255, 255, .66); font-size: 12.5px; line-height: 1.55; }
+
+.jl-foot { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; padding: 0 22px 16px; }
+.jl-bars { display: flex; gap: 5px; margin-bottom: 12px; }
+.jl-bars span { flex: 1; height: 2px; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, .2); }
+.jl-bars i { display: block; height: 100%; width: 0; background: #fff; }
+.jl-bars span.is-done i { width: 100%; }
+.jl-bars span.is-on i { animation: jai-barfill 4200ms linear forwards; }
+@keyframes jai-barfill { from { width: 0%; } to { width: 100%; } }
+.jl-credits { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.jl-credits span { display: inline-flex; align-items: center; gap: 8px; color: rgba(255, 255, 255, .72); font-size: 11px; font-weight: 600; }
+.jl-ic { width: 15px; height: 15px; flex-shrink: 0; background: #8fbaff; }
+.jl-ic-ai  { -webkit-mask: url(../icons/sparkles.svg) center/contain no-repeat; mask: url(../icons/sparkles.svg) center/contain no-repeat; }
+.jl-ic-hum { -webkit-mask: url(../icons/fingerprint-pattern.svg) center/contain no-repeat; mask: url(../icons/fingerprint-pattern.svg) center/contain no-repeat; }
+
+.jl-glare {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, .07) 46%, transparent 60%);
+  animation: jai-glare 8s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes jai-glare { 0% { transform: translateX(-60%); } 55%, 100% { transform: translateX(120%); } }
+.jl-scan {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(180deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 3px);
+}
+
+@media (max-width: 900px) {
+  .jl-board { animation: none; transform: none; }
+  .jl-stage { perspective: none; }
+  .jl-copy { width: 60%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jl-board, .jl-art img, .jl-glare, .jl-live-dot,
+  .jl-bg-sweep, .jl-bg-line, .jl-bars span.is-on i { animation: none !important; }
+  .jl-board { transform: rotateY(-19deg) rotateX(7deg) rotateZ(-2.5deg); }
+  .jl-bars span.is-on i { width: 100%; }
+}
