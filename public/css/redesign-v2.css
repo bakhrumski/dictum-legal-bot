@@ -54,6 +54,7 @@
   --input-bg: rgba(255,255,255,.76);
   --accent: var(--jai-brand);
   --accent-fg: #fff;
+  --font-sans: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
   --font-body: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
   --font-ui: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
   --font-serif: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
@@ -236,7 +237,7 @@ input::placeholder, textarea::placeholder { color: var(--jai-muted-dim) !importa
   color: var(--jai-muted) !important;
   padding: 9px 13px !important;
   border-radius: 999px !important;
-  font-size: 13px !important;
+  font-size: 14.5px !important;
   font-weight: 500 !important;
 }
 .nav-links a:hover, .toplinks a:hover {

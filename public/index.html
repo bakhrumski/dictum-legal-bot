@@ -688,10 +688,10 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
     <p class="ey reveal" data-i18n="how_ey">3 oddiy qadam</p>
     <h2 class="sh reveal" data-i18n="how_h">Daqiqada javob oling</h2>
     <p class="sh-sub reveal" data-i18n="how_sub">Yurist qabuliga yozilish shart emas.</p>
-    <div class="steps">
-      <div class="step reveal"><h3 data-i18n="s1_h">Savolingizni yozing</h3><p data-i18n="s1_p">Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas.</p></div>
-      <div class="step reveal" data-d="1"><h3 data-i18n="s2_h">AI qonunni qidiradi</h3><p data-i18n="s2_p">JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi.</p></div>
-      <div class="step reveal" data-d="2"><h3 data-i18n="s3_h">Manbali javob</h3><p data-i18n="s3_p">Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda.</p></div>
+    <div class="jc-deck" id="stepDeck">
+      <div class="jc-slot"><div class="jc-card"><div class="jc-n">1</div><h3 data-i18n="s1_h">Savolingizni yozing</h3><p data-i18n="s1_p">Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas.</p></div></div>
+      <div class="jc-slot"><div class="jc-card"><div class="jc-n">2</div><h3 data-i18n="s2_h">AI qonunni qidiradi</h3><p data-i18n="s2_p">JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi.</p></div></div>
+      <div class="jc-slot"><div class="jc-card"><div class="jc-n">3</div><h3 data-i18n="s3_h">Manbali javob</h3><p data-i18n="s3_p">Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda.</p></div></div>
     </div>
   </div>
 </section>
@@ -781,6 +781,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 
 <!-- ═══ PRICING ═══ -->
 <section class="section" id="pricing">
+  <div class="jp-pools" aria-hidden="true"><i></i><i></i></div>
   <div class="wrap">
     <p class="ey reveal" data-i18n="pr_ey">Tariflar</p>
     <h2 class="sh reveal" data-i18n="pr_h">Sizga mos rejani tanlang</h2>
@@ -852,6 +853,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 
 <!-- ═══ FAQ ═══ -->
 <section class="section alt" id="faq">
+  <div class="jf-flaps" aria-hidden="true" id="faqFlaps"></div>
   <div class="wrap">
     <p class="ey reveal" data-i18n="faq_ey">Savol-javob</p>
     <h2 class="sh reveal" data-i18n="faq_h">Tez-tez beriladigan savollar</h2>
@@ -867,6 +869,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 
 <!-- ═══ CTA ═══ -->
 <div class="cta-band">
+  <div class="jt-fx" aria-hidden="true"><div class="jt-sweep"></div><div class="jt-glow"></div></div>
   <h2 data-i18n="cta_h">Huquqiy savolingiz bormi?</h2>
   <p data-i18n="cta_p">Hoziroq bepul sinab ko'ring — bir soniyada manbali javob oling.</p>
   <div class="hero-actions" style="justify-content:center">
@@ -1082,6 +1085,71 @@ function countUp(el){
 
 const pio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.style.width=e.target.dataset.w+'%';pio.unobserve(e.target);}});},{threshold:.3});
 document.querySelectorAll('.b-prog-fill').forEach(el=>pio.observe(el));
+
+/* ── Card glow follows the cursor across every card. One document-level
+   listener rather than a pair per card. ─────────────────────────────────── */
+(function cardGlow(){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const SEL='.bcard, .tcard';
+  let last=null;
+  document.addEventListener('pointermove',function(e){
+    const card=e.target.closest&&e.target.closest(SEL);
+    if(card!==last&&last){last.style.removeProperty('--gx');last.style.removeProperty('--gy');last.style.transform='';}
+    last=card;
+    if(!card)return;
+    const r=card.getBoundingClientRect();
+    const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+    card.style.setProperty('--gx',(px*100).toFixed(1)+'%');
+    card.style.setProperty('--gy',(py*100).toFixed(1)+'%');
+    /* A slight lean away from the pointer, capped so text stays readable. */
+    card.style.transform='perspective(900px) rotateX('+((.5-py)*4).toFixed(2)+'deg) rotateY('+((px-.5)*5).toFixed(2)+'deg)';
+  },{passive:true});
+  document.addEventListener('pointerleave',function(){
+    if(last){last.style.removeProperty('--gx');last.style.removeProperty('--gy');last.style.transform='';last=null;}
+  },true);
+})();
+
+/* ── FAQ split-flap backdrop. Deterministic placement so the board looks the
+   same on every load rather than reshuffling. ───────────────────────────── */
+(function faqFlaps(){
+  const host=document.getElementById('faqFlaps');
+  if(!host||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const COLS=22, ROWS=11;
+  let seed=77771;
+  const rnd=function(){seed=(seed*1103515245+12345)%2147483648;return seed/2147483648;};
+  let out='';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      if(rnd()>0.55)continue;
+      const x=(c*(100/COLS)+rnd()*1.2).toFixed(2), y=(r*(100/ROWS)+rnd()*1.2).toFixed(2);
+      const dur=(7+Math.floor(rnd()*9)), delay=(rnd()*9).toFixed(1);
+      out+='<span style="left:'+x+'%;top:'+y+'%;animation:jai-flapcell '+dur+'s steps(1) '+delay+'s infinite"></span>';
+    }
+  }
+  host.innerHTML=out;
+})();
+
+/* ── Pricing shockwave, on the free plan only, once it is on screen. ─────── */
+(function planShock(){
+  const free=document.querySelector('.plans .plan');
+  if(!free||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  new IntersectionObserver(function(es,obs){
+    es.forEach(function(e){ if(e.isIntersecting){ free.classList.add('is-shock'); obs.disconnect(); } });
+  },{threshold:.4}).observe(free);
+})();
+
+/* ── Step deck: the three cards rotate through the front slot every 4s. ──── */
+(function stepDeck(){
+  const deck=document.getElementById('stepDeck');
+  if(!deck)return;
+  const slots=[].slice.call(deck.querySelectorAll('.jc-slot'));
+  if(!slots.length)return;
+  let at=0;
+  function place(){slots.forEach(function(s,i){s.dataset.slot=String((i-at+slots.length)%slots.length);});}
+  place();
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  setInterval(function(){at=(at+1)%slots.length;place();},4000);
+})();
 
 /* ── LED billboard: four ad frames, 4.2s each, with a progress bar per frame
    and the copy swapping with the art. Ported from the canvas's adFrames. */

@@ -624,3 +624,289 @@
   .jl-board { transform: rotateY(-19deg) rotateX(7deg) rotateZ(-2.5deg); }
   .jl-bars span.is-on i { width: 100%; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   "How it works" — the canvas turns the three steps into a 3D deck: the
+   active card faces front and floats, the other two sit back and turned,
+   blurred and dimmed. Rotating every 4s.
+   ══════════════════════════════════════════════════════════════════════════ */
+.jc-deck {
+  position: relative;
+  height: 470px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 12px;
+  perspective: 1900px;
+  overflow: hidden;
+}
+.jc-slot {
+  position: absolute;
+  top: 34px;
+  left: 50%;
+  width: min(646px, 70%);
+  transition: transform 1000ms cubic-bezier(.2, .8, .2, 1),
+              filter 1000ms cubic-bezier(.2, .8, .2, 1),
+              opacity 1000ms cubic-bezier(.2, .8, .2, 1);
+}
+/* Behind: turned away, pushed back, blurred. */
+.jc-slot[data-slot="1"] { transform: translateX(-16%) translateZ(-330px) rotateY(-14deg) scale(.86); filter: blur(3px); opacity: .62; z-index: 2; }
+.jc-slot[data-slot="2"] { transform: translateX(-84%) translateZ(-330px) rotateY(14deg) scale(.86);  filter: blur(3px); opacity: .62; z-index: 2; }
+/* Front: square on, sharp, floating. */
+.jc-slot[data-slot="0"] { transform: translateX(-50%) translateZ(0) rotateY(0) scale(1); filter: none; opacity: 1; z-index: 3; }
+
+.jc-card {
+  position: relative;
+  min-height: 322px;
+  padding: 56px 46px;
+  border: 1px solid var(--jai-line);
+  border-radius: 30px;
+  background:
+    radial-gradient(120% 90% at 8% 104%, color-mix(in srgb, var(--jai-brand) 30%, transparent) 0%, transparent 60%),
+    var(--jai-panel-solid);
+  box-shadow: var(--jai-shadow) !important;
+}
+.jc-slot[data-slot="0"] .jc-card { animation: jai-cardfloat 4.2s ease-in-out infinite; }
+@keyframes jai-cardfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+.jc-n {
+  position: absolute;
+  top: -26px;
+  left: 44px;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  color: #fff;
+  background: var(--jai-brand);
+  font-size: 26px;
+  font-weight: 700;
+  transform-style: preserve-3d;
+}
+/* The number flips in when its card takes the front, then keeps a slow pulse. */
+.jc-slot[data-slot="0"] .jc-n {
+  animation: jai-numroll 900ms cubic-bezier(.2, .8, .2, 1) both,
+             jai-numglow 2.6s ease-out 900ms infinite;
+}
+@keyframes jai-numroll {
+  0%   { transform: rotateX(-90deg) scale(.7);  opacity: 0; }
+  45%  { transform: rotateX(12deg)  scale(1.12); opacity: 1; }
+  70%  { transform: rotateX(-5deg)  scale(.97); }
+  100% { transform: rotateX(0)      scale(1);   opacity: 1; }
+}
+@keyframes jai-numglow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--jai-brand) 42%, transparent) !important; }
+  55%      { box-shadow: 0 0 0 14px transparent !important; }
+}
+
+.jc-card h3 { margin: 30px 0 16px; color: var(--jai-ink); font-size: 29px; font-weight: 600; letter-spacing: -.02em; }
+.jc-card p  { margin: 0; color: var(--jai-muted); font-size: 22px; line-height: 1.6; }
+
+@media (max-width: 980px) {
+  .jc-deck { height: 400px; }
+  .jc-slot { width: min(460px, 84%); }
+  .jc-card { padding: 44px 30px; min-height: 280px; }
+  .jc-card h3 { font-size: 24px; }
+  .jc-card p { font-size: 18px; }
+}
+@media (max-width: 620px) {
+  /* No room for a deck: stack the three and drop the 3D entirely. */
+  .jc-deck { height: auto; padding: 0; perspective: none; display: flex; flex-direction: column; gap: 34px; }
+  .jc-slot, .jc-slot[data-slot] {
+    position: static; width: 100%;
+    transform: none !important; filter: none !important; opacity: 1 !important;
+  }
+  .jc-slot .jc-card { animation: none !important; }
+  .jc-slot .jc-n { animation: none !important; position: static; margin-bottom: 18px; }
+  .jc-card { padding: 30px 24px; min-height: 0; }
+  .jc-card h3 { margin-top: 0; font-size: 21px; }
+  .jc-card p { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jc-slot { transition: none; }
+  .jc-slot .jc-card, .jc-slot .jc-n { animation: none !important; }
+}
+
+/* ── Typography corrections against the canvas ────────────────────────────── */
+/* The canvas sets its big stat figures at 600 (the plan prices stay 700), and
+   gives the card headings -.02em. */
+/* The hero heading. redesign-v2.css carries clamp(48px, 6vw, 78px)/-.055em/.99
+   taken from the canvas file's inline style, but the canvas runtime resolves
+   that to a different scale, and the delivered design screenshots agree with
+   the runtime, not the literal declaration. Measured across eight viewport
+   widths the rendered curve is exactly clamp(34px, 4.1vw, 54px) with -.04em
+   and 1.06 line-height, so that is what ships. */
+.ht {
+  font-size: clamp(34px, 4.1vw, 54px) !important;
+  letter-spacing: -.04em !important;
+  line-height: 1.06 !important;
+}
+
+.stat-num { font-weight: 600 !important; }
+.plan-price { font-weight: 700 !important; }
+.bcard h3, .fcard h3, .b-h { letter-spacing: -.02em !important; }
+
+/* Section headings outside the .ht/.sh pair still carried the old 700 weight
+   and near-zero tracking; the canvas sets every display heading the same way. */
+.split h2, .cta-band h2 {
+  font-weight: 600 !important;
+  letter-spacing: -.055em !important;
+}
+.split > div > p, .cta-band > p, .cta-band p { line-height: 1.75 !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Card glow — the radial highlight in every card tracks the cursor. The
+   canvas drives --gx/--gy per card; the same variables are used here so the
+   gradient below is the canvas's verbatim.
+   ══════════════════════════════════════════════════════════════════════════ */
+.bcard, .tcard {
+  background:
+    radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%),
+      color-mix(in srgb, var(--jai-brand) 34%, transparent) 0%,
+      color-mix(in srgb, var(--jai-brand) 14%, transparent) 30%,
+      transparent 62%),
+    color-mix(in srgb, var(--jai-panel-solid) 88%, transparent) !important;
+  transform-style: preserve-3d;
+  transition: transform 300ms cubic-bezier(.2, .8, .2, 1),
+              box-shadow 300ms cubic-bezier(.2, .8, .2, 1),
+              border-color 300ms ease;
+  will-change: transform;
+}
+.bcard:hover, .tcard:hover {
+  border-color: var(--jai-brand-border) !important;
+  box-shadow: 0 22px 60px -22px color-mix(in srgb, var(--jai-brand) 45%, transparent) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Pricing — light pools drifting behind the plans, and a shockwave that
+   crosses the free card.
+   ══════════════════════════════════════════════════════════════════════════ */
+#pricing { position: relative; overflow: hidden; }
+#pricing > .wrap { position: relative; z-index: 1; }
+.jp-pools { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.jp-pools i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+}
+.jp-pools i:nth-child(1) {
+  left: -10%; bottom: -30%; width: 70%; height: 80%;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--jai-brand) 16%, transparent), transparent 66%);
+  filter: blur(26px);
+  animation: jai-pool 26s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+.jp-pools i:nth-child(2) {
+  right: -12%; top: -24%; width: 64%; height: 74%;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--jai-brand-2) 14%, transparent), transparent 66%);
+  filter: blur(30px);
+  animation: jai-pool2 32s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+@keyframes jai-pool  { from { transform: translate(0, 0) scale(1);   } to { transform: translate(16%, -12%) scale(1.16); } }
+@keyframes jai-pool2 { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-14%, 14%) scale(.94);  } }
+
+/* The wave sweeps bottom-right to top-left across the free plan, then the
+   card's edge answers with a single pulse. */
+.plan.is-shock { position: relative; animation: jai-shock 3s cubic-bezier(.4, 0, .2, 1) infinite; }
+.plan.is-shock::before,
+.plan.is-shock::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; }
+.plan.is-shock::before {
+  z-index: 0;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--jai-brand) 30%, transparent), transparent 62%);
+  animation: jai-shockwave 3s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.plan.is-shock::after {
+  z-index: 0;
+  border: 1px solid color-mix(in srgb, var(--jai-brand) 55%, transparent);
+  animation: jai-shockring 3s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.plan.is-shock > * { position: relative; z-index: 1; }
+@keyframes jai-shockwave {
+  0%   { opacity: 0;  transform: translate(18%, 18%) scale(.28); }
+  12%  { opacity: .9; }
+  70%  { opacity: .5; }
+  100% { opacity: 0;  transform: translate(-18%, -18%) scale(1.5); }
+}
+@keyframes jai-shock {
+  0%, 62% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--jai-brand) 55%, transparent) !important; }
+  78%     { box-shadow: 0 0 34px 10px color-mix(in srgb, var(--jai-brand) 26%, transparent) !important; }
+  100%    { box-shadow: 0 0 0 0 transparent !important; }
+}
+@keyframes jai-shockring {
+  0%, 62% { transform: scale(1);     opacity: 0; }
+  68%     { opacity: .85; }
+  100%    { transform: scale(1.075); opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FAQ — a split-flap board behind the questions, and each answer flips down.
+   ══════════════════════════════════════════════════════════════════════════ */
+#faq { position: relative; overflow: hidden; }
+#faq > .wrap { position: relative; z-index: 1; }
+.jf-flaps {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: radial-gradient(120% 90% at 50% 50%, #000 30%, transparent 88%);
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 50%, #000 30%, transparent 88%);
+}
+.jf-flaps span {
+  position: absolute;
+  width: 34px;
+  height: 20px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--jai-ink) 5%, transparent);
+  transform-origin: center;
+}
+@keyframes jai-flapcell {
+  0%, 88%, 100% { opacity: .5; transform: scaleY(1); }
+  92%           { opacity: .9; transform: scaleY(.2); }
+  96%           { opacity: .6; transform: scaleY(1); }
+}
+.faq-list, .qi-wrap { perspective: 1200px; }
+.qi.open .qi-ans { animation: jai-flipboard 620ms cubic-bezier(.2, .8, .2, 1) both; transform-origin: top center; }
+@keyframes jai-flipboard {
+  0%   { transform: rotateX(-92deg); opacity: 0; }
+  55%  { transform: rotateX(12deg);  opacity: 1; }
+  78%  { transform: rotateX(-5deg); }
+  100% { transform: rotateX(0);      opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Closing band — a light sweeping across, over a slow glow from below.
+   ══════════════════════════════════════════════════════════════════════════ */
+.cta-band { position: relative; overflow: hidden; }
+.cta-band > * { position: relative; z-index: 1; }
+.jt-fx { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.jt-sweep {
+  position: absolute;
+  top: -40%;
+  bottom: -40%;
+  left: -30%;
+  width: 34%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .055) 34%, rgba(120, 170, 255, .13) 50%, rgba(255, 255, 255, .055) 66%, transparent);
+  filter: blur(22px);
+  transform: rotate(14deg);
+  animation: jai-sweep 13s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.jt-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(60% 90% at 50% 120%, rgba(88, 165, 255, .16), transparent 70%);
+  animation: jai-ctaglow 13s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes jai-sweep {
+  0%   { transform: translateX(0) rotate(14deg);    opacity: 0; }
+  8%   { opacity: 1; }
+  82%  { opacity: 1; }
+  100% { transform: translateX(390%) rotate(14deg); opacity: 0; }
+}
+@keyframes jai-ctaglow { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .jp-pools i, .jf-flaps span, .jt-sweep, .jt-glow,
+  .plan.is-shock, .plan.is-shock::before, .plan.is-shock::after,
+  .qi.open .qi-ans { animation: none !important; }
+  .bcard, .tcard { transition: none; }
+}
