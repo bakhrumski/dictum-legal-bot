@@ -299,3 +299,37 @@ body:has(.login-card) {
   .lg-sheen::before { animation: none; }
   .login-card * { transition-duration: .01ms !important; }
 }
+
+/* ── Corrections after diffing against the rendered canvas ───────────────── */
+
+/* The card rises into place on load. */
+.login-card { animation: lg-appear .5s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes lg-appear {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Form footer controls: the canvas runs these a touch smaller, and leans on
+   weight rather than size to mark the recovery link. */
+.login-card .remember-me { font-size: 12.5px !important; font-weight: 500 !important; }
+.login-card .forgot-link { font-size: 12.5px !important; font-weight: 700 !important; }
+.login-card .btn.btn-outline,
+.login-card .btn-outline { font-size: 13.5px !important; font-weight: 600 !important; }
+
+/* The "or" rule sits smaller and wider-tracked than the body text. */
+.login-card .reg-divider {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 1.4px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-card { animation: none; }
+}
+
+/* The note above the Telegram bot link only — the form's own subtitle stays
+   at 13px, so this cannot be hung on .form-subtitle alone. */
+.login-card .tg-note { font-size: 12.5px !important; line-height: 1.6 !important; }
+/* The canvas writes the rule's label in capitals rather than transforming it;
+   the rendered result is the same, this just keeps the computed style equal. */
+.login-card .reg-divider { text-transform: none !important; }
