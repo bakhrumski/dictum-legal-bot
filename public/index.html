@@ -621,6 +621,11 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 </div>
 
 <!-- ═══ FEATURES ═══ -->
+<!-- The particle field: points scatter until this run of sections is
+     reached, then gather into a helix ladder as you scroll through. -->
+<div class="jw-field" id="fieldWrap">
+  <div class="jw-field-layer" aria-hidden="true"><canvas id="fieldCanvas"></canvas></div>
+  <div class="jw-field-body">
 <section class="section" id="features">
   <div class="wrap">
     <p class="ey reveal" data-i18n="feat_ey">Nima uchun JuristAI</p>
@@ -731,6 +736,8 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 </section>
 
 <!-- ═══ SHOWCASE ═══ -->
+  </div>
+</div>
 <section class="section alt">
   <div class="jl-bg" aria-hidden="true"><div class="jl-bg-grid"></div><div class="jl-bg-sweep"></div><div class="jl-bg-line"></div></div>
   <div class="wrap split">
@@ -1066,6 +1073,10 @@ function applyLang(l){
   document.querySelectorAll('.ls-b').forEach(b=>b.classList.toggle('on',b.dataset.lang===l));
   if(window.heroChat)window.heroChat.setLang(l);
   if(window.ledBoard)window.ledBoard.repaint();
+  /* The glitch layers are ::before/::after with content:attr(data-txt), and
+     the line above replaces the heading's innerHTML from the dictionary — which
+     carries no data-txt. Restore it from the text itself, in every language. */
+  document.querySelectorAll('.gt').forEach(function(el){el.setAttribute('data-txt',el.textContent);});
 }
 document.querySelectorAll('.ls-b').forEach(b=>b.addEventListener('click',()=>applyLang(b.dataset.lang)));
 
@@ -1085,6 +1096,95 @@ function countUp(el){
 
 const pio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.style.width=e.target.dataset.w+'%';pio.unobserve(e.target);}});},{threshold:.3});
 document.querySelectorAll('.b-prog-fill').forEach(el=>pio.observe(el));
+
+/* ── Particle field ("ladder"). Port of buildLadder/sizeField/drawField from
+   the canvas. 132 steps give two strand points each plus a 9-point rung on
+   every third step; they start scattered and gather onto a diagonal helix as
+   the section scrolls through. Seeded so the scatter is identical each load. */
+(function ladderField(){
+  const wrap=document.getElementById('fieldWrap'), cv=document.getElementById('fieldCanvas');
+  if(!wrap||!cv)return;
+  const ctx=cv.getContext('2d');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let W=0,H=0,pts=null,key='',gather,tick=0,raf=0;
+
+  function size(){
+    const r=cv.getBoundingClientRect();
+    W=r.width;H=r.height;
+    const cw=Math.round(W),ch=Math.round(H);
+    if(cv.width!==cw||cv.height!==ch){cv.width=cw;cv.height=ch;ctx.setTransform(1,0,0,1,0,0);}
+  }
+
+  function build(w,h){
+    let s=20260829;
+    const rnd=function(){s=(s*1103515245+12345)%2147483648;return s/2147483648;};
+    const steps=132,perRung=9,out=[];
+    for(let i=0;i<steps;i++){
+      const t=i/(steps-1);
+      out.push({t:t,k:0,strand:true});
+      out.push({t:t,k:1,strand:true});
+      if(i%3===0)for(let j=1;j<perRung;j++)out.push({t:t,k:j/perRung,strand:false});
+    }
+    for(const p of out){
+      p.sx=rnd()*w*1.4-w*0.2;
+      p.sy=rnd()*h*1.4-h*0.2;
+      p.ph=rnd()*Math.PI*2;
+      p.sp=0.4+rnd()*0.9;
+    }
+    pts=out;key=Math.round(w)+'x'+Math.round(h);
+  }
+
+  function draw(){
+    if(!W){size();if(!W)return;}
+    if(!pts||key!==Math.round(W)+'x'+Math.round(H))build(W,H);
+    ctx.clearRect(0,0,W,H);
+    const sy=window.scrollY||0, vh=window.innerHeight||800;
+    const r=wrap.getBoundingClientRect();
+    const prog=(vh-r.top)/(r.height+vh);
+    /* Scroll position, not velocity, drives assembly: scattered on entry,
+       fully gathered by mid-section. */
+    let target=Math.max(0,Math.min(1,(prog-0.06)/0.44));
+    if(reduce)target=1;
+    if(gather===undefined)gather=target;
+    gather+=(target-gather)*0.18;
+    const g=gather, ease=g*g*(3-2*g);
+    tick+=reduce?0:0.01;
+
+    const ang=-0.62, cs=Math.cos(ang), sn=Math.sin(ang);
+    const cx=W*0.5, cy=H*0.5;
+    const L=Math.hypot(W,H)*1.15, R=Math.min(W,H)*0.34, turns=3.1;
+    const spin=tick*0.55+sy*0.0016;
+    const dark=document.documentElement.getAttribute('data-theme')==='dark';
+    const blue=dark?'128,176,255':'37,88,214';
+
+    for(const p of pts){
+      const u=(p.t-0.5)*L;
+      const a=p.t*Math.PI*2*turns+spin;
+      const off=Math.cos(a+p.k*Math.PI)*R;
+      const dep=(Math.sin(a+p.k*Math.PI)+1)/2;
+      const tx=cx+u*cs-off*sn, ty=cy+u*sn+off*cs;
+      const drift=1-ease;
+      p.x=p.sx+(tx-p.sx)*ease+Math.cos(tick*p.sp*2+p.ph)*30*drift;
+      p.y=p.sy+(ty-p.sy)*ease+Math.sin(tick*p.sp*1.6+p.ph)*26*drift;
+      p.dep=dep;
+    }
+    for(const p of pts){
+      const base=p.strand?3.6:2.4;
+      const rad=base*(0.45+p.dep*0.85)*(0.6+ease*0.6);
+      ctx.beginPath();
+      ctx.fillStyle='rgba('+blue+','+(0.3+p.dep*0.5+ease*0.2).toFixed(3)+')';
+      ctx.arc(p.x,p.y,Math.max(0.6,rad),0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function loop(){draw();raf=requestAnimationFrame(loop);}
+  addEventListener('resize',size,{passive:true});
+  [0,120,500].forEach(function(d){setTimeout(size,d);});
+  size();
+  if(reduce){draw();return;}
+  raf=requestAnimationFrame(loop);
+})();
 
 /* ── Card glow follows the cursor across every card. One document-level
    listener rather than a pair per card. ─────────────────────────────────── */

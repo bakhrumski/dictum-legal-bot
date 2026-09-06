@@ -910,3 +910,21 @@
   .qi.open .qi-ans { animation: none !important; }
   .bcard, .tcard { transition: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Particle field — the canvas scatters 396 points and gathers them into a
+   diagonal helix "ladder" as this run of sections scrolls past. Sticky, so
+   it stays put while the sections move over it.
+   ══════════════════════════════════════════════════════════════════════════ */
+.jw-field { position: relative; }
+.jw-field-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.jw-field-layer canvas {
+  position: sticky;
+  top: 0;
+  display: block;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  opacity: .10;
+}
+.jw-field-body { position: relative; z-index: 1; }
