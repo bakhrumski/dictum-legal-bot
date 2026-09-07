@@ -1,0 +1,149 @@
+/* ============================================================
+   JuristAI application shell (public/ai-dashboard.html)
+
+   From public/preview/dashboard.dc.html. Declarations are the
+   prototype's; only where they are written moved. Tokens and keyframes
+   come from css/tokens.css.
+
+   This is the shell only — header, tab bar, page container. The sections
+   the tabs lead to land in later work; the container is empty until then.
+   ============================================================ */
+
+html, body { margin:0; padding:0; }
+/* box-sizing stays on the root alone, exactly as the prototype sets it
+   inline. The dashboard is the one page of the three whose stylesheet does
+   not put every descendant on border-box, and its padded, bordered boxes
+   were drawn against that: applying border-box throughout shaves 2px off
+   the header and 18px off the tab bar. */
+#db-root {
+  box-sizing:border-box;
+  min-height:100vh;
+  background-color:var(--canvas);
+  background-image:var(--aurora);
+  background-attachment:fixed;
+  color:var(--ink);
+  font-family:Inter, system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased;
+  /* Room for the floating tab bar, which is fixed over the content. */
+  padding-bottom:96px;
+}
+
+#db-root h1, #db-root h2, #db-root h3 { font-family:'Source Serif 4', Georgia, serif; font-weight:600; letter-spacing:-.012em; }
+#db-root [data-mono] { font-family:'JetBrains Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+#db-root [data-hide-sb] { scrollbar-width:none; -ms-overflow-style:none; }
+#db-root [data-hide-sb]::-webkit-scrollbar { width:0; height:0; display:none; }
+#db-root a { color:var(--brand); text-decoration:none; }
+#db-root a:hover { color:var(--brand-2); }
+#db-root [hidden] { display:none !important; }
+
+/* The app is a single full-height surface: a visible page scrollbar would
+   cut into the floating header and tab bar, which both run to the edge.
+   The wheel, trackpad, keyboard and touch all still scroll. */
+html.db-page, html.db-page body { scrollbar-width:none; -ms-overflow-style:none; overflow-x:hidden; }
+html.db-page::-webkit-scrollbar, html.db-page body::-webkit-scrollbar { width:0; height:0; display:none; }
+
+/* ============================================================
+   Page frame
+   ============================================================ */
+#db-root .db-wrap { width:min(100% - 24px, 1520px); margin:0 auto; padding-top:16px; }
+
+/* ============================================================
+   Header
+   ============================================================ */
+#db-root .db-head {
+  position:sticky; top:12px; z-index:100;
+  display:flex; align-items:center; gap:16px; min-height:72px; padding:0 20px;
+  border:1px solid var(--line); border-radius:14px;
+  background:color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  box-shadow:var(--shadow);
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+}
+#db-root .db-brand { display:flex; align-items:center; gap:9px; flex-shrink:0; cursor:pointer; color:var(--ink); }
+#db-root .db-brand img { height:30px; max-width:118px; width:auto; object-fit:contain; display:block; }
+#db-root .db-head-end { display:flex; align-items:center; gap:8px; margin-left:auto; }
+#db-root .db-iconbtn {
+  width:38px; height:38px; border-radius:12px; border:1px solid transparent;
+  background:transparent; color:var(--muted); display:grid; place-items:center;
+  cursor:pointer; padding:0;
+}
+#db-root .db-iconbtn:hover { background:var(--panel-hover); }
+#db-root .db-profile {
+  display:flex; align-items:center; gap:10px; padding:5px 12px 5px 6px;
+  border:1px solid var(--line); border-radius:999px; background:transparent;
+  cursor:pointer; font-family:inherit;
+}
+#db-root .db-profile:hover { background:var(--panel-hover); }
+#db-root .db-avatar {
+  width:30px; height:30px; border-radius:999px; background:var(--brand); color:#fff;
+  display:grid; place-items:center; font-size:13px; font-weight:700;
+}
+#db-root .db-profile-info { display:flex; flex-direction:column; align-items:flex-start; line-height:1.25; }
+#db-root .db-profile-name { font-size:13.5px; font-weight:600; color:var(--ink); }
+#db-root .db-profile-role { font-size:11.5px; color:var(--muted-dim); }
+#db-root .db-signout { color:var(--muted-dim); display:grid; place-items:center; }
+
+/* ============================================================
+   Tab bar
+
+   It lives inside #db-root even though it is position:fixed — outside it
+   the custom properties it paints with do not resolve.
+   ============================================================ */
+#db-root .db-tabbar {
+  position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:150;
+  width:min(720px, calc(100% - 24px));
+  display:grid; grid-template-columns:repeat(5,1fr); gap:4px; padding:8px;
+  border:1px solid var(--line); border-radius:18px;
+  background:var(--panel-solid); box-shadow:var(--shadow-hover);
+}
+#db-root .db-tab {
+  position:relative; display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:9px 4px; border:0; border-radius:13px; cursor:pointer; font-family:inherit;
+  background:transparent; color:var(--muted-dim);
+}
+#db-root .db-tab[aria-current="page"] { background:var(--brand-soft); color:var(--brand); }
+#db-root .db-tab-label { font-size:11px; font-weight:600; letter-spacing:.01em; }
+#db-root .db-tab-badge {
+  position:absolute; top:4px; right:calc(50% - 22px);
+  min-width:16px; height:16px; padding:0 4px; border-radius:999px;
+  background:var(--danger-solid); color:var(--on-danger);
+  font-size:9.5px; font-weight:700; line-height:16px; text-align:center;
+}
+
+/* ============================================================
+   Section container — empty until the sections are built
+   ============================================================ */
+#db-root .db-panel { display:none; padding:24px 0 8px; }
+#db-root .db-panel[data-active] { display:block; }
+#db-root .db-placeholder {
+  margin-top:16px; padding:56px 28px; text-align:center;
+  border:1px dashed var(--line); border-radius:18px;
+  background:color-mix(in srgb, var(--panel-solid) 60%, transparent);
+}
+#db-root .db-placeholder h2 { margin:0 0 8px; font-size:22px; color:var(--ink); }
+#db-root .db-placeholder p { margin:0; font-size:14px; line-height:1.65; color:var(--muted); }
+
+/* ============================================================
+   Responsive — copied from the prototype's <helmet><style>
+   ============================================================ */
+@media (max-width: 1080px) {
+  #db-root [data-r="stats"] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  #db-root [data-r="ai"] { grid-template-columns:1fr !important; }
+  #db-root [data-r="ai-side"] { display:none !important; }
+  #db-root [data-r="mgrid"] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  #db-root [data-r="wsgrid"] { grid-template-columns:minmax(0,1fr) !important; }
+  #db-root [data-r="chatgrid"] { grid-template-columns:minmax(0,1fr) !important; height:auto !important; }
+}
+@media (max-width: 760px) {
+  #db-root [data-r="stats"] { grid-template-columns:1fr !important; }
+  #db-root [data-r="head"] { min-height:66px !important; padding-inline:12px !important; border-radius:16px !important; }
+  #db-root [data-r="wordmark"] { max-width:116px !important; }
+  #db-root [data-r="profile-info"] { display:none !important; }
+  #db-root [data-r="row"] { grid-template-columns:auto minmax(0,1fr) !important; }
+  #db-root [data-r="row-person"], #db-root [data-r="row-time"] { display:none !important; }
+  #db-root [data-r="tabbar"] { bottom:8px !important; width:calc(100% - 12px) !important; }
+  #db-root [data-r="tab-label"] { font-size:10px !important; }
+  #db-root [data-r="mgrid"] { grid-template-columns:1fr !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #db-root *, #db-root *::before, #db-root *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+}
