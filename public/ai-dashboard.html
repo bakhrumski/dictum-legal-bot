@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="uz" class="db-page">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JuristAI — ish maydoni</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f6f8fc">
+<link rel="icon" href="/favicon-256.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/dashboard.css">
+<script>
+  // Resolve the stored theme before first paint so the shell never flashes
+  // light on a dark-mode reload.
+  (function () {
+    try {
+      if (localStorage.getItem('dictum-theme') === 'dark') {
+        document.documentElement.setAttribute('data-boot-theme', 'dark');
+      }
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<div id="db-root" data-theme="light">
+  <div class="db-wrap">
+
+    <header class="db-head" data-r="head">
+      <a class="db-brand" href="/" aria-label="JuristAI">
+        <img src="/brand/wordmark-filled-light.png" alt="JuristAI" data-r="wordmark" data-wordmark-light>
+        <img src="/brand/wordmark-filled-dark.png" alt="JuristAI" data-r="wordmark" data-wordmark-dark hidden>
+      </a>
+      <div class="db-head-end">
+        <button class="db-iconbtn" data-theme-toggle title="Rejimni almashtirish" aria-label="Rejimni almashtirish">
+          <svg data-theme-icon="light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg>
+          <svg data-theme-icon="dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+        </button>
+        <!-- TODO: connect to /api/me — name, initial and role are placeholders. -->
+        <button class="db-profile" type="button">
+          <span class="db-avatar">A</span>
+          <span class="db-profile-info" data-r="profile-info">
+            <span class="db-profile-name">Baxrom A.</span>
+            <span class="db-profile-role">Master Admin</span>
+          </span>
+          <span class="db-signout" title="Chiqish"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg></span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="db-panel" data-panel="home" data-active>
+        <div class="db-section">
+
+          <section class="db-section-head">
+            <div><h1>Bugungi boshqaruv</h1></div>
+            <button class="db-btn" type="button">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Yangilash
+            </button>
+          </section>
+
+          <div class="db-bits" data-bits></div>
+
+          <div class="db-health" data-health></div>
+
+          <div class="db-card">
+            <div class="db-card-head">
+              <div>
+                <h2>Ish navbati</h2>
+                <p data-queue-summary></p>
+              </div>
+              <button class="db-card-refresh" type="button" title="Navbatni yangilash"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+            </div>
+            <div class="db-chips" data-views></div>
+            <div class="db-searchrow">
+              <label class="db-search">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input type="search" placeholder="Murojaat yoki foydalanuvchini qidiring">
+              </label>
+            </div>
+            <div class="db-rows" data-rows></div>
+            <div class="db-pager">
+              <button type="button" disabled>Oldingi</button>
+              <span data-mono>1 / 4</span>
+              <button type="button">Keyingi</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+      <section class="db-panel" data-panel="jamoa">
+        <div class="ws">
+          <div class="ws-col">
+
+            <div class="ws-bar" data-ws-bar>
+              <!-- TODO: connect to API — the current workspace and the plan it is on. -->
+              <button class="ws-team-btn" type="button" title="juristAI jamoasi · Egasi · Platinum">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+                <span class="ws-barlabel" style="white-space:nowrap;">juristAI jamoasi</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+
+              <div class="ws-viewgroup" data-ws-views></div>
+
+              <div class="ws-spacer"></div>
+
+              <div class="ws-menuwrap">
+                <button class="ws-actions-btn" type="button" data-ws-menu-toggle title="Boshqa amallar" aria-expanded="false">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+                  <span class="ws-barlabel">Amallar</span>
+                </button>
+                <div class="ws-menu" data-ws-menu hidden>
+                  <button type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+                    <span style="min-width:0;">Jamoa chati</span>
+                  </button>
+                  <button type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg>
+                    <span style="min-width:0;">Umumiy hujjatlar</span>
+                  </button>
+                  <!-- TODO: connect to API — the member count. -->
+                  <button type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span style="min-width:0;">A'zolar · 12</span>
+                  </button>
+                  <div class="ws-menu-note">Workspace yaratish — faqat Platinum. Silver va yuqori tarif egalari taklif havolasi orqali qo'shiladi.</div>
+                </div>
+              </div>
+
+              <button class="ws-new" type="button">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                Yangi vazifa
+              </button>
+            </div>
+
+            <!-- Grafik -->
+            <div class="ws-view" data-ws-view="graph" style="flex:1 1 0%; min-height:0;">
+              <section class="ws-pane">
+                <header>
+                  <span class="ws-hint">Masalani surish uchun bosib torting — bog'langan a'zo va chiziqlar ergashadi</span>
+                  <div class="ws-legend" data-ws-legend></div>
+                </header>
+                <div class="ws-scroll" data-ws-scroll data-r="wsscroll" data-hide-sb>
+                  <div class="ws-graph" data-ws-graph data-r="wsgraph">
+                    <svg data-ws-paths></svg>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <!-- Vaqt jadvali -->
+            <div class="ws-view" data-ws-view="timeline" style="flex:1 1 0%; min-height:0;">
+              <section class="ws-pane">
+                <div class="ws-tl-head">
+                  <span>Masala va mas'ul a'zo</span>
+                  <div class="ws-tl-days" data-ws-days></div>
+                </div>
+                <div class="ws-tl-body" data-ws-timeline></div>
+              </section>
+            </div>
+
+            <!-- Ro'yxat -->
+            <div class="ws-view" data-ws-view="list" style="flex:1 1 0%; min-height:0;">
+              <div class="ws-grid" data-r="wsgrid" data-hide-sb>
+                <div class="ws-grid-col">
+                  <section class="ws-sec">
+                    <header>
+                      <h3>Masalalar</h3>
+                      <span class="ws-sec-count" data-ws-matter-count></span>
+                    </header>
+                    <div data-ws-matters></div>
+                  </section>
+                  <section class="ws-sec">
+                    <header>
+                      <h3>Jamoa suhbatlari</h3>
+                      <button class="ws-sec-link" type="button" data-open-ai>
+                        AI bo'limida ochish
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                      </button>
+                    </header>
+                    <div data-ws-threads></div>
+                  </section>
+                </div>
+                <div class="ws-grid-col">
+                  <section class="ws-sec">
+                    <header><h3>Jamoa yuklamasi</h3></header>
+                    <div class="ws-load" data-ws-team></div>
+                  </section>
+                  <section class="ws-sec">
+                    <header>
+                      <h3>Hujjat loyihalari</h3>
+                      <a href="#" style="font-size:12px; font-weight:600;">Barchasi</a>
+                    </header>
+                    <div data-ws-drafts></div>
+                  </section>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <aside class="dock" data-dock hidden>
+            <header>
+              <span class="dock-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg></span>
+              <div style="flex:1; min-width:0;">
+                <div class="dock-title" data-dock-title></div>
+                <div class="dock-sub">
+                  <span class="dock-scope" data-dock-scope></span>
+                  <span class="dock-note" data-mono data-dock-note></span>
+                </div>
+              </div>
+              <button class="dock-btn" type="button" data-dock-wide title="Kengaytirish"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 3 12 9 18"/><polyline points="15 6 21 12 15 18"/></svg></button>
+              <button class="dock-btn" type="button" data-dock-expand title="To'liq ekranda ochish"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+              <button class="dock-btn" type="button" data-dock-close title="Yopish"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </header>
+
+            <div class="dock-actions" data-hide-sb data-dock-actions></div>
+            <div class="dock-log" data-hide-sb data-dock-log></div>
+
+            <div class="dock-saved" data-dock-saved hidden>
+              <button class="dock-saved-toggle" type="button" data-dock-saved-toggle>
+                <span style="flex:1;" data-dock-saved-label></span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="dock-saved-list" data-dock-saved-list></div>
+            </div>
+
+            <div class="dock-composer">
+              <input placeholder="Savolingizni yozing...">
+              <button class="dock-send" type="button" title="Yuborish"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+            </div>
+          </aside>
+        </div>
+      </section>
+      <section class="db-panel" data-panel="chat">
+        <div class="chat">
+          <div class="chat-head">
+            <div>
+              <h2>Suhbatlar</h2>
+              <p>Jamoa muhokamasi va shaxsiy yozishmalar bir ekranda</p>
+            </div>
+            <div class="chat-modes" data-chat-modes></div>
+          </div>
+
+          <div class="chat-grid" data-r="chatgrid" data-chat-grid>
+            <section class="chat-pane" data-kind="group" data-chat-pane="group">
+              <header>
+                <div class="chat-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div style="min-width:0; flex:1;">
+                  <span class="chat-kind">Guruh</span>
+                  <!-- TODO: connect to API — the group's name and member count. -->
+                  <h3>Yuristlar jamoasi</h3>
+                </div>
+                <span class="chat-count">12 a'zo</span>
+              </header>
+              <div class="chat-log" data-kind="group" data-chat-group></div>
+              <div class="chat-composer">
+                <div class="chat-composer-inner">
+                  <textarea placeholder="Jamoaga yozing… (@ bilan mention)" rows="1"></textarea>
+                  <button class="chat-send" type="button" title="Yuborish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                </div>
+              </div>
+            </section>
+
+            <section class="chat-pane" data-kind="private" data-chat-pane="private">
+              <header>
+                <!-- TODO: connect to API — the person and their presence. -->
+                <div class="chat-avatar">
+                  <span>SN</span>
+                  <span class="chat-online"></span>
+                </div>
+                <div style="min-width:0; flex:1;">
+                  <span class="chat-kind">Shaxsiy</span>
+                  <h3>Sardor Nazarov</h3>
+                </div>
+                <span class="chat-status">Onlayn</span>
+              </header>
+              <div class="chat-log" data-kind="private" data-chat-private></div>
+              <div class="chat-composer">
+                <div class="chat-composer-inner">
+                  <textarea placeholder="Sardorga yozing…" rows="1"></textarea>
+                  <button class="chat-send" type="button" title="Yuborish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="db-panel" data-panel="ai">
+        <div class="ai">
+          <div class="ai-shell" data-r="ai">
+            <aside class="ai-side" data-r="ai-side">
+              <button class="ai-new" type="button">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+                Yangi suhbat
+              </button>
+
+              <div class="ai-group">
+                <div class="ai-label">Suhbat doirasi</div>
+                <div data-ai-scopes></div>
+              </div>
+
+              <div class="ai-budget" data-ai-budget hidden>
+                <div class="ai-budget-top">
+                  <span>Workspace balansi</span>
+                  <span data-ai-budget-pct></span>
+                </div>
+                <div class="ai-budget-track"><div class="ai-budget-fill" data-ai-budget-fill></div></div>
+                <small data-mono data-ai-budget-text></small>
+              </div>
+
+              <div class="ai-threads-wrap">
+                <div class="ai-threads-head">
+                  <span>Suhbatlar</span>
+                  <span data-ai-thread-count></span>
+                </div>
+                <label class="ai-search">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/></svg>
+                  <input type="search" placeholder="Suhbatlarni qidirish">
+                </label>
+                <div class="ai-threads" data-ai-threads></div>
+              </div>
+            </aside>
+
+            <div class="ai-main">
+              <div class="ai-bar">
+                <button class="ai-bar-icon" type="button" title="Suhbatlar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="ai-scoperow" role="group" aria-label="Suhbat doirasi" data-ai-scopepills></div>
+                <span class="ai-budgetpill" data-ai-budgetpill title="Workspace token balansi" hidden>
+                  <span class="ai-budgetpill-track"><span class="ai-budgetpill-fill" data-ai-budgetpill-fill></span></span>
+                  <span data-mono style="font-size:11.5px;" data-ai-budgetpill-text></span>
+                </span>
+                <button class="ai-bar-icon ai-bar-icon--sm" type="button" title="Yangi suhbat"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+
+                <div class="ai-matterwrap" data-ai-matterwrap hidden>
+                  <button class="ai-matterbtn" type="button" data-ai-matter-toggle aria-expanded="false">
+                    <span>Masala</span>
+                    <span class="ai-mattername" data-ai-matter-label>Biriktirilmagan</span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-dim); flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div class="ai-mattermenu" data-ai-mattermenu hidden></div>
+                </div>
+                <button class="ai-hide" type="button" data-ai-hide title="Bu suhbatni jamoadan yashirish" hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>
+                  Yashirish
+                </button>
+
+                <div class="ai-dds" data-ai-dds></div>
+              </div>
+
+              <div class="ai-body">
+                <div class="ai-welcome">
+                  <div class="ai-welcome-head">
+                    <h1>Bugun qanday huquqiy masalada yordam kerak?</h1>
+                    <p>Savolingizni oddiy tilda yozing yoki hujjat biriktiring.</p>
+                  </div>
+                  <div class="ai-starters" data-ai-starters></div>
+                  <button class="ai-topics-toggle" type="button" data-ai-topics-toggle aria-expanded="false">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                    Huquqiy sohani oldindan tanlash
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div class="ai-topics" data-ai-topics hidden>
+                    <p>Aniq sohani bilsangiz, javobni yo'naltirish uchun tanlang.</p>
+                    <div class="ai-topics-list" data-ai-topics-list></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ai-composer">
+                <div class="ai-composer-inner">
+                  <button class="ai-attach" type="button" title="Biriktirish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78"/></svg></button>
+                  <textarea placeholder="Huquqiy savolingizni yozing..." rows="1"></textarea>
+                  <button class="ai-send" type="button"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                </div>
+                <p class="ai-disclaimer">Jurist AI xatolarga yo'l qo'yishi mumkin. Muhim masalalarda mutaxassis bilan maslahatlashing.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="db-panel" data-panel="sorov">
+        <div class="mg">
+          <section><h1>Boshqaruv</h1></section>
+          <div class="mg-grid" data-r="mgrid" aria-label="Boshqaruv bo'limlari" data-mg-cards></div>
+          <div class="mg-sections" data-mg-sections></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- The tab bar is fixed, but stays inside #db-root: outside it the
+         custom properties it paints with do not resolve. -->
+    <nav class="db-tabbar" data-r="tabbar" aria-label="Bo'limlar">
+      <button class="db-tab" data-tab="home" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+        <span class="db-tab-label" data-r="tab-label">Asosiy</span>
+      </button>
+      <button class="db-tab" data-tab="jamoa" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 4V2M16 4V2M3 9h18M8 13h3M8 17h6"/></svg>
+        <span class="db-tab-label" data-r="tab-label">Workspace</span>
+      </button>
+      <button class="db-tab" data-tab="chat" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="db-tab-label" data-r="tab-label">Chat</span>
+        <!-- TODO: connect to the unread count. -->
+        <span class="db-tab-badge">2</span>
+      </button>
+      <button class="db-tab" data-tab="ai" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/></svg>
+        <span class="db-tab-label" data-r="tab-label">AI</span>
+      </button>
+      <button class="db-tab" data-tab="sorov" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 2h6v4H9zM9 14l2 2 4-4"/></svg>
+        <span class="db-tab-label" data-r="tab-label">Boshqaruv</span>
+        <!-- TODO: connect to the pending-request count. -->
+        <span class="db-tab-badge">5</span>
+      </button>
+    </nav>
+
+  </div>
+</div>
+<script src="/js/ai-dashboard-data.js"></script>
+<script src="/js/ai-dashboard.js"></script>
+</body>
+</html>
