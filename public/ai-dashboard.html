@@ -92,9 +92,115 @@
         </div>
       </section>
       <section class="db-panel" data-panel="jamoa">
-        <div class="db-placeholder">
-          <h2>Workspace</h2>
-          <p>Ro'yxat, vaqt jadvali va grafik ko'rinishlari shu yerga joylashadi.</p>
+        <div class="ws">
+          <div class="ws-col">
+
+            <div class="ws-bar" data-ws-bar>
+              <!-- TODO: connect to API — the current workspace and the plan it is on. -->
+              <button class="ws-team-btn" type="button" title="juristAI jamoasi · Egasi · Platinum">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+                <span class="ws-barlabel" style="white-space:nowrap;">juristAI jamoasi</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+
+              <div class="ws-viewgroup" data-ws-views></div>
+
+              <div class="ws-spacer"></div>
+
+              <div class="ws-menuwrap">
+                <button class="ws-actions-btn" type="button" data-ws-menu-toggle title="Boshqa amallar" aria-expanded="false">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+                  <span class="ws-barlabel">Amallar</span>
+                </button>
+                <div class="ws-menu" data-ws-menu hidden>
+                  <button type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+                    <span style="min-width:0;">Jamoa chati</span>
+                  </button>
+                  <button type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg>
+                    <span style="min-width:0;">Umumiy hujjatlar</span>
+                  </button>
+                  <!-- TODO: connect to API — the member count. -->
+                  <button type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span style="min-width:0;">A'zolar · 12</span>
+                  </button>
+                  <div class="ws-menu-note">Workspace yaratish — faqat Platinum. Silver va yuqori tarif egalari taklif havolasi orqali qo'shiladi.</div>
+                </div>
+              </div>
+
+              <button class="ws-new" type="button">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                Yangi vazifa
+              </button>
+            </div>
+
+            <!-- Grafik -->
+            <div class="ws-view" data-ws-view="graph" style="flex:1 1 0%; min-height:0;">
+              <section class="ws-pane">
+                <header>
+                  <span class="ws-hint">Masalani surish uchun bosib torting — bog'langan a'zo va chiziqlar ergashadi</span>
+                  <div class="ws-legend" data-ws-legend></div>
+                </header>
+                <div class="ws-scroll" data-ws-scroll data-r="wsscroll" data-hide-sb>
+                  <div class="ws-graph" data-ws-graph data-r="wsgraph">
+                    <svg data-ws-paths></svg>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <!-- Vaqt jadvali -->
+            <div class="ws-view" data-ws-view="timeline" style="flex:1 1 0%; min-height:0;">
+              <section class="ws-pane">
+                <div class="ws-tl-head">
+                  <span>Masala va mas'ul a'zo</span>
+                  <div class="ws-tl-days" data-ws-days></div>
+                </div>
+                <div class="ws-tl-body" data-ws-timeline></div>
+              </section>
+            </div>
+
+            <!-- Ro'yxat -->
+            <div class="ws-view" data-ws-view="list" style="flex:1 1 0%; min-height:0;">
+              <div class="ws-grid" data-r="wsgrid" data-hide-sb>
+                <div class="ws-grid-col">
+                  <section class="ws-sec">
+                    <header>
+                      <h3>Masalalar</h3>
+                      <span class="ws-sec-count" data-ws-matter-count></span>
+                    </header>
+                    <div data-ws-matters></div>
+                  </section>
+                  <section class="ws-sec">
+                    <header>
+                      <h3>Jamoa suhbatlari</h3>
+                      <button class="ws-sec-link" type="button" data-open-ai>
+                        AI bo'limida ochish
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                      </button>
+                    </header>
+                    <div data-ws-threads></div>
+                  </section>
+                </div>
+                <div class="ws-grid-col">
+                  <section class="ws-sec">
+                    <header><h3>Jamoa yuklamasi</h3></header>
+                    <div class="ws-load" data-ws-team></div>
+                  </section>
+                  <section class="ws-sec">
+                    <header>
+                      <h3>Hujjat loyihalari</h3>
+                      <a href="#" style="font-size:12px; font-weight:600;">Barchasi</a>
+                    </header>
+                    <div data-ws-drafts></div>
+                  </section>
+                </div>
+              </div>
+            </div>
+
+          </div>
         </div>
       </section>
       <section class="db-panel" data-panel="chat">
