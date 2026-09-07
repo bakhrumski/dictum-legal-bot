@@ -314,6 +314,35 @@ app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat'], aiLim
 // Public assets do not need a database-backed session. Serving them before the
 // session store keeps the landing, login, tariff and attorney-directory pages
 // available even when the database is restarting or at its connection limit.
+// ── New design prototypes under /preview (temporary, non-production) ───────
+// The redesign handoff (docs/design-handoff/) ships React/Babel-driven .dc.html
+// prototypes. They are served as a staging preview only: not indexed, gated by
+// basic auth, and removed once every page is converted to vanilla HTML/CSS/JS.
+const previewPath = require('path');
+app.use('/preview', (req, res, next) => {
+  const user = process.env.PREVIEW_USER;
+  const pass = process.env.PREVIEW_PASS;
+  // Local development without credentials stays open; a real deployment must
+  // set both env vars or the preview is refused outright.
+  if (!user || !pass) {
+    if (process.env.NODE_ENV === 'production') return res.status(404).end();
+    return next();
+  }
+  const header = req.headers.authorization || '';
+  if (header.startsWith('Basic ')) {
+    const [u, p] = Buffer.from(header.slice(6), 'base64').toString('utf8').split(':');
+    if (u === user && p === pass) return next();
+  }
+  res.set('WWW-Authenticate', 'Basic realm="JuristAI preview", charset="UTF-8"');
+  return res.status(401).send('Authentication required');
+});
+// Pretty URLs: /preview/landing → /preview/landing.dc.html
+app.get('/preview/:page', (req, res, next) => {
+  const allowed = ['landing', 'login', 'dashboard', 'brand'];
+  if (!allowed.includes(req.params.page)) return next();
+  res.sendFile(previewPath.join(process.cwd(), 'public', 'preview', `${req.params.page}.dc.html`));
+});
+
 app.use(express.static('public'));
 
 // Session configuration — PostgreSQL store survives server restarts.
