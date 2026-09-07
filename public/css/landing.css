@@ -1,0 +1,471 @@
+/* ============================================================
+   JuristAI landing page (public/index.html)
+
+   Two kinds of rule live here:
+
+   1. Everything the prototype kept in <helmet><style> that is not a
+      token — footer link resets, the marquee colour overrides, the tilt
+      transition, the responsive rules. Copied verbatim from
+      public/preview/landing.dc.html; see docs/design-handoff/.
+
+   2. Component classes for the patterns the prototype repeats as inline
+      style="..." — buttons, cards, section headings, plan cards. Their
+      declarations are the prototype's declarations, unchanged; only the
+      place they are written moved. One-off structural styles (a grid
+      column span, an absolutely positioned decoration) stay inline on the
+      element, where they describe that element and nothing else.
+
+   Custom properties and @keyframes come from css/tokens.css.
+   ============================================================ */
+
+html, body { margin:0; padding:0; }
+
+#jai-root, #jai-root *, #jai-root *::before, #jai-root *::after { box-sizing: border-box; }
+
+#jai-root {
+  min-width:320px;
+  min-height:100vh;
+  background-color:var(--canvas);
+  background-image:var(--aurora);
+  background-attachment:fixed;
+  color:var(--ink);
+  font-family:'Space Grotesk', Inter, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+#jai-root a { color:inherit; text-decoration:none; }
+#jai-root a:hover { color:var(--brand); }
+
+/* The theme swap hides one wordmark and one icon with [hidden]. That
+   attribute is honoured by a user-agent rule, which an inline display loses
+   to — and both wordmarks carry an inline display:block. */
+#jai-root [hidden] { display:none !important; }
+
+/* The footer is the one place a browser default underline used to leak
+   through, on visited links and on the <span> inside an anchor. */
+#jai-root footer, #jai-root footer h4, #jai-root footer p, #jai-root footer a, #jai-root footer span {
+  font-family:'Space Grotesk', Inter, 'Segoe UI', sans-serif; text-decoration:none; font-style:normal;
+}
+#jai-root footer a, #jai-root footer a:link, #jai-root footer a:visited, #jai-root footer a:hover, #jai-root footer a:active, #jai-root footer a * {
+  text-decoration:none !important; text-decoration-line:none !important; border-bottom:0 !important; background-image:none !important;
+}
+#jai-root footer a { transition:color 220ms cubic-bezier(.2,.8,.2,1); }
+#jai-root footer a:hover { color:var(--brand-2); }
+
+/* The "Qamrab oladi" strip inverts: white on navy in dark mode, navy on
+   white in light mode, independent of the page surface. */
+#jai-root [data-r="mq"] { background:var(--mq-bg) !important; border-top-color:var(--mq-fg) !important; border-bottom-color:var(--mq-fg) !important; }
+#jai-root [data-r="mq"] span { color:var(--mq-fg) !important; }
+#jai-root [data-r="mq"] span[data-mq-label] { background:transparent !important; color:var(--mq-fg) !important; }
+
+/* Cursor-tracked tilt. The transform and the --gx/--gy light position are
+   set from JS; everything that eases them lives here. */
+#jai-root [data-tilt] { transform-style:preserve-3d; transition:transform 300ms cubic-bezier(.2,.8,.2,1), box-shadow 300ms cubic-bezier(.2,.8,.2,1), border-color 300ms; will-change:transform; }
+#jai-root [data-tilt]:hover { box-shadow:0 22px 60px -22px color-mix(in srgb, var(--brand) 45%, transparent); border-color:var(--brand-border); }
+
+#jai-root [data-r="hero-h1"] { font-size: clamp(34px, 4.1vw, 54px) !important; letter-spacing: -.04em !important; line-height: 1.06 !important; }
+
+/* ============================================================
+   Layout primitives
+   ============================================================ */
+#jai-root .jai-wrap{ max-width:1180px; margin:0 auto; padding:0 24px; }
+#jai-root .jai-sec{ padding:88px 0; }
+/* Sections that sit on the tinted band between two hairlines. */
+#jai-root .jai-sec--band{
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  background:color-mix(in srgb, var(--panel-solid) 38%, transparent);
+}
+
+/* ============================================================
+   Section headings
+   ============================================================ */
+#jai-root .jai-ey{
+  text-align:center; font-size:11px; font-weight:700; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--brand); margin:0 0 14px;
+}
+#jai-root .jai-h2{
+  text-align:center; font-size:clamp(30px,4vw,46px); font-weight:600;
+  letter-spacing:-.055em; line-height:1.08; margin:0 0 16px; color:var(--ink);
+}
+/* Sections with no standfirst close the gap on the heading instead. */
+#jai-root .jai-h2--last{ margin-bottom:48px; }
+#jai-root .jai-sub{
+  text-align:center; color:var(--muted); font-size:17.5px;
+  max-width:620px; margin:0 auto 30px; line-height:1.75;
+}
+#jai-root .jai-sub--wide{ margin-bottom:48px; }
+/* Ink-to-brand gradient on the emphasised half of a heading. */
+#jai-root .jai-grad{
+  background:linear-gradient(100deg, var(--ink) 8%, var(--brand-2) 96%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+#jai-root .jai-btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:16px 34px; border-radius:12px; font-size:17px; font-weight:600;
+}
+#jai-root .jai-btn--primary{
+  background:var(--brand); border:1px solid var(--brand); color:#fff;
+  box-shadow:0 16px 34px -22px rgba(45,108,255,.72);
+}
+#jai-root .jai-btn--primary:hover{ color:#fff; }
+#jai-root .jai-btn--ghost{ background:transparent; border:1px solid var(--line); color:var(--ink); }
+/* On the dark CTA panel the button inverts: light plate, navy label. */
+#jai-root .jai-btn--light{
+  width:100%; background:#f8fafc; border:1px solid rgba(255,255,255,.84);
+  color:#10203a; box-shadow:0 18px 44px -24px rgba(0,0,0,.72);
+}
+#jai-root .jai-btn--light:hover{ color:#10203a; }
+
+/* ============================================================
+   Header
+   ============================================================ */
+#jai-root .jai-header{
+  position:sticky; top:0; z-index:200;
+  background:color-mix(in srgb, var(--canvas) 94%, transparent);
+  border-bottom:1px solid var(--line);
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+}
+#jai-root .jai-navlink{
+  color:var(--muted); font-size:14.5px; font-weight:500;
+  padding:9px 13px; border-radius:10px;
+}
+#jai-root .jai-langbtn{
+  background:transparent; border:0; color:var(--muted-dim);
+  font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px;
+  cursor:pointer; letter-spacing:.4px; font-family:inherit;
+}
+#jai-root .jai-langbtn[aria-pressed="true"]{ background:var(--brand); color:#fff; }
+#jai-root .jai-themebtn{
+  width:40px; height:40px; border-radius:999px; background:transparent;
+  border:0; color:var(--muted); cursor:pointer; display:grid;
+  place-items:center; padding:0;
+}
+#jai-root .jai-navbtn{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:40px; padding:0 16px; border-radius:12px; border:0;
+  color:var(--ink); font-size:15px; font-weight:600; white-space:nowrap;
+}
+#jai-root .jai-navbtn:hover{ background:var(--panel-hover); color:var(--ink); }
+#jai-root .jai-navbtn--primary{
+  background:var(--brand); border:1px solid var(--brand); color:#fff;
+  box-shadow:0 16px 34px -22px rgba(45,108,255,.72);
+}
+#jai-root .jai-navbtn--primary:hover{ background:var(--brand); color:#fff; }
+
+/* ============================================================
+   Hero
+   ============================================================ */
+#jai-root .jai-hero-pill{
+  display:inline-flex; align-items:center; gap:9px; color:var(--brand);
+  font-size:13px; font-weight:600; letter-spacing:.13em; line-height:1.5;
+  margin-bottom:24px; text-transform:uppercase;
+}
+#jai-root .jai-hero-h1{
+  font-size:clamp(48px,6vw,78px); line-height:.99; font-weight:600;
+  letter-spacing:-.055em; color:var(--ink); margin:0 0 24px;
+  max-width:min(760px,100%); overflow-wrap:break-word; text-wrap:pretty;
+}
+/* The glitch: the heading's emphasised span carries two clipped clones of
+   its own text, offset a few pixels on their own cycles. */
+#jai-root .jai-glitch{
+  position:relative; display:inline-block;
+  background:linear-gradient(100deg, var(--ink) 8%, var(--brand-2) 96%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:jai-gl-skew 5.2s steps(1) infinite;
+}
+#jai-root .jai-glitch::before{
+  content:attr(data-txt); position:absolute; left:0; top:0; color:#2d6cff;
+  opacity:.55; mix-blend-mode:multiply; clip-path:inset(0 0 62% 0);
+  animation:jai-gl-a 3.1s steps(1) infinite; pointer-events:none;
+}
+#jai-root .jai-glitch::after{
+  content:attr(data-txt); position:absolute; left:0; top:0; color:#d94a4a;
+  opacity:.42; mix-blend-mode:multiply; clip-path:inset(58% 0 0 0);
+  animation:jai-gl-b 2.4s steps(1) infinite; pointer-events:none;
+}
+#jai-root .jai-hero-sub{ font-size:18px; line-height:1.75; color:var(--muted); max-width:min(580px,100%); margin:0 0 36px; }
+#jai-root .jai-hero-stat{ color:var(--muted); font-size:13.5px; }
+#jai-root .jai-hero-stat strong{
+  display:block; font-size:20px; font-weight:700; color:var(--ink);
+  letter-spacing:-.5px; margin-bottom:2px;
+}
+
+/* -- Phone mock ------------------------------------------- */
+#jai-root .jai-msg-q{
+  align-self:flex-end; max-width:84%; padding:9px 13px;
+  border-radius:14px 14px 4px 14px; font-size:12.5px; line-height:1.5;
+  color:#fff; background:linear-gradient(135deg, var(--brand), var(--brand-2));
+}
+#jai-root .jai-msg-a{
+  align-self:flex-start; max-width:88%; padding:9px 13px;
+  border-radius:14px 14px 14px 4px; font-size:12.5px; line-height:1.5;
+  color:var(--ink); background:var(--panel-hover); border:1px solid var(--line);
+}
+#jai-root .jai-msg-src{
+  display:inline-flex; align-items:center; gap:6px; margin-top:7px;
+  font-size:10.5px; font-weight:700; color:var(--brand);
+  background:var(--brand-soft); border:1px solid var(--brand-border);
+  padding:3px 8px; border-radius:6px;
+}
+#jai-root .jai-dot{
+  width:5px; height:5px; border-radius:50%; background:var(--muted-dim);
+  animation:jai-blink 1.2s ease-in-out infinite;
+}
+#jai-root .jai-key{
+  flex:1; height:30px; border-radius:6px; display:grid; place-items:center;
+  font-size:12px; font-weight:600; color:var(--ink); background:var(--panel-solid);
+  box-shadow:0 1px 0 var(--line);
+  transition:background 90ms linear, color 90ms linear, transform 90ms linear;
+}
+#jai-root .jai-key.is-on{ color:#fff; background:var(--brand); transform:scale(1.14); }
+
+/* ============================================================
+   Cards
+   ============================================================ */
+#jai-root .jai-card{
+  background:
+    radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%),
+    color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  border:1px solid var(--line); border-radius:24px; padding:28px;
+  box-shadow:var(--shadow); overflow:hidden;
+}
+#jai-root .jai-card__icon{ width:34px; height:34px; display:grid; place-items:center; margin-bottom:16px; color:var(--brand); }
+#jai-root .jai-card__h{ font-size:18px; font-weight:600; margin:0 0 8px; color:var(--ink); letter-spacing:-.02em; }
+#jai-root .jai-card__p{ color:var(--muted); font-size:14.5px; line-height:1.6; margin:0; }
+
+#jai-root .jai-chip{
+  background:var(--panel-hover); border:1px solid var(--line); color:var(--muted);
+  font-size:12.5px; font-weight:600; padding:5px 11px; border-radius:999px;
+}
+#jai-root .jai-chip--brand{ background:var(--brand-soft); border-color:var(--brand-border); color:var(--brand); }
+#jai-root .jai-tag{
+  padding:6px 12px; border-radius:8px; font-size:12.5px; font-weight:600;
+  background:var(--panel-hover); border:1px solid var(--line); color:var(--muted);
+}
+
+/* A retrieved-source row: the matched act is tinted, the rest are quiet. */
+#jai-root .jai-lexrow{
+  display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:10px;
+  background:var(--panel-hover); border:1px solid var(--line); font-size:13px;
+}
+#jai-root .jai-lexrow--hit{ background:var(--brand-soft); border-color:var(--brand-border); }
+#jai-root .jai-lexbadge{
+  font-size:11px; font-weight:700; color:var(--muted); background:var(--panel-hover);
+  border:1px solid var(--line); padding:2px 7px; border-radius:5px; flex-shrink:0;
+}
+#jai-root .jai-lexrow--hit .jai-lexbadge{ color:var(--brand); }
+#jai-root .jai-lextext{ color:var(--muted); font-size:12.5px; }
+#jai-root .jai-lexrow--hit .jai-lextext{ color:var(--ink); }
+
+/* ============================================================
+   Testimonials
+   ============================================================ */
+#jai-root .jai-testi{
+  height:100%; background:
+    radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%), color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 30%, transparent 62%),
+    color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  border:1px solid var(--line); border-radius:24px; padding:28px;
+  box-shadow:var(--shadow); overflow:hidden;
+  display:flex; flex-direction:column; gap:16px;
+}
+#jai-root .jai-testi__quote{
+  position:relative; flex:1; margin:0; font-style:italic;
+  font-size:15.5px; line-height:1.7; color:var(--muted);
+}
+#jai-root .jai-testi__avatar{
+  width:42px; height:42px; border-radius:999px; display:grid; place-items:center;
+  font-weight:700; font-size:15px; color:var(--ink);
+  background:var(--panel-hover); border:1px solid var(--line); flex-shrink:0;
+}
+/* The caret only blinks while its quote is mid-type; JS drives the opacity. */
+#jai-root .jai-caret{
+  display:inline-block; width:1.5px; height:14px; vertical-align:-2px;
+  margin-left:2px; background:var(--brand); opacity:0;
+  animation:jai-blink 1s steps(1) infinite;
+}
+
+/* ============================================================
+   Checklist beside the LED panel
+   ============================================================ */
+#jai-root .jai-check{ display:flex; align-items:flex-start; gap:12px; font-size:15.5px; line-height:1.5; }
+#jai-root .jai-check__box{
+  width:22px; height:22px; border-radius:6px; background:transparent;
+  border:1px solid var(--line); display:grid; place-items:center; flex-shrink:0;
+  margin-top:1px; color:var(--brand);
+  transition:border-color 260ms ease, background 260ms ease, transform 260ms cubic-bezier(.2,.8,.2,1);
+}
+#jai-root .jai-check__text{ color:var(--muted); transition:color 320ms ease; }
+
+/* ============================================================
+   Pricing
+   Class names match the page this replaces: the pricing copy is tied to
+   the server's PLANS by tests/pricing-cards.test.js, which reads them.
+   ============================================================ */
+#jai-root .plans{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; align-items:stretch; }
+#jai-root .plan{
+  position:relative; height:100%; display:flex; flex-direction:column; gap:4px;
+  border-radius:24px; padding:28px 22px; border:1px solid var(--line);
+  background:color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  box-shadow:var(--shadow);
+}
+/* Featured (free) tier: tinted plate, brand border, and the shockwave. */
+#jai-root .plan.ft{
+  border-color:var(--brand-border);
+  background:linear-gradient(150deg, color-mix(in srgb, var(--panel-solid) 94%, transparent), var(--brand-soft));
+}
+/* Paid tiers are not purchasable yet, so they are held back rather than
+   removed — dimmed here, and labelled "Tez orada" in the markup. */
+#jai-root .plan.soon{ opacity:.72; }
+#jai-root .plan-wave{ position:absolute; inset:-1px; border-radius:24px; pointer-events:none; overflow:hidden; opacity:0; }
+#jai-root .plan.ft .plan-wave{ opacity:1; }
+#jai-root .plan-wave > span{
+  position:absolute; inset:-30%; border-radius:50%;
+  background:radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--brand) 34%, transparent) 0%, color-mix(in srgb, var(--brand) 14%, transparent) 42%, transparent 70%);
+  animation:jai-shockwave 3000ms cubic-bezier(.4,0,.2,1) infinite;
+}
+#jai-root .plan-tag{
+  position:absolute; top:-13px; left:50%; transform:translateX(-50%);
+  background:var(--muted-dim); color:#fff; font-size:11.5px; font-weight:700;
+  padding:4px 14px; border-radius:10px; white-space:nowrap;
+}
+#jai-root .plan.ft .plan-tag{ background:var(--brand); }
+#jai-root .plan-name{ font-size:16px; font-weight:600; color:var(--ink); margin-bottom:4px; min-height:22px; }
+/* "999 000" split across two lines in production once; it must not wrap. */
+#jai-root .plan-price{
+  white-space:nowrap; font-size:36px; font-weight:700; color:var(--ink);
+  letter-spacing:-1.5px; margin:8px 0 2px; line-height:1; min-height:44px;
+  display:flex; align-items:baseline;
+}
+#jai-root .plan-price small{ font-size:14px; font-weight:500; color:var(--muted); margin-left:4px; }
+#jai-root .plan-per{ font-size:13.5px; color:var(--muted); margin-bottom:18px; min-height:20px; }
+/* Reserved height keeps the four bullet lists starting on the same line. */
+#jai-root .plan-for{ font-size:12.5px; color:var(--muted); line-height:1.45; margin-bottom:14px; min-height:58px; }
+#jai-root .plan-features{ list-style:none; margin:0 0 22px; padding:0; display:flex; flex-direction:column; gap:10px; flex:1; }
+#jai-root .plan-features li{ font-size:14px; color:var(--muted); display:flex; align-items:flex-start; gap:9px; line-height:1.45; }
+#jai-root .plan-features li::before{ content:"✓"; color:var(--muted-dim); font-size:12px; flex-shrink:0; }
+#jai-root .plan-btn{
+  display:inline-flex; align-items:center; justify-content:center; width:100%;
+  padding:13px; border-radius:12px; font-size:15px; font-weight:600;
+  background:transparent; border:1px solid var(--line); color:var(--ink);
+}
+#jai-root .plan.ft .plan-btn{ background:var(--brand); border-color:var(--brand); color:#fff; }
+#jai-root .plan.ft .plan-btn:hover{ color:#fff; }
+#jai-root .pr-testing{
+  max-width:720px; margin:0 auto 30px; text-align:center; font-size:13.5px;
+  line-height:1.65; color:var(--muted); background:var(--panel-hover);
+  border:0; border-radius:12px; padding:14px 18px;
+}
+#jai-root .pr-testing b{ color:var(--ink); }
+#jai-root .pr-note{ max-width:760px; margin:34px auto 0; text-align:center; font-size:13.5px; line-height:1.7; color:var(--muted); }
+#jai-root .pr-note b{ color:color-mix(in srgb, var(--ink) 82%, var(--muted)); }
+
+/* ============================================================
+   FAQ
+   ============================================================ */
+#jai-root .jai-faq-row{
+  background:color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  border:1px solid var(--line); border-radius:24px; overflow:hidden;
+  box-shadow:var(--shadow); transform-origin:center center; backface-visibility:hidden;
+}
+#jai-root .jai-faq-btn{
+  width:100%; text-align:left; background:none; border:0; padding:20px 22px;
+  font-size:16px; font-weight:600; cursor:pointer; display:flex;
+  justify-content:space-between; align-items:center; gap:14px;
+  color:var(--ink); font-family:inherit;
+}
+#jai-root .jai-faq-btn svg{ flex-shrink:0; color:var(--muted-dim); transform:rotate(0deg); transition:transform .3s; }
+#jai-root .jai-faq-row.is-open .jai-faq-btn svg{ transform:rotate(180deg); }
+#jai-root .jai-faq-body{ max-height:0; overflow:hidden; transition:max-height .38s ease; }
+#jai-root .jai-faq-row.is-open .jai-faq-body{ max-height:220px; }
+#jai-root .jai-faq-body p{ padding:0 22px 20px; color:var(--muted); font-size:15px; line-height:1.68; margin:0; }
+
+/* ============================================================
+   Footer
+   ============================================================ */
+#jai-root .jai-foot-h{ color:#f8fafc; font-size:14px; font-weight:600; margin:0 0 16px; }
+#jai-root .jai-foot-link{ display:block; color:rgba(255,255,255,.45); font-size:14px; margin-bottom:11px; text-decoration:none; }
+
+/* ============================================================
+   Responsive — copied from the prototype's <helmet><style>
+   ============================================================ */
+@media (max-width: 720px) {
+  #jai-root [data-r="carousel"] { height: 420px !important; }
+  #jai-root [data-r="carousel"] > div { width: min(360px, 92%) !important; }
+}
+@media (max-width: 1080px) {
+  #jai-root [data-r="grid12"] > * { grid-column: auto / span 6 !important; grid-row: auto !important; }
+}
+@media (max-width: 980px) {
+  #jai-root [data-r="nav-links"] { display: none !important; }
+  #jai-root [data-r="hero"] { grid-template-columns: 1fr !important; }
+  #jai-root [data-r="hero"] > * { max-width: 760px !important; }
+  #jai-root [data-r="split"] { grid-template-columns: 1fr !important; gap: 32px !important; }
+  #jai-root [data-r="g4"] { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  #jai-root [data-r="foot"] { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 760px) {
+  #jai-root { background-attachment: scroll !important; }
+  #jai-root [data-r="navbar"] { height: 64px !important; }
+  #jai-root [data-r="hsm"] { display: none !important; }
+  #jai-root [data-r="hero-sec"] { min-height: auto !important; padding: 104px 0 64px !important; }
+  #jai-root [data-r="grid12"] > *, #jai-root [data-r="g3"], #jai-root [data-r="g4"] { grid-column: auto !important; grid-template-columns: 1fr !important; }
+  #jai-root [data-r="g3"], #jai-root [data-r="g4"] { display: grid !important; }
+  #jai-root [data-r="carousel"] { height: 400px !important; }
+  #jai-root [data-r="carousel"] > div { width: min(460px, 84%) !important; }
+  #jai-root [data-r="sec"] { padding: 64px 0 !important; }
+  #jai-root [data-r="foot"] { grid-template-columns: 1fr !important; gap: 28px !important; }
+}
+@media (max-width: 480px) {
+  #jai-root [data-r="wrap"] { padding-inline: 14px !important; }
+  #jai-root [data-r="wordmark"] { max-width: 92px !important; }
+  #jai-root [data-r="nav-end"] { gap: 4px !important; }
+  #jai-root [data-r="hero-actions"] { flex-direction: column !important; align-items: stretch !important; }
+  #jai-root [data-r="hero-actions"] > * { width: 100% !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #jai-root *, #jai-root *::before, #jai-root *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* ============================================================
+   Deliberate departures from the prototype
+
+   Everything above is the prototype's own CSS. The rules below are the
+   two places we knowingly diverge, both agreed before the rebuild.
+   ============================================================ */
+
+/* 1a. The feature grid stays twelve columns wide on a phone. The prototype's
+      760px rule puts `grid-template-columns:1fr` on `[data-r="grid12"] > *`
+      — the cards — instead of on the grid, so each card is dealt one of
+      twelve tracks and renders as an unreadable ~58px sliver that runs off
+      the side of the screen. The container is what needs the single track. */
+@media (max-width: 760px) {
+  #jai-root [data-r="grid12"] { grid-template-columns: 1fr !important; }
+}
+
+/* 1b. The header still scrolls sideways at 390px: its control group needs
+      351px and only 230px is available once the wordmark and its gap are
+      paid for. The wordmark gives back 20px, "Kirish" gives back 76 (the
+      primary button beside it opens the same page, and the footer keeps a
+      text link), and the button's side padding gives back 8. */
+@media (max-width: 480px) {
+  #jai-root [data-r="wordmark"] { max-width: 72px !important; }
+  #jai-root [data-r="nav-login"] { display: none !important; }
+  #jai-root .jai-navbtn--primary { padding-inline: 12px !important; }
+}
+
+/* 2. The plan cards reserve height on name, price, period and audience so
+      the four bullet lists start on the same line. Stacked on a phone there
+      is no row to align to, and the reserve reads as dead space — which the
+      page this replaces had already fixed. */
+@media (max-width: 760px) {
+  #jai-root .plan-name,
+  #jai-root .plan-price,
+  #jai-root .plan-per,
+  #jai-root .plan-for { min-height: 0; }
+}

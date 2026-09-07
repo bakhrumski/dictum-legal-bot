@@ -1,0 +1,357 @@
+/* ============================================================
+   JuristAI sign-in page (public/login.html)
+
+   Built from public/preview/login.dc.html. Declarations are the
+   prototype's; only the place they are written moved, and class names are
+   the ones the page's existing auth script already addresses so that
+   script did not have to be rewritten around new markup.
+
+   The card is dark in both modes by design — the light theme swaps the
+   wash behind it, not the panel itself. That is why #lg-root carries the
+   dark palette as its base and [data-theme="light"] overrides only --page.
+   Tokens and keyframes come from css/tokens.css.
+
+   Sections marked "not in the prototype" cover states the design did not
+   draw — two-factor entry, the Telegram code blocks, the policy modal, the
+   success panel. They are assembled from the prototype's own field, button
+   and divider styles rather than invented.
+   ============================================================ */
+
+html, body { margin:0; padding:0; height:100%; }
+#lg-root, #lg-root *, #lg-root *::before, #lg-root *::after { box-sizing:border-box; }
+
+#lg-root {
+  min-height:100vh;
+  background:var(--page);
+  color:var(--ink);
+  font-family:'Space Grotesk', system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex; align-items:center; justify-content:center;
+  padding:40px 24px;
+}
+#lg-root a { color:var(--brand); text-decoration:none; }
+#lg-root a:hover { color:var(--brand-hover); }
+#lg-root input::placeholder { color:var(--muted-dim); }
+#lg-root input:focus { border-color:var(--brand) !important; box-shadow:0 0 0 3px rgba(45,108,255,.14); }
+#lg-root [hidden] { display:none !important; }
+
+/* ============================================================
+   Card and hero
+   ============================================================ */
+#lg-root .lg-card {
+  display:flex; width:100%; max-width:1150px; min-height:820px;
+  background:var(--card); border-radius:14px; box-shadow:var(--shadow);
+  overflow:hidden; padding:0; position:relative;
+  animation:lg-appear .5s cubic-bezier(.2,.8,.2,1) both;
+}
+/* One photographic wash across the whole card, at half strength in both
+   themes — the card never changes colour, so neither does the image. */
+#lg-root .lg-card__bg {
+  position:absolute; inset:0;
+  background-image:url(/media/login-hero-bg.jpg);
+  background-size:cover; background-position:left center;
+  opacity:.5; pointer-events:none; z-index:0;
+}
+#lg-root .lg-hero {
+  position:relative; z-index:1; flex:0 0 50%; min-width:0;
+  display:flex; flex-direction:column; align-items:flex-start;
+  justify-content:center; padding:48px 24px;
+}
+#lg-root .lg-hero__inner {
+  position:relative; width:100%; padding-left:100px;
+  display:flex; flex-direction:column; align-items:center; gap:14px;
+}
+#lg-root .lg-wordmark { position:relative; width:100%; max-width:560px; aspect-ratio:886/292; }
+#lg-root .lg-wordmark img,
+#lg-root .lg-wordmark video {
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:contain; object-position:left center; display:block;
+  transition:opacity 300ms ease;
+}
+#lg-root .lg-wordmark video { opacity:0; }
+/* A light sweep across the still wordmark until the motion version loads. */
+#lg-root .lg-sheen { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:2; }
+#lg-root .lg-sheen > span {
+  position:absolute; top:0; bottom:0; width:34%;
+  background:linear-gradient(100deg, transparent, rgba(255,255,255,.16) 46%, transparent);
+  filter:blur(14px); animation:lg-sheen 4.6s cubic-bezier(.4,0,.2,1) infinite;
+}
+#lg-root .lg-tagline { font-size:19px; font-style:italic; color:var(--ink2); line-height:1.5; text-align:left; }
+
+/* ============================================================
+   Form panel
+   ============================================================ */
+#lg-root .lg-form {
+  position:relative; z-index:1; flex:0 0 50%; min-width:0;
+  padding:44px 40px; display:flex; flex-direction:column; justify-content:center;
+}
+#lg-root .theme-toggle {
+  position:absolute; z-index:2; top:20px; right:22px;
+  background:transparent; border:0; cursor:pointer; color:var(--muted);
+  padding:6px; border-radius:9px; line-height:0;
+}
+#lg-root .login-container { position:relative; z-index:1; }
+
+/* One view at a time; the auth script flips data-view on the container. */
+#lg-root .login-form,
+#lg-root .register-form,
+#lg-root .success-view,
+#lg-root .recovery-form { display:none; }
+#lg-root .login-container[data-view="login"] .login-form,
+#lg-root .login-container[data-view="register"] .register-form,
+#lg-root .login-container[data-view="success"] .success-view,
+#lg-root .login-container[data-view="recovery"] .recovery-form { display:block; }
+
+#lg-root .form-heading { font-size:29px; font-weight:700; letter-spacing:-.03em; line-height:1.15; margin:0 0 8px; color:var(--ink); }
+#lg-root .form-subtitle { font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 24px; }
+#lg-root .form-subtitle strong { color:var(--ink2); font-weight:600; }
+
+/* ============================================================
+   Fields
+   ============================================================ */
+#lg-root .form-group { position:relative; margin-bottom:14px; }
+#lg-root .input-icon {
+  position:absolute; left:15px; top:50%; transform:translateY(-50%);
+  width:15px; height:15px; color:var(--muted-dim); pointer-events:none;
+}
+#lg-root .form-group input {
+  width:100%; padding:13px 14px; border:1px solid var(--field-line);
+  border-radius:10px; font-size:13.5px; font-family:inherit;
+  background:var(--field); color:var(--ink); outline:none;
+}
+#lg-root .form-group.has-icon input { padding-left:42px; }
+#lg-root .form-group input.input-invalid { border-color:#f08a80 !important; }
+
+#lg-root .form-options {
+  display:flex; justify-content:space-between; align-items:center;
+  gap:12px; margin-bottom:16px; font-size:12.5px;
+}
+#lg-root .remember-me {
+  display:flex; align-items:center; gap:8px;
+  color:var(--ink2); cursor:pointer; font-weight:500;
+}
+#lg-root .remember-me input,
+#lg-root .agreement-item input[type="checkbox"] {
+  width:15px; height:15px; accent-color:var(--brand); cursor:pointer;
+}
+#lg-root .forgot-link { color:var(--ink); font-weight:700; }
+#lg-root .forgot-link:hover { color:var(--brand-2); }
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+#lg-root .btn-row { display:flex; gap:12px; margin-bottom:22px; }
+#lg-root .btn {
+  flex:1; padding:14px; border:0; border-radius:10px;
+  font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer;
+  background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff;
+  box-shadow:0 18px 34px -22px rgba(45,108,255,.7);
+}
+#lg-root .btn:disabled { opacity:.55; cursor:default; }
+#lg-root .btn-outline {
+  border:1px solid var(--line); font-weight:600;
+  background:var(--card); color:var(--ink); box-shadow:none;
+}
+/* A full-width primary action — recovery steps, not the two-up login row. */
+#lg-root .btn-block { width:100%; flex:none; }
+
+#lg-root .reg-divider {
+  display:flex; align-items:center; gap:12px; margin:0 0 14px;
+  font-size:10px; font-weight:600; letter-spacing:.14em;
+  color:var(--muted-dim); text-transform:uppercase;
+}
+#lg-root .reg-divider::before,
+#lg-root .reg-divider::after { content:""; flex:1; height:1px; background:var(--line); }
+
+#lg-root .socrow { display:flex; gap:12px; }
+#lg-root .google-reg-toggle {
+  flex:1 1 0; min-width:0; padding:13px 14px;
+  background:var(--field); border:1px solid var(--field-line); border-radius:10px;
+  color:var(--ink); display:flex; align-items:center; justify-content:center;
+  gap:9px; cursor:pointer; font-family:inherit; font-weight:500;
+  font-size:12.5px; white-space:nowrap;
+}
+#lg-root .google-reg-toggle:hover { border-color:var(--brand); }
+
+#lg-root .telegram-btn {
+  width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+  padding:14px; border:1px solid var(--field-line); border-radius:10px;
+  background:var(--field); color:var(--ink); font-size:13px; font-weight:500;
+}
+#lg-root .telegram-btn:hover { color:var(--ink); border-color:var(--brand); }
+
+#lg-root .reg-social-btn {
+  width:100%; padding:15px 20px; border-radius:10px;
+  border:1px solid var(--field-line); background:var(--field); color:var(--ink);
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  font-family:inherit; font-weight:600; font-size:13.5px; cursor:pointer;
+}
+/* Disabled until both agreements are ticked — the prototype dims rather
+   than hides, so the next step stays visible while it is out of reach. */
+#lg-root .reg-social-btn:disabled { opacity:.5; cursor:default; }
+#lg-root .reg-social-btn:not(:disabled):hover { border-color:var(--brand); }
+
+#lg-root .switch-link { text-align:center; margin-top:22px; font-size:13px; color:var(--muted); }
+#lg-root .switch-link a { font-weight:700; color:var(--ink); cursor:pointer; }
+#lg-root .switch-link a:hover { color:var(--brand-2); }
+
+/* ============================================================
+   Registration agreements
+   ============================================================ */
+#lg-root .agreement-section { display:flex; flex-direction:column; gap:6px; margin-bottom:28px; }
+#lg-root .agreement-row { display:flex; gap:12px; align-items:stretch; }
+#lg-root .agreement-item {
+  flex:1; margin:0; display:flex; align-items:center; gap:9px;
+  padding:12px 14px; border:1px solid var(--field-line); background:var(--field);
+  border-radius:10px; cursor:pointer; font-size:13px; color:var(--ink2);
+}
+#lg-root .agreement-item:hover { border-color:var(--brand); }
+#lg-root .agreement-item a { color:var(--ink2); font-weight:600; }
+/* The tick mark is drawn by the checkbox itself; the span is a legacy hook
+   the script still queries, so it stays and stays invisible. */
+#lg-root .agreement-item .check-icon { display:none; }
+
+/* ============================================================
+   Recovery steps
+   ============================================================ */
+#lg-root .recovery-step { display:none; }
+#lg-root .recovery-step.active { display:block; }
+#lg-root .recovery-methods { display:flex; gap:12px; margin-bottom:16px; }
+#lg-root .recovery-method {
+  flex:1 1 0; padding:16px; border:1px solid var(--field-line);
+  background:var(--field); border-radius:10px; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; gap:9px;
+  font-size:12.5px; font-weight:500; color:var(--ink); font-family:inherit;
+}
+#lg-root .recovery-method:hover { border-color:var(--brand); }
+
+/* ============================================================
+   Status and error text — not in the prototype
+   ============================================================ */
+#lg-root .error-message {
+  display:none; font-size:12.5px; line-height:1.5; color:#f08a80;
+  background:rgba(240,138,128,.10); border:1px solid rgba(240,138,128,.28);
+  border-radius:10px; padding:10px 12px; margin:0 0 14px;
+}
+#lg-root .error-message.show { display:block; }
+#lg-root .agreement-error { font-size:12.5px; color:#f08a80; }
+#lg-root .verify-success { display:none; font-size:12.5px; color:#5fc59a; }
+#lg-root .verify-success.show { display:block; }
+#lg-root .status-note { font-size:12.5px; color:var(--muted); line-height:1.55; }
+
+/* ── Telegram code entry ─────────────────────────────────── */
+#lg-root .otp-block { display:none; margin-top:14px; text-align:center; }
+#lg-root .otp-block.show { display:block; }
+#lg-root .otp-bot-link {
+  display:inline-flex; align-items:center; gap:8px;
+  background:var(--field); color:var(--ink); border:1px solid var(--field-line);
+  padding:10px 20px; border-radius:10px; font-weight:600; font-size:13px;
+  text-decoration:none; margin-bottom:12px;
+}
+#lg-root .otp-bot-link:hover { color:var(--ink); border-color:var(--brand); }
+#lg-root .otp-controls { display:flex; gap:8px; align-items:center; justify-content:center; }
+#lg-root .otp-input {
+  width:140px; font-size:24px; text-align:center; letter-spacing:8px;
+  padding:10px 8px; border:1px solid var(--field-line); border-radius:10px;
+  background:var(--field); color:var(--ink); outline:none; font-family:inherit;
+}
+#lg-root .otp-verify {
+  padding:11px 18px; border:0; border-radius:10px; cursor:pointer;
+  background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff;
+  display:grid; place-items:center;
+}
+
+/* ── Two-factor panel, injected by the auth script ───────── */
+#lg-root .twofa-icon { display:flex; justify-content:center; margin-bottom:14px; color:var(--muted); }
+#lg-root .twofa-text { font-size:14px; color:var(--ink2); line-height:1.55; margin:0 0 16px; text-align:center; }
+#lg-root .twofa-input {
+  width:100%; padding:13px; font-size:22px; text-align:center; letter-spacing:8px;
+  border:1px solid var(--field-line); border-radius:10px; font-family:inherit;
+  color:var(--ink); background:var(--field); outline:none;
+}
+#lg-root .twofa-err { color:#f08a80; font-size:13px; min-height:18px; margin-top:8px; text-align:center; }
+#lg-root .twofa-back {
+  width:100%; padding:10px; margin-top:10px; background:none; border:0;
+  color:var(--muted); font-size:13px; cursor:pointer; font-family:inherit;
+}
+
+/* ── Success panel ───────────────────────────────────────── */
+#lg-root .success-view { text-align:center; }
+#lg-root .success-icon {
+  width:64px; height:64px; margin:0 auto 18px; border-radius:999px;
+  display:grid; place-items:center; font-size:28px; color:#fff;
+  background:linear-gradient(135deg,var(--brand),var(--brand-2));
+  box-shadow:0 18px 34px -22px rgba(45,108,255,.7);
+}
+#lg-root .success-text { font-size:15px; line-height:1.6; color:var(--ink2); }
+
+/* ============================================================
+   Policy modal — not in the prototype
+   ============================================================ */
+#lg-root .policy-overlay {
+  position:fixed; inset:0; z-index:60; display:none;
+  align-items:center; justify-content:center; padding:24px;
+  background:rgba(3,5,12,.72); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+}
+#lg-root .policy-overlay.active { display:flex; }
+#lg-root .policy-box {
+  width:min(640px,100%); max-height:min(720px,90vh);
+  display:flex; flex-direction:column;
+  background:var(--card); border:1px solid var(--line); border-radius:14px;
+  box-shadow:var(--shadow); overflow:hidden;
+  animation:lg-appear .35s cubic-bezier(.2,.8,.2,1) both;
+}
+#lg-root .policy-box-title {
+  padding:22px 26px 14px; font-size:19px; font-weight:700;
+  letter-spacing:-.02em; color:var(--ink); border-bottom:1px solid var(--line);
+}
+#lg-root .policy-box-body {
+  flex:1; overflow-y:auto; padding:20px 26px;
+  font-size:13.5px; line-height:1.7; color:var(--ink2); white-space:pre-wrap;
+}
+#lg-root .policy-box-footer {
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  padding:16px 26px; border-top:1px solid var(--line);
+}
+#lg-root .policy-scroll-hint { font-size:12.5px; color:var(--muted); }
+#lg-root .policy-confirm-btn {
+  padding:12px 22px; border:0; border-radius:10px; cursor:pointer;
+  font-size:13.5px; font-weight:700; font-family:inherit;
+  background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff;
+}
+#lg-root .policy-confirm-btn:disabled { opacity:.45; cursor:default; }
+
+/* Registration-type toggle: kept hidden, the script still queries it. */
+#lg-root .type-toggle { display:none; }
+
+/* ============================================================
+   Responsive — copied from the prototype's <helmet><style>
+   ============================================================ */
+@media (max-width: 900px) {
+  #lg-root .lg-card { display:block !important; min-height:0 !important; }
+  #lg-root .lg-hero { max-width:none !important; min-height:240px !important; padding:32px 26px !important; flex:1 1 auto !important; }
+  #lg-root .lg-form { flex:1 1 auto !important; padding:34px 28px !important; }
+}
+@media (max-width: 480px) {
+  #lg-root { padding:0 !important; }
+  #lg-root .lg-card { border-radius:0 !important; min-height:100vh !important; }
+  #lg-root .lg-form { padding:28px 18px !important; }
+  #lg-root .btn-row > * { flex:1 1 100% !important; }
+  #lg-root .btn-row, #lg-root .socrow { flex-wrap:wrap !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #lg-root *, #lg-root *::before, #lg-root *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+}
+
+/* ============================================================
+   Deliberate departure from the prototype
+
+   The hero's inner block is indented 100px so the wordmark sits off the
+   card's left edge. Below 900px the panel is only a few hundred pixels
+   wide and that indent pushes the wordmark out of view, so it is dropped
+   with the two-column layout it was drawn for.
+   ============================================================ */
+@media (max-width: 900px) {
+  #lg-root .lg-hero__inner { padding-left:0; align-items:flex-start; }
+  #lg-root .lg-wordmark { max-width:320px; }
+}
