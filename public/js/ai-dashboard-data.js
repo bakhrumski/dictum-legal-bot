@@ -138,5 +138,101 @@ window.DB_DATA = {
     { time: '10:05', me: true, txt: "Ko'rdim, bugun tushdan keyin javob beraman." },
     { time: '10:06', txt: 'SLA 4 soat — ulgurasanmi?' },
     { time: '10:07', me: true, txt: "Ha, korpusdan modda topildi. Loyihani tayyorlab qo'ydim." }
-  ]
+  ],
+  /* -- AI ------------------------------------------------------
+     TODO: connect to API. A personal thread is the member's own; a team
+     thread is billed to the workspace and visible to everyone in it. */
+  aiScopes: [
+    { id: 'personal', label: 'Shaxsiy', short: 'Shaxsiy', sub: "Faqat siz ko'rasiz" },
+    { id: 'team', label: 'juristAI jamoasi', short: 'Jamoa', sub: "Jamoa ko'radi · workspace hisobidan" }
+  ],
+
+  /* TODO: connect to API — the workspace's token allowance and usage. */
+  wsBudget: { used: 18400, limit: 40000 },
+
+  hdrDd: ['Navbat', 'Korpus', 'Jamoa', 'Hisobot'],
+
+  starters: [
+    { h: 'Mehnat shartnomasi', sub: 'Bekor qilish tartibi', icon: [['rect', { x: 4, y: 5, width: 16, height: 15, rx: 2 }], ['path', { d: 'M9 5V3h6v2M8 10h8M8 14h5' }]] },
+    { h: 'Jarimani tekshirish', sub: 'Miqdor va asoslar', icon: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M12 7v5l3 2' }]] },
+    { h: 'Shartnomani tahlil qilish', sub: 'Xavfli bandlarni topish', icon: [['path', { d: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z' }], ['path', { d: 'M14 3v6h6M8 14h8M8 17h5' }]] },
+    { h: 'Ariza tayyorlash', sub: 'Loyiha tuzish', icon: [['path', { d: 'M12 20h9' }], ['path', { d: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z' }]] }
+  ],
+
+  topics: [
+    'Advokatura. Notariat. Adliya', 'Axborot', 'Bank', 'Davlat boshqaruvi', 'Ekologiya',
+    'Fuqarolik qonunchiligi', 'Ijtimoiy himoya', 'Jinoyat qonunchiligi', 'Konstitutsiyaviy tuzum',
+    "Ma'muriy javobgarlik", 'Mehnat va bandlik', 'Moliya va kredit', 'Mudofaa', 'Odil sudlov',
+    'Oila qonunchiligi', 'Shaxsiy hujjatlar', "Sog'liqni saqlash", 'Soliq', "Ta'lim. Fan. Madaniyat",
+    'Tadbirkorlik', 'Tashqi iqtisod. Bojxona', "Uy-joy qonunchiligi", 'Xalqaro huquq', "Yo'l-harakati qoidalari"
+  ],
+
+  /* -- Boshqaruv ----------------------------------------------
+     TODO: connect to API — the counts are pending items per area. */
+  mgmt: [
+    { label: 'Qabul', sub: 'Advokat va student arizalari', count: 6, target: 'reg' },
+    { label: 'Advokatlar', sub: 'Tekshiruv va katalog', count: 4, target: 'attorney' },
+    { label: 'Pullik xizmatlar', sub: 'Hujjat buyurtmalari va narxlar', count: 2, target: 'paid' },
+    { label: 'Telegram agent', sub: "24/7 suhbatlar va operator rejimi", count: 9, target: 'telegram' },
+    { label: 'Sifat', sub: 'Javob xatolari va tekshiruv', target: 'quality' },
+    { label: 'Korpus', sub: "Bo'shliqlar va yangi manbalar", target: 'corpus' },
+    { label: 'Xavfsizlik', sub: 'Audit va muhim hodisalar', target: 'audit' },
+    { label: 'Xarajat', sub: 'AI token va API sarfi', target: 'spend' }
+  ],
+
+  mgmtSections: [
+    { id: 'reg', h: 'Qabul arizalari', badge: '6 kutilmoqda', kanban: ['Yangi', "Ko'rib chiqilmoqda", 'Yakunlangan'] },
+    { id: 'attorney', h: 'Advokatlar katalogi', note: "Profil faqat litsenziya rasmiy reyestrdan tekshirilgandan keyin e'lon qilinadi." },
+    { id: 'paid', h: 'Pullik hujjat xizmatlari', note: "Telegram agent narx o'ylab topmaydi. Faqat shu katalogda saqlangan narxlar ishlatiladi va har bir buyurtma yurist tasdig'ini kutadi." },
+    { id: 'telegram', h: 'Telegram agent suhbatlari', note: "Avtomatik rejim huquqiy savollarni platforma orqali javoblaydi. Murakkab holatda suhbatni operator rejimiga o'tkazib, keyin yana agentga qaytarish mumkin." },
+    { id: 'quality', h: 'Javob xatolari', badge: '3 kutilmoqda', note: "Foydalanuvchilar javobning noto'g'ri qismini belgilab yuborgan xabarlar. Har biri grammatik yoki mazmun xatosi sifatida belgilangan; taklif bo'lsa, u ham ko'rsatiladi." },
+    { id: 'corpus', h: 'Korpus qamrovi', note: "Foydalanuvchi savollari bo'yicha korpusdan yetarlicha qonun topilmagan holatlar. Bu ro'yxat qaysi sohalar va savollarni lex.uz dan boyitish kerakligini ko'rsatadi. (Hech qanday matn yaratilmaydi — faqat o'lchov.)", control: { label: 'Davr:', options: ['7 kun', '30 kun', '90 kun'], selected: 1 } },
+    { id: 'audit', h: 'Audit jurnali', note: "Kim qachon qaysi mijoz ma'lumotiga kirgani va kirish (login/2FA) hodisalari. Maxfiylik nazorati uchun — har bir murojaat ko'rish, fayl ochish va korpus o'zgarishi qayd etiladi." },
+    { id: 'spend', h: 'API xarajatlari', note: 'Barcha AI so’rovlari (chat, yuridik xulosa, tushuntirish, OCR) bo’yicha real token va xarajat hisoboti. Faqat Master Admin ko’radi.', control: { label: 'Oy:', options: ['2026-06', '2026-07', '2026-08'], selected: 2 } }
+  ],
+  /* -- AI drawer ----------------------------------------------
+     TODO: connect to API. These are the canned answers the drawer's quick
+     actions return. "Hujjat loyihasi" is per-matter and returns an editable
+     draft rather than a chat reply, which is why it widens the drawer. */
+  quick: [
+    {
+      id: 'sum', label: 'Xulosa tayyorla', q: "Shu masala bo'yicha qisqa xulosa tayyorlang.",
+      a: "Masala bo'yicha uchta asosiy nuqta:\n1. Shartnoma shakli yozma bo'lishi shart.\n2. Sinov muddati 3 oydan oshmasligi kerak.\n3. Bekor qilishda 2 oy oldin yozma ogohlantirish talab etiladi.",
+      cite: 'Mehnat kodeksi 76, 84, 161-moddalar'
+    },
+    {
+      id: 'risk', label: 'Xavfli bandlarni top', q: 'Hujjatdagi xavfli bandlarni toping.',
+      a: "Ikkita band e'tibor talab qiladi:\n· 4.2-band — javobgarlik chegarasi qonun talabidan past.\n· 7.1-band — bir tomonlama bekor qilish muddati ko'rsatilmagan.",
+      cite: 'FK 354-modda · MK 161-modda'
+    },
+    {
+      id: 'due', label: 'Muddat va jarimalar', q: "Muddatlar va mumkin bo'lgan jarimalarni hisoblang.",
+      a: 'Hisobot muddati — 06.09.2026. Kechikkan har bir kun uchun 0.1 BHM, lekin umumiy summa 5 BHM dan oshmaydi.',
+      cite: 'MJtK 175-modda'
+    },
+    { id: 'draft', label: 'Hujjat loyihasi', q: 'Hujjat loyihasini tuzing.', perMatter: true }
+  ],
+
+  drafts: {
+    m1: {
+      title: 'Mehnat shartnomasi — loyiha v1', cite: 'MK 72, 76, 84, 161-moddalar asosida',
+      body: "MEHNAT SHARTNOMASI\n\nToshkent shahri\t\t\t05.09.2026\n\n1. TOMONLAR\n1.1. Ish beruvchi: «JuristAI» MChJ, direktor B. Abdimuminov nomidan.\n1.2. Xodim: F.I.Sh., pasport seriyasi va raqami.\n\n2. SHARTNOMA PREDMETI\n2.1. Xodim lavozimga qabul qilinadi va ichki mehnat tartibiga rioya qiladi.\n2.2. Ish joyi: Toshkent sh., ish beruvchi manzili.\n\n3. MEHNAT SHARTLARI\n3.1. Ish vaqti: haftasiga 40 soat, 5 kunlik ish haftasi.\n3.2. Sinov muddati 3 oydan oshmaydi.\n3.3. Yillik ta'til — kamida 15 ish kuni.\n\n4. MEHNAT HAQI\n4.1. Lavozim maoshi oyiga ____ so'm, oyiga ikki marta to'lanadi.\n4.2. Kechiktirilgan har bir kun uchun kompensatsiya to'lanadi.\n\n5. SHARTNOMANI BEKOR QILISH\n5.1. Tomonlar kelishuviga binoan yoki qonunda nazarda tutilgan asoslarda.\n5.2. Xodim 2 oy oldin yozma ogohlantiradi."
+    },
+    m2: {
+      title: "Da'vo arizasi — loyiha v1", cite: 'FPK 189, 190-moddalar asosida',
+      body: "DA'VO ARIZASI\n\nToshkent shahar fuqarolik ishlari bo'yicha sudiga\n\nDa'vogar: F.I.Sh., manzil, telefon.\nJavobgar: F.I.Sh. / tashkilot nomi, manzil.\nDa'vo qiymati: ____ so'm.\n\n1. HOLATLAR\n1.1. Tomonlar o'rtasida ____ sanada shartnoma tuzilgan.\n1.2. Javobgar shartnomaning ____ bandidagi majburiyatini bajarmadi.\n\n2. HUQUQIY ASOS\n2.1. Majburiyat lozim darajada bajarilishi shart.\n2.2. Bajarmaslik natijasida yetkazilgan zarar qoplanishi lozim.\n\n3. DALILLAR\n3.1. Shartnoma nusxasi.\n3.2. To'lov hujjatlari.\n3.3. Yozishmalar.\n\n4. SO'RALADI\n4.1. Javobgardan ____ so'm asosiy qarzni undirish.\n4.2. Davlat boji xarajatlarini javobgar zimmasiga yuklash."
+    },
+    m3: {
+      title: 'Notarial shartnomaga javob — loyiha v1', cite: 'FK 110, 116-moddalar asosida',
+      body: "JAVOB XATI\n\nKimga: notarius / qarshi tomon\nKimdan: F.I.Sh.\nSana: 05.09.2026\n\n1. Sizning ____ sanadagi murojaatingiz ko'rib chiqildi.\n2. Bitimning notarial tasdiqlanishi qonunda nazarda tutilgan hollarda majburiydir.\n3. Taqdim etilgan hujjatlar bo'yicha quyidagi e'tirozlar bildiriladi:\n   3.1. ____\n   3.2. ____\n4. Javob muddati: xat olingan kundan boshlab 10 kun."
+    },
+    m4: {
+      title: 'YaTT soliq hisoboti — tushuntirish xati', cite: 'Soliq kodeksi 83, 88-moddalar asosida',
+      body: "TUSHUNTIRISH XATI\n\nDavlat soliq inspeksiyasiga\n\nSoliq to'lovchi: YaTT F.I.Sh., STIR ____\nHisobot davri: 2026-yil III chorak\n\n1. Hisobot ____ sanada taqdim etildi.\n2. Quyidagi ko'rsatkichlar bo'yicha aniqlik kiritiladi:\n   2.1. Tushum summasi — ____ so'm.\n   2.2. Chegirmalar — ____ so'm.\n3. Kechikish sababi: ____\n4. Ilova: hisobot nusxasi, to'lov topshiriqnomalari."
+    },
+    m5: {
+      title: "Bola bilan ko'rishish tartibi — ariza loyihasi", cite: 'Oila kodeksi 76, 78-moddalar asosida',
+      body: "ARIZA\n\nToshkent shahar ____ tuman sudiga\n\nArizachi: F.I.Sh., manzil.\nQarshi tomon: F.I.Sh., manzil.\n\n1. Tomonlar nikohi ____ sanada bekor qilingan.\n2. Voyaga yetmagan farzand ____ bilan yashaydi.\n3. Alohida yashovchi ota-ona farzand bilan muloqot qilish huquqiga ega.\n\nSO'RALADI:\n4.1. Ko'rishish tartibini belgilash: har hafta shanba va yakshanba, 10:00–18:00.\n4.2. Ta'til davrida kamida 14 kun birga bo'lish imkonini berish."
+    }
+  }
 };

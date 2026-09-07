@@ -647,3 +647,439 @@ html.db-page::-webkit-scrollbar, html.db-page body::-webkit-scrollbar { width:0;
 }
 #db-root .chat-pane[data-kind="group"] .chat-send { background:var(--grp); }
 #db-root .chat-pane[data-kind="private"] .chat-send { background:var(--prv); }
+
+/* ============================================================
+   Section: AI
+
+   A thread list on the left and the conversation on the right, inside one
+   card that fills the viewport below the header.
+   ============================================================ */
+#db-root .ai { padding-top:28px; box-sizing:border-box; height:calc(100vh - 186px); }
+#db-root .ai-shell {
+  display:grid; grid-template-columns:280px minmax(0,1fr); height:100%; min-height:0;
+  border:1px solid var(--line); border-radius:14px;
+  background:color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+#db-root .ai-side {
+  border-right:1px solid var(--line); padding:18px;
+  display:flex; flex-direction:column; gap:16px; min-width:0;
+}
+#db-root .ai-new {
+  display:flex; align-items:center; justify-content:center; gap:9px; padding:12px;
+  border:1px solid var(--line); border-radius:14px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent);
+  color:var(--ink); font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;
+}
+#db-root .ai-new:hover { background:var(--panel-hover); }
+#db-root .ai-group { display:flex; flex-direction:column; gap:6px; }
+#db-root .ai-label {
+  font-size:11.5px; font-weight:600; letter-spacing:.02em; color:var(--muted-dim); padding:0 2px;
+}
+#db-root .ai-scope {
+  display:flex; flex-direction:column; gap:2px; align-items:flex-start; padding:9px 12px;
+  border:1px solid var(--line); border-radius:12px; background:transparent;
+  cursor:pointer; font-family:inherit; text-align:left;
+}
+#db-root .ai-scope[aria-pressed="true"] { border-color:var(--brand-border); background:var(--brand-soft); }
+#db-root .ai-scope > span { font-size:13px; font-weight:600; color:var(--muted); }
+#db-root .ai-scope[aria-pressed="true"] > span { color:var(--brand); }
+#db-root .ai-scope small { font-size:11px; line-height:1.35; color:var(--muted-dim); }
+
+#db-root .ai-budget {
+  display:flex; flex-direction:column; gap:7px; padding:11px 12px;
+  border:1px solid var(--line); border-radius:12px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent);
+}
+#db-root .ai-budget-top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+#db-root .ai-budget-top span { font-size:11.5px; color:var(--muted-dim); }
+#db-root .ai-budget-top span:first-child { font-weight:600; letter-spacing:.02em; }
+#db-root .ai-budget-track { height:5px; border-radius:999px; background:var(--line); overflow:hidden; }
+#db-root .ai-budget-fill { height:100%; border-radius:999px; background:var(--brand); }
+#db-root .ai-budget small { font-size:11px; color:var(--muted); }
+
+#db-root .ai-threads-wrap { display:flex; flex-direction:column; gap:10px; min-height:0; }
+#db-root .ai-threads-head {
+  display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:0 2px;
+}
+#db-root .ai-threads-head span { font-size:11.5px; color:var(--muted-dim); }
+#db-root .ai-threads-head span:first-child { font-weight:600; letter-spacing:.02em; }
+#db-root .ai-search {
+  display:flex; align-items:center; gap:9px; padding:0 12px; height:40px;
+  border:1px solid var(--line); border-radius:14px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--muted-dim);
+}
+#db-root .ai-search input {
+  flex:1; min-width:0; border:0; background:transparent; outline:none;
+  font-family:inherit; font-size:13px; color:var(--ink);
+}
+#db-root .ai-threads {
+  flex:1 1 0%; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
+  gap:7px; margin:0 -4px; padding:0 4px;
+}
+#db-root .ai-thread {
+  display:flex; flex-direction:column; gap:5px; align-items:flex-start; padding:10px 11px;
+  border:1px solid var(--line); border-radius:12px; background:transparent;
+  cursor:pointer; font-family:inherit; text-align:left;
+}
+#db-root .ai-thread:hover { background:var(--panel-hover); }
+#db-root .ai-thread-q { font-size:12.5px; font-weight:600; line-height:1.4; color:var(--ink); text-wrap:pretty; }
+#db-root .ai-thread-matter {
+  display:inline-flex; align-items:center; gap:5px; max-width:100%; padding:2px 7px;
+  border-radius:999px; border:1px solid var(--brand-border); background:var(--brand-soft);
+  color:var(--brand); font-size:10.5px; font-weight:600;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .ai-thread small { font-size:10.5px; color:var(--muted-dim); }
+
+#db-root .ai-main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+#db-root .ai-bar {
+  flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:10px 16px; border-bottom:1px solid var(--line);
+  min-height:56px; box-sizing:border-box;
+}
+#db-root .ai-bar-icon {
+  width:36px; height:36px; border-radius:11px; border:1px solid var(--line);
+  background:transparent; color:var(--muted); display:grid; place-items:center;
+  cursor:pointer; padding:0;
+}
+#db-root .ai-bar-icon--sm { width:34px; height:34px; flex-shrink:0; }
+#db-root .ai-scoperow {
+  display:flex; gap:3px; flex-shrink:0; padding:3px;
+  border:1px solid var(--line); border-radius:999px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent);
+}
+#db-root .ai-scopepill {
+  display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:0;
+  border-radius:999px; background:transparent; color:var(--muted);
+  font-family:inherit; font-size:12.5px; font-weight:600; white-space:nowrap; cursor:pointer;
+}
+#db-root .ai-scopepill[aria-pressed="true"] { background:var(--brand-soft); color:var(--brand); }
+#db-root .ai-budgetpill {
+  display:inline-flex; align-items:center; gap:7px; flex-shrink:0; padding:7px 12px;
+  border:1px solid var(--line); border-radius:999px; background:transparent;
+  color:var(--muted); font-size:12px; font-weight:600; white-space:nowrap;
+}
+#db-root .ai-budgetpill-track {
+  width:34px; height:5px; border-radius:999px; background:var(--line);
+  overflow:hidden; display:inline-block;
+}
+#db-root .ai-budgetpill-fill { display:block; height:100%; border-radius:999px; background:var(--brand); }
+#db-root .ai-matterwrap { position:relative; flex-shrink:0; }
+#db-root .ai-matterbtn {
+  display:inline-flex; align-items:center; gap:8px; max-width:260px; padding:7px 12px;
+  border:1px solid var(--line); border-radius:999px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent);
+  font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;
+}
+#db-root .ai-matterbtn > span:first-child { color:var(--muted); }
+#db-root .ai-mattername { min-width:0; overflow:hidden; text-overflow:ellipsis; color:var(--ink); }
+#db-root .ai-mattermenu {
+  position:absolute; left:0; top:calc(100% + 8px); z-index:20; min-width:280px; padding:6px;
+  border:1px solid var(--line); border-radius:14px; background:var(--panel-solid);
+  box-shadow:var(--shadow-hover); display:flex; flex-direction:column; gap:2px;
+}
+#db-root .ai-matteropt {
+  display:flex; align-items:center; gap:9px; padding:9px 11px; border:0; border-radius:10px;
+  background:transparent; color:var(--ink); font-family:inherit; font-size:13px;
+  font-weight:600; text-align:left; cursor:pointer;
+}
+#db-root .ai-matteropt:hover { background:var(--panel-hover); }
+#db-root .ai-matteropt[aria-pressed="true"] { background:var(--brand-soft); color:var(--brand); font-weight:700; }
+#db-root .ai-matteropt-dot { width:7px; height:7px; flex-shrink:0; border-radius:50%; }
+#db-root .ai-matteropt-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#db-root .ai-hide {
+  display:inline-flex; align-items:center; gap:6px; padding:7px 11px;
+  border:1px solid var(--line); border-radius:999px; background:transparent;
+  color:var(--muted); font-family:inherit; font-size:12.5px; font-weight:600;
+  cursor:pointer; white-space:nowrap;
+}
+#db-root .ai-dds { display:flex; gap:7px; margin-left:auto; flex-wrap:wrap; }
+#db-root .ai-dd {
+  display:inline-flex; align-items:center; gap:7px; padding:8px 13px;
+  border:1px solid var(--line); border-radius:12px;
+  background:color-mix(in srgb, var(--panel-solid) 92%, transparent);
+  color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+}
+
+#db-root .ai-body {
+  flex:1 1 0%; min-height:0; padding:24px clamp(18px,4vw,48px);
+  display:flex; overflow-y:auto;
+}
+#db-root .ai-welcome {
+  width:min(100%,720px); margin:auto; display:flex; flex-direction:column;
+  align-items:center; gap:22px;
+}
+#db-root .ai-welcome-head { display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
+#db-root .ai-welcome-head h1 {
+  margin:0; font-size:clamp(22px,3vw,29px); font-weight:600;
+  letter-spacing:-.04em; line-height:1.15; color:var(--ink);
+}
+#db-root .ai-welcome-head p { margin:0; font-size:14.5px; line-height:1.6; color:var(--muted); }
+#db-root .ai-starters { width:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+#db-root .ai-starter {
+  min-width:0; min-height:74px; display:flex; align-items:center; gap:11px; padding:12px 14px;
+  border:1px solid var(--line); border-radius:14px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent);
+  color:var(--ink); text-align:left; cursor:pointer; font-family:inherit;
+}
+#db-root .ai-starter:hover { border-color:var(--brand-border); }
+#db-root .ai-starter-icon { flex-shrink:0; color:var(--brand); display:grid; place-items:center; }
+#db-root .ai-starter-text { min-width:0; display:flex; flex-direction:column; gap:3px; }
+#db-root .ai-starter-text strong {
+  font-size:13.5px; font-weight:600; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .ai-starter-text small { font-size:11.5px; line-height:1.25; color:var(--muted-dim); }
+#db-root .ai-topics-toggle {
+  display:inline-flex; align-items:center; gap:8px; padding:9px 15px;
+  border:1px solid var(--line); border-radius:999px; background:transparent;
+  color:var(--muted); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+}
+#db-root .ai-topics-toggle svg:last-child { transform:rotate(0deg); transition:transform .18s ease; }
+#db-root .ai-topics-toggle[aria-expanded="true"] svg:last-child { transform:rotate(180deg); }
+#db-root .ai-topics { width:100%; }
+#db-root .ai-topics p { margin:0 0 12px; font-size:12.5px; color:var(--muted-dim); text-align:center; }
+#db-root .ai-topics-list { display:flex; flex-wrap:wrap; gap:7px; justify-content:center; }
+#db-root .ai-topic {
+  padding:7px 13px; border:1px solid var(--line); border-radius:999px; background:transparent;
+  color:var(--muted); font-family:inherit; font-size:12.5px; font-weight:500; cursor:pointer;
+}
+#db-root .ai-topic:hover { border-color:var(--brand-border); color:var(--brand); }
+
+#db-root .ai-composer {
+  flex-shrink:0; padding:14px clamp(18px,4vw,48px) 20px; border-top:1px solid var(--line);
+}
+#db-root .ai-composer-inner {
+  width:min(100%,820px); margin:0 auto; display:flex; align-items:flex-end; gap:4px;
+  min-height:52px; padding:6px; border:1px solid var(--line); border-radius:16px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent); box-sizing:border-box;
+}
+#db-root .ai-attach {
+  width:38px; height:38px; flex-shrink:0; border-radius:11px; border:0; background:transparent;
+  color:var(--muted-dim); display:grid; place-items:center; cursor:pointer; padding:0;
+}
+#db-root .ai-composer textarea {
+  flex:1; min-width:0; min-height:26px; max-height:120px; padding:8px 4px; border:0;
+  background:transparent; outline:none; resize:none;
+  font-family:inherit; font-size:14.5px; line-height:1.6; color:var(--ink);
+}
+#db-root .ai-send {
+  width:38px; height:38px; flex-shrink:0; border-radius:11px; border:0;
+  background:var(--brand); color:#fff; display:grid; place-items:center; cursor:pointer; padding:0;
+}
+#db-root .ai-disclaimer {
+  width:min(100%,820px); margin:7px auto 0; font-size:11px; line-height:1.6;
+  color:var(--muted-dim); text-align:center;
+}
+
+/* ============================================================
+   Section: Boshqaruv
+   ============================================================ */
+#db-root .mg { padding-top:28px; display:flex; flex-direction:column; gap:20px; }
+#db-root .mg h1 {
+  margin:0 0 6px; font-size:clamp(27px,3.2vw,37px);
+  letter-spacing:-.02em; line-height:1.12; color:var(--ink);
+}
+#db-root .mg-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+#db-root .mg-card {
+  position:relative; min-height:104px; display:flex; flex-direction:column;
+  align-items:flex-start; gap:5px; padding:18px;
+  border:1px solid var(--line); border-radius:18px;
+  background:color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  box-shadow:var(--shadow); cursor:pointer; text-align:left; font-family:inherit;
+}
+#db-root .mg-card[aria-pressed="true"] {
+  border-color:var(--brand-border);
+  background:linear-gradient(150deg, color-mix(in srgb, var(--panel-solid) 94%, transparent), var(--brand-soft));
+}
+#db-root .mg-card > span { font-size:15.5px; font-weight:600; letter-spacing:-.02em; color:var(--ink); }
+#db-root .mg-card small { font-size:12.5px; line-height:1.45; color:var(--muted); }
+#db-root .mg-count {
+  position:absolute; top:14px; right:16px; min-width:24px; padding:3px 8px; border-radius:999px;
+  background:var(--brand-soft); border:1px solid var(--brand-border); color:var(--brand);
+  font-size:12px; font-weight:700; text-align:center;
+}
+#db-root .mg-sections { display:flex; flex-direction:column; gap:16px; }
+#db-root .mg-sec {
+  border:1px solid var(--line); border-radius:14px;
+  background:color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+#db-root .mg-sec-head {
+  display:flex; align-items:center; gap:8px; padding:18px 22px; cursor:pointer;
+  width:100%; border:0; background:transparent; font-family:inherit; text-align:left;
+}
+#db-root .mg-sec-chev {
+  color:var(--muted-dim); flex-shrink:0;
+  transform:rotate(-90deg); transition:transform .2s ease;
+}
+#db-root .mg-sec[data-open] .mg-sec-chev { transform:rotate(0deg); }
+#db-root .mg-sec-head h2 { margin:0; font-size:16.5px; font-weight:600; letter-spacing:-.02em; color:var(--ink); }
+#db-root .mg-sec-badge {
+  padding:3px 9px; border-radius:999px; background:rgba(217,119,6,.12);
+  border:1px solid rgba(217,119,6,.30); color:var(--warn); font-size:11.5px; font-weight:700;
+}
+#db-root .mg-sec-body { display:none; padding:0 22px 22px; flex-direction:column; gap:14px; }
+#db-root .mg-sec[data-open] .mg-sec-body { display:flex; }
+#db-root .mg-sec-body > p { margin:0; font-size:13px; line-height:1.65; color:var(--muted); }
+#db-root .mg-kanban { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+#db-root .mg-col {
+  border:1px solid var(--line); border-radius:14px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent);
+  padding:14px; min-height:120px;
+}
+#db-root .mg-col-h {
+  font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--muted-dim); margin-bottom:10px;
+}
+#db-root .mg-col-note { font-size:12.5px; color:var(--muted-dim); }
+#db-root .mg-control { display:flex; gap:8px; align-items:center; }
+#db-root .mg-control label { font-size:12px; color:var(--muted); }
+#db-root .mg-control select {
+  padding:6px 10px; border:1px solid var(--line); border-radius:10px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent);
+  color:var(--ink); font-family:inherit; font-size:12.5px;
+}
+#db-root .mg-empty {
+  padding:24px; border:1px dashed var(--line); border-radius:14px;
+  text-align:center; font-size:13px; color:var(--muted-dim);
+}
+
+/* ============================================================
+   AI drawer
+
+   Opened from a matter, beside the workspace rather than over it, so the
+   graph or list stays readable while the answer is written. Asking for a
+   document widens it, because a draft needs the room a chat reply does not.
+   ============================================================ */
+#db-root .dock {
+  flex:0 1 min(38%, 440px); min-width:320px;
+  display:flex; flex-direction:column; overflow:hidden;
+  border:1px solid var(--brand-border); border-radius:14px;
+  background:var(--panel-solid); box-shadow:var(--shadow-hover);
+}
+#db-root .dock[data-wide] { flex-basis:min(50%, 780px); }
+#db-root .dock > header {
+  flex-shrink:0; display:flex; align-items:flex-start; gap:10px;
+  padding:14px 16px; border-bottom:1px solid var(--line);
+}
+#db-root .dock-icon {
+  width:30px; height:30px; flex-shrink:0; display:grid; place-items:center;
+  border-radius:9px; background:var(--brand-soft); color:var(--brand);
+}
+#db-root .dock-title { font-size:14px; font-weight:600; line-height:1.35; color:var(--ink); text-wrap:pretty; }
+#db-root .dock-sub { display:flex; align-items:center; gap:7px; margin-top:3px; }
+#db-root .dock-scope { font-size:11.5px; font-weight:600; color:var(--brand); }
+#db-root .dock-note { font-size:10.5px; color:var(--muted-dim); }
+#db-root .dock-btn {
+  width:28px; height:28px; flex-shrink:0; display:grid; place-items:center; padding:0;
+  border:1px solid var(--line); border-radius:8px; background:transparent;
+  color:var(--muted); cursor:pointer;
+}
+#db-root .dock-btn:hover { background:var(--panel-hover); }
+
+#db-root .dock-actions {
+  display:flex; flex-shrink:0; gap:6px; flex-wrap:nowrap; overflow-x:auto;
+  padding:10px 16px; border-bottom:1px solid var(--line);
+}
+#db-root .dock-action {
+  flex-shrink:0; padding:6px 11px; border:1px solid var(--line); border-radius:999px;
+  background:transparent; color:var(--muted); font-family:inherit;
+  font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;
+}
+#db-root .dock-action:hover { border-color:var(--brand-border); }
+
+#db-root .dock-log {
+  flex:1 1 0%; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
+  gap:12px; padding:16px;
+}
+#db-root .dock-empty { margin:0; font-size:13px; line-height:1.6; color:var(--muted); text-wrap:pretty; }
+#db-root .dock-msg {
+  max-width:88%; display:flex; flex-direction:column; padding:10px 12px;
+  border:1px solid var(--line); border-radius:12px;
+  background:color-mix(in srgb, var(--panel-hover) 55%, transparent);
+}
+#db-root .dock-msg[data-role="user"] {
+  align-self:flex-end; border-color:var(--brand-border); background:var(--brand-soft);
+}
+#db-root .dock-msg[data-role="ai"] { align-self:flex-start; }
+/* A returned draft is a document, not a bubble: it takes the whole width
+   and grows to its own length, and its body is editable in place. Making it
+   compete for the log's height instead squeezes it to a single line as soon
+   as anything else is in the thread. */
+#db-root .dock-msg[data-doc] {
+  align-self:stretch; max-width:none; padding:0; overflow:hidden;
+}
+#db-root .dock-doc-head {
+  display:flex; align-items:center; gap:8px; padding:9px 12px;
+  border-bottom:1px solid var(--line);
+  background:color-mix(in srgb, var(--panel-hover) 55%, transparent);
+}
+#db-root .dock-doc-head span:first-of-type {
+  flex:1; min-width:0; font-size:12.5px; font-weight:600; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .dock-doc-hint { font-size:10.5px; color:var(--muted-dim); }
+#db-root .dock-doc-body {
+  padding:16px 18px; font-size:13.5px; line-height:1.75; color:var(--ink);
+  white-space:pre-line; outline:none; text-wrap:pretty;
+}
+#db-root .dock-text { font-size:13px; line-height:1.6; color:var(--ink); text-wrap:pretty; white-space:pre-line; }
+#db-root .dock-msg[data-role="user"] .dock-text { color:var(--brand); }
+#db-root .dock-cite {
+  margin-top:8px; padding-top:8px; border-top:1px solid var(--line);
+  font-size:10.5px; color:var(--muted);
+}
+#db-root .dock-msg[data-doc] .dock-cite { margin:0; padding:9px 18px; }
+#db-root .dock-save {
+  margin-top:9px; align-self:flex-start; display:inline-flex; align-items:center; gap:6px;
+  padding:6px 11px; border:1px solid var(--brand-border); border-radius:9px;
+  background:var(--brand-soft); color:var(--brand);
+  font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;
+}
+#db-root .dock-msg[data-doc] .dock-save { margin:0 18px 14px; }
+#db-root .dock-save:disabled { opacity:.65; cursor:default; }
+
+#db-root .dock-saved {
+  flex-shrink:0; border-top:1px solid var(--line);
+  background:color-mix(in srgb, var(--panel-hover) 45%, transparent);
+}
+#db-root .dock-saved-toggle {
+  width:100%; display:flex; align-items:center; gap:8px; padding:10px 16px; border:0;
+  background:transparent; font-family:inherit; font-size:11.5px; font-weight:600;
+  color:var(--muted-dim); cursor:pointer; text-align:left;
+}
+#db-root .dock-saved-toggle svg { transform:rotate(-90deg); flex-shrink:0; transition:transform .18s ease; }
+#db-root .dock-saved[data-open] .dock-saved-toggle svg { transform:rotate(0deg); }
+#db-root .dock-saved-list {
+  display:none; flex-direction:column; gap:6px; max-height:110px;
+  overflow-y:auto; padding:0 16px 12px;
+}
+#db-root .dock-saved[data-open] .dock-saved-list { display:flex; }
+#db-root .dock-saved-item { display:flex; align-items:baseline; gap:8px; font-size:12.5px; color:var(--ink); }
+#db-root .dock-saved-dot { width:5px; height:5px; flex-shrink:0; border-radius:50%; background:var(--brand); }
+#db-root .dock-saved-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#db-root .dock-saved-when { font-size:10.5px; color:var(--muted-dim); }
+
+#db-root .dock-composer {
+  flex-shrink:0; display:flex; align-items:center; gap:9px;
+  padding:12px 16px; border-top:1px solid var(--line);
+}
+#db-root .dock-composer input {
+  flex:1; min-width:0; height:38px; padding:0 12px;
+  border:1px solid var(--line); border-radius:10px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent);
+  color:var(--ink); font-family:inherit; font-size:13px; outline:none;
+}
+#db-root .dock-send {
+  width:38px; height:38px; flex-shrink:0; display:grid; place-items:center; padding:0;
+  border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer;
+}
+
+/* On a narrow screen the drawer would leave the workspace a sliver, so it
+   takes the whole column instead. */
+@media (max-width: 1080px) {
+  #db-root .dock, #db-root .dock[data-wide] { flex-basis:100%; }
+  #db-root .ws-col[data-dock-open] { display:none; }
+}

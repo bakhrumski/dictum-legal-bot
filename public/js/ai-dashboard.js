@@ -743,14 +743,199 @@
     }
   }
 
-  /* Opening a matter in the AI section. The right-hand drawer belongs to
-     that section; until it exists, this takes the reader there. */
+  /* ============================================================
+     AI drawer
+
+     Asking about a matter opens a panel beside the workspace rather than
+     over it, so the graph or list stays readable while the answer arrives.
+     A team-scoped answer files itself against the matter; a personal one
+     offers a button to file it.
+     ============================================================ */
+  var dock = { matter: null, wide: false, msgs: [], savedOpen: false, timer: null };
+  var dockEl = $('[data-dock]');
+  var dockLog = $('[data-dock-log]');
+
+  var now = function () {
+    return new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  };
+  var matterTitle = function (id) {
+    return (MATTERS.filter(function (m) { return m.id === id; })[0] || {}).title || '';
+  };
+
   function openDock(matterId) {
-    ws.dock = matterId;
+    if (!dockEl) return;
+    dock.matter = matterId;
+    dock.msgs = [];
+    dock.wide = false;
+    clearTimeout(dock.timer);
+    dockEl.hidden = false;
+    dockEl.removeAttribute('data-wide');
+    renderDock();
+    // The drawer takes width off the graph, which has to be laid out again.
+    ws.laidFor = null;
+    ensureLayout();
+  }
+
+  function closeDock() {
+    dock.matter = null;
+    dock.msgs = [];
+    clearTimeout(dock.timer);
+    if (dockEl) dockEl.hidden = true;
+  }
+
+  function runQuick(q) {
+    var draft = q.perMatter ? ((DATA.drafts || {})[dock.matter] || (DATA.drafts || {}).m1) : null;
+    if (draft && !dock.wide) {
+      dock.wide = true;
+      if (dockEl) dockEl.setAttribute('data-wide', '');
+    }
+    var at = now();
+    // A team-scoped answer is filed against the matter without being asked;
+    // a personal one gets a button instead.
+    var auto = ai.scope === 'team';
+    dock.msgs.push({ role: 'user', text: q.q });
+    renderDock();
+    clearTimeout(dock.timer);
+    dock.timer = setTimeout(function () {
+      if (auto) {
+        ws.saved[dock.matter] = (ws.saved[dock.matter] || []).concat([{ label: q.label, when: at }]);
+      }
+      dock.msgs.push({
+        role: 'ai',
+        text: draft ? draft.body : q.a,
+        cite: draft ? draft.cite : q.cite,
+        label: q.label,
+        saved: auto,
+        doc: !!draft,
+        docTitle: draft ? draft.title : ''
+      });
+      renderDock();
+      paintGraph();
+      renderList();
+    }, 620);
+  }
+
+  function saveAnswer(i) {
+    var m = dock.msgs[i];
+    if (!m || m.saved) return;
+    m.saved = true;
+    ws.saved[dock.matter] = (ws.saved[dock.matter] || []).concat([{ label: m.label || 'AI javobi', when: now() }]);
+    renderDock();
+    paintGraph();
+    renderList();
+  }
+
+  function renderDock() {
+    if (!dockEl || !dock.matter) return;
+    var title = $('[data-dock-title]');
+    if (title) title.textContent = matterTitle(dock.matter);
+    var scope = $('[data-dock-scope]');
+    if (scope) scope.textContent = ai.scope === 'team' ? 'juristAI jamoasi' : 'Shaxsiy';
+    var note = $('[data-dock-note]');
+    if (note) note.textContent = ai.scope === 'team' ? 'javob masalaga saqlanadi' : 'saqlash — qo‘lda';
+
+    var actions = $('[data-dock-actions]');
+    if (actions && DATA.quick) {
+      actions.textContent = '';
+      DATA.quick.forEach(function (q) {
+        var b = el('button', { class: 'dock-action', type: 'button', text: q.label });
+        b.addEventListener('click', function () { runQuick(q); });
+        actions.appendChild(b);
+      });
+    }
+
+    if (dockLog) {
+      dockLog.textContent = '';
+      if (!dock.msgs.length) {
+        dockLog.appendChild(el('p', {
+          class: 'dock-empty',
+          text: "Yuqoridagi amallardan birini tanlang yoki savolingizni yozing — javob shu masalaga biriktiriladi."
+        }));
+      }
+      dock.msgs.forEach(function (m, i) {
+        var body;
+        if (m.doc) {
+          body = el('div', { class: 'dock-msg', 'data-role': m.role, 'data-doc': true }, [
+            el('div', { class: 'dock-doc-head' }, [
+              svg(['M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z', 'M14 3v6h6'], 14, 1.9),
+              el('span', { text: m.docTitle }),
+              el('span', { class: 'dock-doc-hint', 'data-mono': true, text: 'tahrirlanadi' })
+            ]),
+            el('div', { class: 'dock-doc-body', contenteditable: 'true', text: m.text }),
+            m.cite ? el('div', { class: 'dock-cite', 'data-mono': true, text: m.cite }) : null
+          ]);
+        } else {
+          body = el('div', { class: 'dock-msg', 'data-role': m.role }, [
+            el('div', { class: 'dock-text', text: m.text }),
+            m.cite ? el('div', { class: 'dock-cite', 'data-mono': true, text: m.cite }) : null
+          ]);
+        }
+        if (m.role === 'ai') {
+          var save = el('button', {
+            class: 'dock-save', type: 'button',
+            text: m.saved ? 'Masalaga saqlandi' : 'Masalaga saqlash'
+          });
+          if (m.saved) save.disabled = true;
+          else save.addEventListener('click', function () { saveAnswer(i); });
+          body.appendChild(save);
+        }
+        dockLog.appendChild(body);
+      });
+      dockLog.scrollTop = dockLog.scrollHeight;
+    }
+
+    var savedList = ws.saved[dock.matter] || [];
+    var savedBox = $('[data-dock-saved]');
+    if (savedBox) {
+      savedBox.hidden = !savedList.length;
+      if (dock.savedOpen) savedBox.setAttribute('data-open', '');
+      else savedBox.removeAttribute('data-open');
+      var label = $('[data-dock-saved-label]');
+      if (label) label.textContent = 'Masalaga saqlangan javoblar · ' + savedList.length;
+      var host = $('[data-dock-saved-list]');
+      if (host) {
+        host.textContent = '';
+        savedList.forEach(function (s) {
+          host.appendChild(el('div', { class: 'dock-saved-item' }, [
+            el('span', { class: 'dock-saved-dot' }),
+            el('span', { class: 'dock-saved-label', text: s.label }),
+            el('span', { class: 'dock-saved-when', 'data-mono': true, text: s.when })
+          ]));
+        });
+      }
+    }
+  }
+
+  var dockWideBtn = $('[data-dock-wide]');
+  if (dockWideBtn) dockWideBtn.addEventListener('click', function () {
+    dock.wide = !dock.wide;
+    if (dock.wide) dockEl.setAttribute('data-wide', '');
+    else dockEl.removeAttribute('data-wide');
+    dockWideBtn.title = dock.wide ? 'Torroq' : 'Kengaytirish';
+    ws.laidFor = null;
+    ensureLayout();
+  });
+  var dockCloseBtn = $('[data-dock-close]');
+  if (dockCloseBtn) dockCloseBtn.addEventListener('click', function () {
+    closeDock();
+    ws.laidFor = null;
+    ensureLayout();
+  });
+  var dockExpandBtn = $('[data-dock-expand]');
+  if (dockExpandBtn) dockExpandBtn.addEventListener('click', function () {
+    // Full screen means the AI section itself, with the matter carried over.
+    ai.matter = dock.matter;
+    ai.scope = 'team';
+    renderAi();
+    closeDock();
     state.tab = 'ai';
     applyTab();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
+  });
+  var savedToggle = $('[data-dock-saved-toggle]');
+  if (savedToggle) savedToggle.addEventListener('click', function () {
+    dock.savedOpen = !dock.savedOpen;
+    renderDock();
+  });
 
   var openAi = $('[data-open-ai]');
   if (openAi) openAi.addEventListener('click', function () {
@@ -832,6 +1017,277 @@
     }
   }
 
+  /* ============================================================
+     AI
+
+     Personal and team scope over the same panel. Team scope adds what only
+     a shared thread needs: the workspace's token balance, the matter the
+     thread is filed under, and a way to keep one out of the team's feed.
+     ============================================================ */
+  var ai = { scope: 'personal', matter: '', topicsOpen: false };
+  try {
+    var savedScope = localStorage.getItem('juristai-ai-scope');
+    if (savedScope === 'team' || savedScope === 'personal') ai.scope = savedScope;
+  } catch (e) { /* ignore */ }
+
+  function shapes(list, size, width) {
+    var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('width', size); s.setAttribute('height', size);
+    s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none');
+    s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', width);
+    s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round');
+    list.forEach(function (pair) {
+      var n = document.createElementNS('http://www.w3.org/2000/svg', pair[0]);
+      Object.keys(pair[1]).forEach(function (k) { n.setAttribute(k, pair[1][k]); });
+      s.appendChild(n);
+    });
+    return s;
+  }
+
+  var nf = function (n) { return n.toLocaleString('ru-RU'); };
+
+  function renderAi() {
+    var team = ai.scope === 'team';
+    var scopes = DATA.aiScopes || [];
+
+    var side = $('[data-ai-scopes]');
+    if (side) {
+      side.textContent = '';
+      side.style.display = 'flex';
+      side.style.flexDirection = 'column';
+      side.style.gap = '6px';
+      scopes.forEach(function (s) {
+        var b = el('button', {
+          class: 'ai-scope', type: 'button', 'aria-pressed': String(ai.scope === s.id)
+        }, [el('span', { text: s.label }), el('small', { text: s.sub })]);
+        b.addEventListener('click', function () { setAiScope(s.id); });
+        side.appendChild(b);
+      });
+    }
+
+    var pills = $('[data-ai-scopepills]');
+    if (pills) {
+      pills.textContent = '';
+      scopes.forEach(function (s) {
+        var b = el('button', {
+          class: 'ai-scopepill', type: 'button', title: s.sub, text: s.short,
+          'aria-pressed': String(ai.scope === s.id)
+        });
+        b.addEventListener('click', function () { setAiScope(s.id); });
+        pills.appendChild(b);
+      });
+    }
+
+    // The balance, the matter picker and "hide from the team" only mean
+    // something once the thread belongs to the workspace.
+    var budget = DATA.wsBudget || { used: 0, limit: 1 };
+    var pct = Math.round((budget.used / budget.limit) * 100) + '%';
+    var box = $('[data-ai-budget]');
+    if (box) {
+      box.hidden = !team;
+      var pctEl = $('[data-ai-budget-pct]');
+      var fill = $('[data-ai-budget-fill]');
+      var text = $('[data-ai-budget-text]');
+      if (pctEl) pctEl.textContent = pct;
+      if (fill) fill.style.width = pct;
+      if (text) text.textContent = nf(budget.used) + ' / ' + nf(budget.limit);
+    }
+    var pill = $('[data-ai-budgetpill]');
+    if (pill) {
+      pill.hidden = !team;
+      var pf = $('[data-ai-budgetpill-fill]');
+      var pt = $('[data-ai-budgetpill-text]');
+      if (pf) pf.style.width = pct;
+      if (pt) pt.textContent = nf(budget.used) + ' / ' + nf(budget.limit);
+    }
+    var mw = $('[data-ai-matterwrap]');
+    if (mw) mw.hidden = !team;
+    var hide = $('[data-ai-hide]');
+    if (hide) hide.hidden = !team;
+
+    var threads = (DATA.aiThreads || []).filter(function (t) { return t.scope === ai.scope; });
+    var count = $('[data-ai-thread-count]');
+    if (count) count.textContent = String(threads.length);
+    var list = $('[data-ai-threads]');
+    if (list) {
+      list.textContent = '';
+      threads.forEach(function (t) {
+        var matter = t.matter ? (MATTERS.filter(function (m) { return m.id === t.matter; })[0] || {}).title : '';
+        var by = (member(t.by).name || '').split(' ')[0];
+        list.appendChild(el('button', { class: 'ai-thread', type: 'button' }, [
+          el('span', { class: 'ai-thread-q', text: t.q }),
+          matter ? el('span', { class: 'ai-thread-matter', text: matter }) : null,
+          el('small', { 'data-mono': true, text: by + ' · ' + t.when + ' · ' + nf(t.cost) + ' token' })
+        ]));
+      });
+    }
+
+    renderMatterMenu();
+  }
+
+  function setAiScope(id) {
+    ai.scope = id;
+    renderAi();
+    try { localStorage.setItem('juristai-ai-scope', id); } catch (e) { /* ignore */ }
+  }
+
+  function renderMatterMenu() {
+    var label = $('[data-ai-matter-label]');
+    var current = ai.matter ? (MATTERS.filter(function (m) { return m.id === ai.matter; })[0] || {}).title : 'Biriktirilmagan';
+    if (label) label.textContent = current;
+    var menu = $('[data-ai-mattermenu]');
+    if (!menu) return;
+    menu.textContent = '';
+    [{ id: '', title: 'Biriktirilmagan', tone: null }].concat(MATTERS).forEach(function (o) {
+      var b = el('button', {
+        class: 'ai-matteropt', type: 'button', 'aria-pressed': String(ai.matter === o.id)
+      }, [
+        el('span', { class: 'ai-matteropt-dot', style: 'background:' + (o.tone ? TONE[o.tone] : 'var(--muted-dim)') + ';' }),
+        el('span', { class: 'ai-matteropt-label', text: o.title })
+      ]);
+      b.addEventListener('click', function () {
+        ai.matter = o.id;
+        menu.hidden = true;
+        var tg = $('[data-ai-matter-toggle]');
+        if (tg) tg.setAttribute('aria-expanded', 'false');
+        renderMatterMenu();
+      });
+      menu.appendChild(b);
+    });
+  }
+
+  var matterToggle = $('[data-ai-matter-toggle]');
+  var matterMenu = $('[data-ai-mattermenu]');
+  if (matterToggle && matterMenu) {
+    matterToggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = matterMenu.hidden;
+      matterMenu.hidden = !open;
+      matterToggle.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('pointerdown', function (e) {
+      if (matterMenu.hidden) return;
+      if (matterMenu.contains(e.target) || matterToggle.contains(e.target)) return;
+      matterMenu.hidden = true;
+      matterToggle.setAttribute('aria-expanded', 'false');
+    }, true);
+  }
+
+  function renderAiStatic() {
+    var dds = $('[data-ai-dds]');
+    if (dds && DATA.hdrDd) {
+      dds.textContent = '';
+      DATA.hdrDd.forEach(function (label) {
+        dds.appendChild(el('button', { class: 'ai-dd', type: 'button' }, [
+          el('span', { text: label }),
+          svg(['M6 9l6 6 6-6'], 11, 2.5)
+        ]));
+      });
+    }
+
+    var st = $('[data-ai-starters]');
+    if (st && DATA.starters) {
+      st.textContent = '';
+      DATA.starters.forEach(function (s) {
+        st.appendChild(el('button', { class: 'ai-starter', type: 'button' }, [
+          el('span', { class: 'ai-starter-icon' }, [shapes(s.icon, 21, 1.7)]),
+          el('span', { class: 'ai-starter-text' }, [
+            el('strong', { text: s.h }),
+            el('small', { text: s.sub })
+          ])
+        ]));
+      });
+    }
+
+    var tl = $('[data-ai-topics-list]');
+    if (tl && DATA.topics) {
+      tl.textContent = '';
+      DATA.topics.forEach(function (t) {
+        tl.appendChild(el('button', { class: 'ai-topic', type: 'button', text: t }));
+      });
+    }
+  }
+
+  var topicsToggle = $('[data-ai-topics-toggle]');
+  var topicsBox = $('[data-ai-topics]');
+  if (topicsToggle && topicsBox) {
+    topicsToggle.addEventListener('click', function () {
+      ai.topicsOpen = !ai.topicsOpen;
+      topicsBox.hidden = !ai.topicsOpen;
+      topicsToggle.setAttribute('aria-expanded', String(ai.topicsOpen));
+    });
+  }
+
+  /* ============================================================
+     Boshqaruv — an overview grid over a set of collapsible areas
+     ============================================================ */
+  var mgOpen = 'reg';
+
+  function renderMgmt() {
+    var grid = $('[data-mg-cards]');
+    if (grid && DATA.mgmt) {
+      grid.textContent = '';
+      DATA.mgmt.forEach(function (m) {
+        var b = el('button', {
+          class: 'mg-card', type: 'button', 'aria-pressed': String(mgOpen === m.target)
+        }, [
+          el('span', { text: m.label }),
+          el('small', { text: m.sub }),
+          m.count != null ? el('b', { class: 'mg-count', text: String(m.count) }) : null
+        ]);
+        b.addEventListener('click', function () {
+          mgOpen = m.target;
+          renderMgmt();
+          var target = $('[data-mg-sec="' + m.target + '"]');
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        grid.appendChild(b);
+      });
+    }
+
+    var host = $('[data-mg-sections]');
+    if (!host || !DATA.mgmtSections) return;
+    host.textContent = '';
+    DATA.mgmtSections.forEach(function (s) {
+      var body = el('div', { class: 'mg-sec-body' }, [
+        s.note ? el('p', { text: s.note }) : null,
+        s.kanban ? el('div', { class: 'mg-kanban' }, s.kanban.map(function (c) {
+          return el('div', { class: 'mg-col' }, [
+            el('div', { class: 'mg-col-h', text: c }),
+            el('div', { class: 'mg-col-note', text: "So'rovlarni ko'rish uchun bo'limni oching" })
+          ]);
+        })) : null,
+        s.control ? el('div', { class: 'mg-control' }, [
+          el('label', { text: s.control.label }),
+          (function () {
+            var sel = el('select', {});
+            s.control.options.forEach(function (o, i) {
+              var opt = el('option', { text: o });
+              if (i === s.control.selected) opt.selected = true;
+              sel.appendChild(opt);
+            });
+            return sel;
+          })()
+        ]) : null,
+        !s.kanban ? el('div', { class: 'mg-empty', text: "Bo'limni oching" }) : null
+      ]);
+
+      var head = el('button', { class: 'mg-sec-head', type: 'button' }, [
+        (function () { var c = svg(['M6 9l6 6 6-6'], 14, 2.5); c.setAttribute('class', 'mg-sec-chev'); return c; })(),
+        el('h2', { text: s.h }),
+        s.badge ? el('span', { class: 'mg-sec-badge', text: s.badge }) : null
+      ]);
+      var sec = el('div', { class: 'mg-sec', 'data-mg-sec': s.id }, [head, body]);
+      if (mgOpen === s.id) sec.setAttribute('data-open', '');
+      head.setAttribute('aria-expanded', String(mgOpen === s.id));
+      head.addEventListener('click', function () {
+        mgOpen = mgOpen === s.id ? '' : s.id;
+        renderMgmt();
+      });
+      host.appendChild(sec);
+    });
+  }
+
   window.addEventListener('resize', function () {
     ws.laidFor = null;
     measureBar();
@@ -846,6 +1302,10 @@
 
   renderChat();
   setChatMode(chatMode);
+
+  renderAiStatic();
+  renderAi();
+  renderMgmt();
 
   renderWsViews();
   renderLegend();
