@@ -114,5 +114,29 @@ window.DB_DATA = {
     { id: 't3', q: "Da'vo arizasiga qanday dalillar ilova qilinadi?", scope: 'team', by: 'u1', matter: 'm2', cost: 1510, when: 'Kecha' },
     { id: 't4', q: 'YaTT uchun soliq hisobotini kim topshiradi?', scope: 'personal', by: 'u1', matter: null, cost: 620, when: '08:10' },
     { id: 't5', q: 'Mehnat shartnomasini bekor qilish tartibi', scope: 'personal', by: 'u1', matter: null, cost: 430, when: '31.08' }
+  ],
+
+  /* -- Chat ---------------------------------------------------
+     TODO: connect to API — the group thread and the private thread. The
+     me flag decides which side a message sits on and which accent it
+     takes; group and private carry different ones by design. */
+  chatModes: [
+    { id: 'both', label: 'Ikkisi' },
+    { id: 'group', label: 'Guruh' },
+    { id: 'private', label: 'Shaxsiy' }
+  ],
+
+  groupMsgs: [
+    { who: 'Nilufar R.', init: 'NR', time: '09:12', txt: "Ish haqi kechikishi bo'yicha yangi murojaat keldi — MK 333-modda asosida javob tayyorlayapman." },
+    { who: 'Sardor N.', init: 'SN', time: '09:18', txt: "Kompensatsiya hisobini ilova qil, foydalanuvchi aniq summani so'ragan." },
+    { who: 'Siz', init: 'SZ', time: '09:24', me: true, txt: "Korpusda 2026 yil tahriri bor, havolani qo'shdim." },
+    { who: 'Nilufar R.', init: 'NR', time: '09:26', txt: 'Rahmat. Tekshiruvga yuboraman.' }
+  ],
+
+  privMsgs: [
+    { time: '10:02', txt: "Notarial shartnoma bo'yicha murojaatni senga tayinladim." },
+    { time: '10:05', me: true, txt: "Ko'rdim, bugun tushdan keyin javob beraman." },
+    { time: '10:06', txt: 'SLA 4 soat — ulgurasanmi?' },
+    { time: '10:07', me: true, txt: "Ha, korpusdan modda topildi. Loyihani tayyorlab qo'ydim." }
   ]
 };

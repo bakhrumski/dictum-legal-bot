@@ -758,6 +758,80 @@
     applyTab();
   });
 
+  /* ============================================================
+     Chat — group and private, together or one at a time
+     ============================================================ */
+  var chatMode = 'both';
+  try {
+    var savedMode = localStorage.getItem('juristai-chat-mode');
+    if (['both', 'group', 'private'].indexOf(savedMode) >= 0) chatMode = savedMode;
+  } catch (e) { /* ignore */ }
+
+  function renderChatModes() {
+    var host = $('[data-chat-modes]');
+    if (!host || !DATA.chatModes) return;
+    host.textContent = '';
+    DATA.chatModes.forEach(function (m) {
+      var dot = m.id === 'group' ? 'var(--grp)' : (m.id === 'private' ? 'var(--prv)' : 'var(--muted-dim)');
+      var b = el('button', {
+        class: 'chat-mode', type: 'button', text: '',
+        'aria-pressed': String(chatMode === m.id)
+      }, [
+        el('span', { class: 'chat-mode-dot', style: 'background:' + dot + ';' }),
+        el('span', { text: m.label })
+      ]);
+      b.addEventListener('click', function () { setChatMode(m.id); });
+      host.appendChild(b);
+    });
+  }
+
+  function setChatMode(id) {
+    chatMode = id;
+    var grid = $('[data-chat-grid]');
+    if (grid) {
+      if (id === 'both') grid.removeAttribute('data-one');
+      else grid.setAttribute('data-one', '');
+    }
+    $$('[data-chat-pane]').forEach(function (p) {
+      var kind = p.getAttribute('data-chat-pane');
+      p.hidden = (id === 'group' && kind !== 'group') || (id === 'private' && kind !== 'private');
+    });
+    renderChatModes();
+    try { localStorage.setItem('juristai-chat-mode', id); } catch (e) { /* ignore */ }
+  }
+
+  function renderChat() {
+    var group = $('[data-chat-group]');
+    if (group && DATA.groupMsgs) {
+      group.textContent = '';
+      DATA.groupMsgs.forEach(function (m) {
+        group.appendChild(el('div', { class: 'chat-msg', 'data-me': !!m.me }, [
+          el('span', { class: 'chat-msg-init', text: m.init }),
+          el('div', { class: 'chat-msg-body' }, [
+            el('div', { class: 'chat-msg-meta' }, [
+              el('span', { class: 'chat-msg-who', text: m.who }),
+              el('span', { class: 'chat-msg-time', text: m.time })
+            ]),
+            el('div', { class: 'chat-bubble', text: m.txt })
+          ])
+        ]));
+      });
+      group.scrollTop = group.scrollHeight;
+    }
+
+    var priv = $('[data-chat-private]');
+    if (priv && DATA.privMsgs) {
+      priv.textContent = '';
+      DATA.privMsgs.forEach(function (m) {
+        priv.appendChild(el('div', { class: 'chat-priv', 'data-me': !!m.me }, [
+          el('div', { class: 'chat-bubble', text: m.txt }),
+          el('span', { class: 'chat-priv-time', text: m.time })
+        ]));
+      });
+      priv.scrollTop = priv.scrollHeight;
+    }
+  }
+
   window.addEventListener('resize', function () {
     ws.laidFor = null;
     measureBar();
@@ -769,6 +843,9 @@
   renderBits();
   renderHealth();
   renderQueue();
+
+  renderChat();
+  setChatMode(chatMode);
 
   renderWsViews();
   renderLegend();

@@ -204,9 +204,59 @@
         </div>
       </section>
       <section class="db-panel" data-panel="chat">
-        <div class="db-placeholder">
-          <h2>Chat</h2>
-          <p>Guruh va shaxsiy suhbatlar shu yerga joylashadi.</p>
+        <div class="chat">
+          <div class="chat-head">
+            <div>
+              <h2>Suhbatlar</h2>
+              <p>Jamoa muhokamasi va shaxsiy yozishmalar bir ekranda</p>
+            </div>
+            <div class="chat-modes" data-chat-modes></div>
+          </div>
+
+          <div class="chat-grid" data-r="chatgrid" data-chat-grid>
+            <section class="chat-pane" data-kind="group" data-chat-pane="group">
+              <header>
+                <div class="chat-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div style="min-width:0; flex:1;">
+                  <span class="chat-kind">Guruh</span>
+                  <!-- TODO: connect to API — the group's name and member count. -->
+                  <h3>Yuristlar jamoasi</h3>
+                </div>
+                <span class="chat-count">12 a'zo</span>
+              </header>
+              <div class="chat-log" data-kind="group" data-chat-group></div>
+              <div class="chat-composer">
+                <div class="chat-composer-inner">
+                  <textarea placeholder="Jamoaga yozing… (@ bilan mention)" rows="1"></textarea>
+                  <button class="chat-send" type="button" title="Yuborish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                </div>
+              </div>
+            </section>
+
+            <section class="chat-pane" data-kind="private" data-chat-pane="private">
+              <header>
+                <!-- TODO: connect to API — the person and their presence. -->
+                <div class="chat-avatar">
+                  <span>SN</span>
+                  <span class="chat-online"></span>
+                </div>
+                <div style="min-width:0; flex:1;">
+                  <span class="chat-kind">Shaxsiy</span>
+                  <h3>Sardor Nazarov</h3>
+                </div>
+                <span class="chat-status">Onlayn</span>
+              </header>
+              <div class="chat-log" data-kind="private" data-chat-private></div>
+              <div class="chat-composer">
+                <div class="chat-composer-inner">
+                  <textarea placeholder="Sardorga yozing…" rows="1"></textarea>
+                  <button class="chat-send" type="button" title="Yuborish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </section>
       <section class="db-panel" data-panel="ai">
