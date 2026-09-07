@@ -52,9 +52,43 @@
 
     <main>
       <section class="db-panel" data-panel="home" data-active>
-        <div class="db-placeholder">
-          <h2>Asosiy</h2>
-          <p>Statistika grafigi va navbat ro'yxati shu yerga joylashadi.</p>
+        <div class="db-section">
+
+          <section class="db-section-head">
+            <div><h1>Bugungi boshqaruv</h1></div>
+            <button class="db-btn" type="button">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Yangilash
+            </button>
+          </section>
+
+          <div class="db-bits" data-bits></div>
+
+          <div class="db-health" data-health></div>
+
+          <div class="db-card">
+            <div class="db-card-head">
+              <div>
+                <h2>Ish navbati</h2>
+                <p data-queue-summary></p>
+              </div>
+              <button class="db-card-refresh" type="button" title="Navbatni yangilash"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+            </div>
+            <div class="db-chips" data-views></div>
+            <div class="db-searchrow">
+              <label class="db-search">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input type="search" placeholder="Murojaat yoki foydalanuvchini qidiring">
+              </label>
+            </div>
+            <div class="db-rows" data-rows></div>
+            <div class="db-pager">
+              <button type="button" disabled>Oldingi</button>
+              <span data-mono>1 / 4</span>
+              <button type="button">Keyingi</button>
+            </div>
+          </div>
+
         </div>
       </section>
       <section class="db-panel" data-panel="jamoa">
@@ -114,6 +148,7 @@
 
   </div>
 </div>
+<script src="/js/ai-dashboard-data.js"></script>
 <script src="/js/ai-dashboard.js"></script>
 </body>
 </html>

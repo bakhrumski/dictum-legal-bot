@@ -5,8 +5,8 @@
    prototype's; only where they are written moved. Tokens and keyframes
    come from css/tokens.css.
 
-   This is the shell only — header, tab bar, page container. The sections
-   the tabs lead to land in later work; the container is empty until then.
+   Header, tab bar, page frame, and the sections behind each tab. Demo
+   fixtures for those sections live in js/ai-dashboard-data.js.
    ============================================================ */
 
 html, body { margin:0; padding:0; }
@@ -112,7 +112,7 @@ html.db-page::-webkit-scrollbar, html.db-page body::-webkit-scrollbar { width:0;
 /* ============================================================
    Section container — empty until the sections are built
    ============================================================ */
-#db-root .db-panel { display:none; padding:24px 0 8px; }
+#db-root .db-panel { display:none; }
 #db-root .db-panel[data-active] { display:block; }
 #db-root .db-placeholder {
   margin-top:16px; padding:56px 28px; text-align:center;
@@ -147,3 +147,132 @@ html.db-page::-webkit-scrollbar, html.db-page body::-webkit-scrollbar { width:0;
 @media (prefers-reduced-motion: reduce) {
   #db-root *, #db-root *::before, #db-root *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
 }
+
+/* ============================================================
+   Section: Asosiy (home)
+   ============================================================ */
+#db-root .db-section { padding-top:28px; display:flex; flex-direction:column; gap:20px; }
+#db-root .db-section-head {
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:20px; flex-wrap:wrap;
+}
+#db-root .db-section-head h1 {
+  margin:0 0 6px; font-size:clamp(27px,3.2vw,37px);
+  letter-spacing:-.02em; line-height:1.12; color:var(--ink);
+}
+#db-root .db-btn {
+  display:inline-flex; align-items:center; gap:8px; padding:10px 16px;
+  border:1px solid var(--line); border-radius:12px;
+  background:color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  color:var(--ink); font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;
+}
+#db-root .db-btn:hover { background:var(--panel-hover); }
+
+/* The four counters double as filters: each one's bar is scaled against the
+   largest of them, so the row reads as a distribution, not four numbers. */
+#db-root .db-bits { display:flex; align-items:stretch; gap:0; overflow-x:auto; }
+#db-root .db-bit {
+  flex:1 1 0%; min-width:132px;
+  display:flex; flex-direction:column; align-items:flex-start; gap:7px;
+  padding:2px 18px 0; border:0; border-left:1px solid var(--line);
+  background:transparent; font-family:inherit; text-align:left; cursor:pointer;
+  text-decoration:none;
+}
+#db-root .db-bit:hover { background:color-mix(in srgb, var(--panel-hover) 60%, transparent); }
+#db-root .db-bit-top { display:flex; align-items:baseline; gap:8px; }
+#db-root .db-bit-n { font-size:30px; font-weight:600; line-height:1; }
+#db-root .db-bit-label { font-size:12.5px; color:var(--muted); white-space:nowrap; }
+#db-root .db-bit-track {
+  width:100%; height:6px; border-radius:999px;
+  background:color-mix(in srgb, var(--line) 70%, transparent); overflow:hidden;
+}
+#db-root .db-bit-fill { display:block; height:100%; border-radius:999px; }
+
+#db-root .db-health {
+  padding:12px 2px; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  display:flex; gap:32px; flex-wrap:wrap;
+}
+#db-root .db-health-item { display:flex; align-items:baseline; gap:8px; font-size:13px; color:var(--muted-dim); }
+#db-root .db-health-dot { width:6px; height:6px; border-radius:999px; align-self:center; }
+#db-root .db-health-item strong { color:var(--ink); font-weight:500; font-size:12.5px; }
+
+#db-root .db-card {
+  border:1px solid var(--line); border-radius:14px;
+  background:color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+#db-root .db-card-head {
+  padding:22px 22px 0; display:flex; align-items:flex-start;
+  justify-content:space-between; gap:16px;
+}
+#db-root .db-card-head h2 { margin:0 0 4px; font-size:20px; font-weight:600; letter-spacing:-.03em; color:var(--ink); }
+#db-root .db-card-head p { margin:0; font-size:13.5px; color:var(--muted); }
+#db-root .db-card-refresh {
+  width:36px; height:36px; border-radius:11px; border:1px solid var(--line);
+  background:transparent; color:var(--muted); display:grid; place-items:center;
+  cursor:pointer; flex-shrink:0; padding:0;
+}
+#db-root .db-card-refresh:hover { background:var(--panel-hover); }
+
+#db-root .db-chips { padding:18px 22px 0; display:flex; gap:7px; flex-wrap:wrap; }
+#db-root .db-chip {
+  padding:8px 14px; border-radius:999px; font-size:13px; font-weight:600;
+  cursor:pointer; font-family:inherit;
+  border:1px solid var(--line); background:transparent; color:var(--muted);
+}
+#db-root .db-chip[aria-pressed="true"] {
+  border-color:var(--brand-border); background:var(--brand-soft); color:var(--brand);
+}
+
+#db-root .db-searchrow { padding:16px 22px 18px; display:flex; gap:10px; flex-wrap:wrap; }
+#db-root .db-search {
+  flex:1 1 280px; display:flex; align-items:center; gap:9px; padding:0 14px; height:42px;
+  border:1px solid var(--line); border-radius:12px;
+  background:color-mix(in srgb, var(--panel-hover) 52%, transparent); color:var(--muted-dim);
+}
+#db-root .db-search input {
+  flex:1; min-width:0; border:0; background:transparent; outline:none;
+  font-family:inherit; font-size:14px; color:var(--ink);
+}
+
+#db-root .db-rows { border-top:1px solid var(--line); }
+#db-root .db-row {
+  display:grid; grid-template-columns:auto minmax(0,1fr) 150px 96px 118px;
+  align-items:center; gap:16px; padding:16px 22px;
+  border-bottom:1px solid var(--line); cursor:pointer;
+}
+#db-root .db-row:hover { background:color-mix(in srgb, var(--panel-hover) 55%, transparent); }
+#db-root .db-row-dot { width:6px; height:6px; border-radius:999px; }
+#db-root .db-row-title {
+  font-size:14.5px; font-weight:600; color:var(--ink); line-height:1.4;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .db-row-meta {
+  display:flex; gap:14px; flex-wrap:wrap; margin-top:5px;
+  font-size:12px; color:var(--muted-dim);
+}
+#db-root .db-row-person, #db-root .db-row-time { display:flex; flex-direction:column; min-width:0; line-height:1.35; }
+#db-root .db-row-person strong, #db-root .db-row-time strong {
+  font-size:13.5px; font-weight:600; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .db-row-person span, #db-root .db-row-time span {
+  font-size:12px; color:var(--muted-dim);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .db-row-status {
+  justify-self:start; padding-left:10px; border-left:2px solid currentColor;
+  font-size:12.5px; font-weight:600; white-space:nowrap;
+}
+#db-root .db-empty { padding:34px 22px; text-align:center; font-size:13.5px; color:var(--muted); }
+
+#db-root .db-pager {
+  padding:16px 22px; display:flex; align-items:center; justify-content:center;
+  gap:14px; font-size:13px; color:var(--muted);
+}
+#db-root .db-pager button {
+  padding:8px 14px; border:1px solid var(--line); border-radius:10px;
+  background:transparent; color:var(--ink); font-family:inherit; font-size:13px; cursor:pointer;
+}
+#db-root .db-pager button:disabled { color:var(--muted); cursor:default; }
+#db-root .db-pager span { font-size:12.5px; }
