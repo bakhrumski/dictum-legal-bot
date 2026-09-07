@@ -67,7 +67,7 @@ async function capture(browser, url, opts) {
   await page.waitForTimeout(2500);
 
   if (opts.dark) {
-    const btn = await page.$('[data-theme-toggle], button[title="Theme"]');
+    const btn = await page.$('[data-theme-toggle], button[title="Theme"], button[title="Rejimni almashtirish"]');
     if (btn) { await btn.click(); await page.waitForTimeout(700); }
     else problems.push('no theme toggle on the page');
   }

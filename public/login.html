@@ -1,1114 +1,300 @@
 <!DOCTYPE html>
 <html lang="uz">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script>
-        if (location.protocol === 'file:') {
-            location.replace('http://localhost:3000/login.html' + location.search + location.hash);
-        }
-    </script>
-    <title>Kirish - JuristAI</title>
-    <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
-    <link rel="apple-touch-icon" href="./favicon-256.png">
-    <link rel="stylesheet" href="./css/design-tokens.css">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { height: 100%; }
-        body {
-            font-family: var(--font-sans);
-            color: var(--fg-1);
-            background: var(--bg-1);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            overflow-x: hidden;   /* guard against accidental horizontal scroll on phones */
-        }
-
-        /* ========== MAIN CARD ========== */
-        .login-card {
-            display: flex;
-            width: 100%;
-            max-width: 960px;
-            min-height: 580px;
-            position: relative;
-            background: var(--bg-2);
-            border-radius: var(--r-xl);
-            border: 1px solid var(--border-1);
-            box-shadow: var(--shadow-3);
-            overflow: hidden;
-            animation: cardAppear 0.5s var(--ease-out);
-        }
-        @keyframes cardAppear {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        /* ========== LEFT HERO PANEL ========== */
-        .hero-panel {
-            width: 42%;
-            background: var(--parchment-100);
-            background-image:
-                radial-gradient(circle at 70% 30%, rgba(176,132,66,0.22), transparent 55%),
-                radial-gradient(circle at 30% 80%, rgba(176,132,66,0.10), transparent 60%);
-            padding: 48px 36px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            overflow: hidden;
-            border-right: 1px solid var(--border-1);
-        }
-        .hero-panel::before {
-            content: '';
-            position: absolute;
-            width: 300px;
-            height: 300px;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            border-radius: 50%;
-            top: -80px;
-            right: -80px;
-            backdrop-filter: blur(12px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-            animation: float 16s ease-in-out infinite;
-        }
-        .hero-panel::after {
-            content: '';
-            position: absolute;
-            width: 200px;
-            height: 200px;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.04));
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-            bottom: 60px;
-            left: -60px;
-            backdrop-filter: blur(12px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-            animation: breathe 12s ease-in-out infinite;
-        }
-        [data-theme="dark"] .hero-panel {
-            background: var(--dark-bg-2);
-            background-image:
-                radial-gradient(circle at 70% 30%, rgba(214,179,121,0.16), transparent 55%),
-                radial-gradient(circle at 30% 80%, rgba(214,179,121,0.08), transparent 60%);
-            border-right-color: var(--dark-border);
-        }
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
-            25%       { transform: translate(14px, -20px) rotate(5deg) scale(1.06); }
-            50%       { transform: translate(-10px, -30px) rotate(-3deg) scale(1.1); }
-            75%       { transform: translate(-18px, -10px) rotate(4deg) scale(1.04); }
-        }
-        @keyframes breathe {
-            0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.85; }
-            40%       { transform: scale(1.12) translate(10px, -14px); opacity: 1; }
-            70%       { transform: scale(0.94) translate(-8px, 8px); opacity: 0.7; }
-        }
-        .hero-logo {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            z-index: 1;
-        }
-        .hero-logo img { height: 64px; width: auto; vertical-align: middle; }
-        .hero-logo .img-light { display: inline-block; }
-        .hero-logo .img-dark { display: none; }
-        .hero-logo .img-icon { display: inline-block; margin-right: 10px; }
-        [data-theme="dark"] .hero-logo .img-light { display: none; }
-        [data-theme="dark"] .hero-logo .img-dark { display: inline-block; }
-        .hero-tagline {
-            font-family: var(--font-mono);
-            font-size: 10px;
-            font-style: italic;
-            color: var(--ink-500);
-            text-align: left;
-            line-height: 1.5;
-            max-width: 240px;
-            margin-top: 4px;
-            white-space: nowrap;
-        }
-        [data-theme="dark"] .hero-tagline { color: var(--dark-fg-2); }
-        .type-cursor {
-            display: inline-block;
-            font-style: normal;
-            font-weight: 300;
-            color: var(--ink-500);
-            margin-left: 1px;
-            opacity: 1;
-        }
-        [data-theme="dark"] .type-cursor { color: var(--dark-fg-2); }
-        .type-cursor.blinking {
-            animation: typeCursorBlink 0.5s step-end infinite;
-        }
-        @keyframes typeCursorBlink {
-            0%, 100% { opacity: 1; }
-            50%       { opacity: 0; }
-        }
-        .hero-seal {
-            display: none;
-            margin-top: 32px;
-            padding: 6px 14px;
-            border-radius: var(--r-pill);
-            background: var(--brass-100);
-            border: 1px solid var(--brass-300);
-            color: var(--brass-600);
-            font-size: var(--t-micro);
-            font-weight: 700;
-            letter-spacing: var(--ls-cap);
-            text-transform: uppercase;
-        }
-        [data-theme="dark"] .hero-seal {
-            background: rgba(214,179,121,0.12);
-            border-color: var(--brass-300);
-            color: var(--brass-300);
-        }
-
-        /* ========== RIGHT FORM PANEL ========== */
-        .form-panel {
-            flex: 1;
-            padding: 44px 48px;
-            overflow-y: auto;
-            position: relative;
-            background: var(--bg-2);
-        }
-        .theme-toggle {
-            position: absolute;
-            top: 18px;
-            right: 18px;
-            background: transparent;
-            border: 0px solid var(--border-1);
-            cursor: pointer;
-            color: var(--fg-3);
-            padding: 7px;
-            border-radius: var(--r-md);
-            transition: background var(--t-med) var(--ease-out), border-color var(--t-med) var(--ease-out);
-            line-height: 0;
-            opacity: 70%;
-        }
-        .theme-toggle:hover { 
-            background: var(--bg-3); 
-            border-color: var(--brass-300);
-            border-radius: 50%;
-            opacity: 50%;        
-        }
-        [data-theme="dark"] .icon-sun { display: none; }
-        .icon-moon { display: none; }
-        [data-theme="dark"] .icon-moon { display: inline-block; }
-
-        .form-heading {
-            font-family: var(--font-serif);
-            font-size: 30px;
-            font-weight: 600;
-            color: var(--fg-1);
-            line-height: var(--lh-tight);
-            letter-spacing: var(--ls-tight);
-            margin-bottom: 6px;
-        }
-        .form-subtitle {
-            font-size: var(--t-small);
-            color: var(--fg-3);
-            line-height: var(--lh-body);
-            margin-bottom: 28px;
-        }
-        .form-subtitle strong { color: var(--fg-2); font-weight: 600; }
-
-        /* ========== FORM ELEMENTS ========== */
-        .form-group { margin-bottom: 16px; position: relative; }
-        .form-group .input-icon {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 16px;
-            height: 16px;
-            color: var(--fg-4);
-            pointer-events: none;
-        }
-        .form-group.has-icon input { padding-left: 40px; }
-        .form-group label {
-            display: block;
-            font-size: var(--t-small);
-            font-weight: 600;
-            color: var(--fg-2);
-            margin-bottom: 6px;
-        }
-        .label-hint {
-            font-weight: 400;
-            color: var(--fg-3);
-            font-size: var(--t-micro);
-        }
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 11px 14px;
-            border: 1px solid var(--border-1);
-            border-radius: var(--r-md);
-            font-size: 14px;
-            font-family: inherit;
-            background: var(--bg-2);
-            color: var(--fg-1);
-            transition: border-color var(--t-med) var(--ease-out),
-                        box-shadow var(--t-med) var(--ease-out);
-            outline: none;
-        }
-        [data-theme="dark"] .form-group input,
-        [data-theme="dark"] .form-group select { background: var(--dark-bg-1); }
-        .form-group select {
-            appearance: none;
-            -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239C8C7B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 14px center;
-            padding-right: 38px;
-        }
-        .form-group input:focus,
-        .form-group select:focus {
-            border-color: var(--brass-500);
-            box-shadow: 0 0 0 3px var(--brass-100);
-        }
-        [data-theme="dark"] .form-group input:focus,
-        [data-theme="dark"] .form-group select:focus {
-            border-color: var(--brass-300);
-            box-shadow: 0 0 0 3px rgba(214,179,121,0.16);
-        }
-        .form-group input::placeholder { color: var(--fg-4); }
-
-        .form-options {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 18px;
-            font-size: var(--t-small);
-        }
-        .remember-me {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--fg-2);
-            cursor: pointer;
-            font-weight: 500;
-        }
-        .remember-me input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            accent-color: var(--brass-500);
-            cursor: pointer;
-        }
-        .forgot-link {
-            color: var(--link);
-            text-decoration: none;
-            font-weight: 600;
-            transition: opacity var(--t-fast);
-        }
-        .forgot-link:hover { opacity: 0.75; text-decoration: underline; }
-        .input-invalid {
-            border-color: var(--danger-700) !important;
-            box-shadow: 0 0 0 3px var(--danger-100) !important;
-            animation: shake 0.4s ease;
-        }
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-3px); }
-            75% { transform: translateX(3px); }
-        }
-
-        /* ========== BUTTONS ========== */
-        .btn {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid transparent;
-            border-radius: var(--r-md);
-            font-size: 14px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            background: var(--accent);
-            color: var(--accent-fg);
-            transition: background var(--t-med) var(--ease-out),
-                        transform var(--t-fast) var(--ease-out);
-            margin-top: 4px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .btn:hover { background: var(--accent-hover); }
-        .btn:active { transform: scale(0.98); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .btn-row { display: flex; gap: 10px; }
-        .btn-row .btn { flex: 1; }
-        .btn-outline {
-            background: var(--bg-2);
-            color: var(--fg-1);
-        }
-        .btn-outline:hover {
-            background: var(--bg-3);
-            color: var(--fg-1);
-        }
-        [data-theme="dark"] .btn-outline { background: transparent; }
-        .btn-brass {
-            background: var(--brass-500);
-            border-color: var(--brass-500);
-            color: #fff;
-        }
-        .btn-brass:hover { background: var(--brass-600); border-color: var(--brass-600); }
-
-        /* ========== TELEGRAM BUTTON ========== */
-        .telegram-btn {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 12px;
-            border: 1px solid var(--border-1);
-            border-radius: var(--r-md);
-            background: var(--bg-2);
-            color: var(--fg-1);
-            font-size: var(--t-small);
-            font-weight: 500;
-            font-family: inherit;
-            cursor: pointer;
-            transition: border-color var(--t-med), background var(--t-med);
-            text-decoration: none;
-        }
-        .telegram-btn:hover {
-            border-color: #0088CC;
-            background: rgba(0,136,204,0.06);
-        }
-        [data-theme="dark"] .telegram-btn { background: transparent; }
-        .telegram-btn svg { flex-shrink: 0; }
-
-        /* ========== SWITCH LINK ========== */
-        .switch-link {
-            text-align: center;
-            margin-top: 20px;
-            font-size: var(--t-small);
-            color: var(--fg-3);
-        }
-        .switch-link a {
-            color: var(--link);
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-        }
-        .switch-link a:hover { text-decoration: underline; }
-
-        /* ========== ERROR / SUCCESS ========== */
-        .error-message {
-            background: var(--danger-100);
-            color: var(--danger-700);
-            border: 1px solid rgba(142,42,42,0.18);
-            padding: 10px 14px;
-            border-radius: var(--r-md);
-            font-size: var(--t-small);
-            margin-bottom: 16px;
-            display: none;
-            animation: fadeSlide 0.3s var(--ease-out);
-        }
-        .error-message.show { display: block; }
-        .agreement-error {
-            color: var(--danger-700);
-            font-size: var(--t-micro);
-            margin-top: 4px;
-            display: none;
-        }
-        @keyframes fadeSlide {
-            from { opacity: 0; transform: translateY(-4px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        .verify-success {
-            font-size: var(--t-small);
-            color: var(--success-700);
-            margin-top: 8px;
-            display: none;
-        }
-        .verify-success.show { display: block; }
-
-        /* ========== TYPE TOGGLE ========== */
-        .type-toggle {
-            display: flex;
-            gap: 4px;
-            background: var(--bg-3);
-            border: 1px solid var(--border-1);
-            border-radius: var(--r-md);
-            padding: 3px;
-            margin-bottom: 20px;
-        }
-        .type-toggle button {
-            flex: 1;
-            padding: 8px;
-            border: none;
-            border-radius: var(--r-sm);
-            font-size: var(--t-small);
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            background: transparent;
-            color: var(--fg-3);
-            transition: all var(--t-med) var(--ease-out);
-        }
-        .type-toggle button.active {
-            background: var(--bg-2);
-            color: var(--fg-1);
-            box-shadow: var(--shadow-1);
-        }
-
-        /* ========== SEND CODE BUTTON ========== */
-        .send-code-btn {
-            width: 100%;
-            padding: 11px;
-            border-radius: var(--r-md);
-            font-size: 14px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            background: transparent;
-            color: var(--brass-600);
-            border: 1px solid var(--brass-300);
-            transition: all var(--t-med);
-        }
-        .send-code-btn:hover:not(:disabled) {
-            background: var(--brass-100);
-            border-color: var(--brass-500);
-        }
-        [data-theme="dark"] .send-code-btn {
-            color: var(--brass-300);
-            border-color: var(--brass-500);
-        }
-        [data-theme="dark"] .send-code-btn:hover:not(:disabled) {
-            background: rgba(214,179,121,0.08);
-        }
-        .send-code-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        /* ========== FILE ZONE ========== */
-        .file-zone {
-            border: 2px dashed var(--border-1);
-            border-radius: var(--r-md);
-            padding: 20px;
-            text-align: center;
-            position: relative;
-            cursor: pointer;
-            transition: border-color var(--t-med), background var(--t-med);
-        }
-        .file-zone:hover, .file-zone.dragover {
-            border-color: var(--brass-500);
-            background: var(--brass-100);
-        }
-        [data-theme="dark"] .file-zone:hover, [data-theme="dark"] .file-zone.dragover {
-            background: rgba(214,179,121,0.08);
-        }
-        .file-zone.has-file {
-            border-color: var(--success-700);
-            border-style: solid;
-            background: var(--success-100);
-        }
-        [data-theme="dark"] .file-zone.has-file {
-            background: rgba(47,107,67,0.12);
-        }
-        .file-zone input[type="file"] {
-            position: absolute;
-            inset: 0;
-            opacity: 0;
-            cursor: pointer;
-        }
-        .file-zone-text { color: var(--fg-3); font-size: var(--t-small); }
-        .file-icon { font-size: 18px; margin-right: 4px; }
-        .file-zone-name {
-            color: var(--success-700);
-            font-size: var(--t-micro);
-            margin-top: 4px;
-            font-weight: 600;
-        }
-
-        /* ========== AGREEMENTS ========== */
-        .agreement-section { margin: 18px 0 8px; }
-        .agreement-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 0;
-            cursor: pointer;
-            font-size: var(--t-small);
-            color: var(--fg-1);
-        }
-        .agreement-item input { display: none; }
-        .check-icon {
-            width: 20px;
-            height: 20px;
-            border: 1.5px solid var(--border-1);
-            border-radius: var(--r-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            transition: all var(--t-med);
-            color: transparent;
-        }
-        .agreement-item input:checked + .check-icon {
-            background: var(--brass-500);
-            border-color: var(--brass-500);
-            color: #fff;
-        }
-        .check-icon svg { width: 12px; height: 12px; }
-        .agreement-item a { color: var(--link); font-weight: 600; }
-
-        /* ========== VERIFY GROUP ========== */
-        .verify-group { display: none; }
-        .verify-group.show { display: block; }
-
-        /* ========== VIEW MANAGEMENT ========== */
-        .login-container .register-form,
-        .login-container .success-view,
-        .login-container .recovery-form { display: none; }
-        .login-container[data-view="register"] .login-form { display: none; }
-        .login-container[data-view="register"] .register-form { display: block; }
-        .login-container[data-view="success"] .login-form { display: none; }
-        .login-container[data-view="success"] .success-view { display: block; }
-        .login-container[data-view="recovery"] .login-form { display: none; }
-        .login-container[data-view="recovery"] .recovery-form { display: block; }
-        .recovery-step { display: none; }
-        .recovery-step.active { display: block; }
-
-        .register-form .lawyer-fields { display: none; }
-        .register-form[data-type="lawyer"] .student-fields { display: none; }
-        .register-form[data-type="lawyer"] .lawyer-fields { display: block; }
-
-        /* Common-user mode: hide all student/lawyer specifics */
-        .register-form[data-type="common"] .student-fields,
-        .register-form[data-type="common"] .lawyer-fields,
-        .register-form[data-type="common"] .reg-doc-section { display: none !important; }
-        .register-form[data-type="common"] .common-only { display: block; }
-        .common-only { display: none; }
-
-        .reg-divider {
-            display: flex; align-items: center; gap: 10px;
-            margin: 18px 0 10px;
-            color: var(--text-muted, #8b94a3); font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
-        }
-        .reg-divider::before, .reg-divider::after {
-            content: ''; flex: 1; height: 1px; background: var(--border, rgba(255,255,255,0.1));
-        }
-        .reg-social-btn {
-            width: 100%; padding: 15px 20px;
-            border-radius: 12px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 12px;
-            font-weight: 600; font-size: 16px; transition: all 0.15s;
-            border: none;
-        }
-        .reg-social-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
-        .tg-social-btn { background: transparent; color: var(--fg-1); border: 1px solid var(--border-1); }
-        .tg-social-btn:not(:disabled):hover { background: var(--bg-3); }
-        .google-social-btn {
-            background: rgba(255,255,255,0.04); color: #111;
-            border: 1.5px solid var(--border, rgba(0,0,0,0.18));
-        }
-        [data-theme="dark"] .google-social-btn { color: #fff; border-color: rgba(255,255,255,0.2); }
-        .google-social-btn:not(:disabled):hover { background: rgba(0,0,0,0.05); }
-        [data-theme="dark"] .google-social-btn:not(:disabled):hover { background: rgba(255,255,255,0.09); }
-        .google-reg-toggle {
-            width: 100%; padding: 11px 16px;
-            background: rgba(255,255,255,0.04); border: 1px solid var(--border, rgba(255,255,255,0.15));
-            color: #111; border-radius: 10px; cursor: pointer;
-            display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-            font-weight: 500; font-size: 14px; transition: background 0.15s;
-        }
-        [data-theme="dark"] .google-reg-toggle { color: #fff; }
-        .google-reg-toggle:hover { background: rgba(255,255,255,0.09); }
-        .google-reg-toggle svg { width: 18px; height: 18px; flex-shrink: 0; display: block; }
-        .email-reg-panel { display: none; margin-top: 10px; }
-        .email-reg-panel.show { display: block; }
-
-        /* ========== SUCCESS VIEW ========== */
-        .success-view {
-            text-align: center;
-            padding: 40px 0;
-        }
-        .success-icon {
-            width: 64px;
-            height: 64px;
-            background: var(--success-700);
-            color: #fff;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            margin: 0 auto 16px;
-            box-shadow: var(--shadow-2);
-        }
-        .success-text {
-            color: var(--fg-1);
-            font-size: 15px;
-            line-height: 1.5;
-            margin-bottom: 16px;
-        }
-
-        /* ========== POLICY MODAL ========== */
-        .policy-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(26,20,16,0.5);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            z-index: 9999;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .policy-overlay.active { display: flex; }
-        .policy-box {
-            background: var(--bg-2);
-            border-radius: var(--r-xl);
-            border: 1px solid var(--border-1);
-            width: 100%;
-            max-width: 520px;
-            max-height: 80vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: var(--shadow-3);
-            overflow: hidden;
-        }
-        .policy-box-title {
-            padding: 20px 24px;
-            font-family: var(--font-serif);
-            font-size: 20px;
-            font-weight: 600;
-            color: var(--fg-1);
-            border-bottom: 1px solid var(--border-1);
-        }
-        .policy-box-body {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px 24px;
-            font-size: 14px;
-            line-height: var(--lh-body);
-            color: var(--fg-2);
-        }
-        .policy-box-body h3 {
-            font-family: var(--font-serif);
-            color: var(--fg-1);
-            font-size: 16px;
-            font-weight: 600;
-            margin: 16px 0 6px;
-        }
-        .policy-box-body h3:first-child { margin-top: 0; }
-        .policy-box-footer {
-            padding: 16px 24px;
-            border-top: 1px solid var(--border-1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: var(--bg-1);
-        }
-        .policy-scroll-hint { font-size: var(--t-micro); color: var(--fg-3); }
-        .policy-confirm-btn {
-            padding: 10px 24px;
-            border: none;
-            border-radius: var(--r-md);
-            font-size: 14px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            background: var(--accent);
-            color: var(--accent-fg);
-            transition: background var(--t-med);
-        }
-        .policy-confirm-btn:hover:not(:disabled) { background: var(--accent-hover); }
-        .policy-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-        /* ========== RESPONSIVE ========== */
-        @media (max-width: 768px) {
-            body { padding: 0; align-items: stretch; }
-            .login-card {
-                flex-direction: column;
-                max-width: 100%;
-                min-height: 100vh;
-                border-radius: 0;
-                border: none;
-            }
-            .hero-panel {
-                width: 100%;
-                padding: 28px 24px;
-                min-height: auto;
-                border-right: none;
-                border-bottom: 1px solid var(--border-1);
-            }
-            .hero-tagline, .hero-seal { display: none; }
-            .form-panel { padding: 28px 24px; }
-        }
-        @media (min-width: 769px) {
-            .form-panel { max-height: 90vh; }
-        }
-        .hero-logo img { animation: logo-reveal 0.3s ease both; }
-        @keyframes logo-reveal { from { opacity: 0; } to { opacity: 1; } }
-
-        /* Modern authentication surface: flat, quiet and product-consistent. */
-        .login-card {
-            max-width: 920px;
-            border-radius: 18px;
-            animation: none;
-        }
-        .hero-panel {
-            width: 38%;
-            padding: 42px 32px;
-            background: var(--parchment-100);
-            background-image: none;
-        }
-        .hero-panel::before,
-        .hero-panel::after {
-            display: block;
-            pointer-events: none;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
-            box-shadow: none;
-        }
-        .hero-panel::before {
-            background: rgba(255, 255, 255, 0.34);
-            border-color: rgba(16, 43, 56, 0.08);
-        }
-        .hero-panel::after {
-            background: rgba(16, 43, 56, 0.035);
-            border-color: rgba(16, 43, 56, 0.07);
-        }
-        [data-theme="dark"] .hero-panel { background: var(--dark-bg-3); background-image: none; }
-        [data-theme="dark"] .hero-panel::before {
-            background: rgba(147, 183, 201, 0.07);
-            border-color: rgba(147, 183, 201, 0.13);
-        }
-        [data-theme="dark"] .hero-panel::after {
-            background: rgba(255, 255, 255, 0.025);
-            border-color: rgba(147, 183, 201, 0.10);
-        }
-        .hero-logo img { animation: none; }
-        .hero-tagline { font-family: var(--font-sans); color: var(--fg-3); }
-        .type-cursor { display: none; }
-        .form-panel { padding: 44px 48px; }
-        .theme-toggle { opacity: 1; }
-        .theme-toggle:hover {
-            opacity: 1;
-            background: var(--bg-3);
-            border-radius: var(--r-md);
-        }
-        .form-heading { font-family: var(--font-sans); font-weight: 700; }
-        .form-group input:focus,
-        .form-group select:focus {
-            border-color: var(--navy-500);
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy-300) 28%, transparent) !important;
-        }
-        [data-theme="dark"] .form-group input:focus,
-        [data-theme="dark"] .form-group select:focus {
-            border-color: var(--dark-accent);
-            box-shadow: 0 0 0 3px rgba(147,183,201,.16) !important;
-        }
-        .btn { transition: background var(--t-fast), border-color var(--t-fast); }
-        .btn:active { transform: none; }
-        .telegram-btn:hover,
-        .tg-social-btn,
-        .google-social-btn,
-        .google-reg-toggle {
-            border-color: var(--border-1);
-            background: transparent;
-            color: var(--fg-1);
-        }
-        .tg-social-btn:not(:disabled):hover,
-        .google-social-btn:not(:disabled):hover,
-        .google-reg-toggle:hover { background: var(--bg-3); }
-        .send-code-btn { color: var(--navy-700); border-color: var(--border-1); }
-        .send-code-btn:hover:not(:disabled) { color: var(--navy-700); background: var(--navy-100); border-color: var(--navy-300); }
-        .remember-me input[type="checkbox"] { accent-color: var(--navy-700); }
-        .agreement-item input:checked + .check-icon { background: var(--navy-700); border-color: var(--navy-700); }
-        .file-zone:hover,
-        .file-zone.dragover { border-color: var(--navy-500); background: var(--navy-100); }
-        .policy-box-title,
-        .policy-box-body h3 { font-family: var(--font-sans); }
-        @media (max-width: 768px) {
-            .hero-panel { padding: 20px 24px; }
-            .hero-logo img { height: 46px; }
-        }
-
-        /* Drop decorative shadows; only overlays may use the shared elevation. */
-        * { box-shadow: none !important; }
-        .policy-box { box-shadow: var(--shadow-3) !important; }
-        .login-card { border: 1px solid var(--border-1); }
-        @media (max-width: 768px) {
-            .login-card { border: 0; border-radius: 0; }
-            .hero-panel {
-                width: 100%;
-                min-height: 76px;
-                padding: 14px 20px;
-                align-items: flex-start;
-            }
-            .hero-panel::before,
-            .hero-panel::after { display: none; }
-            .hero-logo { flex-direction: row; }
-            .hero-logo .img-icon { height: 42px; margin-right: 8px; }
-            .hero-logo .img-light,
-            .hero-logo .img-dark { height: 30px; }
-            .form-panel { padding: 42px 24px 36px; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .hero-panel::before,
-            .hero-panel::after { animation: none; }
-        }
-    </style>
-    <script>
-        (function() {
-            const saved = localStorage.getItem('dictum-theme');
-            if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-        })();
-    </script>
-    <link rel="stylesheet" href="/css/redesign-v2.css">
-    <script src="/js/redesign-v2.js" defer></script>
-    <style>
-        .legacy-otp-controls { display: none !important; }
-        [data-theme="dark"] #loginOtpVerifyBtn,
-        [data-theme="dark"] #otpVerifyBtn { color: #071326 !important; background: #77a9ff !important; }
-        [data-theme="dark"] #twofaBtn { color: #071326 !important; background: #77a9ff !important; }
-        [data-theme="dark"] .agreement-item input:checked + .check-icon { color: #071326 !important; background: #77a9ff !important; border-color: #77a9ff !important; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kirish — JuristAI</title>
+<meta name="description" content="JuristAI hisobingizga kiring — Telegram yoki Google orqali, bir necha soniyada.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#070a14">
+<link rel="icon" href="/favicon-256.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/login.css">
 </head>
 <body>
-    <div class="login-card">
-        <!-- LEFT HERO PANEL -->
-        <div class="hero-panel">
-            <div class="hero-logo">
-                <img class="img-icon" src="./icon-1024.png" alt="JuristAI">
-                <img class="img-light" src="/wordmark-primary-2048.png" alt="JuristAI">
-                <img class="img-dark" src="/wordmark-primary-2048-light.png" alt="JuristAI">
-                <div class="hero-tagline" id="heroTagline"><span id="typeText"></span><span class="type-cursor blinking" id="typeCursor">|</span></div>
-                <div class="hero-seal">O'zbekiston huquqi</div>
-            </div>
+<div id="lg-root" data-theme="light">
+  <div class="lg-card">
+    <div class="lg-card__bg" aria-hidden="true"></div>
+
+    <div class="lg-hero">
+      <div class="lg-hero__inner">
+        <div class="lg-wordmark">
+          <div class="lg-sheen" aria-hidden="true"><span></span></div>
+          <img src="/brand/wordmark-filled-onnavy.png" alt="JuristAI">
+          <video data-wm="/brand/wordmark-motion-white.webm" muted loop playsinline></video>
         </div>
-        <!-- RIGHT FORM PANEL -->
-        <div class="form-panel">
-            <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish">
-                <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
-                <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg></span>
+        <div class="lg-tagline">Sizning shaxsiy AI yordamchingiz</div>
+      </div>
+    </div>
+
+    <div class="lg-form">
+      <button class="theme-toggle" onclick="toggleTheme()" title="Rejimni almashtirish" aria-label="Rejimni almashtirish">
+        <span class="icon-sun"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/><path d="M11 1h2v2h-2zM11 21h2v2h-2zM1 11h2v2H1zM21 11h2v2h-2zM3.5 4.9 4.9 3.5l1.5 1.4-1.4 1.5zM17.6 19.1l1.5-1.5 1.4 1.5-1.4 1.4zM4.9 20.5 3.5 19.1l1.4-1.5 1.5 1.4zM19.1 6.4l-1.5-1.5 1.5-1.4 1.4 1.4z"/></svg></span>
+        <span class="icon-moon" hidden><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg></span>
+      </button>
+
+      <div class="login-container" data-view="login">
+
+        <!-- LOGIN -->
+        <div class="login-form">
+          <h1 class="form-heading">Xush kelibsiz</h1>
+          <p class="form-subtitle">Davom etish uchun <strong>JuristAI</strong> hisobingizga kiring!</p>
+
+          <div id="loginError" class="error-message"></div>
+          <form id="loginForm">
+            <div class="form-group has-icon">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
+              <input type="text" id="username" placeholder="foydalanuvchi nomi" required autofocus autocomplete="username">
+            </div>
+            <div class="form-group has-icon">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+              <input type="password" id="password" placeholder="parol" required autocomplete="current-password">
+            </div>
+            <div class="form-options">
+              <label class="remember-me"><input type="checkbox" id="rememberMe" checked> Eslab qolish</label>
+              <a href="#" class="forgot-link" onclick="event.preventDefault(); showView('recovery')">Parolni unutdingizmi?</a>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn">Kirish</button>
+              <button type="button" class="btn btn-outline" onclick="showView('register')">Ro'yxatdan o'tish</button>
+            </div>
+          </form>
+
+          <div class="reg-divider">yoki</div>
+          <div class="socrow">
+            <button type="button" class="google-reg-toggle" onclick="startTelegramLogin()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+              <span>Telegram</span>
+            </button>
+            <button type="button" class="google-reg-toggle" onclick="window.location.href='/auth/google?mode=login'">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
+              <span>Google</span>
+            </button>
+          </div>
+
+          <div id="loginOtpBlock" class="otp-block">
+            <div id="loginOtpStatus" class="status-note" style="margin-bottom:10px;"></div>
+            <a id="loginBotLink" class="otp-bot-link" href="#" target="_blank" rel="noopener">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+              Telegram botni oching
+            </a>
+            <p class="status-note" style="margin-bottom:8px;">Botdan kelgan 4 raqamli kodni kiriting:</p>
+            <div class="otp-controls">
+              <input type="text" id="loginOtpInput" class="otp-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" onkeydown="if(event.key==='Enter')verifyLoginOtp()">
+              <button type="button" id="loginOtpVerifyBtn" class="otp-verify" aria-label="Kodni tasdiqlash" onclick="verifyLoginOtp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></button>
+            </div>
+            <div id="loginOtpError" class="agreement-error" style="margin-top:6px;display:none;"></div>
+          </div>
+
+          <p class="form-subtitle" style="margin-top:38px; margin-bottom:14px;">Huquqiy maslahat kerak bo'lsa quyidagi Telegram bot orqali murojaat qiling</p>
+          <a class="telegram-btn" href="https://t.me/yuristga_savolbot" target="_blank" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+            @yuristga_savolbot
+          </a>
+        </div>
+
+        <!-- REGISTER -->
+        <div class="register-form" data-type="common">
+          <h1 class="form-heading">Ro'yxatdan o'tish</h1>
+          <p class="form-subtitle"><strong>JuristAI</strong> jamoasiga qo'shiling</p>
+
+          <div id="regError" class="error-message"></div>
+
+          <div class="type-toggle">
+            <button class="active" onclick="setRegType('student')">Student</button>
+            <button onclick="setRegType('lawyer')">Yurist</button>
+          </div>
+
+          <form id="registerForm" novalidate onsubmit="return false">
+            <div class="agreement-section">
+              <div class="agreement-row">
+                <label class="agreement-item">
+                  <input type="checkbox" id="privacyCheck" onchange="updateRegBtn()">
+                  <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span><a href="#" onclick="event.preventDefault(); event.stopPropagation(); openPolicy('privacy')">Shartlar</a></span>
+                </label>
+                <label class="agreement-item">
+                  <input type="checkbox" id="ofertaCheck" onchange="updateRegBtn()">
+                  <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span><a href="#" onclick="event.preventDefault(); event.stopPropagation(); openPolicy('oferta')">Oferta</a></span>
+                </label>
+              </div>
+              <div class="agreement-error" id="privacyError" style="display:none">Shartlarni tasdiqlang!</div>
+              <div class="agreement-error" id="ofertaError" style="display:none">Ofertani tasdiqlang!</div>
+            </div>
+
+            <button type="button" id="tgRegBtn" class="reg-social-btn tg-social-btn" disabled onclick="startTelegramReg()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+              Telegram bilan davom eting
             </button>
 
-            <div class="login-container" data-view="login">
-                <!-- LOGIN FORM -->
-                <div class="login-form">
-                    <h1 class="form-heading">Xush kelibsiz</h1>
-                    <p class="form-subtitle">Davom etish uchun <strong>JuristAI</strong> hisobingizga kiring!</p>
-
-                    <div id="loginError" class="error-message"></div>
-                    <form id="loginForm">
-                        <div class="form-group has-icon">
-                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
-                            <input type="text" id="username" placeholder="foydalanuvchi nomi" required autofocus>
-                        </div>
-                        <div class="form-group has-icon">
-                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
-                            <input type="password" id="password" placeholder="parol" required>
-                        </div>
-                        <div class="form-options">
-                            <label class="remember-me"><input type="checkbox" id="rememberMe"> Eslab qolish</label>
-                            <a href="#" class="forgot-link" onclick="event.preventDefault(); showView('recovery')">Parolni unutdingizmi?</a>
-                        </div>
-                        <div class="btn-row">
-                            <button type="submit" class="btn">Kirish</button>
-                            <button type="button" class="btn btn-outline" onclick="showView('register')">Ro'yxatdan o'tish</button>
-                        </div>
-                    </form>
-
-                    <div style="margin-top:16px;">
-                        <div class="reg-divider" style="margin:0 0 12px">yoki</div>
-                        <div style="display:flex;gap:10px;">
-                            <button type="button" class="google-reg-toggle" style="flex:1" onclick="startTelegramLogin()">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
-                                <span>Telegram bilan kirish</span>
-                            </button>
-                            <button type="button" class="google-reg-toggle" style="flex:1" onclick="window.location.href='/auth/google?mode=login'">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
-                                <span>Google bilan kirish</span>
-                            </button>
-                        </div>
-                        <!-- Telegram login OTP block -->
-                        <div id="loginOtpBlock" style="display:none;margin-top:14px;text-align:center;">
-                            <div id="loginOtpStatus" style="font-size:13px;color:var(--text-muted);margin-bottom:10px;"></div>
-                            <a id="loginBotLink" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:transparent;color:var(--text-main);border:1px solid var(--border);padding:10px 20px;border-radius:10px;font-weight:600;font-size:14px;text-decoration:none;margin-bottom:12px;">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
-                                Telegram botni oching
-                            </a>
-                            <p class="legacy-otp-controls" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Botdan kelgan 4 raqamli kodni kiriting:</p>
-                            <div class="legacy-otp-controls" style="display:flex;gap:8px;align-items:center;justify-content:center;">
-                                <input type="text" id="loginOtpInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000"
-                                    style="width:140px;font-size:24px;text-align:center;letter-spacing:8px;padding:10px 8px;border:2px solid var(--border,rgba(0,0,0,0.15));border-radius:10px;background:var(--input-bg,#fff);color:var(--text-main,#111);outline:none;"
-                                    onkeydown="if(event.key==='Enter')verifyLoginOtp()">
-                                <button type="button" id="loginOtpVerifyBtn" aria-label="Kodni tasdiqlash" style="padding:11px 18px;font-size:18px;font-weight:600;background:var(--accent);color:var(--accent-fg);border:none;border-radius:10px;cursor:pointer;" onclick="verifyLoginOtp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button>
-                            </div>
-                            <div id="loginOtpError" style="color:#d9534f;font-size:13px;margin-top:6px;display:none;"></div>
-                        </div>
-                    </div>
-
-                    <p class="form-subtitle" style="margin-top:36px;">Huquqiy maslahat kerak bo'lsa quyidagi Telegram bot orqali murojaat qiling</p>
-                    <a class="telegram-btn" href="https://t.me/yuristga_savolbot" target="_blank">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
-                        @yuristga_savolbot
-                    </a>
-                </div>
-
-                <!-- REGISTER FORM -->
-                <div class="register-form" data-type="common">
-                    <h1 class="form-heading">Ro'yxatdan o'tish</h1>
-                    <p class="form-subtitle"><strong>JuristAI</strong> jamoasiga qo'shiling</p>
-
-                    <div id="regError" class="error-message"></div>
-
-                    <!-- Student/Yurist toggle hidden for now — common-user only -->
-                    <div class="type-toggle" style="display:none">
-                        <button class="active" onclick="setRegType('student')">Student</button>
-                        <button onclick="setRegType('lawyer')">Yurist</button>
-                    </div>
-
-                    <form id="registerForm" novalidate onsubmit="return false">
-                        <!-- Agreements -->
-                        <div class="agreement-section" style="display:flex;flex-direction:column;gap:6px;margin-bottom:28px;">
-                          <div style="display:flex;gap:16px;align-items:flex-start;">
-                            <div class="agreement-item" onclick="openPolicy('privacy')" style="flex:1;margin:0">
-                              <input type="checkbox" id="privacyCheck" onchange="updateRegBtn()">
-                              <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                              <span><a>Shartlar</a></span>
-                            </div>
-                            <div class="agreement-item" onclick="openPolicy('oferta')" style="flex:1;margin:0">
-                              <input type="checkbox" id="ofertaCheck" onchange="updateRegBtn()">
-                              <span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                              <span><a>Oferta</a></span>
-                            </div>
-                          </div>
-                          <div class="agreement-error" id="privacyError" style="display:none">Shartlarni tasdiqlang!</div>
-                          <div class="agreement-error" id="ofertaError" style="display:none">Ofertani tasdiqlang!</div>
-                        </div>
-
-                        <!-- Telegram button -->
-                        <button type="button" id="tgRegBtn" class="reg-social-btn tg-social-btn" disabled onclick="startTelegramReg()">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
-                            Telegram bilan davom eting
-                        </button>
-
-                        <!-- OTP input — appears after bot sends code -->
-                        <div id="otpBlock" style="display:none;margin-top:14px;text-align:center;">
-                            <a id="regBotLink" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:transparent;color:var(--text-main);border:1px solid var(--border);padding:10px 20px;border-radius:10px;font-weight:600;font-size:14px;text-decoration:none;margin-bottom:12px;">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
-                                Telegram botni oching
-                            </a>
-                            <div id="otpStatus" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
-                            <div class="legacy-otp-controls" style="display:flex;gap:8px;align-items:center;justify-content:center;">
-                                <input type="text" id="otpInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000"
-                                    style="width:140px;font-size:24px;text-align:center;letter-spacing:8px;padding:10px 8px;border:2px solid var(--border,rgba(0,0,0,0.15));border-radius:10px;background:var(--input-bg,#fff);color:var(--text-main,#111);outline:none;"
-                                    onkeydown="if(event.key==='Enter')verifyTelegramOtp()">
-                                <button type="button" id="otpVerifyBtn" aria-label="Kodni tasdiqlash" style="padding:11px 18px;font-size:18px;font-weight:600;background:var(--accent);color:var(--accent-fg);border:none;border-radius:10px;cursor:pointer;" onclick="verifyTelegramOtp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button>
-                            </div>
-                            <div id="otpError" style="color:#d9534f;font-size:13px;margin-top:6px;display:none;"></div>
-                        </div>
-
-                        <div class="reg-divider" style="margin:22px 0 18px;">yoki</div>
-
-                        <!-- Google button -->
-                        <button type="button" id="googleRegBtn" class="reg-social-btn google-social-btn" disabled onclick="startGoogleAuth()">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
-                            Google bilan davom eting
-                        </button>
-                    </form>
-                    <div class="switch-link">
-                        Hisobingiz bormi? <a onclick="showView('login')">Kirish</a>
-                    </div>
-                </div>
-
-                <!-- SUCCESS VIEW -->
-                <div class="success-view">
-                    <div class="success-icon">&#10004;</div>
-                    <div class="success-text" id="successText">Tabriklaymiz, Sizning so'rovingiz muvaffaqiyatli yuborildi! Admin javobini kuting!</div>
-                    <div class="switch-link"><a onclick="showView('login')">Kirish sahifasiga qaytish</a></div>
-                </div>
-
-                <!-- PASSWORD RECOVERY VIEW -->
-                <div class="recovery-form">
-                    <h1 class="form-heading">Parolni tiklash</h1>
-                    <p class="form-subtitle">Hisobingizni tasdiqlash uchun ro'yxatdan o'tgan usulni tanlang</p>
-
-                    <div id="recoveryError" class="error-message"></div>
-
-                    <!-- STEP 1: Choose recovery method -->
-                    <div class="recovery-step active" id="recoveryStep1">
-                        <div style="display:flex;gap:12px;margin-bottom:12px;">
-                            <button type="button" id="recoveryTgBtn" onclick="startTgRecovery()" style="flex:1;padding:14px;border:1px solid var(--border);background:var(--bg-card);border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--fg-1);transition:background 0.15s;">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
-                                Telegram orqali
-                            </button>
-                            <button type="button" onclick="window.location.href='/auth/google?mode=recover'" style="flex:1;padding:14px;border:1px solid var(--border);background:var(--bg-card);border-radius:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--fg-1);transition:background 0.15s;">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
-                                Google orqali
-                            </button>
-                        </div>
-                        <div id="recoveryTgStatus" style="font-size:13px;display:none;margin-top:8px;"></div>
-                        <div class="verify-success" id="recoveryCodeMsg"></div>
-                        <div class="agreement-error" id="recoveryCodeError" style="display:none"></div>
-                    </div>
-
-                    <!-- STEP 2: Enter code from telegram -->
-                    <div class="recovery-step" id="recoveryStep2">
-                        <div class="form-group has-icon">
-                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
-                            <input type="text" id="recoveryCode" placeholder="4 raqamli kod" maxlength="4" inputmode="numeric" pattern="[0-9]*" required>
-                        </div>
-                        <button type="button" class="btn" id="recoveryVerifyBtn" onclick="verifyRecoveryCode()">Tasdiqlash</button>
-                        <div class="agreement-error" id="recoveryVerifyError" style="display:none"></div>
-                    </div>
-
-                    <!-- STEP 3: New password -->
-                    <div class="recovery-step" id="recoveryStep3">
-                        <div class="form-group has-icon">
-                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
-                            <input type="password" id="recoveryNewPassword" placeholder="yangi parol (kamida 6 belgi)" minlength="6" required>
-                        </div>
-                        <div class="form-group has-icon">
-                            <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
-                            <input type="password" id="recoveryConfirmPassword" placeholder="parolni tasdiqlang" required>
-                        </div>
-                        <div class="agreement-error" id="recoveryPasswordError" style="display:none"></div>
-                        <button type="button" class="btn" onclick="submitNewPassword()">Parolni yangilash</button>
-                    </div>
-
-                    <div class="switch-link">
-                        <a onclick="showView('login')">Kirish sahifasiga qaytish</a> | <a onclick="showView('register')">Ro'yxatdan o'tish</a>
-                    </div>
-                </div>
+            <div id="otpBlock" class="otp-block">
+              <a id="regBotLink" class="otp-bot-link" href="#" target="_blank" rel="noopener">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+                Telegram botni oching
+              </a>
+              <div id="otpStatus" class="status-note" style="margin-bottom:8px;"></div>
+              <div class="otp-controls">
+                <input type="text" id="otpInput" class="otp-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" onkeydown="if(event.key==='Enter')verifyTelegramOtp()">
+                <button type="button" id="otpVerifyBtn" class="otp-verify" aria-label="Kodni tasdiqlash" onclick="verifyTelegramOtp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></button>
+              </div>
+              <div id="otpError" class="agreement-error" style="margin-top:6px;display:none;"></div>
             </div>
-        </div>
-    </div>
 
-    <!-- Policy modal -->
-    <div class="policy-overlay" id="policyOverlay">
-        <div class="policy-box">
-            <div class="policy-box-title" id="policyTitle">Maxfiylik siyosati</div>
-            <div class="policy-box-body" id="policyBody" onscroll="checkPolicyScroll()"></div>
-            <div class="policy-box-footer">
-                <span class="policy-scroll-hint" id="policyScrollHint">Pastga aylantiring</span>
-                <button class="policy-confirm-btn" id="policyConfirmBtn" disabled onclick="confirmPolicy()">Tasdiqlayman</button>
+            <div class="reg-divider" style="margin:20px 0;">yoki</div>
+
+            <button type="button" id="googleRegBtn" class="reg-social-btn google-social-btn" disabled onclick="startGoogleAuth()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
+              Google bilan davom eting
+            </button>
+          </form>
+          <div class="switch-link">Hisobingiz bormi? <a onclick="showView('login')">Kirish</a></div>
+        </div>
+
+        <!-- SUCCESS -->
+        <div class="success-view">
+          <div class="success-icon">&#10004;</div>
+          <div class="success-text" id="successText">Tabriklaymiz, Sizning so'rovingiz muvaffaqiyatli yuborildi! Admin javobini kuting!</div>
+          <div class="switch-link"><a onclick="showView('login')">Kirish sahifasiga qaytish</a></div>
+        </div>
+
+        <!-- RECOVERY -->
+        <div class="recovery-form">
+          <h1 class="form-heading">Parolni tiklash</h1>
+          <p class="form-subtitle">Hisobingizni tasdiqlash uchun ro'yxatdan o'tgan usulni tanlang</p>
+
+          <div id="recoveryError" class="error-message"></div>
+
+          <div class="recovery-step active" id="recoveryStep1">
+            <div class="recovery-methods">
+              <button type="button" class="recovery-method" id="recoveryTgBtn" onclick="startTgRecovery()">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+                Telegram orqali
+              </button>
+              <button type="button" class="recovery-method" onclick="window.location.href='/auth/google?mode=recover'">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
+                Google orqali
+              </button>
             </div>
-        </div>
-    </div>
+            <div id="recoveryTgStatus" class="status-note" style="display:none;margin-top:8px;"></div>
+            <div class="verify-success" id="recoveryCodeMsg"></div>
+            <div class="agreement-error" id="recoveryCodeError" style="display:none"></div>
+          </div>
 
-    <script>
+          <div class="recovery-step" id="recoveryStep2">
+            <div class="form-group has-icon">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+              <input type="text" id="recoveryCode" placeholder="4 raqamli kod" maxlength="4" inputmode="numeric" pattern="[0-9]*" required>
+            </div>
+            <button type="button" class="btn btn-block" id="recoveryVerifyBtn" onclick="verifyRecoveryCode()">Tasdiqlash</button>
+            <div class="agreement-error" id="recoveryVerifyError" style="display:none;margin-top:8px;"></div>
+          </div>
+
+          <div class="recovery-step" id="recoveryStep3">
+            <div class="form-group has-icon">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+              <input type="password" id="recoveryNewPassword" placeholder="yangi parol (kamida 6 belgi)" minlength="6" required autocomplete="new-password">
+            </div>
+            <div class="form-group has-icon">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+              <input type="password" id="recoveryConfirmPassword" placeholder="parolni tasdiqlang" required autocomplete="new-password">
+            </div>
+            <div class="agreement-error" id="recoveryPasswordError" style="display:none;margin-bottom:8px;"></div>
+            <button type="button" class="btn btn-block" onclick="submitNewPassword()">Parolni yangilash</button>
+          </div>
+
+          <div class="switch-link">
+            <a onclick="showView('login')">Kirish sahifasiga qaytish</a> | <a onclick="showView('register')">Ro'yxatdan o'tish</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Policy modal -->
+  <div class="policy-overlay" id="policyOverlay">
+    <div class="policy-box">
+      <div class="policy-box-title" id="policyTitle">Maxfiylik siyosati</div>
+      <div class="policy-box-body" id="policyBody" onscroll="checkPolicyScroll()"></div>
+      <div class="policy-box-footer">
+        <span class="policy-scroll-hint" id="policyScrollHint">Pastga aylantiring</span>
+        <button class="policy-confirm-btn" id="policyConfirmBtn" disabled onclick="confirmPolicy()">Tasdiqlayman</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Restore the stored theme before the card animates in. */
+(function () {
+  try {
+    if (localStorage.getItem('dictum-theme') === 'dark') {
+      var r = document.getElementById('lg-root');
+      r.setAttribute('data-theme', 'dark');
+      r.querySelector('.icon-sun').hidden = true;
+      r.querySelector('.icon-moon').hidden = false;
+      var m = document.querySelector('meta[name="theme-color"]');
+      if (m) m.setAttribute('content', '#070a14');
+    }
+  } catch (e) {}
+})();
+
+/* The wordmark plays as video once it has loaded; until then the still
+   image carries the panel and a light sweep runs over it. */
+(function () {
+  function play() {
+    document.querySelectorAll('#lg-root video[data-wm]').forEach(function (v) {
+      v.muted = true; v.loop = true; v.playsInline = true;
+      if (v.dataset.bound) {
+        if (v.src && v.paused) v.play().catch(function () {});
+        return;
+      }
+      v.dataset.bound = '1';
+      v.addEventListener('playing', function () {
+        v.style.opacity = '1';
+        var wrap = v.parentElement;
+        var img = wrap && wrap.querySelector('img');
+        if (img) img.style.opacity = '0';
+        var sheen = wrap && wrap.querySelector('.lg-sheen');
+        if (sheen) sheen.style.display = 'none';
+      });
+      v.addEventListener('pause', function () { v.play().catch(function () {}); });
+      fetch(v.getAttribute('data-wm')).then(function (r) {
+        if (!r.ok) throw new Error('no asset');
+        return r.blob();
+      }).then(function (bl) {
+        v.src = URL.createObjectURL(bl);
+        v.load();
+        var p = v.play();
+        if (p && p.catch) p.catch(function () { setTimeout(function () { v.play().catch(function () {}); }, 300); });
+      }).catch(function () { /* the still image stays */ });
+    });
+  }
+  [0, 400, 1500, 3500, 6000].forEach(function (d) { setTimeout(play, d); });
+})();
+</script>
+
+<script>
         // Theme toggle
         function toggleTheme() {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            if (isDark) {
-                document.documentElement.removeAttribute('data-theme');
-                localStorage.removeItem('dictum-theme');
-            } else {
-                document.documentElement.setAttribute('data-theme', 'dark');
-                localStorage.setItem('dictum-theme', 'dark');
-            }
+            // The card stays dark in both modes by design; the theme swaps
+            // the wash behind it. 'dictum-theme' is the key the rest of the
+            // app reads, so the choice follows the user to the dashboard.
+            var root = document.getElementById('lg-root');
+            var dark = root.getAttribute('data-theme') !== 'light';
+            root.setAttribute('data-theme', dark ? 'light' : 'dark');
+            var sun = root.querySelector('.icon-sun');
+            var moon = root.querySelector('.icon-moon');
+            if (sun) sun.hidden = dark;
+            if (moon) moon.hidden = !dark;
+            try {
+                if (dark) localStorage.removeItem('dictum-theme');
+                else localStorage.setItem('dictum-theme', 'dark');
+            } catch (e) {}
         }
 
         // View management
@@ -1337,17 +523,12 @@
             var box = document.createElement('div');
             box.id = 'twofaBox';
             box.innerHTML =
-                '<div style="display:flex;justify-content:center;margin-bottom:14px;color:var(--fg-3);"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>' +
-                '<p style="font-size:14px;color:var(--fg-2);line-height:1.55;margin-bottom:16px;text-align:center;">' +
-                    'Telegramingizga 6 xonali tasdiqlash kodi yuborildi.<br>Kodni kiriting (5 daqiqa amal qiladi):</p>' +
-                '<input id="twofaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" ' +
-                    'style="width:100%;box-sizing:border-box;padding:13px;font-size:22px;text-align:center;letter-spacing:8px;' +
-                    'border:1px solid var(--border-1);border-radius:10px;font-family:inherit;color:var(--fg-1);background:var(--bg-1);">' +
-                '<div id="twofaErr" style="color:var(--danger-700,#b3261e);font-size:13px;min-height:18px;margin-top:8px;text-align:center;"></div>' +
-                '<button id="twofaBtn" style="width:100%;padding:13px;margin-top:6px;background:var(--navy-700,#16365A);color:#fff;' +
-                    'border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Tasdiqlash</button>' +
-                '<button type="button" onclick="location.reload()" style="width:100%;padding:10px;margin-top:10px;background:none;' +
-                    'border:none;color:var(--fg-3);font-size:13px;cursor:pointer;font-family:inherit;">← Orqaga</button>';
+                '<div class="twofa-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>' +
+                '<p class="twofa-text">Telegramingizga 6 xonali tasdiqlash kodi yuborildi.<br>Kodni kiriting (5 daqiqa amal qiladi):</p>' +
+                '<input id="twofaCode" class="twofa-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6">' +
+                '<div id="twofaErr" class="twofa-err"></div>' +
+                '<button id="twofaBtn" class="btn btn-block" style="margin-top:6px;">Tasdiqlash</button>' +
+                '<button type="button" class="twofa-back" onclick="location.reload()">\u2190 Orqaga</button>';
             form.parentNode.insertBefore(box, form);
             var input = document.getElementById('twofaCode');
             input.focus();
@@ -1807,39 +988,7 @@
                 verifyBtn.textContent = '✓';
             }
         }
-    </script>
-    <script>
-        // Typewriter animation for hero tagline
-        (function () {
-            const FULL_TEXT = 'Sizning shaxsiy AI yordamchingiz';
-            const textEl   = document.getElementById('typeText');
-            const cursor   = document.getElementById('typeCursor');
-            if (!textEl || !cursor) return;
-
-            // Phase 1: cursor blinks 3 times (3 × 500 ms = 1 500 ms), text invisible
-            // cursor already has class "blinking" from HTML
-
-            setTimeout(function () {
-                // Phase 2: stop blinking, start typing
-                cursor.classList.remove('blinking');
-                cursor.style.opacity = '1';
-
-                let i = 0;
-                const SPEED = 55; // ms per character
-
-                function typeNext() {
-                    if (i < FULL_TEXT.length) {
-                        textEl.textContent += FULL_TEXT[i++];
-                        setTimeout(typeNext, SPEED);
-                    } else {
-                        // Typing finished — resume cursor blink
-                        cursor.classList.add('blinking');
-                    }
-                }
-                typeNext();
-            }, 1500); // wait for 3 blinks
-        })();
-    </script>
+</script>
 <script>
     // FingerprintJS — lightweight browser fingerprint for Sinov abuse prevention
     let deviceFingerprint = null;
