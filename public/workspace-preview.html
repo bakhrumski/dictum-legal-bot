@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="uz" data-theme="dark">
+<html lang="uz" data-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>JuristAI Workspace Preview</title>
-    <link rel="icon" href="./favicon-256.png">
+    <link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
+    <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
     <link rel="stylesheet" href="./css/workspace.css">
     <style>
         :root { color-scheme: light; }
@@ -20,14 +21,14 @@
         [data-theme="dark"] .preview-logo.dark { display:block; }
         .preview-theme { width:42px;height:42px;border:1px solid rgba(15,23,42,.12);border-radius:13px;color:#344054;background:rgba(255,255,255,.5);cursor:pointer;font:600 12px 'Space Grotesk',sans-serif; }
         [data-theme="dark"] .preview-theme {border-color:rgba(255,255,255,.11);color:#f7f8fb;background:rgba(255,255,255,.03)}
-        .workspace-app { min-height:calc(100vh - 82px); }
+        .workspace-app { min-height:calc(100vh - 82px); min-height:calc(100dvh - 82px); }
     </style>
 </head>
 <body data-workspace-standalone="true">
     <header class="preview-header">
         <div>
-            <img class="preview-logo light" src="./wordmark-primary-2048.png" alt="JuristAI">
-            <img class="preview-logo dark" src="./wordmark-primary-2048-light.png" alt="JuristAI">
+            <img class="preview-logo light" src="./brand/wordmark-filled-light.png" alt="JuristAI">
+            <img class="preview-logo dark" src="./brand/wordmark-filled-dark.png" alt="JuristAI">
         </div>
         <button class="preview-theme" id="previewTheme" type="button" aria-label="Rejimni o‘zgartirish">☀</button>
     </header>
@@ -37,7 +38,7 @@
     <script>
         (function () {
             var key='juristai-workspace-preview-theme';
-            var saved=localStorage.getItem(key)||'dark';
+            var saved=localStorage.getItem(key)||'light';
             document.documentElement.setAttribute('data-theme',saved);
             var button=document.getElementById('previewTheme');
             function update(){button.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀':'☾';}

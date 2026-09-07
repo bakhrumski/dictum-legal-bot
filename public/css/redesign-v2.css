@@ -54,6 +54,7 @@
   --input-bg: rgba(255,255,255,.76);
   --accent: var(--jai-brand);
   --accent-fg: #fff;
+  --font-sans: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
   --font-body: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
   --font-ui: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
   --font-serif: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
@@ -112,7 +113,7 @@ html {
 
 body {
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   color: var(--jai-ink);
   background-color: var(--jai-canvas) !important;
   background-image: var(--jai-aurora) !important;
@@ -125,6 +126,18 @@ body {
 body, button, input, select, textarea { font-family: inherit !important; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button, a { transition: transform .22s cubic-bezier(.2,.8,.2,1), border-color .22s ease, background-color .22s ease, color .22s ease, box-shadow .22s ease, opacity .22s ease; }
+/* Tactile feedback: a control that moves under the finger confirms the press
+   landed. Transform only, so it stays on the compositor. */
+button:active:not(:disabled), a.btn:active, .btn:active:not(:disabled),
+.plan-btn:active, .find:active, .request:active, .bottom-tab:active {
+  transform: scale(.978);
+  transition-duration: .08s;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, a, .btn { transition: none !important; }
+  button:active:not(:disabled), a.btn:active, .btn:active:not(:disabled),
+  .plan-btn:active, .find:active, .request:active, .bottom-tab:active { transform: none; }
+}
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 0 !important;
   border-color: var(--jai-brand) !important;
@@ -224,7 +237,7 @@ input::placeholder, textarea::placeholder { color: var(--jai-muted-dim) !importa
   color: var(--jai-muted) !important;
   padding: 9px 13px !important;
   border-radius: 999px !important;
-  font-size: 13px !important;
+  font-size: 14.5px !important;
   font-weight: 500 !important;
 }
 .nav-links a:hover, .toplinks a:hover {
@@ -461,6 +474,7 @@ main.shell h1 { max-width: 760px; font-size: clamp(42px, 5.5vw, 68px) !important
 .login-card {
   width: min(1080px, calc(100% - 32px)) !important;
   min-height: min(740px, calc(100vh - 48px)) !important;
+  min-height: min(740px, calc(100dvh - 48px)) !important;
   border: 1px solid var(--jai-line) !important;
   border-radius: 28px !important;
   background: color-mix(in srgb, var(--jai-panel-solid) 90%, transparent) !important;
@@ -775,8 +789,10 @@ body > .container > header {
 }
 @media (min-width: 1181px) {
   body.workspace-chat-open .bottom-tab-bar {
-    left: calc(50% - 230px) !important;
-    transition: left .24s ease !important;
+    /* Offset via transform, not `left`: a layout property reflows the document
+       on every frame of the transition. */
+    transform: translateX(calc(-50% - 230px)) !important;
+    transition: transform .24s cubic-bezier(.16, 1, .3, 1) !important;
   }
 }
 @media (max-width: 1180px) {
@@ -943,7 +959,7 @@ body > .container > header {
   .pricing-intro h1, main.shell h1 { font-size: 38px !important; }
   .trial-strip { align-items: stretch !important; }
   .trial-btn { width: 100%; }
-  .login-card { width: 100% !important; min-height: 100vh !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; }
+  .login-card { width: 100% !important; min-height: 100vh !important; min-height: 100dvh !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; }
   .hero-panel { min-height: 142px !important; }
   .form-panel { padding-inline: 18px !important; }
   .form-options { gap: 12px; align-items: flex-start !important; }

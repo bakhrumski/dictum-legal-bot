@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>JuristAI — Sun'iy intellekt asosidagi huquqiy yordamchi</title>
 <meta name="description" content="JuristAI — O'zbekiston qonunchiligi bo'yicha sun'iy intellekt yordamchisi.">
-<link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
-<link rel="apple-touch-icon" href="./favicon-256.png">
+<link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
+    <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
+<link rel="apple-touch-icon" href="./brand/app-icon.svg">
 <link rel="stylesheet" href="./css/design-tokens.css">
 <script>
   (function(){
@@ -16,6 +17,7 @@
     }catch(_error){
       /* Some browsers restrict storage for file:// previews. */
     }
+    /* The landing canvas is light-ground; only an explicit stored 'dark' opts in. */
     if(savedTheme==='dark') document.documentElement.setAttribute('data-theme','dark');
     if(location.protocol==='file:'){
       document.addEventListener('DOMContentLoaded',function(){
@@ -152,7 +154,7 @@ nav{display:flex;align-items:center;height:68px;gap:20px}
 [data-theme="light"] .thm:hover{background:var(--cream-200)}
 
 /* ═══ HERO ═══ */
-.hero{position:relative;min-height:100vh;display:flex;align-items:center;padding:110px 0 80px;overflow:hidden;
+.hero{position:relative;min-height:100vh; min-height:100dvh;display:flex;align-items:center;padding:110px 0 80px;overflow:hidden;
   background:
     radial-gradient(ellipse 80% 50% at 65% -5%,rgba(176,132,66,0.12),transparent 55%),
     radial-gradient(ellipse 50% 40% at 5%  65%,rgba(14,34,54,0.5),transparent 55%),
@@ -376,13 +378,15 @@ footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-
   .bento{grid-template-columns:1fr}.b1,.b2,.b3,.b4,.b5,.b6{grid-column:1/-1;grid-row:auto}
   nav{height:62px}
   .hero{padding:100px 0 70px;min-height:auto}
-  .hs{display:none}
+  /* The canvas keeps the hero stats at every width; they wrap rather than go. */
+  .hero-stats{gap:20px}
   .btn-ghost.hsm{display:none}
   .fb1,.fb2{display:none}
   .foot-bottom{flex-direction:column}
   .ls{display:none}
-  .brand-wordmark{display:none!important}
-  .brand-icon{display:block!important}
+  /* The canvas keeps the wordmark at every width and simply narrows it, so
+     there is no compact-mark swap here. */
+  .brand-wordmark{max-width:92px}
 }
 /* JuristAI product pass — the public site follows the same quiet, flat visual
    language as the legal workspace. Decoration never competes with the task. */
@@ -514,6 +518,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 }
 </style>
 <link rel="stylesheet" href="/css/redesign-v2.css">
+<link rel="stylesheet" href="/css/landing-canvas.css">
 <script src="/js/redesign-v2.js" defer></script>
 </head>
 <body>
@@ -523,9 +528,8 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
   <div class="wrap">
     <nav>
       <a href="#" class="brand" aria-label="JuristAI">
-        <img src="./icon-1024.png"                   alt="JuristAI" class="brand-img brand-icon">
-        <img src="./wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img logo-on-dark brand-wordmark">
-        <img src="./wordmark-primary-2048.png"       alt="JuristAI" class="brand-img logo-on-light brand-wordmark">
+        <img src="./brand/wordmark-filled-dark.png"  alt="JuristAI" class="brand-img logo-on-dark brand-wordmark">
+        <img src="./brand/wordmark-filled-light.png" alt="JuristAI" class="brand-img logo-on-light brand-wordmark">
       </a>
       <div class="nav-links">
         <a href="#features" data-i18n="nav_features">Imkoniyatlar</a>
@@ -549,32 +553,44 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 
 <!-- ═══ HERO ═══ -->
 <section class="hero">
+  <!-- Scales plate behind the copy column, masked to a soft pool. Decorative. -->
+  <div class="jh-plate" aria-hidden="true"><img src="./media/hero-scales.jpg" alt=""></div>
+  <!-- Code references drifting toward the viewer through the copy column. -->
+  <div class="jh-refs" aria-hidden="true"><div class="jh-refs-rule"></div><div class="jh-refs-space" id="heroRefs"></div></div>
   <div class="wrap hero-inner">
     <div>
       <div class="hero-eyebrow"><span class="hero-dot"></span><span data-i18n="hero_pill">Lex.uz dagi eng so'nggi qonunlar asosida</span></div>
-      <h1 class="ht" data-i18n="hero_title">O'zbekiston huquqi bo'yicha <span class="gt">sun'iy intellekt</span> yuristingiz</h1>
+      <h1 class="ht" data-i18n="hero_title">O'zbekiston huquqi bo'yicha <span class="gt" data-txt="sun'iy intellekt">sun'iy intellekt</span> yuristingiz</h1>
       <p class="hero-sub" data-i18n="hero_sub">Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.</p>
       <div class="hero-actions">
         <a href="/login.html" class="btn btn-primary btn-lg" data-i18n="hero_btn1">Bepul sinab ko'rish</a>
         <a href="#how" class="btn btn-ghost btn-lg" data-i18n="hero_btn2">Qanday ishlaydi?</a>
       </div>
       <div class="hero-stats">
-        <div class="hs"><strong>13+</strong><span data-i18n="hs1">huquqiy soha</span></div>
-        <div class="hs"><strong>24/7</strong><span data-i18n="hs2">doimo ulangan</span></div>
-        <div class="hs"><strong data-i18n="hs3_n">&lt;1s</strong><span data-i18n="hs3">javob vaqti</span></div>
+        <div class="hs"><strong data-i18n="hs1_n">50 000+</strong><span data-i18n="hs1">normativ hujjatlar bazasi</span></div>
+        <div class="hs"><strong data-i18n="hs2_n">lex.uz</strong><span data-i18n="hs2">kunlik yangilanish</span></div>
+        <div class="hs"><strong data-i18n="hs3_n">3</strong><span data-i18n="hs3">til: o'zbek, rus, ingliz</span></div>
       </div>
     </div>
     <div class="browser">
-      <div class="fbadge fb1"><span class="fb-dot"></span><span data-i18n="fb1">✓ Manba tasdiqlandi</span></div>
-      <div class="fbadge fb2"><span class="fb-dot"></span><span data-i18n="fb2">Shifrlangan</span></div>
-      <div class="browser-wrap">
-        <div class="br-bar">
-          <div class="br-dots"><i class="br-dot"></i><i class="br-dot"></i><i class="br-dot"></i></div>
-          <div class="br-url">juristai.uz/chat</div>
-        </div>
-        <div class="br-body" id="mockBody">
-          <div class="bbl u" style="animation-delay:.3s;opacity:0;animation:rise .5s .3s ease forwards" data-i18n="mock_q">Qizil chiroqda o'tib ketsam qancha jarima to'layman?</div>
-          <div class="btyp" id="typing"><span></span><span></span><span></span></div>
+      <div class="jh-phone">
+        <div class="jh-screen">
+          <div class="jh-status"><span>9:41</span><span class="jh-notch"></span><span>JuristAI</span></div>
+          <div class="jh-appbar">
+            <div class="jh-avatar">AI</div>
+            <div class="jh-appbar-txt"><div class="jh-appbar-name">JuristAI</div><div class="jh-appbar-state">online</div></div>
+          </div>
+          <div class="jh-thread" id="heroThread">
+            <div class="jh-history" id="heroHistory"></div>
+            <div class="jh-msg jh-q" id="heroQ" hidden></div>
+            <div class="jh-dots" id="heroDots" hidden><span></span><span></span><span></span></div>
+            <div class="jh-msg jh-a" id="heroA" hidden><span id="heroAText"></span><div class="jh-src" id="heroSrc" hidden></div></div>
+          </div>
+          <div class="jh-compose">
+            <div class="jh-input"><span id="heroDraft"></span><span class="jh-caret"></span></div>
+            <div class="jh-send" id="heroSend"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          </div>
+          <div class="jh-keyboard" id="heroKeys" aria-hidden="true"></div>
         </div>
       </div>
     </div>
@@ -599,12 +615,17 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
   <div class="wrap stats-grid">
     <div class="reveal"><div class="stat-num" data-count="13" data-suffix="+">0</div><div class="stat-lbl" data-i18n="stat1">Huquqiy soha</div></div>
     <div class="reveal" data-d="1"><div class="stat-num" data-count="100" data-suffix="%">0</div><div class="stat-lbl" data-i18n="stat2">Manbaga asoslangan</div></div>
-    <div class="reveal" data-d="2"><div class="stat-num" data-count="1" data-suffix="s<">0</div><div class="stat-lbl" data-i18n="stat3">Javob vaqti</div></div>
+    <div class="reveal" data-d="2"><div class="stat-num" data-count="1" data-prefix="&lt;" data-suffix="s">0</div><div class="stat-lbl" data-i18n="stat3">Javob vaqti</div></div>
     <div class="reveal" data-d="3"><div class="stat-num" data-count="24" data-suffix="/7">0</div><div class="stat-lbl" data-i18n="stat4">Doimo ulangan</div></div>
   </div>
 </div>
 
 <!-- ═══ FEATURES ═══ -->
+<!-- The particle field: points scatter until this run of sections is
+     reached, then gather into a helix ladder as you scroll through. -->
+<div class="jw-field" id="fieldWrap">
+  <div class="jw-field-layer" aria-hidden="true"><canvas id="fieldCanvas"></canvas></div>
+  <div class="jw-field-body">
 <section class="section" id="features">
   <div class="wrap">
     <p class="ey reveal" data-i18n="feat_ey">Nima uchun JuristAI</p>
@@ -672,10 +693,10 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
     <p class="ey reveal" data-i18n="how_ey">3 oddiy qadam</p>
     <h2 class="sh reveal" data-i18n="how_h">Daqiqada javob oling</h2>
     <p class="sh-sub reveal" data-i18n="how_sub">Yurist qabuliga yozilish shart emas.</p>
-    <div class="steps">
-      <div class="step reveal"><h3 data-i18n="s1_h">Savolingizni yozing</h3><p data-i18n="s1_p">Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas.</p></div>
-      <div class="step reveal" data-d="1"><h3 data-i18n="s2_h">AI qonunni qidiradi</h3><p data-i18n="s2_p">JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi.</p></div>
-      <div class="step reveal" data-d="2"><h3 data-i18n="s3_h">Manbali javob</h3><p data-i18n="s3_p">Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda.</p></div>
+    <div class="jc-deck" id="stepDeck">
+      <div class="jc-slot"><div class="jc-card"><div class="jc-n">1</div><h3 data-i18n="s1_h">Savolingizni yozing</h3><p data-i18n="s1_p">Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas.</p></div></div>
+      <div class="jc-slot"><div class="jc-card"><div class="jc-n">2</div><h3 data-i18n="s2_h">AI qonunni qidiradi</h3><p data-i18n="s2_p">JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi.</p></div></div>
+      <div class="jc-slot"><div class="jc-card"><div class="jc-n">3</div><h3 data-i18n="s3_h">Manbali javob</h3><p data-i18n="s3_p">Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda.</p></div></div>
     </div>
   </div>
 </section>
@@ -688,7 +709,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
     <div class="testi-grid" style="margin-top:48px">
       <div class="tcard reveal">
         <div class="stars"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
-        <blockquote data-i18n="t1_q">Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.</blockquote>
+        <blockquote><span class="tq-ghost" data-i18n="t1_q">Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.</span><span class="tq-live"><span data-typed></span><span class="tq-caret"></span></span></blockquote>
         <div class="tperson">
           <div class="tavatar" style="background:linear-gradient(135deg,#16365A,#2C5C92)">ST</div>
           <div><div class="tname" data-i18n="t1_name">Sarvar T.</div><div class="trole" data-i18n="t1_role">Kichik biznes egasi</div></div>
@@ -696,7 +717,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
       </div>
       <div class="tcard reveal" data-d="1">
         <div class="stars"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
-        <blockquote data-i18n="t2_q">Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!</blockquote>
+        <blockquote><span class="tq-ghost" data-i18n="t2_q">Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!</span><span class="tq-live"><span data-typed></span><span class="tq-caret"></span></span></blockquote>
         <div class="tperson">
           <div class="tavatar" style="background:linear-gradient(135deg,#B08442,#8E6730)">DM</div>
           <div><div class="tname" data-i18n="t2_name">Dilnoza M.</div><div class="trole" data-i18n="t2_role">Tadbirkor</div></div>
@@ -704,7 +725,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
       </div>
       <div class="tcard reveal" data-d="2">
         <div class="stars"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
-        <blockquote data-i18n="t3_q">Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!</blockquote>
+        <blockquote><span class="tq-ghost" data-i18n="t3_q">Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!</span><span class="tq-live"><span data-typed></span><span class="tq-caret"></span></span></blockquote>
         <div class="tperson">
           <div class="tavatar" style="background:linear-gradient(135deg,#0E2236,#16365A)">БА</div>
           <div><div class="tname" data-i18n="t3_name">Бахром А.</div><div class="trole" data-i18n="t3_role">Menejer</div></div>
@@ -715,27 +736,50 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 </section>
 
 <!-- ═══ SHOWCASE ═══ -->
+  </div>
+</div>
 <section class="section alt">
+  <div class="jl-bg" aria-hidden="true"><div class="jl-bg-grid"></div><div class="jl-bg-sweep"></div><div class="jl-bg-line"></div></div>
   <div class="wrap split">
     <div class="reveal">
       <h2 data-i18n="sc_h">Har bir javob <span class="gt">tekshiriladigan</span> manbaga ega</h2>
       <p data-i18n="sc_p">Boshqa AI lar havolani to'qib chiqarishi mumkin. JuristAI esa faqat lex.uz dagi haqiqiy qonun matnidan foydalanadi.</p>
       <ul class="check-list">
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li1">Faqat amaldagi (eng so'nggi) qonun tahriri</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li2">Aniq modda va band ko'rsatiladi</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li3">To'g'ridan-to'g'ri lex.uz havolasi</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li4">O'zbek va rus tillarida</span></li>
+        <li data-chk><span class="check-ic" data-chkbox><svg fill="none" viewBox="0 0 24 24"><path data-chkpath d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26"/></svg></span><span data-chktext data-i18n="sc_li1">Faqat amaldagi (eng so'nggi) qonun tahriri</span></li>
+        <li data-chk><span class="check-ic" data-chkbox><svg fill="none" viewBox="0 0 24 24"><path data-chkpath d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26"/></svg></span><span data-chktext data-i18n="sc_li2">Aniq modda va band ko'rsatiladi</span></li>
+        <li data-chk><span class="check-ic" data-chkbox><svg fill="none" viewBox="0 0 24 24"><path data-chkpath d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26"/></svg></span><span data-chktext data-i18n="sc_li3">To'g'ridan-to'g'ri lex.uz havolasi</span></li>
+        <li data-chk><span class="check-ic" data-chkbox><svg fill="none" viewBox="0 0 24 24"><path data-chkpath d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26"/></svg></span><span data-chktext data-i18n="sc_li4">O'zbek va rus tillarida</span></li>
       </ul>
     </div>
-    <div class="sc-card reveal" data-d="1">
-      <div class="browser-wrap" style="animation:none">
-        <div class="br-bar">
-          <div class="br-dots"><i class="br-dot"></i><i class="br-dot"></i><i class="br-dot"></i></div>
-          <div class="br-url"><span data-i18n="sc_mock_title">Namuna javob</span></div>
-        </div>
-        <div class="br-body">
-          <div class="bbl u" style="opacity:1;animation:none" data-i18n="sc_q">Ish haqi kechiktirilsa nima qilaman?</div>
-          <div class="bbl a" style="opacity:1;animation:none"><span data-i18n="sc_a">Ish beruvchi ish haqini o'z vaqtida to'lashi shart. <strong>Mehnat kodeksi</strong>ga ko'ra kechiktirilgan har bir kun uchun kompensatsiya talab qilishingiz mumkin.</span><div class="bsrc" data-i18n="sc_src">Mehnat kodeksi, 333-modda</div></div>
+    <div class="jl-stage reveal" data-d="1">
+      <div class="jl-board">
+        <div class="jl-bloom" aria-hidden="true"></div>
+        <div class="jl-bezel">
+          <div class="jl-panel">
+            <div class="jl-wash" aria-hidden="true"></div>
+            <div class="jl-mesh" aria-hidden="true"></div>
+            <div class="jl-art" id="ledArt" aria-hidden="true"></div>
+            <div class="jl-top-fade" aria-hidden="true"></div>
+            <div class="jl-bot-fade" aria-hidden="true"></div>
+            <div class="jl-head">
+              <img src="./brand/wordmark-filled-dark.png" alt="JuristAI">
+              <span class="jl-live"><span class="jl-live-dot"></span><span data-i18n="led_live">Efirda</span></span>
+            </div>
+            <div class="jl-copy">
+              <div class="jl-ey" id="ledEy">Huquqiy tahlil</div>
+              <div class="jl-h" id="ledH">Savolingizga bir soniyada javob</div>
+              <div class="jl-p" id="ledP">Amaldagi qonun matnidan, manba havolasi bilan.</div>
+            </div>
+            <div class="jl-foot">
+              <div class="jl-bars" id="ledBars"></div>
+              <div class="jl-credits">
+                <span><i class="jl-ic jl-ic-ai"></i>Generated by AI</span>
+                <span><i class="jl-ic jl-ic-hum"></i>Verified by human</span>
+              </div>
+            </div>
+            <div class="jl-glare" aria-hidden="true"></div>
+            <div class="jl-scan" aria-hidden="true"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -744,6 +788,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 
 <!-- ═══ PRICING ═══ -->
 <section class="section" id="pricing">
+  <div class="jp-pools" aria-hidden="true"><i></i><i></i></div>
   <div class="wrap">
     <p class="ey reveal" data-i18n="pr_ey">Tariflar</p>
     <h2 class="sh reveal" data-i18n="pr_h">Sizga mos rejani tanlang</h2>
@@ -815,21 +860,23 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
 
 <!-- ═══ FAQ ═══ -->
 <section class="section alt" id="faq">
+  <div class="jf-flaps" aria-hidden="true" id="faqFlaps"></div>
   <div class="wrap">
     <p class="ey reveal" data-i18n="faq_ey">Savol-javob</p>
     <h2 class="sh reveal" data-i18n="faq_h">Tez-tez beriladigan savollar</h2>
     <div class="faq-wrap" style="margin-top:48px">
-      <div class="qi reveal"><button><span data-i18n="q1_q">JuristAI yuristning o'rnini bosadimi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q1_a">JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz.</p></div></div>
-      <div class="qi reveal"><button><span data-i18n="q2_q">Javoblar qanchalik ishonchli?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q2_a">Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi. Siz manbani o'zingiz tekshirishingiz mumkin.</p></div></div>
-      <div class="qi reveal"><button><span data-i18n="q3_q">Qanday ro'yxatdan o'taman?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q3_a">Telegram yoki Google orqali bir necha soniyada. Parol kerak emas.</p></div></div>
-      <div class="qi reveal"><button><span data-i18n="q4_q">Eski qonunga asoslangan javob bermaymi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q4_a">Yo'q. Tizim eski tahrirlarni avtomatik aniqlab, har doim amaldagi versiyaga o'tadi.</p></div></div>
-      <div class="qi reveal"><button><span data-i18n="q5_q">Qaysi tillarda ishlaydi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q5_a">O'zbek va rus tillarida savol berishingiz va javob olishingiz mumkin.</p></div></div>
+      <div class="qi reveal" data-faqrow><button><span data-faqq data-i18n="q1_q">JuristAI yuristning o'rnini bosadimi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-faqa data-i18n="q1_a">JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz.</p></div></div>
+      <div class="qi reveal" data-faqrow><button><span data-faqq data-i18n="q2_q">Javoblar qanchalik ishonchli?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-faqa data-i18n="q2_a">Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi. Siz manbani o'zingiz tekshirishingiz mumkin.</p></div></div>
+      <div class="qi reveal" data-faqrow><button><span data-faqq data-i18n="q3_q">Qanday ro'yxatdan o'taman?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-faqa data-i18n="q3_a">Telegram yoki Google orqali bir necha soniyada. Parol kerak emas.</p></div></div>
+      <div class="qi reveal" data-faqrow><button><span data-faqq data-i18n="q4_q">Eski qonunga asoslangan javob bermaymi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-faqa data-i18n="q4_a">Yo'q. Tizim eski tahrirlarni avtomatik aniqlab, har doim amaldagi versiyaga o'tadi.</p></div></div>
+      <div class="qi reveal" data-faqrow><button><span data-faqq data-i18n="q5_q">Qaysi tillarda ishlaydi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-faqa data-i18n="q5_a">O'zbek va rus tillarida savol berishingiz va javob olishingiz mumkin.</p></div></div>
     </div>
   </div>
 </section>
 
 <!-- ═══ CTA ═══ -->
 <div class="cta-band">
+  <div class="jt-fx" aria-hidden="true"><div class="jt-sweep"></div><div class="jt-glow"></div></div>
   <h2 data-i18n="cta_h">Huquqiy savolingiz bormi?</h2>
   <p data-i18n="cta_p">Hoziroq bepul sinab ko'ring — bir soniyada manbali javob oling.</p>
   <div class="hero-actions" style="justify-content:center">
@@ -842,7 +889,7 @@ footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
   <div class="wrap">
     <div class="foot-grid">
       <div class="foot-col">
-        <div class="brand" style="margin-bottom:6px"><img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img"></div>
+        <div class="brand" style="margin-bottom:6px"><img src="/brand/wordmark-filled-dark.png" alt="JuristAI" class="brand-img" style="height:34px"></div>
         <p class="foot-brand-desc" data-i18n="foot_desc">O'zbekiston qonunchiligi bo'yicha sun'iy intellekt asosidagi huquqiy yordamchi.</p>
       </div>
       <div class="foot-col">
@@ -880,8 +927,11 @@ uz:{
   hero_title:"O'zbekiston huquqi bo'yicha <span class='gt'>sun'iy intellekt</span> yuristingiz",
   hero_sub:"Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.",
   hero_btn1:"Bepul sinab ko'rish",hero_btn2:"Qanday ishlaydi?",
-  hs1:"huquqiy soha",hs2:"doimo ulangan",hs3_n:"&lt;1s",hs3:"javob vaqti",
+  hs1_n:"50 000+",hs1:"normativ hujjatlar bazasi",hs2_n:"lex.uz",hs2:"kunlik yangilanish",hs3_n:"3",hs3:"til: o'zbek, rus, ingliz",
   fb1:"Manba tasdiqlandi",fb2:"Shifrlangan",
+  led_live:"Efirda",
+  faqs2:[["Hujjat loyihasini tuzib bera oladimi?","Ha. Shartnoma, ariza va da'vo loyihalarini kiritgan ma'lumotlaringiz asosida tayyorlaydi va tahrirlash uchun beradi."],["Ma'lumotlarim maxfiy saqlanadimi?","Suhbatlar shifrlangan holda saqlanadi va uchinchi shaxslarga berilmaydi. Istagan vaqtda o'chirishingiz mumkin."],["Jarima miqdorini hisoblab beradimi?","Ha. BHM asosida amaldagi stavka bo'yicha aniq summani va jarima ballini ko'rsatadi."],["Sud amaliyotini ham ko'rsatadimi?","Tegishli hollarda o'xshash ishlar bo'yicha sud qarorlariga havola qiladi."],["Telegram bot bilan farqi bormi?","Bot tezkor savollar uchun, portal esa hujjat tayyorlash va uzoq suhbatlar uchun mo'ljallangan."]],
+  led_ads:[["Huquqiy tahlil","Savolingizga bir soniyada javob","Amaldagi qonun matnidan, manba havolasi bilan."],["Hujjat tayyorlash","Shartnoma va da'vo loyihalari","Ma'lumotlaringizni kiriting — loyihani JuristAI yozadi."],["Manbali javob","Har bir xulosa lex.uz ga bog'langan","Moddani o'zingiz ochib tekshirishingiz mumkin."],["Ekspert nazorati","Yurist tomonidan tasdiqlangan","Muhim javoblar mutaxassis ko'rigidan o'tadi."]],
   mock_q:"Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
   mock_a:"Svetoforning taqiqlovchi signalida o'tish <strong>ma'muriy huquqbuzarlik</strong> bo'lib, jarima belgilangan. Aniq miqdor amaldagi tahrirga bog'liq.",
   mock_src:"Ma'muriy javobgarlik kodeksi, 128⁴-modda",
@@ -942,8 +992,11 @@ ru:{
   hero_title:"Ваш юрист на базе <span class='gt'>искусственного интеллекта</span> по законодательству Узбекистана",
   hero_sub:"Задайте вопрос на простом языке — JuristAI даст точный ответ со ссылками на действующие законы. 24/7, за секунду.",
   hero_btn1:"Попробовать бесплатно",hero_btn2:"Как это работает?",
-  hs1:"правовых сфер",hs2:"всегда онлайн",hs3_n:"&lt;1с",hs3:"время ответа",
+  hs1_n:"50 000+",hs1:"нормативных документов в базе",hs2_n:"lex.uz",hs2:"ежедневное обновление",hs3_n:"3",hs3:"языка: узбекский, русский, английский",
   fb1:"Источник подтверждён",fb2:"Зашифровано",
+  led_live:"В эфире",
+  faqs2:[["Может ли составить проект документа?","Да. Готовит проекты договоров, заявлений и исков на основе введённых вами данных и отдаёт на правку."],["Мои данные хранятся конфиденциально?","Переписка хранится в зашифрованном виде и не передаётся третьим лицам. Вы можете удалить её в любой момент."],["Рассчитает ли размер штрафа?","Да. Указывает точную сумму по действующей ставке БРВ и количество штрафных баллов."],["Показывает ли судебную практику?","В соответствующих случаях ссылается на решения судов по аналогичным делам."],["Чем отличается от Telegram-бота?","Бот — для быстрых вопросов, портал — для подготовки документов и длинных консультаций."]],
+  led_ads:[["Юридический анализ","Ответ на ваш вопрос за секунду","Из текста действующего закона, со ссылкой на источник."],["Подготовка документов","Проекты договоров и исков","Введите данные — проект напишет JuristAI."],["Ответ с источником","Каждый вывод привязан к lex.uz","Вы можете открыть статью и проверить сами."],["Экспертный контроль","Подтверждено юристом","Важные ответы проходят проверку специалиста."]],
   mock_q:"Сколько штраф за проезд на красный свет?",
   mock_a:"Проезд на запрещающий сигнал светофора является <strong>административным правонарушением</strong> и влечёт штраф. Точный размер зависит от действующей редакции.",
   mock_src:"Кодекс об административной ответственности, ст. 128⁴",
@@ -1020,13 +1073,13 @@ function applyLang(l){
     if(T[l]&&T[l][k]!==undefined)el.innerHTML=T[l][k];
   });
   document.querySelectorAll('.ls-b').forEach(b=>b.classList.toggle('on',b.dataset.lang===l));
-  if(heroAnimDone){
-    const existing=document.querySelector('.br-body .bbl.a');
-    if(existing)existing.remove();
-    const tb=document.getElementById('typing');
-    if(!tb){const t=document.createElement('div');t.className='btyp';t.id='typing';t.innerHTML='<span></span><span></span><span></span>';document.getElementById('mockBody').appendChild(t);}
-    heroAnimDone=false;setTimeout(showHeroAI,1800);
-  }
+  if(window.heroChat)window.heroChat.setLang(l);
+  if(window.ledBoard)window.ledBoard.repaint();
+  /* The glitch layers are ::before/::after with content:attr(data-txt), and
+     the line above replaces the heading's innerHTML from the dictionary — which
+     carries no data-txt. Restore it from the text itself, in every language. */
+  document.querySelectorAll('.gt').forEach(function(el){el.setAttribute('data-txt',el.textContent);});
+  if(window.testiType)window.testiType.restart();
 }
 document.querySelectorAll('.ls-b').forEach(b=>b.addEventListener('click',()=>applyLang(b.dataset.lang)));
 
@@ -1039,23 +1092,502 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 const cio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){countUp(e.target);cio.unobserve(e.target);}});},{threshold:.5});
 document.querySelectorAll('[data-count]').forEach(el=>cio.observe(el));
 function countUp(el){
-  const target=+el.dataset.count,suf=el.dataset.suffix||'';
+  const target=+el.dataset.count,suf=el.dataset.suffix||'',pre=el.dataset.prefix||'';
   let n=0;const step=Math.max(1,target/45);
-  (function tick(){n+=step;if(n>=target){el.textContent=target+suf;}else{el.textContent=Math.floor(n)+suf;requestAnimationFrame(tick);}})();
+  (function tick(){n+=step;if(n>=target){el.textContent=pre+target+suf;}else{el.textContent=pre+Math.floor(n)+suf;requestAnimationFrame(tick);}})();
 }
 
 const pio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.style.width=e.target.dataset.w+'%';pio.unobserve(e.target);}});},{threshold:.3});
 document.querySelectorAll('.b-prog-fill').forEach(el=>pio.observe(el));
 
-function showHeroAI(){
-  const t=document.getElementById('typing');if(!t)return;
-  const l=curLang;
-  const ai=document.createElement('div');
-  ai.className='bbl a';ai.style.cssText='opacity:0;animation:rise .5s ease forwards';
-  ai.innerHTML=(T[l].mock_a||'')+'<div class="bsrc">'+(T[l].mock_src||'')+'</div>';
-  t.replaceWith(ai);heroAnimDone=true;
+/* ── Types a set of targets together at a fixed characters-per-second, each
+   with its own start delay. The canvas's runType, same signature. ───────── */
+function runType(cards,cps,onDone){
+  const t0=performance.now();
+  (function tick(now){
+    let done=true;
+    for(const c of cards){
+      const n=Math.max(0,Math.min(c.full.length,Math.floor((now-t0-(c.delay||0))/1000*cps)));
+      if(c.out.textContent.length!==n)c.out.textContent=c.full.slice(0,n);
+      if(c.caret)c.caret.style.opacity=(n>0&&n<c.full.length)?'1':'0';
+      if(n<c.full.length)done=false;
+    }
+    if(done){if(onDone)onDone();return;}
+    requestAnimationFrame(tick);
+  })(performance.now());
 }
-setTimeout(showHeroAI,2400);
+
+/* ── Testimonials: the three quotes type together at 42 cps, staggered 320ms
+   apart, then a 3s break before the set replays. ────────────────────────── */
+(function testiType(){
+  const grid=document.querySelector('.testi-grid');
+  if(!grid)return;
+  const cards=[].slice.call(grid.querySelectorAll('blockquote')).map(function(bq,i){
+    return {out:bq.querySelector('[data-typed]'),caret:bq.querySelector('.tq-caret'),
+            ghost:bq.querySelector('.tq-ghost'),delay:i*320};
+  }).filter(function(c){return c.out&&c.ghost;});
+  if(!cards.length)return;
+  const fill=function(){cards.forEach(function(c){c.full=c.ghost.textContent;});};
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){
+    fill();cards.forEach(function(c){c.out.textContent=c.full;});return;
+  }
+  let running=false;
+  function cycle(){
+    fill();
+    cards.forEach(function(c){c.out.textContent='';});
+    runType(cards,42,function(){setTimeout(cycle,3000);});
+  }
+  new IntersectionObserver(function(es){
+    es.forEach(function(e){if(e.isIntersecting&&!running){running=true;cycle();}});
+  },{threshold:.25}).observe(grid);
+  /* A language switch rewrites the ghosts, so restart from the new text. */
+  window.testiType={restart:function(){if(running)cycle();}};
+})();
+
+/* ── FAQ: rows flip in on scroll, each starting halfway through the one
+   before, then the board swaps between the two question sets every 4s. ──── */
+(function faqBoard(){
+  const list=document.querySelector('#faq .faq-list')||document.querySelector('#faq .wrap');
+  if(!list)return;
+  const rows=[].slice.call(list.querySelectorAll('[data-faqrow]'));
+  if(!rows.length)return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const DUR=900;
+  let started=false,batch=0;
+  function flap(){
+    const sets=[T[curLang]&&T[curLang].faqs2].filter(Boolean);
+    if(!sets.length)return;
+    batch=(batch+1)%2;
+    rows.forEach(function(row,i){
+      setTimeout(function(){
+        row.style.animation='jai-flapout 300ms cubic-bezier(.4,0,.2,1) forwards';
+        setTimeout(function(){
+          const q=row.querySelector('[data-faqq]'), a=row.querySelector('[data-faqa]');
+          if(batch===1){
+            const pair=(T[curLang].faqs2||[])[i%(T[curLang].faqs2||[]).length];
+            if(pair){if(q)q.textContent=pair[0];if(a)a.textContent=pair[1];}
+          }else{
+            /* Back to the first set, which lives in the ordinary q1..q5 keys. */
+            if(q)q.textContent=T[curLang]['q'+(i+1)+'_q']||q.textContent;
+            if(a)a.textContent=T[curLang]['q'+(i+1)+'_a']||a.textContent;
+          }
+          /* An open answer would be left dangling by the swap. */
+          row.classList.remove('open');
+          const ans=row.querySelector('.qi-ans'); if(ans)ans.style.maxHeight=null;
+          row.style.animation='jai-flapin 320ms cubic-bezier(.2,.8,.2,1) forwards';
+        },300);
+      },i*90);
+    });
+    setTimeout(flap,4000);
+  }
+  new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(!e.isIntersecting||started)return;
+      started=true;
+      rows.forEach(function(row,i){
+        row.style.animation='jai-flipboard '+DUR+'ms cubic-bezier(.2,.8,.2,1) '+(i*DUR*0.5)+'ms both';
+      });
+      setTimeout(flap,rows.length*DUR*0.5+DUR+4000);
+    });
+  },{threshold:.15}).observe(list);
+})();
+
+/* ── Particle field ("ladder"). Port of buildLadder/sizeField/drawField from
+   the canvas. 132 steps give two strand points each plus a 9-point rung on
+   every third step; they start scattered and gather onto a diagonal helix as
+   the section scrolls through. Seeded so the scatter is identical each load. */
+(function ladderField(){
+  const wrap=document.getElementById('fieldWrap'), cv=document.getElementById('fieldCanvas');
+  if(!wrap||!cv)return;
+  const ctx=cv.getContext('2d');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let W=0,H=0,pts=null,key='',gather,tick=0,raf=0;
+
+  function size(){
+    const r=cv.getBoundingClientRect();
+    W=r.width;H=r.height;
+    const cw=Math.round(W),ch=Math.round(H);
+    if(cv.width!==cw||cv.height!==ch){cv.width=cw;cv.height=ch;ctx.setTransform(1,0,0,1,0,0);}
+  }
+
+  function build(w,h){
+    let s=20260829;
+    const rnd=function(){s=(s*1103515245+12345)%2147483648;return s/2147483648;};
+    const steps=132,perRung=9,out=[];
+    for(let i=0;i<steps;i++){
+      const t=i/(steps-1);
+      out.push({t:t,k:0,strand:true});
+      out.push({t:t,k:1,strand:true});
+      if(i%3===0)for(let j=1;j<perRung;j++)out.push({t:t,k:j/perRung,strand:false});
+    }
+    for(const p of out){
+      p.sx=rnd()*w*1.4-w*0.2;
+      p.sy=rnd()*h*1.4-h*0.2;
+      p.ph=rnd()*Math.PI*2;
+      p.sp=0.4+rnd()*0.9;
+    }
+    pts=out;key=Math.round(w)+'x'+Math.round(h);
+  }
+
+  function draw(){
+    if(!W){size();if(!W)return;}
+    if(!pts||key!==Math.round(W)+'x'+Math.round(H))build(W,H);
+    ctx.clearRect(0,0,W,H);
+    const sy=window.scrollY||0, vh=window.innerHeight||800;
+    const r=wrap.getBoundingClientRect();
+    const prog=(vh-r.top)/(r.height+vh);
+    /* Scroll position, not velocity, drives assembly: scattered on entry,
+       fully gathered by mid-section. */
+    let target=Math.max(0,Math.min(1,(prog-0.06)/0.44));
+    if(reduce)target=1;
+    if(gather===undefined)gather=target;
+    gather+=(target-gather)*0.18;
+    const g=gather, ease=g*g*(3-2*g);
+    tick+=reduce?0:0.01;
+
+    const ang=-0.62, cs=Math.cos(ang), sn=Math.sin(ang);
+    const cx=W*0.5, cy=H*0.5;
+    const L=Math.hypot(W,H)*1.15, R=Math.min(W,H)*0.34, turns=3.1;
+    const spin=tick*0.55+sy*0.0016;
+    const dark=document.documentElement.getAttribute('data-theme')==='dark';
+    const blue=dark?'128,176,255':'37,88,214';
+
+    for(const p of pts){
+      const u=(p.t-0.5)*L;
+      const a=p.t*Math.PI*2*turns+spin;
+      const off=Math.cos(a+p.k*Math.PI)*R;
+      const dep=(Math.sin(a+p.k*Math.PI)+1)/2;
+      const tx=cx+u*cs-off*sn, ty=cy+u*sn+off*cs;
+      const drift=1-ease;
+      p.x=p.sx+(tx-p.sx)*ease+Math.cos(tick*p.sp*2+p.ph)*30*drift;
+      p.y=p.sy+(ty-p.sy)*ease+Math.sin(tick*p.sp*1.6+p.ph)*26*drift;
+      p.dep=dep;
+    }
+    for(const p of pts){
+      const base=p.strand?3.6:2.4;
+      const rad=base*(0.45+p.dep*0.85)*(0.6+ease*0.6);
+      ctx.beginPath();
+      ctx.fillStyle='rgba('+blue+','+(0.3+p.dep*0.5+ease*0.2).toFixed(3)+')';
+      ctx.arc(p.x,p.y,Math.max(0.6,rad),0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function loop(){draw();raf=requestAnimationFrame(loop);}
+  addEventListener('resize',size,{passive:true});
+  [0,120,500].forEach(function(d){setTimeout(size,d);});
+  size();
+  if(reduce){draw();return;}
+  raf=requestAnimationFrame(loop);
+})();
+
+/* ── Card glow follows the cursor across every card. One document-level
+   listener rather than a pair per card. ─────────────────────────────────── */
+(function cardGlow(){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const SEL='.bcard, .tcard';
+  let last=null;
+  document.addEventListener('pointermove',function(e){
+    const card=e.target.closest&&e.target.closest(SEL);
+    if(card!==last&&last){last.style.removeProperty('--gx');last.style.removeProperty('--gy');last.style.transform='';}
+    last=card;
+    if(!card)return;
+    const r=card.getBoundingClientRect();
+    const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+    card.style.setProperty('--gx',(px*100).toFixed(1)+'%');
+    card.style.setProperty('--gy',(py*100).toFixed(1)+'%');
+    /* A slight lean away from the pointer, capped so text stays readable. */
+    card.style.transform='perspective(900px) rotateX('+((.5-py)*4).toFixed(2)+'deg) rotateY('+((px-.5)*5).toFixed(2)+'deg)';
+  },{passive:true});
+  document.addEventListener('pointerleave',function(){
+    if(last){last.style.removeProperty('--gx');last.style.removeProperty('--gy');last.style.transform='';last=null;}
+  },true);
+})();
+
+/* ── FAQ split-flap backdrop. Deterministic placement so the board looks the
+   same on every load rather than reshuffling. ───────────────────────────── */
+(function faqFlaps(){
+  const host=document.getElementById('faqFlaps');
+  if(!host||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const COLS=22, ROWS=11;
+  let seed=77771;
+  const rnd=function(){seed=(seed*1103515245+12345)%2147483648;return seed/2147483648;};
+  let out='';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      if(rnd()>0.55)continue;
+      const x=(c*(100/COLS)+rnd()*1.2).toFixed(2), y=(r*(100/ROWS)+rnd()*1.2).toFixed(2);
+      const dur=(7+Math.floor(rnd()*9)), delay=(rnd()*9).toFixed(1);
+      out+='<span style="left:'+x+'%;top:'+y+'%;animation:jai-flapcell '+dur+'s steps(1) '+delay+'s infinite"></span>';
+    }
+  }
+  host.innerHTML=out;
+})();
+
+/* ── Pricing shockwave, on the free plan only, once it is on screen. ─────── */
+(function planShock(){
+  const free=document.querySelector('.plans .plan');
+  if(!free||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  new IntersectionObserver(function(es,obs){
+    es.forEach(function(e){ if(e.isIntersecting){ free.classList.add('is-shock'); obs.disconnect(); } });
+  },{threshold:.4}).observe(free);
+})();
+
+/* ── Step deck: the three cards rotate through the front slot every 4s. ──── */
+(function stepDeck(){
+  const deck=document.getElementById('stepDeck');
+  if(!deck)return;
+  const slots=[].slice.call(deck.querySelectorAll('.jc-slot'));
+  if(!slots.length)return;
+  let at=0;
+  function place(){slots.forEach(function(s,i){s.dataset.slot=String((i-at+slots.length)%slots.length);});}
+  place();
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  setInterval(function(){at=(at+1)%slots.length;place();},4000);
+})();
+
+/* ── LED billboard: four ad frames, 4.2s each, with a progress bar per frame
+   and the copy swapping with the art. Ported from the canvas's adFrames. */
+const LED_ART=['./media/ad-1-legal-analysis.png','./media/ad-2-document-drafting.png',
+               './media/ad-3-sourced-answer.png','./media/ad-4-expert-review.png'];
+(function ledBoard(){
+  const art=document.getElementById('ledArt'), bars=document.getElementById('ledBars');
+  if(!art||!bars)return;
+  const ey=document.getElementById('ledEy'), h=document.getElementById('ledH'), pp=document.getElementById('ledP');
+  const figs=LED_ART.map(function(src){
+    const f=document.createElement('figure');
+    const i=document.createElement('img');i.src=src;i.alt='';i.loading='lazy';
+    f.appendChild(i);art.appendChild(f);return f;
+  });
+  const barEls=LED_ART.map(function(){
+    const s=document.createElement('span');s.innerHTML='<i></i>';bars.appendChild(s);return s;
+  });
+  let at=0;
+  function paint(){
+    const ads=(T[curLang]&&T[curLang].led_ads)||(T.uz&&T.uz.led_ads)||[];
+    const ad=ads[at]||[];
+    if(ey)ey.textContent=ad[0]||'';
+    if(h)h.textContent=ad[1]||'';
+    if(pp)pp.textContent=ad[2]||'';
+    figs.forEach(function(f,i){f.classList.toggle('is-on',i===at);});
+    barEls.forEach(function(s,i){
+      s.classList.toggle('is-done',i<at);
+      s.classList.remove('is-on');
+      if(i===at){void s.offsetWidth;s.classList.add('is-on');}
+    });
+  }
+  window.ledBoard={repaint:paint};
+  paint();
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    setInterval(function(){at=(at+1)%LED_ART.length;paint();},4200);
+  }
+})();
+
+/* ── Checklist: the ticks draw one after another, then the set replays. ──── */
+(function checkTicks(){
+  const list=document.querySelector('.check-list');
+  if(!list)return;
+  const items=[].slice.call(list.querySelectorAll('[data-chk]'));
+  if(!items.length)return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){
+    items.forEach(function(li){
+      const path=li.querySelector('[data-chkpath]');
+      if(path)path.style.strokeDashoffset='0';
+      const box=li.querySelector('[data-chkbox]');
+      if(box){box.style.borderColor='var(--jai-brand-border)';box.style.background='var(--jai-brand-soft)';}
+      const txt=li.querySelector('[data-chktext]');
+      if(txt)txt.style.color='var(--jai-ink)';
+    });
+    return;
+  }
+  const GAP=520, timers=[];
+  function cycle(){
+    timers.forEach(clearTimeout);timers.length=0;
+    items.forEach(function(li){
+      const path=li.querySelector('[data-chkpath]'), box=li.querySelector('[data-chkbox]'), txt=li.querySelector('[data-chktext]');
+      if(path){path.style.animation='none';path.style.strokeDashoffset='26';}
+      if(box){box.style.animation='none';box.style.borderColor='';box.style.background='';}
+      if(txt)txt.style.color='';
+    });
+    items.forEach(function(li,i){
+      timers.push(setTimeout(function(){
+        const path=li.querySelector('[data-chkpath]'), box=li.querySelector('[data-chkbox]'), txt=li.querySelector('[data-chktext]');
+        if(path){path.style.strokeDashoffset='';path.style.animation='jai-tickdraw 420ms cubic-bezier(.2,.8,.2,1) forwards';}
+        if(box){box.style.borderColor='var(--jai-brand-border)';box.style.background='var(--jai-brand-soft)';box.style.animation='jai-tickpop 420ms cubic-bezier(.2,.8,.2,1)';}
+        if(txt)txt.style.color='var(--jai-ink)';
+      },GAP*i));
+    });
+    timers.push(setTimeout(cycle,GAP*items.length+2000));
+  }
+  /* Only run while the list is on screen, so it is seen from the start. */
+  let running=false;
+  new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting&&!running){running=true;cycle();}
+    });
+  },{threshold:.35}).observe(list);
+})();
+
+/* ── Hero phone: types a question, sends it, answers with a source ────────
+   Ported from the hero in docs/brand/landing.dc.html. The canvas drives this
+   from React state; here it is a small timer machine over the same timings
+   (46ms a character while typing, 420ms to send, 1200ms of dots, 19ms a
+   character while answering, 3600ms to read before the next pair). */
+const HERO_CHAT={
+  uz:[
+    {q:"Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
+     a:"Svetoforning taqiqlovchi signalida toʻxtash chizigʻini bosib kirishga 0.5 BHM, svetoforning taqiqlovchi signaliga boʻysunmasdan oʻtishi 3 BHM jarimaga va 1 jarima balliga sabab bo'ladi.",
+     src:"Ma'muriy javobgarlik kodeksi, 128⁴-modda"},
+    {q:"IT-park rezidentiman, chet eldan mutaxassisni ishga olish uchun tasdiqnoma kerakmi?",
+     a:"Yo'q, shart emas.",
+     src:"VMQ-589 Nizomi, 17-bandi"},
+    {q:"Maʼmuriy yoʻl bilan ushlab turish qancha vaqt bo'lishi mumkin?",
+     a:"3 soatdan oshiq bo'lishi mumkin emas.",
+     src:"MJTK 288-modda, 1-qism"}
+  ],
+  ru:[
+    {q:"Сколько штраф за проезд на красный свет?",
+     a:"Выезд за стоп-линию на запрещающий сигнал — 2 БРВ, проезд на запрещающий сигнал светофора — 3 БРВ штрафа и 1 штрафной балл.",
+     src:"Кодекс об административной ответственности, ст. 128⁴"},
+    {q:"Я резидент IT-park — нужно ли подтверждение для найма иностранного специалиста?",
+     a:"Нет, не требуется.",
+     src:"Положение ПКМ-589, пункт 17"},
+    {q:"Сколько может длиться административное задержание?",
+     a:"Не более 3 часов.",
+     src:"КАО, ст. 288, часть 1"}
+  ]
+};
+const HERO_KEYS=[['q','w','e','r','t','y','u','i','o','p'],['a','s','d','f','g','h','j','k','l'],['z','x','c','v','b','n','m']];
+const HERO_REFS=[
+  ["FK 1102-modda","44%","42%","11s","0s","a"],["MK 333-modda","56%","50%","13s","1.6s","b"],
+  ["JK 168-modda","50%","38%","12s","3.1s","c"],["JIK 128⁴","47%","55%","14s","4.7s","d"],
+  ["lex.uz","58%","44%","10s","6.2s","a"],["FK 415-modda","42%","52%","13s","7.8s","b"],
+  ["SK 25-modda","53%","34%","12s","9.4s","c"],["MK 106-modda","46%","48%","15s","11s","d"],
+  ["SK 45-modda","55%","58%","13s","12.6s","a"],["FK 234-modda","49%","46%","11s","14.2s","b"],
+  ["JK 97-modda","57%","40%","14s","15.8s","c"],["MJTK 135-modda","45%","36%","12s","17.4s","d"],
+  ["PQ-10","59%","53%","10s","19s","a"],["VMQ-426","43%","45%","13s","20.6s","b"]
+];
+
+(function heroHero(){
+  const thread=document.getElementById('heroThread');
+  if(!thread)return;
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const refSpace=document.getElementById('heroRefs');
+  if(refSpace&&!reduced){
+    HERO_REFS.forEach(function(r){
+      const s=document.createElement('span');
+      s.textContent=r[0];
+      s.style.left=r[1];s.style.top=r[2];
+      s.style.animation='jai-zoom-'+r[5]+' '+r[3]+' cubic-bezier(.32,0,.62,1) '+r[4]+' infinite';
+      refSpace.appendChild(s);
+    });
+  }
+
+  const keyEls={};
+  const keyboard=document.getElementById('heroKeys');
+  HERO_KEYS.forEach(function(row){
+    const r=document.createElement('div');r.className='jh-krow';
+    row.forEach(function(ch){
+      const k=document.createElement('div');k.className='jh-key';k.textContent=ch;
+      keyEls[ch]=k;r.appendChild(k);
+    });
+    keyboard.appendChild(r);
+  });
+  const bottom=document.createElement('div');bottom.className='jh-krow';
+  const space=document.createElement('div');space.className='jh-key';
+  bottom.innerHTML='<div class="jh-key jh-key-mod"></div>';
+  bottom.appendChild(space);
+  bottom.insertAdjacentHTML('beforeend','<div class="jh-key jh-key-mod"></div>');
+  keyboard.appendChild(bottom);
+  keyEls[' ']=space;
+
+  const els={
+    history:document.getElementById('heroHistory'), q:document.getElementById('heroQ'),
+    dots:document.getElementById('heroDots'), a:document.getElementById('heroA'),
+    aText:document.getElementById('heroAText'), src:document.getElementById('heroSrc'),
+    draft:document.getElementById('heroDraft'), send:document.getElementById('heroSend')
+  };
+  let lang='uz', ci=0, timer=null, live=null;
+
+  function pair(){const l=HERO_CHAT[lang]||HERO_CHAT.uz;return l[ci%l.length];}
+  function at(ms,fn){timer=setTimeout(fn,ms);}
+  function highlight(ch){
+    if(live){live.classList.remove('is-on');live=null;}
+    const k=ch&&keyEls[ch.toLowerCase()];
+    if(k){k.classList.add('is-on');live=k;}
+  }
+  function reset(){
+    clearTimeout(timer);highlight(null);
+    els.q.hidden=els.dots.hidden=els.a.hidden=els.src.hidden=true;
+    els.q.textContent='';els.aText.textContent='';els.draft.textContent='';
+    els.send.classList.remove('is-pressed');
+  }
+
+  function typeQ(){
+    const q=pair().q;let i=0;
+    (function step(){
+      if(i<q.length){
+        i++;els.draft.textContent=q.slice(0,i);highlight(q[i-1]);
+        at(46,step);
+      }else{
+        highlight(null);els.send.classList.add('is-pressed');
+        at(420,function(){
+          els.send.classList.remove('is-pressed');
+          els.draft.textContent='';
+          els.q.textContent=q;els.q.hidden=false;
+          at(420,function(){
+            els.dots.hidden=false;
+            at(1200,function(){els.dots.hidden=true;typeA();});
+          });
+        });
+      }
+    })();
+  }
+
+  function typeA(){
+    const a=pair().a;let i=0;
+    els.a.hidden=false;
+    (function step(){
+      if(i<a.length){i++;els.aText.textContent=a.slice(0,i);at(19,step);}
+      else{
+        els.src.textContent=pair().src;els.src.hidden=false;
+        at(3600,next);
+      }
+    })();
+  }
+
+  function next(){
+    const done=pair();
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;flex-direction:column;gap:10px';
+    const q=document.createElement('div');q.className='jh-msg jh-q';q.textContent=done.q;
+    const a=document.createElement('div');a.className='jh-msg jh-a';
+    a.innerHTML='<span></span><div class="jh-src"></div>';
+    a.firstChild.textContent=done.a;a.lastChild.textContent=done.src;
+    row.appendChild(q);row.appendChild(a);
+    els.history.appendChild(row);
+    while(els.history.children.length>4)els.history.removeChild(els.history.firstChild);
+    ci=(ci+1)%(HERO_CHAT[lang]||HERO_CHAT.uz).length;
+    reset();at(800,typeQ);
+  }
+
+  function start(){reset();at(700,typeQ);}
+
+  window.heroChat={setLang:function(l){
+    lang=(l==='ru')?'ru':'uz';ci=0;els.history.innerHTML='';reset();at(500,typeQ);
+  }};
+
+  if(reduced){
+    /* No typing loop: show one finished exchange and leave it there. */
+    const p=pair();
+    els.q.textContent=p.q;els.q.hidden=false;
+    els.aText.textContent=p.a;els.a.hidden=false;
+    els.src.textContent=p.src;els.src.hidden=false;
+    return;
+  }
+  start();
+})();
 
 document.querySelectorAll('.qi button').forEach(b=>{
   b.addEventListener('click',()=>{

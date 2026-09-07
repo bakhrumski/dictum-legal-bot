@@ -1,0 +1,961 @@
+/*
+ * Landing hero — port of the hero section in docs/brand/landing.dc.html.
+ *
+ * The copy column already matched the canvas through redesign-v2.css (eyebrow
+ * tracking, .ht clamp and weight, .gt gradient). What was missing is here: the
+ * uppercase eyebrow, the glitch layers on the accent word, the scales plate,
+ * the drifting code references, and the phone that replaces the old browser
+ * card. Loads after redesign-v2.css because it overrides some of it, and after
+ * index.html's own `* { box-shadow: none !important }` product-pass rule, which
+ * would otherwise flatten the phone.
+ */
+
+/* ── Eyebrow ──────────────────────────────────────────────── */
+.hero-eyebrow {
+  gap: 9px !important;
+  margin-bottom: 24px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+}
+
+/* ── Accent word ──────────────────────────────────────────── */
+/* Two offset colour copies clipped to opposite halves, nudged a few frames a
+   cycle. `steps(1)` keeps them snapping rather than easing, which is what
+   makes it read as a signal fault instead of a wobble. */
+.gt {
+  position: relative;
+  display: inline-block;
+  animation: jai-gl-skew 5.2s steps(1) infinite;
+}
+.gt::before, .gt::after {
+  content: attr(data-txt);
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+.gt::before {
+  color: #2d6cff;
+  opacity: .55;
+  clip-path: inset(0 0 62% 0);
+  animation: jai-gl-a 3.1s steps(1) infinite;
+}
+.gt::after {
+  color: #d94a4a;
+  opacity: .42;
+  clip-path: inset(58% 0 0 0);
+  animation: jai-gl-b 2.4s steps(1) infinite;
+}
+/* On the dark ground `multiply` would erase the copies, so they screen instead. */
+[data-theme="dark"] .gt::before, [data-theme="dark"] .gt::after { mix-blend-mode: screen; }
+
+@keyframes jai-gl-skew {
+  0%, 92%, 100% { transform: skewX(0deg); }
+  93% { transform: skewX(1.2deg); }
+  94% { transform: skewX(-.8deg); }
+  95% { transform: skewX(0deg); }
+}
+@keyframes jai-gl-a {
+  0%, 7%, 100% { transform: translate(0, 0); clip-path: inset(0 0 62% 0); }
+  8%  { transform: translate(-3px, -1px); clip-path: inset(6% 0 70% 0); }
+  10% { transform: translate(2px, 1px);   clip-path: inset(28% 0 46% 0); }
+  12% { transform: translate(-2px, 0);    clip-path: inset(0 0 62% 0); }
+  47% { transform: translate(0, 0); }
+  48% { transform: translate(3px, -2px);  clip-path: inset(14% 0 68% 0); }
+  50% { transform: translate(-1px, 1px);  clip-path: inset(0 0 62% 0); }
+}
+@keyframes jai-gl-b {
+  0%, 17%, 100% { transform: translate(0, 0); clip-path: inset(58% 0 0 0); }
+  18% { transform: translate(3px, 1px);   clip-path: inset(66% 0 0 0); }
+  20% { transform: translate(-3px, -1px); clip-path: inset(50% 0 22% 0); }
+  22% { transform: translate(1px, 0);     clip-path: inset(58% 0 0 0); }
+  71% { transform: translate(0, 0); }
+  72% { transform: translate(-4px, 1px);  clip-path: inset(74% 0 0 0); }
+  74% { transform: translate(2px, -1px);  clip-path: inset(58% 0 0 0); }
+}
+
+/* ── Scales plate ─────────────────────────────────────────── */
+.jh-plate {
+  position: absolute;
+  z-index: 0;
+  top: -200px;
+  left: -4%;
+  right: 52%;
+  bottom: 0;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, #000 0, #000 76%, transparent), linear-gradient(90deg, #000 78%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 76%, transparent), linear-gradient(90deg, #000 78%, transparent);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+.jh-plate img {
+  position: absolute;
+  top: 150px;
+  left: -16%;
+  width: min(980px, 140%);
+  height: auto;
+  object-fit: contain;
+  opacity: .1;
+  filter: contrast(1.25) saturate(.8);
+  mask-image: radial-gradient(58% 58% at 52% 52%, #000 20%, transparent 92%);
+  -webkit-mask-image: radial-gradient(58% 58% at 52% 52%, #000 20%, transparent 92%);
+  transform-origin: 60% 55%;
+  animation: jai-kenburns 26s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+@keyframes jai-kenburns { from { transform: scale(1.12); } to { transform: scale(1.3); } }
+
+/* ── Drifting code references ─────────────────────────────── */
+.jh-refs {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, transparent, #000 18%, #000 74%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 74%, transparent);
+}
+.jh-refs-rule {
+  position: absolute;
+  inset: 0;
+  opacity: .5;
+  background-image: repeating-linear-gradient(180deg, color-mix(in srgb, var(--jai-ink) 6%, transparent) 0 1px, transparent 1px 34px);
+}
+.jh-refs-space {
+  position: absolute;
+  inset: 0;
+  perspective: 900px;
+  perspective-origin: 52% 46%;
+  transform-style: preserve-3d;
+  color: color-mix(in srgb, var(--jai-ink) 30%, transparent);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.jh-refs-space span {
+  position: absolute;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+@keyframes jai-zoom-a {
+  0%   { opacity: 0; transform: translate(-50%,-50%) translate3d(0,0,-1400px) scale(.10); filter: blur(3px); }
+  12%  { opacity: .85; }
+  62%  { opacity: .55; filter: blur(0); }
+  100% { opacity: 0; transform: translate(-50%,-50%) translate3d(-14vw,-9vh,520px) scale(2.6); filter: blur(2.4px); }
+}
+@keyframes jai-zoom-b {
+  0%   { opacity: 0; transform: translate(-50%,-50%) translate3d(0,0,-1600px) scale(.08); filter: blur(3px); }
+  14%  { opacity: .8; }
+  60%  { opacity: .5; filter: blur(0); }
+  100% { opacity: 0; transform: translate(-50%,-50%) translate3d(16vw,7vh,560px) scale(2.9); filter: blur(2.6px); }
+}
+@keyframes jai-zoom-c {
+  0%   { opacity: 0; transform: translate(-50%,-50%) translate3d(0,0,-1200px) scale(.12); filter: blur(2.6px); }
+  16%  { opacity: .75; }
+  64%  { opacity: .48; filter: blur(0); }
+  100% { opacity: 0; transform: translate(-50%,-50%) translate3d(4vw,-13vh,480px) scale(2.4); filter: blur(2.2px); }
+}
+@keyframes jai-zoom-d {
+  0%   { opacity: 0; transform: translate(-50%,-50%) translate3d(0,0,-1500px) scale(.09); filter: blur(3px); }
+  13%  { opacity: .78; }
+  58%  { opacity: .46; filter: blur(0); }
+  100% { opacity: 0; transform: translate(-50%,-50%) translate3d(-9vw,12vh,540px) scale(2.7); filter: blur(2.5px); }
+}
+
+/* ── Phone ────────────────────────────────────────────────── */
+.hero .browser { position: relative; display: flex; justify-content: center; }
+.jh-phone {
+  position: relative;
+  width: min(360px, 100%);
+  padding: 11px;
+  border-radius: 46px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--jai-ink) 22%, transparent), color-mix(in srgb, var(--jai-ink) 8%, transparent));
+  box-shadow: 0 40px 90px -40px rgba(15, 23, 42, .55), 0 0 0 1px var(--jai-line) !important;
+}
+.jh-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 660px;
+  overflow: hidden;
+  border-radius: 36px;
+  background: var(--jai-panel-solid);
+}
+
+.jh-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 22px 6px;
+  color: var(--jai-muted-dim);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.jh-notch {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: 96px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--jai-ink);
+  opacity: .9;
+  transform: translateX(-50%);
+}
+
+.jh-appbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--jai-line);
+}
+.jh-avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, var(--jai-brand), var(--jai-brand-2));
+  font-size: 12px;
+  font-weight: 700;
+}
+.jh-appbar-txt { flex: 1; min-width: 0; }
+.jh-appbar-name { color: var(--jai-ink); font-size: 13px; font-weight: 600; }
+.jh-appbar-state { color: var(--jai-brand); font-size: 10.5px; font-weight: 600; }
+
+.jh-thread {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 14px 8px;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, transparent, #000 14%);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 14%);
+}
+.jh-history { display: flex; flex-direction: column; gap: 10px; }
+/* A class rule's `display` outranks the UA's `[hidden] { display: none }`, so
+   the flex parts below would stay on screen when the script hides them. */
+.jh-msg[hidden], .jh-dots[hidden], .jh-src[hidden] { display: none !important; }
+.jh-msg {
+  max-width: 88%;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  animation: jai-rise .3s ease both;
+}
+.jh-q {
+  align-self: flex-end;
+  max-width: 84%;
+  border-radius: 14px 14px 4px 14px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--jai-brand), var(--jai-brand-2));
+}
+.jh-a {
+  align-self: flex-start;
+  border: 1px solid var(--jai-line);
+  border-radius: 14px 14px 14px 4px;
+  color: var(--jai-ink);
+  background: var(--jai-panel-hover);
+}
+.jh-src {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding: 3px 8px;
+  border: 1px solid var(--jai-brand-border);
+  border-radius: 6px;
+  color: var(--jai-brand);
+  background: var(--jai-brand-soft);
+  font-size: 10.5px;
+  font-weight: 700;
+  animation: jai-rise .3s ease both;
+}
+.jh-dots {
+  align-self: flex-start;
+  display: flex;
+  gap: 5px;
+  padding: 10px 13px;
+  border: 1px solid var(--jai-line);
+  border-radius: 14px;
+  background: var(--jai-panel-hover);
+}
+.jh-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--jai-muted-dim);
+  animation: jai-blink 1.2s ease-in-out infinite;
+}
+.jh-dots span:nth-child(2) { animation-delay: .2s; }
+.jh-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes jai-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes jai-blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+
+.jh-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--jai-line);
+}
+.jh-input {
+  flex: 1;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid var(--jai-line);
+  border-radius: 17px;
+  color: var(--jai-ink);
+  background: var(--jai-panel-hover);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  word-break: break-word;
+}
+.jh-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 12px;
+  margin-left: 1px;
+  vertical-align: -2px;
+  background: var(--jai-brand);
+  animation: jai-blink 1s steps(1) infinite;
+}
+.jh-send {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--jai-brand);
+  transition: transform 140ms cubic-bezier(.2, .8, .2, 1);
+}
+.jh-send.is-pressed { transform: scale(.86); }
+
+.jh-keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 5px 12px;
+  border-top: 1px solid var(--jai-line);
+  background: color-mix(in srgb, var(--jai-panel-hover) 70%, transparent);
+}
+.jh-krow { display: flex; gap: 4px; justify-content: center; }
+.jh-krow:nth-child(1) { padding: 0 4px; }
+.jh-krow:nth-child(2) { padding: 0 16px; }
+.jh-krow:nth-child(3) { padding: 0 34px; }
+.jh-krow:nth-child(4) { padding: 0 4px; }
+.jh-key {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  height: 30px;
+  border-radius: 6px;
+  color: var(--jai-ink);
+  background: var(--jai-panel-solid);
+  box-shadow: 0 1px 0 var(--jai-line) !important;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 90ms linear, color 90ms linear, transform 90ms linear;
+}
+.jh-key.is-on { color: #fff; background: var(--jai-brand); transform: scale(1.14); }
+.jh-key.jh-key-mod { flex: 0 0 34px; }
+
+@media (max-width: 980px) {
+  .hero .browser { max-width: 420px; margin-inline: auto; }
+  .jh-plate { right: 0; opacity: .6; }
+}
+@media (max-width: 580px) {
+  .jh-screen { height: 560px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gt, .gt::before, .gt::after, .jh-plate img,
+  .jh-refs-space span, .jh-dots span, .jh-caret { animation: none !important; }
+  .gt::before, .gt::after { opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Source-verification section — port of the LED billboard in the canvas.
+   The right column was a flat browser mock; the canvas has a 3D-rotated LED
+   panel running an ad carousel, so that is what this builds.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Scanning light over a faint grid, behind the whole section. */
+.section.alt:has(.jl-stage) { position: relative; overflow: hidden; }
+.jl-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.jl-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(90deg, color-mix(in srgb, var(--jai-ink) 2%, transparent) 0 1px, transparent 1px 64px),
+    linear-gradient(180deg, color-mix(in srgb, var(--jai-ink) 2%, transparent) 0 1px, transparent 1px 64px);
+  mask-image: radial-gradient(120% 100% at 50% 50%, #000 30%, transparent 90%);
+  -webkit-mask-image: radial-gradient(120% 100% at 50% 50%, #000 30%, transparent 90%);
+}
+.jl-bg-sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -170px;
+  height: 170px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--jai-brand) 4.5%, transparent) 62%, color-mix(in srgb, var(--jai-brand) 11%, transparent) 96%, transparent);
+  animation: jai-scan 7.5s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.jl-bg-line { position: absolute; left: 0; right: 0; top: 0; height: 100%; animation: jai-scanline 7.5s cubic-bezier(.4, 0, .2, 1) infinite; }
+.jl-bg-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  background: color-mix(in srgb, var(--jai-brand) 20%, transparent);
+  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--jai-brand) 13%, transparent) !important;
+}
+.section.alt:has(.jl-stage) > .wrap { position: relative; z-index: 1; }
+@keyframes jai-scan {
+  0%   { transform: translateY(0); opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateY(calc(100% + 170px)); opacity: 0; }
+}
+@keyframes jai-scanline {
+  0%   { transform: translateY(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(calc(100% + 172px)); opacity: 0; }
+}
+
+/* ── Checklist: each tick draws in turn ───────────────────────────────────── */
+.check-list [data-chkbox] {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border: 1px solid var(--jai-line);
+  border-radius: 6px;
+  color: var(--jai-brand);
+  background: transparent;
+  transition: border-color 260ms ease, background 260ms ease, transform 260ms cubic-bezier(.2, .8, .2, 1);
+}
+.check-list [data-chkbox] svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2.5; }
+.check-list [data-chkpath] { stroke-linecap: round; stroke-linejoin: round; }
+.check-list [data-chktext] { color: var(--jai-muted); transition: color 320ms ease; }
+@keyframes jai-tickdraw { from { stroke-dashoffset: 26; } to { stroke-dashoffset: 0; } }
+@keyframes jai-tickpop { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.18); } }
+
+/* ── The board ────────────────────────────────────────────────────────────── */
+.jl-stage { perspective: 1500px; perspective-origin: 60% 45%; }
+.jl-board {
+  position: relative;
+  transform-style: preserve-3d;
+  animation: jai-ledfloat 9s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes jai-ledfloat {
+  0%, 100% { transform: rotateY(-19deg) rotateX(7deg) rotateZ(-2.5deg) translateY(0); }
+  50%      { transform: rotateY(-16deg) rotateX(5.5deg) rotateZ(-2deg) translateY(-10px); }
+}
+.jl-bloom {
+  position: absolute;
+  z-index: 0;
+  inset: 8% 4% -8% 6%;
+  border-radius: 20px;
+  background: radial-gradient(60% 60% at 50% 60%, color-mix(in srgb, var(--jai-brand) 30%, transparent), transparent 72%);
+  filter: blur(34px);
+}
+.jl-bezel {
+  position: relative;
+  z-index: 1;
+  padding: 9px 9px 11px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #23262f, #0d0f15 62%, #191c24);
+  box-shadow: 0 46px 90px -44px rgba(9, 14, 30, .75), 0 0 0 1px rgba(255, 255, 255, .06), inset 0 1px 0 rgba(255, 255, 255, .12) !important;
+}
+.jl-panel {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #050914;
+}
+.jl-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(80% 70% at 26% 18%, rgba(45, 108, 255, .3), transparent 68%),
+    radial-gradient(70% 60% at 82% 92%, rgba(88, 165, 255, .22), transparent 70%),
+    #050914;
+}
+.jl-mesh {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 52px),
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 52px);
+  mask-image: radial-gradient(110% 90% at 50% 50%, #000 20%, transparent 90%);
+  -webkit-mask-image: radial-gradient(110% 90% at 50% 50%, #000 20%, transparent 90%);
+}
+
+/* Key art occupies the right 44%, fading between frames. */
+.jl-art { position: absolute; z-index: 1; right: 0; top: 0; bottom: 0; width: 44%; overflow: hidden; }
+.jl-art figure { position: absolute; inset: 0; margin: 0; opacity: 0; transition: opacity 900ms cubic-bezier(.4, 0, .2, 1); }
+.jl-art figure.is-on { opacity: 1; z-index: 2; }
+.jl-art img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  animation: jai-keyart 14s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+.jl-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, #050914, rgba(5, 9, 20, .5) 40%, transparent 78%);
+}
+@keyframes jai-keyart { from { transform: scale(1); } to { transform: scale(1.07); } }
+
+.jl-top-fade, .jl-bot-fade { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
+.jl-top-fade { top: 0; height: 96px; background: linear-gradient(180deg, rgba(5, 9, 20, .82), rgba(5, 9, 20, .34) 62%, transparent); }
+.jl-bot-fade { bottom: 0; height: 132px; background: linear-gradient(0deg, rgba(5, 9, 20, .88), rgba(5, 9, 20, .42) 58%, transparent); }
+
+.jl-head {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  pointer-events: none;
+}
+.jl-head img { height: 24px; width: auto; object-fit: contain; display: block; }
+.jl-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #8fbaff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.jl-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8fbaff;
+  box-shadow: 0 0 9px 2px rgba(143, 186, 255, .55) !important;
+  animation: jai-pulse 2.4s ease-in-out infinite;
+}
+@keyframes jai-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .6; transform: scale(1.3); } }
+
+.jl-copy {
+  position: absolute;
+  z-index: 3;
+  left: 22px;
+  top: 50%;
+  width: 52%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.jl-ey { margin-bottom: 10px; color: #8fbaff; font-size: 9.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.jl-h { color: #fff; font-size: clamp(19px, 2.1vw, 27px); font-weight: 600; letter-spacing: -.03em; line-height: 1.16; }
+.jl-p { margin-top: 9px; color: rgba(255, 255, 255, .66); font-size: 12.5px; line-height: 1.55; }
+
+.jl-foot { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; padding: 0 22px 16px; }
+.jl-bars { display: flex; gap: 5px; margin-bottom: 12px; }
+.jl-bars span { flex: 1; height: 2px; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, .2); }
+.jl-bars i { display: block; height: 100%; width: 0; background: #fff; }
+.jl-bars span.is-done i { width: 100%; }
+.jl-bars span.is-on i { animation: jai-barfill 4200ms linear forwards; }
+@keyframes jai-barfill { from { width: 0%; } to { width: 100%; } }
+.jl-credits { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.jl-credits span { display: inline-flex; align-items: center; gap: 8px; color: rgba(255, 255, 255, .72); font-size: 11px; font-weight: 600; }
+.jl-ic { width: 15px; height: 15px; flex-shrink: 0; background: #8fbaff; }
+.jl-ic-ai  { -webkit-mask: url(../icons/sparkles.svg) center/contain no-repeat; mask: url(../icons/sparkles.svg) center/contain no-repeat; }
+.jl-ic-hum { -webkit-mask: url(../icons/fingerprint-pattern.svg) center/contain no-repeat; mask: url(../icons/fingerprint-pattern.svg) center/contain no-repeat; }
+
+.jl-glare {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, .07) 46%, transparent 60%);
+  animation: jai-glare 8s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes jai-glare { 0% { transform: translateX(-60%); } 55%, 100% { transform: translateX(120%); } }
+.jl-scan {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(180deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 3px);
+}
+
+@media (max-width: 900px) {
+  .jl-board { animation: none; transform: none; }
+  .jl-stage { perspective: none; }
+  .jl-copy { width: 60%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jl-board, .jl-art img, .jl-glare, .jl-live-dot,
+  .jl-bg-sweep, .jl-bg-line, .jl-bars span.is-on i { animation: none !important; }
+  .jl-board { transform: rotateY(-19deg) rotateX(7deg) rotateZ(-2.5deg); }
+  .jl-bars span.is-on i { width: 100%; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   "How it works" — the canvas turns the three steps into a 3D deck: the
+   active card faces front and floats, the other two sit back and turned,
+   blurred and dimmed. Rotating every 4s.
+   ══════════════════════════════════════════════════════════════════════════ */
+.jc-deck {
+  position: relative;
+  height: 470px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 12px;
+  perspective: 1900px;
+  overflow: hidden;
+}
+.jc-slot {
+  position: absolute;
+  top: 34px;
+  left: 50%;
+  width: min(646px, 70%);
+  transition: transform 1000ms cubic-bezier(.2, .8, .2, 1),
+              filter 1000ms cubic-bezier(.2, .8, .2, 1),
+              opacity 1000ms cubic-bezier(.2, .8, .2, 1);
+}
+/* Behind: turned away, pushed back, blurred. */
+.jc-slot[data-slot="1"] { transform: translateX(-16%) translateZ(-330px) rotateY(-14deg) scale(.86); filter: blur(3px); opacity: .62; z-index: 2; }
+.jc-slot[data-slot="2"] { transform: translateX(-84%) translateZ(-330px) rotateY(14deg) scale(.86);  filter: blur(3px); opacity: .62; z-index: 2; }
+/* Front: square on, sharp, floating. */
+.jc-slot[data-slot="0"] { transform: translateX(-50%) translateZ(0) rotateY(0) scale(1); filter: none; opacity: 1; z-index: 3; }
+
+.jc-card {
+  position: relative;
+  min-height: 322px;
+  padding: 56px 46px;
+  border: 1px solid var(--jai-line);
+  border-radius: 30px;
+  background:
+    radial-gradient(120% 90% at 8% 104%, color-mix(in srgb, var(--jai-brand) 30%, transparent) 0%, transparent 60%),
+    var(--jai-panel-solid);
+  box-shadow: var(--jai-shadow) !important;
+}
+.jc-slot[data-slot="0"] .jc-card { animation: jai-cardfloat 4.2s ease-in-out infinite; }
+@keyframes jai-cardfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+.jc-n {
+  position: absolute;
+  top: -26px;
+  left: 44px;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  color: #fff;
+  background: var(--jai-brand);
+  font-size: 26px;
+  font-weight: 700;
+  transform-style: preserve-3d;
+}
+/* The number flips in when its card takes the front, then keeps a slow pulse. */
+.jc-slot[data-slot="0"] .jc-n {
+  animation: jai-numroll 900ms cubic-bezier(.2, .8, .2, 1) both,
+             jai-numglow 2.6s ease-out 900ms infinite;
+}
+@keyframes jai-numroll {
+  0%   { transform: rotateX(-90deg) scale(.7);  opacity: 0; }
+  45%  { transform: rotateX(12deg)  scale(1.12); opacity: 1; }
+  70%  { transform: rotateX(-5deg)  scale(.97); }
+  100% { transform: rotateX(0)      scale(1);   opacity: 1; }
+}
+@keyframes jai-numglow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--jai-brand) 42%, transparent) !important; }
+  55%      { box-shadow: 0 0 0 14px transparent !important; }
+}
+
+.jc-card h3 { margin: 30px 0 16px; color: var(--jai-ink); font-size: 29px; font-weight: 600; letter-spacing: -.02em; }
+.jc-card p  { margin: 0; color: var(--jai-muted); font-size: 22px; line-height: 1.6; }
+
+@media (max-width: 980px) {
+  .jc-deck { height: 400px; }
+  .jc-slot { width: min(460px, 84%); }
+  .jc-card { padding: 44px 30px; min-height: 280px; }
+  .jc-card h3 { font-size: 24px; }
+  .jc-card p { font-size: 18px; }
+}
+@media (max-width: 620px) {
+  /* No room for a deck: stack the three and drop the 3D entirely. */
+  .jc-deck { height: auto; padding: 0; perspective: none; display: flex; flex-direction: column; gap: 34px; }
+  .jc-slot, .jc-slot[data-slot] {
+    position: static; width: 100%;
+    transform: none !important; filter: none !important; opacity: 1 !important;
+  }
+  .jc-slot .jc-card { animation: none !important; }
+  .jc-slot .jc-n { animation: none !important; position: static; margin-bottom: 18px; }
+  .jc-card { padding: 30px 24px; min-height: 0; }
+  .jc-card h3 { margin-top: 0; font-size: 21px; }
+  .jc-card p { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jc-slot { transition: none; }
+  .jc-slot .jc-card, .jc-slot .jc-n { animation: none !important; }
+}
+
+/* ── Typography corrections against the canvas ────────────────────────────── */
+/* The canvas sets its big stat figures at 600 (the plan prices stay 700), and
+   gives the card headings -.02em. */
+/* The hero heading. redesign-v2.css carries clamp(48px, 6vw, 78px)/-.055em/.99
+   taken from the canvas file's inline style, but the canvas runtime resolves
+   that to a different scale, and the delivered design screenshots agree with
+   the runtime, not the literal declaration. Measured across eight viewport
+   widths the rendered curve is exactly clamp(34px, 4.1vw, 54px) with -.04em
+   and 1.06 line-height, so that is what ships. */
+.ht {
+  font-size: clamp(34px, 4.1vw, 54px) !important;
+  letter-spacing: -.04em !important;
+  line-height: 1.06 !important;
+}
+
+.stat-num { font-weight: 600 !important; }
+.plan-price { font-weight: 700 !important; }
+.bcard h3, .fcard h3, .b-h { letter-spacing: -.02em !important; }
+
+/* Section headings outside the .ht/.sh pair still carried the old 700 weight
+   and near-zero tracking; the canvas sets every display heading the same way. */
+.split h2, .cta-band h2 {
+  font-weight: 600 !important;
+  letter-spacing: -.055em !important;
+}
+.split > div > p, .cta-band > p, .cta-band p { line-height: 1.75 !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Card glow — the radial highlight in every card tracks the cursor. The
+   canvas drives --gx/--gy per card; the same variables are used here so the
+   gradient below is the canvas's verbatim.
+   ══════════════════════════════════════════════════════════════════════════ */
+.bcard, .tcard {
+  background:
+    radial-gradient(120% 90% at var(--gx, 6%) var(--gy, 104%),
+      color-mix(in srgb, var(--jai-brand) 34%, transparent) 0%,
+      color-mix(in srgb, var(--jai-brand) 14%, transparent) 30%,
+      transparent 62%),
+    color-mix(in srgb, var(--jai-panel-solid) 88%, transparent) !important;
+  transform-style: preserve-3d;
+  transition: transform 300ms cubic-bezier(.2, .8, .2, 1),
+              box-shadow 300ms cubic-bezier(.2, .8, .2, 1),
+              border-color 300ms ease;
+  will-change: transform;
+}
+.bcard:hover, .tcard:hover {
+  border-color: var(--jai-brand-border) !important;
+  box-shadow: 0 22px 60px -22px color-mix(in srgb, var(--jai-brand) 45%, transparent) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Pricing — light pools drifting behind the plans, and a shockwave that
+   crosses the free card.
+   ══════════════════════════════════════════════════════════════════════════ */
+#pricing { position: relative; overflow: hidden; }
+#pricing > .wrap { position: relative; z-index: 1; }
+.jp-pools { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.jp-pools i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+}
+.jp-pools i:nth-child(1) {
+  left: -10%; bottom: -30%; width: 70%; height: 80%;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--jai-brand) 16%, transparent), transparent 66%);
+  filter: blur(26px);
+  animation: jai-pool 26s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+.jp-pools i:nth-child(2) {
+  right: -12%; top: -24%; width: 64%; height: 74%;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--jai-brand-2) 14%, transparent), transparent 66%);
+  filter: blur(30px);
+  animation: jai-pool2 32s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+@keyframes jai-pool  { from { transform: translate(0, 0) scale(1);   } to { transform: translate(16%, -12%) scale(1.16); } }
+@keyframes jai-pool2 { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-14%, 14%) scale(.94);  } }
+
+/* The wave sweeps bottom-right to top-left across the featured (free) plan.
+   Only this one keyframe: the canvas's jai-shock and jai-shockring are
+   leftovers from an earlier iteration and are applied to nothing. */
+.plan.is-shock { position: relative; }
+.plan.is-shock::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--jai-brand) 30%, transparent), transparent 62%);
+  animation: jai-shockwave 3000ms cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.plan.is-shock > * { position: relative; z-index: 1; }
+@keyframes jai-shockwave {
+  0%   { opacity: 0;  transform: translate(18%, 18%) scale(.28); }
+  12%  { opacity: .9; }
+  70%  { opacity: .5; }
+  100% { opacity: 0;  transform: translate(-18%, -18%) scale(1.5); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FAQ — a split-flap board behind the questions, and each answer flips down.
+   ══════════════════════════════════════════════════════════════════════════ */
+#faq { position: relative; overflow: hidden; }
+#faq > .wrap { position: relative; z-index: 1; }
+.jf-flaps {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: radial-gradient(120% 90% at 50% 50%, #000 30%, transparent 88%);
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 50%, #000 30%, transparent 88%);
+}
+.jf-flaps span {
+  position: absolute;
+  width: 34px;
+  height: 20px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--jai-ink) 5%, transparent);
+  transform-origin: center;
+}
+@keyframes jai-flapcell {
+  0%, 88%, 100% { opacity: .5; transform: scaleY(1); }
+  92%           { opacity: .9; transform: scaleY(.2); }
+  96%           { opacity: .6; transform: scaleY(1); }
+}
+.faq-list, .qi-wrap, #faq .wrap > div { perspective: 1200px; }
+.qi { transform-origin: top center; backface-visibility: hidden; }
+@keyframes jai-flipboard {
+  0%   { transform: rotateX(-92deg); opacity: 0; }
+  55%  { transform: rotateX(12deg);  opacity: 1; }
+  78%  { transform: rotateX(-5deg); }
+  100% { transform: rotateX(0);      opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Closing band — a light sweeping across, over a slow glow from below.
+   ══════════════════════════════════════════════════════════════════════════ */
+.cta-band { position: relative; overflow: hidden; }
+.cta-band > * { position: relative; z-index: 1; }
+.jt-fx { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.jt-sweep {
+  position: absolute;
+  top: -40%;
+  bottom: -40%;
+  left: -30%;
+  width: 34%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .055) 34%, rgba(120, 170, 255, .13) 50%, rgba(255, 255, 255, .055) 66%, transparent);
+  filter: blur(22px);
+  transform: rotate(14deg);
+  animation: jai-sweep 13s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.jt-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(60% 90% at 50% 120%, rgba(88, 165, 255, .16), transparent 70%);
+  animation: jai-ctaglow 13s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes jai-sweep {
+  0%   { transform: translateX(0) rotate(14deg);    opacity: 0; }
+  8%   { opacity: 1; }
+  82%  { opacity: 1; }
+  100% { transform: translateX(390%) rotate(14deg); opacity: 0; }
+}
+@keyframes jai-ctaglow { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .jp-pools i, .jf-flaps span, .jt-sweep, .jt-glow,
+  .plan.is-shock::before, .qi { animation: none !important; }
+  .bcard, .tcard { transition: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Particle field — the canvas scatters 396 points and gathers them into a
+   diagonal helix "ladder" as this run of sections scrolls past. Sticky, so
+   it stays put while the sections move over it.
+   ══════════════════════════════════════════════════════════════════════════ */
+.jw-field { position: relative; }
+.jw-field-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.jw-field-layer canvas {
+  position: sticky;
+  top: 0;
+  display: block;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  opacity: .10;
+}
+.jw-field-body { position: relative; z-index: 1; }
+
+@keyframes jai-flapout { from { transform: rotateX(0deg);  } to { transform: rotateX(-88deg); } }
+@keyframes jai-flapin  { from { transform: rotateX(88deg); } to { transform: rotateX(0deg);   } }
+
+/* Testimonial quotes type themselves. A hidden copy holds the final size so
+   the card never resizes while the text arrives. */
+.tcard blockquote { position: relative; }
+.tcard blockquote .tq-ghost { visibility: hidden; }
+.tcard blockquote .tq-live { position: absolute; inset: 0; }
+.tq-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--jai-brand);
+  opacity: 0;
+  animation: jai-blink 1s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) { .tq-caret { animation: none; opacity: 0; } }
+
+/* ── Footer ───────────────────────────────────────────────────────────────
+   The band is dark at every theme, so its type is white-on-dark regardless.
+   The link colours here were still the old parchment brass. */
+footer a {
+  color: rgba(255, 255, 255, .45) !important;
+  text-decoration: none !important;
+}
+footer a:hover { color: var(--jai-brand-2) !important; }
+footer h4 { color: #f8fafc !important; }
+footer, footer p, .foot-brand-desc { color: rgba(255, 255, 255, .42) !important; }
+
+/* ── FAQ rows ─────────────────────────────────────────────────────────────
+   index.html's product pass set `.qi button { padding: 20px 0 }` for a
+   borderless list where the rows had no card edge to clear. redesign-v2.css
+   later gave `.qi` a border, a 24px radius and a panel background again, but
+   nothing restored the horizontal padding — so the question text and the
+   chevron sat flush against the card edges. The canvas's own values are
+   20px 22px on the button and 0 22px 20px on the answer. */
+.qi button { padding: 20px 22px !important; }
+.qi-ans p { padding: 0 22px 20px !important; }
+/* The canvas flips each row about its middle, not its top edge. */
+.qi { transform-origin: center center; }

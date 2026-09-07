@@ -1,0 +1,212 @@
+/*
+ * Dashboard — port of the visual system in docs/brand/dashboard.dc.html.
+ *
+ * Scope is deliberately presentation only: no markup, data wiring or feature
+ * is touched. This file loads after workspace.css and redesign-v2.css and
+ * re-points what they set.
+ *
+ * The dashboard runs a different type system from the marketing pages, which
+ * is the canvas's own choice rather than an oversight: Inter for interface
+ * text, Source Serif 4 for headings, and JetBrains Mono with tabular figures
+ * for anything numeric. Space Grotesk stays on the landing and login.
+ */
+
+/* ── Type ─────────────────────────────────────────────────────────────────── */
+body {
+  /* redesign-v2.css forces Space Grotesk on body with !important, and every
+     control inherits from it, so this has to match that weight of selector. */
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+}
+body, button, input, select, textarea, .workspace-app {
+  font-family: inherit !important;
+}
+:root {
+  --font-sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ui: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* redesign-v2.css sets Space Grotesk on headings with !important, and some of
+   those selectors carry a class (.operations-heading h1, .form-heading), so a
+   bare `h1` loses on specificity even with !important of its own. Each of
+   those is named here so the serif wins where it should. */
+h1, h2, h3,
+body h1, body h2, body h3,
+main.shell h1, main.shell h2, main.shell h3,
+body .operations-heading h1,
+body .management-heading h1, body .management-heading h2,
+body .form-heading,
+body .ht, body .sh,
+.page-title, .section-title, .card-title, .ws-title, .stat-title {
+  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif !important;
+  font-weight: 600 !important;
+  /* The canvas tracks its headings at -.012em, far looser than the -.045em
+     the marketing pages use. */
+  letter-spacing: -.012em !important;
+}
+
+/* Figures line up in columns and stop jittering as they update. */
+[data-mono], .stat-value, .stat-num, .metric-value, .kpi-value,
+.ws-count, .badge-count, .queue-count, .plan-price, .usage-num,
+time, .mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+/* ── Surfaces ─────────────────────────────────────────────────────────────── */
+/* The canvas's header is a floating rounded bar rather than a full-width band. */
+.dashboard-header, header.db-head {
+  border: 1px solid var(--jai-line, rgba(15, 23, 42, .1));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--jai-panel-solid, #fff) 88%, transparent);
+  box-shadow: var(--jai-shadow, 0 28px 70px -48px rgba(15, 23, 42, .42));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ── Corrections from diffing against the rendered canvas ─────────────────── */
+
+/* Stat-card labels are h3 in this markup but plain label text in the canvas,
+   so the serif rule above must not claim them. */
+.stats .stat-card h3,
+.stat-card .stat-info h3 {
+  font-family: Inter, system-ui, sans-serif !important;
+  font-size: 12.5px !important;
+  font-weight: 400 !important;
+  letter-spacing: normal !important;
+  line-height: 1.35 !important;
+  text-transform: none !important;
+}
+
+/* The role line above the page title reads as quiet metadata in the canvas,
+   not a tracked-out uppercase eyebrow. */
+.operations-eyebrow {
+  font-size: 11.5px !important;
+  font-weight: 400 !important;
+  letter-spacing: normal !important;
+  line-height: 1.25 !important;
+  text-transform: none !important;
+}
+
+.operations-refresh { font-size: 14px !important; font-weight: 600 !important; }
+
+/* Section headings inside the panels. */
+.queue-heading h2, .panel-heading h2, .main-content-area h2 {
+  font-size: 20px !important;
+  letter-spacing: -.03em !important;
+}
+
+/* Chips, filter buttons and small labels sit a step larger than they were,
+   and at 600 rather than the 650 that was in use. */
+.queue-view-btn, .queue-tag, .queue-flag, .chip, .pill {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+/* Must outrank `body .operations-heading h1` in the grouped rule above, which
+   sets the base -.012em; the canvas tracks its display headings at -.02em. */
+body .operations-heading h1,
+body .management-heading h1 {
+  font-size: clamp(27px, 3.2vw, 37px) !important;
+  letter-spacing: -.02em !important;
+  line-height: 1.12 !important;
+}
+.stats .stat-card h3, .stat-card .stat-info h3 { line-height: normal !important; }
+
+/* Health strip labels and pagination controls. */
+.health-item span { font-size: 13px !important; }
+.queue-pagination button { font-size: 13px !important; }
+
+/* Card titles inside panels. */
+.ws-card h3, .panel-card h3, .list-card h3 {
+  font-size: 15.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.02em !important;
+}
+
+/* The bottom tab bar sits small and lightly tracked. */
+.tab-bar-item .tab-label {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .01em !important;
+}
+
+/* Stat figures: mono with tabular digits, so the four cards stay aligned as
+   the counts update. The canvas runs them at 30px/600. */
+.stat-info .number,
+.stat-card .number {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-variant-numeric: tabular-nums;
+  font-size: 30px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.02em !important;
+  line-height: 1 !important;
+}
+/* The sub-label under each stat. */
+.stat-info > span { font-size: 12px !important; }
+
+/* ── Components ───────────────────────────────────────────────────────────── */
+
+/* Queue filters are outlined pills in the canvas, with the active one filled
+   in soft brand rather than solid navy. */
+.queue-view-btn {
+  min-height: 34px !important;
+  padding: 0 16px !important;
+  border: 1px solid var(--jai-line, rgba(15, 23, 42, .1)) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--jai-muted, #5f6b7a) !important;
+}
+.queue-view-btn:hover {
+  border-color: var(--jai-brand-border, rgba(45, 108, 255, .24)) !important;
+  background: color-mix(in srgb, var(--jai-brand, #2d6cff) 6%, transparent) !important;
+  color: var(--jai-ink, #111827) !important;
+}
+.queue-view-btn.active {
+  border-color: var(--jai-brand-border, rgba(45, 108, 255, .24)) !important;
+  background: var(--jai-brand-soft, rgba(45, 108, 255, .1)) !important;
+  color: var(--jai-brand, #2d6cff) !important;
+}
+
+/* The bottom bar marks its active item with a soft brand pill. */
+.tab-bar-item.active {
+  border-radius: 14px !important;
+  background: var(--jai-brand-soft, rgba(45, 108, 255, .1)) !important;
+  color: var(--jai-brand, #2d6cff) !important;
+}
+.tab-bar-item.active .tab-icon,
+.tab-bar-item.active .tab-label { color: var(--jai-brand, #2d6cff) !important; }
+
+/* Each stat carries its own hue in the canvas, so the row reads at a glance
+   instead of as four identical figures. */
+.stat-card.card-overdue .number { color: #c0392b !important; }
+.stat-card:nth-of-type(2) .number { color: #b7791f !important; }
+.stat-card:nth-of-type(3) .number { color: var(--jai-brand, #2d6cff) !important; }
+.stat-card:nth-of-type(4) .number { color: #1f7a4d !important; }
+
+/* The service-health line is a compact left-aligned row, not a spread-out
+   band: label in muted text, state in mono beside it. */
+.operations-health-shell, .operations-health {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-start !important;
+  gap: 22px !important;
+}
+.health-item {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  min-width: 0 !important;
+}
+.health-item strong, .health-item b, .health-item .health-value {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: -.02em;
+  color: var(--jai-ink, #111827) !important;
+}

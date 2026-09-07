@@ -73,8 +73,9 @@
 
 [data-theme="dark"] .workspace-app {
     --ws-canvas: #060814;
-    --ws-panel: rgba(13, 15, 29, 0.88);
-    --ws-panel-solid: #0d0f1d;
+    /* Matches the dashboard canvas's dark panel exactly. */
+    --ws-panel: rgba(11, 13, 25, 0.88);
+    --ws-panel-solid: #0b0d19;
     --ws-panel-hover: #14182a;
     --ws-ink: #f7f8fb;
     --ws-ink-soft: #d7dbe5;
@@ -82,7 +83,12 @@
     --ws-muted-dim: #919aad;
     --ws-line: rgba(255, 255, 255, 0.09);
     --ws-line-strong: rgba(255, 255, 255, 0.15);
-    --ws-brand-soft: rgba(77, 134, 255, 0.14);
+    /* The canvas lifts the brand hue on dark so it clears the #060814 ground;
+       without this the light #2d6cff carried through and read as muddy. */
+    --ws-brand: #5b8cff;
+    --ws-brand-2: #78b5ff;
+    --ws-brand-soft: rgba(91, 140, 255, 0.12);
+    --ws-brand-border: rgba(91, 140, 255, 0.30);
     --ws-navy: #f7f8fb;
     --ws-gold: #d7b65d;
     --ws-success: #6fe7c9;
@@ -573,7 +579,7 @@
 .ws-empty h3 { margin: 0 0 7px; color: var(--ws-ink); font-size: 18px; }
 .ws-empty p { max-width: 520px; margin: 0 auto 18px; color: var(--ws-muted); line-height: 1.55; font-size: 13px; }
 
-.ws-gate { min-height: calc(100vh - 300px); display: grid; place-items: center; }
+.ws-gate { min-height: calc(100vh - 300px); min-height: calc(100dvh - 300px); display: grid; place-items: center; }
 .ws-gate-card { width: min(680px, 100%); padding: clamp(28px, 5vw, 54px); border-radius: 26px; text-align: center; }
 .ws-gate-mark { width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 18px; border-radius: 18px; color: var(--ws-gold); background: var(--ws-warning-soft); }
 .ws-gate-card h2 { margin: 0; color: var(--ws-ink); font-size: clamp(25px, 4vw, 38px); letter-spacing: -.04em; }
