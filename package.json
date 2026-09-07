@@ -81,5 +81,8 @@
     "pg": "^8.17.2",
     "pgvector": "^0.2.1",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
   }
 }

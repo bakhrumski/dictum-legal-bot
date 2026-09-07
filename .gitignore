@@ -57,3 +57,4 @@ nul
 # is tracked. Reinstall with:
 #   npx skills add https://github.com/Leonxlnx/taste-skill
 .agents/
+.design-shots/

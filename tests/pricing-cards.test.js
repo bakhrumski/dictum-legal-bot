@@ -18,6 +18,10 @@ const path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
 const tariffHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'tariff.html'), 'utf8');
 const tariff = tariffHtml;
+// The landing rebuild moved its styles out of the page and into a stylesheet;
+// tariff.html still carries its own in a <style> block. Checks about how the
+// cards are *styled* read whichever file that page's rules now live in.
+const landingCss = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'landing.css'), 'utf8');
 const tiersSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'rag', 'subscription-tiers.js'), 'utf8');
 
 let passed = 0, failed = 0;
@@ -82,7 +86,8 @@ test('no superseded price or unanchored discount is still displayed', () => {
 
 test('a price can never wrap mid-number', () => {
   // "999 000" split across two lines in production before this.
-  const css = html.slice(html.indexOf('.plan-price{'), html.indexOf('}', html.indexOf('.plan-price{')));
+  const at = landingCss.indexOf('.plan-price{');
+  const css = landingCss.slice(at, landingCss.indexOf('}', at));
   assert.ok(css.includes('white-space:nowrap'), '.plan-price must not wrap');
 });
 
@@ -141,10 +146,14 @@ test('every paid tier leads with the headline benefit, not a pointer', () => {
 
 test('the loyalty rebate is advertised', () => {
   assert.ok(html.includes('data-i18n="pr_note"'), 'rebate note missing from the markup');
+  // The hook used to be a <b> inside the translated string. It is now its own
+  // key so the markup, not the copy, decides the emphasis — the note still has
+  // to open with one.
+  assert.ok(/<b data-i18n="pr_note_b">/.test(html), 'the rebate note has no bold hook in the markup');
   for (const [lang, block] of [['uz', uz], ['ru', ru]]) {
     const n = val(block, 'pr_note') || '';
     assert.ok(n.length > 60, `pr_note missing or too short in ${lang}`);
-    assert.ok(n.includes('<b>'), `pr_note in ${lang} should lead with a bold hook`);
+    assert.ok((val(block, 'pr_note_b') || '').length > 10, `pr_note_b missing in ${lang}`);
   }
 });
 
@@ -194,7 +203,7 @@ test('both pages lead every paid tier with the same benefit', () => {
 });
 
 test('cards reserve height so rows align across the row', () => {
-  for (const [name, doc, selector] of [['index', html, '.plan-for'], ['tariff', tariff, '.plan-audience']]) {
+  for (const [name, doc, selector] of [['index', landingCss, '.plan-for'], ['tariff', tariff, '.plan-audience']]) {
     const forCss = doc.slice(doc.indexOf(selector), doc.indexOf(selector) + 260);
     assert.ok(/min-height:\s*\d+/.test(forCss),
       `${name}.html: ${selector} has no reserved height, so bullet lists start at different heights`);
@@ -238,7 +247,7 @@ test('paid cards are dimmed AND labelled, never dimmed alone', () => {
   // eligible", rather than "not yet".
   assert.strictEqual((html.match(/class="plan soon/g) || []).length, 3,
     'index.html should dim exactly the three paid tiers');
-  assert.ok(/\.plan\.soon\{opacity/.test(html), 'no dimming style');
+  assert.ok(/\.plan\.soon\s*\{\s*opacity/.test(landingCss), 'no dimming style');
   assert.ok(html.includes('data-i18n="p_soon"'), 'no "Tez orada" badge');
   assert.ok(tariff.includes('badge-soon'), 'tariff.html has no badge');
 });

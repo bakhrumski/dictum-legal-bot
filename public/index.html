@@ -1,1072 +1,981 @@
 <!DOCTYPE html>
-<html lang="uz" data-theme="light">
+<html lang="uz">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>JuristAI — Sun'iy intellekt asosidagi huquqiy yordamchi</title>
-<meta name="description" content="JuristAI — O'zbekiston qonunchiligi bo'yicha sun'iy intellekt yordamchisi.">
-<link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
-<link rel="apple-touch-icon" href="./favicon-256.png">
-<link rel="stylesheet" href="./css/design-tokens.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JuristAI — O‘zbekiston qonunchiligi bo‘yicha AI yuridik yordamchi</title>
+<meta name="description" content="Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. Lex.uz asosida, 24/7, bir soniyada.">
+<meta name="theme-color" content="#f6f8fc">
+<link rel="icon" href="/favicon-256.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="JuristAI — O‘zbekiston huquqi bo‘yicha sun'iy intellekt yuristingiz">
+<meta property="og:description" content="Amaldagi qonunlardan manbali javob. Lex.uz asosida, 24/7.">
+<meta property="og:image" content="/brand/wordmark-filled-light.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/landing.css">
 <script>
-  (function(){
-    var savedTheme=null;
-    try{
-      savedTheme=localStorage.getItem('dictum-theme')||localStorage.getItem('jtheme');
-    }catch(_error){
-      /* Some browsers restrict storage for file:// previews. */
-    }
-    if(savedTheme==='dark') document.documentElement.setAttribute('data-theme','dark');
-    if(location.protocol==='file:'){
-      document.addEventListener('DOMContentLoaded',function(){
-        document.querySelectorAll('a[href^="/"]').forEach(function(link){
-          link.href='http://localhost:3000'+link.getAttribute('href');
-        });
-      });
-    }
+  // Resolve the stored theme before first paint so the page never flashes
+  // light on a dark-mode reload.
+  (function () {
+    try {
+      var t = localStorage.getItem('jai-theme');
+      var l = localStorage.getItem('jai-lang');
+      document.documentElement.setAttribute('data-boot-theme', t === 'dark' ? 'dark' : 'light');
+      if (l === 'ru') document.documentElement.lang = 'ru';
+    } catch (e) { document.documentElement.setAttribute('data-boot-theme', 'light'); }
   })();
 </script>
-<style>
-/* ═══ RESET ═══ */
-*{margin:0;padding:0;box-sizing:border-box}
-
-:root{
-  /* Brand + neutrals sourced from /css/design-tokens.css so the landing page,
-     login and dashboard share ONE palette. Local aliases keep index's existing
-     rules working; values are identical to the tokens (no visual change). */
-  --gold:       var(--brass-500);
-  --gold-lt:    var(--brass-300);
-  --gold-dim:   rgba(154,122,69,0.16);
-  --navy-deep:  var(--navy-900);
-  --navy-mid:   var(--navy-900);
-  --cream:      var(--parchment-50);
-  --cream-100:  var(--parchment-100);
-  --cream-200:  var(--parchment-200);
-  --r: var(--r-lg);
-  --ease: var(--ease-in-out);
-  /* light */
-  --bg:      var(--cream);
-  --bg2:     var(--cream-100);
-  --bg3:     #fff;
-  --txt:     var(--ink-900);
-  --txt2:    var(--ink-700);
-  --txt3:    var(--ink-500);
-  --card:    #ffffff;
-  --border:  var(--border-1);
-  --shadow:  none;
-  --nav-bg:  rgba(246,245,241,0.94);
-}
-[data-theme="dark"]{
-  --bg:      var(--dark-bg-1);
-  --bg2:     var(--dark-bg-2);
-  --bg3:     var(--dark-bg-3);
-  --txt:     var(--dark-fg-1);
-  --txt2:    var(--dark-fg-2);
-  --txt3:    var(--dark-fg-3);
-  --card:    var(--dark-bg-2);
-  --border:  var(--dark-border);
-  --shadow:  none;
-  --nav-bg:  rgba(16,22,27,0.94);
-}
-
-/* ═══ GLOBAL ═══ */
-html{scroll-behavior:smooth;font-size:16px}
-body{font-family:var(--font-sans);background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;overflow-x:hidden;transition:background var(--ease),color var(--ease)}
-a{text-decoration:none;color:inherit}
-img{max-width:100%;display:block}
-.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
-h1,h2{font-family:var(--font-sans)}
-
-/* ═══ INTRO OVERLAY ═══ */
-#intro-overlay{
-  position:fixed;inset:0;z-index:9999;
-  background:#0E2236;
-  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;
-}
-#intro-overlay.io-out{animation:io-fade .65s ease forwards}
-@keyframes io-fade{to{opacity:0;pointer-events:none}}
-.ib-ring{stroke-dasharray:502;stroke-dashoffset:502}
-.ib-ring:nth-child(1){animation:ring-in .9s .05s ease forwards}
-.ib-ring:nth-child(2){animation:ring-in .9s .2s ease forwards}
-.ib-ring:nth-child(3){animation:ring-in .9s .35s ease forwards}
-@keyframes ring-in{to{stroke-dashoffset:0}}
-.ib-j{opacity:0;animation:fade-in .5s .9s ease forwards}
-.ib-d{opacity:0;animation:fade-in .4s 1.25s ease forwards}
-.ib-wm{opacity:0;animation:fade-in .4s 1.5s ease forwards;font-family:var(--font-sans);font-size:20px;letter-spacing:.14em;color:#F5EFE3;text-transform:uppercase}
-.ib-wm span{color:#D6B379}
-@keyframes fade-in{to{opacity:1}}
-
-/* ═══ CURSOR GLOW ═══ */
-.cursor-glow{position:fixed;width:480px;height:480px;border-radius:50%;background:radial-gradient(circle,rgba(176,132,66,0.05) 0%,transparent 65%);pointer-events:none;z-index:0;transition:left .09s,top .09s;left:-9999px;top:-9999px;transform:translate(-50%,-50%)}
-
-/* ═══ SHIMMER GOLD TEXT ═══ */
-.gt{background:linear-gradient(120deg,#D6B379,#B08442,#8E6730,#D6B379);background-size:260%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 6s linear infinite}
-@keyframes shimmer{to{background-position:260% center}}
-
-/* ═══ BUTTONS ═══ */
-.btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px;border-radius:999px;border:none;cursor:pointer;transition:transform .2s,box-shadow .2s;white-space:nowrap;font-family:inherit}
-.btn-primary{background:linear-gradient(135deg,#B08442,#8E6730);color:#FBF8F2;padding:13px 26px;box-shadow:0 6px 22px rgba(176,132,66,0.28);border:1px solid rgba(214,179,121,0.3)}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(176,132,66,0.42)}
-.btn-ghost{background:transparent;color:#fff;padding:11px 20px;border:1px solid rgba(255,255,255,0.25)}
-.btn-ghost:hover{background:rgba(255,255,255,0.08)}
-.btn-lg{padding:16px 34px;font-size:17px}
-.btn-outline{background:var(--card);border:1px solid var(--border);color:var(--txt);padding:12px 20px}
-.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
-
-/* ═══ NAV ═══ */
-header{position:fixed;top:0;left:0;right:0;z-index:200;transition:background var(--ease),backdrop-filter var(--ease),box-shadow var(--ease)}
-header.sc{background:var(--nav-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 1px 0 rgba(176,132,66,0.14)}
-nav{display:flex;align-items:center;height:68px;gap:20px}
-.brand{display:inline-flex;align-items:center;gap:8px;flex-shrink:0;line-height:1}
-.brand-img{height:36px;width:auto;display:block}
-/* logo swap: light logo on dark bg (default), dark logo on parchment header */
-.brand-icon{display:block}
-.logo-on-dark{display:block}
-.logo-on-light{display:none}
-[data-theme="light"] header.sc .logo-on-dark{display:none}
-[data-theme="light"] header.sc .logo-on-light{display:block}
-.nav-links{display:flex;gap:22px;flex:1;justify-content:center}
-.nav-links a{color:rgba(255,255,255,.75);font-size:14.5px;font-weight:500;transition:color .2s}
-.nav-links a:hover{color:#D6B379}
-/* light mode + scrolled (parchment header): dark links */
-[data-theme="light"] header.sc .nav-links a{color:var(--txt2)}
-[data-theme="light"] header.sc .nav-links a:hover{color:var(--gold)}
-/* requirement 3: ghost btn ink-colored on parchment header */
-[data-theme="light"] header.sc .btn-ghost{color:#1A1410;border-color:rgba(26,20,16,0.22)}
-[data-theme="light"] header.sc .btn-ghost:hover{background:rgba(26,20,16,0.06)}
-.nav-end{display:flex;align-items:center;gap:8px;flex-shrink:0}
-/* lock nav button widths to longest language text so nav-links never shift */
-.nav-end .btn-primary{min-width:196px;justify-content:center}
-.nav-end .btn-ghost{min-width:74px;justify-content:center}
-.ls{display:flex;align-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:3px 4px;gap:2px}
-[data-theme="light"] .ls{background:var(--bg2);border-color:var(--border)}
-.ls-b{background:none;border:none;color:rgba(255,255,255,.45);font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;cursor:pointer;transition:color .2s,background .2s;letter-spacing:.4px;font-family:inherit}
-[data-theme="light"] .ls-b{color:var(--txt3)}
-.ls-b.on{background:linear-gradient(135deg,#B08442,#8E6730);color:#FBF8F2}
-.ls-b:not(.on):hover{color:#D6B379}
-[data-theme="light"] .ls-b:not(.on):hover{color:var(--gold)}
-.thm{width:34px;height:34px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;cursor:pointer;display:grid;place-items:center;transition:background .2s}
-.thm svg{width:17px;height:17px}
-[data-theme="light"] .thm{background:var(--bg2);border-color:var(--border);color:var(--txt)}
-.thm:hover{background:rgba(255,255,255,.18)}
-[data-theme="light"] .thm:hover{background:var(--cream-200)}
-
-/* ═══ HERO ═══ */
-.hero{position:relative;min-height:100vh;display:flex;align-items:center;padding:110px 0 80px;overflow:hidden;
-  background:
-    radial-gradient(ellipse 80% 50% at 65% -5%,rgba(176,132,66,0.12),transparent 55%),
-    radial-gradient(ellipse 50% 40% at 5%  65%,rgba(14,34,54,0.5),transparent 55%),
-    linear-gradient(175deg,#0A1929 0%,#0E2236 60%,#0A1929 100%)}
-.hero::before{content:'';position:absolute;inset:0;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)' opacity='.4'/%3E%3C/svg%3E");
-  background-size:200px 200px;opacity:.024;pointer-events:none;z-index:0}
-.hero::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(to right,transparent,rgba(176,132,66,0.35),transparent)}
-.orb{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none;animation:orb-float 16s ease-in-out infinite}
-.o1{width:500px;height:500px;background:radial-gradient(circle,rgba(22,54,90,0.55),transparent 65%);top:-120px;right:-60px;opacity:.9}
-.o2{width:400px;height:400px;background:radial-gradient(circle,rgba(176,132,66,0.12),transparent 65%);bottom:-80px;left:-80px;opacity:.6;animation-delay:-6s}
-.o3{width:300px;height:300px;background:radial-gradient(circle,rgba(14,34,54,0.5),transparent 65%);top:40%;right:28%;opacity:.5;animation-delay:-11s}
-@keyframes orb-float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(20px,-30px) scale(1.04)}66%{transform:translate(-16px,18px) scale(.97)}}
-.hero-inner{position:relative;z-index:2;display:grid;grid-template-columns:1.1fr .9fr;gap:60px;align-items:center}
-.hero-eyebrow{display:inline-flex;align-items:center;gap:9px;background:rgba(176,132,66,0.1);border:1px solid rgba(176,132,66,0.28);color:#D6B379;padding:7px 16px;border-radius:999px;font-size:13px;font-weight:600;margin-bottom:28px;letter-spacing:.2px}
-.hero-dot{width:7px;height:7px;border-radius:50%;background:var(--gold-lt);box-shadow:0 0 10px var(--gold-lt);animation:pulse-dot 2s ease infinite}
-@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.3)}}
-h1.ht{font-size:clamp(42px,5.5vw,70px);line-height:1.06;font-weight:700;color:#F5EFE3;letter-spacing:-1.5px;margin-bottom:24px}
-.hero-sub{font-size:18px;line-height:1.68;color:rgba(214,179,121,0.65);max-width:520px;margin-bottom:36px}
-.hero-actions{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:36px}
-.hero-stats{display:flex;gap:28px;flex-wrap:wrap}
-.hs{color:rgba(200,185,160,.5);font-size:13.5px}
-.hs strong{display:block;font-size:20px;font-weight:800;color:rgba(214,179,121,0.88);letter-spacing:-0.5px;margin-bottom:2px}
-
-/* ═══ BROWSER MOCKUP ═══ */
-.browser{position:relative}
-.browser-wrap{position:relative;z-index:2;border-radius:14px;overflow:hidden;background:rgba(255,255,255,0.03);border:1px solid rgba(176,132,66,0.18);box-shadow:0 40px 100px rgba(0,0,0,.5),0 0 0 1px rgba(176,132,66,0.08);animation:rise 1.1s cubic-bezier(.2,.8,.2,1) both}
-@keyframes rise{from{opacity:0;transform:translateY(32px) scale(.97)}to{opacity:1;transform:none}}
-.br-bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid rgba(176,132,66,0.1);background:rgba(255,255,255,.02)}
-.br-dots{display:flex;gap:6px}
-.br-dot{width:10px;height:10px;border-radius:50%}
-.br-dot:nth-child(1){background:#FF5F57}.br-dot:nth-child(2){background:#FEBC2E}.br-dot:nth-child(3){background:#28C840}
-.br-url{flex:1;text-align:center;background:rgba(255,255,255,.04);border-radius:6px;padding:5px 12px;font-size:12px;color:rgba(214,179,121,0.38);margin:0 14px;display:flex;align-items:center;justify-content:center;gap:7px}
-.br-lock{font-size:10px;color:rgba(46,200,100,.8)}
-.br-body{padding:20px;display:flex;flex-direction:column;gap:13px;min-height:280px}
-.bbl{max-width:88%;padding:12px 16px;border-radius:14px;font-size:14px;line-height:1.55}
-.bbl.u{align-self:flex-end;background:linear-gradient(135deg,#B08442,#8E6730);color:#FBF8F2;border-bottom-right-radius:4px}
-.bbl.a{align-self:flex-start;background:rgba(245,239,227,0.95);color:#1A2744;border-bottom-left-radius:4px}
-.bbl.a strong{color:#16365A}
-.bsrc{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:11.5px;font-weight:700;color:#8E6730;background:rgba(176,132,66,0.1);padding:4px 10px;border-radius:7px}
-.btyp{align-self:flex-start;display:flex;gap:5px;padding:12px 15px;background:rgba(245,239,227,0.95);border-radius:14px}
-.btyp span{width:6px;height:6px;border-radius:50%;background:#B08442;animation:blink 1.2s ease-in-out infinite}
-.btyp span:nth-child(2){animation-delay:.2s}.btyp span:nth-child(3){animation-delay:.4s}
-@keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
-.fbadge{position:absolute;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;font-size:12.5px;font-weight:600;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(0,0,0,.35);border:1px solid rgba(176,132,66,0.18);animation:badge-float 5s ease-in-out infinite;z-index:3}
-.fb1{bottom:30px;left:-44px;background:rgba(10,25,41,0.92);color:#D6B379;animation-delay:-1s}
-.fb2{top:44px;right:-36px;background:rgba(10,34,20,0.92);color:#5AF0A0;animation-delay:-3s}
-@keyframes badge-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-.fb-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
-
-/* ═══ TRUST BAND ═══ */
-.trust{background:rgba(0,0,0,.22);border-top:1px solid rgba(176,132,66,0.1);border-bottom:1px solid rgba(176,132,66,0.1);padding:14px 0;overflow:hidden}
-[data-theme="light"] .trust{background:var(--bg2);border-color:rgba(176,132,66,0.14)}
-.trust-inner{display:flex;align-items:center;gap:0}
-.trust-label{flex-shrink:0;font-size:12px;font-weight:700;color:rgba(214,179,121,0.45);letter-spacing:.8px;text-transform:uppercase;padding:0 32px 0 24px;border-right:1px solid rgba(176,132,66,0.18);white-space:nowrap}
-[data-theme="light"] .trust-label{color:var(--ink-500);border-color:var(--border)}
-.marquee{flex:1;overflow:hidden;white-space:nowrap}
-.marquee-track{display:inline-flex;gap:44px;animation:scroll 32s linear infinite}
-.mq-item{color:rgba(214,179,121,0.45);font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:9px}
-[data-theme="light"] .mq-item{color:var(--ink-500)}
-.mq-item::before{content:"·";font-size:13px}
-@keyframes scroll{to{transform:translateX(-50%)}}
-
-/* ═══ STATS ═══ */
-.stats{background:linear-gradient(160deg,#0A1929,#0E2236);padding:64px 0;border-top:1px solid rgba(176,132,66,0.1);border-bottom:1px solid rgba(176,132,66,0.1)}
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:32px;text-align:center}
-.stat-num{font-size:52px;font-weight:700;font-family:var(--font-sans);color:var(--navy);letter-spacing:-2px;line-height:1}
-.stat-lbl{color:rgba(214,179,121,0.45);margin-top:8px;font-size:14.5px}
-
-/* ═══ SECTIONS ═══ */
-.section{padding:104px 0;background:var(--bg)}
-.section.alt{background:var(--bg2)}
-
-/* eyebrow with diamond accents */
-.ey{text-align:center;font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:10px}
-.ey::before,.ey::after{content:'◆';font-size:7px;opacity:.55}
-h2.sh{text-align:center;font-size:clamp(30px,4vw,46px);font-weight:700;letter-spacing:-.4px;line-height:1.08;margin-bottom:16px;color:var(--txt)}
-.sh-sub{text-align:center;color:var(--txt2);font-size:17.5px;max-width:620px;margin:0 auto 60px;line-height:1.65}
-
-/* ═══ BENTO GRID ═══ */
-.bento{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:auto;gap:14px}
-.bcard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px;position:relative;overflow:hidden;transition:transform .3s,box-shadow .3s,border-color .3s;box-shadow:var(--shadow)}
-.bcard:hover{transform:translateY(-4px);box-shadow:0 2px 4px rgba(26,20,16,.05),0 16px 40px rgba(26,20,16,.1),0 0 0 1px rgba(176,132,66,0.28)}
-[data-theme="dark"] .bcard:hover{box-shadow:0 2px 4px rgba(0,0,0,.3),0 16px 40px rgba(0,0,0,.5),0 0 0 1px rgba(176,132,66,0.24)}
-.b1{grid-column:1/8}.b2{grid-column:8/13;grid-row:1/3}
-.b3{grid-column:1/5}.b4{grid-column:5/8}.b5{grid-column:1/7}.b6{grid-column:7/13}
-.bc-icon{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;margin-bottom:18px;background:rgba(176,132,66,0.08);border:1px solid rgba(176,132,66,0.2)}
-.bc-icon svg{width:24px;height:24px;stroke:var(--gold)}
-.bcard h3{font-family:var(--font-sans);font-size:18px;font-weight:600;margin-bottom:8px;color:var(--txt);letter-spacing:-.1px}
-.bcard>p{color:var(--txt2);font-size:14.5px;line-height:1.6;margin-bottom:0}
-.b-demo{margin-top:20px;padding-top:20px;border-top:1px solid rgba(176,132,66,0.1)}
-.b-chip-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
-.b-chip{background:var(--bg2);border:1px solid var(--border);color:var(--txt2);font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:999px;transition:.2s}
-.b-chip.on{background:rgba(176,132,66,0.1);border-color:rgba(176,132,66,0.35);color:var(--gold)}
-.b-prog{height:4px;background:var(--bg2);border-radius:2px;overflow:hidden;margin-bottom:6px}
-.b-prog-fill{height:100%;border-radius:2px;background:linear-gradient(to right,#D6B379,#B08442);width:0;transition:width 1.4s cubic-bezier(.4,0,.2,1)}
-.b-prog-lbl{font-size:12px;color:var(--txt3);font-weight:600}
-.b-results{margin-top:18px;display:flex;flex-direction:column;gap:8px}
-.b-res{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);font-size:13px;transition:.25s}
-.b-res.on{background:rgba(176,132,66,0.07);border-color:rgba(176,132,66,0.27)}
-.b-lex{font-size:11px;font-weight:700;color:var(--gold);background:rgba(176,132,66,0.1);padding:2px 7px;border-radius:5px;flex-shrink:0}
-.b-res span:last-child{color:var(--txt2);font-size:12.5px}
-.b-badge{display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:8px 14px;border-radius:10px;background:rgba(176,132,66,0.08);border:1px solid rgba(176,132,66,0.2);font-size:13px;font-weight:600;color:var(--gold)}
-.b-tg{margin-top:16px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(0,136,204,0.08);border-radius:10px;border:1px solid rgba(0,136,204,0.18);font-size:13px;font-weight:600;color:#2AA3E0}
-.b-online{font-size:12px;font-weight:500;color:#2ECC71;margin-left:auto}
-.b-sec-row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
-.b-sec{padding:6px 12px;border-radius:8px;font-size:12.5px;font-weight:600;background:rgba(47,107,67,0.08);border:1px solid rgba(47,107,67,0.2);color:#2F6B43}
-
-/* ═══ STEPS ═══ */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;counter-reset:s}
-.step{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:36px 28px;position:relative;box-shadow:var(--shadow);transition:transform .3s,box-shadow .3s}
-.step:hover{transform:translateY(-4px);box-shadow:0 2px 4px rgba(26,20,16,.05),0 16px 40px rgba(26,20,16,.1)}
-.step::before{counter-increment:s;content:counter(s);position:absolute;top:-18px;left:28px;width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#B08442,#8E6730);color:#FBF8F2;font-weight:800;font-size:18px;display:grid;place-items:center;box-shadow:0 6px 18px rgba(176,132,66,0.26)}
-.step h3{font-family:var(--font-sans);margin:18px 0 10px;font-size:18px;font-weight:600;color:var(--txt)}
-.step p{color:var(--txt2);font-size:15px;line-height:1.62}
-
-/* ═══ TESTIMONIALS ═══ */
-.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-.tcard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:16px;transition:transform .3s,box-shadow .3s}
-.tcard:hover{transform:translateY(-4px);box-shadow:0 2px 4px rgba(26,20,16,.05),0 16px 40px rgba(26,20,16,.1)}
-.stars{display:flex;gap:3px}
-.star{color:var(--txt3);font-size:14px}
-.tcard blockquote{font-style:italic;font-family:var(--font-sans);font-size:15.5px;line-height:1.7;color:var(--txt);font-weight:400;flex:1}
-/*.tcard blockquote::before{content:'"';font-size:48px;color:var(--gold-lt);line-height:.4;display:block;margin-bottom:12px;font-family:'Source Serif 4',Georgia,serif;opacity:.65}*/
-.tperson{display:flex;align-items:center;gap:12px}
-.tavatar{width:42px;height:42px;border-radius:999px;display:grid;place-items:center;font-weight:700;font-size:15px;color:#FBF8F2;flex-shrink:0}
-.tname{font-weight:700;font-size:15px;color:var(--txt)}
-.trole{font-size:13px;color:var(--txt3);margin-top:1px}
-
-/* ═══ SHOWCASE ═══ */
-.split{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
-.split h2{font-size:clamp(28px,3.5vw,40px);font-weight:700;letter-spacing:-.3px;line-height:1.12;margin-bottom:18px;color:var(--txt);text-align:left}
-.split>div>p{color:var(--txt2);font-size:16.5px;line-height:1.65;margin-bottom:22px}
-.check-list{list-style:none;display:flex;flex-direction:column;gap:14px}
-.check-list li{display:flex;align-items:flex-start;gap:12px;font-size:15.5px;color:var(--txt2);line-height:1.5}
-.check-ic{width:22px;height:22px;border-radius:6px;background:rgba(176,132,66,0.1);border:1px solid rgba(176,132,66,0.2);display:grid;place-items:center;flex-shrink:0;margin-top:1px}
-.check-ic svg{width:13px;height:13px;stroke:var(--gold);stroke-width:2.5}
-.sc-card{background:linear-gradient(160deg,#0A1929,#0E2236);border-radius:var(--r);/*padding:6px;*/box-shadow:0 30px 80px rgba(0,0,0,.4),0 0 0 1px rgba(176,132,66,0.14)}
-
-/* ═══ PRICING ═══ */
-.plans{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
-.plan{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px 24px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow);position:relative;transition:transform .3s,box-shadow .3s}
-.plan:hover{transform:translateY(-4px);box-shadow:0 2px 4px rgba(26,20,16,.05),0 20px 48px rgba(26,20,16,.12)}
-/* Paid tiers while payments are off — dimmed AND labelled. A greyed card with
-   no explanation reads as broken rather than as "not yet". */
-.plan.soon{opacity:.6}
-.plan.soon:hover{transform:none;box-shadow:var(--shadow)}
-.plan.soon .plan-price,.plan.soon .plan-name{filter:grayscale(1)}
-.plan-tag.soon-tag{background:var(--txt3)}
-.pr-testing{max-width:720px;margin:0 auto 30px;text-align:center;font-size:13.5px;line-height:1.65;color:var(--txt3);background:var(--bg2);border:0;border-radius:12px;padding:14px 18px}
-.pr-testing b{color:var(--txt)}
-.plan.ft{border:none;padding:29px 25px;z-index:1}
-.plan.ft::before{content:'';position:absolute;inset:0;border-radius:calc(var(--r) + 1px);background:linear-gradient(135deg,#D6B379,#B08442,#8E6730,#D6B379);background-size:300%;animation:border-anim 4s linear infinite;z-index:-1}
-.plan.ft::after{content:'';position:absolute;inset:1.5px;border-radius:calc(var(--r) - 1px);background:var(--card);z-index:-1}
-.plan.ft,.plan.ft .plan-name,.plan.ft .plan-price,.plan.ft .plan-per,.plan.ft .plan-features li,.plan.ft .plan-price small{color:var(--txt)}
-.plan.ft .plan-features li::before{color:var(--txt)}
-@keyframes border-anim{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
-.plan-tag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#B08442,#8E6730);color:#FBF8F2;font-size:11.5px;font-weight:700;padding:4px 14px;border-radius:999px;white-space:nowrap}
-.plan-name{font-family:var(--font-sans);font-size:16px;font-weight:600;color:var(--txt);margin-bottom:4px;min-height:22px}
-.plan-price{white-space:nowrap;font-size:36px;font-weight:800;color:var(--txt);letter-spacing:-1.5px;margin:8px 0 2px;line-height:1;min-height:44px;display:flex;align-items:baseline;flex-wrap:nowrap}
-.plan-price small{font-size:14px;font-weight:500;color:var(--txt2);margin-left:4px}
-.plan-per{font-size:13.5px;color:var(--txt3);margin-bottom:18px;min-height:20px}
-/* Who the plan is for — the first thing a buyer scans for. */
-.plan-for{font-size:12.5px;color:var(--txt3);line-height:1.45;margin-bottom:14px;min-height:58px}
-.plan-inherit{font-weight:600;color:var(--txt2)}
-.pr-note{max-width:760px;margin:34px auto 0;text-align:center;font-size:13.5px;line-height:1.7;color:var(--txt3)}
-.pr-note b{color:var(--txt2)}
-.plan-features{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:22px;flex:1}
-.plan-features li{font-size:14px;color:var(--txt2);display:flex;align-items:flex-start;gap:9px;line-height:1.45}
-.plan-features li::before{content:"◆";font-weight:800;color:var(--gold);font-size:7px;flex-shrink:0;margin-top:4px}
-.plan .btn{justify-content:center;width:100%;padding:13px}
-
-/* ═══ FAQ ═══ */
-.faq-wrap{max-width:760px;margin:0 auto}
-.qi{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
-.qi button{width:100%;text-align:left;background:none;border:none;padding:20px 22px;font-size:16px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:14px;color:var(--txt);font-family:inherit;transition:color .2s}
-.qi button:hover{color:var(--gold)}
-.qi-ans{max-height:0;overflow:hidden;transition:max-height .38s ease}
-.qi-ans p{padding:0 22px 20px;color:var(--txt2);font-size:15px;line-height:1.68}
-.qchev{transition:transform .3s;flex-shrink:0;color:var(--txt3)}
-.qi.open .qchev{transform:rotate(180deg)}
-
-/* ═══ CTA ═══ */
-.cta-band{background:linear-gradient(135deg,#0A1929 0%,#0E2236 50%,#0A1929 100%);position:relative;overflow:hidden;padding:88px 0;text-align:center;border-top:1px solid rgba(176,132,66,0.14);border-bottom:1px solid rgba(176,132,66,0.14)}
-.cta-band::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 50%,rgba(176,132,66,0.07),transparent 65%)}
-.cta-band h2{font-size:clamp(30px,4.5vw,50px);font-weight:700;color:#F5EFE3;letter-spacing:-.4px;line-height:1.05;margin-bottom:18px;position:relative;z-index:1}
-.cta-band p{color:rgba(214,179,121,0.62);font-size:18px;margin-bottom:34px;position:relative;z-index:1;max-width:500px;margin-left:auto;margin-right:auto}
-.cta-band .hero-actions{justify-content:center;position:relative;z-index:1}
-
-/* ═══ FOOTER ═══ */
-footer{background:#060E18;color:rgba(180,165,140,.5);padding:64px 0 32px;border-top:1px solid rgba(176,132,66,0.1)}
-.foot-grid{display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;gap:36px;margin-bottom:48px}
-.foot-col h4{color:#F5EFE3;font-size:14px;font-weight:600;margin-bottom:16px;font-family:var(--font-sans)}
-.foot-col a{display:block;color:rgba(180,165,140,.42);font-size:14px;margin-bottom:11px;transition:color .2s}
-.foot-col a:hover{color:var(--gold-lt)}
-.foot-brand-desc{font-size:14px;line-height:1.65;margin-top:12px;max-width:280px;color:rgba(180,165,140,.38)}
-.foot-bottom{border-top:1px solid rgba(176,132,66,0.08);padding-top:24px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-size:13px}
-
-/* ═══ REVEAL ═══ */
-.reveal{opacity:0;transform:translateY(22px);transition:opacity .75s ease,transform .75s ease}
-.reveal.in{opacity:1;transform:none}
-.reveal[data-d="1"]{transition-delay:.1s}
-.reveal[data-d="2"]{transition-delay:.2s}
-.reveal[data-d="3"]{transition-delay:.3s}
-.reveal[data-d="4"]{transition-delay:.4s}
-
-/* ═══ RESPONSIVE ═══ */
-@media(max-width:960px){
-  .hero-inner,.split,.foot-grid{grid-template-columns:1fr}
-  .hero-inner>.browser{order:-1;max-width:480px;margin:0 auto 16px}
-  .bento{grid-template-columns:repeat(6,1fr)}
-  .b1{grid-column:1/7}.b2{grid-column:1/7;grid-row:auto}
-  .b3,.b4{grid-column:span 3}.b5,.b6{grid-column:span 3}
-  .stats-grid,.testi-grid,.steps,.plans{grid-template-columns:1fr 1fr}
-  .nav-links{display:none}
-  .split h2{text-align:center}
-}
-@media(max-width:580px){
-  .stats-grid,.testi-grid,.steps,.plans{grid-template-columns:1fr}
-  .plan-name,.plan-price,.plan-per,.plan-for{min-height:0}
-  .bento{grid-template-columns:1fr}.b1,.b2,.b3,.b4,.b5,.b6{grid-column:1/-1;grid-row:auto}
-  nav{height:62px}
-  .hero{padding:100px 0 70px;min-height:auto}
-  .hs{display:none}
-  .btn-ghost.hsm{display:none}
-  .fb1,.fb2{display:none}
-  .foot-bottom{flex-direction:column}
-  .ls{display:none}
-  .brand-wordmark{display:none!important}
-  .brand-icon{display:block!important}
-}
-/* JuristAI product pass — the public site follows the same quiet, flat visual
-   language as the legal workspace. Decoration never competes with the task. */
-*{box-shadow:none!important}
-#intro-overlay,.cursor-glow,.orb,.fbadge{display:none!important}
-body{background:var(--bg);color:var(--txt)}
-
-header,
-header.sc{
-  position:fixed;
-  background:color-mix(in srgb,var(--bg) 94%,transparent);
-  border-bottom:1px solid var(--border);
-  backdrop-filter:none;
-  -webkit-backdrop-filter:none;
-}
-.nav-links a,
-[data-theme="light"] header.sc .nav-links a{color:var(--txt2)}
-.nav-links a:hover,
-[data-theme="light"] header.sc .nav-links a:hover{color:var(--txt)}
-[data-theme="light"] .logo-on-dark{display:none}
-[data-theme="light"] .logo-on-light{display:block}
-[data-theme="dark"] .logo-on-dark{display:block}
-[data-theme="dark"] .logo-on-light{display:none}
-.ls,.thm{background:transparent;border-color:var(--border)}
-.ls-b,[data-theme="light"] .ls-b{color:var(--txt3)}
-.ls-b.on{background:var(--bg3);color:var(--txt);border:1px solid var(--border)}
-.ls-b:not(.on):hover,[data-theme="light"] .ls-b:not(.on):hover{color:var(--txt)}
-.thm,[data-theme="light"] .thm{color:var(--txt2);background:transparent}
-.thm:hover,[data-theme="light"] .thm:hover{background:var(--bg2)}
-
-.btn{border-radius:var(--r-md);transition:background var(--t-fast),border-color var(--t-fast),color var(--t-fast)}
-.btn-primary{background:var(--accent)!important;color:var(--accent-fg);border:1px solid var(--accent)!important}
-.btn-primary:hover{transform:none;background:var(--accent-hover)!important;border-color:var(--accent-hover)!important}
-.btn-ghost,
-[data-theme="light"] header.sc .btn-ghost{background:transparent;color:var(--txt);border-color:var(--border)}
-.btn-ghost:hover,[data-theme="light"] header.sc .btn-ghost:hover{background:var(--bg2)}
-.btn-outline{background:transparent;border-color:var(--border);color:var(--txt)}
-.btn-outline:hover{background:var(--bg2);border-color:var(--border);color:var(--txt)}
-
-.hero{
-  min-height:760px;
-  background:var(--bg);
-  padding:132px 0 84px;
-}
-.hero::before,.hero::after{display:none}
-.hero-inner{gap:72px}
-.hero-eyebrow{background:transparent;border:0;color:var(--txt3);padding:0;border-radius:0;margin-bottom:24px}
-.hero-dot{background:var(--accent);box-shadow:none;animation:none}
-h1.ht{color:var(--txt);font-size:clamp(44px,5.4vw,68px);line-height:1.04;letter-spacing:-.045em}
-.gt{background:none;color:var(--accent);animation:none}
-.hero-sub{color:var(--txt2);max-width:580px}
-.hs{color:var(--txt3)}
-.hs strong{color:var(--txt);font-weight:700}
-
-.browser-wrap{background:var(--bg2);border:1px solid var(--border);animation:none}
-.br-bar{background:transparent;border-color:var(--border)}
-.br-dots{display:none}
-.br-url{background:var(--bg3);color:var(--txt3);margin:0}
-.br-lock{color:var(--txt3)}
-.bbl.u{background:var(--accent);color:var(--accent-fg);border-radius:14px 14px 4px 14px}
-.bbl.a{background:var(--bg3);color:var(--txt);border:1px solid var(--border);border-radius:14px 14px 14px 4px}
-.bbl.a strong{color:var(--txt)}
-.bsrc,.b-badge,.b-sec{color:var(--txt2);background:var(--bg2);border-color:var(--border)}
-.btyp span{background:var(--txt3)}
-
-.ticker{background:var(--bg2);border-color:var(--border)}
-.ticker-label{color:var(--txt2);border-color:var(--border)}
-.mq-item,[data-theme="light"] .mq-item{color:var(--txt3)}
-.stats{background:var(--bg2);border-color:var(--border);padding:56px 0}
-.stat-num{color:var(--txt)}
-.stat-lbl{color:var(--txt3)}
-
-.section{padding:88px 0}
-.ey{color:var(--txt3);letter-spacing:.12em}
-.ey::before,.ey::after{display:none}
-.sh-sub{margin-bottom:48px}
-.bento{gap:16px}
-.bcard,.step,.tcard,.plan{
-  background:var(--bg2);
-  border:0;
-  border-radius:var(--r-lg);
-}
-.bcard:hover,.step:hover,.tcard:hover,.plan:hover{transform:none}
-.bc-icon{width:34px;height:34px;background:transparent;border:0;margin-bottom:16px}
-.bc-icon svg{width:22px;height:22px;stroke:var(--txt2)}
-.b-demo{border-color:var(--border)}
-.b-chip,.b-res{background:var(--bg3);border-color:var(--border);color:var(--txt2)}
-.b-chip.on,.b-res.on{background:var(--bg3);border-color:var(--accent);color:var(--txt)}
-.b-prog{background:var(--border)}
-.b-prog-fill{background:var(--accent)}
-.b-lex{color:var(--txt2);background:var(--bg3);border:1px solid var(--border)}
-.b-tg{background:var(--bg3);border-color:var(--border);color:var(--txt2)}
-.b-online{color:var(--txt3)}
-
-.step::before{background:var(--accent);color:var(--accent-fg);border-radius:var(--r-md)}
-.tavatar{background:var(--bg3)!important;color:var(--txt)!important;border:1px solid var(--border)}
-.sc-card{background:var(--bg2);border-radius:var(--r-lg)}
-.check-ic{background:transparent;border:1px solid var(--border);color:var(--txt2)}
-
-.plan{padding:28px 22px}
-.plan:hover{transform:none;box-shadow:none}
-.plan.ft{background:var(--bg2);border-top:2px solid var(--accent)}
-.plan.ft::before{display:none}
-.plan-tag{background:var(--accent);color:var(--accent-fg);border-radius:var(--r-sm)}
-.plan-features li::before{content:"✓";font-size:12px;color:var(--txt3)}
-@media(max-width:580px){.plan-for{min-height:0}}
-.qi{background:transparent;border:0;border-bottom:1px solid var(--border);border-radius:0}
-.qi button{padding:20px 0}
-.qi-ans p{padding-left:0;padding-right:0}
-
-.cta-band{background:var(--navy-900);border:0;padding:76px 0}
-.cta-band::before{display:none}
-.cta-band h2{color:#F7F8F8}
-.cta-band p{color:#C7D0D4}
-.cta-band .btn-primary{background:#F7F8F8!important;border-color:#F7F8F8!important;color:var(--navy-900)}
-footer{background:var(--dark-bg-1);border-color:var(--dark-border)}
-
-@media(max-width:960px){
-  .hero{min-height:auto;padding-top:116px}
-  .hero-inner>.browser{order:initial}
-  .nav-end .btn-primary{min-width:auto}
-}
-@media(max-width:580px){
-  .hero{padding-top:96px}
-  h1.ht{font-size:42px}
-  .hero-inner{gap:40px}
-  .section{padding:68px 0}
-  .nav-end .btn-primary{display:none}
-}
-</style>
-<link rel="stylesheet" href="/css/redesign-v2.css">
-<script src="/js/redesign-v2.js" defer></script>
 </head>
 <body>
+<div id="jai-root" data-theme="light" data-lang="uz">
 
-<!-- ═══ NAV ═══ -->
-<header id="hdr">
-  <div class="wrap">
-    <nav>
-      <a href="#" class="brand" aria-label="JuristAI">
-        <img src="./icon-1024.png"                   alt="JuristAI" class="brand-img brand-icon">
-        <img src="./wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img logo-on-dark brand-wordmark">
-        <img src="./wordmark-primary-2048.png"       alt="JuristAI" class="brand-img logo-on-light brand-wordmark">
-      </a>
-      <div class="nav-links">
-        <a href="#features" data-i18n="nav_features">Imkoniyatlar</a>
-        <a href="#how" data-i18n="nav_how">Qanday ishlaydi</a>
-        <a href="/attorneys.html" data-i18n="nav_attorneys">Advokatlar</a>
-        <a href="#pricing" data-i18n="nav_pricing">Tariflar</a>
-        <a href="#faq" data-i18n="nav_faq">Savollar</a>
-      </div>
-      <div class="nav-end">
-        <div class="ls" id="ls">
-          <button class="ls-b on" data-lang="uz">UZ</button>
-          <button class="ls-b" data-lang="ru">RU</button>
+  <header class="jai-header">
+    <div class="jai-wrap" data-r="wrap">
+      <nav data-r="navbar" style="display:flex; align-items:center; height:72px; gap:20px;">
+        <a href="/" style="display:inline-flex; align-items:center; gap:10px; flex-shrink:0; line-height:1;">
+          <img src="/brand/wordmark-filled-light.png" alt="JuristAI" data-r="wordmark" data-wordmark-light style="height:34px; max-width:124px; width:auto; object-fit:contain; display:block;">
+          <img src="/brand/wordmark-filled-dark.png" alt="JuristAI" data-r="wordmark" data-wordmark-dark hidden style="height:34px; max-width:124px; width:auto; object-fit:contain; display:block;">
+        </a>
+        <div data-r="nav-links" style="display:flex; align-items:center; justify-content:center; gap:6px; flex:1;">
+          <a class="jai-navlink" href="#features" data-i18n="nav_features">Imkoniyatlar</a>
+          <a class="jai-navlink" href="#how" data-i18n="nav_how">Qanday ishlaydi</a>
+          <a class="jai-navlink" href="/attorneys.html" data-i18n="nav_attorneys">Advokatlar</a>
+          <a class="jai-navlink" href="#pricing" data-i18n="nav_pricing">Tariflar</a>
+          <a class="jai-navlink" href="#faq" data-i18n="nav_faq">Savollar</a>
         </div>
-        <button class="thm" id="thm"></button>
-        <a href="/login.html" class="btn btn-ghost hsm" data-i18n="nav_login">Kirish</a>
-        <a href="/login.html" class="btn btn-primary" data-i18n="nav_cta">Bepul boshlash</a>
-      </div>
-    </nav>
-  </div>
-</header>
-
-<!-- ═══ HERO ═══ -->
-<section class="hero">
-  <div class="wrap hero-inner">
-    <div>
-      <div class="hero-eyebrow"><span class="hero-dot"></span><span data-i18n="hero_pill">Lex.uz dagi eng so'nggi qonunlar asosida</span></div>
-      <h1 class="ht" data-i18n="hero_title">O'zbekiston huquqi bo'yicha <span class="gt">sun'iy intellekt</span> yuristingiz</h1>
-      <p class="hero-sub" data-i18n="hero_sub">Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.</p>
-      <div class="hero-actions">
-        <a href="/login.html" class="btn btn-primary btn-lg" data-i18n="hero_btn1">Bepul sinab ko'rish</a>
-        <a href="#how" class="btn btn-ghost btn-lg" data-i18n="hero_btn2">Qanday ishlaydi?</a>
-      </div>
-      <div class="hero-stats">
-        <div class="hs"><strong>13+</strong><span data-i18n="hs1">huquqiy soha</span></div>
-        <div class="hs"><strong>24/7</strong><span data-i18n="hs2">doimo ulangan</span></div>
-        <div class="hs"><strong data-i18n="hs3_n">&lt;1s</strong><span data-i18n="hs3">javob vaqti</span></div>
-      </div>
-    </div>
-    <div class="browser">
-      <div class="fbadge fb1"><span class="fb-dot"></span><span data-i18n="fb1">✓ Manba tasdiqlandi</span></div>
-      <div class="fbadge fb2"><span class="fb-dot"></span><span data-i18n="fb2">Shifrlangan</span></div>
-      <div class="browser-wrap">
-        <div class="br-bar">
-          <div class="br-dots"><i class="br-dot"></i><i class="br-dot"></i><i class="br-dot"></i></div>
-          <div class="br-url">juristai.uz/chat</div>
-        </div>
-        <div class="br-body" id="mockBody">
-          <div class="bbl u" style="animation-delay:.3s;opacity:0;animation:rise .5s .3s ease forwards" data-i18n="mock_q">Qizil chiroqda o'tib ketsam qancha jarima to'layman?</div>
-          <div class="btyp" id="typing"><span></span><span></span><span></span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══ TRUST BAND ═══ -->
-<div class="trust">
-  <div class="trust-inner">
-    <span class="trust-label" data-i18n="trust_label">Qamrab oladi</span>
-    <div class="marquee">
-      <div class="marquee-track">
-        <span class="mq-item" data-i18n="mq1">Fuqarolik qonunchiligi</span><span class="mq-item" data-i18n="mq2">Oila qonunchiligi</span><span class="mq-item" data-i18n="mq3">Mehnat va bandlik</span><span class="mq-item" data-i18n="mq4">Moliya va bank</span><span class="mq-item" data-i18n="mq5">Xavfsizlik va huquq tartibot</span><span class="mq-item" data-i18n="mq6">Tadbirkorlik</span><span class="mq-item" data-i18n="mq7">Uy-joy qonunchiligi</span><span class="mq-item" data-i18n="mq8">Odil sudlov</span><span class="mq-item" data-i18n="mq9">Ijtimoiy himoya</span><span class="mq-item" data-i18n="mq10">Xalqaro huquq</span><span class="mq-item" data-i18n="mq11">Advokatura. Notariat</span>
-        <span class="mq-item" data-i18n="mq1">Fuqarolik qonunchiligi</span><span class="mq-item" data-i18n="mq2">Oila qonunchiligi</span><span class="mq-item" data-i18n="mq3">Mehnat va bandlik</span><span class="mq-item" data-i18n="mq4">Moliya va bank</span><span class="mq-item" data-i18n="mq5">Xavfsizlik va huquq tartibot</span><span class="mq-item" data-i18n="mq6">Tadbirkorlik</span><span class="mq-item" data-i18n="mq7">Uy-joy qonunchiligi</span><span class="mq-item" data-i18n="mq8">Odil sudlov</span><span class="mq-item" data-i18n="mq9">Ijtimoiy himoya</span><span class="mq-item" data-i18n="mq10">Xalqaro huquq</span><span class="mq-item" data-i18n="mq11">Advokatura. Notariat</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══ STATS ═══ -->
-<div class="stats">
-  <div class="wrap stats-grid">
-    <div class="reveal"><div class="stat-num" data-count="13" data-suffix="+">0</div><div class="stat-lbl" data-i18n="stat1">Huquqiy soha</div></div>
-    <div class="reveal" data-d="1"><div class="stat-num" data-count="100" data-suffix="%">0</div><div class="stat-lbl" data-i18n="stat2">Manbaga asoslangan</div></div>
-    <div class="reveal" data-d="2"><div class="stat-num" data-count="1" data-suffix="s<">0</div><div class="stat-lbl" data-i18n="stat3">Javob vaqti</div></div>
-    <div class="reveal" data-d="3"><div class="stat-num" data-count="24" data-suffix="/7">0</div><div class="stat-lbl" data-i18n="stat4">Doimo ulangan</div></div>
-  </div>
-</div>
-
-<!-- ═══ FEATURES ═══ -->
-<section class="section" id="features">
-  <div class="wrap">
-    <p class="ey reveal" data-i18n="feat_ey">Nima uchun JuristAI</p>
-    <h2 class="sh reveal" data-i18n="feat_h">Oddiy chatbot emas — <span class="gt">huquqiy aniqlik</span></h2>
-    <p class="sh-sub reveal" data-i18n="feat_sub">Har bir javob amaldagi qonun matniga bog'lanadi. To'qib chiqarilgan havolalar yo'q.</p>
-    <div class="bento">
-      <div class="bcard b1 reveal">
-        <div class="bc-icon"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></div>
-        <h3 data-i18n="feat1_h">AI huquqiy tahlil</h3>
-        <p data-i18n="feat1_p">Murakkab savollarni tushunadi, qonun normalarini tahlil qilib, aniq xulosa beradi.</p>
-        <div class="b-demo">
-          <div class="b-chip-row">
-            <span class="b-chip on" data-i18n="bc1">128⁴-modda</span>
-            <span class="b-chip" data-i18n="bc2">165-modda</span>
-            <span class="b-chip" data-i18n="bc3">56-modda</span>
+        <div data-r="nav-end" style="display:flex; align-items:center; justify-content:flex-end; gap:7px; flex-shrink:0;">
+          <div style="display:flex; align-items:center; border:0; border-radius:999px; padding:3px 4px; gap:2px;">
+            <button class="jai-langbtn" data-lang-set="uz" aria-pressed="true">UZ</button>
+            <button class="jai-langbtn" data-lang-set="ru" aria-pressed="false">RU</button>
           </div>
-          <div class="b-prog"><div class="b-prog-fill" data-w="84" style="width:0%"></div></div>
-          <div class="b-prog-lbl" data-i18n="b_match">84% mos kelish darajasi</div>
+          <button class="jai-themebtn" data-theme-toggle title="Theme" aria-label="Theme">
+            <svg data-theme-icon="light" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+            <svg data-theme-icon="dark" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </button>
+          <a class="jai-navbtn" data-r="nav-login" href="/login.html" data-i18n="nav_login">Kirish</a>
+          <a class="jai-navbtn jai-navbtn--primary" href="/login.html" data-i18n="nav_cta">Bepul boshlash</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <section data-r="hero-sec" style="position:relative; min-height:680px; display:flex; align-items:center; padding:112px 0 84px; overflow:hidden;">
+    <div aria-hidden="true" style="position:absolute; top:-200px; left:-4%; right:52%; bottom:0; pointer-events:none; z-index:0; overflow:hidden; mask-image:linear-gradient(180deg, #000 0, #000 76%, transparent), linear-gradient(90deg, #000 78%, transparent); -webkit-mask-image:linear-gradient(180deg, #000 0, #000 76%, transparent), linear-gradient(90deg, #000 78%, transparent); -webkit-mask-composite:source-in; mask-composite:intersect;">
+      <img src="/media/hero-scales.jpg" alt="" style="position:absolute; top:150px; left:-16%; width:min(980px, 140%); height:auto; object-fit:contain; opacity:.1; filter:contrast(1.25) saturate(.8); mask-image:radial-gradient(58% 58% at 52% 52%, #000 20%, transparent 92%); -webkit-mask-image:radial-gradient(58% 58% at 52% 52%, #000 20%, transparent 92%); transform-origin:60% 55%; animation:jai-kenburns 26s cubic-bezier(.4,0,.2,1) infinite alternate;">
+    </div>
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; z-index:0; overflow:hidden; mask-image:linear-gradient(180deg, transparent, #000 18%, #000 74%, transparent); -webkit-mask-image:linear-gradient(180deg, transparent, #000 18%, #000 74%, transparent);">
+      <div style="position:absolute; inset:0; background-image:repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink) 6%, transparent) 0 1px, transparent 1px 34px); opacity:.5;"></div>
+      <div data-coderefs style="position:absolute; inset:0; perspective:900px; perspective-origin:52% 46%; transform-style:preserve-3d; font-family:ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size:13px; font-weight:500; letter-spacing:.04em; color:color-mix(in srgb, var(--ink) 30%, transparent); white-space:nowrap;"></div>
+    </div>
+    <div data-r="hero" style="position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:0 24px; display:grid; grid-template-columns:minmax(0,.95fr) minmax(420px,.85fr); gap:clamp(48px,7vw,92px); align-items:center; width:100%;">
+      <div>
+        <div class="jai-hero-pill">
+          <span style="width:7px; height:7px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px color-mix(in srgb, var(--brand) 58%, transparent); animation:jai-pulse 2s ease infinite;"></span>
+          <span data-i18n="hero_pill">Lex.uz dagi eng so'nggi qonunlar asosida</span>
+        </div>
+        <h1 class="jai-hero-h1" data-r="hero-h1"><span data-i18n="hero_title_a">O'zbekiston huquqi bo'yicha</span> <span class="jai-glitch" data-txt="sun'iy intellekt" data-i18n="hero_title_em">sun'iy intellekt</span> <span data-i18n="hero_title_b">yuristingiz</span></h1>
+        <p class="jai-hero-sub" data-i18n="hero_sub">Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.</p>
+        <div data-r="hero-actions" style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:36px;">
+          <a class="jai-btn jai-btn--primary" href="/login.html" data-i18n="hero_btn1">Bepul sinab ko'rish</a>
+          <a class="jai-btn jai-btn--ghost" href="#how" data-i18n="hero_btn2">Qanday ishlaydi?</a>
+        </div>
+        <div style="display:flex; gap:28px; flex-wrap:wrap;">
+          <div class="jai-hero-stat"><strong data-i18n="hs1_n">50 000+</strong><span data-i18n="hs1">normativ hujjatlar bazasi</span></div>
+          <div class="jai-hero-stat"><strong data-i18n="hs2_n">lex.uz</strong><span data-i18n="hs2">kunlik yangilanish</span></div>
+          <div class="jai-hero-stat"><strong data-i18n="hs3_n">3</strong><span data-i18n="hs3">til: o‘zbek, rus, ingliz</span></div>
         </div>
       </div>
-      <div class="bcard b2 reveal" data-d="1">
-        <div class="bc-icon"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"/></svg></div>
-        <h3 data-i18n="feat2_h">Lex.uz RAG qidiruv</h3>
-        <p data-i18n="feat2_p">Javoblar bevosita amaldagi qonunlardan. Eski tahrirlar avtomatik chetlab o'tiladi.</p>
-        <div class="b-results">
-          <div class="b-res on"><span class="b-lex">lex.uz</span><span data-i18n="br1">Ma'muriy kodeks, 128⁴</span></div>
-          <div class="b-res"><span class="b-lex">lex.uz</span><span data-i18n="br2">Mehnat kodeksi, 165</span></div>
-          <div class="b-res"><span class="b-lex">lex.uz</span><span data-i18n="br3">Fuqarolik kodeksi, 56</span></div>
+      <div style="position:relative; display:flex; justify-content:center;">
+        <div style="position:relative; width:min(360px,100%); border-radius:46px; padding:11px; background:linear-gradient(160deg, color-mix(in srgb, var(--ink) 22%, transparent), color-mix(in srgb, var(--ink) 8%, transparent)); box-shadow:0 40px 90px -40px rgba(15,23,42,.55), 0 0 0 1px var(--line);">
+          <div style="position:relative; border-radius:36px; overflow:hidden; background:var(--panel-solid); display:flex; flex-direction:column; height:660px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 22px 6px; font-size:11.5px; font-weight:700; color:var(--muted-dim);">
+              <span>9:41</span>
+              <span style="position:absolute; left:50%; transform:translateX(-50%); top:8px; width:96px; height:22px; border-radius:999px; background:var(--ink); opacity:.9;"></span>
+              <span>JuristAI</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line);">
+              <div style="width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg, var(--brand), var(--brand-2)); display:grid; place-items:center; color:#fff; font-size:12px; font-weight:700;">AI</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13px; font-weight:600; color:var(--ink);">JuristAI</div>
+                <div style="font-size:10.5px; color:var(--brand); font-weight:600;">online</div>
+              </div>
+            </div>
+            <div data-chat-log style="flex:1; padding:14px 14px 8px; display:flex; flex-direction:column; justify-content:flex-end; gap:10px; overflow:hidden; mask-image:linear-gradient(180deg, transparent, #000 14%); -webkit-mask-image:linear-gradient(180deg, transparent, #000 14%);"></div>
+            <div style="display:flex; align-items:flex-end; gap:8px; padding:8px 12px 10px; border-top:1px solid var(--line);">
+              <div style="flex:1; min-height:34px; border-radius:17px; background:var(--panel-hover); border:1px solid var(--line); padding:8px 12px; font-size:12px; line-height:1.4; color:var(--ink); text-align:left; word-break:break-word;">
+                <span data-chat-draft></span><span style="display:inline-block; width:1.5px; height:12px; vertical-align:-2px; background:var(--brand); margin-left:1px; animation:jai-blink 1s steps(1) infinite;"></span>
+              </div>
+              <div data-chat-send style="width:34px; height:34px; flex-shrink:0; border-radius:50%; background:var(--brand); display:grid; place-items:center; color:#fff; transform:scale(1); transition:transform 140ms cubic-bezier(.2,.8,.2,1);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </div>
+            </div>
+            <div style="background:color-mix(in srgb, var(--panel-hover) 70%, transparent); border-top:1px solid var(--line); padding:8px 5px 12px; display:flex; flex-direction:column; gap:6px;">
+              <div data-keyrow="0" style="display:flex; gap:4px; justify-content:center; padding:0 4px;"></div>
+              <div data-keyrow="1" style="display:flex; gap:4px; justify-content:center; padding:0 16px;"></div>
+              <div data-keyrow="2" style="display:flex; gap:4px; justify-content:center; padding:0 34px;"></div>
+              <div style="display:flex; gap:4px; justify-content:center; padding:0 4px;">
+                <div style="width:34px; height:30px; border-radius:6px; background:var(--panel-solid); box-shadow:0 1px 0 var(--line);"></div>
+                <div data-keyspace style="flex:1; height:30px; border-radius:6px; background:var(--panel-solid); box-shadow:0 1px 0 var(--line); transition:background 90ms linear;"></div>
+                <div style="width:34px; height:30px; border-radius:6px; background:var(--panel-solid); box-shadow:0 1px 0 var(--line);"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="bcard b3 reveal">
-        <div class="bc-icon"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg></div>
-        <h3 data-i18n="feat3_h">Manbalar bilan</h3>
-        <p data-i18n="feat3_p">Har bir javob ostida modda va lex.uz havolasi — o'zingiz tekshira olasiz.</p>
-        <div class="b-badge" data-i18n="b_src_badge">128⁴-modda · lex.uz</div>
-      </div>
-      <div class="bcard b4 reveal" data-d="1">
-        <div class="bc-icon"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></div>
-        <h3 data-i18n="feat4_h">Hujjat tahlili</h3>
-        <p data-i18n="feat4_p">Shartnoma yoki hujjatni yuklang — JuristAI xavfli nuqtalarni ko'rsatadi.</p>
-      </div>
-      <div class="bcard b5 reveal">
-        <div class="bc-icon"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5a8.4 8.4 0 1 1 16.1-4.5Z"/></svg></div>
-        <h3 data-i18n="feat5_h">Telegram orqali</h3>
-        <p data-i18n="feat5_p">Ro'yxatdan o'tish va kirish Telegram orqali — parol kerak emas.</p>
-        <div class="b-tg"><span>@juristAI_registration_bot</span><span class="b-online">● online</span></div>
-      </div>
-      <div class="bcard b6 reveal" data-d="1">
-        <div class="bc-icon"><svg fill="none" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg></div>
-        <h3 data-i18n="feat6_h">Maxfiy va xavfsiz</h3>
-        <p data-i18n="feat6_p">Savollaringiz himoyalangan. Ma'lumotlar uchinchi shaxslarga berilmaydi.</p>
-        <div class="b-sec-row">
-          <span class="b-sec" data-i18n="bs1">SSL/TLS</span>
-          <span class="b-sec" data-i18n="bs2">Shifrlash</span>
-          <span class="b-sec" data-i18n="bs3">✓ Xavfsiz</span>
+    </div>
+  </section>
+
+  <div data-r="mq" style="border-top:1px solid var(--mq-fg); border-bottom:1px solid var(--mq-fg); background:var(--mq-bg); overflow:hidden;">
+    <div style="display:flex; align-items:stretch; min-height:46px;">
+      <span data-mq-label="1" style="flex-shrink:0; font-size:12px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--mq-fg); display:flex; align-items:center; padding:0 32px 0 24px; border-right:1px solid var(--line); white-space:nowrap;" data-i18n="trust_label">Qamrab oladi</span>
+      <div style="flex:1; display:flex; align-items:center; overflow:hidden; white-space:nowrap;">
+        <div style="display:inline-flex; gap:44px; animation:jai-scroll 32s linear infinite;">
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.0">Mehnat huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.1">Oila huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.2">Fuqarolik huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.3">Soliq huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.4">Jinoyat huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.5">Ma'muriy javobgarlik</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.6">Korporativ huquq</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.7">Tadbirkorlik</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.8">Uy-joy huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.9">Mulk huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.10">Notariat</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.0">Mehnat huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.1">Oila huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.2">Fuqarolik huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.3">Soliq huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.4">Jinoyat huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.5">Ma'muriy javobgarlik</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.6">Korporativ huquq</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.7">Tadbirkorlik</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.8">Uy-joy huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.9">Mulk huquqi</span>
+          <span style="color:var(--mq-fg); font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:9px;" data-i18n="marquee.10">Notariat</span>
         </div>
       </div>
     </div>
   </div>
-</section>
 
-<!-- ═══ HOW IT WORKS ═══ -->
-<section class="section alt" id="how">
-  <div class="wrap">
-    <p class="ey reveal" data-i18n="how_ey">3 oddiy qadam</p>
-    <h2 class="sh reveal" data-i18n="how_h">Daqiqada javob oling</h2>
-    <p class="sh-sub reveal" data-i18n="how_sub">Yurist qabuliga yozilish shart emas.</p>
-    <div class="steps">
-      <div class="step reveal"><h3 data-i18n="s1_h">Savolingizni yozing</h3><p data-i18n="s1_p">Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas.</p></div>
-      <div class="step reveal" data-d="1"><h3 data-i18n="s2_h">AI qonunni qidiradi</h3><p data-i18n="s2_p">JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi.</p></div>
-      <div class="step reveal" data-d="2"><h3 data-i18n="s3_h">Manbali javob</h3><p data-i18n="s3_p">Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda.</p></div>
+  <div style="background:color-mix(in srgb, var(--panel-solid) 38%, transparent); border-bottom:1px solid var(--line); padding:56px 0;">
+    <div data-r="g4" style="max-width:1180px; margin:0 auto; padding:0 24px; display:grid; grid-template-columns:repeat(4,1fr); gap:32px; text-align:center;">
+      <div><div style="font-size:52px; font-weight:600; color:var(--ink); letter-spacing:-2px; line-height:1;" data-statnum="0">13+</div><div style="color:var(--muted); margin-top:8px; font-size:14.5px;" data-i18n="stats.0">Huquqiy soha</div></div>
+      <div><div style="font-size:52px; font-weight:600; color:var(--ink); letter-spacing:-2px; line-height:1;" data-statnum="1">100%</div><div style="color:var(--muted); margin-top:8px; font-size:14.5px;" data-i18n="stats.1">Manbaga asoslangan</div></div>
+      <div><div style="font-size:52px; font-weight:600; color:var(--ink); letter-spacing:-2px; line-height:1;" data-statnum="2">&lt;1s</div><div style="color:var(--muted); margin-top:8px; font-size:14.5px;" data-i18n="stats.2">Javob vaqti</div></div>
+      <div><div style="font-size:52px; font-weight:600; color:var(--ink); letter-spacing:-2px; line-height:1;" data-statnum="3">24/7</div><div style="color:var(--muted); margin-top:8px; font-size:14.5px;" data-i18n="stats.3">Doimo ulangan</div></div>
     </div>
   </div>
-</section>
 
-<!-- ═══ TESTIMONIALS ═══ -->
-<section class="section">
-  <div class="wrap">
-    <p class="ey reveal" data-i18n="testi_ey">Foydalanuvchilar fikri</p>
-    <h2 class="sh reveal" data-i18n="testi_h">Ular allaqachon ishlayapti</h2>
-    <div class="testi-grid" style="margin-top:48px">
-      <div class="tcard reveal">
-        <div class="stars"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
-        <blockquote data-i18n="t1_q">Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.</blockquote>
-        <div class="tperson">
-          <div class="tavatar" style="background:linear-gradient(135deg,#16365A,#2C5C92)">ST</div>
-          <div><div class="tname" data-i18n="t1_name">Sarvar T.</div><div class="trole" data-i18n="t1_role">Kichik biznes egasi</div></div>
+  <div data-r="solve" style="position:relative;">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; z-index:0;">
+      <canvas data-field style="position:sticky; top:0; display:block; width:100%; height:100vh; opacity:.10;"></canvas>
+    </div>
+    <div style="position:relative; z-index:1;">
+
+      <section id="features" class="jai-sec" data-r="sec" style="position:relative;">
+        <div class="jai-wrap" data-r="wrap" style="position:relative;">
+          <p class="jai-ey" data-i18n="feat_ey">Nima uchun JuristAI</p>
+          <h2 class="jai-h2"><span data-i18n="feat_h_a">Oddiy chatbot emas —</span> <span class="jai-grad" data-i18n="feat_h_em">huquqiy aniqlik</span></h2>
+          <p class="jai-sub jai-sub--wide" data-i18n="feat_sub">Har bir javob amaldagi qonun matniga bog'lanadi. To'qib chiqarilgan havolalar yo'q.</p>
+          <div data-r="grid12" style="display:grid; grid-template-columns:repeat(12,1fr); gap:16px;">
+
+            <div class="jai-card" data-tilt="1" style="grid-column:1/8;">
+              <div class="jai-card__icon"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3Z"/></svg></div>
+              <h3 class="jai-card__h" data-i18n="feat1_h">AI huquqiy tahlil</h3>
+              <p class="jai-card__p" data-i18n="feat1_p">Murakkab savollarni tushunadi, qonun normalarini tahlil qilib, aniq xulosa beradi.</p>
+              <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--line);">
+                <div style="display:flex; flex-wrap:wrap; gap:7px; margin-bottom:14px;">
+                  <span class="jai-chip jai-chip--brand" data-i18n="bc1">128⁴-modda</span>
+                  <span class="jai-chip" data-i18n="bc2">165-modda</span>
+                  <span class="jai-chip" data-i18n="bc3">56-modda</span>
+                </div>
+                <div style="height:4px; background:var(--line); border-radius:2px; overflow:hidden; margin-bottom:6px;"><div data-progbar style="height:100%; border-radius:2px; background:var(--brand); width:0%; transition:width 1.4s cubic-bezier(.4,0,.2,1);"></div></div>
+                <div style="font-size:12px; color:var(--muted-dim); font-weight:600;" data-i18n="b_match">84% mos kelish darajasi</div>
+              </div>
+            </div>
+
+            <div class="jai-card" data-tilt="1" style="grid-column:8/13; grid-row:1/3;">
+              <div class="jai-card__icon"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"/></svg></div>
+              <h3 class="jai-card__h" data-i18n="feat2_h">Lex.uz RAG qidiruv</h3>
+              <p class="jai-card__p" data-i18n="feat2_p">Javoblar bevosita amaldagi qonunlardan. Eski tahrirlar avtomatik chetlab o'tiladi.</p>
+              <div style="margin-top:18px; display:flex; flex-direction:column; gap:8px;">
+                <div class="jai-lexrow jai-lexrow--hit"><span class="jai-lexbadge">lex.uz</span><span class="jai-lextext" data-i18n="br1">Ma'muriy kodeks, 128⁴</span></div>
+                <div class="jai-lexrow"><span class="jai-lexbadge">lex.uz</span><span class="jai-lextext" data-i18n="br2">Mehnat kodeksi, 165</span></div>
+                <div class="jai-lexrow"><span class="jai-lexbadge">lex.uz</span><span class="jai-lextext" data-i18n="br3">Fuqarolik kodeksi, 56</span></div>
+              </div>
+              <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--line);">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                  <span style="font-size:10.5px; font-weight:700; letter-spacing:.9px; text-transform:uppercase; color:var(--brand);" data-i18n="rag_an_ey">Tahlil</span>
+                  <span style="flex:1; height:1px; background:var(--line);"></span>
+                  <span style="font-size:10.5px; font-weight:700; color:var(--brand); background:var(--brand-soft); border:1px solid var(--brand-border); padding:2px 7px; border-radius:5px;" data-i18n="br1">Ma'muriy kodeks, 128⁴</span>
+                </div>
+                <p style="margin:0 0 10px; font-size:13px; line-height:1.62; color:var(--muted);" data-i18n="rag_an_p">128⁴-modda svetoforning taqiqlovchi signaliga yoki tartibga soluvchining ishorasiga bo‘ysunmaslikni ikki holatga ajratadi — jarima qaysi chegaradan o‘tganingizga bog‘liq.</p>
+                <div style="display:flex; flex-direction:column; gap:7px;">
+                  <div style="display:flex; align-items:flex-start; gap:10px; padding:9px 11px; border-radius:10px; background:var(--panel-hover); border:1px solid var(--line);"><span style="font-size:12px; font-weight:700; color:var(--brand); flex-shrink:0;" data-i18n="rag_analysis.0.0">0,5 BHM</span><span style="font-size:12.5px; line-height:1.5; color:var(--muted);" data-i18n="rag_analysis.0.1">To‘xtash chizig‘ini bosib kirish — chiziq yoki belgi bilan belgilangan joydan oshib ketish, lekin chorrahaga o‘tmaslik.</span></div>
+                  <div style="display:flex; align-items:flex-start; gap:10px; padding:9px 11px; border-radius:10px; background:var(--panel-hover); border:1px solid var(--line);"><span style="font-size:12px; font-weight:700; color:var(--brand); flex-shrink:0;" data-i18n="rag_analysis.1.0">3 BHM</span><span style="font-size:12.5px; line-height:1.5; color:var(--muted);" data-i18n="rag_analysis.1.1">Taqiqlovchi signal yoki ishoraga bo‘ysunmasdan butunlay o‘tib ketish.</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="jai-card" data-tilt="1" style="grid-column:1/5;">
+              <div class="jai-card__icon"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg></div>
+              <h3 class="jai-card__h" data-i18n="feat3_h">Manbalar bilan</h3>
+              <p class="jai-card__p" data-i18n="feat3_p">Har bir javob ostida modda va lex.uz havolasi — o'zingiz tekshira olasiz.</p>
+              <div style="display:inline-flex; align-items:center; gap:6px; margin-top:16px; padding:8px 14px; border-radius:10px; background:var(--brand-soft); border:1px solid var(--brand-border); font-size:13px; font-weight:600; color:var(--brand);" data-i18n="b_src_badge">128⁴-modda · lex.uz</div>
+            </div>
+
+            <div class="jai-card" data-tilt="1" style="grid-column:5/8;">
+              <div class="jai-card__icon"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></div>
+              <h3 class="jai-card__h" data-i18n="feat4_h">Hujjat tahlili</h3>
+              <p class="jai-card__p" data-i18n="feat4_p">Shartnoma yoki hujjatni yuklang — JuristAI xavfli nuqtalarni ko'rsatadi.</p>
+            </div>
+
+            <div class="jai-card" data-tilt="1" style="grid-column:1/7;">
+              <div class="jai-card__icon"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5a8.4 8.4 0 1 1 16.1-4.5Z"/></svg></div>
+              <h3 class="jai-card__h" data-i18n="feat5_h">Telegram orqali</h3>
+              <p class="jai-card__p" data-i18n="feat5_p">Ro'yxatdan o'tish va kirish Telegram orqali — parol kerak emas.</p>
+              <div style="margin-top:16px; display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--panel-hover); border:1px solid var(--line); border-radius:10px; font-size:13px; font-weight:600; color:var(--muted);"><span>@juristAI_registration_bot</span><span style="font-size:12px; font-weight:500; color:var(--muted-dim); margin-left:auto;">● online</span></div>
+            </div>
+
+            <div class="jai-card" data-tilt="1" style="grid-column:7/13;">
+              <div class="jai-card__icon"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg></div>
+              <h3 class="jai-card__h" data-i18n="feat6_h">Maxfiy va xavfsiz</h3>
+              <p class="jai-card__p" data-i18n="feat6_p">Savollaringiz himoyalangan. Ma'lumotlar uchinchi shaxslarga berilmaydi.</p>
+              <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
+                <span class="jai-tag" data-i18n="bs1">SSL/TLS</span>
+                <span class="jai-tag" data-i18n="bs2">Shifrlash</span>
+                <span class="jai-tag" data-i18n="bs3">✓ Xavfsiz</span>
+              </div>
+            </div>
+
+          </div>
         </div>
-      </div>
-      <div class="tcard reveal" data-d="1">
-        <div class="stars"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
-        <blockquote data-i18n="t2_q">Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!</blockquote>
-        <div class="tperson">
-          <div class="tavatar" style="background:linear-gradient(135deg,#B08442,#8E6730)">DM</div>
-          <div><div class="tname" data-i18n="t2_name">Dilnoza M.</div><div class="trole" data-i18n="t2_role">Tadbirkor</div></div>
+      </section>
+
+      <section id="how" class="jai-sec jai-sec--band" data-r="sec">
+        <div class="jai-wrap" data-r="wrap">
+          <p class="jai-ey" data-i18n="how_ey">3 oddiy qadam</p>
+          <h2 class="jai-h2" data-i18n="how_h">Daqiqada javob oling</h2>
+          <p class="jai-sub jai-sub--wide" data-i18n="how_sub">Yurist qabuliga yozilish shart emas.</p>
+          <div data-r="carousel" data-steps style="position:relative; height:470px; max-width:1180px; margin:0 auto; perspective:1900px; overflow:hidden; padding:0 12px;">
+            <div data-step="0" style="position:absolute; top:34px; left:50%; width:min(646px,70%); transition:transform 1000ms cubic-bezier(.2,.8,.2,1), filter 1000ms cubic-bezier(.2,.8,.2,1), opacity 1000ms cubic-bezier(.2,.8,.2,1);"><div data-step-card style="position:relative; background:radial-gradient(120% 90% at 8% 104%, color-mix(in srgb, var(--brand) 30%, transparent) 0%, transparent 60%), var(--panel-solid); border:1px solid var(--line); border-radius:30px; padding:56px 46px; box-shadow:var(--shadow); min-height:322px;"><div data-step-num style="position:absolute; top:-26px; left:44px; width:62px; height:62px; border-radius:18px; background:var(--brand); color:#fff; font-weight:700; font-size:26px; display:grid; place-items:center; transform-style:preserve-3d;">1</div><h3 style="margin:30px 0 16px; font-size:29px; font-weight:600; letter-spacing:-.02em; color:var(--ink);" data-i18n="steps.0.0">Savolingizni yozing</h3><p style="color:var(--muted); font-size:22px; line-height:1.6; margin:0;" data-i18n="steps.0.1">Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas.</p></div></div>
+            <div data-step="1" style="position:absolute; top:34px; left:50%; width:min(646px,70%); transition:transform 1000ms cubic-bezier(.2,.8,.2,1), filter 1000ms cubic-bezier(.2,.8,.2,1), opacity 1000ms cubic-bezier(.2,.8,.2,1);"><div data-step-card style="position:relative; background:radial-gradient(120% 90% at 8% 104%, color-mix(in srgb, var(--brand) 30%, transparent) 0%, transparent 60%), var(--panel-solid); border:1px solid var(--line); border-radius:30px; padding:56px 46px; box-shadow:var(--shadow); min-height:322px;"><div data-step-num style="position:absolute; top:-26px; left:44px; width:62px; height:62px; border-radius:18px; background:var(--brand); color:#fff; font-weight:700; font-size:26px; display:grid; place-items:center; transform-style:preserve-3d;">2</div><h3 style="margin:30px 0 16px; font-size:29px; font-weight:600; letter-spacing:-.02em; color:var(--ink);" data-i18n="steps.1.0">AI qonunni qidiradi</h3><p style="color:var(--muted); font-size:22px; line-height:1.6; margin:0;" data-i18n="steps.1.1">JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi.</p></div></div>
+            <div data-step="2" style="position:absolute; top:34px; left:50%; width:min(646px,70%); transition:transform 1000ms cubic-bezier(.2,.8,.2,1), filter 1000ms cubic-bezier(.2,.8,.2,1), opacity 1000ms cubic-bezier(.2,.8,.2,1);"><div data-step-card style="position:relative; background:radial-gradient(120% 90% at 8% 104%, color-mix(in srgb, var(--brand) 30%, transparent) 0%, transparent 60%), var(--panel-solid); border:1px solid var(--line); border-radius:30px; padding:56px 46px; box-shadow:var(--shadow); min-height:322px;"><div data-step-num style="position:absolute; top:-26px; left:44px; width:62px; height:62px; border-radius:18px; background:var(--brand); color:#fff; font-weight:700; font-size:26px; display:grid; place-items:center; transform-style:preserve-3d;">3</div><h3 style="margin:30px 0 16px; font-size:29px; font-weight:600; letter-spacing:-.02em; color:var(--ink);" data-i18n="steps.2.0">Manbali javob</h3><p style="color:var(--muted); font-size:22px; line-height:1.6; margin:0;" data-i18n="steps.2.1">Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda.</p></div></div>
+          </div>
         </div>
-      </div>
-      <div class="tcard reveal" data-d="2">
-        <div class="stars"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span></div>
-        <blockquote data-i18n="t3_q">Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!</blockquote>
-        <div class="tperson">
-          <div class="tavatar" style="background:linear-gradient(135deg,#0E2236,#16365A)">БА</div>
-          <div><div class="tname" data-i18n="t3_name">Бахром А.</div><div class="trole" data-i18n="t3_role">Menejer</div></div>
-        </div>
-      </div>
+      </section>
+
     </div>
   </div>
-</section>
 
-<!-- ═══ SHOWCASE ═══ -->
-<section class="section alt">
-  <div class="wrap split">
-    <div class="reveal">
-      <h2 data-i18n="sc_h">Har bir javob <span class="gt">tekshiriladigan</span> manbaga ega</h2>
-      <p data-i18n="sc_p">Boshqa AI lar havolani to'qib chiqarishi mumkin. JuristAI esa faqat lex.uz dagi haqiqiy qonun matnidan foydalanadi.</p>
-      <ul class="check-list">
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li1">Faqat amaldagi (eng so'nggi) qonun tahriri</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li2">Aniq modda va band ko'rsatiladi</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li3">To'g'ridan-to'g'ri lex.uz havolasi</span></li>
-        <li><span class="check-ic"><svg fill="none" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span data-i18n="sc_li4">O'zbek va rus tillarida</span></li>
-      </ul>
-    </div>
-    <div class="sc-card reveal" data-d="1">
-      <div class="browser-wrap" style="animation:none">
-        <div class="br-bar">
-          <div class="br-dots"><i class="br-dot"></i><i class="br-dot"></i><i class="br-dot"></i></div>
-          <div class="br-url"><span data-i18n="sc_mock_title">Namuna javob</span></div>
-        </div>
-        <div class="br-body">
-          <div class="bbl u" style="opacity:1;animation:none" data-i18n="sc_q">Ish haqi kechiktirilsa nima qilaman?</div>
-          <div class="bbl a" style="opacity:1;animation:none"><span data-i18n="sc_a">Ish beruvchi ish haqini o'z vaqtida to'lashi shart. <strong>Mehnat kodeksi</strong>ga ko'ra kechiktirilgan har bir kun uchun kompensatsiya talab qilishingiz mumkin.</span><div class="bsrc" data-i18n="sc_src">Mehnat kodeksi, 333-modda</div></div>
-        </div>
+  <section class="jai-sec" data-r="sec">
+    <div class="jai-wrap" data-r="wrap">
+      <p class="jai-ey" data-i18n="testi_ey">Foydalanuvchilar fikri</p>
+      <h2 class="jai-h2 jai-h2--last" data-i18n="testi_h">Ular allaqachon ishlayapti</h2>
+      <div data-r="g3" data-testi style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; align-items:stretch;">
+        <div class="jai-testi"><div style="display:flex; gap:3px; color:var(--brand);"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div><blockquote class="jai-testi__quote"><span style="visibility:hidden;" data-i18n="testimonials.0.0">Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.</span><span style="position:absolute; inset:0;"><span data-typed="1"></span><span data-caret="1" class="jai-caret"></span></span></blockquote><div style="display:flex; align-items:center; gap:12px; margin-top:auto; padding-top:16px; border-top:1px solid var(--line);"><div class="jai-testi__avatar" data-i18n="testimonials.0.3">ST</div><div><div style="font-weight:700; font-size:15px; color:var(--ink);" data-i18n="testimonials.0.1">Sarvar T.</div><div style="font-size:13px; color:var(--muted); margin-top:1px;" data-i18n="testimonials.0.2">Kichik biznes egasi</div></div></div></div>
+        <div class="jai-testi"><div style="display:flex; gap:3px; color:var(--brand);"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div><blockquote class="jai-testi__quote"><span style="visibility:hidden;" data-i18n="testimonials.1.0">Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!</span><span style="position:absolute; inset:0;"><span data-typed="1"></span><span data-caret="1" class="jai-caret"></span></span></blockquote><div style="display:flex; align-items:center; gap:12px; margin-top:auto; padding-top:16px; border-top:1px solid var(--line);"><div class="jai-testi__avatar" data-i18n="testimonials.1.3">DM</div><div><div style="font-weight:700; font-size:15px; color:var(--ink);" data-i18n="testimonials.1.1">Dilnoza M.</div><div style="font-size:13px; color:var(--muted); margin-top:1px;" data-i18n="testimonials.1.2">Tadbirkor</div></div></div></div>
+        <div class="jai-testi"><div style="display:flex; gap:3px; color:var(--brand);"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div><blockquote class="jai-testi__quote"><span style="visibility:hidden;" data-i18n="testimonials.2.0">Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!</span><span style="position:absolute; inset:0;"><span data-typed="1"></span><span data-caret="1" class="jai-caret"></span></span></blockquote><div style="display:flex; align-items:center; gap:12px; margin-top:auto; padding-top:16px; border-top:1px solid var(--line);"><div class="jai-testi__avatar" data-i18n="testimonials.2.3">БА</div><div><div style="font-weight:700; font-size:15px; color:var(--ink);" data-i18n="testimonials.2.1">Бахром А.</div><div style="font-size:13px; color:var(--muted); margin-top:1px;" data-i18n="testimonials.2.2">Menejer</div></div></div></div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ═══ PRICING ═══ -->
-<section class="section" id="pricing">
-  <div class="wrap">
-    <p class="ey reveal" data-i18n="pr_ey">Tariflar</p>
-    <h2 class="sh reveal" data-i18n="pr_h">Sizga mos rejani tanlang</h2>
-    <p class="sh-sub reveal" data-i18n="pr_sub">Bepul boshlang — karta kerak emas. Istalgan vaqtda bekor qilasiz.</p>
-    <p class="pr-testing reveal" data-i18n="pr_testing"><b>Platforma sinov bosqichida.</b> To‘lov tizimi hali ulanmagan — hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak bo‘lsa, «Xabar berish» tugmasini bosing.</p>
-    <div class="plans">
-      <div class="plan ft reveal">
-        <span class="plan-tag" data-i18n="p1_tag">Boshlash uchun</span>
-        <div class="plan-name" data-i18n="p1_name">Bepul</div>
-        <div class="plan-price" data-i18n="p1_price">Bepul</div>
-        <div class="plan-per" data-i18n="p1_per">Doimo bepul</div>
-        <div class="plan-for" data-i18n="p1_for">Platformani sinab ko‘rish va kundalik oddiy savollar uchun.</div>
-        <ul class="plan-features">
-          <li data-i18n="p1_f1">Kuniga 10 ta savol — 30 kun</li>
-          <li data-i18n="p1_f2">So‘ngra kuniga 3 ta, muddatsiz</li>
-          <li data-i18n="p1_f3">Har bir javob lex.uz manbasi bilan</li>
-          <li data-i18n="p1_f4">Karta talab qilinmaydi</li>
+  <section class="jai-sec jai-sec--band" data-r="sec" style="position:relative; overflow:hidden;">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; overflow:hidden;">
+      <div style="position:absolute; inset:0; background-image:linear-gradient(90deg, color-mix(in srgb, var(--ink) 2%, transparent) 0 1px, transparent 1px 64px), linear-gradient(180deg, color-mix(in srgb, var(--ink) 2%, transparent) 0 1px, transparent 1px 64px); mask-image:radial-gradient(120% 100% at 50% 50%, #000 30%, transparent 90%); -webkit-mask-image:radial-gradient(120% 100% at 50% 50%, #000 30%, transparent 90%);"></div>
+      <div style="position:absolute; left:0; right:0; height:170px; top:-170px; background:linear-gradient(180deg, transparent, color-mix(in srgb, var(--brand) 4.5%, transparent) 62%, color-mix(in srgb, var(--brand) 11%, transparent) 96%, transparent); animation:jai-scan 7.5s cubic-bezier(.4,0,.2,1) infinite;"></div>
+      <div style="position:absolute; left:0; right:0; top:0; height:100%; animation:jai-scanline 7.5s cubic-bezier(.4,0,.2,1) infinite;"><div style="position:absolute; left:0; right:0; top:-1px; height:1px; background:color-mix(in srgb, var(--brand) 20%, transparent); box-shadow:0 0 18px 2px color-mix(in srgb, var(--brand) 13%, transparent);"></div></div>
+    </div>
+    <div data-r="split" style="position:relative; max-width:1180px; margin:0 auto; padding:0 24px; display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:center;">
+      <div>
+        <h2 style="font-size:clamp(28px,3.5vw,40px); font-weight:600; letter-spacing:-.055em; line-height:1.12; margin:0 0 18px; color:var(--ink); text-align:left;"><span data-i18n="sc_h_a">Har bir javob</span> <span class="jai-grad" data-i18n="sc_h_em">tekshiriladigan</span> <span data-i18n="sc_h_b">manbaga ega</span></h2>
+        <p style="color:var(--muted); font-size:16.5px; line-height:1.75; margin:0 0 22px;" data-i18n="sc_p">Boshqa AI lar havolani to'qib chiqarishi mumkin. JuristAI esa faqat lex.uz dagi haqiqiy qonun matnidan foydalanadi.</p>
+        <ul data-checks style="list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:14px;">
+          <li class="jai-check" data-chk="1"><span class="jai-check__box" data-chkbox="1"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path data-chkpath="1" d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="jai-check__text" data-chktext="1" data-i18n="checks.0">Faqat amaldagi (eng so'nggi) qonun tahriri</span></li>
+          <li class="jai-check" data-chk="1"><span class="jai-check__box" data-chkbox="1"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path data-chkpath="1" d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="jai-check__text" data-chktext="1" data-i18n="checks.1">Aniq modda va band ko'rsatiladi</span></li>
+          <li class="jai-check" data-chk="1"><span class="jai-check__box" data-chkbox="1"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path data-chkpath="1" d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="jai-check__text" data-chktext="1" data-i18n="checks.2">To'g'ridan-to'g'ri lex.uz havolasi</span></li>
+          <li class="jai-check" data-chk="1"><span class="jai-check__box" data-chkbox="1"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path data-chkpath="1" d="M20 6 9 17l-5-5" stroke-dasharray="26" stroke-dashoffset="26" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="jai-check__text" data-chktext="1" data-i18n="checks.3">O'zbek va rus tillarida</span></li>
         </ul>
-        <a href="/login.html" class="btn btn-primary" data-i18n="p1_btn">Bepul boshlash</a>
       </div>
-      <div class="plan soon reveal" data-d="1">
-        <span class="plan-tag soon-tag" data-i18n="p_soon">Tez orada</span>
-        <div class="plan-name" data-i18n="p2_name">Silver</div>
-        <div class="plan-price">199 000<small data-i18n="p_cur"> so'm</small></div>
-        <div class="plan-per" data-i18n="p_per">oyiga</div>
-        <div class="plan-for" data-i18n="p2_for">Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.</div>
-        <ul class="plan-features">
-          <li data-i18n="p2_f1">Cheksiz AI chat</li>
-          <li data-i18n="p2_f2">Oyiga ~39 ta yuridik xulosa krediti</li>
-          <li data-i18n="p2_f3">Oyiga ~95 ta hujjat tayyorlash</li>
-          <li data-i18n="p2_f4">O‘z shablonlaringizni yuklash</li>
-        </ul>
-        <a href="/login.html" class="btn btn-outline" data-i18n="p_soon_btn">Xabar berish</a>
-      </div>
-      <div class="plan soon reveal" data-d="2">
-        <span class="plan-tag soon-tag" data-i18n="p_soon">Tez orada</span>
-        <div class="plan-name" data-i18n="p3_name">Gold</div>
-        <div class="plan-price">399 000<small data-i18n="p_cur"> so'm</small></div>
-        <div class="plan-per" data-i18n="p_per">oyiga</div>
-        <div class="plan-for" data-i18n="p3_for">Yuridik bo‘lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.</div>
-        <ul class="plan-features">
-          <li data-i18n="p3_f1">Cheksiz AI chat</li>
-          <li data-i18n="p3_f2">Oyiga ~74 ta yuridik xulosa krediti</li>
-          <li data-i18n="p3_f3">Oyiga ~217 ta hujjat</li>
-          <li data-i18n="p3_f4">Skan va rasmdan hujjat tahlili</li>
-          <li data-i18n="p3_f5">Ustuvor navbat — tezroq javob</li>
-        </ul>
-        <a href="/login.html" class="btn btn-outline" data-i18n="p_soon_btn">Xabar berish</a>
-      </div>
-      <div class="plan soon reveal" data-d="3">
-        <span class="plan-tag soon-tag" data-i18n="p_soon">Tez orada</span>
-        <div class="plan-name" data-i18n="p4_name">Platinum</div>
-        <div class="plan-price">999 000<small data-i18n="p_cur"> so'm</small></div>
-        <div class="plan-per" data-i18n="p_per">oyiga</div>
-        <div class="plan-for" data-i18n="p4_for">Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya.</div>
-        <ul class="plan-features">
-          <li data-i18n="p4_f1">Cheksiz AI chat</li>
-          <li data-i18n="p4_f2">Oyiga ~182 ta yuridik xulosa krediti</li>
-          <li data-i18n="p4_f3">Oyiga ~542 ta hujjat</li>
-          <li data-i18n="p4_f4">Shaxsiy konsierj va o‘qitish</li>
-          <li data-i18n="p4_f5">API orqali integratsiya</li>
-        </ul>
-        <a href="/login.html" class="btn btn-outline" data-i18n="p_soon_btn">Xabar berish</a>
+      <div style="perspective:1500px; perspective-origin:60% 45%;">
+        <div style="position:relative; transform:rotateY(-19deg) rotateX(7deg) rotateZ(-2.5deg); transform-style:preserve-3d; animation:jai-ledfloat 9s cubic-bezier(.4,0,.2,1) infinite;">
+          <div style="position:absolute; inset:8% 4% -8% 6%; border-radius:20px; background:radial-gradient(60% 60% at 50% 60%, color-mix(in srgb, var(--brand) 30%, transparent), transparent 72%); filter:blur(34px); z-index:0;"></div>
+          <div style="position:relative; z-index:1; border-radius:10px; padding:9px 9px 11px; background:linear-gradient(160deg, #23262f, #0d0f15 62%, #191c24); box-shadow:0 46px 90px -44px rgba(9,14,30,.75), 0 0 0 1px rgba(255,255,255,.06), inset 0 1px 0 rgba(255,255,255,.12);">
+            <div style="position:relative; aspect-ratio:16/9; border-radius:4px; overflow:hidden; background:#050914;">
+              <div style="position:absolute; inset:0; background:radial-gradient(80% 70% at 26% 18%, rgba(45,108,255,.3), transparent 68%), radial-gradient(70% 60% at 82% 92%, rgba(88,165,255,.22), transparent 70%), #050914;"></div>
+              <div style="position:absolute; inset:0; background-image:linear-gradient(90deg, rgba(255,255,255,.045) 0 1px, transparent 1px 52px), linear-gradient(180deg, rgba(255,255,255,.045) 0 1px, transparent 1px 52px); mask-image:radial-gradient(110% 90% at 50% 50%, #000 20%, transparent 90%); -webkit-mask-image:radial-gradient(110% 90% at 50% 50%, #000 20%, transparent 90%);"></div>
+              <video data-led-video="/media/led-ad.webm" muted loop playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; z-index:4; opacity:0; transition:opacity 400ms ease;"></video>
+
+              <div style="position:absolute; right:0; top:0; bottom:0; width:44%; z-index:1; overflow:hidden;">
+                <div data-adframe="0" style="position:absolute; inset:0; display:grid; place-items:center; opacity:1; z-index:2; transition:opacity 900ms cubic-bezier(.4,0,.2,1);"><img src="/media/ad-1-legal-analysis.png" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; display:block; animation:jai-keyart 14s cubic-bezier(.4,0,.2,1) infinite alternate;"></div>
+                <div data-adframe="1" style="position:absolute; inset:0; display:grid; place-items:center; opacity:0; z-index:1; transition:opacity 900ms cubic-bezier(.4,0,.2,1);"><img src="/media/ad-2-document-drafting.png" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; display:block; animation:jai-keyart 14s cubic-bezier(.4,0,.2,1) infinite alternate;"></div>
+                <div data-adframe="2" style="position:absolute; inset:0; display:grid; place-items:center; opacity:0; z-index:1; transition:opacity 900ms cubic-bezier(.4,0,.2,1);"><img src="/media/ad-3-sourced-answer.png" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; display:block; animation:jai-keyart 14s cubic-bezier(.4,0,.2,1) infinite alternate;"></div>
+                <div data-adframe="3" style="position:absolute; inset:0; display:grid; place-items:center; opacity:0; z-index:1; transition:opacity 900ms cubic-bezier(.4,0,.2,1);"><img src="/media/ad-4-expert-review.png" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; display:block; animation:jai-keyart 14s cubic-bezier(.4,0,.2,1) infinite alternate;"></div>
+                <div style="position:absolute; inset:0; pointer-events:none; background:linear-gradient(90deg, #050914, rgba(5,9,20,.5) 40%, transparent 78%);"></div>
+              </div>
+
+              <div style="position:absolute; left:0; right:0; top:0; height:96px; z-index:2; pointer-events:none; background:linear-gradient(180deg, rgba(5,9,20,.82), rgba(5,9,20,.34) 62%, transparent);"></div>
+              <div style="position:absolute; left:0; right:0; bottom:0; height:132px; z-index:2; pointer-events:none; background:linear-gradient(0deg, rgba(5,9,20,.88), rgba(5,9,20,.42) 58%, transparent);"></div>
+              <div style="position:absolute; left:0; right:0; top:0; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 22px; z-index:3; pointer-events:none;">
+                <img src="/brand/wordmark-filled-dark.png" alt="JuristAI" style="height:24px; width:auto; object-fit:contain; display:block;">
+                <span style="display:inline-flex; align-items:center; gap:7px; font-size:9.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#8fbaff;">
+                  <span style="width:6px; height:6px; border-radius:50%; background:#8fbaff; box-shadow:0 0 9px 2px rgba(143,186,255,.55); animation:jai-pulse 2.4s ease-in-out infinite;"></span><span data-i18n="led_live">Efirda</span>
+                </span>
+              </div>
+
+              <div style="position:absolute; left:22px; top:50%; transform:translateY(-50%); width:52%; z-index:3; pointer-events:none;">
+                <div style="font-size:9.5px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:#8fbaff; margin-bottom:10px;" data-ad-ey></div>
+                <div style="font-size:clamp(19px,2.1vw,27px); font-weight:600; letter-spacing:-.03em; line-height:1.16; color:#fff;" data-ad-h></div>
+                <div style="margin-top:9px; font-size:12.5px; line-height:1.55; color:rgba(255,255,255,.66);" data-ad-p></div>
+              </div>
+
+              <div style="position:absolute; left:0; right:0; bottom:0; z-index:3; padding:0 22px 16px;">
+                <div style="display:flex; gap:5px; margin-bottom:12px;">
+                  <span style="flex:1; height:2px; border-radius:999px; background:rgba(255,255,255,.2); overflow:hidden;"><span data-adbar="0" style="display:block; height:100%; width:0%; background:#fff;"></span></span>
+                  <span style="flex:1; height:2px; border-radius:999px; background:rgba(255,255,255,.2); overflow:hidden;"><span data-adbar="1" style="display:block; height:100%; width:0%; background:#fff;"></span></span>
+                  <span style="flex:1; height:2px; border-radius:999px; background:rgba(255,255,255,.2); overflow:hidden;"><span data-adbar="2" style="display:block; height:100%; width:0%; background:#fff;"></span></span>
+                  <span style="flex:1; height:2px; border-radius:999px; background:rgba(255,255,255,.2); overflow:hidden;"><span data-adbar="3" style="display:block; height:100%; width:0%; background:#fff;"></span></span>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                  <span style="display:inline-flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:rgba(255,255,255,.72);">
+                    <span style="width:15px; height:15px; flex-shrink:0; background:#8fbaff; -webkit-mask:url(/icons/sparkles.svg) center/contain no-repeat; mask:url(/icons/sparkles.svg) center/contain no-repeat;"></span>
+                    Generated by AI
+                  </span>
+                  <span style="display:inline-flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:rgba(255,255,255,.72);">
+                    <span style="width:15px; height:15px; flex-shrink:0; background:#8fbaff; -webkit-mask:url(/icons/fingerprint-pattern.svg) center/contain no-repeat; mask:url(/icons/fingerprint-pattern.svg) center/contain no-repeat;"></span>
+                    Verified by human
+                  </span>
+                </div>
+              </div>
+
+              <div style="position:absolute; inset:0; pointer-events:none; z-index:5; background:linear-gradient(115deg, transparent 32%, rgba(255,255,255,.07) 46%, transparent 60%); animation:jai-glare 8s cubic-bezier(.4,0,.2,1) infinite;"></div>
+              <div style="position:absolute; inset:0; pointer-events:none; z-index:5; background-image:repeating-linear-gradient(180deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-    <p class="pr-note reveal" data-i18n="pr_note"><b>Kam ishlatdingizmi — kamroq to‘laysiz.</b> Har oy sarfingizni hisoblab boramiz: rejangizni to‘liq ishlatmagan bo‘lsangiz, farqi keyingi oy uchun chegirma sifatida qaytariladi. Ortiqcha to‘lov yo‘q.</p>
-  </div>
-</section>
+  </section>
 
-<!-- ═══ FAQ ═══ -->
-<section class="section alt" id="faq">
-  <div class="wrap">
-    <p class="ey reveal" data-i18n="faq_ey">Savol-javob</p>
-    <h2 class="sh reveal" data-i18n="faq_h">Tez-tez beriladigan savollar</h2>
-    <div class="faq-wrap" style="margin-top:48px">
-      <div class="qi reveal"><button><span data-i18n="q1_q">JuristAI yuristning o'rnini bosadimi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q1_a">JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz.</p></div></div>
-      <div class="qi reveal"><button><span data-i18n="q2_q">Javoblar qanchalik ishonchli?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q2_a">Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi. Siz manbani o'zingiz tekshirishingiz mumkin.</p></div></div>
-      <div class="qi reveal"><button><span data-i18n="q3_q">Qanday ro'yxatdan o'taman?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q3_a">Telegram yoki Google orqali bir necha soniyada. Parol kerak emas.</p></div></div>
-      <div class="qi reveal"><button><span data-i18n="q4_q">Eski qonunga asoslangan javob bermaymi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q4_a">Yo'q. Tizim eski tahrirlarni avtomatik aniqlab, har doim amaldagi versiyaga o'tadi.</p></div></div>
-      <div class="qi reveal"><button><span data-i18n="q5_q">Qaysi tillarda ishlaydi?</span><svg class="qchev" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="qi-ans"><p data-i18n="q5_a">O'zbek va rus tillarida savol berishingiz va javob olishingiz mumkin.</p></div></div>
+  <section id="pricing" class="jai-sec" data-r="sec" style="position:relative;">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; overflow:hidden;">
+      <div style="position:absolute; left:-10%; bottom:-30%; width:70%; height:80%; border-radius:50%; background:radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--brand) 16%, transparent), transparent 66%); filter:blur(26px); animation:jai-pool 26s cubic-bezier(.4,0,.2,1) infinite alternate;"></div>
+      <div style="position:absolute; right:-12%; top:-24%; width:64%; height:74%; border-radius:50%; background:radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--brand-2) 14%, transparent), transparent 66%); filter:blur(30px); animation:jai-pool2 32s cubic-bezier(.4,0,.2,1) infinite alternate;"></div>
+    </div>
+    <div class="jai-wrap" data-r="wrap" style="position:relative;">
+      <p class="jai-ey" data-i18n="pr_ey">Tariflar</p>
+      <h2 class="jai-h2" data-i18n="pr_h">Sizga mos rejani tanlang</h2>
+      <p class="jai-sub" data-i18n="pr_sub">Bepul boshlang — karta kerak emas. Istalgan vaqtda bekor qilasiz.</p>
+      <p class="pr-testing"><b data-i18n="pr_testing_b">Platforma sinov bosqichida.</b> <span data-i18n="pr_testing">To‘lov tizimi hali ulanmagan — hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak bo‘lsa, «Xabar berish» tugmasini bosing.</span></p>
+      <div class="plans" data-r="g4">
+
+        <div class="plan ft">
+          <span class="plan-wave" aria-hidden="true"><span></span></span>
+          <span class="plan-tag" data-i18n="p1_tag">Boshlash uchun</span>
+          <div class="plan-name" data-i18n="p1_name">Bepul</div>
+          <div class="plan-price" data-i18n="p1_price">Bepul</div>
+          <div class="plan-per" data-i18n="p1_per">Doimo bepul</div>
+          <div class="plan-for" data-i18n="p1_for">Platformani sinab ko‘rish va kundalik oddiy savollar uchun.</div>
+          <ul class="plan-features">
+            <li data-i18n="p1_f1">Kuniga 10 ta savol — 30 kun</li>
+            <li data-i18n="p1_f2">So‘ngra kuniga 3 ta, muddatsiz</li>
+            <li data-i18n="p1_f3">Har bir javob lex.uz manbasi bilan</li>
+            <li data-i18n="p1_f4">Karta talab qilinmaydi</li>
+          </ul>
+          <a class="plan-btn" href="/login.html" data-i18n="p1_btn">Bepul boshlash</a>
+        </div>
+
+        <div class="plan soon">
+          <span class="plan-wave" aria-hidden="true"><span></span></span>
+          <span class="plan-tag" data-i18n="p_soon">Tez orada</span>
+          <div class="plan-name" data-i18n="p2_name">Silver</div>
+          <div class="plan-price">199 000<small data-i18n="p_cur"> so'm</small></div>
+          <div class="plan-per" data-i18n="p_per">oyiga</div>
+          <div class="plan-for" data-i18n="p2_for">Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.</div>
+          <ul class="plan-features">
+            <li data-i18n="p2_f1">Cheksiz AI chat</li>
+            <li data-i18n="p2_f2">Oyiga ~39 ta yuridik xulosa krediti</li>
+            <li data-i18n="p2_f3">Oyiga ~95 ta hujjat tayyorlash</li>
+            <li data-i18n="p2_f4">O‘z shablonlaringizni yuklash</li>
+          </ul>
+          <a class="plan-btn" href="/tariff.html" data-i18n="p_soon_btn">Xabar berish</a>
+        </div>
+
+        <div class="plan soon">
+          <span class="plan-wave" aria-hidden="true"><span></span></span>
+          <span class="plan-tag" data-i18n="p_soon">Tez orada</span>
+          <div class="plan-name" data-i18n="p3_name">Gold</div>
+          <div class="plan-price">399 000<small data-i18n="p_cur"> so'm</small></div>
+          <div class="plan-per" data-i18n="p_per">oyiga</div>
+          <div class="plan-for" data-i18n="p3_for">Yuridik bo‘lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.</div>
+          <ul class="plan-features">
+            <li data-i18n="p3_f1">Cheksiz AI chat</li>
+            <li data-i18n="p3_f2">Oyiga ~74 ta yuridik xulosa krediti</li>
+            <li data-i18n="p3_f3">Oyiga ~217 ta hujjat</li>
+            <li data-i18n="p3_f4">Skan va rasmdan hujjat tahlili</li>
+            <li data-i18n="p3_f5">Ustuvor navbat — tezroq javob</li>
+          </ul>
+          <a class="plan-btn" href="/tariff.html" data-i18n="p_soon_btn">Xabar berish</a>
+        </div>
+
+        <div class="plan soon">
+          <span class="plan-wave" aria-hidden="true"><span></span></span>
+          <span class="plan-tag" data-i18n="p_soon">Tez orada</span>
+          <div class="plan-name" data-i18n="p4_name">Platinum</div>
+          <div class="plan-price">999 000<small data-i18n="p_cur"> so'm</small></div>
+          <div class="plan-per" data-i18n="p_per">oyiga</div>
+          <div class="plan-for" data-i18n="p4_for">Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya.</div>
+          <ul class="plan-features">
+            <li data-i18n="p4_f1">Cheksiz AI chat</li>
+            <li data-i18n="p4_f2">Oyiga ~182 ta yuridik xulosa krediti</li>
+            <li data-i18n="p4_f3">Oyiga ~542 ta hujjat</li>
+            <li data-i18n="p4_f4">Shaxsiy konsierj va o‘qitish</li>
+            <li data-i18n="p4_f5">API orqali integratsiya</li>
+          </ul>
+          <a class="plan-btn" href="/tariff.html" data-i18n="p_soon_btn">Xabar berish</a>
+        </div>
+
+      </div>
+      <p class="pr-note"><b data-i18n="pr_note_b">Kam ishlatdingizmi — kamroq to‘laysiz.</b> <span data-i18n="pr_note">Har oy sarfingizni hisoblab boramiz: rejangizni to‘liq ishlatmagan bo‘lsangiz, farqi keyingi oy uchun chegirma sifatida qaytariladi. Ortiqcha to‘lov yo‘q.</span></p>
+    </div>
+  </section>
+
+  <section id="faq" class="jai-sec jai-sec--band" data-r="sec" style="position:relative;">
+    <div aria-hidden="true" data-flapcells style="position:absolute; inset:0; pointer-events:none; overflow:hidden; mask-image:radial-gradient(120% 90% at 50% 50%, #000 30%, transparent 88%); -webkit-mask-image:radial-gradient(120% 90% at 50% 50%, #000 30%, transparent 88%);"></div>
+    <div class="jai-wrap" data-r="wrap" style="position:relative;">
+      <p class="jai-ey" data-i18n="faq_ey">Savol-javob</p>
+      <h2 class="jai-h2 jai-h2--last" data-i18n="faq_h">Tez-tez beriladigan savollar</h2>
+      <div style="max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:10px;">
+        <div data-faq style="display:flex; flex-direction:column; gap:10px; perspective:1200px;">
+          <div class="jai-faq-row" data-faqrow="1"><button class="jai-faq-btn" type="button"><span data-faqq="1" data-i18n="faqs.0.0">JuristAI yuristning o'rnini bosadimi?</span><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="jai-faq-body"><p data-faqa="1" data-i18n="faqs.0.1">JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz.</p></div></div>
+          <div class="jai-faq-row" data-faqrow="1"><button class="jai-faq-btn" type="button"><span data-faqq="1" data-i18n="faqs.1.0">Javoblar qanchalik ishonchli?</span><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="jai-faq-body"><p data-faqa="1" data-i18n="faqs.1.1">Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi. Siz manbani o'zingiz tekshirishingiz mumkin.</p></div></div>
+          <div class="jai-faq-row" data-faqrow="1"><button class="jai-faq-btn" type="button"><span data-faqq="1" data-i18n="faqs.2.0">Qanday ro'yxatdan o'taman?</span><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="jai-faq-body"><p data-faqa="1" data-i18n="faqs.2.1">Telegram yoki Google orqali bir necha soniyada. Parol kerak emas.</p></div></div>
+          <div class="jai-faq-row" data-faqrow="1"><button class="jai-faq-btn" type="button"><span data-faqq="1" data-i18n="faqs.3.0">Eski qonunga asoslangan javob bermaymi?</span><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="jai-faq-body"><p data-faqa="1" data-i18n="faqs.3.1">Yo'q. Tizim eski tahrirlarni avtomatik aniqlab, har doim amaldagi versiyaga o'tadi.</p></div></div>
+          <div class="jai-faq-row" data-faqrow="1"><button class="jai-faq-btn" type="button"><span data-faqq="1" data-i18n="faqs.4.0">Qaysi tillarda ishlaydi?</span><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="jai-faq-body"><p data-faqa="1" data-i18n="faqs.4.1">O'zbek va rus tillarida savol berishingiz va javob olishingiz mumkin.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div style="position:relative; overflow:hidden; padding:76px 20px; text-align:center; background:var(--cta); border-top:1px solid rgba(255,255,255,.09); border-bottom:1px solid rgba(255,255,255,.09);">
+    <div aria-hidden="true" style="position:absolute; inset:0; pointer-events:none; overflow:hidden;">
+      <div style="position:absolute; top:-40%; bottom:-40%; left:-30%; width:34%; background:linear-gradient(100deg, transparent, rgba(255,255,255,.055) 34%, rgba(120,170,255,.13) 50%, rgba(255,255,255,.055) 66%, transparent); filter:blur(22px); transform:rotate(14deg); animation:jai-sweep 13s cubic-bezier(.4,0,.2,1) infinite;"></div>
+      <div style="position:absolute; inset:0; background:radial-gradient(60% 90% at 50% 120%, rgba(88,165,255,.16), transparent 70%); animation:jai-ctaglow 13s cubic-bezier(.4,0,.2,1) infinite;"></div>
+    </div>
+    <h2 style="position:relative; font-size:clamp(30px,4.5vw,50px); font-weight:600; color:#f8fafc; letter-spacing:-.055em; line-height:1.05; margin:0 0 18px;" data-i18n="cta_h">Huquqiy savolingiz bormi?</h2>
+    <p style="position:relative; color:#cbd5e1; font-size:18px; margin:0 auto 34px; max-width:500px; line-height:1.75;" data-i18n="cta_p">Hoziroq bepul sinab ko'ring — bir soniyada manbali javob oling.</p>
+    <div style="position:relative; width:min(100%,300px); margin-inline:auto;">
+      <a class="jai-btn jai-btn--light" href="/login.html" data-i18n="cta_btn">Bepul boshlash</a>
     </div>
   </div>
-</section>
 
-<!-- ═══ CTA ═══ -->
-<div class="cta-band">
-  <h2 data-i18n="cta_h">Huquqiy savolingiz bormi?</h2>
-  <p data-i18n="cta_p">Hoziroq bepul sinab ko'ring — bir soniyada manbali javob oling.</p>
-  <div class="hero-actions" style="justify-content:center">
-    <a href="/login.html" class="btn btn-primary btn-lg" data-i18n="cta_btn">Bepul boshlash</a>
-  </div>
+  <footer style="background:#080b15; color:rgba(255,255,255,.55); padding:64px 0 32px; border-top:1px solid var(--line);">
+    <div class="jai-wrap" data-r="wrap">
+      <div data-r="foot" style="display:grid; grid-template-columns:1.8fr 1fr 1fr 1fr; gap:36px; margin-bottom:48px;">
+        <div>
+          <img src="/brand/wordmark-filled-dark.png" alt="JuristAI" style="height:34px; width:auto; object-fit:contain; display:block; margin-bottom:6px;">
+          <p style="font-size:14px; line-height:1.65; margin-top:12px; max-width:280px; color:rgba(255,255,255,.42);" data-i18n="foot_desc">O'zbekiston qonunchiligi bo'yicha sun'iy intellekt asosidagi huquqiy yordamchi. Lex.uz dagi amaldagi qonunlar asosida.</p>
+        </div>
+        <div>
+          <h4 class="jai-foot-h" data-i18n="foot_prod">Mahsulot</h4>
+          <a class="jai-foot-link" href="#features" data-i18n="nav_features">Imkoniyatlar</a>
+          <a class="jai-foot-link" href="#how" data-i18n="nav_how">Qanday ishlaydi</a>
+          <a class="jai-foot-link" href="#pricing" data-i18n="nav_pricing">Tariflar</a>
+        </div>
+        <div>
+          <h4 class="jai-foot-h" data-i18n="foot_comp">Kompaniya</h4>
+          <a class="jai-foot-link" href="#faq" data-i18n="nav_faq">Savollar</a>
+          <a class="jai-foot-link" href="/login.html" data-i18n="nav_login">Kirish</a>
+          <a class="jai-foot-link" href="https://t.me/yuristga_savolbot" target="_blank" rel="noopener" data-i18n="foot_tg">Telegram bot</a>
+        </div>
+        <div>
+          <h4 class="jai-foot-h" data-i18n="foot_leg">Huquqiy</h4>
+          <a class="jai-foot-link" href="/oferta.html" data-i18n="foot_offer">Oferta</a>
+          <a class="jai-foot-link" href="/maxfiylik.html" data-i18n="foot_priv">Maxfiylik</a>
+          <a class="jai-foot-link" href="/shartlar.html" data-i18n="foot_terms">Shartlar</a>
+        </div>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,.08); padding-top:24px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; font-size:13px; color:rgba(255,255,255,.4);">
+        <span data-i18n="foot_copy">© 2026 JuristAI. Barcha huquqlar himoyalangan.</span>
+        <span data-i18n="foot_disc">Eslatma: JuristAI javoblari ma'lumot xarakterida — rasmiy yuridik maslahat o'rnini bosmaydi.</span>
+      </div>
+    </div>
+  </footer>
+
 </div>
-
-<!-- ═══ FOOTER ═══ -->
-<footer>
-  <div class="wrap">
-    <div class="foot-grid">
-      <div class="foot-col">
-        <div class="brand" style="margin-bottom:6px"><img src="/wordmark-primary-2048-light.png" alt="JuristAI" class="brand-img"></div>
-        <p class="foot-brand-desc" data-i18n="foot_desc">O'zbekiston qonunchiligi bo'yicha sun'iy intellekt asosidagi huquqiy yordamchi.</p>
-      </div>
-      <div class="foot-col">
-        <h4 data-i18n="foot_prod">Mahsulot</h4>
-        <a href="#features" data-i18n="nav_features">Imkoniyatlar</a>
-        <a href="#how" data-i18n="nav_how">Qanday ishlaydi</a>
-        <a href="#pricing" data-i18n="nav_pricing">Tariflar</a>
-      </div>
-      <div class="foot-col">
-        <h4 data-i18n="foot_comp">Kompaniya</h4>
-        <a href="#faq" data-i18n="nav_faq">Savollar</a>
-        <a href="/login.html" data-i18n="nav_login">Kirish</a>
-        <a href="https://t.me/yuristga_savolbot" target="_blank" data-i18n="foot_tg">Telegram bot</a>
-      </div>
-      <div class="foot-col">
-        <h4 data-i18n="foot_leg">Huquqiy</h4>
-        <a href="#" data-i18n="foot_offer">Oferta</a>
-        <a href="#" data-i18n="foot_priv">Maxfiylik</a>
-        <a href="#" data-i18n="foot_terms">Shartlar</a>
-      </div>
-    </div>
-    <div class="foot-bottom">
-      <span data-i18n="foot_copy">© 2026 JuristAI. Barcha huquqlar himoyalangan.</span>
-      <span data-i18n="foot_disc">Eslatma: JuristAI javoblari ma'lumot xarakterida — rasmiy yuridik maslahat o'rnini bosmaydi.</span>
-    </div>
-  </div>
-</footer>
 
 <script>
-/* ── TRANSLATIONS ── */
-const T={
+/* Landing copy. Both languages ship with the page so the switch is instant and
+   so tests/pricing-cards.test.js can read the advertised plan against the
+   server's PLANS. Transcribed from the design prototype; see
+   docs/design-handoff/. */
+window.JAI_I18N = {
 uz:{
-  nav_features:"Imkoniyatlar",nav_how:"Qanday ishlaydi",nav_attorneys:"Advokatlar",nav_pricing:"Tariflar",nav_faq:"Savollar",nav_login:"Kirish",nav_cta:"Bepul boshlash",
+  nav_features:"Imkoniyatlar",
+  nav_how:"Qanday ishlaydi",
+  nav_attorneys:"Advokatlar",
+  nav_pricing:"Tariflar",
+  nav_faq:"Savollar",
+  nav_login:"Kirish",
+  nav_cta:"Bepul boshlash",
   hero_pill:"Lex.uz dagi eng so'nggi qonunlar asosida",
-  hero_title:"O'zbekiston huquqi bo'yicha <span class='gt'>sun'iy intellekt</span> yuristingiz",
+  hero_title_a:"O'zbekiston huquqi bo'yicha",
+  hero_title_em:"sun'iy intellekt",
+  hero_title_b:"yuristingiz",
   hero_sub:"Savolingizni oddiy tilda yozing — JuristAI amaldagi qonunlardan manbalar bilan tasdiqlangan javob beradi. 24/7, bir soniyada.",
-  hero_btn1:"Bepul sinab ko'rish",hero_btn2:"Qanday ishlaydi?",
-  hs1:"huquqiy soha",hs2:"doimo ulangan",hs3_n:"&lt;1s",hs3:"javob vaqti",
-  fb1:"Manba tasdiqlandi",fb2:"Shifrlangan",
-  mock_q:"Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
-  mock_a:"Svetoforning taqiqlovchi signalida o'tish <strong>ma'muriy huquqbuzarlik</strong> bo'lib, jarima belgilangan. Aniq miqdor amaldagi tahrirga bog'liq.",
-  mock_src:"Ma'muriy javobgarlik kodeksi, 128⁴-modda",
+  hero_btn1:"Bepul sinab ko'rish",
+  hero_btn2:"Qanday ishlaydi?",
+  hs1_n:"50 000+",
+  hs1:"normativ hujjatlar bazasi",
+  hs2_n:"lex.uz",
+  hs2:"kunlik yangilanish",
+  hs3_n:"3",
+  hs3:"til: o‘zbek, rus, ingliz",
   trust_label:"Qamrab oladi",
-  mq1:"Mehnat huquqi",mq2:"Oila huquqi",mq3:"Fuqarolik huquqi",mq4:"Soliq huquqi",mq5:"Jinoyat huquqi",mq6:"Ma'muriy javobgarlik",mq7:"Korporativ huquq",mq8:"Tadbirkorlik",mq9:"Uy-joy huquqi",mq10:"Mulk huquqi",mq11:"Notariat",
-  stat1:"Huquqiy soha",stat2:"Manbaga asoslangan",stat3:"Javob vaqti",stat4:"Doimo ulangan",
-  feat_ey:"Nima uchun JuristAI",feat_h:"Oddiy chatbot emas — <span class='gt'>huquqiy aniqlik</span>",feat_sub:"Har bir javob amaldagi qonun matniga bog'lanadi. To'qib chiqarilgan havolalar yo'q.",
-  feat1_h:"AI huquqiy tahlil",feat1_p:"Murakkab savollarni tushunadi, qonun normalarini tahlil qilib, aniq xulosa beradi.",
-  feat2_h:"Lex.uz RAG qidiruv",feat2_p:"Javoblar bevosita amaldagi qonunlardan. Eski tahrirlar avtomatik chetlab o'tiladi.",
-  feat3_h:"Manbalar bilan",feat3_p:"Har bir javob ostida modda va lex.uz havolasi — o'zingiz tekshira olasiz.",
-  feat4_h:"Hujjat tahlili",feat4_p:"Shartnoma yoki hujjatni yuklang — JuristAI xavfli nuqtalarni ko'rsatadi.",
-  feat5_h:"Telegram orqali",feat5_p:"Ro'yxatdan o'tish va kirish Telegram orqali — parol kerak emas.",
-  feat6_h:"Maxfiy va xavfsiz",feat6_p:"Savollaringiz himoyalangan. Ma'lumotlar uchinchi shaxslarga berilmaydi.",
-  bc1:"128⁴-modda",bc2:"165-modda",bc3:"56-modda",b_match:"84% mos kelish darajasi",
-  br1:"Ma'muriy kodeks, 128⁴",br2:"Mehnat kodeksi, 165",br3:"Fuqarolik kodeksi, 56",
-  b_src_badge:"128⁴-modda · lex.uz",bs1:"SSL/TLS",bs2:"Shifrlash",bs3:"Xavfsiz",
-  how_ey:"3 oddiy qadam",how_h:"Daqiqada javob oling",how_sub:"Yurist qabuliga yozilish shart emas.",
-  s1_h:"Savolingizni yozing",s1_p:"Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas.",
-  s2_h:"AI qonunni qidiradi",s2_p:"JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi.",
-  s3_h:"Manbali javob",s3_p:"Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda.",
-  testi_ey:"Foydalanuvchilar fikri",testi_h:"Ular allaqachon ishlayapti",
-  t1_q:"Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.",t1_name:"Sarvar T.",t1_role:"Kichik biznes egasi",
-  t2_q:"Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!",t2_name:"Dilnoza M.",t2_role:"Tadbirkor",
-  t3_q:"Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно!",t3_name:"Бахром А.",t3_role:"Menejer",
-  sc_h:"Har bir javob <span class='gt'>tekshiriladigan</span> manbaga ega",sc_p:"Boshqa AI lar havolani to'qib chiqarishi mumkin. JuristAI esa faqat lex.uz dagi haqiqiy qonun matnidan foydalanadi.",
-  sc_li1:"Faqat amaldagi (eng so'nggi) qonun tahriri",sc_li2:"Aniq modda va band ko'rsatiladi",sc_li3:"To'g'ridan-to'g'ri lex.uz havolasi",sc_li4:"O'zbek va rus tillarida",
-  sc_mock_title:"Namuna javob",sc_q:"Ish haqi kechiktirilsa nima qilaman?",sc_a:"Ish beruvchi ish haqini o'z vaqtida to'lashi shart. <strong>Mehnat kodeksi</strong>ga ko'ra kechiktirilgan har bir kun uchun kompensatsiya talab qilishingiz mumkin.",sc_src:"Mehnat kodeksi, 333-modda",
-  pr_ey:"Tariflar",pr_h:"Sizga mos rejani tanlang",pr_sub:"Bepul boshlang — karta kerak emas. Istalgan vaqtda bekor qilasiz.",
-  p1_name:"Bepul",p1_price:"Bepul",p1_per:"Doimo bepul",p1_f1:"Kuniga 10 ta savol — 30 kun",p1_f2:"So‘ngra kuniga 3 ta, muddatsiz",p1_f3:"Har bir javob lex.uz manbasi bilan",p1_f4:"Karta talab qilinmaydi",p1_btn:"Bepul boshlash",
-  p2_name:"Silver",p2_f1:"Cheksiz AI chat",p2_f2:"Oyiga ~39 ta yuridik xulosa krediti",p2_f3:"Oyiga ~95 ta hujjat tayyorlash",p2_f4:"O‘z shablonlaringizni yuklash",
-  p3_tag:"Mashhur",p3_name:"Gold",p3_f1:"Cheksiz AI chat",p3_f2:"Oyiga ~74 ta yuridik xulosa krediti",p3_f3:"Oyiga ~217 ta hujjat",p3_f4:"Skan va rasmdan hujjat tahlili",p3_f5:"Ustuvor navbat — tezroq javob",
-  p4_name:"Platinum",p4_f1:"Cheksiz AI chat",p4_f2:"Oyiga ~182 ta yuridik xulosa krediti",p4_f3:"Oyiga ~542 ta hujjat",p4_f4:"Shaxsiy konsierj va o‘qitish",p4_f5:"API orqali integratsiya",
-  p1_for:"Platformani sinab ko‘rish va kundalik oddiy savollar uchun.",
-  p2_for:"Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.",
-  p3_for:"Yuridik bo‘lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.",
-  p4_for:"Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya.",
+  marquee:["Mehnat huquqi","Oila huquqi","Fuqarolik huquqi","Soliq huquqi","Jinoyat huquqi","Ma'muriy javobgarlik","Korporativ huquq","Tadbirkorlik","Uy-joy huquqi","Mulk huquqi","Notariat"],
+  stats:["Huquqiy soha","Manbaga asoslangan","Javob vaqti","Doimo ulangan"],
+  feat_ey:"Nima uchun JuristAI",
+  feat_h_a:"Oddiy chatbot emas —",
+  feat_h_em:"huquqiy aniqlik",
+  feat_sub:"Har bir javob amaldagi qonun matniga bog'lanadi. To'qib chiqarilgan havolalar yo'q.",
+  feat1_h:"AI huquqiy tahlil",
+  feat1_p:"Murakkab savollarni tushunadi, qonun normalarini tahlil qilib, aniq xulosa beradi.",
+  feat2_h:"Lex.uz RAG qidiruv",
+  feat2_p:"Javoblar bevosita amaldagi qonunlardan. Eski tahrirlar avtomatik chetlab o'tiladi.",
+  feat3_h:"Manbalar bilan",
+  feat3_p:"Har bir javob ostida modda va lex.uz havolasi — o'zingiz tekshira olasiz.",
+  feat4_h:"Hujjat tahlili",
+  feat4_p:"Shartnoma yoki hujjatni yuklang — JuristAI xavfli nuqtalarni ko'rsatadi.",
+  feat5_h:"Telegram orqali",
+  feat5_p:"Ro'yxatdan o'tish va kirish Telegram orqali — parol kerak emas.",
+  feat6_h:"Maxfiy va xavfsiz",
+  feat6_p:"Savollaringiz himoyalangan. Ma'lumotlar uchinchi shaxslarga berilmaydi.",
+  bc1:"128⁴-modda",
+  bc2:"165-modda",
+  bc3:"56-modda",
+  b_match:"84% mos kelish darajasi",
+  br1:"Ma'muriy kodeks, 128⁴",
+  br2:"Mehnat kodeksi, 165",
+  br3:"Fuqarolik kodeksi, 56",
+  rag_an_ey:"Tahlil",
+  rag_an_p:"128⁴-modda svetoforning taqiqlovchi signaliga yoki tartibga soluvchining ishorasiga bo‘ysunmaslikni ikki holatga ajratadi — jarima qaysi chegaradan o‘tganingizga bog‘liq.",
+  rag_analysis:[
+    ["0,5 BHM","To‘xtash chizig‘ini bosib kirish — chiziq yoki belgi bilan belgilangan joydan oshib ketish, lekin chorrahaga o‘tmaslik."],
+    ["3 BHM","Taqiqlovchi signal yoki ishoraga bo‘ysunmasdan butunlay o‘tib ketish."]
+  ],
+  b_src_badge:"128⁴-modda · lex.uz",
+  bs1:"SSL/TLS",
+  bs2:"Shifrlash",
+  bs3:"✓ Xavfsiz",
+  how_ey:"3 oddiy qadam",
+  how_h:"Daqiqada javob oling",
+  how_sub:"Yurist qabuliga yozilish shart emas.",
+  steps:[
+    ["Savolingizni yozing","Huquqiy masalangizni oddiy tilda yozing — yuridik atamalar kerak emas."],
+    ["AI qonunni qidiradi","JuristAI lex.uz dagi amaldagi normalardan eng tegishlisini topadi."],
+    ["Manbali javob","Aniq xulosa, moddalar va havolalar bilan — bir soniyada qo'lingizda."]
+  ],
+  testi_ey:"Foydalanuvchilar fikri",
+  testi_h:"Ular allaqachon ishlayapti",
+  testimonials:[
+    ["Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.","Sarvar T.","Kichik biznes egasi","ST"],
+    ["Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!","Dilnoza M.","Tadbirkor","DM"],
+    ["Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!","Бахром А.","Menejer","БА"]
+  ],
+  sc_h_a:"Har bir javob",
+  sc_h_em:"tekshiriladigan",
+  sc_h_b:"manbaga ega",
+  sc_p:"Boshqa AI lar havolani to'qib chiqarishi mumkin. JuristAI esa faqat lex.uz dagi haqiqiy qonun matnidan foydalanadi.",
+  checks:["Faqat amaldagi (eng so'nggi) qonun tahriri","Aniq modda va band ko'rsatiladi","To'g'ridan-to'g'ri lex.uz havolasi","O'zbek va rus tillarida"],
+  pr_ey:"Tariflar",
+  pr_h:"Sizga mos rejani tanlang",
   pr_sub:"Bepul boshlang — karta kerak emas. Istalgan vaqtda bekor qilasiz.",
-  pr_note:"<b>Kam ishlatdingizmi — kamroq to‘laysiz.</b> Har oy sarfingizni hisoblab boramiz: rejangizni to‘liq ishlatmagan bo‘lsangiz, farqi keyingi oy uchun chegirma sifatida qaytariladi. Ortiqcha to‘lov yo‘q.",
-  p_cur:" so'm",p_per:"oyiga",p_select:"Tanlash",
+  pr_testing_b:"Platforma sinov bosqichida.",
+  pr_testing:"To‘lov tizimi hali ulanmagan — hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak bo‘lsa, «Xabar berish» tugmasini bosing.",
+  pr_note_b:"Kam ishlatdingizmi — kamroq to‘laysiz.",
+  pr_note:"Har oy sarfingizni hisoblab boramiz: rejangizni to‘liq ishlatmagan bo‘lsangiz, farqi keyingi oy uchun chegirma sifatida qaytariladi. Ortiqcha to‘lov yo‘q.",
   p_soon:"Tez orada",
   p_soon_btn:"Xabar berish",
   p1_tag:"Boshlash uchun",
-  pr_testing:"<b>Platforma sinov bosqichida.</b> To‘lov tizimi hali ulanmagan — hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak bo‘lsa, «Xabar berish» tugmasini bosing.",
-  faq_ey:"Savol-javob",faq_h:"Tez-tez beriladigan savollar",
-  q1_q:"JuristAI yuristning o'rnini bosadimi?",q1_a:"JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz.",
-  q2_q:"Javoblar qanchalik ishonchli?",q2_a:"Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi. Siz manbani o'zingiz tekshirishingiz mumkin.",
-  q3_q:"Qanday ro'yxatdan o'taman?",q3_a:"Telegram yoki Google orqali bir necha soniyada. Parol kerak emas.",
-  q4_q:"Eski qonunga asoslangan javob bermaymi?",q4_a:"Yo'q. Tizim eski tahrirlarni avtomatik aniqlab, har doim amaldagi versiyaga o'tadi.",
-  q5_q:"Qaysi tillarda ishlaydi?",q5_a:"O'zbek va rus tillarida savol berishingiz va javob olishingiz mumkin.",
-  cta_h:"Huquqiy savolingiz bormi?",cta_p:"Hoziroq bepul sinab ko'ring — bir soniyada manbali javob oling.",cta_btn:"Bepul boshlash",
+  p_cur:" so'm",
+  p_per:"oyiga",
+  faq_ey:"Savol-javob",
+  faq_h:"Tez-tez beriladigan savollar",
+  faqs:[
+    ["JuristAI yuristning o'rnini bosadimi?","JuristAI tez va manbali huquqiy ma'lumot beradi, ammo murakkab ishlarda malakali yurist bilan maslahatlashishni tavsiya etamiz."],
+    ["Javoblar qanchalik ishonchli?","Har bir javob lex.uz dagi amaldagi qonun matniga asoslanadi. Siz manbani o'zingiz tekshirishingiz mumkin."],
+    ["Qanday ro'yxatdan o'taman?","Telegram yoki Google orqali bir necha soniyada. Parol kerak emas."],
+    ["Eski qonunga asoslangan javob bermaymi?","Yo'q. Tizim eski tahrirlarni avtomatik aniqlab, har doim amaldagi versiyaga o'tadi."],
+    ["Qaysi tillarda ishlaydi?","O'zbek va rus tillarida savol berishingiz va javob olishingiz mumkin."]
+  ],
+  faqs2:[
+    ["Hujjat loyihasini tuzib bera oladimi?","Ha. Shartnoma, ariza va da'vo loyihalarini kiritgan ma'lumotlaringiz asosida tayyorlaydi va tahrirlash uchun beradi."],
+    ["Ma'lumotlarim maxfiy saqlanadimi?","Suhbatlar shifrlangan holda saqlanadi va uchinchi shaxslarga berilmaydi. Istagan vaqtda o'chirishingiz mumkin."],
+    ["Jarima miqdorini hisoblab beradimi?","Ha. BHM asosida amaldagi stavka bo'yicha aniq summani va jarima ballini ko'rsatadi."],
+    ["Sud amaliyotini ham ko'rsatadimi?","Tegishli hollarda o'xshash ishlar bo'yicha sud qarorlariga havola qiladi."],
+    ["Telegram bot bilan farqi bormi?","Bot tezkor savollar uchun, portal esa hujjat tayyorlash va uzoq suhbatlar uchun mo'ljallangan."]
+  ],
+  cta_h:"Huquqiy savolingiz bormi?",
+  cta_p:"Hoziroq bepul sinab ko'ring — bir soniyada manbali javob oling.",
+  cta_btn:"Bepul boshlash",
+  led_live:"Efirda",
+  led_ads:[
+    ["Huquqiy tahlil","Savolingizga bir soniyada javob","Amaldagi qonun matnidan, manba havolasi bilan."],
+    ["Hujjat tayyorlash","Shartnoma va da'vo loyihalari","Ma'lumotlaringizni kiriting — loyihani JuristAI yozadi."],
+    ["Manbali javob","Har bir xulosa lex.uz ga bog'langan","Moddani o'zingiz ochib tekshirishingiz mumkin."],
+    ["Ekspert nazorati","Yurist tomonidan tasdiqlangan","Muhim javoblar mutaxassis ko'rigidan o'tadi."]
+  ],
   foot_desc:"O'zbekiston qonunchiligi bo'yicha sun'iy intellekt asosidagi huquqiy yordamchi. Lex.uz dagi amaldagi qonunlar asosida.",
-  foot_prod:"Mahsulot",foot_comp:"Kompaniya",foot_leg:"Huquqiy",foot_tg:"Telegram bot",foot_offer:"Oferta",foot_priv:"Maxfiylik",foot_terms:"Shartlar",
-  foot_copy:"© 2026 JuristAI. Barcha huquqlar himoyalangan.",foot_disc:"Eslatma: JuristAI javoblari ma'lumot xarakterida — rasmiy yuridik maslahat o'rnini bosmaydi.",
+  foot_prod:"Mahsulot",
+  foot_comp:"Kompaniya",
+  foot_leg:"Huquqiy",
+  foot_tg:"Telegram bot",
+  foot_offer:"Oferta",
+  foot_priv:"Maxfiylik",
+  foot_terms:"Shartlar",
+  foot_copy:"© 2026 JuristAI. Barcha huquqlar himoyalangan.",
+  foot_disc:"Eslatma: JuristAI javoblari ma'lumot xarakterida — rasmiy yuridik maslahat o'rnini bosmaydi.",
+  p1_name:"Bepul",
+  p1_price:"Bepul",
+  p1_per:"Doimo bepul",
+  p1_btn:"Bepul boshlash",
+  p1_for:"Platformani sinab ko‘rish va kundalik oddiy savollar uchun.",
+  p1_f1:"Kuniga 10 ta savol — 30 kun",
+  p1_f2:"So‘ngra kuniga 3 ta, muddatsiz",
+  p1_f3:"Har bir javob lex.uz manbasi bilan",
+  p1_f4:"Karta talab qilinmaydi",
+  p2_name:"Silver",
+  p2_for:"Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.",
+  p2_f1:"Cheksiz AI chat",
+  p2_f2:"Oyiga ~39 ta yuridik xulosa krediti",
+  p2_f3:"Oyiga ~95 ta hujjat tayyorlash",
+  p2_f4:"O‘z shablonlaringizni yuklash",
+  p3_name:"Gold",
+  p3_for:"Yuridik bo‘lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga.",
+  p3_f1:"Cheksiz AI chat",
+  p3_f2:"Oyiga ~74 ta yuridik xulosa krediti",
+  p3_f3:"Oyiga ~217 ta hujjat",
+  p3_f4:"Skan va rasmdan hujjat tahlili",
+  p3_f5:"Ustuvor navbat — tezroq javob",
+  p4_name:"Platinum",
+  p4_for:"Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya.",
+  p4_f1:"Cheksiz AI chat",
+  p4_f2:"Oyiga ~182 ta yuridik xulosa krediti",
+  p4_f3:"Oyiga ~542 ta hujjat",
+  p4_f4:"Shaxsiy konsierj va o‘qitish",
+  p4_f5:"API orqali integratsiya"
 },
 ru:{
-  nav_features:"Возможности",nav_how:"Как работает",nav_attorneys:"Адвокаты",nav_pricing:"Тарифы",nav_faq:"Вопросы",nav_login:"Войти",nav_cta:"Начать бесплатно",
+  nav_features:"Возможности",
+  nav_how:"Как работает",
+  nav_attorneys:"Адвокаты",
+  nav_pricing:"Тарифы",
+  nav_faq:"Вопросы",
+  nav_login:"Войти",
+  nav_cta:"Начать бесплатно",
   hero_pill:"На основе актуальных законов с Lex.uz",
-  hero_title:"Ваш юрист на базе <span class='gt'>искусственного интеллекта</span> по законодательству Узбекистана",
+  hero_title_a:"Ваш юрист на базе",
+  hero_title_em:"искусственного интеллекта",
+  hero_title_b:"по законодательству Узбекистана",
   hero_sub:"Задайте вопрос на простом языке — JuristAI даст точный ответ со ссылками на действующие законы. 24/7, за секунду.",
-  hero_btn1:"Попробовать бесплатно",hero_btn2:"Как это работает?",
-  hs1:"правовых сфер",hs2:"всегда онлайн",hs3_n:"&lt;1с",hs3:"время ответа",
-  fb1:"Источник подтверждён",fb2:"Зашифровано",
-  mock_q:"Сколько штраф за проезд на красный свет?",
-  mock_a:"Проезд на запрещающий сигнал светофора является <strong>административным правонарушением</strong> и влечёт штраф. Точный размер зависит от действующей редакции.",
-  mock_src:"Кодекс об административной ответственности, ст. 128⁴",
+  hero_btn1:"Попробовать бесплатно",
+  hero_btn2:"Как это работает?",
+  hs1_n:"50 000+",
+  hs1:"нормативных документов в базе",
+  hs2_n:"lex.uz",
+  hs2:"ежедневное обновление",
+  hs3_n:"3",
+  hs3:"языка: узбекский, русский, английский",
   trust_label:"Охватывает",
-  mq1:"Трудовое право",mq2:"Семейное право",mq3:"Гражданское право",mq4:"Налоговое право",mq5:"Уголовное право",mq6:"Административная ответственность",mq7:"Корпоративное право",mq8:"Предпринимательство",mq9:"Жилищное право",mq10:"Право собственности",mq11:"Нотариат",
-  stat1:"Правовых сфер",stat2:"На основе источников",stat3:"Время ответа",stat4:"Всегда онлайн",
-  feat_ey:"Почему JuristAI",feat_h:"Не просто чатбот — <span class='gt'>юридическая точность</span>",feat_sub:"Каждый ответ привязан к тексту действующего закона. Никаких выдуманных ссылок.",
-  feat1_h:"Правовой анализ ИИ",feat1_p:"Понимает сложные вопросы, анализирует нормы закона и даёт понятное заключение.",
-  feat2_h:"Поиск по Lex.uz (RAG)",feat2_p:"Ответы напрямую из действующих законов. Устаревшие редакции автоматически обходятся.",
-  feat3_h:"Со ссылками",feat3_p:"Под каждым ответом — соответствующая статья и ссылка на Lex.uz.",
-  feat4_h:"Анализ документов",feat4_p:"Загрузите договор — JuristAI прочитает и укажет рискованные пункты.",
-  feat5_h:"Через Telegram",feat5_p:"Регистрация и вход через Telegram — без пароля, за несколько секунд.",
-  feat6_h:"Конфиденциально",feat6_p:"Ваши вопросы защищены. Данные не передаются третьим лицам.",
-  bc1:"Ст. 128⁴",bc2:"Ст. 165",bc3:"Ст. 56",b_match:"84% релевантность",
-  br1:"Адм. кодекс, ст. 128⁴",br2:"Трудовой кодекс, ст. 165",br3:"Гражданский кодекс, ст. 56",
-  b_src_badge:"Ст. 128⁴ · lex.uz",bs1:"SSL/TLS",bs2:"Шифрование",bs3:"Защищено",
-  how_ey:"3 простых шага",how_h:"Получите ответ за минуту",how_sub:"Не нужно записываться к юристу.",
-  s1_h:"Задайте вопрос",s1_p:"Опишите ситуацию на простом языке — юридические термины не нужны.",
-  s2_h:"ИИ ищет в законах",s2_p:"JuristAI находит наиболее релевантные нормы из действующих законов Lex.uz.",
-  s3_h:"Ответ с источниками",s3_p:"Чёткий вывод с нужными статьями и ссылками — за секунду.",
-  testi_ey:"Отзывы пользователей",testi_h:"Уже используют JuristAI",
-  t1_q:"Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.",t1_name:"Sarvar T.",t1_role:"Владелец малого бизнеса",
-  t2_q:"Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!",t2_name:"Dilnoza M.",t2_role:"Предприниматель",
-  t3_q:"Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!",t3_name:"Бахром А.",t3_role:"Менеджер",
-  sc_h:"Каждый ответ имеет <span class='gt'>проверяемый</span> источник",sc_p:"Другие ИИ могут выдумывать ссылки. JuristAI использует только реальный текст законов с Lex.uz.",
-  sc_li1:"Только актуальная (последняя) редакция закона",sc_li2:"Указывается точная статья и пункт",sc_li3:"Прямая ссылка на Lex.uz",sc_li4:"На узбекском и русском языках",
-  sc_mock_title:"Пример ответа",sc_q:"Что делать, если задержали зарплату?",sc_a:"Работодатель обязан выплачивать зарплату вовремя. По <strong>Трудовому кодексу</strong> за каждый день задержки вы вправе требовать компенсацию.",sc_src:"Трудовой кодекс, статья 333",
-  pr_ey:"Тарифы",pr_h:"Выберите подходящий план",pr_sub:"Начните бесплатно — карта не нужна. Отмена в любой момент.",
-  p1_name:"Бесплатный",p1_price:"Бесплатно",p1_per:"Навсегда бесплатно",p1_f1:"10 вопросов в день — 30 дней",p1_f2:"Далее 3 в день, бессрочно",p1_f3:"Каждый ответ со ссылкой на lex.uz",p1_f4:"Без привязки карты",p1_btn:"Начать бесплатно",
-  p2_name:"Silver",p2_f1:"Безлимитный AI-чат",p2_f2:"~39 кредитов на юрзаключения в месяц",p2_f3:"~95 документов в месяц",p2_f4:"Загрузка своих шаблонов",
-  p3_tag:"Популярный",p3_name:"Gold",p3_f1:"Безлимитный AI-чат",p3_f2:"~74 кредита на заключения в месяц",p3_f3:"~217 документов в месяц",p3_f4:"Анализ сканов и фото документов",p3_f5:"Приоритетная очередь",
-  p4_name:"Platinum",p4_f1:"Безлимитный AI-чат",p4_f2:"~182 кредита на заключения в месяц",p4_f3:"~542 документа в месяц",p4_f4:"Персональный консьерж и обучение",p4_f5:"Интеграция по API",
-  p1_for:"Чтобы попробовать платформу и для простых повседневных вопросов.",
-  p2_for:"Для частных юристов, предпринимателей и небольших офисов.",
-  p3_for:"Для юротдела, HR и бухгалтерии — тем, кто работает с документами каждый день.",
-  p4_for:"Для компаний и адвокатских бюро — большие объёмы и интеграция.",
+  marquee:["Трудовое право","Семейное право","Гражданское право","Налоговое право","Уголовное право","Административная ответственность","Корпоративное право","Предпринимательство","Жилищное право","Право собственности","Нотариат"],
+  stats:["Правовых сфер","На основе источников","Время ответа","Всегда онлайн"],
+  feat_ey:"Почему JuristAI",
+  feat_h_a:"Не просто чатбот —",
+  feat_h_em:"юридическая точность",
+  feat_sub:"Каждый ответ привязан к тексту действующего закона. Никаких выдуманных ссылок.",
+  feat1_h:"Правовой анализ ИИ",
+  feat1_p:"Понимает сложные вопросы, анализирует нормы закона и даёт понятное заключение.",
+  feat2_h:"Поиск по Lex.uz (RAG)",
+  feat2_p:"Ответы напрямую из действующих законов. Устаревшие редакции автоматически обходятся.",
+  feat3_h:"Со ссылками",
+  feat3_p:"Под каждым ответом — соответствующая статья и ссылка на Lex.uz.",
+  feat4_h:"Анализ документов",
+  feat4_p:"Загрузите договор — JuristAI прочитает и укажет рискованные пункты.",
+  feat5_h:"Через Telegram",
+  feat5_p:"Регистрация и вход через Telegram — без пароля, за несколько секунд.",
+  feat6_h:"Конфиденциально",
+  feat6_p:"Ваши вопросы защищены. Данные не передаются третьим лицам.",
+  bc1:"Ст. 128⁴",
+  bc2:"Ст. 165",
+  bc3:"Ст. 56",
+  b_match:"84% релевантность",
+  br1:"Адм. кодекс, ст. 128⁴",
+  br2:"Трудовой кодекс, ст. 165",
+  br3:"Гражданский кодекс, ст. 56",
+  rag_an_ey:"Анализ",
+  rag_an_p:"Статья 128⁴ разделяет неподчинение запрещающему сигналу светофора или жесту регулировщика на два случая — размер штрафа зависит от того, какую границу вы пересекли.",
+  rag_analysis:[
+    ["0,5 БРВ","Выезд за стоп-линию, обозначенную разметкой или знаком, без проезда перекрёстка."],
+    ["3 БРВ","Полный проезд на запрещающий сигнал светофора или жест регулировщика."]
+  ],
+  b_src_badge:"Ст. 128⁴ · lex.uz",
+  bs1:"SSL/TLS",
+  bs2:"Шифрование",
+  bs3:"✓ Защищено",
+  how_ey:"3 простых шага",
+  how_h:"Получите ответ за минуту",
+  how_sub:"Не нужно записываться к юристу.",
+  steps:[
+    ["Задайте вопрос","Опишите ситуацию на простом языке — юридические термины не нужны."],
+    ["ИИ ищет в законах","JuristAI находит наиболее релевантные нормы из действующих законов Lex.uz."],
+    ["Ответ с источниками","Чёткий вывод с нужными статьями и ссылками — за секунду."]
+  ],
+  testi_ey:"Отзывы пользователей",
+  testi_h:"Уже используют JuristAI",
+  testimonials:[
+    ["Mehnat nizosida kerakli moddani bir soniyada topib berdi. Avval soatlab qidirar edim — JuristAI vaqtimni juda tejadi.","Sarvar T.","Владелец малого бизнеса","ST"],
+    ["Shartnoma imzolashdan oldin JuristAI yordamida xavfli bandlarni topdim. Pulimni va asabimni tejadi!","Dilnoza M.","Предприниматель","DM"],
+    ["Спросил про задержку зарплаты — за секунду получил ссылку на конкретную статью. Очень удобно и понятно!","Бахром А.","Менеджер","БА"]
+  ],
+  sc_h_a:"Каждый ответ имеет",
+  sc_h_em:"проверяемый",
+  sc_h_b:"источник",
+  sc_p:"Другие ИИ могут выдумывать ссылки. JuristAI использует только реальный текст законов с Lex.uz.",
+  checks:["Только актуальная (последняя) редакция закона","Указывается точная статья и пункт","Прямая ссылка на Lex.uz","На узбекском и русском языках"],
+  pr_ey:"Тарифы",
+  pr_h:"Выберите подходящий план",
   pr_sub:"Начните бесплатно — карта не нужна. Отмена в любой момент.",
-  pr_note:"<b>Меньше используете — меньше платите.</b> Мы считаем ваш расход каждый месяц: если вы не выбрали тариф полностью, разница возвращается скидкой на следующий месяц. Никаких переплат.",
-  p_cur:" сум",p_per:"в месяц",p_select:"Выбрать",
+  pr_testing_b:"Платформа в стадии тестирования.",
+  pr_testing:"Платёжная система ещё не подключена — сейчас все возможности открыты на бесплатном тарифе. Нужен платный — нажмите «Сообщить мне».",
+  pr_note_b:"Меньше используете — меньше платите.",
+  pr_note:"Мы считаем ваш расход каждый месяц: если вы не выбрали тариф полностью, разница возвращается скидкой на следующий месяц. Никаких переплат.",
   p_soon:"Скоро",
   p_soon_btn:"Сообщить мне",
   p1_tag:"Для старта",
-  pr_testing:"<b>Платформа в стадии тестирования.</b> Платёжная система ещё не подключена — сейчас все возможности открыты на бесплатном тарифе. Нужен платный — нажмите «Сообщить мне».",
-  faq_ey:"Вопросы и ответы",faq_h:"Часто задаваемые вопросы",
-  q1_q:"Заменяет ли JuristAI юриста?",q1_a:"JuristAI предоставляет быструю информацию с источниками, но для сложных дел рекомендуем консультироваться с квалифицированным юристом.",
-  q2_q:"Насколько надёжны ответы?",q2_a:"Каждый ответ основан на тексте действующего закона с Lex.uz. Вы можете проверить источник самостоятельно.",
-  q3_q:"Как зарегистрироваться?",q3_a:"Через Telegram или Google за несколько секунд. Пароль не нужен.",
-  q4_q:"Не даст ли ответ на основе устаревшего закона?",q4_a:"Нет. Система автоматически определяет устаревшие редакции и переходит к действующей версии.",
-  q5_q:"На каких языках работает?",q5_a:"Вы можете задавать вопросы и получать ответы на узбекском и русском языках.",
-  cta_h:"Есть юридический вопрос?",cta_p:"Попробуйте прямо сейчас — получите ответ с источниками за секунду.",cta_btn:"Начать бесплатно",
+  p_cur:" сум",
+  p_per:"в месяц",
+  faq_ey:"Вопросы и ответы",
+  faq_h:"Часто задаваемые вопросы",
+  faqs:[
+    ["Заменяет ли JuristAI юриста?","JuristAI предоставляет быструю информацию с источниками, но для сложных дел рекомендуем консультироваться с квалифицированным юристом."],
+    ["Насколько надёжны ответы?","Каждый ответ основан на тексте действующего закона с Lex.uz. Вы можете проверить источник самостоятельно."],
+    ["Как зарегистрироваться?","Через Telegram или Google за несколько секунд. Пароль не нужен."],
+    ["Не даст ли ответ на основе устаревшего закона?","Нет. Система автоматически определяет устаревшие редакции и переходит к действующей версии."],
+    ["На каких языках работает?","Вы можете задавать вопросы и получать ответы на узбекском и русском языках."]
+  ],
+  faqs2:[
+    ["Может ли составить проект документа?","Да. Готовит проекты договоров, заявлений и исков на основе введённых вами данных и отдаёт на правку."],
+    ["Мои данные хранятся конфиденциально?","Переписка хранится в зашифрованном виде и не передаётся третьим лицам. Вы можете удалить её в любой момент."],
+    ["Рассчитает ли размер штрафа?","Да. Указывает точную сумму по действующей ставке БРВ и количество штрафных баллов."],
+    ["Показывает ли судебную практику?","В соответствующих случаях ссылается на решения судов по аналогичным делам."],
+    ["Чем отличается от Telegram-бота?","Бот — для быстрых вопросов, портал — для подготовки документов и длинных консультаций."]
+  ],
+  cta_h:"Есть юридический вопрос?",
+  cta_p:"Попробуйте прямо сейчас — получите ответ с источниками за секунду.",
+  cta_btn:"Начать бесплатно",
+  led_live:"В эфире",
+  led_ads:[
+    ["Юридический анализ","Ответ на ваш вопрос за секунду","Из текста действующего закона, со ссылкой на источник."],
+    ["Подготовка документов","Проекты договоров и исков","Введите данные — проект напишет JuristAI."],
+    ["Ответ с источником","Каждый вывод привязан к lex.uz","Вы можете открыть статью и проверить сами."],
+    ["Экспертный контроль","Подтверждено юристом","Важные ответы проходят проверку специалиста."]
+  ],
   foot_desc:"Юридический помощник на базе ИИ по законодательству Узбекистана. На основе действующих законов Lex.uz.",
-  foot_prod:"Продукт",foot_comp:"Компания",foot_leg:"Правовое",foot_tg:"Telegram-бот",foot_offer:"Оферта",foot_priv:"Конфиденциальность",foot_terms:"Условия",
-  foot_copy:"© 2026 JuristAI. Все права защищены.",foot_disc:"Примечание: ответы JuristAI носят информационный характер и не являются официальной юридической консультацией.",
-}};
-
-let curLang=localStorage.getItem('jlang')||'uz';
-let curTheme=localStorage.getItem('dictum-theme')||localStorage.getItem('jtheme')||'light';
-let heroAnimDone=false;
-
-const ICON_MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>';
-const ICON_SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
-function applyTheme(t){
-  curTheme=t;localStorage.setItem('dictum-theme',t);localStorage.removeItem('jtheme');
-  document.documentElement.setAttribute('data-theme',t);
-  document.getElementById('thm').innerHTML=t==='dark'?ICON_SUN:ICON_MOON;
+  foot_prod:"Продукт",
+  foot_comp:"Компания",
+  foot_leg:"Правовое",
+  foot_tg:"Telegram-бот",
+  foot_offer:"Оферта",
+  foot_priv:"Конфиденциальность",
+  foot_terms:"Условия",
+  foot_copy:"© 2026 JuristAI. Все права защищены.",
+  foot_disc:"Примечание: ответы JuristAI носят информационный характер и не являются официальной юридической консультацией.",
+  p1_name:"Бесплатный",
+  p1_price:"Бесплатно",
+  p1_per:"Навсегда бесплатно",
+  p1_btn:"Начать бесплатно",
+  p1_for:"Чтобы попробовать платформу и для простых повседневных вопросов.",
+  p1_f1:"10 вопросов в день — 30 дней",
+  p1_f2:"Далее 3 в день, бессрочно",
+  p1_f3:"Каждый ответ со ссылкой на lex.uz",
+  p1_f4:"Без привязки карты",
+  p2_name:"Silver",
+  p2_for:"Для частных юристов, предпринимателей и небольших офисов.",
+  p2_f1:"Безлимитный AI-чат",
+  p2_f2:"~39 кредитов на юрзаключения в месяц",
+  p2_f3:"~95 документов в месяц",
+  p2_f4:"Загрузка своих шаблонов",
+  p3_name:"Gold",
+  p3_for:"Для юротдела, HR и бухгалтерии — тем, кто работает с документами каждый день.",
+  p3_f1:"Безлимитный AI-чат",
+  p3_f2:"~74 кредита на заключения в месяц",
+  p3_f3:"~217 документов в месяц",
+  p3_f4:"Анализ сканов и фото документов",
+  p3_f5:"Приоритетная очередь",
+  p4_name:"Platinum",
+  p4_for:"Для компаний и адвокатских бюро — большие объёмы и интеграция.",
+  p4_f1:"Безлимитный AI-чат",
+  p4_f2:"~182 кредита на заключения в месяц",
+  p4_f3:"~542 документа в месяц",
+  p4_f4:"Персональный консьерж и обучение",
+  p4_f5:"Интеграция по API"
 }
-document.getElementById('thm').addEventListener('click',()=>applyTheme(curTheme==='dark'?'light':'dark'));
-
-function applyLang(l){
-  curLang=l;localStorage.setItem('jlang',l);
-  document.documentElement.lang=l;
-  document.querySelectorAll('[data-i18n]').forEach(el=>{
-    const k=el.dataset.i18n;
-    if(T[l]&&T[l][k]!==undefined)el.innerHTML=T[l][k];
-  });
-  document.querySelectorAll('.ls-b').forEach(b=>b.classList.toggle('on',b.dataset.lang===l));
-  if(heroAnimDone){
-    const existing=document.querySelector('.br-body .bbl.a');
-    if(existing)existing.remove();
-    const tb=document.getElementById('typing');
-    if(!tb){const t=document.createElement('div');t.className='btyp';t.id='typing';t.innerHTML='<span></span><span></span><span></span>';document.getElementById('mockBody').appendChild(t);}
-    heroAnimDone=false;setTimeout(showHeroAI,1800);
+};
+window.JAI_STAT_NUMS = ["13+","100%","<1s","24/7"];
+window.JAI_CHAT = {
+  "uz": [
+    {
+      "q": "Qizil chiroqda o'tib ketsam qancha jarima to'layman?",
+      "a": "Svetoforning taqiqlovchi signalida toʻxtash chizigʻini bosib kirishga 0.5 BHM, svetoforning taqiqlovchi signaliga boʻysunmasdan oʻtishi 3 BHM jarimaga va 1 jarima balliga sabab bo'ladi.",
+      "src": "Ma'muriy javobgarlik kodeksi, 128⁴-modda"
+    },
+    {
+      "q": "IT-park rezidentiman, chet eldan mutaxassisni ishga olish uchun tasdiqnoma kerakmi?",
+      "a": "Yo'q, shart emas.",
+      "src": "VMQ-589 Nizomi, 17-bandi"
+    },
+    {
+      "q": "Maʼmuriy yoʻl bilan ushlab turish qancha vaqt bo'lishi mumkin?",
+      "a": "3 soatdan oshiq bo'lishi mumkin emas.",
+      "src": "MJTK 288-modda, 1-qism"
+    }
+  ],
+  "ru": [
+    {
+      "q": "Сколько штраф за проезд на красный свет?",
+      "a": "Выезд за стоп-линию на запрещающий сигнал — 2 БРВ, проезд на запрещающий сигнал светофора — 3 БРВ штрафа и 1 штрафной балл.",
+      "src": "Кодекс об административной ответственности, ст. 128⁴"
+    },
+    {
+      "q": "Я резидент IT-park — нужно ли подтверждение для найма иностранного специалиста?",
+      "a": "Нет, не требуется.",
+      "src": "Положение ПКМ-589, пункт 17"
+    },
+    {
+      "q": "Сколько может длиться административное задержание?",
+      "a": "Не более 3 часов.",
+      "src": "КАО, ст. 288, часть 1"
+    }
+  ]
+};
+window.JAI_CODE_REFS = [
+  {
+    "label": "FK 1102-modda",
+    "x": "44%",
+    "y": "42%",
+    "dur": "11s",
+    "delay": "0s",
+    "anim": "jai-zoom-a"
+  },
+  {
+    "label": "MK 333-modda",
+    "x": "56%",
+    "y": "50%",
+    "dur": "13s",
+    "delay": "1.6s",
+    "anim": "jai-zoom-b"
+  },
+  {
+    "label": "JK 168-modda",
+    "x": "50%",
+    "y": "38%",
+    "dur": "12s",
+    "delay": "3.1s",
+    "anim": "jai-zoom-c"
+  },
+  {
+    "label": "JIK 128⁴",
+    "x": "47%",
+    "y": "55%",
+    "dur": "14s",
+    "delay": "4.7s",
+    "anim": "jai-zoom-d"
+  },
+  {
+    "label": "lex.uz",
+    "x": "58%",
+    "y": "44%",
+    "dur": "10s",
+    "delay": "6.2s",
+    "anim": "jai-zoom-a"
+  },
+  {
+    "label": "FK 415-modda",
+    "x": "42%",
+    "y": "52%",
+    "dur": "13s",
+    "delay": "7.8s",
+    "anim": "jai-zoom-b"
+  },
+  {
+    "label": "SK 25-modda",
+    "x": "53%",
+    "y": "34%",
+    "dur": "12s",
+    "delay": "9.4s",
+    "anim": "jai-zoom-c"
+  },
+  {
+    "label": "MK 106-modda",
+    "x": "46%",
+    "y": "48%",
+    "dur": "15s",
+    "delay": "11s",
+    "anim": "jai-zoom-d"
+  },
+  {
+    "label": "SK 45-modda",
+    "x": "55%",
+    "y": "58%",
+    "dur": "13s",
+    "delay": "12.6s",
+    "anim": "jai-zoom-a"
+  },
+  {
+    "label": "FK 234-modda",
+    "x": "49%",
+    "y": "46%",
+    "dur": "11s",
+    "delay": "14.2s",
+    "anim": "jai-zoom-b"
+  },
+  {
+    "label": "JK 97-modda",
+    "x": "57%",
+    "y": "40%",
+    "dur": "14s",
+    "delay": "15.8s",
+    "anim": "jai-zoom-c"
+  },
+  {
+    "label": "MJTK 135-modda",
+    "x": "45%",
+    "y": "36%",
+    "dur": "12s",
+    "delay": "17.4s",
+    "anim": "jai-zoom-d"
+  },
+  {
+    "label": "PQ-10",
+    "x": "59%",
+    "y": "53%",
+    "dur": "10s",
+    "delay": "19s",
+    "anim": "jai-zoom-a"
+  },
+  {
+    "label": "VMQ-426",
+    "x": "43%",
+    "y": "45%",
+    "dur": "13s",
+    "delay": "20.6s",
+    "anim": "jai-zoom-b"
   }
-}
-document.querySelectorAll('.ls-b').forEach(b=>b.addEventListener('click',()=>applyLang(b.dataset.lang)));
-
-const hdr=document.getElementById('hdr');
-window.addEventListener('scroll',()=>hdr.classList.toggle('sc',scrollY>30),{passive:true});
-
-const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.12});
-document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
-
-const cio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){countUp(e.target);cio.unobserve(e.target);}});},{threshold:.5});
-document.querySelectorAll('[data-count]').forEach(el=>cio.observe(el));
-function countUp(el){
-  const target=+el.dataset.count,suf=el.dataset.suffix||'';
-  let n=0;const step=Math.max(1,target/45);
-  (function tick(){n+=step;if(n>=target){el.textContent=target+suf;}else{el.textContent=Math.floor(n)+suf;requestAnimationFrame(tick);}})();
-}
-
-const pio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.style.width=e.target.dataset.w+'%';pio.unobserve(e.target);}});},{threshold:.3});
-document.querySelectorAll('.b-prog-fill').forEach(el=>pio.observe(el));
-
-function showHeroAI(){
-  const t=document.getElementById('typing');if(!t)return;
-  const l=curLang;
-  const ai=document.createElement('div');
-  ai.className='bbl a';ai.style.cssText='opacity:0;animation:rise .5s ease forwards';
-  ai.innerHTML=(T[l].mock_a||'')+'<div class="bsrc">'+(T[l].mock_src||'')+'</div>';
-  t.replaceWith(ai);heroAnimDone=true;
-}
-setTimeout(showHeroAI,2400);
-
-document.querySelectorAll('.qi button').forEach(b=>{
-  b.addEventListener('click',()=>{
-    const qi=b.parentElement,ans=qi.querySelector('.qi-ans'),open=qi.classList.contains('open');
-    document.querySelectorAll('.qi').forEach(x=>{x.classList.remove('open');x.querySelector('.qi-ans').style.maxHeight=null;});
-    if(!open){qi.classList.add('open');ans.style.maxHeight=ans.scrollHeight+'px';}
-  });
-});
-
-applyTheme(curTheme);
-applyLang(curLang);
+];
 </script>
+<script src="/js/landing.js"></script>
 </body>
 </html>
