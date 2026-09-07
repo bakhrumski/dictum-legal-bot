@@ -116,11 +116,26 @@ body:has(.login-card) {
   object-position: left center;
   transition: opacity 300ms ease;
 }
-.lg-wordmark video { opacity: 0; }
-/* The motion file takes over on hover; the still stays underneath so there is
-   never a blank frame while the video buffers. */
-.lg-wordmark:hover video { opacity: 1; }
-.lg-wordmark:hover img { opacity: 0; }
+/* The motion file types the wordmark out on load. The delivered file is VP9
+   4:2:0 with no alpha despite "transparent" in its name, so it carries a solid
+   black field; blending that away with `screen` also erases the mark, because
+   the J is dark blue. It is therefore re-encoded to VP9 with a real alpha
+   plane (public/brand/wordmark-motion-dark-alpha.webm), keeping the J's colour
+   over the hero photograph. The still sits underneath and shows until the
+   first frame paints, so there is never a gap; when the video ends it holds
+   the finished wordmark. */
+.lg-wordmark video {
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.lg-wordmark.is-playing video { opacity: 1; }
+.lg-wordmark.is-playing img { opacity: 0; }
+
+/* No autoplay when motion is unwelcome: the still is the whole treatment. */
+@media (prefers-reduced-motion: reduce) {
+  .lg-wordmark video { display: none; }
+  .lg-wordmark img { opacity: 1 !important; }
+}
 
 .lg-sheen {
   position: absolute;
