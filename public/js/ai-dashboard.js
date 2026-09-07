@@ -1,10 +1,14 @@
 /* ============================================================
-   JuristAI application shell behaviour.
+   JuristAI application behaviour.
 
-   Ported from the logic class in public/preview/dashboard.dc.html. At this
-   stage the shell only has to do two things the prototype does: switch
-   theme, and switch tab. The sections behind the tabs come later, along
-   with the data they read.
+   Ported from the logic class in public/preview/dashboard.dc.html: theme
+   and tab switching, the five sections behind the tabs, and the drawer a
+   matter opens. Layout constants, seeds, thresholds and timings are the
+   prototype's.
+
+   Every section reads window.DB_DATA, which js/ai-dashboard-data.js fills
+   with demo content. That file is the one place to replace when the
+   endpoints land; nothing here assumes more than the shapes it defines.
    ============================================================ */
 (function () {
   'use strict';
