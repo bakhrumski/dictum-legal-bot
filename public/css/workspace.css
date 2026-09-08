@@ -543,8 +543,16 @@
 /* -- Ro'yxat ------------------------------------------------
    The canvas draws the list as two columns: the matters themselves, and
    beside them who is carrying how much and what has been drafted. */
-.ws-matter-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+/* Both columns are as tall as the taller one, so the matters panel does not
+   stop short of the workload and drafts beside it. */
+.ws-matter-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
 .ws-matter-col { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+/* The list is what grows into the spare room; the panels beside it keep the
+   height of their own contents. */
+.ws-matter-col > .ws-matters { flex: 1 1 auto; }
+.ws-matter-col > .ws-side { flex: 0 0 auto; }
+.ws-panel.ws-matters { display: flex; flex-direction: column; }
+.ws-matters-body { flex: 1 1 auto; }
 .ws-panel.ws-matters,
 .ws-panel.ws-side { border: 1px solid var(--ws-line); border-radius: 14px; background: color-mix(in srgb, var(--ws-panel-solid) 88%, transparent); box-shadow: var(--ws-shadow); overflow: hidden; }
 .ws-matters-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--ws-line); }
@@ -623,12 +631,21 @@
 .ws-tl-track { position: relative; height: 26px; border-radius: 8px; background: color-mix(in srgb, var(--ws-panel-hover) 60%, transparent); }
 .ws-tl-track .ws-timeline-bar {
     position: absolute; top: 4px; bottom: 4px; height: auto;
-    border-radius: 6px; background: var(--ws-brand); box-shadow: none;
+    min-width: 8px; border: 0; border-radius: 6px;
+    background: var(--ws-brand); box-shadow: none;
 }
 .ws-tl-track .ws-timeline-bar.done { background: var(--ws-success); }
 .ws-tl-track .ws-timeline-bar.approaching { background: var(--ws-warning); }
 .ws-tl-track .ws-timeline-bar.overdue { background: var(--ws-danger); }
-.ws-tl-track .ws-timeline-milestone { top: 50%; }
+/* The milestone sits on the bar at its deadline rather than instead of it. */
+.ws-tl-track .ws-timeline-milestone {
+    top: 50%; width: 14px; height: 14px; margin-top: -7px;
+    border-width: 2px; border-color: var(--ws-panel-solid);
+    background: var(--ws-brand);
+}
+.ws-tl-track .ws-timeline-milestone.done { background: var(--ws-success); }
+.ws-tl-track .ws-timeline-milestone.approaching { background: var(--ws-warning); }
+.ws-tl-track .ws-timeline-milestone.overdue { background: var(--ws-danger); }
 
 @media (max-width: 1080px) {
     /* One column: the workload and the drafts fall under the matters. */
@@ -1283,3 +1300,7 @@
 @media (prefers-reduced-motion: reduce) {
     .workspace-app *, .workspace-app *::before, .workspace-app *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* The dragged constellation is offset with a transform, so tell the compositor. */
+.ws-graph-matter.dragging,
+.ws-graph-member.dragging { will-change: transform; }
