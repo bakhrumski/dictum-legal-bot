@@ -532,9 +532,110 @@
 .ws-search-wrap .ws-input { padding-left: 39px; }
 
 .ws-panel { border-radius: 20px; overflow: hidden; }
-.ws-workspace-main > .ws-panel:last-child { flex: 1 1 auto; min-height: 320px; }
-.ws-workspace-main > .ws-panel:last-child:not(.ws-graph) { overflow: auto; }
+/* The view sizes to its own content and the page scrolls. It used to take
+   whatever height was left after the metric cards and the filters, floored at
+   320px and scrolling inside itself — which on a 1280x720 window cut the
+   timeline off after four rows and left the graph needing a scroll of its own
+   before a card could be seen. */
+.ws-workspace-main > .ws-panel:last-child { flex: 0 0 auto; min-height: 0; }
 .ws-workspace-main > .ws-panel:last-child > .ws-empty { min-height: inherit; display: grid; place-content: center; }
+
+/* -- Ro'yxat ------------------------------------------------
+   The canvas draws the list as two columns: the matters themselves, and
+   beside them who is carrying how much and what has been drafted. */
+.ws-matter-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.ws-matter-col { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.ws-panel.ws-matters,
+.ws-panel.ws-side { border: 1px solid var(--ws-line); border-radius: 14px; background: color-mix(in srgb, var(--ws-panel-solid) 88%, transparent); box-shadow: var(--ws-shadow); overflow: hidden; }
+.ws-matters-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--ws-line); }
+.ws-matters-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--ws-ink); }
+.ws-matters-head span { font-size: 12px; color: var(--ws-muted); }
+.ws-matters-body { display: flex; flex-direction: column; }
+.ws-matter-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px 14px;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--ws-line);
+    cursor: pointer;
+}
+.ws-matter-row:last-child { border-bottom: 0; }
+.ws-matter-row:hover { background: var(--ws-panel-hover); }
+.ws-matter-row:focus-visible { outline: 3px solid var(--ws-brand-border); outline-offset: -3px; }
+.ws-matter-copy { min-width: 0; }
+.ws-matter-copy h4 { margin: 0 0 5px; font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ws-ink); }
+.ws-matter-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--ws-muted); }
+.ws-matter-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--ws-muted-dim); }
+.ws-matter-due { font-weight: 600; }
+.ws-matter-due.approaching { color: var(--ws-warning); }
+.ws-matter-due.overdue { color: var(--ws-danger); }
+.ws-matter-due.done { color: var(--ws-success); }
+/* The status reads as a bar of colour rather than a filled chip, as it does on
+   the canvas. */
+.ws-matter-state { justify-self: start; padding-left: 10px; border-left: 2px solid var(--ws-brand); font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--ws-brand); }
+.ws-matter-state.done { border-left-color: var(--ws-success); color: var(--ws-success); }
+.ws-matter-state.approaching { border-left-color: var(--ws-warning); color: var(--ws-warning); }
+.ws-matter-state.overdue { border-left-color: var(--ws-danger); color: var(--ws-danger); }
+.ws-matter-ask { justify-self: end; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid var(--ws-line); border-radius: 8px; background: transparent; color: var(--ws-brand); cursor: pointer; }
+.ws-matter-ask:hover { background: var(--ws-brand-soft); border-color: var(--ws-brand-border); }
+
+.ws-side-body { display: flex; flex-direction: column; }
+.ws-load { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--ws-line); }
+.ws-load:last-child { border-bottom: 0; }
+.ws-load .ws-avatar { width: 34px; height: 34px; margin: 0; font-size: 11.5px; }
+.ws-load-copy { min-width: 0; }
+.ws-load-name { display: block; font-size: 13px; font-weight: 600; color: var(--ws-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-load-meta { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ws-muted); }
+.ws-load-track { display: block; height: 3px; margin-top: 7px; border-radius: 999px; background: var(--ws-line); overflow: hidden; }
+.ws-load-track i { display: block; height: 100%; border-radius: 999px; background: var(--ws-success); }
+.ws-load-track i.approaching { background: var(--ws-warning); }
+.ws-load-track i.overdue { background: var(--ws-danger); }
+.ws-load-share { font-size: 12.5px; font-weight: 700; color: var(--ws-success); }
+.ws-load-share.approaching { color: var(--ws-warning); }
+.ws-load-share.overdue { color: var(--ws-danger); }
+.ws-draft { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px 20px; border-bottom: 1px solid var(--ws-line); color: var(--ws-muted); }
+.ws-draft:last-child { border-bottom: 0; }
+.ws-draft-title { display: block; font-size: 13.5px; font-weight: 600; color: var(--ws-ink); }
+.ws-draft-meta { display: block; margin-top: 2px; font-size: 11.5px; color: var(--ws-muted); }
+
+/* -- Vaqt jadvali -------------------------------------------
+   A 300px column naming the matter and who carries it, and a track whose six
+   dates line up with the bars beneath them. */
+.ws-panel.ws-timeline { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--ws-line); border-radius: 14px; background: color-mix(in srgb, var(--ws-panel-solid) 88%, transparent); box-shadow: var(--ws-shadow); overflow: hidden; }
+.ws-tl-head { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 16px; padding: 13px 20px; border-bottom: 1px solid var(--ws-line); }
+.ws-tl-label > span { font-size: 12px; font-weight: 600; color: var(--ws-muted); }
+.ws-tl-zoom { display: flex; gap: 4px; margin-top: 7px; }
+.ws-tl-zoom button { padding: 3px 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--ws-muted); font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.ws-tl-zoom button:hover { background: var(--ws-panel-hover); }
+.ws-tl-zoom button.active { border-color: var(--ws-brand-border); background: var(--ws-brand-soft); color: var(--ws-brand); }
+.ws-tl-scale { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); font-size: 11.5px; color: var(--ws-muted-dim); }
+.ws-tl-body { flex: 1 1 0%; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.ws-tl-row { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 16px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--ws-line); cursor: pointer; }
+.ws-tl-row:last-child { border-bottom: 0; }
+.ws-tl-row:hover { background: var(--ws-panel-hover); }
+.ws-tl-row:focus-visible { outline: 3px solid var(--ws-brand-border); outline-offset: -3px; }
+.ws-tl-copy { min-width: 0; }
+.ws-tl-title { display: block; font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--ws-ink); }
+.ws-tl-who { display: flex; align-items: center; gap: 7px; margin-top: 6px; min-width: 0; }
+.ws-tl-who .ws-avatar { width: 22px; height: 22px; margin: 0; border: 1px solid var(--ws-brand-border); background: var(--ws-brand-soft); color: var(--ws-brand); font-size: 9.5px; }
+.ws-tl-who-name { font-size: 11.5px; color: var(--ws-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-tl-track { position: relative; height: 26px; border-radius: 8px; background: color-mix(in srgb, var(--ws-panel-hover) 60%, transparent); }
+.ws-tl-track .ws-timeline-bar {
+    position: absolute; top: 4px; bottom: 4px; height: auto;
+    border-radius: 6px; background: var(--ws-brand); box-shadow: none;
+}
+.ws-tl-track .ws-timeline-bar.done { background: var(--ws-success); }
+.ws-tl-track .ws-timeline-bar.approaching { background: var(--ws-warning); }
+.ws-tl-track .ws-timeline-bar.overdue { background: var(--ws-danger); }
+.ws-tl-track .ws-timeline-milestone { top: 50%; }
+
+@media (max-width: 1080px) {
+    /* One column: the workload and the drafts fall under the matters. */
+    .ws-matter-grid { grid-template-columns: minmax(0, 1fr); }
+    .ws-tl-head,
+    .ws-tl-row { grid-template-columns: minmax(0, 160px) minmax(0, 1fr); gap: 12px; }
+}
 .ws-list-head { display: grid; grid-template-columns: minmax(260px, 1.7fr) .72fr .7fr .6fr 38px; align-items: center; gap: 14px; min-height: 48px; padding: 0 18px; border-bottom: 1px solid var(--ws-line); color: var(--ws-muted); font-size: 10px; font-weight: 700; letter-spacing: .10em; text-transform: uppercase; }
 .ws-task-row { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(260px, 1.7fr) .72fr .7fr .6fr 38px; align-items: center; gap: 14px; min-height: 78px; padding: 13px 18px; border: 0; border-bottom: 1px solid var(--ws-line); color: var(--ws-ink); background: transparent; text-align: left; cursor: pointer; transition: background .2s, transform .2s; }
 .ws-task-row:last-child { border-bottom: 0; }
@@ -696,6 +797,27 @@
 .ws-workspace-layout { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .ws-workspace-layout.chat-open { grid-template-columns: minmax(0, 1fr) minmax(340px, 410px); }
 .ws-workspace-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* The stage is the point of these three views. It used to take whatever height
+   was left after the metric cards and the filters — on a 1280x720 window that
+   was the 320px floor, which cut the timeline off after four rows and left the
+   graph needing a scroll of its own to see a card. Each view now sizes to its
+   own content and the page scrolls, which is how the canvas reads. */
+/* With the panel sized to the stage there is nothing left to scroll inside it,
+   and an inner scroller is what made dragging a matter feel like fighting the
+   page. */
+.ws-workspace-main.graph-view .ws-graph-scroll { overflow: visible; }
+.ws-workspace-main.graph-view .ws-graph { overflow: visible; }
+/* The tab bar floats over the page, so the last matter, the last row and the
+   people under the graph all need room to clear it. */
+.ws-workspace-main.graph-view,
+.ws-workspace-main.timeline-view,
+.ws-workspace-main.list-view { padding-bottom: 104px; }
+/* The canvas shows no metric cards above any of the three views. */
+.ws-workspace-main.timeline-view > .ws-summary,
+.ws-workspace-main.list-view > .ws-summary { display: none; }
+/* Search and the three dropdowns only bear on the list, and the canvas has no
+   room for them beside a stage. */
+.ws-workspace-main.timeline-view .ws-filters { display: none; }
 .ws-workspace-layout.chat-open .ws-toolbar { align-items: stretch; flex-wrap: wrap; }
 .ws-workspace-layout.chat-open .ws-filters { flex-basis: 100%; grid-template-columns: minmax(220px, 1.55fr) repeat(3, minmax(124px, .8fr)); }
 .ws-chat-mobile-backdrop { display: none; }
