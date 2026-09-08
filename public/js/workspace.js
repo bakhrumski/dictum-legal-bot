@@ -1063,11 +1063,6 @@
         return task.is_milestone ? t('milestone') : t(task.priority);
     }
 
-    function graphMatterSummary(task) {
-        if (!task) return '';
-        return t(task.status) + ' · ' + (task.due_date ? isoDate(task.due_date) : t('unscheduled'));
-    }
-
     function getGraphMatterPosition(width, height, graphKey, defaultPosition) {
         // The centre is only a sensible default for a single matter. With several
         // on the stage each needs its own computed slot, or they all stack.
@@ -1266,7 +1261,7 @@
 
         var matterNodes=matters.map(function(task){
             var p=matterPositions[String(task.id)],tone=graphTone(task);
-            var memoryCount=Number(task.memory_count||0);
+            var memoryCount=Number(task.memory_count||0),due=dueLine(task);
             return '<article class="ws-graph-matter '+tone+'" data-graph-node data-graph-matter data-graph-key="task:'+esc(task.id)+'" data-action="open-task" data-task-id="'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" role="button" tabindex="0" aria-label="'+esc(t('matter'))+': '+esc(task.title)+'">'+
                 '<div class="ws-graph-matter-top">'+
                     '<span class="ws-graph-accent" aria-hidden="true"></span>'+
@@ -1274,7 +1269,7 @@
                     '<button type="button" class="ws-graph-ask" data-action="open-ai" data-task-id="'+esc(task.id)+'" title="'+esc(t('askAi'))+'" aria-label="'+esc(t('askAi'))+'">'+svg('ai',12)+'</button>'+
                 '</div>'+
                 '<h4>'+esc(task.title)+'</h4>'+
-                '<p class="ws-graph-due">'+esc(graphMatterSummary(task))+'</p>'+
+                '<p class="ws-graph-due '+due.tone+'">'+esc(due.text)+'</p>'+
                 '<div class="ws-graph-matter-foot">'+
                     '<span class="ws-graph-tag">'+esc(task.is_milestone?t('milestone'):t(task.priority))+'</span>'+
                     '<span class="ws-graph-docs">'+svg('document',11)+Number(task.document_count||0)+'</span>'+
@@ -1299,7 +1294,7 @@
             ? '<p class="ws-graph-bench" style="top:'+(benchTop-64)+'px">'+esc(t('benchTitle'))+'</p>'
             : '';
 
-        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
+        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" data-layout-viewport="'+Math.round(viewportWidth)+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
     }
 
     function renderTaskRow(task) {
@@ -2494,8 +2489,32 @@
         }
     }
 
+    var graphRemeasure=null;
+
+    /**
+     * True once the graph has been laid out against the width it is actually
+     * being shown at. A graph drawn while its tab was hidden was measured
+     * against nothing, so its columns are centred on a guess; this notices and
+     * draws it again, once, when the real width arrives.
+     */
+    function graphMeasured() {
+        var stage=root&&root.querySelector('.ws-graph-stage');
+        if(!stage)return true;
+        var measured=Math.round(root.getBoundingClientRect().width);
+        if(measured<200){
+            if(!graphRemeasure){
+                graphRemeasure=requestAnimationFrame(function(){graphRemeasure=null;centerGraphViewport();});
+            }
+            return false;
+        }
+        if(Math.abs(measured-Number(stage.dataset.layoutViewport||0))<=1)return true;
+        render();
+        return false;
+    }
+
     function centerGraphViewport() {
         if(!root)return;
+        if(!graphMeasured())return;
         // The layout places each roster under its own matter, which can leave
         // two people from neighbouring columns sitting on the same spot.
         separateGraphNodes(root.querySelector('.ws-graph-stage'));
@@ -2573,6 +2592,9 @@
     function separateGraphNodes(stage, fixed, options) {
         if(!stage)return null;
         var width=stage.offsetWidth,height=stage.offsetHeight,padding=18;
+        // A hidden tab gives the stage no width, and clamping every node into a
+        // zero-width board stacks the whole thing against the left edge.
+        if(width<200||height<100)return null;
         var boxes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]')).map(function(node){
             return {
                 node:node,

@@ -1003,6 +1003,10 @@
     font-weight: 600;
     line-height: 1.35;
 }
+/* The deadline carries its own colour on the card, as it does in the list. */
+.ws-graph-due.approaching { color: var(--ws-warning); }
+.ws-graph-due.overdue { color: var(--ws-danger); }
+.ws-graph-due.done { color: var(--ws-success); }
 .ws-graph-due {
     margin: 0;
     overflow: hidden;

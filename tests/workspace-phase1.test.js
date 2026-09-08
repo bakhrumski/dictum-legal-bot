@@ -437,6 +437,11 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes('translate(-50%, -50%) translate3d('), 'a drag must not lay the page out on every move');
     // Releasing eases the board into its new arrangement instead of snapping.
     assert.ok(frontend.includes('function settleGraphNodes(stage, targets, snapshot)'), 'the board must settle rather than jump');
+    // A graph drawn while its tab is hidden is laid out against a stage with
+    // no width; clamping into that stacks every node on the left edge.
+    assert.ok(frontend.includes('if(width<200||height<100)return null;'), 'separation must not run on an unmeasured stage');
+    assert.ok(frontend.includes('function graphMeasured()'), 'the graph must be drawn again once it has a real width');
+    assert.ok(frontend.includes("data-layout-viewport="), 'the stage records the width it was laid out for');
     assert.ok(frontend.includes('GRAPH_SETTLE_MS=220'));
     assert.ok(frontend.includes("matchMedia('(prefers-reduced-motion: reduce)')"), 'the settle must honour the OS motion setting');
     assert.ok(!frontend.includes('graphNodeCenter(stage,node)') || frontend.includes('function updateGraphEdges(stage)'), 'the settled board may still measure once');
