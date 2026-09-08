@@ -414,7 +414,15 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes('function graphEdgeAnchor(from, to)'), 'graph links must connect at node edges instead of disappearing below node centers');
     assert.ok(frontend.includes("if(distance<=150)return prefix+' L '"), 'nearby graph nodes must use short straight connectors instead of curled paths');
     assert.ok(frontend.includes('ws-task-description'), 'list view must expose each task description');
-    assert.ok(frontend.includes('GRAPH_FOLLOW_LAG_MS=50'), 'graph followers need the buffered delayed movement treatment');
+    // The canvas moves a matter's people with it, not behind it: the 50ms
+    // position-history trail was replaced by a fixed offset, and the drop now
+    // separates every node rather than only matter from matter.
+    assert.ok(!frontend.includes('GRAPH_FOLLOW_LAG_MS'), 'graph followers must track the card, not trail it');
+    assert.ok(frontend.includes('function separateStage()'), 'a drop must leave nothing on the stage overlapping');
+    assert.ok(frontend.includes('GRAPH_SEPARATION_GAP=12'), 'the canvas separates nodes by 12px');
+    assert.ok(frontend.includes('GRAPH_CARD_W=168,GRAPH_CARD_H=158'), 'the matter card is the 168x158 the canvas draws');
+    assert.ok(frontend.includes('ws-graph-ask'), 'the matter card carries the control that opens Workspace AI on it');
+    assert.ok(styles.includes('.ws-graph-matter-foot'), 'the card footer carries the milestone and document pills');
     assert.ok(styles.includes('scrollbar-width: none;'), 'graph scrolling must remain usable without visible scrollbars');
     assert.ok(styles.includes('#tabJamoa::before'), 'Workspace containers and their pseudo-elements must stay transparent');
     assert.ok(frontend.includes("COPY.uz.dateFormat = 'kk.oo.yyyy'"), 'Workspace dates need the Uzbek numeric format');

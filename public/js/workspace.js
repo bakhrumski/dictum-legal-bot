@@ -923,14 +923,28 @@
         return Math.max(min, Math.min(max, Number(value) || 0));
     }
 
+    // The canvas draws a matter as a 168x158 card and a person as a 152x98
+    // block under a 46px avatar. Layout, collision and cord anchoring all
+    // measure in these.
+    var GRAPH_CARD_W=168,GRAPH_CARD_H=158,GRAPH_NODE_W=152,GRAPH_NODE_H=98;
+    var GRAPH_SEPARATION_GAP=12;
+
     function graphNodeBox(point, kind) {
         var sizes={
-            matter:{halfWidth:110,halfHeight:56},
-            member:{halfWidth:52,halfHeight:42},
+            matter:{halfWidth:GRAPH_CARD_W/2,halfHeight:GRAPH_CARD_H/2},
+            // A cord to a person ends on the rim of their avatar, not on the
+            // corner of the box that also holds their name and role. The avatar
+            // is 46px across and sits 26px above the middle of the node.
+            member:{halfWidth:23,halfHeight:23,lift:26},
             task:{halfWidth:88,halfHeight:38}
         };
         var size=sizes[kind]||sizes.task;
-        return {x:Number(point.x)||0,y:Number(point.y)||0,halfWidth:size.halfWidth,halfHeight:size.halfHeight};
+        return {
+            x:Number(point.x)||0,
+            y:(Number(point.y)||0)-(size.lift||0),
+            halfWidth:size.halfWidth,
+            halfHeight:size.halfHeight
+        };
     }
 
     function graphEdgeAnchor(from, to) {
@@ -978,8 +992,8 @@
             var saved = JSON.parse(localStorage.getItem(graphMatterPositionKey(graphKey)) || 'null');
             if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
                 return {
-                    x: clampNumber(saved.x, 135, width - 135),
-                    y: clampNumber(saved.y, 105, height - 105)
+                    x: clampNumber(saved.x, GRAPH_CARD_W / 2, width - GRAPH_CARD_W / 2),
+                    y: clampNumber(saved.y, GRAPH_CARD_H / 2, height - GRAPH_CARD_H / 2)
                 };
             }
         } catch (_error) {}
@@ -1007,7 +1021,8 @@
         // nearest card. Columns keep the stage close to the size of the work,
         // and put each matter directly above its own people, which also makes
         // the cords short and vertical instead of long diagonals.
-        var COLUMN=306,MATTER_HALF=118,PERSON_ROW=142,ROW_GAP=60;
+        var COLUMN=GRAPH_CARD_W+52,MATTER_HALF=GRAPH_CARD_H/2,
+            PERSON_ROW=GRAPH_NODE_H+52,PERSON_STEP=GRAPH_NODE_W+16,ROW_GAP=60;
         var perRow=Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/COLUMN));
         perRow=Math.min(perRow,Math.max(1,matters.length));
 
@@ -1086,7 +1101,7 @@
             if(!roster.length)return;
             var anchor=matterPositions[String(task.id)];
             roster.forEach(function(member,index){
-                var offset=(index-(roster.length-1)/2)*118;
+                var offset=(index-(roster.length-1)/2)*PERSON_STEP;
                 memberPositions[String(member.id)]={
                     x:Math.round(anchor.x+offset),
                     y:Math.round(anchor.y+MATTER_HALF+72)
@@ -1095,15 +1110,15 @@
         });
         var benchTop=cursor-ROW_GAP+72;
         unassigned.forEach(function(member,index){
-            var perBench=Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/132));
+            var perBench=Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/PERSON_STEP));
             var column=index%perBench,row=Math.floor(index/perBench);
-            var rowWidth=Math.min(perBench,unassigned.length-row*perBench)*132;
+            var rowWidth=Math.min(perBench,unassigned.length-row*perBench)*PERSON_STEP;
             memberPositions[String(member.id)]={
-                x:Math.round(48+(Math.max(viewportWidth,980)-96-rowWidth)/2+column*132+66),
-                y:Math.round(benchTop+row*118)
+                x:Math.round(48+(Math.max(viewportWidth,980)-96-rowWidth)/2+column*PERSON_STEP+PERSON_STEP/2),
+                y:Math.round(benchTop+row*(GRAPH_NODE_H+20))
             };
         });
-        if(unassigned.length)cursor=benchTop+Math.ceil(unassigned.length/Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/132)))*118;
+        if(unassigned.length)cursor=benchTop+Math.ceil(unassigned.length/Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/PERSON_STEP)))*(GRAPH_NODE_H+20);
 
         var width=Math.max(980,viewportWidth);
         var height=Math.max(520,cursor+72);
@@ -1143,21 +1158,36 @@
             relatedMemberIds(task).forEach(function(memberId){
                 var to=memberPositions[memberId];
                 if(!to)return;
-                edges.push('<path class="ws-graph-link matter" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(memberId)+'" d="'+graphConnector(graphNodeBox(from,'matter'),graphNodeBox(to,'member'))+'"/>');
+                edges.push('<path class="ws-graph-link matter '+graphTone(task)+'" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(memberId)+'" d="'+graphConnector(graphNodeBox(from,'matter'),graphNodeBox(to,'member'))+'"/>');
             });
         });
 
         var matterNodes=matters.map(function(task){
             var p=matterPositions[String(task.id)],tone=graphTone(task);
-            var badges=(task.is_milestone?'<b>'+esc(t('milestone'))+'</b>':'')
-                +(Number(task.document_count||0)?'<b>'+svg('document',12)+Number(task.document_count)+'</b>':'');
-            return '<button type="button" class="ws-graph-matter '+tone+'" data-graph-node data-graph-matter data-graph-key="task:'+esc(task.id)+'" data-action="open-task" data-task-id="'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" aria-label="'+esc(t('matter'))+': '+esc(task.title)+'"><span>'+esc(t('matter'))+'</span><strong>'+esc(task.title)+'</strong><small>'+esc(graphMatterSummary(task))+'</small>'+(badges?'<span class="ws-graph-badges">'+badges+'</span>':'')+'</button>';
+            var memoryCount=Number(task.memory_count||0);
+            return '<article class="ws-graph-matter '+tone+'" data-graph-node data-graph-matter data-graph-key="task:'+esc(task.id)+'" data-action="open-task" data-task-id="'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" role="button" tabindex="0" aria-label="'+esc(t('matter'))+': '+esc(task.title)+'">'+
+                '<div class="ws-graph-matter-top">'+
+                    '<span class="ws-graph-accent" aria-hidden="true"></span>'+
+                    (memoryCount?'<span class="ws-graph-saved" title="'+esc(t('sharedMemory'))+'">'+svg('ai',9)+memoryCount+'</span>':'')+
+                    '<button type="button" class="ws-graph-ask" data-action="open-ai" data-task-id="'+esc(task.id)+'" title="'+esc(t('askAi'))+'" aria-label="'+esc(t('askAi'))+'">'+svg('ai',12)+'</button>'+
+                '</div>'+
+                '<h4>'+esc(task.title)+'</h4>'+
+                '<p class="ws-graph-due">'+esc(graphMatterSummary(task))+'</p>'+
+                '<div class="ws-graph-matter-foot">'+
+                    '<span class="ws-graph-tag">'+esc(task.is_milestone?t('milestone'):t(task.priority))+'</span>'+
+                    '<span class="ws-graph-docs">'+svg('document',11)+Number(task.document_count||0)+'</span>'+
+                '</div>'+
+            '</article>';
         }).join('');
 
         var memberNodes=state.members.map(function(member){
             var p=memberPositions[String(member.id)],expired=member.subscription_active===false;
             var home=homeMatter[String(member.id)];
-            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'"'+(home?' data-graph-home="task:'+esc(home)+'"':'')+(pinnedMembers[String(member.id)]?' data-graph-pinned="1"':'')+' data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'"><span class="ws-avatar">'+esc(initials(member))+'</span><span>'+esc(personName(member))+'</span>'+(expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+'</button>';
+            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'"'+(home?' data-graph-home="task:'+esc(home)+'"':'')+(pinnedMembers[String(member.id)]?' data-graph-pinned="1"':'')+' data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'">'+
+                '<span class="ws-avatar'+(member.role==='owner'?' owner':'')+'">'+esc(initials(member))+'</span>'+
+                '<span class="ws-graph-member-copy"><span class="ws-graph-member-name">'+esc(personName(member))+'</span><span class="ws-graph-member-role">'+esc(t(member.role))+'</span></span>'+
+                (expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+
+            '</button>';
         }).join('');
 
         // Someone on no matter has no cord to draw, so the row is labelled
@@ -1656,6 +1686,7 @@
         root.addEventListener('submit',handleSubmit);
         root.addEventListener('pointerdown',handleTimelineDrag);
         root.addEventListener('pointerdown',handleGraphMatterDrag);
+        root.addEventListener('keydown',handleGraphNodeKey);
         document.addEventListener('keydown',handleKeyboard);
         document.addEventListener('click',handleDocumentClick);
         global.addEventListener('focus',refreshWorkspaceEntitlements);
@@ -2359,7 +2390,10 @@
 
     function graphNodeCenter(stage,node) {
         var stageRect=stage.getBoundingClientRect();
-        var nodeRect=node.getBoundingClientRect();
+        // A person's cord ends on the rim of their avatar; measuring the whole
+        // node would aim it at the corner of the name and role beneath it.
+        var anchor=node.querySelector('.ws-avatar')||node;
+        var nodeRect=anchor.getBoundingClientRect();
         return {
             x:nodeRect.left-stageRect.left+(nodeRect.width/2),
             y:nodeRect.top-stageRect.top+(nodeRect.height/2),
@@ -2380,12 +2414,22 @@
         });
     }
 
-    var GRAPH_FOLLOW_LAG_MS=50;
     var GRAPH_DRAG_THRESHOLD=4;
+
+    // The card carries role="button" because it holds a real button of its own,
+    // so Enter and Space have to be wired by hand.
+    function handleGraphNodeKey(event) {
+        if(event.key!=='Enter'&&event.key!==' ')return;
+        var node=event.target.closest&&event.target.closest('.ws-graph-matter[role="button"]');
+        if(!node||node!==event.target)return;
+        event.preventDefault();
+        node.click();
+    }
 
     function handleGraphMatterDrag(event) {
         // Any node on the stage can be repositioned, not only a matter. A person
         // moves alone; a matter still takes its own people with it.
+        if(event.target.closest&&event.target.closest('.ws-graph-ask'))return;
         var matter=event.target.closest&&event.target.closest('[data-graph-node]');
         if(!matter||!root||!root.contains(matter)||event.button!==0)return;
         var stage=matter.closest('.ws-graph-stage');
@@ -2425,16 +2469,6 @@
         var minDy=padding+matterOrigin.halfHeight-matterOrigin.y;
         var maxDy=height-padding-matterOrigin.halfHeight-matterOrigin.y;
 
-        // Honour the OS setting: no trailing motion, satellites track exactly.
-        var reduceMotion=global.matchMedia&&global.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        var lag=reduceMotion?0:GRAPH_FOLLOW_LAG_MS;
-
-        // Where the matter has been. Satellites read this buffer `lag` ms late,
-        // which is what makes them trail the card instead of moving in lockstep
-        // with it. A CSS transition cannot express this: every pointermove would
-        // restart it mid-flight, which stutters and drops the constellation into
-        // rigid-body motion.
-        var history=[{t:performance.now(),x:originX,y:originY}];
         var frameHandle=null;
         var dragging=true;
         var moved=false;
@@ -2442,23 +2476,10 @@
         matter.classList.add('dragging');
         matter.setPointerCapture&&matter.setPointerCapture(event.pointerId);
 
-        function sampleHistory(when){
-            var last=history[history.length-1];
-            if(when>=last.t)return last;
-            for(var i=history.length-1;i>0;i--){
-                if(history[i-1].t<=when&&history[i].t>=when){
-                    var a=history[i-1],b=history[i],span=b.t-a.t;
-                    var progress=span>0?(when-a.t)/span:1;
-                    return {x:a.x+(b.x-a.x)*progress,y:a.y+(b.y-a.y)*progress};
-                }
-            }
-            return history[0];
-        }
-
-        function frame(now){
-            while(history.length>2&&history[1].t<now-lag-50)history.shift();
-            var delayed=sampleHistory(now-lag);
-            var dx=delayed.x-originX,dy=delayed.y-originY;
+        // One frame moves the whole constellation: the card is already where the
+        // pointer put it, and its people sit at the offsets they started with.
+        function frame(){
+            var dx=current.x-originX,dy=current.y-originY;
             satellites.forEach(function(item){
                 var x=clampNumber(item.x+dx,padding+item.halfWidth,width-padding-item.halfWidth);
                 var y=clampNumber(item.y+dy,padding+item.halfHeight,height-padding-item.halfHeight);
@@ -2468,49 +2489,73 @@
                 item.node.dataset.y=String(y);
             });
             updateGraphEdges(stage);
-            var settled=!dragging&&Math.abs(delayed.x-current.x)<0.5&&Math.abs(delayed.y-current.y)<0.5;
-            frameHandle=settled?null:requestAnimationFrame(frame);
+            frameHandle=null;
         }
 
         /**
-         * Matters may sit side by side but never on top of one another. On drop,
-         * push the dragged card out of any card it landed on, along whichever
-         * axis needs the least movement, so releasing it beside a neighbour
-         * settles it flush against that neighbour rather than over it.
+         * Nothing on the stage sits on top of anything else once the pointer is
+         * released. Every node is pushed out of every node it overlaps, along
+         * whichever axis needs the least movement, so a card dropped beside a
+         * neighbour settles flush against it and the people underneath make room
+         * for each other too. The dragged node is held still and the board moves
+         * around it: it goes where it was put.
          */
-        function separateFromOtherMatters(){
-            if(!matter.hasAttribute('data-graph-matter'))return;
-            var GAP=16;
-            var halfWidth=matter.offsetWidth/2,halfHeight=matter.offsetHeight/2;
-            var others=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-matter]'))
-                .filter(function(node){return node!==matter;})
-                .map(function(node){return {
-                    x:Number(node.dataset.x||node.offsetLeft),
-                    y:Number(node.dataset.y||node.offsetTop),
+        function separateStage(){
+            var nodes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]'));
+            var boxes=nodes.map(function(node){
+                var own=node===matter;
+                return {
+                    node:node,
+                    x:own?current.x:Number(node.dataset.x||node.offsetLeft),
+                    y:own?current.y:Number(node.dataset.y||node.offsetTop),
                     halfWidth:node.offsetWidth/2,
-                    halfHeight:node.offsetHeight/2
-                };});
-            for(var pass=0;pass<8;pass+=1){
-                var hit=null;
-                for(var i=0;i<others.length;i+=1){
-                    var other=others[i];
-                    if(Math.abs(current.x-other.x)<halfWidth+other.halfWidth+GAP
-                        &&Math.abs(current.y-other.y)<halfHeight+other.halfHeight+GAP){hit=other;break;}
+                    halfHeight:node.offsetHeight/2,
+                    fixed:own
+                };
+            });
+            var clampAll=function(){
+                boxes.forEach(function(box){
+                    box.x=clampNumber(box.x,padding+box.halfWidth,Math.max(padding+box.halfWidth,width-padding-box.halfWidth));
+                    box.y=clampNumber(box.y,padding+box.halfHeight,Math.max(padding+box.halfHeight,height-padding-box.halfHeight));
+                });
+            };
+            clampAll();
+            for(var pass=0;pass<120;pass+=1){
+                var shifted=false;
+                for(var a=0;a<boxes.length;a+=1){
+                    for(var b=a+1;b<boxes.length;b+=1){
+                        var one=boxes[a],two=boxes[b];
+                        var needX=one.halfWidth+two.halfWidth+GRAPH_SEPARATION_GAP-Math.abs(one.x-two.x);
+                        var needY=one.halfHeight+two.halfHeight+GRAPH_SEPARATION_GAP-Math.abs(one.y-two.y);
+                        if(needX<=0||needY<=0)continue;
+                        shifted=true;
+                        // A fixed node takes none of the correction, so its
+                        // neighbour absorbs the whole of it.
+                        var oneShare=one.fixed?0:(two.fixed?1:0.5);
+                        var twoShare=two.fixed?0:(one.fixed?1:0.5);
+                        if(needX<=needY){
+                            var signX=one.x>=two.x?1:-1;
+                            one.x+=signX*needX*oneShare;
+                            two.x-=signX*needX*twoShare;
+                        }else{
+                            var signY=one.y>=two.y?1:-1;
+                            one.y+=signY*needY*oneShare;
+                            two.y-=signY*needY*twoShare;
+                        }
+                    }
                 }
-                if(!hit)break;
-                var needX=halfWidth+hit.halfWidth+GAP-Math.abs(current.x-hit.x);
-                var needY=halfHeight+hit.halfHeight+GAP-Math.abs(current.y-hit.y);
-                if(needX<=needY)current.x+=(current.x>=hit.x?1:-1)*needX;
-                else current.y+=(current.y>=hit.y?1:-1)*needY;
+                clampAll();
+                if(!shifted)break;
             }
-            current.x=clampNumber(current.x,padding+halfWidth,width-padding-halfWidth);
-            current.y=clampNumber(current.y,padding+halfHeight,height-padding-halfHeight);
-            matter.style.left=current.x+'px';
-            matter.style.top=current.y+'px';
-            matter.dataset.x=String(current.x);
-            matter.dataset.y=String(current.y);
-            // Let the roster trail to the corrected spot, not the dropped one.
-            history.push({t:performance.now(),x:current.x,y:current.y});
+            boxes.forEach(function(box){
+                var x=Math.round(box.x),y=Math.round(box.y);
+                box.node.style.left=x+'px';
+                box.node.style.top=y+'px';
+                box.node.dataset.x=String(x);
+                box.node.dataset.y=String(y);
+                if(box.fixed){current.x=x;current.y=y;}
+            });
+            updateGraphEdges(stage);
         }
 
         function move(moveEvent){
@@ -2519,12 +2564,10 @@
             if(!moved&&Math.max(Math.abs(moveEvent.clientX-startX),Math.abs(moveEvent.clientY-startY))>GRAPH_DRAG_THRESHOLD)moved=true;
             current.x=originX+dx;
             current.y=originY+dy;
-            // The matter tracks the pointer with no delay; only satellites lag.
             matter.style.left=current.x+'px';
             matter.style.top=current.y+'px';
             matter.dataset.x=String(current.x);
             matter.dataset.y=String(current.y);
-            history.push({t:performance.now(),x:current.x,y:current.y});
             if(!frameHandle)frameHandle=requestAnimationFrame(frame);
         }
         function up(){
@@ -2533,8 +2576,9 @@
             document.removeEventListener('pointercancel',up);
             dragging=false;
             matter.classList.remove('dragging');
-            if(moved)separateFromOtherMatters();
-            if(!frameHandle)frameHandle=requestAnimationFrame(frame);
+            if(frameHandle){cancelAnimationFrame(frameHandle);frameHandle=null;}
+            frame();
+            if(moved)separateStage();
             if(!moved)return;
             // Members trail their matter, so once one has been placed by hand it
             // must stop being dragged around by the matter it belongs to.
