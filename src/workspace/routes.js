@@ -1025,6 +1025,118 @@ function mountWorkspaceRoutes(app, options) {
     res.status(201).json({ message });
   }));
 
+  /* -- Direct messages ----------------------------------------
+     workspace_messages is the room the whole team reads; these are the threads
+     beside it. A thread is the unordered pair of two people inside one
+     Workspace, so it is addressed by the other person's id rather than by a
+     thread id of its own, and it lives and dies with their membership. */
+
+  async function requireCounterpart(db, workspaceId, userId, memberId) {
+    if (memberId === userId) {
+      throw new WorkspaceError(400, 'invalid_input', 'O‘zingizga shaxsiy xabar yozib bo‘lmaydi');
+    }
+    const counterpart = (await db.query(
+      `SELECT wm.user_id AS id, wm.role, a.username, a.full_name, a.last_active_at
+         FROM workspace_members wm JOIN admins a ON a.id=wm.user_id
+        WHERE wm.workspace_id=$1 AND wm.user_id=$2`,
+      [workspaceId, memberId]
+    )).rows[0];
+    if (!counterpart) {
+      throw new WorkspaceError(404, 'member_not_found', 'Bunday Workspace a’zosi topilmadi');
+    }
+    return counterpart;
+  }
+
+  // Every colleague, whether or not a thread with them exists yet, so the list
+  // doubles as the people picker. Newest conversation first, then by name.
+  router.get('/workspaces/:workspaceId/direct-threads', asyncRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const userId = actorId(req);
+    await requireWorkspaceAccess(pool, workspaceId, userId);
+    const result = await pool.query(
+      `SELECT wm.user_id AS id, wm.role, a.username, a.full_name, a.last_active_at,
+              recent.body AS last_body, recent.created_at AS last_at,
+              recent.sender_id AS last_sender_id, COALESCE(unread.total,0) AS unread
+         FROM workspace_members wm
+         JOIN admins a ON a.id=wm.user_id
+         LEFT JOIN LATERAL (
+              SELECT m.body, m.created_at, m.sender_id
+                FROM workspace_direct_messages m
+               WHERE m.workspace_id=wm.workspace_id AND m.deleted_at IS NULL
+                 AND ((m.sender_id=$2 AND m.recipient_id=wm.user_id)
+                   OR (m.sender_id=wm.user_id AND m.recipient_id=$2))
+               ORDER BY m.created_at DESC LIMIT 1
+         ) recent ON true
+         LEFT JOIN LATERAL (
+              SELECT count(*)::int AS total
+                FROM workspace_direct_messages m
+               WHERE m.workspace_id=wm.workspace_id AND m.deleted_at IS NULL
+                 AND m.read_at IS NULL
+                 AND m.sender_id=wm.user_id AND m.recipient_id=$2
+         ) unread ON true
+        WHERE wm.workspace_id=$1 AND wm.user_id<>$2
+        ORDER BY recent.created_at DESC NULLS LAST, COALESCE(a.full_name,a.username)`,
+      [workspaceId, userId]
+    );
+    res.json({ threads: result.rows });
+  }));
+
+  router.get('/workspaces/:workspaceId/direct-messages/:memberId', asyncRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const userId = actorId(req);
+    const memberId = integer(req.params.memberId, 'memberId', { min: 1 });
+    await requireWorkspaceAccess(pool, workspaceId, userId);
+    const counterpart = await requireCounterpart(pool, workspaceId, userId, memberId);
+    const limit = integer(req.query.limit || 100, 'limit', { min: 1, max: 200 });
+    const result = await pool.query(
+      `SELECT m.id,m.body,m.created_at,m.updated_at,m.read_at,
+              m.sender_id,m.recipient_id,a.username,a.full_name
+         FROM workspace_direct_messages m
+         JOIN admins a ON a.id=m.sender_id
+        WHERE m.workspace_id=$1 AND m.deleted_at IS NULL
+          AND ((m.sender_id=$2 AND m.recipient_id=$3)
+            OR (m.sender_id=$3 AND m.recipient_id=$2))
+        ORDER BY m.created_at DESC LIMIT $4`,
+      [workspaceId, userId, memberId, limit]
+    );
+    res.json({ messages: result.rows.reverse(), counterpart });
+  }));
+
+  router.post('/workspaces/:workspaceId/direct-messages/:memberId', asyncRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const userId = actorId(req);
+    const memberId = integer(req.params.memberId, 'memberId', { min: 1 });
+    const body = requiredString(req.body.body, 'body', { min: 1, max: 4000 });
+    const message = await withWorkspaceTransaction(pool, userId, async (db) => {
+      // A Viewer reads the thread but does not write to it, exactly as in the
+      // room chat.
+      await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'member' });
+      await requireCounterpart(db, workspaceId, userId, memberId);
+      return (await db.query(
+        `INSERT INTO workspace_direct_messages(workspace_id,sender_id,recipient_id,body)
+         VALUES ($1,$2,$3,$4) RETURNING *`,
+        [workspaceId, userId, memberId, body]
+      )).rows[0];
+    });
+    res.status(201).json({ message });
+  }));
+
+  // Marks what this colleague sent you as read. Only the recipient's own rows
+  // move, so the sender cannot clear their own unread badge on someone else.
+  router.patch('/workspaces/:workspaceId/direct-messages/:memberId/read', asyncRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const userId = actorId(req);
+    const memberId = integer(req.params.memberId, 'memberId', { min: 1 });
+    await requireWorkspaceAccess(pool, workspaceId, userId);
+    const result = await pool.query(
+      `UPDATE workspace_direct_messages SET read_at=now(), updated_at=now()
+        WHERE workspace_id=$1 AND recipient_id=$2 AND sender_id=$3
+          AND deleted_at IS NULL AND read_at IS NULL`,
+      [workspaceId, userId, memberId]
+    );
+    res.json({ read: result.rowCount });
+  }));
+
   router.get('/workspaces/:workspaceId/notifications', asyncRoute(async (req, res) => {
     const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
     const userId = actorId(req);

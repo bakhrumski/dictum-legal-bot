@@ -90,6 +90,8 @@
     // The graph measures its container, which has no width until its tab is
     // on screen, so its layout waits for that moment.
     if (state.tab === 'jamoa') { measureBar(); ensureLayout(); }
+    // Opening the section is what reads the thread — see markPeerRead().
+    if (state.tab === 'chat' && typeof markPeerRead === 'function') markPeerRead();
   }
 
   $$('[data-tab]').forEach(function (b) {
@@ -993,30 +995,8 @@
     // The group thread is live; renderGroup() owns that pane.
     renderGroup();
 
-    var priv = $('[data-chat-private]');
-    if (priv && DATA.privMsgs) {
-      priv.textContent = '';
-      // workspace_messages has no recipient column and there is no
-      // direct-message table, so one-to-one threads have nothing to read or
-      // write yet. Showing the mock silently would read as a working feature.
-      var privPane = $('[data-chat-pane="private"]');
-      if (privPane) {
-        var privBox = privPane.querySelector('textarea');
-        var privSend = privPane.querySelector('.chat-send');
-        if (privBox) { privBox.disabled = true; privBox.placeholder = 'Shaxsiy yozishmalar hali ishlamaydi'; }
-        if (privSend) privSend.disabled = true;
-      }
-      priv.appendChild(el('div', { class: 'chat-notice chat-notice--demo' }, [
-        el('p', { text: 'Namuna suhbat — shaxsiy yozishmalar uchun backend hali yo‘q.' })
-      ]));
-      DATA.privMsgs.forEach(function (m) {
-        priv.appendChild(el('div', { class: 'chat-priv', 'data-me': !!m.me }, [
-          el('div', { class: 'chat-bubble', text: m.txt }),
-          el('span', { class: 'chat-priv-time', text: m.time })
-        ]));
-      });
-      priv.scrollTop = priv.scrollHeight;
-    }
+    // Both threads are live; renderGroup() and renderPrivate() own a pane each.
+    renderPrivate();
   }
 
   /* ============================================================
@@ -1361,6 +1341,12 @@
     return box;
   }
 
+  // POST /messages needs at least the 'member' role, so a Viewer's composer
+  // stays shut rather than collecting a message the server will refuse.
+  function canWrite() {
+    return live.status === 'ready' && !!live.workspace && live.workspace.role !== 'viewer';
+  }
+
   // Typing into a thread you cannot post to is a dead end, so the composer
   // follows the pane's state.
   function setComposerEnabled(on) {
@@ -1368,7 +1354,11 @@
     if (!pane) return;
     var box = pane.querySelector('textarea');
     var send = pane.querySelector('.chat-send');
-    if (box) { box.disabled = !on; box.setAttribute('aria-disabled', String(!on)); }
+    if (box) {
+      box.disabled = !on;
+      box.setAttribute('aria-disabled', String(!on));
+      if (!on && live.status === 'ready') box.placeholder = 'Kuzatuvchi rolida yozib bo‘lmaydi';
+    }
     if (send) send.disabled = !on;
   }
 
@@ -1376,7 +1366,7 @@
     var host = $('[data-chat-group]');
     if (!host) return;
     host.textContent = '';
-    setComposerEnabled(live.status === 'ready');
+    setComposerEnabled(canWrite());
 
     if (live.status === 'loading') {
       host.appendChild(chatNotice('Suhbat yuklanmoqda…'));
@@ -1449,6 +1439,7 @@
         live.status = e.status === 401 || e.status === 403 ? 'signedOut' : 'error';
         live.detail = e.message;
         renderGroup();
+        renderPrivate();
       });
   }
 
@@ -1502,7 +1493,10 @@
   function startPolling() {
     if (live.poll) return;
     live.poll = setInterval(function () {
-      if (state.tab === 'chat' && live.workspace) loadMessages();
+      if (state.tab !== 'chat' || !live.workspace) return;
+      loadMessages();
+      loadThreads();
+      if (priv.peer) loadPrivateMessages();
     }, 8000);
   }
   function stopPolling() { clearInterval(live.poll); live.poll = null; }
@@ -1531,6 +1525,15 @@
     clearTimeout(reloadTimer);
     reloadTimer = setTimeout(loadMessages, 180);
   }
+  var privReloadTimer = null;
+  function schedulePrivateReload() {
+    clearTimeout(privReloadTimer);
+    privReloadTimer = setTimeout(function () {
+      loadThreads();
+      // Reading the open thread also clears what just arrived in it.
+      if (priv.peer && state.tab === 'chat') loadPrivateMessages().then(markPeerRead);
+    }, 180);
+  }
 
   function startRealtime() {
     if (!live.workspace) return;
@@ -1550,6 +1553,15 @@
           }, function () {
             // The row arrives without the author join, so re-read the thread.
             scheduleReload();
+          });
+          // Row-level security keeps this to the two people on the message, so
+          // the filter can stay at the workspace and still deliver nothing a
+          // third colleague should not see.
+          channel.on('postgres_changes', {
+            event: '*', schema: 'public', table: 'workspace_direct_messages',
+            filter: 'workspace_id=eq.' + live.workspace.id
+          }, function () {
+            schedulePrivateReload();
           });
           channel.subscribe(function (status) {
             // Only a dead channel falls back to polling; 'joining' is normal.
@@ -1579,20 +1591,289 @@
       .then(function (d) {
         var list = (d && d.workspaces) || [];
         live.workspace = list.filter(function (w) { return w.is_active; })[0] || list[0] || null;
-        if (!live.workspace) { live.status = 'noWorkspace'; renderGroup(); return; }
+        if (!live.workspace) { live.status = 'noWorkspace'; renderGroup(); renderPrivate(); return; }
         var title = $('[data-chat-pane="group"] h3');
         if (title) title.textContent = live.workspace.name || 'Jamoa';
         var count = $('.chat-count');
         if (count && live.workspace.member_count != null) {
           count.textContent = live.workspace.member_count + " a'zo";
         }
-        return loadMessages().then(startRealtime);
+        return loadMessages().then(loadThreads).then(startRealtime);
       })
       .catch(function (e) {
         live.status = e.status === 401 || e.status === 403 ? 'signedOut' : 'error';
         live.detail = e.message;
         renderGroup();
       });
+  }
+
+
+  /* -- Private threads ---------------------------------------
+     The other half of the chat section. A thread is one colleague inside this
+     workspace, so the header doubles as the picker: it lists everyone else on
+     the team with what they last said and how much of it is unread, and the
+     tab's badge carries that same total.
+
+     Reads GET /direct-threads for the list, GET /direct-messages/{id} for a
+     thread, POST to send, PATCH .../read to clear the badge. Realtime rides on
+     the channel the group pane already opened. */
+  var priv = {
+    threads: [],
+    peer: null,
+    messages: [],
+    seen: {},
+    status: 'loading',   // loading | ready | error
+    detail: '',
+    sending: false,
+    menuOpen: false
+  };
+
+  var ROLE_LABEL = { owner: 'Egasi', member: "A'zo", viewer: 'Kuzatuvchi' };
+  var peerName = function (p) { return p ? (p.full_name || p.username || "A'zo") : ''; };
+
+  function renderPeer() {
+    var pane = $('[data-chat-pane="private"]');
+    if (!pane) return;
+    var who = priv.peer;
+    var name = $('[data-chat-peer-name]');
+    var init = $('[data-chat-peer-init]');
+    var status = $('[data-chat-peer-status]');
+    var box = pane.querySelector('[data-chat-private-input]');
+    var send = pane.querySelector('.chat-send');
+    var button = $('[data-chat-peer]');
+
+    if (name) name.textContent = who ? peerName(who) : 'Suhbatdosh tanlang';
+    if (init) init.textContent = who ? initialsOf(who.full_name, who.username) : '·';
+    if (status) status.textContent = who ? (ROLE_LABEL[who.role] || who.role || '') : '';
+    if (button) button.disabled = !priv.threads.length;
+
+    // Writing to nobody is a dead end, so the composer follows the selection.
+    var writable = !!who && canWrite();
+    if (box) {
+      box.disabled = !writable;
+      box.placeholder = !who ? 'Suhbatdosh tanlang'
+        : (writable ? peerName(who).split(/\s+/)[0] + 'ga yozing…'
+                    : 'Kuzatuvchi rolida yozib bo‘lmaydi');
+    }
+    if (send) send.disabled = !writable;
+  }
+
+  function renderPeerMenu() {
+    var menu = $('[data-chat-peer-menu]');
+    if (!menu) return;
+    menu.textContent = '';
+    if (!priv.threads.length) {
+      menu.appendChild(el('div', { class: 'chat-notice' }, [
+        el('p', { text: "Jamoada sizdan boshqa a'zo yo'q." })
+      ]));
+      return;
+    }
+    priv.threads.forEach(function (thread) {
+      var mine = live.me && thread.last_sender_id === live.me.adminId;
+      var last = thread.last_body
+        ? (mine ? 'Siz: ' : '') + thread.last_body
+        : 'Hali yozishmagansiz';
+      var row = el('button', {
+        class: 'chat-peer-item', type: 'button', role: 'option',
+        'aria-selected': String(!!(priv.peer && priv.peer.id === thread.id))
+      }, [
+        el('span', { class: 'chat-peer-init', text: initialsOf(thread.full_name, thread.username) }),
+        el('span', { class: 'chat-peer-lines' }, [
+          el('span', { class: 'chat-peer-who', text: peerName(thread) }),
+          el('span', { class: 'chat-peer-last', text: last })
+        ]),
+        Number(thread.unread) ? el('span', { class: 'chat-peer-unread', text: String(thread.unread) }) : null
+      ]);
+      row.addEventListener('click', function () { pickPeer(thread); });
+      menu.appendChild(row);
+    });
+  }
+
+  function setPeerMenu(open) {
+    priv.menuOpen = !!open && priv.threads.length > 0;
+    var menu = $('[data-chat-peer-menu]');
+    var button = $('[data-chat-peer]');
+    if (menu) menu.hidden = !priv.menuOpen;
+    if (button) button.setAttribute('aria-expanded', String(priv.menuOpen));
+  }
+
+  function pickPeer(thread) {
+    priv.peer = thread;
+    priv.messages = [];
+    priv.seen = {};
+    priv.status = 'loading';
+    setPeerMenu(false);
+    try { localStorage.setItem('juristai-chat-peer', String(thread.id)); } catch (e) { /* ignore */ }
+    renderPrivate();
+    loadPrivateMessages().then(markPeerRead);
+  }
+
+  function renderPrivate() {
+    var host = $('[data-chat-private]');
+    if (!host) return;
+    host.textContent = '';
+    renderPeer();
+
+    if (live.status === 'loading') { host.appendChild(chatNotice('Suhbat yuklanmoqda…')); return; }
+    if (live.status === 'signedOut') {
+      host.appendChild(chatNotice(
+        'Shaxsiy yozishmalar uchun hisobingizga kiring.',
+        { href: '/login.html', label: 'Kirish' }
+      ));
+      return;
+    }
+    if (live.status === 'noWorkspace') {
+      host.appendChild(chatNotice('Siz hali birorta workspace a’zosi emassiz.'));
+      return;
+    }
+    if (!priv.peer) {
+      host.appendChild(chatNotice(priv.threads.length
+        ? 'Yozish uchun yuqoridan suhbatdosh tanlang.'
+        : "Jamoada sizdan boshqa a'zo yo'q."));
+      return;
+    }
+    if (priv.status === 'loading') { host.appendChild(chatNotice('Suhbat yuklanmoqda…')); return; }
+    if (priv.status === 'error') {
+      host.appendChild(chatNotice('Suhbatni yuklab bo‘lmadi' + (priv.detail ? ': ' + priv.detail : '.')));
+      return;
+    }
+    if (!priv.messages.length) {
+      host.appendChild(chatNotice('Hozircha xabar yo‘q — birinchi bo‘lib yozing.'));
+      return;
+    }
+
+    priv.messages.forEach(function (m) {
+      var mine = live.me && m.sender_id === live.me.adminId;
+      host.appendChild(el('div', { class: 'chat-priv', 'data-me': !!mine }, [
+        el('div', { class: 'chat-bubble', text: m.body }),
+        el('span', { class: 'chat-priv-time' }, [
+          document.createTextNode(clock(m.created_at)),
+          // Only your own message can be read by someone else.
+          mine && m.read_at ? el('span', { class: 'chat-priv-read', text: "o'qildi" }) : null
+        ])
+      ]));
+    });
+    host.scrollTop = host.scrollHeight;
+  }
+
+  function absorbPrivate(rows) {
+    var changed = false;
+    (rows || []).forEach(function (m) {
+      if (!m) return;
+      if (priv.seen[m.id]) {
+        // A read receipt arrives as an update to a row already on screen.
+        priv.messages.forEach(function (existing) {
+          if (existing.id === m.id && m.read_at && !existing.read_at) {
+            existing.read_at = m.read_at;
+            changed = true;
+          }
+        });
+        return;
+      }
+      priv.seen[m.id] = true;
+      priv.messages.push(m);
+      changed = true;
+    });
+    if (changed) {
+      priv.messages.sort(function (a, b) { return new Date(a.created_at) - new Date(b.created_at); });
+      renderPrivate();
+    }
+    return changed;
+  }
+
+  function loadPrivateMessages() {
+    if (!live.workspace || !priv.peer) return Promise.resolve();
+    var id = priv.peer.id;
+    return api('GET', '/workspaces/' + live.workspace.id + '/direct-messages/' + id + '?limit=100')
+      .then(function (d) {
+        // The reader may have switched colleague while this was in flight.
+        if (!priv.peer || priv.peer.id !== id) return;
+        priv.status = 'ready';
+        if (d.counterpart) priv.peer = Object.assign({}, priv.peer, d.counterpart);
+        absorbPrivate(d.messages);
+        renderPrivate();
+      })
+      .catch(function (e) {
+        if (!priv.peer || priv.peer.id !== id) return;
+        priv.status = e.status === 401 || e.status === 403 ? 'signedOut' : 'error';
+        priv.detail = e.message;
+        renderPrivate();
+      });
+  }
+
+  function markPeerRead() {
+    if (!live.workspace || !priv.peer) return Promise.resolve();
+    // Start-up loads the first thread whichever section is on screen, so a
+    // receipt sent from here would clear someone's unread mail they never
+    // opened. Only the Chat section reads a thread; setTab() calls back when
+    // the reader arrives.
+    if (state.tab !== 'chat') return Promise.resolve();
+    var unread = priv.messages.some(function (m) {
+      return live.me && m.recipient_id === live.me.adminId && !m.read_at;
+    });
+    if (!unread) return Promise.resolve();
+    return api('PATCH', '/workspaces/' + live.workspace.id + '/direct-messages/' + priv.peer.id + '/read')
+      .then(function () { return loadThreads(); })
+      // A receipt that does not land is not worth interrupting the thread over.
+      .catch(function () { /* ignore */ });
+  }
+
+  function sendPrivateMessage(text) {
+    if (!live.workspace || !priv.peer || priv.sending || !text.trim()) return;
+    priv.sending = true;
+    api('POST', '/workspaces/' + live.workspace.id + '/direct-messages/' + priv.peer.id, { body: text.trim() })
+      .then(function (d) {
+        if (d && d.message) {
+          absorbPrivate([Object.assign({
+            username: live.me && live.me.username,
+            full_name: live.me && live.me.fullName
+          }, d.message)]);
+        } else {
+          loadPrivateMessages();
+        }
+        loadThreads();
+      })
+      .catch(function (e) {
+        var host = $('[data-chat-private]');
+        if (host) {
+          host.appendChild(chatNotice('Yuborilmadi: ' + e.message));
+          host.scrollTop = host.scrollHeight;
+        }
+      })
+      .then(function () { priv.sending = false; });
+  }
+
+  // The tab badge is the sum of what is waiting across every thread.
+  function paintPrivateBadge() {
+    var total = priv.threads.reduce(function (n, t) { return n + Number(t.unread || 0); }, 0);
+    var badge = $('[data-tab="chat"] .db-tab-badge');
+    if (!badge) return;
+    badge.textContent = String(total);
+    badge.hidden = !total;
+  }
+
+  function loadThreads() {
+    if (!live.workspace) return Promise.resolve();
+    return api('GET', '/workspaces/' + live.workspace.id + '/direct-threads')
+      .then(function (d) {
+        priv.threads = (d && d.threads) || [];
+        // Someone who has left the workspace stops being a thread.
+        if (priv.peer) {
+          priv.peer = priv.threads.filter(function (t) { return t.id === priv.peer.id; })[0] || null;
+        }
+        if (!priv.peer && priv.threads.length) {
+          var saved = null;
+          try { saved = localStorage.getItem('juristai-chat-peer'); } catch (e) { /* ignore */ }
+          priv.peer = priv.threads.filter(function (t) { return String(t.id) === saved; })[0] || priv.threads[0];
+          priv.status = 'loading';
+          loadPrivateMessages().then(markPeerRead);
+        }
+        renderPeerMenu();
+        renderPrivate();
+        paintPrivateBadge();
+      })
+      // The pane's own notice already covers a failure to load.
+      .catch(function () { /* ignore */ });
   }
 
   window.addEventListener('resize', function () {
@@ -1625,6 +1906,37 @@
     if (box) box.addEventListener('keydown', function (e) {
       // Enter sends, Shift+Enter breaks the line.
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+    });
+  })();
+  (function wirePrivateComposer() {
+    var pane = $('[data-chat-pane="private"]');
+    if (!pane) return;
+    var box = pane.querySelector('[data-chat-private-input]');
+    var send = pane.querySelector('.chat-send');
+    var submit = function () {
+      if (!box || !box.value.trim()) return;
+      sendPrivateMessage(box.value);
+      box.value = '';
+      box.style.height = '';
+    };
+    if (send) send.addEventListener('click', submit);
+    if (box) box.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+    });
+
+    var button = $('[data-chat-peer]');
+    if (button) button.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setPeerMenu(!priv.menuOpen);
+    });
+    // Anywhere else closes it, including Escape.
+    document.addEventListener('click', function (e) {
+      if (!priv.menuOpen) return;
+      var menu = $('[data-chat-peer-menu]');
+      if (menu && !menu.contains(e.target)) setPeerMenu(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && priv.menuOpen) setPeerMenu(false);
     });
   })();
   initLiveChat();

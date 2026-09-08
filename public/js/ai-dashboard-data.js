@@ -127,12 +127,9 @@ window.DB_DATA = {
   ],
 
   // groupMsgs is gone: the group thread reads GET /api/workspaces/:id/messages.
-  privMsgs: [
-    { time: '10:02', txt: "Notarial shartnoma bo'yicha murojaatni senga tayinladim." },
-    { time: '10:05', me: true, txt: "Ko'rdim, bugun tushdan keyin javob beraman." },
-    { time: '10:06', txt: 'SLA 4 soat — ulgurasanmi?' },
-    { time: '10:07', me: true, txt: "Ha, korpusdan modda topildi. Loyihani tayyorlab qo'ydim." }
-  ],
+  // privMsgs is gone too: the private thread reads
+  // GET /api/workspaces/:id/direct-messages/:memberId.
+
   /* -- AI ------------------------------------------------------
      TODO: connect to API. A personal thread is the member's own; a team
      thread is billed to the workspace and visible to everyone in it. */

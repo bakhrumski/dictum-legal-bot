@@ -601,6 +601,60 @@ html.db-page::-webkit-scrollbar, html.db-page body::-webkit-scrollbar { width:0;
 }
 #db-root .chat-status { flex-shrink:0; font-size:11.5px; font-weight:600; color:var(--prv); }
 
+/* -- Private pane: who you are talking to -------------------
+   The canvas draws one fixed colleague in this header. A real thread needs a
+   way to choose them, so the header itself is the picker: it opens the list of
+   everyone else on the team, each with what they last said and how much of it
+   you have not read. */
+#db-root .chat-pane > header { position:relative; }
+#db-root .chat-peer {
+  flex:1; min-width:0; display:flex; align-items:center; gap:12px;
+  margin:-6px -8px; padding:6px 8px; border:0; border-radius:12px;
+  background:transparent; color:inherit; font-family:inherit; text-align:left;
+  cursor:pointer;
+}
+#db-root .chat-peer:hover { background:color-mix(in srgb, var(--prv) 9%, transparent); }
+#db-root .chat-peer-copy { min-width:0; display:flex; flex-direction:column; }
+#db-root .chat-peer-name {
+  margin-top:2px; font-size:15.5px; font-weight:600; letter-spacing:-.02em; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .chat-peer-caret { flex-shrink:0; color:var(--muted); transition:transform 180ms var(--ease-in-out); }
+#db-root .chat-peer[aria-expanded="true"] .chat-peer-caret { transform:rotate(180deg); }
+#db-root .chat-peer-menu {
+  position:absolute; z-index:40; top:calc(100% - 4px); left:12px; right:12px;
+  max-height:264px; overflow-y:auto; padding:6px;
+  border:1px solid var(--line); border-radius:14px;
+  background:var(--panel-solid); box-shadow:var(--shadow-hover);
+}
+#db-root .chat-peer-item {
+  width:100%; display:flex; align-items:center; gap:10px;
+  padding:8px 10px; border:0; border-radius:10px;
+  background:transparent; color:inherit; font-family:inherit; text-align:left; cursor:pointer;
+}
+#db-root .chat-peer-item:hover { background:var(--panel-hover); }
+#db-root .chat-peer-item[aria-selected="true"] { background:var(--prv-soft); }
+#db-root .chat-peer-init {
+  width:30px; height:30px; flex-shrink:0; border-radius:999px; display:grid; place-items:center;
+  background:color-mix(in srgb, var(--prv) 16%, transparent);
+  font-size:11.5px; font-weight:700; color:var(--prv);
+}
+#db-root .chat-peer-lines { min-width:0; flex:1; }
+#db-root .chat-peer-who {
+  display:block; font-size:13px; font-weight:600; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .chat-peer-last {
+  display:block; margin-top:1px; font-size:11.5px; color:var(--muted);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#db-root .chat-peer-unread {
+  flex-shrink:0; min-width:19px; padding:2px 6px; border-radius:999px;
+  background:var(--prv); color:#fff; font-size:10.5px; font-weight:700; text-align:center;
+}
+/* A read receipt on your own message, so "sent" and "seen" are distinguishable. */
+#db-root .chat-priv-read { margin-left:6px; font-size:10.5px; color:var(--prv); font-weight:600; }
+
 #db-root .chat-log {
   flex:1 1 0%; min-height:0; overflow-y:auto; padding:18px;
   display:flex; flex-direction:column; gap:14px;
