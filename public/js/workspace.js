@@ -177,17 +177,30 @@
     Object.assign(COPY.uz, {
         matter:'Masala',
         matterSummary:'{tasks} vazifa · {members} a’zo',
-        graphHint:'Masalani surish uchun bosib torting. A’zo yoki vazifani bosing — tafsilotlari ochiladi.'
+        graphHint:'Masalani surish uchun bosib torting. A’zo yoki vazifani bosing — tafsilotlari ochiladi.',
+        // The three views the canvas draws.
+        activeCount:'ta faol', matters:'Masalalar', drafts:'Hujjat loyihalari',
+        teamLoad:'Jamoa yuklamasi', tasksShort:'ish',
+        matterAndOwner:'Masala va mas’ul a’zo', unassignedShort:'Biriktirilmagan',
+        planned:'Rejada', dueOn:'Muddat', late:'Kechikdi'
     });
     Object.assign(COPY.ru, {
         matter:'Дело',
         matterSummary:'{tasks} задач · {members} участников',
-        graphHint:'Перетащите дело мышью. Нажмите на участника или задачу, чтобы открыть детали.'
+        graphHint:'Перетащите дело мышью. Нажмите на участника или задачу, чтобы открыть детали.',
+        activeCount:'активных', matters:'Дела', drafts:'Черновики документов',
+        teamLoad:'Загрузка команды', tasksShort:'задач',
+        matterAndOwner:'Дело и ответственный', unassignedShort:'Без исполнителя',
+        planned:'В плане', dueOn:'Срок', late:'Просрочено'
     });
     Object.assign(COPY.en, {
         matter:'Matter',
         matterSummary:'{tasks} tasks · {members} members',
-        graphHint:'Drag the matter to reposition it. Click a member or task to open details.'
+        graphHint:'Drag the matter to reposition it. Click a member or task to open details.',
+        activeCount:'active', matters:'Matters', drafts:'Document drafts',
+        teamLoad:'Team load', tasksShort:'tasks',
+        matterAndOwner:'Matter and owner', unassignedShort:'Unassigned',
+        planned:'Planned', dueOn:'Due', late:'Late'
     });
 
     var state = {
@@ -819,7 +832,7 @@
                 '</div>'+
             '</header>'+
             pendingInviteBanner+
-            '<div class="ws-workspace-layout '+(state.chatOpen?'chat-open':'')+'"><main class="ws-workspace-main'+(state.view==='graph'?' graph-view':'')+'">'+
+            '<div class="ws-workspace-layout '+(state.chatOpen?'chat-open':'')+'"><main class="ws-workspace-main '+esc(state.view)+'-view">'+
             (previewMode?'<div class="ws-conflict">'+svg('help',16)+esc(t('previewNotice'))+'</div>':'')+
             (!canWrite()?'<div class="ws-conflict">'+svg('history',16)+'<div><strong>'+esc(t('readOnly'))+'</strong> — '+esc(t('readOnlyReason'))+'</div></div>':'')+
             '<section class="ws-summary" aria-label="'+esc(t('workspace'))+'">'+
@@ -897,7 +910,54 @@
         if (!state.tasks.length) {
             return '<section class="ws-panel ws-empty"><div class="ws-empty-icon">'+svg('list',25)+'</div><h3>'+esc(t('noTasksTitle'))+'</h3><p>'+esc(t('noTasksBody'))+'</p><button class="ws-btn primary" type="button" data-action="new-task" '+(!canWrite()?'disabled':'')+'>'+svg('add')+esc(t('createTask'))+'</button></section>';
         }
-        return '<section class="ws-panel"><div class="ws-list-head"><span>'+esc(t('task'))+'</span><span>'+esc(t('status'))+'</span><span>'+esc(t('assignees'))+'</span><span>'+esc(t('dueDate'))+'</span><span></span></div>'+state.tasks.map(renderTaskRow).join('')+'</section>';
+        var active=state.tasks.filter(function(task){return task.status!=='done'&&task.status!=='cancelled';}).length;
+        return '<div class="ws-matter-grid">'+
+            '<div class="ws-matter-col">'+
+                '<section class="ws-panel ws-matters">'+
+                    '<header class="ws-matters-head"><h3>'+esc(t('matters'))+'</h3><span>'+active+' '+esc(t('activeCount'))+'</span></header>'+
+                    '<div class="ws-matters-body">'+state.tasks.map(renderTaskRow).join('')+'</div>'+
+                '</section>'+
+            '</div>'+
+            '<div class="ws-matter-col">'+renderWorkloadPanel()+renderDraftsPanel()+'</div>'+
+        '</div>';
+    }
+
+    // Who is carrying what, as a share of the busiest person's open matters.
+    function renderWorkloadPanel() {
+        var counts={};
+        state.tasks.forEach(function(task){
+            if(task.status==='done'||task.status==='cancelled')return;
+            (task.assignees||[]).forEach(function(person){
+                var key=String(person.id);counts[key]=(counts[key]||0)+1;
+            });
+        });
+        var rows=state.members.map(function(member){
+            return {member:member,count:counts[String(member.id)]||0};
+        }).sort(function(a,b){return b.count-a.count;});
+        var busiest=rows.reduce(function(top,row){return Math.max(top,row.count);},0);
+        if(!rows.length)return '';
+        return '<section class="ws-panel ws-side"><header class="ws-matters-head"><h3>'+esc(t('teamLoad'))+'</h3></header><div class="ws-side-body">'+
+            rows.map(function(row){
+                var share=busiest?Math.round(row.count/busiest*100):0;
+                var tone=share>=75?'overdue':share>=50?'approaching':'done';
+                return '<div class="ws-load"><span class="ws-avatar">'+esc(initials(row.member))+'</span>'+
+                    '<div class="ws-load-copy"><span class="ws-load-name">'+esc(personName(row.member))+'</span>'+
+                    '<span class="ws-load-meta">'+esc(t(row.member.role))+' · '+row.count+' '+esc(t('tasksShort'))+'</span>'+
+                    '<span class="ws-load-track"><i class="'+tone+'" style="width:'+share+'%"></i></span></div>'+
+                    '<span class="ws-load-share '+tone+'">'+share+'%</span></div>';
+            }).join('')+'</div></section>';
+    }
+
+    function renderDraftsPanel() {
+        var docs=(state.documents||[]).slice(0,4);
+        if(!docs.length)return '';
+        return '<section class="ws-panel ws-side"><header class="ws-matters-head"><h3>'+esc(t('drafts'))+'</h3></header><div class="ws-side-body">'+
+            docs.map(function(doc){
+                return '<div class="ws-draft">'+svg('document',15)+'<div class="ws-draft-copy">'+
+                    '<span class="ws-draft-title">'+esc(doc.title)+'</span>'+
+                    '<span class="ws-draft-meta">v'+Number(doc.version_number||1)+' · '+esc(isoDate(doc.version_created_at||doc.updated_at))+'</span>'+
+                    '</div></div>';
+            }).join('')+'</div></section>';
     }
 
     function graphTone(task) {
@@ -977,6 +1037,30 @@
         }
         var horizontalDirection=dx>=0?1:-1;
         return prefix+' C '+point(start.x+(bend*horizontalDirection))+' '+point(start.y)+', '+point(end.x-(bend*horizontalDirection))+' '+point(end.y)+', '+point(end.x)+' '+point(end.y);
+    }
+
+    // The canvas labels a matter by its deadline, not by its status: planned,
+    // due, or late, and the date beside it.
+    function dueLine(task) {
+        if (!task.due_date) return { text: t('unscheduled'), tone: 'none' };
+        var date = isoDate(task.due_date);
+        if (task.status === 'done') return { text: t('done') + ' · ' + date, tone: 'done' };
+        if (isOverdue(task)) return { text: t('late') + ' · ' + date, tone: 'overdue' };
+        var days = Math.ceil((new Date(task.due_date + 'T23:59:59').getTime() - Date.now()) / 86400000);
+        if (days >= 0 && days <= 3) return { text: t('dueOn') + ' · ' + date, tone: 'approaching' };
+        return { text: t('planned') + ' · ' + date, tone: 'none' };
+    }
+
+    // Who the matter belongs to: whoever is on it, else whoever opened it.
+    function matterOwner(task) {
+        var person = (task.assignees || [])[0];
+        if (person) return person;
+        var creator = state.members.filter(function (m) { return String(m.id) === String(task.created_by); })[0];
+        return creator || null;
+    }
+
+    function matterTag(task) {
+        return task.is_milestone ? t('milestone') : t(task.priority);
     }
 
     function graphMatterSummary(task) {
@@ -1123,6 +1207,24 @@
         var width=Math.max(980,viewportWidth);
         var height=Math.max(520,cursor+72);
 
+        // The roster is placed relative to its matter's centre, which puts the
+        // outermost person half off the canvas under the leftmost column.
+        var edge=18;
+        Object.keys(memberPositions).forEach(function(key){
+            var spot=memberPositions[key];
+            memberPositions[key]={
+                x:Math.round(clampNumber(spot.x,edge+GRAPH_NODE_W/2,Math.max(edge+GRAPH_NODE_W/2,width-edge-GRAPH_NODE_W/2))),
+                y:Math.round(clampNumber(spot.y,edge+GRAPH_NODE_H/2,Math.max(edge+GRAPH_NODE_H/2,height-edge-GRAPH_NODE_H/2)))
+            };
+        });
+        Object.keys(matterPositions).forEach(function(key){
+            var spot=matterPositions[key];
+            matterPositions[key]={
+                x:Math.round(clampNumber(spot.x,edge+GRAPH_CARD_W/2,Math.max(edge+GRAPH_CARD_W/2,width-edge-GRAPH_CARD_W/2))),
+                y:Math.round(spot.y)
+            };
+        });
+
         // A matter the user dragged keeps where they put it. Applied after the
         // canvas is sized, since the saved value is clamped against it.
         var pinnedMembers={};
@@ -1201,18 +1303,20 @@
     }
 
     function renderTaskRow(task) {
-        var description=String(task.description||'').trim();
-        var commentCount=Number(task.comment_count||task.comments_count||0);
-        var watcherCount=Number(task.watcher_count||task.watchers_count||0);
-        var startLabel=task.start_date?isoDate(task.start_date):'';
-        var dueLabel=task.due_date?isoDate(task.due_date):t('unscheduled');
-        return '<button class="ws-task-row" type="button" data-action="open-task" data-task-id="'+esc(task.id)+'">'+
-            '<div class="ws-task-main"><span class="ws-priority-line '+esc(task.priority)+'"></span><div class="ws-task-copy"><p class="ws-task-title">'+esc(task.title)+'</p>'+(description?'<p class="ws-task-description">'+esc(description)+'</p>':'')+'<div class="ws-task-meta">'+(task.is_milestone?'<span class="ws-pill">'+esc(t('milestone'))+'</span>':'')+'<span>'+esc(t(task.priority))+'</span><span class="ws-task-counts" title="'+esc(t('documents'))+' / '+esc(t('sharedMemory'))+'">'+svg('document',13)+Number(task.document_count||0)+' · '+svg('ai',13)+Number(task.memory_count||0)+(commentCount?' · '+svg('chat',13)+commentCount:'')+(watcherCount?' · '+svg('members',13)+watcherCount:'')+'</span></div></div></div>'+
-            '<span class="ws-status '+esc(task.status)+'">'+esc(t(task.status))+'</span>'+
-            renderAvatars(task.assignees||[])+
-            '<span class="ws-task-date-range">'+(startLabel?'<small>'+esc(t('startDate'))+': '+esc(startLabel)+'</small>':'')+'<time class="ws-due '+(isOverdue(task)?'overdue':'')+'" datetime="'+esc(task.due_date||'')+'">'+esc(dueLabel)+'</time></span>'+
-            '<span>'+svg('arrow',17)+'</span>'+
-        '</button>';
+        var owner=matterOwner(task),due=dueLine(task),tone=graphTone(task);
+        var who=owner?personName(owner):t('unassignedShort');
+        return '<article class="ws-matter-row" data-action="open-task" data-task-id="'+esc(task.id)+'" role="button" tabindex="0">'+
+            '<div class="ws-matter-copy">'+
+                '<h4>'+esc(task.title)+'</h4>'+
+                '<div class="ws-matter-meta">'+
+                    '<span>'+esc(who)+' · '+esc(matterTag(task))+'</span>'+
+                    '<span class="ws-matter-dot"></span>'+
+                    '<span class="ws-matter-due '+due.tone+'">'+esc(due.text)+'</span>'+
+                '</div>'+
+            '</div>'+
+            '<span class="ws-matter-state '+tone+'">'+esc(t(task.status))+'</span>'+
+            '<button class="ws-matter-ask" type="button" data-action="open-ai" data-task-id="'+esc(task.id)+'" title="'+esc(t('askAi'))+'" aria-label="'+esc(t('askAi'))+'">'+svg('ai',14)+'</button>'+
+        '</article>';
     }
 
     function renderAvatars(people) {
@@ -1231,11 +1335,25 @@
 
     function renderTimeline() {
         var dated=state.tasks.filter(function(task){return task.start_date||task.due_date;});
+        if(!dated.length){
+            return '<section class="ws-panel ws-timeline"><div class="ws-empty"><div class="ws-empty-icon">'+svg('timeline',24)+'</div><h3>'+esc(t('timelineEmpty'))+'</h3></div></section>';
+        }
         var range=timelineRange(), span=Math.max(86400000,range.max-range.min);
-        var tickCount=state.timelineZoom==='day'?8:6;
-        var ticks=[]; for(var i=0;i<tickCount;i++){var ratio=i/(tickCount-1);var ts=range.min+(span*ratio);ticks.push('<span class="ws-timeline-tick" style="left:'+(ratio*100)+'%">'+esc(isoDate(new Date(ts).toISOString()))+'</span>');}
-        return '<section class="ws-panel ws-timeline"><div class="ws-timeline-toolbar"><span class="ws-help ws-timeline-hint">'+esc(t('timelineMobile'))+'</span><div class="ws-view-tabs">'+['day','week','month','quarter'].map(function(zoom){return '<button class="ws-view-tab '+(state.timelineZoom===zoom?'active':'')+'" type="button" data-action="timeline-zoom" data-zoom="'+zoom+'">'+esc(t(zoom))+'</button>';}).join('')+'</div></div>'+
-            (dated.length?'<div class="ws-timeline-stage"><div class="ws-timeline-scale">'+ticks.join('')+'</div>'+dated.map(function(task){return renderTimelineRow(task,range,span);}).join('')+'</div>':'<div class="ws-empty"><div class="ws-empty-icon">'+svg('timeline',24)+'</div><h3>'+esc(t('timelineEmpty'))+'</h3></div>')+'</section>';
+        // The canvas heads the track with six evenly spaced dates. The zoom
+        // control the canvas has no room for sits under the column label, so
+        // the ticks stay aligned with the bars underneath them.
+        var ticks=[];for(var i=0;i<6;i+=1){ticks.push('<span>'+esc(isoDate(new Date(range.min+(span*(i/5))).toISOString()))+'</span>');}
+        return '<section class="ws-panel ws-timeline">'+
+            '<header class="ws-tl-head">'+
+                '<div class="ws-tl-label"><span>'+esc(t('matterAndOwner'))+'</span>'+
+                    '<div class="ws-tl-zoom">'+['day','week','month','quarter'].map(function(zoom){
+                        return '<button class="'+(state.timelineZoom===zoom?'active':'')+'" type="button" data-action="timeline-zoom" data-zoom="'+zoom+'">'+esc(t(zoom))+'</button>';
+                    }).join('')+'</div>'+
+                '</div>'+
+                '<div class="ws-tl-scale">'+ticks.join('')+'</div>'+
+            '</header>'+
+            '<div class="ws-tl-body">'+dated.map(function(task){return renderTimelineRow(task,range,span);}).join('')+'</div>'+
+        '</section>';
     }
 
     function renderTimelineRow(task,range,span) {
@@ -1243,8 +1361,20 @@
         var end=new Date((task.due_date||task.start_date)+'T00:00:00').getTime();
         var left=Math.max(0,Math.min(100,(start-range.min)/span*100));
         var width=Math.max(1.8,Math.min(100-left,(Math.max(end,start)-start+86400000)/span*100));
-        var marker=task.is_milestone?'<span class="ws-timeline-milestone" data-action="open-task" data-task-id="'+esc(task.id)+'" style="left:calc('+left+'% - 9px)" title="'+esc(task.title)+'"></span>':'<span class="ws-timeline-bar '+(isOverdue(task)?'overdue':'')+'" data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'" style="left:'+left+'%;width:'+width+'%" title="'+esc(task.title)+'"></span>';
-        return '<div class="ws-timeline-row"><button class="ws-timeline-label ws-btn ghost" type="button" data-action="open-task" data-task-id="'+esc(task.id)+'" title="'+esc(task.title)+'"><span class="ws-timeline-label-text">'+esc(task.title)+'</span></button><div class="ws-timeline-track">'+marker+'</div></div>';
+        var tone=graphTone(task),owner=matterOwner(task);
+        var marker=task.is_milestone
+            ? '<span class="ws-timeline-milestone '+tone+'" data-action="open-task" data-task-id="'+esc(task.id)+'" style="left:calc('+left+'% - 9px)" title="'+esc(task.title)+'"></span>'
+            : '<span class="ws-timeline-bar '+tone+'" data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'" style="left:'+left+'%;width:'+width+'%" title="'+esc(task.title)+'"></span>';
+        return '<div class="ws-tl-row" data-action="open-task" data-task-id="'+esc(task.id)+'" role="button" tabindex="0">'+
+            '<div class="ws-tl-copy">'+
+                '<span class="ws-tl-title">'+esc(task.title)+'</span>'+
+                '<span class="ws-tl-who">'+
+                    (owner?'<span class="ws-avatar">'+esc(initials(owner))+'</span><span class="ws-tl-who-name">'+esc(personName(owner))+' · '+esc(t(owner.role||'member'))+'</span>'
+                          :'<span class="ws-tl-who-name">'+esc(t('unassignedShort'))+'</span>')+
+                '</span>'+
+            '</div>'+
+            '<div class="ws-tl-track">'+marker+'</div>'+
+        '</div>';
     }
 
     function renderTaskDetail() {
@@ -2316,44 +2446,46 @@
         return date.toISOString().slice(0,10);
     }
 
+    /**
+     * The section reaches the tab bar and stops being pinned there. It used to
+     * be given an exact height, floored at 320px, and asked to scroll inside
+     * itself: on a 1280x720 window that cut the timeline off after four rows
+     * and left the graph mostly behind a scrollbar of its own, which is also
+     * what made dragging a matter feel like fighting the page. The window is
+     * now the minimum and the content decides the rest.
+     */
     function syncWorkspaceViewportHeight() {
         if(!root||!state.workspace)return;
         var main=root.querySelector('.ws-workspace-main');
         if(!main)return;
+        var bottomNav=document.getElementById('bottomTabBar');
+        var navTop=bottomNav?bottomNav.getBoundingClientRect().top:global.innerHeight;
+        var minimum=global.innerWidth<=760?260:320;
+        var layout=main.closest('.ws-workspace-layout');
+        if(layout){
+            layout.style.height='';
+            layout.style.maxHeight='';
+            layout.style.minHeight='';
+            layout.style.minHeight=Math.max(minimum,Math.floor(navTop-layout.getBoundingClientRect().top))+'px';
+        }
         var panels=main.querySelectorAll(':scope > .ws-panel');
         var panel=panels.length?panels[panels.length-1]:null;
         if(!panel)return;
-        var bottomNav=document.getElementById('bottomTabBar');
-        var navTop=bottomNav?bottomNav.getBoundingClientRect().top:global.innerHeight;
-        var mobile=global.innerWidth<=760;
-        var minimum=mobile?260:320;
-        var layout=main.closest('.ws-workspace-layout');
-        if(layout){
-            var layoutTop=layout.getBoundingClientRect().top;
-            var layoutHeight=Math.max(minimum,Math.floor(navTop-layoutTop));
-            layout.style.height=layoutHeight+'px';
-            layout.style.minHeight=layoutHeight+'px';
-            layout.style.maxHeight=layoutHeight+'px';
-        }
-        var available=minimum;
-        for(var pass=0;pass<6;pass++){
-            var rect=panel.getBoundingClientRect();
-            var gap=navTop-rect.bottom;
-            available=Math.max(minimum,Math.floor(rect.height+gap));
-            panel.style.height=available+'px';
-            panel.style.minHeight=available+'px';
-            panel.style.maxHeight=available+'px';
-            if(Math.abs(gap)<1)break;
-        }
+        panel.style.height='';
+        panel.style.maxHeight='';
+        panel.style.minHeight='';
+        panel.style.minHeight=Math.max(minimum,Math.floor(navTop-panel.getBoundingClientRect().top))+'px';
         var graphStage=panel.querySelector('.ws-graph-stage');
         if(graphStage){
-            var layoutHeight=Number(graphStage.dataset.layoutHeight||680);
-            graphStage.style.height=layoutHeight+'px';
+            graphStage.style.height=Number(graphStage.dataset.layoutHeight||680)+'px';
         }
     }
 
     function centerGraphViewport() {
         if(!root)return;
+        // The layout places each roster under its own matter, which can leave
+        // two people from neighbouring columns sitting on the same spot.
+        separateGraphNodes(root.querySelector('.ws-graph-stage'));
         var scroll=root.querySelector('.ws-graph-scroll');
         var matter=scroll&&scroll.querySelector('[data-graph-matter]');
         if(!scroll||!matter)return;
@@ -2416,6 +2548,112 @@
 
     var GRAPH_DRAG_THRESHOLD=4;
 
+    /**
+     * Nothing on the stage sits on top of anything else. Every node is pushed
+     * out of every node it overlaps, along whichever axis needs the least
+     * movement, so a card dropped beside a neighbour settles flush against it
+     * and the people underneath make room for each other too. A node passed as
+     * `fixed` takes none of the correction: a matter that was just dropped
+     * stays where it was put and the board moves around it. Returns where the
+     * fixed node ended up, since clamping can still move it.
+     */
+    function separateGraphNodes(stage, fixed) {
+        if(!stage)return null;
+        var width=stage.offsetWidth,height=stage.offsetHeight,padding=18;
+        var boxes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]')).map(function(node){
+            return {
+                node:node,
+                x:Number(node.dataset.x||node.offsetLeft),
+                y:Number(node.dataset.y||node.offsetTop),
+                halfWidth:node.offsetWidth/2,
+                halfHeight:node.offsetHeight/2,
+                fixed:node===fixed
+            };
+        });
+        if(!boxes.length)return null;
+
+        // Sideways the stage is a hard edge; downwards it simply grows, so there
+        // is always somewhere for a pair to separate to.
+        var roomBefore=function(box,axis){
+            return Math.max(0,axis==='x'?box.x-(padding+box.halfWidth):box.y-(padding+box.halfHeight));
+        };
+        var roomAfter=function(box,axis){
+            return axis==='x'?Math.max(0,(width-padding-box.halfWidth)-box.x):Infinity;
+        };
+        var clampAll=function(){
+            boxes.forEach(function(box){
+                box.x=clampNumber(box.x,padding+box.halfWidth,Math.max(padding+box.halfWidth,width-padding-box.halfWidth));
+                box.y=Math.max(padding+box.halfHeight,box.y);
+            });
+        };
+
+        /**
+         * Moves `lo` back and `hi` forward until they are `need` apart. Each
+         * takes half, except that a node held still takes none and a node with
+         * no room to move passes its share to the other — without that hand-off
+         * a pair wedged against the top of the stage stayed overlapped however
+         * many rounds the pass ran.
+         */
+        var shift=function(lo,hi,need,axis){
+            var roomLo=roomBefore(lo,axis),roomHi=roomAfter(hi,axis);
+            var takeLo=Math.min(lo.fixed?0:(hi.fixed?need:need/2),roomLo);
+            var takeHi=Math.min(hi.fixed?0:(lo.fixed?need:need/2),roomHi);
+            var left=need-takeLo-takeHi;
+            if(left>0){var extraHi=Math.min(left,roomHi-takeHi);takeHi+=extraHi;left-=extraHi;}
+            if(left>0){var extraLo=Math.min(left,roomLo-takeLo);takeLo+=extraLo;left-=extraLo;}
+            // Nowhere left to give: the held node gives way rather than the
+            // board being left with two cards on the same spot.
+            if(left>0)takeHi+=left;
+            if(axis==='x'){lo.x-=takeLo;hi.x+=takeHi;}
+            else{lo.y-=takeLo;hi.y+=takeHi;}
+        };
+
+        clampAll();
+        for(var pass=0;pass<120;pass+=1){
+            var shifted=false;
+            for(var a=0;a<boxes.length;a+=1){
+                for(var b=a+1;b<boxes.length;b+=1){
+                    var one=boxes[a],two=boxes[b];
+                    var needX=one.halfWidth+two.halfWidth+GRAPH_SEPARATION_GAP-Math.abs(one.x-two.x);
+                    var needY=one.halfHeight+two.halfHeight+GRAPH_SEPARATION_GAP-Math.abs(one.y-two.y);
+                    if(needX<=0||needY<=0)continue;
+                    shifted=true;
+                    var loX=one.x<=two.x?one:two,hiX=one.x<=two.x?two:one;
+                    var sideways=roomBefore(loX,'x')+roomAfter(hiX,'x');
+                    // Whichever axis needs the least movement, unless the stage
+                    // is too narrow to give it.
+                    if(needX<=needY&&sideways>=needX){
+                        shift(loX,hiX,needX,'x');
+                    }else{
+                        var loY=one.y<=two.y?one:two,hiY=one.y<=two.y?two:one;
+                        shift(loY,hiY,needY,'y');
+                    }
+                }
+            }
+            clampAll();
+            if(!shifted)break;
+        }
+
+        var settled=null,lowest=0;
+        boxes.forEach(function(box){
+            var x=Math.round(box.x),y=Math.round(box.y);
+            box.node.style.left=x+'px';
+            box.node.style.top=y+'px';
+            box.node.dataset.x=String(x);
+            box.node.dataset.y=String(y);
+            lowest=Math.max(lowest,y+box.halfHeight);
+            if(box.fixed)settled={x:x,y:y};
+        });
+        if(lowest+padding>height){
+            var grown=Math.ceil(lowest+padding);
+            stage.style.height=grown+'px';
+            stage.dataset.layoutHeight=String(grown);
+        }
+        updateGraphEdges(stage);
+        return settled;
+    }
+
+
     // The card carries role="button" because it holds a real button of its own,
     // so Enter and Space have to be wired by hand.
     function handleGraphNodeKey(event) {
@@ -2467,7 +2705,7 @@
         var minDx=padding+matterOrigin.halfWidth-matterOrigin.x;
         var maxDx=width-padding-matterOrigin.halfWidth-matterOrigin.x;
         var minDy=padding+matterOrigin.halfHeight-matterOrigin.y;
-        var maxDy=height-padding-matterOrigin.halfHeight-matterOrigin.y;
+        var maxDy=Math.max(minDy,height-padding-matterOrigin.halfHeight-matterOrigin.y);
 
         var frameHandle=null;
         var dragging=true;
@@ -2492,72 +2730,6 @@
             frameHandle=null;
         }
 
-        /**
-         * Nothing on the stage sits on top of anything else once the pointer is
-         * released. Every node is pushed out of every node it overlaps, along
-         * whichever axis needs the least movement, so a card dropped beside a
-         * neighbour settles flush against it and the people underneath make room
-         * for each other too. The dragged node is held still and the board moves
-         * around it: it goes where it was put.
-         */
-        function separateStage(){
-            var nodes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]'));
-            var boxes=nodes.map(function(node){
-                var own=node===matter;
-                return {
-                    node:node,
-                    x:own?current.x:Number(node.dataset.x||node.offsetLeft),
-                    y:own?current.y:Number(node.dataset.y||node.offsetTop),
-                    halfWidth:node.offsetWidth/2,
-                    halfHeight:node.offsetHeight/2,
-                    fixed:own
-                };
-            });
-            var clampAll=function(){
-                boxes.forEach(function(box){
-                    box.x=clampNumber(box.x,padding+box.halfWidth,Math.max(padding+box.halfWidth,width-padding-box.halfWidth));
-                    box.y=clampNumber(box.y,padding+box.halfHeight,Math.max(padding+box.halfHeight,height-padding-box.halfHeight));
-                });
-            };
-            clampAll();
-            for(var pass=0;pass<120;pass+=1){
-                var shifted=false;
-                for(var a=0;a<boxes.length;a+=1){
-                    for(var b=a+1;b<boxes.length;b+=1){
-                        var one=boxes[a],two=boxes[b];
-                        var needX=one.halfWidth+two.halfWidth+GRAPH_SEPARATION_GAP-Math.abs(one.x-two.x);
-                        var needY=one.halfHeight+two.halfHeight+GRAPH_SEPARATION_GAP-Math.abs(one.y-two.y);
-                        if(needX<=0||needY<=0)continue;
-                        shifted=true;
-                        // A fixed node takes none of the correction, so its
-                        // neighbour absorbs the whole of it.
-                        var oneShare=one.fixed?0:(two.fixed?1:0.5);
-                        var twoShare=two.fixed?0:(one.fixed?1:0.5);
-                        if(needX<=needY){
-                            var signX=one.x>=two.x?1:-1;
-                            one.x+=signX*needX*oneShare;
-                            two.x-=signX*needX*twoShare;
-                        }else{
-                            var signY=one.y>=two.y?1:-1;
-                            one.y+=signY*needY*oneShare;
-                            two.y-=signY*needY*twoShare;
-                        }
-                    }
-                }
-                clampAll();
-                if(!shifted)break;
-            }
-            boxes.forEach(function(box){
-                var x=Math.round(box.x),y=Math.round(box.y);
-                box.node.style.left=x+'px';
-                box.node.style.top=y+'px';
-                box.node.dataset.x=String(x);
-                box.node.dataset.y=String(y);
-                if(box.fixed){current.x=x;current.y=y;}
-            });
-            updateGraphEdges(stage);
-        }
-
         function move(moveEvent){
             var dx=clampNumber(moveEvent.clientX-startX,minDx,maxDx);
             var dy=clampNumber(moveEvent.clientY-startY,minDy,maxDy);
@@ -2578,7 +2750,10 @@
             matter.classList.remove('dragging');
             if(frameHandle){cancelAnimationFrame(frameHandle);frameHandle=null;}
             frame();
-            if(moved)separateStage();
+            if(moved){
+                var settled=separateGraphNodes(stage,matter);
+                if(settled){current.x=settled.x;current.y=settled.y;}
+            }
             if(!moved)return;
             // Members trail their matter, so once one has been placed by hand it
             // must stop being dragged around by the matter it belongs to.

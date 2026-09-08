@@ -399,7 +399,12 @@ function transactionalPool(handler) {
     assert.ok(!frontend.includes('setInterval('), 'Workspace live sync must not poll');
     assert.ok(styles.includes('[data-theme="dark"] .workspace-app'));
     assert.ok(styles.includes('.ws-save-bar { position: static;'), 'task actions must not cover following sections');
-    assert.ok(frontend.includes('ws-timeline-label-text'), 'timeline labels need an inner ellipsis boundary');
+    // The canvas heads each timeline row with the matter over the person who
+    // carries it; the title wraps and the name is the part that must not run
+    // past its column.
+    assert.ok(frontend.includes('ws-tl-who-name'), 'timeline rows need an ellipsis boundary on the owner');
+    assert.ok(styles.includes('.ws-tl-who-name { font-size: 11.5px; color: var(--ws-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }'));
+    assert.ok(frontend.includes('matterAndOwner'), 'the timeline column is labelled as the canvas labels it');
     assert.ok(styles.includes('appearance: none;'), 'Workspace selects should use the shared dropdown treatment');
     assert.ok(frontend.includes('function enhanceDropdowns(scope)'), 'all Workspace selects need custom dropdown enhancement');
     assert.ok(frontend.includes("optionButton.dataset.action = 'dropdown-option'"), 'custom dropdowns need selectable options');
@@ -413,12 +418,20 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes('function updateGraphEdges(stage)'), 'graph links must be recalculated while nodes move');
     assert.ok(frontend.includes('function graphEdgeAnchor(from, to)'), 'graph links must connect at node edges instead of disappearing below node centers');
     assert.ok(frontend.includes("if(distance<=150)return prefix+' L '"), 'nearby graph nodes must use short straight connectors instead of curled paths');
-    assert.ok(frontend.includes('ws-task-description'), 'list view must expose each task description');
+    // The canvas's row is the title over 'owner · tag · deadline', with the
+    // status and the AI control at the end. The description it has no line for
+    // stays on the task itself.
+    assert.ok(frontend.includes('ws-matter-row'), 'the list row must be the one the canvas draws');
+    assert.ok(frontend.includes('ws-matter-due'), 'the deadline carries its own colour');
+    assert.ok(frontend.includes('ws-matter-ask'), 'each row opens Workspace AI on its matter');
+    assert.ok(frontend.includes('renderWorkloadPanel'), 'the list view carries who is carrying how much');
     // The canvas moves a matter's people with it, not behind it: the 50ms
     // position-history trail was replaced by a fixed offset, and the drop now
     // separates every node rather than only matter from matter.
     assert.ok(!frontend.includes('GRAPH_FOLLOW_LAG_MS'), 'graph followers must track the card, not trail it');
-    assert.ok(frontend.includes('function separateStage()'), 'a drop must leave nothing on the stage overlapping');
+    assert.ok(frontend.includes('function separateGraphNodes(stage, fixed)'), 'a drop must leave nothing on the stage overlapping');
+    // Drawing the board untangles it too, not only moving a card.
+    assert.ok(frontend.includes('separateGraphNodes(root.querySelector('+String.fromCharCode(39)+'.ws-graph-stage'+String.fromCharCode(39)+'))'), 'the first paint must separate the board as well');
     assert.ok(frontend.includes('GRAPH_SEPARATION_GAP=12'), 'the canvas separates nodes by 12px');
     assert.ok(frontend.includes('GRAPH_CARD_W=168,GRAPH_CARD_H=158'), 'the matter card is the 168x158 the canvas draws');
     assert.ok(frontend.includes('ws-graph-ask'), 'the matter card carries the control that opens Workspace AI on it');
