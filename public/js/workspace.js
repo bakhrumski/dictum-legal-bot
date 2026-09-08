@@ -2570,7 +2570,7 @@
      * stays where it was put and the board moves around it. Returns where the
      * fixed node ended up, since clamping can still move it.
      */
-    function separateGraphNodes(stage, fixed) {
+    function separateGraphNodes(stage, fixed, options) {
         if(!stage)return null;
         var width=stage.offsetWidth,height=stage.offsetHeight,padding=18;
         var boxes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]')).map(function(node){
@@ -2647,23 +2647,82 @@
             if(!shifted)break;
         }
 
-        var settled=null,lowest=0;
+        var settled=null,lowest=0,targets={};
         boxes.forEach(function(box){
             var x=Math.round(box.x),y=Math.round(box.y);
-            box.node.style.left=x+'px';
-            box.node.style.top=y+'px';
-            box.node.dataset.x=String(x);
-            box.node.dataset.y=String(y);
+            targets[box.node.dataset.graphKey]={x:x,y:y,node:box.node};
             lowest=Math.max(lowest,y+box.halfHeight);
             if(box.fixed)settled={x:x,y:y};
         });
+        // The stage grew while the pass made room; give it that room before
+        // anything moves into it.
         if(lowest+padding>height){
             var grown=Math.ceil(lowest+padding);
             stage.style.height=grown+'px';
             stage.dataset.layoutHeight=String(grown);
         }
-        updateGraphEdges(stage);
+        if(!options||!options.animate){
+            Object.keys(targets).forEach(function(key){
+                var target=targets[key];
+                target.node.style.transform='';
+                target.node.style.left=target.x+'px';
+                target.node.style.top=target.y+'px';
+                target.node.dataset.x=String(target.x);
+                target.node.dataset.y=String(target.y);
+            });
+            updateGraphEdges(stage);
+        }else{
+            settleGraphNodes(stage,targets,options.snapshot);
+        }
         return settled;
+    }
+
+    var GRAPH_SETTLE_MS=220;
+
+    /**
+     * Eases every node from where it is to where the separation pass wants it,
+     * cords and all, on the transform path the drag already uses. Snapping the
+     * whole board in a single frame is the one moment a drag still felt abrupt.
+     */
+    function settleGraphNodes(stage, targets, snapshot) {
+        var keys=Object.keys(targets);
+        var starts={},moving=false;
+        keys.forEach(function(key){
+            var node=targets[key].node;
+            starts[key]={x:Number(node.dataset.x||node.offsetLeft),y:Number(node.dataset.y||node.offsetTop)};
+            if(Math.abs(starts[key].x-targets[key].x)>0.5||Math.abs(starts[key].y-targets[key].y)>0.5)moving=true;
+        });
+        var finish=function(){
+            keys.forEach(function(key){
+                var target=targets[key];
+                target.node.style.transform='';
+                target.node.style.left=target.x+'px';
+                target.node.style.top=target.y+'px';
+                target.node.dataset.x=String(target.x);
+                target.node.dataset.y=String(target.y);
+            });
+            updateGraphEdges(stage);
+        };
+        // The OS setting wins: the board lands where it lands, at once.
+        var reduceMotion=global.matchMedia&&global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if(!moving||!snapshot||reduceMotion){finish();return;}
+        var begun=null;
+        var ease=function(progress){return 1-Math.pow(1-progress,3);};
+        var step=function(now){
+            if(begun===null)begun=now;
+            var progress=Math.min(1,(now-begun)/GRAPH_SETTLE_MS),eased=ease(progress);
+            var live={};
+            keys.forEach(function(key){
+                var from=starts[key],to=targets[key];
+                var x=from.x+(to.x-from.x)*eased,y=from.y+(to.y-from.y)*eased;
+                live[key]={x:x,y:y};
+                to.node.style.transform='translate(-50%, -50%) translate3d('+(x-from.x)+'px, '+(y-from.y)+'px, 0)';
+            });
+            paintGraphEdges(stage,snapshot,live);
+            if(progress<1)requestAnimationFrame(step);
+            else finish();
+        };
+        requestAnimationFrame(step);
     }
 
 
@@ -2828,7 +2887,7 @@
                 item.node.dataset.y=String(y);
             });
             if(moved){
-                var settled=separateGraphNodes(stage,matter);
+                var settled=separateGraphNodes(stage,matter,{animate:true,snapshot:snapshot});
                 if(settled){current.x=settled.x;current.y=settled.y;}
             }else{
                 updateGraphEdges(stage);

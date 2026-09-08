@@ -429,12 +429,16 @@ function transactionalPool(handler) {
     // position-history trail was replaced by a fixed offset, and the drop now
     // separates every node rather than only matter from matter.
     assert.ok(!frontend.includes('GRAPH_FOLLOW_LAG_MS'), 'graph followers must track the card, not trail it');
-    assert.ok(frontend.includes('function separateGraphNodes(stage, fixed)'), 'a drop must leave nothing on the stage overlapping');
+    assert.ok(frontend.includes('function separateGraphNodes(stage, fixed, options)'), 'a drop must leave nothing on the stage overlapping');
     // A drag offsets the constellation with a transform and redraws the cords
     // from remembered coordinates: writing left/top and measuring every node
     // back out of the document costs a layout per node per frame.
     assert.ok(frontend.includes('function graphAnchorSnapshot(stage)'), 'cords must be redrawn without measuring the board again');
     assert.ok(frontend.includes('translate(-50%, -50%) translate3d('), 'a drag must not lay the page out on every move');
+    // Releasing eases the board into its new arrangement instead of snapping.
+    assert.ok(frontend.includes('function settleGraphNodes(stage, targets, snapshot)'), 'the board must settle rather than jump');
+    assert.ok(frontend.includes('GRAPH_SETTLE_MS=220'));
+    assert.ok(frontend.includes("matchMedia('(prefers-reduced-motion: reduce)')"), 'the settle must honour the OS motion setting');
     assert.ok(!frontend.includes('graphNodeCenter(stage,node)') || frontend.includes('function updateGraphEdges(stage)'), 'the settled board may still measure once');
     // Drawing the board untangles it too, not only moving a card.
     assert.ok(frontend.includes('separateGraphNodes(root.querySelector('+String.fromCharCode(39)+'.ws-graph-stage'+String.fromCharCode(39)+'))'), 'the first paint must separate the board as well');
