@@ -52,7 +52,7 @@
             task: 'Vazifa', status: 'Holat', assignees: 'Ijrochilar', dueDate: 'Muddat', priority: 'Ustuvorlik',
             noTasksTitle: 'Birinchi umumiy vazifani yarating', noTasksBody: 'Masalan, shartnoma tahlili yoki xodim hujjatini vazifa qilib yarating. A’zolar, hujjatlar va AI natijalari bir joyda saqlanadi.',
             createTask: 'Vazifa yaratish', editTask: 'Vazifani tahrirlash', title: 'Nomi', description: 'Tavsif', startDate: 'Boshlanish sanasi', milestone: 'Muhim bosqich', watchers: 'Kuzatuvchilar', save: 'Saqlash', cancel: 'Bekor qilish', delete: 'O‘chirish',
-            todo: 'Rejada', in_progress: 'Jarayonda', in_review: 'Tekshiruvda', done: 'Yakunlangan', cancelled: 'Bekor qilingan',
+            todo: 'Navbatda', in_progress: 'Jarayonda', in_review: 'Tekshiruvda', done: 'Yakunlangan', cancelled: 'Bekor qilingan',
             low: 'Past', normal: 'O‘rta', high: 'Yuqori', urgent: 'Shoshilinch',
             comments: 'Izohlar', writeComment: 'Izoh yozing…', send: 'Yuborish', noComments: 'Hali izoh yo‘q. Qaror yoki yangilikni shu yerda ulashing.',
             documents: 'Hujjatlar', uploadDocument: 'Hujjat yuklash', noDocuments: 'Hujjat yoki AI natijasini ushbu vazifaga biriktiring.', versions: 'Versiyalar', version: 'versiya', download: 'Yuklab olish',
@@ -1357,14 +1357,27 @@
     }
 
     function renderTimelineRow(task,range,span) {
-        var start=new Date((task.start_date||task.due_date)+'T00:00:00').getTime();
-        var end=new Date((task.due_date||task.start_date)+'T00:00:00').getTime();
-        var left=Math.max(0,Math.min(100,(start-range.min)/span*100));
-        var width=Math.max(1.8,Math.min(100-left,(Math.max(end,start)-start+86400000)/span*100));
+        // A matter created with only a deadline has no span to draw, and a
+        // single day is a thread nobody can see. The bar then runs between
+        // today and that deadline — time left, or time overdue — which is the
+        // thing the row is being read for anyway.
+        var due=new Date((task.due_date||task.start_date)+'T00:00:00').getTime();
+        var from,to;
+        if(task.start_date&&task.due_date){
+            from=new Date(task.start_date+'T00:00:00').getTime();
+            to=due;
+        }else{
+            var today=new Date();today.setHours(0,0,0,0);
+            from=Math.min(today.getTime(),due);
+            to=Math.max(today.getTime(),due);
+        }
+        if(from>to){var swapped=from;from=to;to=swapped;}
+        var left=Math.max(0,Math.min(100,(from-range.min)/span*100));
+        var width=Math.max(1.8,Math.min(100-left,(to-from+86400000)/span*100));
         var tone=graphTone(task),owner=matterOwner(task);
-        var marker=task.is_milestone
-            ? '<span class="ws-timeline-milestone '+tone+'" data-action="open-task" data-task-id="'+esc(task.id)+'" style="left:calc('+left+'% - 9px)" title="'+esc(task.title)+'"></span>'
-            : '<span class="ws-timeline-bar '+tone+'" data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'" style="left:'+left+'%;width:'+width+'%" title="'+esc(task.title)+'"></span>';
+        var dueLeft=Math.max(0,Math.min(100,(due-range.min)/span*100));
+        var marker='<span class="ws-timeline-bar '+tone+'" data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'" style="left:'+left+'%;width:'+width+'%" title="'+esc(task.title)+'"></span>'
+            +(task.is_milestone?'<span class="ws-timeline-milestone '+tone+'" style="left:calc('+dueLeft+'% - 7px)" title="'+esc(t('milestone'))+'"></span>':'');
         return '<div class="ws-tl-row" data-action="open-task" data-task-id="'+esc(task.id)+'" role="button" tabindex="0">'+
             '<div class="ws-tl-copy">'+
                 '<span class="ws-tl-title">'+esc(task.title)+'</span>'+
@@ -2664,9 +2677,57 @@
         node.click();
     }
 
+    /**
+     * Measured once, while the board is still: where each node's cord anchor
+     * sits relative to the node's own centre, and how big that anchor is. With
+     * this in hand the cords can be redrawn from remembered coordinates during
+     * a drag instead of asking the browser to measure every node again.
+     */
+    function graphAnchorSnapshot(stage) {
+        var snapshot={};
+        Array.prototype.slice.call(stage.querySelectorAll('[data-graph-key]')).forEach(function(node){
+            var anchor=node.querySelector('.ws-avatar')||node;
+            var nodeRect=node.getBoundingClientRect();
+            var anchorRect=anchor.getBoundingClientRect();
+            snapshot[node.dataset.graphKey]={
+                node:node,
+                offsetX:(anchorRect.left+anchorRect.width/2)-(nodeRect.left+nodeRect.width/2),
+                offsetY:(anchorRect.top+anchorRect.height/2)-(nodeRect.top+nodeRect.height/2),
+                halfWidth:anchorRect.width/2,
+                halfHeight:anchorRect.height/2
+            };
+        });
+        return snapshot;
+    }
+
+    function paintGraphEdges(stage, snapshot, positions) {
+        var centres={};
+        Object.keys(snapshot).forEach(function(key){
+            var box=snapshot[key];
+            var spot=positions[key]||{x:Number(box.node.dataset.x||0),y:Number(box.node.dataset.y||0)};
+            centres[key]={
+                x:spot.x+box.offsetX,
+                y:spot.y+box.offsetY,
+                halfWidth:box.halfWidth,
+                halfHeight:box.halfHeight
+            };
+        });
+        stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
+            var from=centres[path.dataset.fromKey],to=centres[path.dataset.toKey];
+            if(from&&to)path.setAttribute('d',graphConnector(from,to));
+        });
+    }
+
+    /**
+     * Dragging a matter moves it and the people it hosts. While the pointer is
+     * down nothing is laid out again: each node is offset with a transform, the
+     * cords are redrawn from coordinates held in memory, and one animation
+     * frame does all of it however many pointer events arrived. Writing left and
+     * top on every move and then measuring each node back out of the document to
+     * redraw the cords — which is what this did — costs a full layout per node
+     * per frame, and that is what the drag felt like.
+     */
     function handleGraphMatterDrag(event) {
-        // Any node on the stage can be repositioned, not only a matter. A person
-        // moves alone; a matter still takes its own people with it.
         if(event.target.closest&&event.target.closest('.ws-graph-ask'))return;
         var matter=event.target.closest&&event.target.closest('[data-graph-node]');
         if(!matter||!root||!root.contains(matter)||event.button!==0)return;
@@ -2674,87 +2735,105 @@
         if(!stage)return;
         event.preventDefault();
         event.stopPropagation();
+
         var startX=event.clientX,startY=event.clientY;
+        var padding=18;
+        var width=stage.offsetWidth,height=stage.offsetHeight;
         var nodes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]'));
         var origins=nodes.map(function(node){return{
             node:node,
+            key:node.dataset.graphKey,
             x:Number(node.dataset.x||node.offsetLeft),
             y:Number(node.dataset.y||node.offsetTop),
             halfWidth:node.offsetWidth/2,
             halfHeight:node.offsetHeight/2
         };});
-        var matterOrigin=origins.find(function(item){return item.node===matter;});
-        // Only the people this matter hosts trail it — the ones drawn beneath it.
-        // Tethering by edge instead would drag anyone merely *linked* to this
-        // matter, and someone who works on two matters sits under one of them:
-        // dragging the other would tear them away from their own column.
+        var matterOrigin=origins.filter(function(item){return item.node===matter;})[0];
+        if(!matterOrigin)return;
+        // Only the people this matter hosts trail it — the ones drawn beneath
+        // it. Tethering by edge instead would drag anyone merely *linked* to
+        // this matter, and someone who works on two matters sits under one of
+        // them: dragging the other would tear them away from their own column.
         var satellites=origins.filter(function(item){
             return item.node!==matter
                 && item.node.dataset.graphHome===matter.dataset.graphKey
                 && !item.node.dataset.graphPinned;
         });
+
         var originX=matterOrigin.x,originY=matterOrigin.y;
-        var width=stage.offsetWidth,height=stage.offsetHeight;
-        var current={x:originX,y:originY};
-        var padding=18;
         // Bounds come from the dragged node alone. Taking the tightest limit
         // across the whole moving group let one satellite sitting near an edge
-        // decide how far the matter could travel — with a person parked at the
-        // left of the board, a matter on the right could not be moved left at
-        // all. Satellites are clamped individually as they follow.
-        var minDx=padding+matterOrigin.halfWidth-matterOrigin.x;
-        var maxDx=width-padding-matterOrigin.halfWidth-matterOrigin.x;
-        var minDy=padding+matterOrigin.halfHeight-matterOrigin.y;
-        var maxDy=Math.max(minDy,height-padding-matterOrigin.halfHeight-matterOrigin.y);
+        // decide how far the matter could travel. Satellites are clamped
+        // individually as they follow.
+        var minDx=padding+matterOrigin.halfWidth-originX;
+        var maxDx=Math.max(minDx,width-padding-matterOrigin.halfWidth-originX);
+        var minDy=padding+matterOrigin.halfHeight-originY;
+        var maxDy=Math.max(minDy,height-padding-matterOrigin.halfHeight-originY);
 
-        var frameHandle=null;
-        var dragging=true;
-        var moved=false;
+        var snapshot=graphAnchorSnapshot(stage);
+        var positions={};
+        origins.forEach(function(item){positions[item.key]={x:item.x,y:item.y};});
+        var current={x:originX,y:originY};
+        var pointer={x:startX,y:startY};
+        var frameHandle=null,moved=false;
 
         matter.classList.add('dragging');
         matter.setPointerCapture&&matter.setPointerCapture(event.pointerId);
 
-        // One frame moves the whole constellation: the card is already where the
-        // pointer put it, and its people sit at the offsets they started with.
-        function frame(){
-            var dx=current.x-originX,dy=current.y-originY;
+        var place=function(node,item,x,y){
+            node.style.transform='translate(-50%, -50%) translate3d('+(x-item.x)+'px, '+(y-item.y)+'px, 0)';
+        };
+
+        function apply(){
+            frameHandle=null;
+            var dx=clampNumber(pointer.x-startX,minDx,maxDx);
+            var dy=clampNumber(pointer.y-startY,minDy,maxDy);
+            current.x=originX+dx;
+            current.y=originY+dy;
+            place(matter,matterOrigin,current.x,current.y);
+            positions[matterOrigin.key]={x:current.x,y:current.y};
             satellites.forEach(function(item){
-                var x=clampNumber(item.x+dx,padding+item.halfWidth,width-padding-item.halfWidth);
-                var y=clampNumber(item.y+dy,padding+item.halfHeight,height-padding-item.halfHeight);
+                var x=clampNumber(item.x+dx,padding+item.halfWidth,Math.max(padding+item.halfWidth,width-padding-item.halfWidth));
+                var y=Math.max(padding+item.halfHeight,item.y+dy);
+                place(item.node,item,x,y);
+                positions[item.key]={x:x,y:y};
+            });
+            paintGraphEdges(stage,snapshot,positions);
+        }
+
+        function move(moveEvent){
+            pointer.x=moveEvent.clientX;
+            pointer.y=moveEvent.clientY;
+            if(!moved&&Math.max(Math.abs(moveEvent.clientX-startX),Math.abs(moveEvent.clientY-startY))>GRAPH_DRAG_THRESHOLD)moved=true;
+            if(!frameHandle)frameHandle=requestAnimationFrame(apply);
+        }
+
+        function up(){
+            document.removeEventListener('pointermove',move);
+            document.removeEventListener('pointerup',up);
+            document.removeEventListener('pointercancel',up);
+            if(frameHandle){cancelAnimationFrame(frameHandle);frameHandle=null;}
+            apply();
+            matter.classList.remove('dragging');
+            // The transforms were only for the duration of the drag; the board
+            // keeps its coordinates in left and top.
+            origins.forEach(function(item){
+                var spot=positions[item.key];
+                if(!spot)return;
+                var x=Math.round(spot.x),y=Math.round(spot.y);
+                item.node.style.transform='';
                 item.node.style.left=x+'px';
                 item.node.style.top=y+'px';
                 item.node.dataset.x=String(x);
                 item.node.dataset.y=String(y);
             });
-            updateGraphEdges(stage);
-            frameHandle=null;
-        }
-
-        function move(moveEvent){
-            var dx=clampNumber(moveEvent.clientX-startX,minDx,maxDx);
-            var dy=clampNumber(moveEvent.clientY-startY,minDy,maxDy);
-            if(!moved&&Math.max(Math.abs(moveEvent.clientX-startX),Math.abs(moveEvent.clientY-startY))>GRAPH_DRAG_THRESHOLD)moved=true;
-            current.x=originX+dx;
-            current.y=originY+dy;
-            matter.style.left=current.x+'px';
-            matter.style.top=current.y+'px';
-            matter.dataset.x=String(current.x);
-            matter.dataset.y=String(current.y);
-            if(!frameHandle)frameHandle=requestAnimationFrame(frame);
-        }
-        function up(){
-            document.removeEventListener('pointermove',move);
-            document.removeEventListener('pointerup',up);
-            document.removeEventListener('pointercancel',up);
-            dragging=false;
-            matter.classList.remove('dragging');
-            if(frameHandle){cancelAnimationFrame(frameHandle);frameHandle=null;}
-            frame();
             if(moved){
                 var settled=separateGraphNodes(stage,matter);
                 if(settled){current.x=settled.x;current.y=settled.y;}
+            }else{
+                updateGraphEdges(stage);
+                return;
             }
-            if(!moved)return;
             // Members trail their matter, so once one has been placed by hand it
             // must stop being dragged around by the matter it belongs to.
             if(!matter.hasAttribute('data-graph-matter'))matter.dataset.graphPinned='1';
@@ -2765,6 +2844,7 @@
             global.setTimeout(function(){document.removeEventListener('click',swallowClick,true);},0);
             try{localStorage.setItem(graphMatterPositionKey(matter.dataset.graphKey),JSON.stringify(current));}catch(_error){}
         }
+
         document.addEventListener('pointermove',move);
         document.addEventListener('pointerup',up);
         document.addEventListener('pointercancel',up);
