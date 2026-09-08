@@ -89,9 +89,16 @@ html.db-page::-webkit-scrollbar, html.db-page body::-webkit-scrollbar { width:0;
    the custom properties it paints with do not resolve.
    ============================================================ */
 #db-root .db-tabbar {
-  position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:150;
-  width:min(720px, calc(100% - 24px));
-  display:grid; grid-template-columns:repeat(5,1fr); gap:4px; padding:8px;
+  /* Insetting both edges by 12px and letting the margin centre it gives the
+     bar the header's own gutter on a phone and a centred 720px pill on a
+     desktop. The canvas's width:min(720px, 100% - 24px) sits on a
+     content-box element, so its padding and border landed on top of the
+     calc and the bar hung 3px past both screen edges instead. */
+  position:fixed; left:12px; right:12px; bottom:14px; margin-inline:auto; z-index:150;
+  box-sizing:border-box; max-width:720px;
+  /* minmax(0,1fr) rather than 1fr: an auto minimum floors each track at the
+     widest label and the bar could not fit its own gutter on a phone. */
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; padding:8px;
   border:1px solid var(--line); border-radius:18px;
   background:var(--panel-solid); box-shadow:var(--shadow-hover);
 }
@@ -140,7 +147,9 @@ html.db-page::-webkit-scrollbar, html.db-page body::-webkit-scrollbar { width:0;
   #db-root [data-r="profile-info"] { display:none !important; }
   #db-root [data-r="row"] { grid-template-columns:auto minmax(0,1fr) !important; }
   #db-root [data-r="row-person"], #db-root [data-r="row-time"] { display:none !important; }
-  #db-root [data-r="tabbar"] { bottom:8px !important; width:calc(100% - 12px) !important; }
+  /* The canvas narrows the bar to a 6px gutter here; it keeps the header's
+     12px instead, so the two line up on a phone. */
+  #db-root [data-r="tabbar"] { bottom:8px !important; }
   #db-root [data-r="tab-label"] { font-size:10px !important; }
   #db-root [data-r="mgrid"] { grid-template-columns:1fr !important; }
 }
