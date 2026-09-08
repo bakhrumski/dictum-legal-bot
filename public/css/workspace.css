@@ -73,9 +73,8 @@
 
 [data-theme="dark"] .workspace-app {
     --ws-canvas: #060814;
-    /* Matches the dashboard canvas's dark panel exactly. */
-    --ws-panel: rgba(11, 13, 25, 0.88);
-    --ws-panel-solid: #0b0d19;
+    --ws-panel: rgba(13, 15, 29, 0.88);
+    --ws-panel-solid: #0d0f1d;
     --ws-panel-hover: #14182a;
     --ws-ink: #f7f8fb;
     --ws-ink-soft: #d7dbe5;
@@ -83,12 +82,7 @@
     --ws-muted-dim: #919aad;
     --ws-line: rgba(255, 255, 255, 0.09);
     --ws-line-strong: rgba(255, 255, 255, 0.15);
-    /* The canvas lifts the brand hue on dark so it clears the #060814 ground;
-       without this the light #2d6cff carried through and read as muddy. */
-    --ws-brand: #5b8cff;
-    --ws-brand-2: #78b5ff;
-    --ws-brand-soft: rgba(91, 140, 255, 0.12);
-    --ws-brand-border: rgba(91, 140, 255, 0.30);
+    --ws-brand-soft: rgba(77, 134, 255, 0.14);
     --ws-navy: #f7f8fb;
     --ws-gold: #d7b65d;
     --ws-success: #6fe7c9;
@@ -579,7 +573,7 @@
 .ws-empty h3 { margin: 0 0 7px; color: var(--ws-ink); font-size: 18px; }
 .ws-empty p { max-width: 520px; margin: 0 auto 18px; color: var(--ws-muted); line-height: 1.55; font-size: 13px; }
 
-.ws-gate { min-height: calc(100vh - 300px); min-height: calc(100dvh - 300px); display: grid; place-items: center; }
+.ws-gate { min-height: calc(100vh - 300px); display: grid; place-items: center; }
 .ws-gate-card { width: min(680px, 100%); padding: clamp(28px, 5vw, 54px); border-radius: 26px; text-align: center; }
 .ws-gate-mark { width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 18px; border-radius: 18px; color: var(--ws-gold); background: var(--ws-warning-soft); }
 .ws-gate-card h2 { margin: 0; color: var(--ws-ink); font-size: clamp(25px, 4vw, 38px); letter-spacing: -.04em; }
@@ -777,61 +771,167 @@
 .ws-graph-stage > svg { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .ws-graph-stage > svg path,
 .ws-graph-stage > svg line { fill: none; stroke: var(--ws-line-strong); stroke-width: 1.15; vector-effect: non-scaling-stroke; }
-.ws-graph-stage > svg path.ws-graph-link.matter { stroke: var(--ws-gold); stroke-width: 1.9; opacity: .85; stroke-linecap: round; stroke-dasharray: 7 6; }
+.ws-graph-stage > svg path.ws-graph-link.matter { stroke: var(--ws-brand); stroke-width: 1.4; opacity: .75; stroke-dasharray: 5 5; }
+.ws-graph-stage > svg path.ws-graph-link.matter.done { stroke: var(--ws-success); }
+.ws-graph-stage > svg path.ws-graph-link.matter.approaching { stroke: var(--ws-warning); }
+.ws-graph-stage > svg path.ws-graph-link.matter.overdue { stroke: var(--ws-danger); }
 /* Member -> task assignment is shown as an avatar chip on the task card
    (.ws-graph-owners) rather than a line spanning the stage. The paths are
    still emitted, so restoring them is a one-line change here. */
 .ws-graph-stage > svg path.ws-graph-link.task { display: none; }
+/* -- Matter card --------------------------------------------
+   The canvas draws a matter as a fixed 168x158 card: a colour bar for its
+   deadline state, the AI ask control, the title, the status-and-date line and
+   a footer of two pills. Nodes are positioned by their centre, so the card is
+   translated back over its own middle. */
 .ws-graph-matter {
     position: absolute;
-    z-index: 4;
-    width: 220px;
-    min-height: 112px;
-    display: grid;
-    place-content: center;
-    gap: 7px;
-    padding: 18px 20px;
+    z-index: 3;
+    box-sizing: border-box;
+    width: 168px;
+    height: 158px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 12px;
     transform: translate(-50%, -50%);
-    border: 1px solid color-mix(in srgb, var(--ws-gold) 58%, var(--ws-line));
-    border-radius: 24px;
+    border: 1px solid var(--ws-line);
+    border-radius: 14px;
     color: var(--ws-ink);
-    background: color-mix(in srgb, var(--ws-panel-solid) 91%, var(--ws-warning-soft));
-    box-shadow: 0 22px 60px -30px color-mix(in srgb, var(--ws-gold) 52%, transparent), var(--ws-shadow);
+    background: color-mix(in srgb, var(--ws-panel-solid) 96%, transparent);
+    box-shadow: var(--ws-shadow);
     font-family: inherit;
     text-align: center;
     cursor: grab;
     touch-action: none;
     user-select: none;
-    transition: transform .18s ease;
 }
-/* Focus keeps its ring — hover does not. Dropping the focus outline too would
-   leave keyboard users with no idea where they are on the stage. */
-.ws-graph-matter:focus-visible { outline: 3px solid color-mix(in srgb, var(--ws-gold) 30%, transparent); outline-offset: 4px; }
-/* Matches the lift on member and task nodes. Suppressed while dragging: the
-   pointer sits on the card for the whole drag, so it would otherwise stay
-   scaled up the entire time. */
-.ws-graph-matter:hover:not(.dragging),
-.ws-graph-matter:focus-visible:not(.dragging) { transform: translate(-50%, -50%) scale(1.045); }
-.ws-graph-matter.dragging { z-index: 8; cursor: grabbing; box-shadow: 0 28px 72px -28px color-mix(in srgb, var(--ws-gold) 68%, transparent), var(--ws-shadow); }
-/* Deadline state on the matter itself. Each matter is now a hub rather than one
-   promoted card, so its own status has to read without opening it. */
-.ws-graph-matter.approaching { border-color: color-mix(in srgb, var(--ws-warning) 62%, transparent); }
-.ws-graph-matter.overdue { border-color: color-mix(in srgb, var(--ws-danger) 60%, transparent); }
-.ws-graph-matter.done { opacity: .82; }
-.ws-graph-matter .ws-graph-badges { justify-content: center; margin-top: 2px; }
-.ws-graph-matter span { color: var(--ws-gold); font-size: 9px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
-.ws-graph-matter strong { overflow: hidden; text-overflow: ellipsis; color: var(--ws-ink); font-size: 16px; line-height: 1.25; }
-.ws-graph-matter small { color: var(--ws-muted); font-size: 10px; }
+/* Focus keeps its ring — hover does not. Dropping the focus outline would
+   leave keyboard users with no idea where they are on the stage. The canvas
+   has no hover lift on the card, so neither does this. */
+.ws-graph-matter:focus-visible { outline: 3px solid var(--ws-brand-border); outline-offset: 4px; }
+.ws-graph-matter.dragging {
+    z-index: 6;
+    cursor: grabbing;
+    box-shadow: 0 30px 74px -30px color-mix(in srgb, var(--ws-brand) 62%, transparent), var(--ws-shadow);
+}
+/* Deadline state colours the border and the bar, nothing else. */
+.ws-graph-matter .ws-graph-accent { width: 18px; height: 2px; border-radius: 2px; background: var(--ws-brand); }
+.ws-graph-matter.done { border-color: color-mix(in srgb, var(--ws-success) 34%, transparent); }
+.ws-graph-matter.done .ws-graph-accent { background: var(--ws-success); }
+.ws-graph-matter.approaching { border-color: color-mix(in srgb, var(--ws-warning) 34%, transparent); }
+.ws-graph-matter.approaching .ws-graph-accent { background: var(--ws-warning); }
+.ws-graph-matter.overdue { border-color: color-mix(in srgb, var(--ws-danger) 34%, transparent); }
+.ws-graph-matter.overdue .ws-graph-accent { background: var(--ws-danger); }
+.ws-graph-matter-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+/* How many AI answers this matter has kept. Absent when there are none. */
+.ws-graph-saved {
+    margin-left: auto;
+    margin-right: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--ws-brand-soft);
+    color: var(--ws-brand);
+    font-size: 10px;
+    font-weight: 600;
+}
+.ws-graph-ask {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--ws-line);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--ws-panel-hover) 60%, transparent);
+    color: var(--ws-brand);
+    cursor: pointer;
+}
+.ws-graph-ask:hover { background: var(--ws-brand-soft); border-color: var(--ws-brand-border); }
+.ws-graph-ask:focus-visible { outline: 2px solid var(--ws-brand-border); outline-offset: 2px; }
+.ws-graph-matter h4 {
+    margin: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    color: var(--ws-ink);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.ws-graph-due {
+    margin: 0;
+    overflow: hidden;
+    color: var(--ws-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ws-graph-matter-foot { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 7px; flex-wrap: nowrap; }
+.ws-graph-tag,
+.ws-graph-docs {
+    padding: 4px 9px;
+    border: 1px solid var(--ws-line);
+    border-radius: 999px;
+    color: var(--ws-muted);
+    font-size: 10.5px;
+}
+.ws-graph-tag { min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.ws-graph-docs { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; font-weight: 700; }
+
+/* -- Person node --------------------------------------------
+   An avatar with a name and a role beneath it — no card, no chrome. Cords land
+   on the rim of the avatar, which is why the node is 152x98 with the circle at
+   the top: graphNodeBox() and graphNodeCenter() both aim at it. */
 .ws-graph-member,
 .ws-graph-task { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-family: inherit; cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, opacity .18s ease; }
-/* Satellites trail the matter card by 50ms, driven per-frame from the drag's
-   position history in handleGraphMatterDrag(). Deliberately no left/top
-   transition here: a transition restarts on every pointermove, which stutters
-   and collapses the trail into rigid-body motion. */
-.ws-graph-member { width: 104px; display: grid; justify-items: center; gap: 5px; border: 0; color: var(--ws-ink); background: transparent; font-size: 10px; font-weight: 700; text-align: center; cursor: grab; touch-action: none; user-select: none; }
-.ws-graph-member.dragging { z-index: 8; cursor: grabbing; }
-.ws-graph-member .ws-avatar { width: 45px; height: 45px; margin: 0; border: 3px solid var(--ws-panel-solid); box-shadow: 0 0 0 1px var(--ws-line-strong), 0 10px 28px -16px rgba(31,77,160,.7); font-size: 13px; }
-.ws-graph-member small { max-width: 98px; color: var(--ws-danger); font-size: 8px; line-height: 1.25; }
+/* No left/top transition here: the people are moved per frame while a matter is
+   dragged, and a transition would restart on every move and stutter. */
+.ws-graph-member {
+    box-sizing: border-box;
+    width: 152px;
+    height: 98px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ws-ink);
+    text-align: center;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+.ws-graph-member.dragging { z-index: 6; cursor: grabbing; }
+.ws-graph-member .ws-avatar {
+    width: 46px;
+    height: 46px;
+    margin: 0;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--ws-brand) 74%, transparent);
+    box-shadow: var(--ws-shadow);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+}
+/* The person who owns the workspace carries the brand at full strength. */
+.ws-graph-member .ws-avatar.owner { background: var(--ws-brand); }
+.ws-graph-member-copy { min-width: 0; display: block; }
+.ws-graph-member-name { display: block; overflow: hidden; color: var(--ws-ink); font-size: 13px; font-weight: 600; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.ws-graph-member-role { display: block; margin-top: 2px; color: var(--ws-muted); font-size: 11px; font-weight: 400; }
+.ws-graph-member small { max-width: 140px; color: var(--ws-danger); font-size: 9px; line-height: 1.25; }
 .ws-graph-member.expired { opacity: .48; filter: grayscale(.8); }
 .ws-graph-task { width: 176px; min-height: 76px; display: grid; align-content: center; gap: 6px; padding: 11px 13px; border: 1px solid rgba(5,112,91,.44); border-radius: 15px; color: var(--ws-ink); background: color-mix(in srgb, var(--ws-panel-solid) 94%, var(--ws-success-soft)); box-shadow: 0 14px 34px -25px rgba(7,49,40,.8); text-align: left; }
 .ws-graph-task > strong { padding-right: 26px; }
@@ -849,14 +949,10 @@
    also overrode the status rings on .approaching and .overdue, so an overdue
    task lost its red ring at exactly the moment you pointed at it. */
 .ws-graph-task:hover,
-.ws-graph-task:focus-visible,
-.ws-graph-member:hover,
-.ws-graph-member:focus-visible { z-index: 5; transform: translate(-50%, -50%) scale(1.045); }
+.ws-graph-task:focus-visible { z-index: 5; transform: translate(-50%, -50%) scale(1.045); }
 .ws-graph-task:focus-visible,
 .ws-graph-member:focus-visible { outline: 2px solid var(--ws-brand-border); outline-offset: 3px; }
 .ws-graph-bench { position: absolute; z-index: 1; left: 0; right: 0; margin: 0; padding-top: 14px; border-top: 1px dashed var(--ws-line); color: var(--ws-muted); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-align: center; text-transform: uppercase; pointer-events: none; }
-.ws-graph-badges { display: flex; flex-wrap: wrap; gap: 5px; }
-.ws-graph-badges b { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 1px solid var(--ws-line); border-radius: 999px; color: var(--ws-ink-soft); background: var(--ws-panel-hover); font-size: 8px; font-weight: 650; }
 
 .ws-timeline { overflow: auto; }
 .ws-timeline-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--ws-line); }
@@ -1030,7 +1126,9 @@
     .ws-graph-toolbar { align-items: flex-start; flex-direction: column; }
     .ws-graph-legend { justify-content: flex-start; }
     .ws-graph-stage { min-width: 760px; }
-    .ws-graph-matter { width: 184px; min-height: 100px; padding: 15px 16px; border-radius: 20px; }
+    /* The card keeps its 168x158 at every width: the layout, the collision
+       pass and the cord anchors are all measured in that box, and a card that
+       grew on a phone would disagree with all three. */
     .ws-chat-form .ws-btn { justify-content: center; }
     .ws-invite-link { grid-template-columns: 1fr; }
     .ws-pending-invite { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
