@@ -317,6 +317,7 @@ function transactionalPool(handler) {
       '20260825_005_workspace_master_owner.sql',
       '20260825_006_workspace_open_invitations.sql',
       '20260825_007_workspace_invitation_membership_guard.sql',
+      '20260908_008_workspace_direct_messages.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
@@ -355,6 +356,61 @@ function transactionalPool(handler) {
     const invitationGuard = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260825_007_workspace_invitation_membership_guard.sql'), 'utf8');
     assert.ok(invitationGuard.includes('Account is already a workspace member'));
     assert.ok(invitationGuard.includes('wm.workspace_id = NEW.workspace_id'));
+  });
+
+  await test('direct messages are readable only by the two people on the row', () => {
+    const dm = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260908_008_workspace_direct_messages.sql'), 'utf8');
+    assert.ok(dm.includes('CREATE TABLE IF NOT EXISTS public.workspace_direct_messages'));
+    assert.ok(dm.includes('ALTER TABLE public.workspace_direct_messages ENABLE ROW LEVEL SECURITY;'));
+    // Both parties read; nobody else on the team does, however senior.
+    assert.ok(dm.includes('juristai_private.current_app_user_id() IN (sender_id, recipient_id)'));
+    assert.ok(dm.includes('ON public.workspace_direct_messages FOR SELECT TO authenticated'));
+    // You write as yourself, to a member of this workspace, and never to
+    // yourself, and only while the workspace is open for writing.
+    assert.ok(dm.includes('sender_id = juristai_private.current_app_user_id()'));
+    assert.ok(dm.includes('juristai_private.is_workspace_member_of(workspace_id, recipient_id)'));
+    assert.ok(dm.includes('juristai_private.can_write_workspace(workspace_id)'));
+    assert.ok(dm.includes('CHECK (sender_id <> recipient_id)'));
+    // A read receipt is an UPDATE, so Realtime needs the whole old row to test
+    // the SELECT policy against.
+    assert.ok(dm.includes('REPLICA IDENTITY FULL'));
+    assert.ok(dm.includes("tablename = 'workspace_direct_messages'"));
+    assert.ok(dm.includes('ALTER PUBLICATION supabase_realtime ADD TABLE public.workspace_direct_messages;'));
+    assert.ok(dm.includes('GRANT SELECT, INSERT, UPDATE ON public.workspace_direct_messages TO authenticated;'));
+    // The membership helper must not be readable by the anonymous role.
+    assert.ok(dm.includes('REVOKE ALL ON FUNCTION juristai_private.is_workspace_member_of(uuid, integer) FROM PUBLIC;'));
+  });
+
+  await test('direct-message routes are scoped to the workspace and to the sender', () => {
+    const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'workspace', 'routes.js'), 'utf8');
+    for (const endpoint of [
+      "router.get('/workspaces/:workspaceId/direct-threads'",
+      "router.get('/workspaces/:workspaceId/direct-messages/:memberId'",
+      "router.post('/workspaces/:workspaceId/direct-messages/:memberId'",
+      "router.patch('/workspaces/:workspaceId/direct-messages/:memberId/read'",
+    ]) assert.ok(routes.includes(endpoint), `missing route ${endpoint}`);
+    // Sending needs the same role the room chat needs; reading does not.
+    assert.ok(routes.includes('await requireCounterpart(db, workspaceId, userId, memberId);'));
+    // The sender is the session, never a field the caller supplies.
+    assert.ok(routes.includes('[workspaceId, userId, memberId, body]'));
+    assert.ok(!routes.includes('req.body.senderId'));
+    // Only the recipient's own rows are marked read.
+    assert.ok(routes.includes('WHERE workspace_id=$1 AND recipient_id=$2 AND sender_id=$3'));
+    assert.ok(routes.includes('O‘zingizga shaxsiy xabar yozib bo‘lmaydi'));
+  });
+
+  await test('the private pane reads the API rather than fixtures', () => {
+    const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'ai-dashboard.js'), 'utf8');
+    const data = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'ai-dashboard-data.js'), 'utf8');
+    assert.ok(!/privMsgs\s*:/.test(data), 'the demo private thread must be gone');
+    assert.ok(!/groupMsgs\s*:/.test(data), 'the demo group thread must be gone');
+    assert.ok(client.includes("'/direct-threads'"));
+    assert.ok(client.includes("'/direct-messages/'"));
+    assert.ok(client.includes("table: 'workspace_direct_messages'"));
+    // Opening the section is what reads a thread, not loading the page.
+    assert.ok(client.includes("if (state.tab !== 'chat') return Promise.resolve();"));
+    // A Viewer may read both threads and write to neither.
+    assert.ok(client.includes("live.workspace.role !== 'viewer'"));
   });
 
   await test('Phase 1 routes and fatal migration guard are mounted without legacy FK rewrites', () => {

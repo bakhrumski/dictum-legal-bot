@@ -126,19 +126,10 @@ window.DB_DATA = {
     { id: 'private', label: 'Shaxsiy' }
   ],
 
-  groupMsgs: [
-    { who: 'Nilufar R.', init: 'NR', time: '09:12', txt: "Ish haqi kechikishi bo'yicha yangi murojaat keldi — MK 333-modda asosida javob tayyorlayapman." },
-    { who: 'Sardor N.', init: 'SN', time: '09:18', txt: "Kompensatsiya hisobini ilova qil, foydalanuvchi aniq summani so'ragan." },
-    { who: 'Siz', init: 'SZ', time: '09:24', me: true, txt: "Korpusda 2026 yil tahriri bor, havolani qo'shdim." },
-    { who: 'Nilufar R.', init: 'NR', time: '09:26', txt: 'Rahmat. Tekshiruvga yuboraman.' }
-  ],
+  // groupMsgs is gone: the group thread reads GET /api/workspaces/:id/messages.
+  // privMsgs is gone too: the private thread reads
+  // GET /api/workspaces/:id/direct-messages/:memberId.
 
-  privMsgs: [
-    { time: '10:02', txt: "Notarial shartnoma bo'yicha murojaatni senga tayinladim." },
-    { time: '10:05', me: true, txt: "Ko'rdim, bugun tushdan keyin javob beraman." },
-    { time: '10:06', txt: 'SLA 4 soat — ulgurasanmi?' },
-    { time: '10:07', me: true, txt: "Ha, korpusdan modda topildi. Loyihani tayyorlab qo'ydim." }
-  ],
   /* -- AI ------------------------------------------------------
      TODO: connect to API. A personal thread is the member's own; a team
      thread is billed to the workspace and visible to everyone in it. */
