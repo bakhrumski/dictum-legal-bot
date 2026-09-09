@@ -598,22 +598,17 @@
     MATTERS.forEach(function (m) {
       var a = ws.pos[m.id], b = ws.pos[m.owner];
       if (!a || !b) return;
-      var R = 25;
-      var cx = b.x + SZ.NODE_W / 2, cy = b.y + 23;
-      var ax = a.x + SZ.CARD_W / 2, ay = a.y + SZ.CARD_H / 2;
-      var vx = cx - ax, vy = cy - ay;
-      var len = Math.hypot(vx, vy) || 1;
-      vx /= len; vy /= len;
-      var sx = Math.abs(vx) > 1e-6 ? (SZ.CARD_W / 2) / Math.abs(vx) : Infinity;
-      var sy = Math.abs(vy) > 1e-6 ? (SZ.CARD_H / 2) / Math.abs(vy) : Infinity;
-      var t = Math.min(sx, sy);
-      var x1 = ax + vx * t, y1 = ay + vy * t;
-      var x2 = cx - vx * R, y2 = cy - vy * R;
-      var k = Math.max(18, Math.hypot(x2 - x1, y2 - y1) * 0.3);
-      var d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1) +
-        ' C' + (x1 + vx * k).toFixed(1) + ',' + (y1 + vy * k).toFixed(1) +
-        ' ' + (x2 - vx * k).toFixed(1) + ',' + (y2 - vy * k).toFixed(1) +
-        ' ' + x2.toFixed(1) + ',' + y2.toFixed(1);
+      // Card bottom centre to node top centre, both control points sharing the
+      // vertical midpoint: a symmetric S that leaves the card straight down and
+      // arrives at the avatar straight up, whichever way the two have been
+      // dragged relative to one another.
+      var x1 = a.x + SZ.CARD_W / 2, y1 = a.y + SZ.CARD_H;
+      var x2 = b.x + SZ.NODE_W / 2, y2 = b.y;
+      var mid = (y1 + y2) / 2;
+      var d = 'M' + x1 + ',' + y1 +
+        ' C' + x1 + ',' + mid +
+        ' ' + x2 + ',' + mid +
+        ' ' + x2 + ',' + y2;
       var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       p.setAttribute('d', d);
       p.setAttribute('fill', 'none');
