@@ -989,54 +989,19 @@
     var GRAPH_CARD_W=168,GRAPH_CARD_H=158,GRAPH_NODE_W=152,GRAPH_NODE_H=98;
     var GRAPH_SEPARATION_GAP=12;
 
-    function graphNodeBox(point, kind) {
-        var sizes={
-            matter:{halfWidth:GRAPH_CARD_W/2,halfHeight:GRAPH_CARD_H/2},
-            // A cord to a person ends on the rim of their avatar, not on the
-            // corner of the box that also holds their name and role. The avatar
-            // is 46px across and sits 26px above the middle of the node.
-            member:{halfWidth:23,halfHeight:23,lift:26},
-            task:{halfWidth:88,halfHeight:38}
-        };
-        var size=sizes[kind]||sizes.task;
-        return {
-            x:Number(point.x)||0,
-            y:(Number(point.y)||0)-(size.lift||0),
-            halfWidth:size.halfWidth,
-            halfHeight:size.halfHeight
-        };
-    }
-
-    function graphEdgeAnchor(from, to) {
-        var dx=to.x-from.x,dy=to.y-from.y;
-        var absX=Math.abs(dx),absY=Math.abs(dy);
-        if(absX<.01&&absY<.01)return{x:from.x,y:from.y};
-        var xScale=absX<.01?Infinity:Math.max(1,from.halfWidth||0)/absX;
-        var yScale=absY<.01?Infinity:Math.max(1,from.halfHeight||0)/absY;
-        var scale=Math.min(xScale,yScale);
-        return{x:from.x+(dx*scale),y:from.y+(dy*scale)};
-    }
-
-    function graphConnector(from, to) {
-        var start=graphEdgeAnchor(from,to);
-        var end=graphEdgeAnchor(to,from);
-        var dx=end.x-start.x,dy=end.y-start.y;
-        var distance=Math.hypot(dx,dy);
-        var point=function(value){return Math.round(value*10)/10;};
-        var prefix='M '+point(start.x)+' '+point(start.y);
-
-        // A curve between nearby cards is mostly hidden underneath the nodes and
-        // leaves hook-shaped fragments visible.  A short edge-to-edge line keeps
-        // the relationship legible as nodes approach one another.
-        if(distance<=150)return prefix+' L '+point(end.x)+' '+point(end.y);
-
-        var bend=Math.min(150,Math.max(42,distance*.34));
-        if(Math.abs(dy)>Math.abs(dx)){
-            var verticalDirection=dy>=0?1:-1;
-            return prefix+' C '+point(start.x)+' '+point(start.y+(bend*verticalDirection))+', '+point(end.x)+' '+point(end.y-(bend*verticalDirection))+', '+point(end.x)+' '+point(end.y);
-        }
-        var horizontalDirection=dx>=0?1:-1;
-        return prefix+' C '+point(start.x+(bend*horizontalDirection))+' '+point(start.y)+', '+point(end.x-(bend*horizontalDirection))+' '+point(end.y)+', '+point(end.x)+' '+point(end.y);
+    /**
+     * Card bottom centre to avatar top centre, both control points sharing the
+     * vertical midpoint: a symmetric S that leaves the card straight down and
+     * arrives at the avatar straight up, whichever way the pair has been
+     * dragged. Aiming at the nearest edge instead, as this used to, swings the
+     * cord around the card as it moves and reads as a different curve on every
+     * frame.
+     */
+    function matterCordPath(card, member) {
+        var x1=Math.round(card.x),y1=Math.round(card.y+GRAPH_CARD_H/2);
+        var x2=Math.round(member.x),y2=Math.round(member.y-GRAPH_NODE_H/2);
+        var mid=Math.round((y1+y2)/2);
+        return 'M'+x1+','+y1+' C'+x1+','+mid+' '+x2+','+mid+' '+x2+','+y2;
     }
 
     // The canvas labels a matter by its deadline, not by its status: planned,
@@ -1061,11 +1026,6 @@
 
     function matterTag(task) {
         return task.is_milestone ? t('milestone') : t(task.priority);
-    }
-
-    function graphMatterSummary(task) {
-        if (!task) return '';
-        return t(task.status) + ' · ' + (task.due_date ? isoDate(task.due_date) : t('unscheduled'));
     }
 
     function getGraphMatterPosition(width, height, graphKey, defaultPosition) {
@@ -1105,10 +1065,6 @@
         // nearest card. Columns keep the stage close to the size of the work,
         // and put each matter directly above its own people, which also makes
         // the cords short and vertical instead of long diagonals.
-        var COLUMN=GRAPH_CARD_W+52,MATTER_HALF=GRAPH_CARD_H/2,
-            PERSON_ROW=GRAPH_NODE_H+52,PERSON_STEP=GRAPH_NODE_W+16,ROW_GAP=60;
-        var perRow=Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/COLUMN));
-        perRow=Math.min(perRow,Math.max(1,matters.length));
 
         // Every stored link between a person and a matter earns a cord, not just
         // assignment: the workspace owner who opened a matter and put nobody on
@@ -1130,82 +1086,115 @@
             return list;
         }
 
-        var memberMatters={};
+        // Each matter belongs to one person on the board — whoever is on it,
+        // else whoever watches it, else whoever opened it — and that is the one
+        // cord it draws. Drawing a cord to every related member turned the
+        // canvas into a mesh nobody could read.
+        var ownerOf={};
         matters.forEach(function(task){
-            relatedMemberIds(task).forEach(function(key){
-                (memberMatters[key]=memberMatters[key]||[]).push(String(task.id));
+            var related=relatedMemberIds(task);
+            ownerOf[String(task.id)]=related.length?related[0]:null;
+        });
+
+        // The spec's band: every matter of one person side by side, that
+        // person's avatar centred underneath, the whole run centred on the
+        // canvas. Gutters tighten twice before the band is allowed to wrap,
+        // because wrapping breaks the "cards above, people below" reading that
+        // is the point of the view.
+        var width=Math.max(980,viewportWidth);
+        var edge=10,gap=14,groupGap=46;
+        var cardTop=14,nodeTop=cardTop+GRAPH_CARD_H+26;      // 14 + 158 + 26 = 198
+        var groups=state.members.map(function(member){
+            var key=String(member.id);
+            return {member:member,ms:matters.filter(function(task){return ownerOf[String(task.id)]===key;})};
+        }).filter(function(group){return group.ms.length;});
+        var placed=matters.length;
+        var fits=function(cardGap,bandGap){
+            return placed*GRAPH_CARD_W+(placed-groups.length)*cardGap
+                +(groups.length-1)*bandGap+edge*2<=width;
+        };
+        if(!fits(gap,groupGap)){gap=10;groupGap=30;}
+        if(!fits(gap,groupGap)){gap=6;groupGap=18;}
+
+        var matterPositions={},memberPositions={},bottom=0;
+        if(groups.length&&fits(gap,groupGap)){
+            var total=placed*GRAPH_CARD_W+(placed-groups.length)*gap+(groups.length-1)*groupGap;
+            var cursorX=Math.round((width-total)/2);
+            groups.forEach(function(group){
+                var start=cursorX;
+                group.ms.forEach(function(task,index){
+                    matterPositions[String(task.id)]={
+                        x:Math.round(cursorX+GRAPH_CARD_W/2),
+                        y:Math.round(cardTop+GRAPH_CARD_H/2)
+                    };
+                    cursorX+=GRAPH_CARD_W+(index<group.ms.length-1?gap:0);
+                });
+                memberPositions[String(group.member.id)]={
+                    x:Math.round(start+(cursorX-start)/2),
+                    y:Math.round(nodeTop+GRAPH_NODE_H/2)
+                };
+                cursorX+=groupGap;
             });
-        });
-        // A person shared across matters is drawn once, under the first of them,
-        // with a cord running to each — never duplicated.
-        var homeMatter={};
-        state.members.forEach(function(member){
-            var owned=(memberMatters[String(member.id)]||[]);
-            if(owned.length)homeMatter[String(member.id)]=owned[0];
-        });
-        var rosterFor={};
-        state.members.forEach(function(member){
-            var host=homeMatter[String(member.id)];
-            if(host)(rosterFor[host]=rosterFor[host]||[]).push(member);
-        });
-
-        var rowCount=Math.ceil(matters.length/perRow)||1;
-        var rowHasPeople=[];
-        matters.forEach(function(task,index){
-            if((rosterFor[String(task.id)]||[]).length)rowHasPeople[Math.floor(index/perRow)]=true;
-        });
-
-        var rowTop=[],cursor=52;
-        for(var r=0;r<rowCount;r+=1){
-            rowTop[r]=cursor;
-            cursor+=MATTER_HALF*2+(rowHasPeople[r]?PERSON_ROW:0)+ROW_GAP;
+            bottom=nodeTop+GRAPH_NODE_H+16;
+        }else{
+            // Only on a genuinely narrow canvas: wrap the groups into rows.
+            var per=Math.max(1,Math.floor((width-edge*2+gap)/(GRAPH_CARD_W+gap)));
+            var rowH=GRAPH_CARD_H+26+GRAPH_NODE_H+22;        // 304
+            var row=0,col=0;
+            groups.forEach(function(group){
+                if(col&&col+group.ms.length>per){row+=1;col=0;}
+                var startCol=col;
+                group.ms.forEach(function(task){
+                    matterPositions[String(task.id)]={
+                        x:Math.round(edge+col*(GRAPH_CARD_W+gap)+GRAPH_CARD_W/2),
+                        y:Math.round(cardTop+row*rowH+GRAPH_CARD_H/2)
+                    };
+                    col+=1;
+                });
+                var cols=col-startCol;
+                var segW=cols*GRAPH_CARD_W+(cols-1)*gap;
+                memberPositions[String(group.member.id)]={
+                    x:Math.round(edge+startCol*(GRAPH_CARD_W+gap)+segW/2),
+                    y:Math.round(cardTop+row*rowH+GRAPH_CARD_H+26+GRAPH_NODE_H/2)
+                };
+                if(col>=per){row+=1;col=0;}
+            });
+            bottom=cardTop+(row+(col?1:0))*rowH;
         }
 
-        var matterPositions={};
-        matters.forEach(function(task,index){
-            var column=index%perRow,row=Math.floor(index/perRow);
-            var columnsInRow=Math.min(perRow,matters.length-row*perRow);
-            var rowWidth=columnsInRow*COLUMN;
-            var seat={
-                x:Math.round(48+(Math.max(viewportWidth,980)-96-rowWidth)/2+column*COLUMN+COLUMN/2),
-                y:Math.round(rowTop[row]+MATTER_HALF)
-            };
-            matterPositions[String(task.id)]=seat;
-        });
-
-        // People sit under their matter. Anyone not on a matter yet keeps a row
-        // of their own directly below the board, close enough to read as part of
-        // the same picture rather than exiled to the far edge of the canvas.
-        var memberPositions={},unassigned=[];
-        state.members.forEach(function(member){
-            if(!homeMatter[String(member.id)])unassigned.push(member);
-        });
-        matters.forEach(function(task){
-            var roster=rosterFor[String(task.id)]||[];
-            if(!roster.length)return;
-            var anchor=matterPositions[String(task.id)];
-            roster.forEach(function(member,index){
-                var offset=(index-(roster.length-1)/2)*PERSON_STEP;
-                memberPositions[String(member.id)]={
-                    x:Math.round(anchor.x+offset),
-                    y:Math.round(anchor.y+MATTER_HALF+72)
+        // A matter nobody is on yet still needs a seat, and so does a member
+        // carrying nothing: the canvas shows the whole team, which is the one
+        // place the spec's fixture list does not have to cope with.
+        var orphans=matters.filter(function(task){return !matterPositions[String(task.id)];});
+        if(orphans.length){
+            var perOrphan=Math.max(1,Math.floor((width-edge*2+gap)/(GRAPH_CARD_W+gap)));
+            orphans.forEach(function(task,index){
+                var column=index%perOrphan,orphanRow=Math.floor(index/perOrphan);
+                matterPositions[String(task.id)]={
+                    x:Math.round(edge+column*(GRAPH_CARD_W+gap)+GRAPH_CARD_W/2),
+                    y:Math.round(bottom+22+orphanRow*(GRAPH_CARD_H+22)+GRAPH_CARD_H/2)
                 };
             });
-        });
-        var benchTop=cursor-ROW_GAP+72;
-        unassigned.forEach(function(member,index){
-            var perBench=Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/PERSON_STEP));
-            var column=index%perBench,row=Math.floor(index/perBench);
-            var rowWidth=Math.min(perBench,unassigned.length-row*perBench)*PERSON_STEP;
-            memberPositions[String(member.id)]={
-                x:Math.round(48+(Math.max(viewportWidth,980)-96-rowWidth)/2+column*PERSON_STEP+PERSON_STEP/2),
-                y:Math.round(benchTop+row*(GRAPH_NODE_H+20))
-            };
-        });
-        if(unassigned.length)cursor=benchTop+Math.ceil(unassigned.length/Math.max(1,Math.floor((Math.max(viewportWidth,980)-96)/PERSON_STEP)))*(GRAPH_NODE_H+20);
+            bottom+=22+Math.ceil(orphans.length/perOrphan)*(GRAPH_CARD_H+22);
+        }
 
-        var width=Math.max(980,viewportWidth);
-        var height=Math.max(520,cursor+72);
+        var unassigned=state.members.filter(function(member){return !memberPositions[String(member.id)];});
+        var benchTop=bottom+22;
+        if(unassigned.length){
+            var step=GRAPH_NODE_W+16;
+            var perBench=Math.max(1,Math.floor((width-edge*2)/step));
+            unassigned.forEach(function(member,index){
+                var column=index%perBench,benchRow=Math.floor(index/perBench);
+                var rowWidth=Math.min(perBench,unassigned.length-benchRow*perBench)*step;
+                memberPositions[String(member.id)]={
+                    x:Math.round((width-rowWidth)/2+column*step+step/2),
+                    y:Math.round(benchTop+benchRow*(GRAPH_NODE_H+20)+GRAPH_NODE_H/2)
+                };
+            });
+            bottom=benchTop+Math.ceil(unassigned.length/perBench)*(GRAPH_NODE_H+20);
+        }
+
+        var height=Math.max(520,Math.round(bottom+16));
 
         // The roster is placed relative to its matter's centre, which puts the
         // outermost person half off the canvas under the leftmost column.
@@ -1225,56 +1214,44 @@
             };
         });
 
-        // A matter the user dragged keeps where they put it. Applied after the
-        // canvas is sized, since the saved value is clamped against it.
-        var pinnedMembers={};
+        // Anything the reader dropped by hand keeps where they put it. Applied
+        // after the canvas is sized, since the saved value is clamped against
+        // it. A matter placed by hand also stops being carried by its owner.
+        var pinnedMatters={};
         matters.forEach(function(task){
-            var key=String(task.id);
-            var seat=matterPositions[key];
+            var key=String(task.id),seat=matterPositions[key];
+            if(!seat)return;
             var placed=getGraphMatterPosition(width,height,'task:'+key,seat);
             if(placed.x===seat.x&&placed.y===seat.y)return;
-            var shiftX=placed.x-seat.x,shiftY=placed.y-seat.y;
             matterPositions[key]=placed;
-            // Move that matter's people with it, or the cords stretch across the
-            // board to a roster still sitting under the empty column.
-            (rosterFor[key]||[]).forEach(function(member){
-                var spot=memberPositions[String(member.id)];
-                if(!spot)return;
-                memberPositions[String(member.id)]={x:spot.x+shiftX,y:spot.y+shiftY};
-            });
+            pinnedMatters[key]=true;
         });
-        // A person dropped somewhere by hand stays there, and stops being
-        // carried by the matter above them.
         state.members.forEach(function(member){
             var key=String(member.id),spot=memberPositions[key];
             if(!spot)return;
-            var placed=getGraphMatterPosition(width,height,'member:'+key,spot);
-            if(placed.x===spot.x&&placed.y===spot.y)return;
-            memberPositions[key]=placed;
-            pinnedMembers[key]=true;
+            memberPositions[key]=getGraphMatterPosition(width,height,'member:'+key,spot);
         });
 
         var edges=[];
         matters.forEach(function(task){
             var from=matterPositions[String(task.id)];
-            relatedMemberIds(task).forEach(function(memberId){
-                var to=memberPositions[memberId];
-                if(!to)return;
-                edges.push('<path class="ws-graph-link matter '+graphTone(task)+'" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(memberId)+'" d="'+graphConnector(graphNodeBox(from,'matter'),graphNodeBox(to,'member'))+'"/>');
-            });
+            var to=ownerOf[String(task.id)]&&memberPositions[ownerOf[String(task.id)]];
+            if(!from||!to)return;
+            edges.push('<path class="ws-graph-link matter '+graphTone(task)+'" fill="none" stroke-width="1.4" stroke-dasharray="5 5" opacity="0.75" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(ownerOf[String(task.id)])+'" d="'+matterCordPath(from,to)+'"/>');
         });
 
         var matterNodes=matters.map(function(task){
             var p=matterPositions[String(task.id)],tone=graphTone(task);
-            var memoryCount=Number(task.memory_count||0);
-            return '<article class="ws-graph-matter '+tone+'" data-graph-node data-graph-matter data-graph-key="task:'+esc(task.id)+'" data-action="open-task" data-task-id="'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" role="button" tabindex="0" aria-label="'+esc(t('matter'))+': '+esc(task.title)+'">'+
+            var memoryCount=Number(task.memory_count||0),due=dueLine(task);
+            var host=ownerOf[String(task.id)];
+            return '<article class="ws-graph-matter '+tone+'" data-graph-node data-graph-matter data-graph-key="task:'+esc(task.id)+'"'+(host?' data-graph-home="member:'+esc(host)+'"':'')+(pinnedMatters[String(task.id)]?' data-graph-pinned="1"':'')+' data-action="open-task" data-task-id="'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" role="button" tabindex="0" aria-label="'+esc(t('matter'))+': '+esc(task.title)+'">'+
                 '<div class="ws-graph-matter-top">'+
                     '<span class="ws-graph-accent" aria-hidden="true"></span>'+
                     (memoryCount?'<span class="ws-graph-saved" title="'+esc(t('sharedMemory'))+'">'+svg('ai',9)+memoryCount+'</span>':'')+
                     '<button type="button" class="ws-graph-ask" data-action="open-ai" data-task-id="'+esc(task.id)+'" title="'+esc(t('askAi'))+'" aria-label="'+esc(t('askAi'))+'">'+svg('ai',12)+'</button>'+
                 '</div>'+
                 '<h4>'+esc(task.title)+'</h4>'+
-                '<p class="ws-graph-due">'+esc(graphMatterSummary(task))+'</p>'+
+                '<p class="ws-graph-due '+due.tone+'">'+esc(due.text)+'</p>'+
                 '<div class="ws-graph-matter-foot">'+
                     '<span class="ws-graph-tag">'+esc(task.is_milestone?t('milestone'):t(task.priority))+'</span>'+
                     '<span class="ws-graph-docs">'+svg('document',11)+Number(task.document_count||0)+'</span>'+
@@ -1284,8 +1261,7 @@
 
         var memberNodes=state.members.map(function(member){
             var p=memberPositions[String(member.id)],expired=member.subscription_active===false;
-            var home=homeMatter[String(member.id)];
-            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'"'+(home?' data-graph-home="task:'+esc(home)+'"':'')+(pinnedMembers[String(member.id)]?' data-graph-pinned="1"':'')+' data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'">'+
+            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'">'+
                 '<span class="ws-avatar'+(member.role==='owner'?' owner':'')+'">'+esc(initials(member))+'</span>'+
                 '<span class="ws-graph-member-copy"><span class="ws-graph-member-name">'+esc(personName(member))+'</span><span class="ws-graph-member-role">'+esc(t(member.role))+'</span></span>'+
                 (expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+
@@ -1299,7 +1275,7 @@
             ? '<p class="ws-graph-bench" style="top:'+(benchTop-64)+'px">'+esc(t('benchTitle'))+'</p>'
             : '';
 
-        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
+        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" data-layout-viewport="'+Math.round(viewportWidth)+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
     }
 
     function renderTaskRow(task) {
@@ -2494,8 +2470,32 @@
         }
     }
 
+    var graphRemeasure=null;
+
+    /**
+     * True once the graph has been laid out against the width it is actually
+     * being shown at. A graph drawn while its tab was hidden was measured
+     * against nothing, so its columns are centred on a guess; this notices and
+     * draws it again, once, when the real width arrives.
+     */
+    function graphMeasured() {
+        var stage=root&&root.querySelector('.ws-graph-stage');
+        if(!stage)return true;
+        var measured=Math.round(root.getBoundingClientRect().width);
+        if(measured<200){
+            if(!graphRemeasure){
+                graphRemeasure=requestAnimationFrame(function(){graphRemeasure=null;centerGraphViewport();});
+            }
+            return false;
+        }
+        if(Math.abs(measured-Number(stage.dataset.layoutViewport||0))<=1)return true;
+        render();
+        return false;
+    }
+
     function centerGraphViewport() {
         if(!root)return;
+        if(!graphMeasured())return;
         // The layout places each roster under its own matter, which can leave
         // two people from neighbouring columns sitting on the same spot.
         separateGraphNodes(root.querySelector('.ws-graph-stage'));
@@ -2533,29 +2533,18 @@
         scroll.scrollTop=Math.max(0,Math.min(maxTop,nextTop));
     }
 
-    function graphNodeCenter(stage,node) {
-        var stageRect=stage.getBoundingClientRect();
-        // A person's cord ends on the rim of their avatar; measuring the whole
-        // node would aim it at the corner of the name and role beneath it.
-        var anchor=node.querySelector('.ws-avatar')||node;
-        var nodeRect=anchor.getBoundingClientRect();
-        return {
-            x:nodeRect.left-stageRect.left+(nodeRect.width/2),
-            y:nodeRect.top-stageRect.top+(nodeRect.height/2),
-            halfWidth:nodeRect.width/2,
-            halfHeight:nodeRect.height/2
-        };
-    }
-
     function updateGraphEdges(stage) {
         if(!stage)return;
         var positions={};
         stage.querySelectorAll('[data-graph-key]').forEach(function(node){
-            positions[node.dataset.graphKey]=graphNodeCenter(stage,node);
+            positions[node.dataset.graphKey]={
+                x:Number(node.dataset.x||node.offsetLeft),
+                y:Number(node.dataset.y||node.offsetTop)
+            };
         });
         stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
             var from=positions[path.dataset.fromKey],to=positions[path.dataset.toKey];
-            if(from&&to)path.setAttribute('d',graphConnector(from,to));
+            if(from&&to)path.setAttribute('d',matterCordPath(from,to));
         });
     }
 
@@ -2572,7 +2561,12 @@
      */
     function separateGraphNodes(stage, fixed, options) {
         if(!stage)return null;
-        var width=stage.offsetWidth,height=stage.offsetHeight,padding=18;
+        // The canvas edge is the wall: the spec insets the first layout by 10px
+        // and then lets a drag reach the edge itself.
+        var width=stage.offsetWidth,height=stage.offsetHeight,padding=0;
+        // A hidden tab gives the stage no width, and clamping every node into a
+        // zero-width board stacks the whole thing against the left edge.
+        if(width<200||height<100)return null;
         var boxes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]')).map(function(node){
             return {
                 node:node,
@@ -2737,43 +2731,30 @@
     }
 
     /**
-     * Measured once, while the board is still: where each node's cord anchor
-     * sits relative to the node's own centre, and how big that anchor is. With
-     * this in hand the cords can be redrawn from remembered coordinates during
-     * a drag instead of asking the browser to measure every node again.
+     * The nodes a drag will have to redraw cords for, collected once so that
+     * every frame after this one works from remembered coordinates rather than
+     * measuring the board out of the document again.
      */
     function graphAnchorSnapshot(stage) {
         var snapshot={};
         Array.prototype.slice.call(stage.querySelectorAll('[data-graph-key]')).forEach(function(node){
-            var anchor=node.querySelector('.ws-avatar')||node;
-            var nodeRect=node.getBoundingClientRect();
-            var anchorRect=anchor.getBoundingClientRect();
-            snapshot[node.dataset.graphKey]={
-                node:node,
-                offsetX:(anchorRect.left+anchorRect.width/2)-(nodeRect.left+nodeRect.width/2),
-                offsetY:(anchorRect.top+anchorRect.height/2)-(nodeRect.top+nodeRect.height/2),
-                halfWidth:anchorRect.width/2,
-                halfHeight:anchorRect.height/2
-            };
+            snapshot[node.dataset.graphKey]={node:node};
         });
         return snapshot;
     }
 
     function paintGraphEdges(stage, snapshot, positions) {
-        var centres={};
+        var spots={};
         Object.keys(snapshot).forEach(function(key){
             var box=snapshot[key];
-            var spot=positions[key]||{x:Number(box.node.dataset.x||0),y:Number(box.node.dataset.y||0)};
-            centres[key]={
-                x:spot.x+box.offsetX,
-                y:spot.y+box.offsetY,
-                halfWidth:box.halfWidth,
-                halfHeight:box.halfHeight
+            spots[key]=positions[key]||{
+                x:Number(box.node.dataset.x||0),
+                y:Number(box.node.dataset.y||0)
             };
         });
         stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
-            var from=centres[path.dataset.fromKey],to=centres[path.dataset.toKey];
-            if(from&&to)path.setAttribute('d',graphConnector(from,to));
+            var from=spots[path.dataset.fromKey],to=spots[path.dataset.toKey];
+            if(from&&to)path.setAttribute('d',matterCordPath(from,to));
         });
     }
 
@@ -2796,7 +2777,7 @@
         event.stopPropagation();
 
         var startX=event.clientX,startY=event.clientY;
-        var padding=18;
+        var padding=0;
         var width=stage.offsetWidth,height=stage.offsetHeight;
         var nodes=Array.prototype.slice.call(stage.querySelectorAll('[data-graph-node]'));
         var origins=nodes.map(function(node){return{
@@ -2893,9 +2874,8 @@
                 updateGraphEdges(stage);
                 return;
             }
-            // Members trail their matter, so once one has been placed by hand it
-            // must stop being dragged around by the matter it belongs to.
-            if(!matter.hasAttribute('data-graph-matter'))matter.dataset.graphPinned='1';
+            // A matter follows its owner until someone places it themselves.
+            if(matter.hasAttribute('data-graph-matter'))matter.dataset.graphPinned='1';
             // A drag must not also open the task. Swallow only the click that
             // this pointerup is about to produce.
             var swallowClick=function(clickEvent){clickEvent.preventDefault();clickEvent.stopPropagation();};

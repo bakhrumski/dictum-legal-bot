@@ -472,8 +472,11 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes("['day','week','month','quarter']"), 'timeline must expose all four zoom levels');
     assert.ok(frontend.includes(`data-from-key="task:'+esc(task.id)+'" data-to-key="member:`), 'each task matter must link directly to its assigned members');
     assert.ok(frontend.includes('function updateGraphEdges(stage)'), 'graph links must be recalculated while nodes move');
-    assert.ok(frontend.includes('function graphEdgeAnchor(from, to)'), 'graph links must connect at node edges instead of disappearing below node centers');
-    assert.ok(frontend.includes("if(distance<=150)return prefix+' L '"), 'nearby graph nodes must use short straight connectors instead of curled paths');
+    // The spec's connector: card bottom centre to avatar top centre, both
+    // control points on the vertical midpoint.
+    assert.ok(frontend.includes('function matterCordPath(card, member)'), 'cords must use the one connector the design specifies');
+    assert.ok(frontend.includes("'M'+x1+','+y1+' C'+x1+','+mid+' '+x2+','+mid+' '+x2+','+y2"), 'the curve is a symmetric S through the vertical midpoint');
+    assert.ok(!frontend.includes('graphConnector'), 'the edge-anchored connector is gone');
     // The canvas's row is the title over 'owner · tag · deadline', with the
     // status and the AI control at the end. The description it has no line for
     // stays on the task itself.
@@ -493,6 +496,11 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes('translate(-50%, -50%) translate3d('), 'a drag must not lay the page out on every move');
     // Releasing eases the board into its new arrangement instead of snapping.
     assert.ok(frontend.includes('function settleGraphNodes(stage, targets, snapshot)'), 'the board must settle rather than jump');
+    // A graph drawn while its tab is hidden is laid out against a stage with
+    // no width; clamping into that stacks every node on the left edge.
+    assert.ok(frontend.includes('if(width<200||height<100)return null;'), 'separation must not run on an unmeasured stage');
+    assert.ok(frontend.includes('function graphMeasured()'), 'the graph must be drawn again once it has a real width');
+    assert.ok(frontend.includes("data-layout-viewport="), 'the stage records the width it was laid out for');
     assert.ok(frontend.includes('GRAPH_SETTLE_MS=220'));
     assert.ok(frontend.includes("matchMedia('(prefers-reduced-motion: reduce)')"), 'the settle must honour the OS motion setting');
     assert.ok(!frontend.includes('graphNodeCenter(stage,node)') || frontend.includes('function updateGraphEdges(stage)'), 'the settled board may still measure once');
@@ -500,6 +508,14 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes('separateGraphNodes(root.querySelector('+String.fromCharCode(39)+'.ws-graph-stage'+String.fromCharCode(39)+'))'), 'the first paint must separate the board as well');
     assert.ok(frontend.includes('GRAPH_SEPARATION_GAP=12'), 'the canvas separates nodes by 12px');
     assert.ok(frontend.includes('GRAPH_CARD_W=168,GRAPH_CARD_H=158'), 'the matter card is the 168x158 the canvas draws');
+    // The spec's band: cards at y=14, avatars at y=198, gutters 14 inside a
+    // group and 46 between groups, tightening twice before the band wraps.
+    assert.ok(frontend.includes('var edge=10,gap=14,groupGap=46;'), 'the band uses the spec gutters');
+    assert.ok(frontend.includes('var cardTop=14,nodeTop=cardTop+GRAPH_CARD_H+26;'), 'cards sit at 14 and avatars at 198');
+    assert.ok(frontend.includes("if(!fits(gap,groupGap)){gap=10;groupGap=30;}"), 'gutters tighten before wrapping');
+    assert.ok(frontend.includes(String.fromCharCode(34)+'5 5'+String.fromCharCode(34)) && frontend.includes('stroke-dasharray='), 'cords carry the spec stroke on the path itself');
+    // One matter, one owner, one cord — not a mesh to every related member.
+    assert.ok(frontend.includes('ownerOf[String(task.id)]=related.length?related[0]:null;'), 'a matter has one owner');
     assert.ok(frontend.includes('ws-graph-ask'), 'the matter card carries the control that opens Workspace AI on it');
     assert.ok(styles.includes('.ws-graph-matter-foot'), 'the card footer carries the milestone and document pills');
     assert.ok(styles.includes('scrollbar-width: none;'), 'graph scrolling must remain usable without visible scrollbars');
