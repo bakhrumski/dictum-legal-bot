@@ -416,8 +416,11 @@ function transactionalPool(handler) {
     assert.ok(frontend.includes("['day','week','month','quarter']"), 'timeline must expose all four zoom levels');
     assert.ok(frontend.includes(`data-from-key="task:'+esc(task.id)+'" data-to-key="member:`), 'each task matter must link directly to its assigned members');
     assert.ok(frontend.includes('function updateGraphEdges(stage)'), 'graph links must be recalculated while nodes move');
-    assert.ok(frontend.includes('function graphEdgeAnchor(from, to)'), 'graph links must connect at node edges instead of disappearing below node centers');
-    assert.ok(frontend.includes("if(distance<=150)return prefix+' L '"), 'nearby graph nodes must use short straight connectors instead of curled paths');
+    // The spec's connector: card bottom centre to avatar top centre, both
+    // control points on the vertical midpoint.
+    assert.ok(frontend.includes('function matterCordPath(card, member)'), 'cords must use the one connector the design specifies');
+    assert.ok(frontend.includes("'M'+x1+','+y1+' C'+x1+','+mid+' '+x2+','+mid+' '+x2+','+y2"), 'the curve is a symmetric S through the vertical midpoint');
+    assert.ok(!frontend.includes('graphConnector'), 'the edge-anchored connector is gone');
     // The canvas's row is the title over 'owner · tag · deadline', with the
     // status and the AI control at the end. The description it has no line for
     // stays on the task itself.

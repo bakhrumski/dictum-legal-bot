@@ -989,54 +989,19 @@
     var GRAPH_CARD_W=168,GRAPH_CARD_H=158,GRAPH_NODE_W=152,GRAPH_NODE_H=98;
     var GRAPH_SEPARATION_GAP=12;
 
-    function graphNodeBox(point, kind) {
-        var sizes={
-            matter:{halfWidth:GRAPH_CARD_W/2,halfHeight:GRAPH_CARD_H/2},
-            // A cord to a person ends on the rim of their avatar, not on the
-            // corner of the box that also holds their name and role. The avatar
-            // is 46px across and sits 26px above the middle of the node.
-            member:{halfWidth:23,halfHeight:23,lift:26},
-            task:{halfWidth:88,halfHeight:38}
-        };
-        var size=sizes[kind]||sizes.task;
-        return {
-            x:Number(point.x)||0,
-            y:(Number(point.y)||0)-(size.lift||0),
-            halfWidth:size.halfWidth,
-            halfHeight:size.halfHeight
-        };
-    }
-
-    function graphEdgeAnchor(from, to) {
-        var dx=to.x-from.x,dy=to.y-from.y;
-        var absX=Math.abs(dx),absY=Math.abs(dy);
-        if(absX<.01&&absY<.01)return{x:from.x,y:from.y};
-        var xScale=absX<.01?Infinity:Math.max(1,from.halfWidth||0)/absX;
-        var yScale=absY<.01?Infinity:Math.max(1,from.halfHeight||0)/absY;
-        var scale=Math.min(xScale,yScale);
-        return{x:from.x+(dx*scale),y:from.y+(dy*scale)};
-    }
-
-    function graphConnector(from, to) {
-        var start=graphEdgeAnchor(from,to);
-        var end=graphEdgeAnchor(to,from);
-        var dx=end.x-start.x,dy=end.y-start.y;
-        var distance=Math.hypot(dx,dy);
-        var point=function(value){return Math.round(value*10)/10;};
-        var prefix='M '+point(start.x)+' '+point(start.y);
-
-        // A curve between nearby cards is mostly hidden underneath the nodes and
-        // leaves hook-shaped fragments visible.  A short edge-to-edge line keeps
-        // the relationship legible as nodes approach one another.
-        if(distance<=150)return prefix+' L '+point(end.x)+' '+point(end.y);
-
-        var bend=Math.min(150,Math.max(42,distance*.34));
-        if(Math.abs(dy)>Math.abs(dx)){
-            var verticalDirection=dy>=0?1:-1;
-            return prefix+' C '+point(start.x)+' '+point(start.y+(bend*verticalDirection))+', '+point(end.x)+' '+point(end.y-(bend*verticalDirection))+', '+point(end.x)+' '+point(end.y);
-        }
-        var horizontalDirection=dx>=0?1:-1;
-        return prefix+' C '+point(start.x+(bend*horizontalDirection))+' '+point(start.y)+', '+point(end.x-(bend*horizontalDirection))+' '+point(end.y)+', '+point(end.x)+' '+point(end.y);
+    /**
+     * Card bottom centre to avatar top centre, both control points sharing the
+     * vertical midpoint: a symmetric S that leaves the card straight down and
+     * arrives at the avatar straight up, whichever way the pair has been
+     * dragged. Aiming at the nearest edge instead, as this used to, swings the
+     * cord around the card as it moves and reads as a different curve on every
+     * frame.
+     */
+    function matterCordPath(card, member) {
+        var x1=Math.round(card.x),y1=Math.round(card.y+GRAPH_CARD_H/2);
+        var x2=Math.round(member.x),y2=Math.round(member.y-GRAPH_NODE_H/2);
+        var mid=Math.round((y1+y2)/2);
+        return 'M'+x1+','+y1+' C'+x1+','+mid+' '+x2+','+mid+' '+x2+','+y2;
     }
 
     // The canvas labels a matter by its deadline, not by its status: planned,
@@ -1255,7 +1220,7 @@
             relatedMemberIds(task).forEach(function(memberId){
                 var to=memberPositions[memberId];
                 if(!to)return;
-                edges.push('<path class="ws-graph-link matter '+graphTone(task)+'" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(memberId)+'" d="'+graphConnector(graphNodeBox(from,'matter'),graphNodeBox(to,'member'))+'"/>');
+                edges.push('<path class="ws-graph-link matter '+graphTone(task)+'" data-matter-edge="1" data-from-key="task:'+esc(task.id)+'" data-to-key="member:'+esc(memberId)+'" d="'+matterCordPath(from,to)+'"/>');
             });
         });
 
@@ -2552,29 +2517,18 @@
         scroll.scrollTop=Math.max(0,Math.min(maxTop,nextTop));
     }
 
-    function graphNodeCenter(stage,node) {
-        var stageRect=stage.getBoundingClientRect();
-        // A person's cord ends on the rim of their avatar; measuring the whole
-        // node would aim it at the corner of the name and role beneath it.
-        var anchor=node.querySelector('.ws-avatar')||node;
-        var nodeRect=anchor.getBoundingClientRect();
-        return {
-            x:nodeRect.left-stageRect.left+(nodeRect.width/2),
-            y:nodeRect.top-stageRect.top+(nodeRect.height/2),
-            halfWidth:nodeRect.width/2,
-            halfHeight:nodeRect.height/2
-        };
-    }
-
     function updateGraphEdges(stage) {
         if(!stage)return;
         var positions={};
         stage.querySelectorAll('[data-graph-key]').forEach(function(node){
-            positions[node.dataset.graphKey]=graphNodeCenter(stage,node);
+            positions[node.dataset.graphKey]={
+                x:Number(node.dataset.x||node.offsetLeft),
+                y:Number(node.dataset.y||node.offsetTop)
+            };
         });
         stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
             var from=positions[path.dataset.fromKey],to=positions[path.dataset.toKey];
-            if(from&&to)path.setAttribute('d',graphConnector(from,to));
+            if(from&&to)path.setAttribute('d',matterCordPath(from,to));
         });
     }
 
@@ -2759,43 +2713,30 @@
     }
 
     /**
-     * Measured once, while the board is still: where each node's cord anchor
-     * sits relative to the node's own centre, and how big that anchor is. With
-     * this in hand the cords can be redrawn from remembered coordinates during
-     * a drag instead of asking the browser to measure every node again.
+     * The nodes a drag will have to redraw cords for, collected once so that
+     * every frame after this one works from remembered coordinates rather than
+     * measuring the board out of the document again.
      */
     function graphAnchorSnapshot(stage) {
         var snapshot={};
         Array.prototype.slice.call(stage.querySelectorAll('[data-graph-key]')).forEach(function(node){
-            var anchor=node.querySelector('.ws-avatar')||node;
-            var nodeRect=node.getBoundingClientRect();
-            var anchorRect=anchor.getBoundingClientRect();
-            snapshot[node.dataset.graphKey]={
-                node:node,
-                offsetX:(anchorRect.left+anchorRect.width/2)-(nodeRect.left+nodeRect.width/2),
-                offsetY:(anchorRect.top+anchorRect.height/2)-(nodeRect.top+nodeRect.height/2),
-                halfWidth:anchorRect.width/2,
-                halfHeight:anchorRect.height/2
-            };
+            snapshot[node.dataset.graphKey]={node:node};
         });
         return snapshot;
     }
 
     function paintGraphEdges(stage, snapshot, positions) {
-        var centres={};
+        var spots={};
         Object.keys(snapshot).forEach(function(key){
             var box=snapshot[key];
-            var spot=positions[key]||{x:Number(box.node.dataset.x||0),y:Number(box.node.dataset.y||0)};
-            centres[key]={
-                x:spot.x+box.offsetX,
-                y:spot.y+box.offsetY,
-                halfWidth:box.halfWidth,
-                halfHeight:box.halfHeight
+            spots[key]=positions[key]||{
+                x:Number(box.node.dataset.x||0),
+                y:Number(box.node.dataset.y||0)
             };
         });
         stage.querySelectorAll('path[data-from-key][data-to-key]').forEach(function(path){
-            var from=centres[path.dataset.fromKey],to=centres[path.dataset.toKey];
-            if(from&&to)path.setAttribute('d',graphConnector(from,to));
+            var from=spots[path.dataset.fromKey],to=spots[path.dataset.toKey];
+            if(from&&to)path.setAttribute('d',matterCordPath(from,to));
         });
     }
 
