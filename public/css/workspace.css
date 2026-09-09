@@ -819,11 +819,10 @@
    was the 320px floor, which cut the timeline off after four rows and left the
    graph needing a scroll of its own to see a card. Each view now sizes to its
    own content and the page scrolls, which is how the canvas reads. */
-/* With the panel sized to the stage there is nothing left to scroll inside it,
-   and an inner scroller is what made dragging a matter feel like fighting the
-   page. */
-.ws-workspace-main.graph-view .ws-graph-scroll { overflow: visible; }
-.ws-workspace-main.graph-view .ws-graph { overflow: visible; }
+/* The graph keeps its own scroller — the canvas grows when a matter is dragged
+   below the fold, and that is how the reader gets to it. The panel is tall
+   enough that nothing needs scrolling until then. */
+.ws-workspace-main.graph-view .ws-graph-scroll { overflow-x: hidden; overflow-y: auto; touch-action: none; }
 /* The tab bar floats over the page, so the last matter, the last row and the
    people under the graph all need room to clear it. */
 .ws-workspace-main.graph-view,
@@ -1053,6 +1052,7 @@
     touch-action: none;
     user-select: none;
 }
+.ws-graph-member { z-index: 4; }
 .ws-graph-member.dragging { z-index: 6; cursor: grabbing; }
 .ws-graph-member .ws-avatar {
     width: 46px;
