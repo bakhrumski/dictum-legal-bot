@@ -20,6 +20,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="./css/design-tokens.css">
     <link rel="stylesheet" href="./css/workspace.css">
     <style>
@@ -6799,42 +6801,60 @@
             if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
         })();
     </script>
+<div id="db-root">
+<script>
+    // tokens.css declares the shell's dark palette on #db-root[data-theme],
+    // while this page has always kept the theme on <html>. Mirror it rather
+    // than move it: every existing rule and toggleTheme() keep working, and
+    // the observer catches the switch however it is made.
+    (function () {
+        var root = document.getElementById('db-root');
+        var html = document.documentElement;
+        var sync = function () {
+            var t = html.getAttribute('data-theme');
+            if (t) root.setAttribute('data-theme', t);
+            else root.removeAttribute('data-theme');
+        };
+        sync();
+        new MutationObserver(sync).observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+    })();
+</script>
     <div class="container">
-        <header>
+        <header class="db-head" data-r="head">
             <div class="header-left">
-                <div class="header-brand" onclick="brandClick()">
+                <div class="header-brand db-brand" onclick="brandClick()">
                     <img src="./brand/wordmark-filled-light.png" alt="JuristAI" class="header-logo header-logo-wordmark header-logo-light">
                     <img src="./brand/wordmark-filled-dark.png"  alt="JuristAI" class="header-logo header-logo-wordmark header-logo-dark">
                 </div>
             </div>
-            <div class="header-center" style="display:flex; align-items:center; gap:12px;">
-                <a href="/enterprise.html" id="enterpriseLaunchBtn" class="hicon" title="Enterprise Uzbekistan — English Law" style="display:none">
+            <div class="header-center db-head-mid">
+                <a href="/enterprise.html" id="enterpriseLaunchBtn" class="hicon db-iconbtn" title="Enterprise Uzbekistan — English Law" style="display:none">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9"/><line x1="9" y1="13" x2="9" y2="13"/><line x1="9" y1="17" x2="9" y2="17"/></svg>
                 </a>
-                <a href="/templates.html" id="templatesLaunchBtn" class="hicon" title="Shablonlar muharriri" style="display:none">
+                <a href="/templates.html" id="templatesLaunchBtn" class="hicon db-iconbtn" title="Shablonlar muharriri" style="display:none">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                 </a>
-                <button id="flaggedAnswersBtn" class="hicon" onclick="openFlaggedPanel()" title="Tekshirilishi kerak javoblar" style="display:none">
+                <button id="flaggedAnswersBtn" class="hicon db-iconbtn" onclick="openFlaggedPanel()" title="Tekshirilishi kerak javoblar" style="display:none">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                     <span id="flaggedAnswersBadge" style="display:none;position:absolute;top:2px;right:2px;background:var(--danger-700);color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center;">0</span>
                 </button>
-                <button class="header-icon-btn hicon" onclick="exportToPDF()" title="PDF">
+                <button class="header-icon-btn hicon db-iconbtn" onclick="exportToPDF()" title="PDF">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 </button>
-                <button class="theme-toggle-header" onclick="toggleTheme()" title="Rejimni almashtirish">
+                <button class="theme-toggle-header db-iconbtn" onclick="toggleTheme()" title="Rejimni almashtirish">
                     <span class="icon-sun"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg></span>
                     <span class="icon-moon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg></span>
                 </button>
                 <div class="header-chat-wrapper">
-                    <button class="header-chat-btn" onclick="toggleChat()" title="Guruh chat">
+                    <button class="header-chat-btn db-iconbtn" onclick="toggleChat()" title="Guruh chat">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                         <span class="header-chat-badge" id="headerChatBadge" style="display:none;">0</span>
                     </button>
                     <div class="chat-msg-notif-stack" id="chatMsgNotifStack"></div>
                 </div>
             </div>
-            <div class="header-right" style="display:flex; align-items:center; gap:8px;">
-                <button class="profile-toggle" id="profileToggle" onclick="toggleProfileDropdown(event)">
+            <div class="header-right db-head-end">
+                <button class="profile-toggle db-profile" id="profileToggle" onclick="toggleProfileDropdown(event)">
                     <div class="profile-avatar" id="profileAvatar">A</div>
                     <div class="profile-info">
                         <span class="profile-fullname" id="profileFullName"></span>
@@ -6851,53 +6871,53 @@
         </header>
         <!-- TAB: Home — Operations command center -->
         <div class="tab-view active" data-tab="home">
-        <section class="operations-heading" aria-labelledby="operationsTitle">
+        <section class="operations-heading db-section-head" aria-labelledby="operationsTitle">
             <div>
                 <p class="operations-eyebrow">Master Admin</p>
                 <h1 id="operationsTitle">Bugungi boshqaruv</h1>
                 <p>Navbat, jamoa va JuristAI xizmatlari holati bir joyda.</p>
             </div>
-            <button class="operations-refresh" type="button" onclick="refreshOperations()" aria-label="Ma'lumotlarni yangilash">
+            <button class="operations-refresh db-btn" type="button" onclick="refreshOperations()" aria-label="Ma'lumotlarni yangilash">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                 Yangilash
             </button>
         </section>
-        <div class="stats">
-            <div class="stat-card card-overdue" onclick="setQueueView('overdue')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-                <div class="stat-info">
-                    <div class="number" id="overdueRequests">0</div>
-                    <h3>SLA o'tgan</h3>
-                    <span>4 soatdan ko'p</span>
-                </div>
-            </div>
-            <div class="stat-card" onclick="setQueueView('unassigned')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M18 8v6M15 11h6"/></svg></div>
-                <div class="stat-info">
-                    <div class="number" id="unassignedRequests">0</div>
-                    <h3>Tayinlanmagan</h3>
-                    <span>Egasi belgilanmagan</span>
-                </div>
-            </div>
-            <div class="stat-card" onclick="setQueueView('review')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
-                <div class="stat-info">
-                    <div class="number" id="awaitingReview">0</div>
-                    <h3>Tekshiruvda</h3>
-                    <span>Yurist qarori kerak</span>
-                </div>
-            </div>
-            <div class="stat-card" onclick="setQueueView('answered_today')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
-                <div class="stat-info">
-                    <div class="number" id="answeredToday">0</div>
-                    <h3>Bugun yakunlandi</h3>
-                    <span>AI va yurist javoblari</span>
-                </div>
-            </div>
+        <div class="stats db-bits">
+            <button class="db-bit" type="button" title="SLA o'tgan" onclick="setQueueView('overdue')">
+                <span class="db-bit-top">
+                    <b class="number db-bit-n" data-mono id="overdueRequests" style="color:var(--danger)">0</b>
+                    <span class="db-bit-label">SLA o'tgan</span>
+                </span>
+                <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--danger)"></span></span>
+                <span class="db-bit-sub">4 soatdan ko'p</span>
+            </button>
+            <button class="db-bit" type="button" title="Tayinlanmagan" onclick="setQueueView('unassigned')">
+                <span class="db-bit-top">
+                    <b class="number db-bit-n" data-mono id="unassignedRequests" style="color:var(--warn)">0</b>
+                    <span class="db-bit-label">Tayinlanmagan</span>
+                </span>
+                <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--warn)"></span></span>
+                <span class="db-bit-sub">Egasi belgilanmagan</span>
+            </button>
+            <button class="db-bit" type="button" title="Tekshiruvda" onclick="setQueueView('review')">
+                <span class="db-bit-top">
+                    <b class="number db-bit-n" data-mono id="awaitingReview" style="color:var(--brand)">0</b>
+                    <span class="db-bit-label">Tekshiruvda</span>
+                </span>
+                <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--brand)"></span></span>
+                <span class="db-bit-sub">Yurist qarori kerak</span>
+            </button>
+            <button class="db-bit" type="button" title="Bugun yakunlandi" onclick="setQueueView('answered_today')">
+                <span class="db-bit-top">
+                    <b class="number db-bit-n" data-mono id="answeredToday" style="color:var(--ok)">0</b>
+                    <span class="db-bit-label">Bugun yakunlandi</span>
+                </span>
+                <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--ok)"></span></span>
+                <span class="db-bit-sub">AI va yurist javoblari</span>
+            </button>
         </div>
         <div class="operations-health-shell">
-            <div class="operations-health" id="operationsHealth" aria-live="polite">
+            <div class="operations-health db-health" id="operationsHealth" aria-live="polite">
                 <div class="health-item"><span class="health-dot is-loading"></span><span>Telegram agent</span><strong id="agentHealthText">Tekshirilmoqda</strong></div>
                 <div class="health-item"><span class="health-dot is-loading"></span><span>Huquqiy korpus</span><strong id="corpusHealthText">Tekshirilmoqda</strong></div>
                 <div class="health-item"><span class="health-dot is-loading"></span><span>Jamoa navbati</span><strong id="teamHealthText">Tekshirilmoqda</strong></div>
@@ -7292,25 +7312,25 @@
         <div class="main-content-area">
             <div class="requests-container" id="requestsSection">
                 <div class="controls">
-                    <div class="controls-header">
+                    <div class="controls-header db-card-head">
                         <div>
                             <h2>Ish navbati</h2>
                             <p id="queueSummary">Muhim murojaatlar birinchi ko'rsatiladi</p>
                         </div>
-                        <button class="queue-refresh" type="button" onclick="loadRequests()" title="Navbatni yangilash" aria-label="Navbatni yangilash">
+                        <button class="queue-refresh db-card-refresh" type="button" onclick="loadRequests()" title="Navbatni yangilash" aria-label="Navbatni yangilash">
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                         </button>
                     </div>
-                    <div class="queue-views" role="tablist" aria-label="Navbat ko'rinishlari">
-                        <button class="queue-view-btn active" type="button" data-view="priority" onclick="setQueueView('priority')">Muhim</button>
-                        <button class="queue-view-btn" type="button" data-view="overdue" onclick="setQueueView('overdue')">SLA o'tgan</button>
-                        <button class="queue-view-btn" type="button" data-view="unassigned" onclick="setQueueView('unassigned')">Tayinlanmagan</button>
-                        <button class="queue-view-btn" type="button" data-view="review" onclick="setQueueView('review')">Tekshiruv</button>
-                        <button class="queue-view-btn" type="button" data-view="paid" onclick="setQueueView('paid')">Pullik xizmatlar</button>
-                        <button class="queue-view-btn" type="button" data-view="attorney" onclick="setQueueView('attorney')">Advokat so'ralgan</button>
+                    <div class="queue-views db-chips" role="tablist" aria-label="Navbat ko'rinishlari">
+                        <button class="queue-view-btn db-chip active" type="button" data-view="priority" onclick="setQueueView('priority')">Muhim</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="overdue" onclick="setQueueView('overdue')">SLA o'tgan</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="unassigned" onclick="setQueueView('unassigned')">Tayinlanmagan</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="review" onclick="setQueueView('review')">Tekshiruv</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="paid" onclick="setQueueView('paid')">Pullik xizmatlar</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="attorney" onclick="setQueueView('attorney')">Advokat so'ralgan</button>
                     </div>
-                    <div class="filter-section">
-                        <label class="queue-search">
+                    <div class="filter-section db-searchrow">
+                        <label class="queue-search db-search">
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                             <input id="requestSearch" type="search" placeholder="Murojaat yoki foydalanuvchini qidiring" oninput="scheduleRequestFilter()">
                         </label>
@@ -7711,30 +7731,31 @@
     </div><!-- /.container -->
 
     <!-- Bottom Tab Bar -->
-    <nav class="bottom-tab-bar" id="bottomTabBar">
-        <button class="tab-bar-item active" id="tabBarHome" data-tab="home" onclick="switchTab('home')">
+    <nav class="bottom-tab-bar db-tabbar" data-r="tabbar" id="bottomTabBar">
+        <button class="tab-bar-item db-tab active" id="tabBarHome" data-tab="home" onclick="switchTab('home')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            <span class="tab-label">Asosiy</span>
+            <span class="tab-label db-tab-label" data-r="tab-label">Asosiy</span>
         </button>
-        <button class="tab-bar-item" id="tabBarWorkspace" data-tab="jamoa" onclick="switchTab('jamoa')">
+        <button class="tab-bar-item db-tab" id="tabBarWorkspace" data-tab="jamoa" onclick="switchTab('jamoa')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4V2M16 4V2M3 9h18"/><path d="M8 13h3M8 17h6"/></svg>
-            <span class="tab-label">Workspace</span>
+            <span class="tab-label db-tab-label" data-r="tab-label">Workspace</span>
         </button>
-        <button class="tab-bar-item" id="tabBarChat" data-tab="chat" onclick="switchTab('chat')">
+        <button class="tab-bar-item db-tab" id="tabBarChat" data-tab="chat" onclick="switchTab('chat')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <span class="tab-label">Chat</span>
+            <span class="tab-label db-tab-label" data-r="tab-label">Chat</span>
             <span class="tab-badge" id="tabChatBadge" style="display:none;">0</span>
         </button>
-        <button class="tab-bar-item" data-tab="ai" id="tabBarAi" onclick="switchTab('ai')">
+        <button class="tab-bar-item db-tab" data-tab="ai" id="tabBarAi" onclick="switchTab('ai')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/></svg>
-            <span class="tab-label">AI</span>
+            <span class="tab-label db-tab-label" data-r="tab-label">AI</span>
         </button>
-        <button class="tab-bar-item" data-tab="sorov" id="tabBarSorov" onclick="switchTab('sorov')">
+        <button class="tab-bar-item db-tab" data-tab="sorov" id="tabBarSorov" onclick="switchTab('sorov')">
             <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>
-            <span class="tab-label">Boshqaruv</span>
+            <span class="tab-label db-tab-label" data-r="tab-label">Boshqaruv</span>
             <span class="tab-badge" id="tabSorovBadge" style="display:none;">0</span>
         </button>
     </nav>
+</div><!-- /#db-root -->
 
     <!-- Admin Creation Modal -->
     <div class="admin-modal-overlay" id="addMemberModal">
