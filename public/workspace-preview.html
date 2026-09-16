@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="./css/workspace.css">
     <style>
         :root { color-scheme: light; }
@@ -28,6 +30,14 @@
     </style>
 </head>
 <body data-workspace-standalone="true">
+<div id="db-root">
+<script>
+  // dashboard.css declares its palette on #db-root[data-theme]; this page
+  // keeps the theme on <html>, as the dashboard does. Mirror it.
+  (function(){var r=document.getElementById("db-root"),h=document.documentElement;
+   var s=function(){var t=h.getAttribute("data-theme");t?r.setAttribute("data-theme",t):r.removeAttribute("data-theme");};
+   s();new MutationObserver(s).observe(h,{attributes:true,attributeFilter:["data-theme"]});})();
+</script>
     <header class="preview-header">
         <div>
             <img class="preview-logo light" src="./brand/wordmark-filled-light.png" alt="JuristAI">
@@ -50,5 +60,6 @@
         })();
     </script>
     <script src="./js/workspace.js"></script>
+</div><!-- /#db-root -->
 </body>
 </html>
