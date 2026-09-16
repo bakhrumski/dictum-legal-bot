@@ -1024,7 +1024,7 @@
     // old ring layout describe a canvas that no longer exists, and replaying
     // them would scatter nodes across the new board.
     function graphMatterPositionKey(graphKey) {
-        return 'juristai-workspace-node-position:v2:' + String(state.workspace && state.workspace.id || 'default') + ':' + String(graphKey || 'default');
+        return 'juristai-workspace-node-position:v3:' + String(state.workspace && state.workspace.id || 'default') + ':' + String(graphKey || 'default');
     }
 
     function clampNumber(value, min, max) {
@@ -1164,7 +1164,7 @@
         // is the point of the view.
         var width=Math.max(980,viewportWidth);
         var edge=10,gap=14,groupGap=46;
-        var cardTop=14,nodeTop=cardTop+GRAPH_CARD_H+26;      // 14 + 158 + 26 = 198
+        var cardTop=14,nodeTop=cardTop+GRAPH_CARD_H+56;      // 14 + 158 + 56 = 228
         var groups=state.members.map(function(member){
             var key=String(member.id);
             return {member:member,ms:matters.filter(function(task){return ownerOf[String(task.id)]===key;})};
@@ -1200,7 +1200,7 @@
         }else{
             // Only on a genuinely narrow canvas: wrap the groups into rows.
             var per=Math.max(1,Math.floor((width-edge*2+gap)/(GRAPH_CARD_W+gap)));
-            var rowH=GRAPH_CARD_H+26+GRAPH_NODE_H+22;        // 304
+            var rowH=GRAPH_CARD_H+56+GRAPH_NODE_H+22;        // 334
             var row=0,col=0;
             groups.forEach(function(group){
                 if(col&&col+group.ms.length>per){row+=1;col=0;}
@@ -1808,7 +1808,13 @@
         if (!state.workspace) return {items:[]};
         var params=new URLSearchParams({limit:'200',offset:'0'});
         Object.keys(state.filters).forEach(function(key){if(state.filters[key])params.set(key,state.filters[key]);});
-        var endpoint='/workspaces/'+state.workspace.id+'/'+(state.view==='timeline'?'timeline':'tasks')+'?'+params.toString();
+        // One endpoint for all three views. /timeline runs the same listTasks
+        // query and only adds a zoomLevels array this client never reads, so
+        // choosing the URL by the open tab bought nothing and cost plenty: the
+        // task set became a function of which view happened to be open when the
+        // fetch fired, so a matter created in one view could be missing from
+        // another until something else forced a reload.
+        var endpoint='/workspaces/'+state.workspace.id+'/tasks?'+params.toString();
         var data=await api('GET',endpoint);
         state.tasks=data.items||[];
         if (shouldRender!==false) render();
