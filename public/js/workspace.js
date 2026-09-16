@@ -1305,26 +1305,26 @@
             var p=matterPositions[String(task.id)],tone=graphTone(task);
             var memoryCount=Number(task.memory_count||0),due=dueLine(task);
             var host=ownerOf[String(task.id)];
-            return '<article class="ws-graph-matter '+tone+'" data-graph-node data-graph-matter data-graph-key="task:'+esc(task.id)+'"'+(host?' data-graph-home="member:'+esc(host)+'"':'')+(pinnedMatters[String(task.id)]?' data-graph-pinned="1"':'')+' data-action="open-task" data-task-id="'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" role="button" tabindex="0" aria-label="'+esc(t('matter'))+': '+esc(task.title)+'">'+
-                '<div class="ws-graph-matter-top">'+
-                    '<span class="ws-graph-accent" aria-hidden="true"></span>'+
-                    (memoryCount?'<span class="ws-graph-saved" title="'+esc(t('sharedMemory'))+'">'+svg('ai',9)+memoryCount+'</span>':'')+
-                    '<button type="button" class="ws-graph-ask" data-action="open-ai" data-task-id="'+esc(task.id)+'" title="'+esc(t('askAi'))+'" aria-label="'+esc(t('askAi'))+'">'+svg('ai',12)+'</button>'+
+            return '<article class="ws-graph-matter ws-card '+tone+'" data-graph-node data-graph-matter data-graph-key="task:'+esc(task.id)+'"'+(host?' data-graph-home="member:'+esc(host)+'"':'')+(pinnedMatters[String(task.id)]?' data-graph-pinned="1"':'')+' data-action="open-task" data-task-id="'+esc(task.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" role="button" tabindex="0" aria-label="'+esc(t('matter'))+': '+esc(task.title)+'">'+
+                '<div class="ws-graph-matter-top ws-card-top">'+
+                    '<span class="ws-graph-accent ws-card-accent" aria-hidden="true"></span>'+
+                    (memoryCount?'<span class="ws-graph-saved ws-card-saved" title="'+esc(t('sharedMemory'))+'">'+svg('ai',9)+memoryCount+'</span>':'')+
+                    '<button type="button" class="ws-graph-ask ws-card-ask" data-action="open-ai" data-task-id="'+esc(task.id)+'" title="'+esc(t('askAi'))+'" aria-label="'+esc(t('askAi'))+'">'+svg('ai',12)+'</button>'+
                 '</div>'+
                 '<h4>'+esc(task.title)+'</h4>'+
-                '<p class="ws-graph-due '+due.tone+'">'+esc(due.text)+'</p>'+
-                '<div class="ws-graph-matter-foot">'+
-                    '<span class="ws-graph-tag">'+esc(task.is_milestone?t('milestone'):t(task.priority))+'</span>'+
-                    '<span class="ws-graph-docs">'+svg('document',11)+Number(task.document_count||0)+'</span>'+
+                '<p class="ws-graph-due ws-card-due '+due.tone+'">'+esc(due.text)+'</p>'+
+                '<div class="ws-graph-matter-foot ws-card-foot">'+
+                    '<span class="ws-graph-tag ws-card-tag">'+esc(task.is_milestone?t('milestone'):t(task.priority))+'</span>'+
+                    '<span class="ws-graph-docs ws-card-docs">'+svg('document',11)+Number(task.document_count||0)+'</span>'+
                 '</div>'+
             '</article>';
         }).join('');
 
         var memberNodes=state.members.map(function(member){
             var p=memberPositions[String(member.id)],expired=member.subscription_active===false;
-            return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'">'+
-                '<span class="ws-avatar'+(member.role==='owner'?' owner':'')+'">'+esc(initials(member))+'</span>'+
-                '<span class="ws-graph-member-copy"><span class="ws-graph-member-name">'+esc(personName(member))+'</span><span class="ws-graph-member-role">'+esc(memberStanding(member))+'</span></span>'+
+            return '<button type="button" class="ws-graph-member ws-node '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'">'+
+                '<span class="ws-avatar ws-node-avatar'+(member.role==='owner'?' owner':'')+'">'+esc(initials(member))+'</span>'+
+                '<span class="ws-graph-member-copy"><span class="ws-graph-member-name ws-node-name">'+esc(personName(member))+'</span><span class="ws-graph-member-role ws-node-role">'+esc(memberStanding(member))+'</span></span>'+
                 (expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+
             '</button>';
         }).join('');
@@ -1336,7 +1336,7 @@
             ? '<p class="ws-graph-bench" style="top:'+(benchTop-64)+'px">'+esc(t('benchTitle'))+'</p>'
             : '';
 
-        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll"><div class="ws-graph-stage" data-layout-height="'+height+'" data-layout-viewport="'+Math.round(viewportWidth)+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
+        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar ws-hint"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend ws-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll ws-scroll"><div class="ws-graph-stage ws-graph" data-layout-height="'+height+'" data-layout-viewport="'+Math.round(viewportWidth)+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
     }
 
     function renderTaskRow(task) {
@@ -2880,7 +2880,7 @@
         var pointer={x:startX,y:startY};
         var frameHandle=null,moved=false;
 
-        matter.classList.add('dragging');
+        matter.classList.add('dragging');matter.setAttribute('data-dragging','1');
         matter.setPointerCapture&&matter.setPointerCapture(event.pointerId);
 
         var place=function(node,item,x,y){
@@ -2917,7 +2917,7 @@
             document.removeEventListener('pointercancel',up);
             if(frameHandle){cancelAnimationFrame(frameHandle);frameHandle=null;}
             apply();
-            matter.classList.remove('dragging');
+            matter.classList.remove('dragging');matter.removeAttribute('data-dragging');
             // The transforms were only for the duration of the drag; the board
             // keeps its coordinates in left and top.
             origins.forEach(function(item){
