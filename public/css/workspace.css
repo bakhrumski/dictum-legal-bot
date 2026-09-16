@@ -588,6 +588,24 @@
 .ws-matter-ask { justify-self: end; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid var(--ws-line); border-radius: 8px; background: transparent; color: var(--ws-brand); cursor: pointer; }
 .ws-matter-ask:hover { background: var(--ws-brand-soft); border-color: var(--ws-brand-border); }
 
+.ws-threads-open {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0; border: 0; background: transparent;
+    color: var(--ws-brand); font-family: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+}
+.ws-threads-open:hover { text-decoration: underline; }
+.ws-thread-row {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 16px 20px; border-bottom: 1px solid var(--ws-line);
+    cursor: pointer;
+}
+.ws-thread-row:last-child { border-bottom: 0; }
+.ws-thread-row:hover { background: var(--ws-panel-hover); }
+.ws-thread-row h4 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.45; color: var(--ws-ink); }
+/* Reuse is the point: it costs the team nothing, so it reads as a good thing. */
+.ws-thread-free { color: var(--ws-success); font-weight: 600; }
+
 .ws-side-body { display: flex; flex-direction: column; }
 .ws-load { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--ws-line); }
 .ws-load:last-child { border-bottom: 0; }
@@ -613,10 +631,6 @@
 .ws-panel.ws-timeline { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--ws-line); border-radius: 14px; background: color-mix(in srgb, var(--ws-panel-solid) 88%, transparent); box-shadow: var(--ws-shadow); overflow: hidden; }
 .ws-tl-head { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 16px; padding: 13px 20px; border-bottom: 1px solid var(--ws-line); }
 .ws-tl-label > span { font-size: 12px; font-weight: 600; color: var(--ws-muted); }
-.ws-tl-zoom { display: flex; gap: 4px; margin-top: 7px; }
-.ws-tl-zoom button { padding: 3px 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--ws-muted); font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
-.ws-tl-zoom button:hover { background: var(--ws-panel-hover); }
-.ws-tl-zoom button.active { border-color: var(--ws-brand-border); background: var(--ws-brand-soft); color: var(--ws-brand); }
 .ws-tl-scale { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); font-size: 11.5px; color: var(--ws-muted-dim); }
 .ws-tl-body { flex: 1 1 0%; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .ws-tl-row { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 16px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--ws-line); cursor: pointer; }
@@ -1010,6 +1024,7 @@
     margin: 0;
     overflow: hidden;
     color: var(--ws-muted);
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     text-overflow: ellipsis;
