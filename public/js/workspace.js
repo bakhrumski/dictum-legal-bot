@@ -1064,12 +1064,25 @@
         return { text: t('planned') + ' · ' + date, tone: 'none' };
     }
 
-    // Who the matter belongs to: whoever is on it, else whoever opened it.
+    // Who the matter belongs to: whoever is on it, else whoever opened it —
+    // resolved back to the member record, because an assignee carries only a
+    // name and the row wants their standing on the team as well.
     function matterOwner(task) {
-        var person = (task.assignees || [])[0];
-        if (person) return person;
-        var creator = state.members.filter(function (m) { return String(m.id) === String(task.created_by); })[0];
-        return creator || null;
+        var id = ((task.assignees || [])[0] || {}).id;
+        if (id == null) id = task.created_by;
+        if (id == null) return null;
+        var member = state.members.filter(function (m) { return String(m.id) === String(id); })[0];
+        return member || (task.assignees || [])[0] || null;
+    }
+
+    // "Egasi · Platinum" — what the person is on this team, and on which plan.
+    // The canvas writes both, and the plan is the part that says whether their
+    // seat is actually active.
+    function memberStanding(member) {
+        if (!member) return '';
+        var plan = String(member.tariff_plan || '').trim();
+        if (!plan) return t(member.role || 'member');
+        return t(member.role || 'member') + ' · ' + plan.charAt(0).toUpperCase() + plan.slice(1);
     }
 
     function matterTag(task) {
@@ -1311,7 +1324,7 @@
             var p=memberPositions[String(member.id)],expired=member.subscription_active===false;
             return '<button type="button" class="ws-graph-member '+(expired?'expired':'')+'" data-graph-node data-graph-key="member:'+esc(member.id)+'" data-x="'+p.x+'" data-y="'+p.y+'" style="left:'+p.x+'px;top:'+p.y+'px" data-action="open-member-profile" data-member-id="'+esc(member.id)+'" title="'+esc(personName(member))+'">'+
                 '<span class="ws-avatar'+(member.role==='owner'?' owner':'')+'">'+esc(initials(member))+'</span>'+
-                '<span class="ws-graph-member-copy"><span class="ws-graph-member-name">'+esc(personName(member))+'</span><span class="ws-graph-member-role">'+esc(t(member.role))+'</span></span>'+
+                '<span class="ws-graph-member-copy"><span class="ws-graph-member-name">'+esc(personName(member))+'</span><span class="ws-graph-member-role">'+esc(memberStanding(member))+'</span></span>'+
                 (expired?'<small>'+esc(t('expiredSubscription'))+'</small>':'')+
             '</button>';
         }).join('');
@@ -1369,11 +1382,7 @@
         var ticks=[];for(var i=0;i<6;i+=1){ticks.push('<span>'+esc(isoDate(new Date(range.min+(span*(i/5))).toISOString()))+'</span>');}
         return '<section class="ws-panel ws-timeline">'+
             '<header class="ws-tl-head">'+
-                '<div class="ws-tl-label"><span>'+esc(t('matterAndOwner'))+'</span>'+
-                    '<div class="ws-tl-zoom">'+['day','week','month','quarter'].map(function(zoom){
-                        return '<button class="'+(state.timelineZoom===zoom?'active':'')+'" type="button" data-action="timeline-zoom" data-zoom="'+zoom+'">'+esc(t(zoom))+'</button>';
-                    }).join('')+'</div>'+
-                '</div>'+
+                '<div class="ws-tl-label"><span>'+esc(t('matterAndOwner'))+'</span></div>'+
                 '<div class="ws-tl-scale">'+ticks.join('')+'</div>'+
             '</header>'+
             '<div class="ws-tl-body">'+dated.map(function(task){return renderTimelineRow(task,range,span);}).join('')+'</div>'+
@@ -1406,7 +1415,7 @@
             '<div class="ws-tl-copy">'+
                 '<span class="ws-tl-title">'+esc(task.title)+'</span>'+
                 '<span class="ws-tl-who">'+
-                    (owner?'<span class="ws-avatar">'+esc(initials(owner))+'</span><span class="ws-tl-who-name">'+esc(personName(owner))+' · '+esc(t(owner.role||'member'))+'</span>'
+                    (owner?'<span class="ws-avatar">'+esc(initials(owner))+'</span><span class="ws-tl-who-name">'+esc(personName(owner))+' · '+esc(memberStanding(owner))+'</span>'
                           :'<span class="ws-tl-who-name">'+esc(t('unassignedShort'))+'</span>')+
                 '</span>'+
             '</div>'+
