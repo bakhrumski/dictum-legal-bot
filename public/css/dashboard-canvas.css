@@ -210,3 +210,11 @@ body .management-heading h1 {
   letter-spacing: -.02em;
   color: var(--jai-ink, #111827) !important;
 }
+
+/* ── Shell adoption ───────────────────────────────────────────────────────
+   dashboard.css sets `#db-root .db-brand img { display: block }`, which
+   outranks the page's own `.header-logo-dark { display: none }` and so shows
+   both wordmarks at once. Restore the theme swap at a specificity that wins. */
+#db-root .db-brand .header-logo-dark { display: none; }
+[data-theme="dark"] #db-root .db-brand .header-logo-light { display: none; }
+[data-theme="dark"] #db-root .db-brand .header-logo-dark { display: block; }
