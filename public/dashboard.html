@@ -6871,53 +6871,53 @@
         </header>
         <!-- TAB: Home — Operations command center -->
         <div class="tab-view active" data-tab="home">
-        <section class="operations-heading" aria-labelledby="operationsTitle">
+        <section class="operations-heading db-section-head" aria-labelledby="operationsTitle">
             <div>
                 <p class="operations-eyebrow">Master Admin</p>
                 <h1 id="operationsTitle">Bugungi boshqaruv</h1>
                 <p>Navbat, jamoa va JuristAI xizmatlari holati bir joyda.</p>
             </div>
-            <button class="operations-refresh" type="button" onclick="refreshOperations()" aria-label="Ma'lumotlarni yangilash">
+            <button class="operations-refresh db-btn" type="button" onclick="refreshOperations()" aria-label="Ma'lumotlarni yangilash">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                 Yangilash
             </button>
         </section>
-        <div class="stats">
-            <div class="stat-card card-overdue" onclick="setQueueView('overdue')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-                <div class="stat-info">
-                    <div class="number" id="overdueRequests">0</div>
-                    <h3>SLA o'tgan</h3>
-                    <span>4 soatdan ko'p</span>
-                </div>
-            </div>
-            <div class="stat-card" onclick="setQueueView('unassigned')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M18 8v6M15 11h6"/></svg></div>
-                <div class="stat-info">
-                    <div class="number" id="unassignedRequests">0</div>
-                    <h3>Tayinlanmagan</h3>
-                    <span>Egasi belgilanmagan</span>
-                </div>
-            </div>
-            <div class="stat-card" onclick="setQueueView('review')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
-                <div class="stat-info">
-                    <div class="number" id="awaitingReview">0</div>
-                    <h3>Tekshiruvda</h3>
-                    <span>Yurist qarori kerak</span>
-                </div>
-            </div>
-            <div class="stat-card" onclick="setQueueView('answered_today')">
-                <div class="stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
-                <div class="stat-info">
-                    <div class="number" id="answeredToday">0</div>
-                    <h3>Bugun yakunlandi</h3>
-                    <span>AI va yurist javoblari</span>
-                </div>
-            </div>
+        <div class="stats db-bits">
+            <button class="db-bit" type="button" title="SLA o'tgan" onclick="setQueueView('overdue')">
+                <span class="db-bit-top">
+                    <b class="number db-bit-n" data-mono id="overdueRequests" style="color:var(--danger)">0</b>
+                    <span class="db-bit-label">SLA o'tgan</span>
+                </span>
+                <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--danger)"></span></span>
+                <span class="db-bit-sub">4 soatdan ko'p</span>
+            </button>
+            <button class="db-bit" type="button" title="Tayinlanmagan" onclick="setQueueView('unassigned')">
+                <span class="db-bit-top">
+                    <b class="number db-bit-n" data-mono id="unassignedRequests" style="color:var(--warn)">0</b>
+                    <span class="db-bit-label">Tayinlanmagan</span>
+                </span>
+                <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--warn)"></span></span>
+                <span class="db-bit-sub">Egasi belgilanmagan</span>
+            </button>
+            <button class="db-bit" type="button" title="Tekshiruvda" onclick="setQueueView('review')">
+                <span class="db-bit-top">
+                    <b class="number db-bit-n" data-mono id="awaitingReview" style="color:var(--brand)">0</b>
+                    <span class="db-bit-label">Tekshiruvda</span>
+                </span>
+                <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--brand)"></span></span>
+                <span class="db-bit-sub">Yurist qarori kerak</span>
+            </button>
+            <button class="db-bit" type="button" title="Bugun yakunlandi" onclick="setQueueView('answered_today')">
+                <span class="db-bit-top">
+                    <b class="number db-bit-n" data-mono id="answeredToday" style="color:var(--ok)">0</b>
+                    <span class="db-bit-label">Bugun yakunlandi</span>
+                </span>
+                <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--ok)"></span></span>
+                <span class="db-bit-sub">AI va yurist javoblari</span>
+            </button>
         </div>
         <div class="operations-health-shell">
-            <div class="operations-health" id="operationsHealth" aria-live="polite">
+            <div class="operations-health db-health" id="operationsHealth" aria-live="polite">
                 <div class="health-item"><span class="health-dot is-loading"></span><span>Telegram agent</span><strong id="agentHealthText">Tekshirilmoqda</strong></div>
                 <div class="health-item"><span class="health-dot is-loading"></span><span>Huquqiy korpus</span><strong id="corpusHealthText">Tekshirilmoqda</strong></div>
                 <div class="health-item"><span class="health-dot is-loading"></span><span>Jamoa navbati</span><strong id="teamHealthText">Tekshirilmoqda</strong></div>
@@ -7312,25 +7312,25 @@
         <div class="main-content-area">
             <div class="requests-container" id="requestsSection">
                 <div class="controls">
-                    <div class="controls-header">
+                    <div class="controls-header db-card-head">
                         <div>
                             <h2>Ish navbati</h2>
                             <p id="queueSummary">Muhim murojaatlar birinchi ko'rsatiladi</p>
                         </div>
-                        <button class="queue-refresh" type="button" onclick="loadRequests()" title="Navbatni yangilash" aria-label="Navbatni yangilash">
+                        <button class="queue-refresh db-card-refresh" type="button" onclick="loadRequests()" title="Navbatni yangilash" aria-label="Navbatni yangilash">
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                         </button>
                     </div>
-                    <div class="queue-views" role="tablist" aria-label="Navbat ko'rinishlari">
-                        <button class="queue-view-btn active" type="button" data-view="priority" onclick="setQueueView('priority')">Muhim</button>
-                        <button class="queue-view-btn" type="button" data-view="overdue" onclick="setQueueView('overdue')">SLA o'tgan</button>
-                        <button class="queue-view-btn" type="button" data-view="unassigned" onclick="setQueueView('unassigned')">Tayinlanmagan</button>
-                        <button class="queue-view-btn" type="button" data-view="review" onclick="setQueueView('review')">Tekshiruv</button>
-                        <button class="queue-view-btn" type="button" data-view="paid" onclick="setQueueView('paid')">Pullik xizmatlar</button>
-                        <button class="queue-view-btn" type="button" data-view="attorney" onclick="setQueueView('attorney')">Advokat so'ralgan</button>
+                    <div class="queue-views db-chips" role="tablist" aria-label="Navbat ko'rinishlari">
+                        <button class="queue-view-btn db-chip active" type="button" data-view="priority" onclick="setQueueView('priority')">Muhim</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="overdue" onclick="setQueueView('overdue')">SLA o'tgan</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="unassigned" onclick="setQueueView('unassigned')">Tayinlanmagan</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="review" onclick="setQueueView('review')">Tekshiruv</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="paid" onclick="setQueueView('paid')">Pullik xizmatlar</button>
+                        <button class="queue-view-btn db-chip" type="button" data-view="attorney" onclick="setQueueView('attorney')">Advokat so'ralgan</button>
                     </div>
-                    <div class="filter-section">
-                        <label class="queue-search">
+                    <div class="filter-section db-searchrow">
+                        <label class="queue-search db-search">
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                             <input id="requestSearch" type="search" placeholder="Murojaat yoki foydalanuvchini qidiring" oninput="scheduleRequestFilter()">
                         </label>
