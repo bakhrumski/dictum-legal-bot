@@ -180,6 +180,8 @@
         graphHint:'Masalani surish uchun bosib torting. A’zo yoki vazifani bosing — tafsilotlari ochiladi.',
         // The three views the canvas draws.
         activeCount:'ta faol', matters:'Masalalar', drafts:'Hujjat loyihalari',
+        teamThreads:'Jamoa suhbatlari', openInAi:'AI bo‘limida ochish', seeAll:'Barchasi',
+        tokenFrom:'Token {who} hisobidan', freeForMembers:'a’zoga token sarfsiz',
         teamLoad:'Jamoa yuklamasi', tasksShort:'ish',
         matterAndOwner:'Masala va mas’ul a’zo', unassignedShort:'Biriktirilmagan',
         planned:'Rejada', dueOn:'Muddat', late:'Kechikdi'
@@ -189,6 +191,8 @@
         matterSummary:'{tasks} задач · {members} участников',
         graphHint:'Перетащите дело мышью. Нажмите на участника или задачу, чтобы открыть детали.',
         activeCount:'активных', matters:'Дела', drafts:'Черновики документов',
+        teamThreads:'Обсуждения команды', openInAi:'Открыть в разделе AI', seeAll:'Все',
+        tokenFrom:'Токены со счёта {who}', freeForMembers:'участникам без расхода токенов',
         teamLoad:'Загрузка команды', tasksShort:'задач',
         matterAndOwner:'Дело и ответственный', unassignedShort:'Без исполнителя',
         planned:'В плане', dueOn:'Срок', late:'Просрочено'
@@ -198,6 +202,8 @@
         matterSummary:'{tasks} tasks · {members} members',
         graphHint:'Drag the matter to reposition it. Click a member or task to open details.',
         activeCount:'active', matters:'Matters', drafts:'Document drafts',
+        teamThreads:'Team conversations', openInAi:'Open in AI', seeAll:'See all',
+        tokenFrom:'Tokens from {who}', freeForMembers:'members at no token cost',
         teamLoad:'Team load', tasksShort:'tasks',
         matterAndOwner:'Matter and owner', unassignedShort:'Unassigned',
         planned:'Planned', dueOn:'Due', late:'Late'
@@ -750,7 +756,12 @@
             targetDoc.files=[{id:crypto.randomUUID(),format:body.fileFormat,path:body.objectPath,mimeType:body.mimeType,byteSize:body.byteSize}]; return {file:clone(targetDoc.files[0])};
         }
         if (method === 'GET' && path === '/workspaces/' + workspaceId + '/activity?limit=100') return {activity:clone(DEMO.activity)};
-        if (method === 'GET' && path === '/workspaces/' + workspaceId + '/memory') return {memory:[{id:'m1',kind:'answer'},{id:'m2',kind:'research'},{id:'m3',kind:'answer'},{id:'m4',kind:'document'}]};
+        if (method === 'GET' && path === '/workspaces/' + workspaceId + '/memory') return {memory:[
+            {id:'m1',kind:'answer',title:'Ish haqi kechiktirilganda kompensatsiya qanday hisoblanadi?',created_by:9003,created_at:new Date(Date.now()-5400000).toISOString()},
+            {id:'m2',kind:'research',title:'Notarial shartnoma majburiy bo‘lgan holatlar ro‘yxati',created_by:9002,created_at:new Date(Date.now()-9000000).toISOString()},
+            {id:'m3',kind:'answer',title:'YaTT uchun soliq hisobotini topshirish muddatlari',created_by:9001,created_at:new Date(Date.now()-172800000).toISOString()},
+            {id:'m4',kind:'document'}
+        ]};
         if (method === 'GET' && path === '/workspaces/' + workspaceId + '/assistant/threads') return {threads:clone(DEMO.threads)};
         var previewThreadMatch=path.match(new RegExp('^/workspaces/'+workspaceId+'/assistant/threads/([^/]+)$'));
         if(method==='GET'&&previewThreadMatch){var previewThread=DEMO.threads.find(function(thread){return thread.id===previewThreadMatch[1];});if(!previewThread)throw{status:404,code:'thread_not_found',message:'AI suhbati topilmadi'};return{thread:clone(previewThread),messages:clone(DEMO.aiMessages[previewThread.id]||[])};}
@@ -917,9 +928,44 @@
                     '<header class="ws-matters-head"><h3>'+esc(t('matters'))+'</h3><span>'+active+' '+esc(t('activeCount'))+'</span></header>'+
                     '<div class="ws-matters-body">'+state.tasks.map(renderTaskRow).join('')+'</div>'+
                 '</section>'+
+                renderThreadsPanel()+
             '</div>'+
             '<div class="ws-matter-col">'+renderWorkloadPanel()+renderDraftsPanel()+'</div>'+
         '</div>';
+    }
+
+    var clockOf=function(value){
+        var at=new Date(value);
+        return isNaN(at)?'':at.toLocaleTimeString(state.language==='ru'?'ru-RU':state.language==='en'?'en-GB':'ru-RU',{hour:'2-digit',minute:'2-digit'});
+    };
+
+    /**
+     * The team's shared AI answers. An answer is generated once, on somebody's
+     * token budget, and stored — everyone else reads it for nothing, which is
+     * the whole point of the shared memory and what this panel reports.
+     */
+    function renderThreadsPanel() {
+        var items=(state.memory||[]).filter(function(item){return item.title;}).slice(0,3);
+        if(!items.length)return '';
+        var others=Math.max(0,state.members.length-1);
+        return '<section class="ws-panel ws-matters">'+
+            '<header class="ws-matters-head"><h3>'+esc(t('teamThreads'))+'</h3>'+
+                '<button class="ws-threads-open" type="button" data-action="open-ai">'+esc(t('openInAi'))+svg('arrow',13)+'</button>'+
+            '</header>'+
+            '<div class="ws-matters-body">'+items.map(function(item){
+                var author=state.members.filter(function(member){return String(member.id)===String(item.created_by);})[0];
+                var who=author?personName(author):t('workspace');
+                return '<article class="ws-thread-row">'+
+                    '<h4>'+esc(item.title)+'</h4>'+
+                    '<div class="ws-matter-meta">'+
+                        '<span>'+esc(who)+(item.created_at?' · '+esc(clockOf(item.created_at)):'')+'</span>'+
+                        '<span class="ws-matter-dot"></span>'+
+                        '<span>'+esc(t('tokenFrom').replace('{who}',who))+'</span>'+
+                        (others?'<span class="ws-matter-dot"></span><span class="ws-thread-free">'+others+' '+esc(t('freeForMembers'))+'</span>':'')+
+                    '</div>'+
+                '</article>';
+            }).join('')+'</div>'+
+        '</section>';
     }
 
     // Who is carrying what, as a share of the busiest person's open matters.
@@ -951,7 +997,9 @@
     function renderDraftsPanel() {
         var docs=(state.documents||[]).slice(0,4);
         if(!docs.length)return '';
-        return '<section class="ws-panel ws-side"><header class="ws-matters-head"><h3>'+esc(t('drafts'))+'</h3></header><div class="ws-side-body">'+
+        return '<section class="ws-panel ws-side"><header class="ws-matters-head"><h3>'+esc(t('drafts'))+'</h3>'+
+            '<button class="ws-threads-open" type="button" data-action="open-shared-documents">'+esc(t('seeAll'))+'</button>'+
+            '</header><div class="ws-side-body">'+
             docs.map(function(doc){
                 return '<div class="ws-draft">'+svg('document',15)+'<div class="ws-draft-copy">'+
                     '<span class="ws-draft-title">'+esc(doc.title)+'</span>'+
