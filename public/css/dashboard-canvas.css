@@ -211,3 +211,77 @@ body .management-heading h1 {
 /* The bar under each figure is filled from script; until counts arrive it
    would otherwise sit at full width. */
 #db-root .db-bit-fill { width: 0; transition: width 320ms cubic-bezier(.2,.8,.2,1); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Bridge: So'rov, Chat and AI onto the redesigned surfaces.
+
+   These three sections carry markup the prototype has no counterpart for -
+   it has no admin tables, no group chat and no document flow, because it has
+   no data behind any of them. Rather than invent structures for them, their
+   own containers are given the design's surface, radius, border and shadow,
+   so they sit on the same page as Asosiy and Workspace without a single
+   handler or id moving.
+   ══════════════════════════════════════════════════════════════════════════ */
+#db-root .reg-section,
+#db-root .chat-tab-wrapper,
+#db-root .ai-workspace,
+#db-root .ai-starter-card,
+#db-root .management-grid > * {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  box-shadow: var(--shadow);
+}
+/* Panels that hold their own scrolling region must not clip it away. */
+#db-root .chat-tab-wrapper,
+#db-root .ai-workspace { overflow: hidden; }
+
+/* The composer bars sit inside those panels, so they take the inner surface
+   rather than a second card edge. */
+#db-root .chat-input-area,
+#db-root .ai-chat-input-bar {
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-solid) 94%, transparent);
+}
+#db-root .ai-chat-main { background: transparent; }
+
+/* Section headings follow the shell: serif display face, the design's tracking. */
+#db-root .management-heading h1,
+#db-root .reg-section h2,
+#db-root .ai-workspace h1 {
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--ink);
+}
+#db-root .management-heading h1 { font-size: clamp(27px, 3.2vw, 37px); line-height: 1.12; }
+#db-root .reg-section h2 { font-size: 20px; letter-spacing: -.03em; }
+
+/* The starter cards on the AI tab are the design's quiet tiles, not buttons. */
+#db-root .ai-starter-card { box-shadow: none; }
+#db-root .ai-starter-card:hover {
+  border-color: var(--brand-border);
+  background: color-mix(in srgb, var(--brand) 5%, var(--panel-solid));
+}
+
+/* The group-chat header was a navy gradient with white text — the one surface
+   on the page that stayed dark in light mode. The design has no dark band
+   there, so it takes the same panel treatment as every other card head. */
+#db-root .chat-header {
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-solid) 94%, transparent);
+  color: var(--ink);
+}
+#db-root .chat-header h3 {
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--ink);
+}
+#db-root .chat-header p,
+#db-root .chat-header span { color: var(--muted); }
+#db-root .chat-header-avatar {
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
+}
