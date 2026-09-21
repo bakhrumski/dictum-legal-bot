@@ -69,6 +69,22 @@ html, body { margin:0; padding:0; height:100%; }
   transition:opacity 300ms ease;
 }
 #lg-root .lg-wordmark video { opacity:0; }
+/* The motion wordmark is VP9 carrying an alpha channel. A browser that
+   decodes the stream but drops its alpha paints the transparent field as
+   solid black, so the video reads as a box sitting over the hero — which is
+   what mobile Safari does. The script probes a frame's corners and only
+   reveals the video where they really are transparent; where they are not it
+   marks the wrapper and the still wordmark types itself in instead, so the
+   animation is there either way. */
+#lg-root .lg-wordmark.no-alpha video { display:none; }
+#lg-root .lg-wordmark.no-alpha img {
+  animation:lg-type 5.7s steps(24, end) infinite;
+}
+@keyframes lg-type {
+  0%   { clip-path:inset(0 100% 0 0); }
+  55%  { clip-path:inset(0 0 0 0); }
+  100% { clip-path:inset(0 0 0 0); }
+}
 /* A light sweep across the still wordmark until the motion version loads. */
 #lg-root .lg-sheen { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:2; }
 #lg-root .lg-sheen > span {
@@ -105,6 +121,11 @@ html, body { margin:0; padding:0; height:100%; }
 #lg-root .form-heading { font-size:29px; font-weight:700; letter-spacing:-.03em; line-height:1.15; margin:0 0 8px; color:var(--ink); }
 #lg-root .form-subtitle { font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 24px; }
 #lg-root .form-subtitle strong { color:var(--ink2); font-weight:600; }
+/* The note above the Telegram button reads as a caption for the centred
+   button under it, not as body copy for the form, so it centres with it.
+   Scoped to its own class because .form-subtitle is shared with the
+   left-aligned subtitle under each form heading. */
+#lg-root .form-subtitle.tg-note { text-align:center; }
 
 /* ============================================================
    Fields
