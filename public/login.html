@@ -23,8 +23,8 @@
       <div class="lg-hero__inner">
         <div class="lg-wordmark">
           <div class="lg-sheen" aria-hidden="true"><span></span></div>
-          <img src="/brand/wordmark-filled-onnavy.png" alt="JuristAI">
-          <video data-wm="/brand/wordmark-motion-white.webm" muted loop playsinline></video>
+          <img src="/brand/wordmark-motion-white-still.png" alt="JuristAI">
+          <video data-wm="/brand/wordmark-motion-white.webm" data-wm-anim="/brand/wordmark-motion-white.webp" muted loop playsinline></video>
         </div>
         <div class="lg-tagline">Sizning shaxsiy AI yordamchingiz</div>
       </div>
@@ -273,6 +273,29 @@
     } catch (e) { return null; }
   }
 
+  /* Hand the animation to the image instead of the video. The WebP is
+     encoded from the same video with its alpha intact, and Safari has shown
+     animated WebP with transparency since iOS 14, so the frames match what
+     the video shows on desktop. It also plays where autoplay is refused
+     outright (iOS Low Power Mode), since it is an image, not media. Swapped
+     in only once decoded, so the still never blanks while it loads. */
+  function useAnimatedImage(v) {
+    if (v.dataset.wmGiveUp) return;
+    v.dataset.wmGiveUp = '1';
+    var wrap = v.parentElement;
+    if (!wrap) return;
+    wrap.classList.add('no-alpha');
+    var sheen = wrap.querySelector('.lg-sheen');
+    if (sheen) sheen.style.display = 'none';
+    try { v.pause(); } catch (e) {}
+    var img = wrap.querySelector('img');
+    var src = v.getAttribute('data-wm-anim');
+    if (!img || !src) return;
+    var pre = new Image();
+    pre.onload = function () { img.src = src; img.style.opacity = ''; };
+    pre.src = src;
+  }
+
   function play() {
     document.querySelectorAll('#lg-root video[data-wm]').forEach(function (v) {
       v.muted = true; v.loop = true; v.playsInline = true;
@@ -282,28 +305,27 @@
         return;
       }
       v.dataset.bound = '1';
+      /* A video that has not started within a few seconds is not going to:
+         autoplay was refused or the codec is missing. */
+      setTimeout(function () {
+        if (!v.dataset.wmProbed) useAnimatedImage(v);
+      }, 3000);
       v.addEventListener('playing', function () {
-        if (v.dataset.wmProbed) return;
+        if (v.dataset.wmProbed || v.dataset.wmGiveUp) return;
         /* The probe can come back undecided — no frame decoded yet, or the
            canvas refused the read. Give it a few frames, then take the safe
-           answer: the still wordmark always looks right, whereas a wrongly
+           answer: the image path always looks right, whereas a wrongly
            revealed video is a black box over the hero. */
         var tries = 0;
         (function probe() {
           var ok = alphaSurvives(v);
           if (ok === null && ++tries < 6) { setTimeout(probe, 180); return; }
           v.dataset.wmProbed = '1';
+          if (ok !== true) { useAnimatedImage(v); return; }
           var wrap = v.parentElement;
           var img = wrap && wrap.querySelector('img');
           var sheen = wrap && wrap.querySelector('.lg-sheen');
           if (sheen) sheen.style.display = 'none';
-          if (ok !== true) {
-            /* Keep the still wordmark and let CSS type it in instead. */
-            if (wrap) wrap.classList.add('no-alpha');
-            v.dataset.wmGiveUp = '1';
-            v.pause();
-            return;
-          }
           v.style.opacity = '1';
           if (img) img.style.opacity = '0';
         })();
@@ -316,6 +338,7 @@
         if (!r.ok) throw new Error('no asset');
         return r.blob();
       }).then(function (bl) {
+        if (v.dataset.wmGiveUp) return;
         v.src = URL.createObjectURL(bl);
         v.load();
         var p = v.play();

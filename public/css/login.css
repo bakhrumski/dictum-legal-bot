@@ -73,18 +73,11 @@ html, body { margin:0; padding:0; height:100%; }
    decodes the stream but drops its alpha paints the transparent field as
    solid black, so the video reads as a box sitting over the hero — which is
    what mobile Safari does. The script probes a frame's corners and only
-   reveals the video where they really are transparent; where they are not it
-   marks the wrapper and the still wordmark types itself in instead, so the
-   animation is there either way. */
+   reveals the video where they really are transparent. Where they are not,
+   or where the video never starts, the image beside it switches to an
+   animated WebP encoded from the same video, so every browser shows the
+   same frames. */
 #lg-root .lg-wordmark.no-alpha video { display:none; }
-#lg-root .lg-wordmark.no-alpha img {
-  animation:lg-type 5.7s steps(24, end) infinite;
-}
-@keyframes lg-type {
-  0%   { clip-path:inset(0 100% 0 0); }
-  55%  { clip-path:inset(0 0 0 0); }
-  100% { clip-path:inset(0 0 0 0); }
-}
 /* A light sweep across the still wordmark until the motion version loads. */
 #lg-root .lg-sheen { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:2; }
 #lg-root .lg-sheen > span {
