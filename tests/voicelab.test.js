@@ -82,11 +82,11 @@ async function test(name, fn) {
 
   await test('lanes map the current OpenAI tiers onto Comet, Orbit and Halo', () => {
     resetEnv(ON);
-    assert.strictEqual(voicelab.modelFor('gpt-5.6-luna'), 'comet');
-    assert.strictEqual(voicelab.modelFor('gpt-5.6-terra'), 'orbit');
-    assert.strictEqual(voicelab.modelFor('gpt-5.6-sol'), 'halo');
-    assert.strictEqual(voicelab.modelFor('vision'), 'halo');
-    assert.strictEqual(voicelab.modelFor('some-custom-model'), 'orbit', 'unknown ids are the standard lane');
+    assert.strictEqual(voicelab.modelFor('gpt-5.6-luna'), 'aisha-comet');
+    assert.strictEqual(voicelab.modelFor('gpt-5.6-terra'), 'aisha-orbit');
+    assert.strictEqual(voicelab.modelFor('gpt-5.6-sol'), 'aisha-halo');
+    assert.strictEqual(voicelab.modelFor('vision'), 'aisha-halo');
+    assert.strictEqual(voicelab.modelFor('some-custom-model'), 'aisha-orbit', 'unknown ids are the standard lane');
     process.env.VOICELAB_MODEL_STANDARD = 'orbit-2';
     assert.strictEqual(voicelab.modelFor('gpt-5.6-terra'), 'orbit-2');
   });
@@ -132,7 +132,7 @@ async function test(name, fn) {
     assert.strictEqual(calls[0].url, 'https://api.voicelab.uz/v1/chat/completions');
     assert.strictEqual(calls[0].init.headers.Authorization, 'Bearer vlk_test_key');
     assert.deepStrictEqual(calls[0].body, {
-      model: 'orbit',
+      model: 'aisha-orbit',
       messages: [
         { role: 'system', content: 'Siz yuristsiz.' },
         { role: 'user', content: 'Savol' },
@@ -143,7 +143,7 @@ async function test(name, fn) {
       response_format: { type: 'json_object' },
     });
     assert.strictEqual(r.text, 'Salom');
-    assert.strictEqual(r.provider, 'voicelab/orbit');
+    assert.strictEqual(r.provider, 'voicelab/aisha-orbit');
     assert.deepStrictEqual(r.usage, { inTokens: 12, outTokens: 3, cachedTokens: 4 });
   });
 
@@ -156,7 +156,7 @@ async function test(name, fn) {
     ];
     const r = await voicelab.chatCompletion('vision', [{ role: 'user', content }]);
     assert.strictEqual(calls[0].url, 'https://example.test/v1/chat/completions', 'base URL override, trailing slash trimmed');
-    assert.strictEqual(calls[0].body.model, 'halo');
+    assert.strictEqual(calls[0].body.model, 'aisha-halo');
     assert.deepStrictEqual(calls[0].body.messages[0].content, content);
     assert.strictEqual(r.text, 'Matn', 'array content is read as text');
   });
@@ -165,7 +165,7 @@ async function test(name, fn) {
     resetEnv(ON);
     stubFetch(() => new Response('{"error":"unauthorized"}', { status: 401 }));
     await assert.rejects(voicelab.chatCompletion('cheap', [{ role: 'user', text: 'x' }]),
-      (e) => e.status === 401 && /VoiceLab comet 401/.test(e.message));
+      (e) => e.status === 401 && /VoiceLab aisha-comet 401/.test(e.message));
     stubFetch(() => jsonResponse({ id: 'req_1', status: 'queued' }));
     await assert.rejects(voicelab.chatCompletion('cheap', [{ role: 'user', text: 'x' }]),
       /no choices \(status: queued\)/);
@@ -185,7 +185,7 @@ async function test(name, fn) {
     const tokens = [];
     const r = await voicelab.chatCompletionStream('gpt-5.6-luna', [{ role: 'user', text: 'Salom' }], {}, (t) => tokens.push(t));
     assert.strictEqual(calls[0].body.stream, true);
-    assert.strictEqual(calls[0].body.model, 'comet');
+    assert.strictEqual(calls[0].body.model, 'aisha-comet');
     assert.deepStrictEqual(tokens, ['Assa', 'lomu alaykum']);
     assert.strictEqual(r.text, 'Assalomu alaykum');
     assert.deepStrictEqual(r.usage, { inTokens: 9, outTokens: 4, cachedTokens: 0 });
@@ -207,7 +207,11 @@ async function test(name, fn) {
   await test('VoiceLab calls are priced from VOICELAB_PRICES, never as free', () => {
     const { calculateTokenCost } = fresh('../src/ai/model-pricing');
     resetEnv();
-    assert.strictEqual(calculateTokenCost('voicelab/orbit', { inTokens: 1000 }), null, 'no price → unknown, not $0');
+    assert.strictEqual(calculateTokenCost('voicelab/unknown-model', { inTokens: 1000 }), null, 'no price → unknown, not $0');
+    // Built-in list prices (console, 2026-09-23): 1M in + 1M out.
+    assert.ok(Math.abs(calculateTokenCost('voicelab/aisha-comet', { inTokens: 1e6, outTokens: 1e6 }) - 1.15) < 1e-9);
+    assert.ok(Math.abs(calculateTokenCost('voicelab/aisha-orbit', { inTokens: 1e6, outTokens: 1e6 }) - 5.40) < 1e-9);
+    assert.ok(Math.abs(calculateTokenCost('voicelab/aisha-halo', { inTokens: 1e6, outTokens: 1e6 }) - 15.90) < 1e-9);
     process.env.VOICELAB_PRICES = '{"orbit":{"in":1,"out":4}}';
     assert.ok(Math.abs(calculateTokenCost('voicelab/orbit', { inTokens: 1e6, outTokens: 5e5 }) - 3) < 1e-12);
     process.env.VOICELAB_PRICES = 'not json';
@@ -232,7 +236,7 @@ async function test(name, fn) {
   });
 
   await test('switched on, classify goes to Comet and is priced as VoiceLab', async () => {
-    resetEnv({ ...ON, GPT_API_KEY: 'sk-test', VOICELAB_PRICES: '{"comet":{"in":1,"out":1}}' });
+    resetEnv({ ...ON, GPT_API_KEY: 'sk-test', VOICELAB_PRICES: '{"aisha-comet":{"in":1,"out":1}}' });
     stubFetch(() => jsonResponse({ choices: [{ message: { content: classifyReply } }], usage: { prompt_tokens: 1e6, completion_tokens: 0 } }));
     const pipeline = fresh('../src/rag/hybrid-pipeline');
     const seen = [];
@@ -240,9 +244,9 @@ async function test(name, fn) {
     await pipeline.classify('Mehnat shartnomasi');
     assert.strictEqual(calls.length, 1);
     assert.strictEqual(calls[0].url, VOICELAB_URL);
-    assert.strictEqual(calls[0].body.model, 'comet');
+    assert.strictEqual(calls[0].body.model, 'aisha-comet');
     assert.deepStrictEqual(calls[0].body.response_format, { type: 'json_object' });
-    assert.strictEqual(seen[0].model, 'voicelab/comet');
+    assert.strictEqual(seen[0].model, 'voicelab/aisha-comet');
     assert.ok(Math.abs(seen[0].costUsd - 1) < 1e-9, 'cost from VOICELAB_PRICES, not the Luna rate');
   });
 
@@ -254,7 +258,7 @@ async function test(name, fn) {
     const pipeline = fresh('../src/rag/hybrid-pipeline');
     const r = await pipeline.generate({ query: 'Savol', systemPrompt: 'Tizim' });
     assert.deepStrictEqual(calls.map((c) => c.url), [VOICELAB_URL, OPENAI_URL]);
-    assert.strictEqual(calls[0].body.model, 'orbit');
+    assert.strictEqual(calls[0].body.model, 'aisha-orbit');
     assert.strictEqual(calls[1].body.model, 'gpt-5.6-terra');
     assert.strictEqual(r.text, 'OpenAI javobi');
   });

@@ -3796,7 +3796,10 @@ try {
     crossCheckLegalAnswer,
     hydrateMentionedOfficialActChunks,
     hydrateLexAnchors,
-    chatModel: MODELS.chat,
+    // The Telegram answer model can differ from the web chat's, so the bot can
+    // be trialled on its own, e.g. MODEL_TELEGRAM=voicelab/aisha-comet with
+    // LLM_PROVIDER off keeps the website on its current model.
+    chatModel: process.env.MODEL_TELEGRAM || MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
   });
 } catch (e) {

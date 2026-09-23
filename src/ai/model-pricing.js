@@ -18,16 +18,21 @@ const MODEL_PRICING = Object.freeze({
   'gpt-5.6-luna':     Object.freeze({ in: 0.20, out:  1.20, cached: 0.02 }),
   'gemini-2.5-flash': Object.freeze({ in: 0.30, out:  2.50, cached: 0.03 }),
   'text-embedding-3-small': Object.freeze({ in: 0.02, out: 0, cached: 0.02 }),
+  // VoiceLab list prices from the VoiceLab console, checked 2026-09-23. These
+  // are the undiscounted rates on purpose: a trial bought at a discount has to
+  // be judged at the price the platform would pay after it.
+  'voicelab/aisha-comet': Object.freeze({ in: 0.45, out:  0.70, cached: null }),
+  'voicelab/aisha-orbit': Object.freeze({ in: 1.20, out:  4.20, cached: null }),
+  'voicelab/aisha-halo':  Object.freeze({ in: 3.20, out: 12.70, cached: null }),
 });
 
 /**
- * VoiceLab prices are read from the environment rather than written here,
- * because they are billed in their own contract terms and change without a
- * public price page this file could cite. VOICELAB_PRICES is JSON in USD per
- * 1M tokens, keyed by VoiceLab model id:
- *   {"comet":{"in":0.1,"out":0.4},"orbit":{"in":1,"out":4},"halo":{"in":2,"out":8}}
- * Calls are logged as 'voicelab/<model>'. A model with no price here returns
- * null like any unknown model, so it is never silently reported as free.
+ * VoiceLab calls are logged as 'voicelab/<model>'. The table above carries
+ * the list prices; VOICELAB_PRICES (JSON, USD per 1M tokens, keyed by
+ * VoiceLab model id) overrides them without a deploy when VoiceLab reprices:
+ *   {"aisha-comet":{"in":0.45,"out":0.70}}
+ * A model priced in neither place returns null like any unknown model, so it
+ * is never silently reported as free.
  */
 function voicelabPricing(model) {
   const m = /^voicelab\/(.+)$/i.exec(String(model || ''));
@@ -54,7 +59,7 @@ function normalizeCount(value) {
  * free merely because its provider price is not configured here.
  */
 function calculateTokenCost(model, { inTokens = 0, outTokens = 0, cachedTokens = 0 } = {}) {
-  const pricing = MODEL_PRICING[String(model || '').toLowerCase()] || voicelabPricing(model);
+  const pricing = voicelabPricing(model) || MODEL_PRICING[String(model || '').toLowerCase()];
   if (!pricing) return null;
 
   const input = normalizeCount(inTokens);

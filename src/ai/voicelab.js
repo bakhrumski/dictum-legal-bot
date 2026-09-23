@@ -36,10 +36,10 @@
  *   LLM_PROVIDER             'voicelab' to switch on
  *   VOICELAB_API_KEY         Bearer key (vlk_...). Lives in Render, never in git.
  *   VOICELAB_BASE_URL        default https://api.voicelab.uz
- *   VOICELAB_MODEL_CHEAP     default comet
- *   VOICELAB_MODEL_STANDARD  default orbit
- *   VOICELAB_MODEL_PREMIUM   default halo
- *   VOICELAB_MODEL_VISION    default halo
+ *   VOICELAB_MODEL_CHEAP     default aisha-comet
+ *   VOICELAB_MODEL_STANDARD  default aisha-orbit
+ *   VOICELAB_MODEL_PREMIUM   default aisha-halo
+ *   VOICELAB_MODEL_VISION    default aisha-halo
  *   VOICELAB_LANES           comma list, default cheap,standard,premium,vision
  *   VOICELAB_FALLBACK        'false' to surface VoiceLab errors instead of
  *                            falling back to the previous provider
@@ -49,11 +49,12 @@
 const DEFAULT_BASE_URL = 'https://api.voicelab.uz';
 const CHAT_PATH = '/v1/chat/completions';
 const LANES = ['cheap', 'standard', 'premium', 'vision'];
+// Model ids as the VoiceLab console lists them (checked 2026-09-23).
 const DEFAULT_MODELS = Object.freeze({
-  cheap: 'comet',
-  standard: 'orbit',
-  premium: 'halo',
-  vision: 'halo',
+  cheap: 'aisha-comet',     // 31B, 258k context
+  standard: 'aisha-orbit',  // 755B, 1M context
+  premium: 'aisha-halo',    // 2.8T, 1M context
+  vision: 'aisha-halo',
 });
 
 // The OpenAI ids the routers pass today, and the lane each one stands for.
