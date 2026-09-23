@@ -48,8 +48,12 @@ test-db.js
 test-api.js
 nul
 
-# Claude Code
-.claude/
+# Claude Code. Personal state (settings.local.json, worktrees, caches) stays
+# local; the shared settings and the SessionStart hook that installs
+# dependencies in cloud sessions are tracked so every session gets them.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 # Agent skills installed by `npx skills add`. The skill bodies are vendored
 # third-party instruction files, so they stay out of the repository; the

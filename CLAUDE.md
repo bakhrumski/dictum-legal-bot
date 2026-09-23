@@ -1,0 +1,107 @@
+# JuristAI — notes for Claude Code
+
+JuristAI is an Uzbek legal assistant: a Telegram bot plus the juristai.uz web
+app. The repository is `bakhrumski/dictum-legal-bot` (the name predates the
+brand). One Node process runs both: `index.js` loads `src/api/server.js`, which
+starts Express and the bot.
+
+The owner writes in Uzbek; answer in Uzbek unless asked otherwise.
+
+## Working agreement
+
+- **After every push, check whether the branch has an open PR.** If it has
+  none, open one and give the link. A push without a visible PR has been
+  missed more than once; do not assume.
+- **Merging is split by what the change touches:**
+  - Frontend only (`public/**` — HTML, CSS, client JS, images, fonts, media):
+    merge the PR yourself once verified, then report the link.
+  - Anything else — `src/**`, `migrations/**`, `scripts/**`, auth, payments,
+    tariffs, database, `package.json`, config, tests, docs: open the PR and
+    **ask before merging**.
+- `main` deploys straight to production on Render. A merge is a release.
+- If the branch's PR has already been merged, restart the branch from
+  `origin/main` before new work; never stack commits on merged history.
+- Verify visual work in a real browser at desktop and phone widths (~390px)
+  before calling it done. Report what was checked, and say plainly what was
+  not (e.g. no real iPhone available — Safari behaviour was simulated).
+
+## Commands
+
+```bash
+npm start                 # server + bot (needs .env; see below)
+npm test                  # core suite: phase1 + rag-search — must pass
+npm run test:workspace    # Workspace API + frontend contract
+npm run test:all          # broad suite
+```
+
+There is no linter. Cloud sessions get `node_modules` from the SessionStart
+hook in `.claude/hooks/session-start.sh`.
+
+Known state of the suites (Sept 2026):
+- `npm test` passes (58 + 5).
+- `tests/authz-matrix.test.js` needs a running server on :3000 and aborts
+  otherwise — expected, not a regression.
+- `tests/workspace-phase1.test.js` has one failing test: it asserts exact code
+  strings that the Workspace graph/dashboard redesign changed on purpose
+  (`nodeTop=cardTop+GRAPH_CARD_H+26` is now `+56`; the tab label gained
+  classes). The test is stale, not the code — update the assertions to the
+  current design rather than reverting the code.
+
+## Layout
+
+- `src/api/server.js` — Express app and most routes.
+- `src/bot/` — Telegram bot. `src/agents/` — agent flows.
+- `src/rag/` — legal corpus ingest and hybrid search (lex.uz).
+- `src/ai/model-pricing.js` — **single source of truth for model prices.**
+  `src/rag/hybrid-pipeline.js` still carries its own `PRICING` table with
+  stale Terra rates (2.50/15.00 vs 2.00/12.00); fold it into model-pricing
+  when touching that file.
+- `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
+  platinum), daily limits, opinion credits and the margin maths.
+- `src/workspace/` — Platinum Workspace: routes, authz, Supabase
+  realtime/storage, Workspace AI.
+- `public/` — static pages: `index.html` (landing), `login.html`,
+  `dashboard.html` (the app), `ai-dashboard.html` (the design reference the
+  dashboard follows), plus tariff, attorneys, templates, legal pages.
+
+## Frontend rules
+
+- **Design source of truth:** `docs/brand/*.dc.html` canvases and
+  `docs/design-handoff/` (`ANIMATIONS.md` lists which animations exist — do
+  not invent new ones). Match the rendered canvas, not its inline declarations;
+  the canvas runtime overrides some of them.
+- **Type:** landing and login use Space Grotesk. The dashboard uses Inter for
+  UI, Source Serif 4 for headings, JetBrains Mono (tabular) for figures.
+- **Three token systems coexist:** `--jai-*` (`redesign-v2.css`, on `:root`),
+  `--ws-*` (`workspace.css`, declared on `.workspace-app` only — they do not
+  exist outside it), and `--fg/--bg/--accent` (`design-tokens.css`).
+  `tokens.css` + `dashboard.css` are scoped to `#db-root`. Use a token only
+  where it is actually defined.
+- **Shared classes:** before styling a class, grep where else it is used.
+  `.form-subtitle` on login, for example, is shared between form subtitles and
+  the Telegram note; give an element its own class rather than changing the
+  shared one.
+- `[hidden]` loses to any class that sets `display`; pages carry an explicit
+  `[hidden]{display:none!important}` for that reason.
+- **`dashboard.html` DOM contract:** the page's own scripts look up 222 ids and
+  34 classes. A restyle must not drop any of them — markup changes are
+  presentation only; handlers, ids and data flow stay.
+- Workspace: a task created in List must appear in Timeline (Gantt) and Graph
+  without a reload; all three read from `/workspaces/:id/tasks`.
+- Login wordmark: `wordmark-motion-white.webm` (VP9 + alpha) on browsers that
+  keep the alpha; everywhere else (iOS Safari, or autoplay refused) the
+  animated `wordmark-motion-white.webp` made from the same video. Regenerate
+  both from one source if the animation changes, or the two will drift.
+
+## Security
+
+- Never commit `.env` or anything like it. `.env.txt` once leaked a bot token
+  and `JWT_SECRET`; both were rotated. Secrets live in Render's environment.
+- Session cookies are signed with `SESSION_SECRET`, falling back to
+  `JWT_SECRET` — keep both set in production.
+
+## Shell gotcha
+
+`pkill -f <pattern>` matches the shell running it when the pattern appears in
+the same command line, and kills the session's own shell (exit 144). Kill by
+PID instead.
