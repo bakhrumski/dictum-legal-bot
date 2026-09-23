@@ -357,6 +357,48 @@ bot.onText(/\/unlink/, async (msg) => {
   }
 });
 
+// /testmode - let a master admin use the bot as an ordinary user
+// A linked admin's messages are never treated as questions, so the owner had
+// no way to try the bot — text or voice — from his own account. Test mode
+// lifts that gate for one chat. It lives in memory and switches itself off
+// after TEST_MODE_TTL_MS, so a forgotten test mode cannot outlive a restart
+// or the afternoon; admin notifications keep arriving either way.
+const TEST_MODE_TTL_MS = 12 * 60 * 60 * 1000;
+const adminTestMode = new Map();   // chatId → expiresAt
+function inAdminTestMode(chatId) {
+  const until = adminTestMode.get(chatId);
+  if (!until) return false;
+  if (Date.now() > until) { adminTestMode.delete(chatId); return false; }
+  return true;
+}
+
+bot.onText(/^\/testmode(?:@\w+)?(?:\s+(on|off))?\s*$/i, async (msg, match) => {
+  const chatId = msg.chat.id;
+  try {
+    const r = await pool.query('SELECT role FROM admins WHERE telegram_chat_id = $1', [chatId]);
+    if (!r.rows.length || r.rows[0].role !== 'master') {
+      bot.sendMessage(chatId, 'ℹ️ Bu buyruq faqat bosh administrator uchun.');
+      return;
+    }
+    const arg = (match && match[1] || '').toLowerCase();
+    const turnOn = arg ? arg === 'on' : !inAdminTestMode(chatId);
+    if (turnOn) {
+      adminTestMode.set(chatId, Date.now() + TEST_MODE_TTL_MS);
+      bot.sendMessage(chatId,
+        '🧪 Test rejimi yoqildi (12 soat).\n\n' +
+        'Endi bot sizni oddiy foydalanuvchi deb ko\'radi: matnli yoki ovozli savol yuboring — AI javob beradi. ' +
+        'Limitlar ham oddiy foydalanuvchinikidek hisoblanadi.\n\n' +
+        'Admin bildirishnomalari odatdagidek keladi.\n/testmode off — o\'chirish');
+    } else {
+      adminTestMode.delete(chatId);
+      bot.sendMessage(chatId, '✅ Test rejimi o\'chirildi. Siz yana admin sifatida ulangansiz.');
+    }
+  } catch (error) {
+    console.error('Testmode error:', error);
+    bot.sendMessage(chatId, '❌ Xatolik yuz berdi.');
+  }
+});
+
 // /cancel - Cancel pending response
 bot.onText(/\/cancel/, (msg) => {
   const chatId = msg.chat.id;
@@ -1207,7 +1249,8 @@ bot.on('message', async (msg) => {
   }
 
   // ---- CHECK IF SENDER IS A LINKED ADMIN (without pending response) ----
-  try {
+  // A master admin in /testmode falls through to the ordinary user path.
+  if (!inAdminTestMode(chatId)) try {
     const adminCheck = await pool.query(
       'SELECT id, full_name FROM admins WHERE telegram_chat_id = $1',
       [chatId]
@@ -1215,7 +1258,7 @@ bot.on('message', async (msg) => {
 
     if (adminCheck.rows.length > 0) {
       // This is a linked admin - don't treat as user request
-      bot.sendMessage(chatId, `👋 ${adminCheck.rows[0].full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}\n/me - Hisob holati\n/unlink - Uzish`);
+      bot.sendMessage(chatId, `👋 ${adminCheck.rows[0].full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}\n/me - Hisob holati\n/unlink - Uzish\n/testmode - Botni oddiy foydalanuvchi sifatida sinash (faqat bosh admin)`);
       return;
     }
   } catch (error) {
