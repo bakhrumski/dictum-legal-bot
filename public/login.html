@@ -283,23 +283,30 @@
       }
       v.dataset.bound = '1';
       v.addEventListener('playing', function () {
-        var wrap = v.parentElement;
-        if (alphaSurvives(v) === false) {
-          /* Keep the still wordmark and let CSS type it in instead. */
-          if (wrap) {
-            wrap.classList.add('no-alpha');
-            var s = wrap.querySelector('.lg-sheen');
-            if (s) s.style.display = 'none';
+        if (v.dataset.wmProbed) return;
+        /* The probe can come back undecided — no frame decoded yet, or the
+           canvas refused the read. Give it a few frames, then take the safe
+           answer: the still wordmark always looks right, whereas a wrongly
+           revealed video is a black box over the hero. */
+        var tries = 0;
+        (function probe() {
+          var ok = alphaSurvives(v);
+          if (ok === null && ++tries < 6) { setTimeout(probe, 180); return; }
+          v.dataset.wmProbed = '1';
+          var wrap = v.parentElement;
+          var img = wrap && wrap.querySelector('img');
+          var sheen = wrap && wrap.querySelector('.lg-sheen');
+          if (sheen) sheen.style.display = 'none';
+          if (ok !== true) {
+            /* Keep the still wordmark and let CSS type it in instead. */
+            if (wrap) wrap.classList.add('no-alpha');
+            v.dataset.wmGiveUp = '1';
+            v.pause();
+            return;
           }
-          v.dataset.wmGiveUp = '1';
-          v.pause();
-          return;
-        }
-        v.style.opacity = '1';
-        var img = wrap && wrap.querySelector('img');
-        if (img) img.style.opacity = '0';
-        var sheen = wrap && wrap.querySelector('.lg-sheen');
-        if (sheen) sheen.style.display = 'none';
+          v.style.opacity = '1';
+          if (img) img.style.opacity = '0';
+        })();
       });
       v.addEventListener('pause', function () {
         if (v.dataset.wmGiveUp) return;
