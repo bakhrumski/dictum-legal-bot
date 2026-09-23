@@ -41,11 +41,10 @@ Known state of the suites (Sept 2026):
 - `npm test` passes (58 + 5).
 - `tests/authz-matrix.test.js` needs a running server on :3000 and aborts
   otherwise — expected, not a regression.
-- `tests/workspace-phase1.test.js` has one failing test: it asserts exact code
-  strings that the Workspace graph/dashboard redesign changed on purpose
-  (`nodeTop=cardTop+GRAPH_CARD_H+26` is now `+56`; the tab label gained
-  classes). The test is stale, not the code — update the assertions to the
-  current design rather than reverting the code.
+- `tests/workspace-phase1.test.js` passes. It asserts exact code strings
+  from the Workspace frontend, so a redesign that renames a class will fail
+  it; update the assertion to the current design rather than reverting the
+  code.
 
 ## Layout
 

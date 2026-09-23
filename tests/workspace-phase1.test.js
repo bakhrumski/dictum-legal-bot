@@ -441,7 +441,9 @@ function transactionalPool(handler) {
     const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'workspace', 'routes.js'), 'utf8');
     assert.ok(dashboard.includes('id="workspaceApp"'));
     assert.ok(dashboard.includes('./js/workspace.js'));
-    assert.ok(dashboard.includes('<span class="tab-label">Workspace</span>'));
+    // The bottom-bar label carries db-tab-label and a data-r hook since the
+    // dashboard shell redesign; match the label, not its exact attributes.
+    assert.ok(/<span class="tab-label[^"]*"[^>]*>Workspace<\/span>/.test(dashboard), 'the bottom bar keeps a Workspace tab');
     assert.ok(dashboard.includes("hasPendingWorkspaceInvite ? 'jamoa'"), 'pending invitations must resume in Workspace after login');
     assert.ok(frontend.includes("channel.on('postgres_changes'"));
     assert.ok(frontend.includes("channel.on('presence'"));
@@ -458,8 +460,12 @@ function transactionalPool(handler) {
     // The canvas heads each timeline row with the matter over the person who
     // carries it; the title wraps and the name is the part that must not run
     // past its column.
-    assert.ok(frontend.includes('ws-tl-who-name'), 'timeline rows need an ellipsis boundary on the owner');
-    assert.ok(styles.includes('.ws-tl-who-name { font-size: 11.5px; color: var(--ws-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }'));
+    // The owner line is ws-tl-whoname since the ai-dashboard layout; its
+    // ellipsis lives in dashboard.css with the rest of the canvas row styles.
+    const dashboardStyles = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'dashboard.css'), 'utf8');
+    assert.ok(frontend.includes('ws-tl-whoname'), 'timeline rows need an ellipsis boundary on the owner');
+    assert.ok(/\.ws-tl-whoname\s*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/.test(dashboardStyles),
+      'the owner name truncates instead of running past its column');
     assert.ok(frontend.includes('matterAndOwner'), 'the timeline column is labelled as the canvas labels it');
     assert.ok(styles.includes('appearance: none;'), 'Workspace selects should use the shared dropdown treatment');
     assert.ok(frontend.includes('function enhanceDropdowns(scope)'), 'all Workspace selects need custom dropdown enhancement');
@@ -480,8 +486,11 @@ function transactionalPool(handler) {
     // The canvas's row is the title over 'owner · tag · deadline', with the
     // status and the AI control at the end. The description it has no line for
     // stays on the task itself.
-    assert.ok(frontend.includes('ws-matter-row'), 'the list row must be the one the canvas draws');
-    assert.ok(frontend.includes('ws-matter-due'), 'the deadline carries its own colour');
+    // The list row is the canvas's <article class="ws-matter">: title, then
+    // owner · tag · deadline, then the state and the AI control.
+    assert.ok(frontend.includes('<article class="ws-matter" data-action="open-task"'), 'the list row must be the one the canvas draws');
+    assert.ok(frontend.includes("var dueColor=due.tone==='overdue'?'var(--danger)'"), 'the deadline carries its own colour');
+    assert.ok(frontend.includes("color:'+dueColor+'"), 'the deadline colour is applied to the deadline itself');
     assert.ok(frontend.includes('ws-matter-ask'), 'each row opens Workspace AI on its matter');
     assert.ok(frontend.includes('renderWorkloadPanel'), 'the list view carries who is carrying how much');
     // The canvas moves a matter's people with it, not behind it: the 50ms
@@ -511,7 +520,7 @@ function transactionalPool(handler) {
     // The spec's band: cards at y=14, avatars at y=198, gutters 14 inside a
     // group and 46 between groups, tightening twice before the band wraps.
     assert.ok(frontend.includes('var edge=10,gap=14,groupGap=46;'), 'the band uses the spec gutters');
-    assert.ok(frontend.includes('var cardTop=14,nodeTop=cardTop+GRAPH_CARD_H+26;'), 'cards sit at 14 and avatars at 198');
+    assert.ok(frontend.includes('var cardTop=14,nodeTop=cardTop+GRAPH_CARD_H+56;'), 'cards sit at 14 and avatars at 228');
     assert.ok(frontend.includes("if(!fits(gap,groupGap)){gap=10;groupGap=30;}"), 'gutters tighten before wrapping');
     assert.ok(frontend.includes(String.fromCharCode(34)+'5 5'+String.fromCharCode(34)) && frontend.includes('stroke-dasharray='), 'cords carry the spec stroke on the path itself');
     // One matter, one owner, one cord — not a mesh to every related member.
