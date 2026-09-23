@@ -21,6 +21,15 @@ function sineWav() {
   return r.stdout;
 }
 
+// A Telegram-style voice note: Opus in an Ogg container, 48 kHz mono.
+function sineOgg(seconds) {
+  const bin = require('ffmpeg-static');
+  const r = spawnSync(bin, ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=300:duration=${seconds}`,
+    '-c:a', 'libopus', '-ar', '48000', '-ac', '1', '-f', 'ogg', 'pipe:1'], { maxBuffer: 1 << 24 });
+  assert.strictEqual(r.status, 0, String(r.stderr));
+  return r.stdout;
+}
+
 let passed = 0;
 let failed = 0;
 async function test(name, fn) {
@@ -44,17 +53,40 @@ async function test(name, fn) {
     assert.strictEqual(speech.ttsEnabled(), false);
   });
 
-  await test('transcribe sends the voice note in Uzbek and returns the text', async () => {
+  await test('a Telegram OGG/Opus voice note is sent to STT as 16 kHz mono WAV with a true header', async () => {
     env({ VOICELAB_API_KEY: 'vlk_x' });
+    const ogg = sineOgg(2);
     let sent;
     speech._setClient({ stt: { transcribe: async (p) => { sent = p; return { id: 't1', transcript: '  Ish haqim kechikyapti  ' }; } } });
-    const text = await speech.transcribe(Buffer.from('ogg'), { contentType: 'audio/ogg' });
+    const text = await speech.transcribe(ogg, { contentType: 'audio/ogg' });
     assert.strictEqual(text, 'Ish haqim kechikyapti');
     assert.strictEqual(sent.language, 'uz');
-    assert.strictEqual(sent.audio.filename, 'voice.ogg');
-    assert.strictEqual(sent.audio.contentType, 'audio/ogg');
+    assert.strictEqual(sent.audio.filename, 'voice.wav');
+    assert.strictEqual(sent.audio.contentType, 'audio/wav');
+    const wav = sent.audio.data;
+    assert.strictEqual(wav.toString('ascii', 0, 4), 'RIFF');
+    assert.strictEqual(wav.readUInt32LE(4), wav.length - 8, 'RIFF size is the real one, not 0xFFFFFFFF');
+    assert.strictEqual(wav.readUInt16LE(22), 1, 'mono');
+    assert.strictEqual(wav.readUInt32LE(24), 16000, '16 kHz');
+    const d = wav.indexOf('data');
+    const seconds = wav.readUInt32LE(d + 4) / (16000 * 2);
+    assert.ok(Math.abs(seconds - 2) < 0.05, `data chunk holds the 2 s of speech, got ${seconds}`);
   });
 
+  await test('if the transcode fails the original audio is sent as is', async () => {
+    env({ VOICELAB_API_KEY: 'vlk_x' });
+    let sent;
+    speech._setClient({ stt: { transcribe: async (p) => { sent = p; return { id: 't1', transcript: 'Matn' }; } } });
+    const warn = console.warn; console.warn = () => {};
+    try {
+      assert.strictEqual(await speech.transcribe(Buffer.from('not audio'), { contentType: 'audio/ogg' }), 'Matn');
+    } finally { console.warn = warn; }
+    assert.strictEqual(sent.audio.filename, 'voice.ogg');
+    assert.strictEqual(sent.audio.contentType, 'audio/ogg');
+    assert.strictEqual(sent.audio.data.toString(), 'not audio');
+  });
+
+  const quiet = console.warn; console.warn = () => {};   // junk buffers below skip the transcode
   await test('a queued transcription is polled until it has text', async () => {
     env({ VOICELAB_API_KEY: 'vlk_x', VOICELAB_STT_LANGUAGE: 'ru' });
     let polls = 0; let lang;
@@ -74,6 +106,7 @@ async function test(name, fn) {
     await assert.rejects(speech.transcribe(Buffer.from('x'), { pollMs: 1, maxWaitMs: 20 }), /still queued/);
   });
 
+  console.warn = quiet;
   await test('answers are cleaned of Markdown, links and bullets before speaking', () => {
     env();
     const t = speech.textForSpeech('**Mehnat kodeksi**, 100-modda.\n- birinchi\n• ikkinchi\n[Lex.uz](https://lex.uz/docs/1) va https://lex.uz/x `kod`');
