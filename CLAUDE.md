@@ -56,6 +56,17 @@ Known state of the suites (Sept 2026):
   `src/rag/hybrid-pipeline.js` still carries its own `PRICING` table with
   stale Terra rates (2.50/15.00 vs 2.00/12.00); fold it into model-pricing
   when touching that file.
+- `src/ai/voicelab.js` — VoiceLab LLM switch (OpenAI-compatible Chat
+  Completions at `api.voicelab.uz`). Off unless `LLM_PROVIDER=voicelab` and
+  `VOICELAB_API_KEY` are set; turning it off is an env change, not a deploy.
+  Lanes: cheap → Comet, standard → Orbit, premium and vision → Halo, each
+  overridable (`VOICELAB_MODEL_*`), limited with `VOICELAB_LANES`. A VoiceLab
+  failure falls back to the previous provider unless `VOICELAB_FALLBACK=false`.
+  Hooked at five places only: `callOpenAI` / `callOpenAIStream` and
+  `triggerAiScreening` in server.js, `callOpenAIModel` in hybrid-pipeline.js,
+  `callVisionOCR` in ocr/routes.js. Embeddings are deliberately not routed —
+  changing them means re-embedding the corpus. Prices come from
+  `VOICELAB_PRICES` (JSON, USD/1M); without it VoiceLab spend is unpriced.
 - `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
   platinum), daily limits, opinion credits and the margin maths.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase

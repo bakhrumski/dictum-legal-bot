@@ -572,9 +572,14 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
   const out = {
     keys: {
       GPT_API_KEY: !!process.env.GPT_API_KEY,
+      VOICELAB: voicelab.isEnabled(),
       GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
     },
     configured: MODELS,
+    voicelab: voicelab.isEnabled()
+      ? { cheap: voicelab.modelFor('cheap'), standard: voicelab.modelFor('standard'),
+          premium: voicelab.modelFor('premium'), vision: voicelab.modelFor('vision') }
+      : null,
     results: {},
   };
   const probe = [{ role: 'user', text: 'Reply with exactly: OK' }];
@@ -584,7 +589,8 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
   for (const [label, model] of targets) {
     try {
       const r = await callOpenAI(probe, { model, maxTokens: 20 });
-      out.results[label] = { model, ok: true, reply: (r.text || '').trim().slice(0, 40) };
+      // provider says who actually answered: 'voicelab/<model>' or the OpenAI id.
+      out.results[label] = { model, ok: true, provider: r.provider, reply: (r.text || '').trim().slice(0, 40) };
     } catch (e) {
       out.results[label] = { model, ok: false, error: e.message.substring(0, 200) };
     }
@@ -3280,6 +3286,8 @@ async function callGemini(messages, options = {}) {
 // so in practice every streamed answer was served by the FALLBACK provider.
 // This restores the intended routing for streamed answers too.
 async function callOpenAIStream(messages, options = {}, onToken) {
+  const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard, onToken);
+  if (viaVoiceLab) return viaVoiceLab;
   const gptKey = process.env.GPT_API_KEY;
   if (!gptKey) throw new Error('GPT_API_KEY sozlanmagan');
   const { temperature = 0.2, maxTokens = 8192 } = options;
@@ -3469,6 +3477,43 @@ const MODELS = {
 // One shared price source keeps the spend log, budget guard, shadow report,
 // and tests aligned with the current provider rates.
 const { calculateTokenCost } = require('../ai/model-pricing');
+// VoiceLab switch (LLM_PROVIDER=voicelab). Off by default; when off, every
+// router below runs exactly as before. See src/ai/voicelab.js.
+const voicelab = require('../ai/voicelab');
+
+/** A paid provider is reachable: OpenAI as before, or VoiceLab when switched on. */
+function paidProviderConfigured() {
+  return !!process.env.GPT_API_KEY || voicelab.isEnabled();
+}
+
+/**
+ * Serve a callOpenAI-shaped request from VoiceLab. Returns null when the call
+ * should go to the previous provider instead — VoiceLab off, the lane not
+ * routed, or VoiceLab failed and fallback is allowed.
+ */
+async function tryVoiceLab(messages, options, model, onToken) {
+  if (!voicelab.routes(model)) return null;
+  try {
+    const { temperature = 0.2, maxTokens = 8192 } = options;
+    const opts = { temperature, maxTokens };
+    const r = onToken
+      ? await voicelab.chatCompletionStream(model, messages, opts, onToken)
+      : await voicelab.chatCompletion(model, messages, opts);
+    recordSpend({ model: r.provider, inTokens: r.usage.inTokens, outTokens: r.usage.outTokens,
+      cachedTokens: r.usage.cachedTokens, userId: options.userId || null, endpoint: options.endpoint || null });
+    return { text: r.text, provider: r.provider, usage: {
+      ...r.usage,
+      costUsd: calculateTokenCost(r.provider, r.usage) || 0,
+    } };
+  } catch (err) {
+    if (!voicelab.fallbackAllowed()) throw err;
+    // A stream that already emitted tokens cannot be silently restarted on
+    // another provider; the stream caller handles that case itself.
+    console.warn(`[VoiceLab] ${voicelab.modelFor(model)} failed, using previous provider:`, err.message);
+    if (onToken && err.partialStream) throw err;
+    return null;
+  }
+}
 
 // Record every main-path AI call into llm_spend_log. Previously only the R&D
 // hybrid pipeline logged spend, so the master spend report saw almost nothing
@@ -3513,6 +3558,8 @@ async function paidModelsAllowed() {
 }
 
 async function callOpenAI(messages, options = {}) {
+  const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard);
+  if (viaVoiceLab) return viaVoiceLab;
   const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
   const gptKey = process.env.GPT_API_KEY;
   if (!gptKey) throw new Error('GPT_API_KEY sozlanmagan');
@@ -3626,7 +3673,7 @@ app.get('/api/lex-anchor', requireAuth, async (req, res) => {
 // per-chunk document digests, the plain-language explainer, Telegram answer
 // compaction, opinion anonymization. Falls back to the free Gemini tier.
 async function callCheapAI(messages, options = {}) {
-  if (process.env.GPT_API_KEY && await paidModelsAllowed()) {
+  if (paidProviderConfigured() && await paidModelsAllowed()) {
     try {
       return await callOpenAI(messages, { ...options, model: MODELS.cheap, useSearch: false });
     } catch (e) {
@@ -3639,7 +3686,7 @@ async function callCheapAI(messages, options = {}) {
 // Premium routing: GPT-5.6 Sol (highest reasoning) for high-stakes
 // generations (legal opinions), with the free Gemini tier as fallback.
 async function callPremiumAI(messages, options = {}) {
-  if (process.env.GPT_API_KEY && await paidModelsAllowed()) {
+  if (paidProviderConfigured() && await paidModelsAllowed()) {
     const model = options.model || MODELS.premium;
     // premiumRetries: how many times to RE-TRY the premium model itself
     // before falling down the chain. High-stakes callers (legal opinions for
@@ -3668,12 +3715,12 @@ async function callAI(messages, options = {}) {
   const geminiKey = process.env.GEMINI_API_KEY;
   const errors = [];
 
-  if (!gptKey && !geminiKey) {
+  if (!paidProviderConfigured() && !geminiKey) {
     throw new Error('AI provayder sozlanmagan (GPT_API_KEY yoki GEMINI_API_KEY kerak)');
   }
 
   // 1. GPT-5.6 Terra — balanced intelligence/cost, primary for general work.
-  if (gptKey && await paidModelsAllowed()) {
+  if (paidProviderConfigured() && await paidModelsAllowed()) {
     try {
       const model = options.model || MODELS.standard;
       console.log(`[AI] Calling ${model}${options.useSearch ? ' with web search' : ''}...`);
@@ -6316,7 +6363,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     //   {type:'done', ...}     — final normalized reply + meta (JSON-response shape)
     //   {type:'error', error}  — terminal failure after headers were sent
     let displayReply, finalProvider;
-    const hasAiProvider = !!(process.env.GPT_API_KEY || process.env.GEMINI_API_KEY);
+    const hasAiProvider = !!(paidProviderConfigured() || process.env.GEMINI_API_KEY);
     if (!hasAiProvider) {
       displayReply = buildCorpusOnlyAnswer(message, ragChunks);
       finalProvider = 'Korpus (AI-siz)';
@@ -6333,7 +6380,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         // GPT-5.6 Terra first (same routing as the non-streaming path);
         // Gemini streaming only if OpenAI is unavailable or over budget.
         let sres;
-        if (process.env.GPT_API_KEY && await paidModelsAllowed()) {
+        if (paidProviderConfigured() && await paidModelsAllowed()) {
           try {
             sres = await callOpenAIStream(aiMessages, streamOpts, emit);
           } catch (oaErr) {
@@ -8621,7 +8668,7 @@ app.get('/api/requests/:id/traces', requireAuth, async (req, res) => {
 // AI Screening using GPT-4o
 async function triggerAiScreening(regId, regData) {
   const apiKey = process.env.GPT_API_KEY;
-  if (!apiKey) return;
+  if (!apiKey && !voicelab.routes('vision')) return;
 
   try {
     let docBase64 = null;
@@ -8690,7 +8737,25 @@ async function triggerAiScreening(regId, regData) {
       response_format: { type: 'json_object' }
     };
 
-    let gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
+    // VoiceLab's vision lane (Halo) when switched on; the OpenAI request below
+    // is untouched and still serves it when VoiceLab is off or fails.
+    let voicelabText = null;
+    if (voicelab.routes('vision')) {
+      try {
+        const r = await voicelab.chatCompletion('vision', gptBody.messages, {
+          temperature: gptBody.temperature, maxTokens: gptBody.max_tokens, responseFormat: gptBody.response_format,
+        });
+        voicelabText = r.text;
+        recordSpend({ model: r.provider, ...r.usage, endpoint: 'ai-screening' });
+      } catch (e) {
+        if (!voicelab.fallbackAllowed() || !apiKey) throw e;
+        console.warn('[AI SCREENING] VoiceLab failed, using previous provider:', e.message);
+      }
+    }
+
+    let gptResp = voicelabText !== null
+      ? new Response(JSON.stringify({ choices: [{ message: { content: voicelabText } }] }), { status: 200 })
+      : await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -10272,7 +10337,7 @@ async function runMigrations() {
         classifyLegalTopic,
         chatModel: MODELS.chat,
         topicLabels: LEGAL_TOPICS,
-        hasAiProvider: () => Boolean(process.env.GPT_API_KEY || process.env.GEMINI_API_KEY),
+        hasAiProvider: () => Boolean(paidProviderConfigured() || process.env.GEMINI_API_KEY),
         isFailedAnswer,
         hasCriticalTermMismatch,
         hasAnswerTopicMismatch,
