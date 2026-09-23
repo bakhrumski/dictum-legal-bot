@@ -182,7 +182,7 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
         costUsd: calculateTokenCost(r.provider, r.usage) || 0,
       };
     } catch (err) {
-      if (!voicelab.fallbackAllowed()) throw err;
+      if (!voicelab.fallbackAllowed(model)) throw err;
       log.warn('voicelab failed, using previous provider', { model, err: err.message });
     }
   }

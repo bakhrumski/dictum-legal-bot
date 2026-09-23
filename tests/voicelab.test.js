@@ -101,6 +101,21 @@ async function test(name, fn) {
     assert.strictEqual(voicelab.routes('gemini-2.5-flash'), false);
   });
 
+  await test('explicit ids pick the provider regardless of the switch, for A/B', () => {
+    resetEnv({ VOICELAB_API_KEY: 'vlk_x' });   // LLM_PROVIDER off
+    assert.strictEqual(voicelab.routes('voicelab/comet'), true, 'voicelab/ works with only a key');
+    assert.strictEqual(voicelab.modelFor('voicelab/comet'), 'comet');
+    assert.strictEqual(voicelab.fallbackAllowed('voicelab/comet'), false, 'an explicit VoiceLab call never falls back');
+    assert.strictEqual(voicelab.routes('gpt-5.6-luna'), false);
+    resetEnv(ON);
+    assert.strictEqual(voicelab.routes('openai/gpt-5.6-luna'), false, 'openai/ bypasses VoiceLab while it is on');
+    assert.strictEqual(voicelab.stripProviderPrefix('openai/gpt-5.6-luna'), 'gpt-5.6-luna');
+    assert.strictEqual(voicelab.stripProviderPrefix('gpt-5.6-terra'), 'gpt-5.6-terra');
+    assert.strictEqual(voicelab.fallbackAllowed('gpt-5.6-luna'), true);
+    resetEnv();
+    assert.strictEqual(voicelab.routes('voicelab/comet'), false, 'no key, no VoiceLab');
+  });
+
   await test('sends an OpenAI Chat Completions request with Bearer auth', async () => {
     resetEnv(ON);
     stubFetch(() => jsonResponse({

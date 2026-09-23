@@ -67,6 +67,9 @@ Known state of the suites (Sept 2026):
   `callVisionOCR` in ocr/routes.js. Embeddings are deliberately not routed —
   changing them means re-embedding the corpus. Prices come from
   `VOICELAB_PRICES` (JSON, USD/1M); without it VoiceLab spend is unpriced.
+  Explicit ids pick a provider for side-by-side tests: `voicelab/<model>`
+  (VoiceLab, needs only the key, never falls back) and `openai/<model>`
+  (bypasses VoiceLab), e.g. `/api/admin/model-ab?a=voicelab/comet&b=openai/gpt-5.6-luna`.
 - `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
   platinum), daily limits, opinion credits and the margin maths.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase

@@ -26,6 +26,12 @@
  * VOICELAB_LANES limits which lanes go to VoiceLab (default: all), so one
  * workload can be moved back without touching the others.
  *
+ * Explicit ids, for comparing providers side by side (/api/admin/model-ab):
+ *   voicelab/<model>  always VoiceLab, whenever VOICELAB_API_KEY is set, even
+ *                     with LLM_PROVIDER off; never falls back, so a VoiceLab
+ *                     failure is measured as a failure, not as OpenAI's answer
+ *   openai/<model>    always the previous provider, even with VoiceLab on
+ *
  * Environment:
  *   LLM_PROVIDER             'voicelab' to switch on
  *   VOICELAB_API_KEY         Bearer key (vlk_...). Lives in Render, never in git.
@@ -74,6 +80,21 @@ function enabledLanes() {
   return new Set(raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
 }
 
+/** 'voicelab/comet' → 'comet'; null for any id without the prefix. */
+function explicitVoiceLabModel(modelOrLane) {
+  const m = /^voicelab\/(.+)$/i.exec(String(modelOrLane || '').trim());
+  return m ? m[1] : null;
+}
+
+function isExplicitOpenAI(modelOrLane) {
+  return /^openai\//i.test(String(modelOrLane || '').trim());
+}
+
+/** 'openai/gpt-5.6-luna' → 'gpt-5.6-luna'; any other id unchanged. */
+function stripProviderPrefix(model) {
+  return String(model || '').replace(/^openai\//i, '');
+}
+
 /** Lane for an OpenAI model id, or the lane name itself if one is passed. */
 function laneFor(modelOrLane) {
   const key = String(modelOrLane || '').trim().toLowerCase();
@@ -83,6 +104,8 @@ function laneFor(modelOrLane) {
 
 /** VoiceLab model id to use for an OpenAI model id or a lane name. */
 function modelFor(modelOrLane) {
+  const explicit = explicitVoiceLabModel(modelOrLane);
+  if (explicit) return explicit;
   const lane = laneFor(modelOrLane);
   const override = String(process.env[`VOICELAB_MODEL_${lane.toUpperCase()}`] || '').trim();
   return override || DEFAULT_MODELS[lane];
@@ -93,12 +116,15 @@ function modelFor(modelOrLane) {
  * never routed: they are the free fallback tier, not a paid lane.
  */
 function routes(modelOrLane) {
+  if (explicitVoiceLabModel(modelOrLane)) return apiKey().length > 0;
+  if (isExplicitOpenAI(modelOrLane)) return false;
   if (!isEnabled()) return false;
   if (/^gemini/i.test(String(modelOrLane || ''))) return false;
   return enabledLanes().has(laneFor(modelOrLane));
 }
 
-function fallbackAllowed() {
+function fallbackAllowed(modelOrLane) {
+  if (explicitVoiceLabModel(modelOrLane)) return false;
   return String(process.env.VOICELAB_FALLBACK || '').trim().toLowerCase() !== 'false';
 }
 
@@ -276,6 +302,7 @@ module.exports = {
   fallbackAllowed,
   modelFor,
   laneFor,
+  stripProviderPrefix,
   chatCompletion,
   chatCompletionStream,
   // exported for tests
