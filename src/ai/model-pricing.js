@@ -17,6 +17,12 @@ const MODEL_PRICING = Object.freeze({
   'gpt-5.6-terra':    Object.freeze({ in: 2.00, out: 12.00, cached: 0.20 }),
   'gpt-5.6-luna':     Object.freeze({ in: 0.20, out:  1.20, cached: 0.02 }),
   'gemini-2.5-flash': Object.freeze({ in: 0.30, out:  2.50, cached: 0.03 }),
+  // GPT-6, Standard processing, short-context rates (OpenAI pricing page,
+  // checked 2026-09-23). Long-context requests bill at roughly double; this
+  // table does not model that, so long prompts are under-reported here.
+  'gpt-6-astra':      Object.freeze({ in: 10.00, out: 50.00, cached: 1.00 }),
+  'gpt-6-sol':        Object.freeze({ in:  2.00, out: 10.00, cached: 0.20 }),
+  'gpt-6-luna':       Object.freeze({ in:  0.10, out:  0.50, cached: 0.01 }),
   'text-embedding-3-small': Object.freeze({ in: 0.02, out: 0, cached: 0.02 }),
   // VoiceLab list prices from the VoiceLab console, checked 2026-09-23. These
   // are the undiscounted rates on purpose: a trial bought at a discount has to

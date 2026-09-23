@@ -64,6 +64,9 @@ const LANE_BY_OPENAI_MODEL = Object.freeze({
   'gpt-5.6-terra': 'standard',
   'gpt-5.6-sol': 'premium',
   'gpt-5.6': 'premium',
+  'gpt-6-luna': 'cheap',
+  'gpt-6-sol': 'standard',
+  'gpt-6-astra': 'premium',
 });
 
 function apiKey() {

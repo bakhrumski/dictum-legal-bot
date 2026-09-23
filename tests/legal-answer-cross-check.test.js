@@ -68,7 +68,7 @@ const officialChunk = {
     });
     assert.strictEqual(result.status, 'pass');
     assert.strictEqual(result.answer, 'Dastlabki, manbali huquqiy javob.');
-    assert.strictEqual(options.model, 'gpt-5.6-luna');
+    assert.strictEqual(options.model, 'gpt-6-luna');
     assert.strictEqual(options.useSearch, false);
   });
 

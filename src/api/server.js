@@ -564,10 +564,10 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// Model diagnostic (master only): verify the configured GPT-5.6 models answer
+// Model diagnostic (master only): verify the configured GPT-6 models answer
 // on this account, without burning a real generation.
 //   GET /api/admin/model-check                    → probes all three tiers
-//   GET /api/admin/model-check?model=gpt-5.6-luna → probe one model
+//   GET /api/admin/model-check?model=gpt-6-luna   → probe one model
 app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
   const out = {
     keys: {
@@ -585,10 +585,20 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
   const probe = [{ role: 'user', text: 'Reply with exactly: OK' }];
   const targets = req.query.model
     ? [['requested', String(req.query.model)]]
-    : [['premium (Sol)', MODELS.premium], ['standard (Terra)', MODELS.standard], ['cheap (Luna)', MODELS.cheap]];
-  for (const [label, model] of targets) {
+    : [['premium', MODELS.premium, 'premium'], ['standard', MODELS.standard, 'standard'], ['cheap', MODELS.cheap, 'cheap']];
+  // With VoiceLab on, a lane that silently fell back to OpenAI looks healthy
+  // above. Probe each VoiceLab model directly too — explicit ids never fall
+  // back — so its own error is visible.
+  if (!req.query.model && voicelab.isEnabled()) {
+    for (const lane of ['cheap', 'standard', 'premium']) {
+      targets.push([`voicelab ${lane}`, `voicelab/${voicelab.modelFor(lane)}`]);
+    }
+  }
+  for (const [label, model, lane] of targets) {
     try {
-      const r = await callOpenAI(probe, { model, maxTokens: 20 });
+      // Reasoning models spend tokens before they answer; 20 left some of
+      // them with nothing to say, which read as a failure.
+      const r = await callOpenAI(probe, { model, lane, maxTokens: 300 });
       // provider says who actually answered: 'voicelab/<model>' or the OpenAI id.
       out.results[label] = { model, ok: true, provider: r.provider, reply: (r.text || '').trim().slice(0, 40) };
     } catch (e) {
@@ -596,6 +606,42 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
     }
   }
   res.json(out);
+});
+
+// ── VoiceLab speech checks (master only) ─────────────────────────────────────
+// The voice list is where a custom cloned voice's id is found, to go into
+// VOICELAB_TTS_VOICE_ID. The TTS preview plays any text in any voice right in
+// the browser, so voices can be judged by ear before the bot uses one.
+//   GET /api/admin/voicelab/voices?language=uz
+//   GET /api/admin/voicelab/tts?text=...&voice=<id>&language=uz&speed=1
+app.get('/api/admin/voicelab/voices', requireMasterAdmin, async (req, res) => {
+  try {
+    const speech = require('../ai/voicelab-speech');
+    const voices = await speech.listVoices(String(req.query.language || 'uz'));
+    res.json({ configuredVoiceId: process.env.VOICELAB_TTS_VOICE_ID || null, voices });
+  } catch (e) {
+    res.status(502).json({ error: e.message.substring(0, 300) });
+  }
+});
+
+app.get('/api/admin/voicelab/tts', requireMasterAdmin, async (req, res) => {
+  try {
+    const speech = require('../ai/voicelab-speech');
+    const text = String(req.query.text || 'Assalomu alaykum! Men JuristAI yordamchisiman.').slice(0, 2500);
+    const voiceId = String(req.query.voice || process.env.VOICELAB_TTS_VOICE_ID || '');
+    if (!voiceId) return res.status(400).json({ error: 'voice parametri yoki VOICELAB_TTS_VOICE_ID kerak' });
+    const out = await speech.synthesize(text, {
+      voiceId,
+      language: req.query.language ? String(req.query.language) : undefined,
+      speed: req.query.speed ? Number(req.query.speed) : undefined,
+    });
+    if (!out) return res.status(400).json({ error: 'Matn bo\'sh' });
+    res.set('Content-Type', out.format === 'ogg' ? 'audio/ogg' : 'audio/wav');
+    if (out.creditsUsed != null) res.set('X-VoiceLab-Credits-Used', String(out.creditsUsed));
+    res.send(out.audio);
+  } catch (e) {
+    res.status(502).json({ error: e.message.substring(0, 300) });
+  }
 });
 
 // Per-user AI spend report (master only) — the unit-economics view: what does
@@ -692,7 +738,7 @@ app.get('/api/admin/spend-report', requireMasterAdmin, async (req, res) => {
 // prompt) on two models and reports objective differences: unverified
 // citations (the hallucination signal), answer length, latency and real cost.
 // Turns "is Luna good enough for chat?" into data instead of intuition.
-//   GET /api/admin/model-ab?a=gpt-5.6-terra&b=gpt-5.6-luna[&topic=fuqarolik]
+//   GET /api/admin/model-ab?a=gpt-6-sol&b=gpt-6-luna[&topic=fuqarolik]
 const AB_QUESTIONS = [
   { q: "Mehnat shartnomasini ish beruvchi tashabbusi bilan bekor qilish tartibi qanday?", topic: 'mehnat' },
   { q: "Ish haqi kechiktirilsa, xodim qanday choralar ko'rishi mumkin?", topic: 'mehnat' },
@@ -3426,10 +3472,11 @@ async function callGeminiStream(messages, options = {}, onToken) {
   return { text: full, provider: 'Gemini' };
 }
 
-// ── GPT-5.6 model family (single source of truth) ────────────────────────────
-// Sol   $5 /$30  — highest reasoning, frontier: legal-opinion synthesis
-// Terra $2.50/$15 — balanced: main legal chat / general generation
-// Luna  $0.20/$1.20 — cost-sensitive, high volume: digests, explainer, compaction
+// ── GPT-6 model family (single source of truth) ──────────────────────────────
+// Prices per 1M tokens, Standard, short context (see ai/model-pricing.js):
+// Astra $10/$50  — frontier; not a default, opt in with MODEL_PREMIUM
+// Sol   $2/$10   — standard work and legal opinions
+// Luna  $0.10/$0.50 — cost-sensitive, high volume: chat, digests, compaction
 // All: 1.05M context, 128k max output, reasoning-token support.
 // Each id is env-overridable; Gemini (free tier) is the only fallback.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3465,15 +3512,19 @@ function webSearchAllowed(requested) {
 }
 
 const MODELS = {
-  premium:  process.env.MODEL_PREMIUM  || 'gpt-5.6-sol',
-  standard: process.env.MODEL_STANDARD || 'gpt-5.6-terra',
-  cheap:    process.env.MODEL_CHEAP    || 'gpt-5.6-luna',
+  // GPT-6 (2026-09-23). Premium is gpt-6-sol, not gpt-6-astra: Astra costs
+  // 10/50 per 1M against the 5/30 the tariff margins were solved for, which
+  // would push every paid plan's worst case below zero. MODEL_PREMIUM=
+  // gpt-6-astra switches it without a deploy once the plans are repriced.
+  premium:  process.env.MODEL_PREMIUM  || 'gpt-6-sol',
+  standard: process.env.MODEL_STANDARD || 'gpt-6-sol',
+  cheap:    process.env.MODEL_CHEAP    || 'gpt-6-luna',
   // Chat has its OWN slot rather than reusing `standard`, because `standard`
   // also drives drafting, OCR, corrective RAG, reference extraction and the
   // agents — moving all of those to save money on chat would be a much
   // larger, unmeasured change. Chat is unlimited on paid plans, so it is the
   // one workload where per-answer cost compounds without bound.
-  chat:     process.env.MODEL_CHAT     || 'gpt-5.6-luna',
+  chat:     process.env.MODEL_CHAT     || 'gpt-6-luna',
 };
 
 // One shared price source keeps the spend log, budget guard, shadow report,
@@ -3493,7 +3544,13 @@ function paidProviderConfigured() {
  * should go to the previous provider instead — VoiceLab off, the lane not
  * routed, or VoiceLab failed and fallback is allowed.
  */
-async function tryVoiceLab(messages, options, model, onToken) {
+async function tryVoiceLab(messages, options, requestedModel, onToken) {
+  // The lane decides the VoiceLab model. Routers pass it explicitly, because
+  // one OpenAI id can serve two lanes (gpt-6-sol is both standard and
+  // premium); an explicit voicelab/ or openai/ id always wins.
+  const model = /^(voicelab|openai)\//i.test(String(requestedModel || ''))
+    ? requestedModel
+    : (options.lane || requestedModel);
   if (!voicelab.routes(model)) return null;
   try {
     const { temperature = 0.2, maxTokens = 8192 } = options;
@@ -3583,7 +3640,7 @@ async function callOpenAI(messages, options = {}) {
   // cost a 400 + retry — TWO HTTP round-trips on every single call (the run-8
   // log shows the rejection on every terra/luna request). The retry below
   // stays as a safety net for other parameter rejections.
-  if (/^gpt-5/i.test(body.model)) delete body.temperature;
+  if (/^gpt-([5-9]|\d{2,})/i.test(body.model)) delete body.temperature;
 
   // OpenAI's hosted web-search tool. This is what produced the buxgalter.uz
   // and talimxabarlari.uz citations — the `utm_source=openai` on those URLs is
@@ -3671,13 +3728,13 @@ app.get('/api/lex-anchor', requireAuth, async (req, res) => {
 
 
 
-// Cheap lane: GPT-5.6 Luna ($0.20/$1.20) for high-volume, low-stakes calls —
+// Cheap lane: GPT-6 Luna ($0.10/$0.50) for high-volume, low-stakes calls —
 // per-chunk document digests, the plain-language explainer, Telegram answer
 // compaction, opinion anonymization. Falls back to the free Gemini tier.
 async function callCheapAI(messages, options = {}) {
   if (paidProviderConfigured() && await paidModelsAllowed()) {
     try {
-      return await callOpenAI(messages, { ...options, model: MODELS.cheap, useSearch: false });
+      return await callOpenAI(messages, { ...options, model: MODELS.cheap, lane: 'cheap', useSearch: false });
     } catch (e) {
       console.warn(`[CheapAI] ${MODELS.cheap} failed (falling back to Gemini):`, e.message);
     }
@@ -3685,7 +3742,7 @@ async function callCheapAI(messages, options = {}) {
   return callAI(messages, { ...options, model: undefined });
 }
 
-// Premium routing: GPT-5.6 Sol (highest reasoning) for high-stakes
+// Premium routing: MODELS.premium (gpt-6-sol by default) for high-stakes
 // generations (legal opinions), with the free Gemini tier as fallback.
 async function callPremiumAI(messages, options = {}) {
   if (paidProviderConfigured() && await paidModelsAllowed()) {
@@ -3698,7 +3755,10 @@ async function callPremiumAI(messages, options = {}) {
     const attempts = 1 + Math.max(0, options.premiumRetries || 0);
     for (let i = 0; i < attempts; i++) {
       try {
-        return await callOpenAI(messages, { ...options, model, useSearch: false });
+        // Low-tier plans get their opinion on the cheap model through this
+        // router, so the lane follows the model rather than the router.
+        const lane = options.lane || (model === MODELS.cheap ? 'cheap' : 'premium');
+        return await callOpenAI(messages, { ...options, model, lane, useSearch: false });
       } catch (e) {
         const last = i === attempts - 1;
         console.error(`[PremiumAI] ${model} attempt ${i + 1}/${attempts} FAILED${last ? ' (falling back)' : ', retrying'}:`, e.message);
@@ -3721,7 +3781,7 @@ async function callAI(messages, options = {}) {
     throw new Error('AI provayder sozlanmagan (GPT_API_KEY yoki GEMINI_API_KEY kerak)');
   }
 
-  // 1. GPT-5.6 Terra — balanced intelligence/cost, primary for general work.
+  // 1. MODELS.standard (gpt-6-sol) — primary for general work.
   if (paidProviderConfigured() && await paidModelsAllowed()) {
     try {
       const model = options.model || MODELS.standard;
@@ -6382,7 +6442,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       const emit = (t) => { if (firstToken) { sse({ type: 'status_clear' }); firstToken = false; } sse({ type: 'token', t }); };
       const streamOpts = { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' };
       try {
-        // GPT-5.6 Terra first (same routing as the non-streaming path);
+        // The paid chat model first (same routing as the non-streaming path);
         // Gemini streaming only if OpenAI is unavailable or over budget.
         let sres;
         if (paidProviderConfigured() && await paidModelsAllowed()) {
@@ -6648,10 +6708,10 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // Tiered quality: the more expensive the plan, the stronger the model.
     const OPINION_MODELS = {
       bepul: MODELS.cheap,
-      sinov: MODELS.cheap,       // Luna  $1/$6
-      silver: MODELS.premium,    // Sol   $5/$30
-      gold: MODELS.premium,      // Sol
-      platinum: MODELS.premium,  // Sol
+      sinov: MODELS.cheap,       // gpt-6-luna
+      silver: MODELS.premium,    // gpt-6-sol (MODEL_PREMIUM)
+      gold: MODELS.premium,
+      platinum: MODELS.premium,
     };
     let opinionMaxTokens = 7000;
     let opinionModel = process.env.OPINION_MODEL || null;
@@ -8727,7 +8787,7 @@ async function triggerAiScreening(regId, regData) {
     const today = new Date().toISOString().split('T')[0];
     const screenPrompt = `Ro'yxatdan o'tish so'rovini tekshiring.\n\nBugungi sana: ${today}\n\nAriza beruvchi ma'lumotlari:\n${infoBlock}\n\n${docNote}\n\nTekshiring:\n1. ${docFetched ? 'Hujjatdagi ism-familiya ariza beruvchi kiritgan ma\'lumotlarga mosmi?' : 'Ism-familiya to\'g\'ri formatdami?'}\n2. ${docFetched ? 'Hujjat huquqshunoslik (yuridik) sohasiga tegishlimi?' : 'Ma\'lumotlar to\'liqmi?'}\n3. Barcha ma'lumotlar to'liqmi?\n4. ${docFetched ? 'Hujjat haqiqiymi yoki shubhalimi? Bugungi sana ' + today + ' — hujjat sanasi bugungi yoki undan oldingi bo\'lsa, bu normal.' : 'Hujjat texnik sabablarga ko\'ra ko\'rib bo\'lmadi — true deb belgilang.'}\n${isLawyer ? '5. Mutaxassislik hujjatga mosmi?\n' : ''}\nJavobni faqat JSON formatda bering:\n{"status":"passed" yoki "flagged","name_match":true/false,"is_law_field":true/false,"info_complete":true/false,"document_authentic":true/false,"notes":"Qisqa izoh"}`;
 
-    // Vision screening request (GPT-5.6 Terra supports text+image input).
+    // Vision screening request (MODELS.standard, gpt-6-sol, takes text+image input).
     const content = [];
     if (docBase64 && docMimeType) {
       content.push({ type: 'image_url', image_url: { url: `data:${docMimeType};base64,${docBase64}` } });

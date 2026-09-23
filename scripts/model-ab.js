@@ -15,13 +15,13 @@
  *   COOKIE="connect.sid=s%3A..." \
  *   npm run model:ab
  *
- * Optional:  A=gpt-5.6-terra  B=gpt-5.6-luna  N=8
+ * Optional:  A=gpt-6-sol  B=gpt-6-luna  N=8
  */
 
 const BASE = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const COOKIE = process.env.COOKIE || '';
-const A = process.env.A || 'gpt-5.6-terra';
-const B = process.env.B || 'gpt-5.6-luna';
+const A = process.env.A || 'gpt-6-sol';
+const B = process.env.B || 'gpt-6-luna';
 const N = process.env.N || '';
 
 function pad(s, n) { s = String(s); return s.length >= n ? s.slice(0, n) : s + ' '.repeat(n - s.length); }

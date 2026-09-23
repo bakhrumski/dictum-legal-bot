@@ -52,10 +52,15 @@ Known state of the suites (Sept 2026):
 - `src/api/server.js` — Express app and most routes.
 - `src/bot/` — Telegram bot. `src/agents/` — agent flows.
 - `src/rag/` — legal corpus ingest and hybrid search (lex.uz).
-- `src/ai/model-pricing.js` — **single source of truth for model prices.**
-  `src/rag/hybrid-pipeline.js` still carries its own `PRICING` table with
-  stale Terra rates (2.50/15.00 vs 2.00/12.00); fold it into model-pricing
-  when touching that file.
+- `src/ai/model-pricing.js` — **single source of truth for model prices**;
+  every spend path, hybrid-pipeline included, reads it.
+- Models: GPT-6 since 2026-09-23. `MODELS` in server.js defaults to
+  premium and standard `gpt-6-sol`, cheap and chat `gpt-6-luna`, each
+  env-overridable (`MODEL_PREMIUM`…). Premium is deliberately not
+  `gpt-6-astra`: at 10/50 per 1M it breaks the paid plans' worst-case
+  margins. The unit costs in `subscription-tiers.js` were measured on
+  GPT-5.6 and need re-measuring on GPT-6. Routers pass an explicit `lane`
+  to `callOpenAI`, because one id can serve two lanes (gpt-6-sol).
 - `src/ai/voicelab.js` — VoiceLab LLM switch (OpenAI-compatible Chat
   Completions at `api.voicelab.uz`). Off unless `LLM_PROVIDER=voicelab` and
   `VOICELAB_API_KEY` are set; turning it off is an env change, not a deploy.
@@ -74,6 +79,15 @@ Known state of the suites (Sept 2026):
   Explicit ids pick a provider for side-by-side tests: `voicelab/<model>`
   (VoiceLab, needs only the key, never falls back) and `openai/<model>`
   (bypasses VoiceLab), e.g. `/api/admin/model-ab?a=voicelab/aisha-comet&b=openai/gpt-5.6-luna`.
+- `src/ai/voicelab-speech.js` — Telegram voice via VoiceLab (`@voicelab/sdk`).
+  STT: a voice note is transcribed, echoed back ("🎙 Savolingiz: …") and
+  answered by the agent like typed text; on by default with the key
+  (`VOICELAB_STT=off` to stop), and on failure the note goes to the human
+  queue as before. TTS: a question asked by voice is also answered as a voice
+  note in `VOICELAB_TTS_VOICE_ID` (off without it). TTS returns WAV; it is
+  transcoded to OGG/Opus with `ffmpeg-static` so Telegram shows a voice
+  bubble, else sent as WAV audio. Master-only checks:
+  `/api/admin/voicelab/voices?language=uz`, `/api/admin/voicelab/tts?text=…`.
 - `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
   platinum), daily limits, opinion credits and the margin maths.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
