@@ -64,12 +64,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /**
  * Transcribe a voice note. Resolves to the transcript text ('' when nothing
  * was recognised). A queued transcription is polled until it finishes.
+ *
+ * Telegram voice notes are OGG/Opus, which not every STT engine accepts. The
+ * audio is first transcoded to 16 kHz mono WAV — the format speech engines
+ * take universally and the rate they are trained on — and sent as is only if
+ * ffmpeg is unavailable.
  */
 async function transcribe(buffer, { filename = 'voice.ogg', contentType = 'audio/ogg', language, pollMs = 1500, maxWaitMs = 60000 } = {}) {
   const lang = language || process.env.VOICELAB_STT_LANGUAGE || 'uz';
+  let upload = { data: buffer, filename, contentType };
+  try {
+    upload = { data: await toSpeechWav(buffer), filename: 'voice.wav', contentType: 'audio/wav' };
+  } catch (e) {
+    console.warn('[VOICELAB-STT] WAV transcode failed, sending the original audio:', e.message);
+  }
   const vl = client();
   const result = await vl.stt.transcribe({
-    audio: { data: buffer, filename, contentType },
+    audio: upload,
     language: lang,
   });
   if (result && typeof result.transcript === 'string') return result.transcript.trim();
@@ -115,14 +126,12 @@ function ffmpegPath() {
   try { return require('ffmpeg-static') || null; } catch (_) { return null; }
 }
 
-/** WAV → OGG/Opus mono 48 kHz, the format Telegram shows as a voice note. */
-function wavToOggOpus(wav, { timeoutMs = 30000 } = {}) {
+/** Pipe audio through ffmpeg with the given output arguments. */
+function ffmpegPipe(input, outputArgs, { timeoutMs = 30000 } = {}) {
   const bin = ffmpegPath();
   if (!bin) return Promise.reject(new Error('ffmpeg not available'));
   return new Promise((resolve, reject) => {
-    const p = spawn(bin, ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0',
-      '-c:a', 'libopus', '-b:a', '32k', '-ac', '1', '-ar', '48000', '-application', 'voip',
-      '-f', 'ogg', 'pipe:1']);
+    const p = spawn(bin, ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', ...outputArgs, 'pipe:1']);
     const out = [];
     let err = '';
     const timer = setTimeout(() => { p.kill('SIGKILL'); reject(new Error('ffmpeg timed out')); }, timeoutMs);
@@ -135,8 +144,40 @@ function wavToOggOpus(wav, { timeoutMs = 30000 } = {}) {
       else reject(new Error(`ffmpeg exited ${code}: ${err.slice(0, 200)}`));
     });
     p.stdin.on('error', () => { /* reported through close */ });
-    p.stdin.end(Buffer.from(wav));
+    p.stdin.end(Buffer.from(input));
   });
+}
+
+/** WAV → OGG/Opus mono 48 kHz, the format Telegram shows as a voice note. */
+function wavToOggOpus(wav, opts) {
+  return ffmpegPipe(wav, ['-c:a', 'libopus', '-b:a', '32k', '-ac', '1', '-ar', '48000',
+    '-application', 'voip', '-f', 'ogg'], opts);
+}
+
+/**
+ * Any audio (a Telegram OGG/Opus voice note) → 16 kHz mono 16-bit WAV.
+ *
+ * ffmpeg writing WAV to a pipe cannot seek back to fill in the lengths, so it
+ * leaves both RIFF and data sizes at 0xFFFFFFFF — a header claiming 4 GB,
+ * which strict decoders reject. The real sizes are known once the buffer is
+ * complete, so they are written in here.
+ */
+async function toSpeechWav(audio, opts) {
+  const wav = await ffmpegPipe(audio, ['-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', '-f', 'wav'], opts);
+  return fixWavSizes(wav);
+}
+
+function fixWavSizes(wav) {
+  if (wav.length < 44 || wav.toString('ascii', 0, 4) !== 'RIFF') return wav;
+  wav.writeUInt32LE(wav.length - 8, 4);
+  // Walk the chunks to the 'data' chunk; its payload runs to the end.
+  let off = 12;
+  while (off + 8 <= wav.length) {
+    const id = wav.toString('ascii', off, off + 4);
+    if (id === 'data') { wav.writeUInt32LE(wav.length - off - 8, off + 4); break; }
+    off += 8 + wav.readUInt32LE(off + 4);
+  }
+  return wav;
 }
 
 /**
@@ -179,5 +220,6 @@ module.exports = {
   listVoices,
   textForSpeech,
   wavToOggOpus,
+  toSpeechWav,
   _setClient,
 };
