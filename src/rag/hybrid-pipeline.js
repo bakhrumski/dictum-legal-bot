@@ -2,17 +2,17 @@
 
 const log = require('../utils/logger').createLogger('HYBRID');
 const voicelab = require('../ai/voicelab');
-const { calculateTokenCost } = require('../ai/model-pricing');
+const { calculateTokenCost, MODEL_PRICING: PRICING } = require('../ai/model-pricing');
 
 /**
  * Hybrid RAG Pipeline — JuristAI (Phase 2)
  *
  * Two-model architecture per user budget decision:
- *   1. CLASSIFY (cheap, fast): gpt-5.6-luna → fallback gemini-2.5-flash
+ *   1. CLASSIFY (cheap, fast): gpt-6-luna → fallback gemini-2.5-flash
  *        Input: raw user query
  *        Output: { topic, language, intent, needs_rag, search_terms }
  *
- *   2. GENERATE (quality):    gpt-5.6-terra → gpt-5.6-luna → gemini-2.5-flash
+ *   2. GENERATE (quality):    gpt-6-sol → gpt-6-luna → gemini-2.5-flash
  *        Input: query + RAG context + citation table
  *        Output: grounded answer, strict zero-hallucination prompt
  *
@@ -21,36 +21,25 @@ const { calculateTokenCost } = require('../ai/model-pricing');
  *   - Per-request token cap (DEFAULT_MAX_OUTPUT_TOKENS)
  *   - Per-day spend cap tracked in-process via `spendTracker`
  *
- * Pricing ($/1M tokens):
- *   gpt-5.6-luna         : $0.20 in / $1.20 out   (cost-sensitive, high volume)
- *   gpt-5.6-terra        : $2.50 in / $15.00 out  (balanced)
- *   gpt-5.6-sol          : $5.00 in / $30.00 out  (frontier reasoning)
- *   gemini-2.5-flash     : $0.30 in / $2.50 out   (free-tier fallback)
+ * Pricing: src/ai/model-pricing.js, the one table every spend path reads.
  *
  * Model chains:
- *   CLASSIFY: gpt-5.6-luna → gemini-2.5-flash
- *   GENERATE: gpt-5.6-terra → gpt-5.6-luna → gemini-2.5-flash
+ *   CLASSIFY: gpt-6-luna → gemini-2.5-flash
+ *   GENERATE: gpt-6-sol → gpt-6-luna → gemini-2.5-flash
  *
  *   Each call tries the primary model first; on error we auto-fall back to the
  *   next in the chain. Fallback chain is hard-coded per call type below.
  */
 
-const CLASSIFY_MODEL_CHAIN = ['gpt-5.6-luna', 'gemini-2.5-flash'];
-const GENERATE_MODEL_CHAIN = ['gpt-5.6-terra', 'gpt-5.6-luna', 'gemini-2.5-flash'];
+const CLASSIFY_MODEL_CHAIN = ['gpt-6-luna', 'gemini-2.5-flash'];
+const GENERATE_MODEL_CHAIN = ['gpt-6-sol', 'gpt-6-luna', 'gemini-2.5-flash'];
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 1500;
 const CLASSIFY_MAX_OUTPUT_TOKENS = 200;
 
-// Rough price table ($ per 1M tokens). Used for spend tracking.
-const PRICING = {
-  // GPT-5.6 family (official per-1M pricing)
-  'gpt-5.6-luna':     { in: 0.20, out: 1.20 },
-  'gpt-5.6-terra':    { in: 2.50, out: 15.00 },
-  'gpt-5.6-sol':      { in: 5.00, out: 30.00 },
-  'gpt-5.6':          { in: 5.00, out: 30.00 },   // alias -> Sol
-  // Gemini free-tier fallback
-  'gemini-2.5-flash': { in: 0.30, out: 2.50 },
-};
+// Prices come from the shared table. This file used to keep its own copy,
+// which drifted: it billed Terra at 2.50/15.00 while the real rate was
+// 2.00/12.00, overstating every generate call by a quarter.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Circuit breaker — prevents hammering providers that are repeatedly failing.
@@ -152,9 +141,7 @@ function getSpendStats() {
 }
 
 function estimateCost(model, inTokens, outTokens) {
-  const p = PRICING[model];
-  if (!p) return 0;
-  return (inTokens / 1e6) * p.in + (outTokens / 1e6) * p.out;
+  return calculateTokenCost(model, { inTokens, outTokens }) || 0;
 }
 
 // Rough token estimator (avoids pulling tiktoken). ~4 chars / token for mixed Uzbek+Latin.

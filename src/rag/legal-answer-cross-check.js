@@ -66,7 +66,7 @@ async function crossCheckLegalAnswer({
   answer = '',
   chunks = [],
   callAI,
-  model = 'gpt-5.6-luna',
+  model = 'gpt-6-luna',
   userId = null,
   endpoint = '/legal-answer/lex-cross-check',
 } = {}) {

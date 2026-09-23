@@ -120,7 +120,7 @@ async function callVisionOCR(buf, mimeType, langCode) {
     try {
       const dataUrl = `data:${mimeType};base64,${b64}`;
       const body = {
-        model: process.env.MODEL_VISION || process.env.MODEL_STANDARD || 'gpt-5.6-terra',
+        model: process.env.MODEL_VISION || process.env.MODEL_STANDARD || 'gpt-6-sol',
         messages: [{ role: 'user', content: [
           { type: 'image_url', image_url: { url: dataUrl } },
           { type: 'text', text: prompt },

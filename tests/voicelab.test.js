@@ -73,7 +73,7 @@ async function test(name, fn) {
   await test('off by default: nothing routes without LLM_PROVIDER and a key', () => {
     resetEnv();
     assert.strictEqual(voicelab.isEnabled(), false);
-    assert.strictEqual(voicelab.routes('gpt-5.6-terra'), false);
+    assert.strictEqual(voicelab.routes('gpt-6-sol'), false);
     resetEnv({ LLM_PROVIDER: 'voicelab' });
     assert.strictEqual(voicelab.isEnabled(), false, 'a missing key keeps it off');
     resetEnv({ VOICELAB_API_KEY: 'vlk_x', LLM_PROVIDER: 'openai' });
@@ -82,19 +82,21 @@ async function test(name, fn) {
 
   await test('lanes map the current OpenAI tiers onto Comet, Orbit and Halo', () => {
     resetEnv(ON);
-    assert.strictEqual(voicelab.modelFor('gpt-5.6-luna'), 'aisha-comet');
-    assert.strictEqual(voicelab.modelFor('gpt-5.6-terra'), 'aisha-orbit');
+    assert.strictEqual(voicelab.modelFor('gpt-6-luna'), 'aisha-comet');
+    assert.strictEqual(voicelab.modelFor('gpt-6-sol'), 'aisha-orbit');
     assert.strictEqual(voicelab.modelFor('gpt-5.6-sol'), 'aisha-halo');
+    assert.strictEqual(voicelab.modelFor('gpt-6-astra'), 'aisha-halo');
+    assert.strictEqual(voicelab.modelFor('premium'), 'aisha-halo', 'an explicit lane wins over the id');
     assert.strictEqual(voicelab.modelFor('vision'), 'aisha-halo');
     assert.strictEqual(voicelab.modelFor('some-custom-model'), 'aisha-orbit', 'unknown ids are the standard lane');
     process.env.VOICELAB_MODEL_STANDARD = 'orbit-2';
-    assert.strictEqual(voicelab.modelFor('gpt-5.6-terra'), 'orbit-2');
+    assert.strictEqual(voicelab.modelFor('gpt-6-sol'), 'orbit-2');
   });
 
   await test('VOICELAB_LANES moves single workloads back; Gemini is never routed', () => {
     resetEnv({ ...ON, VOICELAB_LANES: 'cheap,vision' });
-    assert.strictEqual(voicelab.routes('gpt-5.6-luna'), true);
-    assert.strictEqual(voicelab.routes('gpt-5.6-terra'), false);
+    assert.strictEqual(voicelab.routes('gpt-6-luna'), true);
+    assert.strictEqual(voicelab.routes('gpt-6-sol'), false);
     assert.strictEqual(voicelab.routes('gpt-5.6-sol'), false);
     assert.strictEqual(voicelab.routes('vision'), true);
     resetEnv(ON);
@@ -106,12 +108,12 @@ async function test(name, fn) {
     assert.strictEqual(voicelab.routes('voicelab/comet'), true, 'voicelab/ works with only a key');
     assert.strictEqual(voicelab.modelFor('voicelab/comet'), 'comet');
     assert.strictEqual(voicelab.fallbackAllowed('voicelab/comet'), false, 'an explicit VoiceLab call never falls back');
-    assert.strictEqual(voicelab.routes('gpt-5.6-luna'), false);
+    assert.strictEqual(voicelab.routes('gpt-6-luna'), false);
     resetEnv(ON);
-    assert.strictEqual(voicelab.routes('openai/gpt-5.6-luna'), false, 'openai/ bypasses VoiceLab while it is on');
-    assert.strictEqual(voicelab.stripProviderPrefix('openai/gpt-5.6-luna'), 'gpt-5.6-luna');
-    assert.strictEqual(voicelab.stripProviderPrefix('gpt-5.6-terra'), 'gpt-5.6-terra');
-    assert.strictEqual(voicelab.fallbackAllowed('gpt-5.6-luna'), true);
+    assert.strictEqual(voicelab.routes('openai/gpt-6-luna'), false, 'openai/ bypasses VoiceLab while it is on');
+    assert.strictEqual(voicelab.stripProviderPrefix('openai/gpt-6-luna'), 'gpt-6-luna');
+    assert.strictEqual(voicelab.stripProviderPrefix('gpt-6-sol'), 'gpt-6-sol');
+    assert.strictEqual(voicelab.fallbackAllowed('gpt-6-luna'), true);
     resetEnv();
     assert.strictEqual(voicelab.routes('voicelab/comet'), false, 'no key, no VoiceLab');
   });
@@ -122,7 +124,7 @@ async function test(name, fn) {
       id: 'x', choices: [{ index: 0, message: { role: 'assistant', content: 'Salom' } }],
       usage: { prompt_tokens: 12, completion_tokens: 3, prompt_tokens_details: { cached_tokens: 4 } },
     }));
-    const r = await voicelab.chatCompletion('gpt-5.6-terra', [
+    const r = await voicelab.chatCompletion('gpt-6-sol', [
       { role: 'system', text: 'Siz yuristsiz.' },
       { role: 'user', text: 'Savol' },
       { role: 'model', text: 'Oldingi javob' },
@@ -183,7 +185,7 @@ async function test(name, fn) {
       'data: [DONE]\n\n',
     ]));
     const tokens = [];
-    const r = await voicelab.chatCompletionStream('gpt-5.6-luna', [{ role: 'user', text: 'Salom' }], {}, (t) => tokens.push(t));
+    const r = await voicelab.chatCompletionStream('gpt-6-luna', [{ role: 'user', text: 'Salom' }], {}, (t) => tokens.push(t));
     assert.strictEqual(calls[0].body.stream, true);
     assert.strictEqual(calls[0].body.model, 'aisha-comet');
     assert.deepStrictEqual(tokens, ['Assa', 'lomu alaykum']);
@@ -216,7 +218,7 @@ async function test(name, fn) {
     assert.ok(Math.abs(calculateTokenCost('voicelab/orbit', { inTokens: 1e6, outTokens: 5e5 }) - 3) < 1e-12);
     process.env.VOICELAB_PRICES = 'not json';
     assert.strictEqual(calculateTokenCost('voicelab/orbit', { inTokens: 1000 }), null);
-    assert.ok(calculateTokenCost('gpt-5.6-terra', { inTokens: 1e6 }) === 2, 'OpenAI prices unaffected');
+    assert.ok(calculateTokenCost('gpt-6-sol', { inTokens: 1e6 }) === 2, 'OpenAI prices unaffected');
   });
 
   console.log('\nvoicelab — hybrid pipeline (classify / generate)\n');
@@ -232,7 +234,7 @@ async function test(name, fn) {
     await pipeline.classify('Mehnat shartnomasi');
     assert.strictEqual(calls.length, 1);
     assert.strictEqual(calls[0].url, OPENAI_URL);
-    assert.strictEqual(calls[0].body.model, 'gpt-5.6-luna');
+    assert.strictEqual(calls[0].body.model, 'gpt-6-luna');
   });
 
   await test('switched on, classify goes to Comet and is priced as VoiceLab', async () => {
@@ -259,7 +261,7 @@ async function test(name, fn) {
     const r = await pipeline.generate({ query: 'Savol', systemPrompt: 'Tizim' });
     assert.deepStrictEqual(calls.map((c) => c.url), [VOICELAB_URL, OPENAI_URL]);
     assert.strictEqual(calls[0].body.model, 'aisha-orbit');
-    assert.strictEqual(calls[1].body.model, 'gpt-5.6-terra');
+    assert.strictEqual(calls[1].body.model, 'gpt-6-sol');
     assert.strictEqual(r.text, 'OpenAI javobi');
   });
 
