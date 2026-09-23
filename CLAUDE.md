@@ -74,6 +74,15 @@ Known state of the suites (Sept 2026):
   Explicit ids pick a provider for side-by-side tests: `voicelab/<model>`
   (VoiceLab, needs only the key, never falls back) and `openai/<model>`
   (bypasses VoiceLab), e.g. `/api/admin/model-ab?a=voicelab/aisha-comet&b=openai/gpt-5.6-luna`.
+- `src/ai/voicelab-speech.js` — Telegram voice via VoiceLab (`@voicelab/sdk`).
+  STT: a voice note is transcribed, echoed back ("🎙 Savolingiz: …") and
+  answered by the agent like typed text; on by default with the key
+  (`VOICELAB_STT=off` to stop), and on failure the note goes to the human
+  queue as before. TTS: a question asked by voice is also answered as a voice
+  note in `VOICELAB_TTS_VOICE_ID` (off without it). TTS returns WAV; it is
+  transcoded to OGG/Opus with `ffmpeg-static` so Telegram shows a voice
+  bubble, else sent as WAV audio. Master-only checks:
+  `/api/admin/voicelab/voices?language=uz`, `/api/admin/voicelab/tts?text=…`.
 - `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
   platinum), daily limits, opinion credits and the margin maths.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase

@@ -1017,6 +1017,21 @@ bot.on('pre_checkout_query', async (query) => {
 
 // ========== MAIN MESSAGE HANDLER ==========
 
+// Speak an answer back as a Telegram voice note (VoiceLab TTS). OGG/Opus shows
+// as a voice bubble; if transcoding was unavailable the WAV goes as audio.
+async function sendVoiceReply(chatId, text) {
+  const speech = require('../ai/voicelab-speech');
+  if (!speech.ttsEnabled()) return;
+  await bot.sendChatAction(chatId, 'record_voice').catch(() => {});
+  const spoken = await speech.synthesize(text);
+  if (!spoken) return;
+  if (spoken.format === 'ogg') {
+    await bot.sendVoice(chatId, spoken.audio, {}, { filename: 'javob.ogg', contentType: 'audio/ogg' });
+  } else {
+    await bot.sendAudio(chatId, spoken.audio, { title: 'JuristAI javobi' }, { filename: 'javob.wav', contentType: 'audio/wav' });
+  }
+}
+
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const username = msg.from.username || `user_${msg.from.id}`;
@@ -1324,6 +1339,37 @@ bot.on('message', async (msg) => {
       bot.sendMessage(chatId, '❌ Fayl hajmi juda katta! Maksimal: 5MB');
       return;
     }
+
+    // VoiceLab STT: a transcribed voice note becomes an ordinary question for
+    // the agent below — same grounding, same quota. The audio stays attached
+    // for the human queue. Any failure leaves the old path untouched: the note
+    // goes to the queue as '[Ovozli xabar]'.
+    const speech = require('../ai/voicelab-speech');
+    if (speech.sttEnabled()) {
+      try {
+        await bot.sendChatAction(chatId, 'typing').catch(() => {});
+        const link = await bot.getFileLink(msg.voice.file_id);
+        const audioResp = await fetch(link);
+        if (!audioResp.ok) throw new Error(`voice download ${audioResp.status}`);
+        const audio = Buffer.from(await audioResp.arrayBuffer());
+        const transcript = await speech.transcribe(audio, {
+          filename: 'voice.ogg',
+          contentType: msg.voice.mime_type || 'audio/ogg',
+        });
+        if (transcript) {
+          requestData.request_text = transcript;
+          requestData.voiceTranscribed = true;
+          // Show what was heard, so a misheard question is caught before the
+          // answer is trusted.
+          await bot.sendMessage(chatId, `🎙 Savolingiz: «${transcript}»`).catch(() => {});
+        } else {
+          await bot.sendMessage(chatId, '🎙 Ovozli xabarni tushunib bo\'lmadi. Iltimos, qaytadan aniqroq gapiring yoki savolni yozib yuboring.');
+          return;
+        }
+      } catch (sttErr) {
+        console.warn('[BOT] VoiceLab STT failed, voice note goes to the human queue:', sttErr.message);
+      }
+    }
   }
   else if (msg.video_note) {
     requestData.request_text = '[Video xabar]';
@@ -1382,7 +1428,7 @@ bot.on('message', async (msg) => {
   // guessing this platform exists to avoid.
   let agentResult = null;
   let agentReplyDelivered = false;
-  if (requestData.request_type === 'text') {
+  if (requestData.request_type === 'text' || requestData.voiceTranscribed) {
     try {
       const { handleUserMessage, splitForTelegram, isReady } = require('../agents/telegram-agent');
       if (isReady()) {
@@ -1423,6 +1469,14 @@ bot.on('message', async (msg) => {
             if (!partDelivered) allReplyPartsDelivered = false;
           }
           agentReplyDelivered = allReplyPartsDelivered;
+          // Asked by voice → also answered by voice (VoiceLab TTS, in the
+          // configured voice). Sent in the background: the text answer is
+          // already delivered, and a TTS failure must not touch it or the
+          // quota bookkeeping below.
+          if (agentReplyDelivered && requestData.voiceTranscribed) {
+            sendVoiceReply(chatId, agentResult.reply).catch((e) =>
+              console.warn('[BOT] voice reply failed (text answer already sent):', e.message));
+          }
           if (agentResult.action === 'answered') {
             const { finalizeDailyAiAnswer, releaseDailyAiAnswer } = require('../agents/telegram-agent');
             const reservation = {

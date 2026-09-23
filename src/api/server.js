@@ -598,6 +598,42 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
   res.json(out);
 });
 
+// ── VoiceLab speech checks (master only) ─────────────────────────────────────
+// The voice list is where a custom cloned voice's id is found, to go into
+// VOICELAB_TTS_VOICE_ID. The TTS preview plays any text in any voice right in
+// the browser, so voices can be judged by ear before the bot uses one.
+//   GET /api/admin/voicelab/voices?language=uz
+//   GET /api/admin/voicelab/tts?text=...&voice=<id>&language=uz&speed=1
+app.get('/api/admin/voicelab/voices', requireMasterAdmin, async (req, res) => {
+  try {
+    const speech = require('../ai/voicelab-speech');
+    const voices = await speech.listVoices(String(req.query.language || 'uz'));
+    res.json({ configuredVoiceId: process.env.VOICELAB_TTS_VOICE_ID || null, voices });
+  } catch (e) {
+    res.status(502).json({ error: e.message.substring(0, 300) });
+  }
+});
+
+app.get('/api/admin/voicelab/tts', requireMasterAdmin, async (req, res) => {
+  try {
+    const speech = require('../ai/voicelab-speech');
+    const text = String(req.query.text || 'Assalomu alaykum! Men JuristAI yordamchisiman.').slice(0, 2500);
+    const voiceId = String(req.query.voice || process.env.VOICELAB_TTS_VOICE_ID || '');
+    if (!voiceId) return res.status(400).json({ error: 'voice parametri yoki VOICELAB_TTS_VOICE_ID kerak' });
+    const out = await speech.synthesize(text, {
+      voiceId,
+      language: req.query.language ? String(req.query.language) : undefined,
+      speed: req.query.speed ? Number(req.query.speed) : undefined,
+    });
+    if (!out) return res.status(400).json({ error: 'Matn bo\'sh' });
+    res.set('Content-Type', out.format === 'ogg' ? 'audio/ogg' : 'audio/wav');
+    if (out.creditsUsed != null) res.set('X-VoiceLab-Credits-Used', String(out.creditsUsed));
+    res.send(out.audio);
+  } catch (e) {
+    res.status(502).json({ error: e.message.substring(0, 300) });
+  }
+});
+
 // Per-user AI spend report (master only) — the unit-economics view: what does
 // a user actually cost per month, and who are the p95 outliers? Use this before
 // repricing plans instead of guessing at token estimates.
