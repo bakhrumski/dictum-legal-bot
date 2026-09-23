@@ -177,7 +177,7 @@
     Object.assign(COPY.uz, {
         matter:'Masala',
         matterSummary:'{tasks} vazifa · {members} a’zo',
-        graphHint:'Masalani surish uchun bosib torting. A’zo yoki vazifani bosing — tafsilotlari ochiladi.',
+        graphHint:'Masalani surish uchun bosib torting — bog‘langan a’zo va chiziqlar ergashadi',
         // The three views the canvas draws.
         activeCount:'ta faol', matters:'Masalalar', drafts:'Hujjat loyihalari',
         teamThreads:'Jamoa suhbatlari', openInAi:'AI bo‘limida ochish', seeAll:'Barchasi',
@@ -209,6 +209,26 @@
         planned:'Planned', dueOn:'Due', late:'Late'
     });
 
+    // The compact toolbar the ai-dashboard canvas uses: team, views, actions.
+    Object.assign(COPY.uz, {
+        noDatesSet:'Sana belgilanmagan — bosib muddat qo‘shing',
+        actions:'Amallar', moreActions:'Boshqa amallar', filtersTitle:'Filtrlar', statusLabel:'Holat',
+        switchWorkspace:'Workspace’ni almashtirish',
+        workspaceMenuNote:'Workspace yaratish — faqat Platinum. Silver va yuqori tarif egalari taklif havolasi orqali qo‘shiladi.'
+    });
+    Object.assign(COPY.ru, {
+        noDatesSet:'Сроки не указаны — нажмите, чтобы добавить',
+        actions:'Действия', moreActions:'Другие действия', filtersTitle:'Фильтры', statusLabel:'Статус',
+        switchWorkspace:'Сменить Workspace',
+        workspaceMenuNote:'Создать Workspace можно только на Platinum. Участники с тарифом Silver и выше присоединяются по ссылке-приглашению.'
+    });
+    Object.assign(COPY.en, {
+        noDatesSet:'No dates yet — click to add them',
+        actions:'Actions', moreActions:'More actions', filtersTitle:'Filters', statusLabel:'Status',
+        switchWorkspace:'Switch workspace',
+        workspaceMenuNote:'Creating a workspace requires Platinum. Silver and higher members join through an invitation link.'
+    });
+
     var state = {
         language: localStorage.getItem('juristai-workspace-language') || 'uz',
         activated: false,
@@ -232,7 +252,8 @@
         pendingInviteChecked: false,
         currentTask: null,
         detail: null,
-        view: 'list',
+        view: (function(){try{var v=localStorage.getItem('juristai-ws-view');return ['list','timeline','graph'].indexOf(v)>=0?v:'list';}catch(_e){return 'list';}})(),
+        barMenu: null,
         timelineZoom: 'month',
         filters: { search: '', status: '', priority: '', assigneeId: '' },
         realtimeStatus: previewMode ? 'preview' : 'offline',
@@ -565,7 +586,21 @@
     }
 
     function isOverdue(task) {
-        return task && task.due_date && !['done', 'cancelled'].includes(task.status) && new Date(task.due_date + 'T23:59:59') < new Date();
+        var due = task && normalizeDateValue(task.due_date);
+        return !!due && !['done', 'cancelled'].includes(task.status) && new Date(due + 'T23:59:59') < new Date();
+    }
+
+    // node-postgres turns a DATE column into a JS Date, so the API sends
+    // start_date / due_date as full timestamps ("2026-09-30T00:00:00.000Z").
+    // Every view here builds dates as value + 'T00:00:00', which only works on
+    // a plain "YYYY-MM-DD"; on a timestamp it gives Invalid Date and the
+    // timeline had nothing to draw. Tasks are brought to the plain form once,
+    // as they arrive.
+    function normalizeTaskDates(task) {
+        if (!task) return task;
+        if (task.start_date) task.start_date = normalizeDateValue(task.start_date) || null;
+        if (task.due_date) task.due_date = normalizeDateValue(task.due_date) || null;
+        return task;
     }
 
     function canWrite() {
@@ -823,44 +858,21 @@
         var complete = state.tasks.filter(function(task){return task.status==='done';}).length;
         var unreadNotifications=(state.notifications||[]).filter(function(item){return !item.read_at;}).length;
         var pendingInviteBanner=renderPendingInvitation();
+        // A re-render must not steal the caret from the search box while the
+        // person is still typing into it.
+        var focused=document.activeElement&&root.contains(document.activeElement)&&document.activeElement.dataset&&document.activeElement.dataset.filter==='search'
+            ? {start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd} : null;
         root.innerHTML = '<div class="ws-shell">'+
-            '<header class="ws-topbar">'+
-                '<div class="ws-topbar-main">'+
-                    '<div class="ws-title-row">'+
-                        '<select class="ws-select ws-workspace-select" data-action="switch-workspace" aria-label="'+esc(t('workspace'))+'">'+state.workspaces.map(function(item){return '<option value="'+esc(item.id)+'" '+(item.id===state.workspace.id?'selected':'')+'>'+esc(item.name)+'</option>';}).join('')+'</select>'+
-                        '<span class="ws-role-badge">'+esc(t(state.role||'viewer'))+'</span></div>'+
-                '</div>'+
-                '<div class="ws-topbar-actions">'+
-                    '<span class="ws-live-badge '+esc(state.realtimeStatus)+'">'+esc(t(state.realtimeStatus==='online'?'live':state.realtimeStatus==='connecting'?'connecting':state.realtimeStatus==='preview'?'preview':'offline'))+'</span>'+
-                    '<select class="ws-select ws-language-select" data-action="language" aria-label="'+esc(t('language'))+'"><option value="uz" '+(state.language==='uz'?'selected':'')+'>UZ</option><option value="ru" '+(state.language==='ru'?'selected':'')+'>RU</option><option value="en" '+(state.language==='en'?'selected':'')+'>EN</option></select>'+
-                    '<button class="ws-btn '+(state.chatOpen?'active':'')+'" type="button" data-action="open-chat" aria-expanded="'+state.chatOpen+'">'+svg('chat')+'<span>'+esc(t('teamChat'))+'</span></button>'+
-                    '<button class="ws-btn" type="button" data-action="open-shared-documents">'+svg('document')+'<span>'+esc(t('sharedDocuments'))+'</span></button>'+
-                    '<button class="ws-btn" type="button" data-action="open-members">'+svg('members')+'<span>'+esc(t('members'))+'</span></button>'+
-                    '<button class="ws-btn icon ghost ws-notification-button" type="button" data-action="open-notifications" aria-label="'+esc(t('notifications'))+'" title="'+esc(t('notifications'))+'">'+svg('history')+(unreadNotifications?'<span class="ws-notification-count">'+unreadNotifications+'</span>':'')+'</button>'+
-                    '<button class="ws-btn" type="button" data-action="open-ai">'+svg('ai')+'<span>'+esc(t('aiAssistant'))+'</span></button>'+
-                    '<button class="ws-btn primary" type="button" data-action="new-task" '+(!canWrite()?'disabled':'')+'>'+svg('add')+'<span>'+esc(t('newTask'))+'</span></button>'+
-                    '<button class="ws-btn icon ghost" type="button" data-action="shortcuts" aria-label="'+esc(t('shortcuts'))+'">'+svg('help')+'</button>'+
-                '</div>'+
-            '</header>'+
+            renderBar(unreadNotifications)+
             pendingInviteBanner+
             '<div class="ws-workspace-layout '+(state.chatOpen?'chat-open':'')+'"><main class="ws-workspace-main '+esc(state.view)+'-view">'+
-            (previewMode?'<div class="ws-conflict">'+svg('help',16)+esc(t('previewNotice'))+'</div>':'')+
             (!canWrite()?'<div class="ws-conflict">'+svg('history',16)+'<div><strong>'+esc(t('readOnly'))+'</strong> — '+esc(t('readOnlyReason'))+'</div></div>':'')+
-            '<section class="ws-summary" aria-label="'+esc(t('workspace'))+'">'+
-                renderMetric('list',t('openTasks'),open)+renderMetric('calendar',t('overdue'),overdue)+renderMetric('check',t('completed'),complete)+renderMetric('ai',t('sharedMemory'),Number(state.counts.memory_items||state.memory.length||0))+
-            '</section>'+
-            '<div class="ws-toolbar">'+
-                '<div class="ws-view-tabs" role="tablist" aria-label="'+esc(t('tasks'))+'">'+
-                    '<button class="ws-view-tab '+(state.view==='list'?'active':'')+'" type="button" role="tab" aria-selected="'+(state.view==='list')+'" data-action="view-list">'+svg('list',15)+esc(t('listView'))+'</button>'+
-                    '<button class="ws-view-tab '+(state.view==='timeline'?'active':'')+'" type="button" role="tab" aria-selected="'+(state.view==='timeline')+'" data-action="view-timeline">'+svg('timeline',15)+esc(t('timelineView'))+'</button>'+
-                    '<button class="ws-view-tab '+(state.view==='graph'?'active':'')+'" type="button" role="tab" aria-selected="'+(state.view==='graph')+'" data-action="view-graph">'+svg('graph',15)+esc(t('graphView'))+'</button>'+
-                '</div>'+
-                renderFilters()+
-            '</div>'+
             (state.view==='timeline'?renderTimeline():state.view==='graph'?renderGraph():renderTaskList())+
             '</main>'+renderChatSidebar()+'</div>'+
         '</div>'+renderTaskDetail()+renderAiPanel()+renderModal()+renderToastsAnchor();
         enhanceDropdowns(root);
+        if(focused){var search=root.querySelector('[data-filter="search"]');if(search){search.focus({preventScroll:true});try{search.setSelectionRange(focused.start,focused.end);}catch(_e){}}}
+        measureBar();
         if(state.chatOpen)scrollChatToLatest();
         global.requestAnimationFrame(function(){
             syncWorkspaceViewportHeight();
@@ -875,6 +887,99 @@
             syncWorkspaceViewportHeight();
             if(state.view==='graph')centerGraphViewport();
         },180);
+    }
+
+    /**
+     * The toolbar of the ai-dashboard canvas: the team on the left, the three
+     * views beside it, and everything else folded into "Amallar" so the bar
+     * stays one line. Filters and the language switch live in that menu too.
+     */
+    var BAR_ICON = {
+        team: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>',
+        caret: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:.6;"><polyline points="6 9 12 15 18 9"/></svg>',
+        dots: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>',
+        plus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+        list: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+        timeline: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h12M7 12h14M3 18h9"/></svg>',
+        graph: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6H13a3 3 0 0 1 3 3v6.5"/></svg>',
+        check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>'
+    };
+
+    // Below 560px the toolbar keeps only its icons, as on the canvas.
+    function measureBar() {
+        var bar=root&&root.querySelector('[data-ws-bar]');
+        if(!bar)return;
+        if(bar.clientWidth&&bar.clientWidth<560)bar.setAttribute('data-narrow','');
+        else bar.removeAttribute('data-narrow');
+    }
+
+    function renderBar(unreadNotifications) {
+        var ws=state.workspace||{};
+        var views=[['list','listView'],['timeline','timelineView'],['graph','graphView']];
+        var liveKey=state.realtimeStatus==='online'?'live':state.realtimeStatus==='connecting'?'connecting':state.realtimeStatus==='preview'?'preview':'offline';
+        var liveTone=state.realtimeStatus==='online'?'var(--ok)':state.realtimeStatus==='connecting'?'var(--warn)':'var(--muted-dim)';
+        var activeFilters=['search','status','priority','assigneeId'].filter(function(k){return state.filters[k];}).length;
+        var memberCount=state.members.length||Number(state.counts.members||0);
+
+        var teamMenu=state.barMenu==='team'
+            ? '<div class="ws-menu ws-menu-left" role="menu">'+
+                state.workspaces.map(function(item){
+                    var on=item.id===ws.id;
+                    return '<button type="button" role="menuitem" data-action="pick-workspace" data-workspace-id="'+esc(item.id)+'"'+(on?' aria-current="true"':'')+'>'+
+                        BAR_ICON.team+'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(item.name)+'</span>'+(on?BAR_ICON.check:'')+'</button>';
+                }).join('')+
+                '<div class="ws-menu-note">'+esc(t(state.role||'viewer'))+' · <span style="color:'+liveTone+';font-weight:600;">● '+esc(t(liveKey))+'</span></div>'+
+              '</div>'
+            : '';
+
+        var filters='<div class="ws-menu-section">'+
+                '<div class="ws-menu-label">'+esc(t('filtersTitle'))+(activeFilters?' · '+activeFilters:'')+'</div>'+
+                '<label class="ws-search-wrap ws-menu-search">'+svg('search',15)+'<span class="ws-sr-only">'+esc(t('searchTasks'))+'</span><input class="ws-input" data-filter="search" value="'+esc(state.filters.search)+'" placeholder="'+esc(t('searchTasks'))+'"></label>'+
+                '<select class="ws-menu-select" data-filter="status" aria-label="'+esc(t('status'))+'"><option value="">'+esc(t('allStatuses'))+'</option>'+['todo','in_progress','in_review','done','cancelled'].map(function(item){return '<option value="'+item+'" '+(state.filters.status===item?'selected':'')+'>'+esc(t(item))+'</option>';}).join('')+'</select>'+
+                '<select class="ws-menu-select" data-filter="priority" aria-label="'+esc(t('priority'))+'"><option value="">'+esc(t('allPriorities'))+'</option>'+['low','normal','high','urgent'].map(function(item){return '<option value="'+item+'" '+(state.filters.priority===item?'selected':'')+'>'+esc(t(item))+'</option>';}).join('')+'</select>'+
+                '<select class="ws-menu-select" data-filter="assigneeId" aria-label="'+esc(t('assignees'))+'"><option value="">'+esc(t('allAssignees'))+'</option>'+state.members.map(function(member){return '<option value="'+member.id+'" '+(String(state.filters.assigneeId)===String(member.id)?'selected':'')+'>'+esc(personName(member))+'</option>';}).join('')+'</select>'+
+            '</div>';
+
+        var actionsMenu=state.barMenu==='actions'
+            ? '<div class="ws-menu ws-menu-wide" role="menu">'+
+                '<button type="button" role="menuitem" data-action="open-chat">'+svg('chat',16)+'<span style="min-width:0;">'+esc(t('teamChat'))+'</span></button>'+
+                '<button type="button" role="menuitem" data-action="open-shared-documents">'+svg('document',16)+'<span style="min-width:0;">'+esc(t('sharedDocuments'))+'</span></button>'+
+                '<button type="button" role="menuitem" data-action="open-members">'+svg('members',16)+'<span style="min-width:0;">'+esc(t('members'))+(memberCount?' · '+memberCount:'')+'</span></button>'+
+                '<button type="button" role="menuitem" data-action="open-notifications">'+svg('history',16)+'<span style="min-width:0;flex:1;">'+esc(t('notifications'))+'</span>'+(unreadNotifications?'<span class="ws-menu-count">'+unreadNotifications+'</span>':'')+'</button>'+
+                '<button type="button" role="menuitem" data-action="open-ai">'+svg('ai',16)+'<span style="min-width:0;">'+esc(t('aiAssistant'))+'</span></button>'+
+                '<button type="button" role="menuitem" data-action="shortcuts">'+svg('help',16)+'<span style="min-width:0;">'+esc(t('shortcuts'))+'</span></button>'+
+                filters+
+                '<div class="ws-menu-section ws-menu-row">'+
+                    '<span class="ws-menu-label" style="margin:0;">'+esc(t('language'))+'</span>'+
+                    '<span class="ws-menu-langs">'+['uz','ru','en'].map(function(code){return '<button type="button" data-action="set-language" data-lang="'+code+'" aria-pressed="'+(state.language===code)+'">'+code.toUpperCase()+'</button>';}).join('')+'</span>'+
+                '</div>'+
+                '<div class="ws-menu-note">'+esc(t('workspaceMenuNote'))+'</div>'+
+              '</div>'
+            : '';
+
+        return '<div class="ws-bar" data-ws-bar>'+
+            '<div class="ws-menuwrap">'+
+                '<button class="ws-team-btn" type="button" data-action="bar-menu" data-menu="team" aria-expanded="'+(state.barMenu==='team')+'" title="'+esc((ws.name||t('workspace'))+' · '+t(state.role||'viewer'))+'">'+
+                    BAR_ICON.team+
+                    '<span class="ws-barlabel ws-team-name">'+esc(ws.name||t('workspace'))+'</span>'+
+                    '<span class="ws-live-dot" style="background:'+liveTone+';" title="'+esc(t(liveKey))+'"></span>'+
+                    BAR_ICON.caret+
+                '</button>'+
+                teamMenu+
+            '</div>'+
+            '<div class="ws-viewgroup" role="tablist" aria-label="'+esc(t('tasks'))+'">'+views.map(function(v){
+                return '<button class="ws-viewbtn" type="button" role="tab" data-action="view-'+v[0]+'" title="'+esc(t(v[1]))+'" aria-pressed="'+(state.view===v[0])+'" aria-selected="'+(state.view===v[0])+'">'+BAR_ICON[v[0]]+'<span class="ws-barlabel">'+esc(t(v[1]))+'</span></button>';
+            }).join('')+'</div>'+
+            '<div class="ws-spacer"></div>'+
+            '<div class="ws-menuwrap">'+
+                '<button class="ws-actions-btn" type="button" data-action="bar-menu" data-menu="actions" title="'+esc(t('moreActions'))+'" aria-expanded="'+(state.barMenu==='actions')+'">'+
+                    BAR_ICON.dots+'<span class="ws-barlabel">'+esc(t('actions'))+'</span>'+
+                    ((unreadNotifications||activeFilters)?'<span class="ws-bar-badge">'+(unreadNotifications||activeFilters)+'</span>':'')+
+                '</button>'+
+                actionsMenu+
+            '</div>'+
+            '<button class="ws-new" type="button" data-action="new-task" '+(!canWrite()?'disabled':'')+'>'+BAR_ICON.plus+'<span class="ws-barlabel">'+esc(t('newTask'))+'</span></button>'+
+        '</div>';
     }
 
     function renderToastsAnchor() { return ''; }
@@ -922,15 +1027,15 @@
             return '<section class="ws-panel ws-empty"><div class="ws-empty-icon">'+svg('list',25)+'</div><h3>'+esc(t('noTasksTitle'))+'</h3><p>'+esc(t('noTasksBody'))+'</p><button class="ws-btn primary" type="button" data-action="new-task" '+(!canWrite()?'disabled':'')+'>'+svg('add')+esc(t('createTask'))+'</button></section>';
         }
         var active=state.tasks.filter(function(task){return task.status!=='done'&&task.status!=='cancelled';}).length;
-        return '<div class="ws-matter-grid">'+
-            '<div class="ws-matter-col">'+
-                '<section class="ws-panel ws-matters">'+
-                    '<header class="ws-matters-head"><h3>'+esc(t('matters'))+'</h3><span>'+active+' '+esc(t('activeCount'))+'</span></header>'+
-                    '<div class="ws-matters-body">'+state.tasks.map(renderTaskRow).join('')+'</div>'+
+        return '<div class="ws-grid" data-hide-sb>'+
+            '<div class="ws-grid-col">'+
+                '<section class="ws-sec">'+
+                    '<div class="ws-sec-head"><h3>'+esc(t('matters'))+'</h3><span class="ws-sec-count">'+active+' '+esc(t('activeCount'))+'</span></div>'+
+                    '<div>'+state.tasks.map(renderTaskRow).join('')+'</div>'+
                 '</section>'+
                 renderThreadsPanel()+
             '</div>'+
-            '<div class="ws-matter-col">'+renderWorkloadPanel()+renderDraftsPanel()+'</div>'+
+            '<div class="ws-grid-col">'+renderWorkloadPanel()+renderDraftsPanel()+'</div>'+
         '</div>';
     }
 
@@ -938,6 +1043,31 @@
         var at=new Date(value);
         return isNaN(at)?'':at.toLocaleTimeString(state.language==='ru'?'ru-RU':state.language==='en'?'en-GB':'ru-RU',{hour:'2-digit',minute:'2-digit'});
     };
+
+    // "3 daqiqa oldin", "1 soat oldin", "bugun 08:40", "Kecha", or the date.
+    var REL={
+        uz:{min:'{n} daqiqa oldin',hour:'{n} soat oldin',today:'bugun {t}',yesterday:'Kecha',now:'hozirgina'},
+        ru:{min:'{n} мин назад',hour:'{n} ч назад',today:'сегодня {t}',yesterday:'Вчера',now:'только что'},
+        en:{min:'{n} min ago',hour:'{n} h ago',today:'today {t}',yesterday:'Yesterday',now:'just now'}
+    };
+    function relativeTime(value){
+        var at=new Date(value);if(!value||isNaN(at))return '';
+        var r=REL[state.language]||REL.uz,diff=Date.now()-at.getTime();
+        if(diff<60000)return r.now;
+        if(diff<3600000)return r.min.replace('{n}',Math.max(1,Math.round(diff/60000)));
+        var today=new Date();today.setHours(0,0,0,0);
+        if(diff<4*3600000)return r.hour.replace('{n}',Math.max(1,Math.round(diff/3600000)));
+        if(at>=today)return r.today.replace('{t}',clockOf(value));
+        if(at>=new Date(today.getTime()-86400000))return r.yesterday;
+        return isoDate(value);
+    }
+    function whenLabel(value){
+        var at=new Date(value);if(!value||isNaN(at))return '';
+        var today=new Date();today.setHours(0,0,0,0);
+        if(at>=today)return clockOf(value);
+        if(at>=new Date(today.getTime()-86400000))return (REL[state.language]||REL.uz).yesterday;
+        return isoDate(value);
+    }
 
     /**
      * The team's shared AI answers. An answer is generated once, on somebody's
@@ -948,20 +1078,21 @@
         var items=(state.memory||[]).filter(function(item){return item.title;}).slice(0,3);
         if(!items.length)return '';
         var others=Math.max(0,state.members.length-1);
-        return '<section class="ws-panel ws-matters">'+
-            '<header class="ws-matters-head"><h3>'+esc(t('teamThreads'))+'</h3>'+
-                '<button class="ws-threads-open" type="button" data-action="open-ai">'+esc(t('openInAi'))+svg('arrow',13)+'</button>'+
-            '</header>'+
-            '<div class="ws-matters-body">'+items.map(function(item){
+        return '<section class="ws-sec">'+
+            '<div class="ws-sec-head"><h3>'+esc(t('teamThreads'))+'</h3>'+
+                '<button class="ws-sec-link" type="button" data-action="open-ai">'+esc(t('openInAi'))+'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'+
+            '</div>'+
+            '<div>'+items.map(function(item){
                 var author=state.members.filter(function(member){return String(member.id)===String(item.created_by);})[0];
                 var who=author?personName(author):t('workspace');
-                return '<article class="ws-thread-row">'+
+                var tokens=Number(item.token_count||item.tokens||item.total_tokens||0);
+                return '<article class="ws-thread" data-action="open-ai" role="button" tabindex="0">'+
                     '<h4>'+esc(item.title)+'</h4>'+
-                    '<div class="ws-matter-meta">'+
-                        '<span>'+esc(who)+(item.created_at?' · '+esc(clockOf(item.created_at)):'')+'</span>'+
-                        '<span class="ws-matter-dot"></span>'+
-                        '<span>'+esc(t('tokenFrom').replace('{who}',who))+'</span>'+
-                        (others?'<span class="ws-matter-dot"></span><span class="ws-thread-free">'+others+' '+esc(t('freeForMembers'))+'</span>':'')+
+                    '<div class="ws-thread-meta">'+
+                        '<span>'+esc(who)+(item.created_at?' · '+esc(whenLabel(item.created_at)):'')+'</span>'+
+                        '<span class="ws-dot"></span>'+
+                        '<span>'+esc(t('tokenFrom').replace('{who}',who))+(tokens?' · '+tokens.toLocaleString('ru-RU')+' token':'')+'</span>'+
+                        (others?'<span class="ws-dot"></span><span class="ws-thread-free">'+others+' '+esc(t('freeForMembers'))+'</span>':'')+
                     '</div>'+
                 '</article>';
             }).join('')+'</div>'+
@@ -982,29 +1113,51 @@
         }).sort(function(a,b){return b.count-a.count;});
         var busiest=rows.reduce(function(top,row){return Math.max(top,row.count);},0);
         if(!rows.length)return '';
-        return '<section class="ws-panel ws-side"><header class="ws-matters-head"><h3>'+esc(t('teamLoad'))+'</h3></header><div class="ws-side-body">'+
+        return '<section class="ws-sec"><div class="ws-sec-head"><h3>'+esc(t('teamLoad'))+'</h3></div><div class="ws-load">'+
             rows.map(function(row){
                 var share=busiest?Math.round(row.count/busiest*100):0;
-                var tone=share>=75?'overdue':share>=50?'approaching':'done';
-                return '<div class="ws-load"><span class="ws-avatar">'+esc(initials(row.member))+'</span>'+
-                    '<div class="ws-load-copy"><span class="ws-load-name">'+esc(personName(row.member))+'</span>'+
-                    '<span class="ws-load-meta">'+esc(t(row.member.role))+' · '+row.count+' '+esc(t('tasksShort'))+'</span>'+
-                    '<span class="ws-load-track"><i class="'+tone+'" style="width:'+share+'%"></i></span></div>'+
-                    '<span class="ws-load-share '+tone+'">'+share+'%</span></div>';
+                var color=share>=80?'var(--danger)':share>=60?'var(--warn)':'var(--ok)';
+                return '<div class="ws-load-row" data-action="open-member-profile" data-member-id="'+esc(row.member.id)+'" role="button" tabindex="0">'+
+                    '<span class="ws-load-init">'+esc(initials(row.member))+'</span>'+
+                    '<div style="min-width:0;">'+
+                        '<div class="ws-load-name">'+esc(personName(row.member))+'</div>'+
+                        '<div class="ws-load-role">'+esc(memberStanding(row.member))+' · '+row.count+' '+esc(t('tasksShort'))+'</div>'+
+                        '<span class="ws-load-track"><span class="ws-load-fill" style="width:'+share+'%;background:'+color+';"></span></span>'+
+                    '</div>'+
+                    '<span class="ws-load-pct" style="color:'+color+';">'+share+'%</span>'+
+                '</div>';
             }).join('')+'</div></section>';
     }
 
+    var DRAFT_COPY={
+        uz:{generated:'AI tayyorladi',upload:'Yuklangan',version:'{n}-versiya',latest:'Tasdiqlangan',review:'Yurist ko‘rigi kutilmoqda',editing:'Tahrirda'},
+        ru:{generated:'Подготовил AI',upload:'Загружено',version:'Версия {n}',latest:'Утверждено',review:'Ожидает проверки юриста',editing:'В работе'},
+        en:{generated:'Prepared by AI',upload:'Uploaded',version:'Version {n}',latest:'Approved',review:'Awaiting lawyer review',editing:'Editing'}
+    };
     function renderDraftsPanel() {
         var docs=(state.documents||[]).slice(0,4);
         if(!docs.length)return '';
-        return '<section class="ws-panel ws-side"><header class="ws-matters-head"><h3>'+esc(t('drafts'))+'</h3>'+
-            '<button class="ws-threads-open" type="button" data-action="open-shared-documents">'+esc(t('seeAll'))+'</button>'+
-            '</header><div class="ws-side-body">'+
+        var c=DRAFT_COPY[state.language]||DRAFT_COPY.uz;
+        return '<section class="ws-sec"><div class="ws-sec-head"><h3>'+esc(t('drafts'))+'</h3>'+
+            '<button class="ws-sec-link" type="button" data-action="open-shared-documents">'+esc(t('seeAll'))+'</button>'+
+            '</div><div>'+
             docs.map(function(doc){
-                return '<div class="ws-draft">'+svg('document',15)+'<div class="ws-draft-copy">'+
-                    '<span class="ws-draft-title">'+esc(doc.title)+'</span>'+
-                    '<span class="ws-draft-meta">v'+Number(doc.version_number||1)+' · '+esc(isoDate(doc.version_created_at||doc.updated_at))+'</span>'+
-                    '</div></div>';
+                var generated=doc.kind==='generated'||doc.kind==='ai';
+                var version=Number(doc.version_number||1);
+                var status=String(doc.status||doc.review_status||'').toLowerCase();
+                var stateText,color;
+                if(status==='approved'||status==='final'){stateText=c.latest;color='var(--ok)';}
+                else if(generated&&version<=1){stateText=c.review;color='var(--warn)';}
+                else if(version>1){stateText=c.editing+' · '+c.version.replace('{n}',version);color='var(--brand)';}
+                else {stateText=c.version.replace('{n}',version);color='var(--muted)';}
+                return '<div class="ws-draft" data-action="versions" data-document-id="'+esc(doc.id)+'" role="button" tabindex="0">'+
+                    '<span class="ws-draft-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg></span>'+
+                    '<div style="min-width:0;flex:1;">'+
+                        '<div class="ws-draft-name">'+esc(doc.title)+'</div>'+
+                        '<div class="ws-draft-meta">'+esc(generated?c.generated:c.upload)+' · '+esc(relativeTime(doc.version_created_at||doc.updated_at||doc.created_at))+'</div>'+
+                        '<div class="ws-draft-state" style="color:'+color+';">'+esc(stateText)+'</div>'+
+                    '</div>'+
+                '</div>';
             }).join('')+'</div></section>';
     }
 
@@ -1336,23 +1489,34 @@
             ? '<p class="ws-graph-bench" style="top:'+(benchTop-64)+'px">'+esc(t('benchTitle'))+'</p>'
             : '';
 
-        return '<section class="ws-panel ws-graph"><div class="ws-graph-toolbar ws-hint"><span>'+esc(t('graphHint'))+'</span><span class="ws-graph-legend ws-legend"><i class="done"></i>'+esc(t('onTime'))+' <i class="approaching"></i>'+esc(t('approaching'))+' <i class="overdue"></i>'+esc(t('overdue'))+'</span></div><div class="ws-graph-scroll ws-scroll"><div class="ws-graph-stage ws-graph" data-layout-height="'+height+'" data-layout-viewport="'+Math.round(viewportWidth)+'" style="width:'+width+'px;height:'+height+'px"><svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
+        return '<section class="ws-panel ws-graph ws-graph-pane"><div class="ws-graph-head"><span class="ws-hint">'+esc(t('graphHint'))+'</span><div class="ws-legend">'+[['var(--ok)','onTime'],['var(--warn)','approaching'],['var(--danger)','overdue']].map(function(l){return '<span class="ws-legend-item"><span class="ws-legend-dot" style="background:'+l[0]+';"></span><span>'+esc(t(l[1]))+'</span></span>';}).join('')+'</div></div><div class="ws-graph-scroll ws-scroll"><div class="ws-graph-stage ws-graph" data-layout-height="'+height+'" data-layout-viewport="'+Math.round(viewportWidth)+'" style="width:'+width+'px;height:'+height+'px"><svg aria-hidden="true">'+edges.join('')+'</svg>'+matterNodes+memberNodes+benchLabel+'</div></div></section>';
+    }
+
+    // Status colours follow the canvas: work in hand reads green, anything
+    // waiting on someone reads amber, and a missed deadline overrides both.
+    function matterStateColor(task) {
+        if (isOverdue(task)) return 'var(--danger)';
+        if (task.status==='done') return 'var(--ok)';
+        if (task.status==='cancelled') return 'var(--muted)';
+        if (task.status==='in_progress') return 'var(--ok)';
+        return 'var(--warn)';
     }
 
     function renderTaskRow(task) {
-        var owner=matterOwner(task),due=dueLine(task),tone=graphTone(task);
+        var owner=matterOwner(task),due=dueLine(task);
         var who=owner?personName(owner):t('unassignedShort');
-        return '<article class="ws-matter-row" data-action="open-task" data-task-id="'+esc(task.id)+'" role="button" tabindex="0">'+
-            '<div class="ws-matter-copy">'+
+        var dueColor=due.tone==='overdue'?'var(--danger)':due.tone==='done'?'var(--ok)':due.tone==='approaching'?'var(--warn)':'var(--muted)';
+        return '<article class="ws-matter" data-action="open-task" data-task-id="'+esc(task.id)+'" role="button" tabindex="0">'+
+            '<div style="min-width:0;">'+
                 '<h4>'+esc(task.title)+'</h4>'+
                 '<div class="ws-matter-meta">'+
                     '<span>'+esc(who)+' · '+esc(matterTag(task))+'</span>'+
-                    '<span class="ws-matter-dot"></span>'+
-                    '<span class="ws-matter-due '+due.tone+'">'+esc(due.text)+'</span>'+
+                    '<span class="ws-dot"></span>'+
+                    '<span style="font-weight:600;color:'+dueColor+';">'+esc(due.text)+'</span>'+
                 '</div>'+
             '</div>'+
-            '<span class="ws-matter-state '+tone+'">'+esc(t(task.status))+'</span>'+
-            '<button class="ws-matter-ask" type="button" data-action="open-ai" data-task-id="'+esc(task.id)+'" title="'+esc(t('askAi'))+'" aria-label="'+esc(t('askAi'))+'">'+svg('ai',14)+'</button>'+
+            '<span class="ws-matter-state" style="color:'+matterStateColor(task)+';">'+esc(t(task.status))+'</span>'+
+            '<button class="ws-matter-ask" type="button" data-action="open-ai" data-task-id="'+esc(task.id)+'" title="'+esc(t('askAi'))+'" aria-label="'+esc(t('askAi'))+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg></button>'+
         '</article>';
     }
 
@@ -1372,21 +1536,39 @@
 
     function renderTimeline() {
         var dated=state.tasks.filter(function(task){return task.start_date||task.due_date;});
-        if(!dated.length){
+        // A matter with no dates still belongs on the timeline: it is listed
+        // under the dated ones with a note instead of a bar, so every matter
+        // in the list is also here.
+        var undated=state.tasks.filter(function(task){return !task.start_date&&!task.due_date;});
+        if(!state.tasks.length){
             return '<section class="ws-panel ws-timeline"><div class="ws-empty"><div class="ws-empty-icon">'+svg('timeline',24)+'</div><h3>'+esc(t('timelineEmpty'))+'</h3></div></section>';
         }
         var range=timelineRange(), span=Math.max(86400000,range.max-range.min);
         // The canvas heads the track with six evenly spaced dates. The zoom
         // control the canvas has no room for sits under the column label, so
         // the ticks stay aligned with the bars underneath them.
-        var ticks=[];for(var i=0;i<6;i+=1){ticks.push('<span>'+esc(isoDate(new Date(range.min+(span*(i/5))).toISOString()))+'</span>');}
-        return '<section class="ws-panel ws-timeline">'+
-            '<header class="ws-tl-head">'+
-                '<div class="ws-tl-label"><span>'+esc(t('matterAndOwner'))+'</span></div>'+
-                '<div class="ws-tl-scale">'+ticks.join('')+'</div>'+
-            '</header>'+
-            '<div class="ws-tl-body">'+dated.map(function(task){return renderTimelineRow(task,range,span);}).join('')+'</div>'+
+        var ticks=[];for(var i=0;i<6;i+=1){var tick=new Date(range.min+(span*(i/6)));ticks.push('<span>'+String(tick.getDate()).padStart(2,'0')+'.'+String(tick.getMonth()+1).padStart(2,'0')+'</span>');}
+        return '<section class="ws-panel ws-timeline ws-pane">'+
+            '<div class="ws-tl-head">'+
+                '<span>'+esc(t('matterAndOwner'))+'</span>'+
+                '<div class="ws-tl-days">'+ticks.join('')+'</div>'+
+            '</div>'+
+            '<div class="ws-tl-body" data-hide-sb>'+dated.map(function(task){return renderTimelineRow(task,range,span);}).join('')+undated.map(renderTimelineUndatedRow).join('')+'</div>'+
         '</section>';
+    }
+
+    function renderTimelineUndatedRow(task) {
+        var owner=matterOwner(task);
+        return '<div class="ws-tl-row" data-action="open-task" data-task-id="'+esc(task.id)+'" role="button" tabindex="0">'+
+            '<div style="min-width:0;">'+
+                '<div class="ws-tl-title">'+esc(task.title)+'</div>'+
+                '<div class="ws-tl-who">'+
+                    (owner?'<span class="ws-tl-init">'+esc(initials(owner))+'</span><span class="ws-tl-whoname">'+esc(personName(owner))+' · '+esc(memberStanding(owner))+'</span>'
+                          :'<span class="ws-tl-whoname">'+esc(t('unassignedShort'))+'</span>')+
+                '</div>'+
+            '</div>'+
+            '<div class="ws-tl-track ws-tl-track--empty"><span class="ws-tl-nodate">'+esc(t('noDatesSet'))+'</span></div>'+
+        '</div>';
     }
 
     function renderTimelineRow(task,range,span) {
@@ -1408,16 +1590,17 @@
         var left=Math.max(0,Math.min(100,(from-range.min)/span*100));
         var width=Math.max(1.8,Math.min(100-left,(to-from+86400000)/span*100));
         var tone=graphTone(task),owner=matterOwner(task);
+        var color=tone==='done'?'var(--ok)':tone==='overdue'?'var(--danger)':tone==='approaching'?'var(--warn)':'var(--ok)';
         var dueLeft=Math.max(0,Math.min(100,(due-range.min)/span*100));
-        var marker='<span class="ws-timeline-bar '+tone+'" data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'" style="left:'+left+'%;width:'+width+'%" title="'+esc(task.title)+'"></span>'
-            +(task.is_milestone?'<span class="ws-timeline-milestone '+tone+'" style="left:calc('+dueLeft+'% - 7px)" title="'+esc(t('milestone'))+'"></span>':'');
+        var marker='<span class="ws-timeline-bar ws-tl-bar '+tone+'" data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'" style="left:'+left.toFixed(2)+'%;width:'+width.toFixed(2)+'%;background:'+color+';" title="'+esc(task.title)+'"></span>'
+            +(task.is_milestone?'<span class="ws-timeline-milestone '+tone+'" style="left:calc('+dueLeft.toFixed(2)+'% - 7px)" title="'+esc(t('milestone'))+'"></span>':'');
         return '<div class="ws-tl-row" data-action="open-task" data-task-id="'+esc(task.id)+'" role="button" tabindex="0">'+
-            '<div class="ws-tl-copy">'+
-                '<span class="ws-tl-title">'+esc(task.title)+'</span>'+
-                '<span class="ws-tl-who">'+
-                    (owner?'<span class="ws-avatar">'+esc(initials(owner))+'</span><span class="ws-tl-who-name">'+esc(personName(owner))+' · '+esc(memberStanding(owner))+'</span>'
-                          :'<span class="ws-tl-who-name">'+esc(t('unassignedShort'))+'</span>')+
-                '</span>'+
+            '<div style="min-width:0;">'+
+                '<div class="ws-tl-title">'+esc(task.title)+'</div>'+
+                '<div class="ws-tl-who">'+
+                    (owner?'<span class="ws-tl-init">'+esc(initials(owner))+'</span><span class="ws-tl-whoname">'+esc(personName(owner))+' · '+esc(memberStanding(owner))+'</span>'
+                          :'<span class="ws-tl-whoname">'+esc(t('unassignedShort'))+'</span>')+
+                '</div>'+
             '</div>'+
             '<div class="ws-tl-track">'+marker+'</div>'+
         '</div>';
@@ -1816,7 +1999,7 @@
         // another until something else forced a reload.
         var endpoint='/workspaces/'+state.workspace.id+'/tasks?'+params.toString();
         var data=await api('GET',endpoint);
-        state.tasks=data.items||[];
+        state.tasks=(data.items||[]).map(normalizeTaskDates);
         if (shouldRender!==false) render();
         return data;
     }
@@ -1829,6 +2012,7 @@
         render();
         try {
             state.detail=await api('GET','/workspaces/'+state.workspace.id+'/tasks/'+taskId);
+            if(state.detail&&state.detail.task)normalizeTaskDates(state.detail.task);
             render();
             connectTaskPresence(taskId).catch(function(error){if(!previewMode)console.warn('[Workspace Presence]',error);});
             setTimeout(function(){var input=document.getElementById('wsDetailTitleInput');if(input)input.focus();},80);
@@ -1842,6 +2026,7 @@
         var taskId=state.currentTask;
         var detail=await api('GET','/workspaces/'+state.workspace.id+'/tasks/'+taskId);
         if (state.currentTask!==taskId) return;
+        if(detail&&detail.task)normalizeTaskDates(detail.task);
         state.detail=detail;
         if (showBanner) state.conflict={live:true};
         render();
@@ -1873,12 +2058,19 @@
         document.addEventListener('click',handleDocumentClick);
         global.addEventListener('focus',refreshWorkspaceEntitlements);
         global.addEventListener('resize',syncWorkspaceViewportHeight);
+        global.addEventListener('resize',measureBar);
         document.addEventListener('visibilitychange',function(){
             if(document.visibilityState==='visible')refreshWorkspaceEntitlements();
         });
     }
 
     function handleDocumentClick(event) {
+        // A click that re-rendered the toolbar leaves its target detached; that
+        // click belonged to the toolbar and must not close what it just opened.
+        if (state.barMenu && event.target.isConnected && !(root && root.contains(event.target) && event.target.closest('.ws-menuwrap'))) {
+            state.barMenu=null;
+            if(root){root.querySelectorAll('.ws-bar .ws-menu').forEach(function(menu){menu.remove();});root.querySelectorAll('.ws-bar [data-action="bar-menu"]').forEach(function(btn){btn.setAttribute('aria-expanded','false');});}
+        }
         if (!root || !root.contains(event.target) || !event.target.closest('.ws-dropdown')) closeDropdowns();
         if (!root || !root.contains(event.target) || !event.target.closest('.ws-date-picker')) closeDatePickers();
     }
@@ -1887,6 +2079,22 @@
         var target=event.target.closest('[data-action]');
         if (!target||!root.contains(target)) return;
         var action=target.dataset.action;
+        if (action==='bar-menu') {
+            state.barMenu=state.barMenu===target.dataset.menu?null:target.dataset.menu;
+            render();
+            if(state.barMenu==='actions'){var firstItem=root.querySelector('.ws-menu [role="menuitem"]');if(firstItem)firstItem.focus({preventScroll:true});}
+            return;
+        }
+        if (action==='set-language') {state.language=target.dataset.lang;localStorage.setItem('juristai-workspace-language',state.language);render();return;}
+        if (action==='pick-workspace') {
+            state.barMenu=null;
+            if(state.workspace&&String(target.dataset.workspaceId)===String(state.workspace.id)){render();return;}
+            selectWorkspace(target.dataset.workspaceId).catch(function(error){toast(apiErrorMessage(error),'error');});
+            return;
+        }
+        // Picking an item from the toolbar menu closes it; filters and the
+        // dropdowns inside the menu keep it open while they are used.
+        if (state.barMenu && target.closest('.ws-menu') && !/^(date-|dropdown-)/.test(action)) state.barMenu=null;
         if (action==='date-input') {
             toggleDatePicker(target.closest('.ws-date-picker'), true);
             return;
@@ -1937,6 +2145,7 @@
         if (action==='view-list'||action==='view-timeline'||action==='view-graph') {
             var nextView=action==='view-list'?'list':action==='view-timeline'?'timeline':'graph';
             state.view=nextView;
+            try{localStorage.setItem('juristai-ws-view',nextView);}catch(_e){}
             render();
             return;
         }
@@ -2012,6 +2221,7 @@
     }
 
     function handleKeyboard(event) {
+        if (event.key==='Escape' && state.barMenu) {state.barMenu=null;render();return;}
         var tag=(event.target&&event.target.tagName||'').toLowerCase();
         var typing=['input','textarea','select'].includes(tag)||event.target&&event.target.isContentEditable;
         var dropdown=event.target&&event.target.closest&&event.target.closest('.ws-dropdown');
@@ -2037,7 +2247,7 @@
         if (typing) return;
         if (event.key==='?' ) {event.preventDefault();state.modal='shortcuts';render();}
         if ((event.key==='n'||event.key==='N')&&canWrite()) {event.preventDefault();state.modal='task';state.modalData={};render();}
-        if (event.key==='/') {event.preventDefault();var input=root&&root.querySelector('[data-filter="search"]');if(input)input.focus();}
+        if (event.key==='/') {event.preventDefault();if(state.barMenu!=='actions'){state.barMenu='actions';render();}var input=root&&root.querySelector('[data-filter="search"]');if(input)input.focus();}
     }
 
     function formValues(form) {

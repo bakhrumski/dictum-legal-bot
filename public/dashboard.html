@@ -6790,7 +6790,9 @@
     </style>
     <link rel="stylesheet" href="/css/redesign-v2.css">
     <link rel="stylesheet" href="/css/dashboard-canvas.css">
+    <link rel="stylesheet" href="/css/dashboard-ai.css">
     <script src="/js/redesign-v2.js" defer></script>
+    <script src="/js/dashboard-chat.js" defer></script>
 </head>
 <body>
     <!-- Theme saved state applied in inline script below -->
@@ -6873,9 +6875,7 @@
         <div class="tab-view active" data-tab="home">
         <section class="operations-heading db-section-head" aria-labelledby="operationsTitle">
             <div>
-                <p class="operations-eyebrow">Master Admin</p>
                 <h1 id="operationsTitle">Bugungi boshqaruv</h1>
-                <p>Navbat, jamoa va JuristAI xizmatlari holati bir joyda.</p>
             </div>
             <button class="operations-refresh db-btn" type="button" onclick="refreshOperations()" aria-label="Ma'lumotlarni yangilash">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -6889,7 +6889,6 @@
                     <span class="db-bit-label">SLA o'tgan</span>
                 </span>
                 <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--danger)"></span></span>
-                <span class="db-bit-sub">4 soatdan ko'p</span>
             </button>
             <button class="db-bit" type="button" title="Tayinlanmagan" onclick="setQueueView('unassigned')">
                 <span class="db-bit-top">
@@ -6897,7 +6896,6 @@
                     <span class="db-bit-label">Tayinlanmagan</span>
                 </span>
                 <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--warn)"></span></span>
-                <span class="db-bit-sub">Egasi belgilanmagan</span>
             </button>
             <button class="db-bit" type="button" title="Tekshiruvda" onclick="setQueueView('review')">
                 <span class="db-bit-top">
@@ -6905,7 +6903,6 @@
                     <span class="db-bit-label">Tekshiruvda</span>
                 </span>
                 <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--brand)"></span></span>
-                <span class="db-bit-sub">Yurist qarori kerak</span>
             </button>
             <button class="db-bit" type="button" title="Bugun yakunlandi" onclick="setQueueView('answered_today')">
                 <span class="db-bit-top">
@@ -6913,14 +6910,13 @@
                     <span class="db-bit-label">Bugun yakunlandi</span>
                 </span>
                 <span class="db-bit-track"><span class="db-bit-fill" data-bit-fill style="background:var(--ok)"></span></span>
-                <span class="db-bit-sub">AI va yurist javoblari</span>
             </button>
         </div>
         <div class="operations-health-shell">
             <div class="operations-health db-health" id="operationsHealth" aria-live="polite">
-                <div class="health-item"><span class="health-dot is-loading"></span><span>Telegram agent</span><strong id="agentHealthText">Tekshirilmoqda</strong></div>
-                <div class="health-item"><span class="health-dot is-loading"></span><span>Huquqiy korpus</span><strong id="corpusHealthText">Tekshirilmoqda</strong></div>
-                <div class="health-item"><span class="health-dot is-loading"></span><span>Jamoa navbati</span><strong id="teamHealthText">Tekshirilmoqda</strong></div>
+                <div class="health-item db-health-item"><span class="health-dot is-loading"></span><span>Telegram agent</span><strong id="agentHealthText">Tekshirilmoqda</strong></div>
+                <div class="health-item db-health-item"><span class="health-dot is-loading"></span><span>Huquqiy korpus</span><strong id="corpusHealthText">Tekshirilmoqda</strong></div>
+                <div class="health-item db-health-item"><span class="health-dot is-loading"></span><span>Jamoa navbati</span><strong id="teamHealthText">Tekshirilmoqda</strong></div>
             </div>
         </div>
         </div><!-- /tab-view home: stats -->
@@ -6947,6 +6943,19 @@
                     </button>
                     <button class="ai-sidebar-close" type="button" onclick="closeMobileSidebar()" title="Menyuni yopish" aria-label="Suhbatlar menyusini yopish">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+
+                <!-- Scope: this personal assistant, or the team's workspace AI. -->
+                <div class="ai-group">
+                    <div class="ai-label">Suhbat doirasi</div>
+                    <button class="ai-scope" type="button" aria-pressed="true">
+                        <span>Shaxsiy</span>
+                        <small>Faqat siz ko'rasiz</small>
+                    </button>
+                    <button class="ai-scope" type="button" aria-pressed="false" onclick="openTeamAi()">
+                        <span>Jamoa AI</span>
+                        <small>Jamoa ko'radi · workspace hisobidan</small>
                     </button>
                 </div>
 
@@ -6977,6 +6986,13 @@
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                         </button>
                         <span id="aiChatHeaderTitle" hidden>Yangi suhbat</span>
+                        <div class="ai-scoperow" role="group" aria-label="Suhbat doirasi">
+                            <button class="ai-scopepill" type="button" aria-pressed="true">Shaxsiy</button>
+                            <button class="ai-scopepill" type="button" aria-pressed="false" onclick="openTeamAi()">Jamoa</button>
+                        </div>
+                        <button class="ai-bar-icon ai-bar-icon--sm" type="button" onclick="createNewAiChat()" title="Yangi suhbat" aria-label="Yangi suhbat">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+                        </button>
                     </div>
                     <!-- Master-admin dropdown actions — desktop: header dropdowns; mobile: right drawer -->
                     <div class="hdr-actions" id="masterHeaderActions">
@@ -7205,9 +7221,6 @@
                 <div id="aiReqContextBanner" style="display:none;margin:0;padding:10px 16px;background:var(--parchment-100);border-bottom:1px solid var(--border-1);font-size:13px;color:var(--fg-1)"></div>
                 <div class="ai-chat-messages" id="aiChatMessages" role="log" aria-live="polite" aria-relevant="additions">
                     <div class="ai-chat-welcome" id="aiChatWelcome">
-                        <div class="ai-welcome-mark" aria-hidden="true">
-                            <img src="./icon-1024.png" alt="">
-                        </div>
                         <div class="ai-welcome-copy">
                             <h1>Bugun qanday huquqiy masalada yordam kerak?</h1>
                             <p>Savolingizni oddiy tilda yozing yoki hujjat biriktiring.</p>
@@ -7334,6 +7347,12 @@
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                             <input id="requestSearch" type="search" placeholder="Murojaat yoki foydalanuvchini qidiring" oninput="scheduleRequestFilter()">
                         </label>
+                        <button class="queue-filter-toggle db-btn" id="queueFilterToggle" type="button" onclick="toggleQueueFilters()" aria-expanded="false" aria-controls="queueMoreFilters">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                            <span>Filtrlar</span>
+                            <b class="queue-filter-count" id="queueFilterCount" hidden>0</b>
+                        </button>
+                        <div class="queue-more-filters" id="queueMoreFilters" hidden>
                         <select id="categoryFilter" class="no-jai-select" onchange="filterRequests()">
                             <option value="">Barcha yo'nalishlar</option>
                             <option value="Konstitutsiyaviy tuzum">Konstitutsiyaviy tuzum</option>
@@ -7406,6 +7425,7 @@
                         <button class="queue-clear" type="button" onclick="clearFilters()">
                             Tozalash
                         </button>
+                        </div>
                     </div>
                 </div>
                 <div id="requestsList">
@@ -7426,23 +7446,31 @@
         <!-- TAB: Boshqaruv -->
         <div class="tab-view" id="tabSorov" data-tab="sorov">
         <section class="management-heading">
-            <p class="operations-eyebrow">Platforma boshqaruvi</p>
             <h1>Boshqaruv</h1>
-            <p>Qabul, xizmatlar, sifat, korpus, xavfsizlik va xarajatlarni boshqaring.</p>
         </section>
-        <div class="management-grid" aria-label="Boshqaruv bo'limlari">
-            <button type="button" onclick="openManagementSection('regSection', loadRegRequests, true)"><span>Qabul</span><small>Advokat va student arizalari</small><b id="managementRegCount">0</b></button>
-            <button type="button" onclick="openManagementSection('attorneyAdminSection', loadAttorneyAdmin, true)"><span>Advokatlar</span><small>Tekshiruv va katalog</small><b id="managementAttorneyCount">0</b></button>
-            <button type="button" onclick="openManagementSection('paidServicesSection', loadPaidServicesAdmin, true)"><span>Pullik xizmatlar</span><small>Hujjat buyurtmalari va narxlar</small><b id="managementPaidCount">0</b></button>
-            <button type="button" onclick="openManagementSection('telegramAgentSection', loadTelegramAgentAdmin, true)"><span>Telegram agent</span><small>24/7 suhbatlar va operator rejimi</small><b id="managementHumanCount">0</b></button>
-            <button type="button" onclick="openManagementSection('answerFeedbackSection', loadAnswerFeedback, true)"><span>Sifat</span><small>Javob xatolari va tekshiruv</small></button>
-            <button type="button" onclick="openManagementSection('coverageSection', loadCoverageGaps, true)"><span>Korpus</span><small>Bo'shliqlar va yangi manbalar</small></button>
-            <button type="button" onclick="openManagementSection('auditLogSection', loadAuditLog, true)"><span>Xavfsizlik</span><small>Audit va muhim hodisalar</small></button>
-            <button type="button" onclick="openManagementSection('spendSection', loadSpendReport, true)"><span>Xarajat</span><small>AI token va API sarfi</small></button>
+        <div class="management-grid mg-grid" data-r="mgrid" aria-label="Boshqaruv bo'limlari">
+            <button type="button" class="mg-card" data-mg-target="regSection" aria-pressed="true" onclick="openManagementSection('regSection', loadRegRequests, true)"><span>Qabul</span><small>Advokat va student arizalari</small><b class="mg-count" hidden id="managementRegCount">0</b></button>
+            <button type="button" class="mg-card" data-mg-target="attorneyAdminSection" aria-pressed="false" onclick="openManagementSection('attorneyAdminSection', loadAttorneyAdmin, true)"><span>Advokatlar</span><small>Tekshiruv va katalog</small><b class="mg-count" hidden id="managementAttorneyCount">0</b></button>
+            <button type="button" class="mg-card" data-mg-target="paidServicesSection" aria-pressed="false" onclick="openManagementSection('paidServicesSection', loadPaidServicesAdmin, true)"><span>Pullik xizmatlar</span><small>Hujjat buyurtmalari va narxlar</small><b class="mg-count" hidden id="managementPaidCount">0</b></button>
+            <button type="button" class="mg-card" data-mg-target="telegramAgentSection" aria-pressed="false" onclick="openManagementSection('telegramAgentSection', loadTelegramAgentAdmin, true)"><span>Telegram agent</span><small>24/7 suhbatlar va operator rejimi</small><b class="mg-count" hidden id="managementHumanCount">0</b></button>
+            <button type="button" class="mg-card" data-mg-target="answerFeedbackSection" aria-pressed="false" onclick="openManagementSection('answerFeedbackSection', loadAnswerFeedback, true)"><span>Sifat</span><small>Javob xatolari va tekshiruv</small></button>
+            <button type="button" class="mg-card" data-mg-target="coverageSection" aria-pressed="false" onclick="openManagementSection('coverageSection', loadCoverageGaps, true)"><span>Korpus</span><small>Bo'shliqlar va yangi manbalar</small></button>
+            <button type="button" class="mg-card" data-mg-target="auditLogSection" aria-pressed="false" onclick="openManagementSection('auditLogSection', loadAuditLog, true)"><span>Xavfsizlik</span><small>Audit va muhim hodisalar</small></button>
+            <button type="button" class="mg-card" data-mg-target="spendSection" aria-pressed="false" onclick="openManagementSection('spendSection', loadSpendReport, true)"><span>Xarajat</span><small>AI token va API sarfi</small></button>
         </div>
+        <script>
+            // A card's count shows only when there is something waiting.
+            (function () {
+                function sync(b) { var t = (b.textContent || '').trim(); b.hidden = !t || t === '0'; }
+                document.querySelectorAll('.mg-card .mg-count').forEach(function (b) {
+                    sync(b);
+                    new MutationObserver(function () { sync(b); }).observe(b, { childList: true, characterData: true, subtree: true });
+                });
+            })();
+        </script>
         <!-- Registration Requests Section (Master Only) -->
         <div class="reg-section" id="regSection">
-            <div class="reg-section-header" onclick="document.getElementById('regSection').classList.toggle('collapsed'); if(!document.getElementById('regSection').classList.contains('collapsed') && !regRequestsLoaded) loadRegRequests();">
+            <div class="reg-section-header" role="button" tabindex="0" aria-expanded="true" onclick="openManagementSection('regSection', loadRegRequests)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openManagementSection('regSection', loadRegRequests);}">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     <h2>Qabul arizalari</h2>
@@ -7679,51 +7707,91 @@
 
         <!-- TAB: Chat -->
         <div class="tab-view" id="tabChat" data-tab="chat">
-            <div class="chat-tab-wrapper" id="chatTabWrapper">
-                <div class="chat-header">
-                    <div class="chat-header-left" onclick="toggleMembersPanel()">
-                        <div class="chat-header-avatar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-                        <div>
-                            <h3>Guruh Chat</h3>
-                            <div class="chat-header-info" id="chatMemberCount">Yuristlar va studentlar uchun</div>
+            <!-- Two panes side by side, as on ai-dashboard.html: the team group
+                 chat (the existing /api/chat thread, with replies, mentions
+                 and deletes) and private messages with one colleague
+                 (workspace direct messages, js/dashboard-chat.js). -->
+            <div class="chat">
+                <div class="chat-head">
+                    <div>
+                        <h2>Suhbatlar</h2>
+                        <p>Jamoa muhokamasi va shaxsiy yozishmalar bir ekranda</p>
+                    </div>
+                    <div class="chat-modes" data-chat-modes role="group" aria-label="Ko'rinish"></div>
+                </div>
+
+                <div class="chat-grid" data-r="chatgrid" data-chat-grid>
+                    <section class="chat-pane" id="chatTabWrapper" data-kind="group" data-chat-pane="group">
+                        <header>
+                            <div class="chat-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            </div>
+                            <div style="min-width:0; flex:1;">
+                                <span class="chat-kind">Guruh</span>
+                                <h3>Yuristlar jamoasi</h3>
+                            </div>
+                            <button class="chat-header-delete-all" id="chatDeleteAllBtn" type="button" onclick="deleteAllChatMessages()" title="Barcha xabarlarni o'chirish" style="display:none;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                <span>Tozalash</span>
+                            </button>
+                            <button class="chat-count" id="chatMemberCount" type="button" onclick="toggleMembersPanel()" aria-controls="chatMembersPanel" title="A'zolar ro'yxati">A'zolar</button>
+                            <span id="chatHeaderChevron" hidden></span>
+                            <!-- Members: a list under the header, opened from the count. -->
+                            <div class="chat-members-panel chat-peer-menu" id="chatMembersPanel">
+                                <div class="chat-members-header">
+                                    <h3 id="chatMembersTitle">A'zolar</h3>
+                                    <button class="chat-members-back" type="button" onclick="toggleMembersPanel()" aria-label="Yopish">&times;</button>
+                                </div>
+                                <div class="chat-members-list" id="chatMembersList"></div>
+                            </div>
+                        </header>
+                        <div class="chat-log chat-messages" data-kind="group" id="chatMessages">
+                            <div class="chat-notice"><p>Suhbat yuklanmoqda…</p></div>
                         </div>
-                        <svg class="chat-header-chevron" id="chatHeaderChevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    </div>
-                    <div style="display:flex; align-items:center;">
-                        <button class="chat-header-delete-all" id="chatDeleteAllBtn" onclick="deleteAllChatMessages()" title="Barcha xabarlarni o'chirish" style="display:none;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            Tozalash
-                        </button>
-                    </div>
-                </div>
-                <!-- Members panel -->
-                <div class="chat-members-panel" id="chatMembersPanel">
-                    <div class="chat-members-header">
-                        <h3 id="chatMembersTitle">A'zolar</h3>
-                        <button class="chat-members-back" onclick="toggleMembersPanel()">&times;</button>
-                    </div>
-                    <div class="chat-members-list" id="chatMembersList"></div>
-                </div>
-                <div class="chat-messages" id="chatMessages">
-                    <div style="padding:40px 20px;text-align:center;color:#667781;"><p style="font-size:16px;font-weight:600;">Xabarlar yo'q</p><p style="font-size:13px;">Birinchi xabaringizni yozing!</p></div>
-                </div>
-                <div class="chat-input-area">
-                    <div class="mention-dropdown" id="mentionDropdown"></div>
-                    <div class="chat-reply-preview" id="chatReplyPreview">
-                        <div class="chat-reply-preview-content">
-                            <div class="chat-reply-preview-sender" id="chatReplyPreviewSender"></div>
-                            <div class="chat-reply-preview-text" id="chatReplyPreviewText"></div>
+                        <div class="chat-composer chat-input-area">
+                            <div class="mention-dropdown" id="mentionDropdown"></div>
+                            <div class="chat-reply-preview" id="chatReplyPreview">
+                                <div class="chat-reply-preview-content">
+                                    <div class="chat-reply-preview-sender" id="chatReplyPreviewSender"></div>
+                                    <div class="chat-reply-preview-text" id="chatReplyPreviewText"></div>
+                                </div>
+                                <button class="chat-reply-cancel" type="button" onclick="cancelReply()" aria-label="Javobni bekor qilish">&times;</button>
+                            </div>
+                            <div class="chat-composer-inner">
+                                <textarea class="chat-input" id="chatInput"
+                                    placeholder="Jamoaga yozing… (@ bilan mention)"
+                                    rows="1"
+                                    onkeydown="handleChatKeydown(event)"
+                                    oninput="handleChatInput(event)"></textarea>
+                                <button class="chat-send" id="chatSendBtn" type="button" onclick="sendChatMessage()" title="Yuborish" aria-label="Yuborish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                            </div>
                         </div>
-                        <button class="chat-reply-cancel" onclick="cancelReply()">&times;</button>
-                    </div>
-                    <div class="chat-input-wrapper">
-                        <textarea class="chat-input" id="chatInput"
-                            placeholder="Xabar yozing... (@ bilan mention)"
-                            rows="1"
-                            onkeydown="handleChatKeydown(event)"
-                            oninput="handleChatInput(event)"></textarea>
-                        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()" title="Yuborish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
-                    </div>
+                    </section>
+
+                    <section class="chat-pane" data-kind="private" data-chat-pane="private">
+                        <header>
+                            <button class="chat-peer" type="button" data-chat-peer aria-haspopup="listbox" aria-expanded="false">
+                                <span class="chat-avatar">
+                                    <span data-chat-peer-init>·</span>
+                                    <span class="chat-online"></span>
+                                </span>
+                                <span class="chat-peer-copy">
+                                    <span class="chat-kind">Shaxsiy</span>
+                                    <span class="chat-peer-name" data-chat-peer-name>Suhbatdosh tanlang</span>
+                                </span>
+                                <svg class="chat-peer-caret" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <span class="chat-status" data-chat-peer-status></span>
+                            <div class="chat-peer-menu" data-chat-peer-menu role="listbox" aria-label="Jamoa a'zolari" hidden></div>
+                        </header>
+                        <div class="chat-log" data-kind="private" data-chat-private></div>
+                        <div class="chat-composer">
+                            <div class="chat-composer-inner">
+                                <textarea placeholder="Suhbatdosh tanlang" rows="1" data-chat-private-input disabled></textarea>
+                                <button class="chat-send" type="button" title="Yuborish" aria-label="Yuborish" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
         </div><!-- /tab-view chat -->
@@ -7960,6 +8028,18 @@
             switchTab(role === 'user' ? 'ai' : 'home');
         }
 
+        var DASHBOARD_TABS = ['home', 'jamoa', 'chat', 'ai', 'sorov'];
+        function tabFromHash() {
+            var name = (location.hash || '').replace('#', '');
+            return DASHBOARD_TABS.indexOf(name) >= 0 ? name : null;
+        }
+        window.addEventListener('hashchange', function () {
+            var name = tabFromHash();
+            if (!name || name === currentTab) return;
+            var btn = document.querySelector('.tab-bar-item[data-tab="' + name + '"]');
+            if (btn && btn.style.display !== 'none') switchTab(name);
+        });
+
         function switchTab(tabName) {
             // Hide all tab views
             document.querySelectorAll('.tab-view').forEach(function(view) {
@@ -8017,6 +8097,13 @@
             // Save tab preference
             try { localStorage.setItem('dictum-active-tab', tabName); } catch(e) {}
 
+            // Each bottom-tab section has its own address (#home, #jamoa, #chat,
+            // #ai, #sorov), as on ai-dashboard.html, so a link or a reload lands
+            // on the same section.
+            if (DASHBOARD_TABS.indexOf(tabName) >= 0 && location.hash !== '#' + tabName) {
+                try { history.replaceState(null, '', location.pathname + location.search + '#' + tabName); } catch(e) {}
+            }
+
             // Scroll to top on tab switch
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -8036,6 +8123,7 @@
                 loadChatMessages();
             }
             if (typeof startChatPolling === 'function') startChatPolling();
+            if (window.DashboardChat) window.DashboardChat.activate();
             if (typeof scrollChatToBottom === 'function') {
                 setTimeout(scrollChatToBottom, 100);
             }
@@ -8192,13 +8280,10 @@
                 // Keep the drawer outside the clipped chat workspace. A fixed
                 // descendant of the workspace was visually cut down to the
                 // chat-header height, leaving an apparently empty panel.
-                const masterToolsDrawer = document.getElementById('masterHeaderActions');
-                if (masterToolsDrawer) {
-                    masterToolsDrawer.classList.toggle('master-tools-drawer', data.role === 'master');
-                    if (data.role === 'master' && masterToolsDrawer.parentElement !== document.body) {
-                        document.body.appendChild(masterToolsDrawer);
-                    }
-                }
+                // On a wide screen the tools sit in the AI header as a row of
+                // dropdowns, as on the ai-dashboard canvas; narrower, they move
+                // back out to the drawer.
+                placeMasterTools(data.role === 'master');
                 // Initial queue status fetch for master
                 if (data.role === 'master') refreshQueueStatus();
 
@@ -8531,6 +8616,7 @@
             try {
                 const response = await fetch('/api/admins');
                 allAdmins = await response.json();
+                if (typeof updateChatMemberCount === 'function') updateChatMemberCount();
                 populateAssigneeFilter();
                 renderAdminTable();
             } catch (error) {
@@ -9408,6 +9494,27 @@
 
         function syncQueueSelects() {
             document.querySelectorAll('.filter-section select').forEach(syncQueueSelect);
+            updateQueueFilterCount();
+        }
+
+        // The extra queue filters fold behind one button, as on the canvas;
+        // the button carries how many of them are set.
+        var QUEUE_FILTER_DEFAULTS = { categoryFilter: '', assigneeFilter: '', statusFilter: 'open', urgencyFilter: '', sourceFilter: '', assignedFilter: '', sortFilter: 'priority' };
+        function updateQueueFilterCount() {
+            var n = Object.keys(QUEUE_FILTER_DEFAULTS).filter(function (id) {
+                var el = document.getElementById(id);
+                return el && el.value !== QUEUE_FILTER_DEFAULTS[id];
+            }).length;
+            var badge = document.getElementById('queueFilterCount');
+            if (badge) { badge.textContent = String(n); badge.hidden = !n; }
+        }
+        function toggleQueueFilters(force) {
+            var panel = document.getElementById('queueMoreFilters');
+            var btn = document.getElementById('queueFilterToggle');
+            if (!panel) return;
+            var open = typeof force === 'boolean' ? force : panel.hidden;
+            panel.hidden = !open;
+            if (btn) btn.setAttribute('aria-expanded', String(open));
         }
 
         function enhanceQueueFilters() {
@@ -9523,6 +9630,11 @@
                 return;
             }
 
+            const URGENCY_COLOR = { critical: 'var(--danger)', high: 'var(--danger)', medium: 'var(--warn)', low: 'var(--ok)' };
+            const STATUS_COLOR = {
+                pending: 'var(--muted)', assigned: 'var(--muted)', student_responded: 'var(--warn)',
+                lawyer_approved: 'var(--brand)', answered: 'var(--ok)', ai_answered: 'var(--ok)', rejected: 'var(--danger)'
+            };
             const rows = requests.map(function(req) {
                 const urgency = req.urgency || (req.triage_result && req.triage_result.urgency) || 'medium';
                 const title = escapeHtml((req.request_text || 'Matnsiz murojaat').replace(/^\[[^\]]+\]\s*/, ''));
@@ -9539,24 +9651,30 @@
                 const actionLabel = req.agent_action === 'paid_service'
                     ? 'Pullik hujjat'
                     : (req.agent_action === 'attorney_request' ? "Advokat so'ralgan" : '');
+                // A paid or attorney request reads by what was asked for, the
+                // way the canvas labels it; everything else by its status.
+                const statusText = actionLabel && ['pending', 'assigned'].includes(req.status) ? actionLabel : queueStatusLabel(req.status);
+                const statusColor = actionLabel && ['pending', 'assigned'].includes(req.status) ? 'var(--warn)' : (STATUS_COLOR[req.status] || 'var(--muted)');
+                const created = new Date(req.created_at);
+                const clock = isNaN(created) ? '' : created.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+                const sameDay = !isNaN(created) && created.toDateString() === new Date().toDateString();
                 return `
-                    <article class="ops-request" onclick="showRequestDetail(${Number(req.id)})" tabindex="0" onkeydown="if(event.key==='Enter')showRequestDetail(${Number(req.id)})">
-                        <span class="ops-priority ${escapeHtml(urgency)}" title="${escapeHtml(urgency)}"></span>
-                        <div class="ops-request-main">
-                            <div class="ops-request-title">${title}</div>
-                            <div class="ops-request-meta">
+                    <article class="ops-request db-row" data-r="row" onclick="showRequestDetail(${Number(req.id)})" tabindex="0" onkeydown="if(event.key==='Enter')showRequestDetail(${Number(req.id)})">
+                        <span class="db-row-dot" title="${escapeHtml(urgency)}" style="background:${URGENCY_COLOR[urgency] || 'var(--muted)'}"></span>
+                        <div style="min-width:0;">
+                            <div class="db-row-title">${title}</div>
+                            <div class="db-row-meta">
                                 <span>${category}${subfield ? ' · ' + subfield : ''}</span>
                                 <span>${channel}</span>
-                                ${actionLabel ? '<span>' + actionLabel + '</span>' : ''}
                                 <span>${assignees}</span>
                             </div>
                         </div>
-                        <div class="ops-request-person"><strong>${person}</strong><span>${username}</span></div>
-                        <div class="ops-request-time"><strong>${formatQueueAge(req.created_at)}</strong><span>${formatQueueTimestamp(req.created_at)}</span></div>
-                        <span class="ops-status ${escapeHtml(req.status)}">${escapeHtml(queueStatusLabel(req.status))}</span>
+                        <div class="db-row-person" data-r="row-person"><strong>${person}</strong><span>${username}</span></div>
+                        <div class="db-row-time" data-r="row-time"><strong>${formatQueueAge(req.created_at)}</strong><span>${sameDay ? clock : escapeHtml(formatQueueTimestamp(req.created_at))}</span></div>
+                        <span class="db-row-status" style="color:${statusColor}">${escapeHtml(statusText)}</span>
                     </article>`;
             }).join('');
-            container.innerHTML = '<div class="ops-request-list">' + rows + '</div>';
+            container.innerHTML = '<div class="ops-request-list db-rows">' + rows + '</div>';
         }
         
         function isUnanswered(req) {
@@ -11924,6 +12042,21 @@
             }
         }
 
+        // The team's shared assistant lives in Workspace; the "Jamoa" scope
+        // opens it there once the workspace has loaded.
+        function openTeamAi() {
+            switchTab('jamoa');
+            var tries = 0;
+            (function waitForWorkspace() {
+                var ready = document.querySelector('#workspaceApp .ws-bar');
+                if (ready && window.JuristWorkspace && typeof window.JuristWorkspace.openAi === 'function') {
+                    window.JuristWorkspace.openAi(null);
+                    return;
+                }
+                if (++tries < 40) setTimeout(waitForWorkspace, 150);
+            })();
+        }
+
         function createNewAiChat() {
             aiChatHistory = [];
             currentAiSessionId = null;
@@ -13940,6 +14073,24 @@
         // ═══ HEADER DROPDOWNS ═══
         function isHdrMobile() { return window.matchMedia('(max-width: 768px)').matches; }
 
+        var masterToolsEnabled = false;
+        function placeMasterTools(enabled) {
+            if (typeof enabled === 'boolean') masterToolsEnabled = enabled;
+            var tools = document.getElementById('masterHeaderActions');
+            var header = document.getElementById('aiChatHeader');
+            var toggle = document.getElementById('hdrMobileToggle');
+            if (!tools || !header) return;
+            var inline = masterToolsEnabled && window.matchMedia('(min-width: 1081px)').matches;
+            tools.classList.toggle('master-tools-drawer', masterToolsEnabled && !inline);
+            if (inline) {
+                tools.classList.remove('drawer-open');
+                if (tools.parentElement !== header) header.insertBefore(tools, toggle || null);
+            } else if (masterToolsEnabled && tools.parentElement !== document.body) {
+                document.body.appendChild(tools);
+            }
+        }
+        window.addEventListener('resize', function () { if (masterToolsEnabled) placeMasterTools(); });
+
         function toggleHdrDd(id) {
             var dd = document.getElementById(id);
             if (!dd) return;
@@ -14511,6 +14662,10 @@
             else section.classList.toggle('collapsed');
 
             const isOpen = !section.classList.contains('collapsed');
+            // The card for the open section reads as selected, as on the canvas.
+            document.querySelectorAll('.mg-card[data-mg-target]').forEach(function (card) {
+                card.setAttribute('aria-pressed', String(isOpen && card.dataset.mgTarget === sectionId));
+            });
             const header = section.querySelector('.reg-section-header');
             if (header) header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             if (isOpen && typeof loader === 'function') Promise.resolve(loader()).catch(function() {});
@@ -16921,8 +17076,7 @@
         }
 
         function toggleMembersPanel() {
-            // On desktop, sidebar is always visible — clicking header does nothing
-            if (isDesktopChat()) return;
+            // The members list opens under the group header at every width.
             const panel = document.getElementById('chatMembersPanel');
             const chevron = document.getElementById('chatHeaderChevron');
             const isOpen = panel.classList.toggle('open');
@@ -16932,7 +17086,7 @@
 
         /** Ensure members sidebar is rendered on desktop when chat tab opens */
         function ensureDesktopMembersSidebar() {
-            if (isDesktopChat()) {
+            if (false) {
                 const panel = document.getElementById('chatMembersPanel');
                 const chevron = document.getElementById('chatHeaderChevron');
                 // Close mobile overlay if it was open
@@ -17072,10 +17226,15 @@
         function renderChatMessages() {
             const container = document.getElementById('chatMessages');
             if (chatMessages.length === 0) {
-                container.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#667781;"><p style="font-size:16px;font-weight:600;">Hali xabar yo\'q</p><p style="font-size:13px;">Birinchi xabaringizni yozing!</p></div>';
+                container.innerHTML = '<div class="chat-notice"><p>Hozircha xabar yo\'q — birinchi bo\'lib yozing.</p></div>';
                 return;
             }
             const roleBadgeMap = { master: 'Admin', lawyer: 'Yurist', student: 'Student' };
+            const esc = function (v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+            const initialsOf = function (name) {
+                return String(name || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join('') || '?';
+            };
+            const isMaster = currentUser.role === 'master';
             let html = '';
             let lastDate = '';
             chatMessages.forEach(msg => {
@@ -17094,26 +17253,26 @@
 
                 let replyHtml = '';
                 if (msg.reply_to_id && msg.reply_message) {
-                    const replySenderRole = msg.reply_role || '';
                     const replyText = msg.reply_message.length > 60 ? msg.reply_message.substring(0, 60) + '...' : msg.reply_message;
-                    replyHtml = `<div class="chat-msg-reply" onclick="scrollToMessage(${msg.reply_to_id})">
-                        <div class="chat-msg-reply-sender role-${replySenderRole}">${msg.reply_sender || 'Noma\'lum'}</div>
-                        <div class="chat-msg-reply-text">${replyText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+                    replyHtml = `<div class="chat-msg-reply" onclick="scrollToMessage(${Number(msg.reply_to_id)})">
+                        <div class="chat-msg-reply-sender">${esc(msg.reply_sender || 'Noma\'lum')}</div>
+                        <div class="chat-msg-reply-text">${esc(replyText)}</div>
                     </div>`;
                 }
 
-                const isMaster = currentUser.role === 'master';
-                html += `<div class="chat-msg ${isOwn ? 'own' : 'other'}" data-msg-id="${msg.id}" onclick="toggleMsgActions(this, event)">
-                    ${!isOwn ? `<div class="chat-msg-sender role-${msg.role}">
-                        ${msg.full_name}
-                        <span class="chat-msg-sender-badge ${msg.role}">${roleBadgeMap[msg.role] || msg.role}</span>
-                    </div>` : ''}
-                    ${replyHtml}
-                    <div class="chat-msg-text">${renderMsgText(msg.message)}</div>
-                    <div class="chat-msg-time">${timeStr}</div>
-                    <div class="chat-msg-actions">
-                        <button class="chat-msg-action-btn reply-action" onclick="event.stopPropagation(); startReply(${msg.id});">Javob berish</button>
-                        ${isMaster ? `<button class="chat-msg-action-btn delete-action" onclick="event.stopPropagation(); deleteChatMessage(${msg.id});">O'chirish</button>` : ''}
+                html += `<div class="chat-msg"${isOwn ? ' data-me' : ''} data-msg-id="${Number(msg.id)}" onclick="toggleMsgActions(this, event)">
+                    <span class="chat-msg-init role-${esc(msg.role)}">${esc(initialsOf(msg.full_name))}</span>
+                    <div class="chat-msg-body">
+                        <div class="chat-msg-meta">
+                            <span class="chat-msg-who">${isOwn ? 'Siz' : esc(msg.full_name)}</span>
+                            ${!isOwn && roleBadgeMap[msg.role] ? `<span class="chat-msg-role role-${esc(msg.role)}">${roleBadgeMap[msg.role]}</span>` : ''}
+                            <span class="chat-msg-time">${timeStr}</span>
+                        </div>
+                        <div class="chat-bubble">${replyHtml}<div class="chat-msg-text">${renderMsgText(msg.message)}</div></div>
+                        <div class="chat-msg-actions">
+                            <button class="chat-msg-action-btn reply-action" type="button" onclick="event.stopPropagation(); startReply(${Number(msg.id)});">Javob berish</button>
+                            ${isMaster ? `<button class="chat-msg-action-btn delete-action" type="button" onclick="event.stopPropagation(); deleteChatMessage(${Number(msg.id)});">O'chirish</button>` : ''}
+                        </div>
                     </div>
                 </div>`;
             });
@@ -17524,7 +17683,10 @@
             var requestedTab = new URLSearchParams(window.location.search).get('tab');
             var hasPendingWorkspaceInvite = !!sessionStorage.getItem('juristai-workspace-invite')
                 || !!localStorage.getItem('juristai-pending-workspace-invite');
-            var savedTab = requestedTab || (hasPendingWorkspaceInvite ? 'jamoa' : localStorage.getItem('dictum-active-tab'));
+            var savedTab = requestedTab || tabFromHash() || (hasPendingWorkspaceInvite ? 'jamoa' : localStorage.getItem('dictum-active-tab'));
+            if (savedTab === 'home' && location.hash !== '#home') {
+                try { history.replaceState(null, '', location.pathname + location.search + '#home'); } catch(e) {}
+            }
             if (savedTab && savedTab !== 'home') {
                 var tabBtn = document.querySelector('.tab-bar-item[data-tab="' + savedTab + '"]');
                 if (tabBtn && tabBtn.style.display !== 'none') {

@@ -581,10 +581,6 @@
 .ws-matter-due.done { color: var(--ws-success); }
 /* The status reads as a bar of colour rather than a filled chip, as it does on
    the canvas. */
-.ws-matter-state { justify-self: start; padding-left: 10px; border-left: 2px solid var(--ws-brand); font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--ws-brand); }
-.ws-matter-state.done { border-left-color: var(--ws-success); color: var(--ws-success); }
-.ws-matter-state.approaching { border-left-color: var(--ws-warning); color: var(--ws-warning); }
-.ws-matter-state.overdue { border-left-color: var(--ws-danger); color: var(--ws-danger); }
 .ws-matter-ask { justify-self: end; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid var(--ws-line); border-radius: 8px; background: transparent; color: var(--ws-brand); cursor: pointer; }
 .ws-matter-ask:hover { background: var(--ws-brand-soft); border-color: var(--ws-brand-border); }
 
@@ -606,24 +602,8 @@
 /* Reuse is the point: it costs the team nothing, so it reads as a good thing. */
 .ws-thread-free { color: var(--ws-success); font-weight: 600; }
 
-.ws-side-body { display: flex; flex-direction: column; }
-.ws-load { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--ws-line); }
-.ws-load:last-child { border-bottom: 0; }
-.ws-load .ws-avatar { width: 34px; height: 34px; margin: 0; font-size: 11.5px; }
-.ws-load-copy { min-width: 0; }
-.ws-load-name { display: block; font-size: 13px; font-weight: 600; color: var(--ws-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-load-meta { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ws-muted); }
-.ws-load-track { display: block; height: 3px; margin-top: 7px; border-radius: 999px; background: var(--ws-line); overflow: hidden; }
-.ws-load-track i { display: block; height: 100%; border-radius: 999px; background: var(--ws-success); }
-.ws-load-track i.approaching { background: var(--ws-warning); }
-.ws-load-track i.overdue { background: var(--ws-danger); }
-.ws-load-share { font-size: 12.5px; font-weight: 700; color: var(--ws-success); }
-.ws-load-share.approaching { color: var(--ws-warning); }
-.ws-load-share.overdue { color: var(--ws-danger); }
-.ws-draft { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px 20px; border-bottom: 1px solid var(--ws-line); color: var(--ws-muted); }
-.ws-draft:last-child { border-bottom: 0; }
-.ws-draft-title { display: block; font-size: 13.5px; font-weight: 600; color: var(--ws-ink); }
-.ws-draft-meta { display: block; margin-top: 2px; font-size: 11.5px; color: var(--ws-muted); }
+/* The workload and drafts panels now use the ai-dashboard markup
+   (.ws-sec / .ws-load-row / .ws-draft) styled by dashboard.css. */
 
 /* -- Vaqt jadvali -------------------------------------------
    A 300px column naming the matter and who carries it, and a track whose six
@@ -1323,3 +1303,124 @@
 /* The dragged constellation is offset with a transform, so tell the compositor. */
 .ws-graph-matter.dragging,
 .ws-graph-member.dragging { will-change: transform; }
+
+/* ============================================================
+   Workspace toolbar and views — ai-dashboard canvas
+   The toolbar (.ws-bar), the list (.ws-grid / .ws-sec), the timeline
+   (.ws-tl-*) and the graph header share their markup with
+   ai-dashboard.html, so dashboard.css paints them. What follows only fits
+   that markup into the live workspace: the menus the canvas leaves static,
+   and the page-height behaviour the live data needs.
+   ============================================================ */
+#workspaceApp .ws-shell { display: flex; flex-direction: column; gap: 14px; }
+#workspaceApp .ws-shell > .ws-bar { position: relative; z-index: 30; }
+#workspaceApp .ws-bar .ws-team-btn { max-width: 320px; min-width: 0; flex-shrink: 1; }
+#workspaceApp .ws-bar > .ws-menuwrap:first-child { min-width: 0; flex-shrink: 1; }
+#workspaceApp .ws-team-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#workspaceApp .ws-live-dot { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; }
+#workspaceApp .ws-actions-btn { position: relative; }
+#workspaceApp .ws-bar-badge {
+    min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+    display: inline-grid; place-items: center; border-radius: 999px;
+    background: var(--brand); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 1;
+}
+#workspaceApp .ws-new:disabled { opacity: .55; cursor: not-allowed; }
+#workspaceApp .ws-viewbtn:hover:not([aria-pressed="true"]),
+#workspaceApp .ws-team-btn:hover,
+#workspaceApp .ws-actions-btn:hover { color: var(--ink); background: var(--panel-hover); }
+#workspaceApp .ws-viewbtn:focus-visible,
+#workspaceApp .ws-team-btn:focus-visible,
+#workspaceApp .ws-actions-btn:focus-visible,
+#workspaceApp .ws-new:focus-visible,
+#workspaceApp .ws-menu button:focus-visible { outline: 2px solid var(--brand-border); outline-offset: 2px; }
+
+#workspaceApp .ws-menu { max-height: min(70vh, 640px); overflow-y: auto; }
+#workspaceApp .ws-menu.ws-menu-left { left: 0; right: auto; min-width: 260px; max-width: 340px; }
+#workspaceApp .ws-menu.ws-menu-wide { width: 300px; }
+#workspaceApp .ws-menu button[aria-current="true"] { color: var(--brand); }
+#workspaceApp .ws-menu button svg { flex-shrink: 0; color: var(--muted); }
+#workspaceApp .ws-menu button[aria-current="true"] svg { color: var(--brand); }
+#workspaceApp .ws-menu-count {
+    margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box;
+    display: inline-grid; place-items: center; border-radius: 999px;
+    background: var(--danger); color: #fff; font-size: 11px; font-weight: 700;
+}
+#workspaceApp .ws-menu-section {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 10px 12px; margin-top: 4px; border-top: 1px solid var(--line);
+}
+#workspaceApp .ws-menu-label { font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted-dim); }
+#workspaceApp .ws-menu-search { width: 100%; }
+#workspaceApp .ws-menu-section .ws-input,
+#workspaceApp .ws-menu-section .ws-select,
+#workspaceApp .ws-menu-section .ws-dropdown { width: 100%; min-width: 0; }
+#workspaceApp .ws-menu-section .ws-input,
+#workspaceApp .ws-menu-section .ws-dropdown-toggle { height: 38px; min-height: 38px; font-size: 13px; }
+#workspaceApp .ws-menu-row { flex-direction: row; align-items: center; justify-content: space-between; }
+#workspaceApp .ws-menu-langs { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; }
+#workspaceApp .ws-menu .ws-menu-langs button { padding: 5px 9px; border-radius: 7px; font-size: 11.5px; color: var(--muted); }
+#workspaceApp .ws-menu .ws-menu-langs button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+
+/* List: the page scrolls, not the grid, so nothing is cut off above the tab bar. */
+#workspaceApp .ws-grid { flex: 0 0 auto; overflow: visible; }
+#workspaceApp .ws-matter:last-child,
+#workspaceApp .ws-thread:last-child,
+#workspaceApp .ws-draft:last-child { border-bottom: 0; }
+#workspaceApp .ws-matter:hover,
+#workspaceApp .ws-thread:hover,
+#workspaceApp .ws-draft:hover,
+#workspaceApp .ws-tl-row:hover { background: var(--panel-hover); }
+#workspaceApp .ws-load-row { cursor: pointer; border-radius: 10px; }
+#workspaceApp .ws-matter:focus-visible,
+#workspaceApp .ws-thread:focus-visible,
+#workspaceApp .ws-draft:focus-visible,
+#workspaceApp .ws-load-row:focus-visible,
+#workspaceApp .ws-tl-row:focus-visible { outline: 2px solid var(--brand-border); outline-offset: -2px; }
+#workspaceApp .ws-matter-state { color: inherit; }
+#workspaceApp .ws-tl-row { cursor: pointer; }
+#workspaceApp .ws-tl-row:last-child { border-bottom: 0; }
+#workspaceApp .ws-tl-track .ws-timeline-bar { min-width: 8px; }
+
+/* Graph header: the canvas's hint on the left, the legend on the right. */
+#workspaceApp .ws-graph-head {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; padding: 13px 20px; border-bottom: 1px solid var(--line);
+}
+#workspaceApp .ws-graph-pane { position: static; width: auto; }
+
+@media (max-width: 1080px) {
+    #workspaceApp .ws-grid { grid-template-columns: minmax(0, 1fr); }
+    #workspaceApp .ws-tl-head,
+    #workspaceApp .ws-tl-row { grid-template-columns: minmax(0, 160px) minmax(0, 1fr); gap: 12px; }
+}
+@media (max-width: 640px) {
+    #workspaceApp .ws-bar { padding: 10px; gap: 8px; }
+    #workspaceApp .ws-menu.ws-menu-wide { position: fixed; left: 12px; right: 12px; top: auto; width: auto; margin-top: 8px; }
+    #workspaceApp .ws-graph-head { padding: 11px 14px; }
+}
+/* Section heads are divs: the page styles every <header> as its top bar. */
+#workspaceApp .ws-sec > .ws-sec-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 20px; border-bottom: 1px solid var(--line);
+}
+#workspaceApp .ws-sec > .ws-sec-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+/* Filters in the toolbar menu use plain selects: the custom dropdown's
+   buttons would take on the menu's item styling. */
+#workspaceApp .ws-menu-select {
+    width: 100%; height: 38px; padding: 0 34px 0 12px; box-sizing: border-box;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel-solid) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a93a6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 12px center;
+    color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 500;
+    appearance: none; -webkit-appearance: none; cursor: pointer;
+}
+#workspaceApp .ws-menu-select:focus-visible { outline: 2px solid var(--brand-border); outline-offset: 1px; }
+#workspaceApp .ws-menu-search .ws-input { padding-left: 36px; }
+@media (max-width: 640px) {
+    #workspaceApp .ws-matter { grid-template-columns: minmax(0, 1fr) auto; padding: 14px 16px; }
+    #workspaceApp .ws-matter-state { grid-column: 1; grid-row: 2; }
+    #workspaceApp .ws-matter-ask { grid-column: 2; grid-row: 1; }
+    #workspaceApp .ws-sec > .ws-sec-head { padding: 14px 16px; }
+}
+/* A matter without dates: a note in the track instead of a bar. */
+#workspaceApp .ws-tl-track--empty { display: flex; align-items: center; padding: 0 10px; background: transparent; border: 1px dashed var(--line); }
+#workspaceApp .ws-tl-nodate { font-size: 11.5px; color: var(--muted-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
