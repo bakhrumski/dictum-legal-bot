@@ -3619,7 +3619,7 @@ async function callOpenAI(messages, options = {}) {
   // cost a 400 + retry — TWO HTTP round-trips on every single call (the run-8
   // log shows the rejection on every terra/luna request). The retry below
   // stays as a safety net for other parameter rejections.
-  if (/^gpt-5/i.test(body.model)) delete body.temperature;
+  if (/^gpt-([5-9]|\d{2,})/i.test(body.model)) delete body.temperature;
 
   // OpenAI's hosted web-search tool. This is what produced the buxgalter.uz
   // and talimxabarlari.uz citations — the `utm_source=openai` on those URLs is
