@@ -727,6 +727,8 @@ app.get('/api/admin/model-ab', requireMasterAdmin, async (req, res) => {
       const cit = verifyCitations(reply, chunks);
       return {
         ok: true,
+        // Who actually answered: 'voicelab/<model>' or the OpenAI id.
+        provider: r.provider,
         ms: Date.now() - t0,
         chars: reply.length,
         citedTotal: cit.total,
@@ -3291,7 +3293,7 @@ async function callOpenAIStream(messages, options = {}, onToken) {
   const gptKey = process.env.GPT_API_KEY;
   if (!gptKey) throw new Error('GPT_API_KEY sozlanmagan');
   const { temperature = 0.2, maxTokens = 8192 } = options;
-  const model = options.model || MODELS.standard;
+  const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
 
   const input = messages.map(m => ({
     role: m.role === 'model' ? 'assistant' : (m.role === 'user' ? 'user' : 'assistant'),
@@ -3506,7 +3508,7 @@ async function tryVoiceLab(messages, options, model, onToken) {
       costUsd: calculateTokenCost(r.provider, r.usage) || 0,
     } };
   } catch (err) {
-    if (!voicelab.fallbackAllowed()) throw err;
+    if (!voicelab.fallbackAllowed(model)) throw err;
     // A stream that already emitted tokens cannot be silently restarted on
     // another provider; the stream caller handles that case itself.
     console.warn(`[VoiceLab] ${voicelab.modelFor(model)} failed, using previous provider:`, err.message);
@@ -3570,7 +3572,7 @@ async function callOpenAI(messages, options = {}) {
   }));
 
   const body = {
-    model: options.model || MODELS.standard,
+    model: voicelab.stripProviderPrefix(options.model || MODELS.standard),
     input,
     temperature,
     // OpenAI rejects values below 16 ("integer below minimum value").
@@ -3794,7 +3796,10 @@ try {
     crossCheckLegalAnswer,
     hydrateMentionedOfficialActChunks,
     hydrateLexAnchors,
-    chatModel: MODELS.chat,
+    // The Telegram answer model can differ from the web chat's, so the bot can
+    // be trialled on its own, e.g. MODEL_TELEGRAM=voicelab/aisha-comet with
+    // LLM_PROVIDER off keeps the website on its current model.
+    chatModel: process.env.MODEL_TELEGRAM || MODELS.chat,
     embeddingApiKey: process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY,
   });
 } catch (e) {

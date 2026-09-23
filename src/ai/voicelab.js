@@ -26,14 +26,20 @@
  * VOICELAB_LANES limits which lanes go to VoiceLab (default: all), so one
  * workload can be moved back without touching the others.
  *
+ * Explicit ids, for comparing providers side by side (/api/admin/model-ab):
+ *   voicelab/<model>  always VoiceLab, whenever VOICELAB_API_KEY is set, even
+ *                     with LLM_PROVIDER off; never falls back, so a VoiceLab
+ *                     failure is measured as a failure, not as OpenAI's answer
+ *   openai/<model>    always the previous provider, even with VoiceLab on
+ *
  * Environment:
  *   LLM_PROVIDER             'voicelab' to switch on
  *   VOICELAB_API_KEY         Bearer key (vlk_...). Lives in Render, never in git.
  *   VOICELAB_BASE_URL        default https://api.voicelab.uz
- *   VOICELAB_MODEL_CHEAP     default comet
- *   VOICELAB_MODEL_STANDARD  default orbit
- *   VOICELAB_MODEL_PREMIUM   default halo
- *   VOICELAB_MODEL_VISION    default halo
+ *   VOICELAB_MODEL_CHEAP     default aisha-comet
+ *   VOICELAB_MODEL_STANDARD  default aisha-orbit
+ *   VOICELAB_MODEL_PREMIUM   default aisha-halo
+ *   VOICELAB_MODEL_VISION    default aisha-halo
  *   VOICELAB_LANES           comma list, default cheap,standard,premium,vision
  *   VOICELAB_FALLBACK        'false' to surface VoiceLab errors instead of
  *                            falling back to the previous provider
@@ -43,11 +49,12 @@
 const DEFAULT_BASE_URL = 'https://api.voicelab.uz';
 const CHAT_PATH = '/v1/chat/completions';
 const LANES = ['cheap', 'standard', 'premium', 'vision'];
+// Model ids as the VoiceLab console lists them (checked 2026-09-23).
 const DEFAULT_MODELS = Object.freeze({
-  cheap: 'comet',
-  standard: 'orbit',
-  premium: 'halo',
-  vision: 'halo',
+  cheap: 'aisha-comet',     // 31B, 258k context
+  standard: 'aisha-orbit',  // 755B, 1M context
+  premium: 'aisha-halo',    // 2.8T, 1M context
+  vision: 'aisha-halo',
 });
 
 // The OpenAI ids the routers pass today, and the lane each one stands for.
@@ -74,6 +81,21 @@ function enabledLanes() {
   return new Set(raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
 }
 
+/** 'voicelab/comet' → 'comet'; null for any id without the prefix. */
+function explicitVoiceLabModel(modelOrLane) {
+  const m = /^voicelab\/(.+)$/i.exec(String(modelOrLane || '').trim());
+  return m ? m[1] : null;
+}
+
+function isExplicitOpenAI(modelOrLane) {
+  return /^openai\//i.test(String(modelOrLane || '').trim());
+}
+
+/** 'openai/gpt-5.6-luna' → 'gpt-5.6-luna'; any other id unchanged. */
+function stripProviderPrefix(model) {
+  return String(model || '').replace(/^openai\//i, '');
+}
+
 /** Lane for an OpenAI model id, or the lane name itself if one is passed. */
 function laneFor(modelOrLane) {
   const key = String(modelOrLane || '').trim().toLowerCase();
@@ -83,6 +105,8 @@ function laneFor(modelOrLane) {
 
 /** VoiceLab model id to use for an OpenAI model id or a lane name. */
 function modelFor(modelOrLane) {
+  const explicit = explicitVoiceLabModel(modelOrLane);
+  if (explicit) return explicit;
   const lane = laneFor(modelOrLane);
   const override = String(process.env[`VOICELAB_MODEL_${lane.toUpperCase()}`] || '').trim();
   return override || DEFAULT_MODELS[lane];
@@ -93,12 +117,15 @@ function modelFor(modelOrLane) {
  * never routed: they are the free fallback tier, not a paid lane.
  */
 function routes(modelOrLane) {
+  if (explicitVoiceLabModel(modelOrLane)) return apiKey().length > 0;
+  if (isExplicitOpenAI(modelOrLane)) return false;
   if (!isEnabled()) return false;
   if (/^gemini/i.test(String(modelOrLane || ''))) return false;
   return enabledLanes().has(laneFor(modelOrLane));
 }
 
-function fallbackAllowed() {
+function fallbackAllowed(modelOrLane) {
+  if (explicitVoiceLabModel(modelOrLane)) return false;
   return String(process.env.VOICELAB_FALLBACK || '').trim().toLowerCase() !== 'false';
 }
 
@@ -276,6 +303,7 @@ module.exports = {
   fallbackAllowed,
   modelFor,
   laneFor,
+  stripProviderPrefix,
   chatCompletion,
   chatCompletionStream,
   // exported for tests

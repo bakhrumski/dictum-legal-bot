@@ -59,14 +59,21 @@ Known state of the suites (Sept 2026):
 - `src/ai/voicelab.js` — VoiceLab LLM switch (OpenAI-compatible Chat
   Completions at `api.voicelab.uz`). Off unless `LLM_PROVIDER=voicelab` and
   `VOICELAB_API_KEY` are set; turning it off is an env change, not a deploy.
-  Lanes: cheap → Comet, standard → Orbit, premium and vision → Halo, each
+  Lanes: cheap → aisha-comet, standard → aisha-orbit, premium and vision →
+  aisha-halo (ids as the VoiceLab console lists them), each
   overridable (`VOICELAB_MODEL_*`), limited with `VOICELAB_LANES`. A VoiceLab
   failure falls back to the previous provider unless `VOICELAB_FALLBACK=false`.
   Hooked at five places only: `callOpenAI` / `callOpenAIStream` and
   `triggerAiScreening` in server.js, `callOpenAIModel` in hybrid-pipeline.js,
   `callVisionOCR` in ocr/routes.js. Embeddings are deliberately not routed —
   changing them means re-embedding the corpus. Prices come from
-  `VOICELAB_PRICES` (JSON, USD/1M); without it VoiceLab spend is unpriced.
+  `model-pricing.js` (list prices, 2026-09-23), overridable with
+  `VOICELAB_PRICES` (JSON, USD/1M). `MODEL_TELEGRAM` sets the Telegram
+  answer model on its own (e.g. `voicelab/aisha-comet`), so the bot can be
+  trialled without moving the website.
+  Explicit ids pick a provider for side-by-side tests: `voicelab/<model>`
+  (VoiceLab, needs only the key, never falls back) and `openai/<model>`
+  (bypasses VoiceLab), e.g. `/api/admin/model-ab?a=voicelab/aisha-comet&b=openai/gpt-5.6-luna`.
 - `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
   platinum), daily limits, opinion credits and the margin maths.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
