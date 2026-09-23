@@ -18,6 +18,7 @@
  */
 
 const multer = require('multer');
+const voicelab = require('../ai/voicelab');
 const os = require('os');
 const fs = require('fs');
 
@@ -68,6 +69,24 @@ async function callVisionOCR(buf, mimeType, langCode) {
   const gptKey = process.env.GPT_API_KEY;
   const prompt = VISION_PROMPT(LANG_HINTS[langCode] || '');
   const b64 = buf.toString('base64');
+
+  // VoiceLab's vision lane (Halo) first when switched on. Images only: how it
+  // takes a PDF is not part of the Chat Completions shape, so PDFs keep going
+  // to Gemini, which reads them natively. Any failure falls through to the
+  // chain below, which is unchanged.
+  if (voicelab.routes('vision') && /^image\//i.test(mimeType || '')) {
+    try {
+      const r = await voicelab.chatCompletion('vision', [{ role: 'user', content: [
+        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
+        { type: 'text', text: prompt },
+      ]}], { temperature: 0.1, maxTokens: 4096 });
+      const text = (r.text || '').trim();
+      if (text) return { text, provider: `VoiceLab ${r.model}` };
+    } catch (e) {
+      if (!voicelab.fallbackAllowed()) throw e;
+      console.warn('[OCR] VoiceLab vision error, using previous provider:', e.message);
+    }
+  }
 
   if (geminiKey) {
     try {

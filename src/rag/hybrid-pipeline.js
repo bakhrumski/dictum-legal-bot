@@ -1,6 +1,8 @@
 'use strict';
 
 const log = require('../utils/logger').createLogger('HYBRID');
+const voicelab = require('../ai/voicelab');
+const { calculateTokenCost } = require('../ai/model-pricing');
 
 /**
  * Hybrid RAG Pipeline — JuristAI (Phase 2)
@@ -165,6 +167,25 @@ function estimateTokens(text) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS, responseFormat = null } = {}) {
+  // VoiceLab when LLM_PROVIDER=voicelab routes this lane; otherwise, or on a
+  // failure with fallback allowed, the OpenAI request below runs as before.
+  if (voicelab.routes(model)) {
+    try {
+      const r = await voicelab.chatCompletion(model, messages, { temperature, maxTokens, responseFormat });
+      return {
+        text: r.text,
+        provider: r.provider,
+        model: r.provider,
+        inTokens: r.usage.inTokens || estimateTokens(JSON.stringify(messages)),
+        outTokens: r.usage.outTokens || estimateTokens(r.text),
+        // Priced from VOICELAB_PRICES, never at the OpenAI rate of the lane.
+        costUsd: calculateTokenCost(r.provider, r.usage) || 0,
+      };
+    } catch (err) {
+      if (!voicelab.fallbackAllowed()) throw err;
+      log.warn('voicelab failed, using previous provider', { model, err: err.message });
+    }
+  }
   const key = process.env.GPT_API_KEY || process.env.OPENAI_API_KEY;
   if (!key) throw new Error('GPT_API_KEY not set');
 
@@ -291,13 +312,13 @@ async function callWithFallback(chain, messages, opts = {}) {
     }
     try {
       const result = await callModel(model, messages, opts);
-      const cost = estimateCost(model, result.inTokens, result.outTokens);
+      const cost = result.costUsd != null ? result.costUsd : estimateCost(model, result.inTokens, result.outTokens);
       recordSpend(cost);
       recordCbSuccess(model);
       if (_spendHook) {
         try {
           await _spendHook({
-            model,
+            model: result.model || model,
             stage: opts.stage || 'generate',
             inTokens: result.inTokens,
             outTokens: result.outTokens,
@@ -309,7 +330,7 @@ async function callWithFallback(chain, messages, opts = {}) {
           log.warn('spend hook failed', { err: hookErr.message });
         }
       }
-      log.info('model ok', { model, stage: opts.stage, inTokens: result.inTokens, outTokens: result.outTokens, costUsd: cost.toFixed(4) });
+      log.info('model ok', { model: result.model || model, stage: opts.stage, inTokens: result.inTokens, outTokens: result.outTokens, costUsd: cost.toFixed(4) });
       return { ...result, estimatedCostUsd: cost };
     } catch (err) {
       recordCbFailure(model);
