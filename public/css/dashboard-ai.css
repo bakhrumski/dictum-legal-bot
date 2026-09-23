@@ -1,0 +1,712 @@
+/*
+ * dashboard.html — ai-dashboard.html layout layer.
+ *
+ * dashboard.html carries four generations of styles (the inline legacy
+ * sheet, redesign-v2.css, dashboard-canvas.css and dashboard.css). This file
+ * loads last and brings each bottom-tab section to the ai-dashboard.html
+ * canvas: the same frame, header, section heads, cards and rows. Markup
+ * that could be reused keeps its ids and handlers; this layer only decides
+ * how it looks. Many rules need !important because the layers below it use
+ * it too.
+ */
+
+/* ============================================================
+   Frame and header
+   ============================================================ */
+#db-root > .container {
+  width: min(100% - 24px, 1520px) !important;
+  max-width: 1520px !important;
+  margin: 0 auto !important;
+  padding: 16px 0 112px !important;
+  box-sizing: border-box;
+}
+#db-root > .container > header.db-head {
+  position: sticky !important; top: 12px !important; z-index: 100 !important;
+  height: auto !important; max-height: none !important; min-height: 72px !important;
+  margin: 0 !important; padding: 0 20px !important;
+  display: flex !important; align-items: center !important; gap: 16px !important;
+  border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent) !important;
+  box-shadow: var(--shadow) !important;
+  backdrop-filter: blur(20px) !important; -webkit-backdrop-filter: blur(20px) !important;
+  animation: none !important;
+}
+#db-root .db-head .header-left { display: flex; align-items: center; flex-shrink: 0; }
+#db-root .db-head .header-logo { height: 30px !important; width: auto !important; max-width: 118px !important; }
+/* The admin tools sit with the theme switch on the right, as on the canvas. */
+#db-root .db-head .header-center {
+  position: static !important; transform: none !important;
+  margin-left: auto !important; display: flex !important; align-items: center !important;
+  gap: 4px !important; flex: 0 1 auto !important;
+}
+#db-root .db-head .header-center > .db-iconbtn,
+#db-root .db-head .header-center > a.db-iconbtn,
+#db-root .db-head .header-chat-wrapper > .db-iconbtn {
+  width: 38px !important; height: 38px !important; min-width: 38px !important; min-height: 38px !important;
+  padding: 0 !important; display: grid !important; place-items: center !important;
+  border: 1px solid transparent !important; border-radius: 12px !important;
+  background: transparent !important; box-shadow: none !important; color: var(--muted) !important;
+}
+#db-root .db-head .header-center > .db-iconbtn[style*="display:none"],
+#db-root .db-head .header-center > .db-iconbtn[style*="display: none"] { display: none !important; }
+#db-root .db-head .header-center > .db-iconbtn:hover,
+#db-root .db-head .header-chat-wrapper > .db-iconbtn:hover { background: var(--panel-hover) !important; }
+#db-root .db-head .header-center svg { stroke: currentColor !important; }
+#db-root .db-head .header-right { display: flex !important; align-items: center !important; gap: 8px !important; margin: 0 !important; flex-shrink: 0; }
+
+#db-root .db-head .profile-toggle.db-profile {
+  position: static !important; transform: none !important; width: auto !important;
+  height: auto !important; min-height: 0 !important; min-width: 0 !important;
+  display: flex !important; align-items: center !important; gap: 10px !important;
+  padding: 5px 12px 5px 6px !important;
+  border: 1px solid var(--line) !important; border-radius: 999px !important;
+  background: transparent !important; box-shadow: none !important; cursor: pointer;
+}
+#db-root .db-head .profile-toggle.db-profile:hover { background: var(--panel-hover) !important; }
+#db-root .db-head .profile-avatar {
+  width: 30px !important; height: 30px !important; flex: 0 0 30px !important;
+  border-radius: 999px !important; display: grid !important; place-items: center !important;
+  background: var(--brand) !important; color: #fff !important; border: 0 !important;
+  font-size: 12px !important; font-weight: 700 !important; box-shadow: none !important;
+}
+#db-root .db-head .profile-info {
+  max-width: none !important; opacity: 1 !important; overflow: visible !important;
+  display: flex !important; flex-direction: column !important; align-items: flex-start !important;
+  line-height: 1.25 !important; margin: 0 !important; padding: 0 !important;
+}
+#db-root .db-head .profile-fullname { font-size: 13.5px !important; font-weight: 600 !important; color: var(--ink) !important; white-space: nowrap; }
+#db-root .db-head .profile-role-text { font-size: 11.5px !important; color: var(--muted-dim) !important; white-space: nowrap; text-transform: none !important; letter-spacing: 0 !important; font-weight: 400 !important; }
+#db-root .db-head .profile-exit-btn {
+  max-width: none !important; opacity: 1 !important; width: 18px !important; height: 18px !important;
+  display: grid !important; place-items: center !important; margin: 0 !important; padding: 0 !important;
+  color: var(--muted-dim) !important; background: transparent !important; border: 0 !important;
+}
+#db-root .db-head .profile-exit-btn svg { width: 16px; height: 16px; }
+
+/* ============================================================
+   Asosiy
+   ============================================================ */
+#db-root .tab-view[data-tab="home"] > .operations-heading {
+  max-width: none !important; margin: 0 !important; padding: 28px 0 0 !important;
+  display: flex !important; align-items: flex-end !important; justify-content: space-between !important;
+  gap: 20px !important; flex-wrap: wrap;
+}
+#db-root .operations-heading h1 {
+  margin: 0 0 6px !important; font-family: var(--font-serif, 'Source Serif 4', Georgia, serif) !important;
+  font-size: clamp(27px, 3.2vw, 37px) !important; font-weight: 700 !important;
+  letter-spacing: -.02em !important; line-height: 1.12 !important; color: var(--ink) !important;
+}
+#db-root .operations-heading .operations-refresh {
+  min-height: 0 !important; padding: 10px 16px !important; border: 1px solid var(--line) !important;
+  border-radius: 12px !important; background: color-mix(in srgb, var(--panel-solid) 88%, transparent) !important;
+  box-shadow: none !important; color: var(--ink) !important; font-size: 14px !important; font-weight: 600 !important;
+}
+#db-root .tab-view[data-tab="home"] > .stats.db-bits {
+  max-width: none !important; margin: 20px 0 0 !important; padding: 0 !important;
+  display: flex !important; gap: 0 !important; grid-template-columns: none !important;
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+}
+#db-root .stats.db-bits .db-bit {
+  min-height: 0 !important; padding: 2px 18px 0 !important; gap: 7px !important;
+  border: 0 !important; border-left: 1px solid var(--line) !important; border-radius: 0 !important;
+  background: transparent !important; box-shadow: none !important; transform: none !important;
+}
+#db-root .stats.db-bits .db-bit:hover { background: color-mix(in srgb, var(--panel-hover) 60%, transparent) !important; }
+#db-root .stats.db-bits .db-bit-n { font-size: 30px !important; margin: 0 !important; }
+#db-root .tab-view[data-tab="home"] > .operations-health-shell {
+  display: block !important; width: auto !important; max-width: none !important; margin: 20px 0 0 !important; padding: 0 !important;
+  border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+#db-root .operations-health.db-health {
+  width: auto !important; padding: 12px 2px !important; display: flex !important; gap: 32px !important; flex-wrap: wrap;
+  border: 0 !important; border-top: 1px solid var(--line) !important; border-bottom: 1px solid var(--line) !important;
+  border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+#db-root .operations-health .health-item {
+  display: flex !important; align-items: baseline !important; gap: 8px !important;
+  font-size: 13px !important; color: var(--muted-dim) !important; border: 0 !important;
+}
+#db-root .operations-health .health-item strong {
+  color: var(--ink) !important; font-weight: 500 !important; font-size: 12.5px !important;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace) !important;
+}
+#db-root .operations-health .health-dot { width: 6px !important; height: 6px !important; align-self: center; background: var(--ok) !important; }
+#db-root .operations-health .health-dot.is-warning { background: var(--warn) !important; }
+#db-root .operations-health .health-dot.is-error { background: var(--danger) !important; }
+#db-root .operations-health .health-dot.is-loading { background: var(--muted-dim) !important; }
+
+#db-root .tab-view[data-tab="home"] > .main-content-area { max-width: none !important; margin: 20px 0 0 !important; padding: 0 !important; }
+#db-root .requests-container {
+  border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent) !important;
+  box-shadow: var(--shadow) !important; overflow: visible !important; padding: 0 !important;
+}
+#db-root .requests-container .controls {
+  padding: 0 !important; margin: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+#db-root .requests-container .controls-header.db-card-head {
+  min-height: 0 !important; padding: 22px 22px 0 !important; margin: 0 !important;
+  display: flex !important; align-items: flex-start !important; justify-content: space-between !important; gap: 16px !important;
+  border: 0 !important; background: transparent !important;
+}
+#db-root .controls-header.db-card-head h2 {
+  margin: 0 0 4px !important; font-family: var(--font-serif, 'Source Serif 4', Georgia, serif) !important;
+  font-size: 20px !important; font-weight: 600 !important; letter-spacing: -.03em !important; color: var(--ink) !important;
+}
+#db-root .controls-header.db-card-head p { margin: 0 !important; font-size: 13.5px !important; color: var(--muted) !important; }
+#db-root .controls-header .queue-refresh {
+  width: 36px !important; height: 36px !important; min-height: 0 !important; padding: 0 !important;
+  border-radius: 11px !important; border: 1px solid var(--line) !important; background: transparent !important;
+  color: var(--muted) !important; box-shadow: none !important;
+}
+#db-root .queue-views.db-chips {
+  margin: 0 !important; padding: 18px 22px 0 !important; display: flex !important; gap: 7px !important;
+  flex-wrap: wrap !important; overflow: visible !important;
+}
+#db-root .queue-views .queue-view-btn.db-chip {
+  min-height: 0 !important; padding: 8px 14px !important; border-radius: 999px !important;
+  border: 1px solid var(--line) !important; background: transparent !important; color: var(--muted) !important;
+  font-size: 13px !important; font-weight: 600 !important; box-shadow: none !important;
+}
+#db-root .queue-views .queue-view-btn.db-chip:hover { background: var(--panel-hover) !important; color: var(--ink) !important; }
+#db-root .queue-views .queue-view-btn.db-chip.active {
+  border-color: var(--brand-border) !important; background: var(--brand-soft) !important; color: var(--brand) !important;
+}
+
+/* Search on its own line with the filters folded behind one button. */
+#db-root .filter-section.db-searchrow {
+  padding: 16px 22px 18px !important; margin: 0 !important;
+  display: flex !important; flex-wrap: wrap !important; gap: 10px !important; grid-template-columns: none !important;
+  border: 0 !important; background: transparent !important;
+}
+#db-root .filter-section .queue-search.db-search {
+  flex: 1 1 280px !important; min-height: 0 !important; height: 42px !important; padding: 0 14px !important;
+  display: flex !important; align-items: center !important; gap: 9px !important;
+  border: 1px solid var(--line) !important; border-radius: 12px !important;
+  background: color-mix(in srgb, var(--panel-hover) 52%, transparent) !important; color: var(--muted-dim) !important;
+  box-shadow: none !important;
+}
+#db-root .filter-section .queue-search input {
+  flex: 1; min-width: 0; height: auto !important; border: 0 !important; background: transparent !important;
+  box-shadow: none !important; outline: none; padding: 0 !important;
+  font-size: 14px !important; color: var(--ink) !important;
+}
+#db-root .queue-filter-toggle.db-btn {
+  height: 42px !important; padding: 0 14px !important; gap: 8px !important; flex: 0 0 auto;
+  font-size: 13.5px !important; color: var(--muted) !important; background: transparent !important;
+}
+#db-root .queue-filter-toggle[aria-expanded="true"] { color: var(--brand) !important; border-color: var(--brand-border) !important; background: var(--brand-soft) !important; }
+#db-root .queue-filter-count {
+  min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 999px;
+  display: inline-grid; place-items: center; background: var(--brand); color: #fff;
+  font-size: 10.5px; font-weight: 700; line-height: 1;
+}
+#db-root .queue-more-filters {
+  flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+  padding: 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-hover) 38%, transparent);
+}
+#db-root .queue-more-filters[hidden] { display: none !important; }
+#db-root .queue-more-filters > .queue-select,
+#db-root .queue-more-filters > .queue-clear { grid-column: auto !important; min-width: 0; }
+#db-root .queue-more-filters .queue-clear { min-height: 40px !important; }
+
+#db-root .requests-container #requestsList { padding: 0 !important; }
+#db-root .ops-request-list.db-rows { display: block !important; border-top: 1px solid var(--line); }
+#db-root .ops-request.db-row {
+  position: static !important; min-height: 0 !important;
+  display: grid !important; grid-template-columns: auto minmax(0, 1fr) 150px 96px 118px !important;
+  align-items: center !important; gap: 16px !important; padding: 16px 22px !important;
+  border: 0 !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+}
+#db-root .ops-request.db-row:last-child { border-bottom: 0 !important; }
+#db-root .ops-request.db-row:hover { background: color-mix(in srgb, var(--panel-hover) 55%, transparent) !important; }
+#db-root .ops-request.db-row:focus-visible { outline: 2px solid var(--brand-border); outline-offset: -2px; }
+#db-root .ops-request .db-row-person strong,
+#db-root .ops-request .db-row-time strong { display: block; }
+#db-root .ops-request .db-row-person span,
+#db-root .ops-request .db-row-time span { display: block; margin-top: 0; }
+#db-root .requests-container .queue-empty { padding: 44px 22px !important; border-top: 1px solid var(--line); }
+#db-root .requests-container .queue-empty strong { font-size: 15px; color: var(--ink) !important; }
+#db-root .requests-container .queue-empty span { font-size: 13px; color: var(--muted); }
+#db-root .requests-container .queue-pagination { border-top: 1px solid var(--line); padding: 14px 22px !important; }
+
+@media (max-width: 1080px) {
+  #db-root .queue-more-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  #db-root > .container { width: min(100% - 24px, 1520px) !important; }
+  #db-root > .container > header.db-head { min-height: 66px !important; padding: 0 12px !important; border-radius: 16px !important; }
+  #db-root .db-head .profile-info { display: none !important; }
+  #db-root .db-head .profile-toggle.db-profile { padding: 4px !important; }
+  #db-root .ops-request.db-row { grid-template-columns: auto minmax(0, 1fr) !important; padding: 14px 16px !important; }
+  #db-root .ops-request.db-row .db-row-person,
+  #db-root .ops-request.db-row .db-row-time { display: none !important; }
+  #db-root .ops-request.db-row .db-row-status { grid-column: 2; }
+  #db-root .ops-request.db-row .db-row-title { white-space: normal; }
+  #db-root .requests-container .controls-header.db-card-head,
+  #db-root .queue-views.db-chips { padding-left: 16px !important; padding-right: 16px !important; }
+  #db-root .filter-section.db-searchrow { padding: 14px 16px 16px !important; }
+  #db-root .queue-more-filters { grid-template-columns: minmax(0, 1fr); }
+  #db-root .stats.db-bits .db-bit { min-width: 132px !important; }
+}
+
+/* ============================================================
+   Chat — two panes as on the canvas (dashboard.css paints .chat-*);
+   this resets what the legacy chat sheet still sets on shared names.
+   ============================================================ */
+#db-root #tabChat.tab-view.active { height: auto !important; overflow: visible !important; }
+body.chat-tab-active { overflow: auto !important; height: auto !important; }
+#db-root #tabChat .chat-head h2 { font-family: var(--font-serif, 'Source Serif 4', Georgia, serif) !important; }
+#db-root #tabChat .chat-pane h3 { font-family: var(--font-serif, 'Source Serif 4', Georgia, serif); }
+#db-root #tabChat .chat-grid { height: calc(100vh - 292px); height: calc(100dvh - 292px); }
+#db-root #tabChat .chat-pane[hidden] { display: none !important; }
+#db-root #tabChat .chat-mode-count {
+  min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 999px;
+  display: inline-grid; place-items: center; background: var(--prv); color: #fff; font-size: 10.5px; font-weight: 700;
+}
+#db-root #tabChat .chat-count { background: transparent; font-family: inherit; cursor: pointer; }
+#db-root #tabChat .chat-count:hover { background: color-mix(in srgb, var(--grp) 10%, transparent); }
+#db-root #tabChat .chat-header-delete-all {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 !important; padding: 5px 11px !important;
+  border: 1px solid var(--line) !important; border-radius: 999px !important;
+  background: transparent !important; color: var(--danger) !important; font-size: 11.5px !important; font-weight: 600;
+}
+#db-root #tabChat .chat-header-delete-all[style*="display: none"],
+#db-root #tabChat .chat-header-delete-all[style*="display:none"] { display: none !important; }
+#db-root #tabChat .chat-header-delete-all svg { width: 13px; height: 13px; }
+
+/* The legacy thread paints its own background, padding and bubbles. */
+#db-root #tabChat .chat-log.chat-messages {
+  background: transparent !important; padding: 18px !important; gap: 14px !important;
+  flex: 1 1 0% !important; min-height: 0 !important; overflow-y: auto !important;
+}
+#db-root #tabChat .chat-log .chat-msg {
+  max-width: none !important; padding: 0 !important; margin: 0 !important; border-radius: 0 !important;
+  background: none !important; box-shadow: none !important; align-self: stretch !important;
+  font-size: inherit; cursor: default;
+}
+#db-root #tabChat .chat-log .chat-msg.highlight .chat-bubble { animation: db-msg-flash 1.5s ease; }
+@keyframes db-msg-flash { 0% { box-shadow: 0 0 0 3px var(--brand-border); } 100% { box-shadow: 0 0 0 0 transparent; } }
+#db-root #tabChat .chat-msg-init.role-master { background: var(--brand-soft); border-color: var(--brand-border); color: var(--brand); }
+#db-root #tabChat .chat-msg-role {
+  padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  background: var(--grp-soft); color: var(--grp); border: 1px solid var(--grp-line);
+}
+#db-root #tabChat .chat-bubble { cursor: pointer; word-wrap: break-word; }
+#db-root #tabChat .chat-msg-text { white-space: normal; }
+#db-root #tabChat .chat-msg[data-me] .chat-bubble .mention,
+#db-root #tabChat .chat-msg[data-me] .chat-bubble .mention-all { color: #fff; background: rgba(255,255,255,.18); }
+#db-root #tabChat .chat-bubble .mention,
+#db-root #tabChat .chat-bubble .mention-all { padding: 0 4px; border-radius: 6px; font-weight: 600; }
+#db-root #tabChat .chat-msg-reply {
+  margin: 0 0 7px !important; padding: 5px 9px !important; border-radius: 8px !important;
+  border-left: 3px solid var(--grp) !important; background: color-mix(in srgb, var(--grp) 9%, transparent) !important;
+}
+#db-root #tabChat .chat-msg[data-me] .chat-msg-reply { border-left-color: rgba(255,255,255,.7) !important; background: rgba(255,255,255,.14) !important; }
+#db-root #tabChat .chat-msg-reply-sender { font-size: 11.5px; font-weight: 600; color: var(--grp) !important; }
+#db-root #tabChat .chat-msg[data-me] .chat-msg-reply-sender,
+#db-root #tabChat .chat-msg[data-me] .chat-msg-reply-text { color: rgba(255,255,255,.9) !important; }
+#db-root #tabChat .chat-msg-actions {
+  display: none; gap: 4px; margin-top: 6px; padding: 0 !important; border: 0 !important;
+}
+#db-root #tabChat .chat-msg[data-me] .chat-msg-actions { justify-content: flex-end; }
+#db-root #tabChat .chat-msg.actions-open .chat-msg-actions { display: flex !important; }
+#db-root #tabChat .chat-msg-action-btn {
+  padding: 4px 10px !important; border: 1px solid var(--line) !important; border-radius: 999px !important;
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent) !important; font-size: 11.5px !important;
+}
+#db-root #tabChat .chat-msg-action-btn.reply-action { color: var(--grp) !important; }
+#db-root #tabChat .chat-msg-action-btn.delete-action { color: var(--danger) !important; }
+#db-root #tabChat .chat-date-separator { display: flex; justify-content: center; margin: 2px 0; }
+#db-root #tabChat .chat-date-separator span {
+  padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line) !important;
+  background: color-mix(in srgb, var(--panel-hover) 60%, transparent) !important;
+  font-size: 11px; font-weight: 600; color: var(--muted) !important; box-shadow: none !important;
+}
+
+/* Composer: the canvas's rounded field with the send button inside it. */
+#db-root #tabChat .chat-composer.chat-input-area {
+  position: relative; padding: 12px 16px 16px !important; background: transparent !important;
+  border-top: 1px solid var(--line) !important;
+}
+#db-root #tabChat .chat-composer textarea.chat-input {
+  flex: 1; min-width: 0; min-height: 26px !important; max-height: 120px !important; height: auto;
+  padding: 8px 10px !important; border: 0 !important; border-radius: 0 !important;
+  background: transparent !important; box-shadow: none !important; outline: none;
+  font-size: 14px !important; line-height: 1.6 !important; color: var(--ink) !important;
+}
+#db-root #tabChat .chat-send:disabled { opacity: .5; cursor: not-allowed; }
+#db-root #tabChat .chat-reply-preview {
+  margin: 0 0 8px !important; padding: 8px 12px !important; border-radius: 10px !important;
+  border-left: 3px solid var(--grp) !important; background: var(--grp-soft) !important;
+}
+#db-root #tabChat .chat-reply-preview-sender { color: var(--grp) !important; }
+#db-root #tabChat .mention-dropdown { left: 16px; right: 16px; bottom: calc(100% - 6px); border-radius: 14px; border: 1px solid var(--line); background: var(--panel-solid); }
+
+/* Members list under the group header. */
+#db-root #tabChat .chat-members-panel {
+  display: none !important; position: absolute !important; top: calc(100% - 4px) !important;
+  left: auto !important; right: 12px !important; bottom: auto !important; width: min(320px, calc(100% - 24px)) !important;
+  height: auto !important; max-height: 340px; overflow-y: auto; padding: 6px !important;
+  border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: var(--panel-solid) !important; box-shadow: var(--shadow-hover) !important; transform: none !important;
+}
+#db-root #tabChat .chat-members-panel.open { display: block !important; }
+#db-root #tabChat .chat-members-header { display: none !important; }
+#db-root #tabChat .chat-members-list { padding: 0 !important; }
+#db-root #tabChat .chat-members-list-title {
+  display: flex; justify-content: space-between; padding: 8px 10px 6px !important;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-dim);
+}
+#db-root #tabChat .chat-member-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px !important; border-radius: 10px; }
+#db-root #tabChat .chat-member-item:hover { background: var(--panel-hover); }
+#db-root #tabChat .chat-member-avatar {
+  position: relative; width: 30px !important; height: 30px !important; border-radius: 999px !important;
+  display: grid !important; place-items: center !important; font-size: 11px !important; font-weight: 700;
+  background: var(--grp-soft) !important; color: var(--grp) !important; border: 1px solid var(--grp-line);
+}
+#db-root #tabChat .chat-member-name { font-size: 13px !important; }
+#db-root #tabChat .chat-member-role { padding: 0 !important; background: none !important; color: var(--muted) !important; font-weight: 500 !important; }
+
+@media (max-width: 1080px) {
+  #db-root #tabChat .chat-grid { height: auto !important; }
+  #db-root #tabChat .chat-pane { height: min(620px, calc(100dvh - 240px)); }
+}
+
+/* ============================================================
+   AI — one card: thread list on the left, conversation on the right.
+   ============================================================ */
+#db-root #tabAi.tab-view.active { padding-top: 28px; }
+#db-root #tabAi .ai-workspace {
+  display: grid !important; grid-template-columns: 280px minmax(0, 1fr) !important;
+  height: calc(100vh - 214px) !important; height: calc(100dvh - 214px) !important; min-height: 460px;
+  border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent) !important;
+  box-shadow: var(--shadow) !important; overflow: hidden !important;
+}
+body.no-tab-bar #db-root #tabAi .ai-workspace { height: calc(100dvh - 150px) !important; }
+#db-root #tabAi .ai-workspace.sidebar-collapsed,
+#db-root #tabAi .ai-workspace:has(.ai-sidebar.collapsed) { grid-template-columns: 0 minmax(0, 1fr) !important; }
+#db-root #tabAi .ai-sidebar {
+  width: auto !important; min-width: 0 !important; padding: 18px !important;
+  display: flex !important; flex-direction: column !important; gap: 16px !important;
+  border: 0 !important; border-right: 1px solid var(--line) !important;
+  background: transparent !important; box-shadow: none !important; overflow: hidden;
+}
+#db-root #tabAi .ai-sidebar.collapsed { padding: 0 !important; border-right: 0 !important; }
+#db-root #tabAi .ai-sidebar-header { padding: 0 !important; margin: 0 !important; border: 0 !important; display: flex; gap: 8px; }
+#db-root #tabAi .ai-sidebar-new-btn {
+  flex: 1; display: flex !important; align-items: center !important; justify-content: center !important; gap: 9px !important;
+  padding: 12px !important; min-height: 0 !important; border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: color-mix(in srgb, var(--panel-hover) 52%, transparent) !important; color: var(--ink) !important;
+  font-size: 14px !important; font-weight: 600 !important; box-shadow: none !important;
+}
+#db-root #tabAi .ai-sidebar-new-btn:hover { background: var(--panel-hover) !important; }
+#db-root #tabAi .ai-group .ai-scope { width: 100%; }
+#db-root #tabAi .ai-history-section {
+  flex: 1 1 0%; min-height: 0; display: flex !important; flex-direction: column; gap: 10px;
+  padding: 0 !important; margin: 0 !important; border: 0 !important;
+}
+#db-root #tabAi .ai-history-title {
+  padding: 0 2px !important; margin: 0 !important; font-size: 11.5px !important; font-weight: 600 !important;
+  letter-spacing: .02em !important; text-transform: none !important; color: var(--muted-dim) !important;
+}
+#db-root #tabAi .ai-history-search-wrap {
+  display: flex !important; align-items: center; gap: 9px; height: 40px; padding: 0 12px !important; margin: 0 !important;
+  border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: color-mix(in srgb, var(--panel-hover) 52%, transparent) !important; color: var(--muted-dim);
+}
+#db-root #tabAi .ai-history-search {
+  flex: 1; min-width: 0; height: auto !important; padding: 0 !important; border: 0 !important;
+  background: transparent !important; box-shadow: none !important; outline: none; font-size: 13px !important; color: var(--ink) !important;
+}
+#db-root #tabAi .ai-history-list {
+  flex: 1 1 0%; min-height: 0; overflow-y: auto; display: flex !important; flex-direction: column; gap: 7px !important;
+  margin: 0 -4px !important; padding: 0 4px !important;
+}
+#db-root #tabAi .ai-history-item {
+  position: relative; display: flex !important; align-items: flex-start !important; gap: 6px;
+  padding: 10px 11px !important; margin: 0 !important;
+  border: 1px solid var(--line) !important; border-radius: 12px !important;
+  background: transparent !important; box-shadow: none !important; cursor: pointer;
+}
+#db-root #tabAi .ai-history-item:hover { background: var(--panel-hover) !important; }
+#db-root #tabAi .ai-history-item.active { border-color: var(--brand-border) !important; background: var(--brand-soft) !important; }
+#db-root #tabAi .ai-history-item-content { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+#db-root #tabAi .ai-history-item-title {
+  font-size: 12.5px !important; font-weight: 600 !important; line-height: 1.4 !important; color: var(--ink) !important;
+  white-space: normal !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+#db-root #tabAi .ai-history-item-meta,
+#db-root #tabAi .ai-history-item-time { font-size: 10.5px !important; color: var(--muted-dim) !important; font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+#db-root #tabAi .ai-history-delete-btn { opacity: 0; flex-shrink: 0; color: var(--muted-dim); background: transparent !important; border: 0 !important; padding: 2px !important; }
+#db-root #tabAi .ai-history-item:hover .ai-history-delete-btn,
+#db-root #tabAi .ai-history-delete-btn:focus-visible { opacity: 1; }
+#db-root #tabAi .ai-history-empty { padding: 18px 6px !important; font-size: 12.5px !important; color: var(--muted) !important; text-align: center; }
+
+#db-root #tabAi .ai-chat-main { display: flex !important; flex-direction: column !important; min-width: 0; min-height: 0; background: transparent !important; border: 0 !important; }
+#db-root #tabAi .ai-chat-header {
+  position: relative; flex-shrink: 0; min-height: 56px !important; height: auto !important;
+  display: flex !important; align-items: center !important; gap: 8px !important; flex-wrap: wrap;
+  padding: 10px 16px !important; border: 0 !important; border-bottom: 1px solid var(--line) !important;
+  background: transparent !important; box-shadow: none !important; box-sizing: border-box;
+}
+#db-root #tabAi .ai-chat-header-left { display: flex !important; align-items: center !important; gap: 8px !important; flex: 1 1 auto; min-width: 0; }
+#db-root #tabAi .ai-sidebar-toggle {
+  width: 36px !important; height: 36px !important; flex-shrink: 0; padding: 0 !important;
+  display: grid !important; place-items: center; border: 1px solid var(--line) !important; border-radius: 11px !important;
+  background: transparent !important; color: var(--muted) !important;
+}
+/* Admin tools: inline dropdowns on a wide screen, as on the canvas. */
+@media (min-width: 1081px) {
+  #db-root #tabAi .ai-chat-header.master-mode .hdr-mobile-toggle { display: none !important; }
+  #db-root #tabAi .ai-chat-header.master-mode .hdr-actions {
+    position: static !important; display: flex !important; flex-direction: row !important; align-items: center !important;
+    gap: 7px !important; width: auto !important; padding: 0 !important; margin-left: auto;
+    transform: none !important; visibility: visible !important; overflow: visible !important;
+    background: transparent !important; border: 0 !important; box-shadow: none !important; z-index: 30 !important;
+  }
+  #db-root #tabAi .hdr-actions .hdr-drawer-head { display: none !important; }
+  #db-root #tabAi .hdr-actions .hdr-dd { position: relative !important; width: auto !important; }
+  #db-root #tabAi .hdr-actions .hdr-dd-btn {
+    width: auto !important; display: inline-flex !important; align-items: center; gap: 7px !important;
+    padding: 8px 13px !important; border: 1px solid var(--line) !important; border-radius: 12px !important;
+    background: color-mix(in srgb, var(--panel-solid) 92%, transparent) !important;
+    color: var(--ink) !important; font-size: 13px !important; font-weight: 600 !important; line-height: 1.3 !important;
+  }
+  #db-root #tabAi .hdr-actions .hdr-dd-btn:hover,
+  #db-root #tabAi .hdr-actions .hdr-dd-btn.dd-open { background: var(--panel-hover) !important; border-color: var(--brand-border) !important; }
+  #db-root #tabAi .hdr-actions .hdr-dd-panel {
+    position: absolute !important; top: calc(100% + 8px) !important; right: 0 !important; left: auto !important;
+    min-width: 260px; max-height: min(70vh, 560px); overflow-y: auto; margin: 0 !important; padding: 14px !important;
+    border: 1px solid var(--line) !important; border-radius: 14px !important;
+    background: var(--panel-solid) !important; box-shadow: var(--shadow-hover) !important;
+  }
+  #db-root #tabAi .hdr-actions .hdr-dd-panel:not(.dd-open) { display: none !important; }
+  #db-root #tabAi .hdr-actions .hdr-dd-panel.dd-open { display: block !important; }
+}
+#db-root #tabAi .hdr-mobile-toggle {
+  border: 1px solid var(--line) !important; border-radius: 12px !important; padding: 8px 12px !important;
+  font-size: 13px !important; font-weight: 600 !important; color: var(--ink) !important; background: transparent !important;
+}
+
+/* Welcome */
+#db-root #tabAi .ai-chat-messages { background: transparent !important; }
+#db-root #tabAi .ai-chat-welcome { width: min(100%, 720px) !important; max-width: 720px !important; gap: 22px !important; }
+#db-root #tabAi .ai-welcome-mark { display: none !important; }
+#db-root #tabAi .ai-welcome-copy h1 {
+  margin: 0 0 8px !important; font-family: var(--font-serif, 'Source Serif 4', Georgia, serif) !important;
+  font-size: clamp(22px, 3vw, 29px) !important; font-weight: 600 !important; letter-spacing: -.04em !important;
+  line-height: 1.15 !important; color: var(--ink) !important; max-width: none !important;
+}
+#db-root #tabAi .ai-welcome-copy p { margin: 0 !important; font-size: 14.5px !important; color: var(--muted) !important; }
+#db-root #tabAi .ai-starter-grid { gap: 10px !important; }
+#db-root #tabAi .ai-starter-card {
+  min-height: 74px !important; padding: 12px 14px !important; gap: 11px !important;
+  border: 1px solid var(--line) !important; border-radius: 14px !important; box-shadow: none !important;
+  background: color-mix(in srgb, var(--panel-hover) 52%, transparent) !important;
+}
+#db-root #tabAi .ai-starter-card:hover { border-color: var(--brand-border) !important; transform: none !important; }
+#db-root #tabAi .ai-starter-card svg { stroke: var(--brand) !important; color: var(--brand) !important; }
+#db-root #tabAi .ai-topics-toggle {
+  padding: 9px 15px !important; border: 1px solid var(--line) !important; border-radius: 999px !important;
+  background: transparent !important; color: var(--muted) !important; font-size: 13px !important; font-weight: 600 !important;
+}
+
+/* Composer */
+#db-root #tabAi .ai-chat-input-bar {
+  flex-shrink: 0; padding: 14px clamp(18px, 4vw, 48px) 20px !important;
+  border: 0 !important; border-top: 1px solid var(--line) !important; background: transparent !important; box-shadow: none !important;
+}
+#db-root #tabAi .ai-chat-input-bar .ai-chat-input-wrapper {
+  width: min(100%, 820px) !important; max-width: 820px !important; margin: 0 auto !important;
+  display: flex !important; align-items: flex-end !important; gap: 4px !important;
+  min-height: 52px !important; padding: 6px !important; box-sizing: border-box;
+  border: 1px solid var(--line) !important; border-radius: 16px !important;
+  background: color-mix(in srgb, var(--panel-hover) 52%, transparent) !important; box-shadow: none !important;
+}
+#db-root #tabAi .ai-attach-btn {
+  width: 38px !important; height: 38px !important; border-radius: 11px !important; border: 0 !important;
+  background: transparent !important; color: var(--muted-dim) !important; box-shadow: none !important;
+}
+#db-root #tabAi .ai-chat-textarea {
+  flex: 1; min-width: 0; min-height: 26px !important; padding: 8px 4px !important; border: 0 !important;
+  background: transparent !important; box-shadow: none !important; outline: none;
+  font-size: 14.5px !important; line-height: 1.6 !important; color: var(--ink) !important;
+}
+#db-root #tabAi .ai-chat-input-bar .ai-chat-send-btn {
+  width: 38px !important; height: 38px !important; flex-shrink: 0; border-radius: 11px !important; border: 0 !important;
+  background: var(--brand) !important; color: #fff !important; box-shadow: none !important;
+}
+#db-root #tabAi .ai-composer-note { max-width: 820px; margin: 10px auto 0 !important; text-align: center !important; font-size: 11.5px !important; color: var(--muted-dim) !important; }
+
+@media (max-width: 1080px) {
+  #db-root #tabAi .ai-workspace { grid-template-columns: minmax(0, 1fr) !important; }
+  #db-root #tabAi .ai-scoperow { display: none; }
+}
+@media (max-width: 760px) {
+  #db-root #tabAi.tab-view.active { padding-top: 16px; }
+  #db-root #tabAi .ai-workspace { height: calc(100dvh - 190px) !important; }
+}
+
+/* ============================================================
+   Boshqaruv — cards, then one collapsible card per section.
+   ============================================================ */
+#db-root #tabSorov > .management-heading { max-width: none !important; margin: 0 !important; padding: 28px 0 0 !important; }
+#db-root #tabSorov > .management-heading h1 {
+  margin: 0 0 6px !important; font-family: var(--font-serif, 'Source Serif 4', Georgia, serif) !important;
+  font-size: clamp(27px, 3.2vw, 37px) !important; font-weight: 700 !important; letter-spacing: -.02em !important;
+  line-height: 1.12 !important; color: var(--ink) !important;
+}
+#db-root #tabSorov > .management-grid.mg-grid {
+  max-width: none !important; margin: 20px 0 20px !important; padding: 0 !important;
+  display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 14px !important;
+}
+#db-root #tabSorov .mg-grid > .mg-card {
+  position: relative !important; min-height: 104px !important; margin: 0 !important;
+  display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 5px !important;
+  padding: 18px !important; border: 1px solid var(--line) !important; border-radius: 18px !important;
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent) !important;
+  box-shadow: var(--shadow) !important; text-align: left !important; transform: none !important;
+}
+#db-root #tabSorov .mg-grid > .mg-card:hover { border-color: var(--brand-border) !important; }
+#db-root #tabSorov .mg-grid > .mg-card[aria-pressed="true"] {
+  border-color: var(--brand-border) !important;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--panel-solid) 94%, transparent), var(--brand-soft)) !important;
+}
+#db-root #tabSorov .mg-card > span { font-size: 15.5px !important; font-weight: 600 !important; letter-spacing: -.02em; color: var(--ink) !important; }
+#db-root #tabSorov .mg-card > small { font-size: 12.5px !important; line-height: 1.45; color: var(--muted) !important; }
+#db-root #tabSorov .mg-card > .mg-count {
+  position: absolute !important; top: 14px !important; right: 16px !important; left: auto !important;
+  min-width: 24px; height: auto !important; padding: 3px 8px !important; border-radius: 999px !important;
+  background: var(--brand-soft) !important; border: 1px solid var(--brand-border) !important; color: var(--brand) !important;
+  font-size: 12px !important; font-weight: 700 !important; line-height: 1.3 !important; text-align: center; box-shadow: none !important;
+}
+#db-root #tabSorov .mg-card > .mg-count[hidden] { display: none !important; }
+
+#db-root #tabSorov .reg-section {
+  margin: 0 0 16px !important; padding: 0 !important; max-width: none !important;
+  border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent) !important;
+  box-shadow: var(--shadow) !important; backdrop-filter: none !important; overflow: hidden;
+}
+#db-root #tabSorov .reg-section-header {
+  display: flex !important; align-items: center !important; gap: 8px; padding: 18px 22px !important; margin: 0 !important;
+  border: 0 !important; background: transparent !important;
+}
+#db-root #tabSorov .reg-section-header:focus-visible { outline: 2px solid var(--brand-border); outline-offset: -2px; }
+#db-root #tabSorov .reg-section-header > div { gap: 8px !important; }
+#db-root #tabSorov .reg-section-header .toggle-chevron { margin: 0 !important; stroke: var(--muted-dim) !important; transition: transform .2s ease; }
+#db-root #tabSorov .reg-section-header h2 {
+  margin: 0 !important; font-family: var(--font-serif, 'Source Serif 4', Georgia, serif) !important;
+  font-size: 16.5px !important; font-weight: 600 !important; letter-spacing: -.02em !important; color: var(--ink) !important;
+}
+#db-root #tabSorov .reg-pending-badge {
+  margin: 0 !important; padding: 3px 9px !important; border-radius: 999px !important;
+  background: rgba(217,119,6,.12) !important; border: 1px solid rgba(217,119,6,.30) !important;
+  color: var(--warn) !important; font-size: 11.5px !important; font-weight: 700 !important;
+}
+#db-root #tabSorov .reg-section-body { margin: 0 !important; padding: 0 22px 22px !important; }
+#db-root #tabSorov .reg-section.collapsed .reg-section-body { display: none !important; }
+#db-root #tabSorov .reg-section-body > .management-note,
+#db-root #tabSorov .reg-section-body > p { margin: 0 0 14px !important; font-size: 13px !important; line-height: 1.65 !important; color: var(--muted) !important; }
+#db-root #tabSorov .reg-kanban {
+  display: grid !important; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important; gap: 12px !important;
+}
+#db-root #tabSorov .reg-kanban > .reg-empty { grid-column: 1 / -1; }
+#db-root #tabSorov .reg-kanban-col {
+  min-height: 120px; padding: 14px !important; border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: color-mix(in srgb, var(--panel-hover) 52%, transparent) !important;
+}
+#db-root #tabSorov .reg-kanban-col-title {
+  margin: 0 0 10px !important; padding: 0 !important; border: 0 !important;
+  font-size: 11px !important; font-weight: 700 !important; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-dim) !important;
+}
+#db-root #tabSorov .reg-kanban-col-title span { letter-spacing: 0; text-transform: none; }
+#db-root #tabSorov .reg-kanban-col-body { display: flex !important; flex-direction: column; gap: 8px !important; }
+#db-root #tabSorov .reg-card {
+  padding: 12px 13px !important; border: 1px solid var(--line) !important; border-radius: 12px !important;
+  background: var(--panel-solid) !important; box-shadow: none !important;
+}
+#db-root #tabSorov .reg-card:hover { border-color: var(--brand-border) !important; background: var(--panel-solid) !important; }
+#db-root #tabSorov .reg-card-name { font-size: 13.5px !important; color: var(--ink) !important; }
+#db-root #tabSorov .reg-card-meta { font-size: 11.5px !important; color: var(--muted) !important; }
+#db-root #tabSorov .reg-card-actions button { border-radius: 9px !important; }
+#db-root #tabSorov .reg-empty {
+  padding: 24px !important; border: 1px dashed var(--line); border-radius: 14px;
+  text-align: center; font-size: 13px !important; color: var(--muted-dim) !important;
+}
+
+@media (max-width: 1080px) {
+  #db-root #tabSorov > .management-grid.mg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 760px) {
+  #db-root #tabSorov > .management-grid.mg-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  #db-root #tabSorov .reg-section-header { padding: 16px !important; }
+  #db-root #tabSorov .reg-section-body { padding: 0 16px 16px !important; }
+}
+#db-root .tab-view[data-tab="sorov"] > .monte-carlo-section {
+  max-width: none !important; margin: 0 0 16px !important; padding: 0 !important;
+  display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 16px !important;
+}
+#db-root .monte-carlo-section .mc-card {
+  margin: 0 !important; padding: 18px 22px 22px !important;
+  border: 1px solid var(--line) !important; border-radius: 14px !important;
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent) !important; box-shadow: var(--shadow) !important;
+}
+#db-root .monte-carlo-section .mc-card h3 {
+  margin: 0 0 14px !important; display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-serif, 'Source Serif 4', Georgia, serif) !important;
+  font-size: 16.5px !important; font-weight: 600 !important; letter-spacing: -.02em; color: var(--ink) !important;
+}
+@media (max-width: 1080px) {
+  #db-root .tab-view[data-tab="sorov"] > .monte-carlo-section { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* ============================================================
+   Tab bar badges and the Workspace section's top gap
+   ============================================================ */
+#db-root .bottom-tab-bar .tab-badge {
+  position: absolute !important; top: 4px !important; right: calc(50% - 22px) !important; left: auto !important;
+  min-width: 16px !important; height: 16px !important; padding: 0 4px !important; box-sizing: border-box;
+  border-radius: 999px !important; border: 0 !important; box-shadow: none !important;
+  background: var(--danger-solid, #c2413b) !important; color: #fff !important;
+  font-size: 9.5px !important; font-weight: 700 !important; line-height: 16px !important; text-align: center;
+}
+#db-root #tabJamoa.tab-view.active { padding-top: 28px !important; }
+@media (max-width: 760px) { #db-root #tabJamoa.tab-view.active { padding-top: 16px !important; } }
+#db-root .monte-carlo-section .mc-card h3 { padding: 0 !important; background: transparent !important; border: 0 !important; }
+@media (max-width: 760px) {
+  #db-root .db-head .header-logo { max-width: 96px !important; height: 26px !important; }
+  #db-root .db-head .header-center { gap: 0 !important; }
+  #db-root .db-head .header-center > .db-iconbtn,
+  #db-root .db-head .header-center > a.db-iconbtn,
+  #db-root .db-head .header-chat-wrapper > .db-iconbtn { width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; border-radius: 10px !important; }
+  #db-root .db-head .profile-exit-btn { display: none !important; }
+  #db-root > .container > header.db-head { gap: 8px !important; }
+  #db-root .operations-health.db-health { gap: 8px 20px !important; }
+}
+@media (max-width: 400px) {
+  #db-root .db-head .header-center > a.db-iconbtn { display: none !important; }
+}
+
+/* ============================================================
+   Performance: nothing but the top header blurs what is behind it.
+   A backdrop-filter re-blurs its whole area every time anything under or
+   inside it changes, so the blurred workspace pane, tab bar, chat and AI
+   headers made every frame of a graph drag re-blur ~1400x650px — the drag
+   ran at ~16 fps where ai-dashboard.html (which blurs only its header)
+   holds 60. The canvas paints these surfaces solid anyway.
+   ============================================================ */
+#db-root .ws-panel, #db-root .ws-metric, #db-root .ws-detail-panel, #db-root .ws-ai-panel,
+#db-root .requests-container, #db-root .chat-pane, #db-root .chat-pane *,
+#db-root .ai-chat-header, #db-root .ai-chat-textarea, #db-root .ai-workspace,
+#db-root .mc-card, #db-root .reg-section, #db-root .bottom-tab-bar,
+#db-root .ws-dropdown-menu {
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+#db-root .bottom-tab-bar.db-tabbar { background: var(--panel-solid) !important; }
+/* The tab badges pulsed forever; each pulse repainted the page every frame. */
+#db-root .tab-badge, #db-root .header-chat-badge, #db-root .db-tab-badge { animation: none !important; }
