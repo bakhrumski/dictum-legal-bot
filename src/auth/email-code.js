@@ -37,7 +37,7 @@ function getTransporter() {
 }
 
 function genCode() {
-  return String(Math.floor(1000 + Math.random() * 9000));
+  return require('./otp').digitCode(4);
 }
 
 /**
@@ -73,7 +73,11 @@ async function sendEmailCode(email) {
       console.error('[EMAIL] send failed, keeping token alive for testing:', err.message);
     }
   } else {
-    console.log(`[EMAIL STUB] code for ${email}: ${code} (token: ${token})`);
+    // No SMTP: the code is not sent anywhere. It used to be written to the
+    // production log with its token; now only a local developer who asks
+    // for it sees it.
+    if (process.env.EMAIL_DEV_LOG_CODES === 'true') console.log(`[EMAIL STUB] code for ${email}: ${code}`);
+    else console.warn('[EMAIL STUB] SMTP is not configured; the email code was not sent');
   }
   return { token };
 }
