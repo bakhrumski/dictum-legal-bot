@@ -188,6 +188,7 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
   if (responseFormat) body.response_format = responseFormat;
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    signal: AbortSignal.timeout(Number(process.env.AI_TIMEOUT_MS) || 180000),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -243,6 +244,7 @@ async function callGeminiModel(model, messages, { temperature = 0.2, maxTokens =
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
   const resp = await fetch(url, {
+    signal: AbortSignal.timeout(Number(process.env.AI_TIMEOUT_MS) || 180000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

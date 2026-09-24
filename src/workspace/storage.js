@@ -43,6 +43,7 @@ function encodedObjectPath(objectPath) {
 async function storageRequest(path, options = {}, env = process.env) {
   const { supabaseUrl, serviceRoleKey } = storageConfiguration(env);
   const response = await fetch(`${supabaseUrl}/storage/v1${path}`, {
+    signal: AbortSignal.timeout(Number(env.STORAGE_TIMEOUT_MS) || 60000),
     ...options,
     headers: {
       apikey: serviceRoleKey,

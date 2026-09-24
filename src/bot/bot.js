@@ -1426,7 +1426,7 @@ bot.on('message', async (msg) => {
       try {
         await bot.sendChatAction(chatId, 'typing').catch(() => {});
         const link = await bot.getFileLink(msg.voice.file_id);
-        const audioResp = await fetch(link);
+        const audioResp = await fetch(link, { signal: AbortSignal.timeout(60000) });
         if (!audioResp.ok) throw new Error(`voice download ${audioResp.status}`);
         const audio = Buffer.from(await audioResp.arrayBuffer());
         const transcript = await speech.transcribe(audio, {
