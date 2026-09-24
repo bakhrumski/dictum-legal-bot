@@ -1,0 +1,76 @@
+name: CI
+
+# Runs on every pull request and on main. main deploys straight to
+# production on Render, so this is the last check before a release.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Syntax check (src)
+        run: find src -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Core suite
+        run: npm test
+      - name: Workspace suite
+        run: npm run test:workspace
+      - name: Broad suite
+        run: npm run test:all
+
+  boot-smoke:
+    name: Boot smoke (Postgres + pgvector)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jai
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Boot, anonymous-access matrix, SIGTERM
+        run: scripts/ci/boot-smoke.sh
+
+  audit:
+    name: npm audit (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Known findings are tracked in docs/audit/BACKLOG.md; this job reports
+    # them on every PR without blocking until they are fixed.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: npm audit
+        run: |
+          if ! npm audit --omit=dev --audit-level=high; then
+            echo "::warning title=npm audit::High or critical advisories in production dependencies (see this log; tracked in docs/audit/BACKLOG.md)"
+          fi
