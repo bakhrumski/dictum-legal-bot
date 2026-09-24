@@ -105,7 +105,7 @@ async function test(name, fn) {
 
   await test('registration requests never return password_hash', () => {
     const at = src.indexOf("app.get('/api/registration-requests'");
-    assert.match(src.slice(at, at + 1200), /const \{ document_base64, password_hash, \.\.\.rest \} = r;/);
+    assert.match(src.slice(at, at + 1600), /column_name NOT IN \('document_base64', 'password_hash'\)/);
   });
 
   console.log(`\n${passed} passed, ${failed} failed\n`);
