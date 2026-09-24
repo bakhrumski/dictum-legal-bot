@@ -95,3 +95,20 @@ bajariladigan bo'ladi (hozir ~7/14/35).
 3. *Keyingi qadam (ixtiyoriy):* Telegram'i bog'langan pullik veb tarif
    egalari botda ham o'z tarifidan foydalansin (hozir Platinum ham botda
    3/kun oladi).
+
+## Audit tomonidan qabul qilingan (2026-09-24, kech)
+
+**D-16. Kutilmagan xatolar (uncaughtException).** Stack bilan logga
+yoziladi, jarayon avvalgidek ishlashda davom etadi. Sabab: bugun jimgina
+chidab kelinayotgan takroriy xato bo'lsa, `exit` production'ni restart
+tsikliga tushirishi mumkin. Loglar kuzatilgach qayta ko'riladi.
+
+**D-17. cheerio 0.22 → 1.x keyinga qoldirildi.** lex.uz parser va chunker
+unga tayanadi; haqiqiy lex.uz sahifalarida xarakterizatsiya testlarisiz
+yangilash xavfli. Bu muhitdan lex.uz'ga ulanib bo'lmaydi.
+
+**D-18. Boot qat'iy.** Migratsiya xatosi boot'ni to'xtatadi (Render eski
+instansiyani saqlaydi). Favqulodda holat uchun `BOOT_ALLOW_PARTIAL=true`.
+
+**D-19. RAG eval server ichida.** Kalitlar va baza URL'i tashqariga
+chiqarilmaydi; eval production'dagi `retrieveLegalContext` orqali ishlaydi.

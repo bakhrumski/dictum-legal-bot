@@ -40,3 +40,19 @@ Retrieval va javob sifatini o'lchash uchun faqat o'qish huquqli
 `DATABASE_URL`, korpusga mos embedding kaliti va yurist tekshirgan gold set
 kerak (`findings/rag.md`, "Access needed"). Ular berilmaguncha RAG raqamlari
 kiritilmaydi.
+
+## 2026-09-24 kechki o'lchovlar
+
+| O'lchov | Oldin | Keyin | PR |
+|---------|-------|-------|----|
+| `npm audit --omit=dev` | 20 (2 critical, 9 high) | 14 (2 critical, 5 high) | #339 |
+| 10 parallel chat, sinov 3/kun | 9 o'tdi | 3 o'tdi | #341 |
+| 5 parallel xulosa, 1 kredit | — | 1 band qilindi | #341 |
+| Noto'g'ri JSON javobi | HTML stack trace | JSON 400 | #335 |
+| Baza ishlamasa boot | yarim ishga tushadi / osilib qoladi | 6 urinish, keyin exit(1) | #335 |
+| Deadline'siz `fetch` (so'rov yo'lida) | 15 | 0 | #344 |
+| AI hujjatidagi XSS payload'lari | ishlaydi | 0 | #343 |
+| `authz-matrix` (anonim kirish) | hech qachon ishga tushmagan | 37/37, har bir PR'da CI'da | #337 |
+
+RAG sifati raqamlari: `/api/admin/rag-eval?start=1` production'da ishga
+tushirilgach shu yerga yoziladi.
