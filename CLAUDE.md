@@ -104,8 +104,15 @@ Known state of the suites (Sept 2026):
   `docs/design-handoff/` (`ANIMATIONS.md` lists which animations exist — do
   not invent new ones). Match the rendered canvas, not its inline declarations;
   the canvas runtime overrides some of them.
-- **Type:** landing and login use Space Grotesk. The dashboard uses Inter for
-  UI, Source Serif 4 for headings, JetBrains Mono (tabular) for figures.
+- **Type: one face, Space Grotesk, everywhere** (owner's decision, Sept 2026;
+  it overrides the dashboard canvas's Inter / Source Serif 4 / JetBrains Mono
+  split). It is self-hosted: `public/css/fonts.css` declares it from
+  `public/fonts/space-grotesk/` and sets every font role from `html:root`;
+  every page links that file — a new page must too. Do not add Google Fonts
+  links or literal font names; use `var(--font-sans)`. `tokens.css` keeps the
+  prototype values because `tests/design-tokens` checks them; `fonts.css`
+  overrides them. Figures keep `tabular-nums`; code stays monospace.
+  Space Grotesk has no Cyrillic — Russian falls back to the system sans.
 - **Three token systems coexist:** `--jai-*` (`redesign-v2.css`, on `:root`),
   `--ws-*` (`workspace.css`, declared on `.workspace-app` only — they do not
   exist outside it), and `--fg/--bg/--accent` (`design-tokens.css`).

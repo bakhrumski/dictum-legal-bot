@@ -739,3 +739,21 @@ body.no-tab-bar #db-root #tabAi .ai-workspace { height: calc(100dvh - 150px) !im
 #db-root .ws-graph-stage [data-graph-node] {
   transition-property: border-color, background-color, box-shadow, color, opacity !important;
 }
+
+/* Timeline colour legend: what each bar colour means (graphTone rules). */
+#db-root .ws-tl-legend {
+  flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+  padding: 12px 20px; border-top: 1px solid var(--line);
+  font-size: 12px; color: var(--muted);
+}
+#db-root .ws-tl-legend-title { font-weight: 600; color: var(--ink); }
+#db-root .ws-tl-legend-item { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+#db-root .ws-tl-legend-bar { width: 22px; height: 8px; border-radius: 4px; flex-shrink: 0; }
+#db-root .ws-tl-legend-diamond {
+  width: 10px; height: 10px; margin: 0 6px; flex-shrink: 0; transform: rotate(45deg);
+  border-radius: 2px; background: var(--brand);
+}
+@media (max-width: 760px) {
+  #db-root .ws-tl-legend { padding: 10px 14px; gap: 6px 14px; font-size: 11.5px; }
+  #db-root .ws-tl-legend-item { white-space: normal; }
+}
