@@ -150,8 +150,12 @@
             --bg-card-hover: var(--dark-bg-3);
         }
 
-        /* Smooth theme transition */
-        *, *::before, *::after {
+        /* Smooth theme transition — only while the theme is being switched.
+           Applied to every element all the time, this gave each hover, press
+           and re-rendered view a 0.4s colour and blur fade, so rows, buttons
+           and their text visibly lagged a click. toggleTheme() sets the
+           attribute for the length of the fade. */
+        html[data-theme-switching] *, html[data-theme-switching] *::before, html[data-theme-switching] *::after {
             transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
                         color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
                         border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
@@ -8141,6 +8145,9 @@
         // Theme toggle function
         function toggleTheme() {
             const html = document.documentElement;
+            html.setAttribute('data-theme-switching', '');
+            clearTimeout(toggleTheme._fade);
+            toggleTheme._fade = setTimeout(function () { html.removeAttribute('data-theme-switching'); }, 450);
             const current = html.getAttribute('data-theme');
             const next = current === 'dark' ? 'light' : 'dark';
             if (next === 'dark') {
