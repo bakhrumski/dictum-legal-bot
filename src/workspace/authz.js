@@ -15,9 +15,17 @@ function planWeight(plan) {
   return { silver: 1, gold: 2, platinum: 3 }[String(plan || '').toLowerCase()] || 0;
 }
 
+// A membership row carries both the owner's plan (tariff_plan) and the
+// member's own (member_tariff_plan). The member is judged on their own plan
+// only; falling back to the owner's let a member with no plan ride on the
+// owner's Platinum (audit M4). Master accounts need no plan.
 function isActivePaidPlan(row, minimumPlan = 'silver') {
-  if (!row || planWeight(row.member_tariff_plan || row.tariff_plan) < planWeight(minimumPlan)) return false;
-  const expiresAt = row.member_tariff_expires_at || row.tariff_expires_at;
+  if (!row) return false;
+  const isMembership = Object.prototype.hasOwnProperty.call(row, 'member_tariff_plan');
+  if (isMembership && String(row.member_role || '').toLowerCase() === 'master') return true;
+  const plan = isMembership ? row.member_tariff_plan : row.tariff_plan;
+  const expiresAt = isMembership ? row.member_tariff_expires_at : row.tariff_expires_at;
+  if (planWeight(plan) < planWeight(minimumPlan)) return false;
   return !expiresAt || new Date(expiresAt).getTime() >= Date.now();
 }
 
@@ -41,7 +49,8 @@ async function getWorkspaceAccess(db, workspaceId, userId) {
             owner.tariff_plan,
             owner.tariff_expires_at,
             member_account.tariff_plan AS member_tariff_plan,
-            member_account.tariff_expires_at AS member_tariff_expires_at
+            member_account.tariff_expires_at AS member_tariff_expires_at,
+            member_account.role AS member_role
        FROM workspaces w
        JOIN workspace_members wm
          ON wm.workspace_id = w.id AND wm.user_id = $2

@@ -250,7 +250,12 @@ async function listTasks(pool, workspaceId, userId, query) {
 }
 
 function mountWorkspaceRoutes(app, options) {
-  const { pool, requireAuth, aiLimiter, aiService, verificationTokens } = options;
+  const { pool, requireAuth, aiLimiter, aiService, verificationTokens, tariffModule } = options;
+  // Workspace AI is metered like chat on the asking member's own plan
+  // (DECISIONS.md D-7): one unit of fair-use, fail-open, refunded on failure.
+  const workspaceAiQuota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
+    ? tariffModule.enforceQuota('/api/workspace-ai')
+    : (req, res, next) => next();
   if (!app || !pool || !requireAuth || !aiService) {
     throw new TypeError('Workspace routes require app, pool, requireAuth and aiService');
   }
@@ -354,6 +359,7 @@ function mountWorkspaceRoutes(app, options) {
               owner.tariff_plan, owner.tariff_expires_at,
               member_account.tariff_plan AS member_tariff_plan,
               member_account.tariff_expires_at AS member_tariff_expires_at,
+              member_account.role AS member_role,
               juristai_private.has_workspace_entitlement(w.owner_id) AS is_active,
               (SELECT count(*)::int FROM workspace_members m WHERE m.workspace_id=w.id) AS member_count,
               (SELECT count(*)::int FROM workspace_tasks t WHERE t.workspace_id=w.id AND t.deleted_at IS NULL) AS task_count
@@ -1493,7 +1499,7 @@ function mountWorkspaceRoutes(app, options) {
     });
   }));
 
-  router.post('/workspaces/:workspaceId/assistant/ask', aiLimiter || ((req, res, next) => next()), asyncRoute(async (req, res) => {
+  router.post('/workspaces/:workspaceId/assistant/ask', aiLimiter || ((req, res, next) => next()), workspaceAiQuota, asyncRoute(async (req, res) => {
     const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
     const question = requiredString(req.body.question, 'question', { min: 3, max: 20000 });
     const result = await aiService.ask({
@@ -1504,6 +1510,10 @@ function mountWorkspaceRoutes(app, options) {
       topic: optionalString(req.body.topic, 'topic', { max: 80 }),
       userId: actorId(req),
     });
+    // Joining a run already in progress, or a reused answer, calls no model.
+    if (result.status === 'in_progress' || result.reused === true) {
+      if (tariffModule && typeof tariffModule.refundUsage === 'function') tariffModule.refundUsage(res, 'no_generation');
+    }
     res.status(result.status === 'in_progress' ? 202 : 200).json(result);
   }));
 

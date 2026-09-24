@@ -10481,6 +10481,7 @@ async function runMigrations() {
         aiLimiter,
         aiService: workspaceAiService,
         verificationTokens,
+        tariffModule,
       });
       console.log('[WORKSPACE] API, Realtime bridge and shared AI memory mounted');
     } catch (error) {
