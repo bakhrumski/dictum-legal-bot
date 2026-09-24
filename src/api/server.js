@@ -6612,6 +6612,10 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         [cacheKey, displayReply, finalProvider, ragMeta ? JSON.stringify(ragMeta) : null]
       ).catch(e => console.warn('[Answer Cache] write failed:', e.message));
     }
+    // No answer text at all is a failed request: give the unit back.
+    if (!String(displayReply || '').trim()) {
+      Object.assign(responsePayload, tariffModule.refundUsage(res, 'empty_reply'));
+    }
     if (sse) {
       sse({ type: 'done', ...responsePayload });
       return res.end();
@@ -6623,7 +6627,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     // terminal error event on the open stream instead.
     if (res.headersSent) {
       try {
-        res.write('data: ' + JSON.stringify({ type: 'error', error: 'Qonun qidirish xatoligi: ' + error.message }) + '\n\n');
+        res.write('data: ' + JSON.stringify({ type: 'error', error: 'Qonun qidirish xatoligi: ' + error.message, ...tariffModule.refundUsage(res, 'stream_error') }) + '\n\n');
         res.end();
       } catch (_) {}
       return;
@@ -6677,7 +6681,7 @@ async function digestLongDocument(documentText, userId) {
 // retrieve grounding law from the corpus (lex.uz), and produce a formal
 // opinion in the fixed Kirish / Asosiy ma'lumotlar / Tahlil / Xulosa /
 // Manbalar structure. Returns HTML rendered as an editable, exportable doc.
-app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/api/legal-chat'), async (req, res) => {
+app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/api/legal-chat', { failClosed: true }), async (req, res) => {
   try {
     // Whole-document coverage: no 15k truncation. Cap at ~120k chars (~60
     // pages) as an abuse guard; the map-reduce digest below condenses it.
@@ -6737,7 +6741,12 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
         opinionMaxTokens = (planKey === 'sinov' || planKey === 'bepul') ? 4500 : 7000;
         if (!opinionModel) opinionModel = process.env['OPINION_MODEL_' + planKey.toUpperCase()] || OPINION_MODELS[planKey] || MODELS.standard;
       }
-    } catch (qErr) { console.warn('[Legal Opinion] credit check failed (allowing):', qErr.message); }
+    } catch (qErr) {
+      // Opinions are the most expensive path: refuse rather than run
+      // unmetered when the credit check itself fails (DECISIONS.md D-5).
+      console.warn('[Legal Opinion] credit check failed (refusing):', qErr.message);
+      return res.status(503).json(tariffModule.QUOTA_UNAVAILABLE);
+    }
     if (!opinionModel) opinionModel = MODELS.premium;
 
     const lang = lexLangForText(documentText);
@@ -7127,7 +7136,7 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // NOT the legal-analysis format (no Huquqiy asos/Tahlil sections, no statutes
 // required). Long documents go through the shared map-reduce digest so the
 // whole document is covered.
-app.post('/api/draft/explain-document', requireAuth, tariffModule.enforceQuota('/api/legal-chat'), async (req, res) => {
+app.post('/api/draft/explain-document', requireAuth, tariffModule.enforceQuota('/api/legal-chat', { failClosed: true }), async (req, res) => {
   try {
     const documentText = (typeof req.body.documentText === 'string')
       ? req.body.documentText.replace(/\u0000/g, '').trim().slice(0, 120000) : '';

@@ -244,7 +244,7 @@ function mountAnalyzerRoutes(app, deps) {
   const { requireAuth, callAI, tariffModule } = deps;
 
   const quota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
-    ? tariffModule.enforceQuota('/api/analyze')
+    ? tariffModule.enforceQuota('/api/analyze', { failClosed: true })
     : (req, res, next) => next();
 
   // ── PDF text extraction ──
