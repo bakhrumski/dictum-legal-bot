@@ -9781,21 +9781,32 @@ app.post('/api/password-recovery/reset', async (req, res) => {
 });
 
 // GET /api/registration-requests — master only
+let registrationListColumns = null;
 app.get('/api/registration-requests', requireMasterAdmin, async (req, res) => {
   try {
     const { status } = req.query;
-    let query = `SELECT rr.*, a.full_name as reviewer_name FROM registration_requests rr LEFT JOIN admins a ON rr.reviewed_by = a.id`;
+    // The uploaded documents (base64, up to ~13 MB each) and password hashes
+    // stay in the database: the list used to SELECT rr.* with no LIMIT and
+    // pull every document into memory to drop it afterwards (audit H7).
+    // Column list read from the table itself, so columns added later still
+    // appear, and values keep their types (dates stay dates).
+    if (!registrationListColumns) {
+      const cols = await pool.query(
+        `SELECT column_name FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'registration_requests'
+            AND column_name NOT IN ('document_base64', 'password_hash')
+          ORDER BY ordinal_position`);
+      registrationListColumns = cols.rows.map(c => 'rr.' + '"' + c.column_name.replace(/"/g, '""') + '"').join(', ');
+    }
+    let query = `SELECT ${registrationListColumns},
+                        (rr.document_base64 IS NOT NULL) AS has_document_base64,
+                        a.full_name AS reviewer_name
+                   FROM registration_requests rr LEFT JOIN admins a ON rr.reviewed_by = a.id`;
     const params = [];
     if (status) { query += ' WHERE rr.status = $1'; params.push(status); }
-    query += ' ORDER BY rr.created_at DESC';
+    query += ' ORDER BY rr.created_at DESC LIMIT 500';
     const result = await pool.query(query, params);
-    // Strip large base64 data from list response, send flag instead
-    const rows = result.rows.map(r => {
-      // password_hash is the applicant's future login; it never leaves the server.
-      const { document_base64, password_hash, ...rest } = r;
-      rest.has_document_base64 = !!document_base64;
-      return rest;
-    });
+    const rows = result.rows;
     res.json(rows);
   } catch (error) {
     console.error('[REG REQUESTS] Error:', error);
