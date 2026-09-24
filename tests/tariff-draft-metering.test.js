@@ -21,8 +21,10 @@ const like = (pattern) => new RegExp('^' + pattern.split('%').map((p) => p.repla
 
 // CASE WHEN endpoint LIKE '...' THEN n ... ELSE n END, first match wins.
 function weight(endpoint) {
-  const cases = [...ENDPOINT_WEIGHT_SQL.matchAll(/WHEN endpoint LIKE '([^']+)'\s+THEN (\d+)/g)];
-  for (const [, pattern, value] of cases) if (like(pattern).test(endpoint)) return Number(value);
+  const cases = [...ENDPOINT_WEIGHT_SQL.matchAll(/WHEN endpoint (LIKE|=) '([^']+)'\s+THEN (\d+)/g)];
+  for (const [, op, pattern, value] of cases) {
+    if (op === '=' ? endpoint === pattern : like(pattern).test(endpoint)) return Number(value);
+  }
   return Number(/ELSE (\d+)/.exec(ENDPOINT_WEIGHT_SQL)[1]);
 }
 
@@ -57,11 +59,11 @@ test('exports, suggestions and template analysis are not counted as drafts', () 
   }
 });
 
-test('a Word/PDF export weighs nothing in fair-use; AI drafting weighs 7', () => {
+test('a Word/PDF export and an AI draft weigh nothing in fair-use (D-11); suggestions weigh 1', () => {
   assert.strictEqual(weight(recorded('/api/draft/export')), 0);
   assert.strictEqual(weight(recorded('/api/draft/export-raw')), 0);
-  assert.strictEqual(weight(recorded('/api/draft/ai-generate')), 7);
-  assert.strictEqual(weight(recorded('/api/draft/suggest')), 7);
+  assert.strictEqual(weight(recorded('/api/draft/ai-generate')), 0);
+  assert.strictEqual(weight(recorded('/api/draft/suggest')), 1);
 });
 
 test('an ordinary chat still weighs 1', () => {
