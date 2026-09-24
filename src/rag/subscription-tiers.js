@@ -57,7 +57,8 @@ const PLANS = {
     fairUseDaily: null,
     weeklyOpinionCredits: 0,
     weeklyDrafts: 0,
-    durationDays: null,          // no expiry
+    durationDays: null,
+    dailyOcrPages: 3,            // D-7: scanned pages/images read per day          // no expiry
     priceUzs: 0,
   },
   sinov: {
@@ -68,6 +69,7 @@ const PLANS = {
     weeklyOpinionCredits: 1,
     weeklyDrafts: 2,
     durationDays: 10,
+    dailyOcrPages: 5,            // D-7: scanned pages/images read per day
     priceUzs: 0,
   },
   silver: {
@@ -77,6 +79,7 @@ const PLANS = {
     fairUseDaily: parseInt(process.env.FAIR_USE_SILVER, 10) || 15,
     weeklyOpinionCredits: parseInt(process.env.CREDITS_SILVER, 10) || 9,
     weeklyDrafts: parseInt(process.env.DRAFTS_SILVER, 10) || 22,
+    dailyOcrPages: parseInt(process.env.OCR_PAGES_SILVER, 10) || 20,
     durationDays: 30,
     priceUzs: 199000,
   },
@@ -87,6 +90,7 @@ const PLANS = {
     fairUseDaily: parseInt(process.env.FAIR_USE_GOLD, 10) || 30,
     weeklyOpinionCredits: parseInt(process.env.CREDITS_GOLD, 10) || 17,
     weeklyDrafts: parseInt(process.env.DRAFTS_GOLD, 10) || 50,
+    dailyOcrPages: parseInt(process.env.OCR_PAGES_GOLD, 10) || 50,
     durationDays: 30,
     priceUzs: 399000,
   },
@@ -97,6 +101,7 @@ const PLANS = {
     fairUseDaily: parseInt(process.env.FAIR_USE_PLATINUM, 10) || 70,
     weeklyOpinionCredits: parseInt(process.env.CREDITS_PLATINUM, 10) || 42,
     weeklyDrafts: parseInt(process.env.DRAFTS_PLATINUM, 10) || 125,
+    dailyOcrPages: parseInt(process.env.OCR_PAGES_PLATINUM, 10) || 100,
     durationDays: 30,
     priceUzs: 999000,
   },
@@ -697,8 +702,13 @@ async function checkOpinionCredits(adminId, credits = 1) {
   };
 }
 
-/** Can this user generate another document this week? */
-async function checkDraftQuota(adminId) {
+/**
+ * Can this user generate another document this week?
+ * `alreadyRecorded`: the route's own usage row for this draft is already in
+ * tariff_usage (enforceQuota writes it first), so it counts toward `used`.
+ * Without it the last draft of the allowance was always refused.
+ */
+async function checkDraftQuota(adminId, { alreadyRecorded = false } = {}) {
   const u = await getUserPlan(adminId);
   if (!u) return { allowed: false, reason: 'unknown_user' };
   if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true };
@@ -707,10 +717,41 @@ async function checkDraftQuota(adminId) {
   const limit = cfg.weeklyDrafts || 0;
   if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
   const used = await draftsUsed(adminId);
+  const before = alreadyRecorded ? used - 1 : used;
   return {
-    allowed: used < limit, limit, used,
+    allowed: before < limit, limit, used,
     remaining: Math.max(0, limit - used),
     period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000),
+  };
+}
+
+// ── OCR pages (D-7) ─────────────────────────────────────────────────────────
+// Reading a scan or photo is the step before a question, which is metered on
+// its own, so OCR has a separate daily page allowance instead of using up
+// chat. It weighs 0 in fair-use (ENDPOINT_WEIGHT_SQL).
+async function ocrPagesUsed(adminId) {
+  const r = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM tariff_usage
+      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '/api/analyze/ocr%'`,
+    [adminId, tashkentMidnight()]);
+  return r.rows[0].n;
+}
+
+/** Same contract as checkDraftQuota, per Tashkent day. */
+async function checkOcrQuota(adminId, { alreadyRecorded = false } = {}) {
+  const u = await getUserPlan(adminId);
+  if (!u) return { allowed: false, reason: 'unknown_user' };
+  if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true };
+  const cfg = PLANS[u.plan];
+  if (!cfg) return { allowed: false, reason: 'no_plan' };
+  const limit = cfg.dailyOcrPages || 0;
+  if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
+  const used = await ocrPagesUsed(adminId);
+  const before = alreadyRecorded ? used - 1 : used;
+  return {
+    allowed: before < limit, limit, used,
+    remaining: Math.max(0, limit - used),
+    period: 'day', resetsAt: new Date(tashkentMidnight().getTime() + 86400000),
   };
 }
 
@@ -778,6 +819,8 @@ async function marginReport({ since = null, plan = null } = {}) {
 }
 
 module.exports = {
+  checkOcrQuota,
+  ocrPagesUsed,
   refundUsage,
   REFUND_NOTICE,
   QUOTA_UNAVAILABLE,

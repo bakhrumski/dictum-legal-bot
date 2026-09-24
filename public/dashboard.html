@@ -12365,6 +12365,7 @@
                     var r2 = await fetch('/api/analyze/ocr-image', { method: 'POST', credentials: 'same-origin', body: fd2 });
                     var d2 = await r2.json();
                     if (r2.ok) text = d2.text || '';
+                    else if (d2.code === 'OCR_QUOTA' || d2.code === 'QUOTA_UNAVAILABLE') throw new Error(d2.error || d2.message || 'OCR limiti');
                 }
                 text = (text || '').trim();
                 if (text.length < 40) throw new Error('Hujjatdan yetarli matn topilmadi');

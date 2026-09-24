@@ -399,7 +399,7 @@ function mountDraftingRoutes(app, deps) {
       // costs ~7x a chat answer, so it gets its own counter rather than
       // silently draining the fair-use ceiling.
       if (tariffModule && typeof tariffModule.checkDraftQuota === 'function') {
-        const dq = await tariffModule.checkDraftQuota(req.session.adminId);
+        const dq = await tariffModule.checkDraftQuota(req.session.adminId, { alreadyRecorded: !!(res.locals.tariffUsage && res.locals.tariffUsage.id) });
         if (!dq.allowed) {
           return res.status(429).json({
             error: dq.reason === 'not_in_plan'

@@ -246,6 +246,10 @@ function mountAnalyzerRoutes(app, deps) {
   const quota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
     ? tariffModule.enforceQuota('/api/analyze', { failClosed: true })
     : (req, res, next) => next();
+  // OCR pages: separate daily allowance (DECISIONS.md D-7), fail-closed.
+  const ocrQuota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
+    ? tariffModule.enforceQuota('/api/analyze/ocr', { failClosed: true })
+    : (req, res, next) => next();
 
   // ── PDF text extraction ──
   app.post('/api/analyze/extract', requireAuth, analyzeUpload.single('file'), async (req, res) => {
@@ -300,10 +304,23 @@ function mountAnalyzerRoutes(app, deps) {
   });
 
   // ── AI Vision OCR — images AND scanned PDFs ──
-  app.post('/api/analyze/ocr-image', requireAuth, visionUpload.single('file'), async (req, res) => {
+  app.post('/api/analyze/ocr-image', requireAuth, ocrQuota, visionUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     const filePath = req.file.path;
     try {
+      if (tariffModule && typeof tariffModule.checkOcrQuota === 'function') {
+        const oq = await tariffModule.checkOcrQuota(req.session.adminId, {
+          alreadyRecorded: !!(res.locals.tariffUsage && res.locals.tariffUsage.id),
+        });
+        if (!oq.allowed) {
+          return res.status(429).json({
+            error: oq.reason === 'not_in_plan'
+              ? 'Rasm va skanerlangan hujjatni o\'qish tarifingizga kirmaydi.'
+              : `Bugungi rasm/skan o'qish limiti tugadi (${oq.limit} ta). Limit ertaga yangilanadi.`,
+            code: 'OCR_QUOTA', used: oq.used, limit: oq.limit, resetsAt: oq.resetsAt,
+          });
+        }
+      }
       const buf = fs.readFileSync(filePath);
       const mimeType = req.file.mimetype || 'image/jpeg';
       const langCode = req.body.lang || 'uzb+rus';
