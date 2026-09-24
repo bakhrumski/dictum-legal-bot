@@ -840,16 +840,116 @@
         return payload;
     }
 
+
+    /*
+     * render() builds the whole Workspace as one HTML string. Writing it with
+     * innerHTML threw the page away on every click — switching a view or
+     * opening a form rebuilt the toolbar, the side panels and every row, so
+     * the Workspace flashed as if the dashboard had reloaded, and lost its
+     * scroll, focus and hover state. morphInto() lays the new markup over the
+     * live DOM instead and touches only what differs: an unchanged toolbar
+     * stays the same element, a list row that did not change is not
+     * repainted, and only the part that really changed is replaced.
+     *
+     * Siblings are matched by key (id, graph key, or task id + action) before
+     * position, so adding a matter does not shift every row after it into
+     * its neighbour's element. Handlers are delegated on root, so element
+     * identity never carried behaviour. A form field keeps what is being
+     * typed into it while it has focus.
+     */
+    var MORPH_KEEP_ATTRIBUTES={'data-centered-for':1,'data-layout-height':1};
+
+    function morphKey(node) {
+        if(node.nodeType!==1)return null;
+        if(node.id)return '#'+node.id;
+        var graph=node.getAttribute('data-graph-key');
+        if(graph)return 'g:'+graph;
+        var task=node.getAttribute('data-task-id');
+        if(task)return 't:'+node.tagName+':'+task+':'+(node.getAttribute('data-action')||'');
+        var member=node.getAttribute('data-member-id');
+        if(member)return 'm:'+node.tagName+':'+member+':'+(node.getAttribute('data-action')||'');
+        return null;
+    }
+
+    function morphSame(live, next) {
+        if(live.nodeType!==next.nodeType)return false;
+        if(live.nodeType!==1)return true;
+        return live.tagName===next.tagName&&morphKey(live)===morphKey(next);
+    }
+
+    function morphAttributes(live, next) {
+        var i,attr;
+        for(i=live.attributes.length-1;i>=0;i-=1){
+            attr=live.attributes[i];
+            if(!next.hasAttribute(attr.name)&&!MORPH_KEEP_ATTRIBUTES[attr.name])live.removeAttribute(attr.name);
+        }
+        for(i=0;i<next.attributes.length;i+=1){
+            attr=next.attributes[i];
+            if(live.getAttribute(attr.name)!==attr.value)live.setAttribute(attr.name,attr.value);
+        }
+    }
+
+    function morphField(live, next) {
+        if(live===document.activeElement)return;
+        var tag=live.tagName;
+        if(tag==='INPUT'){
+            if(live.type==='checkbox'||live.type==='radio')live.checked=next.hasAttribute('checked');
+            else if(live.value!==(next.getAttribute('value')||''))live.value=next.getAttribute('value')||'';
+        }else if(tag==='TEXTAREA'){
+            if(live.value!==next.value)live.value=next.value;
+        }else if(tag==='SELECT'){
+            var chosen=next.querySelector('option[selected]');
+            var value=chosen?chosen.getAttribute('value'):(next.options.length?next.options[0].value:'');
+            if(value!==null&&live.value!==value)live.value=value;
+        }
+    }
+
+    function morphNode(live, next) {
+        if(live.nodeType===3||live.nodeType===8){
+            if(live.nodeValue!==next.nodeValue)live.nodeValue=next.nodeValue;
+            return;
+        }
+        morphAttributes(live,next);
+        morphChildren(live,next);
+        if(live.tagName==='INPUT'||live.tagName==='TEXTAREA'||live.tagName==='SELECT')morphField(live,next);
+    }
+
+    function morphChildren(live, next) {
+        var keyed={},child=live.firstChild;
+        for(;child;child=child.nextSibling){var key=morphKey(child);if(key&&!keyed[key])keyed[key]=child;}
+        var cursor=live.firstChild,incoming=next.firstChild;
+        while(incoming){
+            var following=incoming.nextSibling,key=morphKey(incoming),match=null;
+            if(key&&keyed[key]&&keyed[key].parentNode===live){match=keyed[key];delete keyed[key];}
+            else if(!key&&cursor&&morphSame(cursor,incoming)&&!morphKey(cursor))match=cursor;
+            if(match){
+                if(match!==cursor)live.insertBefore(match,cursor);
+                else cursor=cursor.nextSibling;
+                morphNode(match,incoming);
+            }else{
+                live.insertBefore(incoming,cursor);
+            }
+            incoming=following;
+        }
+        while(cursor){var stale=cursor.nextSibling;live.removeChild(cursor);cursor=stale;}
+    }
+
+    function morphInto(target, html) {
+        var template=document.createElement('template');
+        template.innerHTML=html;
+        morphChildren(target,template.content);
+    }
+
     function render() {
         if (!root) root = document.getElementById('workspaceApp');
         if (!root) return;
         document.body.classList.toggle('workspace-chat-open', !!(state.workspace && state.chatOpen));
         if (state.loading && !state.activated) {
-            root.innerHTML='<div class="workspace-boot"><span class="workspace-spinner" aria-hidden="true"></span><span>'+esc(t('loading'))+'</span></div>';
+            morphInto(root,'<div class="workspace-boot"><span class="workspace-spinner" aria-hidden="true"></span><span>'+esc(t('loading'))+'</span></div>');
             return;
         }
         if (!state.workspace) {
-            root.innerHTML=renderPendingInvitation()+renderWorkspaceGate()+renderModal()+renderToastsAnchor();
+            morphInto(root,renderPendingInvitation()+renderWorkspaceGate()+renderModal()+renderToastsAnchor());
             enhanceDropdowns(root);
             return;
         }
@@ -862,15 +962,18 @@
         // person is still typing into it.
         var focused=document.activeElement&&root.contains(document.activeElement)&&document.activeElement.dataset&&document.activeElement.dataset.filter==='search'
             ? {start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd} : null;
-        root.innerHTML = '<div class="ws-shell">'+
+        morphInto(root, '<div class="ws-shell">'+
             renderBar(unreadNotifications)+
             pendingInviteBanner+
             '<div class="ws-workspace-layout '+(state.chatOpen?'chat-open':'')+'"><main class="ws-workspace-main '+esc(state.view)+'-view">'+
             (!canWrite()?'<div class="ws-conflict">'+svg('history',16)+'<div><strong>'+esc(t('readOnly'))+'</strong> — '+esc(t('readOnlyReason'))+'</div></div>':'')+
             (state.view==='timeline'?renderTimeline():state.view==='graph'?renderGraph():renderTaskList())+
             '</main>'+renderChatSidebar()+'</div>'+
-        '</div>'+renderTaskDetail()+renderAiPanel()+renderModal()+renderToastsAnchor();
+        '</div>'+renderTaskDetail()+renderAiPanel()+renderModal()+renderToastsAnchor());
         enhanceDropdowns(root);
+        // Before the frame is painted, so a patched layout never shows for a
+        // frame at its unmeasured height.
+        syncWorkspaceViewportHeight();
         if(focused){var search=root.querySelector('[data-filter="search"]');if(search){search.focus({preventScroll:true});try{search.setSelectionRange(focused.start,focused.end);}catch(_e){}}}
         measureBar();
         if(state.chatOpen)scrollChatToLatest();
