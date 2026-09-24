@@ -957,12 +957,16 @@ async function insertVerifiedAnswer({ question, answer, category, requestId, ver
   // Remove old version of this QA if it exists (re-approval)
   await pool.query(`DELETE FROM legal_chunks WHERE doc_id = $1`, [docId]);
 
-  // Try to generate embedding (best-effort — save without if API fails)
+  // Try to generate embedding (best-effort — save without if API fails).
+  // This called getApiKey(), which is not defined in this file: the
+  // ReferenceError landed in the catch below, so every verified answer was
+  // stored without a vector and the verified-answer vector lookups in
+  // /api/legal-chat (embedding IS NOT NULL) never found a new one.
+  // getEmbedding() resolves the provider's key itself.
   let embStr = null;
   try {
-    const apiKey = getApiKey();
-    if (apiKey) {
-      const embedding = await getEmbedding(chunkText, apiKey);
+    if (detectProvider()) {
+      const embedding = await getEmbedding(chunkText);
       embStr = `[${embedding.join(',')}]`;
     }
   } catch (embErr) {
