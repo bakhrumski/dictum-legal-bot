@@ -182,8 +182,11 @@ async function initSubscriptionSchema() {
 //
 // Applied at COUNT time via SQL rather than stored on the row, so historical
 // usage needs no migration and re-pricing needs no backfill.
+// Word/PDF export renders a file and calls no model, so it weighs nothing;
+// before it matched '/api/draft%' and cost 7 chat-equivalents per download.
 const ENDPOINT_WEIGHT_SQL = `
   CASE
+    WHEN endpoint LIKE '/api/draft/export%'      THEN 0
     WHEN endpoint LIKE '/api/draft/ai-generate%' THEN 7
     WHEN endpoint LIKE '/api/templates/import%'  THEN 7
     WHEN endpoint LIKE '/api/draft%'             THEN 7
@@ -673,6 +676,7 @@ async function marginReport({ since = null, plan = null } = {}) {
 }
 
 module.exports = {
+  ENDPOINT_WEIGHT_SQL,
   opinionCreditsFor,
   opinionCreditsUsed,
   draftsUsed,
