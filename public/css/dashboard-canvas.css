@@ -1,31 +1,31 @@
 /*
  * Dashboard — port of the visual system in docs/brand/dashboard.dc.html.
  *
+ * Type: the canvas's Inter / Source Serif 4 / JetBrains Mono split was
+ * replaced by the platform's one face, Space Grotesk (css/fonts.css), so the
+ * dashboard reads like the landing and sign-in pages. Headings keep their
+ * weight and tracking; figures keep tabular-nums.
+ *
  * Scope is deliberately presentation only: no markup, data wiring or feature
  * is touched. This file loads after workspace.css and redesign-v2.css and
  * re-points what they set.
- *
- * The dashboard runs a different type system from the marketing pages, which
- * is the canvas's own choice rather than an oversight: Inter for interface
- * text, Source Serif 4 for headings, and JetBrains Mono with tabular figures
- * for anything numeric. Space Grotesk stays on the landing and login.
  */
 
 /* ── Type ─────────────────────────────────────────────────────────────────── */
 body {
   /* redesign-v2.css forces Space Grotesk on body with !important, and every
      control inherits from it, so this has to match that weight of selector. */
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
 }
 body, button, input, select, textarea, .workspace-app {
   font-family: inherit !important;
 }
 :root {
-  --font-sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-ui: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-body: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-ui: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* redesign-v2.css sets Space Grotesk on headings with !important, and some of
@@ -40,7 +40,7 @@ body .management-heading h1, body .management-heading h2,
 body .form-heading,
 body .ht, body .sh,
 .page-title, .section-title, .card-title, .ws-title, .stat-title {
-  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif !important;
+  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
   font-weight: 600 !important;
   /* The canvas tracks its headings at -.012em, far looser than the -.045em
      the marketing pages use. */
@@ -51,7 +51,7 @@ body .ht, body .sh,
 [data-mono], .stat-value, .stat-num, .metric-value, .kpi-value,
 .ws-count, .badge-count, .queue-count, .plan-price, .usage-num,
 time, .mono {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
   font-variant-numeric: tabular-nums;
   letter-spacing: -.02em;
 }
@@ -182,7 +182,7 @@ body .management-heading h1 {
   min-width: 0 !important;
 }
 .health-item strong, .health-item b, .health-item .health-value {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
   font-variant-numeric: tabular-nums;
   font-size: 12.5px !important;
   font-weight: 500 !important;
@@ -249,7 +249,7 @@ body .management-heading h1 {
 #db-root .management-heading h1,
 #db-root .reg-section h2,
 #db-root .ai-workspace h1 {
-  font-family: 'Source Serif 4', Georgia, serif;
+  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-weight: 600;
   letter-spacing: -.02em;
   color: var(--ink);
@@ -273,7 +273,7 @@ body .management-heading h1 {
   color: var(--ink);
 }
 #db-root .chat-header h3 {
-  font-family: 'Source Serif 4', Georgia, serif;
+  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-weight: 600;
   letter-spacing: -.02em;
   color: var(--ink);

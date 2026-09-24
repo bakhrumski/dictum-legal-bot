@@ -1006,7 +1006,7 @@
     margin: 0;
     overflow: hidden;
     color: var(--ws-muted);
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: var(--font-mono, 'Space Grotesk', sans-serif);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     text-overflow: ellipsis;

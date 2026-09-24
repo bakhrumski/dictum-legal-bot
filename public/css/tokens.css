@@ -21,9 +21,10 @@
         prototypes theme-switch against.
    Page-specific layout rules stay in each page's own stylesheet.
 
-   Fonts load from Google Fonts via <link> in each page's <head>, matching
-   the prototype: Space Grotesk (landing, login), Source Serif 4 + Inter +
-   JetBrains Mono (dashboard), Inter + JetBrains Mono (brand).
+   The font values below mirror the prototypes (tests/design-tokens checks
+   they have not drifted). The platform itself sets one face, Space Grotesk:
+   css/fonts.css, linked on every page, overrides these roles from
+   html:root, which outranks :root whatever the load order.
 
    Omitted: the keyframes ANIMATIONS.md marks as leftovers from earlier
    iterations and unreferenced by any prototype - jai-breathe, jai-shock,
