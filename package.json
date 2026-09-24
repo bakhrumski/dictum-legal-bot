@@ -51,7 +51,7 @@
     "test:playbook": "node tests/legal-research-playbook.test.js",
     "test:lex-cross-check": "node tests/legal-answer-cross-check.test.js",
     "test:rag-integrity": "node tests/rag-integrity.test.js && node tests/rag-verified-qa-embedding.test.js && node tests/rag-freshness.test.js && node tests/rag-eval-service.test.js && node tests/rag-safe-reingest.db.test.js",
-    "test:tariff": "node tests/tariff-unlimited.test.js && node tests/tariff-draft-metering.test.js && node tests/tariff-week-start.test.js && node tests/tariff-expiry-refund.test.js && node tests/tariff-fair-use-weights.test.js && node tests/tariff-ocr-workspace.test.js",
+    "test:tariff": "node tests/tariff-unlimited.test.js && node tests/tariff-draft-metering.test.js && node tests/tariff-week-start.test.js && node tests/tariff-expiry-refund.test.js && node tests/tariff-fair-use-weights.test.js && node tests/tariff-ocr-workspace.test.js && node tests/tariff-race.db.test.js",
     "test:templates": "node tests/user-templates.test.js",
     "test:ui": "node tests/composer-modes.test.js && node tests/operations-filter.test.js",
     "test:tokens": "node tests/design-tokens.test.js",

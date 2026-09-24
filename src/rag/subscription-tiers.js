@@ -213,8 +213,8 @@ const ENDPOINT_WEIGHT_SQL = `
  * that weighs anything, so exports, drafts and opinions (which have their
  * own allowances) do not use up the day's questions.
  */
-async function dailyQuestionsSince(adminId, since) {
-  const r = await pool.query(
+async function dailyQuestionsSince(adminId, since, db = pool) {
+  const r = await db.query(
     `SELECT COUNT(*) FILTER (WHERE (${ENDPOINT_WEIGHT_SQL}) > 0)::int AS used
        FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
     [adminId, since]
@@ -223,8 +223,8 @@ async function dailyQuestionsSince(adminId, since) {
 }
 
 /** SUM of cost-weighted usage since `since`, for one admin. */
-async function weightedUsageSince(adminId, since) {
-  const r = await pool.query(
+async function weightedUsageSince(adminId, since, db = pool) {
+  const r = await db.query(
     `SELECT COALESCE(SUM(${ENDPOINT_WEIGHT_SQL}), 0)::int AS used
        FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
     [adminId, since]
@@ -260,9 +260,9 @@ function tashkentWeekStart(nowMs = Date.now()) {
   return new Date(midnight.getTime() - dow * 86400000);
 }
 
-async function getUserPlan(adminId) {
+async function getUserPlan(adminId, db = pool) {
   if (!_initialized) await initSubscriptionSchema();
-  const r = await pool.query(
+  const r = await db.query(
     `SELECT tariff_plan, tariff_starts_at, tariff_expires_at, bepul_used, role
        FROM admins WHERE id = $1`,
     [adminId]
@@ -297,8 +297,8 @@ async function getUserPlan(adminId) {
   };
 }
 
-async function checkQuota(adminId) {
-  const u = await getUserPlan(adminId);
+async function checkQuota(adminId, db = pool) {
+  const u = await getUserPlan(adminId, db);
   if (!u) return { allowed: false, reason: 'unknown_user' };
   if (u.plan === 'master') return { allowed: true, plan: 'master', remaining: Infinity };
   // Non-common roles (student, lawyer) bypass tariff system
@@ -314,7 +314,7 @@ async function checkQuota(adminId) {
     const limit = ageDays > (cfg.dailyLimitAfterDays || 30)
       ? (cfg.dailyLimitLater || 3)
       : cfg.dailyLimit;
-    const used = await dailyQuestionsSince(adminId, tashkentMidnight());
+    const used = await dailyQuestionsSince(adminId, tashkentMidnight(), db);
     return {
       allowed: used < limit, plan: 'bepul', limit, used,
       remaining: Math.max(0, limit - used), period: 'day',
@@ -324,7 +324,7 @@ async function checkQuota(adminId) {
 
   if (u.plan === 'sinov') {
     const midnight = tashkentMidnight();
-    const used = await dailyQuestionsSince(adminId, midnight);
+    const used = await dailyQuestionsSince(adminId, midnight, db);
     return {
       allowed: used < cfg.dailyLimit,
       plan: 'sinov',
@@ -347,7 +347,7 @@ async function checkQuota(adminId) {
   }
 
   // Cost-weighted, not a raw request count — see ENDPOINT_WEIGHT_SQL.
-  const usedToday = await weightedUsageSince(adminId, tashkentMidnight());
+  const usedToday = await weightedUsageSince(adminId, tashkentMidnight(), db);
   return {
     allowed: usedToday < fairUse,
     plan: u.plan,
@@ -459,10 +459,10 @@ async function checkFreeAccess(adminId) {
  * failed; `{ throwOnError: true }` makes a failure throw instead, for paths
  * that must not run unmetered.
  */
-async function recordUsage(adminId, endpoint, credits = 1, { throwOnError = false } = {}) {
+async function recordUsage(adminId, endpoint, credits = 1, { throwOnError = false, db = pool } = {}) {
   if (!_initialized) await initSubscriptionSchema();
   try {
-    const r = await pool.query(
+    const r = await db.query(
       `INSERT INTO tariff_usage (admin_id, endpoint, credits) VALUES ($1, $2, $3) RETURNING id`,
       [adminId, endpoint || null, credits]
     );
@@ -586,6 +586,32 @@ async function selectPlan(adminId, plan) {
  * - Common users (role='user') without a plan get 429.
  * - Common users with a plan over their limit get 429.
  */
+/**
+ * Run `fn(client)` holding a per-user advisory lock in one transaction, on
+ * one connection. Check-then-insert quota logic used to run unlocked, so N
+ * parallel requests at `used = limit - 1` all passed (audit M1, H4). Every
+ * query inside must use the client it is given: a lock holder that asked
+ * the pool for a second connection could wait behind requests that are
+ * themselves waiting for the lock.
+ */
+async function withUserLock(adminId, fn) {
+  // Schema setup uses the pool; do it before taking the lock, not inside.
+  if (!_initialized) await initSubscriptionSchema();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('juristai:tariff:' || $1::text))", [adminId]);
+    const out = await fn(client);
+    await client.query('COMMIT');
+    return out;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Expensive paths refuse to run when the quota cannot be checked; chat keeps
 // working through a database hiccup (DECISIONS.md D-5).
 const QUOTA_UNAVAILABLE = {
@@ -616,7 +642,14 @@ function enforceQuota(endpoint, { failClosed = false } = {}) {
         });
       }
 
-      const q = await checkQuota(adminId);
+      // Check and record under one per-user lock, so parallel requests cannot
+      // all pass the same remaining unit.
+      const { q, usageId } = await withUserLock(adminId, async (db) => {
+        const quota = await checkQuota(adminId, db);
+        if (!quota.allowed) return { q: quota, usageId: null };
+        const id = await recordUsage(adminId, endpoint, 1, { throwOnError: failClosed, db });
+        return { q: quota, usageId: id };
+      });
       if (!q.allowed) {
         // A paid subscriber who trips the fair-use ceiling has NOT run out —
         // their plan is unlimited. Telling them "limit tugadi" would be false
@@ -643,7 +676,6 @@ function enforceQuota(endpoint, { failClosed = false } = {}) {
           used: q.used,
         });
       }
-      const usageId = await recordUsage(adminId, endpoint, 1, { throwOnError: failClosed });
       res.locals.quota = q;
       res.locals.tariffUsage = { id: usageId, adminId, endpoint, refunded: false };
       attachRefundOnFailure(res);
@@ -663,8 +695,8 @@ function enforceQuota(endpoint, { failClosed = false } = {}) {
 // the credits consumed. Weighted in SQL so a re-price needs no backfill.
 
 /** Credits already spent this week. */
-async function opinionCreditsUsed(adminId) {
-  const r = await pool.query(
+async function opinionCreditsUsed(adminId, db = pool) {
+  const r = await db.query(
     `SELECT COALESCE(SUM(COALESCE(credits, 1)), 0)::int AS n
        FROM tariff_usage
       WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '%legal-opinion%'`,
@@ -700,6 +732,38 @@ async function checkOpinionCredits(adminId, credits = 1) {
     remaining: Math.max(0, limit - used),
     period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000),
   };
+}
+
+/**
+ * Reserve `credits` opinion credits atomically: check and insert under the
+ * per-user lock. Credits used to be checked at the start and recorded only
+ * after generation (minutes later), so parallel requests all passed the same
+ * remaining credits (audit H4). The reservation row is the spend; release it
+ * with releaseOpinionCredits() when the opinion is not delivered.
+ */
+async function reserveOpinionCredits(adminId, credits = 1) {
+  return withUserLock(adminId, async (db) => {
+    const u = await getUserPlan(adminId, db);
+    if (!u) return { allowed: false, reason: 'unknown_user' };
+    if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true, reservationId: null };
+    const cfg = PLANS[u.plan];
+    if (!cfg) return { allowed: false, reason: 'no_plan' };
+    const limit = cfg.weeklyOpinionCredits || 0;
+    if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
+    const used = await opinionCreditsUsed(adminId, db);
+    const base = { limit, used, cost: credits, remaining: Math.max(0, limit - used),
+      period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000) };
+    if (used + credits > limit) return { allowed: false, ...base };
+    const reservationId = await recordUsage(adminId, '/api/draft/legal-opinion', credits, { throwOnError: true, db });
+    return { allowed: true, ...base, reservationId };
+  });
+}
+
+/** Give reserved opinion credits back (the opinion was not delivered). */
+async function releaseOpinionCredits(adminId, reservationId) {
+  if (!reservationId) return false;
+  const r = await pool.query('DELETE FROM tariff_usage WHERE id = $1 AND admin_id = $2', [reservationId, adminId]);
+  return r.rowCount > 0;
 }
 
 /**
@@ -819,6 +883,9 @@ async function marginReport({ since = null, plan = null } = {}) {
 }
 
 module.exports = {
+  withUserLock,
+  reserveOpinionCredits,
+  releaseOpinionCredits,
   checkOcrQuota,
   ocrPagesUsed,
   refundUsage,
