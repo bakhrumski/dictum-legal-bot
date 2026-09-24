@@ -140,6 +140,9 @@ function reset(over = {}) {
     assert.ok(/credit check failed \(refusing\)/.test(server), 'opinion credit check no longer allows on error');
     assert.ok(/enforceQuota\('\/api\/analyze', \{ failClosed: true \}\)/.test(read('src/ocr/routes.js')));
     assert.ok(/enforceQuota\('\/api\/enterprise-chat', \{ failClosed: true \}\)/.test(read('src/enterprise/routes.js')));
+    const drafting = read('src/drafting/routes.js');
+    assert.ok(/quotaFor\('\/api\/draft\/ai-generate', \{ failClosed: true \}\)/.test(drafting));
+    assert.ok(/quotaFor\('\/api\/templates\/analyze', \{ failClosed: true \}\)/.test(drafting));
   });
 
   console.log('D-6: failed requests are refunded and say so');

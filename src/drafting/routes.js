@@ -213,8 +213,8 @@ function mountDraftingRoutes(app, deps) {
   // ('%draft/ai-generate%'), so the weekly draft allowance was never
   // enforced; and the fair-use weight could not tell an AI draft from a
   // Word/PDF export that calls no model at all.
-  const quotaFor = (endpoint) => (tariffModule && typeof tariffModule.enforceQuota === 'function')
-    ? tariffModule.enforceQuota(endpoint)
+  const quotaFor = (endpoint, opts) => (tariffModule && typeof tariffModule.enforceQuota === 'function')
+    ? tariffModule.enforceQuota(endpoint, opts)
     : (req, res, next) => next();
 
   // Initialise on first mount
@@ -393,7 +393,7 @@ function mountDraftingRoutes(app, deps) {
   // ── POST /api/draft/ai-generate — draft a document from type + key details ──
   // Master-uploaded templates whose names match the requested type are passed
   // to the model as HIDDEN drafting guides (never shown to the user).
-  app.post('/api/draft/ai-generate', requireAuth, quotaFor('/api/draft/ai-generate'), async (req, res) => {
+  app.post('/api/draft/ai-generate', requireAuth, quotaFor('/api/draft/ai-generate', { failClosed: true }), async (req, res) => {
     try {
       // Weekly drafting allowance, separate from chat. Document generation
       // costs ~7x a chat answer, so it gets its own counter rather than
@@ -498,7 +498,7 @@ Rules:
 
   // ── POST /api/templates/analyze — upload a document, get a draft template ──
   // Nothing is saved here; the response is a proposal for the user to confirm.
-  app.post('/api/templates/analyze', requireAuth, quotaFor('/api/templates/analyze'), importUpload.single('file'), async (req, res) => {
+  app.post('/api/templates/analyze', requireAuth, quotaFor('/api/templates/analyze', { failClosed: true }), importUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     const filePath = req.file.path;
     try {
