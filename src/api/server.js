@@ -10438,7 +10438,26 @@ async function runMigrations() {
 module.exports = { callAI, requireAuth, requireMasterAdmin, retrieveLegalContext, buildTopicPrompt };
 
 // Diagnostic endpoint (no auth, safe info only)
+// Public liveness: whether the process is up and can reach the database.
+// It used to be public and also expose the HF token's first 8 characters,
+// raw database errors, provider names, node version and memory, and run a
+// full aggregate over legal_chunks on every call. The corpus figures now sit
+// behind /api/admin/health.
 app.get('/api/health', async (req, res) => {
+  let db = 'ok';
+  try {
+    await Promise.race([
+      pool.query('SELECT 1'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+    ]);
+  } catch (_) {
+    db = 'down';
+  }
+  res.status(db === 'ok' ? 200 : 503).json({ status: db === 'ok' ? 'ok' : 'degraded', db, uptime: Math.round(process.uptime()) });
+});
+
+// Operational detail for the master: corpus coverage and embedding health.
+app.get('/api/admin/health', requireMasterAdmin, async (req, res) => {
   let corpusInfo = {};
   try {
     const r = await pool.query(`
@@ -10458,10 +10477,8 @@ app.get('/api/health', async (req, res) => {
     node: process.version,
     uptime: Math.round(process.uptime()),
     mem: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
-    hasFetch: typeof fetch === 'function',
-    hasFile: typeof File === 'function',
     embedding_provider: process.env.HF_TOKEN ? 'huggingface' : process.env.GEMINI_API_KEY ? 'gemini' : process.env.GPT_API_KEY ? 'openai' : 'none',
-    hf_token_prefix: process.env.HF_TOKEN ? process.env.HF_TOKEN.substring(0, 8) + '...' : 'NOT SET',
+    hf_token_set: !!process.env.HF_TOKEN,
     embedding_health: (() => { try { return require('../rag/embeddings').getEmbeddingHealth(); } catch (e) { return { error: e.message }; } })(),
     tavily: !!process.env.TAVILY_API_KEY,
     corpus: corpusInfo,
