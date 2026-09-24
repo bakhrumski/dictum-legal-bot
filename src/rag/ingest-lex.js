@@ -31,7 +31,7 @@ const { chunkLegalDocument } = require('./chunker');
 const { chunkLegalDocumentStructured } = require('./structural-chunker');
 const { getEmbeddingsBatch, detectProvider } = require('./embeddings');
 const { insertChunks, deleteByDocId, getCorpusStats, rebuildVectorIndex, initLegalCorpus } = require('./legal-corpus');
-const { insertStructuredChunks } = require('./advanced-corpus');
+const { replaceDocumentChunks } = require('./advanced-corpus');
 const { fetchLexDocument } = require('./fetch-lex');
 const { getLawsForCategory, getAllLaws, getRegistryStats, LEX_REGISTRY } = require('./lex-registry');
 
@@ -203,9 +203,8 @@ async function ingestStructuredHtml(rawHtml, docMeta, opts = {}) {
     const e = new Error('Ingest aborted by user'); e.name = 'AbortError'; throw e;
   }
 
-  await deleteByDocId(docMeta.doc_id);
-
-  const inserted = await insertStructuredChunks(chunks);
+  // Insert-then-delete: a failure keeps the previous version of the law.
+  const inserted = await replaceDocumentChunks({ docId: docMeta.doc_id }, chunks);
   const totalInserted = inserted.parents + inserted.children;
   console.log(`  DONE: ${totalInserted} structured chunks inserted (${inserted.parents} parents, ${inserted.children} children)\n`);
 
