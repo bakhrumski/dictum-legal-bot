@@ -8700,8 +8700,8 @@
 
                 return `<tr class="${isOwnRow ? 'own-row' : ''}" onclick="viewMemberDetail(${admin.id})" style="cursor:pointer;">
                     <td>${i + 1}</td>
-                    <td><strong>${admin.full_name}</strong>${isOwnRow ? ' <small style="color:var(--navy-500);">(siz)</small>' : ''}</td>
-                    <td>@${admin.telegram_username || admin.username}</td>
+                    <td><strong>${escapeHtml(admin.full_name)}</strong>${isOwnRow ? ' <small style="color:var(--navy-500);">(siz)</small>' : ''}</td>
+                    <td>@${escapeHtml(admin.telegram_username || admin.username)}</td>
                     <td><span class="role-badge role-${admin.role}">${roleLabels[admin.role] || admin.role}</span></td>
                     <td id="timeslot-cell-${admin.id}">${timeslotHtml}</td>
                     <td>${statusHtml}</td>
@@ -8776,7 +8776,7 @@
                 return `<div class="ranking-item">
                     <div class="rank-medal ${medalClass}">${i + 1}</div>
                     <div class="ranking-info">
-                        <div class="name">${item.full_name}</div>
+                        <div class="name">${escapeHtml(item.full_name)}</div>
                         <div class="stats-line">${count} ${countLabel} &middot; ${avgHours} soat</div>
                     </div>
                     <div class="ranking-stars">${starsHtml}</div>
@@ -10296,12 +10296,12 @@
                     <h3>Foydalanuvchi ma'lumotlari</h3>
                     <div class="detail-row">
                         <div class="detail-label">Ism:</div>
-                        <div class="detail-value">${request.first_name || request.name || 'N/A'}</div>
+                        <div class="detail-value">${escapeHtml(request.first_name || request.name) || 'N/A'}</div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Username:</div>
                         <div class="detail-value">
-                            @${request.username || 'N/A'}
+                            @${escapeHtml(request.username) || 'N/A'}
                             ${request.blocked ? '<span style="color: red; margin-left: 10px;">🚫 BLOKLANGAN</span>' : ''}
                         </div>
                     </div>
@@ -10336,7 +10336,7 @@
                                 <option value="Shaxsiy hujjatlar" ${request.category === 'Shaxsiy hujjatlar' ? 'selected' : ''}>Shaxsiy hujjatlar</option>
                             </select>
                             ${request.category === 'Boshqa' && request.status !== 'answered' ? '<span style="color: var(--danger-700); font-size: 12px; margin-left: 8px;">⚠️ Javob berishdan oldin tanlang!</span>' : '<span style="color: var(--success-700); font-size: 12px; margin-left: 8px;">✅</span>'}
-                            ` : `${request.category || 'N/A'}`}
+                            ` : `${escapeHtml(request.category) || 'N/A'}`}
                         </div>
                     </div>
                     <div class="detail-row">
@@ -10349,10 +10349,10 @@
                 <div class="triage-section">
                     <h4>AI Triage</h4>
                     <div class="triage-grid">
-                        <span class="triage-tag urgency-${request.triage_result.urgency || 'medium'}">
+                        <span class="triage-tag urgency-${['critical','high','medium','low'].includes(request.triage_result.urgency) ? request.triage_result.urgency : 'medium'}">
                             ${{critical:'🔴 Shoshilinch',high:'🟠 Muhim',medium:'🟡 O\'rtacha',low:'🟢 Oddiy'}[request.triage_result.urgency] || '🟡 O\'rtacha'}
                         </span>
-                        <span class="triage-tag">${request.triage_result.complexity || '?'} murakkablik</span>
+                        <span class="triage-tag">${escapeHtml(request.triage_result.complexity) || '?'} murakkablik</span>
                         ${request.triage_result.needs_document ? '<span class="triage-tag">📎 Hujjat kerak</span>' : ''}
                         ${(request.triage_result.key_topics || []).map(t => '<span class="triage-tag">' + escapeHtml(t) + '</span>').join('')}
                     </div>
@@ -10366,7 +10366,7 @@
                     <div class="detail-row">
                         <div class="detail-label">Yurist:</div>
                         <div class="detail-value">
-                            ${request.assigned_lawyer_name || '<span style="color: #e67e22;">Tayinlanmagan</span>'}
+                            ${escapeHtml(request.assigned_lawyer_name) || '<span style="color: #e67e22;">Tayinlanmagan</span>'}
                         </div>
                     </div>
                     ${request.assigned_at ? `
@@ -10390,7 +10390,7 @@
                         <select id="lawyerSelect" class="detail-select" style="flex:1; min-width: 140px;">
                             <option value="">-- Yurist --</option>
                             ${allAdmins.filter(a => a.role === 'master').map(admin =>
-                                `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${admin.full_name}</option>`
+                                `<option value="${admin.id}" ${request.assigned_to === admin.id ? 'selected' : ''}>${escapeHtml(admin.full_name)}</option>`
                             ).join('')}
                         </select>
                         <button class="btn" onclick="assignRequest(${request.id})" style="padding: 8px 16px;">Tayinlash</button>
@@ -10400,7 +10400,7 @@
                         <select id="studentSelect" class="detail-select" style="flex:1; min-width: 140px;">
                             <option value="">-- Talaba --</option>
                             ${allAdmins.filter(a => a.role === 'student').filter(a => !(request.assigned_students || []).some(s => s.id === a.id)).map(admin =>
-                                `<option value="${admin.id}">${admin.full_name}</option>`
+                                `<option value="${admin.id}">${escapeHtml(admin.full_name)}</option>`
                             ).join('')}
                         </select>
                         <button class="btn" onclick="assignStudent(${request.id})" style="padding: 8px 16px;">Tayinlash</button>
@@ -10416,22 +10416,22 @@
                             🗑️ Murojaatni o'chirish
                         </button>
                         ${request.blocked ? `
-                        <button class="btn btn-success" onclick="showUnblockDialog(${request.user_id}, '${request.username}')">
+                        <button class="btn btn-success" onclick="showUnblockDialog(${request.user_id}, ${attrArg(request.username)})">
                             ✅ Blokdan chiqarish
                         </button>
                         ` : `
-                        <button class="btn btn-danger" onclick="blockUser(${request.user_id}, '${request.username}')" style="background: var(--danger-700);">
+                        <button class="btn btn-danger" onclick="blockUser(${request.user_id}, ${attrArg(request.username)})" style="background: var(--danger-700);">
                             🚫 Foydalanuvchini bloklash
                         </button>
                         `}
-                        <button class="btn" onclick="viewBlockHistory(${request.user_id}, '${request.username}')" style="background: var(--fg-3);">
+                        <button class="btn" onclick="viewBlockHistory(${request.user_id}, ${attrArg(request.username)})" style="background: var(--fg-3);">
                             📋 Blok tarixi
                         </button>
                     </div>
                     ${request.blocked ? `
                     <div class="block-info">
                         <strong>Hozirgi holat:</strong> 🚫 BLOKLANGAN<br>
-                        <strong>Sabab:</strong> ${request.block_reason || 'Sabab ko\'rsatilmagan'}<br>
+                        <strong>Sabab:</strong> ${escapeHtml(request.block_reason) || 'Sabab ko\'rsatilmagan'}<br>
                         <strong>Vaqt:</strong> ${new Date(request.blocked_at).toLocaleString('uz-UZ')}
                     </div>
                     ` : `
@@ -10444,14 +10444,14 @@
                 
                 <div class="detail-section">
                     <h3>Murojaat <span style="font-weight:500; font-size:13px; color:var(--text-muted);">(${getRequestTypeLabel(request.request_type)})</span></h3>
-                    ${cleanRequestText(request.request_text) ? `<div class="request-text-box">${cleanRequestText(request.request_text)}</div>` : ''}
+                    ${cleanRequestText(request.request_text) ? `<div class="request-text-box">${escapeHtml(cleanRequestText(request.request_text)).replace(/\n/g, '<br>')}</div>` : ''}
                     
                     ${request.file_id ? `
                     <div class="file-attachment">
                         <div class="file-info">
                             <div class="file-icon">${getFileIcon(request.request_type)}</div>
                             <div class="file-details">
-                                <div class="file-name">${request.file_name || 'Fayl'}</div>
+                                <div class="file-name">${escapeHtml(request.file_name) || 'Fayl'}</div>
                                 <div class="file-size">${formatFileSize(request.file_size)}</div>
                             </div>
                         </div>
@@ -10469,9 +10469,9 @@
                     <div class="detail-section response-kanban">
                         <div class="response-kanban-col">
                             <h3>Berilgan javob</h3>
-                            <div class="response-box flaggable-answer" data-fb-source="response" data-fb-request="${request.id}">${request.response_text}</div>
+                            <div class="response-box flaggable-answer" data-fb-source="response" data-fb-request="${request.id}">${sanitizeBasicHtml(request.response_text)}</div>
                             <p style="color: var(--fg-3); margin-top: 10px; font-size: 13px;">
-                                Javob berdi: ${request.responded_by || 'N/A'}<br>
+                                Javob berdi: ${escapeHtml(request.responded_by) || 'N/A'}<br>
                                 Javob berilgan: ${new Date(request.answered_at).toLocaleString('uz-UZ')}
                             </p>
                         </div>
@@ -10490,9 +10490,9 @@
                     modalContent += `
                     <div class="detail-section">
                         <h3>Berilgan javob</h3>
-                        <div class="response-box flaggable-answer" data-fb-source="response" data-fb-request="${request.id}">${request.response_text}</div>
+                        <div class="response-box flaggable-answer" data-fb-source="response" data-fb-request="${request.id}">${sanitizeBasicHtml(request.response_text)}</div>
                         <p style="color: var(--fg-3); margin-top: 10px; font-size: 13px;">
-                            Javob berdi: ${request.responded_by || 'N/A'}<br>
+                            Javob berdi: ${escapeHtml(request.responded_by) || 'N/A'}<br>
                             Javob berilgan: ${new Date(request.answered_at).toLocaleString('uz-UZ')}
                         </p>
                     </div>
@@ -10502,9 +10502,9 @@
                 modalContent += `
                     <div class="detail-section">
                         <h3>Student javobi</h3>
-                        <div class="student-response-box">${request.student_response}</div>
+                        <div class="student-response-box">${sanitizeBasicHtml(request.student_response)}</div>
                         <p style="color: var(--fg-3); margin-top: 10px; font-size: 13px;">
-                            Javob berdi: ${request.responded_by || 'N/A'}
+                            Javob berdi: ${escapeHtml(request.responded_by) || 'N/A'}
                         </p>
                     </div>
                 `;
@@ -10522,7 +10522,7 @@
                                 </div>
                                 <div class="feedback-correction-fields" id="feedbackFields_${request.id}">
                                     <label>Tuzatilgan javob</label>
-                                    <textarea id="correctedAnswer_${request.id}" rows="4" placeholder="To’g’ri javobni yozing...">${(request.student_response || '').replace(/"/g, '&quot;').replace(/`/g, '`')}</textarea>
+                                    <textarea id="correctedAnswer_${request.id}" rows="4" placeholder="To’g’ri javobni yozing...">${escapeHtml(request.student_response)}</textarea>
                                     <label>Huquqiy mushohada (ixtiyoriy)</label>
                                     <textarea id="correctedReasoning_${request.id}" rows="2" placeholder="Nima uchun bu javob to’g’ri/noto’g’ri..."></textarea>
                                     <label>To’g’ri qonun moddalari (ixtiyoriy)</label>
@@ -10549,7 +10549,7 @@
                     modalContent += `
                         <div class="detail-section">
                             <h3>Rad etilgan javob</h3>
-                            <div class="student-response-box">${request.student_response}</div>
+                            <div class="student-response-box">${sanitizeBasicHtml(request.student_response)}</div>
                         </div>
                     `;
                 }
@@ -10778,7 +10778,7 @@
             };
 
             let html = text
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
             // Convert structured Legal GPT sections into styled divs
             const sectionKeys = Object.keys(sectionMap).join('|');
@@ -10816,7 +10816,11 @@
                 .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.+?)\*/g, '<em>$1</em>')
                 .replace(/`(.+?)`/g, '<code>$1</code>')
-                .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+                .replace(/\[(.+?)\]\((.+?)\)/g, function(match, label, href) {
+                    href = href.trim();
+                    if (!/^(?:https?:\/\/|\/(?![\/\\])|#)/i.test(href)) return label;
+                    return '<a href="' + href + '" target="_blank" rel="noopener">' + label + '</a>';
+                })
                 .replace(/^&gt; (.+)$/gm, '</p><blockquote>$1</blockquote><p>')
                 .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
                 .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
@@ -10827,9 +10831,39 @@
                 .replace(/<p>\s*<\/p>/g, '');
         }
 
+        // Safe in element text and in quoted attributes alike. Numbers are
+        // rendered; null, undefined, false and '' render as nothing.
         function escapeHtml(text) {
-            if (!text) return '';
-            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            if (text == null || text === false || text === '') return '';
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // Keeps simple formatting in stored answers (bold, italics, line
+        // breaks, lists) and drops every other tag and every attribute, so
+        // text written by a client, a student or the AI cannot run script.
+        const SAFE_BASIC_TAGS = new Set(['B','STRONG','I','EM','U','S','BR','P','UL','OL','LI','CODE','PRE','BLOCKQUOTE','H2','H3','H4']);
+        function sanitizeBasicHtml(html) {
+            if (html == null || html === '') return '';
+            const tpl = document.createElement('template');
+            tpl.innerHTML = String(html);
+            (function clean(node) {
+                Array.from(node.childNodes).forEach(function(child) {
+                    if (child.nodeType === 1 && /^(SCRIPT|STYLE|TEMPLATE|IFRAME|OBJECT|EMBED|NOSCRIPT|TEXTAREA|SELECT)$/.test(child.tagName)) {
+                        child.remove();
+                    } else if (child.nodeType === 1) {
+                        clean(child);
+                        if (SAFE_BASIC_TAGS.has(child.tagName)) {
+                            Array.from(child.attributes).forEach(function(a) { child.removeAttribute(a.name); });
+                        } else {
+                            child.replaceWith.apply(child, Array.from(child.childNodes));
+                        }
+                    } else if (child.nodeType !== 3) {
+                        child.remove();
+                    }
+                });
+            })(tpl.content);
+            return tpl.innerHTML.replace(/\n/g, '<br>');
         }
 
         // ── Auto-resize textarea up to 3 rows ──
@@ -13365,8 +13399,8 @@
                     };
                     var srcParts = (data.rag.sources || []).map(function(s) {
                         var label = srcLabels[s.type] || s.type;
-                        var lawList = s.laws && s.laws.length ? ' (' + s.laws.join(', ') + ')' : '';
-                        return '<span class="ai-rag-src">' + label + ' × ' + s.count + lawList + '</span>';
+                        var lawList = s.laws && s.laws.length ? ' (' + escapeHtml(s.laws.join(', ')) + ')' : '';
+                        return '<span class="ai-rag-src">' + escapeHtml(label) + ' × ' + escapeHtml(s.count) + lawList + '</span>';
                     }).join('');
                     var webPart = data.rag.webResults > 0 ? '<span class="ai-rag-src">🌐 Internet × ' + data.rag.webResults + '</span>' : '';
                     ragBadge = '<div class="ai-rag-info">'
@@ -13655,9 +13689,9 @@
                         var hiDay = u.daily  > 0 ? ' ur-hi' : '';
                         var hiWk  = u.weekly > 0 ? ' ur-hi' : '';
                         var hiMo  = u.monthly > 0 ? ' ur-hi' : '';
-                        var name  = u.full_name || u.username || ('ID ' + u.id);
+                        var name  = escapeHtml(u.full_name || u.username || ('ID ' + u.id));
                         return '<tr>' +
-                            '<td class="ur-name" title="' + (u.username || '') + '">' + name + '</td>' +
+                            '<td class="ur-name" title="' + escapeHtml(u.username) + '">' + name + '</td>' +
                             '<td>' + planBadge + '</td>' +
                             '<td class="ur-num' + hiDay + '">' + u.daily   + '</td>' +
                             '<td class="ur-num' + hiWk  + '">' + u.weekly  + '</td>' +
@@ -13725,7 +13759,7 @@
                     html += '<div class="fb-list-item">' + badge +
                         '<div class="fb-q">' + question + '</div>' +
                         '<div class="fb-a">' + answer + '</div>' +
-                        '<div style="margin-top:4px;font-size:10px;color:var(--text-muted)">' + (fb.user_name || '') + ' · ' + date + ' ' + reviewed + '</div>' +
+                        '<div style="margin-top:4px;font-size:10px;color:var(--text-muted)">' + escapeHtml(fb.user_name) + ' · ' + date + ' ' + reviewed + '</div>' +
                         reviewBtns +
                         '</div>';
                 });
@@ -14347,9 +14381,9 @@
                 var extra = '';
                 if (e.type === 'done' && !e.skipped && e.chunks) extra = ' <span style="color:#22c55e">+' + e.chunks + '</span>';
                 if (e.type === 'done' && e.skipped) extra = ' <span style="color:#bbb;font-size:10px">' + (e.reason === 'inactive_or_empty' ? 'eskirgan' : 'mavjud') + '</span>';
-                if (e.type === 'error') { label = e.lawName || e.docId || ''; extra = ' <span style="color:#ef4444">' + truncate(e.error || '', 30) + '</span>'; }
+                if (e.type === 'error') { label = e.lawName || e.docId || ''; extra = ' <span style="color:#ef4444">' + escapeHtml(truncate(e.error || '', 30)) + '</span>'; }
                 if (e.type === 'category-done') extra = ' <span style="color:#22c55e">' + (e.succeeded||0) + '✓</span>';
-                return '<div class="qs-log-row"><span style="flex-shrink:0">' + icon + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + truncate(label, 38) + extra + '</span></div>';
+                return '<div class="qs-log-row"><span style="flex-shrink:0">' + icon + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(truncate(label, 38)) + extra + '</span></div>';
             }).join('');
         }
 
@@ -15785,7 +15819,7 @@
             const isOwn = admin.id === currentUser.adminId;
             if (!isMaster) return '';
             const editIcon = `<button class="action-btn edit-btn" onclick="event.stopPropagation();document.getElementById('regDetailOverlay').classList.remove('active');openEditMemberModal(${admin.id})" title="Tahrirlash" style="background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:var(--text-secondary);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>`;
-            const deleteIcon = !isOwn ? `<button class="action-btn delete-btn" onclick="event.stopPropagation();document.getElementById('regDetailOverlay').classList.remove('active');confirmDeleteAdmin(${admin.id}, '${admin.full_name.replace(/'/g, "\\'")}')" title="O'chirish" style="background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:var(--danger-700);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : '';
+            const deleteIcon = !isOwn ? `<button class="action-btn delete-btn" onclick="event.stopPropagation();document.getElementById('regDetailOverlay').classList.remove('active');confirmDeleteAdmin(${admin.id}, ${attrArg(admin.full_name)})" title="O'chirish" style="background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:var(--danger-700);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : '';
             return `<div style="display:flex;gap:2px;position:absolute;top:16px;right:16px;">${editIcon}${deleteIcon}</div>`;
         }
 
@@ -15876,7 +15910,7 @@
                             Username: <code>${escapeHtml(admin.username)}</code><br>
                             Telegram: <code>@${escapeHtml(admin.telegram_username || '')}</code><br>
                             ${admin.duty_start && admin.duty_end ? `Ish vaqti: <code>${formatTimeslot(admin.duty_start)} - ${formatTimeslot(admin.duty_end)}</code><br>` : ''}
-                            <br><button class="reg-copy-btn" onclick="navigator.clipboard.writeText('${copyText}');this.textContent='Nusxalandi!'">Nusxalash</button>
+                            <br><button class="reg-copy-btn" onclick="navigator.clipboard.writeText(${attrArg(copyText)});this.textContent='Nusxalandi!'">Nusxalash</button>
                         </div>
                         <div class="reg-detail-actions">
                             <button class="reg-detail-close" onclick="document.getElementById('regDetailOverlay').classList.remove('active')">Yopish</button>
@@ -15941,17 +15975,17 @@
                 const data = await r.json();
                 if (data.success) {
                     const c = data.credentials;
-                    const parolLine = c.userSetPassword ? "Parol: <code>Foydalanuvchi o'zi yaratgan</code>" : (c.password ? "Parol: <code>" + c.password + "</code>" : "");
-                    const copyText = c.userSetPassword ? 'Username: ' + c.username : 'Username: ' + c.username + '\\nParol: ' + (c.password || '');
+                    const parolLine = c.userSetPassword ? "Parol: <code>Foydalanuvchi o'zi yaratgan</code>" : (c.password ? "Parol: <code>" + escapeHtml(c.password) + "</code>" : "");
+                    const copyText = c.userSetPassword ? 'Username: ' + c.username : 'Username: ' + c.username + '\nParol: ' + (c.password || '');
                     const actions = document.getElementById('regDetailActions');
                     if (actions) {
                         actions.innerHTML = `<div class="reg-cred-box">
                             <strong>&#10004; Hisob yaratildi!</strong><br><br>
-                            Username: <code>${c.username}</code><br>
+                            Username: <code>${escapeHtml(c.username)}</code><br>
                             ${parolLine}<br>
-                            Telegram: <code>@${c.telegram}</code><br>
-                            ${data.telegramSent ? '<br><span style="color:var(--success-700);">&#10004; Telegram orqali yuborildi</span>' : '<br><span style="color:var(--warning-700);">&#9888; Telegram orqali yuborib bo\'lmadi. Qo\'lda yuboring:</span><br><pre style="white-space:pre-wrap;font-size:12px;margin-top:6px;padding:8px;background:var(--card-bg);border-radius:6px;">' + (data.telegramMessage || '') + '</pre>'}
-                            <br><button class="reg-copy-btn" onclick="navigator.clipboard.writeText('${copyText}');this.textContent='Nusxalandi!'">Nusxalash</button>
+                            Telegram: <code>@${escapeHtml(c.telegram)}</code><br>
+                            ${data.telegramSent ? '<br><span style="color:var(--success-700);">&#10004; Telegram orqali yuborildi</span>' : '<br><span style="color:var(--warning-700);">&#9888; Telegram orqali yuborib bo\'lmadi. Qo\'lda yuboring:</span><br><pre style="white-space:pre-wrap;font-size:12px;margin-top:6px;padding:8px;background:var(--card-bg);border-radius:6px;">' + escapeHtml(data.telegramMessage || '') + '</pre>'}
+                            <br><button class="reg-copy-btn" onclick="navigator.clipboard.writeText(${attrArg(copyText)});this.textContent='Nusxalandi!'">Nusxalash</button>
                         </div>`;
                     } else {
                         alert('Hisob yaratildi!\n\nUsername: ' + c.username);
@@ -16405,7 +16439,7 @@
                 
                 let historyHTML = `
                     <div style="max-width: 600px; max-height: 500px; overflow-y: auto;">
-                        <h2 style="margin-bottom: 20px;">📋 Blok tarixi: @${username}</h2>
+                        <h2 style="margin-bottom: 20px;">📋 Blok tarixi: @${escapeHtml(username)}</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                 `;
                 
@@ -16425,10 +16459,10 @@
                                 <strong>Vaqt:</strong> ${new Date(item.performed_at).toLocaleString('uz-UZ')}
                             </div>
                             <div style="font-size: 13px; color: #666; margin-bottom: 5px;">
-                                <strong>Admin:</strong> ${item.performed_by_name || 'N/A'}
+                                <strong>Admin:</strong> ${escapeHtml(item.performed_by_name) || 'N/A'}
                             </div>
                             <div style="font-size: 13px; color: #666;">
-                                <strong>Sabab:</strong> ${item.reason || 'Sabab ko\'rsatilmagan'}
+                                <strong>Sabab:</strong> ${escapeHtml(item.reason) || 'Sabab ko\'rsatilmagan'}
                             </div>
                         </div>
                     `;
@@ -17134,7 +17168,7 @@
                             <span class="online-dot ${dotClass}"></span>
                         </div>
                         <div class="chat-member-info">
-                            <div class="chat-member-name">${admin.full_name}</div>
+                            <div class="chat-member-name">${escapeHtml(admin.full_name)}</div>
                             <span class="chat-member-role ${roleClass}">${roleLabels[admin.role] || admin.role}</span>
                         </div>
                     </div>`;
@@ -17294,7 +17328,7 @@
             s = s.replace(/@(\w+)/g, (match, uname) => {
                 if (uname.toLowerCase() === 'all') return match;
                 const admin = allAdmins.find(a => a.username.toLowerCase() === uname.toLowerCase());
-                if (admin) return `<span class="mention" title="@${admin.username}">@${admin.full_name}</span>`;
+                if (admin) return `<span class="mention" title="@${escapeHtml(admin.username)}">@${escapeHtml(admin.full_name)}</span>`;
                 return match;
             });
             return s.replace(/\n/g, '<br>');
@@ -17385,7 +17419,7 @@
                 : '<span class="chat-notification-tag me">@' + currentUser.username + '</span>';
             notif.innerHTML = `
                 <div class="chat-notification-header">
-                    <span class="chat-notification-sender">${msg.full_name}${tagHtml}</span>
+                    <span class="chat-notification-sender">${escapeHtml(msg.full_name)}${tagHtml}</span>
                     <span class="chat-notification-time">${timeStr}</span>
                 </div>
                 <div class="chat-notification-text">${renderMsgText(msg.message)}</div>`;
@@ -17437,10 +17471,10 @@
             const notif = document.createElement('div');
             notif.className = 'chat-msg-notif entering';
             notif.innerHTML = `
-                <div class="chat-msg-notif-avatar ${msg.role || ''}">${initials}</div>
+                <div class="chat-msg-notif-avatar ${escapeHtml(msg.role)}">${initials}</div>
                 <div class="chat-msg-notif-body">
                     <div class="chat-msg-notif-header">
-                        <span class="chat-msg-notif-sender">${msg.full_name}<span class="chat-msg-notif-role">${roleBadgeMap[msg.role] || msg.role}</span></span>
+                        <span class="chat-msg-notif-sender">${escapeHtml(msg.full_name)}<span class="chat-msg-notif-role">${roleBadgeMap[msg.role] || escapeHtml(msg.role)}</span></span>
                         <span class="chat-msg-notif-time">${timeStr}</span>
                     </div>
                     <div class="chat-msg-notif-text">${renderMsgText(preview)}</div>
@@ -17624,8 +17658,8 @@
                         <span class="mention-item-role all-role">Barchaga</span></div>`;
                 } else {
                     html += `<div class="mention-item ${active}" onclick="selectMention(${i})">
-                        <div><span class="mention-item-name">${admin.full_name}</span>
-                        <span class="mention-item-username">@${admin.username}</span></div>
+                        <div><span class="mention-item-name">${escapeHtml(admin.full_name)}</span>
+                        <span class="mention-item-username">@${escapeHtml(admin.username)}</span></div>
                         <span class="mention-item-role ${admin.role}">${{'master':'Admin','lawyer':'Yurist','student':'Student'}[admin.role] || admin.role}</span></div>`;
                 }
             });
