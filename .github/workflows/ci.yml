@@ -59,6 +59,8 @@ jobs:
         run: scripts/ci/boot-smoke.sh
       - name: Quota races on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/tariff-race.db.test.js
+      - name: Safe re-ingest on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/rag-safe-reingest.db.test.js
 
   audit:
     name: npm audit (report only)
