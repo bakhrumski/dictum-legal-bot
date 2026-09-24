@@ -10524,6 +10524,21 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Operational detail for the master: corpus coverage and embedding health.
+// Retrieval evaluation inside the server, on the production corpus and keys
+// (docs/audit phase 2). Master only; see src/eval/rag-eval-service.js.
+{
+  const { createRagEvalService, mountRagEvalRoutes } = require('../eval/rag-eval-service');
+  mountRagEvalRoutes(app, {
+    requireMasterAdmin,
+    service: createRagEvalService({
+      pool,
+      retrieve: (q, topic, language, opts) => retrieveLegalContext(q, topic, language, opts),
+      callCheapAI,
+      getArticleRefs: getChunkArticleRefs,
+    }),
+  });
+}
+
 app.get('/api/admin/health', requireMasterAdmin, async (req, res) => {
   let corpusInfo = {};
   try {
