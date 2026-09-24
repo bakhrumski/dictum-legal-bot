@@ -8385,6 +8385,14 @@
                         if (r.ok) {
                             const m = await r.json();
                             if (!m.plan) window.location.href = '/tariff.html';
+                            // An expired paid or trial plan now continues on Bepul; say so
+                            // once per session instead of silently changing the limits.
+                            if (m.downgradedFrom) {
+                                var seenKey = 'juristai-downgrade-' + m.downgradedFrom + '-' + (m.previousExpiresAt || '');
+                                var seen = false;
+                                try { seen = sessionStorage.getItem(seenKey) === '1'; sessionStorage.setItem(seenKey, '1'); } catch (_) {}
+                                if (!seen) showUpdateToast('Tarifingiz muddati tugadi — Bepul tarifda davom etyapsiz. Yangilash: Tariflar sahifasi.', 'info');
+                            }
                         }
                     } catch (e) { /* ignore */ }
                     // Free-access gate (channel join + weekly survey)
@@ -11440,6 +11448,31 @@
             setTimeout(function(){ if (t.parentNode) { t.style.opacity = '0'; t.style.transition = 'opacity .4s'; setTimeout(function(){ if (t.parentNode) t.remove(); }, 400); } }, 6000);
         }
 
+        // A failed AI request gives its quota unit back; the server marks such
+        // replies with quotaRefunded + refundNotice. Every JSON error from the
+        // API passes through here, so each flow shows the notice once.
+        function showRefundNotice(data) {
+            if (data && data.quotaRefunded) showUpdateToast('↩ ' + (data.refundNotice || "So'rov limiti qaytarildi."), 'info');
+        }
+        (function watchQuotaRefunds() {
+            if (!window.fetch || window.fetch.__refundAware) return;
+            var nativeFetch = window.fetch.bind(window);
+            var wrapped = function(input, init) {
+                return nativeFetch(input, init).then(function(response) {
+                    try {
+                        var url = typeof input === 'string' ? input : (input && input.url) || '';
+                        var type = response.headers.get('Content-Type') || '';
+                        if (!response.ok && /\/api\//.test(url) && type.indexOf('application/json') !== -1) {
+                            response.clone().json().then(showRefundNotice).catch(function() {});
+                        }
+                    } catch (_) {}
+                    return response;
+                });
+            };
+            wrapped.__refundAware = true;
+            window.fetch = wrapped;
+        })();
+
         function onDocFileSelected(input) {
             var btn = document.getElementById('docUploadBtn');
             var label = document.getElementById('docSelectedFile');
@@ -13528,8 +13561,10 @@
                             el2.textContent = acc;
                         } else if (ev.type === 'done') {
                             doneData = ev;
+                            showRefundNotice(ev);
                         } else if (ev.type === 'error') {
                             errMsg = ev.error;
+                            showRefundNotice(ev);
                         }
                     }
                 }

@@ -32,7 +32,7 @@ const draftCountPattern = /draftsUsed[\s\S]*?endpoint LIKE '([^']+)'/.exec(tiers
 function recorded(route) {
   const line = routesSrc.split('\n').find((l) => l.includes(`app.post('${route}'`));
   assert.ok(line, `route ${route} not found`);
-  const m = /quotaFor\('([^']+)'\)/.exec(line);
+  const m = /quotaFor\('([^']+)'(?:, \{[^}]*\})?\)/.exec(line);
   assert.ok(m, `${route} records no usage`);
   return m[1];
 }

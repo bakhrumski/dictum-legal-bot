@@ -243,13 +243,25 @@ async function getUserPlan(adminId) {
   if (row.role === 'master') return { plan: 'master', role: 'master' };
 
   let plan = row.tariff_plan;
-  const expired = row.tariff_expires_at && new Date(row.tariff_expires_at) < new Date();
-  if (plan && expired) plan = null;
+  let startsAt = row.tariff_starts_at;
+  let downgradedFrom = null;
+  const expired = !!(row.tariff_expires_at && new Date(row.tariff_expires_at) < new Date());
+  // An expired paid or trial plan falls back to bepul, which never expires
+  // (owner's decision, docs/audit/DECISIONS.md D-4). Computed on read rather
+  // than written back, so tariff_plan keeps what was bought and a renewal
+  // simply overwrites it. Bepul's 30 generous days count from the expiry.
+  if (plan && expired) {
+    downgradedFrom = plan;
+    plan = 'bepul';
+    startsAt = row.tariff_expires_at;
+  }
   return {
     plan,
+    downgradedFrom,
     role: row.role,
-    startsAt: row.tariff_starts_at,
-    expiresAt: row.tariff_expires_at,
+    startsAt,
+    expiresAt: downgradedFrom ? null : row.tariff_expires_at,
+    previousExpiresAt: downgradedFrom ? row.tariff_expires_at : undefined,
     bepulUsed: !!row.bepul_used,
     rollover: parseInt(row.tariff_rollover, 10) || 0,
     expired,
@@ -419,15 +431,63 @@ async function checkFreeAccess(adminId) {
   };
 }
 
-async function recordUsage(adminId, endpoint, credits = 1) {
+/**
+ * Log one unit of usage. Returns the new row id, or null when the insert
+ * failed; `{ throwOnError: true }` makes a failure throw instead, for paths
+ * that must not run unmetered.
+ */
+async function recordUsage(adminId, endpoint, credits = 1, { throwOnError = false } = {}) {
   if (!_initialized) await initSubscriptionSchema();
   try {
-    await pool.query(
-      `INSERT INTO tariff_usage (admin_id, endpoint, credits) VALUES ($1, $2, $3)`,
+    const r = await pool.query(
+      `INSERT INTO tariff_usage (admin_id, endpoint, credits) VALUES ($1, $2, $3) RETURNING id`,
       [adminId, endpoint || null, credits]
     );
+    return r.rows[0] ? r.rows[0].id : null;
   } catch (err) {
     console.warn('[TARIFF] usage log failed:', err.message);
+    if (throwOnError) throw err;
+    return null;
+  }
+}
+
+// ── Refunds ─────────────────────────────────────────────────────────────────
+// A request that fails gives its unit back and says so (owner's decision,
+// DECISIONS.md D-6). enforceQuota records the unit before the handler runs;
+// the handler's error response, or an explicit refundUsage() call on a
+// streamed failure, removes that row again.
+const REFUND_NOTICE = "So'rov limiti qaytarildi: bu urinish hisobga olinmadi.";
+
+/**
+ * Give back the unit enforceQuota recorded for this response. Idempotent.
+ * Returns { quotaRefunded, refundNotice } to merge into the reply, or {}
+ * when there was nothing to refund.
+ */
+function refundUsage(res, reason = 'failed') {
+  const t = res && res.locals && res.locals.tariffUsage;
+  if (!t || t.refunded || !t.id) return {};
+  t.refunded = true;
+  pool.query('DELETE FROM tariff_usage WHERE id = $1 AND admin_id = $2', [t.id, t.adminId])
+    .then(() => console.log(`[TARIFF] refunded usage ${t.id} (${t.endpoint}, ${reason})`))
+    .catch(err => console.warn('[TARIFF] refund failed:', err.message));
+  return { quotaRefunded: true, refundNotice: REFUND_NOTICE };
+}
+
+// Any 4xx/5xx JSON reply from the metered handler refunds the unit and tells
+// the client. A reply that ends in error without JSON (a crash mid-stream)
+// is still refunded when the response finishes, just without the notice.
+function attachRefundOnFailure(res) {
+  if (typeof res.json === 'function') {
+    const json = res.json.bind(res);
+    res.json = function (body) {
+      if (res.statusCode >= 400 && body && typeof body === 'object' && !Array.isArray(body)) {
+        body = Object.assign({}, body, refundUsage(res, 'status ' + res.statusCode));
+      }
+      return json(body);
+    };
+  }
+  if (typeof res.on === 'function') {
+    res.on('finish', () => { if (res.statusCode >= 400) refundUsage(res, 'status ' + res.statusCode); });
   }
 }
 
@@ -503,8 +563,17 @@ async function selectPlan(adminId, plan) {
  * - Common users (role='user') without a plan get 429.
  * - Common users with a plan over their limit get 429.
  */
-function enforceQuota(endpoint) {
+// Expensive paths refuse to run when the quota cannot be checked; chat keeps
+// working through a database hiccup (DECISIONS.md D-5).
+const QUOTA_UNAVAILABLE = {
+  error: 'quota_unavailable',
+  code: 'QUOTA_UNAVAILABLE',
+  message: "Limitni hozir tekshirib bo'lmadi. Bir necha daqiqadan keyin qayta urinib ko'ring.",
+};
+
+function enforceQuota(endpoint, { failClosed = false } = {}) {
   return async (req, res, next) => {
+    let passed = false;
     try {
       const adminId = req.session?.adminId;
       if (!adminId) return next();
@@ -551,12 +620,17 @@ function enforceQuota(endpoint) {
           used: q.used,
         });
       }
-      await recordUsage(adminId, endpoint);
+      const usageId = await recordUsage(adminId, endpoint, 1, { throwOnError: failClosed });
       res.locals.quota = q;
+      res.locals.tariffUsage = { id: usageId, adminId, endpoint, refunded: false };
+      attachRefundOnFailure(res);
+      passed = true;
       next();
     } catch (err) {
       console.error('[TARIFF] enforceQuota error:', err.message);
-      next(); // fail-open
+      if (passed || res.headersSent) return;
+      if (failClosed) return res.status(503).json(QUOTA_UNAVAILABLE);
+      next(); // fail-open: chat
     }
   };
 }
@@ -686,6 +760,9 @@ async function marginReport({ since = null, plan = null } = {}) {
 }
 
 module.exports = {
+  refundUsage,
+  REFUND_NOTICE,
+  QUOTA_UNAVAILABLE,
   ENDPOINT_WEIGHT_SQL,
   opinionCreditsFor,
   opinionCreditsUsed,
