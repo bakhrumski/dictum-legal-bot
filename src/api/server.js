@@ -231,16 +231,30 @@ console.log('[BOT] WEBHOOK_DOMAIN:', WEBHOOK_DOMAIN || 'NOT SET');
 console.log('[BOT] PORT:', PORT);
 
 if (WEBHOOK_DOMAIN) {
-  // Production: webhook mode — no polling at all
-  const secretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
-  app.post(secretPath, express.json(), (req, res) => {
-    bot.processUpdate(req.body);
+  // Production: webhook mode — no polling at all. The path is a hash of the
+  // token and every update must carry Telegram's secret header; see
+  // src/bot/webhook-auth.js for why the token is no longer in the path.
+  const webhookAuth = require('../bot/webhook-auth');
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const hookPath = webhookAuth.webhookPath(botToken);
+  const hookSecret = webhookAuth.webhookSecret(botToken);
+  app.post(hookPath, express.json(), (req, res) => {
+    if (!webhookAuth.isTelegramRequest(req.get('X-Telegram-Bot-Api-Secret-Token'), hookSecret)) {
+      return res.sendStatus(401);
+    }
+    // Acknowledge whatever happens inside the handlers: a throw here used to
+    // turn into a 500, and Telegram redelivers a failed update forever.
+    try {
+      bot.processUpdate(req.body);
+    } catch (err) {
+      console.error('[BOT] update handler threw:', err && err.message);
+    }
     res.sendStatus(200);
   });
   bot.deleteWebHook().then(() => {
-    return bot.setWebHook(`https://${WEBHOOK_DOMAIN}${secretPath}`);
+    return bot.setWebHook(`https://${WEBHOOK_DOMAIN}${hookPath}`, { secret_token: hookSecret });
   }).then(() => {
-    console.log('[BOT] Webhook active:', `https://${WEBHOOK_DOMAIN}${secretPath}`);
+    console.log('[BOT] Webhook active:', webhookAuth.describeWebhook(WEBHOOK_DOMAIN, botToken));
   }).catch(err => {
     console.error('[BOT] Webhook setup failed:', err.message);
   });
