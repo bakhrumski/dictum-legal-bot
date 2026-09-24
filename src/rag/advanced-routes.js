@@ -231,53 +231,9 @@ function mountAdvancedRoutes(app, deps) {
     }
   });
 
-  // ══════════════════════════════════════
-  // SUBSCRIPTION TIERS (Phase 3)
-  // ══════════════════════════════════════
-
-  /**
-   * GET /api/subscription/me — current user's tier, limit, usage
-   * Auth: any authenticated user
-   */
-  app.get('/api/subscription/me', requireAuth, async (req, res) => {
-    try {
-      const userId = req.session?.adminId;
-      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-      const q = await subscription.checkQuota(userId);
-      res.json(q);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  /**
-   * POST /api/subscription/set-tier — admin: assign a tier to a user
-   * Body: { userId, tier, customLimit?, expiresAt? }
-   * Auth: master admin
-   */
-  app.post('/api/subscription/set-tier', requireMasterAdmin, async (req, res) => {
-    try {
-      const { userId, tier, customLimit, expiresAt } = req.body || {};
-      if (!userId || !tier) return res.status(400).json({ error: 'userId and tier required' });
-      if (!subscription.TIER_LIMITS[tier]) {
-        return res.status(400).json({ error: `Unknown tier: ${tier}. Valid: ${Object.keys(subscription.TIER_LIMITS).join(', ')}` });
-      }
-      await subscription.setTier(userId, tier, {
-        customLimit: customLimit != null ? Number(customLimit) : null,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
-      });
-      res.json({ success: true, userId, tier });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  /**
-   * GET /api/subscription/tiers — list tier limits (public reference)
-   */
-  app.get('/api/subscription/tiers', (req, res) => {
-    res.json(subscription.TIER_LIMITS);
-  });
+  // The Phase 3 /api/subscription/* routes were removed (DECISIONS.md D-12):
+  // set-tier and tiers called functions subscription-tiers.js no longer has,
+  // and nothing used /me. Plans live under /api/tariff/*.
 
   // ══════════════════════════════════════
   // METRICS DASHBOARD (Phase 4)

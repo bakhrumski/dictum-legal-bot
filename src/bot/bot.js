@@ -38,7 +38,28 @@ const parsedTelegramFreeLimit = Number.parseInt(process.env.AGENT_FREE_AI_LIMIT 
 const TELEGRAM_FREE_AI_LIMIT = Number.isFinite(parsedTelegramFreeLimit) && parsedTelegramFreeLimit >= 0
   ? parsedTelegramFreeLimit
   : 3;
-const ANSWER_INVOICE_PREFIX = 'juristai_answers_v1';
+const starsInvoice = require('./stars-invoice');
+// The offer is carried in the invoice payload (D-12); these are the prices
+// for new invoices and for v1 invoices issued before that change.
+const LEGACY_ANSWER_OFFER = { stars: PAID_ANSWER_STARS, credits: PAID_ANSWER_CREDITS };
+function readAnswerOffer(payload, telegramUserId) {
+  return starsInvoice.parseAnswerInvoicePayload(payload, telegramUserId, {
+    secret: token, legacy: LEGACY_ANSWER_OFFER,
+  });
+}
+
+// Give the Stars back when a valid payment cannot be credited. Not wrapped
+// by node-telegram-bot-api 0.67, so it goes through the raw Bot API call.
+async function refundStars(telegramUserId, chargeId) {
+  try {
+    await bot._request('refundStarPayment', { form: { user_id: telegramUserId, telegram_payment_charge_id: chargeId } });
+    console.warn(`[BOT] Stars refunded: charge ${chargeId}`);
+    return true;
+  } catch (error) {
+    console.error('[BOT] Stars refund failed:', error.message);
+    return false;
+  }
+}
 const TELEGRAM_TOPIC_CATEGORIES = Object.freeze({
   konstitutsiya: 'Konstitutsiyaviy tuzum',
   'davlat-boshqaruvi': 'Davlat boshqaruvi',
@@ -214,7 +235,9 @@ async function sendPublicStats(chatId) {
 }
 
 async function sendPaidAnswerInvoice(chatId, telegramUserId) {
-  const payload = `${ANSWER_INVOICE_PREFIX}:${telegramUserId}:${crypto.randomBytes(8).toString('hex')}`;
+  const payload = starsInvoice.buildAnswerInvoicePayload({
+    telegramUserId, stars: PAID_ANSWER_STARS, credits: PAID_ANSWER_CREDITS, secret: token,
+  });
   return bot.sendInvoice(
     chatId,
     `${PAID_ANSWER_CREDITS} ta huquqiy javob`,
@@ -1049,9 +1072,8 @@ bot.onText(/\/terms/, async (msg) => {
 });
 
 bot.on('pre_checkout_query', async (query) => {
-  const valid = query.currency === 'XTR'
-    && query.total_amount === PAID_ANSWER_STARS
-    && String(query.invoice_payload || '').startsWith(`${ANSWER_INVOICE_PREFIX}:${query.from.id}:`);
+  const valid = starsInvoice.matchesOffer(
+    readAnswerOffer(query.invoice_payload, query.from.id), query.currency, query.total_amount);
   await bot.answerPreCheckoutQuery(query.id, valid, valid ? {} : {
     error_message: 'To\'lov ma\'lumotlari eskirgan. Botdagi tugma orqali yangi hisob oching.',
   }).catch(error => console.error('[BOT] pre-checkout reply failed:', error.message));
@@ -1084,34 +1106,46 @@ bot.on('message', async (msg) => {
   if (msg.successful_payment) {
     await telegramEconomy.recordTelegramActivity(chatId);
     const payment = msg.successful_payment;
-    const valid = payment.currency === 'XTR'
-      && payment.total_amount === PAID_ANSWER_STARS
-      && String(payment.invoice_payload || '').startsWith(`${ANSWER_INVOICE_PREFIX}:${msg.from.id}:`);
-    if (!valid) {
+    const offer = readAnswerOffer(payment.invoice_payload, msg.from.id);
+    if (!starsInvoice.matchesOffer(offer, payment.currency, payment.total_amount)) {
+      // Pre-checkout should have stopped this; if money moved anyway, give
+      // it back rather than keep it with nothing granted.
       console.error('[BOT] rejected unexpected successful payment payload');
+      const refunded = payment.currency === 'XTR'
+        && await refundStars(msg.from.id, payment.telegram_payment_charge_id);
+      await bot.sendMessage(chatId, refunded
+        ? 'To\'lovni tasdiqlab bo\'lmadi, Stars hisobingizga qaytarildi. Botdagi tugma orqali qayta urinib ko\'ring.'
+        : `To'lovni tasdiqlab bo'lmadi. /paysupport ga yozing. Tranzaksiya: ${payment.telegram_payment_charge_id}`
+      ).catch(() => {});
       return;
     }
+    let granted;
     try {
-      const granted = await telegramEconomy.grantPaidAnswers({
+      granted = await telegramEconomy.grantPaidAnswers({
         chatId,
         telegramUserId: msg.from.id,
         invoicePayload: payment.invoice_payload,
         currency: payment.currency,
         totalAmount: payment.total_amount,
-        credits: PAID_ANSWER_CREDITS,
+        credits: offer.credits,
         telegramPaymentChargeId: payment.telegram_payment_charge_id,
         providerPaymentChargeId: payment.provider_payment_charge_id,
       });
-      if (granted.credited) {
-        await bot.sendMessage(chatId,
-          `To'lov qabul qilindi. Hisobingizga ${PAID_ANSWER_CREDITS} ta huquqiy javob qo'shildi. Hozirgi qoldiq: ${granted.credits}.\n\nHuquqiy savolingizni yozing.`
-        );
-      }
     } catch (error) {
+      // grantPaidAnswers runs in one transaction, so a failure granted
+      // nothing: return the Stars instead of leaving the user charged.
       console.error('[BOT] paid answer credit failed:', error.message);
+      const refunded = await refundStars(msg.from.id, payment.telegram_payment_charge_id);
+      await bot.sendMessage(chatId, refunded
+        ? 'Kreditni qo\'shishda xatolik yuz berdi, Stars hisobingizga qaytarildi. Birozdan keyin qayta urinib ko\'ring.'
+        : `To'lov qabul qilindi, ammo kreditni avtomatik qo'shishda xatolik yuz berdi. /paysupport ga yozing. Tranzaksiya: ${payment.telegram_payment_charge_id}`
+      ).catch(() => {});
+      return;
+    }
+    if (granted && granted.credited) {
       await bot.sendMessage(chatId,
-        `To'lov qabul qilindi, ammo kreditni avtomatik qo'shishda xatolik yuz berdi. /paysupport ga yozing. Tranzaksiya: ${payment.telegram_payment_charge_id}`
-      );
+        `To'lov qabul qilindi. Hisobingizga ${offer.credits} ta huquqiy javob qo'shildi. Hozirgi qoldiq: ${granted.credits}.\n\nHuquqiy savolingizni yozing.`
+      ).catch(error => console.error('[BOT] payment receipt failed:', error.message));
     }
     return;
   }
