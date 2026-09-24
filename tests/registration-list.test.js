@@ -13,7 +13,7 @@ const path = require('path');
 
 const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
 const start = server.indexOf("app.get('/api/registration-requests', requireMasterAdmin");
-const handler = server.slice(start, server.indexOf('\n});', start));
+const handler = server.slice(start, server.indexOf('\n});', start)).replace(/^\s*\/\/.*$/gm, '');
 
 assert.ok(start > 0, 'route found');
 assert.ok(!/SELECT rr\.\*/.test(handler), 'no SELECT rr.* (it pulled every base64 document into memory)');
