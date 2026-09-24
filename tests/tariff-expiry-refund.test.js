@@ -134,8 +134,8 @@ function reset(over = {}) {
   await test('server wiring: opinion, explain, analyze and enterprise fail closed; chat does not', () => {
     const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
     const server = read('src/api/server.js');
-    assert.ok(/'\/api\/draft\/legal-opinion', requireAuth, tariffModule\.enforceQuota\('\/api\/legal-chat', \{ failClosed: true \}\)/.test(server));
-    assert.ok(/'\/api\/draft\/explain-document', requireAuth, tariffModule\.enforceQuota\('\/api\/legal-chat', \{ failClosed: true \}\)/.test(server));
+    assert.ok(/'\/api\/draft\/legal-opinion', requireAuth, tariffModule\.enforceQuota\('\/api\/opinion-request', \{ failClosed: true \}\)/.test(server));
+    assert.ok(/'\/api\/draft\/explain-document', requireAuth, tariffModule\.enforceQuota\('\/api\/draft\/explain-document', \{ failClosed: true \}\)/.test(server));
     assert.ok(/'\/api\/legal-chat', requireAuth, tariffModule\.enforceQuota\('\/api\/legal-chat'\),/.test(server));
     assert.ok(/credit check failed \(refusing\)/.test(server), 'opinion credit check no longer allows on error');
     assert.ok(/enforceQuota\('\/api\/analyze', \{ failClosed: true \}\)/.test(read('src/ocr/routes.js')));

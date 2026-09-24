@@ -182,16 +182,40 @@ async function initSubscriptionSchema() {
 //
 // Applied at COUNT time via SQL rather than stored on the row, so historical
 // usage needs no migration and re-pricing needs no backfill.
-// Word/PDF export renders a file and calls no model, so it weighs nothing;
-// before it matched '/api/draft%' and cost 7 chat-equivalents per download.
+// Owner-approved weights (docs/audit/DECISIONS.md D-11):
+//   0  work that has its own weekly allowance (AI drafts, opinions) or calls
+//      no model (Word/PDF export), so it is not limited twice;
+//   3  document explanation and analysis, which read up to 120k characters;
+//   1  everything else, chat included.
+// Before this, drafts and opinions also cost 7 chat-equivalents each in
+// fair-use, so Silver/Gold/Platinum reached ~7/14/35 drafts a week instead
+// of the 22/50/125 they are sold with.
 const ENDPOINT_WEIGHT_SQL = `
   CASE
-    WHEN endpoint LIKE '/api/draft/export%'      THEN 0
-    WHEN endpoint LIKE '/api/draft/ai-generate%' THEN 7
-    WHEN endpoint LIKE '/api/templates/import%'  THEN 7
-    WHEN endpoint LIKE '/api/draft%'             THEN 7
+    WHEN endpoint LIKE '/api/draft/export%'           THEN 0
+    WHEN endpoint LIKE '/api/draft/ai-generate%'      THEN 0
+    WHEN endpoint LIKE '/api/templates/import%'       THEN 0
+    WHEN endpoint LIKE '/api/draft/legal-opinion%'    THEN 0
+    WHEN endpoint LIKE '/api/opinion-request%'        THEN 0
+    WHEN endpoint LIKE '/api/analyze/ocr%'            THEN 0
+    WHEN endpoint LIKE '/api/draft/explain-document%' THEN 3
+    WHEN endpoint = '/api/analyze'                    THEN 3
     ELSE 1
   END`;
+
+/**
+ * Questions counted against the free and trial daily limits: one per row
+ * that weighs anything, so exports, drafts and opinions (which have their
+ * own allowances) do not use up the day's questions.
+ */
+async function dailyQuestionsSince(adminId, since) {
+  const r = await pool.query(
+    `SELECT COUNT(*) FILTER (WHERE (${ENDPOINT_WEIGHT_SQL}) > 0)::int AS used
+       FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+    [adminId, since]
+  );
+  return r.rows[0].used;
+}
 
 /** SUM of cost-weighted usage since `since`, for one admin. */
 async function weightedUsageSince(adminId, since) {
@@ -285,9 +309,7 @@ async function checkQuota(adminId) {
     const limit = ageDays > (cfg.dailyLimitAfterDays || 30)
       ? (cfg.dailyLimitLater || 3)
       : cfg.dailyLimit;
-    const used = (await pool.query(
-      `SELECT COUNT(*)::int AS used FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
-      [adminId, tashkentMidnight()])).rows[0].used;
+    const used = await dailyQuestionsSince(adminId, tashkentMidnight());
     return {
       allowed: used < limit, plan: 'bepul', limit, used,
       remaining: Math.max(0, limit - used), period: 'day',
@@ -297,11 +319,7 @@ async function checkQuota(adminId) {
 
   if (u.plan === 'sinov') {
     const midnight = tashkentMidnight();
-    const r = await pool.query(
-      `SELECT COUNT(*)::int AS used FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
-      [adminId, midnight]
-    );
-    const used = r.rows[0].used;
+    const used = await dailyQuestionsSince(adminId, midnight);
     return {
       allowed: used < cfg.dailyLimit,
       plan: 'sinov',

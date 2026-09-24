@@ -6731,7 +6731,7 @@ async function digestLongDocument(documentText, userId) {
 // retrieve grounding law from the corpus (lex.uz), and produce a formal
 // opinion in the fixed Kirish / Asosiy ma'lumotlar / Tahlil / Xulosa /
 // Manbalar structure. Returns HTML rendered as an editable, exportable doc.
-app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/api/legal-chat', { failClosed: true }), async (req, res) => {
+app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/api/opinion-request', { failClosed: true }), async (req, res) => {
   try {
     // Whole-document coverage: no 15k truncation. Cap at ~120k chars (~60
     // pages) as an abuse guard; the map-reduce digest below condenses it.
@@ -7186,7 +7186,7 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // NOT the legal-analysis format (no Huquqiy asos/Tahlil sections, no statutes
 // required). Long documents go through the shared map-reduce digest so the
 // whole document is covered.
-app.post('/api/draft/explain-document', requireAuth, tariffModule.enforceQuota('/api/legal-chat', { failClosed: true }), async (req, res) => {
+app.post('/api/draft/explain-document', requireAuth, tariffModule.enforceQuota('/api/draft/explain-document', { failClosed: true }), async (req, res) => {
   try {
     const documentText = (typeof req.body.documentText === 'string')
       ? req.body.documentText.replace(/\u0000/g, '').trim().slice(0, 120000) : '';
