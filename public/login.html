@@ -885,7 +885,14 @@
             const invite = params.get('invite');
             const requested = params.get('redirect');
             if (invite) sessionStorage.setItem('juristai-workspace-invite', invite);
-            if (requested && requested.charAt(0) === '/' && !requested.startsWith('//')) return requested;
+            if (requested && requested.charAt(0) === '/' && !/^\/[\/\\]/.test(requested) && !/[\\\u0000-\u001f]/.test(requested)) {
+                // Only a path on this site: `/\evil.com` and friends resolve to
+                // another host in browsers, so the parsed origin must match.
+                try {
+                    const target = new URL(requested, window.location.origin);
+                    if (target.origin === window.location.origin) return target.pathname + target.search + target.hash;
+                } catch (_) { /* fall through to the default */ }
+            }
             if (invite) return '/workspace-invite.html?token=' + encodeURIComponent(invite);
             return defaultPath;
         }
@@ -937,7 +944,7 @@
                 window.open(deepLink, '_blank', 'noopener');
                 pollTelegramApproval('login', _loginToken, function(){ verifyLoginOtp('APPROVED'); }, otpStatus);
             } catch(err) {
-                otpStatus.innerHTML = '<span style="color:#d9534f;">' + (err.message || 'Xatolik') + '</span>';
+                otpStatus.innerHTML = '<span style="color:#d9534f;"></span>'; otpStatus.firstChild.textContent = err.message || 'Xatolik';
             }
         }
 
@@ -1015,7 +1022,7 @@
             } catch(err) {
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
-                otpStatus.innerHTML = '<span style="color:#d9534f;">' + (err.message || 'Xatolik') + '</span>';
+                otpStatus.innerHTML = '<span style="color:#d9534f;"></span>'; otpStatus.firstChild.textContent = err.message || 'Xatolik';
                 otpBlock.style.display = 'block';
             }
         }
