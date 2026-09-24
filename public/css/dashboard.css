@@ -22,14 +22,14 @@ html, body { margin:0; padding:0; }
   background-image:var(--aurora);
   background-attachment:fixed;
   color:var(--ink);
-  font-family:Inter, system-ui, sans-serif;
+  font-family:'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing:antialiased;
   /* Room for the floating tab bar, which is fixed over the content. */
   padding-bottom:96px;
 }
 
-#db-root h1, #db-root h2, #db-root h3 { font-family:'Source Serif 4', Georgia, serif; font-weight:600; letter-spacing:-.012em; }
-#db-root [data-mono] { font-family:'JetBrains Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+#db-root h1, #db-root h2, #db-root h3 { font-family:'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-weight:600; letter-spacing:-.012em; }
+#db-root [data-mono] { font-family:'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
 #db-root [data-hide-sb] { scrollbar-width:none; -ms-overflow-style:none; }
 #db-root [data-hide-sb]::-webkit-scrollbar { width:0; height:0; display:none; }
 #db-root a { color:var(--brand); text-decoration:none; }

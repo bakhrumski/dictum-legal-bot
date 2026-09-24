@@ -54,10 +54,10 @@
   --input-bg: rgba(255,255,255,.76);
   --accent: var(--jai-brand);
   --accent-fg: #fff;
-  --font-sans: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
-  --font-body: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
-  --font-ui: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
-  --font-serif: 'Space Grotesk', Inter, 'Segoe UI', sans-serif;
+  --font-sans: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-ui: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 [data-theme="dark"] {
@@ -404,7 +404,7 @@ footer { border-color: var(--jai-line) !important; background: #080b15 !importan
   color: #fff !important;
   border-radius: 12px !important;
   background: #0f2850 !important;
-  font-family: Georgia, serif !important;
+  font-family: var(--font-sans) !important;
 }
 .page-header .header-brand strong { text-transform: none; letter-spacing: -.03em; font-size: 19px; }
 .container:has(.pricing-intro) { width: min(1180px, calc(100% - 40px)) !important; padding-top: 72px !important; }
