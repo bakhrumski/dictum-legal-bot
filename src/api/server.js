@@ -371,6 +371,25 @@ function requireStaff(req, res, next) {
   }
 }
 
+// A lawyer or student may act on a client request only when it is assigned
+// to them (directly or through request_students) — the same rule the request
+// list already applies. The master may act on any request. Routes that take
+// a request id used to check only that the caller was signed in, so any
+// account could read or answer any client's request by guessing its id.
+async function canAccessRequest(req, requestId) {
+  if (req.session.role === 'master') return true;
+  const id = Number(requestId);
+  if (!Number.isInteger(id) || id <= 0) return false;
+  const r = await pool.query(
+    `SELECT 1 FROM requests r
+      WHERE r.id = $1
+        AND (r.assigned_to = $2
+             OR EXISTS (SELECT 1 FROM request_students rs WHERE rs.request_id = r.id AND rs.student_id = $2))`,
+    [id, req.session.adminId]
+  );
+  return r.rows.length > 0;
+}
+
 // Audit trail: who touched which client data, from where. Fire-and-forget —
 // an audit write must never block or fail the request it describes.
 function logAudit(req, action, resource, resourceId, adminIdOverride) {
@@ -1272,7 +1291,7 @@ app.get('/', (req, res) => {
 });
 
 // Get request stats
-app.get('/api/stats', requireAuth, async (req, res) => {
+app.get('/api/stats', requireStaff, async (req, res) => {
   try {
     const role = req.session.role;
     const aid = parseInt(req.session.adminId);
@@ -1315,7 +1334,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 });
 
 // Get all requests
-app.get('/api/requests', requireAuth, async (req, res) => {
+app.get('/api/requests', requireStaff, async (req, res) => {
   try {
     const role = req.session.role;
     const aid = parseInt(req.session.adminId);
@@ -1865,10 +1884,11 @@ app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) 
 });
 
 // Get single request
-app.get('/api/requests/:id', requireAuth, async (req, res) => {
+app.get('/api/requests/:id', requireStaff, async (req, res) => {
   logAudit(req, 'request.view', 'request', req.params.id);
   try {
     const { id } = req.params;
+    if (!(await canAccessRequest(req, id))) return res.status(404).json({ error: 'Murojaat topilmadi' });
     const result = await pool.query(`
       SELECT
         r.id,
@@ -1979,9 +1999,10 @@ app.get('/api/files/:fileId/download', requireStaff, async (req, res) => {
 });
 
 // Student submits response (doesn't send to client yet)
-app.post('/api/student-response', requireAuth, async (req, res) => {
+app.post('/api/student-response', requireStaff, async (req, res) => {
   try {
     const { requestId, responseText } = req.body;
+    if (!(await canAccessRequest(req, requestId))) return res.status(404).json({ error: 'Murojaat topilmadi' });
     
     // Update request with student response
     await pool.query(`
@@ -2368,7 +2389,7 @@ app.get('/api/survey/results', requireMasterAdmin, async (req, res) => {
 });
 
 // Get all admins (for assignment dropdown + admin management)
-app.get('/api/admins', requireAuth, async (req, res) => {
+app.get('/api/admins', requireStaff, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT id, username, full_name, role, telegram_username, duty_start, duty_end, last_active_at, created_at,
@@ -2509,7 +2530,7 @@ app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
 });
 
 // Get rankings data
-app.get('/api/rankings', requireAuth, async (req, res) => {
+app.get('/api/rankings', requireStaff, async (req, res) => {
   try {
     // Lawyer rankings: admins with role='master', count answered requests
     const lawyerResult = await pool.query(`
@@ -2559,9 +2580,13 @@ app.get('/api/rankings', requireAuth, async (req, res) => {
 });
 
 // Get request stats for a specific admin
-app.get('/api/admin-stats/:id', requireAuth, async (req, res) => {
+app.get('/api/admin-stats/:id', requireStaff, async (req, res) => {
   try {
     const adminId = parseInt(req.params.id);
+    // Staff see their own figures; only the master sees anyone's.
+    if (req.session.role !== 'master' && adminId !== Number(req.session.adminId)) {
+      return res.status(403).json({ error: 'Ruxsat yo\'q' });
+    }
     const result = await pool.query(`
       SELECT
         (SELECT COUNT(*) FROM requests WHERE assigned_to = $1) AS assigned_count,
@@ -2577,7 +2602,7 @@ app.get('/api/admin-stats/:id', requireAuth, async (req, res) => {
 });
 
 // Monte Carlo simulation data
-app.get('/api/monte-carlo', requireAuth, async (req, res) => {
+app.get('/api/monte-carlo', requireStaff, async (req, res) => {
   try {
     // Daily request counts for past 60 days
     const dailyResult = await pool.query(`
@@ -2636,7 +2661,7 @@ app.get('/api/monte-carlo', requireAuth, async (req, res) => {
 });
 
 // Assign request to lawyer
-app.post('/api/assign-request', requireAuth, async (req, res) => {
+app.post('/api/assign-request', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId, lawyerId } = req.body;
 
@@ -2727,9 +2752,10 @@ app.post('/api/assign-request', requireAuth, async (req, res) => {
 });
 
 // Update request category
-app.post('/api/update-category', requireAuth, async (req, res) => {
+app.post('/api/update-category', requireStaff, async (req, res) => {
   try {
     const { requestId, category } = req.body;
+    if (!(await canAccessRequest(req, requestId))) return res.status(404).json({ error: 'Murojaat topilmadi' });
 
     await pool.query(
       'UPDATE requests SET category = $1 WHERE id = $2',
@@ -2745,7 +2771,7 @@ app.post('/api/update-category', requireAuth, async (req, res) => {
 });
 
 // Unassign request
-app.post('/api/unassign-request', requireAuth, async (req, res) => {
+app.post('/api/unassign-request', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId } = req.body;
     
@@ -2764,7 +2790,7 @@ app.post('/api/unassign-request', requireAuth, async (req, res) => {
 });
 
 // Assign student to request
-app.post('/api/assign-student', requireAuth, async (req, res) => {
+app.post('/api/assign-student', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId, studentId } = req.body;
 
@@ -2816,7 +2842,7 @@ app.post('/api/assign-student', requireAuth, async (req, res) => {
 });
 
 // Unassign student from request
-app.post('/api/unassign-student', requireAuth, async (req, res) => {
+app.post('/api/unassign-student', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId, studentId } = req.body;
 
@@ -2832,7 +2858,7 @@ app.post('/api/unassign-student', requireAuth, async (req, res) => {
 });
 
 // Export to Excel
-app.get('/api/export-excel', requireAuth, async (req, res) => {
+app.get('/api/export-excel', requireMasterAdmin, async (req, res) => {
   try {
     const XLSX = require('xlsx');
     
@@ -3002,7 +3028,7 @@ app.get('/api/users/:userId/block-history', requireMasterAdmin, async (req, res)
 // ========== COMMUNITY CHAT API ==========
 
 // Get chat messages (supports polling via ?since_id=N)
-app.get('/api/chat/messages', requireAuth, async (req, res) => {
+app.get('/api/chat/messages', requireStaff, async (req, res) => {
   try {
     const sinceId = parseInt(req.query.since_id) || 0;
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
@@ -3074,7 +3100,7 @@ app.get('/api/chat/messages', requireAuth, async (req, res) => {
 // NOTE: in-process fan-out — when the app ever runs >1 instance this must move
 // to Postgres LISTEN/NOTIFY or Redis pub/sub.
 const sseClients = new Set();
-app.get('/api/events', requireAuth, (req, res) => {
+app.get('/api/events', requireStaff, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -3108,7 +3134,7 @@ setInterval(async () => {
 }, 10000).unref();
 
 // Send a chat message
-app.post('/api/chat/messages', requireAuth, async (req, res) => {
+app.post('/api/chat/messages', requireStaff, async (req, res) => {
   try {
     const { message, reply_to_id } = req.body;
 
@@ -7970,7 +7996,7 @@ app.get('/api/rag/verified-answers', requireMasterAdmin, async (req, res) => {
 });
 
 // POST /api/rag/verify-chat-answer — lawyer verifies an AI chat answer and adds to corpus
-app.post('/api/rag/verify-chat-answer', requireAuth, async (req, res) => {
+app.post('/api/rag/verify-chat-answer', requireMasterAdmin, async (req, res) => {
   logAudit(req, 'corpus.verified_answer', 'qa', (req.body && req.body.question || '').slice(0, 80));
   try {
     const { question, answer, topic, originalAiAnswer } = req.body;
@@ -8712,9 +8738,10 @@ app.post('/api/requests/:id/triage', requireMasterAdmin, async (req, res) => {
 });
 
 // Classify legal field for a request
-app.post('/api/requests/:id/classify', requireAuth, async (req, res) => {
+app.post('/api/requests/:id/classify', requireStaff, async (req, res) => {
   try {
     const requestId = parseInt(req.params.id);
+    if (!(await canAccessRequest(req, requestId))) return res.status(404).json({ error: 'So\'rov topilmadi' });
     const request = await pool.query('SELECT request_text FROM requests WHERE id = $1', [requestId]);
     if (request.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
 
@@ -8727,9 +8754,10 @@ app.post('/api/requests/:id/classify', requireAuth, async (req, res) => {
 });
 
 // Get agent traces for a request
-app.get('/api/requests/:id/traces', requireAuth, async (req, res) => {
+app.get('/api/requests/:id/traces', requireStaff, async (req, res) => {
   try {
     const requestId = parseInt(req.params.id);
+    if (!(await canAccessRequest(req, requestId))) return res.status(404).json({ error: 'Topilmadi' });
     const traces = await getTraces(requestId);
     res.json(traces);
   } catch (error) {
@@ -9707,7 +9735,8 @@ app.get('/api/registration-requests', requireMasterAdmin, async (req, res) => {
     const result = await pool.query(query, params);
     // Strip large base64 data from list response, send flag instead
     const rows = result.rows.map(r => {
-      const { document_base64, ...rest } = r;
+      // password_hash is the applicant's future login; it never leaves the server.
+      const { document_base64, password_hash, ...rest } = r;
       rest.has_document_base64 = !!document_base64;
       return rest;
     });
