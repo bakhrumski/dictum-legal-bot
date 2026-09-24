@@ -318,6 +318,7 @@ function transactionalPool(handler) {
       '20260825_006_workspace_open_invitations.sql',
       '20260825_007_workspace_invitation_membership_guard.sql',
       '20260908_008_workspace_direct_messages.sql',
+      '20260925_009_rag_eval.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
