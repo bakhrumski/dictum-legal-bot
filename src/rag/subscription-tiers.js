@@ -839,7 +839,7 @@ async function marginReport({ since = null, plan = null } = {}) {
             COALESCE(SUM(l.cost_usd), 0)::float AS cost_usd,
             COUNT(l.id)::int AS calls
        FROM admins a
-       LEFT JOIN llm_spend_log l ON l.user_id = a.id AND l.created_at >= $1
+       LEFT JOIN llm_spend_log l ON l.user_id = a.id AND l.ts >= $1
       WHERE a.tariff_plan IS NOT NULL
         AND ($2::text IS NULL OR a.tariff_plan = $2)
       GROUP BY a.id, a.username, a.full_name, a.tariff_plan

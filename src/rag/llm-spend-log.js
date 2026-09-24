@@ -47,6 +47,9 @@ async function initSpendLog() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_llm_spend_day ON llm_spend_log(day)`);
+    // Same index as migrations/20260925_010 for databases where this table
+    // is created after that migration ran.
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_llm_spend_user_ts ON llm_spend_log(user_id, ts DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_llm_spend_month ON llm_spend_log(month)`);
     _initialized = true;
     console.log('[SPEND-LOG] llm_spend_log schema ready');
