@@ -10851,6 +10851,45 @@
         // breaks, lists) and drops every other tag and every attribute, so
         // text written by a client, a student or the AI cannot run script.
         const SAFE_BASIC_TAGS = new Set(['B','STRONG','I','EM','U','S','BR','P','UL','OL','LI','CODE','PRE','BLOCKQUOTE','H2','H3','H4']);
+        // Documents the AI writes (drafts, opinions) and master templates keep
+        // their layout: headings, lists, tables, alignment, fill-in fields.
+        // Everything that can run code goes: script-like elements, event
+        // handlers, javascript: links, and any style beyond simple layout.
+        const SAFE_DOC_TAGS = new Set(['P','DIV','SPAN','BR','HR','H1','H2','H3','H4','H5','H6','B','STRONG','I','EM','U','S','SUP','SUB','SMALL',
+            'UL','OL','LI','BLOCKQUOTE','PRE','CODE','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','CAPTION','COLGROUP','COL','A']);
+        const DROP_WITH_CONTENT = /^(SCRIPT|STYLE|TEMPLATE|IFRAME|FRAME|OBJECT|EMBED|NOSCRIPT|TEXTAREA|SELECT|BUTTON|INPUT|FORM|LINK|META|BASE|SVG|MATH|AUDIO|VIDEO|SOURCE|IMG|CANVAS)$/;
+        const SAFE_STYLE = /^(text-align|font-weight|font-style|text-decoration|text-indent|line-height|margin(-top|-bottom|-left|-right)?|padding(-top|-bottom|-left|-right)?|width|border(-collapse)?|vertical-align)\s*:\s*[-#%.,\w\s]*$/i;
+        function sanitizeDocHtml(html) {
+            if (html == null || html === '') return '';
+            const tpl = document.createElement('template');
+            tpl.innerHTML = String(html);
+            (function clean(node) {
+                Array.from(node.childNodes).forEach(function(child) {
+                    if (child.nodeType === 1 && DROP_WITH_CONTENT.test(child.tagName)) { child.remove(); return; }
+                    if (child.nodeType === 1) {
+                        clean(child);
+                        if (!SAFE_DOC_TAGS.has(child.tagName)) { child.replaceWith.apply(child, Array.from(child.childNodes)); return; }
+                        Array.from(child.attributes).forEach(function(a) {
+                            const name = a.name.toLowerCase();
+                            let keep = false;
+                            if (name === 'class' || name === 'colspan' || name === 'rowspan' || name === 'align') keep = /^[-\w\s]*$/.test(a.value);
+                            else if (name === 'data-label' || name === 'data-hint' || name === 'data-key') keep = true;
+                            else if (name === 'style') {
+                                const parts = a.value.split(';').map(function(x) { return x.trim(); }).filter(Boolean);
+                                const ok = parts.filter(function(x) { return SAFE_STYLE.test(x); });
+                                if (ok.length) { child.setAttribute('style', ok.join('; ')); return; }
+                            } else if (name === 'href' && child.tagName === 'A') keep = /^(https?:\/\/|\/(?![\/\\])|#)/i.test(a.value.trim());
+                            if (!keep) child.removeAttribute(a.name);
+                        });
+                        if (child.tagName === 'A') { child.setAttribute('target', '_blank'); child.setAttribute('rel', 'noopener'); }
+                    } else if (child.nodeType !== 3) {
+                        child.remove();
+                    }
+                });
+            })(tpl.content);
+            return tpl.innerHTML;
+        }
+
         function sanitizeBasicHtml(html) {
             if (html == null || html === '') return '';
             const tpl = document.createElement('template');
@@ -12576,7 +12615,7 @@
                 if (continuation && continuation.workspaceId) {
                     try {
                         var plainHolder = document.createElement('div');
-                        plainHolder.innerHTML = d.html;
+                        plainHolder.innerHTML = sanitizeDocHtml(d.html);
                         var workspaceSave = await fetch('/api/workspaces/' + encodeURIComponent(continuation.workspaceId) + '/documents', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -12656,12 +12695,22 @@
         }
 
         // ── Inline Word-style document message (shared by both flows) ──
+        // The print page opens same-origin, so anything it runs runs as the
+        // logged-in user. Keep the server's stylesheet, sanitise the body.
+        function safePrintPage(pageHtml) {
+            var doc = new DOMParser().parseFromString(String(pageHtml || ''), 'text/html');
+            var styles = Array.from(doc.querySelectorAll('style')).map(function (st) { return '<style>' + st.textContent.replace(/<\/style/gi, '') + '</style>'; }).join('');
+            return '<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(doc.title || 'Hujjat') + '</title>' + styles +
+                '</head><body>' + sanitizeDocHtml(doc.body ? doc.body.innerHTML : '') + '</body></html>';
+        }
+
         function renderDocMessage(opts) {
             var messagesEl = document.getElementById('aiChatMessages');
             hideChatWelcome();
             var id = 'docmsg_' + (++DOCB.seq);
             var title = opts.title || opts.rawTitle || 'Hujjat';
-            var body = opts.tplId ? opts.html : bracketsToFields(opts.html);
+            var safe = sanitizeDocHtml(opts.html);
+            var body = opts.tplId ? safe : bracketsToFields(safe);
             // Opinion cards carry a quality signal (👍/👎, audited) and a
             // master-only "generalize into corpus" action (anonymized pattern).
             var isMasterHere = (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'master');
@@ -12873,7 +12922,7 @@
                 var ct = r.headers.get('Content-Type') || '';
                 if (ct.indexOf('application/json') !== -1) {
                     var d = await r.json();
-                    if (d.mode === 'client-print' && d.html) { var w = window.open('', '_blank'); if (w) { w.document.write(d.html); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400); } return; }
+                    if (d.mode === 'client-print' && d.html) { var w = window.open('', '_blank'); if (w) { w.document.write(safePrintPage(d.html)); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400); } return; }
                     alert(d.error || 'Eksport xatoligi'); return;
                 }
                 if (!r.ok) throw new Error('Eksport xatoligi (' + r.status + ')');
