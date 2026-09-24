@@ -18,8 +18,9 @@ keyin kirishi kerak.
 | [#319](https://github.com/bakhrumski/dictum-legal-bot/pull/319) | money | Haftalik limit dushanba o'rniga seshanba yangilanardi (Toshkent vaqti). | Past. | — |
 | [#325](https://github.com/bakhrumski/dictum-legal-bot/pull/325) | rag | Yurist tasdiqlagan yangi javoblar embedding olmasdi (aniqlanmagan funksiya). | Past, lekin #326 siz korpusga har kim yoza oladi. | #326 bilan birga yoki keyin. |
 | [#324](https://github.com/bakhrumski/dictum-legal-bot/pull/324) | rag | Kuchini yo'qotgan qonunlarni belgilash skripti noto'g'ri maydonni o'qigani uchun hech narsani belgilamasdi. | Past (qo'lda ishga tushiriladigan skript). | — |
+| [#330](https://github.com/bakhrumski/dictum-legal-bot/pull/330) | money | D-4/D-5/D-6: muddati o'tgan tarif → bepul; xatoda limit qaytariladi va xabar beriladi; qimmat yo'llar fail-closed. | O'rta: tarif xulqi o'zgaradi (sizning qaroringiz). | Merge'dan keyin muddati o'tgan test akkaunt bilan tekshiring. |
 | [#323](https://github.com/bakhrumski/dictum-legal-bot/pull/323) | security | `/api/health` faqat liveness (DB `SELECT 1`, 3 s); korpus tafsilotlari `/api/admin/health` (master). | Past. Render health check yo'li o'zgarmaydi. | — |
 
-Tavsiya etilgan tartib: #326 → #322 (parol o'zgartirilgandan keyin) → #321 → #325 → #320 → #319 → #324 → #323.
+Tavsiya etilgan tartib: #326 → #322 (parol o'zgartirilgandan keyin) → #321 → #325 → #320 → #319 → #330 → #324 → #323.
 
 Ushbu hujjatlar PR'i (`audit/docs-audit-baseline`) ham faqat hujjat — tasdiq kerak.
