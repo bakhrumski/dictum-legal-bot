@@ -1,5 +1,8 @@
 'use strict';
 
+// Vision OCR deadline (audit H3); on timeout the next provider is tried.
+const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS) || 90000;
+
 /**
  * OCR & AI Document Analyzer — API routes
  *
@@ -99,7 +102,7 @@ async function callVisionOCR(buf, mimeType, langCode) {
       };
       const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
       );
       if (resp.ok) {
         const data = await resp.json();
@@ -129,6 +132,7 @@ async function callVisionOCR(buf, mimeType, langCode) {
         temperature: 0.1,
       };
       const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gptKey}` },
         body: JSON.stringify(body),

@@ -183,6 +183,14 @@ function getYurxizmatCatalogText() {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+// Every outbound call has a deadline (audit H3). A provider that stops
+// answering used to hold the request, its connection and a DB pool slot for
+// as long as the socket lived. On timeout the call throws, and the callers'
+// existing fallbacks (OpenAI -> Gemini, VoiceLab -> previous provider) run.
+const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 180000;
+// Streams send tokens as they come; long answers need the longer deadline.
+const AI_STREAM_TIMEOUT_MS = Number(process.env.AI_STREAM_TIMEOUT_MS) || 300000;
+const SHORT_FETCH_TIMEOUT_MS = Number(process.env.SHORT_FETCH_TIMEOUT_MS) || 60000;
 // Keep public legal requests and platform authentication on separate bots.
 const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
 const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
@@ -3326,6 +3334,7 @@ async function callGemini(messages, options = {}) {
   }
 
   const resp = await fetch(url, {
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -3400,6 +3409,7 @@ async function callOpenAIStream(messages, options = {}, onToken) {
   const body = { model, input, temperature, max_output_tokens: maxTokens, stream: true };
 
   const post = (payload) => fetch('https://api.openai.com/v1/responses', {
+    signal: AbortSignal.timeout(AI_STREAM_TIMEOUT_MS),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gptKey}` },
     body: JSON.stringify(payload),
@@ -3471,6 +3481,7 @@ async function callGeminiStream(messages, options = {}, onToken) {
   else if (useSearch) console.log('[SOURCE-GUARD] Gemini google_search suppressed (lex.uz-only)');
 
   const resp = await fetch(url, {
+    signal: AbortSignal.timeout(AI_STREAM_TIMEOUT_MS),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -3704,6 +3715,7 @@ async function callOpenAI(messages, options = {}) {
   }
 
   const post = (payload) => fetch('https://api.openai.com/v1/responses', {
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -8822,7 +8834,7 @@ async function triggerAiScreening(regId, regData) {
     if (regData.document_file_id && regData.document_file_id !== 'upload_failed') {
       try {
         const fileLink = await bot.getFileLink(regData.document_file_id);
-        const resp = await fetch(fileLink);
+        const resp = await fetch(fileLink, { signal: AbortSignal.timeout(SHORT_FETCH_TIMEOUT_MS) });
         const buffer = await resp.arrayBuffer();
         docBase64 = Buffer.from(buffer).toString('base64');
         const ext = fileLink.toLowerCase();
@@ -8899,6 +8911,7 @@ async function triggerAiScreening(regId, regData) {
     let gptResp = voicelabText !== null
       ? new Response(JSON.stringify({ choices: [{ message: { content: voicelabText } }] }), { status: 200 })
       : await fetch('https://api.openai.com/v1/chat/completions', {
+      signal: AbortSignal.timeout(SHORT_FETCH_TIMEOUT_MS),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -8912,6 +8925,7 @@ async function triggerAiScreening(regId, regData) {
       console.log('[AI SCREENING] Rate limited, retrying in 3s...');
       await new Promise(r => setTimeout(r, 3000));
       gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
+        signal: AbortSignal.timeout(SHORT_FETCH_TIMEOUT_MS),
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -9232,6 +9246,7 @@ app.get('/auth/google/callback', async (req, res) => {
     const redirectUri = `${process.env.APP_URL || 'https://' + (process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:3000')}/auth/google/callback`;
 
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      signal: AbortSignal.timeout(15000),
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
@@ -9240,6 +9255,7 @@ app.get('/auth/google/callback', async (req, res) => {
     if (!tokenData.access_token) return res.redirect('/login.html?error=google_failed');
 
     const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      signal: AbortSignal.timeout(15000),
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
     const profile = await userRes.json();
