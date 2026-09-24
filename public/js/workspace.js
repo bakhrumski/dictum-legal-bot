@@ -2822,6 +2822,9 @@
     }
 
     var GRAPH_DRAG_THRESHOLD=4;
+    // Time constant of the lag with which a member's matters follow it: each
+    // frame closes 1-e^(-dt/tau) of the gap, so they arrive ~0.2s behind.
+    var GRAPH_FOLLOW_TAU_MS=70;
 
     /**
      * Nothing on the stage sits on top of anything else. Every node is pushed
@@ -3063,15 +3066,22 @@
         };});
         var matterOrigin=origins.filter(function(item){return item.node===matter;})[0];
         if(!matterOrigin)return;
-        // Only the people this matter hosts trail it — the ones drawn beneath
-        // it. Tethering by edge instead would drag anyone merely *linked* to
-        // this matter, and someone who works on two matters sits under one of
-        // them: dragging the other would tear them away from their own column.
+        // Satellites are the nodes homed on the one being dragged: a member
+        // carries the matters they own (data-graph-home). Tethering by edge
+        // instead would drag anyone merely *linked*, tearing a person who
+        // works on two matters away from their own column. A matter placed by
+        // hand still goes with its owner — excluding pinned ones meant that
+        // once a matter had been moved it never followed again.
         var satellites=origins.filter(function(item){
             return item.node!==matter
-                && item.node.dataset.graphHome===matter.dataset.graphKey
-                && !item.node.dataset.graphPinned;
+                && item.node.dataset.graphHome===matter.dataset.graphKey;
         });
+        // Satellites trail the dragged node instead of moving rigidly with
+        // it: each frame closes a share of the gap set by GRAPH_FOLLOW_TAU_MS,
+        // so a stop arrives about 0.2s after the pointer does.
+        var followers={};
+        satellites.forEach(function(item){followers[item.key]={x:item.x,y:item.y};});
+        var lastFrame=null,released=false;
 
         var originX=matterOrigin.x,originY=matterOrigin.y;
         // Bounds come from the dragged node alone. Taking the tightest limit
@@ -3097,7 +3107,16 @@
             node.style.transform='translate(-50%, -50%) translate3d('+(x-item.x)+'px, '+(y-item.y)+'px, 0)';
         };
 
-        function apply(){
+        // Where each satellite is headed: its start plus the drag offset.
+        function satelliteTarget(item,dx,dy){
+            return {
+                x:clampNumber(item.x+dx,padding+item.halfWidth,Math.max(padding+item.halfWidth,width-padding-item.halfWidth)),
+                y:Math.max(padding+item.halfHeight,item.y+dy)
+            };
+        }
+
+        // Returns true while any satellite is still catching up.
+        function apply(now){
             frameHandle=null;
             var dx=clampNumber(pointer.x-startX,minDx,maxDx);
             var dy=clampNumber(pointer.y-startY,minDy,maxDy);
@@ -3105,28 +3124,64 @@
             current.y=originY+dy;
             place(matter,matterOrigin,current.x,current.y);
             positions[matterOrigin.key]={x:current.x,y:current.y};
+            var elapsed=lastFrame===null||now===undefined?16:Math.min(64,now-lastFrame);
+            if(now!==undefined)lastFrame=now;
+            var share=1-Math.exp(-elapsed/GRAPH_FOLLOW_TAU_MS);
+            var trailing=false;
             satellites.forEach(function(item){
-                var x=clampNumber(item.x+dx,padding+item.halfWidth,Math.max(padding+item.halfWidth,width-padding-item.halfWidth));
-                var y=Math.max(padding+item.halfHeight,item.y+dy);
-                place(item.node,item,x,y);
-                positions[item.key]={x:x,y:y};
+                var target=satelliteTarget(item,dx,dy),spot=followers[item.key];
+                spot.x+=(target.x-spot.x)*share;
+                spot.y+=(target.y-spot.y)*share;
+                if(Math.abs(target.x-spot.x)<0.5&&Math.abs(target.y-spot.y)<0.5){spot.x=target.x;spot.y=target.y;}
+                else trailing=true;
+                place(item.node,item,spot.x,spot.y);
+                positions[item.key]={x:spot.x,y:spot.y};
             });
             paintGraphEdges(stage,snapshot,positions);
+            return trailing;
+        }
+
+        // One loop drives the drag and keeps running after the pointer stops
+        // (or lets go) until the satellites have arrived.
+        function frame(now){
+            var trailing=apply(now);
+            if(released){
+                if(trailing)frameHandle=requestAnimationFrame(frame);
+                else finish();
+                return;
+            }
+            if(trailing)frameHandle=requestAnimationFrame(frame);
         }
 
         function move(moveEvent){
             pointer.x=moveEvent.clientX;
             pointer.y=moveEvent.clientY;
             if(!moved&&Math.max(Math.abs(moveEvent.clientX-startX),Math.abs(moveEvent.clientY-startY))>GRAPH_DRAG_THRESHOLD)moved=true;
-            if(!frameHandle)frameHandle=requestAnimationFrame(apply);
+            if(!frameHandle)frameHandle=requestAnimationFrame(frame);
         }
 
         function up(){
             document.removeEventListener('pointermove',move);
             document.removeEventListener('pointerup',up);
             document.removeEventListener('pointercancel',up);
+            released=true;
+            // A drag must not also open the task. Swallow only the click that
+            // this pointerup is about to produce — now, not after the
+            // satellites land, or the click would already have fired.
+            if(moved){
+                var swallowClick=function(clickEvent){clickEvent.preventDefault();clickEvent.stopPropagation();};
+                document.addEventListener('click',swallowClick,true);
+                global.setTimeout(function(){document.removeEventListener('click',swallowClick,true);},0);
+            }
             if(frameHandle){cancelAnimationFrame(frameHandle);frameHandle=null;}
-            apply();
+            // Satellites still trailing finish their approach before the
+            // board is settled; otherwise settle at once.
+            if(moved&&apply(global.performance?global.performance.now():undefined)){frameHandle=requestAnimationFrame(frame);return;}
+            finish();
+        }
+
+        function finish(){
+            frameHandle=null;
             matter.classList.remove('dragging');matter.removeAttribute('data-dragging');
             // The transforms were only for the duration of the drag; the board
             // keeps its coordinates in left and top.
@@ -3149,12 +3204,13 @@
             }
             // A matter follows its owner until someone places it themselves.
             if(matter.hasAttribute('data-graph-matter'))matter.dataset.graphPinned='1';
-            // A drag must not also open the task. Swallow only the click that
-            // this pointerup is about to produce.
-            var swallowClick=function(clickEvent){clickEvent.preventDefault();clickEvent.stopPropagation();};
-            document.addEventListener('click',swallowClick,true);
-            global.setTimeout(function(){document.removeEventListener('click',swallowClick,true);},0);
             try{localStorage.setItem(graphMatterPositionKey(matter.dataset.graphKey),JSON.stringify(current));}catch(_error){}
+            // A pinned matter that came along with its owner keeps the place
+            // it was carried to.
+            satellites.forEach(function(item){
+                if(!item.node.dataset.graphPinned)return;
+                try{localStorage.setItem(graphMatterPositionKey(item.key),JSON.stringify({x:Number(item.node.dataset.x),y:Number(item.node.dataset.y)}));}catch(_error){}
+            });
         }
 
         document.addEventListener('pointermove',move);

@@ -710,3 +710,32 @@ body.no-tab-bar #db-root #tabAi .ai-workspace { height: calc(100dvh - 150px) !im
 #db-root .bottom-tab-bar.db-tabbar { background: var(--panel-solid) !important; }
 /* The tab badges pulsed forever; each pulse repainted the page every frame. */
 #db-root .tab-badge, #db-root .header-chat-badge, #db-root .db-tab-badge { animation: none !important; }
+
+/* ============================================================
+   Click and drag steadiness
+   ============================================================ */
+
+/* The header profile is the canvas's static pill: avatar, name, sign-out,
+   always shown. The legacy open state still fades the avatar out and runs
+   0.6-0.7s width transitions on every part, so a click left an empty pill
+   with only the exit icon. Nothing in it moves or fades any more. */
+#db-root .db-head .profile-toggle.db-profile,
+#db-root .db-head .profile-toggle.db-profile .profile-avatar,
+#db-root .db-head .profile-toggle.db-profile .profile-info,
+#db-root .db-head .profile-toggle.db-profile .profile-exit-btn { transition: background-color .15s ease, color .15s ease !important; }
+#db-root .db-head .profile-toggle.open .profile-avatar { opacity: 1 !important; width: 30px !important; margin: 0 !important; }
+#db-root .db-head .profile-toggle.open { gap: 10px !important; padding: 5px 12px 5px 6px !important; box-shadow: none !important; border-color: var(--line) !important; }
+@media (max-width: 760px) {
+  /* On a phone the name and exit are hidden; a tap on the avatar reveals the
+     exit, which is the only way to sign out there. */
+  #db-root .db-head .profile-toggle.open .profile-exit-btn { display: grid !important; }
+  #db-root .db-head .profile-toggle.open { padding: 4px 10px 4px 4px !important; }
+}
+
+/* Graph nodes are placed with transform: translate(-50%, -50%) and, while
+   dragged, an inline translate3d. redesign-v2 gives every button a 0.22s
+   transform transition, and a member node is a button — so its drag offset
+   was eased on every frame and the node trailed the cursor. */
+#db-root .ws-graph-stage [data-graph-node] {
+  transition-property: border-color, background-color, box-shadow, color, opacity !important;
+}

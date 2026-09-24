@@ -127,9 +127,17 @@ body, button, input, select, textarea { font-family: inherit !important; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button, a { transition: transform .22s cubic-bezier(.2,.8,.2,1), border-color .22s ease, background-color .22s ease, color .22s ease, box-shadow .22s ease, opacity .22s ease; }
 /* Tactile feedback: a control that moves under the finger confirms the press
-   landed. Transform only, so it stays on the compositor. */
-button:active:not(:disabled), a.btn:active, .btn:active:not(:disabled),
-.plan-btn:active, .find:active, .request:active, .bottom-tab:active {
+   landed. Transform only, so it stays on the compositor.
+   Not in the dashboard (#db-root): its canvas has no press effect, and there
+   the scale replaced transforms that do positioning — a graph member node is
+   a button centred with translate(-50%, -50%), and pressing it threw the node
+   half its size down and to the right. It also re-rasterised every pressed
+   label, which read as the font glitching. :where() keeps the specificity
+   these selectors always had, so every other page behaves as before. */
+button:active:not(:disabled):where(:not(#db-root *)), a.btn:active:where(:not(#db-root *)),
+.btn:active:not(:disabled):where(:not(#db-root *)), .plan-btn:active:where(:not(#db-root *)),
+.find:active:where(:not(#db-root *)), .request:active:where(:not(#db-root *)),
+.bottom-tab:active:where(:not(#db-root *)) {
   transform: scale(.978);
   transition-duration: .08s;
 }
