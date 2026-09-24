@@ -594,7 +594,7 @@ test('server ingest-url uses structural chunking + structured insertion for lex.
 
 test('CLI ingest-from-url uses structural chunking + structured insertion for lex.uz HTML', () => {
   assertMatch(ingestLexSrc, /chunkLegalDocumentStructured/, 'CLI ingest uses structural chunker');
-  assertMatch(ingestLexSrc, /insertStructuredChunks/, 'CLI ingest stores structured rows');
+  assertMatch(ingestLexSrc, /replaceDocumentChunks/, 'CLI ingest stores structured rows');
   assertMatch(ingestLexSrc, /doc\.rawHtml/, 'CLI ingest consumes raw HTML from fetch-lex');
 });
 

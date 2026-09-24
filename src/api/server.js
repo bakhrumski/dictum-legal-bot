@@ -8260,7 +8260,7 @@ async function ingestLexUrl({ url, topic, law_name, adminId }) {
   const cleanUrl = url.split('#')[0];
   const { fetchLexDocument, inferDocLanguage } = require('../rag/fetch-lex');
   const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
-  const { insertStructuredChunks } = require('../rag/advanced-corpus');
+  const { replaceDocumentChunks } = require('../rag/advanced-corpus');
   const { getEmbeddingsBatch } = require('../rag/embeddings');
 
   console.log(`[LEX INGEST] Fetching: ${cleanUrl}`);
@@ -8337,12 +8337,18 @@ async function ingestLexUrl({ url, topic, law_name, adminId }) {
     }
   }
 
-  await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1`, [cleanUrl]);
+  // Without vectors the chunks cannot be stored (insertStructuredChunks
+  // refuses them); stop here so the version already in the corpus stays.
+  if (embedError || embeddedCount < chunks.length) {
+    throw Object.assign(new Error(
+      `Embedding bo'lmadi (${embedError || `${embeddedCount}/${chunks.length}`}); hujjatning oldingi versiyasi saqlab qolindi.`
+    ), { status: 502, code: 'EMBEDDING_FAILED' });
+  }
   for (let i = 0; i < chunks.length; i++) {
     chunks[i].chunkIndex = i;
     chunks[i].embedding = embeddings[i] || null;
   }
-  await insertStructuredChunks(chunks);
+  await replaceDocumentChunks({ sourceUrl: cleanUrl }, chunks);
 
   let justifyResult = null;
   try {
@@ -8387,7 +8393,7 @@ app.post('/api/rag/ingest-url', requireMasterAdmin, async (req, res) => {
 app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
   const { fetchLexDocument, inferDocLanguage } = require('../rag/fetch-lex');
   const { chunkLegalDocumentStructured } = require('../rag/structural-chunker');
-  const { insertStructuredChunks } = require('../rag/advanced-corpus');
+  const { replaceDocumentChunks } = require('../rag/advanced-corpus');
   const { getEmbeddingsBatch } = require('../rag/embeddings');
   const { getAllLaws, getLawsForCategory } = require('../rag/lex-registry');
 
@@ -8479,12 +8485,12 @@ app.post('/api/rag/reingest-registry', requireMasterAdmin, async (req, res) => {
       }
 
       // Safe to replace: embeddings validated above (or no apiKey — text-only ingest)
-      await pool.query(`DELETE FROM legal_chunks WHERE source_url = $1 OR doc_id = $2`, [cleanUrl, law.doc_id]);
       for (let i = 0; i < chunks.length; i++) {
         chunks[i].chunkIndex = i;
         chunks[i].embedding = embeddings[i] || null;
       }
-      await insertStructuredChunks(chunks);
+      // Insert-then-delete: a failure keeps the previous version.
+      await replaceDocumentChunks({ sourceUrl: cleanUrl, docId: law.doc_id }, chunks);
       await logIngest({
         sourceType: 'url', sourceUrl: cleanUrl, lawName: law.law_name, category: cat,
         chunksTotal: chunks.length, embedded: embeddedCount, language: inferredLanguage,

@@ -656,9 +656,44 @@ async function getAdvancedStats() {
   };
 }
 
+/**
+ * Replace a document's chunks without a window where it can vanish.
+ *
+ * Re-ingest used to DELETE the document first and insert after. When
+ * embedding failed or an insert batch died, insertStructuredChunks threw and
+ * the law was gone from the corpus (audit H-RAG-3). Now: insert the new
+ * rows first, and only when every batch succeeded, delete the rows that were
+ * there before. If the insert fails, the partial new rows are removed and
+ * the previous version stays. For a few seconds both versions exist, which
+ * search tolerates (results are deduplicated by law + article).
+ *
+ * `match` selects the document's rows: { sourceUrl, docId } (either or both).
+ */
+async function replaceDocumentChunks(match, chunks, { db = pool, insert = insertStructuredChunks } = {}) {
+  const sourceUrl = match && match.sourceUrl ? String(match.sourceUrl) : null;
+  const docId = match && match.docId ? String(match.docId) : null;
+  if (!sourceUrl && !docId) throw new Error('replaceDocumentChunks needs sourceUrl or docId');
+  if (!chunks || chunks.length === 0) throw new Error('No chunks to insert; previous version kept');
+  const where = `(($1::text IS NOT NULL AND source_url = $1) OR ($2::text IS NOT NULL AND doc_id = $2))`;
+  const before = await db.query(`SELECT COALESCE(max(id), 0)::bigint AS max_id FROM legal_chunks`);
+  const boundary = before.rows[0].max_id;
+  let inserted;
+  try {
+    inserted = await insert(chunks);
+  } catch (err) {
+    const cleaned = await db.query(`DELETE FROM legal_chunks WHERE ${where} AND id > $3`, [sourceUrl, docId, boundary])
+      .catch(() => ({ rowCount: 0 }));
+    err.message = `${err.message} (previous version kept; ${cleaned.rowCount || 0} partial new rows removed)`;
+    throw err;
+  }
+  const removed = await db.query(`DELETE FROM legal_chunks WHERE ${where} AND id <= $3`, [sourceUrl, docId, boundary]);
+  return { ...inserted, replaced: removed.rowCount || 0 };
+}
+
 module.exports = {
   initAdvancedCorpus,
   insertStructuredChunks,
+  replaceDocumentChunks,
   parentChildSearch,
   saveToQaBank,
   voteQaBankEntry,
