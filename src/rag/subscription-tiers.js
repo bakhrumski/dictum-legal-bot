@@ -212,10 +212,20 @@ function tashkentMidnight() {
 }
 
 // Monday 00:00 Asia/Tashkent — the reset point for weekly credit windows.
-function tashkentWeekStart() {
-  const d = tashkentMidnight();
-  const dow = (d.getUTCDay() + 6) % 7;           // 0 = Monday
-  return new Date(d.getTime() - dow * 86400000);
+//
+// The weekday must be read from the Tashkent calendar date, not from the UTC
+// instant of Tashkent midnight: that instant is 19:00 UTC on the previous
+// day, so getUTCDay() on it came out one day early and the week started on
+// Tuesday — a Monday was counted into the week before, and the limit the 429
+// message promised back "dushanba kuni" only returned a day later.
+function tashkentWeekStart(nowMs = Date.now()) {
+  const tashkent = new Date(nowMs + 5 * 3600 * 1000);   // UTC+5, no DST
+  const dow = (tashkent.getUTCDay() + 6) % 7;           // 0 = Monday
+  const y = tashkent.getUTCFullYear();
+  const m = String(tashkent.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(tashkent.getUTCDate()).padStart(2, '0');
+  const midnight = new Date(`${y}-${m}-${day}T00:00:00+05:00`);
+  return new Date(midnight.getTime() - dow * 86400000);
 }
 
 async function getUserPlan(adminId) {
