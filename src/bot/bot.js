@@ -829,7 +829,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     const token = param.replace('login_', '').trim();
     const session = loginSessions.get(token);
     if (session && !session.otp) {
-      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      const otp = require('../auth/otp').digitCode(4);
       session.otp = otp;
       session.telegramUserId = String(msg.from.id);
       session.otpSentAt = Date.now();
@@ -850,7 +850,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     const token = param.replace('reg_', '').trim();
     const session = regSessions.get(token);
     if (session && !session.otp) {
-      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      const otp = require('../auth/otp').digitCode(4);
       session.otp = otp;
       session.telegramUserId = String(msg.from.id);
       session.firstName = msg.from.first_name || '';
@@ -939,7 +939,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
 
     // Prefer whichever is more recent
     if (bestReg && bestRegTime >= bestLoginTime) {
-      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      const otp = require('../auth/otp').digitCode(4);
       bestReg.s.otp = otp;
       bestReg.s.telegramUserId = String(msg.from.id);
       bestReg.s.firstName = msg.from.first_name || '';
@@ -951,7 +951,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
         { parse_mode: 'Markdown' });
     }
     if (bestLogin) {
-      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      const otp = require('../auth/otp').digitCode(4);
       bestLogin.s.otp = otp;
       bestLogin.s.telegramUserId = String(msg.from.id);
       bestLogin.s.otpSentAt = now;
