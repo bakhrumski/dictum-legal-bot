@@ -142,7 +142,10 @@ async function setupDatabase() {
 
     if (adminCheck.rows.length === 0) {
       // Create default master admin
-      const hashedPassword = await bcrypt.hash('admin123', 10);
+      // A random one-time password, printed once. A fixed 'admin123' was
+      // committed here and is refused at sign-in (src/auth/master-bootstrap.js).
+      const initialPassword = require('crypto').randomBytes(12).toString('base64url');
+      const hashedPassword = await bcrypt.hash(initialPassword, 12);
       await client.query(
         `INSERT INTO admins (username, password, full_name, role)
          VALUES ($1, $2, $3, $4)`,
@@ -150,7 +153,7 @@ async function setupDatabase() {
       );
       console.log('✅ Default master admin created');
       console.log('   Username: admin');
-      console.log('   Password: admin123');
+      console.log(`   Password: ${initialPassword}`);
       console.log('   ⚠️  CHANGE THIS PASSWORD AFTER FIRST LOGIN!');
     } else {
       console.log('ℹ️  Master admin already exists');
@@ -163,7 +166,8 @@ async function setupDatabase() {
 
     if (studentCheck.rows.length === 0) {
       // Create default student admin
-      const hashedPassword = await bcrypt.hash('student123', 10);
+      const studentPassword = require('crypto').randomBytes(12).toString('base64url');
+      const hashedPassword = await bcrypt.hash(studentPassword, 12);
       await client.query(
         `INSERT INTO admins (username, password, full_name, role)
          VALUES ($1, $2, $3, $4)`,
@@ -171,7 +175,7 @@ async function setupDatabase() {
       );
       console.log('✅ Default student admin created');
       console.log('   Username: student');
-      console.log('   Password: student123');
+      console.log(`   Password: ${studentPassword}`);
       console.log('   ⚠️  CHANGE THIS PASSWORD AFTER FIRST LOGIN!');
     } else {
       console.log('ℹ️  Student admin already exists');
