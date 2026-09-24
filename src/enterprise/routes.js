@@ -19,7 +19,7 @@ function mountEnterpriseRoutes(app, deps) {
   }
 
   const quota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
-    ? tariffModule.enforceQuota('/api/enterprise-chat')
+    ? tariffModule.enforceQuota('/api/enterprise-chat', { failClosed: true })
     : (req, res, next) => next();
 
   initEnterpriseCorpus().catch((e) => console.error('[ENTERPRISE] init:', e.message));

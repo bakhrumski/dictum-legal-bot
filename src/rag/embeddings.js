@@ -147,7 +147,7 @@ function addE5Prefix(text, isQuery = false) {
 async function hfEmbed(texts, apiKey, isQuery = false) {
   const inputs = texts.map(t => addE5Prefix(t, isQuery));
 
-  console.log(`[EMBEDDINGS] HF request: token=${apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING'}, texts=${texts.length}`);
+  console.log(`[EMBEDDINGS] HF request: token=${apiKey ? 'set' : 'MISSING'}, texts=${texts.length}`);
 
   // Retry transient failures (network resets, 5xx, rate limits) with exponential
   // backoff so a single blip doesn't lose a whole document during long ingests.
