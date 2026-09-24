@@ -17,7 +17,6 @@ Egasining qarori kerak bo'lganlar [DECISIONS](DECISIONS.md)da.
 | 360 | Qisqartmalar va Latin "modda N" regex, Kirill/Rus shakllari | rag | — |
 | 336 | `legal-verify` `.answer` bug | rag | — |
 | 320 | `answer_cache` kalitiga korpus reviziyasini qo'shish | rag | — |
-| 300 | OCR va Workspace AI kvotasi | money | D-7 dan keyin |
 | 280 | Indekslar (qaytariladigan migratsiya) | db | — |
 | 240 | `user` roli uchun xodim polling'ini o'chirish (403 shovqini) | frontend | — |
 | 224 | Embedding keshi (bir so'rovda 5–6 embed) | rag/perf | — |
@@ -29,3 +28,9 @@ Egasining qarori kerak bo'lganlar [DECISIONS](DECISIONS.md)da.
 
 - 🟢 #328 — dashboard XSS (murojaat modali, ismlar, markdown linklar).
 - 🟢 #329 — login open redirect, enterprise/templates escaperlari.
+- 🟢 #330–#333 — egasi qarorlari D-4…D-12.
+
+## Yangi (ixtiyoriy)
+
+- Telegram'i bog'langan pullik veb tarif egalari botda o'z tarifidan foydalansin (D-12, 3-band).
+- OCR va GPT-6 birlik narxlarini qayta o'lchab, worst-case marjani yangilash.

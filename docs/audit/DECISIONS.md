@@ -55,7 +55,10 @@ o'zi aytadi. Kod o'zgarmaydi.
 `VOICELAB_FALLBACK` yoqiq, sifat `model-ab` bilan o'lchanib METRICS'ga
 yoziladi.
 
-## Audit tavsiyasi — egasining tasdig'i kutilmoqda
+## Audit tavsiyasi — egasi tasdiqladi va amalga oshirildi (2026-09-24)
+
+D-7: #332. D-11: #331. D-12: #333 (1 va 2-band; 3-band — bog'langan pullik
+veb tarif botda — ixtiyoriy, alohida ish sifatida backlog'da).
 
 **D-7. OCR va Workspace AI hisobi.**
 - *OCR* (`/api/analyze/ocr-image`) — bu chat yoki tahlildan oldingi qadam,

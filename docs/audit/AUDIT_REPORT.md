@@ -26,7 +26,7 @@ Holat: ✅ PR ochildi, 🟢 merge qilindi (production), ⏳ backlog, 🟡 egasin
 | H-MONEY-2 | Hafta seshanbadan boshlanadi (Toshkent) | 🟢 #319 |
 | H-MONEY-3 | Xulosa (opinion) krediti race: parallel so'rovlar bitta kreditni ikki marta sarflaydi | ⏳ |
 | H-MONEY-4 | Kvota check-then-insert (race) va DB xatosida fail-open | 🟢 fail-closed #330; ⏳ race |
-| H-MONEY-5 | `/api/analyze/ocr-image` va Workspace AI kvotasiz | ⏳ D-7 tasdiqlandi |
+| H-MONEY-5 | `/api/analyze/ocr-image` va Workspace AI kvotasiz | 🟢 #332 |
 | H-RAG-1 | Yangi tasdiqlangan javoblar embedding olmaydi | 🟢 #325 |
 | H-RAG-2 | Freshness skripti hech qachon qonunni "kuchini yo'qotgan" deb belgilamaydi | 🟢 #324 |
 | H-RAG-3 | Qayta ingest avval o'chiradi, keyin yozadi — embedding xatosida hujjat yo'qoladi | ⏳ |
@@ -60,3 +60,6 @@ eval production pipeline'ni o'lchamaydi va 30 ta savoli ishonchsiz.
 ## Qo'shimcha (egasi qarorlari)
 
 - 🟢 #330 — muddati o'tgan tarif → bepul (D-4); qimmat yo'llar fail-closed (D-5); xatoda limit qaytariladi va xabar beriladi (D-6).
+- 🟢 #331 — fair-use og'irliklari (D-11): draft/xulosa endi ikki marta cheklanmaydi.
+- 🟢 #332 — OCR sahifa limiti, Workspace AI hisobi, a'zo egasining tarifini meros qilmaydi (M4), haftalik limitdagi oxirgi draft rad etilishi tuzatildi.
+- 🟢 #333 — Telegram Stars: invoice'dagi taklif bo'yicha kredit, kredit berilmasa refund (M6); eski `/api/subscription/*` olib tashlandi (M8).
