@@ -188,11 +188,13 @@ const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
 const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
 
 // Prevent process crashes from unhandled errors
+// Logged with the stack: the message alone rarely says where it came from.
+// The process keeps running, as before (see DECISIONS.md D-16).
 process.on('unhandledRejection', (err) => {
-  console.error('[PROCESS] Unhandled rejection:', err.message || err);
+  console.error('[PROCESS] Unhandled rejection:', (err && err.stack) || err);
 });
 process.on('uncaughtException', (err) => {
-  console.error('[PROCESS] Uncaught exception:', err.message || err);
+  console.error('[PROCESS] Uncaught exception:', (err && err.stack) || err);
 });
 
 // Import bot from bot.js (created with polling: false)
@@ -10489,8 +10491,13 @@ async function runMigrations() {
       throw error;
     }
   } catch (err) {
-    console.error('[DB] Migration error:', err.message);
-    if (err.workspaceMigrationFatal) throw err;
+    console.error('[DB] Migration error:', (err && err.stack) || err);
+    // A failure here used to be logged and ignored, and the server started
+    // with half its routes unmounted while /health said OK (audit C3). Now
+    // boot stops, so Render keeps the previous instance. BOOT_ALLOW_PARTIAL
+    // =true restores the old behaviour without a deploy, as an escape hatch.
+    if (err.workspaceMigrationFatal || process.env.BOOT_ALLOW_PARTIAL !== 'true') throw err;
+    console.error('[DB] BOOT_ALLOW_PARTIAL=true: starting with the routes mounted so far');
   }
 }
 
@@ -10545,13 +10552,25 @@ app.get('/api/admin/health', requireMasterAdmin, async (req, res) => {
   });
 });
 
-runMigrations()
+const lifecycle = require('./lifecycle');
+
+lifecycle.waitForDatabase(pool)
+  .then(() => runMigrations())
   .then(() => {
-    app.listen(PORT, () => {
+    // Registered last, after every route runMigrations mounts.
+    app.use(lifecycle.jsonErrorHandler);
+    const server = app.listen(PORT, () => {
       console.log(`[SERVER] Dashboard running on port ${PORT} | Node ${process.version}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
+    });
+    lifecycle.installGracefulShutdown({
+      server,
+      pool,
+      stopBots: [async () => { const rb = getRegBot(); if (rb && rb.isPolling && rb.isPolling()) await rb.stopPolling(); }],
     });
   })
   .catch((error) => {
-    console.error('[SERVER] Startup aborted:', error.message);
-    process.exitCode = 1;
+    // exitCode alone never ended the process: the polling registration bot
+    // and the pool kept it alive without ever binding PORT.
+    console.error('[SERVER] Startup aborted:', (error && error.stack) || error);
+    setTimeout(() => process.exit(1), 200);
   });
