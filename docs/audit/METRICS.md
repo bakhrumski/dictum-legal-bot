@@ -28,6 +28,11 @@
 | #325 | `rag-verified-qa-embedding` | 1/2 | 2/2 |
 | #324 | `rag-freshness` | 0/6 | 6/6 |
 | #323 | `health-endpoint` | 0/3 | 3/3 |
+| #330 | `tariff-expiry-refund` | 2/11 | 11/11 |
+| #331 | `tariff-fair-use-weights` | 1/5 | 5/5 |
+| #332 | `tariff-ocr-workspace` | 2/10 | 10/10 |
+| #333 | `telegram-stars-invoice` | 4/6 | 6/6 |
+| #328 | brauzer: murojaat modali XSS payload | 9 ishladi | 0 |
 
 ## O'lchash uchun kerak
 
