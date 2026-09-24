@@ -153,7 +153,9 @@ const history = [];
 let isMaster = false;
 
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);}
-function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// Links only to web pages or this site; anything else stays plain text.
+function safeHref(u){u=String(u==null?'':u).trim();return /^(?:https?:\/\/|\/(?![\/\\]))/i.test(u)?u:'';}
 
 // Minimal markdown → HTML (bold, italic, headings, lists, links, paragraphs)
 function md(t){
@@ -162,7 +164,7 @@ function md(t){
     .replace(/^## (.+)$/gm,'<h2>$1</h2>')
     .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g,'<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,(m,label,href)=>{const u=safeHref(href.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'));return u?'<a href="'+esc(u)+'" target="_blank" rel="noopener">'+label+'</a>':label;})
     .replace(/^[-*] (.+)$/gm,'<li>$1</li>')
     .replace(/^\d+\.\s+(.+)$/gm,'<li>$1</li>')
     .replace(/\n\n/g,'</p><p>')
@@ -228,7 +230,7 @@ async function send(){
     let html = md(data.reply||'');
     if(data.sources && data.sources.length){
       html += '<div class="sources"><strong>Sources:</strong> ' +
-        data.sources.map(s=> s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)).join(' · ') +
+        data.sources.map(s=> safeHref(s.url) ? `<a href="${esc(safeHref(s.url))}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)).join(' · ') +
         '</div>';
     }
     thinking.innerHTML = html;
