@@ -128,7 +128,10 @@ async function verifyReference(ref, { callAI, apiKey, searchKorpus, retrieveLega
   try {
     if (typeof searchKorpus === 'function' && apiKey) {
       const km = await searchKorpus(`${ref.name} ${ref.number} ${ref.claims.join(' ')}`.slice(0, 400), { apiKey });
-      if (km && km.corrected_answer) corpusText += `\n[qa-corpus]\n${String(km.corrected_answer).slice(0, 1200)}\n`;
+      // searchKorpus returns the lawyer-corrected text as `answer`; reading
+      // `corrected_answer` (the column name) meant it was never used here.
+      const korpusAnswer = km && (km.answer || km.corrected_answer);
+      if (korpusAnswer) corpusText += `\n[qa-corpus]\n${String(korpusAnswer).slice(0, 1200)}\n`;
     }
     if (!corpusText && typeof retrieveLegalContext === 'function') {
       const rr = await retrieveLegalContext(`${ref.name} ${ref.number}`.slice(0, 300), null, null, {});
