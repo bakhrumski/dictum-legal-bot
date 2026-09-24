@@ -57,6 +57,8 @@ jobs:
       - run: npm ci
       - name: Boot, anonymous-access matrix, SIGTERM
         run: scripts/ci/boot-smoke.sh
+      - name: Quota races on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/tariff-race.db.test.js
 
   audit:
     name: npm audit (report only)

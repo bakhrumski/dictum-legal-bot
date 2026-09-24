@@ -37,6 +37,11 @@ const fakePool = {
     if (/COUNT\(\*\)|SUM\(/i.test(sql)) return { rows: [{ used: state.used, n: state.used }] };
     return { rows: [] };
   },
+  // enforceQuota checks and records on one locked connection.
+  async connect() {
+    if (state.failQueries) throw new Error('db down');
+    return { query: (sql, params) => (/^(BEGIN|COMMIT|ROLLBACK)$|pg_advisory_xact_lock/.test(sql) ? Promise.resolve({ rows: [] }) : fakePool.query(sql, params)), release() {} };
+  },
 };
 
 const modPath = require.resolve('../src/rag/subscription-tiers');

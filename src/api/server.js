@@ -6778,7 +6778,18 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
         if (!opinionModel) opinionModel = process.env.OPINION_MODEL_STAFF || MODELS.premium;
       } else {
         const planKey = (u && u.plan) || 'bepul';
-        const c = await tariffModule.checkOpinionCredits(req.session.adminId, opinionCredits);
+        // Reserved now, atomically; given back below if no opinion is delivered.
+        const c = await tariffModule.reserveOpinionCredits(req.session.adminId, opinionCredits);
+        if (c.reservationId) {
+          const reservationId = c.reservationId;
+          const adminId = req.session.adminId;
+          res.on('finish', () => {
+            if (res.statusCode >= 400) {
+              tariffModule.releaseOpinionCredits(adminId, reservationId)
+                .catch(e => console.warn('[Legal Opinion] credit release failed:', e.message));
+            }
+          });
+        }
         if (!c.allowed) {
           const msg = c.reason === 'not_in_plan'
             ? 'Yuridik xulosa tarifingizga kirmaydi. Silver, Gold yoki Platinum tarifini tanlang.'
@@ -7136,10 +7147,8 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
     }
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
-    // Spend the credits only once the opinion actually exists — a failed
-    // generation must never consume a user's weekly allowance.
-    tariffModule.recordUsage(req.session.adminId, '/api/draft/legal-opinion', opinionCredits)
-      .catch(e => console.warn('[Legal Opinion] credit record failed:', e.message));
+    // Credits were reserved before generation (reserveOpinionCredits); a
+    // failed response releases them, so nothing is recorded here.
     if (result.usage) {
       // result.provider is the model that ACTUALLY answered. The earlier
       // "model=" line only logs intent — callPremiumAI silently falls back
