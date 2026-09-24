@@ -490,6 +490,16 @@ app.post('/api/login', async (req, res) => {
       // Compare password with hashed password
       const passwordMatch = await bcrypt.compare(password, admin.password);
 
+      if (passwordMatch && require('../auth/master-bootstrap').isPublishedMasterPassword(password)) {
+        // This password was committed to the repository as a seeded login;
+        // anyone could use it. Refuse until it is changed.
+        logAudit(req, 'login.published_password_refused', 'admin', admin.id, admin.id);
+        return res.status(403).json({
+          code: 'PASSWORD_MUST_CHANGE',
+          error: 'Bu parol xavfsiz emas va bloklangan. Parolni tiklash orqali yangi parol o‘rnating.',
+        });
+      }
+
       if (passwordMatch) {
         // Master with linked Telegram → require the second factor.
         // The bot's /link command stores telegram_chat_id; the self-signup flow
@@ -10044,16 +10054,13 @@ async function runMigrations() {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_google_id ON admins(google_id) WHERE google_id IS NOT NULL`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_admins_device_fingerprint ON admins(device_fingerprint) WHERE device_fingerprint IS NOT NULL`);
 
-    // Ensure 'admin' account is always master role
-    await pool.query(`UPDATE admins SET role = 'master' WHERE username = 'admin'`);
-    // Seed masteradmin account (idempotent — does nothing if already exists)
+    // First master only when there is none, from MASTER_BOOTSTRAP_PASSWORD.
+    // This used to seed 'masteradmin' / 'juristAI' on every boot and force the
+    // 'admin' username to master; see src/auth/master-bootstrap.js.
     {
-      const masterPwd = await bcrypt.hash('juristAI', 10);
-      await pool.query(`
-        INSERT INTO admins (username, password, full_name, role)
-        VALUES ('masteradmin', $1, 'Master Admin', 'master')
-        ON CONFLICT (username) DO NOTHING
-      `, [masterPwd]);
+      const boot = await require('../auth/master-bootstrap').bootstrapFirstMaster(pool, bcrypt);
+      if (boot.created) console.log(`[AUTH] first master created: ${boot.username}`);
+      else if (boot.reason !== 'master_exists') console.warn(`[AUTH] no master account: ${boot.reason}`);
     }
 
     // Agent traces table — audit log for all AI agent runs
