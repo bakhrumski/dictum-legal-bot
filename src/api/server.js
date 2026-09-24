@@ -535,7 +535,7 @@ app.post('/api/login', async (req, res) => {
               botUrl: authBotUrl,
             });
           }
-          const code = String(Math.floor(100000 + Math.random() * 900000));
+          const code = require('../auth/otp').digitCode(6);
           const token = require('crypto').randomBytes(24).toString('hex');
           pending2fa.set(token, {
             adminId: admin.id, role: admin.role, username: admin.username,
@@ -8948,12 +8948,12 @@ async function triggerAiScreening(regId, regData) {
 app.post('/api/send-verification-code', async (req, res) => {
   try {
     // Generate 4-digit code + unique deep link token
-    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const code = require('../auth/otp').digitCode(4);
     const token = crypto.randomBytes(8).toString('hex');
 
     verificationTokens.set(token, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
 
-    console.log(`[VERIFY] Code generated, token: ${token}`);
+    console.log('[VERIFY] Code generated');
 
     res.json({ success: true, token });
   } catch (error) {
@@ -9273,7 +9273,7 @@ app.get('/auth/google/callback', async (req, res) => {
         if (fpAbuse.rows.length > 0) return res.redirect('/login.html?error=sinov_used');
       }
 
-      const randomPwd = await bcrypt.hash(Math.random().toString(36), 10);
+      const randomPwd = await bcrypt.hash(require('crypto').randomBytes(24).toString('hex'), 10);
       const fullName = name || `${given_name || ''} ${family_name || ''}`.trim() || email;
       const ins = await pool.query(
       `INSERT INTO admins
@@ -9665,7 +9665,7 @@ app.post('/api/password-recovery/request', async (req, res) => {
     }
 
     // Generate 4-digit code + token
-    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const code = require('../auth/otp').digitCode(4);
     const token = crypto.randomBytes(8).toString('hex');
 
     verificationTokens.set('recovery_' + token, {
@@ -9676,7 +9676,7 @@ app.post('/api/password-recovery/request', async (req, res) => {
       verified: false
     });
 
-    console.log(`[RECOVERY] Code generated for ${cleanUsername}, token: ${token}`);
+    console.log('[RECOVERY] Code generated');
     res.json({ success: true, token });
   } catch (error) {
     console.error('[RECOVERY REQUEST] Error:', error);
@@ -9821,9 +9821,7 @@ app.post('/api/registration-requests/:id/approve', requireMasterAdmin, async (re
       finalHashedPassword = reg.password_hash;
     } else {
       // Fallback for old registrations without password
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-      let tempPwd = '';
-      for (let i = 0; i < 8; i++) tempPwd += chars.charAt(Math.floor(Math.random() * chars.length));
+      const tempPwd = require('../auth/otp').randomPassword(12);
       finalHashedPassword = await bcrypt.hash(tempPwd, 10);
     }
 
