@@ -636,6 +636,8 @@
     top: 50%; width: 14px; height: 14px; margin-top: -7px;
     border-width: 2px; border-color: var(--ws-panel-solid);
     background: var(--ws-brand);
+    /* Above the bar it ends, and moved like one. */
+    z-index: 1; cursor: grab;
 }
 .ws-tl-track .ws-timeline-milestone.done { background: var(--ws-success); }
 .ws-tl-track .ws-timeline-milestone.approaching { background: var(--ws-warning); }

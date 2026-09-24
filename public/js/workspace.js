@@ -1591,9 +1591,22 @@
         var width=Math.max(1.8,Math.min(100-left,(to-from+86400000)/span*100));
         var tone=graphTone(task),owner=matterOwner(task);
         var color=tone==='done'?'var(--ok)':tone==='overdue'?'var(--danger)':tone==='approaching'?'var(--warn)':'var(--ok)';
-        var dueLeft=Math.max(0,Math.min(100,(due-range.min)/span*100));
-        var marker='<span class="ws-timeline-bar ws-tl-bar '+tone+'" data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'" style="left:'+left.toFixed(2)+'%;width:'+width.toFixed(2)+'%;background:'+color+';" title="'+esc(task.title)+'"></span>'
-            +(task.is_milestone?'<span class="ws-timeline-milestone '+tone+'" style="left:calc('+dueLeft.toFixed(2)+'% - 7px)" title="'+esc(t('milestone'))+'"></span>':'');
+        var pct=function(time){return Math.max(0,Math.min(100,(time-range.min)/span*100));};
+        var dates=' data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'"';
+        // A milestone is a moment, not a span. One that falls on a single day
+        // is drawn as the diamond alone, centred on that day; drawing it on a
+        // one-day bar as well left the two stacked into a blot. A milestone
+        // that does span days keeps its bar with the diamond at the deadline,
+        // the bar's end — it used to sit at the start of the last day,
+        // half across the bar.
+        var singleDay=task.is_milestone&&(!task.start_date||!task.due_date||task.start_date===task.due_date);
+        var diamond=function(position){
+            return '<span class="ws-timeline-milestone '+tone+'"'+dates+' style="left:calc('+position.toFixed(2)+'% - 7px)" title="'+esc(task.title)+' · '+esc(t('milestone'))+'"></span>';
+        };
+        var marker=singleDay
+            ? diamond(pct(due+43200000))
+            : '<span class="ws-timeline-bar ws-tl-bar '+tone+'"'+dates+' style="left:'+left.toFixed(2)+'%;width:'+width.toFixed(2)+'%;background:'+color+';" title="'+esc(task.title)+'"></span>'
+                +(task.is_milestone?diamond(pct(to+86400000)):'');
         return '<div class="ws-tl-row" data-action="open-task" data-task-id="'+esc(task.id)+'" role="button" tabindex="0">'+
             '<div style="min-width:0;">'+
                 '<div class="ws-tl-title">'+esc(task.title)+'</div>'+
@@ -3219,13 +3232,16 @@
     }
 
     function handleTimelineDrag(event) {
-        var bar=event.target.closest('.ws-timeline-bar');
+        // A single-day milestone has no bar; its diamond carries the dates.
+        var bar=event.target.closest('.ws-timeline-bar, .ws-timeline-milestone[data-task-id]');
         if(!bar||!canWrite()||global.innerWidth<760)return;
+        // The diamond is a rotated square; a drag must not straighten it.
+        var turn=bar.classList.contains('ws-timeline-milestone')?' rotate(45deg)':'';
         event.preventDefault();
         var track=bar.parentElement,taskId=bar.dataset.taskId,startX=event.clientX,startDate=bar.dataset.start,dueDate=bar.dataset.due;
         var range=timelineRange(),days=Math.max(1,(range.max-range.min)/86400000),trackWidth=track.getBoundingClientRect().width;
         bar.setPointerCapture&&bar.setPointerCapture(event.pointerId);
-        function move(moveEvent){var delta=moveEvent.clientX-startX;bar.style.transform='translateX('+delta+'px)';}
+        function move(moveEvent){var delta=moveEvent.clientX-startX;bar.style.transform='translateX('+delta+'px)'+turn;}
         async function up(upEvent){
             document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);document.removeEventListener('pointercancel',up);
             var deltaDays=Math.round((upEvent.clientX-startX)/trackWidth*days);bar.style.transform='';
