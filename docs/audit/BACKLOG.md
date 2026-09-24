@@ -5,9 +5,7 @@ Egasining qarori kerak bo'lganlar [DECISIONS](DECISIONS.md)da.
 
 | ICE | Ish | Soha | Branch / PR |
 |-----|-----|------|-------------|
-| 810 | Dashboard murojaat modali va ismlar ro'yxatlarini ekranlash; `escapeHtml` qo'shtirnoq/non-string xavfsiz | frontend | `audit/frontend-escape-request-modal` |
-| 720 | Login open redirect | frontend | `audit/frontend-login-redirect` |
-| 640 | `simpleMarkdown` faqat `https:` linklar; AI hujjat HTML'ini sanitize qilish | frontend | `audit/frontend-ai-html` |
+| 640 | AI hujjat HTML'ini sanitize qilish (`renderDocMessage`, `document.write`) | frontend | — |
 | 560 | Opinion kredit rezervatsiyasi (tranzaksiya + `FOR UPDATE`) | money | — |
 | 560 | Kvota: tranzaksiya + advisory lock (race) | money | — |
 | 504 | Boot: `runMigrations` xatosida jarayonni to'xtatish (partial boot o'rniga) | reliability | — |
@@ -26,3 +24,8 @@ Egasining qarori kerak bo'lganlar [DECISIONS](DECISIONS.md)da.
 | 200 | `.env.example`, runbook, README | docs | — |
 | 180 | CSP sarlavhasi (avval report-only) | security | — |
 | 160 | Vote dedupe | authz | — |
+
+## Bajarilgan
+
+- 🟢 #328 — dashboard XSS (murojaat modali, ismlar, markdown linklar).
+- 🟢 #329 — login open redirect, enterprise/templates escaperlari.

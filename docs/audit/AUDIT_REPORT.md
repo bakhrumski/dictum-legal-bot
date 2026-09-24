@@ -14,7 +14,7 @@ Holat: ✅ PR ochildi (tasdiq kutmoqda), 🟢 merge qilindi, ⏳ backlog, 🟡 e
 | C-SEC-1 | Oddiy `user` barcha murojaatlarni, Excel eksportni, xodimlar chatini ko'radi, murojaatlarni tayinlaydi va korpusga "tasdiqlangan" javob yozadi | ✅ #326 |
 | C-SEC-2 | Har boot'da `masteradmin` / `juristAI` (e'lon qilingan parol) master yaratiladi | ✅ #322 — **parolni hoziroq o'zgartiring** |
 | C-SEC-3 | Telegram webhook yo'li Express 5'da wildcard: soxta update va soxta to'lov yuborish mumkin; bot tokeni logga yoziladi | ✅ #321 |
-| C-SEC-4 | Dashboard'dagi murojaat modali Telegram foydalanuvchisi matnini ekranlamaydi (stored XSS → xodim sessiyasi) | ⏳ frontend PR (o'zim merge qilaman) |
+| C-SEC-4 | Dashboard'dagi murojaat modali Telegram foydalanuvchisi matnini ekranlamaydi (stored XSS → xodim sessiyasi) | 🟢 #328 (main'da 9 payload ishladi → 0) |
 | C-MONEY-1 | To'lov provayderi yo'q, `PAYMENTS_ENABLED` bo'lsa `/api/tariff/select` pullik tarifni tekinga beradi | 🟡 D-2 |
 | C-REL-1 | Boot'dagi `runMigrations` xato bersa, marshrutlarning katta qismi ulanmaydi, server esa "sog'lom" bo'lib ishlayveradi | ⏳ |
 
@@ -31,8 +31,8 @@ Holat: ✅ PR ochildi (tasdiq kutmoqda), 🟢 merge qilindi, ⏳ backlog, 🟡 e
 | H-RAG-2 | Freshness skripti hech qachon qonunni "kuchini yo'qotgan" deb belgilamaydi | ✅ #324 |
 | H-RAG-3 | Qayta ingest avval o'chiradi, keyin yozadi — embedding xatosida hujjat yo'qoladi | ⏳ |
 | H-SEC-5 | `/api/health` korpus tafsilotlari va token holatini ochiq beradi | ✅ #323 |
-| H-SEC-6 | `escapeHtml` qo'shtirnoqni ekranlamaydi; `simpleMarkdown` linklarida sxema tekshiruvi yo'q; AI hujjat HTML'i xom qo'yiladi | ⏳ frontend PR |
-| H-SEC-7 | `login.html` `postAuthDestination` open redirect (`/\evil.com`) | ⏳ frontend PR |
+| H-SEC-6 | `escapeHtml` qo'shtirnoqni ekranlamaydi; `simpleMarkdown` linklarida sxema tekshiruvi yo'q; AI hujjat HTML'i xom qo'yiladi | 🟢 #328, #329 (escaper, linklar); ⏳ AI hujjat HTML'i |
+| H-SEC-7 | `login.html` `postAuthDestination` open redirect (`/\evil.com`) | 🟢 #329 |
 | H-SEC-8 | OTP va tokenlar logga yoziladi; OTP `Math.random` | ⏳ |
 | H-REL-2 | Global error handler, graceful shutdown va AI fetch timeout'lari yo'q | ⏳ |
 | H-REL-3 | `/api/register` autentifikatsiyasiz 10 MB base64 qabul qiladi; `verificationTokens` cheksiz o'sadi | ⏳ |
