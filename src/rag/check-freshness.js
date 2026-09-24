@@ -52,7 +52,23 @@ async function getIngestedDocuments() {
   return result.rows;
 }
 
-async function checkDocument(doc) {
+/**
+ * Whether lex.uz reports the fetched document as no longer in force.
+ *
+ * fetchLexDocument() returns { title, body, metadata, rawHtml } with the
+ * status in metadata.is_active / metadata.status_label. This checked
+ * fetched.is_active, which is always undefined — so the job never marked a
+ * single repealed document, and repealed law stayed searchable.
+ */
+function lexStatus(fetched) {
+  const meta = (fetched && fetched.metadata) || {};
+  return {
+    expired: meta.is_active === false,
+    label: meta.status_label || "Hujjat kuchini yo'qotgan",
+  };
+}
+
+async function checkDocument(doc, fetchDoc = fetchLexDocument) {
   const { doc_id, law_name, source_url, chunk_count } = doc;
 
   if (!source_url) {
@@ -61,13 +77,14 @@ async function checkDocument(doc) {
   }
 
   try {
-    const fetched = await fetchLexDocument(source_url);
+    const fetched = await fetchDoc(source_url);
+    const status = lexStatus(fetched);
 
-    if (fetched.is_active === false) {
+    if (status.expired) {
       log.warn('Document expired on lex.uz', {
         doc_id,
         law_name,
-        status_label: fetched.status_label || 'kuchini yo\'qotgan',
+        status_label: status.label,
         source_url,
         chunk_count,
       });
@@ -77,7 +94,7 @@ async function checkDocument(doc) {
         source_url,
         chunk_count,
         status: 'expired',
-        status_label: fetched.status_label || "Hujjat kuchini yo'qotgan",
+        status_label: status.label,
       };
     }
 
@@ -175,7 +192,11 @@ async function main() {
   process.exit(expired.length > 0 && !DRY_RUN ? 0 : 0);
 }
 
-main().catch(err => {
-  log.error('Freshness check failed', { err: err.message });
-  pool.end().finally(() => process.exit(1));
-});
+if (require.main === module) {
+  main().catch(err => {
+    log.error('Freshness check failed', { err: err.message });
+    pool.end().finally(() => process.exit(1));
+  });
+}
+
+module.exports = { checkDocument, lexStatus };
