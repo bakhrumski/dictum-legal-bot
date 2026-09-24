@@ -64,10 +64,13 @@ jobs:
     timeout-minutes: 10
     # Known findings are tracked in docs/audit/BACKLOG.md; this job reports
     # them on every PR without blocking until they are fixed.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm audit --omit=dev --audit-level=high
+      - name: npm audit
+        run: |
+          if ! npm audit --omit=dev --audit-level=high; then
+            echo "::warning title=npm audit::High or critical advisories in production dependencies (see this log; tracked in docs/audit/BACKLOG.md)"
+          fi
