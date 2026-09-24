@@ -183,7 +183,7 @@
         teamThreads:'Jamoa suhbatlari', openInAi:'AI bo‘limida ochish', seeAll:'Barchasi',
         tokenFrom:'Token {who} hisobidan', freeForMembers:'a’zoga token sarfsiz',
         teamLoad:'Jamoa yuklamasi', tasksShort:'ish',
-        matterAndOwner:'Masala va mas’ul a’zo', unassignedShort:'Biriktirilmagan',
+        matterAndOwner:'Masala va mas’ul a’zo', legendTitle:'Ranglar', legendActive:'Rejada', legendApproaching:'Muddat yaqin (3 kun ichida) yoki shoshilinch', legendOverdue:'Muddati o‘tgan', legendDone:'Bajarilgan', legendMilestone:'Muhim bosqich (milestone)', unassignedShort:'Biriktirilmagan',
         planned:'Rejada', dueOn:'Muddat', late:'Kechikdi'
     });
     Object.assign(COPY.ru, {
@@ -194,7 +194,7 @@
         teamThreads:'Обсуждения команды', openInAi:'Открыть в разделе AI', seeAll:'Все',
         tokenFrom:'Токены со счёта {who}', freeForMembers:'участникам без расхода токенов',
         teamLoad:'Загрузка команды', tasksShort:'задач',
-        matterAndOwner:'Дело и ответственный', unassignedShort:'Без исполнителя',
+        matterAndOwner:'Дело и ответственный', legendTitle:'Цвета', legendActive:'По плану', legendApproaching:'Срок близко (3 дня) или срочно', legendOverdue:'Просрочено', legendDone:'Завершено', legendMilestone:'Веха', unassignedShort:'Без исполнителя',
         planned:'В плане', dueOn:'Срок', late:'Просрочено'
     });
     Object.assign(COPY.en, {
@@ -205,7 +205,7 @@
         teamThreads:'Team conversations', openInAi:'Open in AI', seeAll:'See all',
         tokenFrom:'Tokens from {who}', freeForMembers:'members at no token cost',
         teamLoad:'Team load', tasksShort:'tasks',
-        matterAndOwner:'Matter and owner', unassignedShort:'Unassigned',
+        matterAndOwner:'Matter and owner', legendTitle:'Colours', legendActive:'On track', legendApproaching:'Due within 3 days, or urgent', legendOverdue:'Overdue', legendDone:'Done', legendMilestone:'Milestone', unassignedShort:'Unassigned',
         planned:'Planned', dueOn:'Due', late:'Late'
     });
 
@@ -1534,6 +1534,20 @@
         return {min:Math.min.apply(Math,dates)-padding*86400000,max:Math.max.apply(Math,dates)+padding*86400000};
     }
 
+    // What the bar colours mean — the same rules graphTone() applies.
+    function renderTimelineLegend() {
+        var item=function(swatch,label){return '<span class="ws-tl-legend-item">'+swatch+'<span>'+esc(label)+'</span></span>';};
+        var bar=function(color){return '<span class="ws-tl-legend-bar" style="background:'+color+'"></span>';};
+        return '<div class="ws-tl-legend" role="note" aria-label="'+esc(t('legendTitle'))+'">'+
+            '<span class="ws-tl-legend-title">'+esc(t('legendTitle'))+':</span>'+
+            item(bar('var(--brand)'),t('legendActive'))+
+            item(bar('var(--warn)'),t('legendApproaching'))+
+            item(bar('var(--danger)'),t('legendOverdue'))+
+            item(bar('var(--ok)'),t('legendDone'))+
+            item('<span class="ws-tl-legend-diamond"></span>',t('legendMilestone'))+
+        '</div>';
+    }
+
     function renderTimeline() {
         var dated=state.tasks.filter(function(task){return task.start_date||task.due_date;});
         // A matter with no dates still belongs on the timeline: it is listed
@@ -1554,6 +1568,7 @@
                 '<div class="ws-tl-days">'+ticks.join('')+'</div>'+
             '</div>'+
             '<div class="ws-tl-body" data-hide-sb>'+dated.map(function(task){return renderTimelineRow(task,range,span);}).join('')+undated.map(renderTimelineUndatedRow).join('')+'</div>'+
+            renderTimelineLegend()+
         '</section>';
     }
 
@@ -1590,7 +1605,10 @@
         var left=Math.max(0,Math.min(100,(from-range.min)/span*100));
         var width=Math.max(1.8,Math.min(100-left,(to-from+86400000)/span*100));
         var tone=graphTone(task),owner=matterOwner(task);
-        var color=tone==='done'?'var(--ok)':tone==='overdue'?'var(--danger)':tone==='approaching'?'var(--warn)':'var(--ok)';
+        // On track is the brand blue, as the milestone diamond already was:
+        // it used to share done's green, so the legend could not tell a
+        // finished matter from one still running.
+        var color=tone==='done'?'var(--ok)':tone==='overdue'?'var(--danger)':tone==='approaching'?'var(--warn)':'var(--brand)';
         var pct=function(time){return Math.max(0,Math.min(100,(time-range.min)/span*100));};
         var dates=' data-task-id="'+esc(task.id)+'" data-start="'+esc(task.start_date||task.due_date)+'" data-due="'+esc(task.due_date||task.start_date)+'"';
         // A milestone is a moment, not a span. One that falls on a single day
