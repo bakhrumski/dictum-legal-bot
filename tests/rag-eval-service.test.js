@@ -34,6 +34,15 @@ const quiet = { log() {}, warn() {}, error() {} };
     assert.strictEqual(hitRank(chunks, expected, refs), 2);
   });
 
+  await test('a prim article is its own article: 358¹ is not 358 (Astra RAG6)', () => {
+    const expected = { expected_law: 'Jinoyat kodeksi', expected_articles: ['358'] };
+    assert.strictEqual(hitRank([{ law_name: 'Jinoyat kodeksi', article_numbers: ['358¹'] }], expected, refs), 0);
+    assert.strictEqual(hitRank([{ law_name: 'Jinoyat kodeksi', article_numbers: ['358'] }], expected, refs), 1);
+    assert.strictEqual(hitRank([{ law_name: 'Jinoyat kodeksi', article_numbers: ['358¹'] }],
+      { expected_law: 'Jinoyat kodeksi', expected_articles: ['358¹'] }, refs), 1);
+    assert.strictEqual(hitRank([{ law_name: 'Jinoyat kodeksi', article_numbers: ['358-modda'] }], expected, refs), 1);
+  });
+
   await test('doc_id matches even when the law name is written differently', () => {
     assert.ok(lawMatches({ law_name: 'ТК', doc_id: '-6257288' }, { expected_law: 'Mehnat kodeksi', expected_doc_id: '-6257288' }));
     assert.ok(!lawMatches({ law_name: 'Soliq kodeksi', doc_id: '1' }, { expected_law: 'Mehnat kodeksi', expected_doc_id: '2' }));

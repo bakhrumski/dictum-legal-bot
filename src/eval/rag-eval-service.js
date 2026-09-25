@@ -42,15 +42,26 @@ function lawMatches(chunk, expected) {
   return a === b || a.includes(b) || b.includes(a);
 }
 
+/**
+ * Article identity for matching: "12-modda" and "12" are the same article,
+ * but a prim article is its own article, so "358¹" never equals "358"
+ * (Astra audit RAG6: the old digit-stripping counted 358¹ as a hit for 358).
+ */
+function normArticle(a) {
+  return String(a == null ? '' : a).trim().toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/-?(modda|статья|ст\.?)$/u, '');
+}
+
 /** 1-based rank of the first chunk that has the right law and article, or 0. */
 function hitRank(chunks, expected, getArticleRefs) {
-  const want = new Set((expected.expected_articles || []).map(String));
+  const want = new Set((expected.expected_articles || []).map(normArticle));
   const lawKnown = !!(expected.expected_doc_id || expected.expected_law);
   for (let i = 0; i < chunks.length; i++) {
     const c = chunks[i];
     if (lawKnown && !lawMatches(c, expected)) continue;
     const refs = (getArticleRefs(c) || []).map(String);
-    if (want.size === 0 || refs.some(r => want.has(r) || want.has(r.replace(/[^\d]/g, '')))) return i + 1;
+    if (want.size === 0 || refs.some(r => want.has(normArticle(r)))) return i + 1;
   }
   return 0;
 }
@@ -277,4 +288,4 @@ function mountRagEvalRoutes(app, { requireMasterAdmin, service }) {
   });
 }
 
-module.exports = { createRagEvalService, mountRagEvalRoutes, hitRank, lawMatches, summarize, normLaw, SYNTHETIC_SET, GOLD_SET };
+module.exports = { createRagEvalService, mountRagEvalRoutes, hitRank, normArticle, lawMatches, summarize, normLaw, SYNTHETIC_SET, GOLD_SET };
