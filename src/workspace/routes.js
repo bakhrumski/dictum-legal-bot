@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
+const { extractUploadText } = require('./extract-text');
 const { WorkspaceError, sendWorkspaceError } = require('./errors');
 const {
   canCreateWorkspace,
@@ -1229,6 +1230,10 @@ function mountWorkspaceRoutes(app, options) {
         if (taskId) await requireTask(db, workspaceId, taskId);
       });
 
+      // Versions are immutable, so the text Workspace AI reads is taken now,
+      // before the version row exists (Astra audit D1).
+      const extracted = await extractUploadText(req.file.buffer, req.file.mimetype);
+
       await uploadWorkspaceObject(objectPath, req.file.buffer, req.file.mimetype);
       try {
         const created = await withWorkspaceTransaction(pool, userId, async (db) => {
@@ -1241,9 +1246,9 @@ function mountWorkspaceRoutes(app, options) {
           )).rows[0];
           const version = (await db.query(
             `INSERT INTO workspace_document_versions
-               (id,workspace_id,document_id,version_number,created_by)
-             VALUES ($1,$2,$3,1,$4) RETURNING *`,
-            [versionId, workspaceId, documentId, userId]
+               (id,workspace_id,document_id,version_number,content_text,created_by)
+             VALUES ($1,$2,$3,1,$4,$5) RETURNING *`,
+            [versionId, workspaceId, documentId, extracted.text, userId]
           )).rows[0];
           const file = (await db.query(
             `INSERT INTO workspace_document_files
@@ -1251,7 +1256,7 @@ function mountWorkspaceRoutes(app, options) {
              VALUES ($1,$2,$3,'original',$4,$5,$6,$7,$8) RETURNING *`,
             [fileId, workspaceId, versionId, objectPath, req.file.mimetype, req.file.size, digest, userId]
           )).rows[0];
-          return { document, version, file };
+          return { document, version, file, textIndex: extracted.status };
         });
         res.status(201).json(created);
       } catch (error) {

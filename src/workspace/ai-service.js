@@ -52,6 +52,57 @@ function appendWithinLimit(parts, value, limit = MAX_CONTEXT_CHARS) {
   parts.push(String(value).slice(0, limit - currentLength));
 }
 
+// Documents share the context fairly (Astra audit D2). Before, they were
+// appended in update order until 30,000 characters ran out, so one long
+// file pushed every other document, and the rest of itself, out.
+const DOCUMENT_CONTEXT_CHARS = 20000;
+const MIN_DOCUMENT_CHARS = 1500;
+
+function questionTerms(question) {
+  return [...new Set(normalizeQuestion(question)
+    .replace(/[\u2018\u2019\u02BB\u02BC`']/g, '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(t => t.length >= 4))];
+}
+
+function termHits(text, terms) {
+  const lower = String(text || '').toLocaleLowerCase('uz-UZ').replace(/[\u2018\u2019\u02BB\u02BC`']/g, '');
+  return terms.reduce((n, t) => n + (lower.includes(t.slice(0, Math.max(4, t.length - 2))) ? 1 : 0), 0);
+}
+
+/**
+ * The part of a document that fits `budget`: the whole text when it fits,
+ * otherwise the paragraphs that match the question most, kept in document
+ * order, and the opening when nothing matches.
+ */
+function documentExcerpt(text, terms, budget) {
+  const t = String(text || '');
+  if (t.length <= budget) return t;
+  const paragraphs = t.split(/\n{2,}|\n(?=\s*\d+[.)]\s)/).map((p, i) => ({ p: p.trim(), i })).filter(x => x.p);
+  const scored = paragraphs.map(x => ({ ...x, score: termHits(x.p, terms) }));
+  if (!terms.length || scored.every(x => x.score === 0)) return t.slice(0, budget) + '\n[…]';
+  const chosen = [];
+  let used = 0;
+  for (const x of [...scored].sort((a, b) => b.score - a.score || a.i - b.i)) {
+    if (x.score === 0) break;
+    if (used + x.p.length + 2 > budget) continue;
+    chosen.push(x);
+    used += x.p.length + 2;
+  }
+  return chosen.sort((a, b) => a.i - b.i).map(x => x.p).join('\n\n[…]\n\n');
+}
+
+/** Documents in question-relevance order (then recency), each with its share. */
+function documentContextBlocks(documents, question) {
+  const terms = questionTerms(question);
+  const ranked = documents
+    .map((d, i) => ({ d, i, score: termHits(`${d.title}\n${d.content_text}`, terms) }))
+    .sort((a, b) => b.score - a.score || a.i - b.i);
+  const share = Math.max(MIN_DOCUMENT_CHARS, Math.floor(DOCUMENT_CONTEXT_CHARS / Math.max(1, ranked.length)));
+  return ranked.map(({ d }) => `HUJJAT: ${d.title} (v${d.version_number})\n`
+    + `${d.content_text ? documentExcerpt(d.content_text, terms, share) : '[Fayl matni indekslanmagan]'}\n\n`);
+}
+
 async function loadContext(db, workspaceId, taskId, question) {
   const task = taskId ? await requireTask(db, workspaceId, taskId) : null;
   const questionHash = sha256(normalizeQuestion(question));
@@ -171,12 +222,8 @@ async function loadContext(db, workspaceId, taskId, question) {
       + `\nTavsif: ${task.description || '—'}\nMuddat: ${task.due_date || '—'}\n\n`
     );
   }
-  for (const document of documents) {
-    appendWithinLimit(
-      contextParts,
-      `HUJJAT: ${document.title} (v${document.version_number})\n`
-      + `${document.content_text || '[Fayl matni indekslanmagan]'}\n\n`
-    );
+  for (const block of documentContextBlocks(documents, question)) {
+    appendWithinLimit(contextParts, block);
   }
   for (const memory of relevantMemory) {
     appendWithinLimit(
@@ -544,6 +591,8 @@ function createWorkspaceAiService({ pool, generateAnswer }) {
 }
 
 module.exports = {
+  documentContextBlocks,
+  documentExcerpt,
   AUTHORITATIVE_MEMORY_KINDS,
   MAX_CONTEXT_CHARS,
   STALE_RUN_MINUTES,
