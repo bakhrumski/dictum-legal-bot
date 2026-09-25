@@ -414,6 +414,26 @@ async function canAccessRequest(req, requestId) {
   return r.rows.length > 0;
 }
 
+// A Telegram file is reachable only through a request the caller may open
+// (Astra audit S2): the file id alone used to be enough for any staff role.
+async function canAccessFile(req, fileId) {
+  const id = String(fileId || '');
+  if (!id || id.length > 512) return false;
+  if (req.session.role === 'master') {
+    const any = await pool.query('SELECT 1 FROM requests WHERE file_id = $1 LIMIT 1', [id]);
+    return any.rows.length > 0;
+  }
+  const r = await pool.query(
+    `SELECT 1 FROM requests r
+      WHERE r.file_id = $1
+        AND (r.assigned_to = $2
+             OR EXISTS (SELECT 1 FROM request_students rs WHERE rs.request_id = r.id AND rs.student_id = $2))
+      LIMIT 1`,
+    [id, req.session.adminId]
+  );
+  return r.rows.length > 0;
+}
+
 // Audit trail: who touched which client data, from where. Fire-and-forget —
 // an audit write must never block or fail the request it describes.
 function logAudit(req, action, resource, resourceId, adminIdOverride) {
@@ -1973,18 +1993,65 @@ app.get('/api/requests/:id', requireStaff, async (req, res) => {
   }
 });
 
-// Get file from Telegram
+// Get file from Telegram. Telegram's file URL carries the bot token
+// (api.telegram.org/file/bot<TOKEN>/...), so it never reaches the browser
+// (Astra audit S1): the client gets our own same-origin /raw address, and
+// the server fetches from Telegram. The response shape is unchanged.
 app.get('/api/files/:fileId', requireStaff, async (req, res) => {
   logAudit(req, 'file.view', 'file', req.params.fileId);
   try {
     const { fileId } = req.params;
-    const fileLink = await bot.getFileLink(fileId);
-    res.json({ fileLink });
+    if (!(await canAccessFile(req, fileId))) return res.status(404).json({ error: 'Fayl topilmadi' });
+    res.json({ fileLink: `/api/files/${encodeURIComponent(fileId)}/raw` });
   } catch (error) {
-    console.error('Error getting file:', error);
+    console.error('Error getting file:', error.message);
     res.status(500).json({ error: 'Failed to get file' });
   }
 });
+
+// Inline view of a Telegram file (image, audio, video, PDF) through our origin.
+const INLINE_SAFE_TYPE = /^(image\/(png|jpe?g|webp|gif)|audio\/[\w.+-]+|video\/[\w.+-]+|application\/pdf)$/i;
+app.get('/api/files/:fileId/raw', requireStaff, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    if (!(await canAccessFile(req, fileId))) return res.status(404).json({ error: 'Fayl topilmadi' });
+    await streamTelegramFileInline(fileId, res);
+  } catch (error) {
+    console.error('Error viewing file:', error.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to get file' });
+  }
+});
+
+const TYPE_BY_EXT = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+  oga: 'audio/ogg', ogg: 'audio/ogg', opus: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav',
+  mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', pdf: 'application/pdf',
+};
+
+async function streamTelegramFileInline(fileId, res) {
+    const fileLink = await bot.getFileLink(fileId);
+    const lib = fileLink.startsWith('https') ? require('https') : require('http');
+    lib.get(fileLink, { timeout: SHORT_FETCH_TIMEOUT_MS }, (fr) => {
+      if (fr.statusCode !== 200) {
+        fr.resume();
+        return res.status(502).json({ error: 'Faylni olishda xatolik' });
+      }
+      // Telegram often answers application/octet-stream; the file path's
+      // extension then decides. Anything that could render as a page is sent
+      // as a plain download.
+      let type = String(fr.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      if (!INLINE_SAFE_TYPE.test(type)) type = TYPE_BY_EXT[(fileLink.split('?')[0].split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
+      res.setHeader('Content-Type', type);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      if (fr.headers['content-length']) res.setHeader('Content-Length', fr.headers['content-length']);
+      fr.pipe(res);
+    }).on('timeout', function () { this.destroy(new Error('telegram file timeout')); })
+      .on('error', (e) => {
+      console.error('Error streaming file:', e.message);
+      if (!res.headersSent) res.status(502).json({ error: 'Faylni olib bo\'lmadi' });
+    });
+}
 
 // Stream a Telegram file through our own origin as a downloadable attachment,
 // so the browser saves it with the real name/extension (e.g. "9017-04797.pdf").
@@ -2001,9 +2068,10 @@ app.get('/api/files/:fileId/download', requireStaff, async (req, res) => {
     if (!DOWNLOADABLE_MIME[ext]) {
       return res.status(400).json({ error: 'Faqat PDF, PNG, JPG, JPEG fayllarni saqlash mumkin' });
     }
+    if (!(await canAccessFile(req, fileId))) return res.status(404).json({ error: 'Fayl topilmadi' });
     const fileLink = await bot.getFileLink(fileId);
     const lib = fileLink.startsWith('https') ? require('https') : require('http');
-    lib.get(fileLink, (fr) => {
+    lib.get(fileLink, { timeout: SHORT_FETCH_TIMEOUT_MS }, (fr) => {
       if (fr.statusCode !== 200) {
         fr.resume();
         return res.status(502).json({ error: 'Faylni olishda xatolik' });
@@ -9956,6 +10024,18 @@ app.post('/api/registration-requests/:id/reject', requireMasterAdmin, async (req
   }
 });
 
+// GET /api/registration-document/:fileId/raw — master only, streamed via us
+app.get('/api/registration-document/:fileId/raw', requireMasterAdmin, async (req, res) => {
+  try {
+    const known = await pool.query('SELECT 1 FROM registration_requests WHERE document_file_id = $1 LIMIT 1', [String(req.params.fileId)]);
+    if (known.rows.length === 0) return res.status(404).json({ error: 'Hujjat topilmadi' });
+    await streamTelegramFileInline(req.params.fileId, res);
+  } catch (e) {
+    console.error('[REG DOC] stream failed:', e.message);
+    if (!res.headersSent) res.status(502).json({ error: 'Hujjatni olib bo\'lmadi' });
+  }
+});
+
 // GET /api/registration-document/:fileId — master only
 app.get('/api/registration-document/:fileId', requireMasterAdmin, async (req, res) => {
   try {
@@ -9963,8 +10043,9 @@ app.get('/api/registration-document/:fileId', requireMasterAdmin, async (req, re
     // If Telegram file_id is valid, use Telegram
     if (fileId && fileId !== 'upload_failed') {
       try {
-        const fileLink = await bot.getFileLink(fileId);
-        return res.json({ fileLink });
+        // Not the Telegram URL: it carries the bot token (Astra audit S1).
+        await bot.getFileLink(fileId);
+        return res.json({ fileLink: `/api/registration-document/${encodeURIComponent(fileId)}/raw` });
       } catch (e) {
         console.error('[REG DOC] Telegram getFileLink failed:', e.message);
       }

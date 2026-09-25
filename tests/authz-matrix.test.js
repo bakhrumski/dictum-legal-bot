@@ -51,6 +51,8 @@ const CASES = [
   // ── staff-only ──
   ['GET', '/api/files/AgACAgTEST/download', REJECTED, 'client file download'],
   ['GET', '/api/files/AgACAgTEST', REJECTED, 'client file link'],
+  ['GET', '/api/files/AgACAgTEST/raw', REJECTED, 'client file stream'],
+  ['GET', '/api/registration-document/AgACAgTEST/raw', REJECTED, 'registration document stream'],
 
   // ── master-only ──
   ['GET', '/api/admin/audit-log', REJECTED, 'audit trail'],
