@@ -300,6 +300,41 @@ function getEmbeddingHealth() {
   };
 }
 
+// Query-time embedding cache (docs/audit BACKLOG "embedding cache"). One chat
+// question used to be embedded 4-6 times over (semantic guarantee, unscoped
+// retry, parent-child, RRF, QA bank, korpus), each a sequential round trip.
+// Short texts only, so ingestion chunks do not push queries out; concurrent
+// requests for the same text share one call; failures are not cached.
+const EMBED_CACHE_MAX = 300;
+const EMBED_CACHE_TTL_MS = 30 * 60 * 1000;
+const EMBED_CACHE_MAX_CHARS = 2000;
+const _embedCache = new Map(); // key -> { at, promise }
+const _embedStats = { hits: 0, misses: 0 };
+
+function cachedEmbedding(cacheKey, compute) {
+  const now = Date.now();
+  const hit = _embedCache.get(cacheKey);
+  if (hit && now - hit.at < EMBED_CACHE_TTL_MS) {
+    _embedCache.delete(cacheKey); // refresh LRU position
+    _embedCache.set(cacheKey, hit);
+    _embedStats.hits++;
+    return hit.promise;
+  }
+  _embedStats.misses++;
+  const entry = { at: now, promise: null };
+  entry.promise = compute().catch((err) => {
+    if (_embedCache.get(cacheKey) === entry) _embedCache.delete(cacheKey);
+    throw err;
+  });
+  _embedCache.set(cacheKey, entry);
+  while (_embedCache.size > EMBED_CACHE_MAX) _embedCache.delete(_embedCache.keys().next().value);
+  return entry.promise;
+}
+
+function getEmbeddingCacheStats() {
+  return { size: _embedCache.size, ..._embedStats };
+}
+
 async function getEmbedding(text, apiKey) {
   // Prefer the provider-aware key (respects EMBED_PROVIDER) over a caller-passed
   // key, since many call sites build a stale "HF_TOKEN || GEMINI || GPT" chain
@@ -317,6 +352,13 @@ async function getEmbedding(text, apiKey) {
   const provider = detectProvider();
   if (!provider) throw new Error('No embedding provider configured (set HF_TOKEN, GEMINI_API_KEY, or GPT_API_KEY)');
 
+  if (text.length <= EMBED_CACHE_MAX_CHARS) {
+    return cachedEmbedding(`${provider}|${EMBED_MODEL()}|${text}`, () => embedQueryUncached(provider, text, key));
+  }
+  return embedQueryUncached(provider, text, key);
+}
+
+async function embedQueryUncached(provider, text, key) {
   try {
     let vec;
     if (provider === 'huggingface') {
@@ -418,6 +460,7 @@ async function getEmbeddingsBatch(texts, apiKey, opts = {}) {
 }
 
 module.exports = {
+  getEmbeddingCacheStats,
   getEmbedding,
   getEmbeddingsBatch,
   getEmbedDims,
