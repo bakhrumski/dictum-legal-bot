@@ -263,7 +263,30 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
     return r.rows[0] || null;
   }
 
-  return { start, publicJob, recentRuns, runDetail, buildSyntheticSet, loadGoldSet, runSet, SYNTHETIC_SET, GOLD_SET };
+  /**
+   * The cases a run missed (not in the top 3), with the question and what
+   * came back instead, short enough to paste into a chat for analysis.
+   */
+  async function runMisses(id, { limit = 60 } = {}) {
+    const run = await runDetail(id);
+    if (!run) return null;
+    const results = Array.isArray(run.results) ? run.results : JSON.parse(run.results || '[]');
+    const cases = (await pool.query(
+      'SELECT id, question, expected_law, expected_articles FROM rag_eval_cases WHERE set_name = $1', [run.set_name])).rows;
+    const byId = new Map(cases.map(c => [c.id, c]));
+    const misses = results.filter(r => !r.error && !(r.rank >= 1 && r.rank <= 3)).map((r) => {
+      const c = byId.get(r.id) || {};
+      return {
+        id: r.id, language: r.language, topic: r.topic, rank: r.rank || null, lawHit: r.lawHit,
+        question: c.question,
+        expected: r.expected || `${c.expected_law} ${(c.expected_articles || []).join(',')}`,
+        top: r.top || null,
+      };
+    });
+    return { runId: run.id, setName: run.set_name, params: run.params, total: results.length, missed: misses.length, misses: misses.slice(0, limit) };
+  }
+
+  return { start, publicJob, recentRuns, runDetail, runMisses, buildSyntheticSet, loadGoldSet, runSet, SYNTHETIC_SET, GOLD_SET };
 }
 
 /** Express routes, master only. GET so the owner can start a run from a phone. */
@@ -286,7 +309,10 @@ function mountRagEvalRoutes(app, { requireMasterAdmin, service }) {
   app.get('/api/admin/rag-eval/runs/:id', requireMasterAdmin, async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'bad id' });
-    const run = await service.runDetail(id);
+    // ?misses=1: only the cases missed from the top 3, with their questions.
+    const run = req.query.misses === '1'
+      ? await service.runMisses(id, { limit: Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 60)) })
+      : await service.runDetail(id);
     if (!run) return res.status(404).json({ error: 'not found' });
     res.json(run);
   });

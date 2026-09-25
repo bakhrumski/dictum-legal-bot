@@ -125,6 +125,28 @@ const quiet = { log() {}, warn() {}, error() {} };
     assert.strictEqual(r.params.language, 'any');
   });
 
+  await test('?misses=1 lists the missed cases with their questions', async () => {
+    const pool = { query: async (sql, p) => {
+      if (/FROM rag_eval_runs WHERE id/.test(sql)) return { rows: [{ id: 2, set_name: 'synthetic-v1', params: { mode: 'corpus' }, results: [
+        { id: 1, language: 'uz', topic: 'mehnat', rank: 1, lawHit: true },
+        { id: 2, language: 'ru', topic: 'oila', rank: 0, lawHit: true, top: ['Oila kodeksi 99'] },
+        { id: 3, language: 'uz', topic: 'soliq', rank: 5, lawHit: true },
+        { id: 4, language: 'uz', topic: 'soliq', rank: 0, error: 'timeout' },
+      ] }] };
+      if (/FROM rag_eval_cases WHERE set_name/.test(sql)) return { rows: [
+        { id: 2, question: 'Как взыскать алименты?', expected_law: 'Oila kodeksi', expected_articles: ['96'] },
+        { id: 3, question: 'Soliq imtiyozi?', expected_law: 'Soliq kodeksi', expected_articles: ['7'] },
+      ] };
+      return { rows: [] };
+    } };
+    const service = createRagEvalService({ pool, log: quiet, getArticleRefs: refs, callCheapAI: async () => ({}), retrieve: async () => ({}) });
+    const m = await service.runMisses(2);
+    assert.deepStrictEqual([m.total, m.missed], [4, 2]);
+    assert.deepStrictEqual(m.misses[0], { id: 2, language: 'ru', topic: 'oila', rank: null, lawHit: true, question: 'Как взыскать алименты?', expected: 'Oila kodeksi 96', top: ['Oila kodeksi 99'] });
+    assert.strictEqual(m.misses[1].rank, 5, 'found but below the top 3 counts as a miss');
+    assert.strictEqual(await createRagEvalService({ pool: { query: async () => ({ rows: [] }) }, log: quiet }).runMisses(9), null);
+  });
+
   await test('route is master-only and starts only with ?start=1', () => {
     const routes = [];
     const app = { get: (p, ...h) => routes.push({ p, h }) };
