@@ -191,19 +191,23 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
   async function runSet({ setName, mode = 'corpus', topicMode = 'none', onProgress = () => {} }) {
     const cases = (await pool.query(
       'SELECT * FROM rag_eval_cases WHERE set_name = $1 ORDER BY id', [setName])).rows;
-    const params = { mode, topicMode, cases: cases.length };
+    // language 'any': retrieval is called as production calls it (every
+    // caller passes language = null). Runs 1-2 passed 'ru' for Russian
+    // questions, which limited them to the few Russian-language chunks.
+    const params = { mode, topicMode, language: 'any', cases: cases.length };
     const run = (await pool.query(
       'INSERT INTO rag_eval_runs (set_name, params) VALUES ($1, $2) RETURNING id', [setName, params])).rows[0];
     const results = await mapLimit(cases, 3, async (c, i) => {
       const t0 = Date.now();
       const row = { id: c.id, topic: c.topic, language: c.language, rank: 0, lawHit: false, returned: 0, ms: 0 };
       try {
-        const r = await retrieve(c.question, topicMode === 'oracle' ? c.topic : null, c.language === 'ru' ? 'ru' : null,
+        const r = await retrieve(c.question, topicMode === 'oracle' ? c.topic : null, null,
           { noWebFallback: mode !== 'full' });
         const chunks = (r && r.chunks) || [];
         row.returned = chunks.length;
         row.rank = hitRank(chunks, c, getArticleRefs);
         row.lawHit = chunks.some(ch => lawMatches(ch, c));
+        if (!row.rank) row.expected = `${c.expected_law} ${(c.expected_articles || []).join(',')}`;
         if (!row.rank) row.top = chunks.slice(0, 3).map(ch => `${ch.law_name} ${(getArticleRefs(ch) || []).slice(0, 3).join(',')}`);
       } catch (err) {
         row.error = String(err.message || err).slice(0, 200);
