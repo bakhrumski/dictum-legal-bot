@@ -137,8 +137,9 @@ function mountAdvancedRoutes(app, deps) {
         return res.status(400).json({ error: "direction 'up' yoki 'down' bo'lishi kerak" });
       }
 
-      await voteQaBankEntry(parseInt(req.params.id), direction);
-      res.json({ ok: true });
+      if (!req.session.adminId) return res.status(401).json({ error: 'Unauthorized' });
+      const result = await voteQaBankEntry(parseInt(req.params.id), direction, req.session.adminId);
+      res.json({ ok: true, ...(result || {}) });
     } catch (error) {
       console.error('[QA Bank] Vote error:', error);
       res.status(500).json({ error: error.message });

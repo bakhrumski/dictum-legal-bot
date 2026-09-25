@@ -65,6 +65,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/db-indexes-margin.db.test.js
       - name: Auth flows and direct-message guard on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/auth-flows.test.js
+      - name: One vote per account per answer on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/answer-votes.db.test.js
 
   audit:
     name: npm audit (report only)
