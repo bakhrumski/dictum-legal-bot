@@ -6,8 +6,6 @@ Egasining qarori kerak bo'lganlar [DECISIONS](DECISIONS.md)da.
 | ICE | Ish | Soha | Branch / PR |
 |-----|-----|------|-------------|
 | 392 | RAG eval natijalarini olish (endpoint tayyor, #336) va yurist tekshirgan gold set | rag | egasi linkni ochadi |
-| 360 | Qisqartmalar va Latin "modda N" regex, Kirill/Rus shakllari | rag | — |
-| 320 | `answer_cache` kalitiga korpus reviziyasini qo'shish | rag | — |
 | 240 | `user` roli uchun xodim polling'ini o'chirish (403 shovqini) | frontend | — |
 | 224 | Embedding keshi (bir so'rovda 5–6 embed) | rag/perf | — |
 | 180 | CSP sarlavhasi (avval report-only) | security | — |
@@ -18,6 +16,7 @@ Egasining qarori kerak bo'lganlar [DECISIONS](DECISIONS.md)da.
 - 🟢 #328 — dashboard XSS (murojaat modali, ismlar, markdown linklar).
 - 🟢 #329 — login open redirect, enterprise/templates escaperlari.
 - 🟢 #330–#333 — egasi qarorlari D-4…D-12.
+- ✅ #349–#358 — Astra auditi: S1–S6, DOCX, shablon tahriri, Workspace indeksi, kesh reviziyasi, modda va qonun nomlarini tanish.
 
 ## Yangi (ixtiyoriy)
 
