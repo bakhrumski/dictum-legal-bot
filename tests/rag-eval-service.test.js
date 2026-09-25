@@ -87,7 +87,7 @@ const quiet = { log() {}, warn() {}, error() {} };
     const seen = [];
     const service = createRagEvalService({
       pool, log: quiet, getArticleRefs: refs,
-      callCheapAI: async (msgs) => ({ text: `Savol: ${msgs[1].text.split('\n')[0]}` }),
+      callCheapAI: async (msgs) => ({ text: `Savol: ${msgs[1].text.split('\n')[0]}?` }),
       retrieve: async (q, topic, lang, opts) => {
         seen.push({ q, topic, lang, opts });
         return { chunks: q.includes('Mehnat') ? [{ law_name: 'Mehnat kodeksi', doc_id: 'd1', article_numbers: ['161'] }] : [] };
@@ -145,6 +145,62 @@ const quiet = { log() {}, warn() {}, error() {} };
     assert.deepStrictEqual(m.misses[0], { id: 2, language: 'ru', topic: 'oila', rank: null, lawHit: true, question: 'Как взыскать алименты?', expected: 'Oila kodeksi 96', top: ['Oila kodeksi 99'] });
     assert.strictEqual(m.misses[1].rank, 5, 'found but below the top 3 counts as a miss');
     assert.strictEqual(await createRagEvalService({ pool: { query: async () => ({ rows: [] }) }, log: quiet }).runMisses(9), null);
+  });
+
+  await test('cut-off questions are left out of the metrics; hubs are reported', async () => {
+    const { looksComplete, summarize: sum } = require('../src/eval/rag-eval-service');
+    assert.strictEqual(looksComplete('Soliq tekshiruvida qoid'), false);
+    assert.strictEqual(looksComplete('Могут ли меня'), false);
+    assert.strictEqual(looksComplete('Alimentni undirish muddati bormi?'), true);
+    const hub = 'VMQ-86 NIZOM';
+    const rows = [
+      ...Array.from({ length: 8 }, (_, i) => ({ id: i, rank: 1, top3: ['Oila kodeksi 12', hub] })),
+      ...Array.from({ length: 2 }, (_, i) => ({ id: 10 + i, rank: 0, invalid: true, top3: [hub] })),
+    ];
+    const s = sum(rows);
+    assert.strictEqual(s.cases, 8);
+    assert.strictEqual(s.excluded, 2);
+    assert.strictEqual(s['recall@3'], 1);
+    assert.strictEqual(s.allCases['recall@3'], 0.8, 'the old basis is kept for comparison');
+    assert.deepStrictEqual(s.hubs[0], { chunk: hub, cases: 10 });
+  });
+
+  await test('?margin= reaches retrieval for that run only and is recorded', async () => {
+    const seen = [];
+    const pool = { query: async (sql) => {
+      if (/SELECT \* FROM rag_eval_cases/.test(sql)) return { rows: [{ id: 1, question: 'Aliment qancha?', language: 'uz', topic: 'oila', expected_law: 'Oila kodeksi', expected_articles: ['99'] }] };
+      if (/INSERT INTO rag_eval_runs/.test(sql)) return { rows: [{ id: 1 }] };
+      return { rows: [] };
+    } };
+    const service = createRagEvalService({ pool, log: quiet, getArticleRefs: refs, callCheapAI: async () => ({}),
+      retrieve: async (q, t, l, opts) => { seen.push(opts); return { chunks: [] }; } });
+    const r = await service.runSet({ setName: 'synthetic-v1', semanticMargin: 0.05 });
+    assert.strictEqual(seen[0].semanticMargin, 0.05);
+    assert.strictEqual(r.params.semanticMargin, 0.05);
+    await service.runSet({ setName: 'synthetic-v1' });
+    assert.ok(!('semanticMargin' in seen[1]), 'no margin unless asked');
+    const routes = [];
+    mountRagEvalRoutes({ get: (p, ...h) => routes.push({ p, h }) }, { requireMasterAdmin: () => {}, service: { start: (o) => ({ started: true, o }), SYNTHETIC_SET: 'synthetic-v1' } });
+    let body;
+    await routes[0].h[1]({ query: { start: '1', margin: '0.05' } }, { json: (b) => { body = b; } });
+    assert.strictEqual(body.o.semanticMargin, 0.05);
+    await routes[0].h[1]({ query: { start: '1', margin: 'abc' } }, { json: (b) => { body = b; } });
+    assert.strictEqual(body.o.semanticMargin, null);
+  });
+
+  await test('semantic guarantee: a margin keeps a broad hub document out, nothing else changes without one', () => {
+    const { selectSemanticGuarantee, semanticMarginFrom } = require('../src/rag/semantic-guarantee');
+    const hit = (law, art, score) => ({ law_name: law, article_numbers: [art], score, source_type: 'law_text' });
+    const hits = [hit('Oila kodeksi', '96', 0.82), hit('Oila kodeksi', '99', 0.80), hit('FPK', '440', 0.79),
+      hit('VMQ-86 NIZOM', '', 0.71), hit('Oila kodeksi', '12', 0.70), { law_name: 'QA', score: 0.9, source_type: 'verified_qa' }];
+    const without = selectSemanticGuarantee(hits);
+    assert.deepStrictEqual(without.matches.map(r => r.law_name), ['Oila kodeksi', 'FPK', 'VMQ-86 NIZOM', 'Oila kodeksi'], 'old behaviour: the hub is guaranteed');
+    const withMargin = selectSemanticGuarantee(hits, { margin: 0.05 });
+    assert.deepStrictEqual(withMargin.matches.map(r => `${r.law_name} ${r.article_numbers[0]}`), ['Oila kodeksi 96', 'FPK 440', 'Oila kodeksi 99']);
+    assert.strictEqual(semanticMarginFrom({}, {}), null);
+    assert.strictEqual(semanticMarginFrom({}, { RAG_SEMANTIC_MARGIN: '0.05' }), 0.05);
+    assert.strictEqual(semanticMarginFrom({ semanticMargin: 0.1 }, { RAG_SEMANTIC_MARGIN: '0.05' }), 0.1);
+    assert.strictEqual(semanticMarginFrom({}, { RAG_SEMANTIC_MARGIN: 'x' }), null);
   });
 
   await test('route is master-only and starts only with ?start=1', () => {

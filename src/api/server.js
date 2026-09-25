@@ -43,6 +43,7 @@ const {
 } = require('../rag/lex-anchor-resolver');
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
+const { selectSemanticGuarantee, semanticMarginFrom } = require('../rag/semantic-guarantee');
 const { correctiveFilter } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
@@ -4649,17 +4650,11 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         // adding extra chunks from the same law. Otherwise 1-2 laws (e.g. Civil
         // Code 741/743) fill every slot and other relevant laws (JSC, securities
         // bylaws) never reach context. Cap 2 per law so one law can't monopolise.
-        const lawSeen = new Map();
-        const primary = [];
-        const extra = [];
-        for (const r of sm.filter(r => r.source_type === 'law_text')) {
-          const n = lawSeen.get(r.law_name) || 0;
-          if (n === 0) { primary.push(r); lawSeen.set(r.law_name, 1); }
-          else if (n < 2) { extra.push(r); lawSeen.set(r.law_name, n + 1); }
-        }
-        semanticMatches = [...primary, ...extra].slice(0, 6);
+        // An optional score margin keeps broad "hub" documents out (see module).
+        const guarantee = selectSemanticGuarantee(sm, { margin: semanticMarginFrom(opts), limit: 6 });
+        semanticMatches = guarantee.matches;
         if (semanticMatches.length > 0) {
-          console.log(`[RAG] Semantic guarantee (${primary.length} laws): ${semanticMatches.map(r => `${r.law_name.slice(0,18)}#${(r.article_numbers || []).join('/')}`).join(', ')}`);
+          console.log(`[RAG] Semantic guarantee (${guarantee.laws} laws): ${semanticMatches.map(r => `${r.law_name.slice(0,18)}#${(r.article_numbers || []).join('/')}`).join(', ')}`);
         }
       } catch (e) {
         console.warn(`[RAG] semantic guarantee failed: ${e.message}`);
