@@ -63,6 +63,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/rag-safe-reingest.db.test.js
       - name: Query indexes and margin report on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/db-indexes-margin.db.test.js
+      - name: Auth flows and direct-message guard on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/auth-flows.test.js
 
   audit:
     name: npm audit (report only)

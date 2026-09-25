@@ -395,6 +395,20 @@ function requireStaff(req, res, next) {
   }
 }
 
+// Sign a user out everywhere (Astra audit S5): after a password reset, a
+// role or password change, or deletion, a session opened before it must not
+// keep the old access. keepSid spares the session making the change.
+async function revokeSessionsFor(adminId, keepSid = null) {
+  try {
+    await pool.query(
+      `DELETE FROM user_sessions WHERE (sess->>'adminId') = $1::text AND ($2::text IS NULL OR sid <> $2)`,
+      [String(adminId), keepSid]
+    );
+  } catch (err) {
+    console.error('[SESSIONS] revoke failed:', err.message);
+  }
+}
+
 // A lawyer or student may act on a client request only when it is assigned
 // to them (directly or through request_students) — the same rule the request
 // list already applies. The master may act on any request. Routes that take
@@ -2576,6 +2590,8 @@ app.put('/api/admins/:id', requireMasterAdmin, async (req, res) => {
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Bu username allaqachon mavjud' });
     }
+    const before = (await pool.query('SELECT role FROM admins WHERE id = $1', [id])).rows[0];
+    const roleChanged = before && before.role !== role;
     if (password && password.length > 0) {
       if (password.length < 6) {
         return res.status(400).json({ error: 'Parol kamida 6 ta belgidan iborat bo\'lishi kerak' });
@@ -2591,6 +2607,7 @@ app.put('/api/admins/:id', requireMasterAdmin, async (req, res) => {
         [full_name, username, role, id]
       );
     }
+    if (roleChanged || (password && password.length > 0)) await revokeSessionsFor(id, req.sessionID);
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating admin:', error);
@@ -2614,6 +2631,7 @@ app.delete('/api/admins/:id', requireMasterAdmin, async (req, res) => {
     }
     // Delete the admin (FK constraints have ON DELETE SET NULL/CASCADE)
     await pool.query('DELETE FROM admins WHERE id = $1', [adminId]);
+    await revokeSessionsFor(adminId);
     res.json({ success: true, deleted: adminCheck.rows[0].full_name });
   } catch (error) {
     console.error('Error deleting admin:', error.message, error.detail || '');
@@ -9290,8 +9308,13 @@ app.post('/api/register/telegram-otp', async (req, res) => {
 app.get('/auth/google', (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return res.status(503).send('Google OAuth not configured');
-  const mode = req.query.mode || 'login';
-  const state = Buffer.from(JSON.stringify({ mode, ts: Date.now() })).toString('base64url');
+  const mode = ['login', 'register', 'recover'].includes(req.query.mode) ? req.query.mode : 'login';
+  // A random one-time state bound to this browser session (Astra audit S4).
+  // It used to be the mode and a timestamp in base64: anyone could forge it,
+  // so a Google code minted for one person could be completed in another's
+  // browser (login CSRF).
+  const state = crypto.randomBytes(24).toString('hex');
+  req.session.googleOAuth = { state, mode, ts: Date.now() };
   const redirectUri = `${process.env.APP_URL || 'https://' + (process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:3000')}/auth/google/callback`;
   const params = new URLSearchParams({
     client_id: clientId,
@@ -9308,6 +9331,13 @@ app.get('/auth/google', (req, res) => {
 app.get('/auth/google/callback', async (req, res) => {
   const { code, state } = req.query;
   if (!code) return res.redirect('/login.html?error=google_failed');
+  const expected = req.session && req.session.googleOAuth;
+  if (req.session) delete req.session.googleOAuth;          // one use only
+  if (!expected || typeof state !== 'string' || state.length !== expected.state.length
+      || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected.state))
+      || Date.now() - expected.ts > 10 * 60 * 1000) {
+    return res.redirect('/login.html?error=google_failed');
+  }
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -9330,9 +9360,7 @@ app.get('/auth/google/callback', async (req, res) => {
     const { sub: googleId, email, name, given_name, family_name } = profile;
     if (!googleId || !email) return res.redirect('/login.html?error=google_failed');
 
-    let stateData = {};
-    try { stateData = JSON.parse(Buffer.from(state || '', 'base64url').toString()); } catch(e) {}
-    const mode = stateData.mode || 'login';
+    const mode = expected.mode || 'login';
 
     let user = (await pool.query('SELECT * FROM admins WHERE google_id = $1 OR (email = $2 AND email IS NOT NULL)', [googleId, email])).rows[0];
 
@@ -9499,6 +9527,18 @@ app.post('/api/register/common', async (req, res) => {
     let applicantChatId = null;
     let emailWasVerified = false;
     if (tgUserId) {
+      // The Telegram id must be the one the auth bot verified for this
+      // browser's registration session, not whatever the request body says
+      // (Astra audit S3): same proof as /api/register/telegram-otp.
+      const regSession = regSessions.get(String(req.body.reg_token || ''));
+      const otpOk = regSession && regSession.otp && regSession.otpSentAt
+        && Date.now() <= regSession.otpSentAt + 10 * 60 * 1000
+        && String(req.body.otp_code || '').trim() === regSession.otp
+        && String(regSession.telegramUserId || '') === tgUserId;
+      if (!otpOk) {
+        return res.status(400).json({ error: 'Telegram tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta urinib ko\'ring.' });
+      }
+      regSessions.delete(String(req.body.reg_token));
       // Check sinov abuse: if this Telegram user already used bepul plan
       const existing = await pool.query('SELECT id, bepul_used FROM admins WHERE telegram_user_id = $1', [tgUserId]);
       if (existing.rows.length > 0) {
@@ -9774,6 +9814,8 @@ app.post('/api/password-recovery/request', async (req, res) => {
   }
 });
 
+const RECOVERY_MAX_TRIES = 5;
+
 // POST /api/password-recovery/verify — verify the 4-digit code
 app.post('/api/password-recovery/verify', async (req, res) => {
   try {
@@ -9786,7 +9828,14 @@ app.post('/api/password-recovery/verify', async (req, res) => {
     if (!pending || Date.now() > pending.expiresAt) {
       return res.status(400).json({ error: 'Kod muddati o\'tgan. Qayta urinib ko\'ring.' });
     }
-    if (pending.code !== code) {
+    if (pending.code !== String(code)) {
+      // A 4-digit code allows 9,000 guesses; five wrong ones end the token
+      // (Astra audit S5), so guessing someone's code is no longer practical.
+      pending.tries = (pending.tries || 0) + 1;
+      if (pending.tries >= RECOVERY_MAX_TRIES) {
+        verificationTokens.delete('recovery_' + token);
+        return res.status(429).json({ error: 'Juda ko\'p noto\'g\'ri urinish. Kodni qayta so\'rang.' });
+      }
       return res.status(400).json({ error: 'Kod noto\'g\'ri' });
     }
 
@@ -9820,6 +9869,7 @@ app.post('/api/password-recovery/reset', async (req, res) => {
       const hashedPassword = await bcrypt.hash(new_password, 10);
       await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hashedPassword, directPending.adminId]);
       verificationTokens.delete('pwreset_' + token);
+      await revokeSessionsFor(directPending.adminId);
       return res.json({ success: true });
     }
 
@@ -9829,7 +9879,9 @@ app.post('/api/password-recovery/reset', async (req, res) => {
     if (!pending || Date.now() > pending.expiresAt) {
       return res.status(400).json({ error: 'Sessiya muddati o\'tgan. Qayta urinib ko\'ring.' });
     }
-    if (pending.code !== code || !pending.verified) {
+    if (pending.code !== String(code) || !pending.verified) {
+      pending.tries = (pending.tries || 0) + 1;
+      if (pending.tries >= RECOVERY_MAX_TRIES) verificationTokens.delete('recovery_' + token);
       return res.status(400).json({ error: 'Tasdiqlash xatosi' });
     }
 
@@ -9837,8 +9889,9 @@ app.post('/api/password-recovery/reset', async (req, res) => {
     const hashedPassword = await bcrypt.hash(new_password, 10);
     await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hashedPassword, pending.adminId]);
 
-    // Clean up token
+    // Clean up token; sessions opened with the old password end here.
     verificationTokens.delete('recovery_' + token);
+    await revokeSessionsFor(pending.adminId);
 
     console.log(`[RECOVERY] Password reset for admin ID: ${pending.adminId}`);
     res.json({ success: true, message: 'Parol muvaffaqiyatli yangilandi' });
