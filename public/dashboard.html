@@ -10873,7 +10873,7 @@
                             const name = a.name.toLowerCase();
                             let keep = false;
                             if (name === 'class' || name === 'colspan' || name === 'rowspan' || name === 'align') keep = /^[-\w\s]*$/.test(a.value);
-                            else if (name === 'data-label' || name === 'data-hint' || name === 'data-key') keep = true;
+                            else if (name === 'data-label' || name === 'data-hint' || name === 'data-key' || name === 'data-k') keep = true;
                             else if (name === 'style') {
                                 const parts = a.value.split(';').map(function(x) { return x.trim(); }).filter(Boolean);
                                 const ok = parts.filter(function(x) { return SAFE_STYLE.test(x); });
@@ -12900,20 +12900,22 @@
                 btn.innerHTML = iconHtml + '<span>' + label + '</span>';
             };
             try {
-                var endpoint, payload;
-                if (tplId) {
-                    var values = {};
-                    page.querySelectorAll('.docfld[data-k]').forEach(function (sp) { values[sp.dataset.k] = sp.textContent || ''; });
-                    endpoint = '/api/draft/export';
-                    payload = { templateId: tplId, values: values, format: format };
-                } else {
-                    var clone = page.cloneNode(true);
-                    clone.querySelectorAll('.docfld').forEach(function (sp) {
-                        sp.replaceWith(document.createTextNode(sp.textContent || '[_____]'));
-                    });
-                    endpoint = '/api/draft/export-raw';
-                    payload = { title: title, html: clone.innerHTML, format: format };
-                }
+                // Export exactly what is on the page. Template documents used to
+                // send only their field values, and the server rebuilt the text
+                // from the stored template, so every edit outside a field was
+                // lost in the file (Astra audit D3).
+                var clone = page.cloneNode(true);
+                clone.querySelectorAll('.docfld').forEach(function (sp) {
+                    // Keep what was typed, line breaks included; an empty field
+                    // becomes the blank the server used to print.
+                    if (!String(sp.textContent || '').trim()) {
+                        sp.replaceWith(document.createTextNode(tplId ? '__________' : '[_____]'));
+                    } else {
+                        sp.replaceWith.apply(sp, Array.from(sp.childNodes));
+                    }
+                });
+                var endpoint = '/api/draft/export-raw';
+                var payload = { title: title, html: clone.innerHTML, format: format };
                 var r = await docExportFetch(endpoint, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
                     body: JSON.stringify(payload)
