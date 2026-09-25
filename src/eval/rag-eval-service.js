@@ -72,8 +72,53 @@ function percentile(values, p) {
   return s[Math.min(s.length - 1, Math.ceil((p / 100) * s.length) - 1)];
 }
 
-/** Summary over per-case results: recall@k, MRR, law hit, latency. */
+/**
+ * A generated question that stops mid-sentence ("Soliq tekshiruvida qoid")
+ * cannot be answered by anyone; run 3 had about 15 of them. Complete
+ * questions end with terminal punctuation.
+ */
+function looksComplete(question) {
+  return /[?？.!…)»"]\s*$/u.test(String(question || '').trim());
+}
+
+/** Label of a returned chunk for reports: law, first articles, vector score. */
+function chunkLabel(ch, getArticleRefs) {
+  const score = Number(ch.vector_score != null ? ch.vector_score : ch.score);
+  const arts = (getArticleRefs(ch) || []).slice(0, 3).join(',');
+  return `${ch.law_name} ${arts}`.trim() + (Number.isFinite(score) && score > 0 ? ` (${score.toFixed(2)})` : '');
+}
+
+/**
+ * Chunks that come back in the top 3 for many unrelated questions (a "hub",
+ * e.g. a broad regulation similar to everything) - at least 10% of cases.
+ */
+function findHubs(results, minShare = 0.1) {
+  const counts = new Map();
+  for (const r of results) for (const key of new Set(r.top3 || [])) counts.set(key, (counts.get(key) || 0) + 1);
+  const floor = Math.max(3, Math.ceil(results.length * minShare));
+  return [...counts.entries()].filter(([, c]) => c >= floor)
+    .sort((a, b) => b[1] - a[1]).map(([chunk, cases]) => ({ chunk, cases }));
+}
+
+/**
+ * Summary over per-case results: recall@k, MRR, law hit, latency. Cases with
+ * a cut-off question are left out of the metrics (counted in `excluded`);
+ * `allCases` keeps the old basis for comparison with runs 1-3.
+ */
 function summarize(results, ks = [1, 3, 7]) {
+  const valid = results.filter(r => !r.invalid);
+  const out = metrics(valid, ks);
+  out.excluded = results.length - valid.length;
+  if (out.excluded) {
+    const all = metrics(results, ks);
+    out.allCases = { cases: all.cases, 'recall@1': all['recall@1'], 'recall@3': all['recall@3'], 'recall@7': all['recall@7'], mrr: all.mrr };
+  }
+  const hubs = findHubs(results);
+  if (hubs.length) out.hubs = hubs;
+  return out;
+}
+
+function metrics(results, ks) {
   const n = results.length;
   const out = { cases: n, errors: results.filter(r => r.error).length };
   const ok = results.filter(r => !r.error);
@@ -148,9 +193,10 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
         `Qonun nomini, modda raqamini va moddadagi aniq iboralarni takrorlamang; hayotiy vaziyat sifatida yozing. ` +
         `Faqat savolning o'zini qaytaring, boshqa hech narsa yozmang.` },
       { role: 'user', text: `Qonun: ${chunk.law_name}\nModda: ${chunk.article_numbers[0]}\n\n${String(chunk.chunk_text).slice(0, 3000)}` },
-    ], { maxTokens: 120, endpoint: '/api/admin/rag-eval/build' });
+    ], { maxTokens: 400, endpoint: '/api/admin/rag-eval/build' });
     const q = String((res && res.text) || '').trim().replace(/^["«]|["»]$/g, '');
-    return q.length >= 12 ? q.slice(0, 500) : null;
+    // 120 tokens cut about one question in ten mid-sentence (run 3).
+    return q.length >= 12 && q.length <= 500 && looksComplete(q) ? q : null;
   }
 
   async function buildSyntheticSet({ n = 150, ruShare = 0.2, onProgress = () => {} } = {}) {
@@ -188,27 +234,31 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
     return { set: GOLD_SET, created: cases.length };
   }
 
-  async function runSet({ setName, mode = 'corpus', topicMode = 'none', onProgress = () => {} }) {
+  async function runSet({ setName, mode = 'corpus', topicMode = 'none', semanticMargin = null, onProgress = () => {} }) {
     const cases = (await pool.query(
       'SELECT * FROM rag_eval_cases WHERE set_name = $1 ORDER BY id', [setName])).rows;
     // language 'any': retrieval is called as production calls it (every
     // caller passes language = null). Runs 1-2 passed 'ru' for Russian
     // questions, which limited them to the few Russian-language chunks.
     const params = { mode, topicMode, language: 'any', cases: cases.length };
+    if (semanticMargin !== null) params.semanticMargin = semanticMargin;
     const run = (await pool.query(
       'INSERT INTO rag_eval_runs (set_name, params) VALUES ($1, $2) RETURNING id', [setName, params])).rows[0];
     const results = await mapLimit(cases, 3, async (c, i) => {
       const t0 = Date.now();
       const row = { id: c.id, topic: c.topic, language: c.language, rank: 0, lawHit: false, returned: 0, ms: 0 };
+      if (!looksComplete(c.question)) row.invalid = true;
       try {
-        const r = await retrieve(c.question, topicMode === 'oracle' ? c.topic : null, null,
-          { noWebFallback: mode !== 'full' });
+        const opts = { noWebFallback: mode !== 'full' };
+        if (semanticMargin !== null) opts.semanticMargin = semanticMargin;
+        const r = await retrieve(c.question, topicMode === 'oracle' ? c.topic : null, null, opts);
         const chunks = (r && r.chunks) || [];
         row.returned = chunks.length;
         row.rank = hitRank(chunks, c, getArticleRefs);
         row.lawHit = chunks.some(ch => lawMatches(ch, c));
+        row.top3 = chunks.slice(0, 3).map(ch => `${ch.law_name} ${(getArticleRefs(ch) || []).slice(0, 3).join(',')}`.trim());
         if (!row.rank) row.expected = `${c.expected_law} ${(c.expected_articles || []).join(',')}`;
-        if (!row.rank) row.top = chunks.slice(0, 3).map(ch => `${ch.law_name} ${(getArticleRefs(ch) || []).slice(0, 3).join(',')}`);
+        if (!row.rank) row.top = chunks.slice(0, 3).map(ch => chunkLabel(ch, getArticleRefs));
       } catch (err) {
         row.error = String(err.message || err).slice(0, 200);
       }
@@ -225,9 +275,10 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
   }
 
   /** One job at a time: build the set if missing, then run it. */
-  function start({ setName = SYNTHETIC_SET, n = 150, mode = 'corpus', topicMode = 'none' } = {}) {
+  function start({ setName = SYNTHETIC_SET, n = 150, mode = 'corpus', topicMode = 'none', semanticMargin = null } = {}) {
     if (state.job && state.job.status === 'running') return { started: false, job: publicJob() };
     const job = { status: 'running', phase: 'starting', setName, mode, topicMode, done: 0, total: 0, startedAt: new Date().toISOString() };
+    if (semanticMargin !== null) job.semanticMargin = semanticMargin;
     state.job = job;
     const progress = (phase) => (d, t) => { job.phase = phase; job.done = d; job.total = t; };
     (async () => {
@@ -238,7 +289,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
         else throw new Error(`Unknown set ${setName}`);
       }
       job.phase = 'running';
-      const result = await runSet({ setName, mode, topicMode, onProgress: progress('running') });
+      const result = await runSet({ setName, mode, topicMode, semanticMargin, onProgress: progress('running') });
       Object.assign(job, { status: 'done', phase: 'done', runId: result.runId, summary: result.summary, finishedAt: new Date().toISOString() });
     })().catch((err) => {
       log.error('[RAG-EVAL] job failed:', err.stack || err);
@@ -298,7 +349,10 @@ function mountRagEvalRoutes(app, { requireMasterAdmin, service }) {
         const n = Math.max(20, Math.min(400, parseInt(req.query.n, 10) || 150));
         const mode = req.query.mode === 'full' ? 'full' : 'corpus';
         const topicMode = req.query.topic === 'oracle' ? 'oracle' : 'none';
-        const started = service.start({ setName: set, n, mode, topicMode });
+        // ?margin=0.05 tries the semantic-guarantee score margin for this run only.
+        const margin = Number(req.query.margin);
+        const semanticMargin = req.query.margin !== undefined && Number.isFinite(margin) && margin >= 0 && margin <= 1 ? margin : null;
+        const started = service.start({ setName: set, n, mode, topicMode, semanticMargin });
         return res.json({ ...started, howTo: 'Refresh /api/admin/rag-eval to watch progress; results appear under job.summary and runs.' });
       }
       res.json({ job: service.publicJob(), runs: await service.recentRuns() });
@@ -318,4 +372,4 @@ function mountRagEvalRoutes(app, { requireMasterAdmin, service }) {
   });
 }
 
-module.exports = { createRagEvalService, mountRagEvalRoutes, hitRank, normArticle, lawMatches, summarize, normLaw, SYNTHETIC_SET, GOLD_SET };
+module.exports = { createRagEvalService, mountRagEvalRoutes, hitRank, normArticle, lawMatches, summarize, normLaw, looksComplete, findHubs, SYNTHETIC_SET, GOLD_SET };
