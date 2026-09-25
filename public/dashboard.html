@@ -17795,11 +17795,24 @@
         // Default to the operational queue; specialist views are one tap away.
         document.getElementById('statusFilter').value = 'open';
 
+        // Staff screens (requests, team chat, rankings) are requireStaff on the
+        // server; a role='user' account would only collect 403s from them.
+        function pollsStaffData() { return currentUser.role !== 'user'; }
+
         loadUserInfo().then(() => {
-            startBackgroundPoll();
-            loadAdmins();
-            loadRankings();
-            loadMonteCarlo();
+            if (pollsStaffData()) {
+                loadRequests();
+                // Requests update via server push (see startEventStream); this
+                // interval is only the fallback while the event stream is disconnected.
+                setInterval(function () { if (typeof esConnected === 'undefined' || !esConnected) loadRequests(); }, 30000);
+                setInterval(loadAdmins, 60000);
+                setInterval(loadRankings, 120000);
+                setInterval(loadMonteCarlo, 300000);
+                startBackgroundPoll();
+                loadAdmins();
+                loadRankings();
+                loadMonteCarlo();
+            }
             // Show add-member button for master admins
             if (currentUser.role === 'master') {
                 const addBtn = document.getElementById('addMemberBtn');
@@ -17823,13 +17836,6 @@
                 }
             }
         });
-        loadRequests();
-        // Requests now update via server push (see startEventStream); this
-        // interval is only the fallback while the event stream is disconnected.
-        setInterval(function () { if (typeof esConnected === 'undefined' || !esConnected) loadRequests(); }, 30000);
-        setInterval(loadAdmins, 60000);
-        setInterval(loadRankings, 120000);
-        setInterval(loadMonteCarlo, 300000);
     </script>
 
     <!-- ── Flagged Answers Panel JS ── -->
