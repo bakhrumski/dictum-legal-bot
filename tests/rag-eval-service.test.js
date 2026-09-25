@@ -89,7 +89,7 @@ const quiet = { log() {}, warn() {}, error() {} };
       pool, log: quiet, getArticleRefs: refs,
       callCheapAI: async (msgs) => ({ text: `Savol: ${msgs[1].text.split('\n')[0]}` }),
       retrieve: async (q, topic, lang, opts) => {
-        seen.push({ q, topic, opts });
+        seen.push({ q, topic, lang, opts });
         return { chunks: q.includes('Mehnat') ? [{ law_name: 'Mehnat kodeksi', doc_id: 'd1', article_numbers: ['161'] }] : [] };
       },
     });
@@ -102,7 +102,27 @@ const quiet = { log() {}, warn() {}, error() {} };
     assert.strictEqual(db.cases.length, 2, 'two questions written');
     assert.strictEqual(job.summary['recall@1'], 0.5);
     assert.ok(seen.every(s => s.opts.noWebFallback === true && s.topic === null), 'corpus mode, no topic by default');
+    assert.ok(seen.every(s => s.lang === null), 'retrieval is called as production calls it: no language filter');
     assert.strictEqual(db.runs[0].status, 'done');
+  });
+
+  await test('a Russian question is searched across the whole corpus, as production does', async () => {
+    const calls = [];
+    const pool = { query: async (sql) => {
+      if (/SELECT \* FROM rag_eval_cases/.test(sql)) return { rows: [
+        { id: 1, question: 'Может ли работодатель уволить беременную?', language: 'ru', topic: 'mehnat', expected_law: 'Mehnat kodeksi', expected_articles: ['161'] },
+      ] };
+      if (/INSERT INTO rag_eval_runs/.test(sql)) return { rows: [{ id: 1 }] };
+      return { rows: [] };
+    } };
+    const service = createRagEvalService({
+      pool, log: quiet, getArticleRefs: refs, callCheapAI: async () => ({ text: '' }),
+      retrieve: async (q, topic, lang) => { calls.push(lang); return { chunks: [{ law_name: 'Mehnat kodeksi', language: 'uz', article_numbers: ['161'] }] }; },
+    });
+    const r = await service.runSet({ setName: 'synthetic-v1' });
+    assert.deepStrictEqual(calls, [null], 'no language filter (runs 1-2 passed "ru")');
+    assert.strictEqual(r.summary.byLanguage.ru['recall@3'], 1, 'the Uzbek article answers the Russian question');
+    assert.strictEqual(r.params.language, 'any');
   });
 
   await test('route is master-only and starts only with ?start=1', () => {
