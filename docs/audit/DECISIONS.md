@@ -112,3 +112,10 @@ instansiyani saqlaydi). Favqulodda holat uchun `BOOT_ALLOW_PARTIAL=true`.
 
 **D-19. RAG eval server ichida.** Kalitlar va baza URL'i tashqariga
 chiqarilmaydi; eval production'dagi `retrieveLegalContext` orqali ishlaydi.
+
+**D-20. Lokalizatsiya bo'yicha eslatma.** Astra auditi 2026 yil martdagi
+O'RQ-547 27¹-modda o'zgarishidan keyin qat'iy lokal saqlash faqat ayrim
+toifalarga (biometrik va h.k.) qo'llanishini, 415-son qaror (29.07.2026)
+teng himoya beruvchi davlatlarni belgilashini aytadi. D-14 dagi umumiy
+formula shunga ko'ra yurist bilan qayta ko'rilsin (bu muhitdan lex.uz
+tekshirilmadi).

@@ -82,3 +82,23 @@ eval production pipeline'ni o'lchamaydi va 30 ta savoli ishonchsiz.
 
 Yangi topilma: `/api/admin/margin-report` production'da doim 500 qaytarardi
 (`llm_spend_log.created_at` ustuni yo'q) — #345 da tuzatildi.
+
+## GPT-6 Astra auditi topilmalari (2026-09-25)
+
+Mustaqil audit (commit `4cca4ca`) kod topilmalari `main`ga solishtirib
+tasdiqlandi va tuzatildi:
+
+| ID | Topilma | Holat |
+|----|---------|-------|
+| S1 | Xodimga qaytarilgan Telegram fayl havolasida bot tokeni bor | 🟢 #349 — **deploy'dan keyin `TELEGRAM_BOT_TOKEN`ni almashtiring** |
+| S2 | Fayl yo'llari murojaatga tegishlilikni tekshirmaydi | 🟢 #349 |
+| S3 | `register/common` tasdiqlanmagan Telegram ID bilan akkaunt yaratadi | 🟢 #350 (main: 200, keyin: 400) |
+| S4 | Google OAuth `state` soxtalashtiriladi (login CSRF) | 🟢 #350 |
+| S5 | 4 xonali tiklash kodiga urinish limiti yo'q; eski sessiyalar bekor qilinmaydi | 🟢 #350 |
+| S6 | DM UPDATE policy suhbat tomonlari va matnni o'zgartirishga yo'l qo'yadi | 🟢 #350 (migratsiya 011) |
+| RAG6 | Eval `358¹`ni `358` deb hisoblaydi | ✅ #351 |
+
+Ochiq (mahsulot): D1 Workspace fayllari indekslanmaydi; D3 shablon
+eksportida erkin tahrir yo'qolishi mumkin; D4 Word eksporti haqiqiy DOCX
+emas; RAG1/RAG2/RAG4/RAG5 (tahrir sanasi, kesh reviziyasi, QA eskirishi,
+kesish). Bosh sahifadagi tasdiqlanmagan va'dalar — egasi bilan.
