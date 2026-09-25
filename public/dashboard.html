@@ -12930,7 +12930,7 @@
                 if (!blob || blob.size === 0) throw new Error('Server bo\'sh fayl qaytardi');
                 var url = URL.createObjectURL(blob);
                 var a = document.createElement('a'); a.href = url;
-                a.download = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (format === 'pdf' ? '.pdf' : '.doc');
+                a.download = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (format === 'pdf' ? '.pdf' : '.docx');
                 document.body.appendChild(a); a.click(); a.remove();
                 setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
             } catch (e) { alert('Xatolik: ' + e.message); }
