@@ -6441,11 +6441,15 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     const cacheable = process.env.ANSWER_CACHE !== 'off'
       && !hasDocument
       && (!Array.isArray(history) || history.length === 0);
+    // The key carries the corpus revision and the prompt-policy versions, so
+    // an ingested, repealed or corrected law, or a new legal prompt, retires
+    // cached answers at once instead of after 72 hours (Astra audit RAG2).
     const cacheKey = cacheable
       ? require('crypto').createHash('sha256')
           // v5 invalidates answers cached before canonical O'RQ/PQ/PF/VMQ
           // labels became mandatory on every inline legal citation.
-          .update('lex-official-id-citations-v5|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim())
+          .update('lex-official-id-citations-v5|' + (topic || '') + '|' + message.toLowerCase().replace(/\s+/g, ' ').trim()
+            + '|rev:' + (await corpusRevisionForCache()) + '|policy:' + JSON.stringify(getLegalPolicyVersions()))
           .digest('hex')
       : null;
     if (cacheKey) {
@@ -10673,6 +10677,19 @@ async function runMigrations() {
     if (err.workspaceMigrationFatal || process.env.BOOT_ALLOW_PARTIAL !== 'true') throw err;
     console.error('[DB] BOOT_ALLOW_PARTIAL=true: starting with the routes mounted so far');
   }
+}
+
+// Corpus revision for the answer-cache key, read at most once a minute.
+let corpusRevisionCache = { value: 'unknown', at: 0 };
+async function corpusRevisionForCache() {
+  if (Date.now() - corpusRevisionCache.at < 60000) return corpusRevisionCache.value;
+  try {
+    const r = await pool.query('SELECT revision FROM juristai_private.legal_corpus_state WHERE singleton = true');
+    corpusRevisionCache = { value: String(r.rows[0] ? r.rows[0].revision : 0), at: Date.now() };
+  } catch (_) {
+    corpusRevisionCache = { value: 'unknown', at: Date.now() };
+  }
+  return corpusRevisionCache.value;
 }
 
 // Export callAI and auth helpers for use by portal and advanced RAG modules
