@@ -54,5 +54,18 @@ kiritilmaydi.
 | AI hujjatidagi XSS payload'lari | ishlaydi | 0 | #343 |
 | `authz-matrix` (anonim kirish) | hech qachon ishga tushmagan | 37/37, har bir PR'da CI'da | #337 |
 
+## 2026-09-25 (Astra auditi)
+
+| O'lchov | Oldin | Keyin | PR |
+|---------|-------|-------|----|
+| Boshqa yuristning fayliga kirish (`file-routes`) | 0/3 himoyalangan | 3/3 | #349 |
+| Soxta Telegram ID bilan ro'yxatdan o'tish | 200 (akkaunt) | 400 | #350 |
+| Noto'g'ri tiklash kodi | cheksiz | 5-urinishda 429 | #350 |
+| DM trigger: 4 noto'g'ri UPDATE | o'tadi | rad etiladi | #350 |
+| `docx-export` testi | — | 7/7, mammoth xatosiz o'qiydi | #353 |
+| `workspace-extract-text` | — | 7/7 | #355 |
+| Router: modda raqami (12 savol) | 5/12 | 12/12 | #357 |
+| Qonun nomi (19 savol) | 4/19 | 19/19 | #358 |
+
 RAG sifati raqamlari: `/api/admin/rag-eval?start=1` production'da ishga
 tushirilgach shu yerga yoziladi.
