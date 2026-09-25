@@ -32,6 +32,13 @@ async function initUsageFeedback() {
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS helpful_count INT DEFAULT 0`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS unhelpful_count INT DEFAULT 0`);
     await pool.query(`ALTER TABLE legal_chunks ADD COLUMN IF NOT EXISTS flagged_for_review BOOLEAN DEFAULT FALSE`);
+    // Same table as migrations/20260925_012_answer_votes.sql, for a database
+    // the versioned runner has not reached yet.
+    await pool.query(`CREATE TABLE IF NOT EXISTS rag_answer_votes (
+        target text NOT NULL CHECK (target IN ('chunk', 'qa_bank')),
+        target_id integer NOT NULL, voter_id integer NOT NULL, helpful boolean NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (target, target_id, voter_id))`);
     _ready = true;
     console.log('[USAGE-FB] Usage feedback columns ready');
   } catch (err) {
@@ -40,26 +47,81 @@ async function initUsageFeedback() {
 }
 
 /**
- * Record a vote against a verified-answer chunk and recompute its flag.
+ * Keep one vote per account per answer (docs/audit "vote dedupe"). Runs in
+ * the caller's transaction. Returns null when the vote repeats the account's
+ * previous one; otherwise how the counts move: { helpful, unhelpful } deltas.
+ */
+async function claimVote(client, target, targetId, voterId, helpful) {
+  const inserted = await client.query(
+    `INSERT INTO rag_answer_votes (target, target_id, voter_id, helpful)
+     VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING 1`,
+    [target, targetId, voterId, helpful]
+  );
+  if (inserted.rowCount) return helpful ? { helpful: 1, unhelpful: 0 } : { helpful: 0, unhelpful: 1 };
+  const prev = await client.query(
+    `SELECT helpful FROM rag_answer_votes WHERE target = $1 AND target_id = $2 AND voter_id = $3 FOR UPDATE`,
+    [target, targetId, voterId]
+  );
+  if (!prev.rows.length || prev.rows[0].helpful === helpful) return null;
+  await client.query(
+    `UPDATE rag_answer_votes SET helpful = $4, updated_at = now() WHERE target = $1 AND target_id = $2 AND voter_id = $3`,
+    [target, targetId, voterId, helpful]
+  );
+  return helpful ? { helpful: 1, unhelpful: -1 } : { helpful: -1, unhelpful: 1 };
+}
+
+/** Run fn(client) in a transaction. */
+async function inTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Record an account's vote on a verified-answer chunk and recompute its flag.
+ * A repeated vote changes nothing (and so does not touch legal_chunks, whose
+ * every write bumps the corpus revision); a changed vote moves one count.
  * @param {number} chunkId legal_chunks.id
  * @param {boolean} helpful true = 👍, false = 👎
- * @returns {Promise<{helpful, unhelpful, flagged}|null>}
+ * @param {number} voterId admins.id of the voter
+ * @returns {Promise<{helpful, unhelpful, flagged, repeated?}|null>}
  */
-async function recordChunkFeedback(chunkId, helpful) {
-  if (!chunkId) return null;
-  const col = helpful ? 'helpful_count' : 'unhelpful_count';
-  const { rows } = await pool.query(
-    `UPDATE legal_chunks
-        SET ${col} = COALESCE(${col}, 0) + 1,
-            flagged_for_review = (COALESCE(unhelpful_count,0) + ${helpful ? 0 : 1}
-                                  - COALESCE(helpful_count,0) - ${helpful ? 1 : 0}) >= $2
-      WHERE id = $1 AND source_type = 'verified_qa'
-      RETURNING helpful_count, unhelpful_count, flagged_for_review`,
-    [chunkId, FLAG_THRESHOLD]
-  );
-  if (!rows.length) return null;
-  const r = rows[0];
-  return { helpful: r.helpful_count, unhelpful: r.unhelpful_count, flagged: r.flagged_for_review };
+async function recordChunkFeedback(chunkId, helpful, voterId) {
+  if (!chunkId || !voterId) return null;
+  return inTransaction(async (client) => {
+    const found = await client.query(
+      `SELECT helpful_count, unhelpful_count, flagged_for_review FROM legal_chunks
+        WHERE id = $1 AND source_type = 'verified_qa' FOR UPDATE`,
+      [chunkId]
+    );
+    if (!found.rows.length) return null;
+    const delta = await claimVote(client, 'chunk', chunkId, voterId, helpful);
+    if (!delta) {
+      const r = found.rows[0];
+      return { helpful: r.helpful_count || 0, unhelpful: r.unhelpful_count || 0, flagged: !!r.flagged_for_review, repeated: true };
+    }
+    const { rows } = await client.query(
+      `UPDATE legal_chunks
+          SET helpful_count = GREATEST(0, COALESCE(helpful_count, 0) + $2),
+              unhelpful_count = GREATEST(0, COALESCE(unhelpful_count, 0) + $3),
+              flagged_for_review = (GREATEST(0, COALESCE(unhelpful_count, 0) + $3)
+                                    - GREATEST(0, COALESCE(helpful_count, 0) + $2)) >= $4
+        WHERE id = $1
+        RETURNING helpful_count, unhelpful_count, flagged_for_review`,
+      [chunkId, delta.helpful, delta.unhelpful, FLAG_THRESHOLD]
+    );
+    const r = rows[0];
+    return { helpful: r.helpful_count, unhelpful: r.unhelpful_count, flagged: r.flagged_for_review };
+  });
 }
 
 /** List verified answers currently flagged for lawyer review. */
@@ -113,6 +175,8 @@ async function editFlaggedAnswer(chunkId, question, answer) {
       WHERE id = $1 AND source_type = 'verified_qa'`,
     [chunkId, newText]
   );
+  // The rewritten answer starts from zero, so earlier votes may be cast again.
+  await pool.query(`DELETE FROM rag_answer_votes WHERE target = 'chunk' AND target_id = $1`, [chunkId]);
 }
 
 /** Soft-delete: marks a verified answer as invalid so it stops being retrieved. */
@@ -132,7 +196,8 @@ function mountUsageFeedbackRoutes(app, deps) {
   app.post('/api/legal-chat/feedback', requireAuth, async (req, res) => {
     try {
       const { qaChunkId, helpful } = req.body || {};
-      const result = await recordChunkFeedback(parseInt(qaChunkId), helpful === true || helpful === 'up');
+      if (!req.session.adminId) return res.status(401).json({ error: 'Unauthorized' });
+      const result = await recordChunkFeedback(parseInt(qaChunkId), helpful === true || helpful === 'up', req.session.adminId);
       res.json({ ok: true, ...(result || {}) });
     } catch (e) {
       console.error('[USAGE-FB] feedback error:', e.message);
@@ -187,6 +252,8 @@ function mountUsageFeedbackRoutes(app, deps) {
 module.exports = {
   initUsageFeedback,
   recordChunkFeedback,
+  claimVote,
+  inTransaction,
   getFlaggedAnswers,
   clearFlag,
   editFlaggedAnswer,

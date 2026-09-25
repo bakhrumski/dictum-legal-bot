@@ -26,6 +26,7 @@
 
 const { pool } = require('../database/db');
 const { getEmbedding, getEmbeddingsBatch, getEmbedDims, detectProvider } = require('./embeddings');
+const { claimVote, inTransaction, initUsageFeedback } = require('./usage-feedback');
 
 let _v2Initialized = false;
 
@@ -497,36 +498,53 @@ async function saveToQaBank(opts) {
 }
 
 /**
- * Record a thumbs up/down vote on a QA bank entry.
- * Also propagates a quality_score update to the linked legal_chunks row so
- * retrieval ranking reflects accumulated user feedback.
+ * Record an account's thumbs up/down on a QA bank entry, once per account
+ * (a repeat is a no-op, a change moves one count). Also propagates a
+ * quality_score update to the linked legal_chunks row so retrieval ranking
+ * reflects accumulated user feedback.
+ * @returns {Promise<{thumbsUp, thumbsDown, repeated?}|null>} null if no entry
  */
-async function voteQaBankEntry(qaId, direction) {
+async function voteQaBankEntry(qaId, direction, voterId) {
   await initAdvancedCorpus();
+  await initUsageFeedback();
+  if (!qaId || !voterId) return null;
 
-  const col = direction === 'up' ? 'thumbs_up' : 'thumbs_down';
-  const { rows } = await pool.query(
-    `UPDATE qa_bank SET ${col} = ${col} + 1, rating = thumbs_up - thumbs_down, updated_at = NOW()
-     WHERE id = $1
-     RETURNING thumbs_up, thumbs_down, rating`,
-    [qaId]
-  );
+  return inTransaction(async (client) => {
+    const found = await client.query(
+      `SELECT thumbs_up, thumbs_down FROM qa_bank WHERE id = $1 FOR UPDATE`, [qaId]
+    );
+    if (!found.rows.length) return null;
+    const delta = await claimVote(client, 'qa_bank', qaId, voterId, direction === 'up');
+    if (!delta) {
+      return { thumbsUp: found.rows[0].thumbs_up, thumbsDown: found.rows[0].thumbs_down, repeated: true };
+    }
 
-  if (rows.length === 0) return;
-  const { thumbs_up, thumbs_down, rating } = rows[0];
-  const total = thumbs_up + thumbs_down;
+    const { rows } = await client.query(
+      `UPDATE qa_bank
+          SET thumbs_up = GREATEST(0, thumbs_up + $2),
+              thumbs_down = GREATEST(0, thumbs_down + $3),
+              rating = GREATEST(0, thumbs_up + $2) - GREATEST(0, thumbs_down + $3),
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING thumbs_up, thumbs_down`,
+      [qaId, delta.helpful, delta.unhelpful]
+    );
+    const { thumbs_up, thumbs_down } = rows[0];
+    const total = thumbs_up + thumbs_down;
 
-  // Map rating to quality_score in [0.1, 1.0]:
-  // neutral (0 votes) → 1.0, fully negative → 0.1, fully positive → 1.0
-  const ratio = total > 0 ? thumbs_up / total : 1;
-  const qualityScore = Math.max(0.1, Math.min(1.0, 0.1 + ratio * 0.9));
+    // Map rating to quality_score in [0.1, 1.0]:
+    // neutral (0 votes) → 1.0, fully negative → 0.1, fully positive → 1.0
+    const ratio = total > 0 ? thumbs_up / total : 1;
+    const qualityScore = Math.max(0.1, Math.min(1.0, 0.1 + ratio * 0.9));
 
-  // Update the linked legal_chunks row (doc_id pattern set by saveToQaBank / insertVerifiedAnswer)
-  await pool.query(
-    `UPDATE legal_chunks SET quality_score = $1, updated_at = NOW()
-     WHERE doc_id = $2 AND source_type = 'verified_qa'`,
-    [qualityScore, `verified_qa_qa_bank_${qaId}`]
-  );
+    // Update the linked legal_chunks row (doc_id pattern set by saveToQaBank / insertVerifiedAnswer)
+    await client.query(
+      `UPDATE legal_chunks SET quality_score = $1, updated_at = NOW()
+       WHERE doc_id = $2 AND source_type = 'verified_qa'`,
+      [qualityScore, `verified_qa_qa_bank_${qaId}`]
+    );
+    return { thumbsUp: thumbs_up, thumbsDown: thumbs_down };
+  });
 }
 
 /**

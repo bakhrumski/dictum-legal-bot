@@ -321,6 +321,7 @@ function transactionalPool(handler) {
       '20260925_009_rag_eval.sql',
       '20260925_010_query_indexes.sql',
       '20260925_011_direct_message_update_guard.sql',
+      '20260925_012_answer_votes.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
