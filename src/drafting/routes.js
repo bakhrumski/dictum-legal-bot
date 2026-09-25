@@ -76,7 +76,7 @@ function wrapDocumentHtml(title, bodyHtml, lang) {
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="ProgId" content="Word.Document">
-<title>${title}</title>
+<title>${String(title).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
 <!--[if gte mso 9]><xml>
 <w:WordDocument>
   <w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/>
@@ -327,13 +327,17 @@ function mountDraftingRoutes(app, deps) {
     }
   });
 
-  // Shared .doc / .pdf sender (Word HTML with Calibri 12 + Print Layout view).
-  async function sendExport(res, baseName, html, format) {
+  // Shared Word / PDF sender. Word is a real .docx (Astra audit D4); it used
+  // to be HTML saved as .doc, which our own importer then refused.
+  async function sendExport(res, baseName, { title, body, lang }, format) {
     if (format === 'docx' || format === 'doc') {
-      res.setHeader('Content-Type', 'application/msword; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.doc"`);
-      return res.send('﻿' + html);
+      const { htmlToDocx, DOCX_MIME } = require('./html-to-docx');
+      const docx = await htmlToDocx(stripEmbeddedFonts(body), { title, lang });
+      res.setHeader('Content-Type', DOCX_MIME);
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
+      return res.end(docx);
     }
+    const html = wrapDocumentHtml(title, body, lang);
     // PDF: try Puppeteer, fall back to client-print
     let puppeteer = null;
     try { puppeteer = require('puppeteer'); } catch (_) {}
@@ -366,9 +370,10 @@ function mountDraftingRoutes(app, deps) {
       if (!tpl) return res.status(404).json({ error: 'Shablon topilmadi' });
 
       const lang = tpl.lang === 'ru' ? 'ru' : 'uz';
-      const html = buildDocumentHtml(tpl, values, lang);
+      const body = renderTemplate({ body: tpl.body, fields: tpl.fields }, values);
+      const title = (tpl.name && (tpl.name[lang] || tpl.name.uz)) || 'Hujjat';
       const baseName = (tpl.slug || 'hujjat').replace(/[^a-z0-9-]/gi, '_');
-      return await sendExport(res, baseName, html, format);
+      return await sendExport(res, baseName, { title, body, lang: tpl.lang }, format);
     } catch (e) {
       console.error('[DRAFT] export error:', e.message);
       res.status(500).json({ error: e.message });
@@ -381,9 +386,8 @@ function mountDraftingRoutes(app, deps) {
     try {
       const { title = 'Hujjat', html = '', format = 'doc', lang = 'uz' } = req.body || {};
       if (!String(html).trim()) return res.status(400).json({ error: 'Hujjat matni bo\'sh' });
-      const full = wrapDocumentHtml(String(title).slice(0, 140), String(html).slice(0, 200000), lang);
       const baseName = (slugify(String(title)) || 'hujjat');
-      return await sendExport(res, baseName, full, format);
+      return await sendExport(res, baseName, { title: String(title).slice(0, 140), body: String(html).slice(0, 200000), lang }, format);
     } catch (e) {
       console.error('[DRAFT] export-raw error:', e.message);
       res.status(500).json({ error: e.message });
