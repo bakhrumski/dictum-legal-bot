@@ -98,7 +98,14 @@ tasdiqlandi va tuzatildi:
 | S6 | DM UPDATE policy suhbat tomonlari va matnni o'zgartirishga yo'l qo'yadi | 🟢 #350 (migratsiya 011) |
 | RAG6 | Eval `358¹`ni `358` deb hisoblaydi | ✅ #351 |
 
-Ochiq (mahsulot): D1 Workspace fayllari indekslanmaydi; D3 shablon
-eksportida erkin tahrir yo'qolishi mumkin; D4 Word eksporti haqiqiy DOCX
-emas; RAG1/RAG2/RAG4/RAG5 (tahrir sanasi, kesh reviziyasi, QA eskirishi,
-kesish). Bosh sahifadagi tasdiqlanmagan va'dalar — egasi bilan.
+| D4 | Word eksporti HTML'ni `.doc` deb yuboradi | ✅ #353 — haqiqiy `.docx` (sarlavha, ro'yxat, jadval, `358¹`) |
+| D3 | Shablon eksportida qo'lda tahrir yo'qoladi | ✅ #354 — sahifadagi matn eksport qilinadi |
+| — | #343 dan beri shablon eksporti bo'sh maydonlar bilan chiqardi (`data-k` sanitizer'da o'chirilgan) | ✅ #354 (production regressiyasi) |
+| D1 | Workspace'ga yuklangan PDF/DOCX matni indekslanmaydi | ✅ #355 — yuklashda matn ajratiladi |
+| D2 | Bitta uzun hujjat AI kontekstini to'liq egallaydi | ✅ #355 — adolatli ulush, mos parchalar |
+| RAG2 | Javob keshi korpus yangilanganda eskiradi | ✅ #356 — kalitda korpus reviziyasi va siyosat versiyasi |
+| RAG6b | Router `358-modda prim 1`, Kirill/Rus modda shakllarini tanimaydi | ✅ #357 (12 savol: 5 → 12) |
+| RAG7 | Qonun nomi Rus/Kirill qisqartmasida (ГК, УК, КоАП…) tanilmaydi | ✅ #358 (19 savol: 4 → 19) |
+
+Ochiq: RAG1/RAG4/RAG5 (tahrir sanasi, QA eskirishi, kesish). Bosh
+sahifadagi tasdiqlanmagan va'dalar — egasi bilan.
