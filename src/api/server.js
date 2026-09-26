@@ -44,7 +44,7 @@ const {
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { selectSemanticGuarantee, semanticMarginFrom } = require('../rag/semantic-guarantee');
-const { correctiveFilter } = require('../rag/corrective');
+const { correctiveFilter, correctiveModeFrom } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
@@ -4912,9 +4912,11 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   let goodChunks = rawResults;
   let needsWebSearch = rawResults.length < 2;
 
-  if (rawResults.length > 0 && typeof callAI === 'function') {
+  const correctiveMode = correctiveModeFrom(opts);
+  if (rawResults.length > 0 && typeof callAI === 'function' && correctiveMode !== 'off') {
     try {
-      const corrective = await correctiveFilter(query, rawResults, callAI);
+      const grader = correctiveMode === 'cheap' ? callCheapAI : callAI;
+      const corrective = await correctiveFilter(query, rawResults, grader);
       goodChunks = corrective.good.length > 0 ? corrective.good : rawResults.slice(0, FINAL_K);
       needsWebSearch = corrective.needsWebSearch;
     } catch (err) {

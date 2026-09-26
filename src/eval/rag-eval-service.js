@@ -256,7 +256,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
     return { set: GOLD_SET, created: cases.length };
   }
 
-  async function runSet({ setName, mode = 'corpus', topicMode = 'none', semanticMargin = null, keywordLengthNorm = null, onProgress = () => {} }) {
+  async function runSet({ setName, mode = 'corpus', topicMode = 'none', semanticMargin = null, keywordLengthNorm = null, correctiveMode = null, onProgress = () => {} }) {
     const cases = (await pool.query(
       'SELECT * FROM rag_eval_cases WHERE set_name = $1 ORDER BY id', [setName])).rows;
     // language 'any': retrieval is called as production calls it (every
@@ -265,6 +265,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
     const params = { mode, topicMode, language: 'any', cases: cases.length };
     if (semanticMargin !== null) params.semanticMargin = semanticMargin;
     if (keywordLengthNorm !== null) params.keywordLengthNorm = keywordLengthNorm;
+    if (correctiveMode !== null) params.correctiveMode = correctiveMode;
     const run = (await pool.query(
       'INSERT INTO rag_eval_runs (set_name, params) VALUES ($1, $2) RETURNING id', [setName, params])).rows[0];
     const results = await mapLimit(cases, 3, async (c, i) => {
@@ -275,6 +276,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
         const opts = { noWebFallback: mode !== 'full' };
         if (semanticMargin !== null) opts.semanticMargin = semanticMargin;
         if (keywordLengthNorm !== null) opts.keywordLengthNorm = keywordLengthNorm;
+        if (correctiveMode !== null) opts.correctiveMode = correctiveMode;
         const r = await retrieve(c.question, topicMode === 'oracle' ? c.topic : null, null, opts);
         const chunks = (r && r.chunks) || [];
         if (r && r.meta && r.meta.timings) row.stages = r.meta.timings;
@@ -301,11 +303,12 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
   }
 
   /** One job at a time: build the set if missing, then run it. */
-  function start({ setName = SYNTHETIC_SET, n = 150, mode = 'corpus', topicMode = 'none', semanticMargin = null, keywordLengthNorm = null } = {}) {
+  function start({ setName = SYNTHETIC_SET, n = 150, mode = 'corpus', topicMode = 'none', semanticMargin = null, keywordLengthNorm = null, correctiveMode = null } = {}) {
     if (state.job && state.job.status === 'running') return { started: false, job: publicJob() };
     const job = { status: 'running', phase: 'starting', setName, mode, topicMode, done: 0, total: 0, startedAt: new Date().toISOString() };
     if (semanticMargin !== null) job.semanticMargin = semanticMargin;
     if (keywordLengthNorm !== null) job.keywordLengthNorm = keywordLengthNorm;
+    if (correctiveMode !== null) job.correctiveMode = correctiveMode;
     state.job = job;
     const progress = (phase) => (d, t) => { job.phase = phase; job.done = d; job.total = t; };
     (async () => {
@@ -316,7 +319,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
         else throw new Error(`Unknown set ${setName}`);
       }
       job.phase = 'running';
-      const result = await runSet({ setName, mode, topicMode, semanticMargin, keywordLengthNorm, onProgress: progress('running') });
+      const result = await runSet({ setName, mode, topicMode, semanticMargin, keywordLengthNorm, correctiveMode, onProgress: progress('running') });
       Object.assign(job, { status: 'done', phase: 'done', runId: result.runId, summary: result.summary, finishedAt: new Date().toISOString() });
     })().catch((err) => {
       log.error('[RAG-EVAL] job failed:', err.stack || err);
@@ -381,7 +384,9 @@ function mountRagEvalRoutes(app, { requireMasterAdmin, service }) {
         const semanticMargin = req.query.margin !== undefined && Number.isFinite(margin) && margin >= 0 && margin <= 1 ? margin : null;
         // ?lengthNorm=1 (or 0) tries keyword length normalisation for this run only.
         const keywordLengthNorm = req.query.lengthNorm === '1' ? true : req.query.lengthNorm === '0' ? false : null;
-        const started = service.start({ setName: set, n, mode, topicMode, semanticMargin, keywordLengthNorm });
+        // ?corrective=off|cheap|standard picks the chunk grader for this run only.
+        const correctiveMode = ['off', 'cheap', 'standard'].includes(req.query.corrective) ? req.query.corrective : null;
+        const started = service.start({ setName: set, n, mode, topicMode, semanticMargin, keywordLengthNorm, correctiveMode });
         return res.json({ ...started, howTo: 'Refresh /api/admin/rag-eval to watch progress; results appear under job.summary and runs.' });
       }
       res.json({ job: service.publicJob(), runs: await service.recentRuns() });

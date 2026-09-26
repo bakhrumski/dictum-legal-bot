@@ -243,6 +243,24 @@ const quiet = { log() {}, warn() {}, error() {} };
     assert.strictEqual(body.o.keywordLengthNorm, null);
   });
 
+  await test('?corrective= picks the chunk grader for one run; retrieval honours it', async () => {
+    const { correctiveModeFrom } = require('../src/rag/corrective');
+    assert.strictEqual(correctiveModeFrom({}, {}), 'standard');
+    assert.strictEqual(correctiveModeFrom({}, { RAG_CORRECTIVE_MODE: 'cheap' }), 'cheap');
+    assert.strictEqual(correctiveModeFrom({ correctiveMode: 'off' }, { RAG_CORRECTIVE_MODE: 'cheap' }), 'off');
+    assert.strictEqual(correctiveModeFrom({ correctiveMode: 'bogus' }, {}), 'standard');
+    const routes = [];
+    mountRagEvalRoutes({ get: (p, ...h) => routes.push({ p, h }) }, { requireMasterAdmin: () => {}, service: { start: (o) => ({ started: true, o }), SYNTHETIC_SET: 'synthetic-v1' } });
+    let body;
+    await routes[0].h[1]({ query: { start: '1', corrective: 'off' } }, { json: (b) => { body = b; } });
+    assert.strictEqual(body.o.correctiveMode, 'off');
+    await routes[0].h[1]({ query: { start: '1', corrective: 'x' } }, { json: (b) => { body = b; } });
+    assert.strictEqual(body.o.correctiveMode, null);
+    const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
+    assert.ok(/const correctiveMode = correctiveModeFrom\(opts\);/.test(server));
+    assert.ok(/correctiveMode !== 'off'/.test(server) && /correctiveMode === 'cheap' \? callCheapAI : callAI/.test(server));
+  });
+
   await test('route is master-only and starts only with ?start=1', () => {
     const routes = [];
     const app = { get: (p, ...h) => routes.push({ p, h }) };
