@@ -122,4 +122,16 @@ async function correctiveFilter(query, chunks, callAI) {
   return { good, needsWebSearch };
 }
 
-module.exports = { gradeChunks, correctiveFilter, gradeByKeywords, RELEVANCE_THRESHOLD };
+/**
+ * Which model grades retrieved chunks (eval run 7: grading took p50 7.5 s of
+ * an 10.9 s retrieval on the standard model). opts.correctiveMode, else
+ * RAG_CORRECTIVE_MODE: 'standard' (default, unchanged), 'cheap' (the cheap
+ * lane) or 'off' (no grading; web search then only when fewer than two
+ * chunks came back).
+ */
+function correctiveModeFrom(opts = {}, env = process.env) {
+  const raw = String(opts.correctiveMode || env.RAG_CORRECTIVE_MODE || '').trim().toLowerCase();
+  return ['standard', 'cheap', 'off'].includes(raw) ? raw : 'standard';
+}
+
+module.exports = { gradeChunks, correctiveFilter, gradeByKeywords, correctiveModeFrom, RELEVANCE_THRESHOLD };
