@@ -497,6 +497,12 @@ async function denseSearchByEmbedding(embeddingStr, opts = {}) {
   }));
 }
 
+/** opts.keywordLengthNorm, else RAG_KEYWORD_LENGTH_NORM ('1'/'true'/'on'); off by default. */
+function keywordLengthNormFrom(opts = {}, env = process.env) {
+  if (typeof opts.keywordLengthNorm === 'boolean') return opts.keywordLengthNorm;
+  return /^(1|true|on|yes)$/i.test(String(env.RAG_KEYWORD_LENGTH_NORM || '').trim());
+}
+
 async function keywordSearch(query, opts = {}) {
   await initLegalCorpus();
 
@@ -505,6 +511,7 @@ async function keywordSearch(query, opts = {}) {
     language = null,
     limit = 5,
   } = opts;
+  const lengthNorm = keywordLengthNormFrom(opts);
 
   const search = buildKeywordArtifacts(query);
   if ((!search.tsQuery || search.tsQuery.length === 0) && search.phrases.length === 0) {
@@ -514,7 +521,7 @@ async function keywordSearch(query, opts = {}) {
   const { whereClause, params: filterParams } = buildRetrievalFilters({
     category,
     language,
-    startIndex: 6,
+    startIndex: 7,
   });
 
   const result = await pool.query(`
@@ -536,7 +543,10 @@ async function keywordSearch(query, opts = {}) {
         lc.part_number,
         lc.lex_element_id,
         lc.is_active,
+        char_length(lc.chunk_text) AS chunk_chars,
         COALESCE(ts_rank_cd(lc.tsv, to_tsquery('simple', $1)), 0) AS keyword_score,
+        -- 1|32: divided by 1 + log(length), then rank/(rank + 1), so it stays in 0..1.
+        COALESCE(ts_rank_cd(lc.tsv, to_tsquery('simple', $1), 33), 0) AS keyword_score_norm,
         CASE
           WHEN $2 = '' THEN FALSE
           ELSE lc.tsv @@ to_tsquery('simple', $2)
@@ -568,10 +578,17 @@ async function keywordSearch(query, opts = {}) {
     SELECT
       *,
       (
-        keyword_score
-        + (keyword_term_hits * 0.08)
-        + CASE WHEN core_term_match THEN 0.18 ELSE 0 END
-        + CASE WHEN exact_phrase_match THEN 0.35 ELSE 0 END
+        (
+          CASE WHEN $6 THEN keyword_score_norm ELSE keyword_score END
+          + (keyword_term_hits * 0.08)
+          + CASE WHEN core_term_match THEN 0.18 ELSE 0 END
+          + CASE WHEN exact_phrase_match THEN 0.35 ELSE 0 END
+        )
+        -- Length normalisation (eval runs 5-6): a very long chunk contains
+        -- most common words and phrases, and its raw cover-density rank grows
+        -- with it (15k characters ranked ~15 against ~1 for an article), so
+        -- one broad regulation topped keyword search for half of all questions.
+        * CASE WHEN $6 THEN LEAST(1.0, sqrt(2500.0 / GREATEST(chunk_chars, 1))) ELSE 1.0 END
         + CASE WHEN source_type = 'verified_qa' THEN 0.15 ELSE 0 END
       ) AS score
     FROM keyword_candidates
@@ -583,11 +600,13 @@ async function keywordSearch(query, opts = {}) {
     search.searchTokens,
     search.phrases,
     limit,
+    lengthNorm,
     ...filterParams,
   ]);
 
   return result.rows.map((row) => ({
     ...row,
+    chunk_chars: Number(row.chunk_chars || 0),
     keyword_score: Number(row.keyword_score || 0),
     keyword_term_hits: Number(row.keyword_term_hits || 0),
     exact_phrase_match: Boolean(row.exact_phrase_match),
@@ -1353,6 +1372,7 @@ async function getIngestStats() {
 }
 
 module.exports = {
+  keywordLengthNormFrom,
   initLegalCorpus,
   insertChunks,
   deleteByDocId,

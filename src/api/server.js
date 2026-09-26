@@ -4736,6 +4736,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       category: topic || null,
       language,
       limit: 6,
+      keywordLengthNorm: opts.keywordLengthNorm,
     });
 
     // Cap guaranteed keyword matches at 2 so loosely-matching entries (e.g.
@@ -4848,7 +4849,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         limit: 6,
       });
       const unscopedKeyword = apiKey
-        ? await keywordSearch(query, { category: null, language: null, limit: 6 })
+        ? await keywordSearch(query, { category: null, language: null, limit: 6, keywordLengthNorm: opts.keywordLengthNorm })
         : [];
 
       // Cross-field augmentation pulls relevant LAW from OTHER legal fields —

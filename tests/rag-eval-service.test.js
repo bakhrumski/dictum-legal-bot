@@ -217,6 +217,32 @@ const quiet = { log() {}, warn() {}, error() {} };
     assert.ok(/const meta = \{\s*searchMode,\s*timings,/.test(server), 'timings reach meta');
   });
 
+  await test('?lengthNorm=1 reaches retrieval for that run only; hubs report their length', async () => {
+    const seen = [];
+    const pool = { query: async (sql) => {
+      if (/SELECT \* FROM rag_eval_cases/.test(sql)) return { rows: [{ id: 1, question: 'Aliment qancha?', language: 'uz', topic: 'oila', expected_law: 'Oila kodeksi', expected_articles: ['99'] }] };
+      if (/INSERT INTO rag_eval_runs/.test(sql)) return { rows: [{ id: 1 }] };
+      return { rows: [] };
+    } };
+    const service = createRagEvalService({ pool, log: quiet, getArticleRefs: refs, callCheapAI: async () => ({}),
+      retrieve: async (q, t, l, opts) => { seen.push(opts); return { chunks: [{ law_name: 'VMQ-86 NIZOM', chunk_text: 'x'.repeat(15000) }] }; } });
+    const r = await service.runSet({ setName: 'synthetic-v1', keywordLengthNorm: true });
+    assert.strictEqual(seen[0].keywordLengthNorm, true);
+    assert.strictEqual(r.params.keywordLengthNorm, true);
+    await service.runSet({ setName: 'synthetic-v1' });
+    assert.ok(!('keywordLengthNorm' in seen[1]));
+    const { findHubs } = require('../src/eval/rag-eval-service');
+    const hubs = findHubs([1, 2, 3].map(i => ({ id: i, top3: ['VMQ-86 NIZOM'], top3Chars: [15000] })));
+    assert.deepStrictEqual(hubs, [{ chunk: 'VMQ-86 NIZOM', cases: 3, chars: 15000 }]);
+    const routes = [];
+    mountRagEvalRoutes({ get: (p, ...h) => routes.push({ p, h }) }, { requireMasterAdmin: () => {}, service: { start: (o) => ({ started: true, o }), SYNTHETIC_SET: 'synthetic-v1' } });
+    let body;
+    await routes[0].h[1]({ query: { start: '1', lengthNorm: '1' } }, { json: (b) => { body = b; } });
+    assert.strictEqual(body.o.keywordLengthNorm, true);
+    await routes[0].h[1]({ query: { start: '1' } }, { json: (b) => { body = b; } });
+    assert.strictEqual(body.o.keywordLengthNorm, null);
+  });
+
   await test('route is master-only and starts only with ?start=1', () => {
     const routes = [];
     const app = { get: (p, ...h) => routes.push({ p, h }) };
