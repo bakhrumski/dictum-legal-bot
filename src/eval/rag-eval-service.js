@@ -113,9 +113,22 @@ function summarize(results, ks = [1, 3, 7]) {
     const all = metrics(results, ks);
     out.allCases = { cases: all.cases, 'recall@1': all['recall@1'], 'recall@3': all['recall@3'], 'recall@7': all['recall@7'], mrr: all.mrr };
   }
+  const stageMs = stageLatency(results);
+  if (stageMs) out.stageMs = stageMs;
   const hubs = findHubs(results);
   if (hubs.length) out.hubs = hubs;
   return out;
+}
+
+/** p50/p95 per retrieval stage (meta.timings), to see where the time goes. */
+function stageLatency(results) {
+  const byStage = {};
+  for (const r of results) for (const [k, v] of Object.entries(r.stages || {})) {
+    if (Number.isFinite(v)) (byStage[k] = byStage[k] || []).push(v);
+  }
+  const names = Object.keys(byStage);
+  if (!names.length) return null;
+  return Object.fromEntries(names.map(k => [k, { p50: percentile(byStage[k], 50), p95: percentile(byStage[k], 95) }]));
 }
 
 function metrics(results, ks) {
@@ -253,6 +266,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
         if (semanticMargin !== null) opts.semanticMargin = semanticMargin;
         const r = await retrieve(c.question, topicMode === 'oracle' ? c.topic : null, null, opts);
         const chunks = (r && r.chunks) || [];
+        if (r && r.meta && r.meta.timings) row.stages = r.meta.timings;
         row.returned = chunks.length;
         row.rank = hitRank(chunks, c, getArticleRefs);
         row.lawHit = chunks.some(ch => lawMatches(ch, c));

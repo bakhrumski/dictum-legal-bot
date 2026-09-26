@@ -4591,6 +4591,13 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   }
   query = expandedQuery;
 
+  // Wall-clock per stage, reported in meta.timings (eval run 5: retrieval
+  // alone took p50 11.6 s; this shows where).
+  const timings = {};
+  const retrievalStart = Date.now();
+  let lastMark = retrievalStart;
+  const markStage = (name) => { const now = Date.now(); timings[name] = (timings[name] || 0) + (now - lastMark); lastMark = now; };
+
   // ── 1. Router: choose search strategy ──
   const route = routeQuery(query);
   console.log(`[RAG] Route: ${route.strategy} | entities: ${route.entities.join(', ') || '—'}`);
@@ -4625,6 +4632,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // right articles 130/358/129 at 0.78). Run the flat vector search directly and
   // guarantee its top LAW results into context so they can't be crowded out by
   // generic keyword/exact matches downstream.
+  markStage('article');
   let semanticMatches = [];
   {
     const embKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
@@ -4663,6 +4671,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   }
 
   // ── 2. RRF Hybrid Search ──
+  markStage('semantic');
   const retrievalLimit = 15;
   let rawResults = [];
   let guaranteedKeywordMatches = [];
@@ -4874,6 +4883,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // best chunk from each relevant law) and keyword/exact hits coexist — a
   // multi-law question (e.g. corporate vs government bonds) can cite all of them.
   const FINAL_K = 7;
+  markStage('hybrid');
 
   if (rawResults.length > FINAL_K) {
     try {
@@ -4885,6 +4895,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       rawResults = rawResults.slice(0, FINAL_K);
     }
   }
+  markStage('rerank');
 
   if (guaranteedKeywordMatches.length > 0) {
     rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, FINAL_K);
@@ -4909,6 +4920,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       console.warn(`[RAG] Corrective filter failed (${err.message}), using raw results`);
     }
   }
+  markStage('corrective');
 
   // Keep strong keyword matches in the top prompt context even after corrective filtering.
   if (guaranteedKeywordMatches.length > 0) {
@@ -5141,8 +5153,11 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     type: s.type, count: s.count, laws: Array.from(s.laws).slice(0, 3)
   }));
 
+  markStage('rest');
+  timings.total = Date.now() - retrievalStart;
   const meta = {
     searchMode,
+    timings,
     chunks: citationChunks.length,
     webResults: webResults.length,
     lexLiveResults: lexLiveResults.length,

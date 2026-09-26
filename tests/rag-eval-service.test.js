@@ -203,6 +203,20 @@ const quiet = { log() {}, warn() {}, error() {} };
     assert.strictEqual(semanticMarginFrom({}, { RAG_SEMANTIC_MARGIN: 'x' }), null);
   });
 
+  await test('the summary shows where retrieval time goes, stage by stage', () => {
+    const { summarize: sum } = require('../src/eval/rag-eval-service');
+    const rows = [100, 200, 300, 400].map((ms, i) => ({ id: i, rank: 1, stages: { semantic: ms, corrective: ms * 10, total: ms * 12 } }));
+    const s = sum(rows);
+    assert.deepStrictEqual(s.stageMs.semantic, { p50: 200, p95: 400 });
+    assert.deepStrictEqual(s.stageMs.corrective, { p50: 2000, p95: 4000 });
+    assert.strictEqual(sum([{ id: 1, rank: 1 }]).stageMs, undefined);
+    const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
+    for (const stage of ['article', 'semantic', 'hybrid', 'rerank', 'corrective', 'rest']) {
+      assert.ok(server.includes(`markStage('${stage}')`), `retrieval marks ${stage}`);
+    }
+    assert.ok(/const meta = \{\s*searchMode,\s*timings,/.test(server), 'timings reach meta');
+  });
+
   await test('route is master-only and starts only with ?start=1', () => {
     const routes = [];
     const app = { get: (p, ...h) => routes.push({ p, h }) };
