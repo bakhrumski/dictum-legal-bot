@@ -94,10 +94,19 @@ function chunkLabel(ch, getArticleRefs) {
  */
 function findHubs(results, minShare = 0.1) {
   const counts = new Map();
-  for (const r of results) for (const key of new Set(r.top3 || [])) counts.set(key, (counts.get(key) || 0) + 1);
+  const chars = new Map();
+  for (const r of results) {
+    const seen = new Set();
+    (r.top3 || []).forEach((key, i) => {
+      const len = (r.top3Chars || [])[i];
+      if (len) chars.set(key, Math.max(chars.get(key) || 0, len));
+      if (!seen.has(key)) { seen.add(key); counts.set(key, (counts.get(key) || 0) + 1); }
+    });
+  }
   const floor = Math.max(3, Math.ceil(results.length * minShare));
   return [...counts.entries()].filter(([, c]) => c >= floor)
-    .sort((a, b) => b[1] - a[1]).map(([chunk, cases]) => ({ chunk, cases }));
+    .sort((a, b) => b[1] - a[1])
+    .map(([chunk, cases]) => (chars.has(chunk) ? { chunk, cases, chars: chars.get(chunk) } : { chunk, cases }));
 }
 
 /**
@@ -247,7 +256,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
     return { set: GOLD_SET, created: cases.length };
   }
 
-  async function runSet({ setName, mode = 'corpus', topicMode = 'none', semanticMargin = null, onProgress = () => {} }) {
+  async function runSet({ setName, mode = 'corpus', topicMode = 'none', semanticMargin = null, keywordLengthNorm = null, onProgress = () => {} }) {
     const cases = (await pool.query(
       'SELECT * FROM rag_eval_cases WHERE set_name = $1 ORDER BY id', [setName])).rows;
     // language 'any': retrieval is called as production calls it (every
@@ -255,6 +264,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
     // questions, which limited them to the few Russian-language chunks.
     const params = { mode, topicMode, language: 'any', cases: cases.length };
     if (semanticMargin !== null) params.semanticMargin = semanticMargin;
+    if (keywordLengthNorm !== null) params.keywordLengthNorm = keywordLengthNorm;
     const run = (await pool.query(
       'INSERT INTO rag_eval_runs (set_name, params) VALUES ($1, $2) RETURNING id', [setName, params])).rows[0];
     const results = await mapLimit(cases, 3, async (c, i) => {
@@ -264,6 +274,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
       try {
         const opts = { noWebFallback: mode !== 'full' };
         if (semanticMargin !== null) opts.semanticMargin = semanticMargin;
+        if (keywordLengthNorm !== null) opts.keywordLengthNorm = keywordLengthNorm;
         const r = await retrieve(c.question, topicMode === 'oracle' ? c.topic : null, null, opts);
         const chunks = (r && r.chunks) || [];
         if (r && r.meta && r.meta.timings) row.stages = r.meta.timings;
@@ -271,6 +282,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
         row.rank = hitRank(chunks, c, getArticleRefs);
         row.lawHit = chunks.some(ch => lawMatches(ch, c));
         row.top3 = chunks.slice(0, 3).map(ch => `${ch.law_name} ${(getArticleRefs(ch) || []).slice(0, 3).join(',')}`.trim());
+        row.top3Chars = chunks.slice(0, 3).map(ch => String(ch.chunk_text || '').length);
         if (!row.rank) row.expected = `${c.expected_law} ${(c.expected_articles || []).join(',')}`;
         if (!row.rank) row.top = chunks.slice(0, 3).map(ch => chunkLabel(ch, getArticleRefs));
       } catch (err) {
@@ -289,10 +301,11 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
   }
 
   /** One job at a time: build the set if missing, then run it. */
-  function start({ setName = SYNTHETIC_SET, n = 150, mode = 'corpus', topicMode = 'none', semanticMargin = null } = {}) {
+  function start({ setName = SYNTHETIC_SET, n = 150, mode = 'corpus', topicMode = 'none', semanticMargin = null, keywordLengthNorm = null } = {}) {
     if (state.job && state.job.status === 'running') return { started: false, job: publicJob() };
     const job = { status: 'running', phase: 'starting', setName, mode, topicMode, done: 0, total: 0, startedAt: new Date().toISOString() };
     if (semanticMargin !== null) job.semanticMargin = semanticMargin;
+    if (keywordLengthNorm !== null) job.keywordLengthNorm = keywordLengthNorm;
     state.job = job;
     const progress = (phase) => (d, t) => { job.phase = phase; job.done = d; job.total = t; };
     (async () => {
@@ -303,7 +316,7 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
         else throw new Error(`Unknown set ${setName}`);
       }
       job.phase = 'running';
-      const result = await runSet({ setName, mode, topicMode, semanticMargin, onProgress: progress('running') });
+      const result = await runSet({ setName, mode, topicMode, semanticMargin, keywordLengthNorm, onProgress: progress('running') });
       Object.assign(job, { status: 'done', phase: 'done', runId: result.runId, summary: result.summary, finishedAt: new Date().toISOString() });
     })().catch((err) => {
       log.error('[RAG-EVAL] job failed:', err.stack || err);
@@ -366,7 +379,9 @@ function mountRagEvalRoutes(app, { requireMasterAdmin, service }) {
         // ?margin=0.05 tries the semantic-guarantee score margin for this run only.
         const margin = Number(req.query.margin);
         const semanticMargin = req.query.margin !== undefined && Number.isFinite(margin) && margin >= 0 && margin <= 1 ? margin : null;
-        const started = service.start({ setName: set, n, mode, topicMode, semanticMargin });
+        // ?lengthNorm=1 (or 0) tries keyword length normalisation for this run only.
+        const keywordLengthNorm = req.query.lengthNorm === '1' ? true : req.query.lengthNorm === '0' ? false : null;
+        const started = service.start({ setName: set, n, mode, topicMode, semanticMargin, keywordLengthNorm });
         return res.json({ ...started, howTo: 'Refresh /api/admin/rag-eval to watch progress; results appear under job.summary and runs.' });
       }
       res.json({ job: service.publicJob(), runs: await service.recentRuns() });
