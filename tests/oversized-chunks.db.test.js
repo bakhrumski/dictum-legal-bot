@@ -20,7 +20,7 @@ if (/supabase\.co|render\.com|pooler\./i.test(process.env.TEST_DATABASE_URL)) {
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 const { pool } = require('../src/database/db');
 const { initLegalCorpus } = require('../src/rag/legal-corpus');
-const { findOversizedChunks, rechunkOne, mountOversizedChunkRoutes } = require('../src/rag/oversized-chunks');
+const { findOversizedChunks, findTruncatedLawText, rechunkOne, mountOversizedChunkRoutes } = require('../src/rag/oversized-chunks');
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -85,14 +85,27 @@ async function test(name, fn) {
       assert.strictEqual((await pool.query('SELECT 1 FROM legal_chunks WHERE id = $1', [qa])).rowCount, 1);
     });
 
+    await test('law text cut by the old structural chunker is listed by category', async () => {
+      await pool.query(
+        `INSERT INTO legal_chunks (law_name, category, chunk_text, source_type, doc_id, source_url, chunk_type, is_valid) VALUES
+         ('TEST Soliq kodeksi', 'test-oversized', $1, 'law_text', 'trunc_nk', 'https://lex.uz/docs/nk', 'parent', TRUE),
+         ('TEST Soliq kodeksi', 'test-oversized', $2, 'law_text', 'trunc_nk', 'https://lex.uz/docs/nk', 'child', TRUE),
+         ('TEST Soliq kodeksi', 'test-oversized', 'qisqa modda', 'law_text', 'trunc_nk', 'https://lex.uz/docs/nk', 'parent', TRUE)`,
+        ['a'.repeat(3200), 'b'.repeat(800)]);
+      const r = await findTruncatedLawText(pool);
+      const doc = r.documents.find(d => d.law_name === 'TEST Soliq kodeksi');
+      assert.deepStrictEqual([doc.articles_cut, doc.parts_cut, doc.source_url], [1, 1, 'https://lex.uz/docs/nk']);
+      assert.deepStrictEqual(r.byCategory['test-oversized'], { documents: 1, articles_cut: 1, parts_cut: 1 });
+    });
+
     await test('the route is master-only and lists without ?fix=1', async () => {
       const routes = [];
       const requireMasterAdmin = function requireMasterAdmin() {};
       mountOversizedChunkRoutes({ get: (p, ...h) => routes.push({ p, h }) }, { requireMasterAdmin, pool, embedTexts: embed });
-      assert.strictEqual(routes[0].p, '/api/admin/corpus/oversized');
-      assert.strictEqual(routes[0].h[0], requireMasterAdmin);
+      assert.deepStrictEqual(routes.map(r => r.p), ['/api/admin/corpus/truncated', '/api/admin/corpus/oversized']);
+      assert.ok(routes.every(r => r.h[0] === requireMasterAdmin));
       let body;
-      await routes[0].h[1]({ query: {} }, { json: (b) => { body = b; }, status: () => ({ json: (b) => { body = b; } }) });
+      await routes[1].h[1]({ query: {} }, { json: (b) => { body = b; }, status: () => ({ json: (b) => { body = b; } }) });
       assert.ok(Array.isArray(body.oversized) && body.oversized.some(r => r.law_name === 'TEST-OVERSIZED NIZOM'));
     });
   } finally {

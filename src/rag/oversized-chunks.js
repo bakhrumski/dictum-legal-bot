@@ -86,9 +86,47 @@ async function rechunkOne(pool, id, embedTexts, { minChars = OVERSIZED_CHARS, pi
   return { id, pieces: pieces.length };
 }
 
+/**
+ * Law text the structural chunker cut short: until the chunker split long
+ * articles, a parent was cut at exactly PARENT_MAX_CHARS and a child at
+ * CHILD_MAX_CHARS. Grouped by category, so the owner knows which fields to
+ * refresh with the dashboard's "Yangilash" (re-ingest from lex.uz).
+ */
+async function findTruncatedLawText(pool, { parentMax, childMax } = {}) {
+  const { PARENT_MAX_CHARS, CHILD_MAX_CHARS } = require('./structural-chunker');
+  const pMax = parentMax || PARENT_MAX_CHARS;
+  const cMax = childMax || CHILD_MAX_CHARS;
+  const { rows } = await pool.query(
+    `SELECT category, law_name, source_url,
+            count(*) FILTER (WHERE chunk_type = 'parent' AND char_length(chunk_text) = $1)::int AS articles_cut,
+            count(*) FILTER (WHERE chunk_type = 'child' AND char_length(chunk_text) = $2)::int AS parts_cut
+       FROM legal_chunks
+      WHERE source_type = 'law_text' AND is_valid IS NOT FALSE
+      GROUP BY category, law_name, source_url
+     HAVING count(*) FILTER (WHERE chunk_type = 'parent' AND char_length(chunk_text) = $1) > 0
+         OR count(*) FILTER (WHERE chunk_type = 'child' AND char_length(chunk_text) = $2) > 0
+      ORDER BY 4 DESC, 5 DESC`,
+    [pMax, cMax]
+  );
+  const byCategory = {};
+  for (const r of rows) {
+    const c = (byCategory[r.category || '—'] = byCategory[r.category || '—'] || { documents: 0, articles_cut: 0, parts_cut: 0 });
+    c.documents++; c.articles_cut += r.articles_cut; c.parts_cut += r.parts_cut;
+  }
+  return { byCategory, documents: rows.slice(0, 100) };
+}
+
 /** GET /api/admin/corpus/oversized - list; ?fix=1 re-chunks them (master only). */
 function mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts, log = console }) {
   let running = null;
+  app.get('/api/admin/corpus/truncated', requireMasterAdmin, async (req, res) => {
+    try {
+      res.json({ ...(await findTruncatedLawText(pool)),
+        howTo: "Re-ingest each listed category with the dashboard's Yangilash button; this list empties as they finish." });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
   app.get('/api/admin/corpus/oversized', requireMasterAdmin, async (req, res) => {
     try {
       const found = await findOversizedChunks(pool);
@@ -109,4 +147,4 @@ function mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts, 
   });
 }
 
-module.exports = { findOversizedChunks, rechunkOne, mountOversizedChunkRoutes, OVERSIZED_CHARS, PIECE_CHARS, DOCUMENT_TYPES };
+module.exports = { findOversizedChunks, findTruncatedLawText, rechunkOne, mountOversizedChunkRoutes, OVERSIZED_CHARS, PIECE_CHARS, DOCUMENT_TYPES };

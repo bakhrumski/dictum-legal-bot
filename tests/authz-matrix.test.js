@@ -61,6 +61,7 @@ const CASES = [
   ['GET', '/api/admin/corpus-diagnostic', REJECTED, 'corpus diagnostic'],
   ['GET', '/api/admin/retrieval-debug?q=test', REJECTED, 'retrieval debug'],
   ['GET', '/api/admin/corpus/oversized?fix=1', REJECTED, 'oversized chunk re-chunking'],
+  ['GET', '/api/admin/corpus/truncated', REJECTED, 'truncated law text report'],
   ['GET', '/api/admin/answer-feedback', REJECTED, 'error reports'],
   ['GET', '/api/admin/operations-overview', REJECTED, 'operations command center'],
   ['GET', '/api/admin/attorneys', REJECTED, 'attorney verification'],
