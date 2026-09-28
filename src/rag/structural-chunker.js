@@ -23,6 +23,7 @@
  */
 
 const cheerio = require('cheerio');
+const { splitOversized } = require('./chunker');
 
 // ========== CONSTANTS ==========
 
@@ -433,30 +434,36 @@ function chunkByArticle(articles, docMeta = {}) {
   for (const article of articles) {
     const parentId = `${docMeta.doc_id || 'doc'}_art_${article.articleNumber}`;
 
-    // ── PARENT CHUNK: full article ──
-    const parentText = buildParentText(article);
-
-    if (parentText.length > 0) {
-      chunks.push({
-        text: parentText.substring(0, PARENT_MAX_CHARS),
-        chunkType: 'parent',
-        parentId: null,
-        metadata: {
-          ...docMeta,
-          chunkId: parentId,
-          articleNumber: article.articleNumber,
-          articleTitle: article.articleTitle,
-          partNumber: null,
-          partType: 'article',
-          lexElementId: article.lexElementId || '',
-          chapter: article.chapter,
-          section: article.section,
-          references: article.references,
-        },
-      });
+    // ── PARENT CHUNKS: the full article ──
+    // An article longer than PARENT_MAX_CHARS used to be cut at that length,
+    // so its later parts never reached the model. It is now stored as
+    // consecutive pieces (the first keeps the article's chunk id, so existing
+    // links still resolve); each child links to the piece holding its text.
+    const parentPieces = buildParentPieces(article, parentId);
+    const parentMeta = (chunkId) => ({
+      ...docMeta,
+      chunkId,
+      articleNumber: article.articleNumber,
+      articleTitle: article.articleTitle,
+      partNumber: null,
+      partType: 'article',
+      lexElementId: article.lexElementId || '',
+      chapter: article.chapter,
+      section: article.section,
+      references: article.references,
+    });
+    for (const piece of parentPieces) {
+      chunks.push({ text: piece.text, chunkType: 'parent', parentId: null, metadata: parentMeta(piece.id) });
     }
+    const pieceFor = (partText) => {
+      const probe = String(partText || '').trim().slice(0, 60);
+      const hit = probe && parentPieces.find(p => p.text.includes(probe));
+      return (hit || parentPieces[0] || { id: parentId }).id;
+    };
 
     // ── CHILD CHUNKS: individual parts/clauses ──
+    // A part longer than CHILD_MAX_CHARS becomes several children instead of
+    // being cut, so its tail stays searchable.
     if (article.parts.length > 0) {
       for (const part of article.parts) {
         if (part.partType === 'preamble' && part.text.length < 50) continue;
@@ -464,22 +471,28 @@ function chunkByArticle(articles, docMeta = {}) {
         const childText = buildChildText(article, part);
         if (childText.length < 20) continue;
 
-        chunks.push({
-          text: childText.substring(0, CHILD_MAX_CHARS),
-          chunkType: 'child',
-          parentId,
-          metadata: {
-            ...docMeta,
-            chunkId: `${parentId}_p${part.partNumber}`,
-            articleNumber: article.articleNumber,
-            articleTitle: article.articleTitle,
-            partNumber: part.partNumber,
-            partType: part.partType,
-            lexElementId: part.lexElementId || article.lexElementId || '',
-            chapter: article.chapter,
-            section: article.section,
-            references: article.references,
-          },
+        const context = childText.slice(0, childText.length - part.text.length).trimEnd();
+        const bodies = childText.length <= CHILD_MAX_CHARS
+          ? [null]
+          : splitOversized(part.text, Math.max(200, CHILD_MAX_CHARS - context.length - 1));
+        bodies.forEach((body, k) => {
+          chunks.push({
+            text: body === null ? childText : `${context}\n${body}`,
+            chunkType: 'child',
+            parentId: pieceFor(body === null ? part.text : body),
+            metadata: {
+              ...docMeta,
+              chunkId: k === 0 ? `${parentId}_p${part.partNumber}` : `${parentId}_p${part.partNumber}_s${k + 1}`,
+              articleNumber: article.articleNumber,
+              articleTitle: article.articleTitle,
+              partNumber: part.partNumber,
+              partType: part.partType,
+              lexElementId: part.lexElementId || article.lexElementId || '',
+              chapter: article.chapter,
+              section: article.section,
+              references: article.references,
+            },
+          });
         });
       }
     }
@@ -488,6 +501,22 @@ function chunkByArticle(articles, docMeta = {}) {
 
   console.log(`[STRUCT-CHUNKER] ${articles.length} articles → ${chunks.length} chunks (${chunks.filter(c => c.chunkType === 'parent').length} parents, ${chunks.filter(c => c.chunkType === 'child').length} children)`);
   return chunks;
+}
+
+/**
+ * The article as one parent chunk, or as consecutive pieces of at most
+ * PARENT_MAX_CHARS when it is longer; each piece repeats the header.
+ */
+function buildParentPieces(article, parentId) {
+  const full = buildParentText(article);
+  if (!full.trim()) return [];
+  if (full.length <= PARENT_MAX_CHARS) return [{ id: parentId, text: full }];
+  const header = [article.chapter ? `[${article.chapter}]` : '', article.articleTitle].filter(Boolean).join('\n');
+  const room = Math.max(400, PARENT_MAX_CHARS - header.length - 12);
+  return splitOversized(String(article.fullText || ''), room).map((body, i) => ({
+    id: i === 0 ? parentId : `${parentId}_c${i + 1}`,
+    text: `${header}${i === 0 ? '' : '\n(davomi)'}\n${body}`,
+  }));
 }
 
 /**
