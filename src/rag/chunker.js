@@ -202,7 +202,12 @@ function chunkSections(sections, docMeta = {}) {
     if (tokenEst > CHUNK_MAX) {
       // This article is too long — split at paragraph boundaries
       flushMerge();
-      const paragraphs = sec.body.split(/\n\s*\n|\n(?=\d+\)\s)/);
+      // A paragraph with no blank line or "1)" inside it - a regulation whose
+      // points are "1.", "2." on single lines - used to stay whole: one
+      // 797,454-character chunk topped keyword search for half of all
+      // questions (eval runs 5-10). Oversized paragraphs are split further.
+      const paragraphs = sec.body.split(/\n\s*\n|\n(?=\d+\)\s)/)
+        .flatMap((para) => splitOversized(para, CHUNK_TARGET * CHARS_PER_TOKEN));
       let paraBuffer = [context, header].filter(Boolean).join('\n');
       let paraLen = paraBuffer.length;
 
@@ -266,6 +271,26 @@ function chunkSections(sections, docMeta = {}) {
  * @param {object} docMeta - { law_name, doc_id, source_url, category, ... }
  * @returns {{ text: string, metadata: object }[]}
  */
+/**
+ * Split text longer than maxChars at line breaks, then sentence ends, then
+ * spaces, so no piece exceeds maxChars. Shorter text comes back unchanged.
+ */
+function splitOversized(text, maxChars) {
+  if (!text || text.length <= maxChars) return [text];
+  const out = [];
+  let buf = '';
+  const push = () => { if (buf.trim()) out.push(buf.trim()); buf = ''; };
+  const units = text.split(/\n+/).flatMap((line) => (line.length <= maxChars ? [line]
+    : line.split(/(?<=[.!?;:])\s+/).flatMap((sentence) => (sentence.length <= maxChars ? [sentence]
+      : sentence.match(new RegExp(`[\\s\\S]{1,${maxChars}}(?=\\s|$)|[\\s\\S]{1,${maxChars}}`, 'g'))))));
+  for (const unit of units) {
+    if (buf && buf.length + 1 + unit.length > maxChars) push();
+    buf = buf ? `${buf}\n${unit}` : unit;
+  }
+  push();
+  return out;
+}
+
 function chunkLegalDocument(text, docMeta = {}) {
   if (!text || text.trim().length === 0) return [];
 
@@ -276,4 +301,4 @@ function chunkLegalDocument(text, docMeta = {}) {
   return chunks;
 }
 
-module.exports = { chunkLegalDocument, parseDocument, CHUNK_TARGET, CHUNK_MAX };
+module.exports = { chunkLegalDocument, parseDocument, splitOversized, CHUNK_TARGET, CHUNK_MAX };

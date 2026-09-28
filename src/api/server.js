@@ -10743,6 +10743,13 @@ app.get('/api/health', async (req, res) => {
   });
 }
 
+// Oversized corpus chunks: list, and re-chunk with ?fix=1 (master only).
+{
+  const { mountOversizedChunkRoutes } = require('../rag/oversized-chunks');
+  const { getEmbeddingsBatch } = require('../rag/embeddings');
+  mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts: (texts) => getEmbeddingsBatch(texts) });
+}
+
 app.get('/api/admin/health', requireMasterAdmin, async (req, res) => {
   let corpusInfo = {};
   try {
