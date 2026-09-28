@@ -15,6 +15,9 @@
 
 const { splitOversized } = require('./chunker');
 
+// Only document text is re-chunked. A verified answer ("Savol: … Javob: …")
+// is served whole and parsed by its format, so it is never split.
+const DOCUMENT_TYPES = ['law_text', 'uploaded_doc'];
 const OVERSIZED_CHARS = 8000;   // well above the chunker's 4,800-character hard max
 const PIECE_CHARS = 3200;       // the chunker's target
 
@@ -27,9 +30,10 @@ async function findOversizedChunks(pool, { minChars = OVERSIZED_CHARS, limit = 5
     `SELECT id, law_name, doc_id, source_type, source_url, char_length(chunk_text) AS chars
        FROM legal_chunks
       WHERE char_length(chunk_text) > $1 AND is_valid IS NOT FALSE
+        AND source_type = ANY($3::text[])
       ORDER BY char_length(chunk_text) DESC
       LIMIT $2`,
-    [minChars, limit]
+    [minChars, limit, DOCUMENT_TYPES]
   );
   return rows.map(r => ({ ...r, chars: Number(r.chars) }));
 }
@@ -48,9 +52,10 @@ async function copyableColumns(client) {
  * is gone or no longer oversized.
  */
 async function rechunkOne(pool, id, embedTexts, { minChars = OVERSIZED_CHARS, pieceChars = PIECE_CHARS } = {}) {
-  const { rows } = await pool.query('SELECT id, chunk_text, chunk_index FROM legal_chunks WHERE id = $1', [id]);
+  const { rows } = await pool.query('SELECT id, chunk_text, chunk_index, source_type FROM legal_chunks WHERE id = $1', [id]);
   const row = rows[0];
   if (!row || String(row.chunk_text || '').length <= minChars) return null;
+  if (!DOCUMENT_TYPES.includes(row.source_type)) return null;
 
   const pieces = splitOversized(row.chunk_text, pieceChars);
   const vectors = await embedTexts(pieces);
@@ -104,4 +109,4 @@ function mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts, 
   });
 }
 
-module.exports = { findOversizedChunks, rechunkOne, mountOversizedChunkRoutes, OVERSIZED_CHARS, PIECE_CHARS };
+module.exports = { findOversizedChunks, rechunkOne, mountOversizedChunkRoutes, OVERSIZED_CHARS, PIECE_CHARS, DOCUMENT_TYPES };

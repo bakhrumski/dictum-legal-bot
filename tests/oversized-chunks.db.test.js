@@ -37,7 +37,7 @@ async function test(name, fn) {
   const text = Array.from({ length: 400 }, (_, i) => `${i + 1}. Ruxsat berish tartib-taomillari elektron tizim orqali amalga oshiriladi.`).join('\n');
   const insert = async (docId) => (await pool.query(
     `INSERT INTO legal_chunks (law_name, category, chunk_text, source_type, doc_id, source_url, language, article_numbers, is_valid, document_number)
-     VALUES ('TEST-OVERSIZED NIZOM', 'test-oversized', $1, 'law_text', $2, 'https://lex.uz/docs/1', 'uz', '{}', TRUE, 'VMQ-86') RETURNING id`,
+     VALUES ('TEST-OVERSIZED NIZOM', 'test-oversized', $1, 'uploaded_doc', $2, 'https://lex.uz/docs/1', 'uz', '{}', TRUE, 'VMQ-86') RETURNING id`,
     [text, docId])).rows[0].id;
 
   try {
@@ -62,7 +62,7 @@ async function test(name, fn) {
       for (const p of rows) {
         assert.ok(p.chunk_text.length <= 3200);
         assert.deepStrictEqual([p.law_name, p.category, p.source_type, p.source_url, p.language, p.document_number, p.is_valid, p.has_emb, p.has_tsv],
-          ['TEST-OVERSIZED NIZOM', 'test-oversized', 'law_text', 'https://lex.uz/docs/1', 'uz', 'VMQ-86', true, true, true]);
+          ['TEST-OVERSIZED NIZOM', 'test-oversized', 'uploaded_doc', 'https://lex.uz/docs/1', 'uz', 'VMQ-86', true, true, true]);
       }
       assert.strictEqual(rows.map(p => p.chunk_text).join('\n'), text, 'no text lost');
       assert.ok(!(await findOversizedChunks(pool, { minChars: 8000, limit: 500 })).some(f => f.law_name === 'TEST-OVERSIZED NIZOM'));
@@ -73,6 +73,16 @@ async function test(name, fn) {
       await assert.rejects(rechunkOne(pool, keep, async () => { throw new Error('embedding API down'); }));
       assert.strictEqual((await pool.query('SELECT 1 FROM legal_chunks WHERE id = $1', [keep])).rowCount, 1);
       assert.strictEqual((await pool.query(`SELECT count(*)::int n FROM legal_chunks WHERE doc_id = 'oversized_fail'`)).rows[0].n, 1);
+    });
+
+    await test('a verified answer is never listed or split, however long', async () => {
+      const qa = (await pool.query(
+        `INSERT INTO legal_chunks (law_name, category, chunk_text, source_type, doc_id, is_valid)
+         VALUES ('Tasdiqlangan javob', 'test-oversized', $1, 'verified_qa', 'oversized_qa', TRUE) RETURNING id`,
+        [`Savol: uzun savol?\n\nJavob: ${'Batafsil javob matni. '.repeat(600)}`])).rows[0].id;
+      assert.ok(!(await findOversizedChunks(pool, { minChars: 8000, limit: 500 })).some(r => r.id === qa), 'not listed');
+      assert.strictEqual(await rechunkOne(pool, qa, embed), null, 'refused');
+      assert.strictEqual((await pool.query('SELECT 1 FROM legal_chunks WHERE id = $1', [qa])).rowCount, 1);
     });
 
     await test('the route is master-only and lists without ?fix=1', async () => {
