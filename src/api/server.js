@@ -45,7 +45,7 @@ const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/
 const { routeQuery } = require('../rag/router');
 const { selectSemanticGuarantee, semanticMarginFrom } = require('../rag/semantic-guarantee');
 const { correctiveFilter, correctiveModeFrom } = require('../rag/corrective');
-const { mergePrioritizedResults, isHighConfidenceKeywordMatch } = require('../rag/search-utils');
+const { mergePrioritizedResults, isHighConfidenceKeywordMatch, collapseRepeatedChunks } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 const {
@@ -4659,6 +4659,9 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         // Code 741/743) fill every slot and other relevant laws (JSC, securities
         // bylaws) never reach context. Cap 2 per law so one law can't monopolise.
         // An optional score margin keeps broad "hub" documents out (see module).
+        // A short article's parent and its only part are the same text; without
+        // this the per-law second slot went to the same article again.
+        sm = collapseRepeatedChunks(sm);
         const guarantee = selectSemanticGuarantee(sm, { margin: semanticMarginFrom(opts), limit: 6 });
         semanticMatches = guarantee.matches;
         if (semanticMatches.length > 0) {
@@ -4884,6 +4887,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // best chunk from each relevant law) and keyword/exact hits coexist — a
   // multi-law question (e.g. corporate vs government bonds) can cite all of them.
   const FINAL_K = 7;
+  rawResults = collapseRepeatedChunks(rawResults);
   markStage('hybrid');
 
   if (rawResults.length > FINAL_K) {
@@ -4956,6 +4960,8 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     }
     searchMode = `${searchMode}+cross-field`;
   }
+  // The guaranteed merges above re-add by id, so repeats can return here.
+  goodChunks = collapseRepeatedChunks(goodChunks);
 
   // ── 3b. Nuclear fallback: unscoped chunk_text ILIKE when all searches returned 0 ──
   if (goodChunks.length === 0) {
