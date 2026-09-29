@@ -181,7 +181,11 @@ function mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts, 
         const { ingestFromUrl } = require('./ingest-lex');
         reingest = { running: true, startedAt: new Date().toISOString(), results: [] };
         const job = reingest;
-        reingestDocuments(found.documents.filter(needsReingest), {
+        // One document per call by default: both runs on 2026-09-29 finished
+        // the first code and restarted the process while writing the second
+        // (memory), so a whole-list run cannot finish. ?limit=N (up to 3).
+        const limit = Math.max(1, Math.min(3, parseInt(req.query.limit, 10) || 1));
+        reingestDocuments(found.documents.filter(needsReingest).slice(0, limit), {
           fetchDoc: (url) => fetchLexDocument(url),
           ingest: (url, opts) => ingestFromUrl(url, opts),
           report: job.results,
@@ -189,7 +193,8 @@ function mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts, 
           .finally(() => { job.running = false; job.finishedAt = new Date().toISOString(); });
       }
       res.json({ ...found, reingest,
-        howTo: 'Add ?reingest=1 to re-ingest every listed document from lex.uz; refresh to follow reingest.results.' });
+        pending: found.documents.filter(needsReingest).map(d => d.law_name),
+        howTo: 'Add ?reingest=1 to re-ingest the next document in pending from lex.uz (one per call); refresh until reingest.running is false, then call again.' });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
