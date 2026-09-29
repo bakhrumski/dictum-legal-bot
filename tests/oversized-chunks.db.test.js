@@ -124,6 +124,13 @@ async function test(name, fn) {
       assert.deepStrictEqual([calls[0].docId, calls[0].category, calls[0].lawName, !!calls[0].prefetchedDoc], ['d1', 'jinoyat', 'JPK', true]);
     });
 
+    await test('re-ingest skips documents the new chunker already wrote (a few 800-character parts, no cut article)', () => {
+      const { needsReingest } = require('../src/rag/oversized-chunks');
+      const doc = (a, p) => ({ source_url: 'u', doc_id: 'd', articles_cut: a, parts_cut: p });
+      assert.deepStrictEqual([doc(19, 9), doc(0, 23), doc(0, 6), doc(0, 4), doc(0, 3)].map(needsReingest), [true, true, true, false, false]);
+      assert.strictEqual(needsReingest({ ...doc(5, 5), source_url: null }), false);
+    });
+
     await test('the same law under two doc_ids is listed as a duplicate', async () => {
       await pool.query(
         `INSERT INTO legal_chunks (law_name, category, chunk_text, source_type, doc_id, source_url, is_valid) VALUES

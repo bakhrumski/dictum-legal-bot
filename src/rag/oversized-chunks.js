@@ -128,6 +128,17 @@ async function findTruncatedLawText(pool, { parentMax, childMax } = {}) {
 }
 
 /**
+ * Whether a listed document still needs re-ingesting. The new chunker can
+ * leave a child at exactly CHILD_MAX_CHARS by chance, so a document with no
+ * cut article and only a handful of such parts was already re-ingested (the
+ * Tax Code, 0 articles and 4 parts); ingesting it again is a large job for
+ * nothing and, on 2026-09-29, the process restarted mid-run.
+ */
+function needsReingest(d) {
+  return Boolean(d.source_url && d.doc_id) && (d.articles_cut > 0 || d.parts_cut > 5);
+}
+
+/**
  * Re-ingest each listed document from its own lex.uz URL under its own
  * doc_id, one at a time, recording what happened to each: the dashboard's
  * category update left most of them unchanged without saying why (a status
@@ -170,7 +181,7 @@ function mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts, 
         const { ingestFromUrl } = require('./ingest-lex');
         reingest = { running: true, startedAt: new Date().toISOString(), results: [] };
         const job = reingest;
-        reingestDocuments(found.documents.filter(d => d.source_url && d.doc_id), {
+        reingestDocuments(found.documents.filter(needsReingest), {
           fetchDoc: (url) => fetchLexDocument(url),
           ingest: (url, opts) => ingestFromUrl(url, opts),
           report: job.results,
@@ -203,4 +214,4 @@ function mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts, 
   });
 }
 
-module.exports = { findOversizedChunks, findTruncatedLawText, reingestDocuments, rechunkOne, mountOversizedChunkRoutes, OVERSIZED_CHARS, PIECE_CHARS, DOCUMENT_TYPES };
+module.exports = { findOversizedChunks, findTruncatedLawText, reingestDocuments, needsReingest, rechunkOne, mountOversizedChunkRoutes, OVERSIZED_CHARS, PIECE_CHARS, DOCUMENT_TYPES };
