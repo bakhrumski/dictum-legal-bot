@@ -252,7 +252,9 @@ async function ingestFromUrl(url, opts = {}) {
     throw new Error(`Invalid category "${category}". Valid: ${VALID_CATEGORIES.join(', ')}`);
   }
 
-  const doc = await fetchLexDocument(url, { signal });
+  // opts.prefetchedDoc: a caller that already fetched the page (to read its
+  // status first) passes it in instead of fetching lex.uz twice.
+  const doc = opts.prefetchedDoc || await fetchLexDocument(url, { signal });
   const lexMeta = doc.metadata || {};
   const inferredLanguage = url.includes('/uz/') ? 'uz' : 'ru';
 

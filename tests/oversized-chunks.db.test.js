@@ -98,6 +98,42 @@ async function test(name, fn) {
       assert.deepStrictEqual(r.byCategory['test-oversized'], { documents: 1, articles_cut: 1, parts_cut: 1 });
     });
 
+    await test('re-ingest reports each document: done, skipped as not in force, or error', async () => {
+      const { reingestDocuments } = require('../src/rag/oversized-chunks');
+      const report = [];
+      const docs = [
+        { law_name: 'JPK', doc_id: 'd1', category: 'jinoyat', source_url: 'u1' },
+        { law_name: 'Eski', doc_id: 'd2', category: 'jinoyat', source_url: 'u2' },
+        { law_name: 'Xato', doc_id: 'd3', category: 'jinoyat', source_url: 'u3' },
+      ];
+      const calls = [];
+      await reingestDocuments(docs, {
+        pauseMs: 0,
+        report,
+        fetchDoc: async (url) => {
+          if (url === 'u3') throw new Error('lex.uz timeout');
+          return { body: 'x'.repeat(100), metadata: { is_active: url !== 'u2', status_label: url === 'u2' ? 'Hujjat kuchini yoʻqotgan' : null } };
+        },
+        ingest: async (url, opts) => { calls.push({ url, ...opts }); return 42; },
+      });
+      assert.deepStrictEqual(report.map(r => r.status), ['done', 'skipped', 'error']);
+      assert.strictEqual(report[0].chunks, 42);
+      assert.ok(/not in force/.test(report[1].reason) && /kuchini/.test(report[1].reason));
+      assert.strictEqual(report[2].reason, 'lex.uz timeout');
+      assert.strictEqual(calls.length, 1, 'only the active document is ingested');
+      assert.deepStrictEqual([calls[0].docId, calls[0].category, calls[0].lawName, !!calls[0].prefetchedDoc], ['d1', 'jinoyat', 'JPK', true]);
+    });
+
+    await test('the same law under two doc_ids is listed as a duplicate', async () => {
+      await pool.query(
+        `INSERT INTO legal_chunks (law_name, category, chunk_text, source_type, doc_id, source_url, is_valid) VALUES
+         ('TEST Dup kodeksi', 'test-oversized', 'a', 'law_text', 'dup_a', 'https://lex.uz/uz/docs/1', TRUE),
+         ('TEST Dup kodeksi', 'test-oversized', 'b', 'law_text', 'dup_b', 'https://lex.uz/docs/-1', TRUE)`);
+      const r = await findTruncatedLawText(pool);
+      const d = r.duplicates.find(x => x.law_name === 'TEST Dup kodeksi');
+      assert.deepStrictEqual(d.doc_ids.sort(), ['dup_a', 'dup_b']);
+    });
+
     await test('the route is master-only and lists without ?fix=1', async () => {
       const routes = [];
       const requireMasterAdmin = function requireMasterAdmin() {};
