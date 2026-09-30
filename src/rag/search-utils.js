@@ -167,31 +167,60 @@ function mergePrioritizedResults(prioritized = [], results = [], limit = null) {
 }
 
 /**
- * Drop a chunk that repeats one already listed (eval run 17: in 10 of 47
- * misses the same article filled two of the top 3). A short article is
- * stored twice - as its parent and as its only part, with the same text -
- * and a parent-child hit wraps the parent text again under another id, so
- * id dedupe keeps both. A later chunk of the same law whose text is inside
- * an earlier one's is dropped; if the later one holds the earlier one, the
- * earlier keeps its place and id and takes the longer text. Different parts
- * of a long article are different text and are kept.
+ * One article, one slot. Eval run 17: in 10 of 47 misses the same article
+ * filled two of the top 3 (Mehnat kodeksi 207 twice at 0.74), and matching
+ * on identical text (run 19) caught none of them: an article is stored as
+ * its parent ("[bob]\n207-modda. …\nfull text") and as parts ("207-modda.
+ * … — 1-qism:\npart text"), and a parent-child hit wraps both under another
+ * id, so the copies differ in their headers.
+ *
+ * law_text chunks of the same law and the same single article collapse into
+ * the first (highest-ranked) one, which keeps its place and id:
+ *  - a later chunk whose body is inside the kept text is dropped;
+ *  - if the kept body is inside the later chunk (a part, then its article),
+ *    the kept one takes the later text;
+ *  - otherwise (two different parts, or two pieces of a long article) the
+ *    texts are joined while they fit in maxChars, else the later is dropped.
+ * Chunks without a single article number fall back to plain containment.
+ * QA answers and other source types are never touched.
  */
-function collapseRepeatedChunks(chunks = []) {
+function collapseRepeatedChunks(chunks = [], { maxChars = 7000 } = {}) {
   const norm = (t) => String(t || '').replace(MULTISPACE_RX, ' ').trim();
+  // The body without the header line ("207-modda. … — 1-qism:" or "[bob]").
+  const body = (t) => {
+    const s = String(t || '');
+    const nl = s.indexOf('\n');
+    return norm(nl > 0 && nl < s.length - 1 ? s.slice(nl + 1) : s);
+  };
+  const articleOf = (r) => {
+    const nums = Array.isArray(r.article_numbers) ? r.article_numbers.filter(Boolean) : [];
+    if (nums.length === 1) return String(nums[0]).trim().toLowerCase();
+    if (nums.length === 0 && r.articleNumber) return String(r.articleNumber).trim().toLowerCase();
+    return null;
+  };
   const kept = [];
   for (const item of chunks) {
     if (!item) continue;
     const text = norm(item.chunk_text);
-    const comparable = Boolean(text) && item.source_type === 'law_text';
-    const dupe = !comparable ? -1 : kept.findIndex(k => k.comparable && k.law === (item.law_name || '')
-      && (k.text.includes(text) || text.includes(k.text)));
-    if (dupe >= 0) {
-      if (text.length > kept[dupe].text.length) {
-        kept[dupe] = { ...kept[dupe], text, item: { ...kept[dupe].item, chunk_text: item.chunk_text } };
-      }
+    if (!text || item.source_type !== 'law_text') { kept.push({ item }); continue; }
+    const law = item.law_name || '';
+    const article = articleOf(item);
+    const own = body(item.chunk_text);
+    const idx = kept.findIndex(k => k.law === law && (article
+      ? k.article === article
+      : (k.text.includes(text) || text.includes(k.text))));
+    if (idx < 0) { kept.push({ item, law, article, text }); continue; }
+
+    const k = kept[idx];
+    if (k.text.includes(own)) continue;
+    if (text.includes(body(k.item.chunk_text))) {
+      kept[idx] = { ...k, text, item: { ...k.item, chunk_text: item.chunk_text } };
       continue;
     }
-    kept.push({ law: item.law_name || '', text, comparable, item });
+    const joined = `${k.item.chunk_text}\n\n${item.chunk_text}`;
+    if (article && joined.length <= maxChars) {
+      kept[idx] = { ...k, text: norm(joined), item: { ...k.item, chunk_text: joined } };
+    }
   }
   return kept.map(k => k.item);
 }
