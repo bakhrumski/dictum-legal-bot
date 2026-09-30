@@ -4909,7 +4909,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   if (exactMatchIds.size > 0 && exactResults.length > 0) {
     const hasExact = rawResults.some((row) => exactMatchIds.has(row.id));
     if (!hasExact) {
-      rawResults = mergePrioritizedResults([exactResults[0]], rawResults, 3);
+      rawResults = mergePrioritizedResults([exactResults[0]], rawResults, FINAL_K);
     }
   }
 
@@ -4970,6 +4970,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         category: opts.strictTopic ? (topic || null) : null,
         language: null,
         limit: 5,
+        allowTokens: true,
       });
       if (nuclearResults.length > 0) {
         console.log(`[RAG] Nuclear fallback: ${nuclearResults.length} unscoped exact matches`);
