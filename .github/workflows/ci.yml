@@ -71,6 +71,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/keyword-length-norm.db.test.js
       - name: Re-chunking oversized corpus rows on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/oversized-chunks.db.test.js
+      - name: Exact-match failsafe uses word pairs on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/exact-match-phrases.db.test.js
 
   audit:
     name: npm audit (report only)

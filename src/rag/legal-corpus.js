@@ -1248,6 +1248,16 @@ async function getIngestLog({ limit = 50, category = null, sourceType = null } =
  * Standalone exact substring match search.
  * Used as a last-resort failsafe when keyword/vector ranking still under-ranks
  * a chunk that clearly contains the user's exact terms.
+ *
+ * It matches the question's word pairs and triples, not its single words
+ * (eval run 20). With single words any chunk holding one of them matched -
+ * "мне" matches "мнение", "куда", "могу" - and the longest such chunk won,
+ * so a 7,573-character vehicle regulation (VMQ-191) was forced to first
+ * place for questions on fines, cassation and legal capacity. Single words
+ * are already ranked by keywordSearch. They are used only when the question
+ * has one content word (no pairs) or opts.allowTokens is set (the last-resort
+ * fallback). Rows are ordered by how many patterns they match, then the
+ * shorter (more specific) chunk first.
  */
 async function exactMatchSearch(query, opts = {}) {
   await initLegalCorpus();
@@ -1256,12 +1266,14 @@ async function exactMatchSearch(query, opts = {}) {
     category = null,
     language = null,
     limit = 5,
+    allowTokens = false,
   } = opts;
 
   const search = buildKeywordArtifacts(query);
+  const phrases = search.phrases.slice(0, 4);
   const patterns = Array.from(new Set([
-    ...search.phrases.slice(0, 4),
-    ...search.searchTokens.slice(0, 4),
+    ...phrases,
+    ...(allowTokens || phrases.length === 0 ? search.searchTokens.slice(0, 4) : []),
   ]))
     .filter(Boolean)
     .map((value) => `%${value}%`);
@@ -1294,14 +1306,16 @@ async function exactMatchSearch(query, opts = {}) {
       part_number,
       lex_element_id,
       is_active,
-      0.8 + CASE WHEN source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score
+      0.8 + CASE WHEN source_type = 'verified_qa' THEN 0.1 ELSE 0 END AS score,
+      (SELECT count(*) FROM unnest($2::text[]) AS p(pattern)
+        WHERE search_text ILIKE p.pattern OR chunk_text ILIKE p.pattern)::int AS exact_patterns
     FROM legal_chunks
     WHERE ${whereClause}
       AND (
         search_text ILIKE ANY($2::text[])
         OR chunk_text ILIKE ANY($2::text[])
       )
-    ORDER BY score DESC, length(chunk_text) DESC, id
+    ORDER BY score DESC, exact_patterns DESC, length(chunk_text) ASC, id
     LIMIT $1
   `, [limit, patterns, ...filterParams]);
 
