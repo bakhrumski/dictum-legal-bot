@@ -166,6 +166,36 @@ function mergePrioritizedResults(prioritized = [], results = [], limit = null) {
   return typeof limit === 'number' ? merged.slice(0, limit) : merged;
 }
 
+/**
+ * Drop a chunk that repeats one already listed (eval run 17: in 10 of 47
+ * misses the same article filled two of the top 3). A short article is
+ * stored twice - as its parent and as its only part, with the same text -
+ * and a parent-child hit wraps the parent text again under another id, so
+ * id dedupe keeps both. A later chunk of the same law whose text is inside
+ * an earlier one's is dropped; if the later one holds the earlier one, the
+ * earlier keeps its place and id and takes the longer text. Different parts
+ * of a long article are different text and are kept.
+ */
+function collapseRepeatedChunks(chunks = []) {
+  const norm = (t) => String(t || '').replace(MULTISPACE_RX, ' ').trim();
+  const kept = [];
+  for (const item of chunks) {
+    if (!item) continue;
+    const text = norm(item.chunk_text);
+    const comparable = Boolean(text) && item.source_type === 'law_text';
+    const dupe = !comparable ? -1 : kept.findIndex(k => k.comparable && k.law === (item.law_name || '')
+      && (k.text.includes(text) || text.includes(k.text)));
+    if (dupe >= 0) {
+      if (text.length > kept[dupe].text.length) {
+        kept[dupe] = { ...kept[dupe], text, item: { ...kept[dupe].item, chunk_text: item.chunk_text } };
+      }
+      continue;
+    }
+    kept.push({ law: item.law_name || '', text, comparable, item });
+  }
+  return kept.map(k => k.item);
+}
+
 function isHighConfidenceKeywordMatch(row = {}) {
   const keywordScore = Number(row.keyword_score || 0);
   const termHits = Number(row.keyword_term_hits || 0);
@@ -181,6 +211,7 @@ function isHighConfidenceKeywordMatch(row = {}) {
 module.exports = {
   buildKeywordArtifacts,
   canonicalizeUzbekToken,
+  collapseRepeatedChunks,
   isHighConfidenceKeywordMatch,
   mergePrioritizedResults,
   normalizeUzbekForSearch,
