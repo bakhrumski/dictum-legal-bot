@@ -4679,7 +4679,6 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   let rawResults = [];
   let guaranteedKeywordMatches = [];
   let exactResults = [];
-  let exactMatchIds = new Set();
   let searchMode = 'text-only';
 
   if (apiKey) {
@@ -4813,7 +4812,6 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       const existingIds = new Set(rawResults.map((row) => row.id));
 
       for (const exact of exactResults) {
-        exactMatchIds.add(exact.id);
         if (existingIds.has(exact.id)) continue;
         rawResults.push({ ...exact, _exactMatch: true });
         existingIds.add(exact.id);
@@ -4912,12 +4910,10 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     rawResults = mergePrioritizedResults(guaranteedKeywordMatches, rawResults, FINAL_K);
   }
 
-  if (exactMatchIds.size > 0 && exactResults.length > 0) {
-    const hasExact = rawResults.some((row) => exactMatchIds.has(row.id));
-    if (!hasExact) {
-      rawResults = mergePrioritizedResults([exactResults[0]], rawResults, FINAL_K);
-    }
-  }
+  // Exact-match hits are candidates like any other; they are no longer put
+  // back in first place after the reranker or the grader dropped them (eval
+  // run 22: in 4 of 42 misses such a hit held first place - Jinoyat kodeksi
+  // 72 for a question on the Administrative Court Procedure Code).
 
   let goodChunks = rawResults;
   let needsWebSearch = rawResults.length < 2;
@@ -4942,17 +4938,6 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       goodChunks,
       Math.max(goodChunks.length, FINAL_K)
     );
-  }
-
-  if (exactMatchIds.size > 0 && exactResults.length > 0) {
-    const hasExact = goodChunks.some((row) => exactMatchIds.has(row.id));
-    if (!hasExact) {
-      goodChunks = mergePrioritizedResults(
-        [exactResults[0]],
-        goodChunks,
-        Math.max(goodChunks.length, FINAL_K)
-      );
-    }
   }
 
   // ── Append cross-field chunks (from outside the user's topic) at the end of the list ──
