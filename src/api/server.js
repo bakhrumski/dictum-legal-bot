@@ -44,6 +44,7 @@ const {
 const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/query-intent');
 const { routeQuery } = require('../rag/router');
 const { selectSemanticGuarantee, semanticMarginFrom } = require('../rag/semantic-guarantee');
+const { queryRewriteFrom, rewriteLegalQuery, mergeByBestScore } = require('../rag/query-rewrite');
 const { correctiveFilter, correctiveModeFrom } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywordMatch, collapseRepeatedChunks, buildKeywordArtifacts } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
@@ -4633,6 +4634,14 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // guarantee its top LAW results into context so they can't be crowded out by
   // generic keyword/exact matches downstream.
   markStage('article');
+  // Optional rewrite of the question in legislative wording (query-rewrite.js),
+  // searched alongside it by dense search; off unless switched on.
+  let rewrittenQuery = null;
+  if (queryRewriteFrom(opts)) {
+    rewrittenQuery = await rewriteLegalQuery(originalQuestion, callCheapAI);
+    if (rewrittenQuery) console.log(`[RAG] Rewrite: "${rewrittenQuery.slice(0, 160)}"`);
+    markStage('rewrite');
+  }
   let semanticMatches = [];
   {
     const embKey = process.env.HF_TOKEN || process.env.GEMINI_API_KEY || process.env.GPT_API_KEY;
@@ -4653,6 +4662,14 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
             }
             sm = [...byId.values()].sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
           } catch (_) {}
+        }
+        if (rewrittenQuery) {
+          try {
+            const smR = await vectorSearch(rewrittenQuery, { category: opts.strictTopic ? (topic || null) : null, language, limit: 12, apiKey: embKey });
+            sm = mergeByBestScore(sm, smR);
+          } catch (e) {
+            console.warn(`[RAG] rewrite vector search failed: ${e.message}`);
+          }
         }
         // Breadth-first: guarantee the BEST chunk from each distinct law before
         // adding extra chunks from the same law. Otherwise 1-2 laws (e.g. Civil
@@ -5159,6 +5176,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   const meta = {
     searchMode,
     timings,
+    ...(rewrittenQuery ? { rewrite: rewrittenQuery } : {}),
     chunks: citationChunks.length,
     webResults: webResults.length,
     lexLiveResults: lexLiveResults.length,
