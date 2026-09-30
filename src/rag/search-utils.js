@@ -225,6 +225,28 @@ function collapseRepeatedChunks(chunks = [], { maxChars = 7000 } = {}) {
   return kept.map(k => k.item);
 }
 
+/**
+ * Whether a keyword hit is forced into the context ahead of the reranker and
+ * the corrective grader (the "keyword guarantee" in retrieveLegalContext).
+ *
+ * isHighConfidenceKeywordMatch accepts any chunk sharing two words with the
+ * question, and a long chunk shares two words with almost anything: in eval
+ * run 21 a guaranteed keyword hit from an unrelated law held third place in
+ * 7 of 43 misses (Soliq kodeksi 37 for a rehabilitation question, VMQ-172
+ * for one on parliament). A guaranteed hit now has to contain two or three
+ * of the question's content words in a row, or - in a chunk no longer than
+ * the chunker's hard maximum - most of them. Other hits still compete as
+ * ordinary candidates through the reranker.
+ */
+const GUARANTEE_MAX_CHARS = 4800;
+function isGuaranteedKeywordMatch(row = {}, queryTokenCount = 0) {
+  if (row.exact_phrase_match) return true;
+  const hits = Number(row.keyword_term_hits || 0);
+  const chars = Number(row.chunk_chars || String(row.chunk_text || '').length);
+  const need = Math.max(3, Math.ceil(0.6 * (Number(queryTokenCount) || 0)));
+  return Boolean(row.core_term_match) && hits >= need && chars <= GUARANTEE_MAX_CHARS;
+}
+
 function isHighConfidenceKeywordMatch(row = {}) {
   const keywordScore = Number(row.keyword_score || 0);
   const termHits = Number(row.keyword_term_hits || 0);
@@ -241,6 +263,7 @@ module.exports = {
   buildKeywordArtifacts,
   canonicalizeUzbekToken,
   collapseRepeatedChunks,
+  isGuaranteedKeywordMatch,
   isHighConfidenceKeywordMatch,
   mergePrioritizedResults,
   normalizeUzbekForSearch,
