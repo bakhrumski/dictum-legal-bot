@@ -45,7 +45,7 @@ const { getDefinitionPromptAddendum, getTermExplanationRule } = require('../rag/
 const { routeQuery } = require('../rag/router');
 const { selectSemanticGuarantee, semanticMarginFrom } = require('../rag/semantic-guarantee');
 const { correctiveFilter, correctiveModeFrom } = require('../rag/corrective');
-const { mergePrioritizedResults, isHighConfidenceKeywordMatch, collapseRepeatedChunks } = require('../rag/search-utils');
+const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywordMatch, collapseRepeatedChunks, buildKeywordArtifacts } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 const {
@@ -4748,10 +4748,16 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     // A curated verified_qa answer only earns guaranteed status when the user's
     // question matches it closely (exact phrase) — generic token overlap (e.g.
     // a VAT answer matching "soliq") must NOT force it into context.
+    // Guaranteed status needs a run of the question's words or most of them
+    // (see isGuaranteedKeywordMatch); the rest join the reranker's pool.
+    const queryTokenCount = buildKeywordArtifacts(query).searchTokens.length;
     guaranteedKeywordMatches = keywordCandidates
-      .filter(isHighConfidenceKeywordMatch)
+      .filter(r => isGuaranteedKeywordMatch(r, queryTokenCount))
       .filter(r => r.source_type !== 'verified_qa' || r.exact_phrase_match)
       .slice(0, 2);
+    const guaranteedIds = new Set(guaranteedKeywordMatches.map(r => r.id));
+    const keywordPool = keywordCandidates.filter(r => !guaranteedIds.has(r.id) && r.source_type !== 'verified_qa');
+    if (keywordPool.length > 0) rawResults = mergePrioritizedResults(rawResults, keywordPool);
 
     // Priority order for protected matches: explicit article hits, then the
     // top flat-vector law results (proven strongest), then generic keyword hits.
