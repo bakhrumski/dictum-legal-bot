@@ -16,6 +16,7 @@
 const MAX_CHARS = 400;
 const CACHE_SIZE = 500;
 const cache = new Map();
+const META_REPLY = /(^|[^\p{L}])(iltimos|savolingiz|xabaringiz|to['ʻ’`]?liq emas|tugallanmagan|aniqlashtiring|пожалуйста|уточните|ваш вопрос)(?=$|[^\p{L}])/iu;
 
 /** Whether to rewrite: opts.queryRewrite, else RAG_QUERY_REWRITE. */
 function queryRewriteFrom(opts = {}, env = process.env) {
@@ -31,7 +32,9 @@ function buildRewriteMessages(question) {
     "Quyidagi savolni lex.uz dagi qonun matni uslubida, o'zbek tilida (lotin yozuvida) qayta yoz:",
     "- savoldagi holatni qonun atamalari bilan ifodala (masalan: \"ishdan bo'shatish\" -> \"mehnat shartnomasini bekor qilish\");",
     "- savol rus tilida bo'lsa ham, o'zbekcha yoz;",
+    "- savolda yo'q holat, shaxs yoki tushunchani qo'shma (masalan, turmush o'rtog'i uchun aliment haqidagi savolga \"voyaga yetmagan bolalar\" yoki \"nikoh shartnomasi\" ni qo'shma);",
     "- javob berma, modda raqamini to'qima, qonun nomini faqat aniq bo'lsa qo'sh;",
+    "- savol chala bo'lsa ham, faqat bor qismini qayta yoz; hech qachon savolni to'ldirishni so'rama va izoh yozma;",
     `- bir-ikki gap, ${MAX_CHARS} belgidan oshmasin. Faqat qayta yozilgan matnni chiqar.`,
     '',
     `Savol: ${String(question || '').slice(0, 1500)}`,
@@ -46,6 +49,9 @@ function cleanRewrite(reply, question) {
   if (text.length < 10) return null;
   if (text.length > MAX_CHARS) text = text.slice(0, MAX_CHARS).replace(/\s+\S*$/, '');
   if (text.toLowerCase() === String(question || '').trim().toLowerCase()) return null;
+  // A reply to the user instead of a rewrite (run 27, cut-off questions:
+  // "Sizning xabaringiz tugallanmagan. Iltimos, …") is not searched.
+  if (META_REPLY.test(text)) return null;
   return text;
 }
 
