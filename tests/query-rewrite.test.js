@@ -41,6 +41,17 @@ const quiet = { warn: () => {} };
     assert.ok(cleanRewrite({ text: 'soʻz '.repeat(200) }, 'q').length <= 400);
   });
 
+  await test('a reply to the user instead of a rewrite is not searched (run 27, cut-off questions)', () => {
+    assert.strictEqual(cleanRewrite({ text: "Sizning xabaringiz tugallanmagan. Iltimos, savolning to'liq matnini yuboring." }, 'Agar men ilgari mu'), null);
+    assert.strictEqual(cleanRewrite({ text: "Sizning savolingiz to'liq emas. Iltimos, holatni batafsil bayon qiling." }, 'Могут ли меня'), null);
+    assert.ok(cleanRewrite({ text: "Soliq organi tomonidan tuzilgan dalolatnoma yuzasidan e'tirozlar taqdim etish muddati" }, 'q'));
+  });
+
+  await test('the prompt forbids adding facts and asking the user back', () => {
+    const t = buildRewriteMessages('x')[0].text;
+    assert.ok(/qo'shma/.test(t) && /so'rama/.test(t));
+  });
+
   await test('a rewrite is asked once per question (cached); a failure is not cached', async () => {
     _cache.clear();
     let calls = 0;
