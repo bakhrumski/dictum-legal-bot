@@ -1,5 +1,9 @@
 'use strict';
 
+const {
+  ruIdentifier, ruTitle, ruPartOrdinal, ruPartNumber, ruTitlePatterns, ORDINAL_WORD, ARTICLE_WORD, POINT_WORD, PART_WORD,
+} = require('./citation-ru');
+
 const SUPER_DIGITS = {
   '0': '⁰',
   '1': '¹',
@@ -106,6 +110,9 @@ function articleOffsets(text = '', articleRef = '') {
   const out = [];
   let match;
   while ((match = rx.exec(String(text || ''))) !== null) out.push(match.index);
+  // Russian puts the word first: "статья 20", "ст. 20".
+  const ru = new RegExp(`${ARTICLE_WORD}\\s*${base}(?![\\d\u2070\u00b9\u00b2\u00b3\u2074-\u2079])`, 'giu');
+  while ((match = ru.exec(String(text || ''))) !== null) out.push(match.index);
 
   // Grouped citations are common in Uzbek drafting: "4, 18 va 24-moddalar"
   // or "283–289-moddalar". The old matcher saw only the final number, which
@@ -181,18 +188,22 @@ function selectRelevantSourceRefs(chunks = [], replyText = '') {
       ...lawAliases,
       ...documentIdentifierVariants(identifier).map(normalizeLawName),
     ]).sort((a, b) => b.length - a.length);
+    const ruPatterns = ruLawPatterns(lawName);
     records.push({
       chunk,
       lawName,
       lawKey: lawAliases[lawAliases.length - 1],
       aliases,
+      // A Russian answer names the act by its Russian title, in any case form.
+      ruRx: ruPatterns.length ? new RegExp(ruPatterns.join('|'), 'giu') : null,
       articleRefs: getChunkArticleRefs(chunk),
     });
   }
 
   const mentionedLawKeys = new Set();
   for (const record of records) {
-    if (record.aliases.some(alias => normalizedReply.includes(alias))) {
+    if (record.aliases.some(alias => normalizedReply.includes(alias))
+      || (record.ruRx && new RegExp(record.ruRx.source, 'iu').test(reply))) {
       mentionedLawKeys.add(record.lawKey);
     }
   }
@@ -213,8 +224,10 @@ function selectRelevantSourceRefs(chunks = [], replyText = '') {
         lawArticleMatch = offsets.some(offset => {
           const start = Math.max(0, offset - 320);
           const window = normalizeLawName(reply.slice(start, offset + 50));
+          const rawWindow = reply.slice(start, offset + 50);
           let nearestKey = null;
           let nearestIndex = -1;
+          let nearestRawIndex = -1;
           for (const candidate of records) {
             if (!mentionedLawKeys.has(candidate.lawKey)) continue;
             for (const alias of candidate.aliases) {
@@ -223,6 +236,17 @@ function selectRelevantSourceRefs(chunks = [], replyText = '') {
                 nearestIndex = index;
                 nearestKey = candidate.lawKey;
               }
+            }
+          }
+          // Russian titles are matched on the raw text (their endings vary).
+          // Answers are in one language, so when a Russian title is in the
+          // window the nearest Russian title decides.
+          for (const candidate of records) {
+            if (!mentionedLawKeys.has(candidate.lawKey) || !candidate.ruRx) continue;
+            const rx = new RegExp(candidate.ruRx.source, 'giu');
+            let m;
+            while ((m = rx.exec(rawWindow))) {
+              if (m.index > nearestRawIndex) { nearestRawIndex = m.index; nearestKey = candidate.lawKey; }
             }
           }
           return nearestKey === record.lawKey;
@@ -255,6 +279,9 @@ function normalizeLexSourceUrl(value = '', lang = 'uz') {
     url = url
       .replace('lex.uz/ru/docs/', 'lex.uz/docs/')
       .replace(/(lex\.uz\/)(?:uz\/)?docs\/(\d+)/iu, '$1docs/-$2');
+  } else if (lang === 'ru') {
+    // A Russian answer links the Russian text: /ru/docs/<id>, no minus.
+    url = url.replace(/(lex\.uz\/)(?:uz\/|ru\/)?docs\/-?(\d+)/iu, '$1ru/docs/$2');
   }
   return url;
 }
@@ -345,6 +372,11 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   const requestedPart = normalizePartNumber(opts.partNumber);
   const chunkPart = normalizePartNumber(chunk.part_number || chunk.partNumber);
   const articleRef = normalizeArticleRef(opts.articleRef);
+  // Element ids were read from the Uzbek page; on the Russian page the
+  // article is found by its heading instead.
+  if ((opts.lang || 'uz') === 'ru') {
+    return articleRef ? `${baseUrl}#:~:text=${encodeURIComponent(`Статья ${articleRef}`)}` : baseUrl;
+  }
   const resolvedAnchors = chunk.lex_anchor_ids || chunk.lexAnchorIds || {};
   const resolvedId = requestedPart
     ? resolvedAnchors[`${articleRef}:${requestedPart}`]
@@ -504,11 +536,27 @@ function getChunkDocumentIdentifier(chunk = {}) {
   );
 }
 
-function canonicalCitationActLabel(lawName = '', chunk = {}) {
-  const display = canonicalLawLabel(lawName);
+function canonicalCitationActLabel(lawName = '', chunk = {}, lang = 'uz') {
+  const uzDisplay = canonicalLawLabel(lawName);
+  const display = (lang === 'ru' && ruTitle(normalizeLawName(lawName))) || uzDisplay;
   const identifier = getChunkDocumentIdentifier(chunk);
-  if (!identifier || normalizeLawName(display).includes(normalizeLawName(identifier))) return display;
-  return `${display} (${identifier})`;
+  if (!identifier || normalizeLawName(uzDisplay).includes(normalizeLawName(identifier))) return display;
+  return `${display} (${lang === 'ru' ? ruIdentifier(identifier) : identifier})`;
+}
+
+/** "561-modda, 1-qism" / "статья 561, часть первая" - the locator in the answer's language. */
+function citationLocatorLabel(ref = '', type = 'modda', partNumber = '', lang = 'uz') {
+  if (lang === 'ru') {
+    const word = type === 'band' ? 'пункт' : 'статья';
+    return `${word} ${ref}${partNumber ? `, часть ${ruPartOrdinal(partNumber)}` : ''}`;
+  }
+  const partLabel = partNumber ? `${partNumber}-qism` : (type === 'band' ? 'tegishli band' : 'tegishli qism');
+  return `${ref}-${type}, ${partLabel}`;
+}
+
+/** Regex sources for an act's Russian title in any case form ([] when it has none). */
+function ruLawPatterns(lawName = '') {
+  return ruTitlePatterns(ruTitle(normalizeLawName(lawName)));
 }
 
 function documentIdentifierVariants(identifier = '') {
@@ -518,7 +566,7 @@ function documentIdentifierVariants(identifier = '') {
   if (!match) return [normalized];
   const [, prefix, number] = match;
   const type = prefix === 'PF' ? 'farmon' : (prefix === "O'RQ" ? 'qonun' : 'qaror');
-  return unique([normalized, `${normalized}-son`, `${normalized}-son ${type}`, `${number}-son ${type}`]);
+  return unique([normalized, `${normalized}-son`, `${normalized}-son ${type}`, `${number}-son ${type}`, ruIdentifier(normalized)]);
 }
 
 function lawNameVariants(value = '', documentIdentifier = '') {
@@ -556,10 +604,11 @@ function lawNameVariants(value = '', documentIdentifier = '') {
   return unique(variants).sort((a, b) => b.length - a.length);
 }
 
-function joinUzbekMarkdownLinks(links = []) {
+function joinUzbekMarkdownLinks(links = [], lang = 'uz') {
+  const and = lang === 'ru' ? 'и' : 'va';
   if (links.length <= 1) return links[0] || '';
-  if (links.length === 2) return `${links[0]} va ${links[1]}`;
-  return `${links.slice(0, -1).join(', ')} va ${links[links.length - 1]}`;
+  if (links.length === 2) return `${links[0]} ${and} ${links[1]}`;
+  return `${links.slice(0, -1).join(', ')} ${and} ${links[links.length - 1]}`;
 }
 
 function linkGroupedCitationLists(value = '', records = [], lang = 'uz') {
@@ -596,11 +645,10 @@ function linkGroupedCitationLists(value = '', records = [], lang = 'uz') {
         const record = byRef.get(ref);
         const url = buildLexDeepLink(record.chunk, { lang, articleRef: ref });
         if (!url) return '';
-        const partLabel = type === 'band' ? 'tegishli band' : 'tegishli qism';
-        return `[**${canonicalCitationActLabel(record.lawName, record.chunk)}, ${ref}-${type}, ${partLabel}**](${url})`;
+        return `[**${canonicalCitationActLabel(record.lawName, record.chunk, lang)}, ${citationLocatorLabel(ref, type, '', lang)}**](${url})`;
       });
       if (links.some(link => !link)) return match;
-      return prefix + joinUzbekMarkdownLinks(links);
+      return prefix + joinUzbekMarkdownLinks(links, lang);
     });
   }
   return output;
@@ -610,6 +658,38 @@ function grammaticalCitationTail(value = '') {
   const normalized = String(value || '').replace(/[*_]/gu, '');
   const matches = Array.from(normalized.matchAll(/(?:modda(?:si)?|band(?:i)?|qism(?:i)?)(ning|dan|ga|da)\b/giu));
   return matches.length ? matches[matches.length - 1][1].toLocaleLowerCase('uz') : '';
+}
+
+/**
+ * The Russian order of a citation: act first, then "статья N" / "пункт N"
+ * and an optional "часть первая" / "часть 1" - "Трудовой кодекс Республики
+ * Узбекистан (ЗРУ-798), статья 561, часть первая". The act may be written by
+ * its Russian title in any case form, its Uzbek title or its identifier.
+ */
+function linkRussianCitation(text = '', ref = '', record = {}, lang = 'ru') {
+  const escaped = String(ref).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const lawPattern = [
+    ...ruLawPatterns(record.lawName),
+    ...lawNameVariants(record.lawName, getChunkDocumentIdentifier(record.chunk)).map(flexibleLawPattern),
+  ].join('|');
+  if (!lawPattern) return text;
+  const rx = new RegExp(
+    `(^|[^\\p{L}\\p{N}])(?:\\*{0,2})?(?:${lawPattern})[»”"]?(?:\\*{0,2})?` +
+    `(?:\\s*\\([^()\\[\\]]*(?:\\([^()\\[\\]]*\\)[^()\\[\\]]*)*\\))?` +
+    `\\s*,?\\s*(?:\\*{0,2})?(${ARTICLE_WORD}|${POINT_WORD})\\s*${escaped}(?![\\d\\u2070\\u00b9\\u00b2\\u00b3\\u2074-\\u2079])` +
+    `(?:\\s*,?\\s*${PART_WORD}\\s*(\\d+|${ORDINAL_WORD}))?(?:\\*{0,2})?`,
+    'giu'
+  );
+  return text.split(/(\[[^\]]+\]\([^)]+\))/gu).map((part, index) => (index % 2 === 1 ? part : part.replace(rx, (match, prefix, word, partWord) => {
+    const partNumber = partWord ? ruPartNumber(partWord) : '';
+    const type = /^п/iu.test(word) ? 'band' : 'modda';
+    const url = buildLexDeepLink(record.chunk, { lang, articleRef: ref, partNumber });
+    if (!url) return match;
+    // The writer's own words stay: Russian declines the title ("согласно
+    // Трудовому кодексу"), and a nominative label would break the sentence.
+    const label = match.slice(prefix.length).replace(/\*/gu, '').replace(/\s+/gu, ' ').trim();
+    return `${prefix}[**${label}**](${url})`;
+  }))).join('');
 }
 
 /**
@@ -662,14 +742,12 @@ function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
           partNumber: partNumber || '',
         });
         if (!url) return match;
-        const type = String(locatorType || 'modda').toLocaleLowerCase('uz');
-        const partLabel = partNumber
-          ? `${partNumber}-qism`
-          : (type === 'band' ? 'tegishli band' : 'tegishli qism');
-        const label = `${canonicalCitationActLabel(record.lawName, record.chunk)}, ${ref}-${type}, ${partLabel}`;
-        const tail = grammaticalCitationTail(citation);
+        const type = /^band/iu.test(String(locatorType || '')) ? 'band' : 'modda';
+        const label = `${canonicalCitationActLabel(record.lawName, record.chunk, lang)}, ${citationLocatorLabel(ref, type, partNumber || '', lang)}`;
+        const tail = lang === 'ru' ? '' : grammaticalCitationTail(citation);
         return `${prefix}[**${label}**](${url})${tail}`;
       });
+      if (lang === 'ru') output = linkRussianCitation(output, ref, record, lang);
     }
     return linkGroupedCitationLists(output, records, lang);
   }).join('');
@@ -710,15 +788,20 @@ function linkRemainingGroundedActMentions(value = '', chunks = [], lang = 'uz') 
       // would render the same source twice in one sentence.
       variantList = variantList.filter((variant) => !identifierVariants.has(normalizeLawName(variant)));
     }
-    const variants = variantList
-      .filter(variant => normalizeLawName(variant).length >= 5)
-      .map(flexibleLawPattern)
-      .join('|');
+    const variants = [
+      ...(lang === 'ru' ? ruLawPatterns(lawName) : []),
+      ...variantList.filter(variant => normalizeLawName(variant).length >= 5).map(flexibleLawPattern),
+    ].join('|');
     if (!variants) return part;
     const rx = new RegExp(`(^|[^\\p{L}\\p{N}])(?:\\*{0,2}|[\u00ab»“”\"']{0,1})(${variants})(?:\\*{0,2}|[\u00ab»“”\"']{0,1})(?![\\p{L}\\p{N}])`, 'giu');
-    return part.replace(rx, (match, prefix) =>
-      `${prefix}[**${canonicalCitationActLabel(lawName, chunk)}**](${sourceUrl})`
-    );
+    return part.replace(rx, (match, prefix, written) => {
+      // In a Russian answer a Russian title stays as written (it is declined);
+      // anything else gets the canonical label in the answer's language.
+      const label = lang === 'ru' && /[\u0400-\u04ff]/u.test(written) && !/^(?:ЗРУ|ПП|УП|ПКМ)-/u.test(written)
+        ? match.slice(prefix.length).replace(/\*/gu, '').trim()
+        : canonicalCitationActLabel(lawName, chunk, lang);
+      return `${prefix}[**${label}**](${sourceUrl})`;
+    });
   };
   let text = String(value || '');
   for (const source of bySource.values()) {
@@ -757,14 +840,18 @@ function upgradeLinkedCitationIdentifiers(value = '', chunks = [], lang = 'uz') 
   }
   if (bySource.size === 0) return value;
   return String(value || '').replace(
-    /\[([^\]]+)\]\((https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/)?docs\/-?\d+[^)]*)\)/giu,
+    /\[([^\]]+)\]\((https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\/-?\d+[^)]*)\)/giu,
     (whole, rawLabel, url) => {
       const chunk = bySource.get(lexDocumentIdentity(normalizeLexSourceUrl(url, lang)));
       if (!chunk) return whole;
+      if (lang === 'ru' && /[\u0400-\u04ff]/u.test(rawLabel)) return whole;
       const identifier = getChunkDocumentIdentifier(chunk);
-      if (!identifier || normalizeLawName(rawLabel).includes(normalizeLawName(identifier))) return whole;
-      const locator = String(rawLabel).replace(/[*_]/gu, '').match(/,\s*\d+[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*\s*[-\u2013\u2014]\s*(?:modda|band)\b[\s\S]*$/iu);
-      const label = canonicalCitationActLabel(chunk.law_name || chunk.lawName || '', chunk)
+      const shown = lang === 'ru' ? ruIdentifier(identifier) : identifier;
+      if (!identifier || normalizeLawName(rawLabel).includes(normalizeLawName(shown))) return whole;
+      const plain = String(rawLabel).replace(/[*_]/gu, '');
+      const locator = plain.match(/,\s*\d+[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*\s*[-\u2013\u2014]\s*(?:modda|band)\b[\s\S]*$/iu)
+        || plain.match(/,\s*(?:статья|пункт)\s*\d+[\s\S]*$/iu);
+      const label = canonicalCitationActLabel(chunk.law_name || chunk.lawName || '', chunk, lang)
         + (locator ? locator[0] : '');
       return `[**${label}**](${url})`;
     }
@@ -805,7 +892,7 @@ function collapseDuplicateLexCitations(value = '') {
       if (lexDocumentIdentity(first[2]) !== lexDocumentIdentity(second[2])) continue;
 
       const isExact = (label, url) =>
-        /(?:\d+[\u2070\u00b9\u00b2\u00b3\u2074-\u2079]*\s*[-\u2013\u2014]\s*(?:modda|band)|tegishli\s+(?:qism|band))/iu.test(
+        /(?:\d+[\u2070\u00b9\u00b2\u00b3\u2074-\u2079]*\s*[-\u2013\u2014]\s*(?:modda|band)|tegishli\s+(?:qism|band)|(?:статья|пункт)\s*\d)/iu.test(
           String(label || '').replace(/[*_]/gu, '')
         ) || /(?:#|%23|:~:text=)/iu.test(String(url || ''));
       const firstExact = isExact(first[1], first[2]);
@@ -823,6 +910,13 @@ function collapseDuplicateLexCitations(value = '') {
     output = output.slice(0, replacement.start) + replacement.text + output.slice(replacement.end);
   }
   return output;
+}
+
+/** 'ru' for a Russian question, else 'uz' (Uzbek Latin or Cyrillic). */
+function citationLanguageForText(text = '') {
+  const t = String(text || '');
+  if (/[ўқғҳ]/iu.test(t)) return 'uz';
+  return /[а-яё]/iu.test(t) ? 'ru' : 'uz';
 }
 
 function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz') {
@@ -853,14 +947,15 @@ function hasCanonicalOfficialCitations(value = '') {
     /\[([^\]]+)\]\((https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\/-?\d+[^)]*)\)/giu
   ));
   if (links.length === 0) return false;
-  const officialLabel = /\((?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)-\d+(?:-[IVXLCDM]+)?\)|\(\d+-[IVXLCDM]+\)/iu;
+  const officialLabel = /\((?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ|ЗРУ|ПП|УП|ПКМ)-\d+(?:-[IVXLCDM]+)?\)|\(\d+-[IVXLCDM]+\)/iu;
   if (links.some(match => !officialLabel.test(String(match[1] || '').replace(/[*_]/gu, '')))) return false;
 
   const withoutLinks = text.replace(/\[[^\]]+\]\([^)]+\)/gu, ' ');
-  return !/(?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)\s*-\s*\d+|\b\d+\s*[-\u2013\u2014]?\s*(?:modda|band)\b/iu.test(withoutLinks);
+  return !/(?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ|ЗРУ|ПП|УП|ПКМ)\s*-\s*\d+|\b\d+\s*[-\u2013\u2014]?\s*(?:modda|band)\b|(?:^|[^\p{L}])(?:статья|ст\.)\s*\d/iu.test(withoutLinks);
 }
 
 module.exports = {
+  citationLanguageForText,
   extractAnalysisSection,
   extractArticleRefsFromText,
   getChunkArticleRefs,

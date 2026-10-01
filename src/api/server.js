@@ -5276,7 +5276,7 @@ SOHA: MA'MURIY HUQUQ (regulatory/tartibga soluvchi)
 JAVOB FORMATI (3 bo'lim, MAJBURIY):
 ${definitionHint}
 
-**Huquqiy asos** — Qaysi hujjat, qaysi modda yoki band va qaysi qism qo'llanadi? Hujjatning to'liq nomi, Lex.uz'da tasdiqlangan rasmiy raqami va normani **qalin** yozing. Har bir norma uchun: (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**).
+**Huquqiy asos** — Qaysi hujjat, qaysi modda yoki band va qaysi qism qo'llanadi? Hujjatning to'liq nomi, Lex.uz'da tasdiqlangan rasmiy raqami va normani **qalin** yozing. Har bir norma uchun: (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) (rus tilidagi javobda esa: **Полное название на русском (ЗРУ/ПП/УП/ПКМ-номер), статья N, часть первая/вторая…**). Iqtibos ham javob tilida yoziladi.
 Kontekstdagi savolga bevosita tatbiq etiladigan barcha normalarni qamrab oling. Ichki tartib, shartnoma yoki tashkilot nizomi hal qiluvchi bo'lsa, aynan qaysi hujjat kerakligini ayting.
 
 **Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha (jismoniy / mansabdor / yuridik shaxs) farq bo'lsa — har birini alohida jumlada ko'rsating. Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Foydalanuvchi savoliga to'g'ridan-to'g'ri aloqador holatlarni tahlil qiling.

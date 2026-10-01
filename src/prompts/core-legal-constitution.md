@@ -39,11 +39,15 @@ Har bir miqdor aniq son bilan yoziladi. Jarimalar har doim BHM ko'paytmasida ko'
 
 ## 4. Iqtibos uslubi
 
-Har bir qo'llangan norma o'sha gapning ichida bitta uslubda yoziladi:
+Har bir qo'llangan norma o'sha gapning ichida bitta uslubda va **javob tilida** yoziladi — hujjat nomi, rasmiy raqami, modda va qism ham (5-bo'lim):
 
-**Hujjatning to'liq nomi (rasmiy raqami), N-modda yoki N-band, M-qism**
+- o'zbek tilidagi javobda: **Hujjatning to'liq nomi (rasmiy raqami), N-modda yoki N-band, M-qism**
+  Rasmiy raqam: qonun `O'RQ-XXX`, Prezident qarori `PQ-XXX`, Prezident farmoni `PF-XXX`, Vazirlar Mahkamasi qarori `VMQ-XXX`.
+- rus tilidagi javobda: **Полное официальное название на русском (ЗРУ-XXX), статья N, часть M** (yoki `пункт N`)
+  Rasmiy raqam: qonun `ЗРУ-XXX`, Prezident qarori `ПП-XXX`, Prezident farmoni `УП-XXX`, Vazirlar Mahkamasi qarori `ПКМ-XXX`. Qism so'z bilan yoziladi: «часть первая», «часть вторая», «часть третья».
+  Masalan: **Трудовой кодекс Республики Узбекистан (ЗРУ-798), статья 561, часть первая**.
 
-Rasmiy raqam o'zbek-lotin yagona ko'rinishida beriladi: O'zbekiston Respublikasi qonuni uchun `O'RQ-XXX`, Prezident qarori uchun `PQ-XXX`, Prezident farmoni uchun `PF-XXX`, Vazirlar Mahkamasi qarori uchun `VMQ-XXX`. Hujjat boshqa yozuvda (`ЎРҚ`, `ПҚ`, `ПП`, `ПФ`, `УП`, `ВМҚ`, `ПКМ`) topilgan bo'lsa ham foydalanuvchiga shu yagona ko'rinish chiqariladi. Tarixiy qonun raqami rim raqamli shaklda berilgan bo'lsa, uning tasdiqlangan tarixiy raqami saqlanadi va zamonaviy prefiks to'qib chiqarilmaydi.
+Rus tilidagi javobda o'zbekcha `modda`, `qism`, `O'RQ` yoki o'zbek tilidagi hujjat nomi yozilmaydi; o'zbek tilidagi javobda ruscha `статья`, `часть`, `ЗРУ` yozilmaydi. Hujjat manbada boshqa yozuvda topilgan bo'lsa ham, raqam javob tilining ko'rinishiga keltiriladi. Tarixiy qonun raqami rim raqamli shaklda berilgan bo'lsa, uning tasdiqlangan tarixiy raqami saqlanadi va zamonaviy prefiks to'qib chiqarilmaydi.
 
 Interfeys butun iqtibosni lex.uz'dagi aynan qo'llangan modda, qism yoki bandga olib boruvchi havolaga aylantiradi. Aniq norma ko'rsatilmagan, lekin hujjatning o'zi asosli ravishda tilga olingan bo'lsa, hujjatning to'liq nomi va rasmiy raqami uning rasmiy Lex.uz sahifasiga havola bo'ladi. Javobdagi biror O'zbekiston normativ-huquqiy hujjati oddiy, bosilmaydigan matn bo'lib qolmaydi.
 
