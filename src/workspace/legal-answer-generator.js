@@ -13,6 +13,7 @@ const { buildLegalNextActions } = require('../services/legal-next-actions');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
 const { hydrateMentionedOfficialActChunks } = require('../rag/official-citation-hydrator');
+const { appendRepealedNotice } = require('../rag/superseded-acts');
 const { hydrateLexAnchors } = require('../rag/lex-anchor-resolver');
 const { getLegalPolicyVersions } = require('../rag/legal-prompt-policy');
 
@@ -357,6 +358,7 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
           url: chunk.source_url,
         })),
         unresolved: mentionedActs.unresolved,
+        repealed: mentionedActs.repealed,
       },
     });
 
@@ -384,6 +386,7 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
 
     await hydrateLexAnchors(ragChunks, reply);
     reply = normalizeLegalAnswerCitations(reply, ragChunks, lexLanguage(question));
+    reply = appendRepealedNotice(reply, { repealed: mentionedActs.repealed }, lexLanguage(question));
 
     if (typeof dependencies.generateSourceSuggestions === 'function') {
       dependencies.generateSourceSuggestions(question, topic, reply).catch(() => {});

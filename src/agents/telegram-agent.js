@@ -35,6 +35,7 @@ const {
   hasCanonicalOfficialCitations,
 } = require('../rag/citation-utils');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
+const { appendRepealedNotice } = require('../rag/superseded-acts');
 const telegramEconomy = require('../services/telegram-economy');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
 
@@ -451,12 +452,15 @@ async function generateAnswer(question, turns) {
   }
 
   if (korpusAnswer) {
+    let korpusRepealed = [];
     if (D.hydrateMentionedOfficialActChunks) {
       const hydrated = await D.hydrateMentionedOfficialActChunks(korpusAnswer, chunks, { topic });
       chunks = hydrated.chunks;
+      korpusRepealed = hydrated.repealed || [];
     }
     if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, korpusAnswer);
-    const normalizedKorpusAnswer = normalizeLegalAnswerCitations(korpusAnswer, chunks, 'uz');
+    const normalizedKorpusAnswer = appendRepealedNotice(
+      normalizeLegalAnswerCitations(korpusAnswer, chunks, 'uz'), { repealed: korpusRepealed }, 'uz');
     if (hasCanonicalOfficialCitations(normalizedKorpusAnswer)) {
       return {
         text: normalizedKorpusAnswer,
@@ -496,9 +500,11 @@ TELEGRAM FORMATI (majburiy):
     useSearch: false, maxTokens: 900, endpoint: '/tg-agent/answer',
   });
   let text = String(res.text || '').trim();
+  let repealedActs = [];
   if (D.hydrateMentionedOfficialActChunks) {
     const hydrated = await D.hydrateMentionedOfficialActChunks(text, chunks, { topic });
     chunks = hydrated.chunks;
+    repealedActs = hydrated.repealed || [];
   }
   let lexCrossCheck = { status: 'skipped', checked: false };
   if (D.crossCheckLegalAnswer) {
@@ -538,7 +544,7 @@ TELEGRAM FORMATI (majburiy):
   if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, text);
 
   return {
-    text: normalizeLegalAnswerCitations(text, chunks, 'uz'),
+    text: appendRepealedNotice(normalizeLegalAnswerCitations(text, chunks, 'uz'), { repealed: repealedActs }, 'uz'),
     confidence,
     sources: '',
     meta: {

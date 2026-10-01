@@ -64,6 +64,7 @@ const {
 } = require('../rag/legal-prompt-policy');
 const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
 const { hydrateMentionedOfficialActChunks } = require('../rag/official-citation-hydrator');
+const { appendRepealedNotice } = require('../rag/superseded-acts');
 const { parentChildSearch } = require('../rag/advanced-corpus');
 // ── Justify RAG (optional external service, kept as bonus fallback) ──
 const {
@@ -4342,6 +4343,7 @@ ${feedbackNote}`;
       ragCitationChunks,
       lexLangForText(requestText)
     );
+    analysis = appendRepealedNotice(analysis, { repealed: mentionedActs.repealed }, lexLangForText(requestText));
 
     // Archive the analysis (including internal reasoning for audit)
     let archiveId = null;
@@ -6695,7 +6697,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       topic,
     });
     ragChunks = mentionedActs.chunks;
-    if (mentionedActs.added.length || mentionedActs.unresolved.length) {
+    if (mentionedActs.added.length || mentionedActs.unresolved.length || mentionedActs.repealed.length) {
       ragMeta = Object.assign({}, ragMeta || {}, {
         officialCitationHydration: {
           added: mentionedActs.added.map((chunk) => ({
@@ -6703,6 +6705,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
             url: chunk.source_url,
           })),
           unresolved: mentionedActs.unresolved,
+          repealed: mentionedActs.repealed,
         },
       });
     }
@@ -6765,6 +6768,9 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     const citationLanguage = lexLangForText(message);
     await hydrateLexAnchors(ragChunks, displayReply);
     displayReply = normalizeLegalAnswerCitations(displayReply, ragChunks, citationLanguage);
+    // An act that is no longer in force is named to the user, with its
+    // replacement when known (superseded-acts.js).
+    displayReply = appendRepealedNotice(displayReply, { repealed: mentionedActs.repealed }, citationLanguage);
 
     // Enrichment: suggest the laws the AI cited that aren't yet in the corpus
     // (Master-Admin reviews → one-click ingest). Fire-and-forget; never blocks.
