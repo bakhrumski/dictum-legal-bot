@@ -64,9 +64,9 @@ function resultIdentifier(result = {}) {
   });
 }
 
-function resultMatchesMention(result = {}, mention = {}) {
+function resultMatchesMention(result = {}, mention = {}, { allowInactive = false } = {}) {
   if (!result || !result.url || resultIdentifier(result) !== mention.identifier) return false;
-  if (result.metadata && result.metadata.is_active === false) return false;
+  if (!allowInactive && result.metadata && result.metadata.is_active === false) return false;
 
   const contextYears = new Set(String(mention.context || '').match(/(?:19|20)\d{2}/gu) || []);
   const adoptionYear = String((result.metadata && result.metadata.adoption_date) || '').match(/(?:19|20)\d{2}/u);
@@ -124,6 +124,9 @@ async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts 
   const sourceKeys = new Set(existing.map((chunk) => lexDocumentKey(chunk && chunk.source_url)).filter(Boolean));
   const added = [];
   const unresolved = [];
+  // Mentions whose only lex.uz match is not in force (2026-10-01: O'RQ-310
+  // was dropped here silently). The caller tells the user.
+  const repealed = [];
   const search = typeof opts.search === 'function' ? opts.search : searchLexUz;
 
   for (const mention of mentions) {
@@ -148,7 +151,21 @@ async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts 
     const best = candidates[0];
     const key = best && lexDocumentKey(best.url);
     if (!best || !key || sourceKeys.has(key)) {
-      if (!best) unresolved.push(mention.identifier);
+      if (!best) {
+        const inactive = (Array.isArray(results) ? results : [])
+          .find((result) => result && result.metadata && result.metadata.is_active === false
+            && resultMatchesMention(result, mention, { allowInactive: true }));
+        if (inactive) {
+          repealed.push({
+            identifier: mention.identifier,
+            title: inactive.lawName || inactive.title || '',
+            url: inactive.url,
+            status: (inactive.metadata && inactive.metadata.status_label) || '',
+          });
+        } else {
+          unresolved.push(mention.identifier);
+        }
+      }
       continue;
     }
     const chunk = adaptResult(best, mention.identifier, added.length, opts.topic || null);
@@ -158,7 +175,7 @@ async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts 
     sourceKeys.add(key);
   }
 
-  return { chunks: existing, added, unresolved };
+  return { chunks: existing, added, unresolved, repealed };
 }
 
 module.exports = {

@@ -329,7 +329,9 @@ const LEX_REGISTRY = {
     {
       doc_id: 'mchj-qonun',
       law_name: "Mas'uliyati cheklangan jamiyatlar to'g'risida",
-      lex_url: 'https://lex.uz/uz/docs/5765406',      // [QONUN]
+      // O'RQ-1137, the current LLC law (owner, 2026-10-01). The old
+      // /uz/docs/5765406 returned 404, so the law was never ingested.
+      lex_url: 'https://lex.uz/docs/-8151376',        // [QONUN]
       enforcement_date: null
     },
     {

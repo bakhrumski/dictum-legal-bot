@@ -50,6 +50,15 @@ function expandLegalQueryAliases(query) {
     aliases.push("yonida olib yurishi biometrik pasport ID-karta planshet orqali tekshiriladi talab etilmaydi");
   }
 
+  // LLC questions asked in Russian (2026-10-01: "отчуждение доли в уставном
+  // фонде ООО" retrieved no LLC law at all, and the answer cited a repealed one).
+  // (\b is ASCII-only in JS, so Cyrillic word edges are written out.)
+  const ooo = /(?:^|[^\p{L}])ооо(?=$|[^\p{L}])/u.test(lower);
+  if ((ooo || /обществ\S*\s+с\s+ограниченной|дол[яиеюей]\S*|уставн\S*\s+(?:фонд|капитал)/u.test(lower))
+    && (ooo || /обществ|участник|уставн/u.test(lower))) {
+    aliases.push("mas'uliyati cheklangan jamiyat MChJ ishtirokchisi ustav fondidagi ulush ulushni boshqa shaxsga o'tkazish");
+  }
+
   return aliases.length > 0 ? `${text} ${aliases.join(' ')}` : text;
 }
 
