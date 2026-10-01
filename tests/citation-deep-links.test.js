@@ -39,7 +39,7 @@ test('stable Lex.uz element IDs are preferred for an exact qism', () => {
     lex_element_id: '6263814',
     childText: 'Birinchi qism matni.',
   }, { articleRef: '253', partNumber: '1' });
-  assert.strictEqual(url, 'https://lex.uz/uz/docs/6257288#6263814');
+  assert.strictEqual(url, 'https://lex.uz/docs/-6257288#-6263814');
 });
 
 test('negative Lex.uz element IDs are valid deep-link anchors', () => {
@@ -63,7 +63,7 @@ test('existing rows deep-link by the exact requested qism text', () => {
       'Ikkinchi qism aynan kerakli huquqiy qoida.',
     ].join('\n'),
   }, { articleRef: '253', partNumber: '2' });
-  assert.ok(url.startsWith('https://lex.uz/uz/docs/6257288#:~:text='));
+  assert.ok(url.startsWith('https://lex.uz/docs/-6257288#:~:text='));
   assert.strictEqual(decodeURIComponent(url.split('text=')[1]), 'Ikkinchi qism aynan kerakli huquqiy qoida.');
 });
 
@@ -86,7 +86,7 @@ test('qism suffixes are detected and linked inside the answer', () => {
   };
   assert.strictEqual(findCitationPartNumber(answer, '253'), '2');
   const linked = linkCitationsInMarkdown(answer, [chunk], 'uz');
-  assert.match(linked, /\[\*\*Mehnat kodeksi, 253-modda, 2-qism\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/6257288#:~:text=/u);
+  assert.match(linked, /\[\*\*Mehnat kodeksi, 253-modda, 2-qism\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288#:~:text=/u);
   assert.match(linked, /\)ga ko‘ra/u);
   assert.strictEqual((linked.match(/\]\(https:\/\/lex\.uz/gu) || []).length, 2);
 });
@@ -220,7 +220,7 @@ test('legacy rows use the resolved stable article/qism anchor map', () => {
   assert.strictEqual(buildLexDeepLink({
     source_url: 'https://lex.uz/uz/docs/6257288',
     lex_anchor_ids: index,
-  }, { articleRef: '253', partNumber: '2' }), 'https://lex.uz/uz/docs/6257288#6263815');
+  }, { articleRef: '253', partNumber: '2' }), 'https://lex.uz/docs/-6257288#-6263815');
 });
 
 test('the resolver indexes numbered regulatory bands with negative Lex.uz IDs', () => {
@@ -546,6 +546,29 @@ test('selected document actions continue the exact question and answer without p
   assert.match(drafting, /Original legal question/u);
   assert.match(drafting, /Verified legal answer\/conclusion/u);
   assert.match(drafting, /User-selected next step/u);
+});
+
+test('2026-10-01 production answer: one clean Latin link per citation, article linked despite an aside', () => {
+  const law = "O'zbekiston Respublikasining Mehnat kodeksi";
+  const chunks = [
+    { law_name: law, source_url: 'https://lex.uz/uz/docs/6257288', document_number: '798', article_numbers: ['561'], chunk_text: '561-modda. Ishga tiklash.', source_type: 'law_text' },
+    // the same code again, from the live lex.uz search, under its Latin URL
+    { law_name: law, source_url: 'https://lex.uz/docs/-6257288', document_number: '798', chunk_text: 'Mehnat kodeksi', source_type: 'lex_live' },
+  ];
+  const reply = "**Huquqiy asos**\n\n- Mehnat kodeksi (Mehnat kodeksini tasdiqlash to'g'risida (O'RQ-798)), 561-modda\n\n**Xulosa**\n\nMehnat kodeksi bo'yicha sud qaror qiladi.";
+  const out = normalizeLegalAnswerCitations(reply, chunks, 'uz');
+  assert.ok(!/\[\[/.test(out), `no link inside a link: ${out}`);
+  assert.ok(!out.includes('(798) (798)'), 'the number is not repeated');
+  assert.ok(!out.includes('lex.uz/uz/docs/6257288'), 'the original edition is not linked');
+  assert.match(out, /\[\*\*Mehnat kodeksi \(798\), 561-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288#:~:text=561-modda\)/u);
+  assert.ok(!out.includes('tasdiqlash'), "the approving law's title is dropped with the aside");
+});
+
+test('Uzbek links go to the Latin text (/docs/-N); /uz/docs/-N and Russian links are kept', () => {
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/uz/docs/97664' }, {}), 'https://lex.uz/docs/-97664');
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664' }, {}), 'https://lex.uz/docs/-97664');
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/uz/docs/-5013007', lex_element_id: '-5013954' }, { articleRef: '48' }), 'https://lex.uz/uz/docs/-5013007#-5013954');
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/ru/docs/97664' }, { lang: 'ru' }), 'https://lex.uz/ru/docs/97664');
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);

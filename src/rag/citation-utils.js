@@ -244,17 +244,26 @@ function stripFragment(value = '') {
   return String(value || '').split('#')[0];
 }
 
+// lex.uz serves a document's Uzbek Latin text at /docs/-<id> (minus before
+// the id); /uz/docs/<id> and /docs/<id> open the original edition, which for
+// a code is the approving law's page (owner, 2026-10-01: a Mehnat kodeksi
+// link went to "Mehnat kodeksini tasdiqlash to'g'risida"). Uzbek answers
+// link the Latin text.
 function normalizeLexSourceUrl(value = '', lang = 'uz') {
   let url = stripFragment(value).trim();
-  if (lang === 'uz') url = url.replace('lex.uz/ru/docs/', 'lex.uz/docs/');
+  if (lang === 'uz') {
+    url = url
+      .replace('lex.uz/ru/docs/', 'lex.uz/docs/')
+      .replace(/(lex\.uz\/)(?:uz\/)?docs\/(\d+)/iu, '$1docs/-$2');
+  }
   return url;
 }
 
-/** Canonical key used only to match the same Lex document across /docs and /uz/docs URLs. */
+/** Canonical key used only to match the same Lex document across /docs, /uz/docs and /docs/- URLs. */
 function lexDocumentIdentity(value = '') {
   return stripFragment(value)
     .split('?')[0]
-    .replace(/https:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\//iu, 'https://lex.uz/docs/')
+    .replace(/https:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\/-?/iu, 'https://lex.uz/docs/')
     .trim();
 }
 
@@ -324,8 +333,14 @@ function excerptFromLines(value = '', partNumber = '') {
  * the exact child clause, so this works immediately without a corpus rebuild.
  */
 function buildLexDeepLink(chunk = {}, opts = {}) {
-  const baseUrl = normalizeLexSourceUrl(chunk.source_url || chunk.sourceUrl || '', opts.lang || 'uz');
+  const rawUrl = String(chunk.source_url || chunk.sourceUrl || '');
+  const baseUrl = normalizeLexSourceUrl(rawUrl, opts.lang || 'uz');
   if (!baseUrl) return '';
+  // Element ids on the Latin page carry the same minus as its URL
+  // (/docs/-5013007#-5013954). When the stored URL was the original edition
+  // (/uz/docs/6257288) and was moved to the Latin text, move its ids too.
+  const toLatinPage = /lex\.uz\/(?:uz\/)?docs\/\d/iu.test(rawUrl) && /lex\.uz\/docs\/-\d/iu.test(baseUrl);
+  const anchor = (id) => (toLatinPage && /^\d+$/u.test(String(id)) ? `-${id}` : String(id));
 
   const requestedPart = normalizePartNumber(opts.partNumber);
   const chunkPart = normalizePartNumber(chunk.part_number || chunk.partNumber);
@@ -335,7 +350,7 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
     ? resolvedAnchors[`${articleRef}:${requestedPart}`]
     : resolvedAnchors[articleRef];
   if (/^-?\d+$/u.test(String(resolvedId || ''))) {
-    return `${baseUrl}#${resolvedId}`;
+    return `${baseUrl}#${anchor(resolvedId)}`;
   }
   const elementId = String(
     chunk.lex_element_id || chunk.lexElementId ||
@@ -345,7 +360,7 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   // A child anchor is exact only when it represents the requested qism. An
   // article may contain several qism references in one answer.
   if (/^-?\d+$/u.test(elementId) && (!requestedPart || (chunkPart && requestedPart === chunkPart))) {
-    return `${baseUrl}#${elementId}`;
+    return `${baseUrl}#${anchor(elementId)}`;
   }
 
   let excerpt = '';
@@ -630,6 +645,10 @@ function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
       if (!lawPattern) continue;
       const rx = new RegExp(
         `(^|[^\\p{L}\\p{N}])(?:\\*{0,2})?(` + lawPattern + `)(?:\\*{0,2})?` +
+        // An aside between the name and the article - "Mehnat kodeksi
+        // (Mehnat kodeksini tasdiqlash to'g'risida (O'RQ-798)), 561-modda" -
+        // used to stop the article from being linked at all.
+        `(?:\\s*\\([^()\\[\\]]*(?:\\([^()\\[\\]]*\\)[^()\\[\\]]*)*\\))?` +
         `(?:ning)?\\s*,?\\s*(?:\\*{0,2})?(` +
         `${escaped}(?!\\d)\\s*[-\u2013\u2014]?\\s*(modda|band)[\\p{L}'\u2019]*` +
         `(?:\\s*,?\\s*(?:\\*{0,2})?(?:(\\d+)(?:\\s*[-\u2013\u2014]\\s*\\d+)?\\s*[-\u2013\u2014]?\\s*qism[\\p{L}'\u2019]*|tegishli\\s+(?:qism|band))(?:(?:\\*{0,2}))?)?` +
@@ -673,36 +692,41 @@ function linkRemainingGroundedActMentions(value = '', chunks = [], lang = 'uz') 
   }
   if (bySource.size === 0) return value;
 
-  const protectedParts = String(value || '').split(/(\[[^\]]+\]\([^)]+\))/gu);
-  return protectedParts.map((part, index) => {
-    if (index % 2 === 1) return part;
-    let output = part;
-    for (const { chunk, lawName, sourceUrl } of bySource.values()) {
-      const identifier = getChunkDocumentIdentifier(chunk);
-      let variantList = lawNameVariants(lawName, identifier);
-      const fullNamePattern = flexibleLawPattern(canonicalLawLabel(lawName));
-      const fullNamePresent = fullNamePattern && new RegExp(fullNamePattern, 'iu').test(output);
-      if (fullNamePresent && identifier) {
-        const identifierVariants = new Set(
-          documentIdentifierVariants(identifier).map(normalizeLawName)
-        );
-        // If the full official title is written, link that title once. Do not
-        // independently relink the trailing shorthand `(VMQ-244)`, which
-        // would render the same source twice in one sentence.
-        variantList = variantList.filter((variant) => !identifierVariants.has(normalizeLawName(variant)));
-      }
-      const variants = variantList
-        .filter(variant => normalizeLawName(variant).length >= 5)
-        .map(flexibleLawPattern)
-        .join('|');
-      if (!variants) continue;
-      const rx = new RegExp(`(^|[^\\p{L}\\p{N}])(?:\\*{0,2}|[\u00ab»“”\"']{0,1})(${variants})(?:\\*{0,2}|[\u00ab»“”\"']{0,1})(?![\\p{L}\\p{N}])`, 'giu');
-      output = output.replace(rx, (match, prefix) =>
-        `${prefix}[**${canonicalCitationActLabel(lawName, chunk)}**](${sourceUrl})`
+  // Links are protected again for every source: the same act can arrive as
+  // two sources (corpus row and live lex.uz result), and a single protection
+  // pass let the second source wrap the first one's fresh link again
+  // ("[[**Mehnat kodeksi (798)**](…) (798)**](…)", shown as raw text).
+  const linkSource = (part, { chunk, lawName, sourceUrl }) => {
+    const identifier = getChunkDocumentIdentifier(chunk);
+    let variantList = lawNameVariants(lawName, identifier);
+    const fullNamePattern = flexibleLawPattern(canonicalLawLabel(lawName));
+    const fullNamePresent = fullNamePattern && new RegExp(fullNamePattern, 'iu').test(part);
+    if (fullNamePresent && identifier) {
+      const identifierVariants = new Set(
+        documentIdentifierVariants(identifier).map(normalizeLawName)
       );
+      // If the full official title is written, link that title once. Do not
+      // independently relink the trailing shorthand `(VMQ-244)`, which
+      // would render the same source twice in one sentence.
+      variantList = variantList.filter((variant) => !identifierVariants.has(normalizeLawName(variant)));
     }
-    return output;
-  }).join('');
+    const variants = variantList
+      .filter(variant => normalizeLawName(variant).length >= 5)
+      .map(flexibleLawPattern)
+      .join('|');
+    if (!variants) return part;
+    const rx = new RegExp(`(^|[^\\p{L}\\p{N}])(?:\\*{0,2}|[\u00ab»“”\"']{0,1})(${variants})(?:\\*{0,2}|[\u00ab»“”\"']{0,1})(?![\\p{L}\\p{N}])`, 'giu');
+    return part.replace(rx, (match, prefix) =>
+      `${prefix}[**${canonicalCitationActLabel(lawName, chunk)}**](${sourceUrl})`
+    );
+  };
+  let text = String(value || '');
+  for (const source of bySource.values()) {
+    text = text.split(/(\[[^\]]+\]\([^)]+\))/gu)
+      .map((part, index) => (index % 2 === 1 ? part : linkSource(part, source)))
+      .join('');
+  }
+  return text;
 }
 
 /**
