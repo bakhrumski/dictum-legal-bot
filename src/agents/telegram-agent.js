@@ -32,6 +32,7 @@ const {
   selectRelevantSourceRefs,
   getChunkArticleRefs,
   normalizeLegalAnswerCitations,
+  citationLanguageForText,
   hasCanonicalOfficialCitations,
 } = require('../rag/citation-utils');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
@@ -459,8 +460,9 @@ async function generateAnswer(question, turns) {
       korpusRepealed = hydrated.repealed || [];
     }
     if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, korpusAnswer);
+    const lang = citationLanguageForText(question);
     const normalizedKorpusAnswer = appendRepealedNotice(
-      normalizeLegalAnswerCitations(korpusAnswer, chunks, 'uz'), { repealed: korpusRepealed }, 'uz');
+      normalizeLegalAnswerCitations(korpusAnswer, chunks, lang), { repealed: korpusRepealed }, lang);
     if (hasCanonicalOfficialCitations(normalizedKorpusAnswer)) {
       return {
         text: normalizedKorpusAnswer,
@@ -486,7 +488,7 @@ TELEGRAM FORMATI (majburiy):
 - Javob 200 so'zdan oshmasin. Telegram — qisqa javob joyi.
 - Sarlavha, markdown jadval, "###" kabi belgilar ishlatmang.
 - Oddiy, tushunarli til. Har bir da'vo uchun modda raqamini ko'rsating.
-- Har bir qo'llanayotgan normani shu gapning o'zida (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) shaklida yozing. Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. Hujjat raqamini faqat Lex.uz konteksti tasdiqlasa yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang; interfeys har bir tasdiqlangan hujjat eslatmasini Lex.uz havolasiga aylantiradi.
+- Har bir qo'llanayotgan normani shu gapning o'zida (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) shaklida yozing (rus tilidagi javobda esa: **Полное название на русском (ЗРУ/ПП/УП/ПКМ-номер), статья N, часть первая/вторая…**). Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. Hujjat raqamini faqat Lex.uz konteksti tasdiqlasa yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang; interfeys har bir tasdiqlangan hujjat eslatmasini Lex.uz havolasiga aylantiradi.
 - Agar KONTEKSTda javob yo'q bo'lsa — buni ochiq ayting, taxmin qilmang.` },
   ];
   if (hist) messages.push({ role: 'user', text: `Suhbat tarixi (kontekst uchun):\n${hist}` });
@@ -544,7 +546,9 @@ TELEGRAM FORMATI (majburiy):
   if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, text);
 
   return {
-    text: appendRepealedNotice(normalizeLegalAnswerCitations(text, chunks, 'uz'), { repealed: repealedActs }, 'uz'),
+    text: appendRepealedNotice(
+      normalizeLegalAnswerCitations(text, chunks, citationLanguageForText(question)),
+      { repealed: repealedActs }, citationLanguageForText(question)),
     confidence,
     sources: '',
     meta: {
