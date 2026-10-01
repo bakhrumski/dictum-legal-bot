@@ -1,7 +1,7 @@
 'use strict';
 
 const {
-  ruIdentifier, ruTitle, ruPartOrdinal, ruPartNumber, ruTitlePatterns, ORDINAL_WORD, ARTICLE_WORD, POINT_WORD, PART_WORD,
+  ruIdentifier, ruTitle, ruUrlFor, ruPartOrdinal, ruPartNumber, ruTitlePatterns, ORDINAL_WORD, ARTICLE_WORD, POINT_WORD, PART_WORD,
 } = require('./citation-ru');
 
 const SUPER_DIGITS = {
@@ -280,8 +280,12 @@ function normalizeLexSourceUrl(value = '', lang = 'uz') {
       .replace('lex.uz/ru/docs/', 'lex.uz/docs/')
       .replace(/(lex\.uz\/)(?:uz\/)?docs\/(\d+)/iu, '$1docs/-$2');
   } else if (lang === 'ru') {
-    // A Russian answer links the Russian text: /ru/docs/<id>, no minus.
-    url = url.replace(/(lex\.uz\/)(?:uz\/|ru\/)?docs\/-?(\d+)/iu, '$1ru/docs/$2');
+    // A Russian answer links the Russian text when its URL is known (it can
+    // have its own id); otherwise the Uzbek Latin text of the same act.
+    const id = (url.match(/lex\.uz\/(?:uz\/|ru\/)?docs\/-?(\d+)/iu) || [])[1];
+    if (id && !/lex\.uz\/ru\/docs\//iu.test(url)) {
+      url = ruUrlFor(id) || url.replace(/(lex\.uz\/)(?:uz\/)?docs\/(\d+)/iu, '$1docs/-$2');
+    }
   }
   return url;
 }
@@ -372,9 +376,11 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   const requestedPart = normalizePartNumber(opts.partNumber);
   const chunkPart = normalizePartNumber(chunk.part_number || chunk.partNumber);
   const articleRef = normalizeArticleRef(opts.articleRef);
-  // Element ids were read from the Uzbek page; on the Russian page the
-  // article is found by its heading instead.
+  // On a Russian page the article is found by its heading (element ids were
+  // read from the Uzbek page). Without a known Russian page the Uzbek one is
+  // linked, with its own anchors.
   if ((opts.lang || 'uz') === 'ru') {
+    if (!/lex\.uz\/ru\/docs\//iu.test(baseUrl)) return buildLexDeepLink(chunk, { ...opts, lang: 'uz' });
     return articleRef ? `${baseUrl}#:~:text=${encodeURIComponent(`Статья ${articleRef}`)}` : baseUrl;
   }
   const resolvedAnchors = chunk.lex_anchor_ids || chunk.lexAnchorIds || {};
@@ -536,10 +542,29 @@ function getChunkDocumentIdentifier(chunk = {}) {
   );
 }
 
+/** "Трудовой кодекс (ЗРУ-798), статья 561" -> "Трудовой кодекс, статья 561". */
+function stripCodeIdentifier(label = '') {
+  return String(label || '')
+    .replace(/\s*\(\s*(?:O['\u02bb\u02bc\u2018\u2019`]?RQ|ЎРҚ|ЗРУ)\s*[-\u2013\u2014]?\s*\d+\s*\)/giu, '')
+    .replace(/\s*\(\s*\d+\s*\)(?=\s*(?:,|$))/u, '')
+    .trim();
+}
+
+/**
+ * A code or the Constitution has no number of its own: "O'RQ-798" is the
+ * number of the law that adopted the Labour Code (owner, 2026-10-01), so it
+ * is never shown next to the code.
+ */
+function isCodeAct(lawName = '') {
+  const n = normalizeLawName(lawName);
+  if (/tasdiqlash|amalga kiritish|утвержден|введени/u.test(n)) return false;
+  return /(?:^|\s)(?:kodeks\p{L}*|konstitutsiya\p{L}*|кодекс\p{L}*|конституци\p{L}*)(?:\s|$)/u.test(n);
+}
+
 function canonicalCitationActLabel(lawName = '', chunk = {}, lang = 'uz') {
   const uzDisplay = canonicalLawLabel(lawName);
   const display = (lang === 'ru' && ruTitle(normalizeLawName(lawName))) || uzDisplay;
-  const identifier = getChunkDocumentIdentifier(chunk);
+  const identifier = isCodeAct(lawName) ? '' : getChunkDocumentIdentifier(chunk);
   if (!identifier || normalizeLawName(uzDisplay).includes(normalizeLawName(identifier))) return display;
   return `${display} (${lang === 'ru' ? ruIdentifier(identifier) : identifier})`;
 }
@@ -687,7 +712,8 @@ function linkRussianCitation(text = '', ref = '', record = {}, lang = 'ru') {
     if (!url) return match;
     // The writer's own words stay: Russian declines the title ("согласно
     // Трудовому кодексу"), and a nominative label would break the sentence.
-    const label = match.slice(prefix.length).replace(/\*/gu, '').replace(/\s+/gu, ' ').trim();
+    let label = match.slice(prefix.length).replace(/\*/gu, '').replace(/\s+/gu, ' ').trim();
+    if (isCodeAct(record.lawName)) label = stripCodeIdentifier(label);
     return `${prefix}[**${label}**](${url})`;
   }))).join('');
 }
@@ -797,9 +823,10 @@ function linkRemainingGroundedActMentions(value = '', chunks = [], lang = 'uz') 
     return part.replace(rx, (match, prefix, written) => {
       // In a Russian answer a Russian title stays as written (it is declined);
       // anything else gets the canonical label in the answer's language.
-      const label = lang === 'ru' && /[\u0400-\u04ff]/u.test(written) && !/^(?:ЗРУ|ПП|УП|ПКМ)-/u.test(written)
+      let label = lang === 'ru' && /[\u0400-\u04ff]/u.test(written) && !/^(?:ЗРУ|ПП|УП|ПКМ)-/u.test(written)
         ? match.slice(prefix.length).replace(/\*/gu, '').trim()
         : canonicalCitationActLabel(lawName, chunk, lang);
+      if (isCodeAct(lawName)) label = stripCodeIdentifier(label);
       return `${prefix}[**${label}**](${sourceUrl})`;
     });
   };
@@ -948,7 +975,11 @@ function hasCanonicalOfficialCitations(value = '') {
   ));
   if (links.length === 0) return false;
   const officialLabel = /\((?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ|ЗРУ|ПП|УП|ПКМ)-\d+(?:-[IVXLCDM]+)?\)|\(\d+-[IVXLCDM]+\)/iu;
-  if (links.some(match => !officialLabel.test(String(match[1] || '').replace(/[*_]/gu, '')))) return false;
+  // A code or the Constitution is canonical without a number.
+  if (links.some(match => {
+    const label = String(match[1] || '').replace(/[*_]/gu, '');
+    return !officialLabel.test(label) && !isCodeAct(label.split(',')[0]);
+  })) return false;
 
   const withoutLinks = text.replace(/\[[^\]]+\]\([^)]+\)/gu, ' ');
   return !/(?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ|ЗРУ|ПП|УП|ПКМ)\s*-\s*\d+|\b\d+\s*[-\u2013\u2014]?\s*(?:modda|band)\b|(?:^|[^\p{L}])(?:статья|ст\.)\s*\d/iu.test(withoutLinks);

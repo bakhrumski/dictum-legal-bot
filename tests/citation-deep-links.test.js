@@ -560,7 +560,8 @@ test('2026-10-01 production answer: one clean Latin link per citation, article l
   assert.ok(!/\[\[/.test(out), `no link inside a link: ${out}`);
   assert.ok(!out.includes('(798) (798)'), 'the number is not repeated');
   assert.ok(!out.includes('lex.uz/uz/docs/6257288'), 'the original edition is not linked');
-  assert.match(out, /\[\*\*Mehnat kodeksi \(798\), 561-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288#:~:text=561-modda\)/u);
+  // A code has no number of its own (owner): no "(798)" next to it.
+  assert.match(out, /\[\*\*Mehnat kodeksi, 561-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288#:~:text=561-modda\)/u);
   assert.ok(!out.includes('tasdiqlash'), "the approving law's title is dropped with the aside");
 });
 
