@@ -137,6 +137,10 @@ Javobni faqat JSON formatda ber:
 /**
  * Legislation priority map — maps each legal field to its primary and secondary
  * legislation sources for search prioritization.
+ *
+ * Code links are the Uzbek Latin pages from lex-registry.js (2026-10-01: the
+ * Labour Code pointed at the 1995 code, the LLC law at a 404, and several
+ * codes at their Russian or Uzbek Cyrillic pages, which have other ids).
  */
 const LEGAL_FIELD_MAP = {
   'Mehnat huquqi': {
@@ -151,8 +155,8 @@ const LEGAL_FIELD_MAP = {
   },
   'Fuqarolik huquqi': {
     primary: [
-      'Fuqarolik kodeksi (FK): https://lex.uz/docs/111189',
-      'Fuqarolik protsessual kodeks (FPK): https://lex.uz/docs/111325'
+      'Fuqarolik kodeksi (FK): https://lex.uz/docs/-111189',
+      'Fuqarolik protsessual kodeks (FPK): https://lex.uz/docs/-3517337'
     ],
     secondary: [
       'Ijro va sud qarorlari ijrosi: https://lex.uz/docs/5765444',
@@ -161,7 +165,7 @@ const LEGAL_FIELD_MAP = {
   },
   'Oila huquqi': {
     primary: [
-      'Oila kodeksi (OK): https://lex.uz/docs/104723',
+      'Oila kodeksi (OK): https://lex.uz/docs/-104720',
       'Bolalar huquqlari kafolatlari: https://lex.uz/docs/49560'
     ],
     secondary: [
@@ -171,8 +175,8 @@ const LEGAL_FIELD_MAP = {
   },
   'Ma\'muriy huquq': {
     primary: [
-      'Ma\'muriy javobgarlik to\'g\'risidagi kodeks (MJTK): https://lex.uz/docs/97661',
-      'Ma\'muriy sud ishlarini yuritish to\'g\'risidagi kodeks (MSIK): https://lex.uz/docs/3523895'
+      'Ma\'muriy javobgarlik to\'g\'risidagi kodeks (MJTK): https://lex.uz/docs/-97664',
+      'Ma\'muriy sud ishlarini yuritish to\'g\'risidagi kodeks (MSIK): https://lex.uz/docs/-3527353'
     ],
     secondary: [
       'Litsenziyalash: https://lex.uz/docs/6006025',
@@ -181,8 +185,8 @@ const LEGAL_FIELD_MAP = {
   },
   'Jinoyat huquqi': {
     primary: [
-      'Jinoyat kodeksi (JK): https://lex.uz/docs/111457',
-      'Jinoyat-protsessual kodeks (JPK): https://lex.uz/docs/111463'
+      'Jinoyat kodeksi (JK): https://lex.uz/docs/-111453',
+      'Jinoyat-protsessual kodeks (JPK): https://lex.uz/docs/-111460'
     ],
     secondary: [
       'Sudlar to\'g\'risida: https://lex.uz/docs/5965818',
@@ -192,18 +196,18 @@ const LEGAL_FIELD_MAP = {
   'Tadbirkorlik huquqi': {
     primary: [
       'Tadbirkorlik faoliyati erkinligi kafolatlari: https://lex.uz/docs/4538291',
-      'MChJ to\'g\'risida: https://lex.uz/docs/5765406',
+      'MChJ to\'g\'risida (O\'RQ-1137): https://lex.uz/docs/-8151376',
       'Aksiyadorlik jamiyatlari: https://lex.uz/docs/5765400'
     ],
     secondary: [
-      'Soliq kodeksi (SK): https://lex.uz/docs/4674893',
+      'Soliq kodeksi (SK): https://lex.uz/docs/-4674902',
       'Bankrotlik: https://lex.uz/docs/5767454',
       'Davlat xaridlari: https://lex.uz/docs/5759393'
     ]
   },
   'Soliq huquqi': {
     primary: [
-      'Soliq kodeksi (SK): https://lex.uz/docs/4674893',
+      'Soliq kodeksi (SK): https://lex.uz/docs/-4674902',
       'Budjet kodeksi: https://lex.uz/docs/3523816'
     ],
     secondary: [
@@ -244,7 +248,7 @@ const LEGAL_FIELD_MAP = {
   'Boshqa': {
     primary: [
       'Konstitutsiya: https://lex.uz/docs/35869',
-      'Fuqarolik kodeksi (FK): https://lex.uz/docs/111189'
+      'Fuqarolik kodeksi (FK): https://lex.uz/docs/-111189'
     ],
     secondary: []
   }

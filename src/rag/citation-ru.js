@@ -40,8 +40,12 @@ const RU_TITLES = {
 // /docs/-6257288 in Uzbek but /ru/docs/6257291 in Russian (owner,
 // 2026-10-01). Only listed ids get a Russian link; any other act keeps its
 // Uzbek page, which is at least the right document.
+// Keyed by the Uzbek (Latin) id; values as the owner gave them.
 const RU_URLS = {
   '6257288': 'https://lex.uz/ru/docs/6257291', // Mehnat kodeksi / Трудовой кодекс
+  '104720': 'https://lex.uz/docs/104723',      // Oila kodeksi / Семейный кодекс
+  '111453': 'https://lex.uz/docs/111457',      // Jinoyat kodeksi / Уголовный кодекс
+  '4674902': 'https://lex.uz/docs/4674893',    // Soliq kodeksi / Налоговый кодекс
 };
 
 /** The Russian text's URL for a lex.uz document id, or ''. */
