@@ -10772,6 +10772,26 @@ app.get('/api/health', async (req, res) => {
   mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts: (texts) => getEmbeddingsBatch(texts) });
 }
 
+// Registry URL check and corpus script report, with Latin re-ingest (master only).
+{
+  const { mountCorpusAuditRoutes } = require('../rag/corpus-audit');
+  const { reingestDocuments } = require('../rag/oversized-chunks');
+  const { getAllLaws } = require('../rag/lex-registry');
+  const { fetchLexDocument } = require('../rag/fetch-lex');
+  mountCorpusAuditRoutes(app, {
+    requireMasterAdmin,
+    pool,
+    getAllLaws,
+    // Only the parsed text is kept; the raw HTML of a large code is dropped.
+    fetchDoc: async (url) => { const d = await fetchLexDocument(url); return { title: d.title, body: d.body, metadata: d.metadata }; },
+    reingest: (docs, report) => reingestDocuments(docs, {
+      fetchDoc: (url) => fetchLexDocument(url),
+      ingest: (url, opts) => require('../rag/ingest-lex').ingestFromUrl(url, opts),
+      report,
+    }),
+  });
+}
+
 app.get('/api/admin/health', requireMasterAdmin, async (req, res) => {
   let corpusInfo = {};
   try {
