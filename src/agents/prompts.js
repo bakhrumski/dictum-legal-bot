@@ -159,18 +159,18 @@ const LEGAL_FIELD_MAP = {
       'Fuqarolik protsessual kodeks (FPK): https://lex.uz/docs/-3517337'
     ],
     secondary: [
-      'Ijro va sud qarorlari ijrosi: https://lex.uz/docs/5765444',
-      'Notariat: https://lex.uz/docs/5765430'
+      'Ijro va sud qarorlari ijrosi: https://lex.uz/docs/-5765444',
+      'Notariat: https://lex.uz/docs/-5765430'
     ]
   },
   'Oila huquqi': {
     primary: [
       'Oila kodeksi (OK): https://lex.uz/docs/-104720',
-      'Bolalar huquqlari kafolatlari: https://lex.uz/docs/49560'
+      'Bolalar huquqlari kafolatlari: https://lex.uz/docs/-49560'
     ],
     secondary: [
       'Fuqarolik protsessual kodeks (FPK)',
-      'Genderli tenglik: https://lex.uz/docs/5765412'
+      'Genderli tenglik: https://lex.uz/docs/-5765412'
     ]
   },
   'Ma\'muriy huquq': {
@@ -179,8 +179,8 @@ const LEGAL_FIELD_MAP = {
       'Ma\'muriy sud ishlarini yuritish to\'g\'risidagi kodeks (MSIK): https://lex.uz/docs/-3527353'
     ],
     secondary: [
-      'Litsenziyalash: https://lex.uz/docs/6006025',
-      'Korrupsiyaga qarshi kurashish: https://lex.uz/docs/5765442'
+      'Litsenziyalash: https://lex.uz/docs/-6006025',
+      'Korrupsiyaga qarshi kurashish: https://lex.uz/docs/-5765442'
     ]
   },
   'Jinoyat huquqi': {
@@ -189,29 +189,29 @@ const LEGAL_FIELD_MAP = {
       'Jinoyat-protsessual kodeks (JPK): https://lex.uz/docs/-111460'
     ],
     secondary: [
-      'Sudlar to\'g\'risida: https://lex.uz/docs/5965818',
-      'Advokatlik faoliyati: https://lex.uz/docs/5765396'
+      'Sudlar to\'g\'risida: https://lex.uz/docs/-5965818',
+      'Advokatlik faoliyati: https://lex.uz/docs/-5765396'
     ]
   },
   'Tadbirkorlik huquqi': {
     primary: [
-      'Tadbirkorlik faoliyati erkinligi kafolatlari: https://lex.uz/docs/4538291',
+      'Tadbirkorlik faoliyati erkinligi kafolatlari: https://lex.uz/docs/-4538291',
       'MChJ to\'g\'risida (O\'RQ-1137): https://lex.uz/docs/-8151376',
-      'Aksiyadorlik jamiyatlari: https://lex.uz/docs/5765400'
+      'Aksiyadorlik jamiyatlari: https://lex.uz/docs/-5765400'
     ],
     secondary: [
       'Soliq kodeksi (SK): https://lex.uz/docs/-4674902',
-      'Bankrotlik: https://lex.uz/docs/5767454',
-      'Davlat xaridlari: https://lex.uz/docs/5759393'
+      'Bankrotlik: https://lex.uz/docs/-5767454',
+      'Davlat xaridlari: https://lex.uz/docs/-5759393'
     ]
   },
   'Soliq huquqi': {
     primary: [
       'Soliq kodeksi (SK): https://lex.uz/docs/-4674902',
-      'Budjet kodeksi: https://lex.uz/docs/3523816'
+      'Budjet kodeksi: https://lex.uz/docs/-2304138'
     ],
     secondary: [
-      'Bojxona kodeksi: https://lex.uz/docs/4102378',
+      'Bojxona kodeksi: https://lex.uz/docs/-2876354',
       'Tadbirkorlik faoliyati erkinligi kafolatlari'
     ]
   },
@@ -227,7 +227,7 @@ const LEGAL_FIELD_MAP = {
   },
   'Iste\'molchilar huquqi': {
     primary: [
-      'Iste\'molchilar huquqlarini himoya qilish: https://lex.uz/docs/89690',
+      'Iste\'molchilar huquqlarini himoya qilish: https://lex.uz/docs/-89690',
       'Fuqarolik kodeksi (FK), shartnomalar qismi'
     ],
     secondary: [
@@ -237,8 +237,8 @@ const LEGAL_FIELD_MAP = {
   },
   'Yer va ko\'chmas mulk huquqi': {
     primary: [
-      'Yer kodeksi: https://lex.uz/docs/149946',
-      'Uy-joy kodeksi: https://lex.uz/docs/97012'
+      'Yer kodeksi: https://lex.uz/docs/-152653',
+      'Uy-joy kodeksi: https://lex.uz/docs/-106136'
     ],
     secondary: [
       'Fuqarolik kodeksi, ko\'chmas mulk bitimlari',
@@ -247,7 +247,7 @@ const LEGAL_FIELD_MAP = {
   },
   'Boshqa': {
     primary: [
-      'Konstitutsiya: https://lex.uz/docs/35869',
+      'Konstitutsiya: https://lex.uz/docs/-35869',
       'Fuqarolik kodeksi (FK): https://lex.uz/docs/-111189'
     ],
     secondary: []
