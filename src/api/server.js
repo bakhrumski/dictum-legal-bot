@@ -4181,7 +4181,7 @@ Har bir huquqiy da'vo uchun quyidagi formatda manba keltiring:
 [Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism]
 
 Misollar:
-- Mehnat kodeksi (O'RQ-798), 100-modda, tegishli qism
+- Mehnat kodeksi, 100-modda, tegishli qism (kodeksning o'z raqami yo'q; O'RQ-798 uni tasdiqlagan qonun)
 - O'zbekiston hududida xorijiy malakali mutaxassislar uchun sharoitlar yaratish to'g'risida (PQ-4008), 2-band, tegishli band
 
 Hujjatning rasmiy raqami va Lex.uz manbasi tasdiqlanmasa, uni huquqiy asos sifatida ishlatmang. Alohida "Manbalar" bo'limi yoki xom URL yozmang; interfeys tasdiqlangan inline iqtiboslarni Lex.uz havolasiga aylantiradi.

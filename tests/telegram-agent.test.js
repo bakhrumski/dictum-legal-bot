@@ -774,7 +774,8 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(r.action, 'answered');
     assert.strictEqual(r.meta.path, 'rag');
     assert.strictEqual(d.calls.answer, 1, 'legacy content must be grounding, not a verbatim bypass');
-    assert.match(r.reply, /Mehnat kodeksi \(O'RQ-798\), 100-modda/u);
+    // A code is cited without the adopting law's number (owner, 2026-10-01).
+    assert.match(r.reply, /\[\*\*Mehnat kodeksi, 100-modda/u);
     assert.match(r.reply, /https:\/\/lex\.uz\/docs\/-6257288/u);
   });
 

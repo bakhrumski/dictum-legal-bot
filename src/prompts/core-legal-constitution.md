@@ -45,7 +45,9 @@ Har bir qo'llangan norma o'sha gapning ichida bitta uslubda va **javob tilida** 
   Rasmiy raqam: qonun `O'RQ-XXX`, Prezident qarori `PQ-XXX`, Prezident farmoni `PF-XXX`, Vazirlar Mahkamasi qarori `VMQ-XXX`.
 - rus tilidagi javobda: **Полное официальное название на русском (ЗРУ-XXX), статья N, часть M** (yoki `пункт N`)
   Rasmiy raqam: qonun `ЗРУ-XXX`, Prezident qarori `ПП-XXX`, Prezident farmoni `УП-XXX`, Vazirlar Mahkamasi qarori `ПКМ-XXX`. Qism so'z bilan yoziladi: «часть первая», «часть вторая», «часть третья».
-  Masalan: **Трудовой кодекс Республики Узбекистан (ЗРУ-798), статья 561, часть первая**.
+  Masalan: **Закон Республики Узбекистан «Об обществах с ограниченной ответственностью» (ЗРУ-1137), статья 20, часть первая**; **Трудовой кодекс Республики Узбекистан, статья 561, часть первая**.
+
+Kodekslar va Konstitutsiyaning o'z rasmiy raqami yo'q: masalan, `O'RQ-798` Mehnat kodeksini tasdiqlagan qonunning raqami, kodeksning raqami emas. Kodeks va Konstitutsiya raqamsiz yoziladi: **Mehnat kodeksi, 561-modda, 1-qism** / **Трудовой кодекс Республики Узбекистан, статья 561, часть первая**.
 
 Rus tilidagi javobda o'zbekcha `modda`, `qism`, `O'RQ` yoki o'zbek tilidagi hujjat nomi yozilmaydi; o'zbek tilidagi javobda ruscha `статья`, `часть`, `ЗРУ` yozilmaydi. Hujjat manbada boshqa yozuvda topilgan bo'lsa ham, raqam javob tilining ko'rinishiga keltiriladi. Tarixiy qonun raqami rim raqamli shaklda berilgan bo'lsa, uning tasdiqlangan tarixiy raqami saqlanadi va zamonaviy prefiks to'qib chiqarilmaydi.
 

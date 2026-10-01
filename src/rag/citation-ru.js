@@ -36,6 +36,19 @@ const RU_TITLES = {
   'masuliyati cheklangan jamiyatlar togrisida': 'Закон Республики Узбекистан «Об обществах с ограниченной ответственностью»',
 };
 
+// The Russian text of an act can have its own lex.uz id: the Labour Code is
+// /docs/-6257288 in Uzbek but /ru/docs/6257291 in Russian (owner,
+// 2026-10-01). Only listed ids get a Russian link; any other act keeps its
+// Uzbek page, which is at least the right document.
+const RU_URLS = {
+  '6257288': 'https://lex.uz/ru/docs/6257291', // Mehnat kodeksi / Трудовой кодекс
+};
+
+/** The Russian text's URL for a lex.uz document id, or ''. */
+function ruUrlFor(docId = '') {
+  return RU_URLS[String(docId || '').replace(/^-/, '')] || '';
+}
+
 const RU_PREFIX = { "O'RQ": 'ЗРУ', PQ: 'ПП', PF: 'УП', VMQ: 'ПКМ' };
 
 /** O'RQ-310 -> ЗРУ-310 (other forms unchanged). */
@@ -101,4 +114,4 @@ const ARTICLE_WORD = '(?:стать[яиеёюй]\\p{L}{0,2}|ст\\.)';
 const POINT_WORD = '(?:пункт\\p{L}{0,2}|п\\.)';
 const PART_WORD = '(?:част[ьиеюй]\\p{L}{0,2}|ч\\.)';
 
-module.exports = { RU_TITLES, ruIdentifier, ruTitle, ruPartOrdinal, ruPartNumber, ruTitlePattern, ruTitlePatterns, ORDINAL_WORD, ARTICLE_WORD, POINT_WORD, PART_WORD };
+module.exports = { RU_TITLES, RU_URLS, ruUrlFor, ruIdentifier, ruTitle, ruPartOrdinal, ruPartNumber, ruTitlePattern, ruTitlePatterns, ORDINAL_WORD, ARTICLE_WORD, POINT_WORD, PART_WORD };

@@ -30,27 +30,29 @@ test('the question decides the language', () => {
 });
 
 test('a Russian citation (act, статья, часть первая) becomes one link to the Russian text', () => {
+  // The Labour Code's Russian text has its own id (6257291), and a code has
+  // no number: "(ЗРУ-798)" is the adopting law's and is dropped (owner).
   const out = normalizeLegalAnswerCitations('- **Трудовой кодекс Республики Узбекистан (ЗРУ-798), статья 561, часть первая**', [MK], 'ru');
   const links = link(out);
   assert.strictEqual(links.length, 1, out);
-  assert.match(links[0], /^\[\*\*Трудовой кодекс Республики Узбекистан \(ЗРУ-798\), статья 561, часть первая\*\*\]\(https:\/\/lex\.uz\/ru\/docs\/6257288#:~:text=/u);
+  assert.match(links[0], /^\[\*\*Трудовой кодекс Республики Узбекистан, статья 561, часть первая\*\*\]\(https:\/\/lex\.uz\/ru\/docs\/6257291#:~:text=/u);
   assert.ok(decodeURIComponent(links[0]).includes('#:~:text=Статья 561'));
 });
 
 test('a declined title keeps the sentence grammatical', () => {
   const out = normalizeLegalAnswerCitations('Согласно Трудовому кодексу, статья 561, суд восстанавливает работника.', [MK], 'ru');
-  assert.match(out, /^Согласно \[\*\*Трудовому кодексу, статья 561\*\*\]\(https:\/\/lex\.uz\/ru\/docs\/6257288/u);
+  assert.match(out, /^Согласно \[\*\*Трудовому кодексу, статья 561\*\*\]\(https:\/\/lex\.uz\/ru\/docs\/6257291/u);
 });
 
-test('a quoted law title with its identifier and part in words', () => {
+test('a quoted law title with its identifier and part in words (no known Russian page: the Uzbek one)', () => {
   const out = normalizeLegalAnswerCitations('Закон «Об обществах с ограниченной ответственностью» (ЗРУ-1137), статья 20, часть третья требует уведомления.', [LLC], 'ru');
-  assert.match(out, /^\[\*\*Закон «Об обществах с ограниченной ответственностью» \(ЗРУ-1137\), статья 20, часть третья\*\*\]\(https:\/\/lex\.uz\/ru\/docs\/8151376/u);
+  assert.match(out, /^\[\*\*Закон «Об обществах с ограниченной ответственностью» \(ЗРУ-1137\), статья 20, часть третья\*\*\]\(https:\/\/lex\.uz\/docs\/-8151376/u);
   assert.ok(!/\]\([^)]*\)[^\[]*\]\(/u.test(out.split('требует')[0]), 'no stray link fragments');
 });
 
 test('an act named without an article links to its Russian page, as written', () => {
   const out = normalizeLegalAnswerCitations('Об этом говорит и Трудовой кодекс.', [MK], 'ru');
-  assert.strictEqual(out, 'Об этом говорит и [**Трудовой кодекс**](https://lex.uz/ru/docs/6257288).');
+  assert.strictEqual(out, 'Об этом говорит и [**Трудовой кодекс**](https://lex.uz/ru/docs/6257291).');
 });
 
 test('the repealed 2001 law is not linked to the current one by its similar title', () => {
@@ -58,14 +60,16 @@ test('the repealed 2001 law is not linked to the current one by its similar titl
   assert.strictEqual(link(out).length, 0, out);
 });
 
-test('Uzbek answers are unchanged: Latin page, Uzbek label', () => {
+test('Uzbek answers: Latin page, Uzbek label, and a code without the adopting law\'s number', () => {
   const out = normalizeLegalAnswerCitations("Mehnat kodeksi (O'RQ-798), 561-modda, 1-qism bo'yicha.", [MK], 'uz');
-  assert.match(out, /^\[\*\*Mehnat kodeksi \(O'RQ-798\), 561-modda, 1-qism\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288/u);
+  assert.match(out, /^\[\*\*Mehnat kodeksi, 561-modda, 1-qism\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288/u);
+  const law = normalizeLegalAnswerCitations("Mas'uliyati cheklangan jamiyatlar to'g'risida, 20-modda", [LLC], 'uz');
+  assert.match(law, /\[\*\*Mas'uliyati cheklangan jamiyatlar to'g'risida \(O'RQ-1137\), 20-modda/u, 'a law keeps its number');
 });
 
 test('an Uzbek-format citation in a Russian answer is relabelled in Russian', () => {
   const out = normalizeLegalAnswerCitations("Mehnat kodeksi (O'RQ-798), 561-modda", [MK], 'ru');
-  assert.match(out, /\[\*\*Трудовой кодекс Республики Узбекистан \(ЗРУ-798\), статья 561\*\*\]/u);
+  assert.match(out, /\[\*\*Трудовой кодекс Республики Узбекистан, статья 561\*\*\]\(https:\/\/lex\.uz\/ru\/docs\/6257291/u);
 });
 
 test('Russian helpers: ordinals, identifiers, titles, deep link', () => {
@@ -75,7 +79,10 @@ test('Russian helpers: ordinals, identifiers, titles, deep link', () => {
   assert.deepStrictEqual(["O'RQ-310", 'PQ-1', 'PF-2', 'VMQ-3', '349-I'].map(ruIdentifier), ['ЗРУ-310', 'ПП-1', 'УП-2', 'ПКМ-3', '349-I']);
   assert.strictEqual(ruTitle('fuqarolik kodeksi 1 qism'), 'Гражданский кодекс Республики Узбекистан (часть первая)');
   assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/-6257288', lex_element_id: '-6263814' }, { lang: 'ru', articleRef: '561' }),
-    `https://lex.uz/ru/docs/6257288#:~:text=${encodeURIComponent('Статья 561')}`);
+    `https://lex.uz/ru/docs/6257291#:~:text=${encodeURIComponent('Статья 561')}`);
+  // No known Russian page: the Uzbek Latin page with its own anchor.
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/uz/docs/97664', lex_element_id: '98000' }, { lang: 'ru', articleRef: '135' }),
+    'https://lex.uz/docs/-97664#-98000');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

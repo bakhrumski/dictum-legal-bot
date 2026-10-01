@@ -141,7 +141,7 @@ Javobni faqat JSON formatda ber:
 const LEGAL_FIELD_MAP = {
   'Mehnat huquqi': {
     primary: [
-      'Mehnat kodeksi (MK): https://lex.uz/docs/145261',
+      'Mehnat kodeksi (MK): https://lex.uz/docs/-6257288', // the 2023 code; 145261 was the 1995 one
       'Aholini ish bilan ta\'minlash to\'g\'risidagi qonun'
     ],
     secondary: [
