@@ -80,6 +80,41 @@ async function checkRegistryEntry(entry, fetchDoc) {
   return out;
 }
 
+/**
+ * lex.uz search candidates for a registry entry whose URL is dead: the
+ * search page rows (title, in-force badge, own number, Latin URL), ranked by
+ * how well the title matches the registry name; the best one is opened to
+ * confirm its page and script. searchPage(query) -> HTML; parse(html) ->
+ * rows as lex-live-search.parseSearchCandidates gives them.
+ */
+async function findCandidates(entry, { searchPage, parse, fetchDoc }) {
+  const query = String(entry.law_name || '').replace(/\([^)]*\)/gu, ' ').replace(/\s+/gu, ' ').trim();
+  const rows = parse(await searchPage(query)) || [];
+  const ranked = rows
+    .map(r => ({ url: latinLexUrl(r.url) || r.url, title: r.title, in_force: r.isActive, number: r.documentNumber || null,
+      title_match: +titleMatch(entry.law_name, r.title).toFixed(2),
+      // the reverse share: a title with many extra words is a different act
+      // that merely contains the name ("…va aksiyadorlarning huquqlarini…")
+      _exact: titleMatch(r.title, entry.law_name) }))
+    .filter(r => r.title_match > 0)
+    .sort((a, b) => (b.title_match - a.title_match) || (b._exact - a._exact) || ((b.in_force === true) - (a.in_force === true)))
+    .map(({ _exact, ...r }) => r)
+    .slice(0, 3);
+  const out = { candidates: ranked, suggested: null };
+  const best = ranked[0];
+  if (best && best.title_match >= 0.8 && best.in_force !== false) {
+    try {
+      const doc = await fetchDoc(best.url);
+      const meta = (doc && doc.metadata) || {};
+      best.checked = { script: textScript(`${doc.title || ''} ${doc.body || ''}`), in_force: meta.is_active !== false, chars: String(doc.body || '').length };
+      if (best.checked.script === 'latin' && best.checked.in_force && best.checked.chars >= 500) out.suggested = best.url;
+    } catch (err) {
+      best.checked = { error: String(err.message || err).slice(0, 120) };
+    }
+  }
+  return out;
+}
+
 /** Per-document script of the stored law text (first 600 characters of up to 40 chunks). */
 async function corpusScripts(pool) {
   const { rows } = await pool.query(`
@@ -109,9 +144,46 @@ function needsLatinReingest(d) {
   return d.script === 'uz-cyrillic' && Boolean(latinLexUrl(d.source_url)) && Boolean(d.doc_id);
 }
 
-function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fetchDoc, reingest, log = console }) {
+function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fetchDoc, reingest, searchPage, parseSearch, log = console }) {
   let registryJob = null; // { running, startedAt, done, total, results }
   let reingestJob = null;
+  let candidatesJob = null;
+
+  // GET /api/admin/lex-registry/candidates — ?start=1 searches lex.uz for
+  // every registry entry whose URL is dead (from the last check, or checked
+  // again here) and proposes replacement URLs; the owner confirms them.
+  app.get('/api/admin/lex-registry/candidates', requireMasterAdmin, (req, res) => {
+    if (req.query.start === '1' && !(candidatesJob && candidatesJob.running) && searchPage && parseSearch) {
+      const known = new Map(((registryJob && registryJob.results) || []).map(r => [r.doc_id, r.status]));
+      const laws = getAllLaws();
+      const job = { running: true, startedAt: new Date().toISOString(), done: 0, total: laws.length, results: [] };
+      candidatesJob = job;
+      (async () => {
+        for (const entry of laws) {
+          let status = known.get(entry.doc_id);
+          if (!status) status = (await checkRegistryEntry(entry, fetchDoc)).status;
+          if (/not_found|empty|title_mismatch|not_in_force/u.test(status)) {
+            try {
+              job.results.push({ doc_id: entry.doc_id, law_name: entry.law_name, category: entry.category, old_url: entry.lex_url, status,
+                ...(await findCandidates(entry, { searchPage, parse: parseSearch, fetchDoc })) });
+            } catch (err) {
+              job.results.push({ doc_id: entry.doc_id, law_name: entry.law_name, old_url: entry.lex_url, status, error: String(err.message || err).slice(0, 160) });
+            }
+            await new Promise(r => setTimeout(r, 1500));
+          }
+          job.done++;
+        }
+      })().catch((err) => { job.error = err.message; log.error('[REGISTRY-CANDIDATES]', err.message); })
+        .finally(() => { job.running = false; job.finishedAt = new Date().toISOString(); });
+    }
+    const results = candidatesJob ? candidatesJob.results : [];
+    res.json({
+      job: candidatesJob && { running: candidatesJob.running, startedAt: candidatesJob.startedAt, finishedAt: candidatesJob.finishedAt, done: candidatesJob.done, total: candidatesJob.total, error: candidatesJob.error },
+      suggested: results.filter(r => r.suggested).map(r => ({ doc_id: r.doc_id, law_name: r.law_name, url: r.suggested, title: r.candidates[0].title, number: r.candidates[0].number })),
+      unresolved: results.filter(r => !r.suggested),
+      howTo: 'Add ?start=1 to search lex.uz for every dead registry entry (several minutes); refresh without it. Suggested URLs are applied to the registry only after the owner confirms them.',
+    });
+  });
 
   // GET /api/admin/lex-registry/check — ?start=1 opens every registry URL in
   // the background (one at a time); refresh without it to read the results.
@@ -146,7 +218,18 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
     try {
       const found = await corpusScripts(pool);
       const pending = found.documents.filter(needsLatinReingest);
-      if (req.query.reingest === '1' && !(reingestJob && reingestJob.running) && pending.length) {
+      // ?ingest=<doc_id>: (re)ingest one registry act from its registry URL -
+      // for an act stored in another language (the Constitution was stored in
+      // Russian) or not in the corpus at all (the LLC law).
+      if (req.query.ingest && !(reingestJob && reingestJob.running)) {
+        const entry = getAllLaws().find(l => l.doc_id === String(req.query.ingest));
+        if (!entry) return res.status(404).json({ error: `no registry entry with doc_id ${req.query.ingest}` });
+        reingestJob = { running: true, startedAt: new Date().toISOString(), results: [] };
+        const job = reingestJob;
+        reingest([{ doc_id: entry.doc_id, law_name: entry.law_name, category: entry.category, source_url: entry.lex_url }], job.results)
+          .catch((err) => { job.error = err.message; })
+          .finally(() => { job.running = false; job.finishedAt = new Date().toISOString(); });
+      } else if (req.query.reingest === '1' && !(reingestJob && reingestJob.running) && pending.length) {
         const d = pending[0];
         const latin = { ...d, source_url: latinLexUrl(d.source_url) };
         reingestJob = { running: true, startedAt: new Date().toISOString(), results: [] };
@@ -160,7 +243,7 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
         documents: found.documents.map(({ doc_id, law_name, category, source_url, chunks, script }) => ({ doc_id, law_name, category, source_url, chunks, script })),
         reingest: reingestJob,
         pending: pending.map(d => `${d.law_name} (${d.doc_id})`),
-        howTo: 'Add ?reingest=1 to re-ingest the next Uzbek Cyrillic document from its Latin lex.uz URL (one per call); refresh until reingest.running is false, then call again.',
+        howTo: 'Add ?reingest=1 to re-ingest the next Uzbek Cyrillic document from its Latin lex.uz URL (one per call); refresh until reingest.running is false, then call again. ?ingest=<doc_id> (re)ingests one registry act from its registry URL.',
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -168,4 +251,4 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
   });
 }
 
-module.exports = { textScript, latinLexUrl, titleMatch, checkRegistryEntry, corpusScripts, needsLatinReingest, mountCorpusAuditRoutes };
+module.exports = { textScript, latinLexUrl, titleMatch, checkRegistryEntry, findCandidates, corpusScripts, needsLatinReingest, mountCorpusAuditRoutes };
