@@ -93,6 +93,30 @@ const RU = '1-статья. Цели трудового законодатель
     assert.strictEqual(repealed.suggested, null, 'a repealed act is not suggested');
   });
 
+  await test('amending laws, bills and look-alike acts are never suggested (the 2026-10-02 run)', async () => {
+    const entry = { doc_id: 'iste-molchilar-himoya-qonun', law_name: "Iste'molchilarning huquqlarini himoya qilish to'g'risida", lex_url: 'https://lex.uz/docs/-89690' };
+    const rows = [
+      { url: 'https://lex.uz/docs/-8284099', title: "“Isteʼmolchilarning huquqlarini himoya qilish toʻgʻrisida”gi Oʻzbekiston Respublikasi Qonunining 14-moddasiga oʻzgartirishlar va qoʻshimcha kiritish haqida”gi Oʻzbekiston Respublikasi Qonuni toʻgʻrisida", isActive: true },
+      { url: 'https://lex.uz/docs/-5239421', title: "“Isteʼmolchilarning huquqlarini himoya qilish toʻgʻrisida”gi QL-449-sonli Oʻzbekiston Respublikasi qonuni loyihasi haqida", isActive: true },
+      { url: 'https://lex.uz/docs/-111', title: "Isteʼmolchilarning huquqlarini himoya qilish toʻgʻrisida", isActive: true, documentNumber: "O'RQ-221" },
+    ];
+    const asked = [];
+    const r = await findCandidates(entry, {
+      searchPage: async (q, opts) => { asked.push(opts.formId || 'plain'); return 'x'; }, parse: () => rows,
+      fetchDoc: async () => ({ title: "Isteʼmolchilarning huquqlarini himoya qilish toʻgʻrisida", body: LATIN, metadata: {} }),
+    });
+    assert.deepStrictEqual(asked, ['3968', 'plain'], 'a law is searched among laws in force first');
+    assert.deepStrictEqual(r.candidates.map(c => c.url), ['https://lex.uz/docs/-111'], 'amendment and bill dropped');
+    assert.strictEqual(r.suggested, 'https://lex.uz/docs/-111');
+
+    const lookalike = await findCandidates({ doc_id: 'mudofaa-qonun', law_name: "Mudofaa to'g'risida", lex_url: 'x' }, {
+      searchPage: async () => 'x', parse: () => [{ url: 'https://lex.uz/docs/-7755253', title: "Davlat mudofaa buyurtmasi toʻgʻrisida", isActive: true }],
+      fetchDoc: async () => { throw new Error('should not open'); },
+    });
+    assert.strictEqual(lookalike.suggested, null, 'a title with other words is listed, not suggested');
+    assert.strictEqual(lookalike.candidates.length, 1);
+  });
+
   if (!process.env.TEST_DATABASE_URL) {
     console.log('  (database part skipped: TEST_DATABASE_URL not set)');
   } else if (/supabase\.co|render\.com|pooler\./i.test(process.env.TEST_DATABASE_URL)) {
