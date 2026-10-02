@@ -9,7 +9,7 @@
  */
 
 const assert = require('assert');
-const { textScript, latinLexUrl, titleMatch, checkRegistryEntry, needsLatinReingest } = require('../src/rag/corpus-audit');
+const { textScript, latinLexUrl, titleMatch, checkRegistryEntry, findCandidates, needsLatinReingest } = require('../src/rag/corpus-audit');
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -67,6 +67,32 @@ const RU = '1-статья. Цели трудового законодатель
     assert.strictEqual(needsLatinReingest({ doc_id: 'a', script: 'uz-cyrillic', source_url: '' }), false);
   });
 
+  await test('a dead registry entry gets lex.uz candidates; the best is suggested only when its Latin page checks out', async () => {
+    const entry = { doc_id: 'aksiyadorlik', law_name: "Aksiyadorlik jamiyatlari to'g'risida", lex_url: 'https://lex.uz/docs/-5765400' };
+    const rows = [
+      { url: 'https://lex.uz/docs/111', title: "Aksiyadorlik jamiyatlari va aksiyadorlarning huquqlarini himoya qilish to'g'risida", isActive: true, documentNumber: "O'RQ-370" },
+      { url: 'https://lex.uz/docs/-222', title: "Aksiyadorlik jamiyatlari to'g'risida", isActive: true, documentNumber: "O'RQ-999" },
+      { url: 'https://lex.uz/docs/-333', title: "Yo'l harakati qoidalari", isActive: true },
+    ];
+    const opened = [];
+    const r = await findCandidates(entry, {
+      searchPage: async () => '<html/>', parse: () => rows,
+      fetchDoc: async (url) => { opened.push(url); return { title: "Aksiyadorlik jamiyatlari to'g'risida", body: LATIN, metadata: {} }; },
+    });
+    assert.strictEqual(r.candidates[0].url, 'https://lex.uz/docs/-222', 'exact title first');
+    assert.strictEqual(r.candidates[1].url, 'https://lex.uz/docs/-111', 'Latin URL for a plain id');
+    assert.ok(!r.candidates.some(c => /-333/.test(c.url)), 'unrelated titles are dropped');
+    assert.strictEqual(r.suggested, 'https://lex.uz/docs/-222');
+    assert.deepStrictEqual(opened, ['https://lex.uz/docs/-222'], 'only the best candidate is opened');
+
+    const cyr = await findCandidates(entry, { searchPage: async () => '', parse: () => rows,
+      fetchDoc: async () => ({ title: 'x', body: UZ_CYR, metadata: {} }) });
+    assert.strictEqual(cyr.suggested, null, 'a page that is not Latin is not suggested');
+    const repealed = await findCandidates(entry, { searchPage: async () => '', parse: () => [{ ...rows[1], isActive: false }],
+      fetchDoc: async () => { throw new Error('should not open'); } });
+    assert.strictEqual(repealed.suggested, null, 'a repealed act is not suggested');
+  });
+
   if (!process.env.TEST_DATABASE_URL) {
     console.log('  (database part skipped: TEST_DATABASE_URL not set)');
   } else if (/supabase\.co|render\.com|pooler\./i.test(process.env.TEST_DATABASE_URL)) {
@@ -93,7 +119,9 @@ const RU = '1-статья. Цели трудового законодатель
       const app = { get: (path, _auth, handler) => { routes[path] = handler; } };
       const reingested = [];
       mountCorpusAuditRoutes(app, {
-        requireMasterAdmin: () => {}, pool, getAllLaws: () => [], fetchDoc: async () => ({}),
+        requireMasterAdmin: () => {}, pool,
+        getAllLaws: () => [{ doc_id: 'konstitutsiya', law_name: "O'zbekiston Respublikasi Konstitutsiyasi", category: 'konstitutsiya', lex_url: 'https://lex.uz/docs/-6445145' }],
+        fetchDoc: async () => ({}),
         reingest: async (docs, report) => { reingested.push(...docs); report.push({ status: 'done' }); },
       });
       const call = (path, query) => new Promise((resolve) => routes[path]({ query }, { json: resolve, status: () => ({ json: resolve }) }));
@@ -112,6 +140,16 @@ const RU = '1-статья. Цели трудового законодатель
         const target = reingested.find(d => d.doc_id === 'audit_cyr') || reingested[0];
         assert.ok(target, 'something was re-ingested');
         assert.match(target.source_url, /^https:\/\/lex\.uz\/docs\/-\d+$/u);
+      });
+      await test('?ingest=<doc_id> (re)ingests one registry act from its registry URL', async () => {
+        reingested.length = 0;
+        await new Promise(r => setTimeout(r, 20));
+        const r = await call('/api/admin/corpus/script', { ingest: 'konstitutsiya' });
+        await new Promise(r2 => setTimeout(r2, 50));
+        assert.deepStrictEqual(reingested.map(d => [d.doc_id, d.source_url, d.category]), [['konstitutsiya', 'https://lex.uz/docs/-6445145', 'konstitutsiya']]);
+        assert.ok(r.reingest && r.reingest.running !== undefined);
+        const missing = await call('/api/admin/corpus/script', { ingest: 'no-such-act' });
+        assert.match(missing.error || '', /no registry entry/u);
       });
     } finally {
       if (ids.length) await pool.query('DELETE FROM legal_chunks WHERE id = ANY($1::int[])', [ids]);

@@ -63,7 +63,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'konstitutsiya',
       law_name: "O'zbekiston Respublikasi Konstitutsiyasi",
-      lex_url: 'https://lex.uz/docs/-35869',       // [KODEKS]
+      lex_url: 'https://lex.uz/docs/-6445145',      // [KODEKS] 2023 Constitution, Uzbek Latin (owner, 2026-10-02); 35869 is Russian
       enforcement_date: null
     },
     {
@@ -388,7 +388,7 @@ const LEX_REGISTRY = {
   ekologiya: [
     {
       doc_id: 'suv-kodeks',
-      law_name: "O'zbekiston Respublikasining Suv va suvdan foydalanish kodeksi",
+      law_name: "O'zbekiston Respublikasining Suv kodeksi",
       lex_url: 'https://lex.uz/docs/-7655343',     // [KODEKS]
       enforcement_date: null
     },

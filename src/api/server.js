@@ -10784,6 +10784,8 @@ app.get('/api/health', async (req, res) => {
     getAllLaws,
     // Only the parsed text is kept; the raw HTML of a large code is dropped.
     fetchDoc: async (url) => { const d = await fetchLexDocument(url); return { title: d.title, body: d.body, metadata: d.metadata }; },
+    searchPage: (query) => require('../rag/fetch-lex').httpGet(require('../rag/lex-live-search').buildLexSearchUrl(query)),
+    parseSearch: (html) => require('../rag/lex-live-search').parseSearchCandidates(html),
     reingest: (docs, report) => reingestDocuments(docs, {
       fetchDoc: (url) => fetchLexDocument(url),
       ingest: (url, opts) => require('../rag/ingest-lex').ingestFromUrl(url, opts),
