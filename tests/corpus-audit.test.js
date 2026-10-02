@@ -102,10 +102,14 @@ const RU = '1-статья. Цели трудового законодатель
     ];
     const asked = [];
     const r = await findCandidates(entry, {
-      searchPage: async (q, opts) => { asked.push(opts.formId || 'plain'); return 'x'; }, parse: () => rows,
+      searchPage: async (q, opts) => { asked.push(`${opts.formId || 'plain'}:${q}`); return 'x'; }, parse: () => rows,
       fetchDoc: async () => ({ title: "Isteʼmolchilarning huquqlarini himoya qilish toʻgʻrisida", body: LATIN, metadata: {} }),
     });
-    assert.deepStrictEqual(asked, ['3968', 'plain'], 'a law is searched among laws in force first');
+    assert.deepStrictEqual(asked, [
+      "3968:Iste'molchilarning huquqlarini himoya qilish to'g'risida",
+      '3968:Isteʻmolchilarning huquqlarini himoya qilish',
+      "plain:Iste'molchilarning huquqlarini himoya qilish to'g'risida",
+    ], 'a law is searched among laws in force first, also with lex.uz\'s apostrophe and without to\'g\'risida');
     assert.deepStrictEqual(r.candidates.map(c => c.url), ['https://lex.uz/docs/-111'], 'amendment and bill dropped');
     assert.strictEqual(r.suggested, 'https://lex.uz/docs/-111');
 

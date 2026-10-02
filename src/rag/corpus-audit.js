@@ -107,8 +107,15 @@ function actKind(entry = {}) {
 
 async function findCandidates(entry, { searchPage, parse, fetchDoc }) {
   const query = String(entry.law_name || '').replace(/\([^)]*\)/gu, ' ').replace(/\s+/gu, ' ').trim();
+  // lex.uz writes the Uzbek apostrophe as ʻ (U+02BB) and its title search
+  // missed names typed with ' (Iste'molchilar, ta'minoti, ma'lumotlar), so a
+  // second query uses ʻ and drops the "to'g'risida" every title ends with.
+  const core = query.replace(/\s*to['ʻ’`]?g['ʻ’`]?risida\s*$/iu, '').replace(/['’`]/gu, 'ʻ').trim();
+  const queries = [...new Set([query, core].filter(Boolean))];
   const pages = [];
-  if (actKind(entry) === 'law') pages.push(await searchPage(query, { formId: '3968' }).catch(() => ''));
+  if (actKind(entry) === 'law') {
+    for (const q of queries) pages.push(await searchPage(q, { formId: '3968' }).catch(() => ''));
+  }
   pages.push(await searchPage(query, {}).catch(() => ''));
   const seen = new Set();
   const rows = [];

@@ -91,13 +91,13 @@ const LEX_REGISTRY = {
     {
       doc_id: 'davlat-xizmati-qonun',
       law_name: "Davlat fuqarolik xizmati to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765408',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-6145972',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {
       doc_id: 'ochiq-davlat-qonun',
       law_name: "Axborot erkinligi prinsiplari va kafolatlari to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765418',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-52268',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -152,8 +152,8 @@ const LEX_REGISTRY = {
     },
     {
       doc_id: 'bolalar-huquqlari-qonun',
-      law_name: "Bolalar huquqlarining kafolatlari to'g'risida",
-      lex_url: 'https://lex.uz/docs/-49560',       // [QONUN]
+      law_name: "Bola huquqlarining kafolatlari to'g'risida",
+      lex_url: 'https://lex.uz/docs/-1297315',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {
@@ -186,8 +186,8 @@ const LEX_REGISTRY = {
     },
     {
       doc_id: 'kasaba-uyushmalari-qonun',
-      law_name: "Kasaba uyushmalari, ularning huquqlari va faoliyatining kafolatlari to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765420',     // [QONUN]
+      law_name: "Kasaba uyushmalari to'g'risida",
+      lex_url: 'https://lex.uz/docs/-4631281',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -209,7 +209,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'ijtimoiy-sheriklik-qonun',
       law_name: "Ijtimoiy sheriklik to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765422',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-2468214',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -231,13 +231,13 @@ const LEX_REGISTRY = {
     {
       doc_id: 'audit-qonun',
       law_name: "Auditorlik faoliyati to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765436',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-5307886',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {
       doc_id: 'sug-urta-qonun',
       law_name: "Sug'urta faoliyati to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765438',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-5739117',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -253,13 +253,13 @@ const LEX_REGISTRY = {
     {
       doc_id: 'investitsiya-qonun',
       law_name: "Investitsiyalar va investitsiya faoliyati to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765414',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-4664142',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {
       doc_id: 'erkin-iqtisodiy-zona-qonun',
-      law_name: "Erkin iqtisodiy zonalar to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765416',     // [QONUN]
+      law_name: "Maxsus iqtisodiy zonalar to'g'risida",
+      lex_url: 'https://lex.uz/docs/-4737511',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -338,14 +338,14 @@ const LEX_REGISTRY = {
     },
     {
       doc_id: 'bankrotlik-qonun',
-      law_name: "To'lovga qobiliyatsizlik (bankrotlik) to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5767454',     // [QONUN]
+      law_name: "To'lovga qobiliyatsizlik to'g'risida",
+      lex_url: 'https://lex.uz/docs/-5957612',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {
       doc_id: 'davlat-xaridlari-qonun',
       law_name: "Davlat xaridlari to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5759393',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-5382974',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {
@@ -357,7 +357,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'korrupsiyaga-qarshi-qonun',
       law_name: "Korrupsiyaga qarshi kurashish to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765442',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-3088008',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -417,7 +417,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'axborotlashtirish-qonun',
       law_name: "Axborotlashtirish to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765454',     // [QONUN — VERIFY]
+      lex_url: 'https://lex.uz/docs/-83472',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {
@@ -429,7 +429,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'kiberhavfsizlik-qonun',
       law_name: "Kiberxavfsizlik to'g'risida",
-      lex_url: 'https://lex.uz/docs/-6047454',     // [QONUN — VERIFY]
+      lex_url: 'https://lex.uz/docs/-5960604',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -467,7 +467,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'turizm-qonun',
       law_name: "Turizm to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765466',     // [QONUN — VERIFY]
+      lex_url: 'https://lex.uz/docs/-4428097',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -533,13 +533,13 @@ const LEX_REGISTRY = {
     },
     {
       doc_id: 'yol-harakati-xavfsizligi-qonun',
-      law_name: "Yo'l harakati xavfsizligi to'g'risida",
-      lex_url: 'https://lex.uz/docs/-35878',       // [QONUN — VERIFY]
+      law_name: "Yo'l harakati to'g'risida",
+      lex_url: 'https://lex.uz/docs/-6764454',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {
       doc_id: 'transport-qayta-jihozlash-vm758',
-      law_name: "Avtomototransport vositasini qayta jihozlashga ruxsatnoma berish tartibi to'g'risidagi nizom (VM 758, 2020)",
+      law_name: "Avtomototransport vositasi konstruksiyasini va (yoki) uning qismini o'zgartirish bilan bog'liq faoliyatni boshlaganlik yoki tugatganlik haqida xabarnomani taqdim etish va avtomototransport vositasini qayta jihozlashga ruxsatnoma berish tartibi to'g'risidagi nizom (VMQ-758)",
       lex_url: 'https://lex.uz/docs/-5132776',  // owner-confirmed 2026-10-02
       enforcement_date: '2020-11-30'
     },
@@ -562,7 +562,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'konstitutsiyaviy-sud-qonun',
       law_name: "O'zbekiston Respublikasi Konstitutsiyaviy sudi to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765472',     // [QONUN — VERIFY]
+      lex_url: 'https://lex.uz/docs/-5391934',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -589,8 +589,8 @@ const LEX_REGISTRY = {
     },
     {
       doc_id: 'yuridik-yordam-qonun',
-      law_name: "Yuridik yordam to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765474',     // [QONUN — VERIFY]
+      law_name: "Davlat hisobidan yuridik yordam ko'rsatish to'g'risida",
+      lex_url: 'https://lex.uz/docs/-6502543',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
@@ -606,7 +606,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'xalqaro-shartnamalar-qonun',
       law_name: "O'zbekiston Respublikasining xalqaro shartnomalari to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765476',     // [QONUN — VERIFY]
+      lex_url: 'https://lex.uz/docs/-4193761',  // owner-confirmed 2026-10-03
       enforcement_date: null
     },
   ],
