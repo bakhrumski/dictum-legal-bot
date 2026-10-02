@@ -81,28 +81,54 @@ async function checkRegistryEntry(entry, fetchDoc) {
 }
 
 /**
- * lex.uz search candidates for a registry entry whose URL is dead: the
- * search page rows (title, in-force badge, own number, Latin URL), ranked by
- * how well the title matches the registry name; the best one is opened to
- * confirm its page and script. searchPage(query) -> HTML; parse(html) ->
- * rows as lex-live-search.parseSearchCandidates gives them.
+ * lex.uz search candidates for a registry entry whose URL is dead.
+ *
+ * The first version (2026-10-02) suggested 27 URLs, most of them wrong: it
+ * only asked whether the registry name was inside the title, and the title
+ * of an amending law or a bill quotes the name of the law it amends
+ * ("…Qonunining 14-moddasiga o'zgartirish kiritish haqida", "…QL-449-sonli
+ * qonun loyihasi haqida"); lex.uz also lists newest first, so amendments
+ * come before the act itself. Now:
+ * - a law is searched with lex.uz's own filters, laws only and in force
+ *   (form_id 3968, status Y), and also without them;
+ * - amending acts, bills and repeal acts are dropped;
+ * - a candidate is suggested only when the title matches the name both ways
+ *   (no long tail of other words), and its Latin page opens, is in force and
+ *   is Latin text.
+ * searchPage(query, { formId }) -> HTML; parse(html) -> rows as
+ * lex-live-search.parseSearchCandidates gives them.
  */
+const AMENDING_OR_BILL = /o['ʻ’`]?zgartish|o['ʻ’`]?zgartirish|qo['ʻ’`]?shimcha|loyiha|kiritish\s+(?:haqida|to['ʻ’`]?g['ʻ’`]?risida)|kuchini\s+yo['ʻ’`]?qotgan|o['ʻ’`]?z\s+kuchini|deb\s+hisoblash|изменени|дополнени|проект/iu;
+
+/** 'law' for a registry act that is a law (the search can be narrowed to laws), else ''. */
+function actKind(entry = {}) {
+  return /-qonun$/u.test(String(entry.doc_id || '')) ? 'law' : '';
+}
+
 async function findCandidates(entry, { searchPage, parse, fetchDoc }) {
   const query = String(entry.law_name || '').replace(/\([^)]*\)/gu, ' ').replace(/\s+/gu, ' ').trim();
-  const rows = parse(await searchPage(query)) || [];
+  const pages = [];
+  if (actKind(entry) === 'law') pages.push(await searchPage(query, { formId: '3968' }).catch(() => ''));
+  pages.push(await searchPage(query, {}).catch(() => ''));
+  const seen = new Set();
+  const rows = [];
+  for (const html of pages) for (const r of (parse(html) || [])) {
+    const key = latinLexUrl(r.url) || r.url;
+    if (!seen.has(key)) { seen.add(key); rows.push(r); }
+  }
   const ranked = rows
+    .filter(r => !AMENDING_OR_BILL.test(String(r.title || '')))
     .map(r => ({ url: latinLexUrl(r.url) || r.url, title: r.title, in_force: r.isActive, number: r.documentNumber || null,
       title_match: +titleMatch(entry.law_name, r.title).toFixed(2),
-      // the reverse share: a title with many extra words is a different act
-      // that merely contains the name ("…va aksiyadorlarning huquqlarini…")
-      _exact: titleMatch(r.title, entry.law_name) }))
+      // the reverse share: the title has few words beyond the name
+      reverse_match: +titleMatch(r.title, entry.law_name).toFixed(2) }))
     .filter(r => r.title_match > 0)
-    .sort((a, b) => (b.title_match - a.title_match) || (b._exact - a._exact) || ((b.in_force === true) - (a.in_force === true)))
-    .map(({ _exact, ...r }) => r)
+    .sort((a, b) => (b.title_match + b.reverse_match) - (a.title_match + a.reverse_match)
+      || ((b.in_force === true) - (a.in_force === true)))
     .slice(0, 3);
   const out = { candidates: ranked, suggested: null };
   const best = ranked[0];
-  if (best && best.title_match >= 0.8 && best.in_force !== false) {
+  if (best && best.title_match >= 0.8 && best.reverse_match >= 0.6 && best.in_force !== false) {
     try {
       const doc = await fetchDoc(best.url);
       const meta = (doc && doc.metadata) || {};

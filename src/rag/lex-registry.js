@@ -286,8 +286,8 @@ const LEX_REGISTRY = {
     },
     {
       doc_id: 'tolov-tizimlari-qonun',
-      law_name: "To'lov tizimlari va to'lov tashkilotlari to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5017043',     // [QONUN]
+      law_name: "To'lovlar va to'lov tizimlari to'g'risida",
+      lex_url: 'https://lex.uz/docs/-4575786',  // owner-confirmed 2026-10-02
       enforcement_date: null
     },
   ],
@@ -406,8 +406,8 @@ const LEX_REGISTRY = {
     },
     {
       doc_id: 'ekologik-ekspertiza-qonun',
-      law_name: "Ekologik ekspertiza to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765452',     // [QONUN — VERIFY]
+      law_name: "Ekologik ekspertiza, atrof-muhitga ta'sirni baholash va strategik ekologik baholash to'g'risida",
+      lex_url: 'https://lex.uz/docs/-7397280',  // owner-confirmed 2026-10-02
       enforcement_date: null
     },
   ],
@@ -540,7 +540,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'transport-qayta-jihozlash-vm758',
       law_name: "Avtomototransport vositasini qayta jihozlashga ruxsatnoma berish tartibi to'g'risidagi nizom (VM 758, 2020)",
-      lex_url: 'https://lex.uz/docs/-5099700',     // [VM — VERIFY before ingest]
+      lex_url: 'https://lex.uz/docs/-5132776',  // owner-confirmed 2026-10-02
       enforcement_date: '2020-11-30'
     },
     {
@@ -600,7 +600,7 @@ const LEX_REGISTRY = {
     {
       doc_id: 'xalqaro-arbitraj-qonun',
       law_name: "Xalqaro tijorat arbitraji to'g'risida",
-      lex_url: 'https://lex.uz/docs/-6555446',     // [QONUN]
+      lex_url: 'https://lex.uz/docs/-5294106',  // owner-confirmed 2026-10-02
       enforcement_date: null
     },
     {
