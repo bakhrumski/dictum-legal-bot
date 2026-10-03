@@ -10,6 +10,7 @@ const https = require('https');
 const path = require('path');
 const crypto = require('crypto');
 const telegramEconomy = require('../services/telegram-economy');
+const { isStaffRole, isMasterRole, roleLabel, getLinkedAccount, chatRoute, dashboardUrl } = require('./telegram-roles');
 
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
 const {
@@ -351,8 +352,9 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
       [chatId, admin.id]
     );
 
-    const roleLabels = { master: 'Admin', lawyer: 'Yurist', student: 'Student' };
-    bot.sendMessage(chatId, `✅ Telegram hisobingiz ulandi!\n\n👤 ${admin.full_name}\n🔑 Rol: ${roleLabels[admin.role] || admin.role}\n\nEndi bildirishnomalar olasiz:\n• Guruh chatda @mention\n• Murojaat tayinlanganda\n\n/unlink - Uzish`);
+    bot.sendMessage(chatId, isStaffRole(admin.role)
+      ? `✅ Telegram hisobingiz ulandi!\n\n👤 ${admin.full_name}\n🔑 Rol: ${roleLabel(admin.role)}\n\nEndi bildirishnomalar olasiz:\n• Guruh chatda @mention\n• Murojaat tayinlanganda\n\n/unlink - Uzish`
+      : `✅ Telegram hisobingiz ulandi!\n\n👤 ${admin.full_name}\n🔑 Rol: ${roleLabel(admin.role)}\n\nHuquqiy savolingizni shu yerda yozishingiz mumkin.\n\n/unlink - Uzish`);
   } catch (error) {
     console.error('Link error:', error);
     bot.sendMessage(chatId, '❌ Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
@@ -398,8 +400,8 @@ function inAdminTestMode(chatId) {
 bot.onText(/^\/testmode(?:@\w+)?(?:\s+(on|off))?\s*$/i, async (msg, match) => {
   const chatId = msg.chat.id;
   try {
-    const r = await pool.query('SELECT role FROM admins WHERE telegram_chat_id = $1', [chatId]);
-    if (!r.rows.length || r.rows[0].role !== 'master') {
+    const account = await getLinkedAccount(pool, chatId);
+    if (!account || !isMasterRole(account.role)) {
       bot.sendMessage(chatId, 'ℹ️ Bu buyruq faqat bosh administrator uchun.');
       return;
     }
@@ -438,15 +440,14 @@ bot.onText(/\/me/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
-    const result = await pool.query(
-      'SELECT full_name, username, role FROM admins WHERE telegram_chat_id = $1',
-      [chatId]
-    );
+    const admin = await getLinkedAccount(pool, chatId);
 
-    if (result.rows.length > 0) {
-      const admin = result.rows[0];
-      const roleLabels = { master: 'Admin', lawyer: 'Yurist', student: 'Student' };
-      bot.sendMessage(chatId, `✅ Ulangan hisob:\n\n👤 ${admin.full_name}\n🆔 @${admin.username}\n🔑 ${roleLabels[admin.role] || admin.role}`);
+    if (admin) {
+      const route = chatRoute(admin, { testMode: inAdminTestMode(chatId) });
+      const routeLine = route === 'staff'
+        ? 'Savollar emas, bildirishnomalar keladi.'
+        : 'Huquqiy savollaringiz oddiy foydalanuvchi sifatida ko\'rib chiqiladi.';
+      bot.sendMessage(chatId, `✅ Ulangan hisob:\n\n👤 ${admin.full_name}\n🆔 @${admin.username}\n🔑 ${roleLabel(admin.role)}\n\n${routeLine}`);
     } else {
       bot.sendMessage(chatId, 'ℹ️ Bu Telegram hisob hech qanday admin hisobiga ulanmagan.\n\n/link <username> <parol> - Ulash');
     }
@@ -646,17 +647,18 @@ bot.on('callback_query', async (callbackQuery) => {
 
     try {
       // Check if this chat belongs to a linked admin
-      const adminResult = await pool.query(
-        'SELECT id, role, full_name FROM admins WHERE telegram_chat_id = $1',
-        [chatId]
-      );
+      const admin = await getLinkedAccount(pool, chatId);
 
-      if (adminResult.rows.length === 0) {
+      if (!admin) {
         bot.answerCallbackQuery(callbackQuery.id, { text: 'Avval /link buyrug\'i bilan ulaning!' });
         return;
       }
-
-      const admin = adminResult.rows[0];
+      // Only staff answer requests; a linked customer (role 'user') or an
+      // unknown role cannot, whatever button they replay.
+      if (!isStaffRole(admin.role)) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: 'Bu amal faqat yuristlar uchun.' });
+        return;
+      }
 
       // Check request exists and is assigned to this admin
       const reqResult = await pool.query(
@@ -1228,7 +1230,7 @@ bot.on('message', async (msg) => {
           );
           const req = reqInfo.rows[0];
 
-          const masterNotification = `📝 Student javob berdi!\n\n👨‍🎓 Student: ${pending.fullName}\n📋 Murojaat #${pending.requestId}\n👤 Murojatchi: ${req?.first_name || ''} (@${req?.username || ''})\n\n📝 Student javobi:\n${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}\n\nDashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}\nTasdiqlash uchun dashboardga kiring!`;
+          const masterNotification = `📝 Student javob berdi!\n\n👨‍🎓 Student: ${pending.fullName}\n📋 Murojaat #${pending.requestId}\n👤 Murojatchi: ${req?.first_name || ''} (@${req?.username || ''})\n\n📝 Student javobi:\n${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}\n\nDashboard: ${dashboardUrl()}\nTasdiqlash uchun dashboardga kiring!`;
 
           // Notify via ADMIN_TELEGRAM_ID
           await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID, masterNotification);
@@ -1282,17 +1284,14 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // ---- CHECK IF SENDER IS A LINKED ADMIN (without pending response) ----
-  // A master admin in /testmode falls through to the ordinary user path.
-  if (!inAdminTestMode(chatId)) try {
-    const adminCheck = await pool.query(
-      'SELECT id, full_name FROM admins WHERE telegram_chat_id = $1',
-      [chatId]
-    );
-
-    if (adminCheck.rows.length > 0) {
-      // This is a linked admin - don't treat as user request
-      bot.sendMessage(chatId, `👋 ${adminCheck.rows[0].full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}\n/me - Hisob holati\n/unlink - Uzish\n/testmode - Botni oddiy foydalanuvchi sifatida sinash (faqat bosh admin)`);
+  // ---- CHECK IF SENDER IS LINKED STAFF (without pending response) ----
+  // Only a staff role (master, lawyer, student) is kept off the question
+  // path. A linked customer (role 'user') or an unknown role is an ordinary
+  // user, and a master in /testmode falls through to the user path too.
+  try {
+    const account = await getLinkedAccount(pool, chatId);
+    if (chatRoute(account, { testMode: inAdminTestMode(chatId) }) === 'staff') {
+      bot.sendMessage(chatId, `👋 ${account.full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Dashboard: ${dashboardUrl()}\n/me - Hisob holati\n/unlink - Uzish${isMasterRole(account.role) ? '\n/testmode - Botni oddiy foydalanuvchi sifatida sinash' : ''}`);
       return;
     }
   } catch (error) {
@@ -1676,7 +1675,7 @@ ${agentDelivered ? '🤖 Agent foydalanuvchiga dastlabki javob berdi' : ''}
 
 ${requestData.request_type === 'text' ? `Murojaat: ${requestData.request_text}` : ''}
 
-Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}
+Dashboard: ${dashboardUrl()}
           `;
           await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID, adminNotification);
         } catch (error) {
