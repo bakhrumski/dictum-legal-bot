@@ -10,7 +10,7 @@ const https = require('https');
 const path = require('path');
 const crypto = require('crypto');
 const telegramEconomy = require('../services/telegram-economy');
-const { isStaffRole, isMasterRole, roleLabel, getLinkedAccount, chatRoute, dashboardUrl } = require('./telegram-roles');
+const { isStaffRole, isMasterRole, roleLabel, getLinkedAccount, privateSenderId, chatRoute, dashboardUrl } = require('./telegram-roles');
 const usageLedger = require('../ai/usage-ledger');
 
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
@@ -401,7 +401,7 @@ function inAdminTestMode(chatId) {
 bot.onText(/^\/testmode(?:@\w+)?(?:\s+(on|off))?\s*$/i, async (msg, match) => {
   const chatId = msg.chat.id;
   try {
-    const account = await getLinkedAccount(pool, chatId);
+    const account = await getLinkedAccount(pool, chatId, privateSenderId(msg));
     if (!account || !isMasterRole(account.role)) {
       bot.sendMessage(chatId, 'ℹ️ Bu buyruq faqat bosh administrator uchun.');
       return;
@@ -441,7 +441,7 @@ bot.onText(/\/me/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
-    const admin = await getLinkedAccount(pool, chatId);
+    const admin = await getLinkedAccount(pool, chatId, privateSenderId(msg));
 
     if (admin) {
       const route = chatRoute(admin, { testMode: inAdminTestMode(chatId) });
@@ -653,7 +653,7 @@ async function handleCallbackQuery(callbackQuery) {
 
     try {
       // Check if this chat belongs to a linked admin
-      const admin = await getLinkedAccount(pool, chatId);
+      const admin = await getLinkedAccount(pool, chatId, privateSenderId(callbackQuery));
 
       if (!admin) {
         bot.answerCallbackQuery(callbackQuery.id, { text: 'Avval /link buyrug\'i bilan ulaning!' });
@@ -1309,7 +1309,7 @@ async function handleTelegramMessage(msg) {
   // path. A linked customer (role 'user') or an unknown role is an ordinary
   // user, and a master in /testmode falls through to the user path too.
   try {
-    const account = await getLinkedAccount(pool, chatId);
+    const account = await getLinkedAccount(pool, chatId, privateSenderId(msg));
     if (chatRoute(account, { testMode: inAdminTestMode(chatId) }) === 'staff') {
       bot.sendMessage(chatId, `👋 ${account.full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Dashboard: ${dashboardUrl()}\n/me - Hisob holati\n/unlink - Uzish${isMasterRole(account.role) ? '\n/testmode - Botni oddiy foydalanuvchi sifatida sinash' : ''}`);
       return;

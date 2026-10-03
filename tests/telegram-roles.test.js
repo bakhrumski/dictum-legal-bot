@@ -44,10 +44,12 @@ class FakeBot {
 
 // chatId -> admins row
 const accounts = new Map();
+const userLinked = new Map(); // telegram_user_id -> admins row (no telegram_chat_id)
 const pool = {
   async query(sql, params = []) {
-    if (/FROM admins WHERE telegram_chat_id = \$1/u.test(sql) && !/id != \$2/u.test(sql)) {
-      const row = accounts.get(params[0]);
+    if (/FROM admins\s+WHERE telegram_chat_id = \$1/u.test(sql) && !/id != \$2/u.test(sql)) {
+      // linked by /link (chat id) or by registration / site linking (user id)
+      const row = accounts.get(params[0]) || (params[1] != null ? userLinked.get(String(params[1])) : null);
       return { rows: row ? [row] : [] };
     }
     if (/FROM requests WHERE id = \$1/u.test(sql)) return { rows: [{ id: params[0], status: 'pending', request_text: 'x', request_type: 'text' }] };
@@ -94,7 +96,7 @@ const { bot } = require('../src/bot/bot');
 
 const flush = () => new Promise(r => setTimeout(r, 30));
 async function message(msg) {
-  const full = { chat: { id: msg.chatId }, from: { id: msg.chatId, first_name: 'Ali', username: 'ali' }, ...msg };
+  const full = { chat: { id: msg.chatId, type: 'private' }, from: { id: msg.chatId, first_name: 'Ali', username: 'ali' }, ...msg };
   delete full.chatId;
   for (const h of bot.handlers.filter(h => h.event === 'message')) await h.fn(full);
   if (full.text) {
@@ -107,7 +109,7 @@ async function message(msg) {
 }
 async function callback(chatId, data) {
   for (const h of bot.handlers.filter(h => h.event === 'callback_query')) {
-    await h.fn({ id: `cb-${chatId}-${data}`, data, from: { id: chatId }, message: { chat: { id: chatId } } });
+    await h.fn({ id: `cb-${chatId}-${data}`, data, from: { id: chatId }, message: { chat: { id: chatId, type: 'private' } } });
   }
   await flush();
 }
@@ -235,6 +237,29 @@ accounts.set(EMPTY, { id: 6, full_name: 'Bosh rol', username: 'bosh_rol', role: 
     reset();
     await message({ chatId: LAWYER, text: '/me' });
     assert.ok(textsTo(LAWYER).some(t => /🔑 Yurist[\s\S]*bildirishnomalar keladi/u.test(t)));
+  });
+
+  await test('an account linked by telegram_user_id only (registration / site) is recognised: master gets /testmode, a user stays a user', async () => {
+    // 2026-10-03: the owner's master account was linked this way and /testmode refused it
+    const MASTER_BY_UID = 201, USER_BY_UID = 202;
+    userLinked.set(String(MASTER_BY_UID), { id: 21, full_name: 'Bosh', username: 'bosh2', role: 'master' });
+    userLinked.set(String(USER_BY_UID), { id: 22, full_name: 'Mijoz', username: 'mijoz2', role: 'user' });
+    reset();
+    await message({ chatId: MASTER_BY_UID, text: '/testmode on' });
+    assert.ok(textsTo(MASTER_BY_UID).some(t => /Test rejimi yoqildi/u.test(t)), textsTo(MASTER_BY_UID).join(' | '));
+    await message({ chatId: MASTER_BY_UID, text: '/testmode off' });
+    reset();
+    await message({ chatId: MASTER_BY_UID, text: 'Salom' });
+    assert.ok(textsTo(MASTER_BY_UID).some(t => ADMIN_NOTICE.test(t)));
+    reset();
+    await message({ chatId: USER_BY_UID, text: 'Ish haqi masalasi' });
+    assert.deepStrictEqual(agentCalls.map(c => c.chatId), [USER_BY_UID]);
+  });
+
+  await test('the user id is used only in a private chat', () => {
+    assert.strictEqual(roles.privateSenderId({ chat: { type: 'private' }, from: { id: 5 } }), 5);
+    assert.strictEqual(roles.privateSenderId({ chat: { type: 'group' }, from: { id: 5 } }), null);
+    assert.strictEqual(roles.privateSenderId({ message: { chat: { type: 'private' } }, from: { id: 6 } }), 6);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
