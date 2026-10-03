@@ -144,7 +144,9 @@ function needsReingest(d) {
  * category update left most of them unchanged without saying why (a status
  * banner read as "repealed", a fetch error, another doc_id).
  */
-async function reingestDocuments(docs, { fetchDoc, ingest, report, pauseMs = 1500 }) {
+// accept(doc, d) -> '' to go on, or the reason to skip (e.g. the page's title
+// is not the act the caller asked for).
+async function reingestDocuments(docs, { fetchDoc, ingest, report, pauseMs = 1500, accept = null }) {
   for (const d of docs) {
     const entry = { law_name: d.law_name, doc_id: d.doc_id, category: d.category, source_url: d.source_url, status: 'running' };
     report.push(entry);
@@ -155,6 +157,9 @@ async function reingestDocuments(docs, { fetchDoc, ingest, report, pauseMs = 150
       if (meta.is_active === false) {
         entry.status = 'skipped';
         entry.reason = `lex.uz page read as not in force: "${meta.status_label || '?'}"`;
+      } else if (accept && accept(doc, d)) {
+        entry.status = 'skipped';
+        entry.reason = accept(doc, d);
       } else if (meta.current_version_url) {
         entry.status = 'skipped';
         entry.reason = `lex.uz page is an old edition${meta.snapshot_date ? ` as of ${meta.snapshot_date}` : ''}; the current version (${meta.current_version_url}) could not be fetched`;

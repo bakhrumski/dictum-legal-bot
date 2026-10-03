@@ -9,7 +9,7 @@
  */
 
 const assert = require('assert');
-const { textScript, latinLexUrl, titleMatch, checkRegistryEntry, findCandidates, needsLatinReingest } = require('../src/rag/corpus-audit');
+const { textScript, latinLexUrl, titleMatch, checkRegistryEntry, findCandidates, needsLatinReingest, registryTitleCheck } = require('../src/rag/corpus-audit');
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -58,6 +58,13 @@ const RU = '1-статья. Цели трудового законодатель
     assert.match(repealed.status, /not_in_force/u);
     const wrong = await checkRegistryEntry(entry("Aksiyadorlik jamiyatlari to'g'risida"), page("Yo'l harakati qoidalari to'g'risida", LATIN));
     assert.match(wrong.status, /title_mismatch/u);
+  });
+
+  await test('a registry URL that opens another act is not stored under the registry name', () => {
+    const d = { law_name: "Iste'molchilarning huquqlarini himoya qilish to'g'risida", checkTitle: true };
+    assert.strictEqual(registryTitleCheck({ title: "ISTE'MOLCHILARNING HUQUQLARINI HIMOYA QILISH TOʻGʻRISIDA" }, d), '');
+    assert.match(registryTitleCheck({ title: "Avtomobil transporti to'g'risida" }, d), /another act/u);
+    assert.strictEqual(registryTitleCheck({ title: 'anything' }, { law_name: 'X' }), '', 'only registry ingests are checked');
   });
 
   await test('only Uzbek Cyrillic documents with a lex.uz URL are re-ingested from Latin', () => {
@@ -161,6 +168,8 @@ const RU = '1-статья. Цели трудового законодатель
         assert.deepStrictEqual(mine.map(d => [d.doc_id, d.script, d.chunks]), [['audit_cyr', 'uz-cyrillic', 3], ['audit_ru', 'russian', 3], ['audit_lat', 'latin', 3]]);
         assert.ok(r.pending.some(p => p.includes('audit_cyr')));
         assert.ok(!r.pending.some(p => p.includes('audit_ru')), 'a Russian text is not converted');
+        assert.deepStrictEqual(r.registryMissing.map(l => l.doc_id).filter(id => ['konstitutsiya', 'mchj-qonun'].includes(id)).sort(), ['konstitutsiya', 'mchj-qonun'].filter(id => !r.documents.some(d => d.doc_id === id)));
+        assert.ok(r.ingestBatches.every(b => /^\/api\/admin\/corpus\/script\?ingest=[\w,-]+$/u.test(b) && b.split(',').length <= 10));
       });
 
       await test('?reingest=1 re-ingests the Cyrillic document from its Latin URL', async () => {

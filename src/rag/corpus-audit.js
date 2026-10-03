@@ -148,6 +148,14 @@ async function findCandidates(entry, { searchPage, parse, fetchDoc }) {
   return out;
 }
 
+/** reingestDocuments' accept(): '' when the page is the act asked for, else why not. */
+function registryTitleCheck(doc, d) {
+  if (!d || !d.checkTitle) return '';
+  const title = String((doc && doc.title) || '');
+  const match = titleMatch(d.law_name, title);
+  return match < 0.5 ? `the page is another act: "${title.slice(0, 160)}" (title match ${match.toFixed(2)})` : '';
+}
+
 /** Per-document script of the stored law text (first 600 characters of up to 40 chunks). */
 async function corpusScripts(pool) {
   const { rows } = await pool.query(`
@@ -265,7 +273,10 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
         const entries = ids.map(id => all.find(l => l.doc_id === id));
         reingestJob = { running: true, startedAt: new Date().toISOString(), results: [] };
         const job = reingestJob;
-        reingest(entries.map(entry => ({ doc_id: entry.doc_id, law_name: entry.law_name, category: entry.category, source_url: entry.lex_url })), job.results)
+        // A registry URL can point to another act (31 entries were dead or
+        // mismatched on 2026-10-03); such a page is not stored under the
+        // registry's name.
+        reingest(entries.map(entry => ({ doc_id: entry.doc_id, law_name: entry.law_name, category: entry.category, source_url: entry.lex_url, checkTitle: true })), job.results)
           .catch((err) => { job.error = err.message; })
           .finally(() => { job.running = false; job.finishedAt = new Date().toISOString(); });
       } else if (req.query.reingest === '1' && !(reingestJob && reingestJob.running) && pending.length) {
@@ -277,7 +288,19 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
           .catch((err) => { job.error = err.message; })
           .finally(() => { job.running = false; job.finishedAt = new Date().toISOString(); });
       }
+      // Registry acts with no document in the corpus (2026-10-03: the first
+      // weekly re-check found 21 documents for 78 registry entries), with
+      // ready ?ingest= lists of ten.
+      const inCorpus = new Set(found.documents.map(d => d.doc_id));
+      const registryMissing = getAllLaws().filter(l => !inCorpus.has(l.doc_id))
+        .map(l => ({ doc_id: l.doc_id, law_name: l.law_name, category: l.category, url: l.lex_url }));
+      const ingestBatches = [];
+      for (let i = 0; i < registryMissing.length; i += 10) {
+        ingestBatches.push(`/api/admin/corpus/script?ingest=${registryMissing.slice(i, i + 10).map(l => l.doc_id).join(',')}`);
+      }
       res.json({
+        registryMissing,
+        ingestBatches,
         byScript: found.byScript,
         documents: found.documents.map(({ doc_id, law_name, category, source_url, chunks, script }) => ({ doc_id, law_name, category, source_url, chunks, script })),
         reingest: reingestJob,
@@ -290,4 +313,4 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
   });
 }
 
-module.exports = { AMENDING_OR_BILL, textScript, latinLexUrl, titleMatch, checkRegistryEntry, findCandidates, corpusScripts, needsLatinReingest, mountCorpusAuditRoutes };
+module.exports = { AMENDING_OR_BILL, registryTitleCheck, textScript, latinLexUrl, titleMatch, checkRegistryEntry, findCandidates, corpusScripts, needsLatinReingest, mountCorpusAuditRoutes };

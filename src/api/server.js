@@ -10823,7 +10823,7 @@ require('../rag/check-freshness').mountFreshnessRoutes(app, {
 
 // Registry URL check and corpus script report, with Latin re-ingest (master only).
 {
-  const { mountCorpusAuditRoutes } = require('../rag/corpus-audit');
+  const { mountCorpusAuditRoutes, registryTitleCheck } = require('../rag/corpus-audit');
   const { reingestDocuments } = require('../rag/oversized-chunks');
   const { getAllLaws } = require('../rag/lex-registry');
   const { fetchLexDocument } = require('../rag/fetch-lex');
@@ -10843,6 +10843,7 @@ require('../rag/check-freshness').mountFreshnessRoutes(app, {
       fetchDoc: (url) => fetchLexDocument(url),
       ingest: (url, opts) => require('../rag/ingest-lex').ingestFromUrl(url, opts),
       report,
+      accept: registryTitleCheck,
     }),
   });
 
