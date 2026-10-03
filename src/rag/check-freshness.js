@@ -170,9 +170,10 @@ async function applyExpired(expired, db = pool) {
 /**
  * GET /api/admin/corpus/freshness - the last run; ?start=1 runs it now;
  * ?apply=1 takes out the acts the last run found repealed (after a held run).
- * The run also repeats every CORPUS_FRESHNESS_HOURS hours (default 24, 0 off).
+ * The run also repeats weekly, on Sunday at 03:00 Tashkent time (owner,
+ * 2026-10-03); CORPUS_FRESHNESS=off turns the schedule off.
  */
-function mountFreshnessRoutes(app, { requireMasterAdmin, db = pool, fetchDoc = fetchLexDocument, hours = 24, pauseMs = 1500, logger = log }) {
+function mountFreshnessRoutes(app, { requireMasterAdmin, db = pool, fetchDoc = fetchLexDocument, weekly = true, pauseMs = 1500, logger = log }) {
   let job = null;
   const start = (trigger) => {
     if (job && job.running) return false;
@@ -205,21 +206,32 @@ function mountFreshnessRoutes(app, { requireMasterAdmin, db = pool, fetchDoc = f
         expired: (job && job.expired) || [],
         oldEditions: (job && job.oldEditions) || [],
         errors: (job && job.errors) || [],
-        howTo: 'Every corpus document is re-opened on lex.uz. Acts marked "Hujjat kuchini yoʻqotgan" are taken out of search; more than 3 at once are only reported until ?apply=1. ?start=1 runs it now (several minutes); it also runs every CORPUS_FRESHNESS_HOURS hours.',
+        howTo: 'Every corpus document is re-opened on lex.uz. Acts marked "Hujjat kuchini yoʻqotgan" are taken out of search; more than 3 at once are only reported until ?apply=1. ?start=1 runs it now (several minutes); it also runs every Sunday at 03:00 Tashkent time.',
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  if (hours > 0) {
-    // First run 15 minutes after boot, so a deploy's start-up is not slowed.
-    const first = setTimeout(() => start('scheduled'), 15 * 60 * 1000);
-    const every = setInterval(() => start('scheduled'), hours * 60 * 60 * 1000);
-    first.unref?.();
-    every.unref?.();
-  }
-  return { start, current: () => job };
+  let timer = null;
+  const scheduleNext = () => {
+    timer = setTimeout(() => { start('scheduled'); scheduleNext(); }, msUntilNextSunday(new Date()));
+    timer.unref?.();
+  };
+  if (weekly) scheduleNext();
+  return { start, current: () => job, nextRunAt: () => (timer ? new Date(Date.now() + msUntilNextSunday(new Date())) : null) };
+}
+
+// Tashkent is UTC+5 all year (no daylight saving).
+const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+/** Milliseconds from `now` to the next Sunday 03:00 in Tashkent (never 0). */
+function msUntilNextSunday(now = new Date(), hour = 3) {
+  const local = new Date(now.getTime() + TASHKENT_OFFSET_MS); // Tashkent wall clock, read with UTC getters
+  const target = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), hour));
+  target.setUTCDate(target.getUTCDate() + ((7 - local.getUTCDay()) % 7));
+  if (target <= local) target.setUTCDate(target.getUTCDate() + 7);
+  return target.getTime() - local.getTime();
 }
 
 async function runInChunks(items, concurrency, fn) {
@@ -303,4 +315,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkDocument, lexStatus, runFreshnessCheck, mountFreshnessRoutes };
+module.exports = { checkDocument, lexStatus, runFreshnessCheck, mountFreshnessRoutes, msUntilNextSunday };

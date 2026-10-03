@@ -10814,10 +10814,11 @@ app.get('/api/health', async (req, res) => {
   mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts: (texts) => getEmbeddingsBatch(texts) });
 }
 
-// Corpus documents re-checked on lex.uz daily and on demand (master only).
+// Corpus documents re-checked on lex.uz weekly and on demand (master only).
 require('../rag/check-freshness').mountFreshnessRoutes(app, {
   requireMasterAdmin,
-  hours: Number.parseFloat(process.env.CORPUS_FRESHNESS_HOURS ?? '24') || 0,
+  // Weekly, Sunday 03:00 Tashkent time (owner); CORPUS_FRESHNESS=off stops it.
+  weekly: String(process.env.CORPUS_FRESHNESS || 'on').toLowerCase() !== 'off',
 });
 
 // Registry URL check and corpus script report, with Latin re-ingest (master only).

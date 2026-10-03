@@ -10,6 +10,10 @@
  */
 
 const assert = require('assert');
+// check-freshness.js opens the database pool when it loads.
+if (process.env.TEST_DATABASE_URL && !/supabase\.co|render\.com|pooler\./i.test(process.env.TEST_DATABASE_URL)) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+}
 const { parseLexHtml } = require('../src/rag/fetch-lex');
 const { reingestDocuments } = require('../src/rag/oversized-chunks');
 
@@ -57,6 +61,17 @@ const page = ({ banner = '', title = 'Qonun', link = '' }) => `<html><body>
     assert.strictEqual(cyr.metadata.current_version_url, 'https://lex.uz/uz/docs/6257288');
     const current = parseLexHtml(page({}), 'https://lex.uz/docs/-6257288');
     assert.strictEqual(current.metadata.current_version_url, null);
+  });
+
+  await test('the corpus re-check runs weekly, Sunday 03:00 Tashkent time', () => {
+    const { msUntilNextSunday } = require('../src/rag/check-freshness');
+    const at = (iso) => new Date(Date.parse(iso) + msUntilNextSunday(new Date(iso))).toISOString();
+    // Friday 2026-10-02 12:00 Tashkent (07:00 UTC) -> Sunday 2026-10-04 03:00 Tashkent (Saturday 22:00 UTC)
+    assert.strictEqual(at('2026-10-02T07:00:00Z'), '2026-10-03T22:00:00.000Z');
+    // Sunday 02:59 Tashkent -> the same night's 03:00
+    assert.strictEqual(at('2026-10-03T21:59:00Z'), '2026-10-03T22:00:00.000Z');
+    // Sunday 03:00 Tashkent exactly, after a run -> next Sunday
+    assert.strictEqual(at('2026-10-03T22:00:00Z'), '2026-10-10T22:00:00.000Z');
   });
 
   await test('re-ingest refuses an old edition whose current version was not reached', async () => {
@@ -121,7 +136,7 @@ const page = ({ banner = '', title = 'Qonun', link = '' }) => `<html><body>
       Object.assign(status, { 'fresh-b': 'repealed', 'fresh-c': 'repealed', 'fresh-d': 'repealed', 'fresh-e': 'repealed' });
       const routes = {};
       const app = { get: (p, _a, h) => { routes[p] = h; } };
-      const ctl = mountFreshnessRoutes(app, { requireMasterAdmin: () => {}, db: pool, fetchDoc, hours: 0, pauseMs: 0,
+      const ctl = mountFreshnessRoutes(app, { requireMasterAdmin: () => {}, db: pool, fetchDoc, weekly: false, pauseMs: 0,
         logger: { info() {}, error() {} } });
       const call = (query) => new Promise((resolve) => routes['/api/admin/corpus/freshness']({ query }, { json: resolve, status: () => ({ json: resolve }) }));
       await call({ start: '1' });
