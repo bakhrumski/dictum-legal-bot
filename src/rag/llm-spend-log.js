@@ -51,11 +51,101 @@ async function initSpendLog() {
     // is created after that migration ran.
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_llm_spend_user_ts ON llm_spend_log(user_id, ts DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_llm_spend_month ON llm_spend_log(month)`);
+    await extendForUsageLedger();
     _initialized = true;
     console.log('[SPEND-LOG] llm_spend_log schema ready');
   } catch (err) {
     console.error('[SPEND-LOG] Init failed:', err.message);
   }
+}
+
+/**
+ * The per-request usage ledger (src/ai/usage-ledger.js, 2026-10-03) writes
+ * here: one row per AI call, failed and timed-out ones included. Older rows
+ * keep NULL in the new columns; a row's tokens or cost may be NULL now when
+ * the provider reported none (unknown is not $0). ai_requests holds one row
+ * per user request: service, end-to-end latency, outcome, legal check.
+ */
+async function extendForUsageLedger() {
+  const columns = [
+    'request_id UUID', 'call_id UUID', 'seq INTEGER', 'service VARCHAR(20)', 'provider VARCHAR(40)',
+    'model_requested VARCHAR(80)', 'model_returned VARCHAR(80)', 'status VARCHAR(12)', 'error_code VARCHAR(40)',
+    'error_message VARCHAR(200)', 'attempt SMALLINT', 'retry_reason VARCHAR(120)', 'fallback_from VARCHAR(80)',
+    'started_at TIMESTAMPTZ', 'finished_at TIMESTAMPTZ', 'latency_ms INTEGER', 'cached_in_tokens INTEGER',
+    'reasoning_tokens INTEGER', 'audio_ms INTEGER', 'characters INTEGER', 'provider_credits NUMERIC(14,4)',
+    'cost_source VARCHAR(20)', 'pricing JSONB', 'chat_id BIGINT',
+  ];
+  for (const column of columns) {
+    await pool.query(`ALTER TABLE llm_spend_log ADD COLUMN IF NOT EXISTS ${column}`);
+  }
+  // unknown is not zero: tokens and cost may be NULL; small calls need more scale
+  await pool.query(`ALTER TABLE llm_spend_log ALTER COLUMN in_tokens DROP NOT NULL, ALTER COLUMN out_tokens DROP NOT NULL, ALTER COLUMN cost_usd DROP NOT NULL`);
+  await pool.query(`ALTER TABLE llm_spend_log ALTER COLUMN model TYPE VARCHAR(80), ALTER COLUMN stage TYPE VARCHAR(30), ALTER COLUMN endpoint TYPE VARCHAR(80)`);
+  const scale = await pool.query(`SELECT numeric_scale FROM information_schema.columns WHERE table_name = 'llm_spend_log' AND column_name = 'cost_usd'`);
+  if (scale.rows[0] && Number(scale.rows[0].numeric_scale) < 10) {
+    await pool.query(`ALTER TABLE llm_spend_log ALTER COLUMN cost_usd TYPE NUMERIC(16,10)`);
+  }
+  // the same call recorded twice is one row
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_spend_call_id ON llm_spend_log(call_id) WHERE call_id IS NOT NULL`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_llm_spend_request ON llm_spend_log(request_id, seq) WHERE request_id IS NOT NULL`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ai_requests (
+      request_id       UUID PRIMARY KEY,
+      service          VARCHAR(20) NOT NULL,
+      kind             VARCHAR(80),
+      user_id          INTEGER,
+      chat_id          BIGINT,
+      started_at       TIMESTAMPTZ NOT NULL,
+      finished_at      TIMESTAMPTZ,
+      latency_ms       INTEGER,
+      outcome          VARCHAR(40),
+      legal_check      JSONB,
+      telemetry_errors INTEGER NOT NULL DEFAULT 0,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_requests_started ON ai_requests(started_at DESC)`);
+  await pool.query(`ALTER TABLE ai_requests ENABLE ROW LEVEL SECURITY`);
+}
+
+/** One AI call (usage-ledger row). Duplicate call_id: ignored. Throws on DB error. */
+async function writeLedgerRow(r) {
+  if (!_initialized) await initSpendLog();
+  const ts = r.startedAt || new Date();
+  await pool.query(
+    `INSERT INTO llm_spend_log (
+       ts, day, month, model, stage, in_tokens, out_tokens, cost_usd, user_id, endpoint,
+       request_id, call_id, seq, service, provider, model_requested, model_returned, status, error_code,
+       error_message, attempt, retry_reason, fallback_from, started_at, finished_at, latency_ms,
+       cached_in_tokens, reasoning_tokens, audio_ms, characters, provider_credits, cost_source, pricing, chat_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
+     ON CONFLICT (call_id) WHERE call_id IS NOT NULL DO NOTHING`,
+    [ts, ts.toISOString().slice(0, 10), ts.toISOString().slice(0, 7),
+      String(r.modelRequested || r.provider || 'unknown').slice(0, 80), String(r.stage || 'other').slice(0, 30),
+      r.inTokens, r.outTokens, r.costUsd, r.userId, r.endpoint ? String(r.endpoint).slice(0, 80) : null,
+      r.requestId, r.callId, r.seq, r.service, r.provider, r.modelRequested, r.modelReturned, r.status, r.errorCode,
+      r.errorMessage, r.attempt, r.retryReason, r.fallbackFrom, r.startedAt, r.finishedAt, r.latencyMs,
+      r.cachedTokens, r.reasoningTokens, r.audioMs, r.characters, r.credits, r.costSource,
+      r.pricing ? JSON.stringify(r.pricing) : null, r.chatId]
+  );
+}
+
+/** Open or close a request's summary row. Throws on DB error. */
+async function writeRequestRow(r) {
+  if (!_initialized) await initSpendLog();
+  await pool.query(
+    `INSERT INTO ai_requests (request_id, service, kind, user_id, chat_id, started_at, finished_at, latency_ms, outcome, legal_check, telemetry_errors)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     ON CONFLICT (request_id) DO UPDATE SET
+       finished_at = COALESCE(EXCLUDED.finished_at, ai_requests.finished_at),
+       latency_ms = COALESCE(EXCLUDED.latency_ms, ai_requests.latency_ms),
+       outcome = COALESCE(EXCLUDED.outcome, ai_requests.outcome),
+       legal_check = COALESCE(EXCLUDED.legal_check, ai_requests.legal_check),
+       user_id = COALESCE(ai_requests.user_id, EXCLUDED.user_id),
+       telemetry_errors = GREATEST(ai_requests.telemetry_errors, EXCLUDED.telemetry_errors)`,
+    [r.requestId, r.service, r.kind, r.userId, r.chatId, r.startedAt, r.finishedAt || null,
+      r.finishedAt ? Math.max(0, r.finishedAt - r.startedAt) : null, r.outcome || null,
+      r.legalCheck ? JSON.stringify(r.legalCheck) : null, r.telemetryErrors || 0]
+  );
 }
 
 /**
@@ -133,7 +223,7 @@ async function getSpendBreakdown({ days = 30 } = {}) {
     FROM llm_spend_log
     WHERE ts > NOW() - ($1 || ' days')::INTERVAL
     GROUP BY model, stage
-    ORDER BY cost_usd DESC
+    ORDER BY cost_usd DESC NULLS LAST
   `, [days]);
   return result.rows;
 }
@@ -156,13 +246,15 @@ async function getSpendByUser({ days = 30 } = {}) {
     LEFT JOIN admins a ON a.id = s.user_id
     WHERE s.ts > NOW() - ($1 || ' days')::INTERVAL
     GROUP BY s.user_id, a.full_name, a.username
-    ORDER BY cost_usd DESC
+    ORDER BY cost_usd DESC NULLS LAST
   `, [days]);
   return result.rows;
 }
 
 module.exports = {
   initSpendLog,
+  writeLedgerRow,
+  writeRequestRow,
   recordSpendRow,
   getSpendTotals,
   getSpendBreakdown,

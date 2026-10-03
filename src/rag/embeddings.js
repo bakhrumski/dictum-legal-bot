@@ -1,6 +1,10 @@
 'use strict';
 
 const https = require('https');
+// Each embedding request is a row in the usage ledger (stage 'embedding'):
+// OpenAI reports its tokens; Gemini and the HF router report none, so their
+// cost stays unknown rather than $0. Cache hits make no request and no row.
+const usageLedger = require('../ai/usage-ledger');
 
 // Matches any apostrophe-like character BETWEEN two Unicode letters.
 // Covers all 7 variants found in Uzbek Latin text (', ʻ, `, ʼ, ', ', ′, etc.)
@@ -145,6 +149,11 @@ function addE5Prefix(text, isQuery = false) {
 }
 
 async function hfEmbed(texts, apiKey, isQuery = false) {
+  return usageLedger.track({ provider: 'huggingface', model: PROVIDERS.huggingface.model, stage: 'embedding' },
+    (call) => hfEmbedOnce(texts, apiKey, isQuery, call));
+}
+
+async function hfEmbedOnce(texts, apiKey, isQuery, call) {
   const inputs = texts.map(t => addE5Prefix(t, isQuery));
 
   console.log(`[EMBEDDINGS] HF request: token=${apiKey ? 'set' : 'MISSING'}, texts=${texts.length}`);
@@ -168,6 +177,7 @@ async function hfEmbed(texts, apiKey, isQuery = false) {
       if (attempt < MAX_ATTEMPTS) {
         const wait = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s, 16s
         console.warn(`[EMBEDDINGS] HF network error (${err.message}), retry ${attempt}/${MAX_ATTEMPTS - 1} in ${wait / 1000}s...`);
+        await call.retry('network_error', err);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
@@ -188,6 +198,7 @@ async function hfEmbed(texts, apiKey, isQuery = false) {
     if ((resp.status === 503 || resp.status === 429 || resp.status >= 500) && attempt < MAX_ATTEMPTS) {
       const wait = resp.status === 503 ? 20_000 : 2000 * Math.pow(2, attempt - 1);
       console.warn(`[EMBEDDINGS] HF ${resp.status}, retry ${attempt}/${MAX_ATTEMPTS - 1} in ${wait / 1000}s...`);
+      await call.retry(`http_${resp.status}`, Object.assign(new Error(`HF ${resp.status}`), { status: resp.status }));
       await new Promise(r => setTimeout(r, wait));
       continue;
     }
@@ -203,6 +214,11 @@ async function hfEmbed(texts, apiKey, isQuery = false) {
 // Retry transient Gemini failures (429 rate limit, 503, 5xx) with backoff so a
 // long re-embed survives free-tier throttling and runtime queries are resilient.
 async function geminiPostWithRetry(url, payload, label) {
+  return usageLedger.track({ provider: 'gemini', model: PROVIDERS.gemini.model, stage: 'embedding' },
+    (call) => geminiPostWithRetryOnce(url, payload, label, call));
+}
+
+async function geminiPostWithRetryOnce(url, payload, label, call) {
   const MAX_ATTEMPTS = 5;
   let lastText = '';
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -213,6 +229,7 @@ async function geminiPostWithRetry(url, payload, label) {
       if (attempt < MAX_ATTEMPTS) {
         const wait = 2000 * Math.pow(2, attempt - 1);
         console.warn(`[EMBEDDINGS] Gemini ${label} network error (${err.message}), retry ${attempt} in ${wait / 1000}s...`);
+        await call.retry('network_error', err);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
@@ -223,6 +240,7 @@ async function geminiPostWithRetry(url, payload, label) {
     if ((resp.status === 429 || resp.status === 503 || resp.status >= 500) && attempt < MAX_ATTEMPTS) {
       const wait = resp.status === 429 ? 5000 * attempt : 2000 * Math.pow(2, attempt - 1);
       console.warn(`[EMBEDDINGS] Gemini ${label} ${resp.status}, retry ${attempt} in ${wait / 1000}s...`);
+      await call.retry(`http_${resp.status}`, Object.assign(new Error(`Gemini ${resp.status}`), { status: resp.status }));
       await new Promise(r => setTimeout(r, wait));
       continue;
     }
@@ -257,6 +275,11 @@ async function geminiEmbedQuery(text, apiKey) {
 // ========== OPENAI EMBEDDINGS ==========
 
 async function openaiEmbed(texts, apiKey) {
+  return usageLedger.track({ provider: 'openai', model: PROVIDERS.openai.model, stage: 'embedding' },
+    (call) => openaiEmbedOnce(texts, apiKey, call));
+}
+
+async function openaiEmbedOnce(texts, apiKey, call) {
   const inputs = texts.map(t => t.substring(0, PROVIDERS.openai.maxInput));
 
   const resp = await httpsPostJson(
@@ -266,8 +289,10 @@ async function openaiEmbed(texts, apiKey) {
   );
 
   if (resp.status !== 200) {
-    throw new Error(`OpenAI Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
+    throw Object.assign(new Error(`OpenAI Embedding API ${resp.status}: ${(resp.text || '').substring(0, 200)}`), { status: resp.status });
   }
+  const usage = resp.body && resp.body.usage;
+  if (usage) call.usage({ inTokens: usage.prompt_tokens || usage.total_tokens || 0, outTokens: 0, modelReturned: resp.body.model || null });
 
   const sorted = resp.body.data.sort((a, b) => a.index - b.index);
   return sorted.map(d => d.embedding);

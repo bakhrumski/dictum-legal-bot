@@ -1,5 +1,7 @@
 'use strict';
 
+const usageLedger = require('../ai/usage-ledger');
+
 /**
  * Cross-Encoder Re-Ranker — Stage 3 of the Enhanced RAG Pipeline
  *
@@ -92,9 +94,12 @@ async function crossEncoderRerank(query, chunks, model, apiKey) {
   const url = `https://router.huggingface.co/hf-inference/models/${model}`;
 
   // Try batch: send all pairs at once (some models support this)
+  // Each pair is one HF request and one usage-ledger row (stage 'rerank'; the
+  // router reports no usage, so the cost stays unknown).
   const results = await Promise.all(
     pairs.map(async (pair, i) => {
       try {
+        return await usageLedger.track({ provider: 'huggingface', model, stage: 'rerank' }, async (call) => {
         const resp = await httpsPostJson(
           url,
           { inputs: pair },
@@ -103,6 +108,7 @@ async function crossEncoderRerank(query, chunks, model, apiKey) {
 
         if (resp.status === 503) {
           // Model loading — retry once after delay
+          await call.retry('http_503', Object.assign(new Error('HF 503'), { status: 503 }));
           await new Promise(r => setTimeout(r, 5000));
           const retry = await httpsPostJson(
             url,
@@ -114,10 +120,11 @@ async function crossEncoderRerank(query, chunks, model, apiKey) {
         }
 
         if (resp.status !== 200) {
-          throw new Error(`HF ${resp.status}: ${(resp.text || '').substring(0, 200)}`);
+          throw Object.assign(new Error(`HF ${resp.status}: ${(resp.text || '').substring(0, 200)}`), { status: resp.status });
         }
 
         return { index: i, score: extractScore(resp.body) };
+        });
       } catch (err) {
         // Individual pair failure — assign 0 so it sorts to bottom
         console.warn(`[RERANKER] Pair ${i} failed: ${err.message}`);

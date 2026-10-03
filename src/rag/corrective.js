@@ -50,7 +50,7 @@ ${chunksText}
   try {
     const result = await callAI(
       [{ role: 'user', text: gradingPrompt }],
-      { maxTokens: 256, temperature: 0 }
+      { maxTokens: 256, temperature: 0, endpoint: '/rag/corrective-grade' }
     );
 
     const scoresText = result.text || '';

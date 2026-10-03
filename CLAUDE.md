@@ -52,7 +52,18 @@ Known state of the suites (Sept 2026):
 - `src/bot/` — Telegram bot. `src/agents/` — agent flows.
 - `src/rag/` — legal corpus ingest and hybrid search (lex.uz).
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
-  every spend path, hybrid-pipeline included, reads it.
+  every spend path, hybrid-pipeline included, reads it. Each price carries
+  its source and check date; VoiceLab credits convert at the owner's
+  purchase, 1,200,000 credits = $90 (`VOICELAB_CREDIT_USD` overrides).
+- `src/ai/usage-ledger.js` — per-request AI usage: every user request
+  (Telegram message, API request) has a request_id, and every AI call made
+  for it — intent, embeddings, rerank, answer, cross-check, claim check,
+  retries, fallbacks, OCR, STT, TTS — is one `llm_spend_log` row with stage,
+  provider, requested and returned model, usage, latency, status and a cost
+  marked provider_reported / calculated / estimated / unknown (unknown is
+  NULL, never $0). Wrap a new provider call in `usageLedger.track()`.
+  Master views: `/api/admin/ai-usage/{requests,requests/:id,report}` and the
+  dashboard's "AI so'rovlar" panel.
 - Models: GPT-6 since 2026-09-23. `MODELS` in server.js defaults to
   premium and standard `gpt-6-sol`, cheap and chat `gpt-6-luna`, each
   env-overridable (`MODEL_PREMIUM`…). Premium is deliberately not

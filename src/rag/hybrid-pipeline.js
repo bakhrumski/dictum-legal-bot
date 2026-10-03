@@ -1,5 +1,7 @@
 'use strict';
 
+const usageLedger = require('../ai/usage-ledger');
+
 const log = require('../utils/logger').createLogger('HYBRID');
 const voicelab = require('../ai/voicelab');
 const { calculateTokenCost, MODEL_PRICING: PRICING } = require('../ai/model-pricing');
@@ -157,12 +159,19 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
   // VoiceLab when LLM_PROVIDER=voicelab routes this lane; otherwise, or on a
   // failure with fallback allowed, the OpenAI request below runs as before.
   if (voicelab.routes(model)) {
+    const started = Date.now();
     try {
       const r = await voicelab.chatCompletion(model, messages, { temperature, maxTokens, responseFormat });
+      const reported = Boolean(r.usage && (r.usage.inTokens || r.usage.outTokens));
       return {
         text: r.text,
         provider: r.provider,
         model: r.provider,
+        providerName: 'voicelab',
+        billedModel: r.provider,
+        modelReturned: (r.raw && r.raw.model) ? `voicelab/${r.raw.model}` : null,
+        cachedTokens: (r.usage && r.usage.cachedTokens) || 0,
+        usageEstimated: !reported,
         inTokens: r.usage.inTokens || estimateTokens(JSON.stringify(messages)),
         outTokens: r.usage.outTokens || estimateTokens(r.text),
         // Priced from VOICELAB_PRICES, never at the OpenAI rate of the lane.
@@ -170,6 +179,9 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
       };
     } catch (err) {
       if (!voicelab.fallbackAllowed(model)) throw err;
+      // the failed VoiceLab attempt is a ledger row of its own
+      usageLedger.record({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor(model)}`, status: usageLedger.errorCodeOf(err) === 'TIMEOUT' ? 'timeout' : 'error',
+        errorCode: usageLedger.errorCodeOf(err), error: err, startedAt: started, finishedAt: Date.now() });
       log.warn('voicelab failed, using previous provider', { model, err: err.message });
     }
   }
@@ -213,6 +225,10 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
   return {
     text,
     provider: model,
+    modelReturned: data.model || null,
+    cachedTokens: (usage.prompt_tokens_details && usage.prompt_tokens_details.cached_tokens) || 0,
+    reasoningTokens: (usage.completion_tokens_details && usage.completion_tokens_details.reasoning_tokens) || null,
+    usageEstimated: !usage.prompt_tokens,
     inTokens: usage.prompt_tokens || estimateTokens(JSON.stringify(body.messages)),
     outTokens: usage.completion_tokens || estimateTokens(text),
   };
@@ -268,11 +284,17 @@ async function callGeminiModel(model, messages, { temperature = 0.2, maxTokens =
   if (!text) throw new Error(`Gemini ${model} empty response`);
 
   const usage = data.usageMetadata || {};
+  const reported = usageLedger.usageFromGemini(data.usageMetadata);
   return {
     text,
     provider: model,
+    modelReturned: data.modelVersion || null,
+    cachedTokens: reported.cachedTokens || 0,
+    reasoningTokens: reported.reasoningTokens || null,
+    usageEstimated: !usage.promptTokenCount,
     inTokens: usage.promptTokenCount || estimateTokens(JSON.stringify(contents)),
-    outTokens: usage.candidatesTokenCount || estimateTokens(text),
+    // thinking tokens are billed as output and are not in candidatesTokenCount
+    outTokens: usage.candidatesTokenCount ? reported.outTokens : estimateTokens(text),
   };
 }
 
@@ -300,7 +322,19 @@ async function callWithFallback(chain, messages, opts = {}) {
       continue;
     }
     try {
-      const result = await callModel(model, messages, opts);
+      // each attempt in the chain is one usage-ledger row; usage estimated
+      // from characters (no provider usage) is marked "estimated"
+      const result = await usageLedger.withChain(() => usageLedger.track(
+        { provider: isOpenAIModel(model) ? 'openai' : 'gemini', model, stage: opts.stage || 'generate', endpoint: opts.endpoint || null, userId: opts.userId || null },
+        async (call) => {
+          const r = await callModel(model, messages, opts);
+          call.usage({
+            inTokens: r.inTokens, outTokens: r.outTokens, cachedTokens: r.cachedTokens, reasoningTokens: r.reasoningTokens,
+            estimated: r.usageEstimated === true, modelReturned: r.modelReturned || null,
+            provider: r.providerName || undefined, billedModel: r.billedModel || undefined,
+          });
+          return r;
+        }));
       const cost = result.costUsd != null ? result.costUsd : estimateCost(model, result.inTokens, result.outTokens);
       recordSpend(cost);
       recordCbSuccess(model);

@@ -24,6 +24,10 @@
  */
 
 const { spawn } = require('child_process');
+// STT and TTS calls are rows in the usage ledger: STT with the audio duration
+// VoiceLab reports (no credits are returned, so its cost stays unknown), TTS
+// with the characters and credits VoiceLab returns in its headers.
+const usageLedger = require('./usage-ledger');
 
 let _client = null;
 function client() {
@@ -70,7 +74,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * take universally and the rate they are trained on — and sent as is only if
  * ffmpeg is unavailable.
  */
-async function transcribe(buffer, { filename = 'voice.ogg', contentType = 'audio/ogg', language, pollMs = 1500, maxWaitMs = 60000 } = {}) {
+async function transcribe(buffer, options = {}) {
+  return usageLedger.track({ provider: 'voicelab', model: 'voicelab/stt', stage: 'stt' },
+    (call) => transcribeOnce(buffer, options, call));
+}
+
+async function transcribeOnce(buffer, { filename = 'voice.ogg', contentType = 'audio/ogg', language, pollMs = 1500, maxWaitMs = 60000 } = {}, call) {
   const lang = language || process.env.VOICELAB_STT_LANGUAGE || 'uz';
   let upload = { data: buffer, filename, contentType };
   try {
@@ -83,7 +92,10 @@ async function transcribe(buffer, { filename = 'voice.ogg', contentType = 'audio
     audio: upload,
     language: lang,
   });
-  if (result && typeof result.transcript === 'string') return result.transcript.trim();
+  if (result && typeof result.transcript === 'string') {
+    if (Number.isFinite(result.durationMs)) call.usage({ audioMs: result.durationMs });
+    return result.transcript.trim();
+  }
 
   // Queued: poll the transcription until it carries text or fails.
   const id = result && result.id;
@@ -92,7 +104,10 @@ async function transcribe(buffer, { filename = 'voice.ogg', contentType = 'audio
   while (Date.now() < deadline) {
     await sleep(pollMs);
     const detail = await vl.stt.getTranscription(id);
-    if (detail && typeof detail.transcript === 'string' && detail.transcript.trim()) return detail.transcript.trim();
+    if (detail && typeof detail.transcript === 'string' && detail.transcript.trim()) {
+      if (Number.isFinite(detail.durationMs)) call.usage({ audioMs: detail.durationMs });
+      return detail.transcript.trim();
+    }
     const status = String((detail && detail.status) || '').toLowerCase();
     if (/fail|error|cancel/.test(status)) throw new Error(`VoiceLab STT ${id} ${status}`);
   }
@@ -195,7 +210,15 @@ async function synthesize(text, { language, voiceId, speed } = {}) {
   const s = speed != null ? speed : Number(process.env.VOICELAB_TTS_SPEED);
   if (Number.isFinite(s) && s > 0) params.speed = s;
 
-  const speech = await client().tts.synthesize(params);
+  const speech = await usageLedger.track({ provider: 'voicelab', model: 'voicelab/tts', stage: 'tts' }, async (call) => {
+    const out = await client().tts.synthesize(params);
+    call.usage({
+      characters: out.charactersUsed == null ? null : out.charactersUsed,
+      credits: out.creditsUsed == null ? null : out.creditsUsed,
+      audioMs: out.durationMs == null ? null : out.durationMs,
+    });
+    return out;
+  });
   const wav = Buffer.from(speech.audio);
   try {
     const ogg = await wavToOggOpus(wav);

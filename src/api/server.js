@@ -49,6 +49,7 @@ const { correctiveFilter, correctiveModeFrom } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywordMatch, collapseRepeatedChunks, buildKeywordArtifacts } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
+const usageLedger = require('../ai/usage-ledger');
 const { legalForceOf, legalForceLabel, sortByLegalForce } = require('../rag/legal-force');
 // Acts an answer's live lex.uz check found that the corpus lacks go to the
 // dashboard's suggested sources (src/rag/source-suggestions.js).
@@ -373,6 +374,9 @@ app.use((req, res, next) => {
     && (req.path === '/api/attorneys' || req.path === '/api/practice-areas');
   return publicDataRoute ? next() : sessionMiddleware(req, res, next);
 });
+// Every API request is one usage-ledger request: the AI calls it makes share
+// a request_id (src/ai/usage-ledger.js). A request with no AI call leaves no row.
+app.use('/api/', usageLedger.expressScope('web'));
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -1051,6 +1055,9 @@ app.get('/api/admin/coverage-gaps', requireMasterAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Per-request AI usage and cost (master only): src/ai/usage-report.js.
+require('../ai/usage-report').mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger: usageLedger });
 
 // Suggested sources for Master-Admin review (Phase 2 enrichment).
 app.get('/api/admin/suggested-sources', requireMasterAdmin, async (req, res) => {
@@ -3391,7 +3398,16 @@ app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
 
 // ========== AI PROVIDER: Gemini (primary) + OpenAI GPT-4o (fallback) ==========
 
+// Provider usage -> ledger usage (cached input and reasoning output are
+// already inside the input/output counts; thinking tokens are not).
+const { usageFromGemini: geminiUsage, usageFromOpenAI: openaiUsage } = usageLedger;
+
 async function callGemini(messages, options = {}) {
+  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint, userId: options.userId || null },
+    (call) => callGeminiOnce(messages, options, call));
+}
+
+async function callGeminiOnce(messages, options, call) {
   const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) throw new Error('GEMINI_API_KEY sozlanmagan');
@@ -3443,6 +3459,7 @@ async function callGemini(messages, options = {}) {
   }
 
   const data = await resp.json();
+  call.usage({ ...geminiUsage(data.usageMetadata), modelReturned: data.modelVersion || null });
 
   // Gemini 2.5 Flash may return "thought" parts (internal reasoning) alongside "text" parts.
   // Also check for blocked responses (safety filters) and log them.
@@ -3473,13 +3490,6 @@ async function callGemini(messages, options = {}) {
     console.error(`[Gemini] Empty text. Parts received: [${partTypes}], finishReason: ${candidate.finishReason}`);
     throw new Error(`Gemini empty response (parts: ${partTypes || 'none'}, finish: ${candidate.finishReason || '?'})`);
   }
-  recordSpend({
-    model: 'gemini-2.5-flash',
-    inTokens: (data.usageMetadata && data.usageMetadata.promptTokenCount) || 0,
-    outTokens: (data.usageMetadata && data.usageMetadata.candidatesTokenCount) || 0,
-    userId: options.userId || null,
-    endpoint: options.endpoint || null,
-  });
   return { text, provider: 'Gemini' };
 }
 
@@ -3492,12 +3502,19 @@ async function callGemini(messages, options = {}) {
 // so in practice every streamed answer was served by the FALLBACK provider.
 // This restores the intended routing for streamed answers too.
 async function callOpenAIStream(messages, options = {}, onToken) {
-  const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard, onToken);
-  if (viaVoiceLab) return viaVoiceLab;
+  return usageLedger.withChain(async () => {
+    const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard, onToken);
+    if (viaVoiceLab) return viaVoiceLab;
+    const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
+    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null },
+      (call) => callOpenAIStreamOnce(messages, options, onToken, model, call));
+  });
+}
+
+async function callOpenAIStreamOnce(messages, options, onToken, model, call) {
   const gptKey = process.env.GPT_API_KEY;
   if (!gptKey) throw new Error('GPT_API_KEY sozlanmagan');
   const { temperature = 0.2, maxTokens = 8192 } = options;
-  const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
 
   const input = messages.map(m => ({
     role: m.role === 'model' ? 'assistant' : (m.role === 'user' ? 'user' : 'assistant'),
@@ -3516,13 +3533,14 @@ async function callOpenAIStream(messages, options = {}, onToken) {
   if (!resp.ok && (resp.status === 400 || resp.status === 422)) {
     const errText = await resp.clone().text().catch(() => '');
     if (/temperature/i.test(errText)) {
+      await call.retry('param_rejected:temperature', Object.assign(new Error(`OpenAI ${resp.status}`), { status: resp.status }));
       const retry = { ...body }; delete retry.temperature;
       resp = await post(retry);
     }
   }
   if (!resp.ok || !resp.body) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`OpenAI stream ${model} ${resp.status}: ${errBody.substring(0, 200)}`);
+    throw Object.assign(new Error(`OpenAI stream ${model} ${resp.status}: ${errBody.substring(0, 200)}`), { status: resp.status });
   }
 
   const decoder = new TextDecoder();
@@ -3543,22 +3561,22 @@ async function callOpenAIStream(messages, options = {}, onToken) {
         try { onToken(ev.delta); } catch (_) { /* consumer errors must not kill the stream */ }
       } else if (ev.type === 'response.completed' && ev.response && ev.response.usage) {
         usage = ev.response.usage;
+        call.usage({ ...openaiUsage(usage), modelReturned: ev.response.model || null });
       } else if (ev.type === 'error' || ev.type === 'response.failed') {
         throw new Error(`OpenAI stream error: ${JSON.stringify(ev).substring(0, 200)}`);
       }
     }
   }
   if (!full) throw new Error(`OpenAI stream ${model} returned no text`);
-
-  const inTok = (usage && (usage.input_tokens || 0)) || 0;
-  const outTok = (usage && (usage.output_tokens || 0)) || 0;
-  const cachedTok = (usage && usage.input_tokens_details && usage.input_tokens_details.cached_tokens) || 0;
-  recordSpend({ model, inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok,
-    userId: options.userId || null, endpoint: options.endpoint || '/api/legal-chat/stream' });
   return { text: full, provider: model };
 }
 
 async function callGeminiStream(messages, options = {}, onToken) {
+  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null },
+    (call) => callGeminiStreamOnce(messages, options, onToken, call));
+}
+
+async function callGeminiStreamOnce(messages, options, onToken, call) {
   const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) throw new Error('GEMINI_API_KEY sozlanmagan');
@@ -3605,7 +3623,10 @@ async function callGeminiStream(messages, options = {}, onToken) {
       if (!payload || payload === '[DONE]') continue;
       let data;
       try { data = JSON.parse(payload); } catch (_) { continue; }
-      if (data.usageMetadata) usage = data.usageMetadata;
+      if (data.usageMetadata) {
+        usage = data.usageMetadata;
+        call.usage({ ...geminiUsage(usage), modelReturned: data.modelVersion || null });
+      }
       const cand = data.candidates && data.candidates[0];
       if (!cand) continue;
       if (cand.finishReason) finishReason = cand.finishReason;
@@ -3620,15 +3641,6 @@ async function callGeminiStream(messages, options = {}, onToken) {
   }
   if (finishReason === 'SAFETY') throw new Error('Gemini safety filter (stream)');
   if (!full) throw new Error(`Gemini stream empty response (finish: ${finishReason || '?'})`);
-  // The streaming path is the highest-volume call on the platform; without
-  // this it was invisible to the spend report.
-  recordSpend({
-    model: 'gemini-2.5-flash',
-    inTokens: (usage && usage.promptTokenCount) || 0,
-    outTokens: (usage && usage.candidatesTokenCount) || 0,
-    userId: options.userId || null,
-    endpoint: options.endpoint || '/api/legal-chat/stream',
-  });
   return { text: full, provider: 'Gemini' };
 }
 
@@ -3715,11 +3727,14 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
   try {
     const { temperature = 0.2, maxTokens = 8192 } = options;
     const opts = { temperature, maxTokens };
-    const r = onToken
-      ? await voicelab.chatCompletionStream(model, messages, opts, onToken)
-      : await voicelab.chatCompletion(model, messages, opts);
-    recordSpend({ model: r.provider, inTokens: r.usage.inTokens, outTokens: r.usage.outTokens,
-      cachedTokens: r.usage.cachedTokens, userId: options.userId || null, endpoint: options.endpoint || null });
+    const label = `voicelab/${voicelab.modelFor(model)}`;
+    const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null }, async (call) => {
+      const res = onToken
+        ? await voicelab.chatCompletionStream(model, messages, opts, onToken)
+        : await voicelab.chatCompletion(model, messages, opts);
+      call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
+      return res;
+    });
     return { text: r.text, provider: r.provider, usage: {
       ...r.usage,
       costUsd: calculateTokenCost(r.provider, r.usage) || 0,
@@ -3734,28 +3749,16 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
   }
 }
 
-// Record every main-path AI call into llm_spend_log. Previously only the R&D
-// hybrid pipeline logged spend, so the master spend report saw almost nothing
-// and there was no way to know what a user actually costs.
-function recordSpend({ model, inTokens = 0, outTokens = 0, cachedTokens = 0, userId = null, endpoint = null }) {
-  try {
-    const costUsd = calculateTokenCost(model, { inTokens, outTokens, cachedTokens }) || 0;
-    _spendToday.usd += costUsd;
-    const now = new Date();
-    pool.query(
-      `INSERT INTO llm_spend_log (day, month, model, stage, in_tokens, out_tokens, cost_usd, user_id, endpoint)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [now.toISOString().slice(0, 10), now.toISOString().slice(0, 7), model, 'main',
-       inTokens, outTokens, costUsd, userId, endpoint]
-    ).catch(() => {});
-  } catch (_) { /* accounting must never break a request */ }
-}
+// Every AI call is recorded by the usage ledger (src/ai/usage-ledger.js) into
+// llm_spend_log — failed and retried attempts included — and its cost feeds
+// the daily budget breaker below.
 
 // ── Budget circuit breaker ───────────────────────────────────────────────────
 // Caps paid-model spend per day. When the ceiling is hit, paid models are
 // skipped and the free Gemini tier serves requests instead — the product keeps
 // working, the bill stops growing. Essential before any large free promo.
 const _spendToday = { day: new Date().toISOString().slice(0, 10), usd: 0, loaded: false };
+usageLedger.configure({ onCost: (usd) => { _spendToday.usd += usd; } });
 const DAILY_BUDGET_USD = Number(process.env.LLM_DAILY_BUDGET_USD || 0);   // 0 = disabled
 async function paidModelsAllowed() {
   if (!DAILY_BUDGET_USD) return true;
@@ -3777,8 +3780,16 @@ async function paidModelsAllowed() {
 }
 
 async function callOpenAI(messages, options = {}) {
-  const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard);
-  if (viaVoiceLab) return viaVoiceLab;
+  return usageLedger.withChain(async () => {
+    const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard);
+    if (viaVoiceLab) return viaVoiceLab;
+    const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
+    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint, userId: options.userId || null },
+      (call) => callOpenAIOnce(messages, options, call));
+  });
+}
+
+async function callOpenAIOnce(messages, options, call) {
   const { temperature = 0.2, maxTokens = 8192, useSearch = false } = options;
   const gptKey = process.env.GPT_API_KEY;
   if (!gptKey) throw new Error('GPT_API_KEY sozlanmagan');
@@ -3833,6 +3844,7 @@ async function callOpenAI(messages, options = {}) {
     if (/tool|web_search/i.test(errText) && retry.tools) { delete retry.tools; changed = true; }
     if (changed) {
       console.warn(`[OpenAI] ${body.model} rejected a parameter, retrying without it:`, errText.substring(0, 120));
+      await call.retry('param_rejected', Object.assign(new Error(`OpenAI ${resp.status}`), { status: resp.status }));
       resp = await post(retry);
     }
   }
@@ -3840,10 +3852,11 @@ async function callOpenAI(messages, options = {}) {
   const usedModel = body.model;
   if (!resp.ok) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`OpenAI ${usedModel} ${resp.status}: ${errBody.substring(0, 200)}`);
+    throw Object.assign(new Error(`OpenAI ${usedModel} ${resp.status}: ${errBody.substring(0, 200)}`), { status: resp.status });
   }
 
   const data = await resp.json();
+  call.usage({ ...openaiUsage(data.usage), modelReturned: data.model || null });
   const text = (data.output || [])
     .filter(o => o.type === 'message')
     .flatMap(o => o.content || [])
@@ -3852,11 +3865,7 @@ async function callOpenAI(messages, options = {}) {
     .join('');
 
   if (!text) throw new Error(`OpenAI ${usedModel} empty response`);
-  const inTok = (data.usage && (data.usage.input_tokens || data.usage.prompt_tokens)) || 0;
-  const outTok = (data.usage && (data.usage.output_tokens || data.usage.completion_tokens)) || 0;
-  const cachedTok = (data.usage && data.usage.input_tokens_details && data.usage.input_tokens_details.cached_tokens) || 0;
-  recordSpend({ model: usedModel, inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok,
-    userId: options.userId || null, endpoint: options.endpoint || null });
+  const { inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok } = openaiUsage(data.usage);
   // Report the model actually used (a hardcoded label previously hid which
   // model answered) plus token usage, so callers can surface real cost.
   return { text, provider: usedModel, usage: {
@@ -3893,6 +3902,10 @@ app.get('/api/lex-anchor', requireAuth, async (req, res) => {
 // per-chunk document digests, the plain-language explainer, Telegram answer
 // compaction, opinion anonymization. Falls back to the free Gemini tier.
 async function callCheapAI(messages, options = {}) {
+  return usageLedger.withChain(() => callCheapAIChain(messages, options));
+}
+
+async function callCheapAIChain(messages, options = {}) {
   if (paidProviderConfigured() && await paidModelsAllowed()) {
     try {
       return await callOpenAI(messages, { ...options, model: MODELS.cheap, lane: 'cheap', useSearch: false });
@@ -3906,6 +3919,10 @@ async function callCheapAI(messages, options = {}) {
 // Premium routing: MODELS.premium (gpt-6-sol by default) for high-stakes
 // generations (legal opinions), with the free Gemini tier as fallback.
 async function callPremiumAI(messages, options = {}) {
+  return usageLedger.withChain(() => callPremiumAIChain(messages, options));
+}
+
+async function callPremiumAIChain(messages, options = {}) {
   if (paidProviderConfigured() && await paidModelsAllowed()) {
     const model = options.model || MODELS.premium;
     // premiumRetries: how many times to RE-TRY the premium model itself
@@ -3934,6 +3951,10 @@ async function callPremiumAI(messages, options = {}) {
 
 
 async function callAI(messages, options = {}) {
+  return usageLedger.withChain(() => callAIChain(messages, options));
+}
+
+async function callAIChain(messages, options = {}) {
   const gptKey = process.env.GPT_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
   const errors = [];
@@ -5428,7 +5449,7 @@ async function identifyRelevantLaws(question, topic) {
   try {
     const label = LEGAL_TOPICS[topic] ? ` (soha: ${LEGAL_TOPICS[topic]})` : '';
     const prompt = `Quyidagi huquqiy savolga bevosita tatbiq etilishi mumkin bo'lgan O'zbekiston Respublikasining REAL, amaldagi normativ-huquqiy hujjatlarini sanab bering${label}. Qonun va kodeks bilan cheklanmang: tegishli Prezident qarori (PQ), Prezident farmoni (PF), Vazirlar Mahkamasi qarori (VMQ), nizom, tartib, yo'riqnoma va idoraviy buyruqni ham ko'ring. FAQAT hujjat NOMINI va ishonchingiz komil bo'lsa raqamini yozing — har birini yangi qatorda, maksimal 8 ta. Modda raqami, tushuntirish yoki izoh BERMANG. Bu faqat qidiruv gipotezasi; mavjud bo'lmagan hujjatni TO'QIB CHIQARMANG.\n\nSavol: ${question}`;
-    const res = await callAI([{ role: 'user', text: prompt }], { useSearch: false, maxTokens: 300, temperature: 0 });
+    const res = await callAI([{ role: 'user', text: prompt }], { useSearch: false, maxTokens: 300, temperature: 0, endpoint: '/rag/source-suggestions' });
     const text = (res && res.text) || '';
     return String(text)
       .split('\n')
@@ -6216,7 +6237,7 @@ async function classifyLegalTopic(message, opts = {}) {
       [{ role: 'system', text: sys }, { role: 'user', text: message }],
       // 16 is OpenAI's minimum max_output_tokens — 8 got a 400 and pushed
       // every topic classification onto the Gemini fallback.
-      { useSearch: false, maxTokens: 16 }
+      { useSearch: false, maxTokens: 16, endpoint: '/rag/classify-topic' }
     );
     const raw = (result.text || '').trim().toLowerCase().replace(/[^a-z\-]/g, '');
     if (keys.includes(raw)) return raw;
@@ -9063,17 +9084,21 @@ async function triggerAiScreening(regId, regData) {
     let voicelabText = null;
     if (voicelab.routes('vision')) {
       try {
-        const r = await voicelab.chatCompletion('vision', gptBody.messages, {
-          temperature: gptBody.temperature, maxTokens: gptBody.max_tokens, responseFormat: gptBody.response_format,
+        const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, endpoint: 'ai-screening' }, async (call) => {
+          const res = await voicelab.chatCompletion('vision', gptBody.messages, {
+            temperature: gptBody.temperature, maxTokens: gptBody.max_tokens, responseFormat: gptBody.response_format,
+          });
+          call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
+          return res;
         });
         voicelabText = r.text;
-        recordSpend({ model: r.provider, ...r.usage, endpoint: 'ai-screening' });
       } catch (e) {
         if (!voicelab.fallbackAllowed() || !apiKey) throw e;
         console.warn('[AI SCREENING] VoiceLab failed, using previous provider:', e.message);
       }
     }
 
+    const screeningStarted = Date.now();
     let gptResp = voicelabText !== null
       ? new Response(JSON.stringify({ choices: [{ message: { content: voicelabText } }] }), { status: 200 })
       : await fetch('https://api.openai.com/v1/chat/completions', {
@@ -9088,6 +9113,7 @@ async function triggerAiScreening(regId, regData) {
 
     // Retry once after 3s if rate-limited (429)
     if (gptResp.status === 429) {
+      usageLedger.record({ provider: 'openai', model: gptBody.model, endpoint: 'ai-screening', status: 'error', errorCode: 'HTTP_429', startedAt: screeningStarted, finishedAt: Date.now() });
       console.log('[AI SCREENING] Rate limited, retrying in 3s...');
       await new Promise(r => setTimeout(r, 3000));
       gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -9103,10 +9129,15 @@ async function triggerAiScreening(regId, regData) {
 
     if (!gptResp.ok) {
       console.error('[AI SCREENING] GPT-4o API error:', gptResp.status);
+      if (voicelabText === null) usageLedger.record({ provider: 'openai', model: gptBody.model, endpoint: 'ai-screening', status: 'error', errorCode: `HTTP_${gptResp.status}`, startedAt: screeningStarted, finishedAt: Date.now() });
       return;
     }
 
     const data = await gptResp.json();
+    if (voicelabText === null) {
+      usageLedger.record({ provider: 'openai', model: gptBody.model, endpoint: 'ai-screening', status: 'success', startedAt: screeningStarted, finishedAt: Date.now(),
+        usage: { ...openaiUsage(data.usage), modelReturned: data.model || null }, modelReturned: data.model || null });
+    }
     const resultText = data.choices?.[0]?.message?.content;
     if (!resultText) return;
 
@@ -10681,7 +10712,12 @@ async function runMigrations() {
       const hybridPipeline = require('../rag/hybrid-pipeline');
       const spendLog = require('../rag/llm-spend-log');
       await spendLog.initSpendLog();
-      hybridPipeline.setSpendHook(spendLog.recordSpendRow);
+      // The usage ledger writes each AI call (and each request's summary)
+      // into llm_spend_log / ai_requests; its costs feed the daily breaker.
+      usageLedger.configure({ write: spendLog.writeLedgerRow, writeRequest: spendLog.writeRequestRow });
+      // The hybrid pipeline's calls are ledger rows now (callWithFallback);
+      // its old spend hook wrote a second row for the same call.
+      hybridPipeline.setSpendHook(null);
       await spendLog.loadSpendIntoPipeline(hybridPipeline);
       console.log('[SPEND-LOG] Hybrid pipeline wired to persistent spend log');
     } catch (e) { console.log('[SPEND-LOG] Init skipped:', e.message); }
