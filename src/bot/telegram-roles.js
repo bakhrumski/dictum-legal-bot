@@ -35,13 +35,31 @@ function roleLabel(role) {
   return ROLE_LABELS[normalizeRole(role)] || String(role || '—');
 }
 
-/** The platform account linked to this chat ({ id, full_name, username, role }) or null. */
-async function getLinkedAccount(db, chatId) {
+/**
+ * The platform account linked to this chat ({ id, full_name, username, role })
+ * or null. An account is linked to Telegram two ways: /link in this bot sets
+ * telegram_chat_id; registration and the site's "Telegramni ulash" set
+ * telegram_user_id. In a private chat the two ids are the same person, so
+ * both are recognised (2026-10-03: the owner's master account, linked by
+ * telegram_user_id only, was refused /testmode). If both match different
+ * accounts, a staff account wins, then the /link one.
+ */
+async function getLinkedAccount(db, chatId, fromUserId = null) {
   const { rows } = await db.query(
-    'SELECT id, full_name, username, role FROM admins WHERE telegram_chat_id = $1',
-    [chatId]
+    `SELECT id, full_name, username, role FROM admins
+      WHERE telegram_chat_id = $1 OR ($2::bigint IS NOT NULL AND telegram_user_id = $2::bigint)
+      ORDER BY (role IN ('master', 'lawyer', 'student')) DESC, (telegram_chat_id = $1) DESC NULLS LAST
+      LIMIT 1`,
+    [chatId, fromUserId == null ? null : String(fromUserId)]
   );
   return rows[0] || null;
+}
+
+/** The sender's Telegram user id, only in a private chat (where it is the chat's owner). */
+function privateSenderId(msgOrQuery = {}) {
+  const chat = (msgOrQuery.message && msgOrQuery.message.chat) || msgOrQuery.chat || {};
+  const from = msgOrQuery.from || {};
+  return chat.type === 'private' && from.id != null ? from.id : null;
 }
 
 /**
@@ -83,5 +101,5 @@ function dashboardUrl(env = process.env) {
 
 module.exports = {
   STAFF_ROLES, ROLE_LABELS, normalizeRole, isStaffRole, isMasterRole, roleLabel,
-  getLinkedAccount, chatRoute, dashboardUrl,
+  getLinkedAccount, privateSenderId, chatRoute, dashboardUrl,
 };

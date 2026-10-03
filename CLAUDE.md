@@ -105,7 +105,9 @@ Known state of the suites (Sept 2026):
   `/api/admin/voicelab/voices?language=uz`, `/api/admin/voicelab/tts?text=…`.
 - Telegram: a linked staff account's own messages (role master, lawyer or
   student — `src/bot/telegram-roles.js`) are never treated as questions. A
-  linked customer (role `user`) or an unknown role is an ordinary user.
+  linked customer (role `user`) or an unknown role is an ordinary user. An
+  account counts as linked by `telegram_chat_id` (/link) or, in a private
+  chat, by `telegram_user_id` (registration, the site's Telegram linking).
   `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
   chat so the owner can try the bot, voice included, from his own account.
 - `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
