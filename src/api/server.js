@@ -49,6 +49,10 @@ const { correctiveFilter, correctiveModeFrom } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywordMatch, collapseRepeatedChunks, buildKeywordArtifacts } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
+const { legalForceOf, legalForceLabel, sortByLegalForce } = require('../rag/legal-force');
+// Acts answers needed from lex.uz that the corpus lacks; set up with the
+// corpus routes below (src/rag/corpus-demand.js).
+let corpusDemand = null;
 const {
   buildQuestionResearchDirective,
   buildLexResearchPlan,
@@ -5053,6 +5057,10 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     ]);
     webResults = tavilyRes;
     lexLiveResults = lexRes;
+    // Not awaited: counting what the corpus lacked must not slow the answer.
+    if (corpusDemand && lexLiveResults.length) {
+      corpusDemand.record(lexLiveResults, { topic, source: opts.demandSource === 'eval' ? 'eval' : 'user' });
+    }
     if (lexLiveResults.length > 0) {
       console.log(`[RAG] Lex.uz live search returned ${lexLiveResults.length} documents`);
     }
@@ -5132,6 +5140,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       : '';
     const scoreTag = r.score ? ` (${(r.score * 100).toFixed(0)}%)` : '';
     const langTag = r.language === 'uz' ? ' [UZ]' : ' [RU]';
+    const forceLabel = legalForceLabel(r, isUz ? 'uz' : 'ru', getChunkDocumentIdentifier(r));
     const categoryTag = r.category ? ` [${LEGAL_TOPICS[r.category] || r.category}]` : '';
     const maxChars = r.source_type === 'verified_qa' ? 2000 : MAX_CHUNK_CHARS;
     const text = r.chunk_text.length > maxChars
@@ -5144,6 +5153,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         ? `  Normalar: ${arts} (${r.provision_type === 'band' ? 'band' : 'modda'})`
         : `  Нормы: ${arts} (${r.provision_type === 'band' ? 'пункт' : 'статья'})`)
         : '',
+      forceLabel ? `  ${forceLabel}` : '',
       r.chapter ? `  ${r.chapter}` : '',
       text,
       (r.is_active === true && r.source_url) ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.source_url})` : '',
@@ -5226,16 +5236,35 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     ? `\nMANBALAR:\n${sourceRefLines.join('\n')}\n`
     : '';
 
+  // Several acts of different force: list them from the strongest down, so
+  // the answer can show each and say which prevails (owner, 2026-10-03).
+  const forceOrder = [];
+  const seenForceActs = new Set();
+  for (const r of sortByLegalForce(citationChunks, getChunkDocumentIdentifier)) {
+    const level = legalForceOf(r, getChunkDocumentIdentifier(r));
+    const name = String(r.law_name || '').trim();
+    const actKey = lexDocumentKey(r.source_url) || name.toLowerCase();
+    if (!level || !name || seenForceActs.has(actKey)) continue;
+    seenForceActs.add(actKey);
+    const docNum = getChunkDocumentIdentifier(r);
+    forceOrder.push({ rank: level.rank, line: `${forceOrder.length + 1}. ${name}${docNum ? ` (${docNum})` : ''} - ${isUz ? level.uz : level.ru}` });
+  }
+  const forceBlock = new Set(forceOrder.map(f => f.rank)).size >= 2
+    ? (isUz
+      ? `\nHUJJATLAR YURIDIK KUCHI BO'YICHA (yuqoridan pastga):\n${forceOrder.map(f => f.line).join('\n')}\n`
+      : `\nАКТЫ ПО ЮРИДИЧЕСКОЙ СИЛЕ (сверху вниз):\n${forceOrder.map(f => f.line).join('\n')}\n`)
+    : '';
+
   // ── Build clean data-only context (no instructions, no box-drawings) ──
   let context;
   if (isUz) {
     context = `\nQONUNCHILIK KONTEKSTI (${citationChunks.length} natija):\n`
-      + sourceBlock
+      + sourceBlock + forceBlock
       + `\n` + chunksText + webText + lexLiveText
       + `\n\n--- JAVOB SHU YERDAN BOSHLANSIN ---`;
   } else {
     context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${citationChunks.length} результатов):\n`
-      + sourceBlock
+      + sourceBlock + forceBlock
       + `\n` + chunksText + webText + lexLiveText
       + `\n\n--- ОТВЕТ НАЧИНАЕТСЯ ЗДЕСЬ ---`;
   }
@@ -10790,6 +10819,20 @@ app.get('/api/health', async (req, res) => {
       ? `https://lex.uz/search/nat?${new URLSearchParams({ Query: query, form_id: formId, status: 'Y', lang: '4' })}`
       : require('../rag/lex-live-search').buildLexSearchUrl(query)),
     parseSearch: (html) => require('../rag/lex-live-search').parseSearchCandidates(html),
+    reingest: (docs, report) => reingestDocuments(docs, {
+      fetchDoc: (url) => fetchLexDocument(url),
+      ingest: (url, opts) => require('../rag/ingest-lex').ingestFromUrl(url, opts),
+      report,
+    }),
+  });
+
+  const { createCorpusDemand, mountCorpusDemandRoutes } = require('../rag/corpus-demand');
+  const { LEX_REGISTRY } = require('../rag/lex-registry');
+  corpusDemand = createCorpusDemand({ pool, validCategories: Object.keys(LEX_REGISTRY) });
+  mountCorpusDemandRoutes(app, {
+    requireMasterAdmin,
+    pool,
+    demand: corpusDemand,
     reingest: (docs, report) => reingestDocuments(docs, {
       fetchDoc: (url) => fetchLexDocument(url),
       ingest: (url, opts) => require('../rag/ingest-lex').ingestFromUrl(url, opts),

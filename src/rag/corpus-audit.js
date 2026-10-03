@@ -254,12 +254,18 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
       // ?ingest=<doc_id>: (re)ingest one registry act from its registry URL -
       // for an act stored in another language (the Constitution was stored in
       // Russian) or not in the corpus at all (the LLC law).
+      // Several ids, comma-separated, run one after another (up to 10); the
+      // <...> of the instructions' placeholder is ignored (2026-10-03: the
+      // owner typed ?ingest=<mchj-qonun>).
       if (req.query.ingest && !(reingestJob && reingestJob.running)) {
-        const entry = getAllLaws().find(l => l.doc_id === String(req.query.ingest));
-        if (!entry) return res.status(404).json({ error: `no registry entry with doc_id ${req.query.ingest}` });
+        const ids = [...new Set(String(req.query.ingest).replace(/[<>\s]/gu, '').split(',').filter(Boolean))].slice(0, 10);
+        const all = getAllLaws();
+        const missing = ids.filter(id => !all.some(l => l.doc_id === id));
+        if (!ids.length || missing.length) return res.status(404).json({ error: `no registry entry with doc_id ${missing.join(', ') || '(empty)'}` });
+        const entries = ids.map(id => all.find(l => l.doc_id === id));
         reingestJob = { running: true, startedAt: new Date().toISOString(), results: [] };
         const job = reingestJob;
-        reingest([{ doc_id: entry.doc_id, law_name: entry.law_name, category: entry.category, source_url: entry.lex_url }], job.results)
+        reingest(entries.map(entry => ({ doc_id: entry.doc_id, law_name: entry.law_name, category: entry.category, source_url: entry.lex_url })), job.results)
           .catch((err) => { job.error = err.message; })
           .finally(() => { job.running = false; job.finishedAt = new Date().toISOString(); });
       } else if (req.query.reingest === '1' && !(reingestJob && reingestJob.running) && pending.length) {
@@ -276,7 +282,7 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
         documents: found.documents.map(({ doc_id, law_name, category, source_url, chunks, script }) => ({ doc_id, law_name, category, source_url, chunks, script })),
         reingest: reingestJob,
         pending: pending.map(d => `${d.law_name} (${d.doc_id})`),
-        howTo: 'Add ?reingest=1 to re-ingest the next Uzbek Cyrillic document from its Latin lex.uz URL (one per call); refresh until reingest.running is false, then call again. ?ingest=<doc_id> (re)ingests one registry act from its registry URL.',
+        howTo: 'Add ?reingest=1 to re-ingest the next Uzbek Cyrillic document from its Latin lex.uz URL (one per call); refresh until reingest.running is false, then call again. ?ingest=<doc_id> (re)ingests a registry act from its registry URL; ?ingest=id1,id2,... up to ten, one after another.',
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -284,4 +290,4 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
   });
 }
 
-module.exports = { textScript, latinLexUrl, titleMatch, checkRegistryEntry, findCandidates, corpusScripts, needsLatinReingest, mountCorpusAuditRoutes };
+module.exports = { AMENDING_OR_BILL, textScript, latinLexUrl, titleMatch, checkRegistryEntry, findCandidates, corpusScripts, needsLatinReingest, mountCorpusAuditRoutes };

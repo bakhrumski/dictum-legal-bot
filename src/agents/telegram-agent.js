@@ -488,6 +488,7 @@ TELEGRAM FORMATI (majburiy):
 - Javob 200 so'zdan oshmasin. Telegram — qisqa javob joyi.
 - Sarlavha, markdown jadval, "###" kabi belgilar ishlatmang.
 - Oddiy, tushunarli til. Har bir da'vo uchun modda raqamini ko'rsating.
+- Savolga bir nechta hujjat tegishli bo'lsa, kontekstdagi har birining normasini ko'rsating: yuridik kuchi yuqorisidan boshlab (Konstitutsiya, qonun/kodeks, Prezident hujjati, Vazirlar Mahkamasi qarori, vazirlik/idora hujjati, hokim qarori). Normalar farq qilsa, qaysi biri ustun ekanini aytib o'ting: yuridik kuchi yuqori hujjat ustun; bir darajada maxsus va keyingi norma ustun.
 - Har bir qo'llanayotgan normani shu gapning o'zida (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) shaklida yozing (rus tilidagi javobda esa: **Полное название на русском (ЗРУ/ПП/УП/ПКМ-номер), статья N, часть первая/вторая…**). Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. Hujjat raqamini faqat Lex.uz konteksti tasdiqlasa yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang; interfeys har bir tasdiqlangan hujjat eslatmasini Lex.uz havolasiga aylantiradi.
 - Agar KONTEKSTda javob yo'q bo'lsa — buni ochiq ayting, taxmin qilmang.` },
   ];

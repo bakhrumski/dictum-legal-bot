@@ -148,7 +148,8 @@ const RU = '1-статья. Цели трудового законодатель
       const reingested = [];
       mountCorpusAuditRoutes(app, {
         requireMasterAdmin: () => {}, pool,
-        getAllLaws: () => [{ doc_id: 'konstitutsiya', law_name: "O'zbekiston Respublikasi Konstitutsiyasi", category: 'konstitutsiya', lex_url: 'https://lex.uz/docs/-6445145' }],
+        getAllLaws: () => [{ doc_id: 'konstitutsiya', law_name: "O'zbekiston Respublikasi Konstitutsiyasi", category: 'konstitutsiya', lex_url: 'https://lex.uz/docs/-6445145' },
+          { doc_id: 'mchj-qonun', law_name: "Mas'uliyati cheklangan jamiyatlar to'g'risida", category: 'tadbirkorlik', lex_url: 'https://lex.uz/docs/-8151376' }],
         fetchDoc: async () => ({}),
         reingest: async (docs, report) => { reingested.push(...docs); report.push({ status: 'done' }); },
       });
@@ -178,6 +179,14 @@ const RU = '1-статья. Цели трудового законодатель
         assert.ok(r.reingest && r.reingest.running !== undefined);
         const missing = await call('/api/admin/corpus/script', { ingest: 'no-such-act' });
         assert.match(missing.error || '', /no registry entry/u);
+      });
+      await test('?ingest=a,b runs several in one go; the placeholder\'s <...> is ignored', async () => {
+        reingested.length = 0;
+        await call('/api/admin/corpus/script', { ingest: '<mchj-qonun>, konstitutsiya' });
+        await new Promise(r => setTimeout(r, 50));
+        assert.deepStrictEqual(reingested.map(d => d.doc_id), ['mchj-qonun', 'konstitutsiya']);
+        const partly = await call('/api/admin/corpus/script', { ingest: 'mchj-qonun,nope' });
+        assert.match(partly.error || '', /no registry entry with doc_id nope/u, 'nothing starts when one id is unknown');
       });
     } finally {
       if (ids.length) await pool.query('DELETE FROM legal_chunks WHERE id = ANY($1::int[])', [ids]);
