@@ -1,5 +1,7 @@
 'use strict';
 
+const usageLedger = require('../ai/usage-ledger');
+
 // Vision OCR deadline (audit H3); on timeout the next provider is tried.
 const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS) || 90000;
 
@@ -68,6 +70,12 @@ const VISION_PROMPT = (langHint) =>
  * Accepts images (JPEG/PNG/WebP) and PDFs (Gemini reads PDFs directly).
  */
 async function callVisionOCR(buf, mimeType, langCode) {
+  return usageLedger.withChain(() => callVisionOCRChain(buf, mimeType, langCode));
+}
+
+// Each provider attempt is a usage-ledger row (stage 'ocr'); a failed attempt
+// is recorded and the chain falls through as before.
+async function callVisionOCRChain(buf, mimeType, langCode) {
   const geminiKey = process.env.GEMINI_API_KEY;
   const gptKey = process.env.GPT_API_KEY;
   const prompt = VISION_PROMPT(LANG_HINTS[langCode] || '');
@@ -79,10 +87,14 @@ async function callVisionOCR(buf, mimeType, langCode) {
   // chain below, which is unchanged.
   if (voicelab.routes('vision') && /^image\//i.test(mimeType || '')) {
     try {
-      const r = await voicelab.chatCompletion('vision', [{ role: 'user', content: [
-        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
-        { type: 'text', text: prompt },
-      ]}], { temperature: 0.1, maxTokens: 4096 });
+      const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, stage: 'ocr' }, async (call) => {
+        const res = await voicelab.chatCompletion('vision', [{ role: 'user', content: [
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
+          { type: 'text', text: prompt },
+        ]}], { temperature: 0.1, maxTokens: 4096 });
+        call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
+        return res;
+      });
       const text = (r.text || '').trim();
       if (text) return { text, provider: `VoiceLab ${r.model}` };
     } catch (e) {
@@ -100,20 +112,23 @@ async function callVisionOCR(buf, mimeType, langCode) {
         ]}],
         generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
       };
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
-      );
-      if (resp.ok) {
+      const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr' }, async (call) => {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
+        );
+        if (!resp.ok) {
+          const err = await resp.text().catch(() => '');
+          throw Object.assign(new Error(`Gemini Vision HTTP ${resp.status}: ${err.substring(0, 200)}`), { status: resp.status });
+        }
         const data = await resp.json();
+        call.usage({ ...usageLedger.usageFromGemini(data.usageMetadata), modelReturned: data.modelVersion || null });
         const parts = data.candidates?.[0]?.content?.parts || [];
-        const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
-        if (text) return { text, provider: 'Gemini Vision' };
-        console.warn('[OCR] Gemini Vision returned empty text, trying fallback');
-      } else {
-        const err = await resp.text().catch(() => '');
-        console.warn('[OCR] Gemini Vision HTTP', resp.status, err.substring(0, 200));
-      }
+        const out = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
+        if (!out) throw new Error('Gemini Vision returned empty text');
+        return out;
+      });
+      if (text) return { text, provider: 'Gemini Vision' };
     } catch (e) {
       console.warn('[OCR] Gemini Vision error:', e.message);
     }
@@ -131,17 +146,22 @@ async function callVisionOCR(buf, mimeType, langCode) {
         max_tokens: 4096,
         temperature: 0.1,
       };
-      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-        signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gptKey}` },
-        body: JSON.stringify(body),
-      });
-      if (resp.ok) {
+      const text = await usageLedger.track({ provider: 'openai', model: body.model, stage: 'ocr' }, async (call) => {
+        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+          signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gptKey}` },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) throw Object.assign(new Error(`OpenAI vision HTTP ${resp.status}`), { status: resp.status });
         const data = await resp.json();
-        const text = (data.choices?.[0]?.message?.content || '').trim();
-        if (text) return { text, provider: 'GPT-4o Vision' };
-      }
+        call.usage({ ...usageLedger.usageFromOpenAI(data.usage), modelReturned: data.model || null });
+        const out = (data.choices?.[0]?.message?.content || '').trim();
+        if (!out) throw new Error('OpenAI vision returned empty text');
+        return out;
+      });
+      // the label now names the model that served it, not a fixed "GPT-4o"
+      if (text) return { text, provider: `OpenAI Vision (${body.model})` };
     } catch (e) {
       console.warn('[OCR] GPT-4o Vision error:', e.message);
     }

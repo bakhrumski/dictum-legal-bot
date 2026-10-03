@@ -78,4 +78,90 @@ function calculateTokenCost(model, { inTokens = 0, outTokens = 0, cachedTokens =
     + (output / 1e6) * pricing.out;
 }
 
-module.exports = { MODEL_PRICING, calculateTokenCost };
+// ── Where each price comes from (2026-10-03) ─────────────────────────────────
+// A row's cost is stored with a snapshot of the price it was computed from, so
+// a later price change never rewrites an old request's cost. Prices are USD
+// per 1M tokens; "confirmation" says who stands behind the number.
+const PRICING_SOURCES = Object.freeze({
+  openai_2026_08_11: { source: 'https://developers.openai.com/api/docs/models/compare', effectiveFrom: null, checkedAt: '2026-08-11', confirmation: 'official_list' },
+  openai_2026_09_23: { source: 'OpenAI pricing page, Standard processing, short context', effectiveFrom: null, checkedAt: '2026-09-23', confirmation: 'official_list' },
+  gemini_2026_08_11: { source: 'https://ai.google.dev/gemini-api/docs/pricing (paid tier; the free tier bills $0)', effectiveFrom: null, checkedAt: '2026-08-11', confirmation: 'official_list' },
+  voicelab_2026_09_23: { source: 'VoiceLab console list prices', effectiveFrom: null, checkedAt: '2026-09-23', confirmation: 'provider_console' },
+});
+
+const PRICE_SOURCE_OF = Object.freeze({
+  'gpt-5.6-sol': 'openai_2026_08_11', 'gpt-5.6': 'openai_2026_08_11', 'gpt-5.6-terra': 'openai_2026_08_11', 'gpt-5.6-luna': 'openai_2026_08_11',
+  'gemini-2.5-flash': 'gemini_2026_08_11',
+  'gpt-6-astra': 'openai_2026_09_23', 'gpt-6-sol': 'openai_2026_09_23', 'gpt-6-luna': 'openai_2026_09_23',
+  'text-embedding-3-small': 'openai_2026_08_11',
+  'voicelab/aisha-comet': 'voicelab_2026_09_23', 'voicelab/aisha-orbit': 'voicelab_2026_09_23', 'voicelab/aisha-halo': 'voicelab_2026_09_23',
+});
+
+/**
+ * VoiceLab credits -> USD at the owner's purchase: 1,200,000 credits for $90
+ * (confirmed 2026-10-03), $0.000075 a credit. This converts credits the
+ * provider REPORTS; how many credits a model, STT or TTS call uses is not
+ * assumed here. VOICELAB_CREDIT_USD overrides it after a new purchase.
+ */
+const VOICELAB_CREDIT = Object.freeze({
+  usdPerCredit: 90 / 1200000,
+  source: 'owner-confirmed purchase: 1,200,000 credits = $90',
+  checkedAt: '2026-10-03',
+  confirmation: 'owner_confirmed',
+});
+
+function voicelabCreditUsd() {
+  const override = Number(process.env.VOICELAB_CREDIT_USD);
+  return Number.isFinite(override) && override > 0
+    ? { ...VOICELAB_CREDIT, usdPerCredit: override, source: 'VOICELAB_CREDIT_USD', confirmation: 'env_override' }
+    : VOICELAB_CREDIT;
+}
+
+/** The price a token cost is computed from, as stored with the row, or null. */
+function pricingSnapshot(model) {
+  const key = String(model || '').toLowerCase();
+  const override = voicelabPricing(model);
+  const table = MODEL_PRICING[key];
+  const price = override || table;
+  if (!price) return null;
+  const meta = override
+    ? { source: 'VOICELAB_PRICES', effectiveFrom: null, checkedAt: null, confirmation: 'env_override' }
+    : (PRICING_SOURCES[PRICE_SOURCE_OF[key]] || { source: null, effectiveFrom: null, checkedAt: null, confirmation: 'unknown' });
+  return {
+    model: key, unit: 'USD per 1M tokens', currency: 'USD',
+    in: price.in, out: price.out, cached: price.cached == null ? null : price.cached,
+    ...meta,
+  };
+}
+
+/**
+ * The cost of one recorded call and where it came from:
+ *   provider_reported — the provider returned the cost;
+ *   calculated        — provider-reported usage (tokens, or VoiceLab credits)
+ *                       times a price with a known source;
+ *   estimated         — usage itself was estimated (e.g. characters / 4);
+ *   unknown           — no usage, or no price: cost_usd stays null, never $0.
+ * Token rules: cached input is part of input (billed at the cached rate);
+ * reasoning tokens are part of output and are not added again.
+ */
+function costForUsage(model, usage = {}) {
+  const u = usage || {};
+  if (Number.isFinite(Number(u.providerCostUsd)) && u.providerCostUsd !== null && u.providerCostUsd !== undefined) {
+    return { costUsd: Number(u.providerCostUsd), costSource: 'provider_reported', snapshot: { basis: 'provider-reported cost', currency: 'USD' } };
+  }
+  if (Number.isFinite(Number(u.credits)) && u.credits !== null && u.credits !== undefined) {
+    const rate = voicelabCreditUsd();
+    return {
+      costUsd: Number(u.credits) * rate.usdPerCredit,
+      costSource: 'calculated',
+      snapshot: { basis: 'provider-reported VoiceLab credits x credit rate', unit: 'USD per credit', currency: 'USD', usdPerCredit: rate.usdPerCredit, source: rate.source, checkedAt: rate.checkedAt, confirmation: rate.confirmation },
+    };
+  }
+  const hasTokens = (u.inTokens != null && Number(u.inTokens) > 0) || (u.outTokens != null && Number(u.outTokens) > 0);
+  const snapshot = pricingSnapshot(model);
+  if (!hasTokens || !snapshot) return { costUsd: null, costSource: 'unknown', snapshot: snapshot || null };
+  const costUsd = calculateTokenCost(model, { inTokens: u.inTokens, outTokens: u.outTokens, cachedTokens: u.cachedTokens });
+  return { costUsd, costSource: u.estimated ? 'estimated' : 'calculated', snapshot };
+}
+
+module.exports = { MODEL_PRICING, PRICING_SOURCES, VOICELAB_CREDIT, calculateTokenCost, pricingSnapshot, costForUsage, voicelabCreditUsd };

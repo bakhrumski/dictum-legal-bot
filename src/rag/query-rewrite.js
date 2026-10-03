@@ -70,7 +70,7 @@ async function rewriteLegalQuery(question, callLLM, { timeoutMs = 8000, log = co
   let timer;
   try {
     const reply = await Promise.race([
-      callLLM(buildRewriteMessages(key), { maxTokens: 600, temperature: 0 }),
+      callLLM(buildRewriteMessages(key), { maxTokens: 600, temperature: 0, endpoint: '/rag/query-rewrite' }),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('rewrite timeout')), timeoutMs); }),
     ]);
     const text = cleanRewrite(reply, key);

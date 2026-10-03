@@ -11,6 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const telegramEconomy = require('../services/telegram-economy');
 const { isStaffRole, isMasterRole, roleLabel, getLinkedAccount, chatRoute, dashboardUrl } = require('./telegram-roles');
+const usageLedger = require('../ai/usage-ledger');
 
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
 const {
@@ -459,7 +460,12 @@ bot.onText(/\/me/, async (msg) => {
 
 // ========== CALLBACK QUERY HANDLER (Respond to request) ==========
 
-bot.on('callback_query', async (callbackQuery) => {
+bot.on('callback_query', (callbackQuery) => usageLedger.runWithRequest(
+  { service: 'telegram', chatId: callbackQuery.message && callbackQuery.message.chat && callbackQuery.message.chat.id, kind: 'callback' },
+  (store) => handleCallbackQuery(callbackQuery)
+    .finally(() => usageLedger.finishRequest(store).catch(() => {}))));
+
+async function handleCallbackQuery(callbackQuery) {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
 
@@ -693,7 +699,7 @@ bot.on('callback_query', async (callbackQuery) => {
       bot.answerCallbackQuery(callbackQuery.id, { text: 'Xatolik yuz berdi!' });
     }
   }
-});
+}
 
 // ========== START & HELP COMMANDS ==========
 
@@ -1098,7 +1104,21 @@ async function sendVoiceReply(chatId, text) {
   }
 }
 
-bot.on('message', async (msg) => {
+// Each Telegram message is one usage-ledger request: every AI call it makes
+// (intent, retrieval, answer, checks, STT, TTS) shares its request_id.
+bot.on('message', (msg) => usageLedger.runWithRequest(
+  { service: 'telegram', chatId: msg.chat && msg.chat.id, kind: telegramMessageKind(msg) },
+  (store) => handleTelegramMessage(msg)
+    .finally(() => usageLedger.finishRequest(store).catch(() => {}))));
+
+function telegramMessageKind(msg = {}) {
+  if (msg.voice) return 'voice';
+  if (msg.document || msg.photo || msg.video || msg.video_note) return 'file';
+  if (msg.successful_payment) return 'payment';
+  return 'text';
+}
+
+async function handleTelegramMessage(msg) {
   const chatId = msg.chat.id;
   const username = msg.from.username || `user_${msg.from.id}`;
   const firstName = msg.from.first_name || 'Foydalanuvchi';
@@ -1581,6 +1601,22 @@ bot.on('message', async (msg) => {
     }
   }
 
+  // What the request ended as, for the admin usage view (no text, no prompt).
+  if (agentResult) {
+    const m = agentResult.meta || {};
+    usageLedger.annotate({
+      outcome: agentResult.action || null,
+      legalCheck: (m.confidence || m.lexCrossCheck || m.claimGuard) ? {
+        confidence: m.confidence || null,
+        escalate: !!agentResult.escalate,
+        lexCrossCheck: m.lexCrossCheck ? m.lexCrossCheck.status : null,
+        claimGuard: m.claimGuard ? m.claimGuard.status : null,
+        citationCheck: m.citationCheck || null,
+        delivered: agentReplyDelivered,
+      } : null,
+    });
+  }
+
   // Conversational turns (greetings, clarifying questions, off-topic replies)
   // are not legal requests — they must not create dashboard rows or the queue
   // fills with "salom".
@@ -1697,7 +1733,7 @@ Dashboard: ${dashboardUrl()}
       bot.sendMessage(chatId, `Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n\n(${error.message})`);
     }
   }
-});
+}
 
 /**
  * Save a request.
