@@ -87,7 +87,9 @@ Known state of the suites (Sept 2026):
   transcoded to OGG/Opus with `ffmpeg-static` so Telegram shows a voice
   bubble, else sent as WAV audio. Master-only checks:
   `/api/admin/voicelab/voices?language=uz`, `/api/admin/voicelab/tts?text=…`.
-- Telegram: a linked admin's own messages are never treated as questions.
+- Telegram: a linked staff account's own messages (role master, lawyer or
+  student — `src/bot/telegram-roles.js`) are never treated as questions. A
+  linked customer (role `user`) or an unknown role is an ordinary user.
   `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
   chat so the owner can try the bot, voice included, from his own account.
 - `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
