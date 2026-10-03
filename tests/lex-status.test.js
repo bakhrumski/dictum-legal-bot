@@ -78,12 +78,15 @@ const page = ({ banner = '', title = 'Qonun', link = '' }) => `<html><body>
     const html = `<html><body>
       <div class="nav"><a href="/x">Bosh sahifa</a></div>
       <div class="alert-danger" style="background:#c00"><span>Ushbu hujjatga o‘zgartirish kiritilishi kutilmoqda</span></div>
+      <div class="docNavbar__item"><a class="search-toggle">77-modda. Jamoa shartnomasiga oʻzgartish va qoʻshimchalar kiritish</a></div>
+      <div class="docHeader__item"><span class="docHeader__item-label">Кучга кириш санаси</span></div>
+      <ul class="dropdown-menu"><li>Ўзгартиришлар манбаси</li></ul>
       <div class="ACT_TITLE"><a id="t">Mehnat kodeksi</a></div>
       <div id="divCont"><div class="lx_elem ACT_TEXT"><a id="p1">5-modda. Ushbu moddaga o‘zgartirish kiritilgan.</a></div></div>
     </body></html>`;
     const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/-1');
     assert.strictEqual(metadata.is_active, true);
-    assert.strictEqual(metadata.header_notices.length, 1, JSON.stringify(metadata.header_notices));
+    assert.strictEqual(metadata.header_notices.length, 1, `the table of contents, menus and labels are not notices: ${JSON.stringify(metadata.header_notices)}`);
     assert.strictEqual(metadata.header_notices[0].text, 'Ushbu hujjatga o‘zgartirish kiritilishi kutilmoqda');
     assert.match(metadata.header_notices[0].hints, /\.alert-danger \[background:#c00\]/u);
     assert.deepStrictEqual(parseLexHtml(page({}), 'https://lex.uz/docs/-1').metadata.header_notices, []);
@@ -101,6 +104,18 @@ const page = ({ banner = '', title = 'Qonun', link = '' }) => `<html><body>
       ['O‘zgartirish kutilmoqda', 1, ['A (a)']],
       ['Menyu: o‘zgartirishlar', 2, ['A (a)', 'B (b)']],
     ]);
+  });
+
+  await test('re-ingest skips a page the caller does not accept (another act at a registry URL)', async () => {
+    const report = [];
+    let ingested = 0;
+    await reingestDocuments([{ doc_id: 'a', law_name: 'A', category: 'mehnat', source_url: 'https://lex.uz/docs/-1' }], {
+      fetchDoc: async () => ({ title: 'B', body: 'x', metadata: { is_active: true } }),
+      ingest: async () => { ingested++; return 5; },
+      accept: () => 'the page is another act',
+      report, pauseMs: 0,
+    });
+    assert.deepStrictEqual([ingested, report[0].status, report[0].reason], [0, 'skipped', 'the page is another act']);
   });
 
   await test('re-ingest refuses an old edition whose current version was not reached', async () => {

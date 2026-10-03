@@ -151,6 +151,10 @@ function collectHeaderNotices($, $scope) {
     if (text.length < 12 || text.length > 400 || !NOTICE_WORDS.test(text)) return undefined;
     // the innermost element only: skip one whose child holds the same words
     if ($el.children().toArray().some(c => NOTICE_WORDS.test($(c).text()))) return undefined;
+    // The page's table of contents, menus and header labels name articles
+    // and fields ("77-modda. ...o'zgartish kiritish", "Кучга кириш санаси"),
+    // not the act's status (first weekly run, 2026-10-03: 59 of 59 texts).
+    if ($el.closest('[class*="docNavbar"], [class*="docNabvar"], .dropdown-menu, .search-toggle, [class*="item-label"]').length) return undefined;
     if (seen.has(text)) return undefined;
     seen.add(text);
     const hints = [];
