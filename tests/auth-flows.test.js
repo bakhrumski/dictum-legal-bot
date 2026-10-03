@@ -43,6 +43,36 @@ async function test(name, fn) {
     assert.ok(/10 \* 60 \* 1000/.test(cb));
   });
 
+  // 2026-10-03: users could not sign in with Google.
+  await test('Google sign-in starts on the host Google returns to, so the session holding the state is there', () => {
+    const { canonicalAuthRedirect, oauthRedirectUri } = require('../src/auth/oauth-host');
+    const env = { APP_URL: 'https://juristai.uz' };
+    assert.strictEqual(oauthRedirectUri(env), 'https://juristai.uz/auth/google/callback');
+    assert.strictEqual(canonicalAuthRedirect({ host: 'www.juristai.uz', originalUrl: '/auth/google?mode=register' }, env), 'https://juristai.uz/auth/google?mode=register');
+    assert.strictEqual(canonicalAuthRedirect({ host: 'dictum.onrender.com', originalUrl: '/auth/google' }, env), 'https://juristai.uz/auth/google');
+    assert.strictEqual(canonicalAuthRedirect({ host: 'juristai.uz', originalUrl: '/auth/google' }, env), null, 'already there: no loop');
+    assert.strictEqual(canonicalAuthRedirect({ host: 'evil.example', originalUrl: '/somewhere-else' }, env), null, 'only the sign-in path is carried');
+    assert.strictEqual(oauthRedirectUri({ RENDER_EXTERNAL_HOSTNAME: 'dictum.onrender.com' }), 'https://dictum.onrender.com/auth/google/callback');
+    const start = between("app.get('/auth/google', ", "\n});");
+    assert.ok(start.indexOf('canonicalAuthRedirect') < start.indexOf('req.session.googleOAuth'), 'the host move comes before the state is stored');
+  });
+
+  await test('every Google failure is logged with its reason and shown on the login page', () => {
+    const cb = between("app.get('/auth/google/callback'", "\n});");
+    for (const reason of ['no code', 'state check failed', 'token exchange failed', 'profile without id', 'new account refused']) {
+      assert.ok(cb.includes(reason), reason);
+    }
+    const login = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
+    for (const code of ['google_failed', 'google_cancelled', 'sinov_used']) assert.ok(new RegExp(`${code}:`).test(login), code);
+    assert.ok(/box\.classList\.add\('show'\)/.test(login), 'the message is made visible (.error-message is display:none without .show)');
+  });
+
+  await test('an existing account signs in through the Telegram code whatever its trial state', () => {
+    const route = between("const existing = await pool.query('SELECT id, bepul_used, role, full_name FROM admins WHERE telegram_user_id = $1'", "// Sinov abuse: same device fingerprint");
+    assert.ok(!/bepul_used\) return res\.status\(409\)/.test(route), 'the owner of a used trial is not refused');
+    assert.ok(/req\.session\.isAuthenticated = true/.test(route));
+  });
+
   await test('S5: recovery codes lock after five wrong tries', () => {
     assert.ok(/const RECOVERY_MAX_TRIES = 5;/.test(server));
     const verify = between("app.post('/api/password-recovery/verify'", "\n});");

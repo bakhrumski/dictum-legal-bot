@@ -665,6 +665,12 @@
             const params = new URLSearchParams(window.location.search);
             const recoverToken = params.get('recover');
             const err = params.get('error');
+            const GOOGLE_LOGIN_ERRORS = {
+                google_failed: 'Google orqali kirishda xatolik yuz berdi. Qaytadan urinib ko\'ring.',
+                google_cancelled: 'Google orqali kirish bekor qilindi.',
+                // a NEW account refused on a device whose trial was already used
+                sinov_used: 'Bu qurilmada Sinov tarifi boshqa hisobda allaqachon ishlatilgan, shuning uchun yangi hisob ochilmadi. Avvalgi hisobingiz bilan kiring yoki yordam uchun murojaat qiling.',
+            };
             if (params.get('register') === '1') showView('register');
             if (recoverToken) {
                 recoveryToken = recoverToken;
@@ -675,10 +681,16 @@
             }
             if (err === 'google_account_not_found') {
                 showView('recovery');
-                document.getElementById('recoveryError').textContent = 'Bu Google hisobi bilan ro\'yxatdan o\'tilmagan.';
-            } else if (err === 'google_failed') {
-                document.getElementById('loginError') && (document.getElementById('loginError').textContent = 'Google orqali kirishda xatolik yuz berdi.');
+                const box = document.getElementById('recoveryError');
+                box.textContent = 'Bu Google hisobi bilan ro\'yxatdan o\'tilmagan.';
+                box.classList.add('show');
+            } else if (GOOGLE_LOGIN_ERRORS[err]) {
+                // .error-message is hidden until it has .show; setting only the
+                // text left every Google error invisible.
+                const box = document.getElementById('loginError');
+                if (box) { box.textContent = GOOGLE_LOGIN_ERRORS[err]; box.classList.add('show'); }
             }
+            if (err) history.replaceState({}, '', '/login.html');
         })();
 
         // Password recovery state

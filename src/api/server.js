@@ -50,6 +50,7 @@ const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywo
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 const usageLedger = require('../ai/usage-ledger');
+const { oauthRedirectUri, canonicalAuthRedirect } = require('../auth/oauth-host');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { legalForceOf, legalForceLabel, sortByLegalForce } = require('../rag/legal-force');
 // Acts an answer's live lex.uz check found that the corpus lacks go to the
@@ -9420,8 +9421,9 @@ app.post('/api/register/telegram-otp', async (req, res) => {
     // Sinov abuse: same Telegram user_id
     const existing = await pool.query('SELECT id, bepul_used, role, full_name FROM admins WHERE telegram_user_id = $1', [tgUserId]);
     if (existing.rows.length > 0) {
-      if (existing.rows[0].bepul_used) return res.status(409).json({ error: 'sinov_used' });
-      // Account exists but trial not used — just log them in
+      // The account exists: log its owner in. The trial limit stops a SECOND
+      // account, never the owner of the first one (2026-10-03: a user whose
+      // trial had ended could no longer sign in at all).
       const u = existing.rows[0];
       req.session.isAuthenticated = true;
       req.session.role = u.role;
@@ -9478,6 +9480,10 @@ app.post('/api/register/telegram-otp', async (req, res) => {
 app.get('/auth/google', (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return res.status(503).send('Google OAuth not configured');
+  // Start on the host Google will return to, or the session that holds the
+  // state is not there on the way back (src/auth/oauth-host.js).
+  const sameHost = canonicalAuthRedirect({ host: req.get('host'), originalUrl: req.originalUrl });
+  if (sameHost) return res.redirect(302, sameHost);
   const mode = ['login', 'register', 'recover'].includes(req.query.mode) ? req.query.mode : 'login';
   // A random one-time state bound to this browser session (Astra audit S4).
   // It used to be the mode and a timestamp in base64: anyone could forge it,
@@ -9485,7 +9491,7 @@ app.get('/auth/google', (req, res) => {
   // browser (login CSRF).
   const state = crypto.randomBytes(24).toString('hex');
   req.session.googleOAuth = { state, mode, ts: Date.now() };
-  const redirectUri = `${process.env.APP_URL || 'https://' + (process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:3000')}/auth/google/callback`;
+  const redirectUri = oauthRedirectUri();
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -9500,18 +9506,24 @@ app.get('/auth/google', (req, res) => {
 
 app.get('/auth/google/callback', async (req, res) => {
   const { code, state } = req.query;
-  if (!code) return res.redirect('/login.html?error=google_failed');
+  // Each failure says why in the log (no code, token or e-mail is logged), so
+  // a "Google bilan kira olmayapman" report can be traced.
+  if (!code) {
+    console.warn(`[Google OAuth] no code (${String(req.query.error || 'none').slice(0, 40)}) host=${req.get('host')}`);
+    return res.redirect(req.query.error === 'access_denied' ? '/login.html?error=google_cancelled' : '/login.html?error=google_failed');
+  }
   const expected = req.session && req.session.googleOAuth;
   if (req.session) delete req.session.googleOAuth;          // one use only
   if (!expected || typeof state !== 'string' || state.length !== expected.state.length
       || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected.state))
       || Date.now() - expected.ts > 10 * 60 * 1000) {
+    console.warn(`[Google OAuth] state check failed: ${!expected ? 'no state in this session (host or cookie mismatch)' : 'state mismatch or expired'} host=${req.get('host')}`);
     return res.redirect('/login.html?error=google_failed');
   }
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = `${process.env.APP_URL || 'https://' + (process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:3000')}/auth/google/callback`;
+    const redirectUri = oauthRedirectUri();
 
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       signal: AbortSignal.timeout(15000),
@@ -9520,7 +9532,10 @@ app.get('/auth/google/callback', async (req, res) => {
       body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) return res.redirect('/login.html?error=google_failed');
+    if (!tokenData.access_token) {
+      console.warn(`[Google OAuth] token exchange failed: ${String(tokenData.error || tokenRes.status).slice(0, 60)} (redirect_uri ${redirectUri})`);
+      return res.redirect('/login.html?error=google_failed');
+    }
 
     const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       signal: AbortSignal.timeout(15000),
@@ -9528,7 +9543,10 @@ app.get('/auth/google/callback', async (req, res) => {
     });
     const profile = await userRes.json();
     const { sub: googleId, email, name, given_name, family_name } = profile;
-    if (!googleId || !email) return res.redirect('/login.html?error=google_failed');
+    if (!googleId || !email) {
+      console.warn('[Google OAuth] profile without id or e-mail');
+      return res.redirect('/login.html?error=google_failed');
+    }
 
     const mode = expected.mode || 'login';
 
@@ -9549,7 +9567,10 @@ app.get('/auth/google/callback', async (req, res) => {
         `SELECT id FROM admins WHERE (google_id = $1 OR (email = $2 AND email IS NOT NULL)) AND bepul_used = TRUE`,
         [googleId, email]
       );
-      if (abuseCheck.rows.length > 0) return res.redirect('/login.html?error=sinov_used');
+      if (abuseCheck.rows.length > 0) {
+        console.warn('[Google OAuth] new account refused: this Google account already used the trial');
+        return res.redirect('/login.html?error=sinov_used');
+      }
 
       // ── Strict Sinov abuse: block by device fingerprint (cross-account detection) ──
       const gDfp = typeof req.cookies?.dfp === 'string' ? req.cookies.dfp.slice(0, 64) : null;
@@ -9558,7 +9579,10 @@ app.get('/auth/google/callback', async (req, res) => {
           'SELECT id FROM admins WHERE device_fingerprint = $1 AND bepul_used = TRUE',
           [gDfp]
         );
-        if (fpAbuse.rows.length > 0) return res.redirect('/login.html?error=sinov_used');
+        if (fpAbuse.rows.length > 0) {
+          console.warn('[Google OAuth] new account refused: another account on this device already used the trial');
+          return res.redirect('/login.html?error=sinov_used');
+        }
       }
 
       const randomPwd = await bcrypt.hash(require('crypto').randomBytes(24).toString('hex'), 10);
