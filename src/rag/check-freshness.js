@@ -108,7 +108,8 @@ async function checkDocument(doc, fetchDoc = fetchLexDocument) {
     }
 
     log.debug('Document still active', { doc_id, law_name });
-    return { doc_id, law_name, status: 'active' };
+    const notices = (fetched && fetched.metadata && fetched.metadata.header_notices) || [];
+    return { doc_id, law_name, status: 'active', ...(notices.length ? { notices } : {}) };
 
   } catch (err) {
     log.warn('Fetch failed', { doc_id, law_name, source_url, err: err.message });
@@ -152,6 +153,7 @@ async function runFreshnessCheck({ db = pool, fetchDoc = fetchLexDocument, apply
   job.expired = expired;
   job.oldEditions = job.results.filter(r => r.status === 'old_edition');
   job.errors = job.results.filter(r => r.status === 'fetch_error');
+  job.notices = groupNotices(job.results);
   if (expired.length && apply && expired.length <= maxAuto) {
     await applyExpired(expired, db);
     job.applied = expired.map(r => r.doc_id);
@@ -159,6 +161,23 @@ async function runFreshnessCheck({ db = pool, fetchDoc = fetchLexDocument, apply
     job.held = `${expired.length} documents read as repealed (more than ${maxAuto}); review and apply with ?apply=1`;
   }
   return job;
+}
+
+/**
+ * Notice texts across the run, most specific first: a text on (almost) every
+ * page is site furniture, one on a few pages is likely about those acts.
+ */
+function groupNotices(results = []) {
+  const byText = new Map();
+  for (const r of results) {
+    for (const n of r.notices || []) {
+      const g = byText.get(n.text) || { text: n.text, hints: n.hints, docs: 0, examples: [] };
+      g.docs++;
+      if (g.examples.length < 5) g.examples.push(`${r.law_name} (${r.doc_id})`);
+      byText.set(n.text, g);
+    }
+  }
+  return [...byText.values()].sort((a, b) => a.docs - b.docs);
 }
 
 async function applyExpired(expired, db = pool) {
@@ -206,6 +225,9 @@ function mountFreshnessRoutes(app, { requireMasterAdmin, db = pool, fetchDoc = f
         expired: (job && job.expired) || [],
         oldEditions: (job && job.oldEditions) || [],
         errors: (job && job.errors) || [],
+        // Recorded only: texts at the top of the pages that speak of a change
+        // (to learn the wording of lex.uz's pending-amendment notice).
+        notices: (job && job.notices) || [],
         howTo: 'Every corpus document is re-opened on lex.uz. Acts marked "Hujjat kuchini yoʻqotgan" are taken out of search; more than 3 at once are only reported until ?apply=1. ?start=1 runs it now (several minutes); it also runs every Sunday at 03:00 Tashkent time.',
       });
     } catch (err) {
@@ -315,4 +337,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkDocument, lexStatus, runFreshnessCheck, mountFreshnessRoutes, msUntilNextSunday };
+module.exports = { checkDocument, lexStatus, runFreshnessCheck, mountFreshnessRoutes, msUntilNextSunday, groupNotices };

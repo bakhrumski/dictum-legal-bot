@@ -74,6 +74,35 @@ const page = ({ banner = '', title = 'Qonun', link = '' }) => `<html><body>
     assert.strictEqual(at('2026-10-03T22:00:00Z'), '2026-10-10T22:00:00.000Z');
   });
 
+  await test('notices about a change at the top of the page are recorded, not acted on', () => {
+    const html = `<html><body>
+      <div class="nav"><a href="/x">Bosh sahifa</a></div>
+      <div class="alert-danger" style="background:#c00"><span>Ushbu hujjatga o‘zgartirish kiritilishi kutilmoqda</span></div>
+      <div class="ACT_TITLE"><a id="t">Mehnat kodeksi</a></div>
+      <div id="divCont"><div class="lx_elem ACT_TEXT"><a id="p1">5-modda. Ushbu moddaga o‘zgartirish kiritilgan.</a></div></div>
+    </body></html>`;
+    const { metadata } = parseLexHtml(html, 'https://lex.uz/docs/-1');
+    assert.strictEqual(metadata.is_active, true);
+    assert.strictEqual(metadata.header_notices.length, 1, JSON.stringify(metadata.header_notices));
+    assert.strictEqual(metadata.header_notices[0].text, 'Ushbu hujjatga o‘zgartirish kiritilishi kutilmoqda');
+    assert.match(metadata.header_notices[0].hints, /\.alert-danger \[background:#c00\]/u);
+    assert.deepStrictEqual(parseLexHtml(page({}), 'https://lex.uz/docs/-1').metadata.header_notices, []);
+  });
+
+  await test('the weekly report groups notice texts, rarest first', () => {
+    const { groupNotices } = require('../src/rag/check-freshness');
+    const n = (text) => ({ text, hints: '' });
+    const groups = groupNotices([
+      { doc_id: 'a', law_name: 'A', notices: [n('Menyu: o‘zgartirishlar'), n('O‘zgartirish kutilmoqda')] },
+      { doc_id: 'b', law_name: 'B', notices: [n('Menyu: o‘zgartirishlar')] },
+      { doc_id: 'c', law_name: 'C' },
+    ]);
+    assert.deepStrictEqual(groups.map(g => [g.text, g.docs, g.examples]), [
+      ['O‘zgartirish kutilmoqda', 1, ['A (a)']],
+      ['Menyu: o‘zgartirishlar', 2, ['A (a)', 'B (b)']],
+    ]);
+  });
+
   await test('re-ingest refuses an old edition whose current version was not reached', async () => {
     const report = [];
     let ingested = 0;
