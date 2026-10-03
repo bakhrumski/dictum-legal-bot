@@ -12,6 +12,7 @@ const { searchKorpus, formatKorpusGroundTruth } = require('../rag/qa-korpus');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
+const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { hydrateMentionedOfficialActChunks } = require('../rag/official-citation-hydrator');
 const { appendRepealedNotice } = require('../rag/superseded-acts');
 const { hydrateLexAnchors } = require('../rag/lex-anchor-resolver');
@@ -378,10 +379,37 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
       }
     }
 
-    if (typeof dependencies.verifyCitations === 'function') {
-      ragMeta = Object.assign({}, ragMeta || {}, {
-        citationCheck: dependencies.verifyCitations(reply, ragChunks),
+    // Terms, amounts, percentages and rates must be backed by the source text
+    // (src/rag/legal-claim-guard.js, shared with Telegram and the web chat).
+    let claimGuard = { status: 'skipped', withheld: [], retrievals: 0 };
+    if (aiAvailable) {
+      claimGuard = await guardLegalAnswer({
+        question,
+        answer: reply,
+        chunks: ragChunks,
+        callAI,
+        model: chatModel,
+        lang: lexLanguage(question) === 'ru' ? 'ru' : 'uz',
+        endpoint: '/api/workspaces/assistant/claim-check',
+        retrieveMore: (query, { articles = [] } = {}) => retrieveLegalContext(
+          [query, ...articles.map(a => `${a}-modda`)].join(' '), topic, null, { noWebFallback: true }),
       });
+      reply = claimGuard.text;
+      if (Array.isArray(claimGuard.chunks)) ragChunks = claimGuard.chunks;
+    }
+    ragMeta = Object.assign({}, ragMeta || {}, {
+      claimGuard: { status: claimGuard.status, withheld: claimGuard.withheld, retrievals: claimGuard.retrievals, reason: claimGuard.reason || null },
+    });
+
+    if (typeof dependencies.verifyCitations === 'function') {
+      let citationCheck;
+      try {
+        citationCheck = dependencies.verifyCitations(reply, ragChunks);
+      } catch (error) {
+        // a checker that fails has checked nothing
+        citationCheck = { total: null, unverified: [], error: String(error.message || error).slice(0, 200) };
+      }
+      ragMeta = Object.assign({}, ragMeta || {}, { citationCheck });
     }
 
     await hydrateLexAnchors(ragChunks, reply);

@@ -141,7 +141,15 @@ function deps(o = {}) {
       calls.intent++;
       return { text: JSON.stringify(o.intent || { intent: 'huquqiy_savol', missing: [] }) };
     },
-    callAI: async () => {
+    callAI: async (messages, options = {}) => {
+      // The claim verifier (legal-claim-guard) is a separate call; o.claimVerdict
+      // answers it per claim text, o.claimVerifierError makes it fail.
+      if (options.endpoint === '/tg-agent/claim-check') {
+        calls.claimCheck = (calls.claimCheck || 0) + 1;
+        if (o.claimVerifierError) throw new Error(o.claimVerifierError);
+        const payload = JSON.parse(messages[1].text);
+        return { text: JSON.stringify({ claims: payload.claims.map(c => ({ id: c.id, verdict: (o.claimVerdict || (() => 'not_found'))(c.text), topic: 'murojaat muddati', reason: 'stub', needs_facts: [] })) }) };
+      }
       calls.answer++;
       return { text: o.answer !== undefined ? o.answer : 'Mehnat kodeksining 100-moddasiga ko\'ra ish beruvchi buyruq chiqarishi shart.', provider: 'test-model' };
     },
@@ -152,7 +160,9 @@ function deps(o = {}) {
         chunks: o.chunks !== undefined ? o.chunks : [{ law_name: 'Mehnat kodeksi', article_numbers: ['100'], source_url: 'https://lex.uz/docs/1', chunk_text: '100-modda ...' }],
       };
     },
-    verifyCitations: () => ({ total: 1, unverified: o.unverified || [] }),
+    verifyCitations: o.verifyCitationsThrows
+      ? () => { throw new Error('checker crashed'); }
+      : () => ({ total: 1, unverified: o.unverified || [] }),
     buildTopicPrompt: () => 'SYSTEM',
     classifyLegalTopic: async () => o.topic || 'mehnat',
     searchKorpus: o.korpus ? async () => { calls.korpus++; return { corrected_answer: o.korpus }; } : null,
@@ -796,6 +806,62 @@ function stubMemory(clarifyCount = 0) {
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Shartnoma buzilsa nima bo\'ladi?' });
     assert.strictEqual(r.meta.confidence, 'low');
     assert.strictEqual(r.escalate, true);
+  });
+
+  // 2026-10-03: a wrong deadline was sent with only a banner on it.
+  const WAGE_Q = "MChJ xodimiman, ish beruvchi ikki oylik ish haqimni to'lamadi. Undirish uchun nima qilay, muddat qanday?";
+  // fixtures shaped like the Labour Code articles, not the official text
+  const MK560 = { law_name: 'Mehnat kodeksi', article_numbers: ['560'], source_type: 'law_text', source_url: 'https://lex.uz/docs/-6257288', chunk_text: "560-modda. Boshqa mehnat nizolari bo'yicha xodim olti oy ichida murojaat qiladi. Xodim ish beruvchiga yetkazgan moddiy zarar bo'yicha ish beruvchi bir yil ichida murojaat qiladi." };
+  const MK25 = { law_name: 'Mehnat kodeksi', article_numbers: ['25'], source_type: 'law_text', source_url: 'https://lex.uz/docs/-6257288', chunk_text: "25-modda. Xodim mehnat huquqlarini sudda himoya qilishga haqli. Ish beruvchiga yozma talab yuborish, mehnat inspeksiyasiga va sudga murojaat qilish mumkin." };
+
+  await test('a citation checker that throws is not "verified": the answer is low confidence and escalated', async () => {
+    const d = deps({ verifyCitationsThrows: true });
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Shartnoma buzilsa nima bo\'ladi?' });
+    assert.strictEqual(r.meta.confidence, 'low');
+    assert.strictEqual(r.meta.citationCheck, 'error');
+    assert.strictEqual(r.escalate, true);
+  });
+
+  await test('an unsupported deadline is not sent; the supported part is, and the gap is named', async () => {
+    const answer = "Avval ish beruvchiga yozma talab yuboring va mehnat inspeksiyasiga murojaat qiling (Mehnat kodeksi, 25-modda). Sudga murojaat qilish muddati odatda bir yil. Ish haqi qarzini undirish uchun tuman sudiga da'vo arizasi beriladi, unga mehnat shartnomasi va ish haqi hisob-kitobi ilova qilinadi.";
+    const d = deps({ answer, chunks: [MK25], claimVerdict: () => 'supported' });
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: WAGE_Q });
+    assert.strictEqual(r.action, 'answered');
+    assert.ok(!/bir yil/u.test(r.reply), r.reply);
+    assert.match(r.reply, /Manbada tasdiqlanmadi: murojaat muddati/u);
+    assert.match(r.reply, /yozma talab/u, 'the supported advice is still given');
+    assert.strictEqual(r.meta.claimGuard.status, 'partial');
+    assert.strictEqual(r.meta.confidence, 'low');
+    assert.strictEqual(r.escalate, true);
+    assert.strictEqual(d.calls.release, 0, 'a real (partial) answer uses the credit');
+  });
+
+  await test('the wage deadline backed by article 560 is sent as is', async () => {
+    const answer = "Ish haqi bo'yicha nizo uchun sudga olti oy ichida murojaat qilasiz (Mehnat kodeksi, 560-modda). Da'vo arizasiga mehnat shartnomasi va ish haqi hisob-kitobini ilova qiling.";
+    const d = deps({ answer, chunks: [MK560], claimVerdict: (t) => (/olti oy/u.test(t) ? 'supported' : 'not_found') });
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: WAGE_Q });
+    assert.strictEqual(r.meta.claimGuard.status, 'verified');
+    assert.match(r.reply, /olti oy/u);
+  });
+
+  await test('when the claim verifier fails and nothing verified is left: no answer, credit returned, a lawyer takes it', async () => {
+    const answer = "Muddat bir yil (560-modda).";
+    const d = deps({ answer, chunks: [MK560], claimVerifierError: 'timeout' });
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: WAGE_Q });
+    assert.strictEqual(r.action, 'escalate');
+    assert.strictEqual(r.escalate, true);
+    assert.strictEqual(d.calls.release, 1, 'the answer credit is released');
+    assert.ok(!/bir yil/u.test(r.reply), r.reply);
+    assert.match(r.reply, /kreditingiz hisobdan yechilmadi/u);
+    assert.strictEqual(r.meta.claimGuard.status, 'unverified');
   });
 
   console.log('\ntelegram-agent — clarification\n');

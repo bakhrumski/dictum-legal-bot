@@ -51,6 +51,11 @@ Known state of the suites (Sept 2026):
 - `src/api/server.js` — Express app and most routes.
 - `src/bot/` — Telegram bot. `src/agents/` — agent flows.
 - `src/rag/` — legal corpus ingest and hybrid search (lex.uz).
+  `src/rag/legal-claim-guard.js` checks every legal answer (Telegram, web
+  chat, Workspace) before it is sent: a term, amount, percentage or rate
+  must be in the cited source text and confirmed by a verifier for that
+  situation and those parties, else it is withheld and named; a verifier
+  that fails leaves claims unverified, never passed.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it.
 - Models: GPT-6 since 2026-09-23. `MODELS` in server.js defaults to
