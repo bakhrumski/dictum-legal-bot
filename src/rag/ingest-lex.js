@@ -256,6 +256,13 @@ async function ingestFromUrl(url, opts = {}) {
   // status first) passes it in instead of fetching lex.uz twice.
   const doc = opts.prefetchedDoc || await fetchLexDocument(url, { signal });
   const lexMeta = doc.metadata || {};
+  // A date-locked old edition ("Hujjat DD.MM.YYYY sanasi holatiga") that the
+  // fetcher could not move to the current version is not ingested: its text
+  // may be outdated (owner, 2026-10-03).
+  if (lexMeta.current_version_url) {
+    console.warn(`  SKIPPED (old edition${lexMeta.snapshot_date ? ` as of ${lexMeta.snapshot_date}` : ''}): ${url} — current version at ${lexMeta.current_version_url} could not be fetched.`);
+    return 0;
+  }
   const inferredLanguage = url.includes('/uz/') ? 'uz' : 'ru';
 
   const docMeta = {

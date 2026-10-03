@@ -8454,6 +8454,10 @@ async function ingestLexUrl({ url, topic, law_name, adminId }) {
   if (lexMeta.is_active === false) {
     throw Object.assign(new Error('Hujjat kuchini yo\'qotgan (eskirgan) — ingest qilinmadi'), { status: 400, code: 'INACTIVE' });
   }
+  // A date-locked old edition the fetcher could not move to the current one.
+  if (lexMeta.current_version_url) {
+    throw Object.assign(new Error(`Hujjatning eski tahriri${lexMeta.snapshot_date ? ` (${lexMeta.snapshot_date} holatiga)` : ''}, amaldagi versiyasi ochilmadi — ingest qilinmadi`), { status: 400, code: 'OLD_EDITION' });
+  }
 
   // Detect language by script ratio over the title + body — robust for
   // NIZOM/resolution docs that lack "-modda" markers (see inferDocLanguage).
@@ -10809,6 +10813,12 @@ app.get('/api/health', async (req, res) => {
   const { getEmbeddingsBatch } = require('../rag/embeddings');
   mountOversizedChunkRoutes(app, { requireMasterAdmin, pool, embedTexts: (texts) => getEmbeddingsBatch(texts) });
 }
+
+// Corpus documents re-checked on lex.uz daily and on demand (master only).
+require('../rag/check-freshness').mountFreshnessRoutes(app, {
+  requireMasterAdmin,
+  hours: Number.parseFloat(process.env.CORPUS_FRESHNESS_HOURS ?? '24') || 0,
+});
 
 // Registry URL check and corpus script report, with Latin re-ingest (master only).
 {
