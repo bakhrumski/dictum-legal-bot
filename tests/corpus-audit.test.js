@@ -156,7 +156,8 @@ const RU = '1-статья. Цели трудового законодатель
       mountCorpusAuditRoutes(app, {
         requireMasterAdmin: () => {}, pool,
         getAllLaws: () => [{ doc_id: 'konstitutsiya', law_name: "O'zbekiston Respublikasi Konstitutsiyasi", category: 'konstitutsiya', lex_url: 'https://lex.uz/docs/-6445145' },
-          { doc_id: 'mchj-qonun', law_name: "Mas'uliyati cheklangan jamiyatlar to'g'risida", category: 'tadbirkorlik', lex_url: 'https://lex.uz/docs/-8151376' }],
+          { doc_id: 'mchj-qonun', law_name: "Mas'uliyati cheklangan jamiyatlar to'g'risida", category: 'tadbirkorlik', lex_url: 'https://lex.uz/docs/-8151376' },
+          { doc_id: 'audit-test-kodeks', law_name: 'Sinov kodeksi', category: 'tadbirkorlik', lex_url: 'https://lex.uz/docs/-1' }],
         fetchDoc: async () => ({}),
         reingest: async (docs, report) => { reingested.push(...docs); report.push({ status: 'done' }); },
       });
@@ -170,6 +171,11 @@ const RU = '1-статья. Цели трудового законодатель
         assert.ok(!r.pending.some(p => p.includes('audit_ru')), 'a Russian text is not converted');
         assert.deepStrictEqual(r.registryMissing.map(l => l.doc_id).filter(id => ['konstitutsiya', 'mchj-qonun'].includes(id)).sort(), ['konstitutsiya', 'mchj-qonun'].filter(id => !r.documents.some(d => d.doc_id === id)));
         assert.ok(r.ingestBatches.every(b => /^\/api\/admin\/corpus\/script\?ingest=[\w,-]+$/u.test(b) && b.split(',').length <= 10));
+        const codeAt = r.ingestBatches.findIndex(b => /-kodeks(?:-\d+)?(?:,|$)/u.test(b));
+        assert.ok(codeAt >= 0, 'the test registry has a code');
+        {
+          assert.ok(r.ingestBatches.slice(codeAt).every(b => /-kodeks(?:-\d+)?$/u.test(b) && !b.includes(',')), 'each code alone, after the laws');
+        }
       });
 
       await test('?reingest=1 re-ingests the Cyrillic document from its Latin URL', async () => {

@@ -294,10 +294,17 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
       const inCorpus = new Set(found.documents.map(d => d.doc_id));
       const registryMissing = getAllLaws().filter(l => !inCorpus.has(l.doc_id))
         .map(l => ({ doc_id: l.doc_id, law_name: l.law_name, category: l.category, url: l.lex_url }));
+      // A code goes alone and last: the first batch on 2026-10-03 stored the
+      // Air Code and the process restarted on the next act (as on
+      // 2026-09-29: one large code fits in memory, a second act after it
+      // does not). Laws go ten at a time.
+      const isCode = (l) => /-kodeks(?:-\d+)?$/u.test(l.doc_id);
+      const laws = registryMissing.filter(l => !isCode(l));
       const ingestBatches = [];
-      for (let i = 0; i < registryMissing.length; i += 10) {
-        ingestBatches.push(`/api/admin/corpus/script?ingest=${registryMissing.slice(i, i + 10).map(l => l.doc_id).join(',')}`);
+      for (let i = 0; i < laws.length; i += 10) {
+        ingestBatches.push(`/api/admin/corpus/script?ingest=${laws.slice(i, i + 10).map(l => l.doc_id).join(',')}`);
       }
+      for (const code of registryMissing.filter(isCode)) ingestBatches.push(`/api/admin/corpus/script?ingest=${code.doc_id}`);
       res.json({
         registryMissing,
         ingestBatches,
