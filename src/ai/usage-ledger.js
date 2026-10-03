@@ -23,6 +23,7 @@
 const crypto = require('crypto');
 const { AsyncLocalStorage } = require('async_hooks');
 const { costForUsage } = require('./model-pricing');
+const health = require('./provider-health');
 
 const als = new AsyncLocalStorage();
 
@@ -54,8 +55,44 @@ function newRequest(meta = {}) {
     stage: null,
     chain: null,
     // shared by every nested scope (withStage / withChain copy the store)
-    shared: { calls: 0, telemetryErrors: 0, annotations: {}, opened: false },
+    shared: { calls: 0, providerCalls: 0, knownCostUsd: 0, telemetryErrors: 0, annotations: {}, opened: false, degraded: new Set() },
+    budget: requestBudget(meta.budget),
   };
+}
+
+/**
+ * Per-request limits (2026-10-04: one Telegram question made 53 calls over
+ * 114 s). Calls and time are enforced even when prices are unknown; known
+ * cost is enforced on top. Answer, cross-check and claim-check calls get a
+ * small reserve above the call limit so helpers cannot starve the answer.
+ */
+function requestBudget(override = {}) {
+  const n = (v, d) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : d; };
+  return {
+    maxCalls: n(override.maxCalls, n(process.env.AI_REQUEST_MAX_CALLS, 30)),
+    essentialReserve: n(override.essentialReserve, n(process.env.AI_REQUEST_ESSENTIAL_RESERVE, 6)),
+    maxMs: n(override.maxMs, n(process.env.AI_REQUEST_MAX_MS, 120000)),
+    maxCostUsd: n(override.maxCostUsd, n(process.env.AI_REQUEST_MAX_COST_USD, 0.25)),
+  };
+}
+
+const ESSENTIAL_STAGES = new Set(['answer', 'answer_fallback', 'cross_check', 'claim_check', 'stt', 'tts', 'document', 'ocr']);
+
+/** Why a new call may not start for this request, or null. */
+function budgetBlock(store, stage) {
+  if (!store || !store.budget) return null;
+  const b = store.budget;
+  if (Date.now() - store.startedAt > b.maxMs) return `time limit ${b.maxMs} ms reached`;
+  if (store.shared.knownCostUsd >= b.maxCostUsd) return `known cost limit $${b.maxCostUsd} reached`;
+  const limit = b.maxCalls + (ESSENTIAL_STAGES.has(stage) ? b.essentialReserve : 0);
+  if (store.shared.providerCalls >= limit) return `call limit ${limit} reached`;
+  return null;
+}
+
+/** Mark the request as served in a reduced mode (e.g. no reranker). */
+function degrade(reason) {
+  const store = current();
+  if (store) store.shared.degraded.add(String(reason).slice(0, 60));
 }
 
 /** Run fn inside a new request scope; returns fn's result. */
@@ -123,11 +160,7 @@ function stageFor(endpoint, explicit) {
 const SECRET = /(sk-[A-Za-z0-9_-]{8,}|Bearer\s+\S+|key=[^&\s]+|AIza[0-9A-Za-z_-]{10,})/gu;
 
 function errorCodeOf(error) {
-  if (!error) return null;
-  if (error.code === 'TIMEOUT' || error.name === 'TimeoutError' || error.name === 'AbortError' || /timeout|timed out/iu.test(error.message || '')) return 'TIMEOUT';
-  if (error.status) return `HTTP_${error.status}`;
-  const m = String(error.message || '').match(/\b([45]\d\d)\b/u);
-  return m ? `HTTP_${m[1]}` : 'ERROR';
+  return error ? health.classifyError(error).code : null;
 }
 
 function safeMessage(error) {
@@ -178,8 +211,12 @@ async function record(event = {}) {
     modelReturned: event.modelReturned || null,
     status: event.status || 'success',
     errorCode: event.errorCode || null,
-    errorMessage: event.error ? safeMessage(event.error) : null,
+    errorKind: event.errorKind || null,
+    errorMessage: event.errorReason ? health.safeReason(event.errorReason) : (event.error ? safeMessage(event.error) : null),
     attempt: event.attempt || 1,
+    stageRunId: event.stageRunId || null,
+    parentCallId: event.parentCallId || null,
+    batchId: event.batchId || null,
     retryReason: event.retryReason || null,
     fallbackFrom: event.fallbackFrom || null,
     startedAt,
@@ -199,7 +236,11 @@ async function record(event = {}) {
     chatId: store ? store.chatId : null,
     endpoint: event.endpoint || null,
   };
-  if (store) store.shared.calls++;
+  if (store) {
+    store.shared.calls++;
+    if (row.status !== 'skipped') store.shared.providerCalls++;
+    if (priced.costUsd) store.shared.knownCostUsd += priced.costUsd;
+  }
   if (priced.costUsd && costListener) {
     try { costListener(priced.costUsd); } catch (_) { /* the breaker must not break a call */ }
   }
@@ -210,39 +251,91 @@ async function record(event = {}) {
 /**
  * Track one provider call: fn(call) runs it; call.usage({...}) reports what
  * the provider returned, call.retry(reason, error) records a failed attempt
- * before trying again. Success and failure are both recorded; the error is
- * rethrown unchanged. A call inside a router chain after a failed attempt
- * carries that model as fallback_from.
+ * before the adapter tries again. Every attempt is a row; attempts of one
+ * logical call share stage_run_id and point to the previous attempt with
+ * parent_call_id. Success and failure are both recorded; the error is
+ * rethrown unchanged. A call inside a router chain after a failed one carries
+ * that model as fallback_from.
+ *
+ * Before calling: a provider/model whose breaker is open, or a request over
+ * its budget, is not called at all - one "skipped" row, and an error with
+ * code CIRCUIT_OPEN / REQUEST_BUDGET so the router moves on.
+ * meta.retryTransient (0-2) retries a transient error, waiting Retry-After
+ * (capped) or a short jittered backoff, within the request's budget.
  */
 async function track(meta, fn) {
   const store = current();
   const chain = store && store.chain;
   const fallbackFrom = meta.fallbackFrom || (chain && chain.lastFailed) || null;
+  const stage = stageFor(meta.endpoint, meta.stage);
+  const stageRunId = uuid();
   let attempt = 1;
+  let callId = uuid();
+  let parentCallId = null;
   let startedAt = Date.now();
   let usage = null;
   let modelReturned = null;
   let retryReason = null;
+  const base = { ...meta, stage, stageRunId, fallbackFrom };
+
+  const skip = (code, reason) => {
+    record({ ...base, callId, status: 'skipped', errorCode: code, errorKind: 'skipped', errorReason: reason, startedAt, finishedAt: Date.now(), usage: {}, attempt });
+    if (chain) chain.lastFailed = meta.model || meta.provider || null;
+    return Object.assign(new Error(`${meta.provider || 'provider'} ${meta.model || ''} not called: ${reason}`), { code });
+  };
+  const open = health.openState(meta.provider, meta.model);
+  if (open) throw skip('CIRCUIT_OPEN', `${open.code}: ${open.reason || 'circuit open'} (until ${new Date(open.until).toISOString()})`);
+  const blocked = budgetBlock(store, stage);
+  if (blocked) throw skip('REQUEST_BUDGET', blocked);
+
+  const failAttempt = (error, { breaker = true } = {}) => {
+    const c = health.classifyError(error);
+    record({ ...base, callId, parentCallId, modelReturned, status: c.code === 'TIMEOUT' ? 'timeout' : 'error', errorCode: c.code, errorKind: c.kind, errorReason: c.reason, startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason });
+    if (breaker) health.recordOutcome(meta.provider, meta.model, c);
+    return c;
+  };
+  const nextAttempt = (reason) => {
+    parentCallId = callId;
+    callId = uuid();
+    attempt++;
+    retryReason = String(reason || 'retry').slice(0, 120);
+    startedAt = Date.now();
+    usage = null;
+  };
   const call = {
     usage(u = {}) { usage = { ...(usage || {}), ...u }; if (u.modelReturned) modelReturned = u.modelReturned; },
+    // The adapter fixes the request and tries again (e.g. without a rejected
+    // parameter): the attempt is recorded, but it does not trip the breaker.
     async retry(reason, error) {
-      await record({ ...meta, status: error && errorCodeOf(error) === 'TIMEOUT' ? 'timeout' : 'error', errorCode: errorCodeOf(error) || 'REJECTED', error, startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason, fallbackFrom });
-      attempt++;
-      retryReason = String(reason || 'retry').slice(0, 120);
-      startedAt = Date.now();
-      usage = null;
+      failAttempt(error, { breaker: false });
+      nextAttempt(reason);
     },
   };
-  try {
-    const result = await fn(call);
-    record({ ...meta, modelReturned, status: 'success', startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason, fallbackFrom });
-    if (chain) chain.lastFailed = null;
-    return result;
-  } catch (error) {
-    const code = errorCodeOf(error);
-    record({ ...meta, modelReturned, status: code === 'TIMEOUT' ? 'timeout' : 'error', errorCode: code, error, startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason, fallbackFrom });
-    if (chain) chain.lastFailed = meta.model || meta.provider || null;
-    throw error;
+
+  // Essential stages get one retry on a transient error by default; helpers
+  // fall through to the next provider instead. A stream sets 0 (its tokens
+  // may already be on the user's screen).
+  const retries = meta.retryTransient != null ? meta.retryTransient : (ESSENTIAL_STAGES.has(stage) ? 1 : 0);
+  let transientLeft = Math.max(0, Math.min(2, Number(retries) || 0));
+  for (;;) {
+    try {
+      const result = await fn(call);
+      record({ ...base, callId, parentCallId, modelReturned, status: 'success', startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason });
+      health.recordSuccess(meta.provider, meta.model);
+      if (chain) chain.lastFailed = null;
+      return result;
+    } catch (error) {
+      const c = failAttempt(error);
+      if (c.kind === 'transient' && transientLeft > 0 && !budgetBlock(store, stage) && !health.openState(meta.provider, meta.model)) {
+        transientLeft--;
+        const wait = Math.min(4000, c.retryAfterMs != null ? c.retryAfterMs : 400 + Math.floor(Math.random() * 600));
+        await new Promise(r => setTimeout(r, wait));
+        nextAttempt(`transient:${c.code}`);
+        continue;
+      }
+      if (chain) chain.lastFailed = meta.model || meta.provider || null;
+      throw error;
+    }
   }
 }
 
@@ -289,6 +382,7 @@ async function finishRequest(store, fields = {}) {
       finishedAt: new Date(),
       outcome: data.outcome || null,
       legalCheck: data.legalCheck || null,
+      degraded: store.shared.degraded.size ? [...store.shared.degraded] : null,
       telemetryErrors: store.shared.telemetryErrors,
     });
   } catch (error) {
@@ -310,6 +404,6 @@ function expressScope(service = 'web') {
 }
 
 module.exports = {
-  configure, runWithRequest, current, withStage, withChain, annotate, record, track,
+  configure, runWithRequest, current, withStage, withChain, annotate, record, track, degrade, requestBudget, budgetBlock,
   finishRequest, expressScope, stageFor, errorCodeOf, safeMessage, stats, usageFromGemini, usageFromOpenAI,
 };

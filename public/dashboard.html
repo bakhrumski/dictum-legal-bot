@@ -2625,6 +2625,7 @@
         .au-badge.au-ok { color: #1f7a4a; }
         .au-badge.au-warn { color: var(--danger-700, #b42318); }
         .au-models { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+        .spend-table td.au-status { white-space: normal; min-width: 220px; max-width: 420px; }
         .au-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
         /* .detail-select is shared and carries min-width: 220px; this panel needs none */
         .au-controls .detail-select { min-width: 0; max-width: 100%; margin-right: 0; }
@@ -14856,7 +14857,8 @@
         }
 
         // ── Per-request AI usage (master) ──────────────────────────────────
-        var AU_STATUS = { success: 'muvaffaqiyatli', error: 'xato', timeout: 'timeout' };
+        var AU_STATUS = { success: 'muvaffaqiyatli', error: 'xato', timeout: 'timeout', skipped: 'chaqirilmadi' };
+        var AU_KIND = { permanent: 'doimiy', transient: 'vaqtinchalik', unknown: 'noma\'lum', skipped: 'o\'tkazildi' };
         var AU_SOURCE = { provider_reported: 'provayder', calculated: 'hisoblangan', estimated: 'taxminiy', unknown: "noma'lum" };
         function auUsd(v) { return v == null ? '—' : '$' + Number(v).toFixed(Number(v) < 0.01 ? 6 : 4); }
         function auMs(v) { return v == null ? '—' : (v >= 1000 ? (v / 1000).toFixed(1) + ' s' : v + ' ms'); }
@@ -14888,26 +14890,28 @@
                 var periods = (rep.periods || []).slice().reverse();
                 reportBox.innerHTML = periods.length ? (
                     '<div class="au-scroll"><table class="spend-table"><thead><tr>' +
-                    '<th>Davr</th><th class="sp-num">So\'rovlar</th><th class="sp-num">Chaqiruvlar</th><th class="sp-num">Ma\'lum xarajat</th>' +
-                    '<th class="sp-num">Narxi noma\'lum</th><th class="sp-num">O\'rtacha / so\'rov</th><th class="sp-num">Retry/fallback</th><th class="sp-num">VoiceLab kredit</th></tr></thead><tbody>' +
+                    '<th>Davr (Toshkent)</th><th class="sp-num">So\'rovlar</th><th class="sp-num">Chaqiruvlar</th><th class="sp-num">Xato</th><th class="sp-num">Chaqirilmadi</th><th class="sp-num">Ma\'lum xarajat</th>' +
+                    '<th class="sp-num">Narxi noma\'lum</th><th class="sp-num">O\'rtacha / so\'rov</th><th class="sp-num">Retry / fallback</th><th class="sp-num">VoiceLab kredit</th></tr></thead><tbody>' +
                     periods.map(function (p) {
                         var b = p.average_basis || {};
                         return '<tr><td class="sp-name">' + escapeHtml(p.period) + ' ' + (p.cost_complete ? '' : '<span class="au-badge au-warn">to\'liq emas</span>') + '</td>' +
                             '<td class="sp-num">' + p.requests + '</td><td class="sp-num">' + p.calls + '</td>' +
+                            '<td class="sp-num">' + (p.failed_calls || 0) + '</td><td class="sp-num">' + (p.skipped_calls || 0) + '</td>' +
                             '<td class="sp-cost">' + auUsd(p.known_cost_usd) + '</td>' +
                             '<td class="sp-num">' + p.unknown_cost_calls + '</td>' +
                             '<td class="sp-num" title="' + escapeHtml((b.included_requests || 0) + ' ta to\'liq so\'rov; ' + (b.excluded_incomplete_requests || 0) + ' ta to\'liq bo\'lmagan so\'rov hisobga olinmadi') + '">' + auUsd(p.average_cost_per_request_usd) + ' <span class="au-badge">n=' + (b.included_requests || 0) + '</span></td>' +
-                            '<td class="sp-num">' + p.retry_or_fallback_calls + ' / ' + auUsd(p.retry_or_fallback_cost_usd) + '</td>' +
-                            '<td class="sp-num">' + (p.provider_credits || 0) + '</td></tr>';
+                            '<td class="sp-num">' + (p.retry_calls || 0) + ' / ' + (p.fallback_calls || 0) + ' (' + auUsd(p.retry_or_fallback_cost_usd) + ')</td>' +
+                            '<td class="sp-num">' + (p.provider_credits || 0) + (p.voicelab_credits_unknown_calls ? ' <span class="au-badge au-warn" title="VoiceLab kredit sarfini qaytarmagan chaqiruvlar">+' + p.voicelab_credits_unknown_calls + ' noma\'lum</span>' : '') + '</td></tr>';
                     }).join('') + '</tbody></table></div>' +
-                    '<p class="au-note">O\'rtacha faqat barcha chaqiruvlari narxi ma\'lum so\'rovlar bo\'yicha (n). Ledger yozuv xatolari (server ishga tushgandan beri): ' +
-                    ((rep.ledger_health && rep.ledger_health.write_failures_since_boot) || 0) + '.</p>'
+                    '<p class="au-note">Kunlar Toshkent vaqti bo\'yicha. O\'rtacha faqat barcha chaqiruvlari narxi ma\'lum so\'rovlar bo\'yicha (n). "Chaqirilmadi" — provayderga yuborilmagan (ochiq breaker yoki so\'rov limiti). Ledger yozuv xatolari (server ishga tushgandan beri): ' +
+                    ((rep.ledger_health && rep.ledger_health.write_failures_since_boot) || 0) + '.</p>' +
+                    ((rep.open_breakers || []).length ? '<p class="au-note"><b>Hozir to\'xtatilgan provayderlar:</b> ' + rep.open_breakers.map(function (b) { return escapeHtml(String(b.key).replace(/\|\*$/, ' (barcha modellar)').replace('|', ' / ') + ' — ' + b.code + (b.reason ? ': ' + b.reason : '') + ' (' + new Date(b.openUntil).toLocaleTimeString('uz-UZ') + ' gacha)'); }).join('; ') + '</p>' : '')
                 ) : '<div class="reg-empty">Bu davrda AI chaqiruvlari yo\'q</div>';
                 var reqs = list.requests || [];
                 listBox.innerHTML = reqs.length ? (
                     '<div class="au-scroll"><table class="spend-table"><thead><tr>' +
                     '<th>Vaqt</th><th>Xizmat</th><th>Natija</th><th>Huquqiy tekshiruv</th><th>Modellar</th><th class="sp-num">Chaqiruv</th>' +
-                    '<th class="sp-num">Retry</th><th class="sp-num">Xarajat</th><th class="sp-num">Latency</th></tr></thead><tbody>' +
+                    '<th class="sp-num">Retry / fallback</th><th class="sp-num">Xarajat</th><th class="sp-num">Latency</th></tr></thead><tbody>' +
                     reqs.map(function (r) {
                         var lc = r.legal_check || {};
                         var legal = lc.claimGuard || lc.confidence || '—';
@@ -14915,7 +14919,8 @@
                             '<td>' + escapeHtml(new Date(r.started_at).toLocaleString('uz-UZ')) + '</td>' +
                             '<td>' + escapeHtml(r.service) + '</td><td>' + escapeHtml(r.outcome || '—') + '</td><td>' + escapeHtml(legal) + '</td>' +
                             '<td class="au-models" title="' + escapeHtml((r.models || []).join(' → ')) + '">' + escapeHtml((r.models || []).join(' → ')) + '</td>' +
-                            '<td class="sp-num">' + r.calls + '</td><td class="sp-num">' + r.retry_or_fallback_calls + '</td>' +
+                            '<td class="sp-num">' + r.calls + (r.skipped_calls ? ' <span class="au-badge" title="Chaqirilmadi">+' + r.skipped_calls + '</span>' : '') + '</td>' +
+                            '<td class="sp-num">' + (r.retry_calls || 0) + '/' + (r.fallback_calls || 0) + (r.failed_calls ? ' <span class="au-badge au-warn">' + r.failed_calls + ' xato</span>' : '') + (r.degraded ? ' <span class="au-badge au-warn" title="' + escapeHtml((r.degraded || []).join(', ')) + '">degraded</span>' : '') + '</td>' +
                             '<td class="sp-cost">' + auUsd(r.known_cost_usd) + ' ' + auComplete(r) + '</td>' +
                             '<td class="sp-num">' + auMs(r.latency_ms) + '</td></tr>';
                     }).join('') + '</tbody></table></div>'
@@ -14934,21 +14939,25 @@
                 var d = await r.json();
                 var s = d.summary || {};
                 box.innerHTML = '<div class="au-detail-head"><div class="spend-section-label" style="margin:0;">So\'rov ' + escapeHtml(id) + '</div>' +
-                    '<div>' + auUsd(s.known_cost_usd) + ' ' + auComplete(s) + ' · ' + s.calls + ' chaqiruv · ' + (s.retry_or_fallback_calls || 0) + ' retry/fallback' +
+                    '<div>' + auUsd(s.known_cost_usd) + ' ' + auComplete(s) + ' · ' + s.calls + ' chaqiruv' + (s.skipped_calls ? ' (+' + s.skipped_calls + ' chaqirilmadi)' : '') +
+                    ' · ' + (s.failed_calls || 0) + ' xato · ' + (s.retry_calls || 0) + ' retry · ' + (s.fallback_calls || 0) + ' fallback' + (s.batches ? ' · ' + s.batches + ' batch' : '') +
+                    (s.voicelab_credits_unknown_calls ? ' · VoiceLab krediti noma\'lum: ' + s.voicelab_credits_unknown_calls : '') +
                     (s.provider_credits ? ' · ' + s.provider_credits + ' kredit' : '') + (d.request && d.request.latency_ms != null ? ' · ' + auMs(d.request.latency_ms) : '') + '</div></div>' +
                     '<div class="au-scroll"><table class="spend-table"><thead><tr>' +
                     '<th>#</th><th>Bosqich</th><th>Provayder / model</th><th>Usage</th><th class="sp-num">Kredit</th><th class="sp-num">USD</th>' +
                     '<th>Aniqlik</th><th class="sp-num">Latency</th><th>Holat</th></tr></thead><tbody>' +
                     (d.calls || []).map(function (c) {
                         var model = c.model_returned ? escapeHtml(c.model_returned) : escapeHtml(c.model_requested || '—') + ' <span class="au-badge" title="Provayder model ID qaytarmadi">sozlangan</span>';
-                        var status = (AU_STATUS[c.status] || c.status || '—') + (c.error_code ? ' (' + c.error_code + ')' : '') +
-                            (c.retry_reason ? ' · retry: ' + c.retry_reason : '') + (c.fallback_from ? ' · fallback: ' + c.fallback_from : '');
+                        var status = (AU_STATUS[c.status] || c.status || '—') + (c.error_code ? ' (' + c.error_code + (c.error_kind ? ', ' + (AU_KIND[c.error_kind] || c.error_kind) : '') + ')' : '') +
+                            (c.error_message && c.status !== 'success' ? ' — ' + c.error_message : '') +
+                            (c.attempt > 1 ? ' · urinish ' + c.attempt + (c.retry_reason ? ' (' + c.retry_reason + ')' : '') : '') +
+                            (c.fallback_from ? ' · fallback: ' + c.fallback_from : '') + (c.batch_id ? ' · batch ' + String(c.batch_id).slice(0, 8) : '');
                         return '<tr><td class="sp-num">' + (c.seq || '') + '</td><td>' + escapeHtml(c.stage || '') + '</td>' +
                             '<td>' + escapeHtml(c.provider || '') + ' / ' + model + '</td><td>' + escapeHtml(auUsage(c)) + '</td>' +
                             '<td class="sp-num">' + (c.provider_credits == null ? '—' : c.provider_credits) + '</td>' +
                             '<td class="sp-cost">' + auUsd(c.cost_usd) + '</td>' +
                             '<td>' + escapeHtml(AU_SOURCE[c.cost_source] || c.cost_source || '—') + '</td>' +
-                            '<td class="sp-num">' + auMs(c.latency_ms) + '</td><td>' + escapeHtml(status) + '</td></tr>';
+                            '<td class="sp-num">' + auMs(c.latency_ms) + '</td><td class="au-status">' + escapeHtml(status) + '</td></tr>';
                     }).join('') + '</tbody></table></div>' +
                     (d.request && d.request.legal_check ? '<p class="au-note">Huquqiy tekshiruv: ' + escapeHtml(JSON.stringify(d.request.legal_check)) + '</p>' : '');
                 box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

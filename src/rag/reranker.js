@@ -48,6 +48,12 @@ async function rerankChunks(query, chunks, opts = {}) {
   if (chunks.length <= topK) return chunks;
 
   const apiKey = process.env.HF_TOKEN;
+  // RERANKER=off: no cross-encoder calls at all (e.g. while the HF account
+  // cannot pay for Inference Providers); the keyword re-rank keeps order.
+  if (String(process.env.RERANKER || '').toLowerCase() === 'off') {
+    usageLedger.degrade('rerank_off');
+    return keywordFallbackRerank(query, chunks, topK);
+  }
   if (!apiKey) {
     console.log('[RERANKER] No HF_TOKEN — using keyword fallback');
     return keywordFallbackRerank(query, chunks, topK);
@@ -58,15 +64,19 @@ async function rerankChunks(query, chunks, opts = {}) {
     // (each with a 60s socket timeout), so without an overall cap a slow API
     // could stall the user's request. Race against RERANKER_TIMEOUT_MS and
     // fall back to the keyword reranker if it doesn't finish in time.
+    // Candidates beyond the cap keep their retrieval order after the
+    // re-ranked ones; the cross-encoder is not asked to score them.
+    const cap = RERANK_MAX_CANDIDATES();
+    const head = chunks.slice(0, cap);
     const scored = await Promise.race([
-      crossEncoderRerank(query, chunks, model, apiKey),
+      crossEncoderRerank(query, head, model, apiKey),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error(`reranker timeout after ${RERANKER_TIMEOUT_MS}ms`)), RERANKER_TIMEOUT_MS)
       ),
     ]);
     // Sort descending by reranker score
     scored.sort((a, b) => b._rerankerScore - a._rerankerScore);
-    const topChunks = scored.slice(0, topK);
+    const topChunks = scored.concat(chunks.slice(cap).map(c => ({ ...c, _rerankerScore: 0 }))).slice(0, topK);
 
     console.log(`[RERANKER] ${model}: ${chunks.length} → ${topChunks.length} (scores: ${topChunks.map(c => c._rerankerScore.toFixed(3)).join(', ')})`);
 
@@ -75,69 +85,107 @@ async function rerankChunks(query, chunks, opts = {}) {
     return topChunks;
   } catch (err) {
     console.warn(`[RERANKER] Cross-encoder failed (${err.message}), using keyword fallback`);
+    usageLedger.degrade('rerank_unavailable');
     return keywordFallbackRerank(query, chunks, topK);
   }
 }
 
 /**
- * Call the HuggingFace cross-encoder API.
- * Sends (query, passage) pairs and returns chunks annotated with _rerankerScore.
+ * Call the HuggingFace cross-encoder API, one (query, passage) pair per HTTP
+ * request (the hf-inference text-classification pipeline scores one pair).
+ *
+ * 2026-10-04: all pairs went out at once and each HTTP 402 became a score of
+ * 0, so 19-33 failed calls per question left the hybrid order truncated to
+ * topK and were counted as "retries". Now:
+ *   - the pairs of one rerank are one batch (batch_id), not retries;
+ *   - an open breaker (a recent permanent error, e.g. 402) means no call at
+ *     all: one skipped row, keyword fallback, the request marked degraded;
+ *   - the first pair goes alone; a permanent error there stops the rest;
+ *   - the others go a few at a time and stop launching on a permanent error;
+ *   - more than half failed means the cross-encoder did not rank: throw, and
+ *     rerankChunks uses the keyword fallback (which keeps the retrieval
+ *     score), instead of sorting on zeros;
+ *   - candidates are capped, and scores of public corpus text are cached by
+ *     model, query and the chunk's id and text, so a re-run does not re-score.
  */
+const RERANK_MAX_CANDIDATES = () => Math.max(2, Number(process.env.RERANK_MAX_CANDIDATES) || 12);
+const RERANK_CONCURRENCY = () => Math.max(1, Number(process.env.RERANK_CONCURRENCY) || 4);
+const scoreCache = new Map(); // key -> { score, at }
+const SCORE_TTL_MS = 60 * 60 * 1000;
+const PUBLIC_SOURCES = new Set(['law_text', 'lex_live', 'verified_qa']);
+
+function cacheKey(model, query, chunk) {
+  if (!PUBLIC_SOURCES.has(chunk.source_type)) return null; // a user's document is never cached
+  const text = String(chunk.chunk_text || chunk.text || '').slice(0, 512);
+  return require('crypto').createHash('sha256').update(`${model}\u0000${query}\u0000${chunk.id || ''}\u0000${text}`).digest('hex');
+}
+
+function cacheGet(key) {
+  const hit = key && scoreCache.get(key);
+  if (!hit || Date.now() - hit.at > SCORE_TTL_MS) return null;
+  return hit.score;
+}
+
+function cachePut(key, score) {
+  if (!key) return;
+  if (scoreCache.size > 5000) scoreCache.delete(scoreCache.keys().next().value);
+  scoreCache.set(key, { score, at: Date.now() });
+}
+
 async function crossEncoderRerank(query, chunks, model, apiKey) {
-  // Build input pairs for the text-classification pipeline.
-  // BGE reranker expects [query, passage] pairs.
-  const pairs = chunks.map(c => {
-    const text = c.chunk_text || c.text || '';
-    return [query, text.substring(0, 512)]; // truncate to avoid token limits
-  });
+  const health = require('../ai/provider-health');
+  const open = health.openState('huggingface', model);
+  if (open) {
+    usageLedger.record({ provider: 'huggingface', model, stage: 'rerank', status: 'skipped', errorCode: 'CIRCUIT_OPEN', errorKind: 'skipped',
+      errorReason: `${open.code}: ${open.reason || 'circuit open'}` });
+    usageLedger.degrade('rerank_unavailable');
+    throw Object.assign(new Error(`reranker skipped: ${open.code}`), { code: 'CIRCUIT_OPEN' });
+  }
 
   const url = `https://router.huggingface.co/hf-inference/models/${model}`;
+  const batchId = require('crypto').randomUUID();
+  const scores = new Array(chunks.length).fill(null);
+  let failed = 0;
+  let stop = null;
 
-  // Try batch: send all pairs at once (some models support this)
-  // Each pair is one HF request and one usage-ledger row (stage 'rerank'; the
-  // router reports no usage, so the cost stays unknown).
-  const results = await Promise.all(
-    pairs.map(async (pair, i) => {
-      try {
-        return await usageLedger.track({ provider: 'huggingface', model, stage: 'rerank' }, async (call) => {
-        const resp = await httpsPostJson(
-          url,
-          { inputs: pair },
-          { 'Authorization': `Bearer ${apiKey}` }
-        );
-
-        if (resp.status === 503) {
-          // Model loading — retry once after delay
-          await call.retry('http_503', Object.assign(new Error('HF 503'), { status: 503 }));
-          await new Promise(r => setTimeout(r, 5000));
-          const retry = await httpsPostJson(
-            url,
-            { inputs: pair },
-            { 'Authorization': `Bearer ${apiKey}` }
-          );
-          if (retry.status !== 200) throw new Error(`HF ${retry.status} on retry`);
-          return { index: i, score: extractScore(retry.body) };
-        }
-
+  const scorePair = async (i) => {
+    const chunk = chunks[i];
+    const key = cacheKey(model, query, chunk);
+    const cached = cacheGet(key);
+    if (cached != null) { scores[i] = cached; return; }
+    const passage = String(chunk.chunk_text || chunk.text || '').substring(0, 512);
+    try {
+      scores[i] = await usageLedger.track({ provider: 'huggingface', model, stage: 'rerank', batchId, retryTransient: 1 }, async () => {
+        const resp = await httpsPostJson(url, { inputs: [query, passage] }, { 'Authorization': `Bearer ${apiKey}` });
         if (resp.status !== 200) {
-          throw Object.assign(new Error(`HF ${resp.status}: ${(resp.text || '').substring(0, 200)}`), { status: resp.status });
+          const parsed = health.parseProviderError(resp.text || '');
+          throw Object.assign(new Error(`HF ${resp.status}: ${health.safeReason([parsed.code, parsed.message].filter(Boolean).join(': '))}`),
+            { status: resp.status, providerCode: parsed.code, providerMessage: parsed.message, retryAfter: resp.headers && resp.headers['retry-after'] });
         }
+        return extractScore(resp.body);
+      });
+      cachePut(key, scores[i]);
+    } catch (err) {
+      failed++;
+      const c = health.classifyError(err);
+      if (c.kind === 'permanent' || c.kind === 'skipped') stop = stop || c;
+    }
+  };
 
-        return { index: i, score: extractScore(resp.body) };
-        });
-      } catch (err) {
-        // Individual pair failure — assign 0 so it sorts to bottom
-        console.warn(`[RERANKER] Pair ${i} failed: ${err.message}`);
-        return { index: i, score: 0 };
-      }
-    })
-  );
+  // probe with the first pair; a permanent error stops the batch here
+  await scorePair(0);
+  let next = 1;
+  const worker = async () => {
+    while (!stop && next < chunks.length) await scorePair(next++);
+  };
+  await Promise.all(Array.from({ length: Math.min(RERANK_CONCURRENCY(), chunks.length - 1) }, worker));
 
-  // Annotate chunks with scores
-  return chunks.map((chunk, i) => {
-    const result = results.find(r => r.index === i);
-    return { ...chunk, _rerankerScore: result ? result.score : 0 };
-  });
+  const scored = scores.filter(v => v != null).length;
+  if (stop || failed > chunks.length / 2 || scored === 0) {
+    usageLedger.degrade('rerank_unavailable');
+    throw Object.assign(new Error(`cross-encoder unavailable: ${stop ? stop.code : `${failed}/${chunks.length} pairs failed`}`), { code: stop ? stop.code : 'RERANK_FAILED' });
+  }
+  return chunks.map((chunk, i) => ({ ...chunk, _rerankerScore: scores[i] == null ? 0 : scores[i] }));
 }
 
 /**
@@ -220,4 +268,6 @@ function extractKeywords(text) {
 module.exports = {
   rerankChunks,
   keywordFallbackRerank,
+  crossEncoderRerank,
+  _scoreCache: scoreCache,
 };

@@ -31,12 +31,27 @@
  *   5. withholds every claim that is still not supported, and says plainly
  *      which questions were not verified; missing facts for a calculation are
  *      asked for, never guessed.
+ *
+ * Since 2026-10-04 it also checks what an article is cited FOR. A wage-arrears
+ * answer for an LLC employee cited article 511 (termination by an employer
+ * who is an individual entrepreneur) and passed, because the citation check
+ * only asks whether the article number is in the context. Sentences that
+ * apply an article without a number (basis claims) go to the same verifier
+ * call: a basis the source contradicts for this situation, or an article not
+ * in the context, is withheld; one the verifier could not confirm is kept and
+ * reported. A sentence saying the law has no such rule (absence claim) is
+ * only kept when the source says so: not finding a norm in the searched
+ * sources is not the law lacking it. Finally the structure is repaired: an
+ * empty section heading ("Xulosa" with nothing under it) is removed and a
+ * truncated answer is cut back to its last complete sentence and marked.
  */
 
 const { getChunkArticleRefs } = require('./citation-utils');
 
 const DEFAULTS = Object.freeze({
   maxClaims: 8,
+  maxBasisClaims: 6,
+  maxAbsenceClaims: 3,
   maxEvidenceChars: 14_000,
   verifierMaxTokens: 900,
   verifierTimeoutMs: Number.parseInt(process.env.LEGAL_GUARD_TIMEOUT_MS || '30000', 10) || 30000,
@@ -158,26 +173,49 @@ function sentences(text = '') {
 
 const NOTICE_LINE = /^(?:⚠️|ℹ️|_?Javob SI|_?Ответ подготовлен|📚|🔗)/u;
 
+// "the law does not provide for it": a statement about the whole law, which a
+// search that did not find the norm cannot support.
+const ABSENCE = new RegExp([
+  "(?:qonun|kodeks|qonunchilik|қонун|кодекс|закон|законодательств)\\p{L}*[^.!?\\n]{0,100}?(?:nazarda tutilmagan|belgilanmagan|назарда тутилмаган|белгиланмаган|не предусмотрен\\p{L}*|не установлен\\p{L}*)",
+  "(?:norma|qoida|норма|қоида|правил)\\p{L}*[^.!?\\n]{0,40}?(?:yo['ʻ’`]q(?![\\p{L}])|mavjud emas|йўқ|мавжуд эмас|отсутству\\p{L}*|нет(?![\\p{L}]))",
+].join('|'), 'iu');
+
+// A line that is only a section heading ("**Xulosa:**", "## Tahlil", "Вывод:").
+const HEADING_LINE = /^\s*(?:#{1,6}\s+[^\n]{1,60}|\*\*[^*\n]{1,60}\*\*\s*:?|__[^_\n]{1,60}__\s*:?|[\p{L}' ʻ’]{2,40}:)\s*$/u;
+
 /**
- * Sentences of the answer that state a term, an amount, a percentage or a
- * rate. Numbers that are the user's own facts (they appear in the question)
- * do not make a sentence a legal claim.
+ * Sentences of the answer that make a legal claim:
+ *   term / amount / percent / rate - states a number or a rate (numbers that
+ *     are the user's own facts, from the question, do not count);
+ *   absence - says the law has no such rule;
+ *   basis   - applies a cited article without stating a number.
+ * Numeric claims come first; each kind has its own cap.
  */
-function extractCriticalClaims(answer = '', question = '', { maxClaims = DEFAULTS.maxClaims } = {}) {
+function extractCriticalClaims(answer = '', question = '', {
+  maxClaims = DEFAULTS.maxClaims, maxBasisClaims = DEFAULTS.maxBasisClaims, maxAbsenceClaims = DEFAULTS.maxAbsenceClaims,
+} = {}) {
   const userFacts = quantityFacts(question);
-  const claims = [];
+  const numeric = [];
+  const absence = [];
+  const basis = [];
   for (const sentence of sentences(answer)) {
-    if (NOTICE_LINE.test(sentence)) continue;
+    if (NOTICE_LINE.test(sentence) || HEADING_LINE.test(sentence)) continue;
     const facts = [...quantityFacts(sentence)].filter(f => !userFacts.has(f));
     const rate = RATE_WORDS.test(sentence);
-    if (!facts.length && !rate) continue;
-    const kind = facts.some(f => /[DWMYH]$/u.test(f)) ? 'term'
-      : facts.some(f => /PCT$/u.test(f)) ? 'percent'
-        : facts.length ? 'amount' : 'rate';
-    claims.push({ id: `c${claims.length + 1}`, text: sentence, kind, facts, articles: citedArticles(sentence) });
-    if (claims.length >= maxClaims) break;
+    const articles = citedArticles(sentence);
+    if (facts.length || rate) {
+      const kind = facts.some(f => /[DWMYH]$/u.test(f)) ? 'term'
+        : facts.some(f => /PCT$/u.test(f)) ? 'percent'
+          : facts.length ? 'amount' : 'rate';
+      numeric.push({ text: sentence, kind, facts, articles });
+    } else if (ABSENCE.test(sentence)) {
+      absence.push({ text: sentence, kind: 'absence', facts: [], articles });
+    } else if (articles.length) {
+      basis.push({ text: sentence, kind: 'basis', facts: [], articles });
+    }
   }
-  return claims;
+  return [...numeric.slice(0, maxClaims), ...absence.slice(0, maxAbsenceClaims), ...basis.slice(0, maxBasisClaims)]
+    .map((c, i) => ({ id: `c${i + 1}`, ...c }));
 }
 
 // ── Evidence ──────────────────────────────────────────────────────────────
@@ -218,6 +256,8 @@ function deterministicSupport(claim, chunks = []) {
     if (claim.kind === 'rate' && !cited.some(c => RATE_WORDS.test(chunkText(c)))) return { ok: false, reason: 'rate_not_in_cited_article' };
     return { ok: true, chunks: cited };
   }
+  // nothing to find in the text: the verifier decides
+  if (claim.kind === 'absence' || claim.kind === 'basis') return { ok: true, chunks: [] };
   if (!claim.facts.length) {
     const withRate = evidence.filter(c => RATE_WORDS.test(chunkText(c)));
     return withRate.length ? { ok: true, chunks: withRate } : { ok: false, reason: 'rate_not_in_context' };
@@ -256,16 +296,22 @@ function buildEvidence(claims = [], chunks = [], maxChars = DEFAULTS.maxEvidence
 // ── Verifier ──────────────────────────────────────────────────────────────
 const VERIFIER_PROMPT = `Siz huquqiy javobdagi ANIQ DA'VOLARNI manba matni bilan solishtiruvchi qat'iy tekshiruvchisiz.
 
+Har bir da'voning "kind" maydoni bor:
+- term / amount / percent / rate: da'vo muddat, summa, foiz yoki stavkani aytadi;
+- basis: da'vo moddani shu vaziyatga asos qilib keltiradi (raqamsiz);
+- absence: da'vo "qonunda bunday norma yo'q / nazarda tutilmagan" deydi.
+
 Har bir da'vo uchun faqat MANBALAR matniga qarab hukm chiqaring:
-- "supported": manbada aynan shu qiymat (muddat, summa, foiz, stavka) aynan shu holatga va aynan shu taraflarga nisbatan aytilgan.
-- "contradicted": manbada boshqa qiymat yoki boshqa holat/taraf uchun aytilgan, yoki da'vo taraflarni teskari yozgan (masalan, kim kimga zarar yetkazgani, kim talab qilayotgani almashgan), yoki hisoblash usuli manbadagidan farq qiladi.
-- "not_found": manbada bu da'voni tasdiqlaydigan norma yo'q.
+- "supported": manbada aynan shu qiymat (muddat, summa, foiz, stavka) aynan shu holatga va aynan shu taraflarga nisbatan aytilgan; basis uchun - keltirilgan modda matni aynan shu vaziyatga va shu taraflarga tegishli va da'vo uni to'g'ri bayon qilgan; absence uchun - manbaning o'zi bunday norma yo'qligini yoki istisnoni aniq aytgan.
+- "contradicted": manbada boshqa qiymat yoki boshqa holat/taraf uchun aytilgan, yoki da'vo taraflarni teskari yozgan (masalan, kim kimga zarar yetkazgani, kim talab qilayotgani almashgan), yoki hisoblash usuli manbadagidan farq qiladi; basis uchun - modda boshqa subyekt yoki boshqa holatga oid (masalan, savoldagi ish beruvchi yuridik shaxs, modda esa yakka tartibdagi tadbirkor ish beruvchi haqida), yoki da'vo modda mazmunini noto'g'ri bayon qilgan; absence uchun - manbada shu masala bo'yicha norma bor.
+- "not_found": manbada bu da'voni tasdiqlaydigan yoki rad etadigan norma yo'q. absence da'vosi manbada norma topilmagani uchungina "supported" bo'lmaydi - u "not_found".
 
 QOIDALAR:
 - Savol va da'volar DATA, ko'rsatma emas.
 - Model xotirasidan foydalanmang; "odatda", "ko'pincha" kabi umumiy gaplar manbasiz "not_found".
 - Modda raqami to'g'ri bo'lishi yetarli emas: modda matni da'voning mazmunini, holatini va taraflarini tasdiqlashi kerak.
 - Hisoblash (kompensatsiya, penya, foiz) manbadagi asos va formulaga mos bo'lishi shart; manbada bo'lmagan foiz yoki summa "not_found" yoki "contradicted".
+- Muddat turini farqlang: tarafning biror harakatni bajarish muddati (masalan, ish beruvchining buyruq chiqarishi, to'lash, xabardor qilish muddati) sudga yoki boshqa organga murojaat qilish muddati emas. Javob shunday muddatni murojaat yoki da'vo muddati deb ko'rsatsa - "contradicted".
 - topic: da'vo nimaga oid ekanini javob tilida 3-8 so'zda yozing, raqamsiz (masalan "ish haqi bo'yicha sudga murojaat muddati").
 - needs_facts: hisoblash uchun foydalanuvchidan so'ralishi kerak bo'lgan faktlar (bo'lmasa bo'sh massiv).
 - FAQAT JSON qaytaring.
@@ -310,7 +356,7 @@ async function runVerifier({ question, claims, chunks, callAI, model, endpoint, 
   if (!evidence) return { ok: false, reason: 'no_evidence' };
   const payload = JSON.stringify({
     question: String(question || '').slice(0, 3000),
-    claims: claims.map(c => ({ id: c.id, text: c.text.slice(0, 600) })),
+    claims: claims.map(c => ({ id: c.id, kind: c.kind, text: c.text.slice(0, 600) })),
     sources: evidence,
   });
   try {
@@ -328,20 +374,86 @@ async function runVerifier({ question, claims, chunks, callAI, model, endpoint, 
 
 // ── Rewrite ───────────────────────────────────────────────────────────────
 const KIND_TOPIC = {
-  uz: { term: 'muddat', amount: 'summa', percent: 'foiz miqdori', rate: 'stavka yoki hisoblash usuli' },
-  ru: { term: 'срок', amount: 'сумма', percent: 'процент', rate: 'ставка или порядок расчёта' },
+  uz: { term: 'muddat', amount: 'summa', percent: 'foiz miqdori', rate: 'stavka yoki hisoblash usuli', basis: 'huquqiy asos', absence: 'norma mavjudligi' },
+  ru: { term: 'срок', amount: 'сумма', percent: 'процент', rate: 'ставка или порядок расчёта', basis: 'правовое основание', absence: 'наличие нормы' },
 };
 
+/**
+ * The notice for withheld claims. It keeps apart what the source CONTRADICTS
+ * (removed as wrong) and what the searched sources did not show (removed as
+ * unconfirmed - which does not mean the law has no such rule).
+ */
 function unverifiedBlock(withheld = [], lang = 'uz', needsFacts = []) {
-  const topics = [...new Set(withheld.map(w => w.topic || KIND_TOPIC[lang === 'ru' ? 'ru' : 'uz'][w.kind]).filter(Boolean))];
-  if (!topics.length) return '';
+  const ru = lang === 'ru';
+  const topicOf = w => w.topic || KIND_TOPIC[ru ? 'ru' : 'uz'][w.kind];
+  const uniq = list => [...new Set(list.map(topicOf).filter(Boolean))];
+  const wrong = uniq(withheld.filter(w => w.verdict === 'contradicted'));
+  const unconfirmed = uniq(withheld.filter(w => w.verdict !== 'contradicted')).filter(t => !wrong.includes(t));
+  if (!wrong.length && !unconfirmed.length) return '';
   const facts = [...new Set(needsFacts)].slice(0, 5);
-  if (lang === 'ru') {
-    return `\n\n⚠️ Не подтверждено источником: ${topics.join('; ')}. Точное значение не приводится, пока норма не проверена по тексту закона.`
-      + (facts.length ? `\nДля расчёта уточните: ${facts.join('; ')}.` : '');
+  const lines = [];
+  if (ru) {
+    if (wrong.length) lines.push(`⚠️ Не соответствует тексту источника, убрано из ответа: ${wrong.join('; ')}.`);
+    if (unconfirmed.length) lines.push(`⚠️ Не подтверждено источником: ${unconfirmed.join('; ')}. Норма не найдена в просмотренных источниках — это не значит, что в законе её нет; точное значение не приводится, пока норма не проверена по тексту закона.`);
+    if (facts.length) lines.push(`Для расчёта уточните: ${facts.join('; ')}.`);
+  } else {
+    if (wrong.length) lines.push(`⚠️ Manba matniga mos kelmadi, javobdan olib tashlandi: ${wrong.join('; ')}.`);
+    if (unconfirmed.length) lines.push(`⚠️ Manbada tasdiqlanmadi: ${unconfirmed.join('; ')}. Norma ko'rib chiqilgan manbalarda topilmadi — bu qonunda yo'q degani emas; qonun matnida tekshirilmaguncha aniq qiymat keltirilmaydi.`);
+    if (facts.length) lines.push(`Hisoblash uchun aniqlashtiring: ${facts.join('; ')}.`);
   }
-  return `\n\n⚠️ Manbada tasdiqlanmadi: ${topics.join('; ')}. Norma qonun matnida tekshirilmaguncha aniq qiymat keltirilmaydi.`
-    + (facts.length ? `\nHisoblash uchun aniqlashtiring: ${facts.join('; ')}.` : '');
+  return `\n\n${lines.join('\n')}`;
+}
+
+/**
+ * Repair what generation or withholding left broken:
+ *   - a section heading with nothing (or only notices) under it is removed;
+ *   - a truncated answer (the provider said the output limit was hit, or the
+ *     text ends on a comma, colon or dash, or inside unclosed bold) is cut back to its last complete
+ *     sentence and marked.
+ * Returns { text, truncated, removedHeadings }.
+ */
+function repairStructure(text = '', { truncated = false, lang = 'uz' } = {}) {
+  let lines = String(text || '').split('\n');
+  // the body ends before the first notice line at the end
+  let tail = lines.length;
+  while (tail > 0 && (lines[tail - 1].trim() === '' || NOTICE_LINE.test(lines[tail - 1].trim()) || /^(?:Для расчёта|Hisoblash uchun)/u.test(lines[tail - 1].trim()))) tail--;
+  let body = lines.slice(0, tail);
+  const notices = lines.slice(tail);
+
+  const lastLine = (body.filter(l => l.trim()).pop() || '').trim();
+  const looksCut = lastLine && !HEADING_LINE.test(lastLine)
+    && (/[,;:–—-]\s*$/u.test(lastLine) || ((lastLine.match(/\*\*/gu) || []).length % 2 === 1));
+  const cut = Boolean(truncated) || Boolean(looksCut);
+  if (cut) {
+    const joined = body.join('\n');
+    const ends = [...joined.matchAll(/[.!?…](?:\*{1,2})?(?=\s|$)/gu)];
+    const lastEnd = ends.length ? ends[ends.length - 1].index + ends[ends.length - 1][0].length : 0;
+    body = joined.slice(0, lastEnd).split('\n');
+  }
+
+  const removedHeadings = [];
+  const out = [];
+  for (let i = 0; i < body.length; i++) {
+    const line = body[i];
+    if (HEADING_LINE.test(line.trim())) {
+      let j = i + 1;
+      while (j < body.length && body[j].trim() === '') j++;
+      if (j >= body.length || HEADING_LINE.test(body[j].trim()) || NOTICE_LINE.test(body[j].trim())) {
+        removedHeadings.push(line.trim());
+        continue;
+      }
+    }
+    out.push(line);
+  }
+  let result = out.join('\n').replace(/\n{3,}/gu, '\n\n').trim();
+  if (cut) {
+    result += lang === 'ru'
+      ? '\n\nℹ️ Ответ оборвался и сокращён до последней полной фразы. Задайте вопрос ещё раз или обратитесь к юристу.'
+      : "\n\nℹ️ Javob uzilib qoldi va oxirgi to'liq gapgacha qisqartirildi. Savolni qayta yuboring yoki yurist bilan bog'laning.";
+  }
+  const rest = notices.join('\n').trim();
+  if (rest) result += `\n\n${rest}`;
+  return { text: result.trim(), truncated: cut, removedHeadings };
 }
 
 function removeSentences(answer = '', toRemove = []) {
@@ -372,12 +484,19 @@ function substantiveLength(text = '') {
  */
 async function guardLegalAnswer({
   question = '', answer = '', chunks = [], callAI, model, lang = 'uz',
-  retrieveMore = null, endpoint = '/legal-answer/claim-check', options = {},
+  retrieveMore = null, endpoint = '/legal-answer/claim-check', options = {}, truncated = false,
 } = {}) {
   const opts = { ...DEFAULTS, ...options };
   const text = String(answer || '').trim();
   const claims = extractCriticalClaims(text, question, opts);
-  if (!claims.length) return { text, status: 'no_claims', claims: [], withheld: [], retrievals: 0, substantive: substantiveLength(text) > 0 };
+  if (!claims.length) {
+    const repaired = repairStructure(text, { truncated, lang });
+    return {
+      text: repaired.text, status: 'no_claims', claims: [], withheld: [], retrievals: 0,
+      truncated: repaired.truncated, removedHeadings: repaired.removedHeadings,
+      substantive: substantiveLength(repaired.text) > 0,
+    };
+  }
 
   let pool = Array.isArray(chunks) ? chunks.slice() : [];
   let retrievals = 0;
@@ -401,12 +520,20 @@ async function guardLegalAnswer({
     const r = results.get(c.id) || {};
     return r.verdict === 'supported' && r.deterministic && r.deterministic.ok;
   };
+  // A basis claim is kept unless its article is not in the context or the
+  // source contradicts it; "not found" or a failed verifier leaves it in,
+  // reported as unconfirmed.
+  const kept = (c) => {
+    if (c.kind !== 'basis') return verifierRan && supported(c);
+    const r = results.get(c.id) || {};
+    return Boolean(r.deterministic && r.deterministic.ok) && !(verifierRan && r.verdict === 'contradicted');
+  };
 
   await check(claims);
 
   // One bounded re-retrieval for claims not found in the context. A claim
   // the verifier contradicted is not searched again: the source answered it.
-  let open = claims.filter(c => !supported(c) && (results.get(c.id) || {}).verdict !== 'contradicted');
+  let open = claims.filter(c => !kept(c) && (results.get(c.id) || {}).verdict !== 'contradicted');
   while (open.length && typeof retrieveMore === 'function' && retrievals < opts.maxRetrievals && verifierRan) {
     retrievals++;
     const query = [String(question || '').slice(0, 400), ...open.map(c => (results.get(c.id) || {}).topic || c.text.replace(/\d+/gu, ' ').slice(0, 160))].join('\n');
@@ -421,7 +548,7 @@ async function guardLegalAnswer({
       break;
     }
     await check(open);
-    open = open.filter(c => !supported(c) && (results.get(c.id) || {}).verdict !== 'contradicted');
+    open = open.filter(c => !kept(c) && (results.get(c.id) || {}).verdict !== 'contradicted');
   }
 
   const decorated = claims.map(c => {
@@ -432,28 +559,34 @@ async function guardLegalAnswer({
       deterministic: r.deterministic ? (r.deterministic.ok ? 'ok' : r.deterministic.reason) : 'not_run',
       topic: r.topic || '', reason: r.reason || '', needsFacts: r.needsFacts || [],
       supported: verifierRan && supported(c),
+      kept: kept(c),
     };
   });
-  const withheld = decorated.filter(c => !c.supported);
-  let out = text;
-  if (withheld.length) {
-    out = removeSentences(text, withheld.map(c => c.text));
-    out += unverifiedBlock(withheld, lang, withheld.flatMap(c => c.needsFacts));
-  }
+  const withheld = decorated.filter(c => !c.kept);
+  const unconfirmed = decorated.filter(c => c.kept && !c.supported);
+  let body = text;
+  if (withheld.length) body = removeSentences(text, withheld.map(c => c.text));
+  const repaired = repairStructure(body, { truncated, lang });
+  const out = repaired.text + (withheld.length ? unverifiedBlock(withheld, lang, withheld.flatMap(c => c.needsFacts)) : '');
   const status = !verifierRan ? 'unverified' : (withheld.length ? 'partial' : 'verified');
   return {
     text: out,
     status,
     claims: decorated,
-    withheld: withheld.map(c => ({ id: c.id, kind: c.kind, topic: c.topic, verdict: c.verdict, deterministic: c.deterministic })),
+    withheld: withheld.map(c => ({ id: c.id, kind: c.kind, topic: c.topic, verdict: c.verdict, deterministic: c.deterministic, articles: c.articles })),
+    // basis claims kept although the verifier did not confirm them
+    unconfirmed: unconfirmed.map(c => ({ id: c.id, kind: c.kind, articles: c.articles, verdict: c.verdict })),
     retrievals,
     chunks: pool,
     reason: verifierRan ? null : verifierReason,
-    substantive: substantiveLength(removeSentences(text, withheld.map(c => c.text))) >= 120,
+    truncated: repaired.truncated,
+    removedHeadings: repaired.removedHeadings,
+    // after withholding, a husk of connecting words is not an answer
+    substantive: withheld.length || repaired.truncated ? substantiveLength(repaired.text) >= 120 : substantiveLength(repaired.text) > 0,
   };
 }
 
 module.exports = {
   DEFAULTS, wordNumber, quantityFacts, extractCriticalClaims, deterministicSupport,
-  buildEvidence, parseVerdicts, unverifiedBlock, removeSentences, guardLegalAnswer, citedArticles,
+  buildEvidence, parseVerdicts, unverifiedBlock, removeSentences, repairStructure, guardLegalAnswer, citedArticles,
 };

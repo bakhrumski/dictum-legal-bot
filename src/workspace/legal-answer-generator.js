@@ -13,6 +13,7 @@ const { buildLegalNextActions } = require('../services/legal-next-actions');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
+const { retrieveAspects } = require('../rag/question-aspects');
 const { hydrateMentionedOfficialActChunks } = require('../rag/official-citation-hydrator');
 const { appendRepealedNotice } = require('../rag/superseded-acts');
 const { hydrateLexAnchors } = require('../rag/lex-anchor-resolver');
@@ -283,9 +284,24 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
         .join(' ')
         .slice(-6000),
     });
-    const ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
+    let ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
     let ragChunks = typeof ragResult === 'string' ? [] : (ragResult.chunks || []);
     let ragMeta = typeof ragResult === 'string' ? null : (ragResult.meta || null);
+    // Each part of the question (deadline, compensation, evidence, remedy)
+    // gets its own light corpus search (src/rag/question-aspects.js).
+    try {
+      const aspects = await retrieveAspects({
+        question, topic, existing: ragChunks, lang: lexLanguage(question) === 'ru' ? 'ru' : 'uz',
+        retrieve: (query, t, opts) => retrieveLegalContext(query, t, null, { ...opts, strictTopic: Boolean(deterministicTopic) }),
+      });
+      if (aspects.chunks.length) {
+        ragChunks = ragChunks.concat(aspects.chunks);
+        ragContext += aspects.context;
+        ragMeta = Object.assign({}, ragMeta || {}, { aspects: aspects.found });
+      }
+    } catch (error) {
+      console.warn(`[WORKSPACE AI] aspect retrieval failed: ${error.message}`);
+    }
     if (typeof dependencies.logCoverage === 'function') {
       dependencies.logCoverage(question, topic, ragChunks, ragMeta);
     }
@@ -391,14 +407,19 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
         model: chatModel,
         lang: lexLanguage(question) === 'ru' ? 'ru' : 'uz',
         endpoint: '/api/workspaces/assistant/claim-check',
+        truncated: result.truncated === true,
         retrieveMore: (query, { articles = [] } = {}) => retrieveLegalContext(
-          [query, ...articles.map(a => `${a}-modda`)].join(' '), topic, null, { noWebFallback: true }),
+          [query, ...articles.map(a => `${a}-modda`)].join(' '), topic, null, { noWebFallback: true, queryRewrite: false, correctiveMode: 'off', rerank: false }),
       });
       reply = claimGuard.text;
       if (Array.isArray(claimGuard.chunks)) ragChunks = claimGuard.chunks;
     }
     ragMeta = Object.assign({}, ragMeta || {}, {
-      claimGuard: { status: claimGuard.status, withheld: claimGuard.withheld, retrievals: claimGuard.retrievals, reason: claimGuard.reason || null },
+      claimGuard: {
+        status: claimGuard.status, withheld: claimGuard.withheld, unconfirmed: claimGuard.unconfirmed || [],
+        retrievals: claimGuard.retrievals, reason: claimGuard.reason || null,
+        truncated: claimGuard.truncated === true, removedHeadings: claimGuard.removedHeadings || [],
+      },
     });
 
     if (typeof dependencies.verifyCitations === 'function') {
