@@ -73,6 +73,19 @@ async function test(name, fn) {
     assert.ok(/req\.session\.isAuthenticated = true/.test(route));
   });
 
+  await test('Google sign-in is closed unless GOOGLE_AUTH_ENABLED=true: buttons hidden, routes refuse', () => {
+    assert.ok(/process\.env\.GOOGLE_AUTH_ENABLED === 'true'/.test(server));
+    for (const route of ["app.get('/auth/google', ", "app.get('/auth/google/callback'"]) {
+      const body = between(route, "\n});");
+      assert.ok(/if \(!googleAuthEnabled\(\)\) return res\.redirect\('\/login\.html\?error=google_disabled'\)/.test(body.slice(0, 400)), route);
+    }
+    const login = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
+    const googleButtons = login.match(/<[^>]*\/auth\/google\?mode=[^>]*>/g) || [];
+    assert.ok(googleButtons.length >= 2 && googleButtons.every(b => /data-auth="google" hidden/.test(b)), 'every Google button starts hidden');
+    assert.ok(/id="googleRegBtn"[^>]*data-auth="google" hidden/.test(login));
+    assert.ok(/fetch\('\/api\/auth\/options'\)/.test(login) && /google_disabled:/.test(login));
+  });
+
   await test('S5: recovery codes lock after five wrong tries', () => {
     assert.ok(/const RECOVERY_MAX_TRIES = 5;/.test(server));
     const verify = between("app.post('/api/password-recovery/verify'", "\n});");
