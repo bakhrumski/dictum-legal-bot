@@ -180,8 +180,10 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
     } catch (err) {
       if (!voicelab.fallbackAllowed(model)) throw err;
       // the failed VoiceLab attempt is a ledger row of its own
-      usageLedger.record({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor(model)}`, status: usageLedger.errorCodeOf(err) === 'TIMEOUT' ? 'timeout' : 'error',
-        errorCode: usageLedger.errorCodeOf(err), error: err, startedAt: started, finishedAt: Date.now() });
+      const c = require('../ai/provider-health').classifyError(err);
+      require('../ai/provider-health').recordOutcome('voicelab', `voicelab/${voicelab.modelFor(model)}`, c);
+      usageLedger.record({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor(model)}`, status: c.code === 'TIMEOUT' ? 'timeout' : 'error',
+        errorCode: c.code, errorKind: c.kind, errorReason: c.reason, startedAt: started, finishedAt: Date.now() });
       log.warn('voicelab failed, using previous provider', { model, err: err.message });
     }
   }

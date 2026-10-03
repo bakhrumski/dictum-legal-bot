@@ -791,8 +791,19 @@ function stubMemory(clarifyCount = 0) {
 
   console.log('\ntelegram-agent — the confidence gate\n');
 
-  await test('nothing retrieved => answer is sent but flagged and escalated', async () => {
+  await test('nothing retrieved, an article not in context => that basis is withheld, the husk is not sent', async () => {
+    // 2026-10-04: an article is only applied when its text is in the context
     const d = deps({ chunks: [] });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Bu holatda qanday javobgarlik bor?' });
+    assert.strictEqual(r.action, 'escalate');
+    assert.strictEqual(r.escalate, true);
+    assert.strictEqual(r.meta.creditReleased, true);
+    assert.ok(!/100-modda/u.test(r.reply), r.reply);
+  });
+
+  await test('nothing retrieved => answer is sent but flagged and escalated', async () => {
+    const d = deps({ chunks: [], answer: "Bu holatda javobgarlik turi vaziyat tafsilotlariga bog'liq. Aniq baho uchun shartnoma va yozishmalarni yuristga ko'rsating." });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Bu holatda qanday javobgarlik bor?' });
     assert.strictEqual(r.action, 'answered');
@@ -862,6 +873,59 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(!/bir yil/u.test(r.reply), r.reply);
     assert.match(r.reply, /kreditingiz hisobdan yechilmadi/u);
     assert.strictEqual(r.meta.claimGuard.status, 'unverified');
+  });
+
+  // 2026-10-04 retest: 560 and 333 never reached the context; 511 was cited
+  // for an LLC employee and passed with citationCheck=ok; "Xulosa" was empty.
+  const MK333 = { id: 'mk-333', law_name: 'Mehnat kodeksi', article_numbers: ['333'], source_type: 'law_text', source_url: 'https://lex.uz/docs/-6257288', chunk_text: "333-modda. Ish haqini kechiktirgan har bir kun uchun ish beruvchi Markaziy bankning asosiy stavkasidan kelib chiqib kompensatsiya to'laydi." };
+  const MK511 = { id: 'mk-511', law_name: 'Mehnat kodeksi', article_numbers: ['511'], source_type: 'law_text', source_url: 'https://lex.uz/docs/-6257288', chunk_text: "511-modda. Yakka tartibdagi tadbirkor bo'lgan ish beruvchi bilan tuzilgan mehnat shartnomasini bekor qilish." };
+
+  await test('each part of the question is retrieved on its own, and its norms reach the answer prompt', async () => {
+    const d = deps({ answer: "Ish beruvchiga yozma talab yuboring va mehnat inspeksiyasiga murojaat qiling (25-modda).", claimVerdict: () => 'supported' });
+    const queries = [];
+    d.retrieveLegalContext = async (query, topic, language, options = {}) => {
+      queries.push({ query, options });
+      if (/murojaat qilish muddatlari/u.test(query)) return { chunks: [{ ...MK560, id: 'mk-560' }] };
+      if (/to'lash muddatlari buzilganligi/u.test(query)) return { chunks: [MK333] };
+      return { context: 'kontekst', chunks: [{ ...MK25, id: 'mk-25' }] };
+    };
+    let prompt = '';
+    d.buildTopicPrompt = (topic, context) => { prompt = context; return `SYSTEM\n${context}`; };
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: WAGE_Q });
+    assert.ok(queries.length >= 3, `${queries.length} searches`);
+    assert.ok(queries.slice(1).every(q => q.options.noWebFallback && q.options.queryRewrite === false), 'aspect searches are light');
+    assert.match(prompt, /560-modda/u);
+    assert.match(prompt, /333-modda/u);
+    assert.ok(r.meta.aspects.deadline.includes('560'));
+  });
+
+  await test('an article about a different employer is withheld; citationCheck is not the semantic check', async () => {
+    const answer = "Ish haqi to'lanmasa shartnomani bekor qilishingiz mumkin (Mehnat kodeksi, 511-modda). Avval ish beruvchiga yozma talab yuboring va mehnat inspeksiyasiga murojaat qiling (Mehnat kodeksi, 25-modda). Talabda qarz summasi va to'lanmagan oylarni ko'rsating, nusxasini o'zingizda saqlang.";
+    const d = deps({ answer, chunks: [MK25, MK511], claimVerdict: (t) => (/511/u.test(t) ? 'contradicted' : 'supported') });
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: WAGE_Q });
+    assert.ok(!/511/u.test(r.reply), r.reply);
+    assert.match(r.reply, /yozma talab/u);
+    assert.strictEqual(r.meta.citationCheck, 'ok', 'the format check passes');
+    assert.strictEqual(r.meta.semanticCheck, 'partial', 'the content check does not');
+    assert.strictEqual(r.meta.confidence, 'low');
+  });
+
+  await test('a cut-off answer with an empty "Xulosa" is repaired and marked low confidence', async () => {
+    const answer = "Huquqiy asos: ish beruvchiga yozma talab yuboring (Mehnat kodeksi, 25-modda).\n\nXulosa:";
+    const d = deps({ answer, chunks: [MK25], claimVerdict: () => 'supported' });
+    const answerAI = d.callAI;
+    d.callAI = async (messages, options) => { const out = await answerAI(messages, options); return options.endpoint === '/tg-agent/answer' ? { ...out, truncated: true } : out; };
+    agent.initTelegramAgent(d);
+    stubMemory(0);
+    const r = await agent.handleUserMessage({ chatId: 1, text: WAGE_Q });
+    assert.ok(!/Xulosa:/u.test(r.reply), r.reply);
+    assert.match(r.reply, /Javob uzilib qoldi/u);
+    assert.strictEqual(r.meta.claimGuard.truncated, true);
+    assert.strictEqual(r.meta.confidence, 'low');
   });
 
   console.log('\ntelegram-agent — clarification\n');

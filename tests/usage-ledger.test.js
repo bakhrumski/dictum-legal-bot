@@ -84,7 +84,7 @@ const close = (a, b) => Math.abs(a - b) < 1e-12;
     await settle();
     assert.deepStrictEqual(rows.map(r => [r.provider, r.status, r.errorCode, r.attempt, r.retryReason, r.fallbackFrom]), [
       ['voicelab', 'error', 'HTTP_502', 1, null, null],
-      ['openai', 'error', 'HTTP_400', 1, null, 'voicelab/aisha-comet'],
+      ['openai', 'error', 'HTTP_400_REQUEST', 1, null, 'voicelab/aisha-comet'],
       ['openai', 'success', null, 2, 'param_rejected', 'voicelab/aisha-comet'],
     ]);
   });
@@ -259,7 +259,8 @@ const close = (a, b) => Math.abs(a - b) < 1e-12;
       assert.strictEqual(mine.length, 2);
       assert.deepStrictEqual(mine.find(r => r.request_id === complete).models, ['gpt-6-luna', 'gpt-6-luna']);
 
-      const today = new Date().toISOString().slice(0, 10);
+      // report days are Tashkent's (UTC+5), not UTC
+      const today = require('../src/ai/usage-report').tashkentDate();
       const report = await call('/api/admin/ai-usage/report', { query: { period: 'day', from: today, to: today } });
       const p = report.periods.find(x => x.period === today);
       assert.ok(p.unknown_cost_calls >= 1);
@@ -268,6 +269,38 @@ const close = (a, b) => Math.abs(a - b) < 1e-12;
       assert.ok(!p.average_basis.included_request_ids.includes(incomplete), 'an incomplete request is not averaged as if its cost were known');
       assert.ok(p.average_basis.excluded_incomplete_requests >= 1);
       assert.ok(p.by_model.length >= 1 && p.by_service.length >= 1);
+    });
+
+    await test('database: Tashkent day boundary; skipped calls are not unknown cost; retries, fallbacks and failures counted apart', async () => {
+      // 19:30 UTC on 1 Jan is already 2 Jan in Tashkent (a date far from real rows)
+      const at = new Date('2031-01-01T19:30:00Z');
+      const later = new Date('2031-01-01T19:30:01Z');
+      let reqId;
+      await ledger.runWithRequest({ service: 'telegram' }, async (s) => {
+        reqId = s.requestId; made.push(reqId);
+        const base = { provider: 'openai', model: 'gpt-6-luna', endpoint: '/tg-agent/answer', startedAt: at, finishedAt: later };
+        const run = '22222222-2222-4222-8222-222222222222';
+        await ledger.record({ ...base, callId: '22222222-2222-4222-8222-000000000001', stageRunId: run, status: 'error', errorCode: 'HTTP_429_RATE', errorKind: 'transient', usage: {} });
+        await ledger.record({ ...base, callId: '22222222-2222-4222-8222-000000000002', stageRunId: run, parentCallId: '22222222-2222-4222-8222-000000000001', attempt: 2, retryReason: 'transient:HTTP_429_RATE', status: 'success', usage: { inTokens: 100, outTokens: 100 } });
+        await ledger.record({ ...base, callId: '22222222-2222-4222-8222-000000000003', provider: 'huggingface', model: 'BAAI/bge-reranker-v2-m3', stage: 'rerank', status: 'skipped', errorCode: 'CIRCUIT_OPEN', errorKind: 'skipped', usage: {} });
+        await ledger.record({ ...base, callId: '22222222-2222-4222-8222-000000000004', provider: 'google', model: 'gemini-2.5-flash', fallbackFrom: 'gpt-6-sol', status: 'success', usage: { inTokens: 100, outTokens: 100 } });
+        await ledger.finishRequest(s, { outcome: 'answered' });
+      });
+      const routes = {};
+      require('../src/ai/usage-report').mountUsageReportRoutes({ get: (p, g, h) => { routes[p] = h; } }, { requireMasterAdmin: null, pool, ledger });
+      const call = (p, req) => new Promise((resolve) => routes[p]({ query: {}, params: {}, ...req }, { json: resolve, status: () => ({ json: resolve }) }));
+      const utcDay = await call('/api/admin/ai-usage/report', { query: { period: 'day', from: '2031-01-01', to: '2031-01-01' } });
+      assert.strictEqual(utcDay.periods.length, 0, 'not on the UTC day');
+      const day = await call('/api/admin/ai-usage/report', { query: { period: 'day', from: '2031-01-02', to: '2031-01-02' } });
+      assert.strictEqual(day.timezone, 'Asia/Tashkent');
+      const p = day.periods[0];
+      assert.strictEqual(p.period, '2031-01-02');
+      assert.deepStrictEqual(
+        [p.calls, p.skipped_calls, p.failed_calls, p.retry_calls, p.fallback_calls],
+        [3, 1, 1, 1, 1]);
+      assert.strictEqual(p.unknown_cost_calls, 1, 'the failed attempt; the skipped call has no cost to know');
+      const one = await call('/api/admin/ai-usage/requests/:id', { params: { id: reqId } });
+      assert.ok(one.calls.some(c => c.error_kind === 'transient' && c.stage_run_id === '22222222-2222-4222-8222-222222222222'));
     });
   } finally {
     await cleanup();

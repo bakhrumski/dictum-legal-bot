@@ -36,9 +36,9 @@ function httpsPostJson(url, body, headers = {}) {
       res.on('end', () => {
         const text = Buffer.concat(chunks).toString('utf-8');
         try {
-          resolve({ status: res.statusCode, body: JSON.parse(text), text });
+          resolve({ status: res.statusCode, body: JSON.parse(text), text, headers: res.headers });
         } catch {
-          resolve({ status: res.statusCode, body: null, text });
+          resolve({ status: res.statusCode, body: null, text, headers: res.headers });
         }
       });
       res.on('error', reject);
@@ -214,8 +214,18 @@ async function hfEmbedOnce(texts, apiKey, isQuery, call) {
 // Retry transient Gemini failures (429 rate limit, 503, 5xx) with backoff so a
 // long re-embed survives free-tier throttling and runtime queries are resilient.
 async function geminiPostWithRetry(url, payload, label) {
-  return usageLedger.track({ provider: 'gemini', model: PROVIDERS.gemini.model, stage: 'embedding' },
-    (call) => geminiPostWithRetryOnce(url, payload, label, call));
+  // The embedding API returns no token count. Its billing unit is input
+  // tokens, so the count is estimated from the text (about 4 characters a
+  // token) and marked estimated; the cost stays unknown unless the owner sets
+  // a confirmed price (AI_PRICE_OVERRIDES), and never shows as $0.
+  const texts = Array.isArray(payload.requests)
+    ? payload.requests.map(r => ((r.content && r.content.parts) || []).map(p => p.text || '').join(''))
+    : [((payload.content && payload.content.parts) || []).map(p => p.text || '').join('')];
+  const estimatedTokens = Math.ceil(texts.reduce((n, t) => n + String(t).length, 0) / 4);
+  return usageLedger.track({ provider: 'gemini', model: PROVIDERS.gemini.model, stage: 'embedding' }, (call) => {
+    call.usage({ inTokens: estimatedTokens, outTokens: 0, estimated: true });
+    return geminiPostWithRetryOnce(url, payload, label, call);
+  });
 }
 
 async function geminiPostWithRetryOnce(url, payload, label, call) {

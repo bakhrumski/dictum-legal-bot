@@ -146,7 +146,7 @@ async function test(name, fn) {
     });
     assert.strictEqual(r.text, 'Salom');
     assert.strictEqual(r.provider, 'voicelab/aisha-orbit');
-    assert.deepStrictEqual(r.usage, { inTokens: 12, outTokens: 3, cachedTokens: 4 });
+    assert.deepStrictEqual(r.usage, { inTokens: 12, outTokens: 3, cachedTokens: 4, credits: null });
   });
 
   await test('image parts pass through untouched on the vision lane', async () => {

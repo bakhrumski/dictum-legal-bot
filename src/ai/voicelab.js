@@ -165,6 +165,20 @@ function contentText(content) {
   return '';
 }
 
+/**
+ * Credits VoiceLab reports for a call, or null when it reports none: the
+ * x-voicelab-credits-used header (the one its TTS API sets) or a usage.credits
+ * field. Never derived from tokens here; unknown stays null (2026-10-04).
+ */
+function creditsOf(resp, data) {
+  const header = resp && resp.headers && typeof resp.headers.get === 'function' ? resp.headers.get('x-voicelab-credits-used') : null;
+  const fromHeader = header != null && header !== '' ? Number(header) : NaN;
+  if (Number.isFinite(fromHeader)) return fromHeader;
+  const u = (data && data.usage) || {};
+  const field = u.credits != null ? Number(u.credits) : (u.credits_used != null ? Number(u.credits_used) : NaN);
+  return Number.isFinite(field) ? field : null;
+}
+
 function usageOf(data) {
   const u = (data && data.usage) || {};
   return {
@@ -206,8 +220,13 @@ async function post(body, signal) {
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => '');
-      const err = new Error(`VoiceLab ${body.model} ${resp.status}: ${errText.substring(0, 300)}`);
+      const { parseProviderError, safeReason } = require('./provider-health');
+      const parsed = parseProviderError(errText);
+      const err = new Error(`VoiceLab ${body.model} ${resp.status}: ${safeReason([parsed.code, parsed.message].filter(Boolean).join(': ') || errText.substring(0, 200))}`);
       err.status = resp.status;
+      err.providerCode = parsed.code;
+      err.providerMessage = parsed.message ? safeReason(parsed.message) : null;
+      err.retryAfter = resp.headers.get('retry-after');
       err.isModelNotFound = resp.status === 404 || /model_not_found|does not exist|invalid.*model/i.test(errText);
       throw err;
     }
@@ -243,12 +262,21 @@ async function chatCompletion(modelOrLane, messages, opts = {}) {
     // which this synchronous path does not poll. Failing loudly lets the
     // caller fall back rather than returning an empty answer.
     const status = data && (data.status || data.state);
-    throw new Error(`VoiceLab ${model} returned no choices${status ? ` (status: ${status})` : ''}`);
+    // a specific code instead of a bare "ERROR" in the usage ledger (2026-10-04)
+    throw Object.assign(new Error(`VoiceLab ${model} returned no choices${status ? ` (status: ${status})` : ''}`), { code: 'NO_CHOICES', providerCode: status || null });
   }
   const text = contentText(choice.message && choice.message.content);
-  if (!text.trim()) throw new Error(`VoiceLab ${model} empty response`);
+  if (!text.trim()) {
+    // e.g. the token budget spent before any visible text (finish_reason=length)
+    throw Object.assign(new Error(`VoiceLab ${model} empty response (finish_reason: ${choice.finish_reason || '?'}, max_tokens: ${body.max_tokens || '-'})`),
+      { code: 'EMPTY_RESPONSE', providerCode: choice.finish_reason || null });
+  }
 
-  return { text, model, provider: `voicelab/${model}`, usage: usageOf(data), raw: data };
+  return {
+    text, model, provider: `voicelab/${model}`, raw: data,
+    usage: { ...usageOf(data), credits: creditsOf(resp, data) },
+    finishReason: choice.finish_reason || null,
+  };
 }
 
 /**
@@ -310,5 +338,5 @@ module.exports = {
   chatCompletion,
   chatCompletionStream,
   // exported for tests
-  _internal: { toChatMessages, contentText, usageOf, buildBody, DEFAULT_MODELS, LANES },
+  _internal: { toChatMessages, contentText, usageOf, creditsOf, buildBody, DEFAULT_MODELS, LANES },
 };
