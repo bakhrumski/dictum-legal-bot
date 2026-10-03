@@ -50,6 +50,7 @@ const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywo
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 const usageLedger = require('../ai/usage-ledger');
+const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { legalForceOf, legalForceLabel, sortByLegalForce } = require('../rag/legal-force');
 // Acts an answer's live lex.uz check found that the corpus lacks go to the
 // dashboard's suggested sources (src/rag/source-suggestions.js).
@@ -1211,6 +1212,33 @@ app.post('/api/admin/answer-feedback/:id/status', requireMasterAdmin, async (req
       [id, status, req.session.adminId]
     );
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// The stored text of one article (master only, database read, no model call):
+// to check what the corpus — ingested from lex.uz — actually says before
+// trusting an answer about it (2026-10-03, Labour Code articles 560 and 333).
+//   GET /api/admin/corpus/article?doc_id=mehnat-kodeks&article=560
+app.get('/api/admin/corpus/article', requireMasterAdmin, async (req, res) => {
+  try {
+    const docId = String(req.query.doc_id || '').trim();
+    const article = String(req.query.article || '').replace(/[^\d]/gu, '');
+    if (!docId || !article) return res.status(400).json({ error: 'doc_id and article are required, e.g. ?doc_id=mehnat-kodeks&article=560' });
+    const { rows } = await pool.query(
+      `SELECT id, law_name, source_url, language, is_active, status_label, chunk_type, article_numbers, chunk_text
+         FROM legal_chunks
+        WHERE doc_id = $1 AND is_valid IS NOT FALSE AND $2 = ANY(article_numbers)
+        ORDER BY (chunk_type = 'parent') DESC, id
+        LIMIT 20`, [docId, article]);
+    res.json({
+      doc_id: docId,
+      article,
+      found: rows.length,
+      note: 'Corpus copy of the lex.uz text; open source_url on lex.uz to compare with the official current edition.',
+      chunks: rows.map(r => ({ id: r.id, law_name: r.law_name, source_url: r.source_url, language: r.language, is_active: r.is_active, status_label: r.status_label, chunk_type: r.chunk_type, text: r.chunk_text })),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -6804,6 +6832,31 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       if (sse) sse({ type: 'status_clear' });
     }
 
+    // Terms, amounts, percentages and rates must be backed by the source text
+    // for this situation and these parties; what is not is withheld and named
+    // (src/rag/legal-claim-guard.js, shared with Telegram and Workspace).
+    if (hasAiProvider) {
+      const claimGuard = await guardLegalAnswer({
+        question: message,
+        answer: displayReply,
+        chunks: ragChunks,
+        callAI,
+        model: MODELS.chat,
+        lang: lexLangForText(message) === 'ru' ? 'ru' : 'uz',
+        endpoint: '/api/legal-chat/claim-check',
+        retrieveMore: (query, { articles = [] } = {}) => retrieveLegalContext(
+          [query, ...articles.map(a => `${a}-modda`)].join(' '), topic, null, { noWebFallback: true }),
+      });
+      if (claimGuard.text !== displayReply) {
+        displayReply = claimGuard.text;
+        if (sse) sse({ type: 'replace', text: displayReply });
+      }
+      if (Array.isArray(claimGuard.chunks)) ragChunks = claimGuard.chunks;
+      ragMeta = Object.assign({}, ragMeta || {}, {
+        claimGuard: { status: claimGuard.status, withheld: claimGuard.withheld, retrievals: claimGuard.retrievals, reason: claimGuard.reason || null },
+      });
+    }
+
     // Citation post-check (before the footer append — the footer's own
     // verified citations must not be counted as body citations). Runs ALWAYS,
     // not only when chunks exist: when RAG retrieved nothing (no topic, or a
@@ -6811,7 +6864,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     // unverified — precisely the case where hallucinated citations are most
     // likely, so skipping the check there was the worst possible gap.
     {
-      const citationCheck = verifyCitations(displayReply, ragChunks);
+      let citationCheck;
+      try {
+        citationCheck = verifyCitations(displayReply, ragChunks);
+      } catch (error) {
+        // a checker that fails has checked nothing
+        citationCheck = { total: null, unverified: [], error: String(error.message || error).slice(0, 200) };
+      }
       if (citationCheck.unverified.length > 0) {
         console.warn(`[Legal Chat] ${citationCheck.unverified.length}/${citationCheck.total} cited article(s) not found in retrieved context: ${citationCheck.unverified.join(', ')}`);
       }
