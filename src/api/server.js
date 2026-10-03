@@ -9476,8 +9476,19 @@ app.post('/api/register/telegram-otp', async (req, res) => {
 });
 
 // ========== GOOGLE OAUTH ==========
+// Closed for now (owner, 2026-10-03: users could not register with Google;
+// sign-in stays Telegram and username/password). GOOGLE_AUTH_ENABLED=true and
+// the Google client keys turn it back on; the login page asks /api/auth/options.
+function googleAuthEnabled() {
+  return process.env.GOOGLE_AUTH_ENABLED === 'true' && Boolean(process.env.GOOGLE_CLIENT_ID);
+}
+
+app.get('/api/auth/options', (req, res) => {
+  res.json({ google: googleAuthEnabled() });
+});
 
 app.get('/auth/google', (req, res) => {
+  if (!googleAuthEnabled()) return res.redirect('/login.html?error=google_disabled');
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return res.status(503).send('Google OAuth not configured');
   // Start on the host Google will return to, or the session that holds the
@@ -9505,6 +9516,7 @@ app.get('/auth/google', (req, res) => {
 });
 
 app.get('/auth/google/callback', async (req, res) => {
+  if (!googleAuthEnabled()) return res.redirect('/login.html?error=google_disabled');
   const { code, state } = req.query;
   // Each failure says why in the log (no code, token or e-mail is logged), so
   // a "Google bilan kira olmayapman" report can be traced.

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kirish — JuristAI</title>
-<meta name="description" content="JuristAI hisobingizga kiring — Telegram yoki Google orqali, bir necha soniyada.">
+<meta name="description" content="JuristAI hisobingizga kiring — Telegram orqali, bir necha soniyada.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#070a14">
 <link rel="icon" href="/favicon-256.png">
@@ -70,7 +70,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
               <span>Telegram</span>
             </button>
-            <button type="button" class="google-reg-toggle" onclick="window.location.href='/auth/google?mode=login'">
+            <button type="button" class="google-reg-toggle" data-auth="google" hidden onclick="window.location.href='/auth/google?mode=login'">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
               <span>Google</span>
             </button>
@@ -145,9 +145,9 @@
               <div id="otpError" class="agreement-error" style="margin-top:6px;display:none;"></div>
             </div>
 
-            <div class="reg-divider" style="margin:20px 0;">yoki</div>
+            <div class="reg-divider" data-auth="google" hidden style="margin:20px 0;">yoki</div>
 
-            <button type="button" id="googleRegBtn" class="reg-social-btn google-social-btn" disabled onclick="startGoogleAuth()">
+            <button type="button" id="googleRegBtn" class="reg-social-btn google-social-btn" data-auth="google" hidden disabled onclick="startGoogleAuth()">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
               Google bilan davom eting
             </button>
@@ -175,7 +175,7 @@
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
                 Telegram orqali
               </button>
-              <button type="button" class="recovery-method" onclick="window.location.href='/auth/google?mode=recover'">
+              <button type="button" class="recovery-method" data-auth="google" hidden onclick="window.location.href='/auth/google?mode=recover'">
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
                 Google orqali
               </button>
@@ -665,7 +665,13 @@
             const params = new URLSearchParams(window.location.search);
             const recoverToken = params.get('recover');
             const err = params.get('error');
+            // Google sign-in is off unless the server says otherwise
+            // (GOOGLE_AUTH_ENABLED, 2026-10-03: closed for now).
+            fetch('/api/auth/options').then(function (r) { return r.ok ? r.json() : {}; }).then(function (o) {
+                if (o && o.google) document.querySelectorAll('[data-auth="google"]').forEach(function (el) { el.hidden = false; });
+            }).catch(function () {});
             const GOOGLE_LOGIN_ERRORS = {
+                google_disabled: 'Google orqali kirish vaqtincha o\'chirilgan. Telegram yoki login va parol orqali kiring.',
                 google_failed: 'Google orqali kirishda xatolik yuz berdi. Qaytadan urinib ko\'ring.',
                 google_cancelled: 'Google orqali kirish bekor qilindi.',
                 // a NEW account refused on a device whose trial was already used
