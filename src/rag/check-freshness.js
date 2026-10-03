@@ -30,13 +30,13 @@ const DRY_RUN     = args.includes('--dry-run');
 const CONCURRENCY = parseInt(args.find(a => a.startsWith('--concurrency='))?.split('=')[1] || '2', 10);
 const SINGLE_DOC  = args.find((a, i) => args[i - 1] === '--doc-id');
 
-async function getIngestedDocuments() {
+async function getIngestedDocuments(db = pool) {
   const where = SINGLE_DOC
     ? `WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE) AND doc_id = $1`
     : `WHERE is_valid = TRUE AND (is_active IS NULL OR is_active = TRUE)`;
   const params = SINGLE_DOC ? [SINGLE_DOC] : [];
 
-  const result = await pool.query(`
+  const result = await db.query(`
     SELECT DISTINCT ON (doc_id)
       doc_id,
       law_name,
@@ -46,6 +46,8 @@ async function getIngestedDocuments() {
     FROM legal_chunks
     ${where}
       AND source_url IS NOT NULL
+      AND source_url LIKE '%lex.uz%'
+      AND (source_type IS NULL OR source_type = 'law_text')
     ORDER BY doc_id, id
   `, params);
 
@@ -98,6 +100,13 @@ async function checkDocument(doc, fetchDoc = fetchLexDocument) {
       };
     }
 
+    // Still a date-locked old edition after the fetcher tried the current
+    // one: the act is not repealed, but its current text was not reached.
+    if (fetched && fetched.metadata && fetched.metadata.current_version_url) {
+      return { doc_id, law_name, source_url, status: 'old_edition',
+        snapshot_date: fetched.metadata.snapshot_date || null, current_version_url: fetched.metadata.current_version_url };
+    }
+
     log.debug('Document still active', { doc_id, law_name });
     return { doc_id, law_name, status: 'active' };
 
@@ -107,15 +116,122 @@ async function checkDocument(doc, fetchDoc = fetchLexDocument) {
   }
 }
 
-async function deactivateDocument(doc_id) {
-  await pool.query(
+async function deactivateDocument(doc_id, label = '', db = pool) {
+  await db.query(
     `UPDATE legal_chunks
      SET is_active = FALSE,
-         status_label = 'Hujjat kuchini yo''qotgan (auto-checked)'
+         status_label = $2
      WHERE doc_id = $1`,
-    [doc_id]
+    [doc_id, `${label || "Hujjat kuchini yo'qotgan"} (auto-checked)`.slice(0, 200)]
   );
   log.info('Marked as inactive in DB', { doc_id });
+}
+
+/**
+ * Every corpus document re-opened on lex.uz, one at a time (2026-10-03,
+ * owner: an act that lost force after it was ingested must not keep being
+ * cited). This was a CLI script nobody ran; the server now runs it daily and
+ * on demand.
+ *
+ * Acts lex.uz marks "Hujjat kuchini yoʻqotgan" are taken out of search
+ * (is_active = FALSE). As a guard against a misread banner taking a whole
+ * code out at once, a run that finds more than `maxAuto` of them only
+ * reports; the owner applies it with ?apply=1.
+ */
+async function runFreshnessCheck({ db = pool, fetchDoc = fetchLexDocument, apply = true, maxAuto = 3, pauseMs = 1500, job = {} } = {}) {
+  const docs = await getIngestedDocuments(db);
+  job.total = docs.length;
+  job.done = 0;
+  job.results = [];
+  for (const doc of docs) {
+    job.results.push(await checkDocument(doc, fetchDoc));
+    job.done++;
+    if (pauseMs) await new Promise(r => setTimeout(r, pauseMs));
+  }
+  const expired = job.results.filter(r => r.status === 'expired');
+  job.expired = expired;
+  job.oldEditions = job.results.filter(r => r.status === 'old_edition');
+  job.errors = job.results.filter(r => r.status === 'fetch_error');
+  if (expired.length && apply && expired.length <= maxAuto) {
+    await applyExpired(expired, db);
+    job.applied = expired.map(r => r.doc_id);
+  } else if (expired.length && apply) {
+    job.held = `${expired.length} documents read as repealed (more than ${maxAuto}); review and apply with ?apply=1`;
+  }
+  return job;
+}
+
+async function applyExpired(expired, db = pool) {
+  for (const r of expired) await deactivateDocument(r.doc_id, r.status_label, db);
+  // The answer-time screen reads "in corpus and in force" from its own index.
+  require('./answer-verification').invalidateCorpusIndex();
+}
+
+/**
+ * GET /api/admin/corpus/freshness - the last run; ?start=1 runs it now;
+ * ?apply=1 takes out the acts the last run found repealed (after a held run).
+ * The run also repeats weekly, on Sunday at 03:00 Tashkent time (owner,
+ * 2026-10-03); CORPUS_FRESHNESS=off turns the schedule off.
+ */
+function mountFreshnessRoutes(app, { requireMasterAdmin, db = pool, fetchDoc = fetchLexDocument, weekly = true, pauseMs = 1500, logger = log }) {
+  let job = null;
+  const start = (trigger) => {
+    if (job && job.running) return false;
+    const current = { running: true, trigger, startedAt: new Date().toISOString() };
+    job = current;
+    runFreshnessCheck({ db, fetchDoc, pauseMs, job: current })
+      .catch((err) => { current.error = err.message; logger.error('Freshness run failed', { err: err.message }); })
+      .finally(() => {
+        current.running = false;
+        current.finishedAt = new Date().toISOString();
+        logger.info('Freshness run done', { checked: current.done, expired: (current.expired || []).length, applied: (current.applied || []).length, held: current.held || null });
+      });
+    return true;
+  };
+
+  app.get('/api/admin/corpus/freshness', requireMasterAdmin, async (req, res) => {
+    try {
+      if (req.query.start === '1') start('manual');
+      if (req.query.apply === '1' && job && !job.running && (job.expired || []).length && !job.applied) {
+        await applyExpired(job.expired, db);
+        job.applied = job.expired.map(r => r.doc_id);
+        job.held = null;
+      }
+      const summary = job && {
+        running: job.running, trigger: job.trigger, startedAt: job.startedAt, finishedAt: job.finishedAt,
+        done: job.done, total: job.total, error: job.error, held: job.held || null, applied: job.applied || [],
+      };
+      res.json({
+        job: summary,
+        expired: (job && job.expired) || [],
+        oldEditions: (job && job.oldEditions) || [],
+        errors: (job && job.errors) || [],
+        howTo: 'Every corpus document is re-opened on lex.uz. Acts marked "Hujjat kuchini yoʻqotgan" are taken out of search; more than 3 at once are only reported until ?apply=1. ?start=1 runs it now (several minutes); it also runs every Sunday at 03:00 Tashkent time.',
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  let timer = null;
+  const scheduleNext = () => {
+    timer = setTimeout(() => { start('scheduled'); scheduleNext(); }, msUntilNextSunday(new Date()));
+    timer.unref?.();
+  };
+  if (weekly) scheduleNext();
+  return { start, current: () => job, nextRunAt: () => (timer ? new Date(Date.now() + msUntilNextSunday(new Date())) : null) };
+}
+
+// Tashkent is UTC+5 all year (no daylight saving).
+const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+/** Milliseconds from `now` to the next Sunday 03:00 in Tashkent (never 0). */
+function msUntilNextSunday(now = new Date(), hour = 3) {
+  const local = new Date(now.getTime() + TASHKENT_OFFSET_MS); // Tashkent wall clock, read with UTC getters
+  const target = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), hour));
+  target.setUTCDate(target.getUTCDate() + ((7 - local.getUTCDay()) % 7));
+  if (target <= local) target.setUTCDate(target.getUTCDate() + 7);
+  return target.getTime() - local.getTime();
 }
 
 async function runInChunks(items, concurrency, fn) {
@@ -179,7 +295,7 @@ async function main() {
   if (expired.length > 0 && !DRY_RUN) {
     console.log('\n── Deactivating expired documents in DB ──');
     for (const r of expired) {
-      await deactivateDocument(r.doc_id);
+      await deactivateDocument(r.doc_id, r.status_label);
       console.log(`  ✓ Deactivated: ${r.doc_id}`);
     }
     console.log(`\nDone. ${expired.length} document(s) marked is_active = FALSE.`);
@@ -199,4 +315,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkDocument, lexStatus };
+module.exports = { checkDocument, lexStatus, runFreshnessCheck, mountFreshnessRoutes, msUntilNextSunday };

@@ -155,6 +155,9 @@ async function reingestDocuments(docs, { fetchDoc, ingest, report, pauseMs = 150
       if (meta.is_active === false) {
         entry.status = 'skipped';
         entry.reason = `lex.uz page read as not in force: "${meta.status_label || '?'}"`;
+      } else if (meta.current_version_url) {
+        entry.status = 'skipped';
+        entry.reason = `lex.uz page is an old edition${meta.snapshot_date ? ` as of ${meta.snapshot_date}` : ''}; the current version (${meta.current_version_url}) could not be fetched`;
       } else {
         const chunks = await ingest(d.source_url, { category: d.category, docId: d.doc_id, lawName: d.law_name, prefetchedDoc: doc });
         entry.status = chunks > 0 ? 'done' : 'skipped';

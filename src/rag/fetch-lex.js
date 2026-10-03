@@ -174,6 +174,8 @@ function parseLexHtml(html, sourceUrl) {
   // (or Russian "Документ") subject — require it.
   const statusPatterns = [
     new RegExp(`Hujjat(?:ning)?\\s+kuchi(?:ni)?\\s+yo${APO}?qotgan`, 'i'),
+    // The Uzbek Cyrillic page (/uz/docs/<id>) prints the same banner in Cyrillic.
+    /Ҳужжат(?:нинг)?\s+кучи(?:ни)?\s+йўқотган/iu,
     /Документ\s+утратил\s+силу/i,
     /Not\s+in\s+force/i,
   ];
@@ -181,7 +183,12 @@ function parseLexHtml(html, sourceUrl) {
     const m = statusText.match(pat);
     if (m) {
       metadata.is_active = false;
-      metadata.status_label = m[0];
+      // The banner is followed by the date the act lost force
+      // ("Hujjat kuchini yoʻqotgan 20.01.2026"); keep it with the label.
+      const after = statusText.slice((m.index || 0) + m[0].length, (m.index || 0) + m[0].length + 40);
+      const lostOn = after.match(/^\s*[-–:]?\s*(\d{2}\.\d{2}\.\d{4})/u);
+      metadata.repealed_date = lostOn ? lostOn[1] : null;
+      metadata.status_label = lostOn ? `${m[0]} ${lostOn[1]}` : m[0];
       // Log surrounding context so a misfire is diagnosable from logs alone.
       const idx = m.index || 0;
       const ctx = statusText.slice(Math.max(0, idx - 60), idx + 80).replace(/\s+/g, ' ').trim();
@@ -209,8 +216,10 @@ function parseLexHtml(html, sourceUrl) {
   // contains an "Amaldagi versiyaga o'tish" link to the current version.
   // We capture that link so fetchLexDocument() can re-fetch the current doc.
   metadata.current_version_url = null;
-  if (/sanasi\s+holatiga/i.test(fullText)) {
-    const amaldagiRx = new RegExp(`Amaldagi\\s+versiyaga\\s+o${APO}?tish`, 'i');
+  const snapshot = fullText.match(/Hujjat\s+(\d{2}\.\d{2}\.\d{4})\s+sanasi\s+holatiga|Ҳужжат\s+(\d{2}\.\d{2}\.\d{4})\s+санаси\s+ҳолатига/iu);
+  metadata.snapshot_date = snapshot ? (snapshot[1] || snapshot[2]) : null;
+  if (/sanasi\s+holatiga|санаси\s+ҳолатига/iu.test(fullText)) {
+    const amaldagiRx = new RegExp(`Amaldagi\\s+versiyaga\\s+o${APO}?tish|Амалдаги\\s+версияга\\s+ўтиш`, 'iu');
     $('a').each((_, el) => {
       const linkText = $(el).text().trim();
       if (amaldagiRx.test(linkText)) {

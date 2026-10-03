@@ -77,6 +77,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/corpus-audit.test.js
       - name: Suggested sources and batch ingest on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/source-suggestions.test.js
+      - name: lex.uz status and corpus re-check on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/lex-status.test.js
 
   audit:
     name: npm audit (report only)
