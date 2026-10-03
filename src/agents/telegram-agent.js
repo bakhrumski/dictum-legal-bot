@@ -37,6 +37,7 @@ const {
 } = require('../rag/citation-utils');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const { appendRepealedNotice } = require('../rag/superseded-acts');
+const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const telegramEconomy = require('../services/telegram-economy');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
 
@@ -522,6 +523,26 @@ TELEGRAM FORMATI (majburiy):
     if (lexCrossCheck && lexCrossCheck.answer) text = String(lexCrossCheck.answer).trim();
   }
 
+  // Terms, amounts, percentages and rates must be backed by the source text
+  // for this situation and these parties; anything that is not is withheld
+  // and named as unverified (src/rag/legal-claim-guard.js). One bounded
+  // corpus re-retrieval looks for a missing norm.
+  const lang = citationLanguageForText(question);
+  const claimGuard = await guardLegalAnswer({
+    question,
+    answer: text,
+    chunks,
+    callAI: D.callAI,
+    model: D.chatModel || undefined,
+    lang,
+    endpoint: '/tg-agent/claim-check',
+    retrieveMore: (query, { articles = [] } = {}) => D.retrieveLegalContext(
+      [query, ...articles.map(a => `${a}-modda`)].join(' '), topic, null,
+      { noWebFallback: true, strictTopic: Boolean(deterministicTopic) }),
+  });
+  text = claimGuard.text;
+  chunks = claimGuard.chunks || chunks;
+
   // Never let a sourced legal answer cite a legal act that was outside the
   // retrieved topic-scoped context. In that failure mode the old behavior sent
   // a polished but ungrounded answer and then appended unrelated retrievals.
@@ -533,13 +554,27 @@ TELEGRAM FORMATI (majburiy):
   // Two independent failure signals: nothing retrieved, or the answer cites
   // articles that are not in what we retrieved. Either one means we cannot
   // stand behind the citation, which is the whole product promise.
+  // A checker that fails has not checked anything: its failure counts as
+  // unverified, never as passed (2026-10-03).
   let unverified = [];
-  try {
-    if (D.verifyCitations) unverified = (D.verifyCitations(text, chunks) || {}).unverified || [];
-  } catch (_) { /* treat as verified rather than blocking the answer */ }
+  let citationCheck = 'ok';
+  if (!D.verifyCitations) {
+    citationCheck = 'missing';
+  } else {
+    try {
+      const result = D.verifyCitations(text, chunks);
+      if (!result || !Array.isArray(result.unverified)) citationCheck = 'invalid_result';
+      else unverified = result.unverified;
+    } catch (error) {
+      citationCheck = 'error';
+      console.warn('[TG-AGENT] citation check failed — answer marked unverified:', error.message);
+    }
+  }
 
   const lexCheckWeak = ['error', 'insufficient'].includes(String(lexCrossCheck.status || ''));
-  const confidence = (chunks.length === 0 || unverified.length > 0 || !groundedToNamedSource || lexCheckWeak) ? 'low' : 'high';
+  const claimsWeak = ['partial', 'unverified'].includes(claimGuard.status);
+  const confidence = (chunks.length === 0 || unverified.length > 0 || citationCheck !== 'ok'
+    || !groundedToNamedSource || lexCheckWeak || claimsWeak) ? 'low' : 'high';
   if (confidence === 'low') {
     console.log(`[TG-AGENT] low confidence — chunks=${chunks.length} unverified=[${unverified.join(', ')}]`);
   }
@@ -548,15 +583,24 @@ TELEGRAM FORMATI (majburiy):
 
   return {
     text: appendRepealedNotice(
-      normalizeLegalAnswerCitations(text, chunks, citationLanguageForText(question)),
-      { repealed: repealedActs }, citationLanguageForText(question)),
+      normalizeLegalAnswerCitations(text, chunks, lang),
+      { repealed: repealedActs }, lang),
     confidence,
     sources: '',
+    // false when withholding the unverified claims left no legal content
+    substantive: claimGuard.substantive !== false,
     meta: {
       path: 'rag',
       topic,
       chunks: chunks.length,
       unverified,
+      citationCheck,
+      claimGuard: {
+        status: claimGuard.status,
+        withheld: claimGuard.withheld,
+        retrievals: claimGuard.retrievals,
+        reason: claimGuard.reason || null,
+      },
       provider: res.provider,
       lexCrossCheck: {
         status: lexCrossCheck.status || 'skipped',
@@ -1137,6 +1181,24 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
     if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId, quota).catch(() => {});
     else await releaseDailyAiAnswer(chatId, quota);
     return skip('empty answer');
+  }
+
+  // Every critical claim had to be withheld and little else was left: this
+  // is not an answer. The credit is returned, the user is told plainly, and
+  // a lawyer takes the question.
+  if (answer.substantive === false) {
+    if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId, quota).catch(() => {});
+    else await releaseDailyAiAnswer(chatId, quota);
+    const reply = "Savolingiz bo'yicha muddat, summa yoki hisoblash kabi aniq ma'lumotlarni manbada tasdiqlay olmadim, shuning uchun taxminiy javob yubormayman. Savolingiz yuristga yuborildi. Bu javob uchun AI kreditingiz hisobdan yechilmadi."
+      + (answer.text.includes('⚠️') ? `\n\n${answer.text.slice(answer.text.indexOf('⚠️')).trim()}` : '');
+    console.log(`[TG-AGENT] chat=${chatId} claims unverified, nothing substantive — escalated, credit released`);
+    return complete({
+      handled: true,
+      reply,
+      action: 'escalate',
+      escalate: true,
+      meta: { intent: intent.intent, ...answer.meta, confidence: 'low', creditReleased: true, ms: Date.now() - started },
+    });
   }
 
   const lowConfidence = answer.confidence === 'low' && ESCALATE_WEAK;

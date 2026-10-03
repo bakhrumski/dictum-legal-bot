@@ -35,16 +35,23 @@ const officialChunk = {
 (async () => {
   console.log('\nindependent Lex.uz answer cross-check\n');
 
-  await test('only freshly retrieved HTTPS Lex.uz chunks become verifier evidence', async () => {
+  await test('verifier evidence: live Lex.uz excerpts and in-force corpus law text from lex.uz, nothing else', async () => {
+    // 2026-10-03: the corpus text of the cited code is evidence too; before,
+    // only live excerpts were, so the Labour Code in the corpus was never shown.
     const evidence = buildOfficialEvidence([
+      { ...officialChunk, source_type: 'law_text', source_url: 'https://lex.uz/docs/-6257288', law_name: 'Mehnat kodeksi', chunk_text: '560-modda. Olti oy.' },
       officialChunk,
-      { ...officialChunk, source_type: 'law_text', source_url: 'https://lex.uz/docs/1' },
-      { ...officialChunk, source_url: 'https://example.com/fake' },
+      { ...officialChunk, source_type: 'law_text', source_url: 'https://lex.uz/docs/-1', is_active: false, chunk_text: 'Repealed text' },
+      { ...officialChunk, source_type: 'verified_qa', source_url: 'https://lex.uz/docs/-2', chunk_text: 'A stored answer' },
+      { ...officialChunk, source_url: 'https://example.com/fake', chunk_text: 'Fake' },
     ]);
     assert.match(evidence, /41-band/);
     assert.match(evidence, /\(VMQ-824\)/);
     assert.match(evidence, /lex\.uz\/uz\/docs\/-5193564/);
-    assert.strictEqual((evidence.match(/\[LEX-/g) || []).length, 1);
+    assert.match(evidence, /560-modda\. Olti oy\./);
+    assert.strictEqual((evidence.match(/\[LEX-/g) || []).length, 2);
+    assert.ok(evidence.indexOf('41-band') < evidence.indexOf('560-modda'), 'the live excerpt comes first');
+    assert.ok(!/Repealed text|A stored answer|Fake/u.test(evidence));
   });
 
   await test('fenced verifier JSON is parsed and validated', async () => {

@@ -13,9 +13,21 @@ function isLexUrl(value = '') {
   }
 }
 
+// Official text the verifier may check against: live lex.uz excerpts and the
+// corpus law text, which is ingested from lex.uz and re-checked weekly for
+// repeal (2026-10-03: the verifier saw only live excerpts, so an answer citing
+// the Labour Code in the corpus was "checked" without the code's text).
+// Acts lex.uz marks repealed are left out.
+function isOfficialChunk(chunk) {
+  return Boolean(chunk && ['lex_live', 'law_text'].includes(chunk.source_type)
+    && chunk.is_active !== false && isLexUrl(chunk.source_url));
+}
+
 function buildOfficialEvidence(chunks = [], maxChars = MAX_EVIDENCE_CHARS) {
   const official = (Array.isArray(chunks) ? chunks : [])
-    .filter((chunk) => chunk && chunk.source_type === 'lex_live' && isLexUrl(chunk.source_url));
+    .filter(isOfficialChunk)
+    // the live excerpt first: it is the current text as of this answer
+    .sort((a, b) => (a.source_type === 'lex_live' ? 0 : 1) - (b.source_type === 'lex_live' ? 0 : 1));
   let output = '';
   for (let index = 0; index < official.length; index++) {
     const chunk = official[index];
@@ -25,7 +37,7 @@ function buildOfficialEvidence(chunks = [], maxChars = MAX_EVIDENCE_CHARS) {
     const block = [
       `[LEX-${index + 1}] ${canonicalCitationActLabel(chunk.law_name || 'Lex.uz hujjati', chunk)} — ${locator}`,
       `URL: ${chunk.source_url}`,
-      String(chunk.chunk_text || chunk.childText || '').trim(),
+      String(chunk.parentText || chunk.chunk_text || chunk.childText || '').trim(),
     ].filter(Boolean).join('\n');
     if (!block.trim()) continue;
     const remaining = maxChars - output.length;
@@ -146,6 +158,7 @@ JSON SHAKLI:
 }
 
 module.exports = {
+  isOfficialChunk,
   buildOfficialEvidence,
   parseVerifierJson,
   crossCheckLegalAnswer,
