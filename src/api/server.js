@@ -934,7 +934,7 @@ app.get('/api/admin/audit-log', requireMasterAdmin, async (req, res) => {
 app.get('/api/user-info', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT tariff_plan, tariff_expires_at FROM admins WHERE id = $1 LIMIT 1`,
+      `SELECT tariff_plan, tariff_expires_at, google_id IS NOT NULL AS google_linked FROM admins WHERE id = $1 LIMIT 1`,
       [req.session.adminId]
     );
     const account = result.rows[0] || {};
@@ -944,7 +944,8 @@ app.get('/api/user-info', requireAuth, async (req, res) => {
       role: req.session.role,
       fullName: req.session.fullName,
       tariffPlan: account.tariff_plan || null,
-      tariffExpiresAt: account.tariff_expires_at || null
+      tariffExpiresAt: account.tariff_expires_at || null,
+      googleLinked: account.google_linked === true,
     });
   } catch (error) {
     console.error('[user-info]', error.message);
@@ -9484,13 +9485,18 @@ app.get('/auth/google', (req, res) => {
   // state is not there on the way back (src/auth/oauth-host.js).
   const sameHost = canonicalAuthRedirect({ host: req.get('host'), originalUrl: req.originalUrl });
   if (sameHost) return res.redirect(302, sameHost);
-  const mode = ['login', 'register', 'recover'].includes(req.query.mode) ? req.query.mode : 'login';
+  const mode = ['login', 'register', 'recover', 'link'].includes(req.query.mode) ? req.query.mode : 'login';
+  // 'link' attaches Google to the account already signed in (2026-10-03: a
+  // password account had no Google, so Google sign-in opened a second one).
+  if (mode === 'link' && !(req.session && req.session.isAuthenticated && req.session.adminId)) {
+    return res.redirect('/login.html');
+  }
   // A random one-time state bound to this browser session (Astra audit S4).
   // It used to be the mode and a timestamp in base64: anyone could forge it,
   // so a Google code minted for one person could be completed in another's
   // browser (login CSRF).
   const state = crypto.randomBytes(24).toString('hex');
-  req.session.googleOAuth = { state, mode, ts: Date.now() };
+  req.session.googleOAuth = { state, mode, ts: Date.now(), adminId: mode === 'link' ? req.session.adminId : null };
   const redirectUri = oauthRedirectUri();
   const params = new URLSearchParams({
     client_id: clientId,
@@ -9549,6 +9555,35 @@ app.get('/auth/google/callback', async (req, res) => {
     }
 
     const mode = expected.mode || 'login';
+
+    // ── LINK mode: attach this Google account to the signed-in account ──
+    // Refused when the Google account (or its e-mail) already belongs to a
+    // different account: two accounts are never merged here, because their
+    // chats, tariffs and payments would mix.
+    if (mode === 'link') {
+      const adminId = req.session && req.session.isAuthenticated ? req.session.adminId : null;
+      if (!adminId || adminId !== expected.adminId) {
+        console.warn('[Google OAuth] link refused: not the account that started it');
+        return res.redirect('/login.html?error=google_failed');
+      }
+      const other = (await pool.query(
+        'SELECT id FROM admins WHERE (google_id = $1 OR (email = $2 AND email IS NOT NULL)) AND id <> $3 LIMIT 1',
+        [googleId, email, adminId])).rows[0];
+      if (other) {
+        console.warn(`[Google OAuth] link refused: this Google account belongs to account ${other.id}`);
+        return res.redirect('/dashboard.html?google_link=taken');
+      }
+      await pool.query(
+        `UPDATE admins
+            SET google_id = $1,
+                email = COALESCE(email, $2),
+                email_verified = CASE WHEN email IS NULL OR email = $2 THEN TRUE ELSE email_verified END,
+                email_verification_source = CASE WHEN email IS NULL THEN 'google' ELSE email_verification_source END
+          WHERE id = $3`,
+        [googleId, email, adminId]);
+      console.log(`[Google OAuth] Google linked to account ${adminId}`);
+      return res.redirect('/dashboard.html?google_link=ok');
+    }
 
     let user = (await pool.query('SELECT * FROM admins WHERE google_id = $1 OR (email = $2 AND email IS NOT NULL)', [googleId, email])).rows[0];
 

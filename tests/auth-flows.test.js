@@ -35,7 +35,7 @@ async function test(name, fn) {
   await test('S4: Google OAuth state is random, stored in the session, single use and compared in constant time', () => {
     const start = between("app.get('/auth/google', ", "\n});");
     assert.ok(/crypto\.randomBytes\(24\)\.toString\('hex'\)/.test(start));
-    assert.ok(/req\.session\.googleOAuth = \{ state, mode, ts: Date\.now\(\) \}/.test(start));
+    assert.ok(/req\.session\.googleOAuth = \{ state, mode, ts: Date\.now\(\)/.test(start));
     assert.ok(!/Buffer\.from\(JSON\.stringify\(\{ mode/.test(start), 'no forgeable base64 state');
     const cb = between("app.get('/auth/google/callback'", "const clientId");
     assert.ok(/delete req\.session\.googleOAuth/.test(cb));
@@ -71,6 +71,20 @@ async function test(name, fn) {
     const route = between("const existing = await pool.query('SELECT id, bepul_used, role, full_name FROM admins WHERE telegram_user_id = $1'", "// Sinov abuse: same device fingerprint");
     assert.ok(!/bepul_used\) return res\.status\(409\)/.test(route), 'the owner of a used trial is not refused');
     assert.ok(/req\.session\.isAuthenticated = true/.test(route));
+  });
+
+  await test('linking Google: only for the signed-in account that started it, never onto another account', () => {
+    const start = between("app.get('/auth/google', ", "\n});");
+    assert.ok(/'login', 'register', 'recover', 'link'/.test(start));
+    assert.ok(/mode === 'link' && !\(req\.session && req\.session\.isAuthenticated/.test(start), 'link needs a signed-in session');
+    assert.ok(/adminId: mode === 'link' \? req\.session\.adminId : null/.test(start), 'the state remembers whose account');
+    const cb = between("app.get('/auth/google/callback'", "\n});");
+    const link = cb.slice(cb.indexOf("if (mode === 'link')"), cb.indexOf("let user = "));
+    assert.ok(link.length > 0, 'link is handled before the login lookup');
+    assert.ok(/adminId !== expected\.adminId/.test(link));
+    assert.ok(/AND id <> \$3/.test(link) && /google_link=taken/.test(link), 'a Google account of another account is refused, not moved');
+    assert.ok(/SET google_id = \$1/.test(link) && /WHERE id = \$3/.test(link));
+    assert.ok(/google_id IS NOT NULL AS google_linked/.test(server), 'user-info says whether Google is linked');
   });
 
   await test('S5: recovery codes lock after five wrong tries', () => {

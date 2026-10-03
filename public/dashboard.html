@@ -6892,6 +6892,9 @@
                         <span class="profile-fullname" id="profileFullName"></span>
                         <span class="profile-role-text" id="profileRoleText"></span>
                     </div>
+                    <span class="profile-google-btn" id="profileGoogleBtn" hidden role="button" tabindex="0" title="Google hisobini ulash" aria-label="Google hisobini ulash" onclick="event.stopPropagation(); linkGoogleAccount();" onkeydown="if(event.key==='Enter'){event.stopPropagation();linkGoogleAccount();}">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.07H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.93l3.66-2.83z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A10.5 10.5 0 0 0 12 1 11 11 0 0 0 2.18 7.07l3.66 2.83C6.71 7.31 9.14 5.38 12 5.38z"/></svg>
+                    </span>
                     <span class="profile-exit-btn" onclick="event.stopPropagation(); logout();" title="Chiqish">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                     </span>
@@ -8298,6 +8301,11 @@
                 const roleTextEl = document.getElementById('profileRoleText');
                 if (roleTextEl) roleTextEl.textContent = roleText;
 
+                // Offer to attach Google to this account when it has none, so a
+                // later Google sign-in lands here instead of opening a new account.
+                const googleBtn = document.getElementById('profileGoogleBtn');
+                if (googleBtn) googleBtn.hidden = data.googleLinked !== false;
+
                 // Hidden spans for backward compatibility
                 const un = document.getElementById('userName');
                 if (un) un.textContent = name;
@@ -8671,6 +8679,26 @@
                 document.getElementById('gateSurveyStatus').textContent = 'Tarmoq xatoligi.';
             }
         }
+
+        function linkGoogleAccount() {
+            if (!confirm('Google hisobingizni shu akkauntga ulaysizmi? Keyin Google orqali to\'g\'ridan-to\'g\'ri shu akkauntga kirasiz.')) return;
+            window.location.href = '/auth/google?mode=link';
+        }
+        // Result of /auth/google?mode=link, shown once.
+        (function () {
+            var params = new URLSearchParams(window.location.search);
+            var r = params.get('google_link');
+            if (!r) return;
+            var text = {
+                ok: ['Google hisobingiz ulandi. Endi Google orqali shu akkauntga kirasiz.', 'success'],
+                taken: ['Bu Google hisobi boshqa akkauntga ulangan, shuning uchun ulanmadi. Avval o\'sha akkauntni o\'chiring, keyin qayta urinib ko\'ring.', 'error'],
+            }[r];
+            params.delete('google_link');
+            history.replaceState({}, '', window.location.pathname + (params.toString() ? '?' + params : '') + window.location.hash);
+            if (!text) return;
+            var show = function () { if (typeof showUpdateToast === 'function') showUpdateToast(text[0], text[1]); else alert(text[0]); };
+            if (document.readyState === 'complete') show(); else window.addEventListener('load', show);
+        })();
 
         function toggleProfileDropdown(e) {
             e.stopPropagation();

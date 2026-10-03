@@ -82,6 +82,14 @@
   color: var(--muted-dim) !important; background: transparent !important; border: 0 !important;
 }
 #db-root .db-head .profile-exit-btn svg { width: 16px; height: 16px; }
+/* "Google hisobini ulash": shown only for an account without Google, on every width */
+#db-root .db-head .profile-google-btn {
+  width: 18px; height: 18px; display: grid; place-items: center; flex: 0 0 18px;
+  margin: 0; padding: 0; cursor: pointer; border-radius: 4px;
+}
+#db-root .db-head .profile-google-btn svg { width: 16px; height: 16px; }
+#db-root .db-head .profile-google-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+#db-root .db-head .profile-google-btn[hidden] { display: none !important; }
 
 /* ============================================================
    Asosiy
