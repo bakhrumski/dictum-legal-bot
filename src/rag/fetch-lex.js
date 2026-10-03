@@ -130,6 +130,42 @@ async function fetchLexDocument(urlOrId, opts = {}) {
   };
 }
 
+// Words of a notice about a change to the act (owner, 2026-10-03: lex.uz
+// shows an act awaiting amendment with a red notice at the top of its page;
+// its exact wording is not known yet).
+const NOTICE_WORDS = /o['\u2018\u2019\u02BB\u02BC`]?zgartirish|o['\u2018\u2019\u02BB\u02BC`]?zgartish|kutilmoqda|kuchga\s+kir|ўзгартириш|ўзгартиш|кутилмоқда|кучга\s+кир|изменени|вступ\p{L}*\s+в\s+силу|ожида/iu;
+
+/**
+ * Short texts outside the act's body (#divCont) that speak of a change -
+ * recorded only, to learn what lex.uz's notices say; nothing acts on them.
+ * Each is the innermost element holding the words, with the class and inline
+ * style of it and its parents (a red notice shows there).
+ */
+function collectHeaderNotices($, $scope) {
+  const out = [];
+  const seen = new Set();
+  $scope.find('div, span, p, td, a, b, strong, font, li, h1, h2, h3, h4').each((_, el) => {
+    if (out.length >= 5) return false;
+    const $el = $(el);
+    const text = $el.text().replace(/\s+/gu, ' ').trim();
+    if (text.length < 12 || text.length > 400 || !NOTICE_WORDS.test(text)) return undefined;
+    // the innermost element only: skip one whose child holds the same words
+    if ($el.children().toArray().some(c => NOTICE_WORDS.test($(c).text()))) return undefined;
+    if (seen.has(text)) return undefined;
+    seen.add(text);
+    const hints = [];
+    for (let node = $el, depth = 0; node.length && depth < 4; node = node.parent(), depth++) {
+      const cls = String(node.attr('class') || '').trim();
+      const style = String(node.attr('style') || '').trim();
+      if (cls) hints.push(`.${cls.replace(/\s+/gu, '.')}`);
+      if (style) hints.push(`[${style.slice(0, 80)}]`);
+    }
+    out.push({ text: text.slice(0, 300), hints: hints.join(' ').slice(0, 200) });
+    return undefined;
+  });
+  return out;
+}
+
 /**
  * Parse lex.uz HTML and extract structured legal text.
  */
@@ -164,6 +200,7 @@ function parseLexHtml(html, sourceUrl) {
   const $statusScope = $('body').clone();
   $statusScope.find('#divCont').remove();
   const statusText = $statusScope.text();
+  metadata.header_notices = collectHeaderNotices($, $statusScope);
   // Match ONLY the document-level repeal banner, which lex.uz renders as
   // "Hujjat kuchini yoʻqotgan" (Document has lost force). We must NOT match a
   // bare "kuchini yoʻqotgan", because that phrase also appears in the header in
