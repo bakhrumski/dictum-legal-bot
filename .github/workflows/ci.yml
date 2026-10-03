@@ -75,6 +75,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/exact-match-phrases.db.test.js
       - name: Corpus script report and Latin re-ingest on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/corpus-audit.test.js
+      - name: Suggested sources and batch ingest on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/source-suggestions.test.js
 
   audit:
     name: npm audit (report only)

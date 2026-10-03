@@ -551,8 +551,10 @@ function formatLexSearchResults(results, language = 'uz') {
     ? `\n\nLEX.UZ DAN TOPILGAN QO'SHIMCHA MA'LUMOTLAR (${results.length} ta hujjat):\n`
     : `\n\nДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ С LEX.UZ (${results.length} документов):\n`;
 
+  const { legalForceLabel } = require('./legal-force');
   const body = results.map((r, i) => [
     `[LEX-${i + 1}] ${r.title}`,
+    legalForceLabel(r, isUz ? 'uz' : 'ru') ? `  ${legalForceLabel(r, isUz ? 'uz' : 'ru')}` : '',
     r.content,
     r.url ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.url})` : '',
   ].filter(Boolean).join('\n')).join('\n\n');

@@ -202,8 +202,8 @@ const LEX_REGISTRY = {
     },
     {
       doc_id: 'nogironlar-ijtimoiy-himoya-qonun',
-      law_name: "Nogironligi bo'lgan shaxslarni ijtimoiy himoya qilish to'g'risida",
-      lex_url: 'https://lex.uz/docs/-5765426',     // [QONUN]
+      law_name: "Nogironligi bo'lgan shaxslarning huquqlari to'g'risida",
+      lex_url: 'https://lex.uz/docs/-5049511',  // O'RQ-641, owner-confirmed 2026-10-03
       enforcement_date: null
     },
     {

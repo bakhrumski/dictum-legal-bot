@@ -49,6 +49,11 @@ const { correctiveFilter, correctiveModeFrom } = require('../rag/corrective');
 const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywordMatch, collapseRepeatedChunks, buildKeywordArtifacts } = require('../rag/search-utils');
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
+const { legalForceOf, legalForceLabel, sortByLegalForce } = require('../rag/legal-force');
+// Acts an answer's live lex.uz check found that the corpus lacks go to the
+// dashboard's suggested sources (src/rag/source-suggestions.js).
+const { createSuggestionRecorder, mountSuggestionBatchRoutes, suggestionForce, preferLatinUrl } = require('../rag/source-suggestions');
+const liveSuggestions = createSuggestionRecorder({ pool });
 const {
   buildQuestionResearchDirective,
   buildLexResearchPlan,
@@ -1053,10 +1058,10 @@ app.get('/api/admin/suggested-sources', requireMasterAdmin, async (req, res) => 
     const status = ['pending', 'ingested', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
     const r = await pool.query(`
       SELECT id, lex_doc_id, lex_url, title, is_active, status_label, sample_query, sample_answer, topic,
-             times_suggested, status, last_suggested_at
+             times_suggested, status, last_suggested_at, last_error
       FROM suggested_sources WHERE status = $1
       ORDER BY times_suggested DESC, last_suggested_at DESC LIMIT 100`, [status]);
-    res.json({ suggestions: r.rows });
+    res.json({ suggestions: r.rows.map(row => ({ ...row, lex_url: preferLatinUrl(row.lex_url), legal_force: suggestionForce(row) })) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1073,7 +1078,7 @@ app.post('/api/admin/suggested-sources/:id/ingest', requireMasterAdmin, async (r
     if (!useTopic) return res.status(400).json({ error: 'Soha (topic) tanlanmadi' });
 
     // ingestLexUrl re-fetches and refuses if the document is repealed/inactive.
-    const result = await ingestLexUrl({ url: row.lex_url, topic: useTopic, law_name: row.title, adminId: req.session.adminId });
+    const result = await ingestLexUrl({ url: preferLatinUrl(row.lex_url), topic: useTopic, law_name: row.title, adminId: req.session.adminId });
     await pool.query(
       `UPDATE suggested_sources SET status = 'ingested', topic = $2, reviewed_by = $3, reviewed_at = NOW() WHERE id = $1`,
       [id, useTopic, req.session.adminId]
@@ -1083,6 +1088,9 @@ app.post('/api/admin/suggested-sources/:id/ingest', requireMasterAdmin, async (r
     res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
+
+// Up to ten suggested sources at once, in the background (owner, 2026-10-03).
+mountSuggestionBatchRoutes(app, { requireMasterAdmin, pool, ingestOne: (args) => ingestLexUrl(args), recorder: liveSuggestions });
 
 // Reject a suggested source.
 app.post('/api/admin/suggested-sources/:id/reject', requireMasterAdmin, async (req, res) => {
@@ -5053,6 +5061,11 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     ]);
     webResults = tavilyRes;
     lexLiveResults = lexRes;
+    // Not awaited: suggesting what the corpus lacked must not slow the
+    // answer. Eval runs (mode=full) are not real questions and suggest nothing.
+    if (lexLiveResults.length && opts.demandSource !== 'eval') {
+      liveSuggestions.record(lexLiveResults, { question: originalQuestion, topic });
+    }
     if (lexLiveResults.length > 0) {
       console.log(`[RAG] Lex.uz live search returned ${lexLiveResults.length} documents`);
     }
@@ -5132,6 +5145,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       : '';
     const scoreTag = r.score ? ` (${(r.score * 100).toFixed(0)}%)` : '';
     const langTag = r.language === 'uz' ? ' [UZ]' : ' [RU]';
+    const forceLabel = legalForceLabel(r, isUz ? 'uz' : 'ru', getChunkDocumentIdentifier(r));
     const categoryTag = r.category ? ` [${LEGAL_TOPICS[r.category] || r.category}]` : '';
     const maxChars = r.source_type === 'verified_qa' ? 2000 : MAX_CHUNK_CHARS;
     const text = r.chunk_text.length > maxChars
@@ -5144,6 +5158,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         ? `  Normalar: ${arts} (${r.provision_type === 'band' ? 'band' : 'modda'})`
         : `  Нормы: ${arts} (${r.provision_type === 'band' ? 'пункт' : 'статья'})`)
         : '',
+      forceLabel ? `  ${forceLabel}` : '',
       r.chapter ? `  ${r.chapter}` : '',
       text,
       (r.is_active === true && r.source_url) ? `  (${isUz ? 'Manba' : 'Источник'}: ${r.source_url})` : '',
@@ -5226,16 +5241,38 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     ? `\nMANBALAR:\n${sourceRefLines.join('\n')}\n`
     : '';
 
+  // Several acts of different force: list them from the strongest down, so
+  // the answer can show each and say which prevails (owner, 2026-10-03).
+  const forceOrder = [];
+  const seenForceActs = new Set();
+  for (const r of sortByLegalForce(citationChunks, getChunkDocumentIdentifier)) {
+    const level = legalForceOf(r, getChunkDocumentIdentifier(r));
+    const name = String(r.law_name || '').trim();
+    const actKey = lexDocumentKey(r.source_url) || name.toLowerCase();
+    if (!level || !name || seenForceActs.has(actKey)) continue;
+    seenForceActs.add(actKey);
+    const docNum = getChunkDocumentIdentifier(r);
+    // The adoption date decides between acts of equal force: the later prevails.
+    const adopted = formatDate(r.adoption_date || (r.metadata && r.metadata.adoption_date));
+    const actMeta = [docNum, adopted].filter(Boolean).join(', ');
+    forceOrder.push({ rank: level.rank, line: `${forceOrder.length + 1}. ${name}${actMeta ? ` (${actMeta})` : ''} - ${isUz ? level.uz : level.ru}` });
+  }
+  const forceBlock = new Set(forceOrder.map(f => f.rank)).size >= 2
+    ? (isUz
+      ? `\nHUJJATLAR YURIDIK KUCHI BO'YICHA (yuqoridan pastga):\n${forceOrder.map(f => f.line).join('\n')}\n`
+      : `\nАКТЫ ПО ЮРИДИЧЕСКОЙ СИЛЕ (сверху вниз):\n${forceOrder.map(f => f.line).join('\n')}\n`)
+    : '';
+
   // ── Build clean data-only context (no instructions, no box-drawings) ──
   let context;
   if (isUz) {
     context = `\nQONUNCHILIK KONTEKSTI (${citationChunks.length} natija):\n`
-      + sourceBlock
+      + sourceBlock + forceBlock
       + `\n` + chunksText + webText + lexLiveText
       + `\n\n--- JAVOB SHU YERDAN BOSHLANSIN ---`;
   } else {
     context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${citationChunks.length} результатов):\n`
-      + sourceBlock
+      + sourceBlock + forceBlock
       + `\n` + chunksText + webText + lexLiveText
       + `\n\n--- ОТВЕТ НАЧИНАЕТСЯ ЗДЕСЬ ---`;
   }
@@ -10391,6 +10428,7 @@ async function runMigrations() {
       last_suggested_at TIMESTAMPTZ DEFAULT NOW()
     )`);
     await pool.query(`ALTER TABLE suggested_sources ADD COLUMN IF NOT EXISTS sample_answer TEXT`);
+    await pool.query(`ALTER TABLE suggested_sources ADD COLUMN IF NOT EXISTS last_error TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_suggested_status ON suggested_sources(status, times_suggested DESC)`);
 
     // Inline answer-error reports: a reader highlights an inaccurate span of an
@@ -10796,6 +10834,7 @@ app.get('/api/health', async (req, res) => {
       report,
     }),
   });
+
 }
 
 app.get('/api/admin/health', requireMasterAdmin, async (req, res) => {

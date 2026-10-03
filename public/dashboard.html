@@ -3822,6 +3822,16 @@
         .suggest-status { font-size:12px; margin-top:8px; color:var(--text-secondary); }
         .suggest-ctx { font-size:12px; color:var(--text-secondary); margin-top:6px; line-height:1.5; }
         .suggest-toggle { margin-top:6px; background:none; border:none; color:var(--navy-700,#0e2236); font-size:12px; cursor:pointer; padding:0; text-decoration:underline; font-family:inherit; }
+        .suggest-bulk { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 12px; }
+        .suggest-bulk[hidden] { display:none; }
+        .suggest-bulk .btn { flex:none; padding:6px 12px; font-size:12px; }
+        .suggest-bulk-note { font-size:12px; color:var(--text-secondary); }
+        .suggest-progress { font-size:12px; color:var(--text-secondary); margin:0 0 12px; line-height:1.6; }
+        .suggest-progress:empty { display:none; }
+        .suggest-head { display:flex; gap:10px; align-items:flex-start; }
+        .suggest-pick { flex:none; width:16px; height:16px; margin-top:2px; accent-color:var(--navy-600,#1b3a5c); cursor:pointer; }
+        .suggest-force { display:inline-block; font-size:11px; font-weight:600; padding:1px 7px; border-radius:999px; background:var(--parchment-100,rgba(0,0,0,0.05)); color:var(--navy-700,#0e2236); margin-right:6px; }
+        .suggest-error { font-size:12px; color:var(--danger-700,#b42318); margin-top:6px; }
         .suggest-answer { margin-top:8px; padding:10px 12px; background:var(--parchment-100,rgba(0,0,0,0.04)); border-radius:8px; font-size:12px; color:var(--text-primary); white-space:pre-wrap; max-height:320px; overflow-y:auto; line-height:1.55; }
 
         /* Inline answer-error flagging */
@@ -7602,7 +7612,14 @@
                 <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">
                     Foydalanuvchi savollari asosida lex.uz dan topilgan, korpusda hali yo'q <b>amaldagi</b> hujjatlar.
                     Tekshirib, to'g'ri bo'lsa — bir bosishda korpusga qo'shing. Faqat amaldagi (kuchini yo'qotmagan) hujjatlar ko'rsatiladi.
+                    Bir nechtasini belgilab yoki eng ko'p so'ralgan 10 tasini birato'la qo'shish mumkin: ular fonda ketma-ket yuklanadi.
                 </p>
+                <div class="suggest-bulk" id="suggestBulk" hidden>
+                    <button class="btn" type="button" id="suggestTopBtn" onclick="ingestSuggestedBatch('top')">Eng ko'p so'ralgan 10 tasini qo'shish</button>
+                    <button class="btn" type="button" id="suggestPickedBtn" onclick="ingestSuggestedBatch('picked')" disabled>Belgilanganlarni qo'shish (0)</button>
+                    <span class="suggest-bulk-note">Bir martada 10 tagacha</span>
+                </div>
+                <div class="suggest-progress" id="suggestProgress" aria-live="polite"></div>
                 <div id="suggestedContent"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
             </div>
         </div>
@@ -15244,7 +15261,7 @@
             ['adliya',"Adliya"],['xalqaro',"Xalqaro"],['ekologiya',"Ekologiya"]
         ];
         function suggestTopicOptions(sel) {
-            return SUGGEST_TOPICS.map(function(t){ return '<option value="'+t[0]+'"'+(t[0]===sel?' selected':'')+'>'+t[1]+'</option>'; }).join('');
+            return (sel ? '' : '<option value="">Soha tanlang</option>') + SUGGEST_TOPICS.map(function(t){ return '<option value="'+t[0]+'"'+(t[0]===sel?' selected':'')+'>'+t[1]+'</option>'; }).join('');
         }
         // JSON-encode a value AND HTML-escape its quotes so it's safe to embed
         // as an argument inside a double-quoted onclick="" attribute.
@@ -15276,7 +15293,9 @@
                 var list = data.suggestions || [];
                 var badge = document.getElementById('suggestedBadge');
                 if (badge) { if (list.length) { badge.textContent = list.length; badge.style.display = 'inline'; } else badge.style.display = 'none'; }
-                if (list.length === 0) { box.innerHTML = '<div class="reg-empty">Tavsiyalar yo\'q</div>'; return; }
+                var bulk = document.getElementById('suggestBulk');
+                if (bulk) bulk.hidden = list.length === 0;
+                if (list.length === 0) { box.innerHTML = '<div class="reg-empty">Tavsiyalar yo\'q</div>'; updateSuggestPicked(); return; }
                 box.innerHTML = list.map(function(s) {
                     var ctx = '';
                     if (s.sample_query) {
@@ -15286,11 +15305,16 @@
                         ctx += '<button class="suggest-toggle" onclick="toggleSuggestAnswer(' + s.id + ')">📄 Platforma javobini ko\'rish</button>' +
                                '<div class="suggest-answer" id="suggest-answer-' + s.id + '" style="display:none;">' + escapeHtml(String(s.sample_answer)) + '</div>';
                     }
-                    return '<div class="suggest-card" id="suggest-' + s.id + '">' +
-                        '<div class="suggest-main">' +
-                          '<a href="' + s.lex_url + '" target="_blank" rel="noopener" class="suggest-title">' + escapeHtml(s.title || s.lex_url) + '</a>' +
-                          '<div class="suggest-meta">✅ amaldagi · ×' + s.times_suggested + ' so\'ralgan</div>' +
-                          ctx +
+                    var force = s.legal_force ? '<span class="suggest-force">' + escapeHtml(s.legal_force.uz) + '</span>' : '';
+                    var lastError = s.last_error ? '<div class="suggest-error">Oxirgi urinish: ' + escapeHtml(String(s.last_error)) + '</div>' : '';
+                    return '<div class="suggest-card" id="suggest-' + s.id + '" data-suggest-id="' + s.id + '">' +
+                        '<div class="suggest-head">' +
+                          '<input type="checkbox" class="suggest-pick" aria-label="Belgilash" onchange="updateSuggestPicked()">' +
+                          '<div class="suggest-main">' +
+                            '<a href="' + escapeHtml(s.lex_url) + '" target="_blank" rel="noopener" class="suggest-title">' + escapeHtml(s.title || s.lex_url) + '</a>' +
+                            '<div class="suggest-meta">' + force + '✅ amaldagi · ×' + s.times_suggested + ' so\'ralgan</div>' +
+                            ctx + lastError +
+                          '</div>' +
                         '</div>' +
                         '<div class="suggest-actions">' +
                           '<select class="detail-select suggest-topic" style="padding:5px 8px;">' + suggestTopicOptions(s.topic) + '</select>' +
@@ -15300,9 +15324,92 @@
                         '<div class="suggest-status" id="suggest-status-' + s.id + '"></div>' +
                       '</div>';
                 }).join('');
+                updateSuggestPicked();
+                pollSuggestBatch(); // a batch started earlier keeps showing its progress
             } catch (e) {
                 box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
             }
+        }
+        // ── Batch ingest: up to ten suggested sources, one after another on
+        // the server; the page polls the job and updates each card.
+        var SUGGEST_BATCH_MAX = 10;
+        var suggestBatchTimer = null;
+        function suggestCards() {
+            return Array.prototype.slice.call(document.querySelectorAll('#suggestedContent .suggest-card'));
+        }
+        function updateSuggestPicked() {
+            var picked = suggestCards().filter(function(c){ var b = c.querySelector('.suggest-pick'); return b && b.checked; });
+            var btn = document.getElementById('suggestPickedBtn');
+            if (btn) {
+                btn.textContent = 'Belgilanganlarni qo\'shish (' + picked.length + ')';
+                btn.disabled = picked.length === 0 || picked.length > SUGGEST_BATCH_MAX || !!suggestBatchTimer;
+                btn.title = picked.length > SUGGEST_BATCH_MAX ? 'Bir martada ' + SUGGEST_BATCH_MAX + ' tagacha' : '';
+            }
+            var top = document.getElementById('suggestTopBtn');
+            if (top) top.disabled = !!suggestBatchTimer || suggestCards().length === 0;
+        }
+        async function ingestSuggestedBatch(mode) {
+            var cards = suggestCards();
+            if (mode === 'picked') cards = cards.filter(function(c){ var b = c.querySelector('.suggest-pick'); return b && b.checked; });
+            cards = cards.slice(0, SUGGEST_BATCH_MAX); // the list is most-asked first
+            var progress = document.getElementById('suggestProgress');
+            var missing = cards.filter(function(c){ return !c.querySelector('.suggest-topic').value; });
+            if (missing.length) {
+                progress.textContent = missing.length + ' ta hujjatga soha tanlanmagan — avval sohasini tanlang.';
+                missing.forEach(function(c){ c.querySelector('.suggest-topic').focus(); });
+                return;
+            }
+            if (!cards.length) return;
+            var items = cards.map(function(c){ return { id: Number(c.getAttribute('data-suggest-id')), topic: c.querySelector('.suggest-topic').value }; });
+            if (!confirm(items.length + ' ta hujjat lex.uz dan yuklanib, korpusga qo\'shiladi. Davom etilsinmi?')) return;
+            progress.textContent = 'Boshlanmoqda...';
+            try {
+                var r = await fetch('/api/admin/suggested-sources/ingest-batch', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin', body: JSON.stringify({ items: items })
+                });
+                var data = await r.json();
+                if (!r.ok) { progress.textContent = '❌ ' + (data.error || 'Xatolik'); return; }
+                cards.forEach(function(c){
+                    var st = c.querySelector('.suggest-status');
+                    if (st) { st.style.color = ''; st.textContent = 'Navbatda...'; }
+                });
+                pollSuggestBatch();
+            } catch (e) {
+                progress.textContent = '❌ Tarmoq xatoligi';
+            }
+        }
+        function renderSuggestBatch(job) {
+            var progress = document.getElementById('suggestProgress');
+            if (!job) { progress.textContent = ''; return; }
+            var ok = job.items.filter(function(i){ return i.status === 'done'; }).length;
+            var bad = job.items.filter(function(i){ return i.status === 'error'; }).length;
+            progress.textContent = (job.running ? 'Yuklanmoqda: ' : 'Tugadi: ') + job.done + '/' + job.total +
+                ' · ✅ ' + ok + (bad ? ' · ❌ ' + bad : '') + (job.running ? ' — sahifani yopsangiz ham davom etadi.' : '');
+            job.items.forEach(function(i){
+                var card = document.getElementById('suggest-' + i.id);
+                var st = document.getElementById('suggest-status-' + i.id);
+                if (!st) return;
+                if (i.status === 'running') { st.style.color = ''; st.textContent = 'Yuklanmoqda... (lex.uz dan yuklab, korpusga qo\'shilmoqda)'; }
+                else if (i.status === 'done') {
+                    st.style.color = '#2e8b57';
+                    st.textContent = '✅ Qo\'shildi: ' + (i.chunks || 0) + ' bo\'lak' + (i.warning ? ' — ' + i.warning : '');
+                    if (card && !i.warning) setTimeout(function(){ if (card.parentNode) { card.remove(); updateSuggestPicked(); } }, 2500);
+                } else if (i.status === 'error') { st.style.color = 'var(--danger-700)'; st.textContent = '❌ ' + (i.error || 'Xatolik'); }
+            });
+        }
+        async function pollSuggestBatch() {
+            if (suggestBatchTimer) clearTimeout(suggestBatchTimer);
+            suggestBatchTimer = null;
+            try {
+                var r = await fetch('/api/admin/suggested-sources/ingest-batch', { credentials: 'same-origin' });
+                var data = await r.json();
+                renderSuggestBatch(data.job);
+                if (data.job && data.job.running) suggestBatchTimer = setTimeout(pollSuggestBatch, 3000);
+            } catch (e) {
+                suggestBatchTimer = setTimeout(pollSuggestBatch, 6000);
+            }
+            updateSuggestPicked();
         }
         function toggleSuggestAnswer(id) {
             var el = document.getElementById('suggest-answer-' + id);

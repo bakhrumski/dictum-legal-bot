@@ -96,10 +96,10 @@ test('the versioned constitution and research playbook are separate policy layer
     "Har bir shunday iqtibos Lex.uz'dagi aynan qo'llangan norma bilan bog'lanishi shart",
     "har bir tilga olingan O'zbekiston normativ-huquqiy hujjati bosiladigan Lex.uz havolasiga aylangani",
   ]) assert.ok(text.includes(required), `missing playbook rule: ${required}`);
-  assert.strictEqual(getConstitutionVersion(), '1.3.0');
+  assert.strictEqual(getConstitutionVersion(), '1.4.0');
   assert.strictEqual(getPlaybookVersion(), '1.4.0');
   assert.deepStrictEqual(getLegalPolicyVersions(), {
-    constitution: '1.3.0',
+    constitution: '1.4.0',
     legalResearch: '1.4.0',
   });
 });
@@ -378,7 +378,7 @@ test('advanced RAG uses the same playbook and three-section answer contract', ()
     userQuestion: 'Yakuniy nazoratdan chetlatish mumkinmi?',
   });
   assert.ok(prompt.startsWith('ASOSIY HUQUQIY KONSTITUTSIYA'));
-  assert.ok(prompt.includes('Constitution-Version: 1.3.0'));
+  assert.ok(prompt.includes('Constitution-Version: 1.4.0'));
   assert.ok(prompt.includes('Playbook-Version: 1.4.0'));
   assert.ok(prompt.includes('MAJBURIY 3-QISMLI JAVOB TUZILMASI'));
   assert.ok(prompt.includes('Alohida "Manbalar"'));
