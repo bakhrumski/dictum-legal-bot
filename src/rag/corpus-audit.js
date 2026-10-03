@@ -188,6 +188,10 @@ function needsLatinReingest(d) {
 function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fetchDoc, reingest, searchPage, parseSearch, log = console }) {
   let registryJob = null; // { running, startedAt, done, total, results }
   let reingestJob = null;
+  // Registry URLs an ingest found dead (404) or opening another act, by
+  // doc_id: kept out of the ready batches until the registry URL changes.
+  // In memory: after a restart each is tried once more (a 404 is quick).
+  const badUrls = new Map();
   let candidatesJob = null;
 
   // GET /api/admin/lex-registry/candidates — ?start=1 searches lex.uz for
@@ -291,9 +295,19 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
       // Registry acts with no document in the corpus (2026-10-03: the first
       // weekly re-check found 21 documents for 78 registry entries), with
       // ready ?ingest= lists of ten.
+      for (const r of (reingestJob && reingestJob.results) || []) {
+        const why = String(r.reason || '');
+        if ((r.status === 'error' && /HTTP 404/u.test(why)) || (r.status === 'skipped' && /another act/u.test(why))) {
+          badUrls.set(r.doc_id, { url: r.source_url, reason: why.slice(0, 200) });
+        }
+      }
       const inCorpus = new Set(found.documents.map(d => d.doc_id));
-      const registryMissing = getAllLaws().filter(l => !inCorpus.has(l.doc_id))
+      const missingAll = getAllLaws().filter(l => !inCorpus.has(l.doc_id))
         .map(l => ({ doc_id: l.doc_id, law_name: l.law_name, category: l.category, url: l.lex_url }));
+      const isBad = (l) => badUrls.has(l.doc_id) && badUrls.get(l.doc_id).url === l.url;
+      // Acts whose registry URL must be corrected before they can be ingested.
+      const needsUrl = missingAll.filter(isBad).map(l => ({ ...l, reason: badUrls.get(l.doc_id).reason }));
+      const registryMissing = missingAll.filter(l => !isBad(l));
       // A code goes alone and last: the first batch on 2026-10-03 stored the
       // Air Code and the process restarted on the next act (as on
       // 2026-09-29: one large code fits in memory, a second act after it
@@ -308,6 +322,7 @@ function mountCorpusAuditRoutes(app, { requireMasterAdmin, pool, getAllLaws, fet
       res.json({
         registryMissing,
         ingestBatches,
+        needsUrl,
         byScript: found.byScript,
         documents: found.documents.map(({ doc_id, law_name, category, source_url, chunks, script }) => ({ doc_id, law_name, category, source_url, chunks, script })),
         reingest: reingestJob,
