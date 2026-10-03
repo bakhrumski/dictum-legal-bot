@@ -85,6 +85,8 @@ test('the constitution tells the answer to show every act and say which prevails
   assert.match(c, /javob bittasi bilan cheklanmaydi/u);
   assert.match(c, /Prezident Administratsiyasi Rahbarining farmoyishlari/u);
   assert.match(c, /qaysi hujjat ustun ekani va nima uchun ochiq aytiladi/u);
+  assert.match(c, /Prezidentning farmoni va qarori bir xil yuridik kuchga ega/u);
+  assert.match(c, /Bir xil yuridik kuchga ega hujjatlar zid bo'lsa, eng keyingi sanada qabul qilingan hujjat ustun/u);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

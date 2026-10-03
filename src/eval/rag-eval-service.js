@@ -274,8 +274,9 @@ function createRagEvalService({ pool, retrieve, callCheapAI, getArticleRefs, log
       const row = { id: c.id, topic: c.topic, language: c.language, rank: 0, lawHit: false, returned: 0, ms: 0 };
       if (!looksComplete(c.question)) row.invalid = true;
       try {
-        // demandSource: lex.uz acts a full run finds missing from the corpus
-        // are counted apart from real questions (corpus-demand.js).
+        // demandSource: an eval question is not a real one, so the lex.uz
+        // acts a full run finds are not suggested to the corpus
+        // (source-suggestions.js).
         const opts = { noWebFallback: mode !== 'full', demandSource: 'eval' };
         if (semanticMargin !== null) opts.semanticMargin = semanticMargin;
         if (keywordLengthNorm !== null) opts.keywordLengthNorm = keywordLengthNorm;
