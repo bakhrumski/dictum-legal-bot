@@ -3813,9 +3813,17 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
     const opts = { temperature, maxTokens };
     const label = `voicelab/${voicelab.modelFor(model)}`;
     const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null, ...(onToken ? { retryTransient: 0 } : {}) }, async (call) => {
-      const res = onToken
-        ? await voicelab.chatCompletionStream(model, messages, opts, onToken)
-        : await voicelab.chatCompletion(model, messages, opts);
+      let res;
+      try {
+        res = onToken
+          ? await voicelab.chatCompletionStream(model, messages, opts, onToken)
+          : await voicelab.chatCompletion(model, messages, opts);
+      } catch (e) {
+        // usage the provider reported on a failed call (e.g. empty text at
+        // finish_reason "length") is billed: record it, do not leave it unknown
+        if (e && e.usage) call.usage(e.usage);
+        throw e;
+      }
       call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
       return res;
     });
@@ -6703,7 +6711,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
           question: message, topic, existing: ragChunks, lang: lexLangForText(message) === 'ru' ? 'ru' : 'uz',
           retrieve: (query, t, opts) => retrieveLegalContext(query, t, null, { ...opts, strictTopic: Boolean(deterministicTopic && topic === deterministicTopic) }),
         });
-        if (aspects.chunks.length) {
+        if (aspects.chunks.length || aspects.context) {
           ragChunks = ragChunks.concat(aspects.chunks);
           ragContext += aspects.context;
           ragMeta = Object.assign({}, ragMeta || {}, { aspects: aspects.found });

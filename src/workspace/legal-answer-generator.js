@@ -294,7 +294,7 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
         question, topic, existing: ragChunks, lang: lexLanguage(question) === 'ru' ? 'ru' : 'uz',
         retrieve: (query, t, opts) => retrieveLegalContext(query, t, null, { ...opts, strictTopic: Boolean(deterministicTopic) }),
       });
-      if (aspects.chunks.length) {
+      if (aspects.chunks.length || aspects.context) {
         ragChunks = ragChunks.concat(aspects.chunks);
         ragContext += aspects.context;
         ragMeta = Object.assign({}, ragMeta || {}, { aspects: aspects.found });

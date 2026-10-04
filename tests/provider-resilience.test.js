@@ -92,7 +92,7 @@ const chunk = (id, text, score = 0.5) => ({ id, chunk_text: text, source_type: '
       global.fetch = reply({ status: 'queued' });
       await assert.rejects(voicelab.chatCompletion('standard', [{ role: 'user', text: 'x' }]), e => e.code === 'NO_CHOICES');
       global.fetch = reply({ choices: [{ message: { content: '' }, finish_reason: 'length' }] });
-      await assert.rejects(voicelab.chatCompletion('standard', [{ role: 'user', text: 'x' }], { maxTokens: 400 }), e => e.code === 'EMPTY_RESPONSE' && /max_tokens: 400/u.test(e.message));
+      await assert.rejects(voicelab.chatCompletion('standard', [{ role: 'user', text: 'x' }], { maxTokens: 400 }), e => e.code === 'EMPTY_RESPONSE' && /max_tokens: 1024/u.test(e.message));
       global.fetch = reply({ choices: [{ message: { content: 'javob' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
       const unknown = await voicelab.chatCompletion('cheap', [{ role: 'user', text: 'x' }]);
       assert.strictEqual(unknown.usage.credits, null, 'no credits reported: null, never 0');
@@ -260,6 +260,26 @@ const chunk = (id, text, score = 0.5) => ({ id, chunk_text: text, source_type: '
     assert.strictEqual(rows[0].costSource, 'unknown');
     assert.strictEqual(rows[1].credits, null);
     assert.strictEqual(rows[1].costUsd, null, 'no price and no credits: unknown, not $0');
+  });
+
+  await test('a failed call whose usage the provider reported is priced, not unknown (Orbit empty text at finish_reason "length")', async () => {
+    rows.length = 0;
+    const keep = process.env.VOICELAB_PRICES;
+    process.env.VOICELAB_PRICES = JSON.stringify({ 'aisha-orbit': { in: 1, out: 2, source: 'test fixture, not a real price' } });
+    try {
+      await ledger.runWithRequest({ service: 'telegram' }, async () => {
+        await assert.rejects(ledger.track({ provider: 'voicelab', model: 'voicelab/aisha-orbit', endpoint: '/rag/corrective-grade' }, async (call) => {
+          const e = Object.assign(new Error('VoiceLab aisha-orbit empty response (finish_reason: length)'), { code: 'EMPTY_RESPONSE', usage: { inTokens: 1000, outTokens: 1024 } });
+          if (e.usage) call.usage(e.usage); // as tryVoiceLab does
+          throw e;
+        }));
+      });
+    } finally { if (keep === undefined) delete process.env.VOICELAB_PRICES; else process.env.VOICELAB_PRICES = keep; }
+    await settle();
+    assert.strictEqual(rows[0].status, 'error');
+    assert.strictEqual(rows[0].errorCode, 'EMPTY_RESPONSE');
+    assert.strictEqual(rows[0].costSource, 'calculated');
+    assert.ok(Math.abs(rows[0].costUsd - (1000 * 1 + 1024 * 2) / 1e6) < 1e-12, String(rows[0].costUsd));
   });
 
   await test('reported VoiceLab credits are converted at the owner\'s rate (a conversion, not a token price)', async () => {

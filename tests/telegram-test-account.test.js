@@ -119,12 +119,21 @@ function fakeDb({ admins = [], spend = { known_usd: 0, unknown_calls: 0, calls: 
     });
   });
 
-  await test('the user-facing note shows spend, the unknown part and the end time', () => {
-    const account = { until: '2026-10-06T10:00:00Z', budgetUsd: 5, spend: { committedUsd: 1.2, unknownCalls: 2, assumedUnknownUsd: 0.1 } };
-    const note = t.testModeNote(account, 1.25);
-    assert.match(note, /\$1\.2500 \/ \$5/u);
-    assert.match(note, /2 ta narxi noma'lum/u);
-    assert.match(note, /qat'iy emas/u);
+  await test('the note and /balance keep known spend apart from the reserve for unknown cost, and show the end time', () => {
+    const account = { until: '2026-10-06T05:00:00.000Z', budgetUsd: 5, unknownCallUsd: 0.05, exhausted: false, spend: { knownUsd: 0.01879245, unknownCalls: 8 } };
+    const balance = t.balanceText(account);
+    assert.match(balance, /Test rejimi yoqilgan/u);
+    assert.match(balance, /Tugash vaqti: 06\.10\.2026, 10:00 \(Toshkent vaqti\)/u);
+    assert.match(balance, /Narxi ma'lum sarf: \$0\.0188\./u);
+    assert.match(balance, /8 ta\. Ular \$0 deb hisoblanmaydi/u);
+    assert.match(balance, /haqiqiy hisob-faktura emas/u);
+    assert.match(balance, /qoldig'i: \$4\.58 \/ \$5/u);
+    assert.ok(!/sarflandi/u.test(balance), 'the reserve is never called spending');
+    const note = t.testModeNote(account, { knownUsd: 0.002, unknownCalls: 1 });
+    assert.match(note, /\$0\.0208/u, 'this request\'s known cost is added');
+    assert.match(note, /9 ta/u);
+    const clean = t.balanceText({ ...account, spend: { knownUsd: 0.5, unknownCalls: 0 } });
+    assert.ok(!/noma'lum/u.test(clean), 'nothing to explain when every cost is known');
   });
 
   // ── database ─────────────────────────────────────────────────────────

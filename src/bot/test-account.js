@@ -129,13 +129,49 @@ function ledgerPool(account) {
   };
 }
 
-/** One line for the user under a test-mode answer; committedUsd includes this request. */
-function testModeNote(account, committedUsd = account.spend.committedUsd) {
-  const s = account.spend;
-  const until = new Date(account.until).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', hour12: false });
-  return `🧪 Test rejimi: kunlik limit va kredit hisoblanmadi. Test budjeti: $${committedUsd.toFixed(4)} / $${account.budgetUsd} sarflandi`
-    + (s.unknownCalls ? ` (avvalgi ${s.unknownCalls} ta narxi noma'lum chaqiruv taxminan $${s.assumedUnknownUsd.toFixed(2)} deb olingan — hisob qat'iy emas)` : '')
-    + `. Rejim ${until} gacha (Toshkent).`;
+/** Tashkent time, e.g. "06.10.2026, 10:00". */
+function tashkentTime(iso) {
+  const d = new Date(iso);
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(d).map(x => [x.type, x.value]));
+  return `${p.day}.${p.month}.${p.year}, ${p.hour}:${p.minute}`;
 }
 
-module.exports = { MAX_HOURS, testAccountConfig, testAccountSpend, resolveTestAccount, ledgerPool, testModeNote };
+/**
+ * The budget in words, keeping apart what is known and what is only reserved
+ * (2026-10-04: "$0.4188 sarflandi" read as a bill although $0.40 of it was
+ * the assumed price of 8 calls whose cost is unknown). extra adds the current
+ * request: { knownUsd, unknownCalls }.
+ */
+function budgetLines(account, extra = {}) {
+  const s = account.spend;
+  const knownUsd = s.knownUsd + (Number(extra.knownUsd) || 0);
+  const unknownCalls = s.unknownCalls + (Number(extra.unknownCalls) || 0);
+  const reservedUsd = unknownCalls * account.unknownCallUsd;
+  const remainingUsd = Math.max(0, account.budgetUsd - knownUsd - reservedUsd);
+  const lines = [`Narxi ma'lum sarf: $${knownUsd.toFixed(4)}.`];
+  if (unknownCalls) {
+    lines.push(`Narxi noma'lum chaqiruvlar: ${unknownCalls} ta. Ular $0 deb hisoblanmaydi: budjetdan har biriga $${account.unknownCallUsd} zaxira ajratilgan (jami $${reservedUsd.toFixed(2)}). Bu haqiqiy hisob-faktura emas, shuning uchun budjet hisobi qat'iy emas.`);
+  }
+  lines.push(`Test budjeti qoldig'i: $${remainingUsd.toFixed(2)} / $${account.budgetUsd}.`);
+  return lines;
+}
+
+/** The note under a test-mode answer. */
+function testModeNote(account, extra = {}) {
+  return [`🧪 Test rejimi (${tashkentTime(account.until)} gacha, Toshkent vaqti): kunlik limit va kredit hisoblanmadi.`, ...budgetLines(account, extra)].join('\n');
+}
+
+/** The /balance block of a test account. */
+function balanceText(account) {
+  return [
+    '🧪 Test rejimi yoqilgan.',
+    `Tugash vaqti: ${tashkentTime(account.until)} (Toshkent vaqti). Shundan keyin oddiy limitlar qaytadi.`,
+    'Huquqiy savollar uchun kunlik bepul limit va javob krediti talab qilinmaydi; tekshiruvlar va bir vaqtda bitta javob qoidasi saqlanadi.',
+    ...budgetLines(account),
+    account.exhausted ? 'Test budjeti tugagan: yangi AI chaqiruvlari to\'xtatilgan.' : '',
+  ].filter(Boolean).join('\n');
+}
+
+module.exports = { MAX_HOURS, testAccountConfig, testAccountSpend, resolveTestAccount, ledgerPool, testModeNote, balanceText, budgetLines, tashkentTime };

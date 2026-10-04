@@ -8,7 +8,7 @@ const assert = require('assert');
 const ENV_KEYS = [
   'LLM_PROVIDER', 'VOICELAB_API_KEY', 'VOICELAB_BASE_URL', 'VOICELAB_LANES', 'VOICELAB_FALLBACK',
   'VOICELAB_MODEL_CHEAP', 'VOICELAB_MODEL_STANDARD', 'VOICELAB_MODEL_PREMIUM', 'VOICELAB_MODEL_VISION',
-  'VOICELAB_PRICES', 'GPT_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY',
+  'VOICELAB_PRICES', 'VOICELAB_MIN_MAX_TOKENS', 'GPT_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY',
 ];
 const savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 const realFetch = global.fetch;
@@ -141,12 +141,34 @@ async function test(name, fn) {
         { role: 'assistant', content: 'Oldingi javob' },
       ],
       temperature: 0.2,
-      max_tokens: 500,
+      // raised to the VoiceLab floor (VOICELAB_MIN_MAX_TOKENS, default 1024):
+      // Orbit returned empty text at 256/700 with finish_reason "length"
+      max_tokens: 1024,
       response_format: { type: 'json_object' },
     });
     assert.strictEqual(r.text, 'Salom');
     assert.strictEqual(r.provider, 'voicelab/aisha-orbit');
-    assert.deepStrictEqual(r.usage, { inTokens: 12, outTokens: 3, cachedTokens: 4, credits: null });
+    assert.deepStrictEqual(r.usage, { inTokens: 12, outTokens: 3, cachedTokens: 4, reasoningTokens: null, credits: null });
+    process.env.VOICELAB_MIN_MAX_TOKENS = '0';
+    assert.strictEqual(voicelab._internal.buildBody('aisha-orbit', [], { maxTokens: 500 }).max_tokens, 500, 'the floor can be turned off');
+    delete process.env.VOICELAB_MIN_MAX_TOKENS;
+    assert.strictEqual(voicelab._internal.buildBody('aisha-orbit', [], { maxTokens: 4000 }).max_tokens, 4000, 'a larger limit is kept');
+  });
+
+  await test('an empty answer at finish_reason "length" says what used the budget, and carries the billed usage', async () => {
+    resetEnv(ON);
+    const voicelab = fresh('../src/ai/voicelab');
+    stubFetch(() => jsonResponse({
+      choices: [{ message: { content: '', reasoning_content: 'x'.repeat(900) }, finish_reason: 'length' }],
+      usage: { prompt_tokens: 300, completion_tokens: 1024, completion_tokens_details: { reasoning_tokens: 1024 } },
+    }));
+    await assert.rejects(voicelab.chatCompletion('gpt-6-sol', [{ role: 'user', text: 'x' }], { maxTokens: 256 }), (e) => {
+      assert.strictEqual(e.code, 'EMPTY_RESPONSE');
+      assert.match(e.message, /max_tokens: 1024, completion_tokens: 1024, reasoning_tokens: 1024, reasoning_field: reasoning_content \(900 chars\)/u);
+      assert.ok(!/xxxx/u.test(e.message), 'the reasoning text itself is not logged');
+      assert.deepStrictEqual([e.usage.inTokens, e.usage.outTokens], [300, 1024]);
+      return true;
+    });
   });
 
   await test('image parts pass through untouched on the vision lane', async () => {
@@ -190,7 +212,7 @@ async function test(name, fn) {
     assert.strictEqual(calls[0].body.model, 'aisha-comet');
     assert.deepStrictEqual(tokens, ['Assa', 'lomu alaykum']);
     assert.strictEqual(r.text, 'Assalomu alaykum');
-    assert.deepStrictEqual(r.usage, { inTokens: 9, outTokens: 4, cachedTokens: 0 });
+    assert.deepStrictEqual(r.usage, { inTokens: 9, outTokens: 4, cachedTokens: 0, reasoningTokens: null });
   });
 
   await test('a stream that fails after tokens is marked partial', async () => {
