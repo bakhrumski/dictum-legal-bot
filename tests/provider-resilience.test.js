@@ -92,7 +92,7 @@ const chunk = (id, text, score = 0.5) => ({ id, chunk_text: text, source_type: '
       global.fetch = reply({ status: 'queued' });
       await assert.rejects(voicelab.chatCompletion('standard', [{ role: 'user', text: 'x' }]), e => e.code === 'NO_CHOICES');
       global.fetch = reply({ choices: [{ message: { content: '' }, finish_reason: 'length' }] });
-      await assert.rejects(voicelab.chatCompletion('standard', [{ role: 'user', text: 'x' }], { maxTokens: 400 }), e => e.code === 'EMPTY_RESPONSE' && /max_tokens: 1024/u.test(e.message));
+      await assert.rejects(voicelab.chatCompletion('standard', [{ role: 'user', text: 'x' }], { maxTokens: 400 }), e => e.code === 'EMPTY_RESPONSE' && /max_tokens: 400/u.test(e.message));
       global.fetch = reply({ choices: [{ message: { content: 'javob' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
       const unknown = await voicelab.chatCompletion('cheap', [{ role: 'user', text: 'x' }]);
       assert.strictEqual(unknown.usage.credits, null, 'no credits reported: null, never 0');
@@ -338,6 +338,15 @@ const chunk = (id, text, score = 0.5) => ({ id, chunk_text: text, source_type: '
     assert.match(doc, /no Claude\s+\(Anthropic\) adapter/u);
     const adapters = fs.readdirSync(path.join(__dirname, '../src/ai')).map(f => fs.readFileSync(path.join(__dirname, '../src/ai', f), 'utf8')).join('\n');
     assert.ok(!/api\.anthropic\.com/u.test(adapters + server), 'if an adapter is added, update docs/ai-routing.md and this test');
+  });
+
+  await test('routing: retrieval grade and query plan use the cheap lane by default; standard on request', () => {
+    const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    assert.match(server, /const planner = String\(process\.env\.LEX_PLANNER_LANE \|\| 'cheap'\)\.toLowerCase\(\) === 'standard' \? callAI : callCheapAI;/u);
+    assert.match(server, /const grader = correctiveMode === 'cheap' \? callCheapAI : callAI;/u);
+    const { correctiveModeFrom } = require('../src/rag/corrective');
+    assert.strictEqual(correctiveModeFrom({}, {}), 'cheap');
+    assert.strictEqual(correctiveModeFrom({}, { RAG_CORRECTIVE_MODE: 'standard' }), 'standard');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

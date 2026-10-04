@@ -106,10 +106,13 @@ Known state of the suites (Sept 2026):
   `callVisionOCR` in ocr/routes.js. Embeddings are deliberately not routed —
   changing them means re-embedding the corpus. Prices come from
   `model-pricing.js` (list prices, 2026-09-23), overridable with
-  `VOICELAB_PRICES` (JSON, USD/1M). `max_tokens` sent to VoiceLab is at least
-  `VOICELAB_MIN_MAX_TOKENS` (1024): Orbit returned empty text at 256/700 with
-  finish_reason "length"; such an error carries the billed usage and token
-  counts into the ledger. `MODEL_TELEGRAM` sets the Telegram
+  `VOICELAB_PRICES` (JSON, USD/1M). Orbit spent whole helper budgets on hidden
+  reasoning (completion = reasoning = 1024 tokens, empty text), so retrieval
+  grade and query plan run on the cheap lane (`RAG_CORRECTIVE_MODE`,
+  `LEX_PLANNER_LANE`, `standard` to revert); no max_tokens floor
+  (`VOICELAB_MIN_MAX_TOKENS` off) and no reasoning parameter, none being
+  documented; reasoning text is never used as an answer. Such an error
+  carries the billed usage and token counts into the ledger. `MODEL_TELEGRAM` sets the Telegram
   answer model on its own (e.g. `voicelab/aisha-comet`), so the bot can be
   trialled without moving the website.
   Explicit ids pick a provider for side-by-side tests: `voicelab/<model>`

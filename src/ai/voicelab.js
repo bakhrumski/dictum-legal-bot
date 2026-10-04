@@ -191,15 +191,16 @@ function usageOf(data) {
 }
 
 /**
- * Smallest max_tokens sent to VoiceLab (2026-10-04: Orbit returned empty
- * text with finish_reason "length" at max_tokens 256 and 700 - the limit was
- * spent before any visible text). Only output actually produced is billed,
- * so a floor costs nothing when the answer is short. VOICELAB_MIN_MAX_TOKENS
- * changes it; 0 turns it off.
+ * Optional floor for max_tokens (VOICELAB_MIN_MAX_TOKENS, off by default).
+ * 2026-10-04: a 1024 floor did not help Orbit - it then spent all 1024
+ * tokens on hidden reasoning (reasoning_tokens = completion_tokens = 1024)
+ * and still returned no text, so the floor only raised what each failure
+ * costs. Helper stages moved to the cheap lane instead; no reasoning
+ * parameter is sent, because none is documented for this API.
  */
 function minMaxTokens() {
   const n = Number(process.env.VOICELAB_MIN_MAX_TOKENS);
-  return Number.isFinite(n) && n >= 0 ? n : 1024;
+  return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
 function buildBody(model, messages, { temperature, maxTokens, responseFormat, stream } = {}) {

@@ -5163,7 +5163,11 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     let lexPlan = deterministicLexPlan;
     if (process.env.LEX_AI_QUERY_PLANNER !== 'false') {
       try {
-        const plannerResult = await callAI(
+        // The query plan is a short JSON list: the cheap lane by default
+        // (LEX_PLANNER_LANE=standard restores the standard lane) - see
+        // correctiveModeFrom for why Orbit is not used for helper stages.
+        const planner = String(process.env.LEX_PLANNER_LANE || 'cheap').toLowerCase() === 'standard' ? callAI : callCheapAI;
+        const plannerResult = await planner(
           [{ role: 'user', text: buildLexQueryPlannerPrompt(originalQuestion, topic) }],
           {
             useSearch: false,

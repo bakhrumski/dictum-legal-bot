@@ -141,17 +141,19 @@ async function test(name, fn) {
         { role: 'assistant', content: 'Oldingi javob' },
       ],
       temperature: 0.2,
-      // raised to the VoiceLab floor (VOICELAB_MIN_MAX_TOKENS, default 1024):
-      // Orbit returned empty text at 256/700 with finish_reason "length"
-      max_tokens: 1024,
+      // sent as asked: no blind floor (a 1024 floor only made Orbit's empty
+      // answers cost more - it spent all 1024 on hidden reasoning)
+      max_tokens: 500,
       response_format: { type: 'json_object' },
     });
     assert.strictEqual(r.text, 'Salom');
     assert.strictEqual(r.provider, 'voicelab/aisha-orbit');
     assert.deepStrictEqual(r.usage, { inTokens: 12, outTokens: 3, cachedTokens: 4, reasoningTokens: null, credits: null });
-    process.env.VOICELAB_MIN_MAX_TOKENS = '0';
-    assert.strictEqual(voicelab._internal.buildBody('aisha-orbit', [], { maxTokens: 500 }).max_tokens, 500, 'the floor can be turned off');
+    process.env.VOICELAB_MIN_MAX_TOKENS = '800';
+    assert.strictEqual(voicelab._internal.buildBody('aisha-orbit', [], { maxTokens: 500 }).max_tokens, 800, 'an explicit floor is still possible');
     delete process.env.VOICELAB_MIN_MAX_TOKENS;
+    const body = voicelab._internal.buildBody('aisha-orbit', [], { maxTokens: 500 });
+    assert.ok(!Object.keys(body).some(k => /reason|think/iu.test(k)), 'no undocumented reasoning parameter is sent');
     assert.strictEqual(voicelab._internal.buildBody('aisha-orbit', [], { maxTokens: 4000 }).max_tokens, 4000, 'a larger limit is kept');
   });
 
@@ -164,11 +166,15 @@ async function test(name, fn) {
     }));
     await assert.rejects(voicelab.chatCompletion('gpt-6-sol', [{ role: 'user', text: 'x' }], { maxTokens: 256 }), (e) => {
       assert.strictEqual(e.code, 'EMPTY_RESPONSE');
-      assert.match(e.message, /max_tokens: 1024, completion_tokens: 1024, reasoning_tokens: 1024, reasoning_field: reasoning_content \(900 chars\)/u);
+      assert.match(e.message, /max_tokens: 256, completion_tokens: 1024, reasoning_tokens: 1024, reasoning_field: reasoning_content \(900 chars\)/u);
       assert.ok(!/xxxx/u.test(e.message), 'the reasoning text itself is not logged');
       assert.deepStrictEqual([e.usage.inTokens, e.usage.outTokens], [300, 1024]);
       return true;
     });
+    // reasoning text next to a real answer is never part of the answer
+    stubFetch(() => jsonResponse({ choices: [{ message: { content: 'Javob', reasoning_content: 'ichki fikr' }, finish_reason: 'stop' }] }));
+    const ok = await voicelab.chatCompletion('gpt-6-sol', [{ role: 'user', text: 'x' }]);
+    assert.strictEqual(ok.text, 'Javob');
   });
 
   await test('image parts pass through untouched on the vision lane', async () => {

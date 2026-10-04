@@ -30,8 +30,8 @@ straight to Gemini, so a failing helper call no longer costs three more calls.
 | intent (Telegram) | `/tg-agent/intent` | `callCheapAI` |
 | topic | `/rag/classify-topic` | `callCheapAI` |
 | query_rewrite | `/rag/query-rewrite` | `callCheapAI` |
-| retrieval_plan | `/rag/lex-query-plan` | `callAI` (standard) |
-| retrieval_grade | `/rag/corrective-grade` | `callAI` (standard); `RAG_CORRECTIVE_MODE=cheap` moves it to `callCheapAI` |
+| retrieval_plan | `/rag/lex-query-plan` | `callCheapAI` (since 2026-10-04; `LEX_PLANNER_LANE=standard` restores `callAI`) |
+| retrieval_grade | `/rag/corrective-grade` | `callCheapAI` (default since 2026-10-04); `RAG_CORRECTIVE_MODE=standard` restores `callAI` |
 | answer | `/tg-agent/answer`, `/api/legal-chat` | `callAI` with `MODELS.chat` / `MODEL_TELEGRAM` |
 | cross_check | `*/lex-cross-check` | `callAI` with the chat model |
 | claim_check | `*/claim-check` | `callAI` with the chat model |
@@ -94,12 +94,14 @@ failed.
   open breaker already stops the calls for 10 minutes after one 402.
 - **OpenAI 429:** the ledger now shows `HTTP_429_QUOTA` (billing/quota) or
   `HTTP_429_RATE` (rate limit). Quota needs billing on the OpenAI account.
-- **Orbit empty text (2026-10-04):** `EMPTY_RESPONSE` at max_tokens 256/700
-  with finish_reason "length" - the limit was used up before any visible
-  text. VoiceLab now gets at least `VOICELAB_MIN_MAX_TOKENS` (1024), and the
-  error records completion/reasoning token counts and the billed usage; if
-  it persists at 1024, ask VoiceLab whether Orbit spends tokens on hidden
-  reasoning and how to limit it.
+- **Orbit empty text (2026-10-04):** 3 of 4 Orbit helper calls returned no
+  text with completion_tokens = reasoning_tokens = 1024 and finish_reason
+  "length": the budget went to hidden reasoning. A larger limit is not the
+  fix (it only raises what each failure costs), and no reasoning parameter is
+  documented for the VoiceLab API, so none is sent. Retrieval grade and query
+  plan moved to the cheap lane (Comet, then GPT-6 Luna, then Gemini). Ask
+  VoiceLab whether Orbit's reasoning can be limited; until then Orbit serves
+  only stages routed to the standard lane by an explicit choice.
 - **VoiceLab Orbit errors:** the ledger now shows `NO_CHOICES`,
   `EMPTY_RESPONSE` (with finish_reason and max_tokens) or the HTTP code and
   provider message; send it to VoiceLab support if it is on their side.
