@@ -74,6 +74,9 @@ async function extendForUsageLedger() {
     'started_at TIMESTAMPTZ', 'finished_at TIMESTAMPTZ', 'latency_ms INTEGER', 'cached_in_tokens INTEGER',
     'reasoning_tokens INTEGER', 'audio_ms INTEGER', 'characters INTEGER', 'provider_credits NUMERIC(14,4)',
     'cost_source VARCHAR(20)', 'pricing JSONB', 'chat_id BIGINT',
+    // 2026-10-04: what kind of failure, and which rows are attempts of one
+    // logical call (stage_run_id, parent_call_id) or pairs of one batch
+    'error_kind VARCHAR(12)', 'stage_run_id UUID', 'parent_call_id UUID', 'batch_id UUID',
   ];
   for (const column of columns) {
     await pool.query(`ALTER TABLE llm_spend_log ADD COLUMN IF NOT EXISTS ${column}`);
@@ -104,6 +107,7 @@ async function extendForUsageLedger() {
       created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_requests_started ON ai_requests(started_at DESC)`);
+  await pool.query(`ALTER TABLE ai_requests ADD COLUMN IF NOT EXISTS degraded JSONB`);
   await pool.query(`ALTER TABLE ai_requests ENABLE ROW LEVEL SECURITY`);
 }
 
@@ -116,8 +120,9 @@ async function writeLedgerRow(r) {
        ts, day, month, model, stage, in_tokens, out_tokens, cost_usd, user_id, endpoint,
        request_id, call_id, seq, service, provider, model_requested, model_returned, status, error_code,
        error_message, attempt, retry_reason, fallback_from, started_at, finished_at, latency_ms,
-       cached_in_tokens, reasoning_tokens, audio_ms, characters, provider_credits, cost_source, pricing, chat_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
+       cached_in_tokens, reasoning_tokens, audio_ms, characters, provider_credits, cost_source, pricing, chat_id,
+       error_kind, stage_run_id, parent_call_id, batch_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
      ON CONFLICT (call_id) WHERE call_id IS NOT NULL DO NOTHING`,
     [ts, ts.toISOString().slice(0, 10), ts.toISOString().slice(0, 7),
       String(r.modelRequested || r.provider || 'unknown').slice(0, 80), String(r.stage || 'other').slice(0, 30),
@@ -125,7 +130,8 @@ async function writeLedgerRow(r) {
       r.requestId, r.callId, r.seq, r.service, r.provider, r.modelRequested, r.modelReturned, r.status, r.errorCode,
       r.errorMessage, r.attempt, r.retryReason, r.fallbackFrom, r.startedAt, r.finishedAt, r.latencyMs,
       r.cachedTokens, r.reasoningTokens, r.audioMs, r.characters, r.credits, r.costSource,
-      r.pricing ? JSON.stringify(r.pricing) : null, r.chatId]
+      r.pricing ? JSON.stringify(r.pricing) : null, r.chatId,
+      r.errorKind || null, r.stageRunId || null, r.parentCallId || null, r.batchId || null]
   );
 }
 
@@ -133,18 +139,20 @@ async function writeLedgerRow(r) {
 async function writeRequestRow(r) {
   if (!_initialized) await initSpendLog();
   await pool.query(
-    `INSERT INTO ai_requests (request_id, service, kind, user_id, chat_id, started_at, finished_at, latency_ms, outcome, legal_check, telemetry_errors)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    `INSERT INTO ai_requests (request_id, service, kind, user_id, chat_id, started_at, finished_at, latency_ms, outcome, legal_check, telemetry_errors, degraded)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT (request_id) DO UPDATE SET
        finished_at = COALESCE(EXCLUDED.finished_at, ai_requests.finished_at),
        latency_ms = COALESCE(EXCLUDED.latency_ms, ai_requests.latency_ms),
        outcome = COALESCE(EXCLUDED.outcome, ai_requests.outcome),
        legal_check = COALESCE(EXCLUDED.legal_check, ai_requests.legal_check),
+       degraded = COALESCE(EXCLUDED.degraded, ai_requests.degraded),
        user_id = COALESCE(ai_requests.user_id, EXCLUDED.user_id),
        telemetry_errors = GREATEST(ai_requests.telemetry_errors, EXCLUDED.telemetry_errors)`,
     [r.requestId, r.service, r.kind, r.userId, r.chatId, r.startedAt, r.finishedAt || null,
       r.finishedAt ? Math.max(0, r.finishedAt - r.startedAt) : null, r.outcome || null,
-      r.legalCheck ? JSON.stringify(r.legalCheck) : null, r.telemetryErrors || 0]
+      r.legalCheck ? JSON.stringify(r.legalCheck) : null, r.telemetryErrors || 0,
+      r.degraded ? JSON.stringify(r.degraded) : null]
   );
 }
 

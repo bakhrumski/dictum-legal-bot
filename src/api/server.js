@@ -52,6 +52,7 @@ const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search'
 const usageLedger = require('../ai/usage-ledger');
 const { oauthRedirectUri, canonicalAuthRedirect } = require('../auth/oauth-host');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
+const { retrieveAspects } = require('../rag/question-aspects');
 const { legalForceOf, legalForceLabel, sortByLegalForce } = require('../rag/legal-force');
 // Acts an answer's live lex.uz check found that the corpus lacks go to the
 // dashboard's suggested sources (src/rag/source-suggestions.js).
@@ -3427,6 +3428,22 @@ app.delete('/api/chat/messages', requireMasterAdmin, async (req, res) => {
 
 // ========== AI PROVIDER: Gemini (primary) + OpenAI GPT-4o (fallback) ==========
 
+/**
+ * An error from a provider's HTTP response, carrying what classification
+ * needs (status, the provider's own error code and message, Retry-After) and
+ * no request data. The message keeps only the provider's short error text.
+ */
+function providerError(prefix, resp, errBody = '') {
+  const { parseProviderError, safeReason } = require('../ai/provider-health');
+  const parsed = parseProviderError(errBody);
+  const err = new Error(`${prefix}: ${safeReason([parsed.code, parsed.message].filter(Boolean).join(': ') || errBody.slice(0, 200))}`);
+  err.status = resp.status;
+  err.providerCode = parsed.code;
+  err.providerMessage = parsed.message ? safeReason(parsed.message) : null;
+  err.retryAfter = resp.headers && typeof resp.headers.get === 'function' ? resp.headers.get('retry-after') : null;
+  return err;
+}
+
 // Provider usage -> ledger usage (cached input and reasoning output are
 // already inside the input/output counts; thinking tokens are not).
 const { usageFromGemini: geminiUsage, usageFromOpenAI: openaiUsage } = usageLedger;
@@ -3484,7 +3501,7 @@ async function callGeminiOnce(messages, options, call) {
 
   if (!resp.ok) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`Gemini ${resp.status}: ${errBody.substring(0, 300)}`);
+    throw providerError(`Gemini ${resp.status}`, resp, errBody);
   }
 
   const data = await resp.json();
@@ -3513,13 +3530,14 @@ async function callGeminiOnce(messages, options, call) {
     .map(p => p.text)
     .join('');
 
+  const geminiTruncated = candidate.finishReason === 'MAX_TOKENS';
   if (!text) {
     // Log what we actually got for debugging
     const partTypes = parts.map(p => Object.keys(p).join('+')).join(', ');
     console.error(`[Gemini] Empty text. Parts received: [${partTypes}], finishReason: ${candidate.finishReason}`);
-    throw new Error(`Gemini empty response (parts: ${partTypes || 'none'}, finish: ${candidate.finishReason || '?'})`);
+    throw Object.assign(new Error(`Gemini empty response (parts: ${partTypes || 'none'}, finish: ${candidate.finishReason || '?'})`), { code: 'EMPTY_RESPONSE' });
   }
-  return { text, provider: 'Gemini' };
+  return { text, provider: 'Gemini', truncated: geminiTruncated };
 }
 
 // Streaming variant: same request shape as callGemini, but via
@@ -3535,7 +3553,7 @@ async function callOpenAIStream(messages, options = {}, onToken) {
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard, onToken);
     if (viaVoiceLab) return viaVoiceLab;
     const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
-    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null },
+    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null, retryTransient: 0 },
       (call) => callOpenAIStreamOnce(messages, options, onToken, model, call));
   });
 }
@@ -3569,7 +3587,7 @@ async function callOpenAIStreamOnce(messages, options, onToken, model, call) {
   }
   if (!resp.ok || !resp.body) {
     const errBody = await resp.text().catch(() => '');
-    throw Object.assign(new Error(`OpenAI stream ${model} ${resp.status}: ${errBody.substring(0, 200)}`), { status: resp.status });
+    throw providerError(`OpenAI stream ${model} ${resp.status}`, resp, errBody);
   }
 
   const decoder = new TextDecoder();
@@ -3601,7 +3619,7 @@ async function callOpenAIStreamOnce(messages, options, onToken, model, call) {
 }
 
 async function callGeminiStream(messages, options = {}, onToken) {
-  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null },
+  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null, retryTransient: 0 },
     (call) => callGeminiStreamOnce(messages, options, onToken, call));
 }
 
@@ -3632,7 +3650,7 @@ async function callGeminiStreamOnce(messages, options, onToken, call) {
   });
   if (!resp.ok || !resp.body) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`Gemini stream ${resp.status}: ${errBody.substring(0, 300)}`);
+    throw providerError(`Gemini stream ${resp.status}`, resp, errBody);
   }
 
   const decoder = new TextDecoder();
@@ -3757,14 +3775,14 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
     const { temperature = 0.2, maxTokens = 8192 } = options;
     const opts = { temperature, maxTokens };
     const label = `voicelab/${voicelab.modelFor(model)}`;
-    const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null }, async (call) => {
+    const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null, ...(onToken ? { retryTransient: 0 } : {}) }, async (call) => {
       const res = onToken
         ? await voicelab.chatCompletionStream(model, messages, opts, onToken)
         : await voicelab.chatCompletion(model, messages, opts);
       call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
       return res;
     });
-    return { text: r.text, provider: r.provider, usage: {
+    return { text: r.text, provider: r.provider, truncated: r.finishReason === 'length', usage: {
       ...r.usage,
       costUsd: calculateTokenCost(r.provider, r.usage) || 0,
     } };
@@ -3881,7 +3899,7 @@ async function callOpenAIOnce(messages, options, call) {
   const usedModel = body.model;
   if (!resp.ok) {
     const errBody = await resp.text().catch(() => '');
-    throw Object.assign(new Error(`OpenAI ${usedModel} ${resp.status}: ${errBody.substring(0, 200)}`), { status: resp.status });
+    throw providerError(`OpenAI ${usedModel} ${resp.status}`, resp, errBody);
   }
 
   const data = await resp.json();
@@ -3897,7 +3915,10 @@ async function callOpenAIOnce(messages, options, call) {
   const { inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok } = openaiUsage(data.usage);
   // Report the model actually used (a hardcoded label previously hid which
   // model answered) plus token usage, so callers can surface real cost.
-  return { text, provider: usedModel, usage: {
+  // max_output_tokens reached: the text stops mid-way (2026-10-04, an answer
+  // whose "Xulosa" section was left empty)
+  const truncated = data.status === 'incomplete' && !!(data.incomplete_details && /max_output_tokens/u.test(String(data.incomplete_details.reason || '')));
+  return { text, provider: usedModel, truncated, usage: {
     inTokens: inTok, outTokens: outTok, cachedTokens: cachedTok,
     costUsd: calculateTokenCost(usedModel, {
       inTokens: inTok,
@@ -3942,7 +3963,11 @@ async function callCheapAIChain(messages, options = {}) {
       console.warn(`[CheapAI] ${MODELS.cheap} failed (falling back to Gemini):`, e.message);
     }
   }
-  return callAI(messages, { ...options, model: undefined });
+  // Straight to the last-resort provider. It used to run the whole standard
+  // chain again (VoiceLab Orbit, GPT-6 Sol, then Gemini), so one failing
+  // helper call made three more calls to providers that were already failing
+  // (2026-10-04, docs/ai-routing.md).
+  return callGeminiLastResort(messages, options);
 }
 
 // Premium routing: MODELS.premium (gpt-6-sol by default) for high-stakes
@@ -3975,7 +4000,9 @@ async function callPremiumAIChain(messages, options = {}) {
   } else {
     console.warn('[PremiumAI] Paid models unavailable (no GPT_API_KEY or daily budget reached) — using Gemini fallback.');
   }
-  return callAI(messages, { ...options, model: undefined });
+  // Not the standard chain again: it would retry the same OpenAI account
+  // after the premium attempts had already failed.
+  return callGeminiLastResort(messages, options);
 }
 
 
@@ -4006,29 +4033,39 @@ async function callAIChain(messages, options = {}) {
     }
   }
 
-  // 2. Gemini (free tier) — the only fallback.
-  if (geminiKey) {
-    try {
-      console.log(`[AI] Falling back to Gemini${options.useSearch ? ' with Google Search' : ''}...`);
-      const result = await callGemini(messages, { ...options, model: undefined });
-      console.log('[AI] Gemini succeeded');
-      return result;
-    } catch (err) {
-      console.warn(`[AI] Gemini failed: ${err.message}`);
-      errors.push(`Gemini: ${err.message}`);
-      if (options.useSearch) {
-        try {
-          console.log('[AI] Retrying Gemini WITHOUT Google Search...');
-          const result = await callGemini(messages, { ...options, model: undefined, useSearch: false });
-          console.log('[AI] Gemini succeeded (no search)');
-          return result;
-        } catch (err2) {
-          errors.push(`Gemini (no-search): ${err2.message}`);
-        }
+  // 2. Gemini — the last resort.
+  return callGeminiLastResort(messages, options, errors);
+}
+
+/**
+ * The last provider of every chain: Gemini 2.5 Flash, and once more without
+ * the search tool when that was the problem. Kept on purpose (2026-10-04):
+ * it is the one provider that answered while VoiceLab Orbit and OpenAI were
+ * failing. Throws with every earlier error when it fails too.
+ */
+async function callGeminiLastResort(messages, options = {}, errors = []) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('Barcha AI provayderlar ishlamayapti: ' + (errors.concat('Gemini: GEMINI_API_KEY sozlanmagan')).join(' | '));
+  }
+  try {
+    console.log(`[AI] Falling back to Gemini${options.useSearch ? ' with Google Search' : ''}...`);
+    const result = await callGemini(messages, { ...options, model: undefined });
+    console.log('[AI] Gemini succeeded');
+    return result;
+  } catch (err) {
+    console.warn(`[AI] Gemini failed: ${err.message}`);
+    errors.push(`Gemini: ${err.message}`);
+    if (options.useSearch && err.code !== 'CIRCUIT_OPEN' && err.code !== 'REQUEST_BUDGET') {
+      try {
+        console.log('[AI] Retrying Gemini WITHOUT Google Search...');
+        const result = await callGemini(messages, { ...options, model: undefined, useSearch: false });
+        console.log('[AI] Gemini succeeded (no search)');
+        return result;
+      } catch (err2) {
+        errors.push(`Gemini (no-search): ${err2.message}`);
       }
     }
   }
-
   throw new Error('Barcha AI provayderlar ishlamayapti: ' + errors.join(' | '));
 }
 
@@ -4971,7 +5008,11 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   rawResults = collapseRepeatedChunks(rawResults);
   markStage('hybrid');
 
-  if (rawResults.length > FINAL_K) {
+  if (rawResults.length > FINAL_K && opts.rerank === false) {
+    // a light secondary search (question aspects): keyword order, no AI call
+    rawResults = require('../rag/reranker').keywordFallbackRerank(query, rawResults, FINAL_K);
+    searchMode = `${searchMode}+keyword-rank`;
+  } else if (rawResults.length > FINAL_K) {
     try {
       const { rerankChunks } = require('../rag/reranker');
       rawResults = await rerankChunks(query, rawResults, { topK: FINAL_K });
@@ -6618,6 +6659,21 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       ragContext = typeof ragResult === 'string' ? ragResult : (ragResult.context || '');
       ragMeta = ragResult.meta || null;
       ragChunks = ragResult.chunks || [];
+      // Each part of the question (deadline, compensation, evidence, remedy)
+      // gets its own light corpus search (src/rag/question-aspects.js).
+      try {
+        const aspects = await retrieveAspects({
+          question: message, topic, existing: ragChunks, lang: lexLangForText(message) === 'ru' ? 'ru' : 'uz',
+          retrieve: (query, t, opts) => retrieveLegalContext(query, t, null, { ...opts, strictTopic: Boolean(deterministicTopic && topic === deterministicTopic) }),
+        });
+        if (aspects.chunks.length) {
+          ragChunks = ragChunks.concat(aspects.chunks);
+          ragContext += aspects.context;
+          ragMeta = Object.assign({}, ragMeta || {}, { aspects: aspects.found });
+        }
+      } catch (aspectErr) {
+        console.warn('[Legal Chat] aspect retrieval failed:', aspectErr.message);
+      }
       // Phase 1 corpus gap-fill: record coverage + queue lex.uz source suggestions
       // for Master-Admin review (both fire-and-forget; never block the answer).
       logCoverage(message, topic, ragChunks, ragMeta);
@@ -6700,6 +6756,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     //   {type:'done', ...}     — final normalized reply + meta (JSON-response shape)
     //   {type:'error', error}  — terminal failure after headers were sent
     let displayReply, finalProvider;
+    let answerTruncated = false;
     const hasAiProvider = !!(paidProviderConfigured() || process.env.GEMINI_API_KEY);
     if (!hasAiProvider) {
       displayReply = buildCorpusOnlyAnswer(message, ragChunks);
@@ -6731,6 +6788,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         }
         displayReply = normalizeResponseForUser(sres.text);
         finalProvider = sres.provider;
+        answerTruncated = sres.truncated === true;
       } catch (streamErr) {
         // Primary stream failed (rate limit, safety, network) — run the normal
         // non-streaming provider chain and replace whatever was shown.
@@ -6738,12 +6796,14 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         const aiResult = await callAI(aiMessages, { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
         displayReply = normalizeResponseForUser(aiResult.text);
         finalProvider = aiResult.provider;
+        answerTruncated = aiResult.truncated === true;
         sse({ type: 'replace', text: displayReply });
       }
     } else {
       const aiResult = await callAI(aiMessages, { model: MODELS.chat, useSearch: true, maxTokens: 8192, userId: _chatUserId, endpoint: '/api/legal-chat' });
       displayReply = normalizeResponseForUser(aiResult.text);
       finalProvider = aiResult.provider;
+      answerTruncated = aiResult.truncated === true;
     }
 
     // ── GEMINI FALLBACK: if RAG-constrained answer failed, let Gemini answer freely ──
@@ -6767,6 +6827,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         if (!isFailedAnswer(fallbackReply)) {
           displayReply = fallbackReply;
           finalProvider = `${fallbackResult.provider} (fallback)`;
+          answerTruncated = fallbackResult.truncated === true;
           console.log(`[Legal Chat] Gemini fallback succeeded — using pretrained answer`);
           if (sse) sse({ type: 'replace', text: displayReply });
         }
@@ -6845,8 +6906,9 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
         model: MODELS.chat,
         lang: lexLangForText(message) === 'ru' ? 'ru' : 'uz',
         endpoint: '/api/legal-chat/claim-check',
+        truncated: answerTruncated,
         retrieveMore: (query, { articles = [] } = {}) => retrieveLegalContext(
-          [query, ...articles.map(a => `${a}-modda`)].join(' '), topic, null, { noWebFallback: true }),
+          [query, ...articles.map(a => `${a}-modda`)].join(' '), topic, null, { noWebFallback: true, queryRewrite: false, correctiveMode: 'off', rerank: false }),
       });
       if (claimGuard.text !== displayReply) {
         displayReply = claimGuard.text;
@@ -6854,7 +6916,11 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       }
       if (Array.isArray(claimGuard.chunks)) ragChunks = claimGuard.chunks;
       ragMeta = Object.assign({}, ragMeta || {}, {
-        claimGuard: { status: claimGuard.status, withheld: claimGuard.withheld, retrievals: claimGuard.retrievals, reason: claimGuard.reason || null },
+        claimGuard: {
+          status: claimGuard.status, withheld: claimGuard.withheld, unconfirmed: claimGuard.unconfirmed || [],
+          retrievals: claimGuard.retrievals, reason: claimGuard.reason || null,
+          truncated: claimGuard.truncated === true, removedHeadings: claimGuard.removedHeadings || [],
+        },
       });
     }
 

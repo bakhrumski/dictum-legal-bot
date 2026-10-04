@@ -41,6 +41,8 @@ Known state of the suites (Sept 2026):
 - `npm test` passes (58 + 5).
 - `tests/authz-matrix.test.js` needs a running server on :3000 and aborts
   otherwise — expected, not a regression.
+- `tests/provider-resilience.test.js` and `tests/legal-regressions.test.js`
+  (A-H, 2026-10-04 retest) use stub providers only; no real cost.
 - `tests/workspace-phase1.test.js` passes. It asserts exact code strings
   from the Workspace frontend, so a redesign that renames a class will fail
   it; update the assertion to the current design rather than reverting the
@@ -55,7 +57,15 @@ Known state of the suites (Sept 2026):
   chat, Workspace) before it is sent: a term, amount, percentage or rate
   must be in the cited source text and confirmed by a verifier for that
   situation and those parties, else it is withheld and named; a verifier
-  that fails leaves claims unverified, never passed.
+  that fails leaves claims unverified, never passed. Since 2026-10-04 it also
+  checks what an article is cited FOR (a basis the source contradicts, or an
+  article not in context, is withheld), never lets "not found in the searched
+  sources" read as "not in the law", and removes empty headings / cuts a
+  truncated answer to its last full sentence. `citationCheck` is the format
+  check only; `semanticCheck` is the guard's verdict.
+  `src/rag/question-aspects.js` splits a question into deadline,
+  compensation, evidence and remedy and runs a light corpus search for each
+  (Telegram, web chat, Workspace).
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's
@@ -69,6 +79,14 @@ Known state of the suites (Sept 2026):
   NULL, never $0). Wrap a new provider call in `usageLedger.track()`.
   Master views: `/api/admin/ai-usage/{requests,requests/:id,report}` and the
   dashboard's "AI so'rovlar" panel.
+- `src/ai/provider-health.js` — provider errors are classified from status
+  AND the provider's own code/message (a 429 is quota or rate limit, a 402
+  says why), permanent vs transient, with a per-process circuit breaker; an
+  open breaker or a spent per-request budget (`AI_REQUEST_*`) is one
+  `skipped` ledger row, no call. Rerank pairs of one question are one
+  `batch_id`, not retries; `RERANKER=off` turns HF rerank off.
+  `docs/ai-routing.md` is the routing map (there is no Claude adapter).
+  Report days are Asia/Tashkent.
 - Models: GPT-6 since 2026-09-23. `MODELS` in server.js defaults to
   premium and standard `gpt-6-sol`, cheap and chat `gpt-6-luna`, each
   env-overridable (`MODEL_PREMIUM`…). Premium is deliberately not

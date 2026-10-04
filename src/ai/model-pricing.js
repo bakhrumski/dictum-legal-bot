@@ -65,7 +65,7 @@ function normalizeCount(value) {
  * free merely because its provider price is not configured here.
  */
 function calculateTokenCost(model, { inTokens = 0, outTokens = 0, cachedTokens = 0 } = {}) {
-  const pricing = voicelabPricing(model) || MODEL_PRICING[String(model || '').toLowerCase()];
+  const pricing = voicelabPricing(model) || MODEL_PRICING[String(model || '').toLowerCase()] || overridePricing(model);
   if (!pricing) return null;
 
   const input = normalizeCount(inTokens);
@@ -117,14 +117,37 @@ function voicelabCreditUsd() {
     : VOICELAB_CREDIT;
 }
 
+/**
+ * Owner-confirmed prices for models this table does not carry (2026-10-04:
+ * gemini-embedding-001's price could not be checked from here), as JSON in
+ * AI_PRICE_OVERRIDES, USD per 1M tokens:
+ *   {"gemini-embedding-001":{"in":0.15,"out":0,"source":"ai.google.dev/pricing","checkedAt":"2026-10-04"}}
+ * Without an entry the model's cost stays unknown.
+ */
+function overridePricing(model) {
+  let table;
+  try { table = JSON.parse(process.env.AI_PRICE_OVERRIDES || '{}'); } catch (_) { return null; }
+  const e = table && table[String(model || '').toLowerCase()];
+  if (!e || !Number.isFinite(Number(e.in))) return null;
+  return {
+    in: Number(e.in), out: Number.isFinite(Number(e.out)) ? Number(e.out) : 0,
+    cached: Number.isFinite(Number(e.cached)) ? Number(e.cached) : null,
+    source: e.source ? String(e.source).slice(0, 200) : 'AI_PRICE_OVERRIDES',
+    checkedAt: e.checkedAt ? String(e.checkedAt).slice(0, 20) : null,
+  };
+}
+
 /** The price a token cost is computed from, as stored with the row, or null. */
 function pricingSnapshot(model) {
   const key = String(model || '').toLowerCase();
   const override = voicelabPricing(model);
+  const custom = override ? null : overridePricing(model);
   const table = MODEL_PRICING[key];
-  const price = override || table;
+  const price = override || table || custom;
   if (!price) return null;
-  const meta = override
+  const meta = custom && !table
+    ? { source: custom.source, effectiveFrom: null, checkedAt: custom.checkedAt, confirmation: 'owner_confirmed' }
+    : override
     ? { source: 'VOICELAB_PRICES', effectiveFrom: null, checkedAt: null, confirmation: 'env_override' }
     : (PRICING_SOURCES[PRICE_SOURCE_OF[key]] || { source: null, effectiveFrom: null, checkedAt: null, confirmation: 'unknown' });
   return {

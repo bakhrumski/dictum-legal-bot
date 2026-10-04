@@ -38,6 +38,7 @@ const {
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const { appendRepealedNotice } = require('../rag/superseded-acts');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
+const { retrieveAspects } = require('../rag/question-aspects');
 const telegramEconomy = require('../services/telegram-economy');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
 
@@ -453,6 +454,24 @@ async function generateAnswer(question, turns) {
     console.warn('[TG-AGENT] retrieval failed:', e.message);
   }
 
+  // Each part of the question (deadline, compensation, evidence, remedy) gets
+  // its own light corpus search, so the norms of the quieter parts reach the
+  // context too (src/rag/question-aspects.js).
+  const lang = citationLanguageForText(question);
+  let aspects = { found: {} };
+  try {
+    aspects = await retrieveAspects({
+      question, topic, existing: chunks, lang,
+      retrieve: (query, t, opts) => D.retrieveLegalContext(query, t, null, { ...opts, strictTopic: Boolean(deterministicTopic) }),
+    });
+    if (aspects.chunks.length) {
+      chunks = chunks.concat(aspects.chunks);
+      ragContext += aspects.context;
+    }
+  } catch (e) {
+    console.warn('[TG-AGENT] aspect retrieval failed:', e.message);
+  }
+
   if (korpusAnswer) {
     let korpusRepealed = [];
     if (D.hydrateMentionedOfficialActChunks) {
@@ -461,7 +480,6 @@ async function generateAnswer(question, turns) {
       korpusRepealed = hydrated.repealed || [];
     }
     if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, korpusAnswer);
-    const lang = citationLanguageForText(question);
     const normalizedKorpusAnswer = appendRepealedNotice(
       normalizeLegalAnswerCitations(korpusAnswer, chunks, lang), { repealed: korpusRepealed }, lang);
     if (hasCanonicalOfficialCitations(normalizedKorpusAnswer)) {
@@ -491,7 +509,11 @@ TELEGRAM FORMATI (majburiy):
 - Oddiy, tushunarli til. Har bir da'vo uchun modda raqamini ko'rsating.
 - Savolga bir nechta hujjat tegishli bo'lsa, kontekstdagi har birining normasini ko'rsating: yuridik kuchi yuqorisidan boshlab (Konstitutsiya, qonun/kodeks, Prezident hujjati, Vazirlar Mahkamasi qarori, vazirlik/idora hujjati, hokim qarori). Normalar farq qilsa, qaysi biri ustun ekanini aytib o'ting: yuridik kuchi yuqori hujjat ustun; bir xil kuchdagi hujjatlar (masalan, Prezident farmoni va qarori) zid bo'lsa, eng keyingi sanada qabul qilingani ustun.
 - Har bir qo'llanayotgan normani shu gapning o'zida (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) shaklida yozing (rus tilidagi javobda esa: **Полное название на русском (ЗРУ/ПП/УП/ПКМ-номер), статья N, часть первая/вторая…**). Qism raqami kontekstda bo'lmasa "tegishli qism" deb yozing. Hujjat raqamini faqat Lex.uz konteksti tasdiqlasa yozing. "lex.uz:", "Manba:" yoki xom URL yozmang. Alohida "Manbalar" bo'limi yaratmang; interfeys har bir tasdiqlangan hujjat eslatmasini Lex.uz havolasiga aylantiradi.
-- Agar KONTEKSTda javob yo'q bo'lsa — buni ochiq ayting, taxmin qilmang.` },
+- Agar KONTEKSTda javob yo'q bo'lsa — buni ochiq ayting, taxmin qilmang. "Qonunda yo'q" yoki "nazarda tutilmagan" demang: "berilgan manbalarda topilmadi" deb yozing — norma kontekstda bo'lmasligi qonunda yo'qligini anglatmaydi.
+- Savolning har bir qismiga (choralar, dalillar, muddat, kompensatsiya) alohida javob bering; kontekstda o'sha qism uchun norma bo'lsa, shu normani keltiring.
+- Moddani faqat uning matni savoldagi vaziyat va taraflarga tegishli bo'lsa keltiring (masalan, ish beruvchi yuridik shaxs bo'lsa, yakka tartibdagi tadbirkor ish beruvchi haqidagi moddani keltirmang).
+- Tarafning harakat muddatini (masalan, buyruq chiqarish, to'lash muddati) sudga murojaat muddati deb yozmang.
+- Javobni to'liq gap bilan tugating; bo'sh sarlavha qoldirmang.` },
   ];
   if (hist) messages.push({ role: 'user', text: `Suhbat tarixi (kontekst uchun):\n${hist}` });
   messages.push({ role: 'user', text: question });
@@ -526,8 +548,10 @@ TELEGRAM FORMATI (majburiy):
   // Terms, amounts, percentages and rates must be backed by the source text
   // for this situation and these parties; anything that is not is withheld
   // and named as unverified (src/rag/legal-claim-guard.js). One bounded
-  // corpus re-retrieval looks for a missing norm.
-  const lang = citationLanguageForText(question);
+  // corpus re-retrieval looks for a missing norm. Since 2026-10-04 the
+  // articles an answer applies are checked too (an article about a different
+  // employer was cited and passed), and an empty heading or a cut-off answer
+  // is repaired before sending.
   const claimGuard = await guardLegalAnswer({
     question,
     answer: text,
@@ -536,9 +560,10 @@ TELEGRAM FORMATI (majburiy):
     model: D.chatModel || undefined,
     lang,
     endpoint: '/tg-agent/claim-check',
+    truncated: res.truncated === true,
     retrieveMore: (query, { articles = [] } = {}) => D.retrieveLegalContext(
       [query, ...articles.map(a => `${a}-modda`)].join(' '), topic, null,
-      { noWebFallback: true, strictTopic: Boolean(deterministicTopic) }),
+      { noWebFallback: true, queryRewrite: false, correctiveMode: 'off', rerank: false, strictTopic: Boolean(deterministicTopic) }),
   });
   text = claimGuard.text;
   chunks = claimGuard.chunks || chunks;
@@ -572,7 +597,7 @@ TELEGRAM FORMATI (majburiy):
   }
 
   const lexCheckWeak = ['error', 'insufficient'].includes(String(lexCrossCheck.status || ''));
-  const claimsWeak = ['partial', 'unverified'].includes(claimGuard.status);
+  const claimsWeak = ['partial', 'unverified'].includes(claimGuard.status) || claimGuard.truncated === true;
   const confidence = (chunks.length === 0 || unverified.length > 0 || citationCheck !== 'ok'
     || !groundedToNamedSource || lexCheckWeak || claimsWeak) ? 'low' : 'high';
   if (confidence === 'low') {
@@ -594,12 +619,19 @@ TELEGRAM FORMATI (majburiy):
       topic,
       chunks: chunks.length,
       unverified,
+      // citationCheck is the format check only (are the cited articles in the
+      // context); whether they say what the answer claims is semanticCheck
       citationCheck,
+      semanticCheck: claimGuard.status,
+      aspects: aspects.found || {},
       claimGuard: {
         status: claimGuard.status,
         withheld: claimGuard.withheld,
+        unconfirmed: claimGuard.unconfirmed || [],
         retrievals: claimGuard.retrievals,
         reason: claimGuard.reason || null,
+        truncated: claimGuard.truncated === true,
+        removedHeadings: claimGuard.removedHeadings || [],
       },
       provider: res.provider,
       lexCrossCheck: {
@@ -1183,13 +1215,13 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
     return skip('empty answer');
   }
 
-  // Every critical claim had to be withheld and little else was left: this
-  // is not an answer. The credit is returned, the user is told plainly, and
+  // Every critical claim had to be withheld (or the answer was cut off) and
+  // little else was left: this is not an answer. The credit is returned, the user is told plainly, and
   // a lawyer takes the question.
   if (answer.substantive === false) {
     if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId, quota).catch(() => {});
     else await releaseDailyAiAnswer(chatId, quota);
-    const reply = "Savolingiz bo'yicha muddat, summa yoki hisoblash kabi aniq ma'lumotlarni manbada tasdiqlay olmadim, shuning uchun taxminiy javob yubormayman. Savolingiz yuristga yuborildi. Bu javob uchun AI kreditingiz hisobdan yechilmadi."
+    const reply = "Savolingiz bo'yicha javobning huquqiy asosi yoki aniq ma'lumotlarini (modda, muddat, summa, hisoblash) manbada tasdiqlay olmadim, shuning uchun taxminiy javob yubormayman. Savolingiz yuristga yuborildi. Bu javob uchun AI kreditingiz hisobdan yechilmadi."
       + (answer.text.includes('⚠️') ? `\n\n${answer.text.slice(answer.text.indexOf('⚠️')).trim()}` : '');
     console.log(`[TG-AGENT] chat=${chatId} claims unverified, nothing substantive — escalated, credit released`);
     return complete({

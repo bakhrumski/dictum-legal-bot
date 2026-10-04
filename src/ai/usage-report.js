@@ -14,7 +14,24 @@
  * or key is stored, so none can be shown.
  */
 
-const RETRY_OR_FALLBACK = `(COALESCE(l.attempt, 1) > 1 OR l.fallback_from IS NOT NULL OR COALESCE(l.status, 'success') <> 'success')`;
+// 2026-10-04: a failed call is not a retry, and the pairs of one rerank batch
+// are neither. A retry is a later attempt of the same logical call; a
+// fallback is a call made because another model failed before it.
+const RETRY = `COALESCE(l.attempt, 1) > 1`;
+const FALLBACK = `l.fallback_from IS NOT NULL`;
+const RETRY_OR_FALLBACK = `(${RETRY} OR ${FALLBACK})`;
+const FAILED = `l.status IN ('error', 'timeout')`;
+const SKIPPED = `l.status = 'skipped'`;
+// a call that reached the provider; a skipped one has no cost by definition
+const CALLED = `COALESCE(l.status, 'success') <> 'skipped'`;
+const UNKNOWN_COST = `(l.cost_usd IS NULL AND ${CALLED})`;
+const VOICELAB_CREDITS_UNKNOWN = `(l.provider = 'voicelab' AND l.provider_credits IS NULL AND ${CALLED})`;
+
+// Days and months are Tashkent's (UTC+5); timestamps are stored in UTC.
+const TZ = 'Asia/Tashkent';
+function tashkentDate(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
 
 function intParam(value, fallback, min, max) {
   const n = Number.parseInt(value, 10);
@@ -28,8 +45,14 @@ function dateParam(value) {
 
 const REQUEST_TOTALS = `
   SELECT l.request_id,
-         COUNT(*)::int                                              AS calls,
-         COUNT(*) FILTER (WHERE l.cost_usd IS NULL)::int            AS unknown_cost_calls,
+         COUNT(*) FILTER (WHERE ${CALLED})::int                     AS calls,
+         COUNT(*) FILTER (WHERE ${SKIPPED})::int                    AS skipped_calls,
+         COUNT(*) FILTER (WHERE ${FAILED})::int                     AS failed_calls,
+         COUNT(*) FILTER (WHERE ${RETRY})::int                      AS retry_calls,
+         COUNT(*) FILTER (WHERE ${FALLBACK})::int                   AS fallback_calls,
+         COUNT(DISTINCT l.batch_id)::int                            AS batches,
+         COUNT(*) FILTER (WHERE ${UNKNOWN_COST})::int               AS unknown_cost_calls,
+         COUNT(*) FILTER (WHERE ${VOICELAB_CREDITS_UNKNOWN})::int   AS voicelab_credits_unknown_calls,
          COALESCE(SUM(l.cost_usd), 0)::float                        AS known_cost_usd,
          COALESCE(SUM(l.provider_credits), 0)::float                AS provider_credits,
          COUNT(*) FILTER (WHERE ${RETRY_OR_FALLBACK})::int          AS retry_or_fallback_calls,
@@ -60,8 +83,9 @@ function mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger }) {
       const { rows } = await pool.query(`
         WITH totals AS (${REQUEST_TOTALS} AND l.ts > NOW() - ($1 || ' days')::interval GROUP BY l.request_id)
         SELECT r.request_id, r.service, r.kind, r.user_id, r.chat_id IS NOT NULL AS telegram,
-               r.started_at, r.finished_at, r.latency_ms, r.outcome, r.legal_check, r.telemetry_errors,
-               t.calls, t.unknown_cost_calls, t.known_cost_usd, t.provider_credits,
+               r.started_at, r.finished_at, r.latency_ms, r.outcome, r.legal_check, r.telemetry_errors, r.degraded,
+               t.calls, t.skipped_calls, t.failed_calls, t.retry_calls, t.fallback_calls, t.batches,
+               t.unknown_cost_calls, t.voicelab_credits_unknown_calls, t.known_cost_usd, t.provider_credits,
                t.retry_or_fallback_calls, t.retry_or_fallback_cost_usd, t.models, t.stages, t.cost_sources
           FROM ai_requests r JOIN totals t ON t.request_id = r.request_id
          WHERE ($2::text IS NULL OR r.service = $2)
@@ -81,22 +105,29 @@ function mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger }) {
       const [reqRow, calls] = await Promise.all([
         pool.query('SELECT * FROM ai_requests WHERE request_id = $1', [id]),
         pool.query(`
-          SELECT call_id, seq, stage, service, provider, model_requested, model_returned, status, error_code, error_message,
-                 attempt, retry_reason, fallback_from, started_at, finished_at, latency_ms,
+          SELECT call_id, seq, stage, service, provider, model_requested, model_returned, status, error_code, error_kind, error_message,
+                 attempt, retry_reason, fallback_from, stage_run_id, parent_call_id, batch_id, started_at, finished_at, latency_ms,
                  in_tokens, cached_in_tokens, out_tokens, reasoning_tokens, audio_ms, characters, provider_credits,
                  cost_usd::float AS cost_usd, cost_source, pricing, endpoint
             FROM llm_spend_log WHERE request_id = $1
            ORDER BY seq NULLS LAST, started_at`, [id]),
       ]);
       if (!reqRow.rows.length && !calls.rows.length) return res.status(404).json({ error: 'not found' });
-      const unknown = calls.rows.filter(c => c.cost_usd == null).length;
+      const called = calls.rows.filter(c => c.status !== 'skipped');
+      const unknown = called.filter(c => c.cost_usd == null).length;
       const summary = {
-        calls: calls.rows.length,
+        calls: called.length,
+        skipped_calls: calls.rows.length - called.length,
+        failed_calls: called.filter(c => c.status === 'error' || c.status === 'timeout').length,
+        retry_calls: called.filter(c => (c.attempt || 1) > 1).length,
+        fallback_calls: called.filter(c => c.fallback_from).length,
+        batches: new Set(called.filter(c => c.batch_id).map(c => c.batch_id)).size,
+        voicelab_credits_unknown_calls: called.filter(c => c.provider === 'voicelab' && c.provider_credits == null).length,
         known_cost_usd: calls.rows.reduce((sum, c) => sum + (c.cost_usd || 0), 0),
         unknown_cost_calls: unknown,
         provider_credits: calls.rows.reduce((sum, c) => sum + (Number(c.provider_credits) || 0), 0),
         model_sequence: calls.rows.map(c => ({ stage: c.stage, model: c.model_returned || c.model_requested, confirmed: Boolean(c.model_returned), status: c.status })),
-        retry_or_fallback_calls: calls.rows.filter(c => (c.attempt || 1) > 1 || c.fallback_from || c.status !== 'success').length,
+        retry_or_fallback_calls: called.filter(c => (c.attempt || 1) > 1 || c.fallback_from).length,
       };
       const request = reqRow.rows[0] || null;
       res.json({ request, summary: { ...summary, ...completeness({ ...summary, telemetry_errors: request ? request.telemetry_errors : 0 }) }, calls: calls.rows });
@@ -109,34 +140,40 @@ function mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger }) {
   app.get('/api/admin/ai-usage/report', requireMasterAdmin, async (req, res) => {
     try {
       const period = req.query.period === 'month' ? 'month' : 'day';
-      const to = dateParam(req.query.to) || new Date().toISOString().slice(0, 10);
-      const from = dateParam(req.query.from) || new Date(Date.now() - (period === 'month' ? 180 : 30) * 864e5).toISOString().slice(0, 10);
-      const bucket = period === 'month' ? `to_char(l.ts, 'YYYY-MM')` : `to_char(l.ts, 'YYYY-MM-DD')`;
-      const range = `l.ts >= $1::date AND l.ts < ($2::date + 1)`;
+      const to = dateParam(req.query.to) || tashkentDate();
+      const from = dateParam(req.query.from) || tashkentDate(new Date(Date.now() - (period === 'month' ? 180 : 30) * 864e5));
+      const local = `(l.ts AT TIME ZONE '${TZ}')`;
+      const bucket = period === 'month' ? `to_char(${local}, 'YYYY-MM')` : `to_char(${local}, 'YYYY-MM-DD')`;
+      const range = `l.ts >= ($1::date::timestamp AT TIME ZONE '${TZ}') AND l.ts < (($2::date + 1)::timestamp AT TIME ZONE '${TZ}')`;
       const [totals, byService, byModel, requests] = await Promise.all([
         pool.query(`
-          SELECT ${bucket} AS period, COUNT(*)::int AS calls,
+          SELECT ${bucket} AS period, COUNT(*) FILTER (WHERE ${CALLED})::int AS calls,
+                 COUNT(*) FILTER (WHERE ${SKIPPED})::int AS skipped_calls,
+                 COUNT(*) FILTER (WHERE ${FAILED})::int AS failed_calls,
+                 COUNT(*) FILTER (WHERE ${RETRY})::int AS retry_calls,
+                 COUNT(*) FILTER (WHERE ${FALLBACK})::int AS fallback_calls,
                  COALESCE(SUM(l.cost_usd), 0)::float AS known_cost_usd,
-                 COUNT(*) FILTER (WHERE l.cost_usd IS NULL)::int AS unknown_cost_calls,
-                 COUNT(*) FILTER (WHERE l.in_tokens IS NULL AND l.out_tokens IS NULL AND l.audio_ms IS NULL AND l.characters IS NULL)::int AS no_usage_calls,
-                 COUNT(*) FILTER (WHERE l.pricing IS NULL)::int AS no_price_calls,
+                 COUNT(*) FILTER (WHERE ${UNKNOWN_COST})::int AS unknown_cost_calls,
+                 COUNT(*) FILTER (WHERE ${VOICELAB_CREDITS_UNKNOWN})::int AS voicelab_credits_unknown_calls,
+                 COUNT(*) FILTER (WHERE ${CALLED} AND l.in_tokens IS NULL AND l.out_tokens IS NULL AND l.audio_ms IS NULL AND l.characters IS NULL)::int AS no_usage_calls,
+                 COUNT(*) FILTER (WHERE ${CALLED} AND l.pricing IS NULL)::int AS no_price_calls,
                  COUNT(*) FILTER (WHERE ${RETRY_OR_FALLBACK})::int AS retry_or_fallback_calls,
                  COALESCE(SUM(l.cost_usd) FILTER (WHERE ${RETRY_OR_FALLBACK}), 0)::float AS retry_or_fallback_cost_usd,
                  COALESCE(SUM(l.provider_credits), 0)::float AS provider_credits
             FROM llm_spend_log l WHERE ${range} GROUP BY 1 ORDER BY 1`, [from, to]),
         pool.query(`
-          SELECT ${bucket} AS period, COALESCE(l.service, 'legacy') AS service, COUNT(*)::int AS calls,
+          SELECT ${bucket} AS period, COALESCE(l.service, 'legacy') AS service, COUNT(*) FILTER (WHERE ${CALLED})::int AS calls,
                  COALESCE(SUM(l.cost_usd), 0)::float AS known_cost_usd,
-                 COUNT(*) FILTER (WHERE l.cost_usd IS NULL)::int AS unknown_cost_calls
+                 COUNT(*) FILTER (WHERE ${UNKNOWN_COST})::int AS unknown_cost_calls
             FROM llm_spend_log l WHERE ${range} GROUP BY 1, 2 ORDER BY 1, 4 DESC`, [from, to]),
         pool.query(`
           SELECT ${bucket} AS period, COALESCE(l.model_returned, l.model_requested, l.model) AS model, COALESCE(l.provider, '?') AS provider,
-                 COUNT(*)::int AS calls, COALESCE(SUM(l.cost_usd), 0)::float AS known_cost_usd,
-                 COUNT(*) FILTER (WHERE l.cost_usd IS NULL)::int AS unknown_cost_calls
+                 COUNT(*) FILTER (WHERE ${CALLED})::int AS calls, COALESCE(SUM(l.cost_usd), 0)::float AS known_cost_usd,
+                 COUNT(*) FILTER (WHERE ${UNKNOWN_COST})::int AS unknown_cost_calls
             FROM llm_spend_log l WHERE ${range} GROUP BY 1, 2, 3 ORDER BY 1, 5 DESC`, [from, to]),
         pool.query(`
           WITH totals AS (${REQUEST_TOTALS} AND ${range} GROUP BY l.request_id)
-          SELECT to_char(r.started_at, ${period === 'month' ? `'YYYY-MM'` : `'YYYY-MM-DD'`}) AS period,
+          SELECT to_char(r.started_at AT TIME ZONE '${TZ}', ${period === 'month' ? `'YYYY-MM'` : `'YYYY-MM-DD'`}) AS period,
                  COUNT(*)::int AS requests,
                  COUNT(*) FILTER (WHERE t.unknown_cost_calls = 0 AND r.telemetry_errors = 0)::int AS complete_requests,
                  COALESCE(SUM(t.known_cost_usd) FILTER (WHERE t.unknown_cost_calls = 0 AND r.telemetry_errors = 0), 0)::float AS complete_cost_usd,
@@ -163,9 +200,10 @@ function mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger }) {
         };
       });
       res.json({
-        period, from, to, periods,
+        period, from, to, timezone: TZ, periods,
+        open_breakers: require('./provider-health').snapshot(),
         ledger_health: ledger ? { rows_written_since_boot: ledger.stats.rowsWritten, write_failures_since_boot: ledger.stats.writeFailures } : null,
-        note: 'known_cost_usd sums the calls whose cost is known; unknown_cost_calls are not included in it. Calls before 2026-10-03 are "legacy" rows without request ids.',
+        note: 'Days are Asia/Tashkent. known_cost_usd sums the calls whose cost is known; unknown_cost_calls (provider called, cost unknown) are not in it. Skipped calls never reached a provider (open breaker or request limit). A failed call is not a retry; rerank pairs share a batch. Calls before 2026-10-03 are "legacy" rows without request ids.',
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -173,4 +211,4 @@ function mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger }) {
   });
 }
 
-module.exports = { mountUsageReportRoutes, completeness };
+module.exports = { mountUsageReportRoutes, completeness, tashkentDate };
