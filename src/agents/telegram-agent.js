@@ -40,6 +40,8 @@ const { appendRepealedNotice } = require('../rag/superseded-acts');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { retrieveAspects } = require('../rag/question-aspects');
 const telegramEconomy = require('../services/telegram-economy');
+const usageLedger = require('../ai/usage-ledger');
+const { testModeNote } = require('../bot/test-account');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,6 +125,16 @@ async function claimDailyAiAnswer(chatId) {
   } catch (error) {
     console.error('[TG-AGENT] answer entitlement check failed:', error.message);
     return { allowed: false, unavailable: true, used: 0, remaining: 0, limit: FREE_AI_LIMIT, paidCredits: 0 };
+  }
+}
+
+/** The test account's reservation: one answer at a time, no limit or credit taken. */
+async function claimTestAiAnswer(chatId) {
+  try {
+    return D && D.claimTestAnswer ? await D.claimTestAnswer(chatId) : await telegramEconomy.claimTestAnswer(chatId);
+  } catch (error) {
+    console.error('[TG-AGENT] test reservation failed:', error.message);
+    return { allowed: false, unavailable: true, used: 0, remaining: 0, limit: 0, paidCredits: 0 };
   }
 }
 
@@ -661,7 +673,7 @@ TELEGRAM FORMATI (majburiy):
  *   meta: object
  * }>}
  */
-async function handleUserMessage({ chatId, text, firstName = '' }) {
+async function handleUserMessage({ chatId, text, firstName = '', testAccount = null }) {
   const skip = (reason) => ({ handled: false, reply: null, action: 'skip', escalate: true, meta: { reason } });
 
   if (!AUTO_ANSWER) return skip('auto-answer disabled');
@@ -696,6 +708,17 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
       meta: { intent: 'huquqiy_savol', freeLimit: dailyLimit, paidCredits: status.paidCredits || 0 },
     };
   };
+
+  // The Telegram test account (src/bot/test-account.js): no daily limit or
+  // credit, but its own total budget. Once that is spent no new AI call is
+  // made for it - not even intent classification.
+  const testBudgetSpent = () => ({
+    handled: true,
+    reply: `🧪 Test rejimi budjeti ($${testAccount.budgetUsd}) tugadi, shuning uchun yangi AI chaqiruvlari to'xtatildi. Rejimni davom ettirish yoki budjetni o'zgartirish administrator qarori bilan bo'ladi.`,
+    action: 'test_budget_exhausted',
+    escalate: false,
+    meta: { intent: 'huquqiy_savol', testMode: { budgetUsd: testAccount.budgetUsd, spend: testAccount.spend } },
+  });
 
   // Master Admin can pause automation for an individual conversation. The
   // bot still records the message in the normal request queue, but it does not
@@ -735,9 +758,12 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
       // Do not pay for an intent-model call when the user cannot receive a
       // generated legal answer. Deterministic conversations above remain
       // unlimited and cost-free.
+      if (testAccount && testAccount.exhausted) return testBudgetSpent();
       try {
         const entitlement = await telegramEconomy.getAnswerEntitlementStatus(chatId, FREE_AI_LIMIT);
-        if (!entitlement.allowed) return paymentRequired(entitlement);
+        // the test account skips the limit and credits, not the
+        // one-answer-at-a-time rule
+        if (testAccount ? entitlement.pending : !entitlement.allowed) return paymentRequired(entitlement);
       } catch (error) {
         console.warn('[TG-AGENT] preflight entitlement check failed:', error.message);
         return {
@@ -1180,9 +1206,12 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
   }
 
   // ── Answer ──────────────────────────────────────────────────────────────
-  const quota = D.claimDailyAnswer
-    ? await D.claimDailyAnswer(chatId, FREE_AI_LIMIT)
-    : await claimDailyAiAnswer(chatId);
+  if (testAccount && testAccount.exhausted) return complete(testBudgetSpent());
+  const quota = testAccount
+    ? await claimTestAiAnswer(chatId)
+    : D.claimDailyAnswer
+      ? await D.claimDailyAnswer(chatId, FREE_AI_LIMIT)
+      : await claimDailyAiAnswer(chatId);
 
   if (!quota.allowed) {
     if (!quota.unavailable) return complete(paymentRequired(quota));
@@ -1242,7 +1271,9 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
     ? '\n\n⚠️ _Bu dastlabki javob: ba\'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim. Yurist ko\'rib chiqib, aniqlashtiradi._'
     : '';
 
-  const allowance = quota.source === 'paid'
+  const allowance = quota.source === 'test'
+    ? `\n\n${testModeNote(testAccount, usageLedger.sharedPoolCommitted(usageLedger.current()) || testAccount.spend.committedUsd)}`
+    : quota.source === 'paid'
     ? `\n\n🎟 Pullik javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`
     : quota.remaining > 0
       ? `\n\n🎁 Bugun yana ${quota.remaining} ta bepul AI huquqiy javobingiz qoldi.`
@@ -1276,6 +1307,7 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
       entitlementSource: quota.source,
       reservationId: quota.reservationId,
       paidCredits: quota.paidCredits || 0,
+      ...(testAccount ? { testMode: { until: testAccount.until, budgetUsd: testAccount.budgetUsd, spentBeforeUsd: testAccount.spend.committedUsd } } : {}),
       nextActions,
       conversationState: 'awaiting_next_action',
       ms: Date.now() - started,

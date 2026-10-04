@@ -12,6 +12,24 @@ const crypto = require('crypto');
 const telegramEconomy = require('../services/telegram-economy');
 const { isStaffRole, isMasterRole, roleLabel, getLinkedAccount, privateSenderId, chatRoute, dashboardUrl } = require('./telegram-roles');
 const usageLedger = require('../ai/usage-ledger');
+const testAccounts = require('./test-account');
+
+/**
+ * The Telegram test account for this update (src/bot/test-account.js), or
+ * null. When it is one, this request's AI calls are also held to the test
+ * account's total budget by the usage ledger.
+ */
+async function testAccountFor(msgOrQuery) {
+  const chat = (msgOrQuery.message && msgOrQuery.message.chat) || msgOrQuery.chat || {};
+  const account = await testAccounts.resolveTestAccount(pool, {
+    chatId: chat.id, chatType: chat.type, fromUserId: msgOrQuery.from && msgOrQuery.from.id,
+  });
+  if (account) {
+    usageLedger.useSharedBudget(testAccounts.ledgerPool(account));
+    usageLedger.annotate({ testMode: true });
+  }
+  return account;
+}
 
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
 const {
@@ -467,6 +485,7 @@ bot.on('callback_query', (callbackQuery) => usageLedger.runWithRequest(
 
 async function handleCallbackQuery(callbackQuery) {
   const chatId = callbackQuery.message.chat.id;
+  const testAccount = await testAccountFor(callbackQuery);
   const data = callbackQuery.data;
 
   if (data === 'bot_stats') {
@@ -533,6 +552,7 @@ async function handleCallbackQuery(callbackQuery) {
           chatId,
           text: caseSummary,
           firstName: callbackQuery.from.first_name || '',
+          testAccount,
         });
         if (result && result.reply) {
           const parts = telegramAgent.splitForTelegram(result.reply);
@@ -1120,6 +1140,7 @@ function telegramMessageKind(msg = {}) {
 
 async function handleTelegramMessage(msg) {
   const chatId = msg.chat.id;
+  const testAccount = await testAccountFor(msg);
   const username = msg.from.username || `user_${msg.from.id}`;
   const firstName = msg.from.first_name || 'Foydalanuvchi';
 
@@ -1535,6 +1556,7 @@ async function handleTelegramMessage(msg) {
             chatId,
             text: requestData.request_text,
             firstName,
+            testAccount,
           });
         } finally {
           clearInterval(typing);

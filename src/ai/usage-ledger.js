@@ -55,7 +55,7 @@ function newRequest(meta = {}) {
     stage: null,
     chain: null,
     // shared by every nested scope (withStage / withChain copy the store)
-    shared: { calls: 0, providerCalls: 0, knownCostUsd: 0, telemetryErrors: 0, annotations: {}, opened: false, degraded: new Set() },
+    shared: { calls: 0, providerCalls: 0, knownCostUsd: 0, unknownCostCalls: 0, telemetryErrors: 0, annotations: {}, opened: false, degraded: new Set() },
     budget: requestBudget(meta.budget),
   };
 }
@@ -86,7 +86,37 @@ function budgetBlock(store, stage) {
   if (store.shared.knownCostUsd >= b.maxCostUsd) return `known cost limit $${b.maxCostUsd} reached`;
   const limit = b.maxCalls + (ESSENTIAL_STAGES.has(stage) ? b.essentialReserve : 0);
   if (store.shared.providerCalls >= limit) return `call limit ${limit} reached`;
+  const pool = b.sharedPool;
+  if (pool) {
+    const committed = sharedPoolCommitted(store);
+    if (committed >= pool.limitUsd) return `${pool.label} budget $${pool.limitUsd} reached ($${committed.toFixed(4)} committed)`;
+  }
   return null;
+}
+
+/**
+ * A budget shared by many requests (the Telegram test account's $5): what
+ * earlier requests spent, plus this request's known cost, plus every
+ * unknown-cost call counted at a conservative assumed price - unknown is
+ * never $0.
+ */
+function sharedPoolCommitted(store) {
+  const pool = store && store.budget && store.budget.sharedPool;
+  if (!pool) return 0;
+  return pool.spentUsd + store.shared.knownCostUsd + store.shared.unknownCostCalls * pool.unknownCallUsd;
+}
+
+/** Put the current request under a shared budget: { label, limitUsd, spentUsd, unknownCallUsd }. */
+function useSharedBudget(pool) {
+  const store = current();
+  if (!store || !pool) return false;
+  store.budget.sharedPool = {
+    label: String(pool.label || 'shared').slice(0, 40),
+    limitUsd: Number(pool.limitUsd),
+    spentUsd: Math.max(0, Number(pool.spentUsd) || 0),
+    unknownCallUsd: Math.max(0, Number(pool.unknownCallUsd) || 0),
+  };
+  return true;
 }
 
 /** Mark the request as served in a reduced mode (e.g. no reranker). */
@@ -240,6 +270,7 @@ async function record(event = {}) {
     store.shared.calls++;
     if (row.status !== 'skipped') store.shared.providerCalls++;
     if (priced.costUsd) store.shared.knownCostUsd += priced.costUsd;
+    if (priced.costUsd == null && row.status !== 'skipped') store.shared.unknownCostCalls++;
   }
   if (priced.costUsd && costListener) {
     try { costListener(priced.costUsd); } catch (_) { /* the breaker must not break a call */ }
@@ -405,5 +436,6 @@ function expressScope(service = 'web') {
 
 module.exports = {
   configure, runWithRequest, current, withStage, withChain, annotate, record, track, degrade, requestBudget, budgetBlock,
+  useSharedBudget, sharedPoolCommitted,
   finishRequest, expressScope, stageFor, errorCodeOf, safeMessage, stats, usageFromGemini, usageFromOpenAI,
 };
