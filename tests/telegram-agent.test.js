@@ -33,7 +33,7 @@ const fakePool = {
       return { rows: found ? [{ reservation_id: found.id }] : [] };
     }
     if (/INSERT INTO tg_answer_reservations/i.test(sql)) {
-      const reservation = { id: String(params[0]), chatId: String(params[1]), source: /'paid'/i.test(sql) ? 'paid' : 'free', usageDay: /usage_day/i.test(sql) ? '2026-08-14' : null, status: 'pending' };
+      const reservation = { id: String(params[0]), chatId: String(params[1]), source: /'paid'/i.test(sql) ? 'paid' : /'test'/i.test(sql) ? 'test' : 'free', usageDay: /usage_day/i.test(sql) ? '2026-08-14' : null, status: 'pending' };
       dbState.reservations.set(reservation.id, reservation);
       return { rows: [] };
     }
@@ -926,6 +926,59 @@ function stubMemory(clarifyCount = 0) {
     assert.match(r.reply, /Javob uzilib qoldi/u);
     assert.strictEqual(r.meta.claimGuard.truncated, true);
     assert.strictEqual(r.meta.confidence, 'low');
+  });
+
+  // Telegram test account (src/bot/test-account.js): no daily limit or
+  // credit for it alone; checks, one-answer-at-a-time and its budget stay.
+  const TEST_ACCOUNT = (over = {}) => ({ userId: '7001', adminId: 42, since: '2026-10-04T00:00:00Z', until: '2026-10-06T00:00:00Z', budgetUsd: 5, unknownCallUsd: 0.05, spend: { knownUsd: 0.1, unknownCalls: 0, assumedUnknownUsd: 0, committedUsd: 0.1, exhausted: false, strict: true }, exhausted: false, ...over });
+
+  await test('test account: answered past the daily limit, no free answer or credit taken, checks still run', async () => {
+    stubMemory();
+    dbState.aiAnswers = 3; // the daily free answers are used up
+    dbState.paidCredits = 0;
+    const d = deps({ answer: "Ish beruvchiga yozma talab yuboring va mehnat inspeksiyasiga murojaat qiling (Mehnat kodeksi, 100-modda). Talabda qarz summasi va to'lanmagan oylarni ko'rsating.", claimVerdict: () => 'supported' });
+    delete d.claimDailyAnswer;
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 7001, text: 'Ishdagi murakkab vaziyat bo\'yicha nima qilaman?', testAccount: TEST_ACCOUNT() });
+    assert.strictEqual(r.action, 'answered');
+    assert.strictEqual(r.meta.entitlementSource, 'test');
+    assert.strictEqual(d.calls.quota, 0, 'the free/paid entitlement is not touched');
+    assert.strictEqual(dbState.aiAnswers, 3);
+    assert.match(r.reply, /🧪 Test rejimi/u);
+    assert.ok(d.calls.claimCheck >= 1, 'the legal claim check still runs');
+    assert.ok(r.meta.semanticCheck, 'the semantic verdict is still recorded');
+    dbState.paidCredits = 0;
+  });
+
+  await test('test account: still one answer at a time', async () => {
+    stubMemory();
+    dbState.reservations.set('busy', { id: 'busy', chatId: '7001', source: 'test', status: 'pending' });
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 7001, text: 'Ishdagi murakkab vaziyat bo\'yicha nima qilaman?', testAccount: TEST_ACCOUNT() });
+    assert.strictEqual(r.action, 'answer_pending');
+    assert.strictEqual(d.calls.answer, 0);
+    assert.strictEqual(d.calls.intent, 0, 'no intent call while an answer is in flight');
+  });
+
+  await test('test account: a spent budget stops every new AI call', async () => {
+    stubMemory();
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 7001, text: 'Ishdagi murakkab vaziyat bo\'yicha nima qilaman?', testAccount: TEST_ACCOUNT({ exhausted: true }) });
+    assert.strictEqual(r.action, 'test_budget_exhausted');
+    assert.strictEqual(d.calls.intent + d.calls.answer, 0);
+    assert.match(r.reply, /budjeti \(\$5\) tugadi/u);
+  });
+
+  await test('everyone else keeps the daily limit', async () => {
+    stubMemory();
+    dbState.aiAnswers = 3;
+    const d = deps();
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 7002, text: 'Ishdagi murakkab vaziyat bo\'yicha nima qilaman?' });
+    assert.strictEqual(r.action, 'quota_exceeded');
+    assert.strictEqual(d.calls.answer, 0);
   });
 
   console.log('\ntelegram-agent — clarification\n');

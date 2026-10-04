@@ -128,6 +128,14 @@ Known state of the suites (Sept 2026):
   chat, by `telegram_user_id` (registration, the site's Telegram linking).
   `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
   chat so the owner can try the bot, voice included, from his own account.
+  Separately, one ordinary (role `user`) account can be a test account
+  (`src/bot/test-account.js`, `TG_TEST_ACCOUNT_*`): by the Telegram user id
+  linked in `admins.telegram_user_id`, never a username; no daily limit or
+  credit, but every check, the one-answer-at-a-time reservation and the
+  per-request limits stay; its spend (ledger rows of its chat) has its own
+  budget ($5 default, unknown cost priced at an assumed rate, never $0) after
+  which the ledger refuses new calls; ends 48 h after `TG_TEST_ACCOUNT_SINCE`.
+  Status: `/api/admin/telegram-test-account?username=…` (master only).
 - `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
   platinum), daily limits, opinion credits and the margin maths.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase

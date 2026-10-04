@@ -62,6 +62,22 @@ function ensureTables() {
       ALTER TABLE tg_answer_reservations
         ADD COLUMN IF NOT EXISTS usage_day DATE
     `);
+    // 'test': the Telegram test account's answer (src/bot/test-account.js) -
+    // no free answer or credit is taken or refunded; the reservation only
+    // keeps one answer at a time.
+    await pool.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+           WHERE conname = 'tg_answer_reservations_source_check'
+             AND pg_get_constraintdef(oid) LIKE '%test%'
+        ) THEN
+          ALTER TABLE tg_answer_reservations DROP CONSTRAINT IF EXISTS tg_answer_reservations_source_check;
+          ALTER TABLE tg_answer_reservations ADD CONSTRAINT tg_answer_reservations_source_check
+            CHECK (source IN ('free', 'paid', 'test'));
+        END IF;
+      END $$
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tg_answer_payments (
         id                          BIGSERIAL PRIMARY KEY,
@@ -141,6 +157,7 @@ async function getPaidAnswerCreditsFrom(db, chatId) {
 }
 
 async function refundReservation(db, chatId, source, usageDay = null) {
+  if (source === 'test') return; // nothing was taken
   if (source === 'paid') {
     await db.query(`
       INSERT INTO tg_answer_wallets (chat_id, credits, updated_at)
@@ -297,6 +314,30 @@ async function claimAnswerEntitlement(chatId, freeLimit = 3) {
   });
 }
 
+/**
+ * The test account's answer: the same one-pending-answer-per-chat rule and
+ * lock as everyone else, but no free answer or credit is taken.
+ */
+async function claimTestAnswer(chatId) {
+  await ensureTables();
+  return inTransaction(async client => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1::text))', [String(chatId)]);
+    await releaseExpiredReservations(client, chatId);
+    const active = await client.query(`
+      SELECT reservation_id FROM tg_answer_reservations
+       WHERE chat_id = $1 AND status = 'pending'
+       LIMIT 1
+    `, [chatId]);
+    if (active.rows.length) return { allowed: false, pending: true, source: null, used: 0, remaining: 0, limit: 0, paidCredits: 0 };
+    const reservationId = crypto.randomUUID();
+    await client.query(`
+      INSERT INTO tg_answer_reservations (reservation_id, chat_id, source)
+      VALUES ($1, $2, 'test')
+    `, [reservationId, chatId]);
+    return { allowed: true, reservationId, source: 'test', used: 0, remaining: 0, limit: 0, paidCredits: 0 };
+  });
+}
+
 /** Finalize only after every Telegram answer part was delivered successfully. */
 async function finalizeAnswerEntitlement(chatId, reservation = {}) {
   await ensureTables();
@@ -417,6 +458,7 @@ async function getTelegramUserStats() {
 
 module.exports = {
   claimAnswerEntitlement,
+  claimTestAnswer,
   finalizeAnswerEntitlement,
   getAnswerEntitlementStatus,
   releaseAnswerEntitlement,

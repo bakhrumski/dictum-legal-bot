@@ -81,6 +81,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/lex-status.test.js
       - name: Per-request AI usage ledger and report on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/usage-ledger.test.js
+      - name: Telegram test account reservation and budget on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/telegram-test-account.test.js
 
   audit:
     name: npm audit (report only)

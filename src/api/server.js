@@ -1062,6 +1062,43 @@ app.get('/api/admin/coverage-gaps', requireMasterAdmin, async (req, res) => {
 // Per-request AI usage and cost (master only): src/ai/usage-report.js.
 require('../ai/usage-report').mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger: usageLedger });
 
+// Telegram test account (src/bot/test-account.js): the configured mode, the
+// database link of the configured Telegram id, and its spend against the
+// budget. ?username= also shows which Telegram id an account with that
+// Telegram username is linked to, to check the id before configuring it.
+// Read-only; no secret is returned.
+app.get('/api/admin/telegram-test-account', requireMasterAdmin, async (req, res) => {
+  try {
+    const testAccounts = require('../bot/test-account');
+    const cfg = testAccounts.testAccountConfig();
+    const out = {
+      mode: { active: cfg.active, reason: cfg.reason, userId: cfg.userId, since: cfg.since, until: cfg.until, maxHours: testAccounts.MAX_HOURS, budgetUsd: cfg.budgetUsd, unknownCallUsdAssumed: cfg.unknownCallUsd },
+      linkedAccounts: [],
+      lookup: null,
+      spend: null,
+    };
+    if (cfg.userId) {
+      const linked = await pool.query(
+        `SELECT id, role, telegram_username, (telegram_chat_id = $1::bigint) AS chat_linked
+           FROM admins WHERE telegram_user_id = $1::bigint ORDER BY id`, [cfg.userId]);
+      out.linkedAccounts = linked.rows;
+      out.eligible = linked.rows.length === 1 && linked.rows[0].role === 'user';
+      if (cfg.since && cfg.until) out.spend = await testAccounts.testAccountSpend(pool, cfg);
+    }
+    const username = String(req.query.username || '').replace(/^@/, '').trim().toLowerCase();
+    if (username) {
+      const found = await pool.query(
+        `SELECT id, role, telegram_user_id::text AS telegram_user_id, telegram_chat_id::text AS telegram_chat_id
+           FROM admins WHERE LOWER(telegram_username) = $1 ORDER BY id LIMIT 5`, [username.slice(0, 64)]);
+      out.lookup = { telegramUsername: username, accounts: found.rows };
+    }
+    res.json(out);
+  } catch (error) {
+    console.error('[TG-TEST] status failed:', error.message);
+    res.status(500).json({ error: 'Test rejimi holatini o\'qib bo\'lmadi' });
+  }
+});
+
 // Suggested sources for Master-Admin review (Phase 2 enrichment).
 app.get('/api/admin/suggested-sources', requireMasterAdmin, async (req, res) => {
   try {
