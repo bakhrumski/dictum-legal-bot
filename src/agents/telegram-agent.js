@@ -37,7 +37,7 @@ const {
 } = require('../rag/citation-utils');
 const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const { appendRepealedNotice } = require('../rag/superseded-acts');
-const { guardLegalAnswer } = require('../rag/legal-claim-guard');
+const { guardLegalAnswer, NO_CALC } = require('../rag/legal-claim-guard');
 const { retrieveAspects } = require('../rag/question-aspects');
 const telegramEconomy = require('../services/telegram-economy');
 const usageLedger = require('../ai/usage-ledger');
@@ -548,7 +548,9 @@ TELEGRAM FORMATI (majburiy):
 - Savolning har bir qismiga (choralar, dalillar, muddat, kompensatsiya) alohida javob bering; kontekstda o'sha qism uchun norma bo'lsa, shu normani keltiring.
 - Moddani faqat uning matni savoldagi vaziyat va taraflarga tegishli bo'lsa keltiring (masalan, ish beruvchi yuridik shaxs bo'lsa, yakka tartibdagi tadbirkor ish beruvchi haqidagi moddani keltirmang).
 - Tarafning harakat muddatini (masalan, buyruq chiqarish, to'lash muddati) sudga murojaat muddati deb yozmang.
-- Javobni to'liq gap bilan tugating; bo'sh sarlavha qoldirmang.` },
+- Javobni to'liq gap bilan tugating; bo'sh sarlavha qoldirmang.` + (NO_CALC.test(question)
+      ? `\n- Foydalanuvchi summani hisoblamaslikni so'radi: summa yoki raqamli natija chiqarmang; normani, hisoblash tartibini (asos, davr, stavka turi) va qanday faktlar kerakligini tushuntiring.`
+      : '') },
   ];
   if (hist) messages.push({ role: 'user', text: `Suhbat tarixi (kontekst uchun):\n${hist}` });
   messages.push({ role: 'user', text: question });
@@ -635,8 +637,22 @@ TELEGRAM FORMATI (majburiy):
   const claimsWeak = ['partial', 'unverified'].includes(claimGuard.status) || claimGuard.truncated === true;
   const confidence = (chunks.length === 0 || unverified.length > 0 || citationCheck !== 'ok'
     || !groundedToNamedSource || lexCheckWeak || claimsWeak) ? 'low' : 'high';
+  // Why the answer is preliminary, said precisely (2026-10-04: a generic
+  // "some norms could not be confirmed" under an answer that applied article
+  // 333 read as if the article itself was missing).
+  const lowReasons = [];
+  if (chunks.length === 0) lowReasons.push("qidirilgan manbalarda tegishli norma topilmadi");
+  if (unverified.length) lowReasons.push(`${unverified.map(a => `${a}-modda`).join(', ')} iqtibosi qidirilgan manbalarda tasdiqlanmadi`);
+  if (citationCheck !== 'ok') lowReasons.push("iqtiboslarni tekshirish bajarilmadi");
+  if (!groundedToNamedSource && chunks.length) lowReasons.push("javob kontekstdagi hujjatlarga to'liq bog'lanmadi");
+  if (lexCheckWeak) lowReasons.push(lexCrossCheck.status === 'insufficient'
+    ? "Lex.uz matni bilan mustaqil tekshiruvga dalil yetarli bo'lmadi"
+    : "Lex.uz matni bilan mustaqil tekshiruv bajarilmadi");
+  if (claimGuard.status === 'unverified') lowReasons.push("aniq qiymatlarni tekshiruvchi model ishlamadi");
+  else if (claimGuard.status === 'partial') lowReasons.push("ba'zi aniq qiymatlar manba matnida tasdiqlanmadi (yuqoridagi izohga qarang)");
+  if (claimGuard.truncated === true) lowReasons.push('javob uzilib qoldi');
   if (confidence === 'low') {
-    console.log(`[TG-AGENT] low confidence — chunks=${chunks.length} unverified=[${unverified.join(', ')}]`);
+    console.log(`[TG-AGENT] low confidence — chunks=${chunks.length} unverified=[${unverified.join(', ')}] reasons=${lowReasons.length}`);
   }
 
   if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, text);
@@ -658,6 +674,7 @@ TELEGRAM FORMATI (majburiy):
       // context); whether they say what the answer claims is semanticCheck
       citationCheck,
       semanticCheck: claimGuard.status,
+      lowReasons,
       aspects: aspects.found || {},
       claimGuard: {
         status: claimGuard.status,
@@ -1291,7 +1308,7 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
   // silence helps nobody. What changes is that it is labelled as preliminary
   // and a human is put on it.
   const banner = lowConfidence
-    ? '\n\n⚠️ _Bu dastlabki javob: ba\'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim. Yurist ko\'rib chiqib, aniqlashtiradi._'
+    ? `\n\n⚠️ _Bu dastlabki javob: ${(answer.meta && answer.meta.lowReasons && answer.meta.lowReasons.length ? answer.meta.lowReasons : ["ba'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim"]).join('; ')}. Yurist ko'rib chiqib, aniqlashtiradi._`
     : '';
 
   const allowance = quota.source === 'test'

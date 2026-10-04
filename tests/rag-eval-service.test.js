@@ -245,10 +245,12 @@ const quiet = { log() {}, warn() {}, error() {} };
 
   await test('?corrective= picks the chunk grader for one run; retrieval honours it', async () => {
     const { correctiveModeFrom } = require('../src/rag/corrective');
-    assert.strictEqual(correctiveModeFrom({}, {}), 'standard');
+    // cheap by default since 2026-10-04 (Orbit spent the helper budget on hidden reasoning)
+    assert.strictEqual(correctiveModeFrom({}, {}), 'cheap');
+    assert.strictEqual(correctiveModeFrom({}, { RAG_CORRECTIVE_MODE: 'standard' }), 'standard');
     assert.strictEqual(correctiveModeFrom({}, { RAG_CORRECTIVE_MODE: 'cheap' }), 'cheap');
     assert.strictEqual(correctiveModeFrom({ correctiveMode: 'off' }, { RAG_CORRECTIVE_MODE: 'cheap' }), 'off');
-    assert.strictEqual(correctiveModeFrom({ correctiveMode: 'bogus' }, {}), 'standard');
+    assert.strictEqual(correctiveModeFrom({ correctiveMode: 'bogus' }, {}), 'cheap');
     const routes = [];
     mountRagEvalRoutes({ get: (p, ...h) => routes.push({ p, h }) }, { requireMasterAdmin: () => {}, service: { start: (o) => ({ started: true, o }), SYNTHETIC_SET: 'synthetic-v1' } });
     let body;

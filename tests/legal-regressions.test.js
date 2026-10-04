@@ -183,6 +183,65 @@ function corpus(query) {
     assert.strictEqual(husk.substantive, false);
   });
 
+  // 2026-10-04 retest (PR #405): the answer explained article 333's delay
+  // compensation, then said the rule was "not found in the sources".
+  const Q2 = "Ish beruvchi ikki oylik ish haqini kechiktirdi. Kompensatsiya talab qilish mumkinmi? Aniq sana va stavka berilmagan, summani hisoblamang.";
+  const verdicts = (rules) => async (messages) => {
+    const payload = JSON.parse(messages[1].text);
+    return { text: JSON.stringify({ claims: payload.claims.map(c => ({ id: c.id, topic: 'kechiktirish kompensatsiyasi', reason: 'stub', needs_facts: [], ...((rules.find(r => r.when.test(c.text)) || {}).v || { verdict: 'not_found' }) })) }) };
+  };
+
+  await test('I. the norm is there, the exact figure is not: the notice says so, it does not call the norm missing', async () => {
+    const answer = "Ish haqi kechiktirilsa, ish beruvchi kechiktirilgan har bir kun uchun Markaziy bankning asosiy stavkasidan kelib chiqib kompensatsiya to'laydi (Mehnat kodeksi, 333-modda). Kompensatsiya qarzning 10% miqdorida bo'ladi (333-modda).";
+    const r = await g.guardLegalAnswer({
+      question: QUESTION, answer, chunks: [A333],
+      callAI: verdicts([
+        { when: /stavka/u, v: { verdict: 'supported', norm: 'found', method: 'supported' } },
+        { when: /10%/u, v: { verdict: 'not_found', norm: 'found', method: 'supported', needs_facts: ['qarz summasi', "to'lov kuni"] } },
+      ]),
+    });
+    assert.match(r.text, /Markaziy bankning asosiy stavkasidan/u, 'the confirmed rule stays');
+    assert.ok(!/10%/u.test(r.text), 'the unconfirmed figure goes');
+    assert.match(r.text, /norma manbada bor \(333-modda\), lekin javobdagi aniq foiz uning matnida tasdiqlanmadi/u);
+    assert.match(r.text, /Hisoblash usuli manbada tasdiqlangan/u);
+    assert.ok(!/topilmadi/u.test(r.text), r.text);
+    assert.strictEqual(r.withheld[0].normFound, true);
+  });
+
+  await test('J. "summani hisoblamang" is respected: no sum, and the notice says it was not calculated on request', async () => {
+    assert.ok(g.NO_CALC.test(Q2));
+    const answer = "Kechiktirilgan har bir kun uchun kompensatsiya to'lanadi (333-modda). Ikki oy uchun kompensatsiya 1 200 000 so'm bo'ladi.";
+    const r = await g.guardLegalAnswer({
+      question: Q2, answer, chunks: [A333],
+      callAI: verdicts([
+        { when: /har bir kun/u, v: { verdict: 'supported', norm: 'found', method: 'supported' } },
+        { when: /so'm/u, v: { verdict: 'not_found', norm: 'found', method: 'n/a', needs_facts: ["to'lov kuni", 'qarz summasi'] } },
+      ]),
+    });
+    assert.ok(!/1 200 000/u.test(r.text));
+    assert.match(r.text, /Summa so'rovingizga ko'ra hisoblanmadi\. Hisoblash uchun kerak bo'ladi: to'lov kuni; qarz summasi\./u);
+    assert.ok(!/aniqlashtiring/u.test(r.text), 'not asked to supply facts for a sum the user did not want');
+  });
+
+  await test('K. a norm that really is missing keeps its warning', async () => {
+    const r = await g.guardLegalAnswer({
+      question: QUESTION, answer: "Kompensatsiya qarzning 10% miqdorida to'lanadi (333-modda).", chunks: [A25],
+      callAI: verdicts([{ when: /10%/u, v: { verdict: 'supported', norm: 'not_found' } }]),
+    });
+    assert.match(r.text, /Manbada tasdiqlanmadi: kechiktirish kompensatsiyasi\. Norma ko'rib chiqilgan manbalarda topilmadi — bu qonunda yo'q degani emas/u);
+    assert.strictEqual(r.withheld[0].normFound, false);
+  });
+
+  await test('L. the independent Lex.uz check sees the cited article first, within its size limit', () => {
+    const { buildOfficialEvidence } = require('../src/rag/legal-answer-cross-check');
+    const live = Array.from({ length: 6 }, (_, i) => ({ source_type: 'lex_live', source_url: `https://lex.uz/docs/${i}`, is_active: true, article_numbers: [String(900 + i)], chunk_text: 'x'.repeat(3000) }));
+    const a333 = { ...A333, source_url: 'https://lex.uz/docs/-6257288' };
+    const evidence = buildOfficialEvidence([...live, a333], 16000, { answer: 'Kompensatsiya (Mehnat kodeksi, 333-modda).' });
+    assert.ok(evidence.startsWith('[LEX-1]') && evidence.indexOf('333') < 200, 'article 333 is first');
+    const without = buildOfficialEvidence([...live, a333], 16000);
+    assert.ok(!/Ish haqini to'lash muddati buzilganligi/u.test(without), 'without the answer it would have been cut off');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

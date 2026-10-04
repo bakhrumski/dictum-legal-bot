@@ -313,10 +313,13 @@ QOIDALAR:
 - Hisoblash (kompensatsiya, penya, foiz) manbadagi asos va formulaga mos bo'lishi shart; manbada bo'lmagan foiz yoki summa "not_found" yoki "contradicted".
 - Muddat turini farqlang: tarafning biror harakatni bajarish muddati (masalan, ish beruvchining buyruq chiqarishi, to'lash, xabardor qilish muddati) sudga yoki boshqa organga murojaat qilish muddati emas. Javob shunday muddatni murojaat yoki da'vo muddati deb ko'rsatsa - "contradicted".
 - topic: da'vo nimaga oid ekanini javob tilida 3-8 so'zda yozing, raqamsiz (masalan "ish haqi bo'yicha sudga murojaat muddati").
-- needs_facts: hisoblash uchun foydalanuvchidan so'ralishi kerak bo'lgan faktlar (bo'lmasa bo'sh massiv).
+- Uch narsani ALOHIDA baholang (2026-10-04: norma manbada bo'lsa ham, aniq qiymat tasdiqlanmagani "norma topilmadi" deb ko'rsatildi):
+  - norm: manbada shu masala bo'yicha norma BORmi ("found"), yo'qmi ("not_found") - da'vodagi aniq qiymatdan qat'i nazar;
+  - method: hisoblash usuli (asos, stavka turi, davr, formula) manbada tasdiqlanganmi: "supported", "contradicted", "not_found" yoki hisob haqida bo'lmasa "n/a";
+  - needs_facts: aniq summa uchun foydalanuvchidan kerak bo'ladigan faktlar (sana, summa, stavka...), bo'lmasa bo'sh massiv.
 - FAQAT JSON qaytaring.
 
-JSON: {"claims":[{"id":"c1","verdict":"supported|contradicted|not_found","topic":"...","reason":"qisqa","needs_facts":[]}]}`;
+JSON: {"claims":[{"id":"c1","verdict":"supported|contradicted|not_found","topic":"...","reason":"qisqa","norm":"found|not_found","method":"supported|contradicted|not_found|n/a","needs_facts":[]}]}`;
 
 function parseVerdicts(text = '') {
   const raw = String(text || '').replace(/^```(?:json)?\s*/iu, '').replace(/\s*```$/u, '').trim();
@@ -335,6 +338,8 @@ function parseVerdicts(text = '') {
         topic: String(c.topic || '').replace(/\d+/gu, '').trim().slice(0, 120),
         reason: String(c.reason || '').slice(0, 300),
         needsFacts: Array.isArray(c.needs_facts) ? c.needs_facts.map(f => String(f).slice(0, 120)).slice(0, 5) : [],
+        norm: ['found', 'not_found'].includes(String(c.norm)) ? String(c.norm) : null,
+        method: ['supported', 'contradicted', 'not_found', 'n/a'].includes(String(c.method)) ? String(c.method) : null,
       });
     }
     return out;
@@ -378,30 +383,63 @@ const KIND_TOPIC = {
   ru: { term: 'срок', amount: 'сумма', percent: 'процент', rate: 'ставка или порядок расчёта', basis: 'правовое основание', absence: 'наличие нормы' },
 };
 
+// "do not calculate the sum" in the question: the user's choice, respected
+const NO_CALC = /hisoblama(?:ng|sin|y|nglar)?|hisoblash(?:ingiz)?\s+(?:shart|kerak)\s+emas|ҳисобламанг|не\s+(?:надо\s+)?(?:считайте|рассчитывайте|считать|рассчитывать)|без\s+расч[её]т/iu;
+
+const KIND_VALUE = {
+  uz: { term: 'muddat', amount: 'summa', percent: 'foiz', rate: 'stavka yoki hisoblash usuli', basis: "modda mazmuni", absence: "norma yo'qligi haqidagi gap" },
+  ru: { term: 'срок', amount: 'сумма', percent: 'процент', rate: 'ставка или порядок расчёта', basis: 'содержание статьи', absence: 'утверждение об отсутствии нормы' },
+};
+
 /**
- * The notice for withheld claims. It keeps apart what the source CONTRADICTS
- * (removed as wrong) and what the searched sources did not show (removed as
- * unconfirmed - which does not mean the law has no such rule).
+ * The notice for withheld claims. Three questions are kept apart
+ * (2026-10-04: an answer explained the delay compensation of article 333
+ * and then said the rule was "not found in the sources", because its exact
+ * figure was not confirmed):
+ *   - is there a norm on this in the sources (and which article);
+ *   - is the calculation method confirmed by its text;
+ *   - are there enough facts for an exact sum (or did the user ask for none).
+ * What the source CONTRADICTS is named as removed; what the searched sources
+ * did not show is never called "not in the law".
  */
-function unverifiedBlock(withheld = [], lang = 'uz', needsFacts = []) {
+function unverifiedBlock(withheld = [], lang = 'uz', needsFacts = [], { noCalc = false } = {}) {
   const ru = lang === 'ru';
   const topicOf = w => w.topic || KIND_TOPIC[ru ? 'ru' : 'uz'][w.kind];
   const uniq = list => [...new Set(list.map(topicOf).filter(Boolean))];
   const wrong = uniq(withheld.filter(w => w.verdict === 'contradicted'));
-  const unconfirmed = uniq(withheld.filter(w => w.verdict !== 'contradicted')).filter(t => !wrong.includes(t));
-  if (!wrong.length && !unconfirmed.length) return '';
+  const rest = withheld.filter(w => w.verdict !== 'contradicted' && !wrong.includes(topicOf(w)));
+  const normFound = rest.filter(w => w.normFound);
+  const missing = uniq(rest.filter(w => !w.normFound)).filter(t => !uniq(normFound).includes(t));
   const facts = [...new Set(needsFacts)].slice(0, 5);
   const lines = [];
-  if (ru) {
-    if (wrong.length) lines.push(`⚠️ Не соответствует тексту источника, убрано из ответа: ${wrong.join('; ')}.`);
-    if (unconfirmed.length) lines.push(`⚠️ Не подтверждено источником: ${unconfirmed.join('; ')}. Норма не найдена в просмотренных источниках — это не значит, что в законе её нет; точное значение не приводится, пока норма не проверена по тексту закона.`);
-    if (facts.length) lines.push(`Для расчёта уточните: ${facts.join('; ')}.`);
-  } else {
-    if (wrong.length) lines.push(`⚠️ Manba matniga mos kelmadi, javobdan olib tashlandi: ${wrong.join('; ')}.`);
-    if (unconfirmed.length) lines.push(`⚠️ Manbada tasdiqlanmadi: ${unconfirmed.join('; ')}. Norma ko'rib chiqilgan manbalarda topilmadi — bu qonunda yo'q degani emas; qonun matnida tekshirilmaguncha aniq qiymat keltirilmaydi.`);
-    if (facts.length) lines.push(`Hisoblash uchun aniqlashtiring: ${facts.join('; ')}.`);
+  const seen = new Set();
+  for (const w of normFound) {
+    const topic = topicOf(w);
+    if (seen.has(topic)) continue;
+    seen.add(topic);
+    const refs = (w.normRefs || []).map(r => (ru ? `ст. ${r}` : `${r}-modda`)).join(', ');
+    const value = KIND_VALUE[ru ? 'ru' : 'uz'][w.kind] || (ru ? 'значение' : 'qiymat');
+    const method = w.method === 'supported' ? (ru ? ' Порядок расчёта источником подтверждён.' : ' Hisoblash usuli manbada tasdiqlangan.')
+      : w.method === 'contradicted' ? (ru ? ' Порядок расчёта в ответе не совпадает с источником.' : " Javobdagi hisoblash usuli manbaga mos emas.")
+        : w.method === 'not_found' ? (ru ? ' Порядок расчёта в тексте источника не найден.' : ' Hisoblash usuli manba matnida topilmadi.') : '';
+    lines.push(ru
+      ? `⚠️ ${topic}: норма в источнике есть${refs ? ` (${refs})` : ''}, но указанное в ответе значение (${value}) её текстом не подтверждено, поэтому оно убрано.${method}`
+      : `⚠️ ${topic}: norma manbada bor${refs ? ` (${refs})` : ''}, lekin javobdagi aniq ${value} uning matnida tasdiqlanmadi, shuning uchun olib tashlandi.${method}`);
   }
-  return `\n\n${lines.join('\n')}`;
+  if (wrong.length) lines.push(ru ? `⚠️ Не соответствует тексту источника, убрано из ответа: ${wrong.join('; ')}.` : `⚠️ Manba matniga mos kelmadi, javobdan olib tashlandi: ${wrong.join('; ')}.`);
+  if (missing.length) {
+    lines.push(ru
+      ? `⚠️ Не подтверждено источником: ${missing.join('; ')}. Норма не найдена в просмотренных источниках — это не значит, что в законе её нет; точное значение не приводится, пока норма не проверена по тексту закона.`
+      : `⚠️ Manbada tasdiqlanmadi: ${missing.join('; ')}. Norma ko'rib chiqilgan manbalarda topilmadi — bu qonunda yo'q degani emas; qonun matnida tekshirilmaguncha aniq qiymat keltirilmaydi.`);
+  }
+  if (noCalc) {
+    lines.push(ru
+      ? `Сумма по вашей просьбе не рассчитывалась.${facts.length ? ` Для расчёта понадобятся: ${facts.join('; ')}.` : ''}`
+      : `Summa so'rovingizga ko'ra hisoblanmadi.${facts.length ? ` Hisoblash uchun kerak bo'ladi: ${facts.join('; ')}.` : ''}`);
+  } else if (facts.length) {
+    lines.push(ru ? `Для расчёта уточните: ${facts.join('; ')}.` : `Hisoblash uchun aniqlashtiring: ${facts.join('; ')}.`);
+  }
+  return lines.length ? `\n\n${lines.join('\n')}` : '';
 }
 
 /**
@@ -560,6 +598,11 @@ async function guardLegalAnswer({
       topic: r.topic || '', reason: r.reason || '', needsFacts: r.needsFacts || [],
       supported: verifierRan && supported(c),
       kept: kept(c),
+      // is there a norm on this in the sources at all: the cited article is
+      // in the context, or the verifier found one
+      normFound: Boolean(c.articles.length && chunksForArticles(pool, c.articles).length) || r.norm === 'found',
+      normRefs: c.articles.filter(a => chunksForArticles(pool, [a]).length),
+      method: r.method || null,
     };
   });
   const withheld = decorated.filter(c => !c.kept);
@@ -567,13 +610,14 @@ async function guardLegalAnswer({
   let body = text;
   if (withheld.length) body = removeSentences(text, withheld.map(c => c.text));
   const repaired = repairStructure(body, { truncated, lang });
-  const out = repaired.text + (withheld.length ? unverifiedBlock(withheld, lang, withheld.flatMap(c => c.needsFacts)) : '');
+  const noCalc = NO_CALC.test(String(question || ''));
+  const out = repaired.text + (withheld.length ? unverifiedBlock(withheld, lang, withheld.flatMap(c => c.needsFacts), { noCalc }) : '');
   const status = !verifierRan ? 'unverified' : (withheld.length ? 'partial' : 'verified');
   return {
     text: out,
     status,
     claims: decorated,
-    withheld: withheld.map(c => ({ id: c.id, kind: c.kind, topic: c.topic, verdict: c.verdict, deterministic: c.deterministic, articles: c.articles })),
+    withheld: withheld.map(c => ({ id: c.id, kind: c.kind, topic: c.topic, verdict: c.verdict, deterministic: c.deterministic, articles: c.articles, normFound: c.normFound, method: c.method })),
     // basis claims kept although the verifier did not confirm them
     unconfirmed: unconfirmed.map(c => ({ id: c.id, kind: c.kind, articles: c.articles, verdict: c.verdict })),
     retrievals,
@@ -588,5 +632,5 @@ async function guardLegalAnswer({
 
 module.exports = {
   DEFAULTS, wordNumber, quantityFacts, extractCriticalClaims, deterministicSupport,
-  buildEvidence, parseVerdicts, unverifiedBlock, removeSentences, repairStructure, guardLegalAnswer, citedArticles,
+  buildEvidence, parseVerdicts, unverifiedBlock, NO_CALC, removeSentences, repairStructure, guardLegalAnswer, citedArticles,
 };

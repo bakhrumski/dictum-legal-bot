@@ -278,6 +278,20 @@ function stubMemory(clarifyCount = 0) {
     }
   });
 
+  await test('"summani hisoblamang" reaches the answer prompt, and a preliminary answer says why it is preliminary', async () => {
+    stubMemory();
+    const d = deps({ answer: "Ish haqi kechiktirilsa, kechiktirilgan har bir kun uchun kompensatsiya to'lanadi (Mehnat kodeksi, 100-modda). Hisob uchun to'lov sanasi va qarz summasi kerak.", claimVerdict: () => 'supported', crossCheck: true, crossCheckResult: null });
+    d.crossCheckLegalAnswer = async ({ answer }) => ({ answer, status: 'insufficient', checked: false });
+    let system = '';
+    const answerAI = d.callAI;
+    d.callAI = async (messages, options) => { if (options.endpoint === '/tg-agent/answer') system = messages[0].text; return answerAI(messages, options); };
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: CALC_QUESTIONS[1] });
+    assert.match(system, /summani hisoblamaslikni so'radi/u);
+    assert.match(r.reply, /Bu dastlabki javob: Lex\.uz matni bilan mustaqil tekshiruvga dalil yetarli bo'lmadi/u);
+    assert.ok(!/ba'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim/u.test(r.reply), 'not the generic line');
+  });
+
   await test('real login, OTP, password and registration requests still go to account help', async () => {
     for (const q of ['OTP kodim kelmadi, nima qilay?', 'Parolimni unutdim', 'Parolni qanday tiklayman?', 'Saytga kira olmayapman', "Botda ro'yxatdan o'tolmayapman", 'SMS kod kelmayapti', 'Не могу войти в аккаунт', 'Loginim ishlamayapti']) {
       const det = agent.classifyDeterministicIntent(q);

@@ -23,11 +23,24 @@ function isOfficialChunk(chunk) {
     && chunk.is_active !== false && isLexUrl(chunk.source_url));
 }
 
-function buildOfficialEvidence(chunks = [], maxChars = MAX_EVIDENCE_CHARS) {
+/** Article numbers a draft answer cites ("333-modda", "статья 333"). */
+function citedArticleNumbers(text = '') {
+  const out = new Set();
+  for (const m of String(text).matchAll(/(\d+)\s*[-–]?\s*(?:modda|moddas\p{L}*|модда\p{L}*)|(?:стать\p{L}*|ст\.)\s*(\d+)/giu)) out.add(m[1] || m[2]);
+  return out;
+}
+
+function buildOfficialEvidence(chunks = [], maxChars = MAX_EVIDENCE_CHARS, { answer = '' } = {}) {
+  const cited = citedArticleNumbers(answer);
+  const isCited = (c) => (Array.isArray(c.article_numbers) ? c.article_numbers : [])
+    .some(a => cited.has(String(a).replace(/[^\d]/gu, '')));
   const official = (Array.isArray(chunks) ? chunks : [])
     .filter(isOfficialChunk)
-    // the live excerpt first: it is the current text as of this answer
-    .sort((a, b) => (a.source_type === 'lex_live' ? 0 : 1) - (b.source_type === 'lex_live' ? 0 : 1));
+    // the articles the answer cites first (2026-10-04: with live excerpts
+    // first, the cited article 333 fell past the size cap and the check
+    // answered "insufficient"), then the live excerpt: it is the current text
+    .sort((a, b) => ((isCited(a) ? 0 : 2) + (a.source_type === 'lex_live' ? 0 : 1))
+      - ((isCited(b) ? 0 : 2) + (b.source_type === 'lex_live' ? 0 : 1)));
   let output = '';
   for (let index = 0; index < official.length; index++) {
     const chunk = official[index];
@@ -83,7 +96,7 @@ async function crossCheckLegalAnswer({
   endpoint = '/legal-answer/lex-cross-check',
 } = {}) {
   const originalAnswer = String(answer || '').trim();
-  const evidence = buildOfficialEvidence(chunks);
+  const evidence = buildOfficialEvidence(chunks, MAX_EVIDENCE_CHARS, { answer });
   if (!originalAnswer || typeof callAI !== 'function') {
     return { answer: originalAnswer, status: 'skipped', reason: 'answer_or_model_missing', checked: false };
   }
@@ -158,6 +171,7 @@ JSON SHAKLI:
 }
 
 module.exports = {
+  citedArticleNumbers,
   isOfficialChunk,
   buildOfficialEvidence,
   parseVerifierJson,
