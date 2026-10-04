@@ -349,6 +349,16 @@ const chunk = (id, text, score = 0.5) => ({ id, chunk_text: text, source_type: '
     assert.strictEqual(correctiveModeFrom({}, { RAG_CORRECTIVE_MODE: 'standard' }), 'standard');
   });
 
+  await test('runtime routing view: master only, shows the effective helper lanes and the reranker switch, no secret', () => {
+    const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    const start = server.indexOf("app.get('/api/admin/runtime-routing', requireMasterAdmin,");
+    assert.ok(start >= 0, 'behind requireMasterAdmin');
+    const body = server.slice(start, server.indexOf('\n});\n', start));
+    assert.match(body, /effective: correctiveModeFrom\(\{\}\)/u);
+    assert.match(body, /RENDER_GIT_COMMIT/u);
+    assert.ok(!/API_KEY|SECRET|PASSWORD|HF_TOKEN|BOT_TOKEN|JWT/u.test(body), 'no key or token is read');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

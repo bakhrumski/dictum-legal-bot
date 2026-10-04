@@ -670,6 +670,29 @@ app.post('/api/logout', (req, res) => {
 // on this account, without burning a real generation.
 //   GET /api/admin/model-check                    → probes all three tiers
 //   GET /api/admin/model-check?model=gpt-6-luna   → probe one model
+// Runtime routing as this process sees it (master only, no AI call): the live
+// commit (Render sets RENDER_GIT_COMMIT), and the effective helper lanes and
+// reranker switch after environment overrides - so a Render value that
+// overrides the code default is visible. No secret is returned.
+app.get('/api/admin/runtime-routing', requireMasterAdmin, (req, res) => {
+  const raw = (k) => (process.env[k] == null || process.env[k] === '' ? null : String(process.env[k]).slice(0, 40));
+  const planner = String(process.env.LEX_PLANNER_LANE || 'cheap').toLowerCase() === 'standard' ? 'standard' : 'cheap';
+  res.json({
+    commit: raw('RENDER_GIT_COMMIT'),
+    branch: raw('RENDER_GIT_BRANCH'),
+    startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+    helpers: {
+      retrievalGrade: { effective: correctiveModeFrom({}), env: raw('RAG_CORRECTIVE_MODE'), default: 'cheap' },
+      queryPlan: { effective: planner, env: raw('LEX_PLANNER_LANE'), default: 'cheap', aiPlanner: process.env.LEX_AI_QUERY_PLANNER !== 'false' },
+    },
+    reranker: { off: String(process.env.RERANKER || '').toLowerCase() === 'off', env: raw('RERANKER'), model: process.env.RERANKER_MODEL || 'BAAI/bge-reranker-v2-m3' },
+    voicelab: voicelab.isEnabled()
+      ? { cheap: voicelab.modelFor('cheap'), standard: voicelab.modelFor('standard'), lanes: raw('VOICELAB_LANES'), minMaxTokens: raw('VOICELAB_MIN_MAX_TOKENS') }
+      : null,
+    openBreakers: require('../ai/provider-health').snapshot(),
+  });
+});
+
 app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
   const out = {
     keys: {
