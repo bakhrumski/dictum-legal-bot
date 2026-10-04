@@ -185,13 +185,27 @@ function usageOf(data) {
     inTokens: Number(u.prompt_tokens || u.input_tokens || 0) || 0,
     outTokens: Number(u.completion_tokens || u.output_tokens || 0) || 0,
     cachedTokens: Number((u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) || 0) || 0,
+    // part of the completion tokens, not added again
+    reasoningTokens: Number((u.completion_tokens_details && u.completion_tokens_details.reasoning_tokens) || u.reasoning_tokens || 0) || null,
   };
+}
+
+/**
+ * Smallest max_tokens sent to VoiceLab (2026-10-04: Orbit returned empty
+ * text with finish_reason "length" at max_tokens 256 and 700 - the limit was
+ * spent before any visible text). Only output actually produced is billed,
+ * so a floor costs nothing when the answer is short. VOICELAB_MIN_MAX_TOKENS
+ * changes it; 0 turns it off.
+ */
+function minMaxTokens() {
+  const n = Number(process.env.VOICELAB_MIN_MAX_TOKENS);
+  return Number.isFinite(n) && n >= 0 ? n : 1024;
 }
 
 function buildBody(model, messages, { temperature, maxTokens, responseFormat, stream } = {}) {
   const body = { model, messages: toChatMessages(messages) };
   if (temperature !== undefined && temperature !== null) body.temperature = temperature;
-  if (maxTokens) body.max_tokens = Math.max(16, Number(maxTokens) || 0);
+  if (maxTokens) body.max_tokens = Math.max(16, minMaxTokens(), Number(maxTokens) || 0);
   if (responseFormat) body.response_format = responseFormat;
   if (stream) body.stream = true;
   return body;
@@ -263,13 +277,22 @@ async function chatCompletion(modelOrLane, messages, opts = {}) {
     // caller fall back rather than returning an empty answer.
     const status = data && (data.status || data.state);
     // a specific code instead of a bare "ERROR" in the usage ledger (2026-10-04)
-    throw Object.assign(new Error(`VoiceLab ${model} returned no choices${status ? ` (status: ${status})` : ''}`), { code: 'NO_CHOICES', providerCode: status || null });
+    throw Object.assign(new Error(`VoiceLab ${model} returned no choices${status ? ` (status: ${status})` : ''}`),
+      { code: 'NO_CHOICES', providerCode: status || null, usage: { ...usageOf(data), credits: creditsOf(resp, data) } });
   }
   const text = contentText(choice.message && choice.message.content);
   if (!text.trim()) {
     // e.g. the token budget spent before any visible text (finish_reason=length)
-    throw Object.assign(new Error(`VoiceLab ${model} empty response (finish_reason: ${choice.finish_reason || '?'}, max_tokens: ${body.max_tokens || '-'})`),
-      { code: 'EMPTY_RESPONSE', providerCode: choice.finish_reason || null });
+    // What used the budget, without the text itself: completion and reasoning
+    // token counts, and whether a separate reasoning field came back.
+    const usage = { ...usageOf(data), credits: creditsOf(resp, data) };
+    const msg = choice.message || {};
+    const reasoningField = ['reasoning_content', 'reasoning'].find(k => typeof msg[k] === 'string' && msg[k].length);
+    throw Object.assign(new Error(`VoiceLab ${model} empty response (finish_reason: ${choice.finish_reason || '?'}, max_tokens: ${body.max_tokens || '-'}, `
+      + `completion_tokens: ${usage.outTokens}, reasoning_tokens: ${usage.reasoningTokens == null ? '?' : usage.reasoningTokens}, `
+      + `reasoning_field: ${reasoningField ? `${reasoningField} (${msg[reasoningField].length} chars)` : 'none'})`),
+    // the provider billed these tokens: they go to the ledger, not "unknown"
+    { code: 'EMPTY_RESPONSE', providerCode: choice.finish_reason || null, usage });
   }
 
   return {
@@ -338,5 +361,5 @@ module.exports = {
   chatCompletion,
   chatCompletionStream,
   // exported for tests
-  _internal: { toChatMessages, contentText, usageOf, creditsOf, buildBody, DEFAULT_MODELS, LANES },
+  _internal: { toChatMessages, contentText, usageOf, creditsOf, buildBody, minMaxTokens, DEFAULT_MODELS, LANES },
 };

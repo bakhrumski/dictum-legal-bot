@@ -128,6 +128,12 @@ async function claimDailyAiAnswer(chatId) {
   }
 }
 
+/** This request's own AI spend so far (known cost, unknown-cost calls), from the usage ledger. */
+function currentRequestSpend() {
+  const store = usageLedger.current();
+  return store ? { knownUsd: store.shared.knownCostUsd, unknownCalls: store.shared.unknownCostCalls } : {};
+}
+
 /** The test account's reservation: one answer at a time, no limit or credit taken. */
 async function claimTestAiAnswer(chatId) {
   try {
@@ -250,7 +256,24 @@ const HUMAN_RE    = /(inson\s+bilan|jonli\s+odam|operator|real\s+yurist|yurist\s
 // both a document and something being "written" (for example, police wrote a
 // fine after checking an ID). Those facts must still reach legal Q&A.
 const DOCUMENT_RE = /(?:hujjat|ariza|da['’]?vo|shikoyat|shartnoma|iltimosnoma|e['’]?tiroz|претензи|иск|жалоб|договор|заявлен)(?:\s+\S+){0,3}\s+(?:(?:tayyorlab|yozib|tuzib)\s+ber(?:ing|asizmi|a\s+olasizmi)?|(?:tayyorlash|yozish|tuzish)(?:ni|im)?\s+(?:kerak|xohlayman|istayman)|(?:tayyorlamoqchi|yozmoqchi|tuzmoqchi)(?:man|miz)?|(?:состав|подготов|напис)(?:ить|ьте))/iu;
-const ACCOUNT_RE  = /(ro['’]?yxat|registrat|login|kirish|parol|otp|kod\s+kelm|hisob|аккаунт|регистрац|парол|войти)/iu;
+// Account help (login, OTP, password, registration) is answered without AI.
+// 2026-10-04: "hisob" matched "hisoblash" / "hisoblamang", so two wage-delay
+// questions about how compensation is calculated got the password-reset
+// reply; "kirish" and "otp" matched "ishga kirish" and "otpusk" the same way.
+// Now: unambiguous account words; a registration or sign-in phrase only
+// together with the platform; and never when the message is about law -
+// such a message goes to the intent model, whose prompt tells the two apart.
+const ACCOUNT_STRONG_RE = /(?:^|[^\p{L}])(?:parol\p{L}*|парол\p{L}*|otp|login\p{L}*|логин\p{L}*|akkaunt\p{L}*|аккаунт\p{L}*)(?![\p{L}])|(?:sms|tasdiqlash|tasdiq)\s*[-‐]?\s*kod|kod(?:im|i)?\s+kel(?:ma|m)|код\s+не\s+(?:приш|приход)|не\s+(?:могу|получается)\s+войти|войти\s+в\s+(?:аккаунт|систем|личный|кабинет)/iu;
+const ACCOUNT_WEAK_RE = /ro['’ʻ`]?yxatdan\s+o['’ʻ`]?t\p{L}*|registrat\p{L}*|регистрац\p{L}*|hisob(?:im|ingiz)?(?:ga|ni|dan)?\s+(?:kir|och|yarat|tikla)\p{L}*|kir(?:a\s+olma|olma)\p{L}*/iu;
+const PLATFORM_RE = /juristai|sayt|botga|botda|botdan|\bbot\b|ilova|platforma|tizimga|tizimda|kabinet|сайт|бот|приложени|кабинет/iu;
+const LEGAL_MARKER_RE = /qonun|modda|kodeks|ish\s+haq|ish\s+beruvchi|kompensatsiya|\bsud|da['’ʻ`]?vo|jarima|shartnoma|undir|mehnat|закон|стать|кодекс|\bсуд|работодател|зарплат|компенсац|штраф|договор|взыск/iu;
+
+/** True for a request about the user's JuristAI account, not about law. */
+function isAccountRequest(text = '') {
+  const t = String(text || '');
+  if (LEGAL_MARKER_RE.test(t)) return false;
+  return ACCOUNT_STRONG_RE.test(t) || (ACCOUNT_WEAK_RE.test(t) && PLATFORM_RE.test(t));
+}
 const CANCEL_RE   = /^(yo['’]?q|kerak\s+emas|bekor|rad\s+etaman|hech\s+qaysi(?:sini)?(?:\s+(?:tanlamayman|xohlamayman))?|нет|отмена)[.!\s]*$/iu;
 const ATTORNEY_COMPARE_RE = /(qaysi(?:si|\s+biri)?.*(?:maslahat|tavsiya|mos)|solishtir|farqi|tanimayman|eng\s+mosi)/iu;
 const ATTORNEY_RESTART_RE = /(boshqa(\s+advokat)?|yana\s+(advokat|nomzod)|mezon(ni)?\s+o['’]?zgartir|hudud(ni)?\s+o['’]?zgartir|orqaga)/iu;
@@ -268,7 +291,7 @@ intent qiymatlari:
 - "bot_haqida"     — foydalanuvchi bot kimligi, AI yoki yurist ekanini so'ramoqda
 - "advokat_kerak"  — mos advokat yoki yurist topishni so'ramoqda
 - "hujjat_tayyorlash" — ariza, da'vo, shikoyat, shartnoma yoki boshqa hujjat tayyorlashni so'ramoqda
-- "hisob_yordam"   — ro'yxatdan o'tish, login, OTP yoki parol masalasi
+- "hisob_yordam"   — JuristAI'da ro'yxatdan o'tish, login, OTP yoki parol masalasi. "Hisoblash", "hisob-kitob", "hisoblamang" (kompensatsiya, summa, muddat, penya hisobi) — bu hisob_yordam EMAS, huquqiy savol.
 - "yurist_kerak"   — operator yoki jonli inson bilan gaplashishni so'ramoqda
 - "mavzudan_tashqari" — huquqqa aloqasi yo'q
 
@@ -319,7 +342,7 @@ function classifyDeterministicIntent(text) {
   if (HELP_RE.test(t))     return { intent: 'noaniq', missing: ['Qanday huquqiy muammo yoki vaziyat bo\'yicha yordam kerak?'] };
   if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
   if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
-  if (ACCOUNT_RE.test(t))  return { intent: 'hisob_yordam', missing: [] };
+  if (isAccountRequest(t)) return { intent: 'hisob_yordam', missing: [] };
   if (HUMAN_RE.test(t))    return { intent: 'yurist_kerak', missing: [] };
   return null;
 }
@@ -476,7 +499,7 @@ async function generateAnswer(question, turns) {
       question, topic, existing: chunks, lang,
       retrieve: (query, t, opts) => D.retrieveLegalContext(query, t, null, { ...opts, strictTopic: Boolean(deterministicTopic) }),
     });
-    if (aspects.chunks.length) {
+    if (aspects.chunks.length || aspects.context) {
       chunks = chunks.concat(aspects.chunks);
       ragContext += aspects.context;
     }
@@ -1272,7 +1295,7 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
     : '';
 
   const allowance = quota.source === 'test'
-    ? `\n\n${testModeNote(testAccount, usageLedger.sharedPoolCommitted(usageLedger.current()) || testAccount.spend.committedUsd)}`
+    ? `\n\n${testModeNote(testAccount, currentRequestSpend())}`
     : quota.source === 'paid'
     ? `\n\n🎟 Pullik javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`
     : quota.remaining > 0
@@ -1340,6 +1363,8 @@ module.exports = {
   isReady,
   // exported for tests
   classifyIntent,
+  classifyDeterministicIntent,
+  isAccountRequest,
   formatSources,
   formatAttorneyRecommendations,
   detectServiceSlug,

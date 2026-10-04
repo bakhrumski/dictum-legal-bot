@@ -94,6 +94,12 @@ failed.
   open breaker already stops the calls for 10 minutes after one 402.
 - **OpenAI 429:** the ledger now shows `HTTP_429_QUOTA` (billing/quota) or
   `HTTP_429_RATE` (rate limit). Quota needs billing on the OpenAI account.
+- **Orbit empty text (2026-10-04):** `EMPTY_RESPONSE` at max_tokens 256/700
+  with finish_reason "length" - the limit was used up before any visible
+  text. VoiceLab now gets at least `VOICELAB_MIN_MAX_TOKENS` (1024), and the
+  error records completion/reasoning token counts and the billed usage; if
+  it persists at 1024, ask VoiceLab whether Orbit spends tokens on hidden
+  reasoning and how to limit it.
 - **VoiceLab Orbit errors:** the ledger now shows `NO_CHOICES`,
   `EMPTY_RESPONSE` (with finish_reason and max_tokens) or the HTTP code and
   provider message; send it to VoiceLab support if it is on their side.

@@ -183,7 +183,7 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
       const c = require('../ai/provider-health').classifyError(err);
       require('../ai/provider-health').recordOutcome('voicelab', `voicelab/${voicelab.modelFor(model)}`, c);
       usageLedger.record({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor(model)}`, status: c.code === 'TIMEOUT' ? 'timeout' : 'error',
-        errorCode: c.code, errorKind: c.kind, errorReason: c.reason, startedAt: started, finishedAt: Date.now() });
+        errorCode: c.code, errorKind: c.kind, errorReason: c.reason, startedAt: started, finishedAt: Date.now(), usage: err.usage || {} });
       log.warn('voicelab failed, using previous provider', { model, err: err.message });
     }
   }

@@ -1077,8 +1077,14 @@ bot.onText(/\/balance/, async (msg) => {
     const credits = await telegramEconomy.getPaidAnswerCredits(msg.chat.id);
     const daily = await telegramEconomy.getAnswerEntitlementStatus(msg.chat.id, TELEGRAM_FREE_AI_LIMIT);
     const pendingLine = daily.pending ? '\nHozir bitta huquqiy javob tayyorlanmoqda.' : '';
+    // the test account (src/bot/test-account.js): its mode, end time and budget
+    const testAccount = await testAccounts.resolveTestAccount(pool, {
+      chatId: msg.chat.id, chatType: msg.chat.type, fromUserId: msg.from && msg.from.id,
+    });
     await bot.sendMessage(msg.chat.id,
-      `Bugungi bepul AI huquqiy javoblar: ${daily.freeRemaining}/${daily.limit}.\nQo'shimcha huquqiy javob kreditlari: ${credits}.${pendingLine}\n\nBepul kunlik limit tugagandan keyin har bir AI huquqiy javob bitta kredit sarflaydi.`
+      (testAccount ? `${testAccounts.balanceText(testAccount)}\n\n` : '')
+      + `Bugungi bepul AI huquqiy javoblar: ${daily.freeRemaining}/${daily.limit}.\nQo'shimcha huquqiy javob kreditlari: ${credits}.${pendingLine}\n\n`
+      + (testAccount ? 'Test rejimi davomida bu limit va kreditlar ishlatilmaydi.' : 'Bepul kunlik limit tugagandan keyin har bir AI huquqiy javob bitta kredit sarflaydi.')
     );
   } catch (error) {
     console.error('[BOT] /balance failed:', error.message);

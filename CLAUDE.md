@@ -106,7 +106,10 @@ Known state of the suites (Sept 2026):
   `callVisionOCR` in ocr/routes.js. Embeddings are deliberately not routed —
   changing them means re-embedding the corpus. Prices come from
   `model-pricing.js` (list prices, 2026-09-23), overridable with
-  `VOICELAB_PRICES` (JSON, USD/1M). `MODEL_TELEGRAM` sets the Telegram
+  `VOICELAB_PRICES` (JSON, USD/1M). `max_tokens` sent to VoiceLab is at least
+  `VOICELAB_MIN_MAX_TOKENS` (1024): Orbit returned empty text at 256/700 with
+  finish_reason "length"; such an error carries the billed usage and token
+  counts into the ledger. `MODEL_TELEGRAM` sets the Telegram
   answer model on its own (e.g. `voicelab/aisha-comet`), so the bot can be
   trialled without moving the website.
   Explicit ids pick a provider for side-by-side tests: `voicelab/<model>`
@@ -126,7 +129,9 @@ Known state of the suites (Sept 2026):
   linked customer (role `user`) or an unknown role is an ordinary user. An
   account counts as linked by `telegram_chat_id` (/link) or, in a private
   chat, by `telegram_user_id` (registration, the site's Telegram linking).
-  `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
+  Account help (login/OTP/password) is matched only on unambiguous account
+  words, never "hisob…" in a legal question ("hisoblash" once routed wage
+  questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
   chat so the owner can try the bot, voice included, from his own account.
   Separately, one ordinary (role `user`) account can be a test account
   (`src/bot/test-account.js`, `TG_TEST_ACCOUNT_*`): by the Telegram user id

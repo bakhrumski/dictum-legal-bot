@@ -109,7 +109,26 @@ async function retrieveAspects({ question, topic, retrieve, existing = [], lang 
     }
     if (lines.length) blocks.push(`SAVOLNING "${aspect.label}" QISMI UCHUN TOPILGAN NORMALAR:\n${lines.join('\n\n')}`);
   }
-  return { chunks: added, context: blocks.length ? `\n\n${blocks.join('\n\n')}` : '', found };
+  const coverage = coverageInstruction(aspects, found);
+  return { chunks: added, context: (blocks.length ? `\n\n${blocks.join('\n\n')}` : '') + coverage, found };
 }
 
-module.exports = { ASPECTS, LIGHT, questionAspects, retrieveAspects };
+/**
+ * What the answer must cover: every part the question asks about, with the
+ * article refs its search found, or the plain statement that none was found
+ * in the context (2026-10-04: a general answer on late wages left out the
+ * delay compensation although the question asked about it). The refs come
+ * from retrieval, never from a list of article numbers.
+ */
+function coverageInstruction(aspects = [], found = {}) {
+  if (!aspects.length) return '';
+  const lines = aspects.map(a => {
+    const refs = [...new Set(found[a.key] || [])].slice(0, 4);
+    return refs.length
+      ? `- ${a.label}: kontekstdagi ${refs.map(r => `${r}-modda`).join(', ')} normasini javobda bayon qiling (kim, kimga, qanday asosda); manbada bo'lmagan foiz yoki summani yozmang, hisob uchun fakt yetishmasa hisoblash tartibini tushuntirib, kerakli faktlarni so'rang.`
+      : `- ${a.label}: bu qism uchun kontekstda norma topilmadi — buni ochiq ayting, taxmin qilmang.`;
+  });
+  return `\n\nJAVOB QAMROVI (savol shu qismlarni so'raydi, har birini yoriting):\n${lines.join('\n')}`;
+}
+
+module.exports = { ASPECTS, LIGHT, questionAspects, retrieveAspects, coverageInstruction };

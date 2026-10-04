@@ -255,6 +255,65 @@ function stubMemory(clarifyCount = 0) {
     stubMemory();
   });
 
+  // 2026-10-04 production retest: "hisob" matched "hisoblash" / "hisoblamang"
+  // and two wage-compensation questions got the password-reset reply.
+  const CALC_QUESTIONS = [
+    'Ish haqi kechiktirilgan. Kompensatsiyaning hisoblash prinsipi va davri qanday?',
+    'Ish beruvchi ikki oylik ish haqini kechiktirdi. Kompensatsiya talab qilish mumkinmi? Aniq sana va stavka berilmagan, summani hisoblamang.',
+  ];
+
+  await test('legal calculation questions go to the legal path, not account help', async () => {
+    for (const q of [...CALC_QUESTIONS, 'Penyani qanday hisoblash kerak?', 'Ishga kirishda sinov muddati qancha?', 'Otpusk necha kun beriladi?', 'Как рассчитать компенсацию за задержку зарплаты?', 'Bank hisobimni bloklashdi, nima qilay?']) {
+      const det = agent.classifyDeterministicIntent(q);
+      assert.ok(!det || det.intent !== 'hisob_yordam', q);
+    }
+    for (const q of CALC_QUESTIONS) {
+      stubMemory();
+      const d = deps({ answer: "Ish haqi kechiktirilsa, ish beruvchi kechiktirilgan har bir kun uchun kompensatsiya to'laydi (Mehnat kodeksi, 100-modda). Aniq summa uchun to'lov sanasi va qarz summasi kerak.", claimVerdict: () => 'supported' });
+      agent.initTelegramAgent(d);
+      const r = await agent.handleUserMessage({ chatId: 1, text: q });
+      assert.notStrictEqual(r.action, 'account_help', q);
+      assert.ok(!/@juristAI_registration_bot/u.test(r.reply || ''), q);
+      assert.strictEqual(d.calls.answer, 1, `${q} - a legal answer is generated`);
+    }
+  });
+
+  await test('real login, OTP, password and registration requests still go to account help', async () => {
+    for (const q of ['OTP kodim kelmadi, nima qilay?', 'Parolimni unutdim', 'Parolni qanday tiklayman?', 'Saytga kira olmayapman', "Botda ro'yxatdan o'tolmayapman", 'SMS kod kelmayapti', 'Не могу войти в аккаунт', 'Loginim ishlamayapti']) {
+      const det = agent.classifyDeterministicIntent(q);
+      assert.strictEqual(det && det.intent, 'hisob_yordam', q);
+    }
+    // a legal question that mentions a password is the model's call, not a shortcut
+    assert.strictEqual(agent.classifyDeterministicIntent("Ish beruvchi pochtamning parolini talab qilyapti, qonuniymi?"), null);
+  });
+
+  await test('the intent model is told that calculation is not account help', async () => {
+    let prompt = '';
+    const d = deps();
+    d.callCheapAI = async (messages) => { prompt = messages[0].text; return { text: '{"intent":"huquqiy_savol","missing":[]}' }; };
+    agent.initTelegramAgent(d);
+    await agent.classifyIntent('Kechikkan maosh bo\'yicha nima qilaman?', []);
+    assert.match(prompt, /"Hisoblash", "hisob-kitob", "hisoblamang"[^\n]*hisob_yordam EMAS/u);
+  });
+
+  await test('the answer prompt is told to cover every part the question asks, with the norms found for it', async () => {
+    stubMemory();
+    const d = deps({ answer: "Ish haqi kechiktirilsa kompensatsiya to'lanadi (Mehnat kodeksi, 333-modda). Hisoblash uchun to'lov sanasi kerak.", claimVerdict: () => 'supported' });
+    let context = '';
+    d.buildTopicPrompt = (topic, ctx) => { context = ctx; return `SYSTEM\n${ctx}`; };
+    // fixtures shaped like Labour Code articles, not the official text
+    const A333 = { id: 'mk-333', law_name: 'Mehnat kodeksi', article_numbers: ['333'], source_type: 'law_text', chunk_text: "333-modda. Ish haqini kechiktirgan har bir kun uchun ish beruvchi kompensatsiya to'laydi." };
+    const A25 = { id: 'mk-25', law_name: 'Mehnat kodeksi', article_numbers: ['25'], source_type: 'law_text', chunk_text: "25-modda. Xodim mehnat huquqlarini sudda himoya qilishga haqli." };
+    d.retrieveLegalContext = async (query) => {
+      if (/to'lash muddatlari buzilganligi/u.test(query)) return { chunks: [A333] };
+      return { context: 'kontekst', chunks: [A25] };
+    };
+    agent.initTelegramAgent(d);
+    await agent.handleUserMessage({ chatId: 1, text: CALC_QUESTIONS[0] });
+    assert.match(context, /JAVOB QAMROVI/u);
+    assert.match(context, /kompensatsiya: kontekstdagi 333-modda normasini javobda bayon qiling/u);
+  });
+
   await test('account questions are routed to the registration bot', async () => {
     const d = deps();
     agent.initTelegramAgent(d);
