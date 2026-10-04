@@ -3248,6 +3248,9 @@
         .docform-col-right .docform-input { flex: 1; min-height: 190px; }
         .docform-input:focus { outline: none; border-color: var(--navy-300); box-shadow: 0 0 0 3px rgba(44,92,146,0.12); }
         .docform-input::placeholder { color: var(--text-muted); }
+        .doc-cost-card { max-width: 560px; }
+        .doc-cost-card .doc-cost-body { font-size: 13px; line-height: 1.55; margin-bottom: 10px; }
+        .doc-cost-card.doc-cost-done .docform-actions { display: none; }
         .docform-actions {
             display: flex; flex-wrap: wrap; gap: 10px;
             margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-1);
@@ -8457,14 +8460,18 @@
                         const r = await fetch('/api/tariff/me', { credentials: 'same-origin' });
                         if (r.ok) {
                             const m = await r.json();
-                            if (!m.plan) window.location.href = '/tariff.html';
-                            // An expired paid or trial plan now continues on Bepul; say so
-                            // once per session instead of silently changing the limits.
-                            if (m.downgradedFrom) {
-                                var seenKey = 'juristai-downgrade-' + m.downgradedFrom + '-' + (m.previousExpiresAt || '');
+                            // Tariffs v2: a new account starts on the one-time Sinov with its
+                            // first request; nothing to choose first. When the Sinov or the
+                            // paid period has nothing left, say so once per session.
+                            var b = m.balance || {};
+                            var left = b.services ? Object.keys(b.services).reduce(function (n, k) { return n + (b.services[k].remaining || 0); }, 0) : null;
+                            if ((b.kind === 'trial' || b.kind === 'paid') && left === 0) {
+                                var seenKey = 'juristai-limits-' + (b.plan || '') + '-' + (b.endsAt || '');
                                 var seen = false;
                                 try { seen = sessionStorage.getItem(seenKey) === '1'; sessionStorage.setItem(seenKey, '1'); } catch (_) {}
-                                if (!seen) showUpdateToast('Tarifingiz muddati tugadi — Bepul tarifda davom etyapsiz. Yangilash: Tariflar sahifasi.', 'info');
+                                if (!seen) showUpdateToast(b.kind === 'trial'
+                                    ? 'Sinov limitlari tugadi (bir martalik). Davom etish uchun Tariflar sahifasida tarif tanlang — avtomatik to\'lov olinmaydi.'
+                                    : 'Tarifingizdagi limitlar tugadi. Yangi davr yoki yuqori tarif: Tariflar sahifasi.', 'info');
                             }
                         }
                     } catch (e) { /* ignore */ }
@@ -12436,6 +12443,55 @@
                 '</div>');
         }
 
+        // ── Document cost, shown before the job runs (tariffs v2) ──
+        // Size (pages, characters), units, and what remains of the plan. The
+        // server enforces the same numbers; if the quote cannot be fetched
+        // the job still goes to the server, which refuses what is not allowed.
+        function confirmDocCost(service, text, docTicket) {
+            var label = service === 'opinion' ? 'AI yuridik xulosa' : 'Hujjat tahlili';
+            return fetch('/api/tariff/quote', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                body: JSON.stringify({ service: service, text: text, docTicket: docTicket || null })
+            }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (q) {
+                if (!q || q.unlimited) return true;
+                var messagesEl = document.getElementById('aiChatMessages');
+                if (!messagesEl) return true;
+                hideChatWelcome();
+                var size = q.size || {};
+                var lines = '<b>' + label + '</b><br>Hujjat hajmi: ' + (size.pages || 0) + ' sahifa, ' + Number(size.chars || 0).toLocaleString('ru-RU') + ' belgi'
+                    + ' → <b>' + q.units + ' birlik</b>.';
+                var ok = q.fits && q.enough !== false;
+                if (!q.fits) {
+                    lines += '<br>Bu hujjat bitta ish chegarasidan katta (' + q.maxPages + ' sahifa / ' + Number(q.maxChars || 0).toLocaleString('ru-RU') + ' belgi). Hujjat qisqartirilmaydi — uni qismlarga bo\'lib yuboring.';
+                } else if (q.legacy) {
+                    lines += '<br>Oldin sotib olingan tarifingiz shartlari bo\'yicha hisoblanadi.';
+                } else if (q.enough === false) {
+                    lines += '<br>Limit yetarli emas: ' + q.remaining + ' birlik qolgan.';
+                } else if (q.remaining != null) {
+                    lines += '<br>Sarflanadi: ' + q.units + ' birlik · qoladi: ' + q.remainingAfter + ' birlik.';
+                }
+                var id = 'docCost' + Date.now();
+                var card = document.createElement('div');
+                card.className = 'ai-chat-msg ai doc-cost-card';
+                card.id = id;
+                card.innerHTML = '<div class="doc-cost-body">' + lines + '</div><div class="docform-actions">'
+                    + (ok ? '<button class="docflow-opt docflow-primary" type="button" data-act="go">Davom etish</button>' : '<a class="docflow-opt" href="/tariff.html">Tariflar</a>')
+                    + '<button class="docflow-opt" type="button" data-act="cancel">' + (ok ? 'Bekor qilish' : 'Yopish') + '</button></div>';
+                messagesEl.appendChild(card);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+                return new Promise(function (resolve) {
+                    card.addEventListener('click', function (ev) {
+                        var act = ev.target && ev.target.getAttribute('data-act');
+                        if (!act) return;
+                        card.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+                        if (act === 'cancel') card.remove();
+                        else card.classList.add('doc-cost-done');
+                        resolve(act === 'go');
+                    });
+                });
+            });
+        }
+
         // ── Yuridik xulosa: upload a document → structured legal opinion ──
         var opinionDoc = null;   // { name, text } of the extracted upload
         function docFlowOpinion() {
@@ -12477,12 +12533,12 @@
                     var r2 = await fetch('/api/analyze/ocr-image', { method: 'POST', credentials: 'same-origin', body: fd2 });
                     var d2 = await r2.json();
                     if (r2.ok) text = d2.text || '';
-                    else if (d2.code === 'OCR_QUOTA' || d2.code === 'QUOTA_UNAVAILABLE') throw new Error(d2.error || d2.message || 'OCR limiti');
+                    else if (['QUOTA_EXCEEDED', 'NOT_IN_PLAN', 'PLAN_REQUIRED', 'QUOTA_UNAVAILABLE'].indexOf(d2.code) !== -1) throw new Error(d2.message || d2.error || 'OCR limiti');
                 }
                 text = (text || '').trim();
                 if (text.length < 40) throw new Error('Hujjatdan yetarli matn topilmadi');
-                opinionDoc = { name: file.name, text: text };
-                st.className = 'afp-status ok'; st.textContent = '✅ Tayyor (' + text.length.toLocaleString() + ' belgi). Endi "Xulosa tayyorlash" tugmasini bosing.';
+                opinionDoc = { name: file.name, text: text, docTicket: (d.text && !d.scanned) ? d.docTicket : null };
+                st.className = 'afp-status ok'; st.textContent = '✅ Tayyor (' + (d.pageCount ? d.pageCount + ' sahifa, ' : '') + text.length.toLocaleString() + ' belgi). Endi "Xulosa tayyorlash" tugmasini bosing — avval sarf ko\'rsatiladi.';
                 btn.disabled = false;
             } catch (e) {
                 st.className = 'afp-status err'; st.textContent = '❌ ' + e.message;
@@ -12492,6 +12548,8 @@
             if (!opinionDoc) return;
             var messagesEl = document.getElementById('aiChatMessages');
             docFlowClose();
+            // Size, units and what remains are shown before the job runs.
+            if (!(await confirmDocCost('opinion', opinionDoc.text, opinionDoc.docTicket))) return;
             hideChatWelcome();
             messagesEl.innerHTML += '<div class="ai-chat-msg user">📑 Yuridik xulosa — ' + escapeHtml(opinionDoc.name) + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
@@ -12499,11 +12557,11 @@
             try {
                 var r = await fetch('/api/draft/legal-opinion', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ documentText: opinionDoc.text })
+                    body: JSON.stringify({ documentText: opinionDoc.text, docTicket: opinionDoc.docTicket || null })
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
-                if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Xulosa yaratib bo\'lmadi')); return; }
+                if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Xulosa yaratib bo\'lmadi')); return; }
                 var oTitle = 'Yuridik xulosa — ' + opinionDoc.name;
                 renderDocMessage({ rawTitle: oTitle, html: d.html, kind: 'opinion', topic: d.topic || '', docHash: d.docHash || '', usage: d.usage || null });
                 // Persist into the conversation so it survives a reload and
@@ -12993,7 +13051,7 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
                     body: JSON.stringify(payload)
                 }, showAttempt);
-                if (r.status === 429) { alert('Kunlik limit tugadi'); return; }
+                if (r.status === 429 || r.status === 402) { var qd = await r.json().catch(function () { return {}; }); alert(qd.message || qd.error || 'Limit yetarli emas'); return; }
                 var ct = r.headers.get('Content-Type') || '';
                 if (ct.indexOf('application/json') !== -1) {
                     var d = await r.json();
@@ -13256,6 +13314,7 @@
                     if (!r.ok) throw new Error(d.error || 'Fayl o\'qilmadi');
                     // A scanned PDF has no embedded text → OCR fallback (not for Word).
                     text = (att.kind === 'pdf' && (d.scanned || !d.text)) ? await ocrFile(file) : d.text;
+                    att.docTicket = (d.text && !d.scanned) ? d.docTicket : null;
                 } else {
                     text = await ocrFile(file);
                 }
@@ -13271,7 +13330,7 @@
             var fd = new FormData(); fd.append('file', file);
             var r = await fetch('/api/analyze/ocr-image', { method: 'POST', credentials: 'same-origin', body: fd });
             var d = await r.json();
-            if (!r.ok) throw new Error(d.error || 'OCR xatolik');
+            if (!r.ok) throw new Error(d.message || d.error || 'OCR xatolik');
             return d.text || '';
         }
         function removeAttachment(id) {
@@ -13326,9 +13385,12 @@
             docActionsUsed.explain = true;
             renderAttachChips();
             var name = docs.map(function (d) { return d.name; }).join(', ');
-            var text = docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
+            // one document is sent as extracted (its signed page count applies)
+            var text = docs.length === 1 ? docs[0].text : docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
+            var ticket = docs.length === 1 ? docs[0].docTicket || null : null;
             var messagesEl = document.getElementById('aiChatMessages');
             hideChatWelcome();
+            if (!(await confirmDocCost('analysis', text, ticket))) { docActionsUsed.explain = false; renderAttachChips(); return; }
             aiChatHistory.push({ role: 'user', text: '[Hujjat: ' + name + '] mazmunini oddiy tilda tushuntirib bering' });
             messagesEl.innerHTML += '<div class="ai-chat-msg user">💬 Hujjat mazmunini tushuntirish — ' + escapeHtml(name) + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
@@ -13336,11 +13398,11 @@
             try {
                 var r = await fetch('/api/draft/explain-document', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ documentText: text })
+                    body: JSON.stringify({ documentText: text, docTicket: ticket })
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
-                if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.error || 'Tushuntirib bo\'lmadi')); return; }
+                if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Tushuntirib bo\'lmadi')); return; }
                 renderAiChatReply({ reply: d.reply, provider: d.provider, ragUsed: false, rag: null, qaBank: null },
                     'Hujjat mazmunini tushuntirish: ' + name, messagesEl, true);
                 // Offer the alternative (legal opinion) as a next step.
@@ -13360,7 +13422,7 @@
         // ready ones are promoted into the session so they survive the action.
         function collectSessionDocs() {
             var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
-            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text }); });
+            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, docTicket: a.docTicket || null }); });
             if (ready.length) {
                 aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
             }
@@ -13377,7 +13439,8 @@
             renderAttachChips();
             opinionDoc = {
                 name: docs.map(function (d) { return d.name; }).join(', '),
-                text: docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n')
+                text: docs.length === 1 ? docs[0].text : docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n'),
+                docTicket: docs.length === 1 ? docs[0].docTicket || null : null
             };
             docFlowGenerateOpinion();
         }
@@ -13477,8 +13540,12 @@
                     renderAiChatReply(data, currentQuestion, messagesEl, false);
                 } else if (data.code === 'CHANNEL_REQUIRED' || data.code === 'SURVEY_REQUIRED') {
                     checkAccessGate(true);
+                } else if (data.upgradeUrl || data.code === 'QUOTA_EXCEEDED' || data.code === 'PLAN_REQUIRED' || data.code === 'NOT_IN_PLAN' || data.code === 'FAIR_USE') {
+                    // a limit, not an error: the server's own explanation and the way on
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai">' + escapeHtml(data.message || 'Limit yetarli emas') +
+                        (data.upgradeUrl ? ' <a href="/tariff.html">Tariflar</a>' : '') + '</div>';
                 } else {
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:var(--danger-700);">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:var(--danger-700);">Xatolik: ' + escapeHtml(data.message || data.error || 'Nomalum xatolik') + '</div>';
                 }
             } catch (error) {
                 var typing = document.getElementById('aiChatTyping');

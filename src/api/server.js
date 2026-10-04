@@ -7101,9 +7101,33 @@ function tidyDocumentHtml(html) {
 // from EVERY chunk in parallel so the whole document is covered, not just the
 // first pages. Short docs pass through unchanged. Shared by the legal-opinion
 // and explain-document endpoints.
+// Analysis and opinion of the same document, ordered one after the other,
+// share one digest (tariffs v2: reuse parsing within the same person's
+// work). Keyed by the user and the text's hash, so nothing crosses accounts;
+// each service still charges its own units.
+const DIGEST_CACHE = new Map(); // key -> { at, digest }
+const DIGEST_TTL_MS = 60 * 60 * 1000;
+
 async function digestLongDocument(documentText, userId) {
   if (documentText.length <= 14000) return documentText;
-  const CHUNK = 12000, OVERLAP = 400, MAX_CHUNKS = 10;
+  const cacheKey = `${userId || 'anon'}|${require('crypto').createHash('sha256').update(documentText).digest('hex')}`;
+  const hit = userId ? DIGEST_CACHE.get(cacheKey) : null;
+  if (hit && Date.now() - hit.at < DIGEST_TTL_MS) {
+    console.log(`[Doc Digest] reused for user ${userId} (${documentText.length} chars)`);
+    return hit.digest;
+  }
+  const digest = await buildDigest(documentText, userId);
+  if (userId && !/\(o'qib bo'lmadi\)/u.test(digest)) {
+    if (DIGEST_CACHE.size >= 200) DIGEST_CACHE.delete(DIGEST_CACHE.keys().next().value);
+    DIGEST_CACHE.set(cacheKey, { at: Date.now(), digest });
+  }
+  return digest;
+}
+
+async function buildDigest(documentText, userId) {
+  // 11 chunks of 12 000 with a 400 overlap cover 127 600 characters: the
+  // whole 120 000-character job (10 chunks left the last ~4 000 unread).
+  const CHUNK = 12000, OVERLAP = 400, MAX_CHUNKS = 11;
   const chunks = [];
   for (let i = 0; i < documentText.length && chunks.length < MAX_CHUNKS; i += (CHUNK - OVERLAP)) {
     chunks.push(documentText.slice(i, i + CHUNK));
@@ -7126,12 +7150,13 @@ async function digestLongDocument(documentText, userId) {
 // retrieve grounding law from the corpus (lex.uz), and produce a formal
 // opinion in the fixed Kirish / Asosiy ma'lumotlar / Tahlil / Xulosa /
 // Manbalar structure. Returns HTML rendered as an editable, exportable doc.
-app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/api/opinion-request', { failClosed: true }), async (req, res) => {
+app.post('/api/draft/legal-opinion', requireAuth, async (req, res) => {
   try {
-    // Whole-document coverage: no 15k truncation. Cap at ~120k chars (~60
-    // pages) as an abuse guard; the map-reduce digest below condenses it.
+    // Whole-document coverage. One job is at most 30 pages / 120 000
+    // characters on a paid plan and 1 unit on Sinov (tariffs v2); a larger
+    // document is refused with its size by meterDocument, never cut here.
     const documentText = (typeof req.body.documentText === 'string')
-      ? req.body.documentText.replace(/\u0000/g, '').trim().slice(0, 120000) : '';
+      ? req.body.documentText.replace(/\u0000/g, '').trim() : '';
     if (!documentText || documentText.length < 40) {
       return res.status(400).json({ error: 'Hujjat matni bo\'sh yoki juda qisqa — matnli (skaner emas) hujjat yuklang' });
     }
@@ -7143,20 +7168,11 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     // is generated fresh and re-verified against current sources.
     const docHash = require('crypto').createHash('sha256').update(documentText).digest('hex');
 
-    // ── Per-plan opinion limits ──────────────────────────────────────────────
-    // Legal opinions run on the premium model and are the most expensive
-    // generation on the platform. Freemium (sinov / no plan): 1 per month.
-    // Paid tiers get more (override any of these via OPINION_LIMIT_<PLAN> env).
-    // Master + staff (lawyer/student) are exempt.
-    // ── Opinion credits ─────────────────────────────────────────────────────
-    // Metered in CREDITS scaled to document size (1 / 2 / 3), not flat counts.
-    // A legal opinion costs $0.15-$0.65 depending on length, so charging one
-    // "opinion" regardless made the worst case a lottery and let heavy users
-    // ride on light ones. Credits make cost-per-credit flat.
-    const opinionCredits = tariffModule.opinionCreditsFor(documentText.length);
-    // Tiered quality: the more expensive the plan, the stronger the model.
+    // Opinion units by document size: max(pages / 10, characters / 40 000),
+    // reserved now, committed when the opinion is delivered and released if
+    // it is not (tariffs v2, src/rag/tariff-ledger.js). Tiered quality: the
+    // more expensive the plan, the stronger the model.
     const OPINION_MODELS = {
-      bepul: MODELS.cheap,
       sinov: MODELS.cheap,       // gpt-6-luna
       silver: MODELS.premium,    // gpt-6-sol (MODEL_PREMIUM)
       gold: MODELS.premium,
@@ -7166,42 +7182,24 @@ app.post('/api/draft/legal-opinion', requireAuth, tariffModule.enforceQuota('/ap
     let opinionModel = process.env.OPINION_MODEL || null;
     try {
       const u = await tariffModule.getUserPlan(req.session.adminId);
-      const isExempt = u && (u.plan === 'master' || (u.role && u.role !== 'user'));
+      const isExempt = u && (u.plan === 'master' || u.staff || (u.role && u.role !== 'user'));
       if (isExempt) {
         if (!opinionModel) opinionModel = process.env.OPINION_MODEL_STAFF || MODELS.premium;
       } else {
-        const planKey = (u && u.plan) || 'bepul';
-        // Reserved now, atomically; given back below if no opinion is delivered.
-        const c = await tariffModule.reserveOpinionCredits(req.session.adminId, opinionCredits);
-        if (c.reservationId) {
-          const reservationId = c.reservationId;
-          const adminId = req.session.adminId;
-          res.on('finish', () => {
-            if (res.statusCode >= 400) {
-              tariffModule.releaseOpinionCredits(adminId, reservationId)
-                .catch(e => console.warn('[Legal Opinion] credit release failed:', e.message));
-            }
-          });
-        }
-        if (!c.allowed) {
-          const msg = c.reason === 'not_in_plan'
-            ? 'Yuridik xulosa tarifingizga kirmaydi. Silver, Gold yoki Platinum tarifini tanlang.'
-            : `Ushbu haftalik yuridik xulosa limiti tugadi (${c.used}/${c.limit} kredit). ` +
-              `Bu hujjat ${opinionCredits} kredit talab qiladi. Limit dushanba kuni yangilanadi.`;
-          return res.status(429).json({
-            error: msg, code: 'OPINION_CREDITS',
-            used: c.used, limit: c.limit, cost: opinionCredits,
-            remaining: c.remaining, resetsAt: c.resetsAt,
-          });
-        }
-        opinionMaxTokens = (planKey === 'sinov' || planKey === 'bepul') ? 4500 : 7000;
+        const m = await tariffModule.meterDocument(req, res, {
+          service: 'opinion', text: documentText, docTicket: req.body.docTicket, endpoint: '/api/draft/legal-opinion',
+        });
+        if (!m.allowed) return;
+        const planKey = (res.locals.quota && res.locals.quota.plan) || (u && u.plan) || 'sinov';
+        opinionMaxTokens = planKey === 'sinov' ? 4500 : 7000;
         if (!opinionModel) opinionModel = process.env['OPINION_MODEL_' + planKey.toUpperCase()] || OPINION_MODELS[planKey] || MODELS.standard;
       }
     } catch (qErr) {
       // Opinions are the most expensive path: refuse rather than run
-      // unmetered when the credit check itself fails (DECISIONS.md D-5).
-      console.warn('[Legal Opinion] credit check failed (refusing):', qErr.message);
-      return res.status(503).json(tariffModule.QUOTA_UNAVAILABLE);
+      // unmetered when the quota check itself fails (DECISIONS.md D-5).
+      console.warn('[Legal Opinion] quota check failed (refusing):', qErr.message);
+      if (!res.headersSent) return res.status(503).json(tariffModule.QUOTA_UNAVAILABLE);
+      return;
     }
     if (!opinionModel) opinionModel = MODELS.premium;
 
@@ -7540,8 +7538,8 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
     }
 
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
-    // Credits were reserved before generation (reserveOpinionCredits); a
-    // failed response releases them, so nothing is recorded here.
+    // Units were reserved before generation (meterDocument); the response
+    // commits them when it succeeds and releases them when it fails.
     if (result.usage) {
       // result.provider is the model that ACTUALLY answered. The earlier
       // "model=" line only logs intent — callPremiumAI silently falls back
@@ -7590,12 +7588,23 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // NOT the legal-analysis format (no Huquqiy asos/Tahlil sections, no statutes
 // required). Long documents go through the shared map-reduce digest so the
 // whole document is covered.
-app.post('/api/draft/explain-document', requireAuth, tariffModule.enforceQuota('/api/draft/explain-document', { failClosed: true }), async (req, res) => {
+app.post('/api/draft/explain-document', requireAuth, async (req, res) => {
   try {
     const documentText = (typeof req.body.documentText === 'string')
-      ? req.body.documentText.replace(/\u0000/g, '').trim().slice(0, 120000) : '';
+      ? req.body.documentText.replace(/\u0000/g, '').trim() : '';
     if (!documentText || documentText.length < 40) {
       return res.status(400).json({ error: 'Hujjat matni bo\'sh yoki juda qisqa' });
+    }
+    // an explanation is a document analysis: sized and reserved by units
+    try {
+      const m = await tariffModule.meterDocument(req, res, {
+        service: 'analysis', text: documentText, docTicket: req.body.docTicket, endpoint: '/api/draft/explain-document',
+      });
+      if (!m.allowed) return;
+    } catch (qErr) {
+      console.warn('[Explain] quota check failed (refusing):', qErr.message);
+      if (!res.headersSent) return res.status(503).json(tariffModule.QUOTA_UNAVAILABLE);
+      return;
     }
     const docForAnalysis = await digestLongDocument(documentText, req.session?.adminId || null);
     const lang = lexLangForText(documentText);
@@ -9993,14 +10002,15 @@ app.get('/api/tariff/plans', (req, res) => {
   res.json({ plans: tariffModule.PLANS, paymentsEnabled: PAYMENTS_ENABLED });
 });
 
-// GET /api/tariff/me — current user's plan + remaining quota
+// GET /api/tariff/me — current user's plan + what is left of each service
 app.get('/api/tariff/me', requireAuth, async (req, res) => {
   try {
     const userPlan = await tariffModule.getUserPlan(req.session.adminId);
     if (!userPlan) return res.status(404).json({ error: 'User not found' });
     const quota = await tariffModule.checkQuota(req.session.adminId);
+    const balance = await tariffModule.ledger.balance({ adminId: req.session.adminId });
     const usage = await tariffModule.getUsageStats(req.session.adminId);
-    res.json({ ...userPlan, quota, usage });
+    res.json({ ...userPlan, quota, balance, usage });
   } catch (err) {
     console.error('[TARIFF ME] Error:', err);
     res.status(500).json({ error: err.message });
@@ -10086,7 +10096,75 @@ app.get('/api/admin/plan-interest', requireMasterAdmin, async (req, res) => {
   }
 });
 
-// POST /api/tariff/select — user picks a plan (sinov is once-per-user)
+// POST /api/tariff/quote — what a document job will cost before it runs:
+// size (pages, characters), units, whether it fits the plan, what remains.
+app.post('/api/tariff/quote', requireAuth, async (req, res) => {
+  try {
+    const { service = 'analysis', text = '', chars = null, pages = null, docTicket = null } = req.body || {};
+    if (!['analysis', 'opinion'].includes(service)) return res.status(400).json({ error: 'Noto\'g\'ri xizmat' });
+    res.json(await tariffModule.quoteDocument(req.session.adminId, { service, text, chars, pages, docTicket }));
+  } catch (err) {
+    console.error('[TARIFF QUOTE] error:', err.message);
+    res.status(500).json({ error: 'Hisob-kitobni hozir ko\'rsatib bo\'lmadi' });
+  }
+});
+
+// POST /api/admin/tariff/grant — a master records a paid period for a
+// payment received outside the app (DECISIONS.md D-2: until a payment
+// provider is connected, paid plans are granted by the master). Idempotent
+// by paymentRef: the same payment never grants twice. Renewal, upgrade and
+// downgrade rules: tariff-ledger.grantPaidPeriod.
+app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
+  try {
+    const { adminId, plan, paymentRef, amountUzs = null, provider = 'manual' } = req.body || {};
+    if (!Number.isInteger(Number(adminId)) || !tariffModule.ledger.PAID_PLAN_ORDER.includes(plan)) {
+      return res.status(400).json({ error: 'adminId va to\'g\'ri pullik tarif kerak' });
+    }
+    const ref = String(paymentRef || '').trim();
+    if (ref.length < 4 || ref.length > 120) return res.status(400).json({ error: 'paymentRef (to\'lov raqami) kerak' });
+    const out = await tariffModule.ledger.grantPaidPeriod({
+      adminId: Number(adminId), plan, paymentRef: `${String(provider).slice(0, 20)}:${ref}`,
+      provider: String(provider).slice(0, 30), amountUzs: amountUzs == null ? null : Number(amountUzs),
+      createdBy: req.session.adminId, source: 'admin',
+    });
+    logAudit(req, 'tariff.grant', 'admin', `${adminId}:${plan}:${out.duplicate ? 'duplicate' : out.change}`);
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    console.error('[TARIFF GRANT] error:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/tariff/quote-change?adminId=&plan= — price of a plan change now
+app.get('/api/admin/tariff/quote-change', requireMasterAdmin, async (req, res) => {
+  try {
+    res.json(await tariffModule.ledger.quotePlanChange(Number(req.query.adminId), String(req.query.plan || '')));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/tariff/economics — planning budgets per plan (NOT measured
+// cost; the measured cost per service is in /api/admin/ai-usage/report)
+app.get('/api/admin/tariff/economics', requireMasterAdmin, async (req, res) => {
+  let measured = null;
+  try {
+    measured = await tariffModule.ledger.measuredServiceCost({ days: Math.min(180, Math.max(1, Number(req.query.days) || 30)) });
+  } catch (e) {
+    measured = { error: e.message };
+  }
+  res.json({
+    planning: tariffModule.ledger.PLANNING,
+    plans: tariffModule.ledger.PAID_PLAN_ORDER.map(p => tariffModule.ledger.planEconomics(p)),
+    // delivered jobs joined to their AI calls: known, estimated and unknown kept apart
+    measured,
+    note: 'planning = owner budgets (not provider prices); measured = usage ledger, complete only when no call has an unknown cost.',
+  });
+});
+
+// POST /api/tariff/select — the Sinov (once per person). A paid plan is
+// never granted by the user's own request: only a confirmed payment
+// (POST /api/admin/tariff/grant, or a provider callback) grants one.
 app.post('/api/tariff/select', requireAuth, async (req, res) => {
   try {
     const { plan } = req.body || {};
@@ -10104,13 +10182,23 @@ app.post('/api/tariff/select', requireAuth, async (req, res) => {
         message: 'To\'lov tizimi hali ulanmagan. Hozircha bepul tarifdan foydalaning — pullik tariflar tez orada ochiladi.',
       });
     }
+    if (tariffModule.PLANS[plan].priceUzs > 0) {
+      // no payment provider is connected: a paid plan cannot be activated
+      // from here even with payments switched on
+      return res.status(501).json({
+        error: 'checkout_unavailable', code: 'CHECKOUT_UNAVAILABLE',
+        message: 'Onlayn to\'lov hali ulanmagan. Tarifni faollashtirish uchun administrator bilan bog\'laning.',
+      });
+    }
     const result = await tariffModule.selectPlan(req.session.adminId, plan);
     res.json({ success: true, ...result });
   } catch (err) {
-    if (err.message === 'bepul_already_used') {
+    if (['trial_unavailable', 'paid_plan_active'].includes(err.message)) {
       return res.status(400).json({
-        error: 'bepul_already_used',
-        message: 'Bepul Sinov rejasi faqat bir marta ishlatiladi. Pullik rejani tanlang.',
+        error: err.message,
+        message: err.message === 'paid_plan_active'
+          ? 'Sizda faol pullik tarif bor.'
+          : 'Sinov faqat bir marta beriladi. Davom etish uchun pullik tarifni tanlang.',
       });
     }
     console.error('[TARIFF SELECT] Error:', err);
@@ -10925,7 +11013,7 @@ async function runMigrations() {
     // Mount OCR & AI Document Analyzer routes
     try {
       const { mountAnalyzerRoutes } = require('../ocr/routes');
-      mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule });
+      mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule, digestLongDocument });
     } catch (e) { console.log('[ANALYZE] Mount skipped:', e.message); }
 
     // Mount Enterprise Uzbekistan / TIFC English-law routes

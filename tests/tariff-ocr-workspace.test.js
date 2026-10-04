@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * DECISIONS.md D-7 and the fixes that came with it:
- *   - OCR has its own daily page allowance per plan (weight 0 in fair-use);
+ * DECISIONS.md D-7 and the fixes that came with it, under tariffs v2:
+ *   - OCR has its own page allowance per period (10 pages per analysis unit);
  *   - Workspace AI is metered on the asking member's own plan;
  *   - a Workspace member no longer inherits the owner's plan (audit M4);
  *   - the last draft / OCR page of an allowance is no longer refused
@@ -57,48 +57,41 @@ async function test(name, fn) {
 }
 
 (async () => {
-  console.log('D-7: OCR pages');
+  console.log('OCR pages (tariffs v2)');
 
-  await test('daily OCR pages per plan: 3 / 5 / 20 / 50 / 100', () => {
-    const got = ['bepul', 'sinov', 'silver', 'gold', 'platinum'].map((k) => tiers.PLANS[k].dailyOcrPages);
-    assert.deepStrictEqual(got, [3, 5, 20, 50, 100]);
+  await test('OCR is not unlimited: 10 pages per analysis unit per period (Sinov 10, Silver 80, Gold 240, Platinum 400)', () => {
+    const got = ['sinov', 'silver', 'gold', 'platinum'].map((k) => tiers.PLANS[k].quotas.ocr);
+    assert.deepStrictEqual(got, [10, 80, 240, 400]);
+    for (const k of ['sinov', 'silver', 'gold', 'platinum']) {
+      assert.strictEqual(tiers.PLANS[k].quotas.ocr, tiers.PLANS[k].quotas.analysis * tiers.ledger.OCR_PAGES_PER_ANALYSIS_UNIT);
+    }
   });
 
-  await test('the last page of the allowance is allowed, the next one is not', async () => {
-    state.plan = 'bepul'; state.used = 3;
-    assert.strictEqual((await tiers.checkOcrQuota(7, { alreadyRecorded: true })).allowed, true);
-    state.used = 4;
-    const q = await tiers.checkOcrQuota(7, { alreadyRecorded: true });
-    assert.strictEqual(q.allowed, false);
-    assert.strictEqual(q.limit, 3);
+  await test('legacy (v1) subscriptions keep their daily OCR pages: 20 / 50 / 100', () => {
+    assert.deepStrictEqual(['silver', 'gold', 'platinum'].map((k) => tiers.LEGACY_PLANS[k].dailyOcrPages), [20, 50, 100]);
   });
 
-  await test('staff and master are not limited', async () => {
-    state.role = 'lawyer'; state.used = 999;
-    assert.strictEqual((await tiers.checkOcrQuota(7)).allowed, true);
-    state.role = 'user';
-  });
-
-  await test('OCR weighs nothing in fair-use; Workspace AI weighs like chat', () => {
+  await test('OCR weighs nothing in legacy fair-use; Workspace AI weighs like chat', () => {
     assert.strictEqual(weight('/api/analyze/ocr'), 0);
     assert.strictEqual(weight('/api/workspace-ai'), 1);
   });
 
-  await test('the OCR route is metered and fails closed', () => {
+  await test('the OCR route reserves an OCR page and fails closed', () => {
     const src = read('src/ocr/routes.js');
-    assert.ok(/enforceQuota\('\/api\/analyze\/ocr', \{ failClosed: true \}\)/.test(src));
+    assert.ok(/enforceQuota\('\/api\/analyze\/ocr', \{ failClosed: true, service: 'ocr' \}\)/.test(src));
     assert.ok(/app\.post\('\/api\/analyze\/ocr-image', requireAuth, ocrQuota,/.test(src));
-    assert.ok(/checkOcrQuota\(req\.session\.adminId, \{\s*alreadyRecorded:/.test(src));
+    assert.ok(!/checkOcrQuota/.test(src), 'no second, unlocked check after the reservation');
+    assert.strictEqual(tiers.serviceFor('/api/analyze/ocr'), 'ocr');
   });
 
-  console.log('Drafts: the last one of the week');
+  console.log('Drafts');
 
-  await test('sinov (2 drafts/week) gets both drafts', async () => {
-    state.plan = 'sinov'; state.used = 2;
-    assert.strictEqual((await tiers.checkDraftQuota(7, { alreadyRecorded: true })).allowed, true);
-    state.used = 3;
-    assert.strictEqual((await tiers.checkDraftQuota(7, { alreadyRecorded: true })).allowed, false);
-    assert.ok(/checkDraftQuota\(req\.session\.adminId, \{ alreadyRecorded:/.test(read('src/drafting/routes.js')));
+  await test('a draft is one unit of the period\'s drafts; Sinov has none', () => {
+    assert.strictEqual(tiers.serviceFor('/api/draft/ai-generate'), 'draft');
+    assert.strictEqual(tiers.PLANS.sinov.quotas.draft, 0);
+    assert.ok(!/checkDraftQuota/.test(read('src/drafting/routes.js')), 'the reservation is the only check');
+    assert.ok(/quotaFor\('\/api\/draft\/ai-generate', \{ failClosed: true \}\)/.test(read('src/drafting/routes.js')));
+    assert.strictEqual(tiers.serviceFor('/api/draft/export'), null, 'an export calls no model and is not metered');
   });
 
   console.log('D-7: Workspace AI and member entitlement (M4)');
@@ -123,6 +116,9 @@ async function test(name, fn) {
   await test('Workspace AI ask is metered, and runs that call no model are refunded', () => {
     const routes = read('src/workspace/routes.js');
     assert.ok(/enforceQuota\('\/api\/workspace-ai'\)/.test(routes));
+    // v2: the asking member pays from their own allowance, the Workspace is recorded
+    assert.strictEqual(tiers.serviceFor('/api/workspace-ai'), 'chat');
+    assert.ok(/channel: workspaceId \? 'workspace' : 'web',\s*actorId: adminId, workspaceId/.test(read('src/rag/subscription-tiers.js')));
     assert.ok(/assistant\/ask', aiLimiter \|\| \(\(req, res, next\) => next\(\)\), workspaceAiQuota,/.test(routes));
     assert.ok(/refundUsage\(res, 'no_generation'\)/.test(routes));
     assert.ok(/verificationTokens,\s*tariffModule,\s*\}\);/.test(read('src/api/server.js')), 'server passes tariffModule');

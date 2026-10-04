@@ -13,12 +13,32 @@ const telegramEconomy = require('../services/telegram-economy');
 const { isStaffRole, isMasterRole, roleLabel, getLinkedAccount, privateSenderId, chatRoute, dashboardUrl } = require('./telegram-roles');
 const usageLedger = require('../ai/usage-ledger');
 const testAccounts = require('./test-account');
+const tariffTexts = require('./tariff-texts');
 
 /**
  * The Telegram test account for this update (src/bot/test-account.js), or
  * null. When it is one, this request's AI calls are also held to the test
  * account's total budget by the usage ledger.
  */
+/**
+ * Who pays for a Telegram answer (tariffs v2): the sender, and the ordinary
+ * account linked to them, if any - linked Telegram and web accounts share one
+ * allowance. A staff account (even a master in /testmode) is not a payer
+ * here: its chat is treated as an ordinary Telegram user.
+ */
+async function telegramIdentity(msgOrQuery) {
+  const chat = (msgOrQuery.message && msgOrQuery.message.chat) || msgOrQuery.chat || {};
+  const fromId = msgOrQuery.from && msgOrQuery.from.id != null ? msgOrQuery.from.id : null;
+  let adminId = null;
+  try {
+    const account = await getLinkedAccount(pool, chat.id, privateSenderId(msgOrQuery));
+    if (account && account.role === 'user') adminId = account.id;
+  } catch (e) {
+    console.warn('[BOT] linked account lookup failed:', e.message);
+  }
+  return { telegramUserId: fromId, adminId };
+}
+
 async function testAccountFor(msgOrQuery) {
   const chat = (msgOrQuery.message && msgOrQuery.message.chat) || msgOrQuery.chat || {};
   const account = await testAccounts.resolveTestAccount(pool, {
@@ -54,10 +74,6 @@ const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
 const LEGAL_BOT_AUTH_FALLBACK_ENABLED = false;
 const PAID_ANSWER_STARS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_STARS || '1', 10) || 1);
 const PAID_ANSWER_CREDITS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_CREDITS || '4', 10) || 4);
-const parsedTelegramFreeLimit = Number.parseInt(process.env.AGENT_FREE_AI_LIMIT || '3', 10);
-const TELEGRAM_FREE_AI_LIMIT = Number.isFinite(parsedTelegramFreeLimit) && parsedTelegramFreeLimit >= 0
-  ? parsedTelegramFreeLimit
-  : 3;
 const starsInvoice = require('./stars-invoice');
 // The offer is carried in the invoice payload (D-12); these are the prices
 // for new invoices and for v1 invoices issued before that change.
@@ -553,6 +569,7 @@ async function handleCallbackQuery(callbackQuery) {
           text: caseSummary,
           firstName: callbackQuery.from.first_name || '',
           testAccount,
+          identity: await telegramIdentity(callbackQuery),
         });
         if (result && result.reply) {
           const parts = telegramAgent.splitForTelegram(result.reply);
@@ -998,10 +1015,8 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     } catch(e) { console.error('[Bot bare-start]', e.message); }
   }
 
-  let freeAiLimit = TELEGRAM_FREE_AI_LIMIT;
   try {
     const telegramAgent = require('../agents/telegram-agent');
-    freeAiLimit = telegramAgent.FREE_AI_LIMIT;
     // A bare /start means "begin again". Clear stale clarification/service
     // states so the next message is classified normally. The reset deliberately
     // preserves human-takeover mode when an operator is handling the chat.
@@ -1021,9 +1036,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
 
 JuristAIga xush kelibsiz. Men inson yurist emasman — O'zbekiston qonunchiligi bo'yicha ma'lumot beruvchi AI yordamchiman.
 
-📝 Huquqiy vaziyatingizni matn shaklida yozing. Har kuni ${freeAiLimit} ta AI huquqiy javobni bepul olasiz. Keyingi javoblar obunasiz, bir martalik Telegram Stars to'lovi bilan olinadi.
-
-Salomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.
+📝 Huquqiy vaziyatingizni matn shaklida yozing. ${tariffTexts.START_LIMIT_TEXT()}
 
 📎 Ovozli xabar, video yoki 5 MB gacha fayl ham yuborishingiz mumkin; bunday murojaatlarni yurist ko'rib chiqadi.${communityLine}
 
@@ -1042,11 +1055,12 @@ bot.onText(/\/help/, (msg) => {
 
 1. /start orqali xizmat turini tanlang.
 2. Huquqiy vaziyatingizni matn shaklida yozing.
-3. Har kuni ${TELEGRAM_FREE_AI_LIMIT} ta AI huquqiy javob bepul. Keyingi javoblar Telegram Stars orqali bir martalik to'lov bilan olinadi; obuna yo'q.
-4. Salomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar cheklanmagan.
+3. Tariflar:
+${tariffTexts.planLines().join('\n')}
+4. Salomlashuv, menyu, /balance va yordam buyruqlari limit sarflamaydi. Telegram va veb hisoblaringiz ulangan bo'lsa, limit umumiy.
 
 /stats — faol foydalanuvchilar soni
-/balance — javob kreditlari qoldig'i
+/balance — tarif va limit qoldig'i
 /terms — to'lov shartlari
 /paysupport — to'lov muammosi bo'yicha yordam
 
@@ -1074,18 +1088,19 @@ bot.onText(/\/stats/, async (msg) => {
 bot.onText(/\/balance/, async (msg) => {
   try {
     await telegramEconomy.recordTelegramActivity(msg.chat.id);
-    const credits = await telegramEconomy.getPaidAnswerCredits(msg.chat.id);
-    const daily = await telegramEconomy.getAnswerEntitlementStatus(msg.chat.id, TELEGRAM_FREE_AI_LIMIT);
-    const pendingLine = daily.pending ? '\nHozir bitta huquqiy javob tayyorlanmoqda.' : '';
+    // tariffs v2: the plan and what is left, from the same ledger that
+    // meters the answers (linked Telegram and web accounts share it)
+    const identity = await telegramIdentity(msg);
+    const status = await telegramEconomy.getTelegramAnswerStatus(msg.chat.id, identity);
+    const balance = await require('../rag/tariff-ledger').balance(identity);
     // the test account (src/bot/test-account.js): its mode, end time and budget
     const testAccount = await testAccounts.resolveTestAccount(pool, {
       chatId: msg.chat.id, chatType: msg.chat.type, fromUserId: msg.from && msg.from.id,
     });
-    await bot.sendMessage(msg.chat.id,
-      (testAccount ? `${testAccounts.balanceText(testAccount)}\n\n` : '')
-      + `Bugungi bepul AI huquqiy javoblar: ${daily.freeRemaining}/${daily.limit}.\nQo'shimcha huquqiy javob kreditlari: ${credits}.${pendingLine}\n\n`
-      + (testAccount ? 'Test rejimi davomida bu limit va kreditlar ishlatilmaydi.' : 'Bepul kunlik limit tugagandan keyin har bir AI huquqiy javob bitta kredit sarflaydi.')
-    );
+    await bot.sendMessage(msg.chat.id, tariffTexts.balanceText({
+      balance, paidCredits: status.paidCredits || 0, pending: status.pending,
+      testAccountText: testAccount ? `${testAccounts.balanceText(testAccount)}\n\nTest rejimi davomida quyidagi limit ishlatilmaydi.` : '',
+    }));
   } catch (error) {
     console.error('[BOT] /balance failed:', error.message);
     await bot.sendMessage(msg.chat.id, 'Kredit qoldig\'ini hozir tekshirib bo\'lmadi.');
@@ -1563,6 +1578,7 @@ async function handleTelegramMessage(msg) {
             text: requestData.request_text,
             firstName,
             testAccount,
+            identity: await telegramIdentity(msg),
           });
         } finally {
           clearInterval(typing);

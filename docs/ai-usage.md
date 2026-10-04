@@ -140,65 +140,25 @@ These are planning estimates. Provider-reported token usage written to
 
 ## 4. Plan economics
 
-Rate: **11,980 UZS/USD**. Quotas are *solved* from measured unit costs against
-three targets — worst case 5–10%, medium (35% usage) 40–60%, and anything a
-customer generates above 75% returned to them as a rebate.
-
-| Plan | Price | USD | Chat | Fair use | Opinion credits/wk | Drafts/wk | Worst case |
-|---|---|---|---|---|---|---|---|
-| Bepul | free | — | 10/day → 3/day after 30d | — | 0 | 0 | — |
-| Sinov | free, 10d | — | 3/day | — | 1 | 2 | — |
-| Silver | 199,000 | $16.61 | unlimited | 15/day | **9** (~39/mo) | **22** (~95/mo) | **8.2%** |
-| Gold | 399,000 | $33.31 | unlimited | 30/day | **17** (~74/mo) | **50** (~217/mo) | **8.0%** |
-| Platinum | 999,000 | $83.39 | unlimited | 70/day | **42** (~182/mo) | **125** (~542/mo) | **9.8%** |
-
-Weekly windows reset Monday 00:00 Asia/Tashkent — a fresh allowance every week
-reads as more generous than one monthly number, and caps what a single abusive
-week can cost.
-
-### Opinion credits, not opinion counts
-
-An opinion costs $0.15–$0.65 depending on document length — a 4× spread.
-Charging one "opinion" regardless made the worst case a lottery: with every
-document at max size, every plan went to **−20%**. Credits flatten it to
-~$0.22 each.
-
-| Document | Credits |
-|---|---|
-| ≤ 40k chars (~15 pages) | 1 |
-| 40–90k chars | 2 |
-| > 90k chars | 3 |
-
-### Margin by usage
-
-| Usage | Silver | Gold | Platinum | |
-|---|---|---|---|---|
-| 100% quota + ceiling chat | 8% | 8% | 10% | worst |
-| 50% + 20 chat/day | 41% | 51% | 58% | target |
-| 35% + 15 chat/day | 58% | 65% | 70% | target |
-| 20% + 8 chat/day | 76% | 81% | 83% | **rebate** |
-| 5% + 2 chat/day | 94% | 95% | 96% | **rebate** |
-
-### Loyalty rebate
-
-Margin above `REBATE_THRESHOLD` (0.75) is returned as a discount on the next
-renewal — a discount rather than cash, because it costs the same, is funded by
-the following month's revenue, and only pays someone who stays.
-
-`GET /api/admin/margin-report` (master only) computes it per customer from
-**real** `llm_spend_log` cost, and bands each user `rebate` / `target` /
-`thin` / `loss`. Modelled on a 50/30/20 light/medium/heavy mix it returns
-~8% of revenue and lands net margin at 53–65%.
+**Superseded on 2026-10-04 by tariffs v2** — see [`docs/tariffs-v2.md`](tariffs-v2.md)
+(rules, units, migration) and [`docs/finance/tariffs-v2-report.md`](finance/tariffs-v2-report.md)
+(economics). In short: a one-time Sinov (5 chat + 1 analysis + 1 opinion
+unit), Silver 199 000 / Gold 599 000 / Platinum 999 000 so'm per 30-day
+period with monthly service quotas (Gold 3×, Platinum 5× Silver), no daily or
+weekly reset, no rollover, no rebate. The v1 table (unlimited chat under a
+daily fair-use ceiling, weekly opinion credits and drafts) now applies only to
+subscriptions sold under it, until they end (`tariff_periods.rules =
+'legacy_v1'`).
 
 ### Telegram cost controls
 
-Each Telegram account receives three successful AI legal answers per Tashkent
-calendar day. Additional answers are pay-as-you-go Telegram Stars credits, not
-a subscription. The reservation is atomic in PostgreSQL and is released if
-generation or Telegram delivery fails, so concurrent messages cannot overspend
-the wallet and a failed provider does not consume a free answer or paid credit.
-Greetings, menus, FAQ and clarification remain unlimited because they do not
-enter the legal-answer generation path.
+A Telegram answer draws on the same personal allowance as the web: the
+linked account's plan, or the one-time Sinov (one between linked Telegram and
+web accounts). The daily free answers are retired. Stars answer credits
+already bought stay valid (a separate balance, no expiry) and are used once
+the tariff allowance is spent. The reservation is atomic in PostgreSQL and is
+released if generation or Telegram delivery fails. Greetings, menus, /balance
+and help do not enter the legal-answer path and cost no allowance.
 
 The `/start` flow is deterministic and costs nothing: users select **Huquqiy
 savol**, **Advokat topish**, or **Hujjat tayyorlash**. Advocate matching does
@@ -208,9 +168,10 @@ also button-driven and goes to lawyer approval without generating an AI
 document or inventing a price. The selected field is also written directly to
 the Master Admin queue, so guided requests skip the separate AI triage call.
 
-The remaining abuse risk is identity-based: a person can use multiple
-Telegram accounts. Monitor unique daily chat IDs and add phone/account linking
-before increasing `AGENT_FREE_AI_LIMIT` further.
+The remaining abuse risk is identity-based: a person can open several
+Telegram accounts, each with its own Sinov (people are not merged by IP).
+Monitor new Sinov grants per day; phone or account verification is the next
+lever if that grows.
 
 ---
 
@@ -278,7 +239,7 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 | `AGENT_AUTO_ANSWER` | true | `false` sends all Telegram requests to humans |
 | `AGENT_ESCALATE_WEAK` | true | Queue a lawyer on low-confidence answers |
 | `AGENT_MAX_CLARIFY` | 2 | Clarifying questions before answering anyway |
-| `AGENT_FREE_AI_LIMIT` | 3 | Free Telegram legal answers per user per Tashkent calendar day; greetings, menus, FAQ and clarification do not consume it |
+| `TARIFF_RESERVATION_TTL_MIN` | 30 | Minutes after which an abandoned tariff reservation stops counting (docs/tariffs-v2.md) |
 | `TG_PAID_ANSWER_STARS` | 1 | Telegram Stars charged for one pay-as-you-go answer-credit package |
 | `TG_PAID_ANSWER_CREDITS` | 4 | Legal-answer credits granted per successful Stars payment; credits do not expire |
 | `HERMES_SHADOW_ENABLED` | false | Runs Hermes privately without changing Telegram replies |
@@ -292,9 +253,9 @@ cost and latency per model. Use it before changing `MODEL_STANDARD`.
 
 ## 7. Levers, in the order I would pull them
 
-1. **Monitor the Telegram cap** — anonymous chats receive three successful
-   legal answers per Tashkent calendar day by default. Adjust `AGENT_FREE_AI_LIMIT`
-   only after measuring answer quality, repeat usage and conversion.
+1. **Monitor Sinov grants** — every new person (Telegram or web) gets the
+   one-time Sinov (~$0.725 on the planning budgets). Watch new grants per day
+   against Silver purchases (docs/finance/tariffs-v2-report.md).
 2. **Grow `qa_korpus`** — a verified answer reuses an embedding-only lookup
    instead of a ~$0.0035 generation path, and it is *higher* quality than
    generation. The lawyer-correction loop already feeds it.

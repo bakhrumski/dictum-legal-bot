@@ -144,8 +144,22 @@ Known state of the suites (Sept 2026):
   budget ($5 default, unknown cost priced at an assumed rate, never $0) after
   which the ledger refuses new calls; ends 48 h after `TG_TEST_ACCOUNT_SINCE`.
   Status: `/api/admin/telegram-test-account?username=…` (master only).
-- `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
-  platinum), daily limits, opinion credits and the margin maths.
+- Tariffs v2 (2026-10-04, `docs/tariffs-v2.md`): `src/rag/tariff-ledger.js`
+  is the single source of prices and limits (`PLAN_CATALOG`: one-time Sinov
+  5 chat + 1 + 1; Silver 199 000 / Gold 599 000 / Platinum 999 000 so'm per
+  30-day period, Gold 3x and Platinum 5x Silver; no daily/weekly reset, no
+  rollover) and of the reserve / commit / release ledger (`tariff_usage` +
+  `tariff_periods`, atomic per payer, idempotent by job key). Linked Telegram
+  and web accounts share one allowance; Stars credits are a separate balance.
+  Document jobs are sized in units: max(pages/10, chars/40 000), signed PDF
+  page counts (`docTicket`), never silently cut. A paid period is granted only
+  by `POST /api/admin/tariff/grant` (idempotent `paymentRef`), never by the
+  user. Subscriptions sold under v1 keep their rules as `legacy_v1` until they
+  end. `src/rag/subscription-tiers.js` keeps the middleware (`enforceQuota`,
+  `meterJob`, `meterDocument`), the free-access gate and the legacy rules.
+  Every user-facing number (landing, tariff page, bot /start /help /balance)
+  comes from the catalogue; `tests/tariffs-v2*.test.js` checks it.
+  Economics: `docs/finance/tariffs-v2-report.md`, `scripts/tariff-scenarios.js`.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

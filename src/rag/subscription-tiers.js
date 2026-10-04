@@ -1,29 +1,21 @@
 'use strict';
 
 /**
- * JuristAI tariff plans — for common users (role = 'user').
+ * JuristAI tariff plans - for common users (role = 'user').
  *
- * Plans (see PLANS for the derivation of every number):
- *   bepul    : 10 chat/day for 30 days, then 3/day. Free forever.
- *   sinov    : 3 chat/day + 1 opinion credit + 2 drafts weekly, 10 days
- *   silver   : unlimited chat +  9 credits + 22 drafts weekly,   199,000/oy
- *   gold     : unlimited chat + 17 credits + 50 drafts weekly,   399,000/oy
- *   platinum : unlimited chat + 42 credits + 125 drafts weekly,  999,000/oy
+ * Tariffs v2 (2026-10-04, docs/tariffs-v2.md). The catalogue, the units and
+ * the reserve / commit / release ledger are in tariff-ledger.js; this module
+ * keeps the HTTP middleware (enforceQuota, meterJob), the free-access gate,
+ * the legacy rules of subscriptions sold before v2, and reporting.
  *
- * Chat is unlimited on paid plans, bounded only by an anti-abuse ceiling.
- * Opinions are metered in CREDITS scaled to document size; drafting has its
- * own weekly count. Both reset every Monday 00:00 Asia/Tashkent.
+ *   Sinov     free, once per person: 5 chat + 1 analysis + 1 opinion unit
+ *   Silver    199 000 so'm / 30 days: 150 chat, 8 analysis, 8 opinion, 10 drafts
+ *   Gold      599 000 so'm / 30 days: 3 x Silver
+ *   Platinum  999 000 so'm / 30 days: 5 x Silver; can create a Workspace
  *
- * Schema additions (admins table):
- *   tariff_plan       VARCHAR(20)   -- 'sinov'|'silver'|'gold'|'platinum'|NULL
- *   tariff_starts_at  TIMESTAMPTZ
- *   tariff_expires_at TIMESTAMPTZ
- *   bepul_used        BOOLEAN       -- true once user has consumed their one sinov
- *   phone             VARCHAR(30)
- *   email             VARCHAR(255)
- *   email_verified    BOOLEAN
- *
- * Usage table: tariff_usage(id, admin_id, endpoint, ts)
+ * No daily or weekly reset and no rollover: a paid period's limits are for
+ * its 30 days. Usage: tariff_usage (one row per job, with service, units and
+ * status); entitlements: tariff_periods.
  */
 
 const { pool } = require('../database/db');
@@ -44,7 +36,12 @@ const { pool } = require('../database/db');
 // abusive week can do.
 //
 // Worst-case margins at these numbers: Silver 8.2%, Gold 8.0%, Platinum 9.8%.
-const PLANS = {
+//
+// LEGACY (tariffs v1). Since 2026-10-04 these rules apply only to a
+// subscription sold under them, until it ends (tariff_periods rules
+// 'legacy_v1') - what was bought is not reduced. New periods use the v2
+// catalogue in tariff-ledger.js.
+const LEGACY_PLANS = {
   bepul: {
     label: 'Bepul',
     // Generous for the first month, then a smaller steady allowance. A free
@@ -107,22 +104,19 @@ const PLANS = {
   },
 };
 
-// A legal opinion costs $0.15-$0.65 depending on document length — a 4x
-// spread. Charging one "opinion" regardless meant the worst case was a
-// lottery: with every document at max size, every plan went to -20%. Credits
-// make cost-per-credit flat (~$0.22) so the worst case is predictable, and
-// light users stop subsidising heavy ones.
-const OPINION_CREDIT_TIERS = [
-  { maxChars: 40000,  credits: 1 },
-  { maxChars: 90000,  credits: 2 },
-  { maxChars: Infinity, credits: 3 },
-];
+const ledger = require('./tariff-ledger');
 
-/** Credits a document of this length costs. */
-function opinionCreditsFor(charCount) {
-  const n = Number(charCount) || 0;
-  for (const t of OPINION_CREDIT_TIERS) if (n <= t.maxChars) return t.credits;
-  return 3;
+// The plan catalogue the UI, the bot and the API show: one source.
+const PLANS = Object.freeze(Object.fromEntries(Object.entries(ledger.PLAN_CATALOG).map(([k, v]) => [k, Object.freeze({
+  ...v, durationDays: v.periodDays,
+})])));
+
+// v1 metered opinions in credits by size (1 / 2 / 3); v2 meters every
+// document service in units (tariff-ledger.js docUnits).
+
+/** Units a document of this length costs (v2: one unit per 40 000 characters / 10 pages). */
+function opinionCreditsFor(charCount, pages = null) {
+  return ledger.docUnits({ chars: charCount, pages }).units || 1;
 }
 
 let _initialized = false;
@@ -213,10 +207,14 @@ const ENDPOINT_WEIGHT_SQL = `
  * that weighs anything, so exports, drafts and opinions (which have their
  * own allowances) do not use up the day's questions.
  */
+// A unit given back (released) or a reservation abandoned long ago is not
+// usage; rows written before v2 have no status and count.
+const LIVE_SQL = `(status IS NULL OR status = 'committed' OR (status = 'reserved' AND ts > now() - interval '${ledger.RESERVATION_TTL_MIN} minutes'))`;
+
 async function dailyQuestionsSince(adminId, since, db = pool) {
   const r = await db.query(
     `SELECT COUNT(*) FILTER (WHERE (${ENDPOINT_WEIGHT_SQL}) > 0)::int AS used
-       FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+       FROM tariff_usage WHERE admin_id = $1 AND ts >= $2 AND ${LIVE_SQL}`,
     [adminId, since]
   );
   return r.rows[0].used;
@@ -226,7 +224,7 @@ async function dailyQuestionsSince(adminId, since, db = pool) {
 async function weightedUsageSince(adminId, since, db = pool) {
   const r = await db.query(
     `SELECT COALESCE(SUM(${ENDPOINT_WEIGHT_SQL}), 0)::int AS used
-       FROM tariff_usage WHERE admin_id = $1 AND ts >= $2`,
+       FROM tariff_usage WHERE admin_id = $1 AND ts >= $2 AND ${LIVE_SQL}`,
     [adminId, since]
   );
   return r.rows[0].used;
@@ -260,106 +258,39 @@ function tashkentWeekStart(nowMs = Date.now()) {
   return new Date(midnight.getTime() - dow * 86400000);
 }
 
+/**
+ * The account's plan now, from its tariff periods:
+ *   { plan: 'silver'|'gold'|'platinum', kind: 'paid', rules, startsAt, expiresAt }
+ *   { plan: 'sinov', kind: 'trial' }          the one-time Sinov (used or not)
+ *   { plan: null, kind: 'none', trialAvailable }
+ *   { plan: 'master' } / { plan: <role>, staff: true }   not metered
+ * Read-only: a Sinov is created on first metered use, not by reading.
+ */
 async function getUserPlan(adminId, db = pool) {
   if (!_initialized) await initSubscriptionSchema();
-  const r = await db.query(
-    `SELECT tariff_plan, tariff_starts_at, tariff_expires_at, bepul_used, role
-       FROM admins WHERE id = $1`,
-    [adminId]
-  );
-  if (r.rows.length === 0) return null;
-  const row = r.rows[0];
-  if (row.role === 'master') return { plan: 'master', role: 'master' };
-
-  let plan = row.tariff_plan;
-  let startsAt = row.tariff_starts_at;
-  let downgradedFrom = null;
-  const expired = !!(row.tariff_expires_at && new Date(row.tariff_expires_at) < new Date());
-  // An expired paid or trial plan falls back to bepul, which never expires
-  // (owner's decision, docs/audit/DECISIONS.md D-4). Computed on read rather
-  // than written back, so tariff_plan keeps what was bought and a renewal
-  // simply overwrites it. Bepul's 30 generous days count from the expiry.
-  if (plan && expired) {
-    downgradedFrom = plan;
-    plan = 'bepul';
-    startsAt = row.tariff_expires_at;
+  const ent = await ledger.resolveEntitlement(db, { adminId }, { createTrial: false });
+  if (ent.reason === 'unknown_user') return null;
+  if (ent.kind === 'staff') return ent.role === 'master' ? { plan: 'master', role: 'master' } : { plan: ent.role, role: ent.role, staff: true };
+  if (ent.kind === 'paid') {
+    return { plan: ent.plan, role: 'user', kind: 'paid', rules: ent.rules, legacy: ent.rules === 'legacy_v1',
+      startsAt: ent.period.starts_at, expiresAt: ent.period.ends_at, periodId: ent.period.id };
   }
-  return {
-    plan,
-    downgradedFrom,
-    role: row.role,
-    startsAt,
-    expiresAt: downgradedFrom ? null : row.tariff_expires_at,
-    previousExpiresAt: downgradedFrom ? row.tariff_expires_at : undefined,
-    bepulUsed: !!row.bepul_used,
-    rollover: parseInt(row.tariff_rollover, 10) || 0,
-    expired,
-  };
+  if (ent.kind === 'trial') return { plan: 'sinov', role: 'user', kind: 'trial', rules: 'v2', startsAt: ent.periods[0].starts_at, expiresAt: null };
+  return { plan: null, role: 'user', kind: 'none', trialAvailable: true };
 }
 
+/** Chat allowance now, read-only (for /api/tariff/me and the dashboard). */
 async function checkQuota(adminId, db = pool) {
   const u = await getUserPlan(adminId, db);
   if (!u) return { allowed: false, reason: 'unknown_user' };
   if (u.plan === 'master') return { allowed: true, plan: 'master', remaining: Infinity };
-  // Non-common roles (student, lawyer) bypass tariff system
-  if (u.role && u.role !== 'user') return { allowed: true, plan: u.role, remaining: Infinity };
-  if (!u.plan) return { allowed: false, reason: 'no_plan' };
-
-  const cfg = PLANS[u.plan];
-  if (!cfg) return { allowed: false, reason: 'unknown_plan' };
-
-  // Bepul: generous for the first 30 days, then a smaller steady allowance.
-  if (u.plan === 'bepul') {
-    const ageDays = u.startsAt ? (Date.now() - new Date(u.startsAt)) / 86400000 : 0;
-    const limit = ageDays > (cfg.dailyLimitAfterDays || 30)
-      ? (cfg.dailyLimitLater || 3)
-      : cfg.dailyLimit;
-    const used = await dailyQuestionsSince(adminId, tashkentMidnight(), db);
-    return {
-      allowed: used < limit, plan: 'bepul', limit, used,
-      remaining: Math.max(0, limit - used), period: 'day',
-      steppedDown: ageDays > (cfg.dailyLimitAfterDays || 30),
-    };
-  }
-
-  if (u.plan === 'sinov') {
-    const midnight = tashkentMidnight();
-    const used = await dailyQuestionsSince(adminId, midnight, db);
-    return {
-      allowed: used < cfg.dailyLimit,
-      plan: 'sinov',
-      limit: cfg.dailyLimit,
-      used,
-      remaining: Math.max(0, cfg.dailyLimit - used),
-      period: 'day',
-      expiresAt: u.expiresAt,
-    };
-  }
-
-  // ── Paid plans: unlimited chat, guarded by a daily fair-use ceiling ──────
-  // Counted per DAY, not per period: the ceiling exists to stop a shared login
-  // or a script, and both show up as a burst within one day. A monthly figure
-  // would let an abusive day pass unnoticed and then lock out a legitimate one.
-  const fairUse = cfg.fairUseDaily;
-  if (!fairUse) {
-    return { allowed: true, plan: u.plan, limit: null, used: 0, remaining: Infinity,
-             period: 'unlimited', expiresAt: u.expiresAt };
-  }
-
-  // Cost-weighted, not a raw request count — see ENDPOINT_WEIGHT_SQL.
-  const usedToday = await weightedUsageSince(adminId, tashkentMidnight(), db);
-  return {
-    allowed: usedToday < fairUse,
-    plan: u.plan,
-    limit: null,              // the offer is unlimited; this is not a quota
-    unlimited: true,
-    fairUseDaily: fairUse,
-    used: usedToday,
-    remaining: Infinity,
-    fairUseHit: usedToday >= fairUse,
-    period: 'unlimited',
-    expiresAt: u.expiresAt,
-  };
+  if (u.staff) return { allowed: true, plan: u.role, remaining: Infinity };
+  const b = await ledger.balance({ adminId }, { db });
+  if (b.kind === 'none') return { allowed: !!b.trialAvailable, plan: null, reason: 'no_plan', trialAvailable: !!b.trialAvailable, limit: b.trialQuotas.chat, used: 0, remaining: b.trialQuotas.chat, period: 'trial' };
+  if (b.legacy) return { allowed: true, plan: b.plan, legacy: true, period: 'legacy', expiresAt: b.endsAt };
+  const c = b.services.chat;
+  return { allowed: c.remaining > 0, plan: b.plan, limit: c.limit, used: c.used, remaining: c.remaining,
+    period: b.kind === 'trial' ? 'trial' : 'period', expiresAt: b.endsAt, services: b.services };
 }
 
 // ════════════════════════════════════════
@@ -455,15 +386,15 @@ async function checkFreeAccess(adminId) {
 }
 
 /**
- * Log one unit of usage. Returns the new row id, or null when the insert
- * failed; `{ throwOnError: true }` makes a failure throw instead, for paths
- * that must not run unmetered.
+ * Log one unit of usage outside the reserve/commit flow (kept for callers
+ * that only record). Returns the new row id, or null when the insert failed;
+ * `{ throwOnError: true }` makes a failure throw instead.
  */
 async function recordUsage(adminId, endpoint, credits = 1, { throwOnError = false, db = pool } = {}) {
   if (!_initialized) await initSubscriptionSchema();
   try {
     const r = await db.query(
-      `INSERT INTO tariff_usage (admin_id, endpoint, credits) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO tariff_usage (admin_id, endpoint, credits, status) VALUES ($1, $2, $3, 'committed') RETURNING id`,
       [adminId, endpoint || null, credits]
     );
     return r.rows[0] ? r.rows[0].id : null;
@@ -475,30 +406,33 @@ async function recordUsage(adminId, endpoint, credits = 1, { throwOnError = fals
 }
 
 // ── Refunds ─────────────────────────────────────────────────────────────────
-// A request that fails gives its unit back and says so (owner's decision,
-// DECISIONS.md D-6). enforceQuota records the unit before the handler runs;
-// the handler's error response, or an explicit refundUsage() call on a
-// streamed failure, removes that row again.
+// A job that is not delivered gives its units back and says so (DECISIONS.md
+// D-6): the reservation is released. A delivered job is committed. A client
+// that disconnects after the answer started streaming has received work the
+// providers were paid for: that job is committed, not released, so a cancel
+// cannot be used to get model calls for free (docs/tariffs-v2.md).
 const REFUND_NOTICE = "So'rov limiti qaytarildi: bu urinish hisobga olinmadi.";
 
-/**
- * Give back the unit enforceQuota recorded for this response. Idempotent.
- * Returns { quotaRefunded, refundNotice } to merge into the reply, or {}
- * when there was nothing to refund.
- */
+/** Give back the units of this response's job. Idempotent. */
 function refundUsage(res, reason = 'failed') {
   const t = res && res.locals && res.locals.tariffUsage;
-  if (!t || t.refunded || !t.id) return {};
+  if (!t || t.refunded || t.committed || !t.jobKey) return {};
   t.refunded = true;
-  pool.query('DELETE FROM tariff_usage WHERE id = $1 AND admin_id = $2', [t.id, t.adminId])
-    .then(() => console.log(`[TARIFF] refunded usage ${t.id} (${t.endpoint}, ${reason})`))
-    .catch(err => console.warn('[TARIFF] refund failed:', err.message));
+  ledger.release(t.jobKey, reason)
+    .then(ok => { if (ok) console.log(`[TARIFF] released ${t.service} x${t.units} (${t.endpoint}, ${reason})`); })
+    .catch(err => console.warn('[TARIFF] release failed:', err.message));
   return { quotaRefunded: true, refundNotice: REFUND_NOTICE };
 }
 
-// Any 4xx/5xx JSON reply from the metered handler refunds the unit and tells
-// the client. A reply that ends in error without JSON (a crash mid-stream)
-// is still refunded when the response finishes, just without the notice.
+function commitUsage(res) {
+  const t = res && res.locals && res.locals.tariffUsage;
+  if (!t || t.refunded || t.committed || !t.jobKey) return;
+  t.committed = true;
+  ledger.commit(t.jobKey).catch(err => console.warn('[TARIFF] commit failed:', err.message));
+}
+
+// A 4xx/5xx JSON reply releases the job and tells the client; a reply that
+// finishes successfully commits it.
 function attachRefundOnFailure(res) {
   if (typeof res.json === 'function') {
     const json = res.json.bind(res);
@@ -510,7 +444,16 @@ function attachRefundOnFailure(res) {
     };
   }
   if (typeof res.on === 'function') {
-    res.on('finish', () => { if (res.statusCode >= 400) refundUsage(res, 'status ' + res.statusCode); });
+    res.on('finish', () => {
+      if (res.statusCode >= 400) refundUsage(res, 'status ' + res.statusCode);
+      else commitUsage(res);
+    });
+    // the connection closed before the response finished
+    res.on('close', () => {
+      if (res.writableFinished) return;
+      if (res.headersSent) commitUsage(res);      // the answer had started
+      else refundUsage(res, 'client_closed');      // nothing was delivered
+    });
   }
 }
 
@@ -539,60 +482,28 @@ async function getUsageStats(adminId) {
   return { daily: row.daily || 0, weekly: row.weekly || 0, monthly: row.monthly || 0 };
 }
 
+/**
+ * The Sinov is taken by using it (created on the first metered request) or
+ * here. A paid plan is never granted by the user's own request: only a
+ * payment (or a master's grant) through ledger.grantPaidPeriod.
+ */
 async function selectPlan(adminId, plan) {
   if (!_initialized) await initSubscriptionSchema();
   if (!PLANS[plan]) throw new Error(`Unknown plan: ${plan}`);
-  const cfg = PLANS[plan];
-
-  if (plan === 'sinov') {
-    const r = await pool.query(`SELECT bepul_used FROM admins WHERE id = $1`, [adminId]);
-    if (r.rows[0]?.bepul_used) throw new Error('bepul_already_used');
-  }
-
-  const now = new Date();
-  // `bepul` is permanent. Multiplying its null duration by milliseconds
-  // produces zero and would otherwise expire the plan immediately.
-  const expires = cfg.durationDays == null
-    ? null
-    : new Date(now.getTime() + cfg.durationDays * 24 * 3600 * 1000);
-
-  // Rollover is retired. It existed to carry unused CHAT requests into the
-  // next period; with chat unlimited on every paid plan there is nothing left
-  // to carry. The tariff_rollover column is kept (written as 0) so historical
-  // rows stay readable and no migration is needed.
-  const rollover = 0;
-
-  await pool.query(
-    `UPDATE admins
-        SET tariff_plan = $1,
-            tariff_starts_at = $2,
-            tariff_expires_at = $3,
-            bepul_used = bepul_used OR $4,
-            tariff_rollover = $6
-      WHERE id = $5`,
-    [plan, now, expires, plan === 'sinov', adminId, rollover]
-  );
-  return {
-    plan, startsAt: now, expiresAt: expires, rollover,
-    limit: cfg.monthlyLimit || cfg.dailyLimit || null,   // null = unlimited chat
-    unlimited: !cfg.monthlyLimit && !cfg.dailyLimit,
-  };
+  if (plan !== 'sinov') throw new Error('payment_required');
+  const ent = await ledger.resolveEntitlement(pool, { adminId });
+  if (ent.kind === 'paid') throw new Error('paid_plan_active');
+  if (ent.kind !== 'trial') throw new Error('trial_unavailable');
+  return { plan: 'sinov', startsAt: ent.periods[0].starts_at, expiresAt: null, quotas: PLANS.sinov.quotas };
 }
 
-/**
- * Express middleware: enforces the caller's tariff quota.
- * - Master admins bypass entirely.
- * - Student/lawyer roles bypass (legacy admin users).
- * - Common users (role='user') without a plan get 429.
- * - Common users with a plan over their limit get 429.
- */
 /**
  * Run `fn(client)` holding a per-user advisory lock in one transaction, on
  * one connection. Check-then-insert quota logic used to run unlocked, so N
  * parallel requests at `used = limit - 1` all passed (audit M1, H4). Every
  * query inside must use the client it is given: a lock holder that asked
  * the pool for a second connection could wait behind requests that are
- * themselves waiting for the lock.
+ * themselves waiting for the lock. Same key as tariff-ledger's lock.
  */
 async function withUserLock(adminId, fn) {
   // Schema setup uses the pool; do it before taking the lock, not inside.
@@ -620,8 +531,162 @@ const QUOTA_UNAVAILABLE = {
   message: "Limitni hozir tekshirib bo'lmadi. Bir necha daqiqadan keyin qayta urinib ko'ring.",
 };
 
-function enforceQuota(endpoint, { failClosed = false } = {}) {
+// Which service an endpoint draws on. null: no model call, not metered.
+const SERVICE_BY_ENDPOINT = [
+  [/^\/api\/draft\/export/u, null],
+  [/^\/api\/templates\/import/u, null],
+  [/^\/api\/draft\/ai-generate/u, 'draft'],
+  [/^\/api\/analyze\/ocr/u, 'ocr'],
+  [/^\/api\/analyze$|explain-document/u, 'analysis'],
+  [/legal-opinion|opinion-request/u, 'opinion'],
+];
+function serviceFor(endpoint = '') {
+  for (const [re, svc] of SERVICE_BY_ENDPOINT) if (re.test(String(endpoint))) return svc;
+  return 'chat';
+}
+
+const SERVICE_LABEL = {
+  chat: 'huquqiy chat', analysis: 'hujjat tahlili', opinion: 'AI yuridik xulosa', draft: 'hujjat (draft) yaratish', ocr: "rasm/skan o'qish",
+};
+
+function tashkentDateText(d) {
+  if (!d) return '';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric' })
+    .formatToParts(new Date(d)).map(x => [x.type, x.value]));
+  return `${p.day}.${p.month}.${p.year}`;
+}
+
+/** The refusal for a reservation that was not allowed: status and body. */
+function refusal(r, service) {
+  const label = SERVICE_LABEL[service] || service;
+  if (r.fairUseHit) {
+    return [429, { error: 'rate_limited', code: 'FAIR_USE', reason: 'fair_use',
+      message: "Juda ko'p so'rov yuborildi. Biroz kuting va davom eting.", plan: r.plan, retryAfterHours: 24 }];
+  }
+  if (r.kind === 'none' || r.reason === 'no_plan') {
+    return [402, { error: 'plan_required', code: 'PLAN_REQUIRED', service, upgradeUrl: '/tariff.html',
+      message: "Sinov limitingiz tugagan yoki tarif tanlanmagan. Davom etish uchun tarifni tanlang — avtomatik to'lov olinmaydi." }];
+  }
+  const planLabel = (PLANS[r.plan] || {}).label || r.plan;
+  if (r.reason === 'not_in_plan' || r.limit === 0) {
+    return [402, { error: 'not_in_plan', code: 'NOT_IN_PLAN', service, plan: r.plan, upgradeUrl: '/tariff.html',
+      message: `${label[0].toUpperCase()}${label.slice(1)} ${planLabel} tarifiga kirmaydi. Silver, Gold yoki Platinum tarifini tanlang.` }];
+  }
+  const until = r.kind === 'trial'
+    ? "Sinov bir martalik va yangilanmaydi — davom etish uchun tarifni tanlang."
+    : (r.endsAt ? `Limit ${tashkentDateText(r.endsAt)} da yangi 30 kunlik davr bilan qayta tiklanadi (avtomatik to'lov olinmaydi) yoki yuqori tarifga o'tishingiz mumkin.` : '');
+  return [429, { error: 'quota_exceeded', code: 'QUOTA_EXCEEDED', service, plan: r.plan, upgradeUrl: '/tariff.html',
+    used: r.used, limit: r.limit, cost: r.units, remaining: r.remaining,
+    message: `${planLabel}: ${label} limiti yetarli emas (${r.used}/${r.limit}${r.units > 1 ? `, bu ish ${r.units} birlik talab qiladi` : ''}). ${until}`.trim() }];
+}
+
+/**
+ * Reserve `units` of `service` for this request's job and tie the
+ * reservation to the response: committed when it succeeds, released (with a
+ * notice) when it fails. Sends the refusal itself and returns
+ * { allowed: false } when the person has no allowance. The payer is the
+ * session's own account, never an id from the request.
+ */
+async function meterJob(req, res, { service, units = 1, endpoint = null, workspaceId = null, meta = null } = {}) {
+  const adminId = req.session && req.session.adminId;
+  if (!adminId) return { allowed: true, unmetered: true };
+  if (req.session.role && req.session.role !== 'user') return { allowed: true, staff: true };
+  const r = await ledger.reserve({
+    adminId, service, units, endpoint, channel: workspaceId ? 'workspace' : 'web',
+    actorId: adminId, workspaceId, meta,
+  });
+  if (r.kind === 'staff') return { allowed: true, staff: true };
+  if (!r.allowed) {
+    const [status, body] = refusal(r, service);
+    res.status(status).json(body);
+    return { allowed: false, ...r };
+  }
+  res.locals.quota = r;
+  res.locals.tariffUsage = { jobKey: r.jobKey, adminId, endpoint, service, units: r.units, refunded: false, committed: false };
+  attachRefundOnFailure(res);
+  return r;
+}
+
+/**
+ * Size a document job, refuse it if it cannot run on the plan, and reserve
+ * its units. Returns { allowed, size } or sends the response itself:
+ *   400 empty document (no units charged)
+ *   413 larger than one job may be on this plan (clear message, no cut)
+ *   402/429 no allowance
+ * text: the extracted text; docTicket: from /api/analyze/extract (PDF page
+ * count), optional.
+ */
+async function meterDocument(req, res, { service, text = '', docTicket = null, endpoint = null } = {}) {
+  const clean = String(text || '').replace(/\u0000/gu, '').trim();
+  const ticket = ledger.readDocTicket(docTicket, clean);
+  const size = ledger.docUnits({ chars: clean.length, pages: ticket ? ticket.pages : null });
+  if (!size.units) {
+    res.status(400).json({ error: "Hujjat matni bo'sh yoki o'qib bo'lmadi — limit sarflanmadi.", code: 'EMPTY_DOCUMENT', quotaRefunded: true });
+    return { allowed: false, size };
+  }
+  const adminId = req.session && req.session.adminId;
+  let plan = 'silver';
+  if (adminId && (!req.session.role || req.session.role === 'user')) {
+    const access = await checkFreeAccess(adminId);
+    if (!access.allowed) {
+      res.status(403).json({ error: access.code, code: access.code, message: access.code === 'SURVEY_REQUIRED'
+        ? 'Bepul foydalanishni davom ettirish uchun qisqa so\'rovnomani to\'ldiring.'
+        : 'Bepul foydalanish uchun rasmiy Telegram kanalimizga obuna bo\'ling.' });
+      return { allowed: false, size };
+    }
+    const u = await getUserPlan(adminId);
+    plan = u && u.plan && PLANS[u.plan] ? u.plan : 'sinov';
+  }
+  const fit = ledger.jobFits(plan, { chars: size.chars, pages: size.pages });
+  if (!fit.ok) {
+    const label = (PLANS[plan] || {}).label || plan;
+    res.status(413).json({
+      error: 'document_too_large', code: 'DOCUMENT_TOO_LARGE', service, plan, size,
+      maxPages: fit.maxPages, maxChars: fit.maxChars, maxUnits: fit.maxUnits, quotaRefunded: true,
+      message: `Hujjat hajmi: ${size.pages} sahifa, ${size.chars.toLocaleString('ru-RU')} belgi (${size.units} birlik). `
+        + `${label} tarifida bitta ish ko'pi bilan ${fit.maxPages} sahifa va ${fit.maxChars.toLocaleString('ru-RU')} belgi`
+        + `${plan === 'sinov' ? ' (1 birlik)' : ''}. Hujjat qisqartirilmaydi: uni qismlarga bo'lib yuboring${plan === 'sinov' ? ' yoki tarif tanlang' : ''}. Limit sarflanmadi.`,
+    });
+    return { allowed: false, size };
+  }
+  const r = await meterJob(req, res, { service, units: size.units, endpoint, meta: { pages: size.pages, chars: size.chars, ticket: !!ticket } });
+  return { ...r, size };
+}
+
+/**
+ * What a document job will cost before it runs: size, units, whether it
+ * fits the plan, and what remains after it. Read-only.
+ */
+async function quoteDocument(adminId, { service = 'analysis', text = '', chars = null, pages = null, docTicket = null } = {}) {
+  const clean = String(text || '').trim();
+  const ticket = clean ? ledger.readDocTicket(docTicket, clean) : null;
+  const size = ledger.docUnits({ chars: chars != null ? chars : clean.length, pages: ticket ? ticket.pages : pages });
+  const u = await getUserPlan(adminId);
+  if (u && (u.plan === 'master' || u.staff)) return { service, size, units: size.units, fits: true, unlimited: true };
+  const plan = u && u.plan && PLANS[u.plan] ? u.plan : 'sinov';
+  const fit = ledger.jobFits(plan, size);
+  const b = await ledger.balance({ adminId });
+  const svc = b.services ? b.services[service] : (b.kind === 'none' ? { limit: b.trialQuotas[service], used: 0, remaining: b.trialQuotas[service] } : null);
+  return {
+    service, plan, size, units: size.units, fits: fit.ok, reason: fit.ok ? null : fit.reason,
+    maxPages: fit.maxPages, maxChars: fit.maxChars,
+    legacy: !!b.legacy,
+    remaining: svc ? svc.remaining : null,
+    remainingAfter: svc ? Math.max(0, svc.remaining - size.units) : null,
+    enough: svc ? svc.remaining >= size.units : true,
+  };
+}
+
+/**
+ * Express middleware: reserve one unit of the endpoint's service.
+ * Master and staff bypass; the free-access gate applies to Sinov users.
+ * Analysis and opinion size their units from the document and call
+ * meterJob from the handler instead.
+ */
+function enforceQuota(endpoint, { failClosed = false, service: forced, units = 1 } = {}) {
+  const service = forced !== undefined ? forced : serviceFor(endpoint);
   return async (req, res, next) => {
+    if (!service) return next();
     let passed = false;
     try {
       const adminId = req.session?.adminId;
@@ -629,8 +694,6 @@ function enforceQuota(endpoint, { failClosed = false } = {}) {
       if (req.session?.role === 'master') return next();
       if (req.session?.role && req.session.role !== 'user') return next();
 
-      // Free-access gate: free-tier users must join the channel and (after a
-      // week) complete the survey, instead of paying. Paid plans bypass.
       const access = await checkFreeAccess(adminId);
       if (!access.allowed) {
         return res.status(403).json({
@@ -641,44 +704,10 @@ function enforceQuota(endpoint, { failClosed = false } = {}) {
             : 'Bepul foydalanish uchun rasmiy Telegram kanalimizga obuna bo\'ling.',
         });
       }
-
-      // Check and record under one per-user lock, so parallel requests cannot
-      // all pass the same remaining unit.
-      const { q, usageId } = await withUserLock(adminId, async (db) => {
-        const quota = await checkQuota(adminId, db);
-        if (!quota.allowed) return { q: quota, usageId: null };
-        const id = await recordUsage(adminId, endpoint, 1, { throwOnError: failClosed, db });
-        return { q: quota, usageId: id };
-      });
-      if (!q.allowed) {
-        // A paid subscriber who trips the fair-use ceiling has NOT run out —
-        // their plan is unlimited. Telling them "limit tugadi" would be false
-        // and would read as a bait-and-switch, so it is framed as the
-        // temporary slow-down it actually is.
-        if (q.fairUseHit) {
-          return res.status(429).json({
-            error: 'rate_limited',
-            reason: 'fair_use',
-            message: 'Juda ko\'p so\'rov yuborildi. Biroz kuting va davom eting — tarifingiz cheklanmagan.',
-            plan: q.plan,
-            unlimited: true,
-            retryAfterHours: 24,
-          });
-        }
-        return res.status(429).json({
-          error: 'quota_exceeded',
-          reason: q.reason || 'limit_reached',
-          message: q.reason === 'no_plan'
-            ? 'Tarif rejasi tanlanmagan. Iltimos, tarifni tanlang.'
-            : `Limit tugadi (${q.used}/${q.limit}). Yangi tarif tanlang.`,
-          plan: q.plan,
-          limit: q.limit,
-          used: q.used,
-        });
-      }
-      res.locals.quota = q;
-      res.locals.tariffUsage = { id: usageId, adminId, endpoint, refunded: false };
-      attachRefundOnFailure(res);
+      const workspaceId = /\/workspaces?\//u.test(String(req.originalUrl || req.url || '')) && req.params && /^[0-9a-f-]{36}$/iu.test(String(req.params.id || ''))
+        ? req.params.id : null;
+      const r = await meterJob(req, res, { service, units: typeof units === 'function' ? units(req) : units, endpoint, workspaceId });
+      if (!r.allowed) return;
       passed = true;
       next();
     } catch (err) {
@@ -690,133 +719,84 @@ function enforceQuota(endpoint, { failClosed = false } = {}) {
   };
 }
 
-// ── Weekly opinion credits & drafting ───────────────────────────────────────
-// Counted from tariff_usage rows tagged with the endpoint and, for opinions,
-// the credits consumed. Weighted in SQL so a re-price needs no backfill.
+// ── Legacy (v1) allowances ──────────────────────────────────────────────────
+// Counted from tariff_usage rows tagged with the endpoint, for subscriptions
+// sold under v1 (until they end). v2 periods count units per service.
 
-/** Credits already spent this week. */
+/** Opinion credits spent this week (legacy). */
 async function opinionCreditsUsed(adminId, db = pool) {
   const r = await db.query(
     `SELECT COALESCE(SUM(COALESCE(credits, 1)), 0)::int AS n
        FROM tariff_usage
-      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '%legal-opinion%'`,
+      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '%legal-opinion%' AND ${LIVE_SQL}`,
     [adminId, tashkentWeekStart()]);
   return r.rows[0].n;
 }
 
-/** Drafts already generated this week. */
-async function draftsUsed(adminId) {
-  const r = await pool.query(
+/** Drafts generated this week (legacy). */
+async function draftsUsed(adminId, db = pool) {
+  const r = await db.query(
     `SELECT COUNT(*)::int AS n FROM tariff_usage
-      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '%draft/ai-generate%'`,
+      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '%draft/ai-generate%' AND ${LIVE_SQL}`,
     [adminId, tashkentWeekStart()]);
   return r.rows[0].n;
 }
 
-/**
- * Can this user spend `credits` on an opinion right now?
- * Staff and master bypass; free tiers get their small weekly allowance.
- */
-async function checkOpinionCredits(adminId, credits = 1) {
-  const u = await getUserPlan(adminId);
-  if (!u) return { allowed: false, reason: 'unknown_user' };
-  if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true };
-  const cfg = PLANS[u.plan];
-  if (!cfg) return { allowed: false, reason: 'no_plan' };
-  const limit = cfg.weeklyOpinionCredits || 0;
-  if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
-  const used = await opinionCreditsUsed(adminId);
-  return {
-    allowed: used + credits <= limit,
-    limit, used, cost: credits,
-    remaining: Math.max(0, limit - used),
-    period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000),
-  };
-}
-
-/**
- * Reserve `credits` opinion credits atomically: check and insert under the
- * per-user lock. Credits used to be checked at the start and recorded only
- * after generation (minutes later), so parallel requests all passed the same
- * remaining credits (audit H4). The reservation row is the spend; release it
- * with releaseOpinionCredits() when the opinion is not delivered.
- */
-async function reserveOpinionCredits(adminId, credits = 1) {
-  return withUserLock(adminId, async (db) => {
-    const u = await getUserPlan(adminId, db);
-    if (!u) return { allowed: false, reason: 'unknown_user' };
-    if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true, reservationId: null };
-    const cfg = PLANS[u.plan];
-    if (!cfg) return { allowed: false, reason: 'no_plan' };
-    const limit = cfg.weeklyOpinionCredits || 0;
-    if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
-    const used = await opinionCreditsUsed(adminId, db);
-    const base = { limit, used, cost: credits, remaining: Math.max(0, limit - used),
-      period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000) };
-    if (used + credits > limit) return { allowed: false, ...base };
-    const reservationId = await recordUsage(adminId, '/api/draft/legal-opinion', credits, { throwOnError: true, db });
-    return { allowed: true, ...base, reservationId };
-  });
-}
-
-/** Give reserved opinion credits back (the opinion was not delivered). */
-async function releaseOpinionCredits(adminId, reservationId) {
-  if (!reservationId) return false;
-  const r = await pool.query('DELETE FROM tariff_usage WHERE id = $1 AND admin_id = $2', [reservationId, adminId]);
-  return r.rowCount > 0;
-}
-
-/**
- * Can this user generate another document this week?
- * `alreadyRecorded`: the route's own usage row for this draft is already in
- * tariff_usage (enforceQuota writes it first), so it counts toward `used`.
- * Without it the last draft of the allowance was always refused.
- */
-async function checkDraftQuota(adminId, { alreadyRecorded = false } = {}) {
-  const u = await getUserPlan(adminId);
-  if (!u) return { allowed: false, reason: 'unknown_user' };
-  if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true };
-  const cfg = PLANS[u.plan];
-  if (!cfg) return { allowed: false, reason: 'no_plan' };
-  const limit = cfg.weeklyDrafts || 0;
-  if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
-  const used = await draftsUsed(adminId);
-  const before = alreadyRecorded ? used - 1 : used;
-  return {
-    allowed: before < limit, limit, used,
-    remaining: Math.max(0, limit - used),
-    period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000),
-  };
-}
-
-// ── OCR pages (D-7) ─────────────────────────────────────────────────────────
-// Reading a scan or photo is the step before a question, which is metered on
-// its own, so OCR has a separate daily page allowance instead of using up
-// chat. It weighs 0 in fair-use (ENDPOINT_WEIGHT_SQL).
-async function ocrPagesUsed(adminId) {
-  const r = await pool.query(
+/** OCR pages read today (legacy). */
+async function ocrPagesUsed(adminId, db = pool) {
+  const r = await db.query(
     `SELECT COUNT(*)::int AS n FROM tariff_usage
-      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '/api/analyze/ocr%'`,
+      WHERE admin_id = $1 AND ts >= $2 AND endpoint LIKE '/api/analyze/ocr%' AND ${LIVE_SQL}`,
     [adminId, tashkentMidnight()]);
   return r.rows[0].n;
 }
 
-/** Same contract as checkDraftQuota, per Tashkent day. */
-async function checkOcrQuota(adminId, { alreadyRecorded = false } = {}) {
-  const u = await getUserPlan(adminId);
-  if (!u) return { allowed: false, reason: 'unknown_user' };
-  if (u.plan === 'master' || (u.role && u.role !== 'user')) return { allowed: true, unlimited: true };
-  const cfg = PLANS[u.plan];
-  if (!cfg) return { allowed: false, reason: 'no_plan' };
-  const limit = cfg.dailyOcrPages || 0;
-  if (limit === 0) return { allowed: false, reason: 'not_in_plan', limit: 0 };
-  const used = await ocrPagesUsed(adminId);
-  const before = alreadyRecorded ? used - 1 : used;
-  return {
-    allowed: before < limit, limit, used,
-    remaining: Math.max(0, limit - used),
-    period: 'day', resetsAt: new Date(tashkentMidnight().getTime() + 86400000),
-  };
+/**
+ * How a legacy_v1 period is checked: the v1 rules for its plan, unchanged -
+ * chat and analysis under the daily fair-use ceiling (cost-weighted),
+ * opinions and drafts weekly, OCR pages daily. Runs inside the ledger's lock.
+ */
+async function legacyCheck(db, { adminId, plan, service, units = 1 }) {
+  const cfg = LEGACY_PLANS[plan];
+  if (!cfg) return { allowed: false, reason: 'unknown_plan' };
+  const week = { period: 'week', resetsAt: new Date(tashkentWeekStart().getTime() + 7 * 86400000) };
+  if (service === 'opinion') {
+    const limit = cfg.weeklyOpinionCredits || 0;
+    const used = await opinionCreditsUsed(adminId, db);
+    return { allowed: limit > 0 && used + units <= limit, limit, used, remaining: Math.max(0, limit - used), reason: limit ? 'limit_reached' : 'not_in_plan', ...week };
+  }
+  if (service === 'draft') {
+    const limit = cfg.weeklyDrafts || 0;
+    const used = await draftsUsed(adminId, db);
+    return { allowed: limit > 0 && used + units <= limit, limit, used, remaining: Math.max(0, limit - used), reason: limit ? 'limit_reached' : 'not_in_plan', ...week };
+  }
+  if (service === 'ocr') {
+    const limit = cfg.dailyOcrPages || 0;
+    const used = await ocrPagesUsed(adminId, db);
+    return { allowed: limit > 0 && used + units <= limit, limit, used, remaining: Math.max(0, limit - used), reason: limit ? 'limit_reached' : 'not_in_plan', period: 'day' };
+  }
+  // chat and analysis: unlimited, under the daily anti-abuse ceiling
+  const fairUse = cfg.fairUseDaily;
+  if (!fairUse) return { allowed: true, limit: null, used: 0, remaining: null };
+  const usedToday = await weightedUsageSince(adminId, tashkentMidnight(), db);
+  return { allowed: usedToday < fairUse, limit: null, unlimited: true, used: usedToday, remaining: null, fairUseHit: usedToday >= fairUse, reason: 'fair_use' };
+}
+ledger.setLegacyCheck(legacyCheck);
+
+/**
+ * Reserve opinion units for one opinion (atomic, idempotent). Kept for the
+ * callers of the v1 name; the unit count comes from ledger.docUnits.
+ */
+async function reserveOpinionCredits(adminId, credits = 1) {
+  if (!_initialized) await initSubscriptionSchema();
+  const r = await ledger.reserve({ adminId, service: 'opinion', units: credits, endpoint: '/api/draft/legal-opinion' });
+  if (r.kind === 'staff') return { allowed: true, unlimited: true, reservationId: null };
+  return { ...r, cost: r.units, reservationId: r.allowed ? r.jobKey : null };
+}
+
+/** Give reserved opinion units back (the opinion was not delivered). */
+async function releaseOpinionCredits(adminId, reservationId) {
+  return ledger.release(reservationId, 'opinion_not_delivered');
 }
 
 // ── Loyalty rebate ──────────────────────────────────────────────────────────
@@ -883,10 +863,16 @@ async function marginReport({ since = null, plan = null } = {}) {
 }
 
 module.exports = {
+  ledger,
   withUserLock,
+  meterJob,
+  meterDocument,
+  quoteDocument,
+  serviceFor,
+  refusal,
+  legacyCheck,
   reserveOpinionCredits,
   releaseOpinionCredits,
-  checkOcrQuota,
   ocrPagesUsed,
   refundUsage,
   REFUND_NOTICE,
@@ -895,11 +881,10 @@ module.exports = {
   opinionCreditsFor,
   opinionCreditsUsed,
   draftsUsed,
-  checkOpinionCredits,
-  checkDraftQuota,
   marginReport,
   tashkentWeekStart,
   PLANS,
+  LEGACY_PLANS,
   initSubscriptionSchema,
   getUserPlan,
   checkQuota,
