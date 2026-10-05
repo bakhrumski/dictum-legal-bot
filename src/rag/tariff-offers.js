@@ -36,7 +36,17 @@ async function ordinaryUser(db, userId) {
  * The server's quote for an offer (read-only). Measured service cost, when
  * the ledger has it, can only raise the cost estimate.
  */
+/**
+ * Feature flag: TARIFF_OFFERS=off stops new offers and their redemption at
+ * once, without a code rollback (docs/tariffs-v2-rollback.md). Periods
+ * already bought with an offer are untouched.
+ */
+function offersEnabled(env = process.env) {
+  return String(env.TARIFF_OFFERS || '').toLowerCase() !== 'off';
+}
+
 async function quoteOffer({ userId, plan, discountPercent = null, discountUzs = null, db = pool }) {
+  if (!offersEnabled()) return { ok: false, reason: 'offers_disabled' };
   const u = await ordinaryUser(db, userId);
   if (u.error) return { ok: false, reason: u.error };
   let measured = null;
@@ -55,6 +65,7 @@ async function quoteOffer({ userId, plan, discountPercent = null, discountUzs = 
  */
 async function createOffer({ createdBy, userId, plan, discountPercent = null, discountUzs = null, reason = '', validDays = 7, draft = false, db = pool, now = new Date() }) {
   if (!(await isMaster(db, createdBy))) return { ok: false, reason: 'master_only' };
+  if (!offersEnabled()) return { ok: false, reason: 'offers_disabled' };
   const why = String(reason || '').trim();
   if (why.length < 3 || why.length > 500) return { ok: false, reason: 'reason_required' };
   const days = Number(validDays);
@@ -68,6 +79,7 @@ async function createOffer({ createdBy, userId, plan, discountPercent = null, di
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
     [userId, plan, q.quotaVersion, JSON.stringify(q.quotas), q.listPriceUzs, q.discountUzs, q.finalPriceUzs, q.minPriceUzs,
       JSON.stringify({ components: q.cost.components, fixedUzs: q.cost.fixedUzs, paymentFeeBp: q.paymentFeeBp, paymentFeeUzs: q.paymentFeeUzs,
+        feeScope: q.feeScope, measured: q.costMeasured, basisNote: q.basisNote,
         totalCostUzs: q.totalCostUzs, leftUzs: q.leftUzs, serviceMarginBp: q.serviceMarginBp, confidence: q.confidence, label: q.costModelLabel }),
       q.costModelVersion, why, createdBy, now, expiresAt, draft ? 'draft' : 'active']);
   return { ok: true, offer: r.rows[0], quote: q };
@@ -107,7 +119,7 @@ async function revokeOffer({ offerId, revokedBy, reason = '', db = pool, now = n
  * under the current cost model? A stale offer is reported, not repriced;
  * once a payment is accepted the offer's price is honoured.
  */
-async function checkOffer({ offerId, db = pool, now = new Date() }) {
+async function checkOffer({ offerId, provider = 'manual', db = pool, now = new Date() }) {
   const r = await db.query('SELECT * FROM tariff_offers WHERE id = $1', [offerId]);
   const o = r.rows[0];
   if (!o) return { ok: false, reason: 'offer_not_found' };
@@ -119,9 +131,13 @@ async function checkOffer({ offerId, db = pool, now = new Date() }) {
   const cost = pricing.conservativeCost(o.plan, { model, measured });
   if (!cost.ok) return { ok: false, reason: cost.reason, offer: o };
   const min = pricing.minimumPrice(cost.fixedUzs, model.paymentFeeBp || 0);
-  const stale = model.version !== o.cost_model_version || min > o.final_price_uzs;
-  return { ok: !(min > o.final_price_uzs), stale, currentMinPriceUzs: min, costModelVersion: model.version, offer: o,
-    reason: min > o.final_price_uzs ? 'offer_below_current_minimum' : null };
+  // quoted under another fee scope or cost model: not redeemable until a
+  // master quotes it again - never applied under the new conditions
+  const blocked = pricing.offerBlockedReason(o, { provider, model });
+  const below = min > o.final_price_uzs;
+  const stale = !!blocked || below;
+  return { ok: !blocked && !below, stale, currentMinPriceUzs: min, costModelVersion: model.version, paymentFeeBp: model.paymentFeeBp || 0,
+    feeScope: model.feeScope || null, offer: o, reason: blocked || (below ? 'offer_below_current_minimum' : null) };
 }
 
-module.exports = { quoteOffer, createOffer, listOffers, revokeOffer, checkOffer };
+module.exports = { offersEnabled, quoteOffer, createOffer, listOffers, revokeOffer, checkOffer };

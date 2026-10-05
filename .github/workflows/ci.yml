@@ -63,6 +63,12 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/tariffs-v2.db.test.js
       - name: Discount offers, price floor and margin report on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/tariff-offers.db.test.js
+      - name: Cash, carried credit and service revenue (renewal, advance renewal, upgrade chain)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/tariff-revenue.db.test.js
+      - name: Chat with a document - analysis, opinion and Workspace quotas on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/document-jobs.db.test.js
+      - name: Test account's hard budget on the web
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/test-account-web-budget.test.js
       - name: Safe re-ingest on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/rag-safe-reingest.db.test.js
       - name: Query indexes and margin report on real Postgres

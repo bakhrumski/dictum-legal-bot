@@ -64,15 +64,18 @@ function testAccountConfig(env = process.env, now = Date.now()) {
  * Unknown-cost calls are counted, and priced at the assumed price for the
  * budget; skipped calls (nothing was called) are not.
  */
-async function testAccountSpend(db, cfg) {
+async function testAccountSpend(db, cfg, adminId = null) {
+  // its Telegram chat and, when known, its web requests (the same account):
+  // one budget for both, each row counted once
   const { rows } = await db.query(`
     SELECT COALESCE(SUM(cost_usd), 0)::float AS known_usd,
            COUNT(*) FILTER (WHERE cost_usd IS NULL AND COALESCE(status, 'success') <> 'skipped')::int AS unknown_calls,
            COUNT(*) FILTER (WHERE COALESCE(status, 'success') <> 'skipped')::int AS calls,
            COUNT(DISTINCT request_id)::int AS requests
       FROM llm_spend_log
-     WHERE chat_id = $1::bigint AND ts >= $2::timestamptz AND ts < $3::timestamptz`,
-  [cfg.userId, cfg.since, cfg.until]);
+     WHERE (chat_id = $1::bigint OR ($4::int IS NOT NULL AND user_id = $4::int))
+       AND ts >= $2::timestamptz AND ts < $3::timestamptz`,
+  [cfg.userId, cfg.since, cfg.until, adminId == null ? null : Number(adminId)]);
   const r = rows[0] || {};
   const knownUsd = Number(r.known_usd) || 0;
   const unknownCalls = Number(r.unknown_calls) || 0;
@@ -108,13 +111,39 @@ async function resolveTestAccount(db, { chatId, fromUserId, chatType = 'private'
       console.warn('[TG-TEST] the linked account is not an ordinary user; test mode refused');
       return null;
     }
-    const spend = await testAccountSpend(db, cfg);
+    const spend = await testAccountSpend(db, cfg, rows[0].id);
     return {
       userId: cfg.userId, adminId: rows[0].id, since: cfg.since, until: cfg.until,
       budgetUsd: cfg.budgetUsd, unknownCallUsd: cfg.unknownCallUsd, spend, exhausted: spend.exhausted,
     };
   } catch (error) {
     console.warn('[TG-TEST] check failed; ordinary limits apply:', error.message);
+    return null;
+  }
+}
+
+/**
+ * The same test account on the website (2026-10-06, for the paid pilot):
+ * the session's account is the one linked to the configured Telegram user
+ * id, role 'user'. Its web AI calls (analysis, opinion, drafts, chat) count
+ * against the same total budget, and once it is reached the ledger refuses
+ * new calls. Nothing else changes on the web: the tariff quota, the
+ * document size rules and every check stay. Any other account: null.
+ */
+async function resolveWebTestAccount(db, adminId, env = process.env, now = Date.now()) {
+  const cfg = testAccountConfig(env, now);
+  if (!cfg.active || adminId == null) return null;
+  try {
+    const { rows } = await db.query(
+      `SELECT id, role FROM admins WHERE telegram_user_id = $1::bigint ORDER BY id LIMIT 2`, [cfg.userId]);
+    if (rows.length !== 1 || rows[0].role !== 'user' || Number(rows[0].id) !== Number(adminId)) return null;
+    const spend = await testAccountSpend(db, cfg, rows[0].id);
+    return {
+      userId: cfg.userId, adminId: rows[0].id, since: cfg.since, until: cfg.until,
+      budgetUsd: cfg.budgetUsd, unknownCallUsd: cfg.unknownCallUsd, spend, exhausted: spend.exhausted, channel: 'web',
+    };
+  } catch (error) {
+    console.warn('[TG-TEST] web check failed; no test budget applied:', error.message);
     return null;
   }
 }
@@ -174,4 +203,4 @@ function balanceText(account) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = { MAX_HOURS, testAccountConfig, testAccountSpend, resolveTestAccount, ledgerPool, testModeNote, balanceText, budgetLines, tashkentTime };
+module.exports = { MAX_HOURS, testAccountConfig, testAccountSpend, resolveTestAccount, resolveWebTestAccount, ledgerPool, testModeNote, balanceText, budgetLines, tashkentTime };

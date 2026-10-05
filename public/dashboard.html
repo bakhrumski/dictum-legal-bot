@@ -2653,6 +2653,8 @@
         .of-msg { font-size: 12px; margin: 8px 0 0; line-height: 1.5; }
         .of-msg.err { color: var(--danger-700, #b42318); }
         .of-msg.ok { color: #1f7a4a; }
+        .of-basis { margin: 0 0 8px; color: var(--warning-700, #8a5a00); }
+        .of-scope { font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.45; }
         .of-est { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--bg-table-header); color: var(--warning-700, #8a5a00); }
         /* ── End Spend tables ── */
         /* Delete button on history items */
@@ -3273,6 +3275,7 @@
         .docform-input::placeholder { color: var(--text-muted); }
         .doc-cost-card { max-width: 560px; }
         .doc-scope-note { margin-top: 10px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+        .doc-scope-note.doc-scope-warn { color: var(--warning-700, #8a5a00); }
         .doc-cost-card .doc-cost-body { font-size: 13px; line-height: 1.55; margin-bottom: 10px; }
         .doc-cost-card.doc-cost-done .docform-actions { display: none; }
         .docform-actions {
@@ -7771,6 +7774,8 @@
                     Aniq foydalanuvchiga aniq tarif uchun bitta 30 kunlik davrga chegirmali taklif. Taklif obunani faollashtirmaydi:
                     haqiqiy to'lov tasdiqlangach "Aktivatsiya" bilan beriladi. Chegirma limitni kamaytirmaydi va keyingi renewal'ga o'tmaydi.
                     Minimal narx — konservativ xizmat xarajati / 0,80; xarajatlar <b>taxminiy</b> (planlash budjeti, o'lchanmagan).
+                    To'lov komissiyasi 0 — bu faqat provayder ulanmagan, qo'lda qabul qilinadigan to'lov doirasi; provayder ulanganda
+                    eski takliflar narx modeli qayta tekshirilmaguncha qo'llanmaydi.
                 </p>
                 <div class="of-form">
                     <label>Foydalanuvchi
@@ -12523,26 +12528,37 @@
         }
         // The card itself, for a quote fetched here or one the server sent
         // back (409 DOC_COST_CONFIRM from the chat). Resolves true to run.
+        // One card for one service, or for each service a chat request
+        // ordered (analysis and opinion are separate quotas). service and q
+        // may be arrays of the same length.
         function renderDocCostCard(service, q, intro) {
-            var label = service === 'opinion' ? 'AI yuridik xulosa' : 'Hujjat tahlili';
+            var services = Array.isArray(service) ? service : [service];
             return Promise.resolve(q).then(function (q) {
-                if (!q || q.unlimited) return true;
+                var quotes = Array.isArray(q) ? q : [q];
+                if (!quotes.length || quotes.some(function (x) { return !x; }) || quotes.every(function (x) { return x.unlimited; })) return true;
                 var messagesEl = document.getElementById('aiChatMessages');
                 if (!messagesEl) return true;
                 hideChatWelcome();
-                var size = q.size || {};
-                var lines = (intro ? escapeHtml(intro) + '<br><br>' : '') + '<b>' + label + '</b><br>Hujjat hajmi: ' + (size.pages || 0) + ' sahifa, ' + Number(size.chars || 0).toLocaleString('ru-RU') + ' belgi'
-                    + ' → <b>' + q.units + ' birlik</b>.';
-                var ok = q.fits && q.enough !== false;
-                if (!q.fits) {
-                    lines += '<br>Bu hujjat bitta ish chegarasidan katta (' + q.maxPages + ' sahifa / ' + Number(q.maxChars || 0).toLocaleString('ru-RU') + ' belgi). Hujjat qisqartirilmaydi — uni qismlarga bo\'lib yuboring.';
-                } else if (q.legacy) {
-                    lines += '<br>Oldin sotib olingan tarifingiz shartlari bo\'yicha hisoblanadi.';
-                } else if (q.enough === false) {
-                    lines += '<br>Limit yetarli emas: ' + q.remaining + ' birlik qolgan.';
-                } else if (q.remaining != null) {
-                    lines += '<br>Sarflanadi: ' + q.units + ' birlik · qoladi: ' + q.remainingAfter + ' birlik.';
-                }
+                var size = quotes[0].size || {};
+                var lines = (intro ? escapeHtml(intro) + '<br><br>' : '') + 'Hujjat hajmi: ' + (size.pages || 0) + ' sahifa, ' + Number(size.chars || 0).toLocaleString('ru-RU') + ' belgi.';
+                var ok = true;
+                quotes.forEach(function (qq, i) {
+                    var sv = services[i] || qq.service;
+                    var label = sv === 'opinion' ? 'AI yuridik xulosa' : 'Hujjat tahlili';
+                    var quota = sv === 'opinion' ? 'xulosa' : 'tahlil';
+                    lines += '<br><b>' + label + '</b> → <b>' + qq.units + ' birlik</b> (' + quota + ' limitidan).';
+                    if (!qq.fits) {
+                        ok = false;
+                        lines += '<br>Bu hujjat bitta ish chegarasidan katta (' + qq.maxPages + ' sahifa / ' + Number(qq.maxChars || 0).toLocaleString('ru-RU') + ' belgi). Hujjat qisqartirilmaydi — uni qismlarga bo\'lib yuboring.';
+                    } else if (qq.legacy) {
+                        lines += '<br>Oldin sotib olingan tarifingiz shartlari bo\'yicha hisoblanadi.';
+                    } else if (qq.enough === false) {
+                        ok = false;
+                        lines += '<br>' + quota[0].toUpperCase() + quota.slice(1) + ' limiti yetarli emas: ' + qq.remaining + ' birlik qolgan.';
+                    } else if (qq.remaining != null) {
+                        lines += '<br>Sarflanadi: ' + qq.units + ' birlik · qoladi: ' + qq.remainingAfter + ' birlik.';
+                    }
+                });
                 var id = 'docCost' + Date.now();
                 var card = document.createElement('div');
                 card.className = 'ai-chat-msg ai doc-cost-card';
@@ -13582,6 +13598,7 @@
                 // the server answers 409 with its size and units first, and
                 // runs it only after the user confirms (tariffs v2).
                 var confirmedUnits = null;
+                var confirmedJob = null;
                 var response = null;
                 for (var attempt = 0; attempt < 2; attempt++) {
                     response = await fetch('/api/legal-chat', {
@@ -13597,6 +13614,7 @@
                             autoDetect: topicAutoDetect === true,
                             documentText: documentText || null,
                             confirmedUnits: confirmedUnits,
+                            confirmedJob: confirmedJob,
                             stream: true
                         })
                     });
@@ -13604,10 +13622,12 @@
                     var conf = await response.clone().json().catch(function () { return {}; });
                     if (conf.code !== 'DOC_COST_CONFIRM') break;
                     var typingC = document.getElementById('aiChatTyping'); if (typingC) typingC.remove();
-                    var go = await renderDocCostCard('analysis', conf.quote, conf.message);
+                    var confServices = conf.services || [conf.service || 'analysis'];
+                    var go = await renderDocCostCard(confServices, conf.quotes || [conf.quote], conf.message);
                     if (!go) { sendBtn.disabled = false; aiChatHistory.pop(); saveAiChatSession(); return; }
                     messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
-                    confirmedUnits = conf.quote && conf.quote.units;
+                    confirmedJob = {};
+                    (conf.quotes || [conf.quote]).forEach(function (qq, i) { if (qq) confirmedJob[confServices[i]] = qq.units; });
                 }
 
                 var contentType = (response.headers.get('Content-Type') || '');
@@ -13695,7 +13715,7 @@
             // Only excerpts of an attached document were used (one chat unit);
             // a full analysis is its own service (tariffs v2).
             var docScopeHtml = (data.documentScope && data.documentScope.note)
-                ? '<div class="doc-scope-note">' + escapeHtml(data.documentScope.note) + '</div>' : '';
+                ? '<div class="doc-scope-note' + (data.documentScope.insufficient ? ' doc-scope-warn' : '') + '">' + escapeHtml(data.documentScope.note) + '</div>' : '';
             // ── RAG source info badge — ONLY visible to Master Admin ──
             var ragBadge = '';
             var isMasterAdmin = (typeof currentUser !== 'undefined' && currentUser.role === 'master');
@@ -15081,6 +15101,8 @@
                 ['Eng katta ruxsat etilgan chegirma', q.maxDiscountUzs != null ? ofMoney(q.maxDiscountUzs) + ' (' + (q.maxDiscountPercent != null ? q.maxDiscountPercent + '%' : '—') + ')' : '—'],
                 ['Prognoz AI xarajati (100% limit)', ofMoney(q.aiCostUzs != null ? q.aiCostUzs : ((c.components || []).find(function (x) { return x.key === 'ai'; }) || {}).uzs) + ' <span class="of-est">taxminiy</span>'],
                 ['Jami xizmat xarajati', ofMoney(q.totalCostUzs != null ? q.totalCostUzs : c.fixedUzs) + ' <span class="of-est">taxminiy</span>'],
+                ['To\'lov komissiyasi', ofMoney(q.paymentFeeUzs != null ? q.paymentFeeUzs : 0) + ' <span class="of-est">doira</span>'
+                    + (q.feeScope && q.feeScope.label ? '<div class="of-scope">' + escapeHtml(q.feeScope.label) + '</div>' : '')],
                 ['Qoladigan summa', ofMoney(q.leftUzs)],
                 ['Xizmat marjasi', ofPct(q.serviceMarginBp) + ' <span class="au-note">(sof foyda emas)</span>'],
                 ['Ishonchlilik', escapeHtml(q.costModelLabel || q.confidence || '—')],
@@ -15090,7 +15112,9 @@
             var msg = q.ok
                 ? '<p class="of-msg ok">Chegirma minimal narx doirasida. Taklif yaratilishi mumkin.</p>'
                 : '<p class="of-msg err">' + escapeHtml(q.message || q.reason || 'Rad etildi') + '</p>';
-            box.innerHTML = '<div class="of-quote"><div class="au-scroll"><table class="spend-table"><tbody>'
+            // the floors rest on an unmeasured planning budget: said on the screen, every time
+            var basis = q.basisNote ? '<p class="of-msg of-basis">⚠ ' + escapeHtml(q.basisNote) + (q.costMeasured ? '' : ' O\'lchangan xarajat bilan qayta tekshirilmaguncha taxminiy.') + '</p>' : '';
+            box.innerHTML = '<div class="of-quote">' + basis + '<div class="au-scroll"><table class="spend-table"><tbody>'
                 + rows.map(function (r) { return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>'; }).join('')
                 + '</tbody></table></div>' + msg + '</div>';
         }
@@ -15127,7 +15151,7 @@
             var r = await fetch('/api/admin/tariff/offers/' + encodeURIComponent(id) + '/check', { credentials: 'same-origin' });
             var d = await r.json().catch(function () { return {}; });
             alert(d.ok ? ('Taklif amalda. Joriy minimal narx: ' + ofMoney(d.currentMinPriceUzs) + (d.stale ? ' (xarajat modeli yangilangan)' : ''))
-                : ('To\'lov boshlanmasin: ' + (d.reason || 'tekshirib bo\'lmadi') + (d.currentMinPriceUzs ? ' · joriy minimal narx ' + ofMoney(d.currentMinPriceUzs) : '')));
+                : ('To\'lov boshlanmasin: ' + (d.message || d.reason || 'tekshirib bo\'lmadi') + (d.currentMinPriceUzs ? ' · joriy minimal narx ' + ofMoney(d.currentMinPriceUzs) : '')));
         }
         async function offersActivate(id, userId, plan, price) {
             var ref = prompt('To\'lov tasdiqlandi. To\'lov raqami (paymentRef) — ' + ofMoney(price) + ':');
@@ -15136,7 +15160,7 @@
                 body: JSON.stringify({ adminId: userId, plan: plan, paymentRef: ref.trim(), offerId: id, provider: 'manual' }) });
             var d = await r.json().catch(function () { return {}; });
             alert(r.ok ? (d.duplicate ? 'Bu to\'lov allaqachon qayd etilgan — qayta berilmadi.' : 'Faollashtirildi: ' + ofDay(d.period && d.period.starts_at) + ' — ' + ofDay(d.period && d.period.ends_at) + '. Naqd: ' + ofMoney(d.cashUzs) + (d.creditUzs ? ', kredit: ' + ofMoney(d.creditUzs) : ''))
-                : (d.error || 'Faollashtirilmadi'));
+                : (d.message || d.error || 'Faollashtirilmadi'));
             loadOffers();
         }
         var OF_STATUS = { draft: 'qoralama', active: 'faol', redeemed: 'ishlatilgan', expired: 'muddati o\'tgan', revoked: 'bekor qilingan' };

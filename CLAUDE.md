@@ -160,16 +160,29 @@ Known state of the suites (Sept 2026):
   Every user-facing number (landing, tariff page, bot /start /help /balance)
   comes from the catalogue; `tests/tariffs-v2*.test.js` checks it.
   Economics: `docs/finance/tariffs-v2-report.md`, `scripts/tariff-scenarios.js`.
-  A file attached to a chat does not buy an analysis: a question about it
-  is one chat unit with relevant excerpts only (<= 20 000 chars,
-  `src/rag/document-job.js`); an analysis / review / opinion request is a
-  document job in analysis units, confirmed first (409 `DOC_COST_CONFIRM`),
-  never charged as chat too. Individual discounts (`src/rag/tariff-pricing.js`,
-  `tariff-offers.js`, table `tariff_offers`): master only, one user, one plan,
-  one 30-day period, final price >= conservative cost / 0.80 (integers, min
-  rounded up to 1 000), unknown cost blocks offers; redeemed once by
-  `grant { offerId, paymentRef }`. `marginReport` counts actual sale prices
-  (cash, credit, discount apart; legacy unknown), never the catalogue.
+  A file attached to a chat does not buy a document service
+  (`src/rag/document-job.js`): a question about it is one chat unit with
+  the matching clauses, their definitions, referred clauses and exceptions
+  (<= 20 000 chars, never just the opening pages; when that is not enough
+  the answer must say so and not conclude); an analysis takes analysis
+  units, a legal opinion opinion units, both are two jobs - each confirmed
+  first (409 `DOC_COST_CONFIRM`, `confirmedJob`), never charged as chat too;
+  Workspace answers on the same excerpts for one chat unit and names the
+  service. Telegram runs no AI on files (lawyer queue, told plainly, no
+  quota, review not promised free). Individual discounts
+  (`src/rag/tariff-pricing.js`, `tariff-offers.js`, table `tariff_offers`):
+  master only, one user, one plan, one 30-day period, final price >=
+  conservative cost / 0.80 (integers, min rounded up to 1 000, floors
+  marked unmeasured), unknown cost blocks offers; the zero payment fee is a
+  scope (no provider), so an offer is not redeemed through a provider or
+  under another fee / cost model; redeemed once by
+  `grant { offerId, paymentRef }`; `TARIFF_OFFERS=off` stops them.
+  `marginReport` keeps cash (once, at payment), carried credit (not cash)
+  and service revenue (price + credit in - credit out over the days run)
+  apart; legacy revenue and refunds are unknown, never 0. Rollback is code,
+  not data: `docs/tariffs-v2-rollback.md`; the 013 down file is for an empty
+  test database only. The test account's $5 budget also covers its web
+  requests (for the pilot).
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

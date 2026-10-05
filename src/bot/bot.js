@@ -39,6 +39,11 @@ async function telegramIdentity(msgOrQuery) {
   return { telegramUserId: fromId, adminId };
 }
 
+// Voice notes become typed questions when VoiceLab STT is on (src/ai/voicelab-speech.js).
+function voiceToTextEnabled() {
+  try { return require('../ai/voicelab-speech').sttEnabled(); } catch (_) { return false; }
+}
+
 async function testAccountFor(msgOrQuery) {
   const chat = (msgOrQuery.message && msgOrQuery.message.chat) || msgOrQuery.chat || {};
   const account = await testAccounts.resolveTestAccount(pool, {
@@ -1038,7 +1043,7 @@ JuristAIga xush kelibsiz. Men inson yurist emasman — O'zbekiston qonunchiligi 
 
 📝 Huquqiy vaziyatingizni matn shaklida yozing. ${tariffTexts.START_LIMIT_TEXT()}
 
-📎 Ovozli xabar, video yoki 5 MB gacha fayl ham yuborishingiz mumkin; bunday murojaatlarni yurist ko'rib chiqadi.${communityLine}
+${tariffTexts.startFileLine({ voiceToText: voiceToTextEnabled() })}${communityLine}
 
 Javoblar umumiy huquqiy ma'lumot bo'lib, rasmiy yuridik xulosa hisoblanmaydi.`;
 
@@ -1411,11 +1416,7 @@ async function handleTelegramMessage(msg) {
       const tooShortNote = caption.length > 0
         ? `\n\n⚠️ Izohingiz juda qisqa (${caption.length}/${MIN_FILE_DESC} belgi).`
         : '';
-      bot.sendMessage(chatId,
-        '📎 Faylingiz qabul qilindi.' + tooShortNote + '\n\n' +
-        `✍️ Endi vaziyatingizni yozib yuboring — nima bo'lgani va qanday yordam kerakligini batafsil tushuntiring (kamida ${MIN_FILE_DESC} belgi).\n\n` +
-        '⚠️ Faqat fayl yuborish yetarli emas: hujjat/rasm bilan birga izoh (savolingiz) bo\'lishi shart.'
-      );
+      bot.sendMessage(chatId, tariffTexts.fileHeldText({ tooShortNote, minChars: MIN_FILE_DESC }));
     }
     return;
   }
@@ -1736,6 +1737,12 @@ async function handleTelegramMessage(msg) {
         }
       } else if (agentDelivered && needsHuman && agentResult.action === 'answered') {
         bot.sendMessage(chatId, '👨‍⚖️ Murojaatingiz aniqlik uchun yuristga ham yuborildi — tasdiq shu yerda keladi.').catch(() => {});
+      } else if (!agentDelivered && tariffTexts.FILE_TYPES.has(requestData.request_type)) {
+        // a file: the lawyer queue, not AI - said plainly, with the way to
+        // the AI document services on the website
+        const keyboard = tariffTexts.fileQueuedKeyboard(dashboardUrl());
+        bot.sendMessage(chatId, tariffTexts.fileQueuedText({ typeLabel: getRequestTypeLabel(requestData.request_type) }),
+          keyboard ? { reply_markup: keyboard } : {}).catch(() => {});
       } else if (!agentDelivered) {
         bot.sendMessage(chatId,
           `✅ Murojaat qabul qilindi!\n\n📝 Turi: ${getRequestTypeLabel(requestData.request_type)}\n\nYurist tez orada ko'rib chiqadi va javob beradi. Rahmat!`);

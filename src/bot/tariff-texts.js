@@ -77,4 +77,45 @@ function balanceText({ balance: b, paidCredits = 0, pending = false, testAccount
   return lines.join('\n');
 }
 
-module.exports = { planLines, START_LIMIT_TEXT, balanceText, money, tashkentDay };
+// ── Files in Telegram ─────────────────────────────────────────────────────
+// Telegram does not run AI on files: a file goes to the lawyer queue. The
+// user is told so plainly, that no analysis / opinion quota was used, that
+// a lawyer's review is not part of the plan (nor promised free), and where
+// the AI document services are (the website, priced in document units).
+const FILE_TYPES = new Set(['document', 'photo', 'video', 'video_note']);
+
+function startFileLine({ voiceToText = false } = {}) {
+  return [
+    "📎 Fayl (hujjat, rasm, video, 5 MB gacha) yuborsangiz, uni AI o'qimaydi — murojaat yurist navbatiga tushadi; tarif limitingizdan hech narsa yechilmaydi.",
+    "Hujjatni AI bilan tahlil qilish yoki AI yuridik xulosa olish — juristai.uz saytida.",
+    voiceToText ? '🎙 Ovozli savol matnga aylantiriladi va yozma savol kabi javob beriladi.' : '🎙 Ovozli xabarni ham yurist ko\'rib chiqadi.',
+  ].join(' ');
+}
+
+/** Asked when a file arrives without a description (it is held). */
+function fileHeldText({ tooShortNote = '', minChars = 0 } = {}) {
+  return '📎 Faylingiz qabul qilindi.' + tooShortNote + '\n\n'
+    + "ℹ️ Telegram'da fayllar AI bilan tahlil qilinmaydi: murojaatingiz yurist navbatiga yuboriladi va tahlil yoki xulosa limitingizdan hech narsa yechilmaydi.\n\n"
+    + `✍️ Endi vaziyatingizni yozib yuboring — nima bo'lgani va qanday yordam kerakligini batafsil tushuntiring (kamida ${minChars} belgi).\n\n`
+    + "⚠️ Faqat fayl yuborish yetarli emas: hujjat/rasm bilan birga izoh (savolingiz) bo'lishi shart.";
+}
+
+/** Sent when a request with a file has been put in the lawyer queue. */
+function fileQueuedText({ typeLabel = 'Fayl' } = {}) {
+  return [
+    "✅ Murojaatingiz yurist navbatiga yuborildi.",
+    `📝 Turi: ${typeLabel}`,
+    '',
+    "🤖 Bu AI tahlili emas: Telegram'da fayllar sun'iy intellekt bilan o'qilmaydi va tarifingizning tahlil yoki xulosa limitidan hech narsa yechilmadi.",
+    "👨‍⚖️ Yurist murojaatni ko'rib chiqib, shu yerda javob beradi. Yurist ko'rigi tarif limitlariga kirmaydi; uning shartlari, agar pullik bo'lsa, yurist bilan alohida kelishiladi.",
+    "💻 Hujjatni hozir AI bilan tahlil qilish yoki AI yuridik xulosa olish — saytda: hujjat birligida, sarf ish boshlanishidan oldin ko'rsatiladi.",
+  ].join('\n');
+}
+
+/** The button under it: the AI document services on the website. */
+function fileQueuedKeyboard(url) {
+  if (!/^https?:\/\//iu.test(String(url || ''))) return null;
+  return { inline_keyboard: [[{ text: '💻 Saytda AI tahlil yoki xulosa', url }]] };
+}
+
+module.exports = { planLines, START_LIMIT_TEXT, balanceText, money, tashkentDay, FILE_TYPES, startFileLine, fileHeldText, fileQueuedText, fileQueuedKeyboard };

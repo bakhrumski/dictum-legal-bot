@@ -479,6 +479,21 @@ function upgradeCredit(periods, now) {
   return Math.floor(sum / 1000) * 1000;
 }
 
+/**
+ * Which superseded period gives how much of an upgrade's credit: in order
+ * (the running one first, then queued renewals), each at most its unused
+ * value, summing to exactly `credit`. Recorded as carried_out_uzs on each,
+ * so the value is service revenue of one period only - never of both.
+ */
+function allocateCredit(periods, now, credit) {
+  let left = Math.max(0, Number(credit) || 0);
+  return [...periods].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).map(p => {
+    const uzs = Math.min(unusedValue(p, now), left);
+    left -= uzs;
+    return { periodId: Number(p.id), uzs, known: periodValue(p).known };
+  }).filter(x => x.uzs > 0);
+}
+
 async function supersedable(db, adminId, now) {
   const r = await db.query(
     `SELECT * FROM tariff_periods
@@ -527,6 +542,7 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
     if (account.role !== 'user') throw new Error('staff accounts are not on tariffs');
 
     let offer = null;
+    if (offerId && String(process.env.TARIFF_OFFERS || '').toLowerCase() === 'off') throw new Error('offers_disabled');
     if (offerId) {
       const o = await db.query('SELECT * FROM tariff_offers WHERE id = $1 FOR UPDATE', [offerId]);
       offer = o.rows[0] || null;
@@ -540,6 +556,11 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
         return { refused: 'offer_expired' };
       }
       if (offer.status !== 'active') throw new Error(`offer_${offer.status}`);
+      // an offer quoted with no payment fee (no provider) is not taken
+      // through a provider, or under a changed fee or cost model, until a
+      // master quotes it again
+      const blocked = require('./tariff-pricing').offerBlockedReason(offer, { provider });
+      if (blocked) throw new Error(blocked);
     }
 
     await adoptUnrecordedPlan(db, account, now);
@@ -559,7 +580,10 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
     const listPrice = offer ? Number(offer.list_price_uzs) : cfg.priceUzs;
     const discount = offer ? Number(offer.discount_uzs) : 0;
     const finalPrice = listPrice - discount;
-    const credit = change === 'upgrade' ? Math.min(upgradeCredit(await supersedable(db, adminId, now), now), finalPrice) : 0;
+    const superseded = change === 'upgrade' ? await supersedable(db, adminId, now) : [];
+    const creditAvailable = change === 'upgrade' ? upgradeCredit(superseded, now) : 0;
+    const credit = Math.min(creditAvailable, finalPrice);
+    const creditFrom = allocateCredit(superseded, now, credit);
     const cash = finalPrice - credit;
     if (amountUzs != null && amountUzs !== '' && Number(amountUzs) !== cash) {
       throw new Error(`amount_mismatch: due ${cash}`);
@@ -584,15 +608,22 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
     } catch (e) {
       economics = { error: e.message };
     }
+    if (change === 'upgrade') {
+      // where the credit came from; value above the new price stays with the
+      // old periods (it is not carried, and it is not new cash)
+      economics = Object.assign(economics || {}, {
+        creditFrom, creditKnown: creditFrom.every(x => x.known), creditNotCarriedUzs: creditAvailable - credit,
+      });
+    }
     const endsAt = new Date(startsAt.getTime() + cfg.periodDays * 86400000);
     const ins = await db.query(
       `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits,
                                    price_uzs, list_price_uzs, discount_uzs, credit_uzs, offer_id, economics,
-                                   payment_ref, provider, created_by)
-       VALUES ($1, $2, $3, 'v2', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
+                                   payment_ref, provider, created_by, paid_at)
+       VALUES ($1, $2, $3, 'v2', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
       [`a:${adminId}`, adminId, plan, source, startsAt, endsAt, JSON.stringify(cfg.quotas),
         cash, listPrice, discount, credit, offer ? offer.id : null, economics ? JSON.stringify(economics) : null,
-        paymentRef, provider, createdBy]);
+        paymentRef, provider, createdBy, now]);
     const period = ins.rows[0];
     if (offer) {
       await db.query(
@@ -600,9 +631,13 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
         [offer.id, paymentRef, period.id, now]);
     }
     if (change === 'upgrade') {
-      // every running or queued lower period gives way to the upgrade
+      // every running or queued lower period gives way to the upgrade; each
+      // records the value it carried into it
+      for (const x of creditFrom) {
+        await db.query('UPDATE tariff_periods SET carried_out_uzs = carried_out_uzs + $2 WHERE id = $1', [x.periodId, x.uzs]);
+      }
       await db.query(
-        `UPDATE tariff_periods SET status = 'superseded', superseded_by = $1,
+        `UPDATE tariff_periods SET status = 'superseded', superseded_by = $1, superseded_at = $2,
                 ends_at = CASE WHEN starts_at < $2 THEN $2 ELSE ends_at END
           WHERE subject = $3 AND source <> 'trial' AND status = 'active' AND id <> $1 AND ends_at > $2`,
         [period.id, now, `a:${adminId}`]);
@@ -703,5 +738,5 @@ module.exports = {
   docUnits, draftUnits, jobFits, planEconomics, subjectsFor, lockKey,
   signDocTicket, readDocTicket, textHash,
   setLegacyCheck, resolveEntitlement, balance, reserve, commit, release,
-  grantPaidPeriod, quotePlanChange, syncAccountPlan, usedUnits, periodValue, upgradeCredit, withLock,
+  grantPaidPeriod, quotePlanChange, syncAccountPlan, usedUnits, periodValue, upgradeCredit, allocateCredit, withLock,
 };

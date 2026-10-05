@@ -315,9 +315,16 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
     // chat document cap (ai-service DOCUMENT_CONTEXT_CHARS = document-job's
     // CHAT_DOCUMENT_CONTEXT_CHARS); a request for a full analysis is not
     // served as one under a chat unit (tariffs v2, 2026-10-05).
-    const wantsFullDocumentWork = /(^|\n)HUJJAT: /u.test(workspaceContext) && documentJob.isFullDocumentRequest(question);
+    // An analysis is the analysis service, an opinion the opinion service:
+    // neither is served under the Workspace chat unit.
+    const hasDocuments = /(^|\n)HUJJAT: /u.test(workspaceContext);
+    const orderedServices = hasDocuments ? documentJob.requestedServices(question) : [];
+    const wantsFullDocumentWork = orderedServices.length > 0;
+    if (hasDocuments) {
+      systemPrompt += "\n\nMUHIM: Workspace hujjatlaridan faqat parchalar berildi: savolga oid bandlar, ularning ta'riflari, havola qilingan bandlar va istisnolar. Javob uchun kerakli band parchalarda bo'lmasa yoki blokda \"Qat'iy xulosa bermang\" deyilgan bo'lsa, buni aniq ayting va qat'iy xulosa bermang.";
+    }
     if (wantsFullDocumentWork) {
-      systemPrompt += "\n\nMUHIM: Workspace hujjatlaridan faqat savolga oid parchalar berildi. Butun hujjatning to'liq tahlili yoki yuridik xulosasi deb javob bermang; parchalar asosida savolga javob bering.";
+      systemPrompt += "\n\nMUHIM: Butun hujjatning to'liq tahlili yoki yuridik xulosasi deb javob bermang; parchalar asosida savolga javob bering.";
     }
 
     const messages = [
@@ -462,11 +469,12 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
       },
     });
     if (wantsFullDocumentWork) {
-      reply += `\n\nℹ️ Workspace hujjatlaridan savolga oid parchalar (${documentJob.CHAT_DOCUMENT_CONTEXT_CHARS.toLocaleString('ru-RU')} belgigacha) ishlatildi. Butun hujjatni tahlil qilish — «Hujjat tahlili» yoki «Yuridik xulosa» xizmati: hujjat birligida, shaxsiy limitingizdan, ish boshlanishidan oldin sarf ko'rsatiladi.`;
+      const asked = orderedServices.map(sv => `«${documentJob.SERVICE_TITLE[sv]}» (${sv === 'analysis' ? 'tahlil' : 'xulosa'} limitidan)`).join(' va ');
+      reply += `\n\nℹ️ Bu javob Workspace chati: hujjatlardan savolga oid parchalar (${documentJob.CHAT_DOCUMENT_CONTEXT_CHARS.toLocaleString('ru-RU')} belgigacha) ishlatildi va 1 chat birligi yechildi. So'ralgan ${asked} alohida xizmat: hujjat birligida, shaxsiy limitingizdan, ish boshlanishidan oldin sarf ko'rsatiladi.`;
     }
     return {
       reply,
-      documentScope: wantsFullDocumentWork ? { mode: 'chat_excerpt', excerpt: true, maxChars: documentJob.CHAT_DOCUMENT_CONTEXT_CHARS } : null,
+      documentScope: wantsFullDocumentWork ? { mode: 'chat_excerpt', excerpt: true, requestedServices: orderedServices, maxChars: documentJob.CHAT_DOCUMENT_CONTEXT_CHARS } : null,
       provider: verification.status === 'revised'
         ? `${result.provider} + Lex QA`
         : result.provider,

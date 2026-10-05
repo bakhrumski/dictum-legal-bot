@@ -1,4 +1,4 @@
-# Tariflar v2 — moliyaviy hisobot (2026-10-04)
+# Tariflar v2 — moliyaviy hisobot (2026-10-04, yangilangan 2026-10-06)
 
 **Holat: rejalashtirish.** Bu hisobotdagi barcha xarajat raqamlari egasining
 dastlabki birlik budjetlaridan chiqadi. Ular provayderning tasdiqlangan
@@ -20,7 +20,9 @@ budjetidan qayta chiqariladi (`src/rag/tariff-ledger.js` `PLAN_CATALOG`,
 | **Taxmin (egasi)** | Kurs 12 000 so'm/$; chat $0.025; tahlil va xulosa $0.30/birlik; draft $0.06; operatsion ajratma 10 200 / 30 600 / 51 000 so'm | `PLANNING` |
 | **Taxmin (shu hisobot)** | Tasdiqlangan javob bazadan berilganda generatsiya narxining 20% (retrieval, moslik tekshiruvi, infratuzilma 0 emas) | `--hit-cost-share` |
 | **Noma'lum** | Hujjat tahlili, xulosa va draftning haqiqiy birlik narxi; OCR, STT, TTS narxi; Gemini embedding narxi (`AI_PRICE_OVERRIDES` bo'lmaguncha "estimated"); VoiceLab kredit iste'moli (kredit qaytmasa noma'lum, token narxiga aylantirilmaydi) | Benchmark va production o'lchovi kerak |
-| **Noma'lum** | Hosting (Render), Supabase (DB + storage), to'lov komissiyasi, support, Workspace storage — operatsion ajratmani tekshirish uchun hisob-fakturalar kerak | Egasining hisoblari |
+| **Noma'lum** | Hosting (Render), Supabase (DB + storage), support, Workspace storage — operatsion ajratmani tekshirish uchun hisob-fakturalar kerak | Egasining hisoblari |
+| **Doira (scope), o'lchov emas** | To'lov komissiyasi 0: provayder ulanmagan, to'lov qo'lda (master grant). Provayder ulanganda komissiya noma'lum bo'ladi, model qayta tekshiriladi; eski takliflar shungacha qo'llanmaydi | `feeScope` (`src/rag/tariff-pricing.js`) |
+| **Noma'lum (0 emas)** | Refundlar: qaytarish oqimi va yozuvi yo'q. Hisobotda `refundsUzs: null`, `refundsStatus: 'not_tracked'` — "tasdiqlangan nol refund" emas | `marginReport` |
 | **Alohida, bu yerda yo'q** | Umumiy kompaniya xarajatlari, marketing (CAC), soliqlar, individual yurist ekspertizasi | — |
 
 Xizmat marjasi (narx − xizmat budjeti) **sof foyda emas**: yuqoridagi alohida
@@ -106,15 +108,19 @@ Qoida: `finalPrice >= conservativeTotalServiceCost / 0.80`, minimal narx 1 000 s
 **Konservativ xarajat nimadan tuziladi:**
 - yangi davr limitlarining 100% ishlatilishi (planlash birlik budjetlari bilan, barcha AI bosqichlari);
 - OCR;
-- operatsion ulush: hosting, DB, storage, support, to'lov komissiyasi; Platinum'da Workspace ham.
+- operatsion ulush: hosting, DB, storage, support; Platinum'da Workspace ham;
+- to'lov komissiyasi — hozir doira bo'yicha 0 (pastda).
 
 **Nimalar ishlatilmaydi:** foydalanuvchining tarixiy kam sarfi, o'rtacha yoki p95 sarf, isbotlanmagan cache foydasi.
 
 **O'lchangan tannarx** faqat yuqoriga ta'sir qiladi: agar o'lchangan birlik narxi planlash budjetidan yuqori bo'lsa, AI qismi oshiriladi.
 
+**Asos o'lchanmagan.** 150 000 / 450 000 / 750 000 minimal narxlar egasining o'lchanmagan planlash budjetidan chiqadi; admin ekrani har quote'da buni ko'rsatadi. Pilot (§7) o'lchagan birlik narxi budjetdan yuqori chiqsa, minimal narx avtomatik ko'tariladi (o'lchov faqat yuqoriga ta'sir qiladi).
+
 **Payment fee:**
-- Hozir 0 bp, chunki egasining operatsion ajratmasi ichida — ikki marta qo'shilmaydi.
-- Ulush sifatida kiritilsa, formula `fixed / (0.80 − fee)` bo'ladi. Misol: 3% fee bilan Silver minimal narxi 156 000.
+- Hozir 0 bp. Bu o'lchangan komissiya emas, **hisob doirasi**: provayder ulanmagan, to'lov qo'lda (master grant) qabul qilinadi (`feeScope.providers = ['manual']`). Admin ekranida "To'lov komissiyasi: 0 so'm · doira" qatori izohi bilan chiqadi.
+- Provayder ulanganda komissiya ulush sifatida kiritiladi, formula `fixed / (0.80 − fee)`. Misol: 3% fee bilan Silver minimal narxi 156 000.
+- Taklif o'zi hisoblangan doira va model versiyasini saqlaydi. Boshqa provayder orqali, boshqa komissiya bilan yoki boshqa model versiyasida u aktivlashtirilmaydi (`offer_fee_scope_changed`, `offer_cost_model_changed`). Master qayta tekshirib, yangi taklif yaratadi; avtomatik qayta narxlash yo'q.
 
 **Noma'lum xarajat:** asoslangan zaxirasi bo'lmasa, taklif rad etiladi (0 deb hisoblanmaydi).
 
@@ -137,30 +143,79 @@ Qoida: `finalPrice >= conservativeTotalServiceCost / 0.80`, minimal narx 1 000 s
 
 **Audit** (`tariff_offers`): `offer_id`, `user_id`, plan va kvota versiyasi, `list_price` / `discount` / `final_price`, `min_price`, `cost_estimate` va `cost_model_version`, yaratuvchi Master, sabab, `created_at` / `expires_at`, holat (draft / active / redeemed / expired / revoked), `payment_ref` va aktivatsiya qilingan `period_id`. Bekor qilish allaqachon sotib olingan davrni bekor qilmaydi.
 
-## 6. Margin hisoboti endi haqiqiy sotuv narxida
+## 6. Margin hisoboti: naqd, kredit va xizmat daromadi alohida (2026-10-06)
 
-`GET /api/admin/margin-report` (`marginReport`):
-- **Daromad** — har bir davrning haqiqiy sotuv narxi (naqd + ko'chirilgan kredit, chegirmadan keyin), oyna kunlariga pro rata.
-- **Alohida ko'rsatiladi:** katalog narxi, haqiqiy sotuv narxi, chegirma, naqd va kredit, refund. Refund hozircha 0 — refund oqimi yo'q.
-- **Chegirmali mijoz** katalog narxi bilan hisoblanmaydi.
-- **Migratsiyadan ko'chirilgan legacy davrlar** (to'lov yozilmagan, master bergan): daromad **noma'lum** deb alohida chiqadi. v1 ro'yxat narxi faqat ma'lumot uchun, yangi katalog narxi hech qachon.
-- **Xarajat** — o'lchangan ma'lum spend. Noma'lum narxli chaqiruvlar soni alohida.
-- **Prognoz marja** (grant paytidagi `economics.forecastLeftUzs`) va **yakuniy marja** alohida.
+`GET /api/admin/margin-report?since=&until=` (`marginReport`, `periodRevenue`). Uch xil narsa aralashmaydi:
+
+| Ko'rsatkich | Nima | Qachon sanaladi |
+|---|---|---|
+| `cashReceivedUzs` | Mijoz to'lagan naqd (`price_uzs`) | To'lov qabul qilingan paytda (`paid_at`), **bir marta** |
+| `creditCarriedInUzs` / `creditCarriedOutUzs` | Upgrade'da mijozning bir davridan boshqasiga o'tgan qiymat | Naqd emas; daromad sifatida qayta sanalmaydi |
+| `recognizedRevenueUzs` | Xizmat daromadi: davr narxi + kirgan kredit − chiqqan kredit, davr ishlagan kunlarga taqsimlanadi | Davr kunlari oynaga tushganda |
+| `deferredRevenueUzs` | To'langan, lekin oyna oxirigacha hali ishlab topilmagan qism | Oyna oxirida |
+
+**Qanday ishlaydi:**
+- Upgrade'da eski davr upgrade paytida tugaydi. Uning upgrade'ga o'tgan qiymati `carried_out_uzs` bo'lib yoziladi.
+- Oldindan sotib olingan, lekin hali boshlanmagan renewal ham upgrade'da almashtiriladi: uning qiymati kreditga o'tadi, kredit bo'lmagan qoldiq almashtirilgan paytda tan olinadi.
+- Daromad kumulyativ funksiya bilan hisoblanadi, shuning uchun oynalar qo'shiladi: [a, b) + [b, c) = [a, c). Hech bir so'm ikki marta sanalmaydi.
+- `recognized + deferred = naqd` tenglamasi testlarda aniq bajariladi.
+
+**Aniq summali tekshiruv** (`tests/tariff-revenue.db.test.js`):
+- **Oddiy renewal.** Ikki marta 199 000 to'langan, ikkinchisi 29-kuni. [-1; 40) oynasida: naqd 398 000, daromad 265 333, kechiktirilgan 132 667.
+- **Oldindan sotib olingan renewal** (1-kuni to'langan). [-1; 15) oynasida: naqd 398 000, daromad 99 500. [30; 45) oynasida yangi naqd yo'q, daromad 99 500.
+- **Upgrade zanjiri.** Silver 0-kuni, renewal 5-kuni oldindan, Gold 10-kuni.
+  - Kredit = 132 666 (ishlayotgan davrning 20/30 qismi) + 199 000 (navbatdagi renewal) = 331 666; 1 000 ga pastga yaxlitlanib 331 000.
+  - Gold uchun naqd 268 000.
+  - Kompaniya naqdi 666 000 — 997 000 emas (kredit qayta sanalmagan).
+  - [-1; 25) oynasida daromad 366 500 (66 334 + 666 + 299 500), kechiktirilgan 299 500.
+  - Butun zanjir bo'yicha daromad 666 000 = naqd.
+
+Boshqa qoidalar:
+- Chegirmali mijoz katalog narxida hisoblanmaydi: `listPriceUzs` va `discountUzs` alohida.
+- Legacy (migratsiya) davrlar: to'lov yozilmagan, daromad **noma'lum**. v1 ro'yxat narxi faqat ma'lumot uchun. Noma'lum davrdan kelgan kredit `creditFromUnknownUzs` sifatida alohida chiqadi va marja hisoblanmaydi.
+- Refund: **noma'lum** (`null`, `not_tracked`), 0 emas.
+- Xarajat — o'lchangan ma'lum spend; noma'lum narxli chaqiruvlar soni alohida. Prognoz marja (grant paytidagi `economics.forecastLeftUzs`) va yakuniy marja ham alohida.
 
 ## 7. Jonli benchmark: avval kichik pilot (tasdiqsiz boshlanmaydi)
 
-Stub testlar provider billingini isbotlamaydi. ~$75 lik to'liq benchmark tasdiqlanmagan, uning o'rniga avval kichik pilot taklif qilinadi.
+Stub testlar provider billingini isbotlamaydi. ~$75 lik to'liq benchmark tasdiqlanmagan. Pilot ham **hali boshlanmagan** — egasining ruxsati kerak.
 
-**Tanlov:**
-- 8 savol: 333/560 ish haqi va kompensatsiya — 3; 511/347 chalkashtiruvchi — 2; fuqarolik — 2; "summani hisoblamang" — 1.
-- 4 hujjat: 1–5 sahifa, 6–10 sahifa, 11–20 sahifa (2 birlik), skan (OCR).
-- 2 draft.
+**Namunalar (xizmatlar alohida):**
 
-**Har bir xizmatdan namuna:** chat ×8, tahlil ×4, xulosa ×2 (bitta qisqa, bitta 2 birlik), draft ×2, OCR ×1.
+| Xizmat | Namunalar | Birlik | Planlash budjeti |
+|---|---|---:|---:|
+| Chat | 8 savol: 333/560 ish haqi va kompensatsiya — 3; 511/347 chalkashtiruvchi — 2; fuqarolik — 2; "summani hisoblamang" — 1 | 8 | $0.20 |
+| Hujjat bo'yicha savol (parcha) | 2: muhim band oxirida va boshqa bandga havola qilgan hujjat; band topilmaydigan savol | 2 chat | $0.05 |
+| **Hujjat tahlili** | 3 hujjat: 3 sahifa (1 birlik), 12 sahifa (2 birlik), **25 sahifa (3 birlik)** | 6 | $1.80 |
+| **AI yuridik xulosa** | 2: 3 sahifa (1 birlik), **25 sahifa (3 birlik)** — tahlil bilan bir xil hujjat, solishtirish uchun | 4 | $1.20 |
+| **Draft** | 2 | 2 | $0.12 |
+| OCR | 1 skan (2 sahifa) | 2 sahifa | noma'lum (o'lchanadi) |
+| **Jami** | | | **≈ $3.4** + OCR |
 
-**Xarajat chegarasi:**
-- Planlash budjeti bo'yicha ~$4 (8 × $0.025 + 6 × ~1.5 birlik × $0.30 + 2 × $0.06 ≈ $3.0, zaxira bilan).
-- **Qattiq limit $5:** test hisobi budjeti sifatida (`TG_TEST_ACCOUNT_BUDGET_USD=5`, mavjud mexanizm) yoki shu summadan oshganda to'xtatiladi.
+**Nima o'lchanadi.** Foydalanuvchi ko'radigan butun pipeline: bitta so'rovning `request_id` si ostidagi barcha chaqiruvlar (`/api/admin/ai-usage/requests/:id`). Bularga intent, embedding, rerank, retrieval grade/plan, javob, cross-check, claim-check, digest (uzun hujjat), OCR, retry va fallback kiradi.
+
+Har so'rov uchun:
+- chaqiruvlar soni;
+- known / estimated / unknown xarajat;
+- p50 latency;
+- `skipped` qatorlar.
+
+Xizmat bo'yicha birlik narxi ham hisoblanadi (known cost / birlik). Shunda ko'p birlikli 25 sahifali hujjat birlik narxi chiziqli o'sadimi, yo'qmi, ko'rinadi.
+
+**Qattiq $5 chegara — mavjud test rejimi, tekshirilgan.**
+- `TG_TEST_ACCOUNT_USER_ID`, `TG_TEST_ACCOUNT_SINCE`, `TG_TEST_ACCOUNT_BUDGET_USD=5` (standart qiymat).
+- 2026-10-06 dan bu budjet shu akkauntning **veb** so'rovlarini ham qamraydi (tahlil, xulosa, draft vebda ishlaydi). Telegram + veb — bitta budjet. $5 ga yetgach, ledger yangi AI chaqiruvini qilmaydi (`skipped`, `REQUEST_BUDGET`).
+- Tekshiruv: `tests/test-account-web-budget.test.js`, haqiqiy Postgres ledgerida $5 dan keyin provider funksiyasi chaqirilmadi.
+- Narxi noma'lum chaqiruv $0 emas, $0.05 zaxira bilan sanaladi.
+- Boshqa foydalanuvchilar va production budjetlari o'zgarmaydi. Rejim sozlanmasa o'chiq, 48 soatda o'zi tugaydi.
+
+**Pilotdan oldin hal qilinadigan (ochiq):**
+1. **Test akkauntiga davr berish.** Tahlil va xulosa birliklari uchun pullik davr kerak, lekin hozirgi `grant` har doim narx yozadi va bu tushumga tushadi. Variantlar:
+   - (a) pilot davrini `paymentRef = pilot:…` bilan berib, hisobotda chiqarib tashlash;
+   - (b) "bepul/komplimentar" manba qo'shish (alohida o'zgarish).
+2. **So'rov boshiga cheklovlar.** `AI_REQUEST_MAX_COST_USD = 0.25` va `AI_REQUEST_MAX_CALLS = 30` 25 sahifali tahlilni kesishi mumkin. Pilot buni o'lchaydi va topilma sifatida yozadi. Production qiymatlari pilot uchun o'zgartirilmaydi.
+
+**Tartib.** Avval har xizmatdan bittadan arzon namuna, keyin ko'p birlikli hujjatlar. Chegara erta tugasa ham har xizmat o'lchangan bo'ladi.
 
 **Reviewer mezonlari** (har biri 0–2 ball):
 - norma mavjudligi to'g'ri;
@@ -169,7 +224,7 @@ Stub testlar provider billingini isbotlamaydi. ~$75 lik to'liq benchmark tasdiql
 - noto'g'ri modda yo'q;
 - javob to'liq va uzilmagan.
 
-Har bir javob uchun yozib olinadi: chaqiruvlar soni, known va unknown xarajat, p50 latency.
+Hujjat bo'yicha savollar uchun qo'shimcha mezon: parcha yetmaganda qat'iy xulosa berilmaganmi?
 
 **Kengaytirish sharti:**
 - har xizmat bo'yicha o'lchangan known birlik narxi planlash budjetidan oshmasa (yoki farq tushuntirilsa);

@@ -26,6 +26,7 @@ const { pool } = require('../src/database/db');
 const tiers = require('../src/rag/subscription-tiers');
 const ledger = require('../src/rag/tariff-ledger');
 const offers = require('../src/rag/tariff-offers');
+const pricing = require('../src/rag/tariff-pricing');
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -158,6 +159,45 @@ async function makeUser(role = 'user', extra = {}) {
     assert.strictEqual(g.economics.belowCurrentMinimum, false);
   });
 
+  await test('an offer quoted with no payment fee (no provider) is not applied through a provider, under a new fee or a new cost model', async () => {
+    const u = await makeUser();
+    const { offer } = await offers.createOffer({ createdBy: master, userId: u, plan: 'silver', discountUzs: 40000, reason: 'fee scope test' });
+    assert.deepStrictEqual(offer.cost_estimate.feeScope.providers, ['manual']);
+    assert.strictEqual(offer.cost_estimate.measured, false, 'stored as unmeasured');
+    // a provider connected: refused, and the offer stays active for a master to re-check
+    await assert.rejects(ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `fs-${offer.id}`, provider: 'payme', offerId: offer.id }), /offer_fee_scope_changed/u);
+    const viaProvider = await offers.checkOffer({ offerId: offer.id, provider: 'payme' });
+    assert.deepStrictEqual([viaProvider.ok, viaProvider.reason], [false, 'offer_fee_scope_changed']);
+    // the fee in the model changed (a provider's 2.5%): refused even by hand
+    const base = pricing.defaultCostModel();
+    process.env.TARIFF_COST_MODEL = JSON.stringify({ ...base, version: base.version, paymentFeeBp: 250 });
+    try {
+      const chk = await offers.checkOffer({ offerId: offer.id });
+      assert.deepStrictEqual([chk.ok, chk.reason], [false, 'offer_fee_scope_changed']);
+      await assert.rejects(ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `fs2-${offer.id}`, offerId: offer.id }), /offer_fee_scope_changed/u);
+      process.env.TARIFF_COST_MODEL = JSON.stringify({ ...base, version: 'cm-test-revised' });
+      await assert.rejects(ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `fs3-${offer.id}`, offerId: offer.id }), /offer_cost_model_changed/u);
+    } finally { delete process.env.TARIFF_COST_MODEL; }
+    const still = await pool.query('SELECT status FROM tariff_offers WHERE id = $1', [offer.id]);
+    assert.strictEqual(still.rows[0].status, 'active', 'nothing was redeemed');
+    // under the scope it was quoted in, it works
+    const g = await ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `fs4-${offer.id}`, provider: 'manual', offerId: offer.id });
+    assert.strictEqual(g.cashUzs, 159000);
+  });
+
+  await test('feature flag TARIFF_OFFERS=off: no new offer, no redemption; a period already bought is untouched', async () => {
+    const u = await makeUser();
+    const { offer } = await offers.createOffer({ createdBy: master, userId: u, plan: 'silver', discountUzs: 30000, reason: 'flag test' });
+    process.env.TARIFF_OFFERS = 'off';
+    try {
+      assert.strictEqual((await offers.createOffer({ createdBy: master, userId: u, plan: 'gold', discountUzs: 30000, reason: 'flag test' })).reason, 'offers_disabled');
+      assert.strictEqual((await offers.quoteOffer({ userId: u, plan: 'gold', discountUzs: 30000 })).reason, 'offers_disabled');
+      await assert.rejects(ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `ff-${offer.id}`, offerId: offer.id }), /offers_disabled/u);
+      const plain = await ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `ff-plain-${u}` });
+      assert.strictEqual(plain.cashUzs, 199000, 'a grant without an offer still works, at the catalogue price');
+    } finally { delete process.env.TARIFF_OFFERS; }
+  });
+
   await test('the margin report counts the actual sale price: discount and credit apart, legacy unknown, never the catalogue', async () => {
     const disc = await makeUser();
     const { offer } = await offers.createOffer({ createdBy: master, userId: disc, plan: 'gold', discountUzs: 149000, reason: 'test' });
@@ -166,14 +206,15 @@ async function makeUser(role = 'user', extra = {}) {
     await tiers.getUserPlan(legacy); // adopts the legacy grant (price not recorded)
     const r = await tiers.marginReport({});
     const d = r.rows.find(x => x.adminId === disc);
-    assert.strictEqual(d.salePriceUzs, 450000, 'the discounted price, not 599 000');
+    assert.strictEqual(d.cashReceivedUzs, 450000, 'the discounted price, not 599 000');
     assert.strictEqual(d.listPriceUzs, 599000);
     assert.strictEqual(d.discountUzs, 149000);
-    assert.ok(Math.abs(d.recognizedSaleUzs - 225000) <= 1000, `half the period recognised: ${d.recognizedSaleUzs}`);
+    assert.ok(Math.abs(d.recognizedRevenueUzs - 225000) <= 1000, `half the period recognised: ${d.recognizedRevenueUzs}`);
+    assert.strictEqual(d.recognizedRevenueUzs + d.deferredRevenueUzs, 450000);
     const l = r.rows.find(x => x.adminId === legacy);
-    assert.deepStrictEqual([l.revenueKnown, l.salePriceUzs, l.margin], [false, 0, null], 'legacy revenue is unknown, not the catalogue price');
+    assert.deepStrictEqual([l.revenueKnown, l.cashReceivedUzs, l.recognizedRevenueUzs, l.margin], [false, 0, 0, null], 'legacy revenue is unknown, not the catalogue price');
     assert.ok(l.unknownRevenueListUzs > 0 && l.unknownRevenueListUzs <= 399000, 'the v1 list price only as a reference');
-    assert.strictEqual(r.totals.refundsUzs, 0);
+    assert.deepStrictEqual([r.totals.refundsUzs, r.totals.refundsStatus], [null, 'not_tracked'], 'refunds are unknown, not a confirmed 0');
   });
 
   await test('chat with a document: a question costs 1 chat unit; an analysis is confirmed first and costs analysis units only', async () => {

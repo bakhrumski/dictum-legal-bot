@@ -35,6 +35,10 @@ ro'yxati: [`.env.example`](../.env.example).
   editor'da ishga tushirish, so'ng
   `DELETE FROM public.schema_migrations WHERE version = '<nomi>.sql';`
   Down fayli yo'q migratsiyani qaytarishdan oldin zaxira oling.
+- **Tariflar v2 (013):** down-migratsiya EMAS. Kod qaytariladi, ma'lumot
+  saqlanadi: `docs/tariffs-v2-rollback.md` (`scripts/rollback/tariffs-v2-to-v1.sql`,
+  qaytishda `tariffs-v1-to-v2.sql`). 013 ning down fayli faqat v2 ma'lumoti
+  yo'q test bazasi uchun va ma'lumot bo'lsa ishlamaydi.
 
 ## Deploy'siz o'chiriladigan kalitlar (Render → Environment)
 
@@ -48,6 +52,7 @@ ro'yxati: [`.env.example`](../.env.example).
 | lex.uz sekin yoki ishlamayapti | `LEX_CROSSCHECK_EVERY_ANSWER=false`, `LEX_AI_QUERY_PLANNER=false` |
 | Migratsiya xato berib boot to'xtadi, sayt esa ishlashi shart | `BOOT_ALLOW_PARTIAL=true` (vaqtincha; ba'zi bo'limlar ishlamaydi) |
 | Master 2FA bot ishlamayapti | `MASTER_2FA=off` (vaqtincha) |
+| Individual chegirmalarni to'xtatish | `TARIFF_OFFERS=off` (sotib olingan davrlar o'zgarmaydi) |
 
 Env o'zgarishi Render'da qayta ishga tushirishni talab qiladi (kod deploy
 emas).

@@ -381,6 +381,26 @@ app.use((req, res, next) => {
 // Every API request is one usage-ledger request: the AI calls it makes share
 // a request_id (src/ai/usage-ledger.js). A request with no AI call leaves no row.
 app.use('/api/', usageLedger.expressScope('web'));
+// The configured test account (src/bot/test-account.js) keeps its one total
+// AI budget on the website too: its web requests run under the same shared
+// pool as its Telegram chat. Off unless TG_TEST_ACCOUNT_* is set; any other
+// account is untouched.
+const webTestAccounts = require('../bot/test-account');
+app.use('/api/', async (req, res, next) => {
+  try {
+    const adminId = req.session && req.session.adminId;
+    if (adminId && req.session.role === 'user' && webTestAccounts.testAccountConfig().active) {
+      const account = await webTestAccounts.resolveWebTestAccount(pool, adminId);
+      if (account) {
+        usageLedger.useSharedBudget(webTestAccounts.ledgerPool(account));
+        usageLedger.annotate({ testMode: true });
+      }
+    }
+  } catch (e) {
+    console.warn('[TG-TEST] web budget not applied:', e.message);
+  }
+  next();
+});
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -775,14 +795,17 @@ app.get('/api/admin/voicelab/tts', requireMasterAdmin, async (req, res) => {
 // repricing plans instead of guessing at token estimates.
 //   GET /api/admin/spend-report?month=YYYY-MM
 // ── Per-customer margin (master only) ───────────────────────────────────────
-// Answers "who is subsidising whom". Revenue is each period's actual sale
-// price (after discounts; credits carried on upgrade shown apart; unknown
-// where a legacy payment was never recorded), cost is measured spend from
+// Answers "who is subsidising whom". Cash is each payment once, when it was
+// accepted; credit carried on upgrade is shown apart and is not cash;
+// service revenue is each period's actual price + credit in - credit out,
+// spread over the days it ran; legacy payments never recorded are unknown;
+// refunds are not tracked (unknown, not 0). Cost is measured spend from
 // llm_spend_log (tariffs v2, src/rag/subscription-tiers.js marginReport).
 app.get('/api/admin/margin-report', requireMasterAdmin, async (req, res) => {
   try {
     const report = await tariffModule.marginReport({
       since: req.query.since || null,
+      until: req.query.until || null,
       plan: req.query.plan || null,
     });
     res.json(report);
@@ -1108,7 +1131,8 @@ app.get('/api/admin/telegram-test-account', requireMasterAdmin, async (req, res)
            FROM admins WHERE telegram_user_id = $1::bigint ORDER BY id`, [cfg.userId]);
       out.linkedAccounts = linked.rows;
       out.eligible = linked.rows.length === 1 && linked.rows[0].role === 'user';
-      if (cfg.since && cfg.until) out.spend = await testAccounts.testAccountSpend(pool, cfg);
+      // its Telegram chat and its web requests share one budget
+      if (cfg.since && cfg.until) out.spend = await testAccounts.testAccountSpend(pool, cfg, out.eligible ? linked.rows[0].id : null);
     }
     const username = String(req.query.username || '').replace(/^@/, '').trim().toLowerCase();
     if (username) {
@@ -6438,13 +6462,14 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceChatQuota('/api/leg
     const docJobInfo = res.locals.documentJob || { mode: rawDoc ? 'chat_excerpt' : 'chat' };
     let documentScope = null;
     let docContext = '';
-    if (rawDoc && docJobInfo.mode === 'analysis') {
+    if (rawDoc && docJobInfo.mode === 'document') {
       docContext = rawDoc.length > 30000 ? await digestLongDocument(rawDoc, req.session?.adminId || null) : rawDoc;
-      documentScope = { mode: 'analysis', units: docJobInfo.units, totalChars: rawDoc.length, excerpt: false };
+      documentScope = { mode: 'document', services: docJobInfo.services, units: docJobInfo.units, totalChars: rawDoc.length, excerpt: false };
     } else if (rawDoc) {
       const ex = documentJob.selectExcerpt(rawDoc, message);
       docContext = ex.text;
       documentScope = { mode: 'chat_excerpt', excerpt: ex.excerpt, usedChars: ex.usedChars, totalChars: ex.totalChars,
+        matched: ex.matched, referenced: ex.referenced, missingReferences: ex.missingReferences, insufficient: ex.insufficient,
         analysisUnits: tariffModule.ledger.docUnits({ chars: rawDoc.length }).units };
     }
     const hasDocument = docContext.length > 0;
@@ -6833,7 +6858,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceChatQuota('/api/leg
     // RAG query above, which stays keyed to the question so retrieval isn't
     // polluted by the document body).
     const finalUserText = hasDocument
-      ? `${message}\n\n─── ILOVA QILINGAN HUJJAT MATNI ───\n${docContext}\n─── HUJJAT TUGADI ───${documentJob.excerptInstruction(documentScope, lexLangForText(message) === 'ru' ? 'ru' : 'uz')}`
+      ? `${message}\n\n─── ILOVA QILINGAN HUJJAT MATNI ───\n${docContext}\n─── HUJJAT TUGADI ───${documentJob.excerptInstruction(documentScope, lexLangForText(message) === 'ru' ? 'ru' : 'uz')}${documentJob.serviceInstruction(documentScope && documentScope.services, lexLangForText(message) === 'ru' ? 'ru' : 'uz')}`
       : message;
     aiMessages.push({ role: 'user', text: finalUserText });
 
@@ -10154,7 +10179,7 @@ app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
     res.json({ ok: true, ...out });
   } catch (err) {
     console.error('[TARIFF GRANT] error:', err.message);
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message, message: OFFER_REASONS[err.message] || null });
   }
 });
 
@@ -10175,6 +10200,15 @@ const OFFER_REASONS = {
   invalid_percent: 'Foiz 0 dan katta va 100 dan kichik, ko\'pi bilan 2 kasr xonali bo\'lsin.',
   invalid_amount: 'Chegirma summasi butun so\'m, 0 dan katta va narxdan kichik bo\'lsin.',
   discount_required: 'Chegirma foizi yoki summasini kiriting.',
+  offers_disabled: "Individual chegirmalar vaqtincha o'chirilgan (TARIFF_OFFERS=off). Oldin sotib olingan davrlar o'zgarmaydi.",
+  offer_fee_scope_changed: "Taklif to'lov komissiyasi 0 bo'lgan doirada (provayder ulanmagan, qo'lda to'lov) hisoblangan. Boshqa provayder yoki komissiya bilan qo'llanmaydi: narx modelini qayta tekshirib, yangi taklif yarating.",
+  offer_cost_model_changed: "Taklif boshqa xarajat modeli versiyasida hisoblangan. U avtomatik qo'llanmaydi: qayta tekshirib, yangi taklif yarating.",
+  offer_below_current_minimum: "Joriy xarajat modeli bo'yicha taklif narxi minimal narxdan past. To'lov boshlanmasin: yangi taklif yarating.",
+  offer_expired: 'Taklif muddati tugagan.',
+  offer_revoked: 'Taklif bekor qilingan.',
+  offer_redeemed: 'Taklif allaqachon ishlatilgan.',
+  offer_for_another_user: 'Taklif boshqa foydalanuvchi uchun.',
+  offer_for_another_plan: 'Taklif boshqa tarif uchun.',
 };
 function offerError(res, out) {
   const q = out.quote || out;
@@ -10233,7 +10267,9 @@ app.post('/api/admin/tariff/offers/:id/revoke', requireMasterAdmin, async (req, 
 
 app.get('/api/admin/tariff/offers/:id/check', requireMasterAdmin, async (req, res) => {
   try {
-    res.json(await tariffOffers.checkOffer({ offerId: req.params.id }));
+    const provider = String(req.query.provider || 'manual').slice(0, 30);
+    const out = await tariffOffers.checkOffer({ offerId: req.params.id, provider });
+    res.json({ ...out, message: out.reason ? (OFFER_REASONS[out.reason] || out.reason) : null });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -10247,7 +10283,7 @@ app.get('/api/admin/tariff/users', requireMasterAdmin, async (req, res) => {
     const r = await pool.query(
       `SELECT id, username, full_name, tariff_plan, tariff_expires_at FROM admins
         WHERE role = 'user' AND (username ILIKE $1 OR full_name ILIKE $1 OR id::text = $2)
-        ORDER BY id DESC LIMIT 20`, [`%${q.replace(/[%_]/g, '')}%`, q]);
+        ORDER BY id DESC LIMIT 20`, [`%${q.replace(/[\\%_]/g, '\\$&')}%`, q]);  // LIKE wildcards escaped, not dropped ("aziza_k" must match)
     res.json({ users: r.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });

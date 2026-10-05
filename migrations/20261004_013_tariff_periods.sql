@@ -47,10 +47,18 @@ CREATE TABLE IF NOT EXISTS public.tariff_periods (
     --                   (not new cash)
     --   price_uzs       cash received for this period; NULL = not recorded
     --                   (a legacy grant made before payments were recorded)
+    --   carried_out_uzs value this period gave to an upgrade that superseded
+    --                   it (the other side of the new period's credit_uzs)
+    -- paid_at: when the payment was accepted (cash is counted then, once);
+    -- superseded_at: when an upgrade replaced it. Service revenue is the
+    -- period's price + credit in - credit out, spread over the days it ran.
     price_uzs      integer,
     list_price_uzs integer,
     discount_uzs   integer NOT NULL DEFAULT 0,
     credit_uzs     integer NOT NULL DEFAULT 0,
+    carried_out_uzs integer NOT NULL DEFAULT 0,
+    paid_at        timestamptz,
+    superseded_at  timestamptz,
     offer_id       uuid,
     economics      jsonb,
     payment_ref    text,
@@ -69,6 +77,9 @@ ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS discount_uzs integer 
 ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS credit_uzs integer NOT NULL DEFAULT 0;
 ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS offer_id uuid;
 ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS economics jsonb;
+ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS carried_out_uzs integer NOT NULL DEFAULT 0;
+ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS paid_at timestamptz;
+ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS superseded_at timestamptz;
 
 -- One Sinov per subject, ever: a redeploy or a retry cannot grant another.
 CREATE UNIQUE INDEX IF NOT EXISTS tariff_periods_one_trial_uidx

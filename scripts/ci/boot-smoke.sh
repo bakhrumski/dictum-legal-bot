@@ -31,6 +31,11 @@ curl -fsS "http://localhost:$PORT/api/health"; echo
 grep -q "Shared AI memory mounted\|shared AI memory mounted" /tmp/boot-smoke.log || { echo "workspace routes not mounted"; tail -50 /tmp/boot-smoke.log; exit 1; }
 
 BASE_URL="http://localhost:$PORT" node tests/authz-matrix.test.js
+# discount offer end to end through the running server (no payment, no AI);
+# skipped by an older checkout that does not have the test
+if [ -f tests/offer-flow.e2e.test.js ]; then
+  BASE_URL="http://localhost:$PORT" TEST_DATABASE_URL="$DATABASE_URL" node tests/offer-flow.e2e.test.js
+fi
 
 kill -TERM $PID
 for _ in $(seq 1 30); do kill -0 $PID 2>/dev/null || break; sleep 1; done

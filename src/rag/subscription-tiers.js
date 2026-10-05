@@ -413,22 +413,36 @@ async function recordUsage(adminId, endpoint, credits = 1, { throwOnError = fals
 // cannot be used to get model calls for free (docs/tariffs-v2.md).
 const REFUND_NOTICE = "So'rov limiti qaytarildi: bu urinish hisobga olinmadi.";
 
-/** Give back the units of this response's job. Idempotent. */
+// The jobs reserved for one response. Usually one; a chat request that
+// orders both an analysis and an opinion of its document reserves one job
+// per service, each from its own quota, and they succeed or fail together.
+function jobsOf(res) {
+  const l = res && res.locals;
+  if (!l) return [];
+  if (Array.isArray(l.tariffJobs) && l.tariffJobs.length) return l.tariffJobs;
+  return l.tariffUsage ? [l.tariffUsage] : [];
+}
+
+/** Give back the units of this response's job(s). Idempotent. */
 function refundUsage(res, reason = 'failed') {
-  const t = res && res.locals && res.locals.tariffUsage;
-  if (!t || t.refunded || t.committed || !t.jobKey) return {};
-  t.refunded = true;
-  ledger.release(t.jobKey, reason)
-    .then(ok => { if (ok) console.log(`[TARIFF] released ${t.service} x${t.units} (${t.endpoint}, ${reason})`); })
-    .catch(err => console.warn('[TARIFF] release failed:', err.message));
-  return { quotaRefunded: true, refundNotice: REFUND_NOTICE };
+  let released = false;
+  for (const t of jobsOf(res)) {
+    if (!t || t.refunded || t.committed || !t.jobKey) continue;
+    t.refunded = true;
+    released = true;
+    ledger.release(t.jobKey, reason)
+      .then(ok => { if (ok) console.log(`[TARIFF] released ${t.service} x${t.units} (${t.endpoint}, ${reason})`); })
+      .catch(err => console.warn('[TARIFF] release failed:', err.message));
+  }
+  return released ? { quotaRefunded: true, refundNotice: REFUND_NOTICE } : {};
 }
 
 function commitUsage(res) {
-  const t = res && res.locals && res.locals.tariffUsage;
-  if (!t || t.refunded || t.committed || !t.jobKey) return;
-  t.committed = true;
-  ledger.commit(t.jobKey).catch(err => console.warn('[TARIFF] commit failed:', err.message));
+  for (const t of jobsOf(res)) {
+    if (!t || t.refunded || t.committed || !t.jobKey) continue;
+    t.committed = true;
+    ledger.commit(t.jobKey).catch(err => console.warn('[TARIFF] commit failed:', err.message));
+  }
 }
 
 // A 4xx/5xx JSON reply releases the job and tells the client; a reply that
@@ -601,9 +615,16 @@ async function meterJob(req, res, { service, units = 1, endpoint = null, workspa
     res.status(status).json(body);
     return { allowed: false, ...r };
   }
-  res.locals.quota = r;
-  res.locals.tariffUsage = { jobKey: r.jobKey, adminId, endpoint, service, units: r.units, refunded: false, committed: false };
-  attachRefundOnFailure(res);
+  const job = { jobKey: r.jobKey, adminId, endpoint, service, units: r.units, refunded: false, committed: false };
+  if (!res.locals.tariffUsage) {
+    res.locals.quota = r;
+    res.locals.tariffUsage = job;
+  }
+  res.locals.tariffJobs = [...(res.locals.tariffJobs || []), job];
+  if (!res.locals.tariffRefundAttached) {
+    res.locals.tariffRefundAttached = true;
+    attachRefundOnFailure(res);
+  }
   return r;
 }
 
@@ -679,14 +700,18 @@ async function quoteDocument(adminId, { service = 'analysis', text = '', chars =
 
 /**
  * Chat middleware that knows about attached documents (2026-10-05): a file
- * does not make a request an analysis, and a chat unit does not buy one.
+ * does not make a request a document job, and a chat unit does not buy one.
  *   - question about the document -> one chat unit; the handler gives the
- *     model only the relevant excerpts (document-job.selectExcerpt);
- *   - analysis / review / opinion of the document -> a document job in
- *     analysis units, charged instead of (never on top of) the chat unit.
- *     It runs only when the client confirms the units it was shown: the
- *     first call answers 409 DOC_COST_CONFIRM with the quote.
- * res.locals.documentJob = { mode: 'chat' | 'chat_excerpt' | 'analysis', units }.
+ *     model the relevant clauses only (document-job.selectExcerpt);
+ *   - analysis / review of the document -> a document analysis (analysis
+ *     quota); a legal opinion on it -> an AI legal opinion (opinion quota);
+ *     both -> two jobs, each from its own quota. Sized in units from the
+ *     whole document, charged instead of (never on top of) the chat unit,
+ *     and run only when the client confirms the units it was shown: the
+ *     first call answers 409 DOC_COST_CONFIRM with a quote per service.
+ *     Confirmation: confirmedJob { analysis: n, opinion: n }, or
+ *     confirmedUnits: n when one service is ordered.
+ * res.locals.documentJob = { mode: 'chat' | 'chat_excerpt' | 'document', services, units }.
  */
 function enforceChatQuota(endpoint, opts = {}) {
   const chat = enforceQuota(endpoint, opts);
@@ -694,25 +719,34 @@ function enforceChatQuota(endpoint, opts = {}) {
   return async (req, res, next) => {
     const body = req.body || {};
     const doc = typeof body.documentText === 'string' ? body.documentText.replace(/\u0000/gu, '').trim() : '';
-    if (!doc || !docJob.isFullDocumentRequest(body.message)) {
-      res.locals.documentJob = { mode: doc ? 'chat_excerpt' : 'chat' };
+    const services = doc ? docJob.requestedServices(body.message) : [];
+    if (!services.length) {
+      res.locals.documentJob = { mode: doc ? 'chat_excerpt' : 'chat', services: [] };
       return chat(req, res, next);
     }
     try {
       const adminId = req.session && req.session.adminId;
       const ticket = ledger.readDocTicket(body.docTicket, doc);
       const size = ledger.docUnits({ chars: doc.length, pages: ticket ? ticket.pages : null });
-      res.locals.documentJob = { mode: 'analysis', units: size.units, size };
+      res.locals.documentJob = { mode: 'document', services, units: size.units, size };
       if (!adminId || (req.session.role && req.session.role !== 'user')) return next();
-      if (Number(body.confirmedUnits) !== size.units) {
-        const quote = await quoteDocument(adminId, { service: 'analysis', text: doc, docTicket: body.docTicket });
+      const confirmed = body.confirmedJob && typeof body.confirmedJob === 'object' ? body.confirmedJob : {};
+      const ok = services.every(sv => Number(confirmed[sv]) === size.units)
+        || (services.length === 1 && Number(body.confirmedUnits) === size.units);
+      if (!ok) {
+        const quotes = [];
+        for (const sv of services) quotes.push(await quoteDocument(adminId, { service: sv, text: doc, docTicket: body.docTicket }));
+        const names = services.map(sv => `${docJob.SERVICE_TITLE[sv]} — ${size.units} birlik (${sv === 'analysis' ? 'tahlil' : 'xulosa'} limitidan)`).join('; ');
         return res.status(409).json({
-          error: 'doc_cost_confirm', code: 'DOC_COST_CONFIRM', service: 'analysis', quote,
-          message: `Butun hujjatni tahlil qilish — hujjat tahlili xizmati: ${size.pages} sahifa, ${size.chars.toLocaleString('ru-RU')} belgi = ${size.units} birlik. Tasdiqlang yoki savolni hujjatning aniq bandi bo'yicha bering (u 1 chat birligi).`,
+          error: 'doc_cost_confirm', code: 'DOC_COST_CONFIRM', service: services[0], services, quote: quotes[0], quotes,
+          message: `Butun hujjat bo'yicha ish: ${size.pages} sahifa, ${size.chars.toLocaleString('ru-RU')} belgi. ${names}. `
+            + `Chat limiti yechilmaydi. Tasdiqlang yoki savolni hujjatning aniq bandi bo'yicha bering (u 1 chat birligi).`,
         });
       }
-      const m = await meterDocument(req, res, { service: 'analysis', text: doc, docTicket: body.docTicket, endpoint: `${endpoint}#analysis` });
-      if (!m.allowed) return;
+      for (const sv of services) {
+        const m = await meterDocument(req, res, { service: sv, text: doc, docTicket: body.docTicket, endpoint: `${endpoint}#${sv}` });
+        if (!m.allowed) return;
+      }
       next();
     } catch (err) {
       console.error('[TARIFF] chat document job error:', err.message);
@@ -854,62 +888,99 @@ async function releaseOpinionCredits(adminId, reservationId) {
 // The loyalty rebate is retired with tariffs v2 (no longer offered).
 const UZS_PER_USD = Number(process.env.UZS_PER_USD || ledger.PLANNING.uzsPerUsd);
 
-async function marginReport({ since = null, plan = null, now = new Date() } = {}) {
-  const from = since ? new Date(since) : new Date(now.getTime() - 30 * 86400000);
+// Cumulative service revenue of one period at time t, in whole so'm:
+// price + credit in - credit out, spread over the days it ran (a running
+// period superseded by an upgrade ran until the upgrade; a queued one that
+// never started is recognised when it was superseded). Additive over
+// windows: revenue in [a, b) = R(b) - R(a), so no so'm is counted twice.
+function periodRevenue(p) {
+  const known = p.price_uzs != null;
+  const creditKnown = !(p.economics && p.economics.creditKnown === false);
+  const creditIn = Number(p.credit_uzs || 0);
+  const net = known ? Number(p.price_uzs) + (creditKnown ? creditIn : 0) - Number(p.carried_out_uzs || 0) : null;
+  const start = new Date(p.starts_at).getTime();
+  const end = new Date(p.ends_at).getTime();
+  const sup = p.superseded_at ? new Date(p.superseded_at).getTime() : null;
+  const point = sup != null && sup <= start ? sup : null;
+  const R = (t) => {
+    if (net == null) return 0;
+    if (point != null) return t >= point ? net : 0;
+    if (end <= start) return t >= end ? net : 0;
+    const f = Math.min(1, Math.max(0, (t - start) / (end - start)));
+    return Math.floor(net * f);
+  };
+  const share = (a, b) => {
+    if (point != null) return point >= a && point < b ? 1 : 0;
+    if (end <= start) return 0;
+    return Math.max(0, Math.min(end, b) - Math.max(start, a)) / (end - start);
+  };
+  return { known, net, creditKnown, creditIn, R, share, paidAt: new Date(p.paid_at || p.created_at).getTime() };
+}
+
+async function marginReport({ since = null, until = null, plan = null, now = new Date() } = {}) {
+  const to = until ? new Date(until) : now;
+  const from = since ? new Date(since) : new Date(to.getTime() - 30 * 86400000);
+  const a = from.getTime();
+  const b = to.getTime();
+  // every period that ran, was paid for, or was superseded in the window
   const periods = await pool.query(
     `SELECT p.*, a.username, a.full_name
        FROM tariff_periods p JOIN admins a ON a.id = p.admin_id
       WHERE p.source IN ('payment', 'admin', 'migration') AND p.status IN ('active', 'superseded')
-        AND p.starts_at < $2 AND p.ends_at > $1
+        AND ((p.starts_at < $2 AND p.ends_at > $1)
+          OR (COALESCE(p.paid_at, p.created_at) >= $1 AND COALESCE(p.paid_at, p.created_at) < $2)
+          OR (p.superseded_at >= $1 AND p.superseded_at < $2))
         AND ($3::text IS NULL OR p.plan = $3)`,
-    [from, now, plan]);
+    [from, to, plan]);
   const spend = await pool.query(
     `SELECT user_id, COALESCE(SUM(cost_usd), 0)::float AS cost_usd,
             COUNT(*) FILTER (WHERE cost_usd IS NULL AND COALESCE(status, 'success') <> 'skipped')::int AS unknown_calls,
             COUNT(*)::int AS calls
-       FROM llm_spend_log l WHERE l.ts >= $1 AND l.ts < $2 AND l.user_id IS NOT NULL GROUP BY user_id`, [from, now]);
+       FROM llm_spend_log l WHERE l.ts >= $1 AND l.ts < $2 AND l.user_id IS NOT NULL GROUP BY user_id`, [from, to]);
   const spendBy = new Map(spend.rows.map(r => [Number(r.user_id), r]));
 
   const users = new Map();
   for (const p of periods.rows) {
-    const start = new Date(p.starts_at).getTime();
-    const end = new Date(p.ends_at).getTime();
-    const overlap = Math.max(0, Math.min(end, now.getTime()) - Math.max(start, from.getTime()));
-    const share = end > start ? overlap / (end - start) : 0;
+    const rv = periodRevenue(p);
     const u = users.get(p.admin_id) || {
       adminId: p.admin_id, username: p.username, fullName: p.full_name, plans: new Set(), periods: 0,
-      listPriceUzs: 0, discountUzs: 0, salePriceUzs: 0, cashUzs: 0, creditUzs: 0,
-      recognizedSaleUzs: 0, recognizedCashUzs: 0, recognizedCreditUzs: 0,
+      // sold (paid) in the window
+      listPriceUzs: 0, discountUzs: 0, cashReceivedUzs: 0, creditCarriedInUzs: 0, creditFromUnknownUzs: 0,
+      // value moved out of periods superseded in the window
+      creditCarriedOutUzs: 0,
+      // service revenue earned in the window, and what is paid for but not yet earned at its end
+      recognizedRevenueUzs: 0, deferredRevenueUzs: 0,
       unknownRevenuePeriods: 0, unknownRevenueListUzs: 0, forecastLeftUzs: 0, discounted: false,
     };
     u.plans.add(p.plan);
     u.periods++;
-    const list = Number(p.list_price_uzs || 0);
-    u.listPriceUzs += list;
-    if (p.price_uzs == null) {
+    const paidIn = rv.paidAt >= a && rv.paidAt < b;
+    if (!rv.known) {
       u.unknownRevenuePeriods++;
-      u.unknownRevenueListUzs += Math.round(list * share);
+      u.unknownRevenueListUzs += Math.round(Number(p.list_price_uzs || 0) * rv.share(a, b));
     } else {
-      const cash = Number(p.price_uzs);
-      const credit = Number(p.credit_uzs || 0);
-      u.discountUzs += Number(p.discount_uzs || 0);
+      if (paidIn) {
+        u.listPriceUzs += Number(p.list_price_uzs || 0);
+        u.discountUzs += Number(p.discount_uzs || 0);
+        u.cashReceivedUzs += Number(p.price_uzs);
+        if (rv.creditKnown) u.creditCarriedInUzs += rv.creditIn;
+        else u.creditFromUnknownUzs += rv.creditIn;
+        if (p.economics && Number.isFinite(Number(p.economics.forecastLeftUzs))) u.forecastLeftUzs += Number(p.economics.forecastLeftUzs);
+      }
       if (Number(p.discount_uzs || 0) > 0) u.discounted = true;
-      u.salePriceUzs += cash + credit;
-      u.cashUzs += cash;
-      u.creditUzs += credit;
-      u.recognizedCashUzs += Math.round(cash * share);
-      u.recognizedCreditUzs += Math.round(credit * share);
-      u.recognizedSaleUzs += Math.round((cash + credit) * share);
-      if (p.economics && Number.isFinite(Number(p.economics.forecastLeftUzs))) u.forecastLeftUzs += Number(p.economics.forecastLeftUzs);
+      u.recognizedRevenueUzs += rv.R(b) - rv.R(a);
+      u.deferredRevenueUzs += rv.paidAt < b ? rv.net - rv.R(b) : 0;
     }
+    const supAt = p.superseded_at ? new Date(p.superseded_at).getTime() : null;
+    if (supAt != null && supAt >= a && supAt < b) u.creditCarriedOutUzs += Number(p.carried_out_uzs || 0);
     users.set(p.admin_id, u);
   }
 
   const rows = [...users.values()].map(u => {
     const s = spendBy.get(Number(u.adminId)) || { cost_usd: 0, unknown_calls: 0, calls: 0 };
     const costUzs = Math.ceil(s.cost_usd * UZS_PER_USD);
-    const revenueKnown = u.unknownRevenuePeriods === 0;
-    const margin = revenueKnown && u.recognizedSaleUzs > 0 ? (u.recognizedSaleUzs - costUzs) / u.recognizedSaleUzs : null;
+    const revenueKnown = u.unknownRevenuePeriods === 0 && u.creditFromUnknownUzs === 0;
+    const margin = revenueKnown && u.recognizedRevenueUzs > 0 ? (u.recognizedRevenueUzs - costUzs) / u.recognizedRevenueUzs : null;
     return {
       ...u, plans: [...u.plans],
       costUsd: Number(s.cost_usd.toFixed(4)), costUzs, unknownCostCalls: s.unknown_calls, calls: s.calls,
@@ -918,25 +989,33 @@ async function marginReport({ since = null, plan = null, now = new Date() } = {}
       margin: margin == null ? null : Number((margin * 100).toFixed(1)),
       band: margin == null ? 'unknown' : margin >= 0.40 ? 'target' : margin >= 0.05 ? 'thin' : 'loss',
     };
-  }).sort((a, b) => b.costUzs - a.costUzs);
+  }).sort((x, y) => y.costUzs - x.costUzs);
 
   const sum = k => rows.reduce((t, r) => t + (r[k] || 0), 0);
   const totals = {
-    listPriceUzs: sum('listPriceUzs'), salePriceUzs: sum('salePriceUzs'), discountUzs: sum('discountUzs'),
-    cashUzs: sum('cashUzs'), creditUzs: sum('creditUzs'),
-    recognizedSaleUzs: sum('recognizedSaleUzs'), recognizedCashUzs: sum('recognizedCashUzs'), recognizedCreditUzs: sum('recognizedCreditUzs'),
+    // cash: what customers paid in the window, each payment once
+    cashReceivedUzs: sum('cashReceivedUzs'),
+    listPriceUzs: sum('listPriceUzs'), discountUzs: sum('discountUzs'),
+    // credit: value moved between a customer's own periods on upgrade - never new cash
+    creditCarriedInUzs: sum('creditCarriedInUzs'), creditCarriedOutUzs: sum('creditCarriedOutUzs'), creditFromUnknownUzs: sum('creditFromUnknownUzs'),
+    // service revenue: earned in the window; deferred: paid, not yet earned at its end
+    recognizedRevenueUzs: sum('recognizedRevenueUzs'), deferredRevenueUzs: sum('deferredRevenueUzs'),
     unknownRevenuePeriods: sum('unknownRevenuePeriods'), unknownRevenueListUzs: sum('unknownRevenueListUzs'),
-    refundsUzs: 0, refundsNote: "To'lov qaytarish oqimi hozircha yo'q; qayd etilgan refund 0.",
+    // refunds are not recorded anywhere yet: unknown, not a confirmed zero
+    refundsUzs: null, refundsStatus: 'not_tracked',
+    refundsNote: "To'lov qaytarish qayd etilmaydi (oqim yo'q): refund summasi noma'lum, tasdiqlangan nol emas.",
     costUsd: Number(sum('costUsd').toFixed(4)), costUzs: sum('costUzs'), unknownCostCalls: sum('unknownCostCalls'),
     forecastLeftUzs: sum('forecastLeftUzs'),
     discountedCustomers: rows.filter(r => r.discounted).length,
     byBand: rows.reduce((t, r) => { t[r.band] = (t[r.band] || 0) + 1; return t; }, {}),
   };
-  totals.serviceMargin = totals.recognizedSaleUzs > 0 && totals.unknownRevenuePeriods === 0
-    ? Number((((totals.recognizedSaleUzs - totals.costUzs) / totals.recognizedSaleUzs) * 100).toFixed(1)) : null;
+  totals.serviceMargin = totals.recognizedRevenueUzs > 0 && totals.unknownRevenuePeriods === 0 && totals.creditFromUnknownUzs === 0
+    ? Number((((totals.recognizedRevenueUzs - totals.costUzs) / totals.recognizedRevenueUzs) * 100).toFixed(1)) : null;
   return {
-    since: from, until: now, users: rows.length, uzsPerUsd: UZS_PER_USD, totals, rows,
-    basis: 'revenue = actual sale price (cash + carried credit, after discount) recognised pro rata; unknown where not recorded; cost = measured known spend',
+    since: from, until: to, users: rows.length, uzsPerUsd: UZS_PER_USD, totals, rows,
+    basis: 'cash = payments accepted in the window, once; credit = value carried between periods on upgrade, not cash; '
+      + 'revenue = price + credit in - credit out of each period, spread over the days it ran; unknown where a legacy payment was never recorded; '
+      + 'refunds not tracked (unknown); cost = measured known spend',
   };
 }
 
@@ -961,6 +1040,7 @@ module.exports = {
   opinionCreditsUsed,
   draftsUsed,
   marginReport,
+  periodRevenue,
   tashkentWeekStart,
   PLANS,
   LEGACY_PLANS,

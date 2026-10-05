@@ -54,18 +54,44 @@ function defaultCostModel() {
       components: [
         { key: 'ai', label: "AI: limitlarning 100% i, barcha bosqichlar (generatsiya, retrieval, embedding, tekshiruv, retry/fallback), OCR", uzs: plannedAiUzs(plan), status: 'estimated',
           basis: 'catalogue quotas x owner planning unit budgets; no cache saving assumed' },
-        { key: 'ops', label: plan === 'platinum' ? "Operatsion ulush: hosting, DB, storage, support, to'lov komissiyasi, Workspace" : "Operatsion ulush: hosting, DB, storage, support, to'lov komissiyasi", uzs: ledger.PLANNING.opsUzs[plan], status: 'estimated',
-          basis: "owner's operations allotment; the payment fee is inside it until it is measured" },
+        { key: 'ops', label: plan === 'platinum' ? 'Operatsion ulush: hosting, DB, storage, support, Workspace' : 'Operatsion ulush: hosting, DB, storage, support', uzs: ledger.PLANNING.opsUzs[plan], status: 'estimated',
+          basis: "owner's operations allotment" },
       ],
     };
   }
   return {
     version: 'cm-2026-10-05-planning-v1',
     label: 'taxminiy (egasining planlash budjeti, o\'lchanmagan)',
-    // a share of the price; 0 here because the operations allotment includes it (never counted twice)
+    // the floors rest on planning budgets, not on measured cost
+    measured: false,
+    basisNote: "Minimal narxlar (Silver 150 000, Gold 450 000, Platinum 750 000 so'm) o'lchangan xarajatga emas, egasining o'lchanmagan planlash budjetiga asoslangan.",
+    // a share of the price. 0 is the scope of this model, not a measured
+    // fee: no payment provider is connected and a payment is taken by hand
+    // (master grant). An offer quoted under this scope is not redeemed
+    // through a provider, or under another fee, until it is quoted again.
     paymentFeeBp: 0,
+    feeScope: {
+      providers: ['manual'],
+      label: "To'lov provayderi ulanmagan: to'lov qo'lda qabul qilinadi (master grant). Komissiya 0 — faqat shu holat uchun; provayder ulanganda narx modeli qayta tekshiriladi.",
+    },
     plans,
   };
+}
+
+/**
+ * Why an offer must not be redeemed now, or null: it was quoted under a
+ * cost model or a payment-fee scope that is no longer the one in force (a
+ * provider connected, a fee changed, the model revised). It is not
+ * repriced: a master checks it and makes a new offer.
+ */
+function offerBlockedReason(offer, { provider = 'manual', model = costModel() } = {}) {
+  const est = (offer && offer.cost_estimate) || {};
+  const scope = est.feeScope || { providers: ['manual'] };
+  const providers = Array.isArray(scope.providers) ? scope.providers : ['manual'];
+  if (!providers.includes(String(provider || 'manual'))) return 'offer_fee_scope_changed';
+  if (Number(est.paymentFeeBp || 0) !== Number(model.paymentFeeBp || 0)) return 'offer_fee_scope_changed';
+  if (offer.cost_model_version !== (model.version || 'unversioned')) return 'offer_cost_model_changed';
+  return null;
 }
 
 let override = null;
@@ -169,7 +195,8 @@ function quoteDiscount({ plan, discountPercent = null, discountUzs = null, measu
   const base = {
     plan, listPriceUzs, quotas: cfg.quotas, quotaVersion: QUOTA_VERSION,
     costModelVersion: model.version || 'unversioned', costModelLabel: model.label || null,
-    paymentFeeBp: model.paymentFeeBp || 0, cost,
+    costMeasured: model.measured === true, basisNote: model.basisNote || null,
+    paymentFeeBp: model.paymentFeeBp || 0, feeScope: model.feeScope || null, cost,
   };
   if (!cost.ok) {
     return { ...base, ok: false, reason: cost.reason, message: cost.reason === 'unknown_cost_without_reserve'
@@ -204,5 +231,5 @@ function quoteDiscount({ plan, discountPercent = null, discountUzs = null, measu
 }
 
 module.exports = {
-  CEILING_BP, QUOTA_VERSION, defaultCostModel, costModel, conservativeCost, minimumPrice, parseDiscount, quoteDiscount, plannedAiUzs,
+  CEILING_BP, QUOTA_VERSION, defaultCostModel, costModel, conservativeCost, minimumPrice, parseDiscount, quoteDiscount, plannedAiUzs, offerBlockedReason,
 };

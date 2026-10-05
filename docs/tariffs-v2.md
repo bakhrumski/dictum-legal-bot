@@ -75,21 +75,44 @@ Bitta tahlil yoki xulosa birligi — ko'pi bilan 10 sahifa va 40 000 belgi:
 - Tahlil va xulosa ketma-ket buyurtma qilinsa, o'sha foydalanuvchining digest natijasi qayta ishlatiladi (1 soat, user + matn hash kaliti bilan; boshqa hisobga o'tmaydi). Har bir xizmat o'z birligini alohida sarflaydi.
 - **Draft.** 1 birlik ≈ 5 standart sahifa / 20 000 chiqish belgisi (`draftUnits`). Hozirgi generatsiya 4 096 token bilan cheklangan va bu chegaradan oshmaydi. Uzun draft uchun alohida birlik — keyingi bosqich.
 
-### Hujjat biriktirilgan chat (2026-10-05)
+### Hujjat biriktirilgan chat (2026-10-05, review 2026-10-06)
 
-Fayl biriktirilgani o'zi tahlil degani emas: xizmat amalda so'ralgan ishga qarab aniqlanadi (`src/rag/document-job.js`). Qoida veb, Workspace va Telegram'da bir xil.
+Fayl biriktirilgani o'zi tahlil degani emas: xizmat amalda so'ralgan ishga qarab aniqlanadi (`src/rag/document-job.js`, `requestedServices`). Qoida veb, Workspace va Telegram'da bir xil.
 
-- **Hujjat bo'yicha savol** ("5-band qonuniymi?") = 1 chat birligi.
-  - Modelga hujjatning savolga oid parchalari beriladi: sarlavha qismi va savol so'zlari bo'yicha tanlangan bandlar, ko'pi bilan 20 000 belgi (yarim tahlil birligi).
-  - Modelga "bu to'liq tahlil emas" deyiladi.
-  - Javob ostida qancha qism ishlatilgani va to'liq tahlil alohida xizmat ekani ko'rsatiladi.
-  - Ilgari hujjatning birinchi 15 000 belgisi jimgina 1 chat birligiga berilardi.
-- **Tahlil, tekshiruv yoki xulosa so'ralsa** ("hujjatni tahlil qiling", "проанализируйте договор") — bu hujjat ishi:
-  - butun hujjatdan birlik hisoblanadi;
-  - server avval 409 `DOC_COST_CONFIRM` va quote qaytaradi, dashboard tasdiq kartasini ko'rsatadi;
-  - tasdiqlangach (`confirmedUnits`) **faqat** tahlil birliklari yechiladi — chat birligi qo'shimcha olinmaydi.
-- **Workspace.** Hujjat konteksti xuddi shu 20 000 belgilik chegarada, parchalar bilan. To'liq tahlil so'ralsa, javob parchalarga asoslanganini aytadi va «Hujjat tahlili» xizmatiga yo'naltiradi.
-- **Telegram.** Fayllar AI'ga emas, yurist navbatiga tushadi; matn va ovozli savol esa chat.
+| So'rov | Xizmat | Qaysi limitdan |
+|---|---|---|
+| Hujjat bo'yicha savol ("5-band qonuniymi?") | chat | 1 chat birligi |
+| "Hujjatni tahlil qiling", "проанализируйте договор" | Hujjat tahlili | tahlil birligi |
+| "Yuridik xulosa yozing", "юридическое заключение" | AI yuridik xulosa | **xulosa** birligi |
+| "Tahlil qilib, yuridik xulosa tayyorlang" | ikkalasi | har biri o'z limitidan, alohida |
+
+- **Tahlil / xulosa (veb).**
+  - Birlik butun hujjatdan hisoblanadi.
+  - Server avval 409 `DOC_COST_CONFIRM` qaytaradi, unda har bir xizmat uchun quote (`services`, `quotes`) bo'ladi. Dashboard har bir xizmat uchun alohida qator ko'rsatadi.
+  - Tasdiq: `confirmedJob { analysis: n, opinion: n }`; bitta xizmat bo'lsa `confirmedUnits: n` ham bo'ladi. Boshqa xizmat uchun yoki boshqa son bilan berilgan tasdiq ishni boshlamaydi.
+  - Har bir xizmat o'z ishi (job) sifatida rezerv qilinadi. Ikkinchisi rad etilsa, birinchisi ham qaytariladi — hech narsa yechilmaydi.
+  - Chat birligi qo'shimcha olinmaydi.
+  - "Tahlil qilib xulosa bering" — bu tahlilning xulosasi, ikkinchi xizmat emas. Xulosa xizmati faqat "yuridik/huquqiy xulosa" yoki "xulosa yozing/tayyorlang" deyilganda tanlanadi.
+- **Hujjat bo'yicha savol: qaysi qismlar beriladi** (`selectExcerpt`). Hujjatning boshi kesib olinmaydi; ko'pi bilan 20 000 belgi.
+  - hujjat boshidan kichik qism (sarlavha, tomonlar), ≤ 700 belgi;
+  - savolga mos bandlar (kam uchraydigan so'zlar ko'proq og'irlikka ega; savolda nomi aytilgan band birinchi);
+  - ular havola qilgan bandlar, ikki qadamgacha ("14.3 → 7.2"); bo'limga havola bo'lsa ("16-bo'lim"), uning kichik bandlari ham;
+  - shu bandlarni nomlagan istisnolar ("14.3-band … qo'llanilmaydi") va istisno o'zi havola qilgan bo'lim;
+  - ular ishlatgan atamalarning ta'riflari («Ish kuni» — …).
+- **Parchalar yetarli bo'lmasa.** Mos band topilmasa yoki havola qilingan band hujjatda yo'q yoki sig'madi:
+  - natija `insufficient` deb belgilanadi;
+  - modelga "buni aniq ayting, qat'iy xulosa bermang, to'liq tahlilni taklif qiling" deyiladi;
+  - foydalanuvchi ⚠ izoh ko'radi: qaysi band yetmadi va to'liq xizmat necha birlik;
+  - mos band umuman topilmasa, model hujjatning birinchi sahifalarini emas, bandlar ro'yxatini oladi.
+- **Workspace.**
+  - Hujjat konteksti o'sha `selectExcerpt` bilan olinadi. Yetishmagan band blok ichida "Qat'iy xulosa bermang" deb yoziladi, shu qoida promptda ham bor.
+  - Tahlil yoki xulosa so'ralsa, javob 1 Workspace chat birligi bo'lib qoladi va aynan qaysi xizmat (tahlil yoki xulosa limiti) kerakligini aytadi. Tahlil yoki xulosa birligi yechilmaydi.
+- **Telegram.** Fayllar AI'ga emas, yurist navbatiga tushadi (`src/bot/tariff-texts.js`). Foydalanuvchiga quyidagilar aytiladi:
+  - bu AI tahlili emas va tahlil yoki xulosa limiti yechilmadi;
+  - yurist ko'rigi tarif limitlariga kirmaydi, uning shartlari alohida kelishiladi (bepul deb va'da qilinmaydi);
+  - AI tahlil va xulosa saytda bor (tugma bilan).
+
+  Matn va ovozli savol esa chat.
 
 ## 4. OCR, ovoz
 
@@ -111,16 +134,14 @@ Fayl biriktirilgani o'zi tahlil degani emas: xizmat amalda so'ralgan ishga qarab
 - **Telegram Stars kreditlari** to'liq saqlanadi va tarif limiti tugagach ishlatiladi; alohida hisob, muddati tugamaydi.
 - `admins.tariff_*` ustunlari joriy pullik davrga sinxron turadi (Workspace DB siyosatlari ularni o'qiydi).
 
-**Rollback.**
-1. PR revert qilinadi.
-2. `migrations/down/20261004_013_tariff_periods.down.sql` bajariladi.
-3. `schema_migrations` dan yozuv o'chiriladi.
+- **Revenue ustunlari (2026-10-06):** `tariff_periods.paid_at` (naqd shu paytda, bir marta sanaladi), `superseded_at`, `carried_out_uzs` (upgrade'ga o'tgan qiymat — yangi davrning `credit_uzs` iga teng).
 
-Natija:
-- v1 kodi `admins.tariff_*` va `tariff_usage` (admin_id, ts) bilan ishlashda davom etadi.
-- `released` qatorlar v1'da o'chirilgan qator kabi emas, ishlatilgan bo'lib ko'rinadi. Shuning uchun rollback faqat shoshilinch holat uchun.
-
-**Feature flag yo'q, ataylab.** Ikkita parallel enforcement tizimi — topshiriq taqiqlagan "parallel hisob-kitob". Bosqichli joriy etish bayroqlari tasdiqlangan javoblar (exact → semantic shadow) uchun keyingi bosqichda qo'shiladi.
+**Rollback — kod, ma'lumot emas.** To'liq tartib: [`docs/tariffs-v2-rollback.md`](tariffs-v2-rollback.md).
+- Production'da oldingi reliz qayta deploy qilinadi va `scripts/rollback/tariffs-v2-to-v1.sql` ishga tushiriladi. Skript bajarilmagan v2 qatorlarini o'chirmaydi, alohida jadvalga ko'chiradi; v1 kodi ularni sarf deb sanamasligi uchun.
+- Qaytishda `tariffs-v1-to-v2.sql` ishga tushiriladi.
+- Eski kod yangi schema bilan ishlashi lokal tekshirilgan (`scripts/rollback/compat-check.sh`).
+- `migrations/down/20261004_013_tariff_periods.down.sql` destruktiv. U faqat v2 ma'lumoti yo'q test bazasi uchun: takliflar yoki davrlar bo'lsa, ishlamaydi.
+- Qisman o'chirish uchun `TARIFF_OFFERS=off` kaliti bor (individual chegirmalar). Tarif enforcement'i uchun ikkinchi parallel tizim (flag) ataylab yo'q: bunday tizim ikki xil hisob-kitobga olib kelardi.
 
 ## 6. Xarajat modeli
 
@@ -165,11 +186,22 @@ Master aniq foydalanuvchiga aniq pullik tarif uchun bitta 30 kunlik davrga chegi
 - parallel redeem — faqat bittasi o'tadi;
 - takroriy `paymentRef` qayta kvota bermaydi.
 
-**To'lovdan oldin:** `GET /api/admin/tariff/offers/:id/check` — muddat va joriy minimal narx tekshiriladi.
+**To'lovdan oldin:** `GET /api/admin/tariff/offers/:id/check[?provider=]` — muddat, joriy minimal narx, xarajat modeli va komissiya doirasi tekshiriladi.
+
+**O'lchanmagan asos va komissiya doirasi (2026-10-06):**
+- 150 / 450 / 750 ming minimal narxlar o'lchangan xarajatga emas, o'lchanmagan planlash budjetiga asoslangan. Admin ekranidagi har bir quote buni ko'rsatadi (`basisNote`, `costMeasured: false`).
+- To'lov komissiyasi 0. Bu o'lchangan komissiya emas, **hisobning doirasi**: provayder ulanmagan, to'lov qo'lda (master grant) qabul qilinadi (`feeScope.providers = ['manual']`).
+- Taklif o'zi hisoblangan model versiyasi va komissiya doirasini saqlaydi. Quyidagi holatlarda u aktivlashtirilmaydi:
+  - boshqa provayder orqali to'lansa;
+  - komissiya o'zgargan bo'lsa;
+  - xarajat modeli versiyasi o'zgargan bo'lsa.
+
+  Xato kodlari: `offer_fee_scope_changed`, `offer_cost_model_changed`. Taklif faol qoladi, Master uni qayta tekshirib, yangisini yaratadi. Qayta narxlash avtomatik qilinmaydi.
+- Kalit: `TARIFF_OFFERS=off` yangi taklif va aktivatsiyani to'xtatadi. Sotib olingan davrlar o'zgarmaydi.
 
 **Xarajat modeli:** `TARIFF_COST_MODEL` (JSON) bilan almashtiriladi. Har bir komponent `status` bilan beriladi (`estimated`, `unknown` + `reserveUzs` + `reserveBasis`). Zaxirasiz noma'lum komponent yangi takliflarni to'xtatadi.
 
-Iqtisodiyot va audit: [`docs/finance/tariffs-v2-report.md`](finance/tariffs-v2-report.md) §5–6.
+Iqtisodiyot va audit: [`docs/finance/tariffs-v2-report.md`](finance/tariffs-v2-report.md) §5–6. Rollback: [`docs/tariffs-v2-rollback.md`](tariffs-v2-rollback.md).
 
 ## 8. Keyingi bosqichlar (alohida PR'lar, ushbu PR'da bajarilmagan)
 

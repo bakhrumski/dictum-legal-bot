@@ -117,6 +117,27 @@ function withModel(model, fn) {
     assert.deepStrictEqual(q.quotas, require('../src/rag/tariff-ledger').PLAN_CATALOG.silver.quotas, 'a discount does not cut the quota');
   });
 
+  await test('the floors are marked unmeasured, and the zero payment fee is the scope (no provider), not a measured fee', () => {
+    const q = pricing.quoteDiscount({ plan: 'gold', discountPercent: '10' });
+    assert.strictEqual(q.costMeasured, false);
+    assert.match(q.basisNote, /o'lchanmagan planlash budjetiga asoslangan/u);
+    assert.deepStrictEqual([q.paymentFeeBp, q.feeScope.providers], [0, ['manual']]);
+    assert.match(q.feeScope.label, /provayderi ulanmagan/u);
+    const html = read('public/dashboard.html');
+    assert.match(html, /q\.basisNote \? '<p class="of-msg of-basis">/u, 'the admin screen always shows it');
+    assert.match(html, /q\.feeScope && q\.feeScope\.label/u);
+  });
+
+  await test('an offer is not applied under another fee scope or cost model: it must be quoted again', () => {
+    const model = pricing.costModel();
+    const offer = { cost_model_version: model.version, cost_estimate: { paymentFeeBp: 0, feeScope: { providers: ['manual'] } } };
+    assert.strictEqual(pricing.offerBlockedReason(offer, { provider: 'manual', model }), null);
+    assert.strictEqual(pricing.offerBlockedReason(offer, { provider: 'click', model }), 'offer_fee_scope_changed');
+    assert.strictEqual(pricing.offerBlockedReason(offer, { provider: 'manual', model: { ...model, paymentFeeBp: 200 } }), 'offer_fee_scope_changed');
+    assert.strictEqual(pricing.offerBlockedReason(offer, { provider: 'manual', model: { ...model, version: 'cm-next' } }), 'offer_cost_model_changed');
+    assert.match(read('src/rag/tariff-ledger.js'), /offerBlockedReason\(offer, \{ provider \}\);\s*if \(blocked\) throw new Error\(blocked\);/u, 'checked inside the grant');
+  });
+
   console.log('chat with a document');
 
   await test('the work asked for decides the service: a question is chat, an analysis or opinion is a document job', () => {
@@ -145,7 +166,7 @@ function withModel(model, fn) {
 
   await test('one rule in all channels: Workspace context uses the same cap; Telegram runs no AI on files', () => {
     assert.match(read('src/workspace/ai-service.js'), new RegExp(`const DOCUMENT_CONTEXT_CHARS = ${docJob.CHAT_DOCUMENT_CONTEXT_CHARS};`, 'u'));
-    assert.match(read('src/workspace/legal-answer-generator.js'), /documentJob\.isFullDocumentRequest\(question\)/u);
+    assert.match(read('src/workspace/legal-answer-generator.js'), /documentJob\.requestedServices\(question\)/u);
     assert.match(read('src/bot/bot.js'), /if \(requestData\.request_type === 'text' \|\| requestData\.voiceTranscribed\)/u, 'files go to the lawyer queue, not the agent');
   });
 
@@ -154,7 +175,7 @@ function withModel(model, fn) {
     assert.match(server, /app\.post\('\/api\/legal-chat', requireAuth, tariffModule\.enforceChatQuota\('\/api\/legal-chat'\),/u);
     assert.ok(!/\.trim\(\)\.slice\(0, 15000\)/u.test(server), 'no silent first-15 000-characters cut');
     assert.match(server, /documentJob\.selectExcerpt\(rawDoc, message\)/u);
-    assert.match(server, /docJobInfo\.mode === 'analysis'/u);
+    assert.match(server, /docJobInfo\.mode === 'document'/u);
   });
 
   // the middleware itself, with the ledger stubbed
@@ -176,10 +197,10 @@ function withModel(model, fn) {
     let r2 = res(); let n2 = false;
     await mw({ session: { adminId: 0, role: 'master' }, body: { message: 'Ushbu hujjatni tahlil qiling', documentText: doc }, params: {} }, r2, () => { n2 = true; });
     assert.ok(n2);
-    assert.deepStrictEqual([r2.locals.documentJob.mode, r2.locals.documentJob.units], ['analysis', 2]);
+    assert.deepStrictEqual([r2.locals.documentJob.mode, r2.locals.documentJob.services, r2.locals.documentJob.units], ['document', ['analysis'], 2]);
     assert.deepStrictEqual(calls, [], 'no chat unit was reserved for the analysis');
     tiers.ledger.reserve = real.reserve;
-    assert.match(read('src/rag/subscription-tiers.js'), /if \(Number\(body\.confirmedUnits\) !== size\.units\) \{[\s\S]*?status\(409\)[\s\S]*?DOC_COST_CONFIRM/u);
+    assert.match(read('src/rag/subscription-tiers.js'), /\|\| \(services\.length === 1 && Number\(body\.confirmedUnits\) === size\.units\);\s*if \(!ok\) \{[\s\S]*?status\(409\)[\s\S]*?DOC_COST_CONFIRM/u);
   });
 
   console.log('routes');
@@ -198,10 +219,11 @@ function withModel(model, fn) {
 
   await test('the margin report uses actual sale prices, never the catalogue', () => {
     const src = read('src/rag/subscription-tiers.js');
-    const fn = src.slice(src.indexOf('async function marginReport'), src.indexOf('module.exports'));
+    const fn = src.slice(src.indexOf('function periodRevenue'), src.indexOf('module.exports'));
     assert.ok(!/PLANS\[/u.test(fn), 'no catalogue price in the margin report');
-    assert.match(fn, /p\.price_uzs == null/u);
-    assert.match(fn, /recognizedCreditUzs/u);
+    assert.match(fn, /const known = p\.price_uzs != null;/u);
+    assert.match(fn, /Number\(p\.price_uzs\) \+ \(creditKnown \? creditIn : 0\) - Number\(p\.carried_out_uzs \|\| 0\)/u, 'price + credit in - credit out');
+    assert.match(fn, /refundsUzs: null, refundsStatus: 'not_tracked'/u);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
