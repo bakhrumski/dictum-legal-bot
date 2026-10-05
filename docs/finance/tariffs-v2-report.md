@@ -66,6 +66,16 @@ Stress (jami xizmat budjeti, narxga nisbatan; 80% chegara):
 | storage/ops +50% | 125 100 (62.9%) | 375 300 (62.7%) | 625 500 (62.6%) |
 | hammasi birga | 181 620 (91.3% ⚠ >80%) | 544 860 (91.0% ⚠ >80%) | 908 100 (90.9% ⚠ >80%) |
 
+Individual chegirma chegarasi (xarajat modeli cm-2026-10-05-planning-v1, taxminiy):
+
+| Tarif | Katalog | Konservativ xarajat | Minimal narx (xarajat / 0,80, 1 000 ga yuqoriga) | Eng katta chegirma | Minimal narxda xarajat ulushi |
+|---|---:|---:|---:|---:|---:|
+| Silver | 199 000 | 120 000 | 150 000 | 49 000 (24.62%) | 80.0% |
+| Gold | 599 000 | 360 000 | 450 000 | 149 000 (24.87%) | 80.0% |
+| Platinum | 999 000 | 600 000 | 750 000 | 249 000 (24.92%) | 80.0% |
+
+100 Silver: 70 katalog narxida, 30 minimal narxda (hammasi 100%): katalog bo'yicha 19.90 mln, haqiqiy tushum 18.43 mln (chegirma 1.47 mln), xizmat budjeti 12.00 mln, natija 6.43 mln (boshqa xarajatlardan oldin).
+
 
 ## 3. 80% xarajat maqsadi
 
@@ -89,28 +99,86 @@ Stress (jami xizmat budjeti, narxga nisbatan; 80% chegara):
   - Tavsiya: yangi invoice narxini (masalan, 1 ⭐ = 1 javob yoki Stars sotuvini to'xtatish) egasi hal qiladi. Kod buni o'zgartirmadi.
   - Sotib olingan kreditlar to'liq saqlanadi.
 
-## 5. Jonli benchmark (tasdiqsiz boshlanmaydi)
+## 5. Individual chegirmalar (2026-10-05)
 
-Stub testlar provider billingini isbotlamaydi. O'lchov uchun quyidagilar tayyorlanadi; jonli pullik ishga tushirish egasining alohida tasdig'i bilan bo'ladi.
+Qoida: `finalPrice >= conservativeTotalServiceCost / 0.80`, minimal narx 1 000 so'mga yuqoriga yaxlitlanadi, butun son (so'm) arifmetikasi (`src/rag/tariff-pricing.js`).
 
-**To'plam:**
-- 40 savol: 10 ish haqi / kompensatsiya (333, 560), 10 ishdan bo'shatish (511, 347 bilan chalkashtiruvchi), 10 fuqarolik, 10 boshqa soha;
-- 20 hujjat: 5 × 1–10 sahifa, 5 × 11–20, 5 × 21–30, 5 × skan;
-- 10 draft turi.
+**Konservativ xarajat nimadan tuziladi:**
+- yangi davr limitlarining 100% ishlatilishi (planlash birlik budjetlari bilan, barcha AI bosqichlari);
+- OCR;
+- operatsion ulush: hosting, DB, storage, support, to'lov komissiyasi; Platinum'da Workspace ham.
 
-**Har bir yozuv uchun yig'iladi:**
-- huquqiy to'g'rilik va to'liqlik (reviewer varag'i: 0–2 ball, norma / hisoblash usuli / faktlar alohida);
-- noto'g'ri cache hit;
-- chaqiruvlar soni, known / unknown xarajat;
-- p50 / p95 latency;
-- eski va yangi pipeline solishtirmasi.
+**Nimalar ishlatilmaydi:** foydalanuvchining tarixiy kam sarfi, o'rtacha yoki p95 sarf, isbotlanmagan cache foydasi.
 
-**Sarf budjeti (planlash bo'yicha):**
-- 40 × $0.025 + 20 × ~2 birlik × $0.30 × 2 (tahlil + xulosa) + 10 × $0.06 ≈ **$26**;
-- ikki pipeline uchun ≈ **$52**;
-- zaxira bilan **$75** chegarasi.
+**O'lchangan tannarx** faqat yuqoriga ta'sir qiladi: agar o'lchangan birlik narxi planlash budjetidan yuqori bo'lsa, AI qismi oshiriladi.
 
-## 6. Hisobotni qayta hosil qilish
+**Payment fee:**
+- Hozir 0 bp, chunki egasining operatsion ajratmasi ichida — ikki marta qo'shilmaydi.
+- Ulush sifatida kiritilsa, formula `fixed / (0.80 − fee)` bo'ladi. Misol: 3% fee bilan Silver minimal narxi 156 000.
+
+**Noma'lum xarajat:** asoslangan zaxirasi bo'lmasa, taklif rad etiladi (0 deb hisoblanmaydi).
+
+**Minimal narx katalog narxidan yuqori bo'lsa:**
+- chegirma berilmaydi;
+- admin ogohlantirishi chiqadi;
+- sotib olingan huquqlar o'zgarmaydi.
+
+**Taklif nimani o'zgartiradi va nimani o'zgartirmaydi:**
+- Kvotani kamaytirmaydi — tarifning to'liq limiti beriladi.
+- Bitta 30 kunlik davr uchun, bir martalik; renewal'ga o'tmaydi.
+- Yaratilishi obunani faollashtirmaydi: haqiqiy to'lov tasdiqlangach `POST /api/admin/tariff/grant { offerId, paymentRef }` (kelajakdagi provider callback ham shu funksiya).
+- Narx taklifdan olinadi: klient yuborgan summa farq qilsa, grant rad etiladi.
+
+**Upgrade bilan birga:**
+- Eski davr(lar)ning ishlatilmagan qiymati `credit_uzs` sifatida yoziladi — bu yangi naqd tushum emas.
+- `price_uzs` = naqd = yakuniy narx − kredit.
+- Yangi kvota to'liq xarajat bilan baholanadi (`economics` maydoni).
+- To'lov qabul qilingandan keyin model o'zgargan bo'lsa ham, narx hurmat qilinadi va `belowCurrentMinimum` belgisi qo'yiladi. Yashirin qo'shimcha haq chiqarilmaydi.
+
+**Audit** (`tariff_offers`): `offer_id`, `user_id`, plan va kvota versiyasi, `list_price` / `discount` / `final_price`, `min_price`, `cost_estimate` va `cost_model_version`, yaratuvchi Master, sabab, `created_at` / `expires_at`, holat (draft / active / redeemed / expired / revoked), `payment_ref` va aktivatsiya qilingan `period_id`. Bekor qilish allaqachon sotib olingan davrni bekor qilmaydi.
+
+## 6. Margin hisoboti endi haqiqiy sotuv narxida
+
+`GET /api/admin/margin-report` (`marginReport`):
+- **Daromad** — har bir davrning haqiqiy sotuv narxi (naqd + ko'chirilgan kredit, chegirmadan keyin), oyna kunlariga pro rata.
+- **Alohida ko'rsatiladi:** katalog narxi, haqiqiy sotuv narxi, chegirma, naqd va kredit, refund. Refund hozircha 0 — refund oqimi yo'q.
+- **Chegirmali mijoz** katalog narxi bilan hisoblanmaydi.
+- **Migratsiyadan ko'chirilgan legacy davrlar** (to'lov yozilmagan, master bergan): daromad **noma'lum** deb alohida chiqadi. v1 ro'yxat narxi faqat ma'lumot uchun, yangi katalog narxi hech qachon.
+- **Xarajat** — o'lchangan ma'lum spend. Noma'lum narxli chaqiruvlar soni alohida.
+- **Prognoz marja** (grant paytidagi `economics.forecastLeftUzs`) va **yakuniy marja** alohida.
+
+## 7. Jonli benchmark: avval kichik pilot (tasdiqsiz boshlanmaydi)
+
+Stub testlar provider billingini isbotlamaydi. ~$75 lik to'liq benchmark tasdiqlanmagan, uning o'rniga avval kichik pilot taklif qilinadi.
+
+**Tanlov:**
+- 8 savol: 333/560 ish haqi va kompensatsiya — 3; 511/347 chalkashtiruvchi — 2; fuqarolik — 2; "summani hisoblamang" — 1.
+- 4 hujjat: 1–5 sahifa, 6–10 sahifa, 11–20 sahifa (2 birlik), skan (OCR).
+- 2 draft.
+
+**Har bir xizmatdan namuna:** chat ×8, tahlil ×4, xulosa ×2 (bitta qisqa, bitta 2 birlik), draft ×2, OCR ×1.
+
+**Xarajat chegarasi:**
+- Planlash budjeti bo'yicha ~$4 (8 × $0.025 + 6 × ~1.5 birlik × $0.30 + 2 × $0.06 ≈ $3.0, zaxira bilan).
+- **Qattiq limit $5:** test hisobi budjeti sifatida (`TG_TEST_ACCOUNT_BUDGET_USD=5`, mavjud mexanizm) yoki shu summadan oshganda to'xtatiladi.
+
+**Reviewer mezonlari** (har biri 0–2 ball):
+- norma mavjudligi to'g'ri;
+- hisoblash usuli manbaga mos;
+- faktlar yetarliligi to'g'ri baholangan;
+- noto'g'ri modda yo'q;
+- javob to'liq va uzilmagan.
+
+Har bir javob uchun yozib olinadi: chaqiruvlar soni, known va unknown xarajat, p50 latency.
+
+**Kengaytirish sharti:**
+- har xizmat bo'yicha o'lchangan known birlik narxi planlash budjetidan oshmasa (yoki farq tushuntirilsa);
+- unknown narxli chaqiruvlar ≤ 10%;
+- reviewer ballari ≥ 1,5 o'rtacha.
+
+Shundan keyingina to'liq benchmark (~$75) uchun alohida ruxsat so'raladi.
+
+## 8. Hisobotni qayta hosil qilish
 
     node scripts/tariff-scenarios.js
     node scripts/tariff-scenarios.js --hit-cost-share=0.3

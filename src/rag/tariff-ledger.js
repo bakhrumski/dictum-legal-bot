@@ -241,16 +241,20 @@ async function adoptUnrecordedPlan(db, account, now) {
   if (new Date(account.tariff_expires_at) <= now) return;
   const ref = `migration:legacy_v1:${account.id}:${new Date(account.tariff_expires_at).toISOString().replace(/\D/gu, '').slice(0, 14)}`;
   await db.query(
-    `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, payment_ref, provider)
-     SELECT $1, $2, $3, 'legacy_v1', 'migration', $4, $5, '{}'::jsonb, $6, 'migration'
+    `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, payment_ref, provider, list_price_uzs)
+     SELECT $1, $2, $3, 'legacy_v1', 'migration', $4, $5, '{}'::jsonb, $6, 'migration', $8
       WHERE NOT EXISTS (
         SELECT 1 FROM tariff_periods
          WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND starts_at <= $7 AND ends_at > $7)
      ON CONFLICT DO NOTHING`,
     [`a:${account.id}`, account.id, account.tariff_plan,
       account.tariff_starts_at || new Date(new Date(account.tariff_expires_at).getTime() - 30 * 86400000),
-      account.tariff_expires_at, ref, now]);
+      account.tariff_expires_at, ref, now, LEGACY_LIST_PRICE_UZS[account.tariff_plan] || null]);
 }
+
+// v1 list prices, kept only as a reference for legacy grants whose payment
+// was never recorded (their revenue is reported as unknown, not as these)
+const LEGACY_LIST_PRICE_UZS = Object.freeze({ silver: 199000, gold: 399000, platinum: 999000 });
 
 /**
  * What this person is entitled to now:
@@ -444,26 +448,100 @@ async function release(jobKey, reason = 'failed', { db = pool } = {}) {
 
 // ── Paid periods ──────────────────────────────────────────────────────────
 /**
- * Grant a paid 30-day period for a payment (or a master's grant).
- * Idempotent by paymentRef: a repeated callback returns the same period.
+ * What a period was sold for: the cash received plus any value carried in
+ * from a superseded period. A legacy grant made before payments were
+ * recorded has no recorded price: its v1 list price is used as its value,
+ * marked unknown (never the new catalogue price).
+ */
+function periodValue(p) {
+  if (p.price_uzs != null) return { uzs: Number(p.price_uzs) + Number(p.credit_uzs || 0), known: true };
+  return { uzs: Number(p.list_price_uzs || 0), known: false };
+}
+
+/** Unused share of one period's value at `now` (a queued period is wholly unused), in so'm. */
+function unusedValue(p, now) {
+  const start = new Date(p.starts_at).getTime();
+  const end = new Date(p.ends_at).getTime();
+  const total = end - start;
+  if (total <= 0) return 0;
+  const left = Math.max(0, Math.min(total, end - Math.max(start, now.getTime())));
+  return Math.floor(periodValue(p).uzs * left / total);
+}
+
+/**
+ * Credit for an upgrade: the unused value of every period it supersedes -
+ * the running one and any renewal already paid and queued - floored to
+ * 1 000 so'm. It is value carried over, not new cash.
+ */
+function upgradeCredit(periods, now) {
+  const list = Array.isArray(periods) ? periods : [periods];
+  const sum = list.reduce((t, p) => t + unusedValue(p, now), 0);
+  return Math.floor(sum / 1000) * 1000;
+}
+
+async function supersedable(db, adminId, now) {
+  const r = await db.query(
+    `SELECT * FROM tariff_periods
+      WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND ends_at > $2
+      ORDER BY starts_at`, [`a:${adminId}`, now]);
+  return r.rows;
+}
+
+/**
+ * Grant a paid 30-day period for a confirmed payment (a master's grant
+ * until a payment provider is connected; a provider callback later - the
+ * same function). Idempotent by paymentRef: a repeated callback returns the
+ * same period.
  *   renewal (same plan, one is running)  -> starts when the running one ends
  *   upgrade (higher plan)                 -> starts now; the running period
- *                                            is superseded (its unused units
- *                                            do not carry over; the price
- *                                            credit is in quotePlanChange)
+ *                                            is superseded and its unused
+ *                                            days are credited (credit_uzs,
+ *                                            not new cash)
  *   downgrade (lower plan)                -> starts when the running one ends
+ * offerId: an individual discount offer (tariff_offers) for exactly this
+ * user and plan, active and not expired; redeemed once, here. The price is
+ * the offer's (or the catalogue's) - never one sent by a client; amountUzs,
+ * when given, must equal the cash due or the grant is refused. A discount
+ * never carries to the next renewal: a period without an offer is at the
+ * catalogue price. The full quota of the plan is granted either way.
  * No rollover: each period has its own limits.
  */
-async function grantPaidPeriod({ adminId, plan, paymentRef, provider = 'manual', amountUzs = null, createdBy = null, source = 'payment', now = new Date() }) {
+async function grantPaidPeriod(args) {
+  const out = await grantPaidPeriodLocked(args);
+  if (out && out.refused) throw new Error(out.refused);
+  return out;
+}
+
+async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'manual', amountUzs = null, createdBy = null, source = 'payment', offerId = null, now = new Date() }) {
   if (!PAID_PLAN_ORDER.includes(plan)) throw new Error(`not a paid plan: ${plan}`);
   if (!paymentRef) throw new Error('paymentRef is required');
   const cfg = PLAN_CATALOG[plan];
   return withLock({ adminId }, async (db) => {
     const dup = await db.query('SELECT * FROM tariff_periods WHERE payment_ref = $1', [paymentRef]);
-    if (dup.rows[0]) return { period: dup.rows[0], duplicate: true };
+    if (dup.rows[0]) {
+      if (Number(dup.rows[0].admin_id) !== Number(adminId)) throw new Error('payment_ref_used_for_another_user');
+      return { period: dup.rows[0], duplicate: true };
+    }
     const account = await accountRow(db, adminId);
     if (!account) throw new Error('unknown account');
     if (account.role !== 'user') throw new Error('staff accounts are not on tariffs');
+
+    let offer = null;
+    if (offerId) {
+      const o = await db.query('SELECT * FROM tariff_offers WHERE id = $1 FOR UPDATE', [offerId]);
+      offer = o.rows[0] || null;
+      if (!offer) throw new Error('offer_not_found');
+      if (Number(offer.user_id) !== Number(adminId)) throw new Error('offer_for_another_user');
+      if (offer.plan !== plan) throw new Error('offer_for_another_plan');
+      if (offer.status === 'active' && new Date(offer.expires_at) <= now) {
+        // recorded, then refused after the transaction commits (a throw here
+        // would roll the status back)
+        await db.query(`UPDATE tariff_offers SET status = 'expired' WHERE id = $1 AND status = 'active'`, [offer.id]);
+        return { refused: 'offer_expired' };
+      }
+      if (offer.status !== 'active') throw new Error(`offer_${offer.status}`);
+    }
+
     await adoptUnrecordedPlan(db, account, now);
     const running = await db.query(
       `SELECT * FROM tariff_periods
@@ -478,13 +556,49 @@ async function grantPaidPeriod({ adminId, plan, paymentRef, provider = 'manual',
       if (rank > lastRank) change = 'upgrade';
       else { change = rank === lastRank ? 'renewal' : 'downgrade'; startsAt = new Date(last.ends_at); }
     }
+    const listPrice = offer ? Number(offer.list_price_uzs) : cfg.priceUzs;
+    const discount = offer ? Number(offer.discount_uzs) : 0;
+    const finalPrice = listPrice - discount;
+    const credit = change === 'upgrade' ? Math.min(upgradeCredit(await supersedable(db, adminId, now), now), finalPrice) : 0;
+    const cash = finalPrice - credit;
+    if (amountUzs != null && amountUzs !== '' && Number(amountUzs) !== cash) {
+      throw new Error(`amount_mismatch: due ${cash}`);
+    }
+    // the economics of this sale as granted: the new quota's conservative
+    // cost against the price (cash + credit); a price now under the current
+    // floor is honoured (the payment was accepted) and flagged, never re-billed
+    let economics = null;
+    try {
+      const pricing = require('./tariff-pricing');
+      const model = pricing.costModel();
+      const c = pricing.conservativeCost(plan, { model });
+      if (c.ok) {
+        const fee = Math.floor((finalPrice * (model.paymentFeeBp || 0) + 9999) / 10000);
+        const total = c.fixedUzs + fee;
+        const min = pricing.minimumPrice(c.fixedUzs, model.paymentFeeBp || 0);
+        economics = { costModelVersion: model.version, estimatedServiceCostUzs: total, finalPriceUzs: finalPrice, cashUzs: cash, creditUzs: credit,
+          forecastLeftUzs: finalPrice - total, minPriceUzs: min, belowCurrentMinimum: finalPrice < min, confidence: 'estimated' };
+      } else {
+        economics = { costModelVersion: model.version, unknown: c.reason };
+      }
+    } catch (e) {
+      economics = { error: e.message };
+    }
     const endsAt = new Date(startsAt.getTime() + cfg.periodDays * 86400000);
     const ins = await db.query(
-      `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, price_uzs, payment_ref, provider, created_by)
-       VALUES ($1, $2, $3, 'v2', $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits,
+                                   price_uzs, list_price_uzs, discount_uzs, credit_uzs, offer_id, economics,
+                                   payment_ref, provider, created_by)
+       VALUES ($1, $2, $3, 'v2', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
       [`a:${adminId}`, adminId, plan, source, startsAt, endsAt, JSON.stringify(cfg.quotas),
-        amountUzs == null ? cfg.priceUzs : amountUzs, paymentRef, provider, createdBy]);
+        cash, listPrice, discount, credit, offer ? offer.id : null, economics ? JSON.stringify(economics) : null,
+        paymentRef, provider, createdBy]);
     const period = ins.rows[0];
+    if (offer) {
+      await db.query(
+        `UPDATE tariff_offers SET status = 'redeemed', payment_ref = $2, period_id = $3, redeemed_at = $4 WHERE id = $1`,
+        [offer.id, paymentRef, period.id, now]);
+    }
     if (change === 'upgrade') {
       // every running or queued lower period gives way to the upgrade
       await db.query(
@@ -494,32 +608,32 @@ async function grantPaidPeriod({ adminId, plan, paymentRef, provider = 'manual',
         [period.id, now, `a:${adminId}`]);
     }
     await syncAccountPlan(db, adminId, now);
-    return { period, change, duplicate: false };
+    return { period, change, duplicate: false, offerId: offer ? offer.id : null, cashUzs: cash, creditUzs: credit, economics };
   });
 }
 
 /**
- * The price of moving to `plan` now: an upgrade is credited the unused days
- * of the running period (pro rata of what was paid for it); a renewal or a
- * downgrade starts when the running period ends and costs the full price.
+ * The price of moving to `plan` now (optionally under an offer's price):
+ * an upgrade is credited the unused days of the running period, pro rata of
+ * what it was sold for; a renewal or a downgrade starts when the running
+ * period ends and costs the full price.
  */
-async function quotePlanChange(adminId, plan, { db = pool, now = new Date() } = {}) {
+async function quotePlanChange(adminId, plan, { db = pool, now = new Date(), priceUzs = null } = {}) {
   const cfg = PLAN_CATALOG[plan];
   if (!cfg || !cfg.priceUzs) return null;
+  const price = priceUzs != null ? Number(priceUzs) : cfg.priceUzs;
   const running = await db.query(
     `SELECT * FROM tariff_periods
       WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND starts_at <= $2 AND ends_at > $2
       ORDER BY starts_at DESC LIMIT 1`, [`a:${adminId}`, now]);
   const last = running.rows[0];
   if (!last || PAID_PLAN_ORDER.indexOf(plan) <= PAID_PLAN_ORDER.indexOf(last.plan)) {
-    return { plan, change: last ? (last.plan === plan ? 'renewal' : 'downgrade') : 'new', priceUzs: cfg.priceUzs, creditUzs: 0, dueUzs: cfg.priceUzs,
+    return { plan, change: last ? (last.plan === plan ? 'renewal' : 'downgrade') : 'new', priceUzs: price, creditUzs: 0, dueUzs: price,
       startsAt: last ? last.ends_at : now };
   }
-  const total = new Date(last.ends_at) - new Date(last.starts_at);
-  const left = Math.max(0, new Date(last.ends_at) - now);
-  const paid = last.price_uzs != null ? last.price_uzs : (PLAN_CATALOG[last.plan] || {}).priceUzs || 0;
-  const creditUzs = Math.floor((paid * left / total) / 1000) * 1000;
-  return { plan, change: 'upgrade', priceUzs: cfg.priceUzs, creditUzs, dueUzs: Math.max(0, cfg.priceUzs - creditUzs), startsAt: now };
+  const rows = await supersedable(db, adminId, now);
+  const creditUzs = Math.min(upgradeCredit(rows, now), price);
+  return { plan, change: 'upgrade', priceUzs: price, creditUzs, creditKnown: rows.every(p => periodValue(p).known), dueUzs: price - creditUzs, startsAt: now };
 }
 
 /**
@@ -589,5 +703,5 @@ module.exports = {
   docUnits, draftUnits, jobFits, planEconomics, subjectsFor, lockKey,
   signDocTicket, readDocTicket, textHash,
   setLegacyCheck, resolveEntitlement, balance, reserve, commit, release,
-  grantPaidPeriod, quotePlanChange, syncAccountPlan, usedUnits,
+  grantPaidPeriod, quotePlanChange, syncAccountPlan, usedUnits, periodValue, upgradeCredit, withLock,
 };

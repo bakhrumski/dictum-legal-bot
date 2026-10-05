@@ -5,6 +5,7 @@
 -- are ignored by it. tariff_periods is dropped: the v1 code keeps the plan
 -- in admins.tariff_*, which v2 keeps in sync.
 BEGIN;
+DROP TABLE IF EXISTS public.tariff_offers;
 ALTER TABLE public.tariff_usage DROP CONSTRAINT IF EXISTS tariff_usage_period_id_fkey;
 DROP TABLE IF EXISTS public.tariff_periods;
 COMMIT;

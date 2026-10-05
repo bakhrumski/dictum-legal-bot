@@ -53,6 +53,7 @@ const usageLedger = require('../ai/usage-ledger');
 const { oauthRedirectUri, canonicalAuthRedirect } = require('../auth/oauth-host');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { retrieveAspects } = require('../rag/question-aspects');
+const documentJob = require('../rag/document-job');
 const { legalForceOf, legalForceLabel, sortByLegalForce } = require('../rag/legal-force');
 // Acts an answer's live lex.uz check found that the corpus lacks go to the
 // dashboard's suggested sources (src/rag/source-suggestions.js).
@@ -773,10 +774,11 @@ app.get('/api/admin/voicelab/tts', requireMasterAdmin, async (req, res) => {
 // a user actually cost per month, and who are the p95 outliers? Use this before
 // repricing plans instead of guessing at token estimates.
 //   GET /api/admin/spend-report?month=YYYY-MM
-// ── Per-customer margin + loyalty rebate (master only) ──────────────────────
-// Answers "who is subsidising whom". Cost comes from llm_spend_log, so these
-// are measured margins, not modelled ones. Anyone above REBATE_THRESHOLD has
-// earned a discount on their next renewal.
+// ── Per-customer margin (master only) ───────────────────────────────────────
+// Answers "who is subsidising whom". Revenue is each period's actual sale
+// price (after discounts; credits carried on upgrade shown apart; unknown
+// where a legacy payment was never recorded), cost is measured spend from
+// llm_spend_log (tariffs v2, src/rag/subscription-tiers.js marginReport).
 app.get('/api/admin/margin-report', requireMasterAdmin, async (req, res) => {
   try {
     const report = await tariffModule.marginReport({
@@ -6390,7 +6392,7 @@ async function classifyLegalTopic(message, opts = {}) {
   }
 }
 
-app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-chat'), async (req, res) => {
+app.post('/api/legal-chat', requireAuth, tariffModule.enforceChatQuota('/api/legal-chat'), async (req, res) => {
   try {
     const { message, history, databases, topic: rawTopic, topics, autoDetect } = req.body;
     if (!message || typeof message !== 'string') {
@@ -6426,8 +6428,25 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     // Sanitize: strip runs of the box-drawing char used as the document
     // delimiter so a malicious file can't fake a "─── HUJJAT TUGADI ───"
     // marker and smuggle text out of the data region into instruction space.
-    const docContext = (typeof req.body.documentText === 'string')
-      ? req.body.documentText.replace(/\u0000/g, '').replace(/─{3,}/g, '—').trim().slice(0, 15000) : '';
+    // What the model sees of the document depends on the service the request
+    // was metered as (tariffs v2, src/rag/document-job.js): a question about
+    // it gets the relevant excerpts (one chat unit); an analysis of it, paid
+    // in analysis units, gets the whole document (long ones through the
+    // digest). It used to be the first 15 000 characters for one chat unit.
+    const rawDoc = (typeof req.body.documentText === 'string')
+      ? req.body.documentText.replace(/\u0000/g, '').replace(/─{3,}/g, '—').trim() : '';
+    const docJobInfo = res.locals.documentJob || { mode: rawDoc ? 'chat_excerpt' : 'chat' };
+    let documentScope = null;
+    let docContext = '';
+    if (rawDoc && docJobInfo.mode === 'analysis') {
+      docContext = rawDoc.length > 30000 ? await digestLongDocument(rawDoc, req.session?.adminId || null) : rawDoc;
+      documentScope = { mode: 'analysis', units: docJobInfo.units, totalChars: rawDoc.length, excerpt: false };
+    } else if (rawDoc) {
+      const ex = documentJob.selectExcerpt(rawDoc, message);
+      docContext = ex.text;
+      documentScope = { mode: 'chat_excerpt', excerpt: ex.excerpt, usedChars: ex.usedChars, totalChars: ex.totalChars,
+        analysisUnits: tariffModule.ledger.docUnits({ chars: rawDoc.length }).units };
+    }
     const hasDocument = docContext.length > 0;
 
     // Resolve the effective topic:
@@ -6814,7 +6833,7 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
     // RAG query above, which stays keyed to the question so retrieval isn't
     // polluted by the document body).
     const finalUserText = hasDocument
-      ? `${message}\n\n─── ILOVA QILINGAN HUJJAT MATNI ───\n${docContext}\n─── HUJJAT TUGADI ───`
+      ? `${message}\n\n─── ILOVA QILINGAN HUJJAT MATNI ───\n${docContext}\n─── HUJJAT TUGADI ───${documentJob.excerptInstruction(documentScope, lexLangForText(message) === 'ru' ? 'ru' : 'uz')}`
       : message;
     aiMessages.push({ role: 'user', text: finalUserText });
 
@@ -7044,6 +7063,8 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceQuota('/api/legal-c
       policyVersions,
       qaBank: qaMatchInfo,
       nextActions: buildLegalNextActions({ question: message, answer: displayReply, topic }),
+      // what of an attached document was used, and under which service
+      documentScope: documentScope ? { ...documentScope, note: documentJob.excerptNote(documentScope, documentScope.analysisUnits) || null } : null,
     };
 
     // Store in the answer cache (fire-and-forget; failed answers never cached).
@@ -10116,7 +10137,7 @@ app.post('/api/tariff/quote', requireAuth, async (req, res) => {
 // downgrade rules: tariff-ledger.grantPaidPeriod.
 app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
   try {
-    const { adminId, plan, paymentRef, amountUzs = null, provider = 'manual' } = req.body || {};
+    const { adminId, plan, paymentRef, amountUzs = null, provider = 'manual', offerId = null } = req.body || {};
     if (!Number.isInteger(Number(adminId)) || !tariffModule.ledger.PAID_PLAN_ORDER.includes(plan)) {
       return res.status(400).json({ error: 'adminId va to\'g\'ri pullik tarif kerak' });
     }
@@ -10126,12 +10147,110 @@ app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
       adminId: Number(adminId), plan, paymentRef: `${String(provider).slice(0, 20)}:${ref}`,
       provider: String(provider).slice(0, 30), amountUzs: amountUzs == null ? null : Number(amountUzs),
       createdBy: req.session.adminId, source: 'admin',
+      // an individual offer: its server-side price, for exactly this user and plan, redeemed once
+      offerId: offerId ? String(offerId) : null,
     });
-    logAudit(req, 'tariff.grant', 'admin', `${adminId}:${plan}:${out.duplicate ? 'duplicate' : out.change}`);
+    logAudit(req, 'tariff.grant', 'admin', `${adminId}:${plan}:${out.duplicate ? 'duplicate' : out.change}${out.offerId ? `:offer ${out.offerId}` : ''}`);
     res.json({ ok: true, ...out });
   } catch (err) {
     console.error('[TARIFF GRANT] error:', err.message);
     res.status(400).json({ error: err.message });
+  }
+});
+
+// ── Individual discount offers (master only; docs/tariffs-v2.md §9) ─────────
+// Quote, create, list, revoke, check. Creating an offer activates nothing:
+// the period starts with POST /api/admin/tariff/grant { offerId, paymentRef }
+// once the payment is confirmed. Permission is the master role, checked by
+// the route AND in the database by the offer functions.
+const tariffOffers = require('../rag/tariff-offers');
+
+const OFFER_REASONS = {
+  master_only: 'Faqat Master Admin chegirma yarata oladi.',
+  unknown_user: 'Foydalanuvchi topilmadi.',
+  not_an_ordinary_user: 'Chegirma faqat oddiy foydalanuvchiga beriladi.',
+  reason_required: 'Chegirma sababini yozing (3–500 belgi).',
+  invalid_validity: 'Amal qilish muddati 1–30 kun.',
+  one_of_percent_or_amount: 'Foiz yoki summadan faqat bittasini kiriting.',
+  invalid_percent: 'Foiz 0 dan katta va 100 dan kichik, ko\'pi bilan 2 kasr xonali bo\'lsin.',
+  invalid_amount: 'Chegirma summasi butun so\'m, 0 dan katta va narxdan kichik bo\'lsin.',
+  discount_required: 'Chegirma foizi yoki summasini kiriting.',
+};
+function offerError(res, out) {
+  const q = out.quote || out;
+  res.status(out.reason === 'master_only' ? 403 : 400).json({
+    ok: false, reason: out.reason, message: q.message || OFFER_REASONS[out.reason] || out.reason,
+    quote: out.quote || null,
+  });
+}
+
+app.post('/api/admin/tariff/offers/quote', requireMasterAdmin, async (req, res) => {
+  try {
+    const { userId, plan, discountPercent = null, discountUzs = null } = req.body || {};
+    const q = await tariffOffers.quoteOffer({ userId: Number(userId), plan, discountPercent, discountUzs });
+    if (!q.ok && !q.listPriceUzs) return offerError(res, q);
+    res.json({ ...q, message: q.message || (q.ok ? null : OFFER_REASONS[q.reason] || q.reason) });
+  } catch (err) {
+    console.error('[TARIFF OFFER QUOTE]', err.message);
+    res.status(500).json({ error: 'Quote hisoblanmadi' });
+  }
+});
+
+app.post('/api/admin/tariff/offers', requireMasterAdmin, async (req, res) => {
+  try {
+    const { userId, plan, discountPercent = null, discountUzs = null, reason = '', validDays = 7, draft = false } = req.body || {};
+    const out = await tariffOffers.createOffer({
+      createdBy: req.session.adminId, userId: Number(userId), plan, discountPercent, discountUzs, reason, validDays: Number(validDays), draft: draft === true,
+    });
+    if (!out.ok) return offerError(res, out);
+    logAudit(req, 'tariff.offer.create', 'offer', `${out.offer.id}:${userId}:${plan}:${out.offer.final_price_uzs}`);
+    res.json({ ok: true, offer: out.offer, quote: out.quote });
+  } catch (err) {
+    console.error('[TARIFF OFFER CREATE]', err.message);
+    res.status(500).json({ error: 'Taklif yaratilmadi' });
+  }
+});
+
+app.get('/api/admin/tariff/offers', requireMasterAdmin, async (req, res) => {
+  try {
+    const status = ['draft', 'active', 'redeemed', 'expired', 'revoked'].includes(req.query.status) ? req.query.status : null;
+    res.json({ offers: await tariffOffers.listOffers({ userId: req.query.userId ? Number(req.query.userId) : null, status }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/tariff/offers/:id/revoke', requireMasterAdmin, async (req, res) => {
+  try {
+    const out = await tariffOffers.revokeOffer({ offerId: req.params.id, revokedBy: req.session.adminId, reason: (req.body || {}).reason || '' });
+    if (!out.ok) return offerError(res, out);
+    logAudit(req, 'tariff.offer.revoke', 'offer', req.params.id);
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/tariff/offers/:id/check', requireMasterAdmin, async (req, res) => {
+  try {
+    res.json(await tariffOffers.checkOffer({ offerId: req.params.id }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/tariff/users?q= — find ordinary users for an offer
+app.get('/api/admin/tariff/users', requireMasterAdmin, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 60);
+    if (q.length < 2) return res.json({ users: [] });
+    const r = await pool.query(
+      `SELECT id, username, full_name, tariff_plan, tariff_expires_at FROM admins
+        WHERE role = 'user' AND (username ILIKE $1 OR full_name ILIKE $1 OR id::text = $2)
+        ORDER BY id DESC LIMIT 20`, [`%${q.replace(/[%_]/g, '')}%`, q]);
+    res.json({ users: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -40,7 +40,19 @@ CREATE TABLE IF NOT EXISTS public.tariff_periods (
     -- NULL only for a trial: it does not expire, it is used up
     ends_at        timestamptz,
     limits         jsonb       NOT NULL DEFAULT '{}'::jsonb,
+    -- money, in whole so'm (integers: no float rounding):
+    --   list_price_uzs  the catalogue price when bought
+    --   discount_uzs    an individual offer's discount (tariff_offers)
+    --   credit_uzs      value carried from a superseded period on upgrade
+    --                   (not new cash)
+    --   price_uzs       cash received for this period; NULL = not recorded
+    --                   (a legacy grant made before payments were recorded)
     price_uzs      integer,
+    list_price_uzs integer,
+    discount_uzs   integer NOT NULL DEFAULT 0,
+    credit_uzs     integer NOT NULL DEFAULT 0,
+    offer_id       uuid,
+    economics      jsonb,
     payment_ref    text,
     provider       varchar(30),
     status         varchar(12) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'cancelled')),
@@ -50,6 +62,13 @@ CREATE TABLE IF NOT EXISTS public.tariff_periods (
     CHECK (source = 'trial' OR ends_at IS NOT NULL),
     CHECK (ends_at IS NULL OR ends_at > starts_at)
 );
+
+-- (repeatable on a database that has an earlier draft of this table)
+ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS list_price_uzs integer;
+ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS discount_uzs integer NOT NULL DEFAULT 0;
+ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS credit_uzs integer NOT NULL DEFAULT 0;
+ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS offer_id uuid;
+ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS economics jsonb;
 
 -- One Sinov per subject, ever: a redeploy or a retry cannot grant another.
 CREATE UNIQUE INDEX IF NOT EXISTS tariff_periods_one_trial_uidx
@@ -91,13 +110,17 @@ CREATE INDEX IF NOT EXISTS tariff_usage_reserved_idx
 -- Carry every running paid subscription over with the rules it was sold
 -- with, until it ends. Idempotent: the payment_ref of a migration row is
 -- fixed per account and subscription start.
+-- What was actually paid for these was never recorded (payments were off,
+-- D-2: a master granted them), so price_uzs stays NULL - unknown, not the
+-- new catalogue price; list_price_uzs keeps the v1 list price for reference.
 INSERT INTO public.tariff_periods
-    (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, price_uzs, payment_ref, provider)
+    (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, price_uzs, list_price_uzs, payment_ref, provider)
 SELECT 'a:' || a.id, a.id, a.tariff_plan, 'legacy_v1', 'migration',
        COALESCE(a.tariff_starts_at, a.tariff_expires_at - interval '30 days'),
        a.tariff_expires_at,
        '{}'::jsonb,
        NULL,
+       CASE a.tariff_plan WHEN 'silver' THEN 199000 WHEN 'gold' THEN 399000 WHEN 'platinum' THEN 999000 END,
        'migration:legacy_v1:' || a.id || ':' || to_char(a.tariff_expires_at AT TIME ZONE 'UTC', 'YYYYMMDDHH24MISS'),
        'migration'
   FROM public.admins a
@@ -108,5 +131,41 @@ SELECT 'a:' || a.id, a.id, a.tariff_plan, 'legacy_v1', 'migration',
 ON CONFLICT DO NOTHING;
 
 ALTER TABLE public.tariff_periods ENABLE ROW LEVEL SECURITY;
+
+-- Individual discount offers (2026-10-05): a master offers one user one
+-- paid plan for one 30-day period at a discount, with a reason and an
+-- expiry; redeemed once, by the payment that activates the period. The
+-- quote (prices, cost estimate, model versions) is stored as it was made.
+CREATE TABLE IF NOT EXISTS public.tariff_offers (
+    id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id            integer     NOT NULL,
+    plan               varchar(20) NOT NULL CHECK (plan IN ('silver', 'gold', 'platinum')),
+    quota_version      text        NOT NULL,
+    quotas             jsonb       NOT NULL,
+    list_price_uzs     integer     NOT NULL CHECK (list_price_uzs > 0),
+    discount_uzs       integer     NOT NULL CHECK (discount_uzs > 0),
+    final_price_uzs    integer     NOT NULL CHECK (final_price_uzs > 0),
+    min_price_uzs      integer     NOT NULL CHECK (min_price_uzs > 0),
+    cost_estimate      jsonb       NOT NULL,
+    cost_model_version text        NOT NULL,
+    reason             text        NOT NULL CHECK (char_length(reason) BETWEEN 3 AND 500),
+    created_by         integer     NOT NULL,
+    created_at         timestamptz NOT NULL DEFAULT now(),
+    expires_at         timestamptz NOT NULL,
+    status             varchar(10) NOT NULL DEFAULT 'active'
+                       CHECK (status IN ('draft', 'active', 'redeemed', 'expired', 'revoked')),
+    payment_ref        text UNIQUE,
+    period_id          bigint REFERENCES public.tariff_periods(id),
+    redeemed_at        timestamptz,
+    revoked_at         timestamptz,
+    revoked_by         integer,
+    revoke_reason      text,
+    CHECK (final_price_uzs = list_price_uzs - discount_uzs),
+    CHECK (final_price_uzs >= min_price_uzs),
+    CHECK (expires_at > created_at),
+    CHECK (status <> 'redeemed' OR (payment_ref IS NOT NULL AND period_id IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS tariff_offers_user_idx ON public.tariff_offers (user_id, created_at DESC);
+ALTER TABLE public.tariff_offers ENABLE ROW LEVEL SECURITY;
 
 COMMIT;

@@ -80,11 +80,28 @@ const stress = [
   return { plan, serviceUzs: s, share: s / C[plan].priceUzs, within80: s <= C[plan].priceUzs * P.costCeilingShare };
 }) }));
 
+// 8. individual discounts at the price floor (finalPrice >= conservative cost / 0.80)
+const pricing = require('../src/rag/tariff-pricing');
+const floors = ['silver', 'gold', 'platinum'].map(plan => {
+  const c = pricing.conservativeCost(plan);
+  const min = pricing.minimumPrice(c.fixedUzs, pricing.costModel().paymentFeeBp || 0);
+  return { plan, listUzs: C[plan].priceUzs, costUzs: c.fixedUzs, minUzs: min, maxDiscountUzs: C[plan].priceUzs - min,
+    maxDiscountPct: Math.floor((C[plan].priceUzs - min) * 10000 / C[plan].priceUzs) / 100, costShareAtMin: c.fixedUzs / min };
+});
+const discountScenario = (() => {
+  // 100 Silver customers: 70 at list, 30 at the floor price, all using 100%
+  const list = C.silver.priceUzs; const min = floors[0].minUzs; const cost = floors[0].costUzs;
+  const revenue = 70 * list + 30 * min; const service = 100 * cost;
+  return { name: '100 Silver: 70 katalog narxida, 30 minimal narxda (hammasi 100%)', revenue, service, result: revenue - service,
+    catalogRevenue: 100 * list, discountsUzs: 30 * (list - min) };
+})();
+
 const out = {
   basis: 'planning budgets at 100% use, not measured cost (src/rag/tariff-ledger.js PLANNING)',
   planning: P, trialUzs: trialUzs(), trialUsd: aiUsd('sinov'),
   plans: ['silver', 'gold', 'platinum'].map(p => ledger.planEconomics(p)),
-  scenarios, breakEvenSilver, hitRates, hitCostShare: HIT_COST_SHARE, stress,
+  scenarios, breakEvenSilver, hitRates, hitCostShare: HIT_COST_SHARE, stress, floors, discountScenario,
+  costModelVersion: pricing.costModel().version,
 };
 
 if (process.argv.includes('--json')) {
@@ -102,5 +119,10 @@ if (process.argv.includes('--json')) {
   for (const h of hitRates) L.push(`| ${h.hitRate * 100}% | ${h.rows.map(r => `${fmt(r.serviceUzs)} (${(r.share * 100).toFixed(1)}%)`).join(' | ')} |`);
   L.push('', 'Stress (jami xizmat budjeti, narxga nisbatan; 80% chegara):', '', '| Holat | Silver | Gold | Platinum |', '|---|---:|---:|---:|');
   for (const s of stress) L.push(`| ${s.name} | ${s.rows.map(r => `${fmt(r.serviceUzs)} (${(r.share * 100).toFixed(1)}%${r.within80 ? '' : ' ⚠ >80%'})`).join(' | ')} |`);
+  L.push('', `Individual chegirma chegarasi (xarajat modeli ${out.costModelVersion}, taxminiy):`, '',
+    '| Tarif | Katalog | Konservativ xarajat | Minimal narx (xarajat / 0,80, 1 000 ga yuqoriga) | Eng katta chegirma | Minimal narxda xarajat ulushi |', '|---|---:|---:|---:|---:|---:|');
+  for (const f of floors) L.push(`| ${C[f.plan].label} | ${fmt(f.listUzs)} | ${fmt(f.costUzs)} | ${fmt(f.minUzs)} | ${fmt(f.maxDiscountUzs)} (${f.maxDiscountPct}%) | ${(f.costShareAtMin * 100).toFixed(1)}% |`);
+  const ds = discountScenario;
+  L.push('', `${ds.name}: katalog bo'yicha ${mln(ds.catalogRevenue)} mln, haqiqiy tushum ${mln(ds.revenue)} mln (chegirma ${mln(ds.discountsUzs)} mln), xizmat budjeti ${mln(ds.service)} mln, natija ${mln(ds.result)} mln (boshqa xarajatlardan oldin).`);
   console.log(L.join('\n'));
 }

@@ -14,6 +14,7 @@ const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { retrieveAspects } = require('../rag/question-aspects');
+const documentJob = require('../rag/document-job');
 const { hydrateMentionedOfficialActChunks } = require('../rag/official-citation-hydrator');
 const { appendRepealedNotice } = require('../rag/superseded-acts');
 const { hydrateLexAnchors } = require('../rag/lex-anchor-resolver');
@@ -310,6 +311,14 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
     if (verified.groundTruth) systemPrompt += `\n\n${verified.groundTruth}`;
     if (verified.fewShot) systemPrompt += `\n\n${verified.fewShot}`;
     systemPrompt += workspaceContextBlock(workspaceContext);
+    // Workspace documents reach the model as relevant excerpts within the
+    // chat document cap (ai-service DOCUMENT_CONTEXT_CHARS = document-job's
+    // CHAT_DOCUMENT_CONTEXT_CHARS); a request for a full analysis is not
+    // served as one under a chat unit (tariffs v2, 2026-10-05).
+    const wantsFullDocumentWork = /(^|\n)HUJJAT: /u.test(workspaceContext) && documentJob.isFullDocumentRequest(question);
+    if (wantsFullDocumentWork) {
+      systemPrompt += "\n\nMUHIM: Workspace hujjatlaridan faqat savolga oid parchalar berildi. Butun hujjatning to'liq tahlili yoki yuridik xulosasi deb javob bermang; parchalar asosida savolga javob bering.";
+    }
 
     const messages = [
       { role: 'system', text: systemPrompt },
@@ -452,8 +461,12 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
         estimatedCostUsd: verification.estimatedCostUsd,
       },
     });
+    if (wantsFullDocumentWork) {
+      reply += `\n\nℹ️ Workspace hujjatlaridan savolga oid parchalar (${documentJob.CHAT_DOCUMENT_CONTEXT_CHARS.toLocaleString('ru-RU')} belgigacha) ishlatildi. Butun hujjatni tahlil qilish — «Hujjat tahlili» yoki «Yuridik xulosa» xizmati: hujjat birligida, shaxsiy limitingizdan, ish boshlanishidan oldin sarf ko'rsatiladi.`;
+    }
     return {
       reply,
+      documentScope: wantsFullDocumentWork ? { mode: 'chat_excerpt', excerpt: true, maxChars: documentJob.CHAT_DOCUMENT_CONTEXT_CHARS } : null,
       provider: verification.status === 'revised'
         ? `${result.provider} + Lex QA`
         : result.provider,

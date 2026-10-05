@@ -75,6 +75,22 @@ Bitta tahlil yoki xulosa birligi — ko'pi bilan 10 sahifa va 40 000 belgi:
 - Tahlil va xulosa ketma-ket buyurtma qilinsa, o'sha foydalanuvchining digest natijasi qayta ishlatiladi (1 soat, user + matn hash kaliti bilan; boshqa hisobga o'tmaydi). Har bir xizmat o'z birligini alohida sarflaydi.
 - **Draft.** 1 birlik ≈ 5 standart sahifa / 20 000 chiqish belgisi (`draftUnits`). Hozirgi generatsiya 4 096 token bilan cheklangan va bu chegaradan oshmaydi. Uzun draft uchun alohida birlik — keyingi bosqich.
 
+### Hujjat biriktirilgan chat (2026-10-05)
+
+Fayl biriktirilgani o'zi tahlil degani emas: xizmat amalda so'ralgan ishga qarab aniqlanadi (`src/rag/document-job.js`). Qoida veb, Workspace va Telegram'da bir xil.
+
+- **Hujjat bo'yicha savol** ("5-band qonuniymi?") = 1 chat birligi.
+  - Modelga hujjatning savolga oid parchalari beriladi: sarlavha qismi va savol so'zlari bo'yicha tanlangan bandlar, ko'pi bilan 20 000 belgi (yarim tahlil birligi).
+  - Modelga "bu to'liq tahlil emas" deyiladi.
+  - Javob ostida qancha qism ishlatilgani va to'liq tahlil alohida xizmat ekani ko'rsatiladi.
+  - Ilgari hujjatning birinchi 15 000 belgisi jimgina 1 chat birligiga berilardi.
+- **Tahlil, tekshiruv yoki xulosa so'ralsa** ("hujjatni tahlil qiling", "проанализируйте договор") — bu hujjat ishi:
+  - butun hujjatdan birlik hisoblanadi;
+  - server avval 409 `DOC_COST_CONFIRM` va quote qaytaradi, dashboard tasdiq kartasini ko'rsatadi;
+  - tasdiqlangach (`confirmedUnits`) **faqat** tahlil birliklari yechiladi — chat birligi qo'shimcha olinmaydi.
+- **Workspace.** Hujjat konteksti xuddi shu 20 000 belgilik chegarada, parchalar bilan. To'liq tahlil so'ralsa, javob parchalarga asoslanganini aytadi va «Hujjat tahlili» xizmatiga yo'naltiradi.
+- **Telegram.** Fayllar AI'ga emas, yurist navbatiga tushadi; matn va ovozli savol esa chat.
+
 ## 4. OCR, ovoz
 
 - **OCR.** Cheksiz emas: davr uchun har bir tahlil birligiga 10 sahifa (Sinov 10, Silver 80, Gold 240, Platinum 400). Bitta so'rov — bitta sahifa/rasm. Narxi `llm_spend_log` da alohida o'lchanadi (stage `ocr`).
@@ -126,7 +142,36 @@ chat $0.025, tahlil $0.30/birlik, xulosa $0.30/birlik, draft $0.06.
 
 `AGENT_FREE_AI_LIMIT` endi ishlatilmaydi.
 
-## 8. Keyingi bosqichlar (alohida PR'lar)
+## 9. Individual chegirma (Master)
+
+Master aniq foydalanuvchiga aniq pullik tarif uchun bitta 30 kunlik davrga chegirmali taklif yaratadi. Dashboard → Boshqaruv → «Chegirmalar» bo'limi yoki `POST /api/admin/tariff/offers`.
+
+**Taklif:**
+- sabab va amal qilish muddati (1–30 kun) bilan, bir martalik;
+- renewal'ga o'tmaydi; takroriy chegirma — yangi taklif.
+
+**Narx chegarasi:**
+- yakuniy narx ≥ konservativ xizmat xarajati / 0,80, 1 000 so'mga yuqoriga yaxlitlanadi;
+- boshlang'ich minimal narxlar: Silver 150 000, Gold 450 000, Platinum 750 000 (taxminiy);
+- chegaradan oshgan chegirma jimgina o'zgartirilmaydi: rad etiladi va eng katta ruxsat etilgan chegirma ko'rsatiladi.
+
+**Ruxsat:** faqat Master — route (`requireMasterAdmin`) va bazadagi rol tekshiruvi.
+
+**Aktivatsiya:**
+- taklif obunani faollashtirmaydi;
+- to'lov tasdiqlangach `POST /api/admin/tariff/grant { adminId, plan, paymentRef, offerId }`;
+- narx serverdagi taklifdan olinadi;
+- taklif boshqa user yoki tarifga qo'llanmaydi;
+- parallel redeem — faqat bittasi o'tadi;
+- takroriy `paymentRef` qayta kvota bermaydi.
+
+**To'lovdan oldin:** `GET /api/admin/tariff/offers/:id/check` — muddat va joriy minimal narx tekshiriladi.
+
+**Xarajat modeli:** `TARIFF_COST_MODEL` (JSON) bilan almashtiriladi. Har bir komponent `status` bilan beriladi (`estimated`, `unknown` + `reserveUzs` + `reserveBasis`). Zaxirasiz noma'lum komponent yangi takliflarni to'xtatadi.
+
+Iqtisodiyot va audit: [`docs/finance/tariffs-v2-report.md`](finance/tariffs-v2-report.md) §5–6.
+
+## 8. Keyingi bosqichlar (alohida PR'lar, ushbu PR'da bajarilmagan)
 
 1. **Workspace.**
    - Hozir bor: ish `actor_id`, `workspace_id` va to'lovchi = sessiyadagi a'zo bilan yoziladi.
