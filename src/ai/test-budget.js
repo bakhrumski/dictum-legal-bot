@@ -70,6 +70,11 @@ async function entitlementFor(db, adminId, now = new Date()) {
     unknownCallUsd: Number(e.unknownCallUsd || 0.05),
     // the account's own per-request limit, else the production one
     perRequestUsd: e.perRequestUsd != null ? Number(e.perRequestUsd) : productionPerRequest,
+    // 'strict': a provider call is made only if its maximum cost (bound)
+    // fits what is left; a call with no bound is refused. 'estimated': such
+    // a call runs at unboundedCallUsd and is reported as estimated risk.
+    budgetMode: e.budgetMode === 'estimated' ? 'estimated' : 'strict',
+    unboundedCallUsd: Number(e.unboundedCallUsd) > 0 ? Number(e.unboundedCallUsd) : null,
   };
 }
 
@@ -128,10 +133,10 @@ async function admit(ent, requestId, { db = pool } = {}) {
 }
 
 /** The request finished: record what it committed and free the rest of its hold. Idempotent. */
-async function release(requestId, actualUsd, { db = pool } = {}) {
+async function release(requestId, actualUsd, { db = pool, risk = null } = {}) {
   await db.query(
-    `UPDATE test_budget_holds SET released_at = now(), actual_usd = $2 WHERE request_id = $1 AND released_at IS NULL`,
-    [requestId, Math.max(0, Number(actualUsd) || 0)]);
+    `UPDATE test_budget_holds SET released_at = now(), actual_usd = $2, risk = $3 WHERE request_id = $1 AND released_at IS NULL`,
+    [requestId, Math.max(0, Number(actualUsd) || 0), risk && (risk.calls || risk.boundExceeded) ? JSON.stringify(risk) : null]);
 }
 
 /**
@@ -149,10 +154,13 @@ async function attach(adminId, { db = pool } = {}) {
     label: 'test entitlement',
     admit: (store) => admit(ent, store.requestId, { db }).then(out => ({
       ...out,
-      pool: out.ok ? { label: `test entitlement budget (hold $${out.amount})`, limitUsd: out.amount, spentUsd: 0, unknownCallUsd: ent.unknownCallUsd } : null,
+      pool: out.ok ? { label: `test entitlement budget (hold $${out.amount})`, limitUsd: out.amount, spentUsd: 0, unknownCallUsd: ent.unknownCallUsd,
+        perCall: ent.budgetMode, unboundedCallUsd: ent.unboundedCallUsd } : null,
       maxCostUsd: out.ok ? out.amount : null,
     })),
-    release: (store, committedUsd) => release(store.requestId, committedUsd, { db }),
+    // what the request committed: known cost + unknown-cost calls at their
+    // reservation; estimated-risk calls are recorded apart on the hold
+    release: (store, committedUsd) => release(store.requestId, committedUsd, { db, risk: { calls: store.shared.estimatedRiskCalls, usd: store.shared.estimatedRiskUsd, boundExceeded: store.shared.boundExceeded } }),
     unknownCallUsd: ent.unknownCallUsd,
   });
 }

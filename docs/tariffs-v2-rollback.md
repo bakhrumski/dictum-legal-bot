@@ -17,20 +17,28 @@ u ishlashdan bosh tortadi.
 | VoiceLab / provayder | Env (`LLM_PROVIDER`, `VOICELAB_*`), deploy'siz | — |
 | Tariflar v2 butunlay | **Kod rollback** (2-bo'lim) | Saqlanadi |
 
-## 2. Kod rollback (ma'lumot saqlanadi)
+## 2. Kod rollback (ma'lumot saqlanadi) — aniq ketma-ketlik
 
-1. Render: oldingi relizni (v2'dan oldingi `main` commit, hozir `a3b858b`)
-   qayta deploy qilish. Schema o'zgarmaydi: 013 qo'shgan jadval va ustunlar
-   joyida qoladi, eski kod ularni o'qimaydi.
-2. Deploy tugagach, production bazasida bir marta:
-   `psql "$DATABASE_URL" -f scripts/rollback/tariffs-v2-to-v1.sql`
+Asosiy qoida: eski kod (`a3b858b`) baza tartibga keltirilmasdan **bir lahza ham** trafikka xizmat qilmasligi kerak. Aks holda u qaytarilgan (`released`) va tugallanmagan (`reserved`) v2 qatorlarini sarf deb sanaydi. Buning uchun `MAINTENANCE_MODE` kaliti bor (`src/api/maintenance.js`). U yoqilganda:
+- `/api/health` dan boshqa barcha API so'rovlari 503 oladi;
+- Telegram bot faqat qisqa xabar beradi: AI chaqirilmaydi, usage qatori yozilmaydi.
 
-   Sababi: eski kod `tariff_usage` dagi hisobning **har bir** qatorini
-   ishlatilgan deb sanaydi. v2 da bajarilmagan ishlar (`released` — limiti
-   qaytarilgan, `reserved` — davom etayotgan) ham qator bo'lib turadi.
-   Skript ularni o'chirmaydi: `tariff_usage_v2_hold` jadvaliga ko'chiradi.
-   Skript idempotent.
-3. Tekshirish: `GET /api/health`, bitta oddiy hisob bilan chat.
+Kalit 2026-10-06 dagi pilot-budjet PR'i bilan keladi. U deploy qilinmagan bo'lsa, 3-qadam o'rniga quyidagi "kalitsiz" varianti ishlatiladi.
+
+1. **Pilotni to'xtatish.** `POST /api/admin/tariff/test-entitlements/:userId/end`.
+2. **Render → Settings → Auto-Deploy: Off.** `main` ga kelgan yangi commit rollback o'rtasida deploy bo'lib ketmasligi uchun.
+3. **Trafikni to'xtatish.** Render → Environment → `MAINTENANCE_MODE=on` → Save. Servis qayta ishga tushadi, ishlab turgan so'rovlar to'xtaydi.
+   - Tekshirish: `/api/health` → 200; `/api/tariff/me` → 503 `MAINTENANCE`.
+   - 1–2 daqiqa kutiladi.
+4. **Rezervlarni tartibga keltirish.** `psql "$DATABASE_URL" -f scripts/rollback/tariffs-v2-to-v1.sql`.
+   - Tekshirish: `SELECT count(*) FROM tariff_usage WHERE status IN ('released','reserved')` → 0. Ko'chirilgan qatorlar `tariff_usage_v2_hold` da turadi.
+   - Bu paytda hech bir kod ish yozmaydi: v2 kodi maintenance rejimida.
+5. **Eski kodni yoqish.** Render → Manual Deploy → commit `a3b858b`.
+   - Eski kod `MAINTENANCE_MODE` ni bilmaydi, deploy tugashi bilan trafikka xizmat qila boshlaydi. Bu 4-qadamdan keyin bo'ladi, shuning uchun oraliq holat yo'q.
+6. **`MAINTENANCE_MODE` ni olib tashlash** (eski kodga ta'siri yo'q; keyingi roll-forward'da kutilmagan holat bo'lmasin).
+7. **Tekshirish.** `/api/health`; bitta oddiy hisob bilan chat; legacy obunali mijozda limit.
+
+**Kalitsiz variant** (live reliz `MAINTENANCE_MODE` ni bilmasa): 3-qadam o'rniga Render → **Suspend service**, keyin 4-qadam. Undan keyin `a3b858b` Manual Deploy qilinadi va servis Resume qilinadi. Render'da suspend holatidagi manual deploy va resume ketma-ketligi **sinab ko'rilmagan**. Shuning uchun kalitli PR'ni oldinroq deploy qilish tavsiya etiladi.
 
 Rollback davrida nimalar bo'ladi (tekshirilgan, 4-bo'lim):
 - v2 da sotilgan davrlar eski kodda ham amal qiladi: v2 `admins.tariff_*`
@@ -45,16 +53,17 @@ Rollback davrida nimalar bo'ladi (tekshirilgan, 4-bo'lim):
   o'qimaydi. Pilot akkaunti eski kodda oddiy hisob bo'ladi: test kvotasi
   ham, $5 budjet ham yo'q. Shuning uchun rollback oldidan pilot to'xtatiladi.
 
-## 3. Qayta oldinga (roll-forward)
+## 3. Qayta oldinga (roll-forward) — aniq ketma-ketlik
 
-1. v2 relizini qayta deploy qilish. Migratsiya 013 allaqachon qo'llangan,
-   checksum bir xil bo'lgani uchun qayta qo'llanmaydi.
-2. `psql "$DATABASE_URL" -f scripts/rollback/tariffs-v1-to-v2.sql` —
-   ushlab turilgan qatorlarni qaytaradi. Rollback paytida davom etayotgan
-   rezerv v2 tomonidan yetkazilmagan, shuning uchun u `released`
-   (`code_rollback`) bo'lib qaytadi va birligi mijozga qaytadi. Bo'sh qolgan
-   `tariff_usage_v2_hold` jadvalini inson o'chiradi.
-3. Rollback davridagi oqibatlar:
+1. **Kalitni oldindan qo'yish.** Render → Environment → `MAINTENANCE_MODE=on`. Eski kod buni bilmaydi va ishlashda davom etadi; uning yozgan qatorlari v2'ga zarar qilmaydi (pastda).
+2. **v2 relizini deploy qilish** (kalitli versiya). U maintenance rejimida ko'tariladi: migratsiyalar qo'llanadi, trafik qabul qilinmaydi. 013 allaqachon qo'llangan, checksum bir xil bo'lgani uchun qayta qo'llanmaydi.
+3. **`psql "$DATABASE_URL" -f scripts/rollback/tariffs-v1-to-v2.sql`.**
+   - Ushlab turilgan qatorlar qaytadi.
+   - Rollback paytida davom etayotgan rezerv v2 tomonidan yetkazilmagan, shuning uchun u `released` (`code_rollback`) bo'lib qaytadi va birligi mijozga qaytadi.
+   - Tekshirish: `SELECT count(*) FROM tariff_usage_v2_hold` → 0.
+4. **`MAINTENANCE_MODE` ni olib tashlash** — servis qayta ishga tushadi va trafikka xizmat qiladi.
+5. **Auto-Deploy: On.**
+6. Rollback davridagi oqibatlar:
    - Eski kod yozgan qatorlarda `service` ham, `status` ham yo'q. v2 ularni
      davr limitiga qo'shmaydi, ya'ni o'sha davrdagi ish mijoz foydasiga
      hisoblanmaydi.
@@ -119,4 +128,4 @@ yo'q.
    - matnli savolga javob keladi;
    - fayl yuborilsa, "AI tahlili emas, yurist navbati" xabari va sayt tugmasi chiqadi.
 7. **Workspace (Platinum):** "shartnomani tahlil qiling" — yo'naltirish chiqadi, limit yechilmaydi; band bo'yicha savolga javob keladi.
-8. **Muammo bo'lsa:** chegirmalar uchun `TARIFF_OFFERS=off`; butunlay — 2-bo'limdagi kod rollback.
+8. **Muammo bo'lsa:** chegirmalar uchun `TARIFF_OFFERS=off`; butunlay — 2-bo'limdagi ketma-ketlik (avval `MAINTENANCE_MODE=on`, keyin SQL, keyin eski kod).

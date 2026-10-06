@@ -50,6 +50,7 @@ const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywo
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 const usageLedger = require('../ai/usage-ledger');
+const modelPricing = require('../ai/model-pricing');
 const { oauthRedirectUri, canonicalAuthRedirect } = require('../auth/oauth-host');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { retrieveAspects } = require('../rag/question-aspects');
@@ -344,6 +345,9 @@ const aiLimiter = rateLimit({
   standardHeaders: true, legacyHeaders: false,
   message: { error: "AI so'rovlari limiti — bir necha daqiqadan so'ng urinib ko'ring" },
 });
+// MAINTENANCE_MODE=on: no API work while the database is put in order for a
+// rollback (src/api/maintenance.js, docs/tariffs-v2-rollback.md)
+app.use(require('./maintenance').maintenanceGate());
 app.use('/api/', globalLimiter);
 app.use('/api/login', loginLimiter);
 app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat'], aiLimiter);
@@ -3528,7 +3532,8 @@ function providerError(prefix, resp, errBody = '') {
 const { usageFromGemini: geminiUsage, usageFromOpenAI: openaiUsage } = usageLedger;
 
 async function callGemini(messages, options = {}) {
-  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint, userId: options.userId || null },
+  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint, userId: options.userId || null,
+    bound: modelPricing.callCostBound({ model: 'gemini-2.5-flash', thinkingUncapped: true }) },
     (call) => callGeminiOnce(messages, options, call));
 }
 
@@ -3632,7 +3637,8 @@ async function callOpenAIStream(messages, options = {}, onToken) {
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard, onToken);
     if (viaVoiceLab) return viaVoiceLab;
     const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
-    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null, retryTransient: 0 },
+    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null, retryTransient: 0,
+      bound: modelPricing.callCostBound({ model, inputTokensMax: modelPricing.inputTokenBound(messages), outputTokensMax: Number(options.maxTokens) || 8192 }) },
       (call) => callOpenAIStreamOnce(messages, options, onToken, model, call));
   });
 }
@@ -3698,7 +3704,8 @@ async function callOpenAIStreamOnce(messages, options, onToken, model, call) {
 }
 
 async function callGeminiStream(messages, options = {}, onToken) {
-  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null, retryTransient: 0 },
+  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null, retryTransient: 0,
+    bound: modelPricing.callCostBound({ model: 'gemini-2.5-flash', thinkingUncapped: true }) },
     (call) => callGeminiStreamOnce(messages, options, onToken, call));
 }
 
@@ -3854,7 +3861,8 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
     const { temperature = 0.2, maxTokens = 8192 } = options;
     const opts = { temperature, maxTokens };
     const label = `voicelab/${voicelab.modelFor(model)}`;
-    const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null, ...(onToken ? { retryTransient: 0 } : {}) }, async (call) => {
+    const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null, ...(onToken ? { retryTransient: 0 } : {}),
+      bound: modelPricing.callCostBound({ model: label, creditBilling: true }) }, async (call) => {
       let res;
       try {
         res = onToken
@@ -3918,7 +3926,11 @@ async function callOpenAI(messages, options = {}) {
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard);
     if (viaVoiceLab) return viaVoiceLab;
     const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
-    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint, userId: options.userId || null },
+    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint, userId: options.userId || null,
+      // the most this call can cost (Responses: max_output_tokens caps
+      // reasoning too); a web search tool makes it unbounded
+      bound: modelPricing.callCostBound({ model, inputTokensMax: modelPricing.inputTokenBound(messages),
+        outputTokensMax: Math.max(16, Number(options.maxTokens) || 8192), webSearch: webSearchAllowed(options.useSearch) }) },
       (call) => callOpenAIOnce(messages, options, call));
   });
 }
@@ -9336,7 +9348,8 @@ async function triggerAiScreening(regId, regData) {
     let voicelabText = null;
     if (voicelab.routes('vision')) {
       try {
-        const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, endpoint: 'ai-screening' }, async (call) => {
+        const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, endpoint: 'ai-screening',
+          bound: modelPricing.callCostBound({ model: `voicelab/${voicelab.modelFor('vision')}`, creditBilling: true }) }, async (call) => {
           const res = await voicelab.chatCompletion('vision', gptBody.messages, {
             temperature: gptBody.temperature, maxTokens: gptBody.max_tokens, responseFormat: gptBody.response_format,
           });
@@ -10199,6 +10212,8 @@ const TEST_ENT_REASONS = {
   not_an_ordinary_user: 'Test huquqi faqat oddiy foydalanuvchiga beriladi.',
   account_has_paid_period: "Bu hisobda pullik davr ishlayapti: test huquqi alohida test hisobiga beriladi.",
   no_test_entitlement: "Faol test huquqi yo'q.",
+  invalid_budget_mode: "Budjet rejimi: 'strict' yoki 'estimated'.",
+  estimated_mode_needs_estimate_and_basis: "'estimated' rejimida chegarasi isbotlanmagan chaqiruv uchun taxmin (unboundedCallUsd) va uning asosi (riskBasis, kamida 10 belgi) kerak.",
 };
 app.post('/api/admin/tariff/test-entitlements', requireMasterAdmin, async (req, res) => {
   try {
@@ -10207,6 +10222,7 @@ app.post('/api/admin/tariff/test-entitlements', requireMasterAdmin, async (req, 
       adminId: Number(b.userId), grantedBy: req.session.adminId, reason: b.reason, hours: b.hours == null ? 48 : Number(b.hours),
       plan: b.plan || 'silver', quotas: b.quotas || null, budgetUsd: b.budgetUsd == null ? 5 : Number(b.budgetUsd),
       unknownCallUsd: b.unknownCallUsd == null ? 0.05 : Number(b.unknownCallUsd), perRequestUsd: b.perRequestUsd == null ? null : Number(b.perRequestUsd),
+      budgetMode: b.budgetMode || 'strict', unboundedCallUsd: b.unboundedCallUsd == null ? null : Number(b.unboundedCallUsd), riskBasis: b.riskBasis || '',
     });
     if (!out.ok) return res.status(out.reason === 'master_only' ? 403 : 400).json({ ...out, message: TEST_ENT_REASONS[out.reason] || out.reason });
     require('../ai/test-budget').resetCache();

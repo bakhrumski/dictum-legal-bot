@@ -55,7 +55,9 @@ function newRequest(meta = {}) {
     stage: null,
     chain: null,
     // shared by every nested scope (withStage / withChain copy the store)
-    shared: { calls: 0, providerCalls: 0, knownCostUsd: 0, unknownCostCalls: 0, telemetryErrors: 0, annotations: {}, opened: false, degraded: new Set() },
+    shared: { calls: 0, providerCalls: 0, knownCostUsd: 0, unknownCostCalls: 0, telemetryErrors: 0, annotations: {}, opened: false, degraded: new Set(),
+      // per-call reservations under a strict pool (pilot budget)
+      inflightUsd: 0, reservedUnknownUsd: 0, boundExceeded: 0, estimatedRiskCalls: 0, estimatedRiskUsd: 0 },
     budget: requestBudget(meta.budget),
   };
 }
@@ -103,7 +105,10 @@ function budgetBlock(store, stage) {
 function sharedPoolCommitted(store) {
   const pool = store && store.budget && store.budget.sharedPool;
   if (!pool) return 0;
-  return pool.spentUsd + store.shared.knownCostUsd + store.shared.unknownCostCalls * pool.unknownCallUsd;
+  // under per-call reservation an unknown-cost call counts at what was
+  // reserved for it (reservedUnknownUsd), not at the assumed rate
+  const unknown = pool.perCall ? store.shared.reservedUnknownUsd : store.shared.unknownCostCalls * pool.unknownCallUsd;
+  return pool.spentUsd + store.shared.knownCostUsd + unknown;
 }
 
 /** Put the current request under a shared budget: { label, limitUsd, spentUsd, unknownCallUsd }. */
@@ -335,6 +340,50 @@ async function record(event = {}) {
  * meta.retryTransient (0-2) retries a transient error, waiting Retry-After
  * (capped) or a short jittered backoff, within the request's budget.
  */
+/**
+ * Reserve one call attempt's maximum cost under a per-call pool (the pilot
+ * budget, src/ai/test-budget.js): the request's committed cost + every
+ * attempt still running + this one's bound must stay within the pool.
+ * meta.bound = model-pricing callCostBound(): { usd } or { usd: null, reason }.
+ * A call without a bound is refused in 'strict' mode; in 'estimated' mode it
+ * runs at the pool's stated estimate and is counted as estimated risk.
+ * Returns null (no pool), { refuse } or { usd, estimated, release(actualUsd) }.
+ */
+function reserveCall(store, meta) {
+  const pool = store && store.budget && store.budget.sharedPool;
+  if (!pool || !pool.perCall) return null;
+  let usd = meta.bound && Number.isFinite(Number(meta.bound.usd)) && meta.bound.usd != null ? Number(meta.bound.usd) : null;
+  let estimated = false;
+  if (usd == null) {
+    const why = (meta.bound && meta.bound.reason) || 'no cost bound given for this call';
+    if (pool.perCall !== 'estimated' || !(pool.unboundedCallUsd > 0)) return { refuse: `no upper cost bound (${why})` };
+    usd = pool.unboundedCallUsd;
+    estimated = true;
+  }
+  const committed = sharedPoolCommitted(store);
+  if (committed + store.shared.inflightUsd + usd > pool.limitUsd + 1e-12) {
+    return { refuse: `call reservation $${usd.toFixed(4)} exceeds the request's remaining $${Math.max(0, pool.limitUsd - committed - store.shared.inflightUsd).toFixed(4)}` };
+  }
+  store.shared.inflightUsd += usd;
+  if (estimated) { store.shared.estimatedRiskCalls++; store.shared.estimatedRiskUsd += usd; }
+  let done = false;
+  return {
+    usd, estimated,
+    release(knownBefore, unknownBefore) {
+      if (done) return;
+      done = true;
+      store.shared.inflightUsd = Math.max(0, store.shared.inflightUsd - usd);
+      const actual = store.shared.knownCostUsd - knownBefore;
+      // a call whose cost came back unknown counts at its full reservation
+      if (store.shared.unknownCostCalls > unknownBefore) store.shared.reservedUnknownUsd += usd * (store.shared.unknownCostCalls - unknownBefore);
+      if (!estimated && actual > usd + 1e-9) {
+        store.shared.boundExceeded++;
+        store.shared.annotations.boundExceeded = (store.shared.annotations.boundExceeded || 0) + 1;
+      }
+    },
+  };
+}
+
 async function track(meta, fn) {
   const store = current();
   const chain = store && store.chain;
@@ -364,6 +413,22 @@ async function track(meta, fn) {
   const blocked = budgetBlock(store, stage);
   if (blocked) throw skip('REQUEST_BUDGET', blocked);
 
+  // per-attempt reservation (strict pilot budget): every attempt - the
+  // first, a transient retry, an adapter's own retry - reserves its own
+  // bound before the provider is called; a fallback is its own track()
+  let reservation = null;
+  let knownBefore = 0;
+  let unknownBefore = 0;
+  const reserveAttempt = () => {
+    const r = reserveCall(store, meta);
+    if (r && r.refuse) throw skip('CALL_RESERVE', r.refuse);
+    reservation = r;
+    knownBefore = store ? store.shared.knownCostUsd : 0;
+    unknownBefore = store ? store.shared.unknownCostCalls : 0;
+  };
+  const releaseAttempt = () => { if (reservation) reservation.release(knownBefore, unknownBefore); reservation = null; };
+  reserveAttempt();
+
   const failAttempt = (error, { breaker = true } = {}) => {
     const c = health.classifyError(error);
     record({ ...base, callId, parentCallId, modelReturned, status: c.code === 'TIMEOUT' ? 'timeout' : 'error', errorCode: c.code, errorKind: c.kind, errorReason: c.reason, startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason });
@@ -384,7 +449,9 @@ async function track(meta, fn) {
     // parameter): the attempt is recorded, but it does not trip the breaker.
     async retry(reason, error) {
       failAttempt(error, { breaker: false });
+      releaseAttempt();
       nextAttempt(reason);
+      reserveAttempt();
     },
   };
 
@@ -397,16 +464,20 @@ async function track(meta, fn) {
     try {
       const result = await fn(call);
       record({ ...base, callId, parentCallId, modelReturned, status: 'success', startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason });
+      releaseAttempt();
       health.recordSuccess(meta.provider, meta.model);
       if (chain) chain.lastFailed = null;
       return result;
     } catch (error) {
+      if (error && error.code === 'CALL_RESERVE' && !reservation) throw error;   // an adapter retry was refused
       const c = failAttempt(error);
+      releaseAttempt();
       if (c.kind === 'transient' && transientLeft > 0 && !budgetBlock(store, stage) && !health.openState(meta.provider, meta.model)) {
         transientLeft--;
         const wait = Math.min(4000, c.retryAfterMs != null ? c.retryAfterMs : 400 + Math.floor(Math.random() * 600));
         await new Promise(r => setTimeout(r, wait));
         nextAttempt(`transient:${c.code}`);
+        reserveAttempt();
         continue;
       }
       if (chain) chain.lastFailed = meta.model || meta.provider || null;
@@ -484,6 +555,6 @@ function expressScope(service = 'web') {
 
 module.exports = {
   configure, runWithRequest, current, withStage, withChain, annotate, record, track, degrade, requestBudget, budgetBlock,
-  useSharedBudget, sharedPoolCommitted, useAdmission, releaseAdmission,
+  useSharedBudget, sharedPoolCommitted, useAdmission, releaseAdmission, reserveCall,
   finishRequest, expressScope, stageFor, errorCodeOf, safeMessage, stats, usageFromGemini, usageFromOpenAI,
 };

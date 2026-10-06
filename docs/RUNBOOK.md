@@ -53,6 +53,7 @@ ro'yxati: [`.env.example`](../.env.example).
 | Migratsiya xato berib boot to'xtadi, sayt esa ishlashi shart | `BOOT_ALLOW_PARTIAL=true` (vaqtincha; ba'zi bo'limlar ishlamaydi) |
 | Master 2FA bot ishlamayapti | `MASTER_2FA=off` (vaqtincha) |
 | Individual chegirmalarni to'xtatish | `TARIFF_OFFERS=off` (sotib olingan davrlar o'zgarmaydi) |
+| Rollback/roll-forward paytida ish qabul qilmaslik | `MAINTENANCE_MODE=on` (API 503, `/api/health` ishlaydi; bot faqat xabar beradi) |
 
 Env o'zgarishi Render'da qayta ishga tushirishni talab qiladi (kod deploy
 emas).
