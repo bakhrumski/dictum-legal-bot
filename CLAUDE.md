@@ -190,10 +190,14 @@ Known state of the suites (Sept 2026):
   and the service endpoints load the text by `scanId` for that account only
   (`document_scans`, 7-day cache, analysis and opinion share one OCR). One
   document: Sinov 10, paid 30 pages. Chat scans draw the plan's `ocr` pool
-  in pages (legacy v1: 1 per file). Gemini only (thinking off, 1 536 output
-  tokens a page); `OCR_FALLBACK=on` or no Gemini key makes OCR cost unknown
-  and blocks offers. The per-page cost ($0.010956) is a sourced estimate in
-  the planning economics, not a measurement.
+  in pages (legacy v1: 1 per file). Providers (`scanLimits.ocrProviders`):
+  images VoiceLab vision first when that lane is on (as before #411), Gemini
+  with `OCR_IMAGE_PROVIDER=gemini`; PDFs Gemini (Developer API, thinking
+  off, 1 536 output tokens a page); fallbacks unless `OCR_FALLBACK=off`.
+  Only the Gemini-only route has a per-page budget ($0.010959, conservative
+  upper budget, not measured); any route reaching VoiceLab / OpenAI vision
+  makes OCR cost unknown and blocks offers. Parallel requests for one
+  account and file share one OCR (in-process single flight).
   `marginReport` keeps cash (once, at payment), carried credit (not cash)
   and service revenue (price + credit in - credit out over the days run)
   apart; legacy revenue and refunds are unknown, never 0. Rollback is code,

@@ -103,51 +103,133 @@ async function measureScan(buf, { mimetype = '', filename = '', planMaxPages = 1
   return { kind: 'image', pages: 1, bytes: buf.length, width: img.width, height: img.height, mimetype: img.type };
 }
 
-// ── The cost of one OCR page (an estimate, with its source) ───────────────
-// OCR runs on Gemini 2.5 Flash with thinking turned off and an output cap
-// per page (src/ocr/routes.js), so its billed tokens are bounded by:
-//   input:  one page or image as an image input. Source: the Vertex AI
-//           Generative AI pricing page (fetched 2026-10-06): "PDFs are billed
-//           as image input, with one PDF page equivalent to one image" and
-//           "For an 1024x1024 image, it consumes 1290 tokens. Per image token
-//           count varies by image resolution." No upper bound per page is
-//           published there, so 4x that example is assumed (5 160 tokens),
-//           plus the prompt (300 tokens);
-//   output: the cap we send, 1 536 tokens per page (OCR_OUTPUT_TOKENS_PER_PAGE);
-//           with thinking off no thinking tokens are billed;
-//   price:  gemini-2.5-flash $0.30 / 1M input, $2.50 / 1M output "(response
-//           and reasoning)" - same page, and src/ai/model-pricing.js;
-//   retry:  x2 - one transient retry of the OCR stage is allowed.
-// It covers the Gemini path only. A fallback to VoiceLab or OpenAI vision
-// (OCR_FALLBACK=on, or no Gemini key) has no such bound: the cost model then
-// marks OCR unknown (src/rag/tariff-pricing.js).
-const OCR_OUTPUT_TOKENS_PER_PAGE = 1536;
-const OCR_PAGE_ESTIMATE = Object.freeze({
-  inputTokens: 4 * 1290 + 300,
-  outputTokens: OCR_OUTPUT_TOKENS_PER_PAGE,
-  inPerM: 0.30,
-  outPerM: 2.50,
-  attempts: 2,
-  model: 'gemini-2.5-flash',
-  source: 'Vertex AI Generative AI pricing page (cloud.google.com/vertex-ai/generative-ai/pricing), fetched 2026-10-06',
-  status: 'estimated',
+// ── The OCR prompt (one place: the routes send it, the cost bound counts it)
+const LANG_HINTS = Object.freeze({
+  'uzb+rus':     'The document contains Uzbek (Latin script) and/or Russian (Cyrillic) text.',
+  'uzb':         'The document is in Uzbek (Latin script).',
+  'rus':         'The document is in Russian (Cyrillic script).',
+  'eng':         'The document is in English.',
+  'uzb+rus+eng': 'The document may be in Uzbek (Latin), Russian (Cyrillic), or English.',
 });
-/** USD per OCR page, upper estimate (see above). */
-function ocrPageUsd(e = OCR_PAGE_ESTIMATE) {
-  return ((e.inputTokens * e.inPerM + e.outputTokens * e.outPerM) / 1e6) * e.attempts;
+const VISION_PROMPT = (langHint) =>
+  `${langHint ? langHint + ' ' : ''}Extract all text from this document image exactly as it appears. ` +
+  'Preserve the original text layout including line breaks and paragraph structure. ' +
+  'Return ONLY the extracted text — no commentary, no labels, no markdown formatting.';
+/** Tokens of the longest prompt, bounded by its UTF-8 bytes (a token is at least one byte). */
+function promptTokenBound() {
+  return Math.max(...Object.values(LANG_HINTS).map(h => Buffer.byteLength(VISION_PROMPT(h), 'utf8')));
 }
 
-/** Is OCR cost covered by the estimate in this deployment? */
-function ocrCostBasis(env = process.env) {
-  const gemini = !!env.GEMINI_API_KEY;
-  const fallback = String(env.OCR_FALLBACK || '').toLowerCase() === 'on';
-  if (!gemini) return { status: 'unknown', reason: 'GEMINI_API_KEY is not set: OCR runs on VoiceLab / OpenAI vision, whose cost per page has no bound' };
-  if (fallback) return { status: 'unknown', reason: 'OCR_FALLBACK=on: a fallback to VoiceLab / OpenAI vision has no cost bound per page' };
-  return { status: 'estimated', usdPerPage: ocrPageUsd(), estimate: OCR_PAGE_ESTIMATE };
+// ── Which provider reads a scan (2026-10-06, review of #411) ─────────────
+// Nothing is switched silently. An image goes, as before #411, first to
+// VoiceLab's vision lane when that lane is on, else to Gemini; the owner
+// picks Gemini for images with OCR_IMAGE_PROVIDER=gemini. A PDF goes to
+// Gemini (VoiceLab and OpenAI Chat Completions take images, not PDFs).
+// After a failure the other providers are tried, as before, unless
+// OCR_FALLBACK=off. A truncated Gemini reading (MAX_TOKENS) is refused, not
+// retried elsewhere.
+const PROVIDERS = Object.freeze(['voicelab', 'gemini', 'openai']);
+function ocrProviders({ kind = 'image', env = process.env, voicelabVision = null } = {}) {
+  const vlOn = voicelabVision != null ? !!voicelabVision : require('../ai/voicelab').routes('vision');
+  const has = { voicelab: vlOn, gemini: !!env.GEMINI_API_KEY, openai: !!env.GPT_API_KEY };
+  const fallback = String(env.OCR_FALLBACK || '').toLowerCase() !== 'off';
+  if (kind === 'pdf') return { primary: has.gemini ? 'gemini' : null, fallbacks: [], fallback };
+  const want = String(env.OCR_IMAGE_PROVIDER || '').toLowerCase();
+  const order = want === 'gemini' ? ['gemini', 'voicelab', 'openai'] : ['voicelab', 'gemini', 'openai'];
+  const usable = order.filter(p => has[p]);
+  return { primary: usable[0] || null, fallbacks: fallback ? usable.slice(1) : [], fallback };
+}
+
+// ── The cost of one OCR page ──────────────────────────────────────────────
+// Only the Gemini path has a per-page budget; every part of it is listed
+// with its basis. It is a CONSERVATIVE UPPER BUDGET (for the plans' worst
+// case and the discount floors), not an expected cost: nothing here has been
+// measured on a real reading yet (the pilot reads usageMetadata).
+//   model / API: gemini-2.5-flash through the Gemini Developer API
+//     (generativelanguage.googleapis.com v1beta generateContent, API key) -
+//     not Vertex AI;
+//   price: src/ai/model-pricing.js (the single price table), source
+//     ai.google.dev/gemini-api/docs/pricing, paid tier, checked 2026-08-11.
+//     It could not be re-read on 2026-10-06 (ai.google.dev is blocked from
+//     this environment). Output is billed with thinking ("response and
+//     reasoning" on the Vertex page, the only one readable here);
+//   image input: no Developer API tokens-per-page figure could be read here.
+//     The Vertex page says "For an 1024x1024 image, it consumes 1290 tokens.
+//     Per image token count varies by image resolution." - used only as a
+//     scale; the budget is 4x that (larger page images), an assumption;
+//   prompt: bounded by its UTF-8 bytes (promptTokenBound), counted per page
+//     (a one-page call is the worst case);
+//   output: the cap we send, maxOutputTokens = 1 536 x pages; a reading that
+//     reaches it is refused (OCR_TRUNCATED) but still billed;
+//   thinking: thinkingConfig.thinkingBudget = 0 is sent (tests/scan-ocr.test.js
+//     checks the request); budget 0 - NOT confirmed on a real response;
+//   attempts: the usage ledger retries a transient error of stage 'ocr' once
+//     (ESSENTIAL_STAGES), so 2 attempts, both counted as billed;
+//   extra reserve factor: 1 (none beyond the above);
+//   fallback (VoiceLab, OpenAI vision): NOT in this figure - unknown cost.
+const OCR_OUTPUT_TOKENS_PER_PAGE = 1536;
+const VERTEX_IMAGE_TOKENS_1024 = 1290;
+function ocrPageBudget() {
+  const p = require('../ai/model-pricing');
+  const price = p.MODEL_PRICING['gemini-2.5-flash'];
+  const src = p.PRICING_SOURCES.gemini_2026_08_11; // the source the price table names for gemini-2.5-flash
+  const parts = {
+    imageInputTokens: { tokens: 4 * VERTEX_IMAGE_TOKENS_1024, status: 'assumed_upper',
+      basis: 'Vertex page: 1 290 tokens for a 1024x1024 image, varies by resolution; x4 headroom. No Developer API per-page figure read here.' },
+    promptTokens: { tokens: promptTokenBound(), status: 'bound', basis: 'UTF-8 bytes of the longest OCR prompt (tokens <= bytes)' },
+    outputTokens: { tokens: OCR_OUTPUT_TOKENS_PER_PAGE, status: 'cap_sent', basis: 'maxOutputTokens = 1 536 x pages; MAX_TOKENS is refused but billed' },
+    thinkingTokens: { tokens: 0, status: 'assumed_zero_unverified', basis: 'thinkingBudget: 0 is sent; not confirmed on a real response' },
+  };
+  const inputTokens = parts.imageInputTokens.tokens + parts.promptTokens.tokens;
+  const outputTokens = parts.outputTokens.tokens + parts.thinkingTokens.tokens;
+  const attempts = 2;
+  const reserveFactor = 1;
+  const oneAttemptUsd = (inputTokens * price.in + outputTokens * price.out) / 1e6;
+  return {
+    kind: 'conservative_upper_budget', expected: null, expectedStatus: 'unmeasured',
+    model: 'gemini-2.5-flash', api: 'Gemini Developer API (generativelanguage.googleapis.com v1beta, API key)',
+    inPerM: price.in, outPerM: price.out, priceSource: src ? `${src.source}, checked ${src.checkedAt}` : 'src/ai/model-pricing.js',
+    parts, inputTokens, outputTokens,
+    attempts, attemptsBasis: "usage ledger: one transient retry for stage 'ocr'",
+    reserveFactor,
+    usdInputPerAttempt: inputTokens * price.in / 1e6, usdOutputPerAttempt: outputTokens * price.out / 1e6,
+    usdPerAttempt: oneAttemptUsd, usdPerPage: oneAttemptUsd * attempts * reserveFactor,
+  };
+}
+/** USD per OCR page on the Gemini path: the conservative upper budget (see above). */
+function ocrPageUsd() { return ocrPageBudget().usdPerPage; }
+
+// Cost status of each provider for one page: only Gemini has a budget.
+const PROVIDER_COST = Object.freeze({
+  gemini: 'estimated',
+  voicelab: 'unknown', // aisha-halo: token prices are listed, image input tokens are not; credits may come back instead
+  openai: 'unknown',   // image input tokens per page not bounded here
+});
+const PROVIDER_COST_REASON = Object.freeze({
+  voicelab: 'VoiceLab vision: image input tokens per page are not published; credit billing may not convert to tokens',
+  openai: 'OpenAI vision: image input tokens per page are not bounded here',
+});
+
+/**
+ * Is OCR cost covered by the Gemini budget in this deployment? Only when
+ * every provider a page can reach - primary and fallbacks, images and PDFs -
+ * is Gemini. Any reachable provider of unknown cost makes OCR unknown: the
+ * Gemini figure is never applied to it.
+ */
+function ocrCostBasis(env = process.env, { voicelabVision = null } = {}) {
+  const img = ocrProviders({ kind: 'image', env, voicelabVision });
+  const pdf = ocrProviders({ kind: 'pdf', env, voicelabVision });
+  const reach = [...new Set([img.primary, ...img.fallbacks, pdf.primary, ...pdf.fallbacks].filter(Boolean))];
+  const route = { image: [img.primary, ...img.fallbacks].filter(Boolean), pdf: [pdf.primary].filter(Boolean) };
+  if (!pdf.primary) return { status: 'unknown', route, reason: 'GEMINI_API_KEY is not set: scanned PDFs cannot be read and images go to providers of unknown cost' };
+  const unknown = reach.filter(p => PROVIDER_COST[p] !== 'estimated');
+  if (unknown.length) return { status: 'unknown', route, providers: unknown,
+    reason: `${unknown.map(p => PROVIDER_COST_REASON[p]).join('; ')} (set OCR_IMAGE_PROVIDER=gemini and OCR_FALLBACK=off for the Gemini-only route)` };
+  return { status: 'estimated', route, usdPerPage: ocrPageUsd(), estimate: ocrPageBudget() };
 }
 
 module.exports = {
   MAX_PDF_BYTES, MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, MAX_IMAGE_PIXELS, IMAGE_TYPES, TEXT_PDF_CHARS_PER_PAGE,
-  OCR_OUTPUT_TOKENS_PER_PAGE, OCR_PAGE_ESTIMATE,
-  pdfInfo, imageInfo, measureScan, ocrPageUsd, ocrCostBasis,
+  OCR_OUTPUT_TOKENS_PER_PAGE, LANG_HINTS, VISION_PROMPT, PROVIDERS, PROVIDER_COST,
+  pdfInfo, imageInfo, measureScan, promptTokenBound, ocrProviders, ocrPageBudget, ocrPageUsd, ocrCostBasis,
 };

@@ -26,9 +26,10 @@ const { pool } = require('../src/database/db');
 const tiers = require('../src/rag/subscription-tiers');
 const ledger = require('../src/rag/tariff-ledger');
 const offers = require('../src/rag/tariff-offers');
-// the floors assume OCR on the Gemini path (costed per page); see tests/tariff-offers.test.js
+// the floors assume the Gemini-only OCR route (costed per page); see tests/tariff-offers.test.js
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'assumed-for-this-test';
-delete process.env.OCR_FALLBACK;
+process.env.OCR_IMAGE_PROVIDER = 'gemini';
+process.env.OCR_FALLBACK = 'off';
 const pricing = require('../src/rag/tariff-pricing');
 
 let passed = 0, failed = 0;
@@ -80,7 +81,7 @@ async function makeUser(role = 'user', extra = {}) {
     const ok = await offers.createOffer({ createdBy: master, userId: user, plan: 'gold', discountUzs: 30000, reason: 'pilot mijoz', validDays: 5 });
     assert.strictEqual(ok.ok, true);
     assert.deepStrictEqual([ok.offer.status, ok.offer.final_price_uzs, ok.offer.min_price_uzs, ok.offer.list_price_uzs], ['active', 569000, 569000, 599000]);
-    assert.ok(ok.offer.cost_model_version && ok.offer.quota_version && ok.offer.cost_estimate.totalCostUzs === 454660);
+    assert.ok(ok.offer.cost_model_version && ok.offer.quota_version && ok.offer.cost_estimate.totalCostUzs === 454686);
     const no = await offers.createOffer({ createdBy: master, userId: user, plan: 'gold', discountUzs: 30001, reason: 'pilot mijoz' });
     assert.deepStrictEqual([no.ok, no.reason, no.quote.maxDiscountUzs], [false, 'below_minimum', 30000]);
     // creating an offer activates nothing
@@ -158,7 +159,7 @@ async function makeUser(role = 'user', extra = {}) {
     assert.strictEqual(g.change, 'upgrade');
     assert.strictEqual(g.period.credit_uzs + g.period.price_uzs, offer.final_price_uzs, 'cash + credit = the offer price');
     assert.ok(g.period.credit_uzs <= 398000);
-    assert.strictEqual(g.economics.estimatedServiceCostUzs, 757767, 'the new quota is costed in full');
+    assert.strictEqual(g.economics.estimatedServiceCostUzs, 757810, 'the new quota is costed in full');
     assert.strictEqual(g.economics.belowCurrentMinimum, false);
   });
 

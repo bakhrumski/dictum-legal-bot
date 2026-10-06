@@ -58,7 +58,7 @@ function ocrComponent(plan) {
   const label = `OCR: skan hujjatlar, ${o.pages} sahifa (tahlil + xulosa birliklari turli skanlarda, chatdagi skan chegarasi)`;
   if (o.status !== 'estimated') return { key: 'ocr', label, status: 'unknown', basis: o.reason };
   return { key: 'ocr', label, uzs: Math.ceil(o.usd * ledger.PLANNING.uzsPerUsd), status: 'estimated',
-    basis: `${o.pages} pages x $${o.usdPerPage.toFixed(6)} per page (${o.estimate.model}, input ${o.estimate.inputTokens} + output ${o.estimate.outputTokens} tokens, x${o.estimate.attempts} attempts; ${o.estimate.source})` };
+    basis: `${o.pages} pages x $${o.usdPerPage.toFixed(6)} per page - conservative upper budget, not measured (${o.estimate.model}, ${o.estimate.api}; input ${o.estimate.inputTokens} + output ${o.estimate.outputTokens} tokens, thinking 0 assumed, x${o.estimate.attempts} attempts; price: ${o.estimate.priceSource})` };
 }
 
 /** The default cost model: the owner's planning budgets, marked estimated. */

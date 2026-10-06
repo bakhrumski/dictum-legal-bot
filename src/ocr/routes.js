@@ -12,9 +12,10 @@ const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS) || 90000;
  *                                Returns { text, pageCount, scanned }
  *                                scanned=true when < 80 chars extracted (image PDF)
  *
- * POST /api/analyze/ocr-image  — AI Vision OCR for images AND scanned PDFs
- *                                Gemini 2.5 Flash Vision primary, GPT-4o Vision fallback.
- *                                Returns { text, charCount, provider }
+ * POST /api/analyze/scan-quote — page count and quote of a scan (no AI)
+ * POST /api/analyze/ocr-image  — confirmed OCR of a quoted scan, as a step of
+ *                                a service; returns { scanId, pages, chars } (no text).
+ *                                Providers: scanLimits.ocrProviders.
  *
  * POST /api/analyze            — AI analysis of supplied text
  *                                Returns structured JSON:
@@ -54,55 +55,45 @@ const visionUpload = multer({
   },
 });
 
-const LANG_HINTS = {
-  'uzb+rus':     'The document contains Uzbek (Latin script) and/or Russian (Cyrillic) text.',
-  'uzb':         'The document is in Uzbek (Latin script).',
-  'rus':         'The document is in Russian (Cyrillic script).',
-  'eng':         'The document is in English.',
-  'uzb+rus+eng': 'The document may be in Uzbek (Latin), Russian (Cyrillic), or English.',
-};
-
-const VISION_PROMPT = (langHint) =>
-  `${langHint ? langHint + ' ' : ''}Extract all text from this document image exactly as it appears. ` +
-  'Preserve the original text layout including line breaks and paragraph structure. ' +
-  'Return ONLY the extracted text — no commentary, no labels, no markdown formatting.';
+const { LANG_HINTS, VISION_PROMPT } = scanLimits;
 
 /**
- * Vision OCR: Gemini 2.5 Flash Vision (primary) → GPT-4o Vision (fallback).
- * Accepts images (JPEG/PNG/WebP) and PDFs (Gemini reads PDFs directly).
+ * Vision OCR of an image or a scanned PDF, in the provider order of
+ * scanLimits.ocrProviders (VoiceLab vision / Gemini 2.5 Flash / OpenAI vision).
  */
 async function callVisionOCR(buf, mimeType, langCode, opts = {}) {
   return usageLedger.withChain(() => callVisionOCRChain(buf, mimeType, langCode, opts));
 }
 
-// Each provider attempt is a usage-ledger row (stage 'ocr'); a failed attempt
-// is recorded and the chain falls through as before.
+// Each provider attempt is a usage-ledger row (stage 'ocr', its provider),
+// so primary and fallback spend are reported apart; a failed attempt is
+// recorded and the chain moves on. The order is scanLimits.ocrProviders:
+// images VoiceLab first when its vision lane is on (as before), Gemini when
+// OCR_IMAGE_PROVIDER=gemini; PDFs Gemini; fallbacks unless OCR_FALLBACK=off.
 async function callVisionOCRChain(buf, mimeType, langCode, { pages = 1 } = {}) {
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const gptKey = process.env.GPT_API_KEY;
   const prompt = VISION_PROMPT(LANG_HINTS[langCode] || '');
   const b64 = buf.toString('base64');
-  // Gemini first, with thinking off and an output cap per page: the only
-  // path whose cost per page has an estimate with a source
-  // (src/ocr/scan-limits.js). VoiceLab / OpenAI vision are used only when
-  // there is no Gemini key, or OCR_FALLBACK=on - their cost per page has no
-  // bound, and the cost model then marks OCR unknown.
-  const fallback = !geminiKey || String(process.env.OCR_FALLBACK || '').toLowerCase() === 'on';
-  const outputCap = Math.min(65536, scanLimits.OCR_OUTPUT_TOKENS_PER_PAGE * Math.max(1, pages));
+  const kind = /^image\//i.test(mimeType || '') ? 'image' : 'pdf';
+  const plan = scanLimits.ocrProviders({ kind });
+  const chain = [plan.primary, ...plan.fallbacks].filter(Boolean);
+  if (!chain.length) throw new Error('Vision OCR uchun AI kalit sozlanmagan (GEMINI_API_KEY yoki GPT_API_KEY kerak)');
   const noBound = { usd: null, reason: 'image input tokens per page are not published; OCR cost is an estimate, not a bound' };
+  // Gemini's cap is per page (the budget in scan-limits); VoiceLab and
+  // OpenAI keep the cap they had before #411
+  const geminiCap = Math.min(65536, scanLimits.OCR_OUTPUT_TOKENS_PER_PAGE * Math.max(1, pages));
 
-  if (geminiKey) {
-    try {
+  const readers = {
+    async gemini() {
       const body = {
         contents: [{ role: 'user', parts: [
           { inlineData: { mimeType, data: b64 } },
           { text: prompt },
         ]}],
-        generationConfig: { temperature: 0.1, maxOutputTokens: outputCap, thinkingConfig: { thinkingBudget: 0 } },
+        generationConfig: { temperature: 0.1, maxOutputTokens: geminiCap, thinkingConfig: { thinkingBudget: 0 } },
       };
       const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr', bound: noBound }, async (call) => {
         const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
         );
         if (!resp.ok) {
@@ -119,49 +110,34 @@ async function callVisionOCRChain(buf, mimeType, langCode, { pages = 1 } = {}) {
         if (!out) throw new Error('Gemini Vision returned empty text');
         return out;
       });
-      if (text) return { text, provider: 'Gemini Vision' };
-    } catch (e) {
-      console.warn('[OCR] Gemini Vision error:', e.message);
-      if (e.code === 'OCR_TRUNCATED' || !fallback) throw e;
-    }
-  }
-
-  // fallback (no Gemini key, or OCR_FALLBACK=on): images only
-  if (fallback && voicelab.routes('vision') && /^image\//i.test(mimeType || '')) {
-    try {
+      return { text, provider: 'Gemini Vision' };
+    },
+    async voicelab() {
       const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
         const res = await voicelab.chatCompletion('vision', [{ role: 'user', content: [
           { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
           { type: 'text', text: prompt },
-        ]}], { temperature: 0.1, maxTokens: outputCap });
+        ]}], { temperature: 0.1, maxTokens: 4096 });
         call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
         return res;
       });
-      const text = (r.text || '').trim();
-      if (text) return { text, provider: `VoiceLab ${r.model}` };
-    } catch (e) {
-      if (!voicelab.fallbackAllowed()) throw e;
-      console.warn('[OCR] VoiceLab vision error, using previous provider:', e.message);
-    }
-  }
-
-  if (fallback && gptKey && /^image\//i.test(mimeType || '')) {
-    try {
-      const dataUrl = `data:${mimeType};base64,${b64}`;
+      return { text: (r.text || '').trim(), provider: `VoiceLab ${r.model}` };
+    },
+    async openai() {
       const body = {
         model: process.env.MODEL_VISION || process.env.MODEL_STANDARD || 'gpt-6-sol',
         messages: [{ role: 'user', content: [
-          { type: 'image_url', image_url: { url: dataUrl } },
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
           { type: 'text', text: prompt },
         ]}],
-        max_tokens: outputCap,
+        max_tokens: 4096,
         temperature: 0.1,
       };
       const text = await usageLedger.track({ provider: 'openai', model: body.model, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
         const resp = await fetch('https://api.openai.com/v1/chat/completions', {
           signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gptKey}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GPT_API_KEY}` },
           body: JSON.stringify(body),
         });
         if (!resp.ok) throw Object.assign(new Error(`OpenAI vision HTTP ${resp.status}`), { status: resp.status });
@@ -171,13 +147,26 @@ async function callVisionOCRChain(buf, mimeType, langCode, { pages = 1 } = {}) {
         if (!out) throw new Error('OpenAI vision returned empty text');
         return out;
       });
-      if (text) return { text, provider: `OpenAI Vision (${body.model})` };
+      return { text, provider: `OpenAI Vision (${body.model})` };
+    },
+  };
+
+  let lastErr = null;
+  for (let i = 0; i < chain.length; i++) {
+    const who = chain[i];
+    try {
+      const r = await readers[who]();
+      if (r.text) return { ...r, providerKey: who, role: i === 0 ? 'primary' : 'fallback' };
+      lastErr = new Error(`${who}: empty text`);
     } catch (e) {
-      console.warn('[OCR] OpenAI vision error:', e.message);
+      console.warn(`[OCR] ${who} error:`, e.message);
+      // a cut reading is refused, not read again elsewhere
+      if (e.code === 'OCR_TRUNCATED') throw e;
+      if (who === 'voicelab' && !voicelab.fallbackAllowed()) throw e;
+      lastErr = e;
     }
   }
-
-  throw new Error(geminiKey ? "Skan hujjatni o'qib bo'lmadi (OCR xizmati javob bermadi)" : 'Vision OCR uchun AI kalit sozlanmagan (GEMINI_API_KEY kerak)');
+  throw lastErr || new Error('OCR failed');
 }
 
 // How many characters to feed to the AI (keeps token cost predictable)
@@ -354,6 +343,17 @@ function mountAnalyzerRoutes(app, deps) {
   const SCAN_SERVICES = ['analysis', 'opinion', 'chat'];
   const serviceTitle = { analysis: 'Hujjat tahlili', opinion: 'AI yuridik xulosa', chat: 'Chatda hujjat bo\'yicha savol' };
 
+  // In-process single flight (the app is one Node process): requests for
+  // the same account and file share one OCR call.
+  const scanFlights = new Map();
+  function readScanOnce(key, fn) {
+    const running = scanFlights.get(key);
+    if (running) return running.then(r => ({ ...r, joined: true }));
+    const p = Promise.resolve().then(fn).finally(() => scanFlights.delete(key));
+    scanFlights.set(key, p);
+    return p;
+  }
+
   async function scanContext(req) {
     const adminId = req.session && req.session.adminId;
     const u = await tariffModule.getUserPlan(adminId);
@@ -468,10 +468,25 @@ function mountAnalyzerRoutes(app, deps) {
       }
 
       if (!cached) {
-        let ocr;
+        let flight;
         try {
-          ocr = await ocrFn(buf, m.kind === 'pdf' ? 'application/pdf' : m.mimetype, String((req.body && req.body.lang) || 'uzb+rus'), { pages: m.pages });
+          // one paid OCR per account and file, however many requests ask at
+          // once (analysis and opinion sent in parallel): the others wait for
+          // it and keep their own service reservation
+          flight = await readScanOnce(`${ctx.adminId}:${hash}`, async () => {
+            const again = await scanStore.findScan(pool, { adminId: ctx.adminId, fileHash: hash });
+            if (again) return { row: again, fresh: false };
+            const ocr = await ocrFn(buf, m.kind === 'pdf' ? 'application/pdf' : m.mimetype, String((req.body && req.body.lang) || 'uzb+rus'), { pages: m.pages });
+            if (!ocr.text || ocr.text.length < 20) throw Object.assign(new Error('no text'), { code: 'OCR_EMPTY' });
+            const store = usageLedger.current();
+            const row = await scanStore.saveScan(pool, { adminId: ctx.adminId, fileHash: hash, kind: m.kind, pages: m.pages, bytes: m.bytes, text: ocr.text, provider: ocr.provider, requestId: store ? store.requestId : null });
+            return { row, fresh: true };
+          });
         } catch (e) {
+          if (e.code === 'OCR_EMPTY') {
+            await releaseAll('ocr_empty');
+            return res.status(422).json({ error: 'ocr_empty', code: 'OCR_EMPTY', quotaRefunded: true, message: "Hujjatdan matn topilmadi. Limit qaytarildi." });
+          }
           await releaseAll(e.code === 'OCR_TRUNCATED' ? 'ocr_truncated' : 'ocr_failed');
           console.error('[OCR] failed:', e.message);
           return res.status(e.code === 'OCR_TRUNCATED' ? 422 : 502).json({
@@ -481,12 +496,11 @@ function mountAnalyzerRoutes(app, deps) {
               : "Skan hujjatni o'qib bo'lmadi. Limit qaytarildi.",
           });
         }
-        if (!ocr.text || ocr.text.length < 20) {
-          await releaseAll('ocr_empty');
-          return res.status(422).json({ error: 'ocr_empty', code: 'OCR_EMPTY', quotaRefunded: true, message: "Hujjatdan matn topilmadi. Limit qaytarildi." });
+        cached = flight.row;
+        // this request did not run the OCR it reserved chat-scan pages for
+        if (!flight.fresh || flight.joined) {
+          for (const j of jobs) if (j.service === 'ocr' && !j.done) { j.done = true; await ledger.release(j.jobKey, 'ocr_shared'); }
         }
-        const store = usageLedger.current();
-        cached = await scanStore.saveScan(pool, { adminId: ctx.adminId, fileHash: hash, kind: m.kind, pages: m.pages, bytes: m.bytes, text: ocr.text, provider: ocr.provider, requestId: store ? store.requestId : null });
       }
       // the OCR pages of a chat scan were used: committed (the OCR was done)
       for (const j of jobs) if (j.service === 'ocr' && !j.done) { j.done = true; await ledger.commit(j.jobKey); }

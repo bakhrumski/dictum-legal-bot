@@ -14,11 +14,12 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-// OCR is costed per page only on the Gemini path (src/ocr/scan-limits.js):
-// these floors assume that deployment; without the key OCR is unknown and no
-// offer is made (tested below)
+// OCR has a per-page budget only on the Gemini-only route
+// (src/ocr/scan-limits.js): these floors assume that configuration; any other
+// route makes OCR unknown and no offer is made (tested below)
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'assumed-for-this-test';
-delete process.env.OCR_FALLBACK;
+process.env.OCR_IMAGE_PROVIDER = 'gemini';
+process.env.OCR_FALLBACK = 'off';
 const pricing = require('../src/rag/tariff-pricing');
 const docJob = require('../src/rag/document-job');
 
@@ -37,8 +38,8 @@ function withModel(model, fn) {
 (async () => {
   console.log('price floor');
 
-  await test('starting budgets with OCR (2026-10-06): Silver 151 554 -> 190 000, Gold 454 660 -> 569 000, Platinum 757 767 -> 948 000 (marked estimated)', () => {
-    for (const [plan, cost, min] of [['silver', 151554, 190000], ['gold', 454660, 569000], ['platinum', 757767, 948000]]) {
+  await test('starting budgets with OCR (2026-10-06): Silver 151 562 -> 190 000, Gold 454 686 -> 569 000, Platinum 757 810 -> 948 000 (marked estimated)', () => {
+    for (const [plan, cost, min] of [['silver', 151562, 190000], ['gold', 454686, 569000], ['platinum', 757810, 948000]]) {
       const c = pricing.conservativeCost(plan);
       assert.strictEqual(c.fixedUzs, cost, plan);
       assert.strictEqual(pricing.minimumPrice(c.fixedUzs, 0), min, plan);
@@ -47,12 +48,12 @@ function withModel(model, fn) {
     assert.match(pricing.costModel().label, /taxminiy/u);
     // OCR: (analysis + opinion) x 10 pages + the chat-scan pool, at the per-page estimate
     const ocr = pricing.conservativeCost('silver').components.find(c => c.key === 'ocr');
-    assert.deepStrictEqual([ocr.uzs, ocr.status], [31554, 'estimated']);
-    assert.match(ocr.basis, /240 pages x \$0\.010956 per page/u);
+    assert.deepStrictEqual([ocr.uzs, ocr.status], [31562, 'estimated']);
+    assert.match(ocr.basis, /240 pages x \$0\.010959 per page - conservative upper budget, not measured/u);
     assert.strictEqual(pricing.costModel().version, 'cm-2026-10-06-planning-v2-ocr');
   });
 
-  await test('OCR cost unknown (no Gemini key, or the unbounded fallback on): no offer, the reason named', () => {
+  await test('OCR cost unknown (no Gemini key, or a reachable provider of unknown cost): no offer, the reason named', () => {
     const keep = process.env.GEMINI_API_KEY;
     try {
       delete process.env.GEMINI_API_KEY;
@@ -62,8 +63,9 @@ function withModel(model, fn) {
       assert.strictEqual(pricing.costModel().version, 'cm-2026-10-06-planning-v2-ocr-unknown');
       process.env.GEMINI_API_KEY = keep;
       process.env.OCR_FALLBACK = 'on';
+      process.env.GPT_API_KEY = 'fallback-reachable';
       assert.strictEqual(pricing.quoteDiscount({ plan: 'gold', discountPercent: '1' }).reason, 'unknown_cost_without_reserve');
-    } finally { process.env.GEMINI_API_KEY = keep; delete process.env.OCR_FALLBACK; }
+    } finally { process.env.GEMINI_API_KEY = keep; process.env.OCR_FALLBACK = 'off'; delete process.env.GPT_API_KEY; }
   });
 
   await test('the minimum rounds UP to 1 000 so\'m, in integers', () => {
@@ -120,9 +122,9 @@ function withModel(model, fn) {
 
   await test('measured cost can raise the estimate, never lower it (no optimistic cache or low-usage discount)', () => {
     const low = pricing.conservativeCost('silver', { measured: [{ service: 'chat', knownUsdPerUnit: 0.001 }, { service: 'analysis', knownUsdPerUnit: 0.01 }] });
-    assert.strictEqual(low.fixedUzs, 151554, 'cheaper measurements do not lower the floor');
+    assert.strictEqual(low.fixedUzs, 151562, 'cheaper measurements do not lower the floor');
     const high = pricing.conservativeCost('silver', { measured: [{ service: 'analysis', knownUsdPerUnit: 0.45 }] });
-    assert.strictEqual(high.fixedUzs, 151554 + 8 * 0.15 * 12000);
+    assert.strictEqual(high.fixedUzs, 151562 + 8 * 0.15 * 12000);
     assert.strictEqual(high.components.find(c => c.key === 'ai').status, 'measured_above_plan');
   });
 
@@ -138,7 +140,7 @@ function withModel(model, fn) {
     for (const k of ['listPriceUzs', 'discountUzs', 'finalPriceUzs', 'minPriceUzs', 'aiCostUzs', 'totalCostUzs', 'leftUzs', 'serviceMarginBp', 'confidence', 'costModelVersion', 'quotaVersion']) {
       assert.ok(q[k] != null, k);
     }
-    assert.deepStrictEqual([q.finalPriceUzs, q.totalCostUzs, q.leftUzs, q.serviceMarginBp], [191040, 151554, 39486, 2066]);
+    assert.deepStrictEqual([q.finalPriceUzs, q.totalCostUzs, q.leftUzs, q.serviceMarginBp], [191040, 151562, 39478, 2066]);
     assert.deepStrictEqual(q.quotas, require('../src/rag/tariff-ledger').PLAN_CATALOG.silver.quotas, 'a discount does not cut the quota');
   });
 

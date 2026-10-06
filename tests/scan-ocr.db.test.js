@@ -218,6 +218,46 @@ const rows = async (user) => (await pool.query(`SELECT service, credits, status,
       assert.deepStrictEqual(await rows(a), []);
     });
 
+    await test('parallel analysis and opinion of one new file: the paid OCR runs once, each service keeps its own reservation', async () => {
+      const u = await makeUser();
+      const file = fx('scan-3p.pdf');
+      const [qa, qo] = await Promise.all([quote(u, file, 'analysis'), quote(u, file, 'opinion')]);
+      assert.deepStrictEqual([qa.body.cached, qo.body.cached], [false, false], 'both quoted before any OCR');
+      const before = ocrCalls.length;
+      // a slow provider, so the two requests overlap
+      ocrBehaviour = async (buf, mime, pages) => { await settle(300); return { text: `SKAN MATNI. ${'Shartnoma bandi matni. '.repeat(40 * pages)}`, provider: 'stub' }; };
+      let ra, ro;
+      try {
+        [ra, ro] = await Promise.all([ocr(u, file, qa.body.scanTicket), ocr(u, file, qo.body.scanTicket)]);
+      } finally { ocrBehaviour = null; }
+      assert.deepStrictEqual([ra.status, ro.status], [200, 200], JSON.stringify([ra.body, ro.body]));
+      assert.strictEqual(ocrCalls.length, before + 1, 'one paid OCR');
+      assert.strictEqual(ra.body.scanId, ro.body.scanId, 'one stored reading');
+      assert.deepStrictEqual((await rows(u)).map(x => [x.service, x.credits, x.status]).sort(),
+        [['analysis', 1, 'reserved'], ['opinion', 1, 'reserved']], 'each service its own held unit');
+      const n = await pool.query('SELECT count(*)::int AS n FROM document_scans WHERE admin_id = $1', [u]);
+      assert.strictEqual(n.rows[0].n, 1);
+    });
+
+    await test('parallel chat scan and analysis of one new file: one OCR; the chat-scan pages are charged only by the request that ran it', async () => {
+      const u = await makeUser();
+      const file = fx('scan-3p-b.pdf');
+      const [qc, qa] = await Promise.all([quote(u, file, 'chat'), quote(u, file, 'analysis')]);
+      const before = ocrCalls.length;
+      ocrBehaviour = async (buf, mime, pages) => { await settle(300); return { text: `SKAN MATNI. ${'Shartnoma bandi matni. '.repeat(40 * pages)}`, provider: 'stub' }; };
+      let rc, ra;
+      try {
+        [rc, ra] = await Promise.all([ocr(u, file, qc.body.scanTicket), ocr(u, file, qa.body.scanTicket)]);
+      } finally { ocrBehaviour = null; }
+      assert.deepStrictEqual([rc.status, ra.status], [200, 200], JSON.stringify([rc.body, ra.body]));
+      assert.strictEqual(ocrCalls.length, before + 1, 'one paid OCR');
+      const r = await rows(u);
+      const pool_ = r.filter(x => x.service === 'ocr');
+      // committed only if the chat request ran the OCR; released ('ocr_shared') if it waited for the analysis'
+      assert.ok(pool_.length === 1 && (pool_[0].status === 'committed' || (pool_[0].status === 'released' && pool_[0].release_reason === 'ocr_shared')), JSON.stringify(r));
+      assert.deepStrictEqual(r.filter(x => x.service === 'analysis').map(x => x.status), ['reserved']);
+    });
+
     await test('parallel: two scans against one Sinov analysis unit - one is read, the other refused before its OCR', async () => {
       const u = await makeUser();
       const qa = await quote(u, fx('scan-3p.pdf'), 'analysis');
