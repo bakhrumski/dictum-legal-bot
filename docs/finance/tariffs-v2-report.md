@@ -243,9 +243,16 @@ GPT-6 uzun kontekstda taxminan ikki baravar narxlanadi, shuning uchun chegarada 
    - Shu sababli bu ham **qat'iy dollar kafolati emas**: kafolat narx jadvali bilan cheklangan.
 2. **`estimated` (alohida qaror bilan).** Chegarasiz chaqiruvlar Master yozgan taxmin bilan ishlaydi (`unboundedCallUsd` va uning asosi `riskBasis`). Ular har so'rovda "taxminiy risk" sifatida alohida yoziladi (`test_budget_holds.risk`). Bu nazorat qilinadigan taxminiy budjet, kafolat emas.
 
-**Qat'iy rejim pilotga nima qiladi** (pullik chaqiruvsiz, `callCostBound` bilan oldindan hisoblandi; production'dagi so'rov limiti $0.25):
+**Qat'iy rejim pilotga nima qiladi** (pullik chaqiruvsiz, `callCostBound` bilan oldindan hisoblandi; production'dagi so'rov limiti $0.25).
 
-| Qadam (asosiy chaqiruv) | Chegara | $0.25 so'rov limiti bilan |
+Jadvaldagi summalar — **maksimal rezerv taxmini**, real tannarx emas. Ular eng yomon holat uchun hisoblangan:
+- output limiti to'liq ishlatiladi;
+- har bir input bayti alohida token deb olinadi;
+- GPT-6 narxi ×2.
+
+Real sarf odatda ancha past bo'ladi. U faqat pilotda o'lchanadi.
+
+| Qadam (asosiy chaqiruv) | Maksimal rezerv taxmini (real narx emas) | $0.25 so'rov limiti bilan |
 |---|---:|---|
 | Chat javobi (`gpt-6-luna`, 8 192 output) | $0.0098 | o'tadi |
 | Cross-check / claim-check (`gpt-6-luna`) | $0.0057 | o'tadi |
@@ -266,6 +273,27 @@ Qo'shimcha: production'da `LLM_PROVIDER=voicelab` yoki Gemini yo'li yoqilgan bo'
    - avval qaror so'raladi.
 
 Umumiy reja: $5 = A $2 + B $3. Bu "taxminiy nazoratli" budjet, qat'iy emas: oshib ketish faqat narx jadvali noto'g'ri bo'lgan holda bo'lishi mumkin va bu `boundExceeded` bilan ko'rinadi.
+
+**A/B pilot nimani baholamaydi.** A va B faqat chegarasi isbotlangan yo'llarni ishlatadi: OpenAI Responses (web search'siz) va OpenAI embedding. Quyidagilar o'chiq, shuning uchun **baholanmaydi**:
+- VoiceLab (LLM, vision, STT, TTS);
+- Gemini (javob, OCR, embedding);
+- Hugging Face (embedding, rerank);
+- rasmli OCR;
+- web search;
+- hybrid pipeline.
+
+Shu sababli A/B natijasi:
+- production'dagi **butun pipeline xarajatini tasdiqlamaydi** — production'da yoqilgan VoiceLab, Gemini yoki HF yo'llari pilotdagidan boshqacha ishlaydi;
+- tariflarning **80% xarajat maqsadini tasdiqlamaydi**, chunki u production pipeline'ining 100% limitdagi to'liq xarajatiga bog'liq;
+- faqat OpenAI yo'lidagi xizmatlarning birlik narxi va sifati haqida fakt beradi.
+
+**Hisobot providerlar bo'yicha alohida bo'ladi.** Har bir provider/model uchun `/api/admin/ai-usage/report` va `llm_spend_log` bo'yicha alohida ko'rsatiladi:
+- chaqiruvlar soni;
+- known / estimated / unknown xarajat;
+- rad etilgan (`CALL_RESERVE`, `TEST_BUDGET`) va `skipped` chaqiruvlar;
+- `boundExceeded` holatlari.
+
+Sifat (reviewer ballari) ham xizmat va javob bergan provider bo'yicha alohida beriladi. O'chiq providerlar "baholanmagan" deb belgilanadi.
 
 **Pilot akkaunti doirasi.** Budjet faqat test huquqi berilgan hisobning chaqiruvlarini qamraydi: veb va bog'langan Telegram chati. Boshqa foydalanuvchilar va production limitlari o'zgarmaydi.
 

@@ -27,16 +27,39 @@ Kalit 2026-10-06 dagi pilot-budjet PR'i bilan keladi. U deploy qilinmagan bo'lsa
 
 1. **Pilotni to'xtatish.** `POST /api/admin/tariff/test-entitlements/:userId/end`.
 2. **Render → Settings → Auto-Deploy: Off.** `main` ga kelgan yangi commit rollback o'rtasida deploy bo'lib ketmasligi uchun.
-3. **Trafikni to'xtatish.** Render → Environment → `MAINTENANCE_MODE=on` → Save. Servis qayta ishga tushadi, ishlab turgan so'rovlar to'xtaydi.
+3. **Yangi ishlarni to'xtatish.** Render → Environment → `MAINTENANCE_MODE=on` → Save.
+   - **Diqqat:** env o'zgarishi Render'da zero-downtime qayta deploy qiladi. Yangi (maintenance) instansiya ko'tarilguncha **eski instansiya trafikni qabul qilishda davom etadi**. Kalit o'zi almashinuv paytidagi trafikni to'xtatmaydi.
+   - Render → Events'da deploy `live` bo'lganini kutiladi.
    - Tekshirish: `/api/health` → 200; `/api/tariff/me` → 503 `MAINTENANCE`.
-   - 1–2 daqiqa kutiladi.
-4. **Rezervlarni tartibga keltirish.** `psql "$DATABASE_URL" -f scripts/rollback/tariffs-v2-to-v1.sql`.
+4. **Allaqachon boshlangan ishlarni yakunlash yoki bekor qilish.** Kalit faqat *yangi* ishlarni to'xtatadi.
+   - **HTTP so'rovlari (SSE stream'lar ham).** Eski instansiya SIGTERM olganda yangi ulanish qabul qilmaydi, boshlangan so'rovlarni 25 soniyagacha tugatishga qo'yadi, keyin majburan chiqadi (`src/api/lifecycle.js`).
+     - Render logida eski instansiyaning `[SHUTDOWN] done` yoki `[SHUTDOWN] timed out` qatori kutiladi.
+     - Majburan to'xtatilgan so'rovning rezervi `reserved` holatda qoladi. Uning provider sarfi ledger'da qoladi; yozilmay qolgan oxirgi qatorlar bo'lsa, ular yo'qoladi.
+   - **Telegram.** Eski instansiya SIGTERM'da polling'ni to'xtatadi. Maintenance instansiyasi yangi xabarlarga faqat "texnik ishlar" deb javob beradi: AI chaqirilmaydi, usage qatori yozilmaydi. Ishlov berilayotgan javob eski instansiya bilan birga to'xtaydi.
+   - **Fon AI ishlari:**
+     - Workspace AI run'lari, ingest navbati va AI screening — hammasi HTTP orqali boshlanadi. Maintenance'da yangisi boshlanmaydi; boshlangani eski instansiya bilan to'xtaydi.
+     - Ingest navbati xotirada turadi va qayta ishga tushganda yo'qoladi.
+     - To'xtab qolgan Workspace run'larini (`workspace_ai_runs.status = 'in_progress'`) keyingi ishga tushishdagi `recoverStaleRuns` yopadi.
+     - Rejalashtirilgan (cron) AI ishi yo'q.
+   - **Bazada sukunatni tekshirish.** Kamida 2 daqiqa davomida ikki marta:
+
+     ```sql
+     SELECT max(ts) FROM tariff_usage;
+     SELECT max(ts) FROM llm_spend_log;
+     SELECT count(*) FROM tariff_usage WHERE status = 'reserved' AND ts > now() - interval '30 minutes';
+     SELECT count(*) FROM test_budget_holds WHERE released_at IS NULL;
+     ```
+
+     `max(ts)` o'zgarmasligi kerak. Qolgan `reserved` qatorlarni yakunlaydigan jarayon endi yo'q — ular **bekor qilingan** hisoblanadi. 5-qadam ularni ushlab turish jadvaliga ko'chiradi; roll-forward'da ular `released` bo'lib qaytadi va birligi mijozga qaytadi.
+   - Agar `max(ts)` hali o'zgarayotgan bo'lsa, eski instansiya hali tirik. 5-qadamga o'tilmaydi.
+5. **Rezervlarni tartibga keltirish** (faqat 4-qadamdagi sukunatdan keyin). `psql "$DATABASE_URL" -f scripts/rollback/tariffs-v2-to-v1.sql`.
    - Tekshirish: `SELECT count(*) FROM tariff_usage WHERE status IN ('released','reserved')` → 0. Ko'chirilgan qatorlar `tariff_usage_v2_hold` da turadi.
-   - Bu paytda hech bir kod ish yozmaydi: v2 kodi maintenance rejimida.
-5. **Eski kodni yoqish.** Render → Manual Deploy → commit `a3b858b`.
-   - Eski kod `MAINTENANCE_MODE` ni bilmaydi, deploy tugashi bilan trafikka xizmat qila boshlaydi. Bu 4-qadamdan keyin bo'ladi, shuning uchun oraliq holat yo'q.
-6. **`MAINTENANCE_MODE` ni olib tashlash** (eski kodga ta'siri yo'q; keyingi roll-forward'da kutilmagan holat bo'lmasin).
-7. **Tekshirish.** `/api/health`; bitta oddiy hisob bilan chat; legacy obunali mijozda limit.
+   - Bu paytda hech bir kod ish yozmaydi: faqat maintenance instansiyasi tirik.
+6. **Eski kodni yoqish.** Render → Manual Deploy → commit `a3b858b`.
+   - Eski kod `MAINTENANCE_MODE` ni bilmaydi. Deploy `live` bo'lishi bilan u trafikka xizmat qila boshlaydi.
+   - Almashinuv paytida eski instansiya o'rnida faqat maintenance instansiyasi turadi va u ish qabul qilmaydi. Ma'lumot esa 5-qadamda tayyorlangan. Shuning uchun eski kod tayyor bo'lmagan ma'lumotni hech qachon ko'rmaydi.
+7. **`MAINTENANCE_MODE` ni olib tashlash.** Eski kodga ta'siri yo'q; keyingi roll-forward'da kutilmagan holat bo'lmasin. Env o'zgarishi eski kodni qayta ishga tushiradi — bu xavfsiz.
+8. **Tekshirish.** `/api/health`; bitta oddiy hisob bilan chat; legacy obunali mijozda limit.
 
 **Kalitsiz variant** (live reliz `MAINTENANCE_MODE` ni bilmasa): 3-qadam o'rniga Render → **Suspend service**, keyin 4-qadam. Undan keyin `a3b858b` Manual Deploy qilinadi va servis Resume qilinadi. Render'da suspend holatidagi manual deploy va resume ketma-ketligi **sinab ko'rilmagan**. Shuning uchun kalitli PR'ni oldinroq deploy qilish tavsiya etiladi.
 
@@ -56,7 +79,10 @@ Rollback davrida nimalar bo'ladi (tekshirilgan, 4-bo'lim):
 ## 3. Qayta oldinga (roll-forward) — aniq ketma-ketlik
 
 1. **Kalitni oldindan qo'yish.** Render → Environment → `MAINTENANCE_MODE=on`. Eski kod buni bilmaydi va ishlashda davom etadi; uning yozgan qatorlari v2'ga zarar qilmaydi (pastda).
-2. **v2 relizini deploy qilish** (kalitli versiya). U maintenance rejimida ko'tariladi: migratsiyalar qo'llanadi, trafik qabul qilinmaydi. 013 allaqachon qo'llangan, checksum bir xil bo'lgani uchun qayta qo'llanmaydi.
+2. **v2 relizini deploy qilish** (kalitli versiya).
+   - U maintenance rejimida ko'tariladi: migratsiyalar qo'llanadi, trafik qabul qilinmaydi. 013 allaqachon qo'llangan, checksum bir xil bo'lgani uchun qayta qo'llanmaydi.
+   - Almashinuv paytida eski kod trafikka xizmat qilishda davom etadi va v1 qatorlarini yozadi. Bu xavfsiz: v2 ularni sanamaydi.
+   - Eski instansiyaning `[SHUTDOWN] done` qatori va bazadagi sukunat (2-bo'lim, 4-qadam) kutiladi.
 3. **`psql "$DATABASE_URL" -f scripts/rollback/tariffs-v1-to-v2.sql`.**
    - Ushlab turilgan qatorlar qaytadi.
    - Rollback paytida davom etayotgan rezerv v2 tomonidan yetkazilmagan, shuning uchun u `released` (`code_rollback`) bo'lib qaytadi va birligi mijozga qaytadi.

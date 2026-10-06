@@ -53,9 +53,12 @@ function run(env, p) {
   await test('the rollback document puts the switch before the SQL and the old code after it', () => {
     const doc = fs.readFileSync(path.join(__dirname, '..', 'docs', 'tariffs-v2-rollback.md'), 'utf8');
     const a = doc.indexOf('MAINTENANCE_MODE=on` → Save');
+    const d = doc.indexOf('`[SHUTDOWN] done`');
+    const q = doc.indexOf('SELECT max(ts) FROM tariff_usage;');
     const b = doc.indexOf('scripts/rollback/tariffs-v2-to-v1.sql`.');
     const c = doc.indexOf('Manual Deploy → commit `a3b858b`');
-    assert.ok(a > 0 && a < b && b < c, 'switch -> SQL -> old code');
+    assert.ok(a > 0 && a < d && d < q && q < b && b < c, 'switch -> old instance drained -> database quiet -> SQL -> old code');
+    assert.match(doc, /eski instansiya trafikni qabul qilishda davom etadi/u, 'the switch does not block traffic during the swap');
   });
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

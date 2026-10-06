@@ -286,6 +286,38 @@ async function aiCall({ inTokens = 0, unknown = false } = {}) {
     assert.match(bot, /if \(\(await testBudget\.accountsWithTest\(\)\)\.size\) \{[\s\S]*?testBudget\.attach\(ident\.adminId\)/u);
   });
 
+  await test('scope: Sinov, paid and legacy accounts get no test budget - their unbounded provider calls run as before', async () => {
+    const sinov = await makeUser();
+    await ledger.reserve({ adminId: sinov, service: 'chat', endpoint: '/api/legal-chat' });   // starts the Sinov
+    const paid = await makeUser();
+    await ledger.grantPaidPeriod({ adminId: paid, plan: 'gold', paymentRef: `scope-${paid}` });
+    const legacy = await makeUser();
+    await pool.query(`UPDATE admins SET tariff_plan = 'silver', tariff_starts_at = now() - interval '5 days', tariff_expires_at = now() + interval '25 days' WHERE id = $1`, [legacy]);
+    assert.strictEqual((await ledger.balance({ adminId: legacy })).rules, 'legacy_v1');
+    // a live test entitlement elsewhere does not change them
+    const pilot = await makeUser();
+    assert.ok((await ledger.grantTestEntitlement({ adminId: pilot, grantedBy: master, reason: 'scope pilot', budgetUsd: 1 })).ok);
+    testBudget.resetCache();
+    for (const [who, id] of [['sinov', sinov], ['paid', paid], ['legacy', legacy]]) {
+      let calls = 0;
+      await usage.runWithRequest({ service: 'web', userId: id }, async (store) => {
+        assert.strictEqual(await testBudget.attach(id), false, who);
+        assert.strictEqual(store.admission, undefined, who);
+        await usage.track({ provider: 'voicelab', model: 'voicelab/aisha-comet', stage: 'answer', bound: { usd: null, reason: 'billed in provider credits' } }, async () => { calls++; return {}; });
+        await usage.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'answer', bound: { usd: null, reason: 'thinking tokens are not capped' } }, async () => { calls++; return {}; });
+      });
+      assert.strictEqual(calls, 2, `${who}: not blocked`);
+    }
+    // the pilot account itself is held to strict
+    let pilotCalls = 0;
+    await usage.runWithRequest({ service: 'web', userId: pilot }, async (store) => {
+      assert.strictEqual(await testBudget.attach(pilot), true, 'the pilot account is attached');
+      assert.ok(store.admission, 'admission set');
+      await assert.rejects(usage.track({ provider: 'voicelab', model: 'voicelab/aisha-comet', stage: 'answer', bound: { usd: null, reason: 'credits' } }, async () => { pilotCalls++; return {}; }));
+    });
+    assert.strictEqual(pilotCalls, 0);
+  });
+
   try {
     const subjects = made.map(a => `a:${a}`);
     await pool.query(`DELETE FROM test_budget_holds WHERE period_id IN (SELECT id FROM tariff_periods WHERE subject = ANY($1))`, [subjects]);

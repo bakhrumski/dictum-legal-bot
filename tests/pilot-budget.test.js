@@ -178,6 +178,38 @@ const inRequest = (pool, fn) => usage.runWithRequest({ service: 'web' }, async (
     });
   });
 
+  console.log('scope: only a test entitlement');
+
+  await test('no pool (every ordinary request): a call with no proven bound - VoiceLab, Gemini, HF, OCR - is made as before', async () => {
+    let calls = 0;
+    await usage.runWithRequest({ service: 'web' }, async (store) => {
+      assert.strictEqual(store.budget.sharedPool, undefined);
+      for (const reason of ['billed in provider credits; credits per token not confirmed', 'thinking tokens are not capped by the output limit',
+        'Hugging Face inference is not priced per call here', 'image input has no token bound here']) {
+        await usage.track({ provider: 'voicelab', model: 'voicelab/aisha-comet', stage: 'answer', bound: { usd: null, reason } }, async () => { calls++; return {}; });
+      }
+    });
+    assert.strictEqual(calls, 4);
+  });
+
+  await test('the Telegram test account (env, useSharedBudget) has no per-call reservation either', async () => {
+    let calls = 0;
+    await usage.runWithRequest({ service: 'telegram', chatId: 1 }, async (store) => {
+      usage.useSharedBudget({ label: 'telegram test account', limitUsd: 5, spentUsd: 0, unknownCallUsd: 0.05 });
+      assert.strictEqual(store.budget.sharedPool.perCall, undefined);
+      await usage.track({ provider: 'voicelab', model: 'voicelab/aisha-comet', stage: 'answer', bound: { usd: null, reason: 'credits' } }, async () => { calls++; return {}; });
+    });
+    assert.strictEqual(calls, 1);
+  });
+
+  await test('per-call reservation is set only by the test-entitlement admission', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const files = ['src/ai/usage-ledger.js', 'src/ai/test-budget.js', 'src/api/server.js', 'src/bot/bot.js', 'src/rag/hybrid-pipeline.js'];
+    const setters = files.filter(f => /perCall:/u.test(fs.readFileSync(path.join(__dirname, '..', f), 'utf8')));
+    assert.deepStrictEqual(setters, ['src/ai/test-budget.js']);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();
