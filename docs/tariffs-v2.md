@@ -90,7 +90,12 @@ Fayl biriktirilgani o'zi tahlil degani emas: xizmat amalda so'ralgan ishga qarab
   - Birlik butun hujjatdan hisoblanadi.
   - Server avval 409 `DOC_COST_CONFIRM` qaytaradi, unda har bir xizmat uchun quote (`services`, `quotes`) bo'ladi. Dashboard har bir xizmat uchun alohida qator ko'rsatadi.
   - Tasdiq: `confirmedJob { analysis: n, opinion: n }`; bitta xizmat bo'lsa `confirmedUnits: n` ham bo'ladi. Boshqa xizmat uchun yoki boshqa son bilan berilgan tasdiq ishni boshlamaydi.
-  - Har bir xizmat o'z ishi (job) sifatida rezerv qilinadi. Ikkinchisi rad etilsa, birinchisi ham qaytariladi — hech narsa yechilmaydi.
+  - Ikkala xizmat AI boshlanishidan oldin **bitta tranzaksiyada** rezerv qilinadi (`ledger.reserveMany`). Biri sig'masa, hech biri rezerv qilinmaydi va AI ishga tushmaydi.
+  - Har bir xizmat o'z bo'limi bo'yicha alohida hisoblanadi. Sarlavhalar qat'iy belgilangan: `## Hujjat tahlili`, `## Yuridik xulosa`. Yetkazilgan bo'lim commit qilinadi, yetkazilmagani release qilinadi (`settleSections`).
+    - Tahlil yetkazilib, xulosa muvaffaqiyatsiz bo'lsa, tahlil baribir to'lanadi.
+    - Javob AI'gacha xato bersa, ikkalasi ham qaytariladi.
+    - Model sarlavhalarni qo'ymasa-yu, to'liq javob bersa, ikkalasi yetkazilgan deb hisoblanadi: format xatosi xizmatni bepul qilmaydi.
+  - Release qilingan xizmatning provider sarfi usage ledger'da qoladi.
   - Chat birligi qo'shimcha olinmaydi.
   - "Tahlil qilib xulosa bering" — bu tahlilning xulosasi, ikkinchi xizmat emas. Xulosa xizmati faqat "yuridik/huquqiy xulosa" yoki "xulosa yozing/tayyorlang" deyilganda tanlanadi.
 - **Hujjat bo'yicha savol: qaysi qismlar beriladi** (`selectExcerpt`). Hujjatning boshi kesib olinmaydi; ko'pi bilan 20 000 belgi.
@@ -106,7 +111,11 @@ Fayl biriktirilgani o'zi tahlil degani emas: xizmat amalda so'ralgan ishga qarab
   - mos band umuman topilmasa, model hujjatning birinchi sahifalarini emas, bandlar ro'yxatini oladi.
 - **Workspace.**
   - Hujjat konteksti o'sha `selectExcerpt` bilan olinadi. Yetishmagan band blok ichida "Qat'iy xulosa bermang" deb yoziladi, shu qoida promptda ham bor.
-  - Tahlil yoki xulosa so'ralsa, javob 1 Workspace chat birligi bo'lib qoladi va aynan qaysi xizmat (tahlil yoki xulosa limiti) kerakligini aytadi. Tahlil yoki xulosa birligi yechilmaydi.
+  - Workspace'da to'liq tahlil va xulosa xizmati **yo'q**. Shunday so'rov yo'naltiriladi, agar u hujjat yoki yuridik xulosani nomlasa va Workspace'da hujjat bo'lsa (`createWorkspaceServiceRouting`). Bunda:
+    - AI chaqirilmaydi va **kvota yechilmaydi**;
+    - javob "bu tahlil ham, xulosa ham emas" deydi;
+    - tugma AI bo'limidagi mavjud xizmatni ochadi.
+  - Band bo'yicha savol yoki hujjatsiz huquqiy savol ("vaziyatni tahlil qiling") — oddiy javob, 1 chat birligi.
 - **Telegram.** Fayllar AI'ga emas, yurist navbatiga tushadi (`src/bot/tariff-texts.js`). Foydalanuvchiga quyidagilar aytiladi:
   - bu AI tahlili emas va tahlil yoki xulosa limiti yechilmadi;
   - yurist ko'rigi tarif limitlariga kirmaydi, uning shartlari alohida kelishiladi (bepul deb va'da qilinmaydi);
@@ -202,6 +211,32 @@ Master aniq foydalanuvchiga aniq pullik tarif uchun bitta 30 kunlik davrga chegi
 **Xarajat modeli:** `TARIFF_COST_MODEL` (JSON) bilan almashtiriladi. Har bir komponent `status` bilan beriladi (`estimated`, `unknown` + `reserveUzs` + `reserveBasis`). Zaxirasiz noma'lum komponent yangi takliflarni to'xtatadi.
 
 Iqtisodiyot va audit: [`docs/finance/tariffs-v2-report.md`](finance/tariffs-v2-report.md) §5–6. Rollback: [`docs/tariffs-v2-rollback.md`](tariffs-v2-rollback.md).
+
+## 10. Test entitlement (pilot, Master)
+
+Pilot uchun test akkauntiga kvota tijoriy to'lov grant'i orqali berilmaydi. Buning uchun Master'ning alohida test huquqi bor.
+
+| | |
+|---|---|
+| Berish | `POST /api/admin/tariff/test-entitlements { userId, reason, hours (≤ 168, 48 standart), plan (hujjat hajmi qoidasi), quotas, budgetUsd (5), unknownCallUsd (0.05), perRequestUsd }` |
+| Ko'rish | `GET /api/admin/tariff/test-entitlements` — kvota sarfi va budjet holati (spent, held) |
+| Tugatish | `POST /api/admin/tariff/test-entitlements/:userId/end` |
+
+- **Ruxsat:** faqat Master — route va bazadagi rol tekshiruvi bilan.
+- **Kimga:** faqat oddiy (role `user`) hisobga. Hisobda pullik davr ishlayotgan bo'lsa, berilmaydi.
+- **Pul tomoni:** `tariff_periods.source = 'test'`. `price_uzs`, `payment_ref` va kredit yo'q — buni jadvaldagi CHECK taqiqlaydi. Tushum yo'q, `admins.tariff_*` o'zgarmaydi.
+- **Audit:** kim berdi, sabab va vaqt `economics` ichida va `audit_log` da.
+- **Bitta faol huquq.** Har bir hisobda bitta faol test huquqi bo'ladi (unikal indeks). Takroriy yoki parallel berish o'shani qaytaradi va kvotani ko'paytirmaydi.
+- **Tugagach:** hisob avvalgidek qoladi — Sinov ishlatilmagan, tarif yozilmagan. Test davridagi sarf yozuvi esa saqlanadi.
+- **Hisobotlarda alohida:**
+  - `marginReport.totals.testEntitlements` — mijoz qatoriga, tannarxga va marjaga kirmaydi;
+  - `GET /api/admin/tariff/economics` → `measuredTest` — mijozlarning birlik tannarxidan alohida.
+- **Budjet** (`src/ai/test-budget.js`) — veb va bog'langan Telegram chati uchun bitta:
+  - har so'rov birinchi AI chaqiruvidan oldin o'z so'rov limitini rezerv qiladi (`test_budget_holds`);
+  - shart: `sarflangan + band qilingan + bu so'rov ≤ budjet`, aks holda AI chaqirilmaydi (`TEST_BUDGET` qatori yoziladi);
+  - narxi noma'lum chaqiruv taxminiy narxda sanaladi, hech qachon $0 emas;
+  - so'rov limiti — production'niki (`AI_REQUEST_MAX_COST_USD`). Faqat shu akkaunt uchun `perRequestUsd` bilan o'zgartiriladi; global limit o'zgarmaydi.
+  - Cheklovlari: moliyaviy hisobot §7.
 
 ## 8. Keyingi bosqichlar (alohida PR'lar, ushbu PR'da bajarilmagan)
 

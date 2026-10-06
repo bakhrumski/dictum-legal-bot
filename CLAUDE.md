@@ -167,8 +167,12 @@ Known state of the suites (Sept 2026):
   the answer must say so and not conclude); an analysis takes analysis
   units, a legal opinion opinion units, both are two jobs - each confirmed
   first (409 `DOC_COST_CONFIRM`, `confirmedJob`), never charged as chat too;
-  Workspace answers on the same excerpts for one chat unit and names the
-  service. Telegram runs no AI on files (lawyer queue, told plainly, no
+  two services are reserved in one transaction before any AI
+  (`reserveMany`) and each is settled on its own section of the answer
+  (`settleSections`: a delivered analysis stays paid if the opinion fails).
+  Workspace does not run full analysis/opinion: such a request is routed to
+  the AI section with no AI call and no quota (`createWorkspaceServiceRouting`);
+  a clause question is one chat unit. Telegram runs no AI on files (lawyer queue, told plainly, no
   quota, review not promised free). Individual discounts
   (`src/rag/tariff-pricing.js`, `tariff-offers.js`, table `tariff_offers`):
   master only, one user, one plan, one 30-day period, final price >=
@@ -181,8 +185,12 @@ Known state of the suites (Sept 2026):
   and service revenue (price + credit in - credit out over the days run)
   apart; legacy revenue and refunds are unknown, never 0. Rollback is code,
   not data: `docs/tariffs-v2-rollback.md`; the 013 down file is for an empty
-  test database only. The test account's $5 budget also covers its web
-  requests (for the pilot).
+  test database only. The pilot runs on a master-only test entitlement
+  (`grantTestEntitlement`, `tariff_periods.source = 'test'`: no price, no
+  paymentRef, no revenue, admins.tariff_* untouched, spend reported apart)
+  with a total AI budget (`src/ai/test-budget.js`): each request holds its
+  per-request limit before its first AI call, so parallel requests cannot
+  pass it; unknown-cost calls count at an assumed price, never $0.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

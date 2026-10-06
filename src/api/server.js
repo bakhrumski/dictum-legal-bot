@@ -381,23 +381,16 @@ app.use((req, res, next) => {
 // Every API request is one usage-ledger request: the AI calls it makes share
 // a request_id (src/ai/usage-ledger.js). A request with no AI call leaves no row.
 app.use('/api/', usageLedger.expressScope('web'));
-// The configured test account (src/bot/test-account.js) keeps its one total
-// AI budget on the website too: its web requests run under the same shared
-// pool as its Telegram chat. Off unless TG_TEST_ACCOUNT_* is set; any other
-// account is untouched.
-const webTestAccounts = require('../bot/test-account');
+// A test entitlement (pilot) has one total AI budget (src/ai/test-budget.js):
+// a request of that account reserves its per-request limit before its first
+// AI call. Every other account is untouched (a cached id set, no query).
+const testBudget = require('../ai/test-budget');
 app.use('/api/', async (req, res, next) => {
   try {
     const adminId = req.session && req.session.adminId;
-    if (adminId && req.session.role === 'user' && webTestAccounts.testAccountConfig().active) {
-      const account = await webTestAccounts.resolveWebTestAccount(pool, adminId);
-      if (account) {
-        usageLedger.useSharedBudget(webTestAccounts.ledgerPool(account));
-        usageLedger.annotate({ testMode: true });
-      }
-    }
+    if (adminId && req.session.role === 'user' && await testBudget.attach(adminId)) usageLedger.annotate({ testEntitlement: true });
   } catch (e) {
-    console.warn('[TG-TEST] web budget not applied:', e.message);
+    console.warn('[TEST-BUDGET] not attached:', e.message);
   }
   next();
 });
@@ -6438,7 +6431,13 @@ app.post('/api/legal-chat', requireAuth, tariffModule.enforceChatQuota('/api/leg
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
       res.flushHeaders();
-      sse = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch (_) {} };
+      sse = (obj) => {
+        // what the user has received so far: a two-service document job is
+        // settled per service on it (subscription-tiers settleJobs)
+        if (obj && obj.type === 'token' && typeof obj.t === 'string') res.locals.deliveredText = (res.locals.deliveredText || '') + obj.t;
+        else if (obj && (obj.type === 'replace' || obj.type === 'done') && typeof (obj.text || obj.reply) === 'string') res.locals.deliveredText = obj.text || obj.reply;
+        try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch (_) {}
+      };
       // 2KB padding comment forces proxies that buffer by size to flush the
       // headers + first frame immediately (Render's front proxy can hold small
       // responses); harmless to the client SSE parser (lines starting with ':').
@@ -10183,6 +10182,69 @@ app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// ── Test entitlement for the pilot (master only; docs/tariffs-v2.md §10) ────
+// Quotas for one ordinary account for a limited time, with a total AI budget
+// (src/ai/test-budget.js). No payment, no paymentRef, no revenue; who gave
+// it, why and when is stored on the period and in the audit log.
+const TEST_ENT_REASONS = {
+  master_only: 'Faqat Master Admin test huquqini bera oladi.',
+  reason_required: 'Sababini yozing (3–500 belgi).',
+  invalid_hours: "Muddat 1 soatdan 168 soatgacha (7 kun).",
+  invalid_plan: "Hujjat hajmi qoidasi uchun Silver, Gold yoki Platinum tanlang.",
+  invalid_quotas: 'Kvotalar 0–1000 oralig\'idagi butun son bo\'lsin.',
+  invalid_budget: 'Budjet $0 dan katta va $50 dan oshmasin.',
+  invalid_unknown_reserve: "Narxi noma'lum chaqiruv uchun zaxira $0 dan katta bo'lsin.",
+  invalid_per_request: "So'rov limiti $0 dan katta va budjetdan oshmasin.",
+  unknown_user: 'Foydalanuvchi topilmadi.',
+  not_an_ordinary_user: 'Test huquqi faqat oddiy foydalanuvchiga beriladi.',
+  account_has_paid_period: "Bu hisobda pullik davr ishlayapti: test huquqi alohida test hisobiga beriladi.",
+  no_test_entitlement: "Faol test huquqi yo'q.",
+};
+app.post('/api/admin/tariff/test-entitlements', requireMasterAdmin, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const out = await tariffModule.ledger.grantTestEntitlement({
+      adminId: Number(b.userId), grantedBy: req.session.adminId, reason: b.reason, hours: b.hours == null ? 48 : Number(b.hours),
+      plan: b.plan || 'silver', quotas: b.quotas || null, budgetUsd: b.budgetUsd == null ? 5 : Number(b.budgetUsd),
+      unknownCallUsd: b.unknownCallUsd == null ? 0.05 : Number(b.unknownCallUsd), perRequestUsd: b.perRequestUsd == null ? null : Number(b.perRequestUsd),
+    });
+    if (!out.ok) return res.status(out.reason === 'master_only' ? 403 : 400).json({ ...out, message: TEST_ENT_REASONS[out.reason] || out.reason });
+    require('../ai/test-budget').resetCache();
+    if (!out.duplicate) logAudit(req, 'tariff.test_entitlement.grant', 'admin', `${b.userId}:${out.period.id}:${String(b.reason || '').slice(0, 80)}`);
+    res.json(out);
+  } catch (err) {
+    console.error('[TEST ENTITLEMENT]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/admin/tariff/test-entitlements/:userId/end', requireMasterAdmin, async (req, res) => {
+  try {
+    const out = await tariffModule.ledger.endTestEntitlement({ adminId: Number(req.params.userId), endedBy: req.session.adminId });
+    if (!out.ok) return res.status(out.reason === 'master_only' ? 403 : 400).json({ ...out, message: TEST_ENT_REASONS[out.reason] || out.reason });
+    require('../ai/test-budget').resetCache();
+    logAudit(req, 'tariff.test_entitlement.end', 'admin', `${req.params.userId}:${out.period.id}`);
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get('/api/admin/tariff/test-entitlements', requireMasterAdmin, async (req, res) => {
+  try {
+    const rows = await tariffModule.ledger.listTestEntitlements({ limit: req.query.limit });
+    const testBudget = require('../ai/test-budget');
+    // budget standing of the live ones: spent (finished requests), held (running)
+    for (const r of rows) {
+      if (r.status !== 'active' || new Date(r.ends_at) <= new Date()) continue;
+      const ent = await testBudget.entitlementFor(pool, r.admin_id);
+      if (ent) r.budget = { ...(await testBudget.standing(pool, ent)), budgetUsd: ent.budgetUsd, perRequestUsd: ent.perRequestUsd, unknownCallUsd: ent.unknownCallUsd };
+      r.balance = await tariffModule.ledger.balance({ adminId: r.admin_id });
+    }
+    res.json({ entitlements: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Individual discount offers (master only; docs/tariffs-v2.md §9) ─────────
 // Quote, create, list, revoke, check. Creating an offer activates nothing:
 // the period starts with POST /api/admin/tariff/grant { offerId, paymentRef }
@@ -10303,8 +10365,11 @@ app.get('/api/admin/tariff/quote-change', requireMasterAdmin, async (req, res) =
 // cost; the measured cost per service is in /api/admin/ai-usage/report)
 app.get('/api/admin/tariff/economics', requireMasterAdmin, async (req, res) => {
   let measured = null;
+  let measuredTest = null;
+  const days = Math.min(180, Math.max(1, Number(req.query.days) || 30));
   try {
-    measured = await tariffModule.ledger.measuredServiceCost({ days: Math.min(180, Math.max(1, Number(req.query.days) || 30)) });
+    measured = await tariffModule.ledger.measuredServiceCost({ days });
+    measuredTest = await tariffModule.ledger.measuredServiceCost({ days, test: true });
   } catch (e) {
     measured = { error: e.message };
   }
@@ -10313,6 +10378,8 @@ app.get('/api/admin/tariff/economics', requireMasterAdmin, async (req, res) => {
     plans: tariffModule.ledger.PAID_PLAN_ORDER.map(p => tariffModule.ledger.planEconomics(p)),
     // delivered jobs joined to their AI calls: known, estimated and unknown kept apart
     measured,
+    // the pilot (test entitlements), apart from customers
+    measuredTest,
     note: 'planning = owner budgets (not provider prices); measured = usage ledger, complete only when no call has an unknown cost.',
   });
 });

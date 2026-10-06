@@ -119,6 +119,47 @@ function useSharedBudget(pool) {
   return true;
 }
 
+/**
+ * An admission step before the request's first AI call (the test budget,
+ * src/ai/test-budget.js): { admit(store) -> { ok, reason, pool, maxCostUsd },
+ * release(store, committedUsd), unknownCallUsd }. admit runs once, at the
+ * first call; refused -> no call is made (one 'skipped' row). release runs
+ * when the request finishes, with what it committed.
+ */
+function useAdmission(admission) {
+  const store = current();
+  if (!store || !admission || typeof admission.admit !== 'function') return false;
+  store.admission = { ...admission, promise: null, state: null, released: false };
+  return true;
+}
+
+async function admitOnce(store) {
+  const a = store && store.admission;
+  if (!a) return null;
+  if (!a.promise) {
+    a.promise = Promise.resolve()
+      .then(() => a.admit(store))
+      .catch(e => ({ ok: false, reason: `admission check failed: ${safeMessage(e)}` }))
+      .then(state => {
+        a.state = state;
+        if (state && state.ok) {
+          if (state.pool) store.budget.sharedPool = state.pool;
+          if (state.maxCostUsd != null) store.budget.maxCostUsd = state.maxCostUsd;
+        }
+        return state;
+      });
+  }
+  return a.promise;
+}
+
+async function releaseAdmission(store) {
+  const a = store && store.admission;
+  if (!a || a.released || !a.state || !a.state.ok || typeof a.release !== 'function') return;
+  a.released = true;
+  const committed = store.shared.knownCostUsd + store.shared.unknownCostCalls * (Number(a.unknownCallUsd) || 0);
+  try { await a.release(store, committed); } catch (error) { console.warn('[USAGE] admission release failed:', safeMessage(error)); }
+}
+
 /** Mark the request as served in a reduced mode (e.g. no reranker). */
 function degrade(reason) {
   const store = current();
@@ -314,6 +355,10 @@ async function track(meta, fn) {
     if (chain) chain.lastFailed = meta.model || meta.provider || null;
     return Object.assign(new Error(`${meta.provider || 'provider'} ${meta.model || ''} not called: ${reason}`), { code });
   };
+  if (store && store.admission) {
+    const adm = await admitOnce(store);
+    if (!adm || !adm.ok) throw skip('TEST_BUDGET', (adm && adm.reason) || 'test budget refused');
+  }
   const open = health.openState(meta.provider, meta.model);
   if (open) throw skip('CIRCUIT_OPEN', `${open.code}: ${open.reason || 'circuit open'} (until ${new Date(open.until).toISOString()})`);
   const blocked = budgetBlock(store, stage);
@@ -399,6 +444,7 @@ function usageFromOpenAI(u) {
 
 /** Close the request: end-to-end latency, outcome, legal check, telemetry health. */
 async function finishRequest(store, fields = {}) {
+  await releaseAdmission(store);
   if (!store || !requestWriter) return;
   const data = { ...store.shared.annotations, ...fields };
   if (!store.shared.opened && !store.shared.calls) return; // no AI call was made: nothing to close
@@ -430,12 +476,14 @@ function expressScope(service = 'web') {
     userIdOf: () => (req.session && (req.session.adminId || req.session.userId)) || null,
   }, (store) => {
     res.on('finish', () => { finishRequest(store, { outcome: `http_${res.statusCode}` }).catch(() => {}); });
+    // a client that left before the end: the admission hold is still released
+    res.on('close', () => { if (!res.writableFinished) releaseAdmission(store).catch(() => {}); });
     next();
   });
 }
 
 module.exports = {
   configure, runWithRequest, current, withStage, withChain, annotate, record, track, degrade, requestBudget, budgetBlock,
-  useSharedBudget, sharedPoolCommitted,
+  useSharedBudget, sharedPoolCommitted, useAdmission, releaseAdmission,
   finishRequest, expressScope, stageFor, errorCodeOf, safeMessage, stats, usageFromGemini, usageFromOpenAI,
 };

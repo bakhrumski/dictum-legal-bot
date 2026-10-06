@@ -76,7 +76,10 @@ function contract({ dropClause = null } = {}) {
     const tiers = read('src/rag/subscription-tiers.js');
     const fn = tiers.slice(tiers.indexOf('function enforceChatQuota'), tiers.indexOf('function enforceQuota('));
     assert.match(fn, /docJob\.requestedServices\(body\.message\)/u);
-    assert.match(fn, /for \(const sv of services\) \{\s*const m = await meterDocument\(req, res, \{ service: sv,/u, 'one job per service, each its own service');
+    assert.match(fn, /const m = await meterDocuments\(req, res, \{ services, text: doc,/u, 'all ordered services reserved together');
+    const md = tiers.slice(tiers.indexOf('async function meterDocuments'), tiers.indexOf('async function quoteDocument'));
+    assert.match(md, /ledger\.reserveMany\(\{[\s\S]*?jobs: services\.map\(sv => \(\{ service: sv, units: size\.units/u, 'one job per service, each its own service, one transaction');
+    assert.match(md, /section: true/u, 'each settled on its own section');
     assert.match(fn, /code: 'DOC_COST_CONFIRM', service: services\[0\], services, quote: quotes\[0\], quotes/u);
     assert.ok(!/service: 'analysis'/u.test(fn), 'an opinion is never metered as analysis');
     assert.match(fn, /if \(!services\.length\) \{[\s\S]*?return chat\(req, res, next\);/u, 'only a question takes the chat unit');
@@ -149,29 +152,48 @@ function contract({ dropClause = null } = {}) {
     assert.match(blocks[0], /Parchaga kirmagan, javob tayanadigan band\(lar\): 7\.2\. Qat'iy xulosa bermang\./u);
   });
 
-  await test('a Workspace chat asked for an opinion answers on excerpts, takes one chat unit and names the opinion service', async () => {
+  await test('Workspace: a full analysis or opinion of a document is routed (no AI, no quota, not shown as done); other questions are answered', async () => {
+    const cases = [
+      ["Shartnoma bo'yicha yuridik xulosa yozing", ['opinion']],
+      ['Shartnomani tahlil qiling', ['analysis']],
+      ['Hujjatni tahlil qilib, yuridik xulosa tayyorlang', ['analysis', 'opinion']],
+      ['14.3-band qachon qo\'llaniladi?', []],
+      ['Vaziyatni tahlil qilib bering: ish haqi kechikdi', []],
+    ];
+    for (const [q, want] of cases) assert.deepStrictEqual(docJob.workspaceDocumentServices(q), want, q);
+    const reply = docJob.workspaceRoutingReply(['analysis', 'opinion']);
+    assert.match(reply, /«Hujjat tahlili» va «AI yuridik xulosa» Workspace ichida hozircha bajarilmaydi — bu javob tahlil ham, xulosa ham emas/u);
+    assert.match(reply, /AI bo'limida bor[\s\S]*ish boshlanishidan oldin ko'rsatiladi/u);
+    assert.match(reply, /limitingizdan hech narsa yechmadi/u);
+    const routes = read('src/workspace/routes.js');
+    assert.match(routes, /'\/workspaces\/:workspaceId\/assistant\/ask', aiLimiter \|\| \(\(req, res, next\) => next\(\)\), workspaceServiceRouting, workspaceAiQuota,/u, 'routing runs before the quota');
+    const fn = routes.slice(routes.indexOf('function createWorkspaceServiceRouting'), routes.indexOf('function translateDatabaseError'));
+    assert.ok(fn.indexOf('await requireAccess(') < fn.indexOf('res.json('), 'access is checked before answering');
+    const ws = read('public/js/workspace.js');
+    assert.match(ws, /if\(action\.kind==='service'\) \{[\s\S]*?global\.switchTab\('ai'\)[\s\S]*?action\.service==='opinion'\?global\.modeOpinion:global\.modeAnalyzer/u, 'the button opens the right service');
+    assert.match(ws, /result\.routed\?'<span>'\+esc\(t\('routedNoQuota'\)\)/u, 'shown as a redirect, not as a generated answer');
+    // what reaches the assistant still answers on excerpts and says when they are not enough
     const { createWorkspaceLegalAnswerGenerator } = require('../src/workspace/legal-answer-generator');
     const prompts = [];
     const gen = createWorkspaceLegalAnswerGenerator({
       callAI: async (messages) => { prompts.push(messages[0].text); return { text: 'Parchalar asosida javob.', provider: 'stub', model: 'stub' }; },
       retrieveLegalContext: async () => ({ context: '', chunks: [], meta: null }),
-      buildTopicPrompt: () => 'SYSTEM',
-      classifyLegalTopic: async () => 'civil',
-      hasAiProvider: () => true,
-      pool: null,
+      buildTopicPrompt: () => 'SYSTEM', classifyLegalTopic: async () => 'civil', hasAiProvider: () => true, pool: null,
     });
-    const ctx = 'HUJJAT: Shartnoma (v1)\n14.3. Penya 0,5%.';
-    const op = await gen({ question: "Shartnoma bo'yicha yuridik xulosa yozing", workspaceContext: ctx });
-    assert.deepStrictEqual(op.documentScope.requestedServices, ['opinion']);
-    assert.match(op.reply, /1 chat birligi yechildi\. So'ralgan «AI yuridik xulosa» \(xulosa limitidan\) alohida xizmat/u);
-    const an = await gen({ question: 'Shartnomani tahlil qiling', workspaceContext: ctx });
-    assert.deepStrictEqual(an.documentScope.requestedServices, ['analysis']);
-    assert.match(an.reply, /«Hujjat tahlili» \(tahlil limitidan\)/u);
-    const q = await gen({ question: 'Penya necha foiz?', workspaceContext: ctx });
-    assert.strictEqual(q.documentScope, null, 'a question is an ordinary Workspace answer');
-    assert.match(prompts[2], /buni aniq ayting va qat'iy xulosa bermang/u, 'the insufficiency rule is in every prompt with documents');
-    // the Workspace route meters the chat service only
-    assert.match(read('src/workspace/routes.js'), /tariffModule\.enforceQuota\('\/api\/workspace-ai'\)/u);
+    const q = await gen({ question: 'Penya necha foiz?', workspaceContext: 'HUJJAT: Shartnoma (v1)\n14.3. Penya 0,5%.' });
+    assert.ok(!/alohida xizmat/u.test(q.reply), 'no service note on an ordinary answer');
+    assert.match(prompts[0], /buni aniq ayting va qat'iy xulosa bermang/u);
+  });
+
+  await test('two services in one answer are settled per section: a missing section is given back, a format slip is not free', () => {
+    const A = '## Hujjat tahlili\n' + 'Tahlil. '.repeat(40);
+    const O = '## Yuridik xulosa\n' + 'Xulosa. '.repeat(40);
+    assert.deepStrictEqual(docJob.settleSections(`${A}\n${O}`, ['analysis', 'opinion']), { analysis: 'delivered', opinion: 'delivered' });
+    assert.deepStrictEqual(docJob.settleSections(`${A}\n## Yuridik xulosa\nXato`, ['analysis', 'opinion']), { analysis: 'delivered', opinion: 'not_delivered' });
+    assert.deepStrictEqual(docJob.settleSections('Sarlavhasiz to\'liq javob. '.repeat(40), ['analysis', 'opinion']), { analysis: 'delivered', opinion: 'delivered' });
+    assert.deepStrictEqual(docJob.settleSections('', ['analysis', 'opinion']), { analysis: 'not_delivered', opinion: 'not_delivered' });
+    assert.match(docJob.serviceInstruction(['analysis', 'opinion']), /bo'lim sarlavhalari aynan: "## Hujjat tahlili" va "## Yuridik xulosa"/u);
+    assert.match(read('src/api/server.js'), /obj\.type === 'token' && typeof obj\.t === 'string'\) res\.locals\.deliveredText/u, 'the stream records what was delivered');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

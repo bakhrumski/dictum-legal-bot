@@ -53,6 +53,18 @@ async function testAccountFor(msgOrQuery) {
     usageLedger.useSharedBudget(testAccounts.ledgerPool(account));
     usageLedger.annotate({ testMode: true });
   }
+  // a test entitlement (pilot) of the linked account: the same total AI
+  // budget as on the web (src/ai/test-budget.js)
+  try {
+    const testBudget = require('../ai/test-budget');
+    // no live test entitlement anywhere (the usual case): no lookup at all
+    if ((await testBudget.accountsWithTest()).size) {
+      const ident = await telegramIdentity(msgOrQuery);
+      if (ident.adminId && await testBudget.attach(ident.adminId)) usageLedger.annotate({ testEntitlement: true });
+    }
+  } catch (e) {
+    console.warn('[TEST-BUDGET] Telegram attach failed:', e.message);
+  }
   return account;
 }
 

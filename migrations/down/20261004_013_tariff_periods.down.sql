@@ -22,6 +22,7 @@ BEGIN
     RAISE EXCEPTION 'tariff_periods has rows: this down migration is for an empty test database only (see docs/tariffs-v2-rollback.md)';
   END IF;
 END $$;
+DROP TABLE IF EXISTS public.test_budget_holds;
 DROP TABLE IF EXISTS public.tariff_offers;
 ALTER TABLE public.tariff_usage DROP CONSTRAINT IF EXISTS tariff_usage_period_id_fkey;
 DROP TABLE IF EXISTS public.tariff_periods;

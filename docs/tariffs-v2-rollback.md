@@ -41,6 +41,9 @@ Rollback davrida nimalar bo'ladi (tekshirilgan, 4-bo'lim):
   va foydalanuvchiga v1 dagi tarifini qo'llaydi.
 - Takliflar va narx/kredit ustunlari o'zgarmaydi. Eski kodda chegirma
   ekrani yo'q.
+- Test huquqi (`source = 'test'`) va `test_budget_holds` ni eski kod
+  o'qimaydi. Pilot akkaunti eski kodda oddiy hisob bo'ladi: test kvotasi
+  ham, $5 budjet ham yo'q. Shuning uchun rollback oldidan pilot to'xtatiladi.
 
 ## 3. Qayta oldinga (roll-forward)
 
@@ -62,8 +65,8 @@ Rollback davrida nimalar bo'ladi (tekshirilgan, 4-bo'lim):
 ## 4. Tekshiruv: eski kod yangi schema bilan
 
 `scripts/rollback/compat-check.sh` (bo'sh, tashlab yuboriladigan Postgres +
-pgvector bazasida) 2026-10-06 da lokal ishga tushirildi. Natija:
-`compat check OK`.
+pgvector bazasida) 2026-10-06 da lokal ishga tushirildi va test huquqi
+qo'shilgandan keyin yana takrorlandi. Ikkala safar natija: `compat check OK`.
 
 1. **Yangi kod ko'tarildi.** Barcha migratsiyalar, jumladan 013, qo'llandi;
    boot smoke 41/41.
@@ -99,3 +102,21 @@ Destruktiv down-migratsiya ham tekshirildi:
 Tekshirilmagan: haqiqiy Render muhitida rollback. Supabase ustidagi
 production bazasida ham ishga tushirilmadi — production'ga yozish ruxsati
 yo'q.
+
+## 5. Merge/deploy'dan keyingi qisqa tekshiruv
+
+1. **Deploy holati.** Render'da deploy tugadi va jonli commit SHA PR'nikiga teng. Logda `[MIGRATIONS] Applied 20261004_013_tariff_periods.sql` bor va `BOOT` xatosi yo'q.
+2. **Sog'liq.** `GET /api/health` → `db: ok`.
+3. **Master:**
+   - `GET /api/admin/tariff/economics` — `measured` va `measuredTest` qaytadi;
+   - `GET /api/admin/margin-report` — `refundsStatus: not_tracked`, `testEntitlements` maydoni bor;
+   - `GET /api/admin/tariff/offers` — bo'sh ro'yxat, xato yo'q.
+4. **Legacy obuna.** Ishlab turgan v1 obunasi bor bitta mijozda `/api/tariff/me` → `legacy_v1`, limit kamaymagan.
+5. **Oddiy hisob (Sinov):**
+   - bitta savol — 1 chat yechiladi;
+   - hujjat + "tahlil qiling" — 409 tasdiq kartasi chiqadi, chat yechilmaydi.
+6. **Telegram:**
+   - matnli savolga javob keladi;
+   - fayl yuborilsa, "AI tahlili emas, yurist navbati" xabari va sayt tugmasi chiqadi.
+7. **Workspace (Platinum):** "shartnomani tahlil qiling" — yo'naltirish chiqadi, limit yechilmaydi; band bo'yicha savolga javob keladi.
+8. **Muammo bo'lsa:** chegirmalar uchun `TARIFF_OFFERS=off`; butunlay — 2-bo'limdagi kod rollback.

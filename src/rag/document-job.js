@@ -84,6 +84,30 @@ function requestedServices(text = '') {
 
 const SERVICE_TITLE = { analysis: 'Hujjat tahlili', opinion: 'AI yuridik xulosa' };
 
+// Workspace: a request names a document ("shartnomani tahlil qiling") or a
+// legal opinion - "vaziyatni tahlil qiling" is a legal question, not a
+// document service, and is answered as one.
+const DOC_WORD = /(hujjat|shartnoma|fayl|ilova|kelishuv|bitim|ҳужжат|шартнома|файл|документ|договор|контракт)/iu;
+function workspaceDocumentServices(text = '') {
+  const t = String(text || '');
+  if (!DOC_WORD.test(t) && !OPINION_EXPLICIT.test(t)) return [];
+  return requestedServices(t);
+}
+
+/**
+ * The answer a Workspace chat gives when a full document analysis or
+ * opinion is asked for: Workspace does not run those services; they run in
+ * the AI section, sized and shown before they start. No AI call is made
+ * and no quota is used for this answer.
+ */
+function workspaceRoutingReply(services = []) {
+  const names = services.map(sv => `«${SERVICE_TITLE[sv]}»`).join(' va ');
+  return `${names} Workspace ichida hozircha bajarilmaydi — bu javob tahlil ham, xulosa ham emas.\n\n`
+    + `Bu xizmat AI bo'limida bor: hujjatni o'sha yerga yuklang, uning hajmi va sarfi (${services.map(sv => (sv === 'analysis' ? 'tahlil' : 'xulosa')).join(' va ')} limitidan, hujjat birligida) ish boshlanishidan oldin ko'rsatiladi.\n\n`
+    + "Hujjatning aniq bandi bo'yicha savol bersangiz, shu yerda parchalar asosida javob beraman (1 chat birligi).\n\n"
+    + 'Bu yo\'naltirish limitingizdan hech narsa yechmadi.';
+}
+
 // ── Excerpts ───────────────────────────────────────────────────────────────
 
 const lower = s => String(s || '').toLocaleLowerCase('uz-UZ').replace(/[‘’ʻʼ`']/gu, '');
@@ -316,20 +340,68 @@ function excerptNote(scope, analysisUnits = null) {
     + `Butun hujjatni tahlil qilish — alohida xizmat${units}: «Hujjat tahlili» yoki «Yuridik xulosa».`;
 }
 
+// When both services are ordered in one request, each is delivered as its
+// own section under a fixed heading, so each can be settled on its own: a
+// delivered analysis is paid even if the opinion then fails, and an opinion
+// that never arrived is given back (subscription-tiers settleJobs).
+const SECTION_HEADINGS = {
+  analysis: { uz: 'Hujjat tahlili', ru: 'Анализ документа' },
+  opinion: { uz: 'Yuridik xulosa', ru: 'Юридическое заключение' },
+};
+const SECTION_MIN_CHARS = 200;
+const HEADING_LINE = /^#{1,3}[ \t]*(.+?)[ \t]*#*[ \t]*$/gmu;
+
+/** Was `service` delivered in `text` as its own section with real content? */
+function sectionDelivered(text, service) {
+  const names = Object.values(SECTION_HEADINGS[service] || {}).map(n => n.toLocaleLowerCase());
+  if (!names.length || typeof text !== 'string') return false;
+  const heads = [...text.matchAll(HEADING_LINE)].map(m => ({ at: m.index, end: m.index + m[0].length, title: m[1].toLocaleLowerCase() }));
+  const isService = h => Object.values(SECTION_HEADINGS).some(v => Object.values(v).some(n => h.title.startsWith(n.toLocaleLowerCase())));
+  const i = heads.findIndex(h => names.some(n => h.title.startsWith(n)));
+  if (i < 0) return false;
+  const next = heads.slice(i + 1).find(isService);
+  const body = text.slice(heads[i].end, next ? next.at : text.length).replace(/\s+/gu, ' ').trim();
+  return body.length >= SECTION_MIN_CHARS;
+}
+
+/**
+ * How each service of a two-service answer is settled: 'delivered' or
+ * 'not_delivered'. When the answer has none of the service headings at all
+ * (the model ignored the format) but real content, both are delivered - a
+ * format slip does not make delivered work free; a short or empty answer
+ * delivered neither.
+ */
+function settleSections(text, services = []) {
+  const t = typeof text === 'string' ? text : '';
+  const anyHeading = [...t.matchAll(HEADING_LINE)].some(m => Object.values(SECTION_HEADINGS)
+    .some(v => Object.values(v).some(n => m[1].toLocaleLowerCase().startsWith(n.toLocaleLowerCase()))));
+  const out = {};
+  for (const sv of services) {
+    out[sv] = anyHeading
+      ? (sectionDelivered(t, sv) ? 'delivered' : 'not_delivered')
+      : (t.replace(/\s+/gu, ' ').trim().length >= SECTION_MIN_CHARS * services.length ? 'delivered' : 'not_delivered');
+  }
+  return out;
+}
+
 /** The instruction for a chat request metered as document service(s). */
 function serviceInstruction(services = [], lang = 'uz') {
   const s = new Set(services);
   if (!s.size) return '';
-  if (lang === 'ru') {
-    return `\n\nЗАКАЗАНО: ${s.has('analysis') ? 'анализ документа' : ''}${s.size > 1 ? ' и ' : ''}${s.has('opinion') ? 'юридическое заключение по документу' : ''}. Дайте ${s.size > 1 ? 'оба результата отдельными разделами' : 'именно этот результат'} по всему документу.`;
+  const l = lang === 'ru' ? 'ru' : 'uz';
+  const headings = [...s].map(sv => `## ${SECTION_HEADINGS[sv][l]}`);
+  if (l === 'ru') {
+    return `\n\nЗАКАЗАНО: ${s.has('analysis') ? 'анализ документа' : ''}${s.size > 1 ? ' и ' : ''}${s.has('opinion') ? 'юридическое заключение по документу' : ''}. Дайте ${s.size > 1 ? 'оба результата отдельными разделами' : 'именно этот результат'} по всему документу`
+      + (s.size > 1 ? `; заголовки разделов строго: "${headings.join('" и "')}".` : '.');
   }
   const parts = [s.has('analysis') ? 'hujjat tahlili (bandlar, xavflar, kamchiliklar)' : null,
     s.has('opinion') ? 'AI yuridik xulosa (savol, huquqiy asos, xulosa)' : null].filter(Boolean);
-  return `\n\nBUYURTMA: ${parts.join(' va ')}. ${s.size > 1 ? 'Ikkalasini alohida bo\'limlarda bering' : 'Aynan shu natijani bering'}, butun hujjat bo'yicha.`;
+  return `\n\nBUYURTMA: ${parts.join(' va ')}. ${s.size > 1 ? 'Ikkalasini alohida bo\'limlarda bering' : 'Aynan shu natijani bering'}, butun hujjat bo'yicha`
+    + (s.size > 1 ? `; bo'lim sarlavhalari aynan: "${headings.join('" va "')}".` : '.');
 }
 
 module.exports = {
   CHAT_DOCUMENT_CONTEXT_CHARS, SERVICE_TITLE,
-  isFullDocumentRequest, requestedServices, selectExcerpt, references, parseClauses,
-  excerptInstruction, excerptNote, serviceInstruction,
+  isFullDocumentRequest, requestedServices, workspaceDocumentServices, workspaceRoutingReply, selectExcerpt, references, parseClauses,
+  excerptInstruction, excerptNote, serviceInstruction, sectionDelivered, settleSections, SECTION_HEADINGS, SECTION_MIN_CHARS,
 };

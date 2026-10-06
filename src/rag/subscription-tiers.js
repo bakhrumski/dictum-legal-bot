@@ -275,6 +275,12 @@ async function getUserPlan(adminId, db = pool) {
     return { plan: ent.plan, role: 'user', kind: 'paid', rules: ent.rules, legacy: ent.rules === 'legacy_v1',
       startsAt: ent.period.starts_at, expiresAt: ent.period.ends_at, periodId: ent.period.id };
   }
+  if (ent.kind === 'test') {
+    // a master's test entitlement: its nominal plan sets the document size
+    // rules; it is not a sale and admins.tariff_* is not changed by it
+    return { plan: ent.plan, role: 'user', kind: 'test', test: true, rules: 'v2',
+      startsAt: ent.period.starts_at, expiresAt: ent.period.ends_at, periodId: ent.period.id };
+  }
   if (ent.kind === 'trial') return { plan: 'sinov', role: 'user', kind: 'trial', rules: 'v2', startsAt: ent.periods[0].starts_at, expiresAt: null };
   return { plan: null, role: 'user', kind: 'none', trialAvailable: true };
 }
@@ -437,9 +443,24 @@ function refundUsage(res, reason = 'failed') {
   return released ? { quotaRefunded: true, refundNotice: REFUND_NOTICE } : {};
 }
 
+// A job marked `section` (one of two services in one answer) is paid only
+// if its section reached the user (res.locals.deliveredText, kept by the
+// handler); one that did not is given back. Other jobs: delivered = paid.
 function commitUsage(res) {
-  for (const t of jobsOf(res)) {
+  const text = res && res.locals ? res.locals.deliveredText : undefined;
+  const jobs = jobsOf(res);
+  const sectionJobs = jobs.filter(t => t && t.section);
+  const settled = sectionJobs.length && typeof text === 'string'
+    ? require('./document-job').settleSections(text, sectionJobs.map(t => t.service)) : {};
+  for (const t of jobs) {
     if (!t || t.refunded || t.committed || !t.jobKey) continue;
+    if (t.section && settled[t.service] === 'not_delivered') {
+      t.refunded = true;
+      ledger.release(t.jobKey, 'not_delivered')
+        .then(ok => { if (ok) console.log(`[TARIFF] released ${t.service} x${t.units} (${t.endpoint}, section not delivered)`); })
+        .catch(err => console.warn('[TARIFF] release failed:', err.message));
+      continue;
+    }
     t.committed = true;
     ledger.commit(t.jobKey).catch(err => console.warn('[TARIFF] commit failed:', err.message));
   }
@@ -451,6 +472,7 @@ function attachRefundOnFailure(res) {
   if (typeof res.json === 'function') {
     const json = res.json.bind(res);
     res.json = function (body) {
+      if (res.statusCode < 400 && body && typeof body === 'object' && typeof body.reply === 'string') res.locals.deliveredText = body.reply;
       if (res.statusCode >= 400 && body && typeof body === 'object' && !Array.isArray(body)) {
         body = Object.assign({}, body, refundUsage(res, 'status ' + res.statusCode));
       }
@@ -675,6 +697,62 @@ async function meterDocument(req, res, { service, text = '', docTicket = null, e
 }
 
 /**
+ * Several document services for one document, all or none (analysis and
+ * opinion ordered together): the size and plan rules are checked once,
+ * then every service's units are reserved in one transaction
+ * (ledger.reserveMany) before any AI starts. If one does not fit, nothing
+ * is reserved and the refusal names that service. Each job is settled on
+ * its own section of the answer (commitUsage).
+ */
+async function meterDocuments(req, res, { services = [], text = '', docTicket = null, endpoint = null } = {}) {
+  if (services.length === 1) return meterDocument(req, res, { service: services[0], text, docTicket, endpoint: `${endpoint}#${services[0]}` });
+  const clean = String(text || '').replace(/\u0000/gu, '').trim();
+  const ticket = ledger.readDocTicket(docTicket, clean);
+  const size = ledger.docUnits({ chars: clean.length, pages: ticket ? ticket.pages : null });
+  if (!size.units) {
+    res.status(400).json({ error: "Hujjat matni bo'sh yoki o'qib bo'lmadi — limit sarflanmadi.", code: 'EMPTY_DOCUMENT', quotaRefunded: true });
+    return { allowed: false, size };
+  }
+  const adminId = req.session && req.session.adminId;
+  if (!adminId || (req.session.role && req.session.role !== 'user')) return { allowed: true, staff: true, size };
+  const access = await checkFreeAccess(adminId);
+  if (!access.allowed) {
+    res.status(403).json({ error: access.code, code: access.code, message: access.code === 'SURVEY_REQUIRED'
+      ? 'Bepul foydalanishni davom ettirish uchun qisqa so\'rovnomani to\'ldiring.'
+      : 'Bepul foydalanish uchun rasmiy Telegram kanalimizga obuna bo\'ling.' });
+    return { allowed: false, size };
+  }
+  const u = await getUserPlan(adminId);
+  const plan = u && u.plan && PLANS[u.plan] ? u.plan : 'sinov';
+  const fit = ledger.jobFits(plan, { chars: size.chars, pages: size.pages });
+  if (!fit.ok) {
+    res.status(413).json({ error: 'document_too_large', code: 'DOCUMENT_TOO_LARGE', services, plan, size, maxPages: fit.maxPages, maxChars: fit.maxChars, quotaRefunded: true,
+      message: `Hujjat hajmi: ${size.pages} sahifa, ${size.chars.toLocaleString('ru-RU')} belgi (${size.units} birlik) — bitta ish chegarasidan katta. Hujjat qisqartirilmaydi. Limit sarflanmadi.` });
+    return { allowed: false, size };
+  }
+  const meta = { pages: size.pages, chars: size.chars, ticket: !!ticket, together: services };
+  const r = await ledger.reserveMany({
+    adminId, actorId: adminId, channel: 'web',
+    jobs: services.map(sv => ({ service: sv, units: size.units, endpoint: `${endpoint}#${sv}`, meta })),
+  });
+  if (r.kind === 'staff') return { allowed: true, staff: true, size };
+  if (!r.allowed) {
+    const [status, body] = refusal(r, r.failed);
+    res.status(status).json({ ...body, services, quotaRefunded: true });
+    return { allowed: false, size, ...r };
+  }
+  const jobs = r.jobs.map(j => ({ jobKey: j.jobKey, adminId, endpoint: `${endpoint}#${j.service}`, service: j.service, units: j.units, section: true, refunded: false, committed: false }));
+  res.locals.quota = r;
+  res.locals.tariffUsage = jobs[0];
+  res.locals.tariffJobs = [...(res.locals.tariffJobs || []), ...jobs];
+  if (!res.locals.tariffRefundAttached) {
+    res.locals.tariffRefundAttached = true;
+    attachRefundOnFailure(res);
+  }
+  return { allowed: true, size, jobs };
+}
+
+/**
  * What a document job will cost before it runs: size, units, whether it
  * fits the plan, and what remains after it. Read-only.
  */
@@ -743,10 +821,9 @@ function enforceChatQuota(endpoint, opts = {}) {
             + `Chat limiti yechilmaydi. Tasdiqlang yoki savolni hujjatning aniq bandi bo'yicha bering (u 1 chat birligi).`,
         });
       }
-      for (const sv of services) {
-        const m = await meterDocument(req, res, { service: sv, text: doc, docTicket: body.docTicket, endpoint: `${endpoint}#${sv}` });
-        if (!m.allowed) return;
-      }
+      // all services reserved together before any AI starts, or none
+      const m = await meterDocuments(req, res, { services, text: doc, docTicket: body.docTicket, endpoint });
+      if (!m.allowed) return;
       next();
     } catch (err) {
       console.error('[TARIFF] chat document job error:', err.message);
@@ -932,11 +1009,19 @@ async function marginReport({ since = null, until = null, plan = null, now = new
           OR (p.superseded_at >= $1 AND p.superseded_at < $2))
         AND ($3::text IS NULL OR p.plan = $3)`,
     [from, to, plan]);
+  // AI spend of an account while it held a test entitlement (the pilot) is
+  // test spend: reported apart, never in a customer's cost or margin
+  const inTest = `EXISTS (SELECT 1 FROM tariff_periods t WHERE t.source = 'test' AND t.admin_id = l.user_id AND l.ts >= t.starts_at AND l.ts < t.ends_at)`;
   const spend = await pool.query(
     `SELECT user_id, COALESCE(SUM(cost_usd), 0)::float AS cost_usd,
             COUNT(*) FILTER (WHERE cost_usd IS NULL AND COALESCE(status, 'success') <> 'skipped')::int AS unknown_calls,
             COUNT(*)::int AS calls
-       FROM llm_spend_log l WHERE l.ts >= $1 AND l.ts < $2 AND l.user_id IS NOT NULL GROUP BY user_id`, [from, to]);
+       FROM llm_spend_log l WHERE l.ts >= $1 AND l.ts < $2 AND l.user_id IS NOT NULL AND NOT ${inTest} GROUP BY user_id`, [from, to]);
+  const testSpend = (await pool.query(
+    `SELECT COUNT(DISTINCT user_id)::int AS accounts, COALESCE(SUM(cost_usd), 0)::float AS cost_usd,
+            COUNT(*) FILTER (WHERE cost_usd IS NULL AND COALESCE(status, 'success') <> 'skipped')::int AS unknown_calls,
+            COUNT(*)::int AS calls
+       FROM llm_spend_log l WHERE l.ts >= $1 AND l.ts < $2 AND l.user_id IS NOT NULL AND ${inTest}`, [from, to])).rows[0];
   const spendBy = new Map(spend.rows.map(r => [Number(r.user_id), r]));
 
   const users = new Map();
@@ -1002,6 +1087,8 @@ async function marginReport({ since = null, until = null, plan = null, now = new
     recognizedRevenueUzs: sum('recognizedRevenueUzs'), deferredRevenueUzs: sum('deferredRevenueUzs'),
     unknownRevenuePeriods: sum('unknownRevenuePeriods'), unknownRevenueListUzs: sum('unknownRevenueListUzs'),
     // refunds are not recorded anywhere yet: unknown, not a confirmed zero
+    // the pilot / test entitlements: AI spend only (no revenue), apart
+    testEntitlements: { accounts: testSpend.accounts, costUsd: Number(Number(testSpend.cost_usd).toFixed(4)), unknownCostCalls: testSpend.unknown_calls, calls: testSpend.calls },
     refundsUzs: null, refundsStatus: 'not_tracked',
     refundsNote: "To'lov qaytarish qayd etilmaydi (oqim yo'q): refund summasi noma'lum, tasdiqlangan nol emas.",
     costUsd: Number(sum('costUsd').toFixed(4)), costUzs: sum('costUzs'), unknownCostCalls: sum('unknownCostCalls'),
@@ -1024,6 +1111,8 @@ module.exports = {
   withUserLock,
   meterJob,
   meterDocument,
+  meterDocuments,
+  commitUsage,
   quoteDocument,
   enforceChatQuota,
   serviceFor,

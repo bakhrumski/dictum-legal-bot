@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS public.tariff_periods (
     -- subscription was sold with (unlimited chat + weekly allowances), kept
     -- until it ends - never silently reduced
     rules          varchar(12) NOT NULL CHECK (rules IN ('v2', 'legacy_v1')),
-    source         varchar(12) NOT NULL CHECK (source IN ('trial', 'payment', 'admin', 'migration')),
+    -- 'test': a master's test entitlement (pilot) - no payment, no revenue
+    source         varchar(12) NOT NULL CHECK (source IN ('trial', 'payment', 'admin', 'migration', 'test')),
     starts_at      timestamptz NOT NULL,
     -- NULL only for a trial: it does not expire, it is used up
     ends_at        timestamptz,
@@ -63,7 +64,8 @@ CREATE TABLE IF NOT EXISTS public.tariff_periods (
     economics      jsonb,
     payment_ref    text,
     provider       varchar(30),
-    status         varchar(12) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'cancelled')),
+    -- 'ended': a test entitlement that ran out or was ended by a master
+    status         varchar(12) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'cancelled', 'ended')),
     superseded_by  bigint REFERENCES public.tariff_periods(id),
     created_by     integer,
     created_at     timestamptz NOT NULL DEFAULT now(),
@@ -82,6 +84,22 @@ ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS paid_at timestamptz;
 ALTER TABLE public.tariff_periods ADD COLUMN IF NOT EXISTS superseded_at timestamptz;
 
 -- One Sinov per subject, ever: a redeploy or a retry cannot grant another.
+-- (repeatable: the source and status checks of an earlier draft)
+ALTER TABLE public.tariff_periods DROP CONSTRAINT IF EXISTS tariff_periods_source_check;
+ALTER TABLE public.tariff_periods ADD CONSTRAINT tariff_periods_source_check
+    CHECK (source IN ('trial', 'payment', 'admin', 'migration', 'test'));
+ALTER TABLE public.tariff_periods DROP CONSTRAINT IF EXISTS tariff_periods_status_check;
+ALTER TABLE public.tariff_periods ADD CONSTRAINT tariff_periods_status_check
+    CHECK (status IN ('active', 'superseded', 'cancelled', 'ended'));
+-- A test entitlement is never a sale: no price, no payment reference.
+ALTER TABLE public.tariff_periods DROP CONSTRAINT IF EXISTS tariff_periods_test_no_money;
+ALTER TABLE public.tariff_periods ADD CONSTRAINT tariff_periods_test_no_money
+    CHECK (source <> 'test' OR (price_uzs IS NULL AND payment_ref IS NULL AND credit_uzs = 0));
+-- One live test entitlement per account: a repeated or parallel grant
+-- cannot add a second allowance.
+CREATE UNIQUE INDEX IF NOT EXISTS tariff_periods_one_active_test_uidx
+    ON public.tariff_periods (subject) WHERE source = 'test' AND status = 'active';
+
 CREATE UNIQUE INDEX IF NOT EXISTS tariff_periods_one_trial_uidx
     ON public.tariff_periods (subject) WHERE source = 'trial';
 -- A payment (or a migration row) grants one period, however often its
@@ -142,6 +160,23 @@ SELECT 'a:' || a.id, a.id, a.tariff_plan, 'legacy_v1', 'migration',
 ON CONFLICT DO NOTHING;
 
 ALTER TABLE public.tariff_periods ENABLE ROW LEVEL SECURITY;
+
+-- The AI budget of a test entitlement (src/ai/test-budget.js): a request of
+-- the test account reserves its per-request limit before its first AI
+-- call, so parallel requests cannot together pass the total budget; on
+-- finish the hold records what the request committed (known cost, and
+-- unknown-cost calls at the assumed price - never $0).
+CREATE TABLE IF NOT EXISTS public.test_budget_holds (
+    id          bigserial PRIMARY KEY,
+    period_id   bigint      NOT NULL REFERENCES public.tariff_periods(id),
+    request_id  text        NOT NULL UNIQUE,
+    amount_usd  numeric(10, 4) NOT NULL CHECK (amount_usd > 0),
+    actual_usd  numeric(10, 4),
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    released_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS test_budget_holds_period_idx ON public.test_budget_holds (period_id, released_at);
+ALTER TABLE public.test_budget_holds ENABLE ROW LEVEL SECURITY;
 
 -- Individual discount offers (2026-10-05): a master offers one user one
 -- paid plan for one 30-day period at a discount, with a reason and an

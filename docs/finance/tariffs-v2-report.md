@@ -202,18 +202,34 @@ Har so'rov uchun:
 
 Xizmat bo'yicha birlik narxi ham hisoblanadi (known cost / birlik). Shunda ko'p birlikli 25 sahifali hujjat birlik narxi chiziqli o'sadimi, yo'qmi, ko'rinadi.
 
-**Qattiq $5 chegara — mavjud test rejimi, tekshirilgan.**
-- `TG_TEST_ACCOUNT_USER_ID`, `TG_TEST_ACCOUNT_SINCE`, `TG_TEST_ACCOUNT_BUDGET_USD=5` (standart qiymat).
-- 2026-10-06 dan bu budjet shu akkauntning **veb** so'rovlarini ham qamraydi (tahlil, xulosa, draft vebda ishlaydi). Telegram + veb — bitta budjet. $5 ga yetgach, ledger yangi AI chaqiruvini qilmaydi (`skipped`, `REQUEST_BUDGET`).
-- Tekshiruv: `tests/test-account-web-budget.test.js`, haqiqiy Postgres ledgerida $5 dan keyin provider funksiyasi chaqirilmadi.
-- Narxi noma'lum chaqiruv $0 emas, $0.05 zaxira bilan sanaladi.
-- Boshqa foydalanuvchilar va production budjetlari o'zgarmaydi. Rejim sozlanmasa o'chiq, 48 soatda o'zi tugaydi.
+**Pilot akkauntiga huquq berish (to'lovsiz, tushumsiz) — `docs/tariffs-v2.md` §10:**
+1. Alohida oddiy (role `user`) hisob ochiladi; unda pullik davr bo'lmasligi kerak.
+2. Master shunday huquq beradi:
+   `POST /api/admin/tariff/test-entitlements { userId, reason: "Pilot 2026-10", hours: 48, plan: "gold", quotas: { chat: 12, analysis: 8, opinion: 6, draft: 3, ocr: 10 }, budgetUsd: 5 }`
+   - `perRequestUsd` berilmaydi, ya'ni production'dagi $0.25 qo'llanadi.
+   - `plan: "gold"` faqat hujjat hajmi qoidasi uchun kerak (≤ 30 sahifa). U narx ham, tushum ham emas.
+3. `GET /api/admin/tariff/test-entitlements` orqali kvota, `spent` va `held` kuzatiladi.
+4. Pilot tugagach `…/:userId/end`. Hisob avvalgidek qoladi; sarf `measuredTest` va `testEntitlements` da alohida turadi.
 
-**Pilotdan oldin hal qilinadigan (ochiq):**
-1. **Test akkauntiga davr berish.** Tahlil va xulosa birliklari uchun pullik davr kerak, lekin hozirgi `grant` har doim narx yozadi va bu tushumga tushadi. Variantlar:
-   - (a) pilot davrini `paymentRef = pilot:…` bilan berib, hisobotda chiqarib tashlash;
-   - (b) "bepul/komplimentar" manba qo'shish (alohida o'zgarish).
-2. **So'rov boshiga cheklovlar.** `AI_REQUEST_MAX_COST_USD = 0.25` va `AI_REQUEST_MAX_CALLS = 30` 25 sahifali tahlilni kesishi mumkin. Pilot buni o'lchaydi va topilma sifatida yozadi. Production qiymatlari pilot uchun o'zgartirilmaydi.
+**$5 budjet — qanday ishlaydi.** Mexanizm haqiqiy Postgres'da, pullik AI chaqirmasdan tekshirilgan (`tests/test-entitlement.db.test.js`):
+- Har so'rov birinchi AI chaqiruvidan oldin o'z so'rov limitini (hold, $0.25) rezerv qiladi.
+- Shart `sarflangan + band qilingan + hold ≤ $5`, aks holda chaqiruv qilinmaydi (`TEST_BUDGET`).
+- Testda $1 budjetga 6 ta parallel so'rov yuborildi: 4 tasi o'tdi, 2 tasi rad etildi.
+- Narxi noma'lum chaqiruv $0 emas, `unknownCallUsd` ($0.05) bilan sanaladi.
+- So'rov yakunida hold uning haqiqiy sarfi bilan almashtiriladi. Tugamay qolgan (jarayon to'xtagan) hold 15 daqiqadan keyin to'liq sarf deb sanaladi.
+
+**$5 ning ma'lum cheklovlari (qat'iy kafolat emas):**
+1. **Oxirgi chaqiruv.** Tekshiruv har chaqiruvdan *oldin* qilinadi. Shu sababli bitta chaqiruvning o'z narxi so'rovni hold'dan oshirib yuborishi mumkin (testda $0.15 hold → $0.20 sarf). Eng yomon holatda $5 dan oshish = har bir parallel so'rovning oxirgi chaqiruvi.
+2. **Noma'lum narx.** Narxi noma'lum chaqiruvning haqiqiy narxi $0.05 dan qimmat bo'lsa, farq budjetdan tashqarida qoladi. Bu taxmin hisob-fakturaga asoslanmagan, shuning uchun $5 faqat narxi ma'lum chaqiruvlar uchun qat'iy.
+3. **Faqat shu akkaunt.** Budjet faqat test huquqi berilgan hisobning AI chaqiruvlarini qamraydi: veb so'rovlari va bog'langan Telegram chati. Boshqa foydalanuvchilar va production limitlari o'zgarmaydi.
+
+**Birinchi sinov va katta hujjat.** So'rov limiti production'dagi $0.25 da qoladi va o'zgartirilmaydi. Agar u 25 sahifali tahlilni to'xtatsa, quyidagilar yoziladi:
+- qaysi bosqichda to'xtagani — `/api/admin/ai-usage/requests/:id` dagi `skipped` qatori va uning `stage` i;
+- shu paytgacha sarflangan haqiqiy pul (known va unknown alohida);
+- hujjatning qancha qismi qamralgani va natija foydalanuvchiga yetkazilgan-yetkazilmagani;
+- kvota qaytarilgani (`tariff_usage.status = released`, `release_reason`).
+
+Shundan keyin **faqat shu test akkaunti uchun** `perRequestUsd` ni oshirib qayta sinash taklif qilinadi (masalan, $0.60). Buning uchun yangi test huquqi beriladi; global `AI_REQUEST_MAX_COST_USD` ko'tarilmaydi.
 
 **Tartib.** Avval har xizmatdan bittadan arzon namuna, keyin ko'p birlikli hujjatlar. Chegara erta tugasa ham har xizmat o'lchangan bo'ladi.
 

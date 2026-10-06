@@ -166,7 +166,7 @@ function withModel(model, fn) {
 
   await test('one rule in all channels: Workspace context uses the same cap; Telegram runs no AI on files', () => {
     assert.match(read('src/workspace/ai-service.js'), new RegExp(`const DOCUMENT_CONTEXT_CHARS = ${docJob.CHAT_DOCUMENT_CONTEXT_CHARS};`, 'u'));
-    assert.match(read('src/workspace/legal-answer-generator.js'), /documentJob\.requestedServices\(question\)/u);
+    assert.match(read('src/workspace/routes.js'), /documentJob\.workspaceDocumentServices\(question\)/u, 'Workspace routes full document work before any AI');
     assert.match(read('src/bot/bot.js'), /if \(requestData\.request_type === 'text' \|\| requestData\.voiceTranscribed\)/u, 'files go to the lawyer queue, not the agent');
   });
 

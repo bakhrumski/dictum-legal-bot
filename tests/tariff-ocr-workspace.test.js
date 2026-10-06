@@ -119,7 +119,7 @@ async function test(name, fn) {
     // v2: the asking member pays from their own allowance, the Workspace is recorded
     assert.strictEqual(tiers.serviceFor('/api/workspace-ai'), 'chat');
     assert.ok(/channel: workspaceId \? 'workspace' : 'web',\s*actorId: adminId, workspaceId/.test(read('src/rag/subscription-tiers.js')));
-    assert.ok(/assistant\/ask', aiLimiter \|\| \(\(req, res, next\) => next\(\)\), workspaceAiQuota,/.test(routes));
+    assert.ok(/assistant\/ask', aiLimiter \|\| \(\(req, res, next\) => next\(\)\), workspaceServiceRouting, workspaceAiQuota,/.test(routes));
     assert.ok(/refundUsage\(res, 'no_generation'\)/.test(routes));
     assert.ok(/verificationTokens,\s*tariffModule,\s*\}\);/.test(read('src/api/server.js')), 'server passes tariffModule');
     assert.ok(/member_account\.role AS member_role/.test(read('src/workspace/authz.js')));

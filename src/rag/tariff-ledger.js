@@ -245,7 +245,7 @@ async function adoptUnrecordedPlan(db, account, now) {
      SELECT $1, $2, $3, 'legacy_v1', 'migration', $4, $5, '{}'::jsonb, $6, 'migration', $8
       WHERE NOT EXISTS (
         SELECT 1 FROM tariff_periods
-         WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND starts_at <= $7 AND ends_at > $7)
+         WHERE subject = $1 AND source NOT IN ('trial', 'test') AND status = 'active' AND starts_at <= $7 AND ends_at > $7)
      ON CONFLICT DO NOTHING`,
     [`a:${account.id}`, account.id, account.tariff_plan,
       account.tariff_starts_at || new Date(new Date(account.tariff_expires_at).getTime() - 30 * 86400000),
@@ -275,9 +275,16 @@ async function resolveEntitlement(db, identity = {}, { now = new Date(), createT
 
   if (account) await adoptUnrecordedPlan(db, account, now);
   if (identity.adminId != null) {
+    // a master's test entitlement (pilot) covering now: its own quotas, no
+    // sale; it never touches admins.tariff_* or the Sinov
+    const test = await db.query(
+      `SELECT * FROM tariff_periods
+        WHERE subject = $1 AND source = 'test' AND status = 'active' AND starts_at <= $2 AND ends_at > $2
+        ORDER BY id DESC LIMIT 1`, [`a:${identity.adminId}`, now]);
+    if (test.rows[0]) return { kind: 'test', period: test.rows[0], plan: test.rows[0].plan, rules: 'v2', subjects, account };
     const paid = await db.query(
       `SELECT * FROM tariff_periods
-        WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND starts_at <= $2 AND ends_at > $2
+        WHERE subject = $1 AND source NOT IN ('trial', 'test') AND status = 'active' AND starts_at <= $2 AND ends_at > $2
         ORDER BY starts_at DESC, id DESC LIMIT 1`, [`a:${identity.adminId}`, now]);
     if (paid.rows[0]) {
       // keep admins.tariff_* (read by the Workspace policies) on the period
@@ -307,6 +314,7 @@ async function resolveEntitlement(db, identity = {}, { now = new Date(), createT
 }
 
 function limitsOf(ent) {
+  if (ent.kind === 'test') return ent.period.limits || {};
   if (ent.kind === 'paid') {
     const l = ent.period.limits && Object.keys(ent.period.limits).length ? ent.period.limits : (PLAN_CATALOG[ent.plan] || {}).quotas;
     return l || {};
@@ -316,7 +324,7 @@ function limitsOf(ent) {
 }
 
 function periodIdsOf(ent) {
-  if (ent.kind === 'paid') return [ent.period.id];
+  if (ent.kind === 'paid' || ent.kind === 'test') return [ent.period.id];
   if (ent.kind === 'trial') return ent.periods.map(p => p.id);
   return [];
 }
@@ -352,8 +360,9 @@ async function balance(identity, { db = pool, now = new Date() } = {}) {
   }
   return {
     kind: ent.kind, plan: ent.plan, rules: 'v2',
-    startsAt: ent.kind === 'paid' ? ent.period.starts_at : ent.periods[0].starts_at,
-    endsAt: ent.kind === 'paid' ? ent.period.ends_at : null,
+    startsAt: ent.period ? ent.period.starts_at : ent.periods[0].starts_at,
+    endsAt: ent.period ? ent.period.ends_at : null,
+    test: ent.kind === 'test' || undefined,
     services,
   };
 }
@@ -406,9 +415,9 @@ async function reserve({
       const used = await usedUnits(db, periodIdsOf(ent), service);
       check = { allowed: used + n <= limit, limit, used, remaining: Math.max(0, limit - used), reason: limit === 0 ? 'not_in_plan' : 'limit_reached' };
     }
-    const periodId = ent.kind === 'paid' ? ent.period.id : ent.periods[0].id;
+    const periodId = ent.period ? ent.period.id : ent.periods[0].id;
     const base = { kind: ent.kind, plan: ent.plan, rules: ent.rules, periodId,
-      endsAt: ent.kind === 'paid' ? ent.period.ends_at : null, units: n, ...check };
+      endsAt: ent.period ? ent.period.ends_at : null, units: n, ...check };
     if (!check.allowed) return { ...base, allowed: false, jobKey: key };
 
     await db.query(
@@ -420,6 +429,65 @@ async function reserve({
     return { ...base, allowed: true, jobKey: key,
       remaining: Math.max(0, (check.remaining == null ? 0 : check.remaining) - n),
       used: (check.used || 0) + n };
+  });
+}
+
+/**
+ * Reserve several jobs at once - all or none (a chat request that orders
+ * both an analysis and an opinion of its document). One lock, one
+ * transaction: every job is checked against its own service quota first;
+ * if any of them does not fit, nothing is reserved and nothing may start.
+ * jobs: [{ service, units, endpoint, meta }]. Returns
+ *   { allowed: true, kind, plan, jobs: [{ service, units, jobKey, remaining }] }
+ *   { allowed: false, failed: <service>, ...that job's check }
+ */
+async function reserveMany({
+  adminId = null, telegramUserId = null, jobs = [], actorId = null, workspaceId = null, channel = 'web', now = new Date(), requestId = undefined,
+}) {
+  if (requestId === undefined) {
+    try { const st = require('../ai/usage-ledger').current(); requestId = st ? st.requestId : null; } catch (_) { requestId = null; }
+  }
+  const list = jobs.map(j => {
+    if (!SERVICES.includes(j.service)) throw new Error(`unknown service: ${j.service}`);
+    return { ...j, units: Math.max(1, Math.ceil(Number(j.units) || 1)), jobKey: j.jobKey || crypto.randomUUID() };
+  });
+  if (!list.length) throw new Error('no jobs');
+  const identity = { adminId, telegramUserId };
+  return withLock(identity, async (db) => {
+    const ent = await resolveEntitlement(db, identity, { now });
+    if (ent.kind === 'staff') return { allowed: true, kind: 'staff', unlimited: true, jobs: list.map(j => ({ service: j.service, units: j.units, jobKey: null })) };
+    if (ent.kind === 'none') return { allowed: false, kind: 'none', reason: ent.reason || 'no_plan', failed: list[0].service };
+    const periodId = ent.period ? ent.period.id : ent.periods[0].id;
+    const taken = {};
+    const checks = [];
+    for (const j of list) {
+      let check;
+      if (ent.rules === 'legacy_v1') {
+        if (typeof legacyCheck !== 'function') throw new Error('legacy tariff check not registered');
+        check = await legacyCheck(db, { adminId, plan: ent.plan, service: j.service, units: j.units + (taken[j.service] || 0), period: ent.period });
+      } else {
+        const limit = Number(limitsOf(ent)[j.service] || 0);
+        const used = (await usedUnits(db, periodIdsOf(ent), j.service)) + (taken[j.service] || 0);
+        check = { allowed: used + j.units <= limit, limit, used, remaining: Math.max(0, limit - used), reason: limit === 0 ? 'not_in_plan' : 'limit_reached' };
+      }
+      if (!check.allowed) {
+        return { kind: ent.kind, plan: ent.plan, rules: ent.rules, periodId, endsAt: ent.period ? ent.period.ends_at : null,
+          units: j.units, ...check, allowed: false, failed: j.service };
+      }
+      taken[j.service] = (taken[j.service] || 0) + j.units;
+      checks.push({ j, check });
+    }
+    const out = [];
+    for (const { j, check } of checks) {
+      await db.query(
+        `INSERT INTO tariff_usage
+           (admin_id, endpoint, credits, service, status, period_id, subject, job_key, actor_id, workspace_id, channel, meta, ts, request_id)
+         VALUES ($1, $2, $3, $4, 'reserved', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [adminId, j.endpoint ? String(j.endpoint).slice(0, 50) : null, j.units, j.service, periodId, ent.subjects[0], j.jobKey,
+          actorId != null ? actorId : adminId, workspaceId, channel, j.meta ? JSON.stringify(j.meta) : null, now, requestId || null]);
+      out.push({ service: j.service, units: j.units, jobKey: j.jobKey, remaining: check.remaining == null ? null : Math.max(0, check.remaining - j.units) });
+    }
+    return { allowed: true, kind: ent.kind, plan: ent.plan, rules: ent.rules, periodId, jobs: out };
   });
 }
 
@@ -497,7 +565,7 @@ function allocateCredit(periods, now, credit) {
 async function supersedable(db, adminId, now) {
   const r = await db.query(
     `SELECT * FROM tariff_periods
-      WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND ends_at > $2
+      WHERE subject = $1 AND source NOT IN ('trial', 'test') AND status = 'active' AND ends_at > $2
       ORDER BY starts_at`, [`a:${adminId}`, now]);
   return r.rows;
 }
@@ -566,7 +634,7 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
     await adoptUnrecordedPlan(db, account, now);
     const running = await db.query(
       `SELECT * FROM tariff_periods
-        WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND ends_at > $2
+        WHERE subject = $1 AND source NOT IN ('trial', 'test') AND status = 'active' AND ends_at > $2
         ORDER BY ends_at DESC LIMIT 1`, [`a:${adminId}`, now]);
     const last = running.rows[0] || null;
     let startsAt = now;
@@ -639,12 +707,105 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
       await db.query(
         `UPDATE tariff_periods SET status = 'superseded', superseded_by = $1, superseded_at = $2,
                 ends_at = CASE WHEN starts_at < $2 THEN $2 ELSE ends_at END
-          WHERE subject = $3 AND source <> 'trial' AND status = 'active' AND id <> $1 AND ends_at > $2`,
+          WHERE subject = $3 AND source NOT IN ('trial', 'test') AND status = 'active' AND id <> $1 AND ends_at > $2`,
         [period.id, now, `a:${adminId}`]);
     }
     await syncAccountPlan(db, adminId, now);
     return { period, change, duplicate: false, offerId: offer ? offer.id : null, cashUzs: cash, creditUzs: credit, economics };
   });
+}
+
+// ── Test entitlement (pilot) ──────────────────────────────────────────────
+// A master gives one ordinary account quotas for a limited time to test the
+// paid services (the pilot), without a payment: no paymentRef, no price, no
+// revenue (a check in the table forbids them), and admins.tariff_* is not
+// touched, so the account is exactly as before when it ends. Who gave it,
+// why and when is stored on the period. Its AI spend stays in the usage
+// ledger and is reported apart from customers' (marginReport,
+// measuredServiceCost); its total AI budget is enforced by
+// src/ai/test-budget.js.
+const TEST_DEFAULT_QUOTAS = Object.freeze({ chat: 12, analysis: 8, opinion: 6, draft: 3, ocr: 10 });
+const TEST_MAX_HOURS = 168;
+
+function testQuotas(input) {
+  const out = {};
+  for (const s of SERVICES) {
+    const v = input && input[s] != null ? Number(input[s]) : TEST_DEFAULT_QUOTAS[s] || 0;
+    if (!Number.isInteger(v) || v < 0 || v > 1000) return null;
+    out[s] = v;
+  }
+  return out;
+}
+
+/**
+ * Give `adminId` a test entitlement. Master only (checked in the database).
+ * Idempotent: while one is live, a repeated or parallel grant returns it
+ * unchanged (one live test entitlement per account, a unique index).
+ * Refused while the account has a running paid period. Returns
+ * { ok, period, duplicate } or { ok: false, reason }.
+ */
+async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 48, plan = 'silver', quotas = null,
+  budgetUsd = 5, unknownCallUsd = 0.05, perRequestUsd = null, now = new Date() }) {
+  const why = String(reason || '').trim();
+  if (why.length < 3 || why.length > 500) return { ok: false, reason: 'reason_required' };
+  const h = Number(hours);
+  if (!Number.isFinite(h) || h <= 0 || h > TEST_MAX_HOURS) return { ok: false, reason: 'invalid_hours' };
+  if (!PAID_PLAN_ORDER.includes(plan)) return { ok: false, reason: 'invalid_plan' };
+  const q = testQuotas(quotas);
+  if (!q) return { ok: false, reason: 'invalid_quotas' };
+  const budget = Number(budgetUsd);
+  const unknown = Number(unknownCallUsd);
+  const perReq = perRequestUsd == null ? null : Number(perRequestUsd);
+  if (!(budget > 0 && budget <= 50)) return { ok: false, reason: 'invalid_budget' };
+  if (!(unknown > 0 && unknown <= budget)) return { ok: false, reason: 'invalid_unknown_reserve' };
+  if (perReq != null && !(perReq > 0 && perReq <= budget)) return { ok: false, reason: 'invalid_per_request' };
+  return withLock({ adminId }, async (db) => {
+    const m = await db.query('SELECT role FROM admins WHERE id = $1', [grantedBy]);
+    if (!m.rows[0] || m.rows[0].role !== 'master') return { ok: false, reason: 'master_only' };
+    const account = await accountRow(db, adminId);
+    if (!account) return { ok: false, reason: 'unknown_user' };
+    if (account.role !== 'user') return { ok: false, reason: 'not_an_ordinary_user' };
+    // a live one: returned as it is - a repeat never adds quota
+    const live = await db.query(
+      `SELECT * FROM tariff_periods WHERE subject = $1 AND source = 'test' AND status = 'active' ORDER BY id DESC LIMIT 1`, [`a:${adminId}`]);
+    if (live.rows[0] && new Date(live.rows[0].ends_at) > now) return { ok: true, period: live.rows[0], duplicate: true };
+    if (live.rows[0]) await db.query(`UPDATE tariff_periods SET status = 'ended' WHERE id = $1`, [live.rows[0].id]);
+    await adoptUnrecordedPlan(db, account, now);
+    const paid = await db.query(
+      `SELECT 1 FROM tariff_periods WHERE subject = $1 AND source NOT IN ('trial', 'test') AND status = 'active' AND ends_at > $2 LIMIT 1`,
+      [`a:${adminId}`, now]);
+    if (paid.rows[0]) return { ok: false, reason: 'account_has_paid_period' };
+    const ends = new Date(now.getTime() + Math.round(h * 3600e3));
+    const meta = { kind: 'test', reason: why, grantedBy: Number(grantedBy), grantedAt: now.toISOString(),
+      budgetUsd: budget, unknownCallUsd: unknown, perRequestUsd: perReq };
+    const ins = await db.query(
+      `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, economics, created_by)
+       VALUES ($1, $2, $3, 'v2', 'test', $4, $5, $6, $7, $8) RETURNING *`,
+      [`a:${adminId}`, adminId, plan, now, ends, JSON.stringify(q), JSON.stringify(meta), grantedBy]);
+    return { ok: true, period: ins.rows[0], duplicate: false };
+  });
+}
+
+/** End a live test entitlement now (master only). Usage and spend stay recorded. */
+async function endTestEntitlement({ adminId, endedBy, now = new Date() }) {
+  return withLock({ adminId }, async (db) => {
+    const m = await db.query('SELECT role FROM admins WHERE id = $1', [endedBy]);
+    if (!m.rows[0] || m.rows[0].role !== 'master') return { ok: false, reason: 'master_only' };
+    const r = await db.query(
+      `UPDATE tariff_periods SET status = 'ended', ends_at = LEAST(ends_at, GREATEST($2, starts_at + interval '1 second')),
+              economics = COALESCE(economics, '{}'::jsonb) || jsonb_build_object('endedBy', $3::int, 'endedAt', $2::timestamptz)
+        WHERE subject = $1 AND source = 'test' AND status = 'active' RETURNING *`, [`a:${adminId}`, now, endedBy]);
+    return r.rows[0] ? { ok: true, period: r.rows[0] } : { ok: false, reason: 'no_test_entitlement' };
+  });
+}
+
+/** Test entitlements, newest first (master view). */
+async function listTestEntitlements({ db = pool, limit = 50 } = {}) {
+  const r = await db.query(
+    `SELECT p.id, p.admin_id, a.username, p.plan, p.starts_at, p.ends_at, p.status, p.limits, p.economics, p.created_by
+       FROM tariff_periods p LEFT JOIN admins a ON a.id = p.admin_id
+      WHERE p.source = 'test' ORDER BY p.id DESC LIMIT $1`, [Math.min(200, Math.max(1, Number(limit) || 50))]);
+  return r.rows;
 }
 
 /**
@@ -659,7 +820,7 @@ async function quotePlanChange(adminId, plan, { db = pool, now = new Date(), pri
   const price = priceUzs != null ? Number(priceUzs) : cfg.priceUzs;
   const running = await db.query(
     `SELECT * FROM tariff_periods
-      WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND starts_at <= $2 AND ends_at > $2
+      WHERE subject = $1 AND source NOT IN ('trial', 'test') AND status = 'active' AND starts_at <= $2 AND ends_at > $2
       ORDER BY starts_at DESC LIMIT 1`, [`a:${adminId}`, now]);
   const last = running.rows[0];
   if (!last || PAID_PLAN_ORDER.indexOf(plan) <= PAID_PLAN_ORDER.indexOf(last.plan)) {
@@ -679,7 +840,7 @@ async function quotePlanChange(adminId, plan, { db = pool, now = new Date(), pri
 async function syncAccountPlan(db, adminId, now = new Date()) {
   const r = await db.query(
     `SELECT * FROM tariff_periods
-      WHERE subject = $1 AND source <> 'trial' AND status = 'active' AND ends_at > $2
+      WHERE subject = $1 AND source NOT IN ('trial', 'test') AND status = 'active' AND ends_at > $2
       ORDER BY starts_at`, [`a:${adminId}`, now]);
   const current = r.rows.find(p => new Date(p.starts_at) <= now);
   if (!current) return null;
@@ -699,12 +860,15 @@ async function syncAccountPlan(db, adminId, now = new Date()) {
  * their AI calls in the usage ledger. Known, estimated and unknown costs are
  * kept apart; cost per unit uses known cost only and says how complete it is.
  */
-async function measuredServiceCost({ days = 30, db = pool } = {}) {
+async function measuredServiceCost({ days = 30, db = pool, test = false } = {}) {
+  // customers' jobs only; test=true: the test entitlements' (pilot) jobs,
+  // reported apart and never mixed into the customer cost per unit
   const r = await db.query(`
     WITH jobs AS (
       SELECT service, COALESCE(credits, 1) AS units, request_id, (meta ->> 'cache') AS cache
-        FROM tariff_usage
-       WHERE status = 'committed' AND service IS NOT NULL AND ts > now() - ($1 * interval '1 day')),
+        FROM tariff_usage u
+       WHERE status = 'committed' AND service IS NOT NULL AND ts > now() - ($1 * interval '1 day')
+         AND (EXISTS (SELECT 1 FROM tariff_periods p WHERE p.id = u.period_id AND p.source = 'test')) = $2),
     calls AS (
       SELECT l.request_id,
              COALESCE(SUM(l.cost_usd) FILTER (WHERE l.cost_source IN ('provider_reported', 'calculated')), 0) AS known_usd,
@@ -722,7 +886,7 @@ async function measuredServiceCost({ days = 30, db = pool } = {}) {
            COALESCE(SUM(c.calls), 0)::int AS calls,
            COUNT(*) FILTER (WHERE j.cache = 'hit')::int AS cache_hits
       FROM jobs j LEFT JOIN calls c ON c.request_id = j.request_id
-     GROUP BY j.service ORDER BY j.service`, [days]);
+     GROUP BY j.service ORDER BY j.service`, [days, !!test]);
   return r.rows.map(x => ({
     ...x,
     knownUsdPerUnit: x.units ? Number((x.known_usd / x.units).toFixed(5)) : null,
@@ -738,5 +902,5 @@ module.exports = {
   docUnits, draftUnits, jobFits, planEconomics, subjectsFor, lockKey,
   signDocTicket, readDocTicket, textHash,
   setLegacyCheck, resolveEntitlement, balance, reserve, commit, release,
-  grantPaidPeriod, quotePlanChange, syncAccountPlan, usedUnits, periodValue, upgradeCredit, allocateCredit, withLock,
+  reserveMany, grantPaidPeriod, grantTestEntitlement, endTestEntitlement, listTestEntitlements, TEST_DEFAULT_QUOTAS, quotePlanChange, syncAccountPlan, usedUnits, periodValue, upgradeCredit, allocateCredit, withLock,
 };

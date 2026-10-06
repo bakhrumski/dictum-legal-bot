@@ -60,11 +60,11 @@ function fakeRes() {
     json(b) { this.body = b; this.headersSent = true; this.writableFinished = true; if (l.finish) l.finish(); return this; },
     on(e, f) { l[e] = f; return this; } };
 }
-async function run(mw, user, body, url = '/api/legal-chat') {
+async function run(mw, user, body, url = '/api/legal-chat', reply = 'ok') {
   const out = fakeRes();
   let next = false;
   await mw({ session: { adminId: user, role: 'user' }, body, params: {}, originalUrl: url }, out, () => { next = true; });
-  if (next) out.json({ reply: 'ok' });
+  if (next) out.json({ reply });
   await settle();
   return { out, next };
 }
@@ -106,36 +106,123 @@ const used = async (user) => {
     assert.strictEqual(half.out.statusCode, 409, 'both must be confirmed');
     const one = await run(mw, user, { message: 'Hujjatni tahlil qilib, yuridik xulosa tayyorlang', documentText: doc2, confirmedUnits: 2 });
     assert.strictEqual(one.out.statusCode, 409, 'a single number does not confirm two services');
-    await run(mw, user, { message: 'Hujjatni tahlil qilib, yuridik xulosa tayyorlang', documentText: doc2, confirmedJob: { analysis: 2, opinion: 2 } });
+    const twoSections = ['Hujjat tahlili', 'Yuridik xulosa'].map(t => `## ${t}\n` + `${t}: bandlar va asoslar. `.repeat(12)).join('\n\n');
+    await run(mw, user, { message: 'Hujjatni tahlil qilib, yuridik xulosa tayyorlang', documentText: doc2, confirmedJob: { analysis: 2, opinion: 2 } }, '/api/legal-chat', twoSections);
     assert.deepStrictEqual(await used(user), { chat: 1, analysis: 4, opinion: 4 }, 'each service once, from its own quota; no chat unit');
   });
 
-  await test('web: when the second service cannot run, the first is released - nothing is charged', async () => {
+  await test('web: when one of two services does not fit, neither is reserved and no AI starts (one transaction)', async () => {
     const user = await makeUser();
     // Sinov: 1 analysis + 1 opinion unit
     await run(mw, user, { message: "Shartnoma bo'yicha yuridik xulosa yozing", documentText: doc1, confirmedUnits: 1 });
     assert.deepStrictEqual(await used(user), { chat: 0, analysis: 0, opinion: 1 });
     const both = await run(mw, user, { message: 'Hujjatni tahlil qilib, yuridik xulosa tayyorlang', documentText: doc1, confirmedJob: { analysis: 1, opinion: 1 } });
-    assert.deepStrictEqual([both.next, both.out.statusCode, both.out.body.service, both.out.body.quotaRefunded], [false, 429, 'opinion', true]);
-    assert.deepStrictEqual(await used(user), { chat: 0, analysis: 0, opinion: 1 }, 'the analysis reserved first was released');
+    assert.deepStrictEqual([both.next, both.out.statusCode, both.out.body.service], [false, 429, 'opinion'], 'refused before any AI: next() not called');
+    assert.deepStrictEqual(await used(user), { chat: 0, analysis: 0, opinion: 1 });
     const rows = await pool.query(`SELECT service, status FROM tariff_usage WHERE admin_id = $1 AND service = 'analysis'`, [user]);
-    assert.deepStrictEqual(rows.rows.map(r => r.status), ['released']);
+    assert.deepStrictEqual(rows.rows, [], 'atomic: the analysis was never reserved, not reserved-then-released');
   });
 
-  await test('Workspace: a chat asked for an analysis or an opinion takes one chat unit and no document units', async () => {
+  // a two-service job, reserved by the middleware, then settled on what the user got
+  async function twoService(user, deliver) {
+    const out = fakeRes();
+    let next = false;
+    await mw({ session: { adminId: user, role: 'user' }, body: { message: 'Hujjatni tahlil qilib, yuridik xulosa tayyorlang', documentText: doc2, confirmedJob: { analysis: 2, opinion: 2 } }, params: {}, originalUrl: '/api/legal-chat' }, out, () => { next = true; });
+    assert.ok(next, 'both reserved, the AI may start');
+    const rows = await pool.query(`SELECT service, status FROM tariff_usage WHERE admin_id = $1 AND service IN ('analysis','opinion') AND status = 'reserved' ORDER BY id`, [user]);
+    assert.deepStrictEqual(rows.rows.map(r => r.service), ['analysis', 'opinion'], 'both reserved before the AI starts');
+    await deliver(out);
+    await settle();
+    const st = await pool.query(`SELECT service, status, release_reason FROM tariff_usage WHERE admin_id = $1 AND service IN ('analysis','opinion') ORDER BY id DESC LIMIT 2`, [user]);
+    return Object.fromEntries(st.rows.map(r => [r.service, r.status]));
+  }
+  const section = (title) => `## ${title}\n` + `${title} bo'yicha batafsil matn, bandlar va asoslar. `.repeat(8);
+
+  await test('two services: both delivered -> both committed; only the analysis delivered -> analysis paid, opinion given back', async () => {
+    const user = await makeUser();
+    await ledger.grantPaidPeriod({ adminId: user, plan: 'gold', paymentRef: `dj2-${user}` });
+    const full = await twoService(user, async (out) => out.json({ reply: section('Hujjat tahlili') + '\n\n' + section('Yuridik xulosa') }));
+    assert.deepStrictEqual(full, { analysis: 'committed', opinion: 'committed' });
+    const half = await twoService(user, async (out) => out.json({ reply: section('Hujjat tahlili') + '\n\n## Yuridik xulosa\nXatolik.' }));
+    assert.deepStrictEqual(half, { analysis: 'committed', opinion: 'released' }, 'the delivered analysis is not free because the opinion failed');
+    assert.deepStrictEqual(await used(user), { chat: 0, analysis: 4, opinion: 2 });
+  });
+
+  await test('two services: a stream that stopped after the analysis -> analysis paid, opinion back; an error before anything -> both back', async () => {
+    const user = await makeUser();
+    await ledger.grantPaidPeriod({ adminId: user, plan: 'gold', paymentRef: `dj3-${user}` });
+    // the client left mid-stream: the SSE helper kept what was sent
+    const cut = await twoService(user, async (out) => {
+      out.locals.deliveredText = section('Hujjat tahlili') + '\n\n## Yuridik xulosa\nBoshlandi';
+      out.headersSent = true;
+      out.writableFinished = false;
+      // 'close' without finish
+      const { commitUsage } = tiers;
+      commitUsage(out);
+    });
+    assert.deepStrictEqual(cut, { analysis: 'committed', opinion: 'released' });
+    const failedRun = await twoService(user, async (out) => { out.status(502).json({ error: 'AI xizmati javob bermadi' }); });
+    assert.deepStrictEqual(failedRun, { analysis: 'released', opinion: 'released' });
+    assert.deepStrictEqual(await used(user), { chat: 0, analysis: 2, opinion: 0 });
+  });
+
+  await test('the provider cost of a released service stays in the usage ledger', async () => {
+    const user = await makeUser();
+    await ledger.grantPaidPeriod({ adminId: user, plan: 'gold', paymentRef: `dj4-${user}` });
+    const usage = require('../src/ai/usage-ledger');
+    const spendLog = require('../src/rag/llm-spend-log');
+    await spendLog.initSpendLog();
+    usage.configure({ write: spendLog.writeLedgerRow, writeRequest: spendLog.writeRequestRow });
+    let requestId = null;
+    const st = await usage.runWithRequest({ service: 'web', userId: user }, async (store) => {
+      requestId = store.requestId;
+      return twoService(user, async (out) => {
+        await usage.track({ provider: 'openai', model: 'gpt-6-luna', endpoint: '/api/legal-chat', stage: 'answer' }, async (ctx) => { ctx.usage({ inTokens: 1e5, outTokens: 0 }); return { text: '' }; });
+        out.status(500).json({ error: 'failed after the model call' });
+      });
+    });
+    assert.deepStrictEqual(st, { analysis: 'released', opinion: 'released' });
+    await settle(150);
+    const rows = await pool.query(`SELECT cost_usd FROM llm_spend_log WHERE request_id = $1`, [requestId]);
+    assert.ok(rows.rows.length === 1 && Number(rows.rows[0].cost_usd) > 0, 'the spend row is kept');
+    await pool.query(`DELETE FROM llm_spend_log WHERE request_id = $1`, [requestId]);
+  });
+
+  await test('Workspace: a full analysis or opinion request is routed with no AI and no quota; a clause question is one chat unit', async () => {
     const user = await makeUser();
     await ledger.grantPaidPeriod({ adminId: user, plan: 'platinum', paymentRef: `djw-${user}` });
-    const ws = tiers.enforceQuota('/api/workspace-ai');
+    const { createWorkspaceServiceRouting } = require('../src/workspace/routes');
     const id = '00000000-0000-4000-8000-000000000001';
-    for (const question of ["Shartnoma bo'yicha yuridik xulosa yozing", 'Shartnomani tahlil qiling']) {
+    let accessChecked = 0;
+    // the Workspace has a document; access is checked before anything is said
+    const fakePool = { query: async (sql) => (/FROM workspace_documents/u.test(sql) ? { rows: [{ '?column?': 1 }] } : { rows: [] }) };
+    const routing = createWorkspaceServiceRouting({ pool: fakePool, requireAccess: async () => { accessChecked++; } });
+    const ws = tiers.enforceQuota('/api/workspace-ai');
+    const ask = async (question) => {
       const out = fakeRes();
-      let next = false;
-      await ws({ session: { adminId: user, role: 'user' }, body: { question }, params: { id }, originalUrl: `/api/workspaces/${id}/ai` }, out, () => { next = true; });
-      assert.ok(next, question);
-      out.json({ reply: 'ok' });
+      const req = { session: { adminId: user, role: 'user', isAuthenticated: true }, body: { question }, params: { workspaceId: id, id }, originalUrl: `/api/workspaces/${id}/assistant/ask` };
+      let reachedAssistant = false;
+      await routing(req, out, async () => {
+        await ws(req, out, () => { reachedAssistant = true; });
+        if (reachedAssistant) out.json({ reply: 'band bo\'yicha javob' });
+      });
       await settle();
+      return { out, reachedAssistant };
+    };
+    for (const q of ["Shartnoma bo'yicha yuridik xulosa yozing", 'Shartnomani tahlil qiling', 'Hujjatni tahlil qilib, yuridik xulosa tayyorlang']) {
+      const r = await ask(q);
+      assert.strictEqual(r.reachedAssistant, false, q);
+      assert.deepStrictEqual([r.out.body.status, r.out.body.quotaUsed, r.out.body.nextActions.every(a => a.kind === 'service')], ['routed', false, true], q);
+      assert.match(r.out.body.reply, /Workspace ichida hozircha bajarilmaydi — bu javob tahlil ham, xulosa ham emas/u);
+      assert.match(r.out.body.reply, /limitingizdan hech narsa yechmadi/u);
     }
-    assert.deepStrictEqual(await used(user), { chat: 2, analysis: 0, opinion: 0 });
+    assert.strictEqual(accessChecked, 3);
+    assert.deepStrictEqual(await used(user), { chat: 0, analysis: 0, opinion: 0 }, 'routing used no quota');
+    const clause = await ask('14.3-band qachon qo\'llaniladi?');
+    assert.ok(clause.reachedAssistant, 'a clause question goes to the assistant');
+    const situation = await ask('Vaziyatni tahlil qilib bering: ish haqi kechikdi');
+    assert.ok(situation.reachedAssistant, 'a legal question without a document is not routed away');
+    assert.deepStrictEqual(await used(user), { chat: 2, analysis: 0, opinion: 0 }, 'real answers take one chat unit each');
   });
 
   try {

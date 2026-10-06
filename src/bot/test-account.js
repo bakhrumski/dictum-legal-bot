@@ -122,32 +122,6 @@ async function resolveTestAccount(db, { chatId, fromUserId, chatType = 'private'
   }
 }
 
-/**
- * The same test account on the website (2026-10-06, for the paid pilot):
- * the session's account is the one linked to the configured Telegram user
- * id, role 'user'. Its web AI calls (analysis, opinion, drafts, chat) count
- * against the same total budget, and once it is reached the ledger refuses
- * new calls. Nothing else changes on the web: the tariff quota, the
- * document size rules and every check stay. Any other account: null.
- */
-async function resolveWebTestAccount(db, adminId, env = process.env, now = Date.now()) {
-  const cfg = testAccountConfig(env, now);
-  if (!cfg.active || adminId == null) return null;
-  try {
-    const { rows } = await db.query(
-      `SELECT id, role FROM admins WHERE telegram_user_id = $1::bigint ORDER BY id LIMIT 2`, [cfg.userId]);
-    if (rows.length !== 1 || rows[0].role !== 'user' || Number(rows[0].id) !== Number(adminId)) return null;
-    const spend = await testAccountSpend(db, cfg, rows[0].id);
-    return {
-      userId: cfg.userId, adminId: rows[0].id, since: cfg.since, until: cfg.until,
-      budgetUsd: cfg.budgetUsd, unknownCallUsd: cfg.unknownCallUsd, spend, exhausted: spend.exhausted, channel: 'web',
-    };
-  } catch (error) {
-    console.warn('[TG-TEST] web check failed; no test budget applied:', error.message);
-    return null;
-  }
-}
-
 /** The ledger's shared budget for a resolved test account. */
 function ledgerPool(account) {
   return {
@@ -203,4 +177,4 @@ function balanceText(account) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = { MAX_HOURS, testAccountConfig, testAccountSpend, resolveTestAccount, resolveWebTestAccount, ledgerPool, testModeNote, balanceText, budgetLines, tashkentTime };
+module.exports = { MAX_HOURS, testAccountConfig, testAccountSpend, resolveTestAccount, ledgerPool, testModeNote, balanceText, budgetLines, tashkentTime };
