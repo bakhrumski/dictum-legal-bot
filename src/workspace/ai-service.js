@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { getLegalPolicyVersions } = require('../rag/legal-prompt-policy');
 const { WorkspaceError } = require('./errors');
+const documentJob = require('../rag/document-job');
 const {
   requireTask,
   requireWorkspaceAccess,
@@ -72,24 +73,22 @@ function termHits(text, terms) {
 
 /**
  * The part of a document that fits `budget`: the whole text when it fits,
- * otherwise the paragraphs that match the question most, kept in document
- * order, and the opening when nothing matches.
+ * otherwise the clauses that bear on the question with their definitions,
+ * the clauses they refer to and the exceptions that refer back to them
+ * (src/rag/document-job.js selectExcerpt, the same as the web chat) - never
+ * just the opening pages. When those are not enough to answer, the block
+ * says so, and the model is told not to conclude.
  */
-function documentExcerpt(text, terms, budget) {
-  const t = String(text || '');
-  if (t.length <= budget) return t;
-  const paragraphs = t.split(/\n{2,}|\n(?=\s*\d+[.)]\s)/).map((p, i) => ({ p: p.trim(), i })).filter(x => x.p);
-  const scored = paragraphs.map(x => ({ ...x, score: termHits(x.p, terms) }));
-  if (!terms.length || scored.every(x => x.score === 0)) return t.slice(0, budget) + '\n[…]';
-  const chosen = [];
-  let used = 0;
-  for (const x of [...scored].sort((a, b) => b.score - a.score || a.i - b.i)) {
-    if (x.score === 0) break;
-    if (used + x.p.length + 2 > budget) continue;
-    chosen.push(x);
-    used += x.p.length + 2;
-  }
-  return chosen.sort((a, b) => a.i - b.i).map(x => x.p).join('\n\n[…]\n\n');
+function documentExcerpt(text, termsOrQuestion, budget) {
+  const question = Array.isArray(termsOrQuestion) ? termsOrQuestion.join(' ') : String(termsOrQuestion || '');
+  const ex = documentJob.selectExcerpt(String(text || ''), question, budget);
+  if (!ex.excerpt) return ex.text;
+  const gap = ex.insufficient
+    ? ((ex.missingReferences || []).length
+      ? `\n[Parchaga kirmagan, javob tayanadigan band(lar): ${ex.missingReferences.join(', ')}. Qat'iy xulosa bermang.]`
+      : "\n[Bu hujjatda savolga oid band topilmadi. Qat'iy xulosa bermang.]")
+    : '';
+  return `${ex.text}${gap}`;
 }
 
 /** Documents in question-relevance order (then recency), each with its share. */
@@ -100,7 +99,7 @@ function documentContextBlocks(documents, question) {
     .sort((a, b) => b.score - a.score || a.i - b.i);
   const share = Math.max(MIN_DOCUMENT_CHARS, Math.floor(DOCUMENT_CONTEXT_CHARS / Math.max(1, ranked.length)));
   return ranked.map(({ d }) => `HUJJAT: ${d.title} (v${d.version_number})\n`
-    + `${d.content_text ? documentExcerpt(d.content_text, terms, share) : '[Fayl matni indekslanmagan]'}\n\n`);
+    + `${d.content_text ? documentExcerpt(d.content_text, question, share) : '[Fayl matni indekslanmagan]'}\n\n`);
 }
 
 async function loadContext(db, workspaceId, taskId, question) {

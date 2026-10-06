@@ -265,14 +265,13 @@ Rules:
 - Return ONLY the JSON object. Any extra text will break the parser.`;
 
 function mountAnalyzerRoutes(app, deps) {
-  const { requireAuth, callAI, tariffModule } = deps;
+  const { requireAuth, callAI, tariffModule, digestLongDocument } = deps;
+  const ledger = tariffModule && tariffModule.ledger;
 
-  const quota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
-    ? tariffModule.enforceQuota('/api/analyze', { failClosed: true })
-    : (req, res, next) => next();
-  // OCR pages: separate daily allowance (DECISIONS.md D-7), fail-closed.
+  // OCR pages (tariffs v2): one page per request from the period's OCR
+  // allowance (10 pages per analysis unit), fail-closed.
   const ocrQuota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
-    ? tariffModule.enforceQuota('/api/analyze/ocr', { failClosed: true })
+    ? tariffModule.enforceQuota('/api/analyze/ocr', { failClosed: true, service: 'ocr' })
     : (req, res, next) => next();
 
   // ── PDF text extraction ──
@@ -301,18 +300,27 @@ function mountAnalyzerRoutes(app, deps) {
         const mammoth = require('mammoth');
         const result = await mammoth.extractRawText({ path: filePath });
         const text = (result.value || '').trim();
-        return res.json({ text, pageCount: 1, scanned: false, charCount: text.length });
+        // DOCX has no fixed pages: the standard page (4 000 characters) is used
+        const size = ledger ? ledger.docUnits({ chars: text.length }) : null;
+        return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: text.length,
+          units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text }) : null });
       }
       const pdfParse = require('pdf-parse');
       const buf = fs.readFileSync(filePath);
       const parsed = await pdfParse(buf);
       const text = (parsed.text || '').trim();
       const scanned = text.length < 80;
+      const pages = parsed.numpages || 1;
+      // the PDF's own page count, signed with the text so the analysis is
+      // billed by max(pages / 10, characters / 40 000)
+      const size = ledger && !scanned ? ledger.docUnits({ chars: text.length, pages }) : null;
       res.json({
         text: scanned ? '' : text,
-        pageCount: parsed.numpages || 1,
+        pageCount: pages,
         scanned,
         charCount: text.length,
+        units: size ? size.units : null,
+        docTicket: ledger && !scanned ? ledger.signDocTicket({ text, pages }) : null,
       });
     } catch (e) {
       console.error('[ANALYZE] extract error:', e.message);
@@ -332,19 +340,6 @@ function mountAnalyzerRoutes(app, deps) {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     const filePath = req.file.path;
     try {
-      if (tariffModule && typeof tariffModule.checkOcrQuota === 'function') {
-        const oq = await tariffModule.checkOcrQuota(req.session.adminId, {
-          alreadyRecorded: !!(res.locals.tariffUsage && res.locals.tariffUsage.id),
-        });
-        if (!oq.allowed) {
-          return res.status(429).json({
-            error: oq.reason === 'not_in_plan'
-              ? 'Rasm va skanerlangan hujjatni o\'qish tarifingizga kirmaydi.'
-              : `Bugungi rasm/skan o'qish limiti tugadi (${oq.limit} ta). Limit ertaga yangilanadi.`,
-            code: 'OCR_QUOTA', used: oq.used, limit: oq.limit, resetsAt: oq.resetsAt,
-          });
-        }
-      }
       const buf = fs.readFileSync(filePath);
       const mimeType = req.file.mimetype || 'image/jpeg';
       const langCode = req.body.lang || 'uzb+rus';
@@ -359,12 +354,28 @@ function mountAnalyzerRoutes(app, deps) {
   });
 
   // ── AI analysis ──
-  app.post('/api/analyze', requireAuth, quota, async (req, res) => {
+  app.post('/api/analyze', requireAuth, async (req, res) => {
     try {
-      const { text, langHint } = req.body || {};
+      const { text, langHint, docTicket } = req.body || {};
       if (!text || !text.trim()) return res.status(400).json({ error: 'Matn kerak' });
+      // Sized and reserved from the whole document (tariffs v2); a document
+      // larger than one job on the plan is refused with its size, never cut.
+      if (tariffModule && typeof tariffModule.meterDocument === 'function') {
+        try {
+          const m = await tariffModule.meterDocument(req, res, { service: 'analysis', text, docTicket, endpoint: '/api/analyze' });
+          if (!m.allowed) return;
+        } catch (qErr) {
+          console.warn('[ANALYZE] quota check failed (refusing):', qErr.message);
+          return res.status(503).json(tariffModule.QUOTA_UNAVAILABLE);
+        }
+      }
 
-      const truncated = text.trim().slice(0, MAX_ANALYSIS_CHARS);
+      // The whole document is analysed: a long one goes through the shared
+      // map-reduce digest first (it used to be cut at 9 000 characters).
+      const full = text.trim();
+      const truncated = full.length > MAX_ANALYSIS_CHARS && typeof digestLongDocument === 'function'
+        ? await digestLongDocument(full, req.session && req.session.adminId)
+        : full.slice(0, MAX_ANALYSIS_CHARS);
       const langNote = langHint === 'ru' ? '\n(Document language: Russian)' : langHint === 'uz' ? '\n(Document language: Uzbek)' : '';
 
       const result = await callAI([
@@ -388,7 +399,8 @@ function mountAnalyzerRoutes(app, deps) {
       analysis.complianceIssues = Array.isArray(analysis.complianceIssues) ? analysis.complianceIssues : [];
       analysis.strengths = Array.isArray(analysis.strengths) ? analysis.strengths : [];
 
-      res.json({ analysis, provider: result.provider, truncated: text.trim().length > MAX_ANALYSIS_CHARS });
+      res.json({ analysis, provider: result.provider, digested: full.length > MAX_ANALYSIS_CHARS && typeof digestLongDocument === 'function',
+        truncated: full.length > MAX_ANALYSIS_CHARS && typeof digestLongDocument !== 'function', units: res.locals.quota ? res.locals.quota.units : null });
     } catch (e) {
       console.error('[ANALYZE] AI error:', e.message);
       res.status(500).json({ error: 'Tahlil xatoligi: ' + e.message });

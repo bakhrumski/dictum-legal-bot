@@ -179,7 +179,14 @@ function deps(o = {}) {
     recordAgentEvent: async () => { calls.events++; },
     claimDailyAnswer: async () => {
       calls.quota++;
-      return o.quota || { allowed: true, reservationId: '00000000-0000-4000-8000-000000000001', source: 'free', used: 1, remaining: 2, limit: 3, paidCredits: 0 };
+      return o.quota || { allowed: true, reservationId: '00000000-0000-4000-8000-000000000001', source: 'tariff', kind: 'trial', plan: 'sinov', used: 1, remaining: 4, limit: 5, paidCredits: 0 };
+    },
+    // Read-only status before any model call (tariffs v2 ledger, stubbed on
+    // the same dbState: dbState.aiAnswers stands for answers used, limit 3).
+    answerStatus: async (chatId) => {
+      const pending = Array.from(dbState.reservations.values()).some(r => r.chatId === String(chatId) && r.status === 'pending');
+      const left = Math.max(0, 3 - dbState.aiAnswers);
+      return { allowed: !pending && (left > 0 || dbState.paidCredits > 0), pending, plan: 'sinov', kind: 'trial', limit: 3, tariffRemaining: left, paidCredits: dbState.paidCredits };
     },
     releaseDailyAnswer: async () => { calls.release++; },
   };
@@ -601,8 +608,10 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/lex\.uz/.test(r.reply), 'source link missing');
     assert.ok(/#:~:text=/.test(r.reply), 'source must deep-link to the cited provision');
     assert.ok(/yuridik kuchga ega emas/.test(r.reply), 'disclaimer missing');
-    assert.ok(/Bugun yana 2 ta bepul AI huquqiy javobingiz qoldi/i.test(r.reply), 'daily free-answer balance missing');
-    assert.strictEqual(r.meta.entitlementSource, 'free');
+    // tariffs v2: the one-time Sinov, no daily reset
+    assert.ok(/Sinov: yana 4 ta huquqiy savol qoldi \(bir martalik, yangilanmaydi\)/u.test(r.reply), 'Sinov balance missing');
+    assert.ok(!/Bugun|kuniga|00:00/u.test(r.reply), 'no daily allowance is promised');
+    assert.strictEqual(r.meta.entitlementSource, 'tariff');
     assert.deepStrictEqual(
       r.meta.nextActions.map(action => action.kind),
       ['document', 'document', 'attorney'],
@@ -745,14 +754,26 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(r.meta.lexCrossCheck.checked, true);
   });
 
-  await test('a fourth unpaid legal answer is blocked before retrieval or generation', async () => {
-    const d = deps({ quota: { allowed: false, used: 3, remaining: 0, limit: 3, paidCredits: 0 } });
+  await test('a used-up Sinov is blocked before retrieval or generation, with the way on and no auto-payment', async () => {
+    const d = deps({ quota: { allowed: false, kind: 'trial', plan: 'sinov', used: 5, remaining: 0, limit: 5, paidCredits: 0 } });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat ta\'tili necha kun?' });
     assert.strictEqual(r.action, 'quota_exceeded');
-    assert.ok(/Bugungi 3 ta bepul AI huquqiy javobingizdan foydalandingiz/i.test(r.reply));
+    assert.match(r.reply, /Sinov tarifidagi bepul huquqiy savollaringiz tugadi \(Sinov bir martalik, yangilanmaydi\)/u);
+    assert.match(r.reply, /tariff\.html/u);
+    assert.match(r.reply, /Avtomatik to'lov olinmaydi/u);
+    assert.ok(!/00:00|kuniga|Bugungi/u.test(r.reply), 'no daily reset is promised');
     assert.strictEqual(d.calls.answer, 0, 'quota must block answer generation');
     assert.strictEqual(d.calls.korpus, 0, 'quota must block paid/verified answer work');
+  });
+
+  await test('a paid plan that is used up says when the period ends; it does not renew by itself', async () => {
+    const d = deps({ quota: { allowed: false, kind: 'paid', plan: 'silver', used: 150, remaining: 0, limit: 150, endsAt: '2026-11-03T05:00:00Z', paidCredits: 0 } });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat ta\'tili necha kun?' });
+    assert.strictEqual(r.action, 'quota_exceeded');
+    assert.match(r.reply, /huquqiy chat limiti tugadi \(150\/150\)/u);
+    assert.match(r.reply, /03\.11\.2026 da tugaydi; yangi davr to'lov bilan boshlanadi — avtomatik to'lov olinmaydi/u);
   });
 
   await test('an in-flight answer never shows the used-free-answer payment prompt', async () => {
@@ -800,17 +821,22 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(d.calls.shadow, 0);
   });
 
-  await test('the daily-free reservation is atomic and releasable', async () => {
-    dbState.aiAnswers = 0;
-    const first = await agent.claimDailyAiAnswer(77);
-    const second = await agent.claimDailyAiAnswer(77);
+  await test('Stars credits bought earlier stay usable: one at a time, released on failure', async () => {
+    // tariffs v2 retired the daily free answers; the Stars wallet is a
+    // separate balance used when the tariff allowance is spent
+    const economy = require('../src/services/telegram-economy');
+    stubMemory();
+    dbState.paidCredits = 2;
+    const first = await economy.claimAnswerEntitlement(77, 0);
+    const second = await economy.claimAnswerEntitlement(77, 0);
     assert.strictEqual(first.allowed, true);
-    assert.strictEqual(first.source, 'free');
-    assert.strictEqual(first.remaining, 2);
+    assert.strictEqual(first.source, 'paid');
     assert.strictEqual(second.allowed, false);
-    await agent.releaseDailyAiAnswer(77, first);
-    const retry = await agent.claimDailyAiAnswer(77);
+    // the refund itself is covered by tests/telegram-economy.test.js
+    await economy.releaseAnswerEntitlement(77, first);
+    const retry = await economy.claimAnswerEntitlement(77, 0);
     assert.strictEqual(retry.allowed, true, 'a failed answer reservation must be reusable');
+    dbState.paidCredits = 0;
     stubMemory();
   });
 
@@ -1183,9 +1209,12 @@ function stubMemory(clarifyCount = 0) {
   await test('/start explains AI identity, the free answer and unlimited non-token conversation', async () => {
     const botSource = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
     assert.ok(/Men inson yurist emasman/.test(botSource));
-    assert.ok(/Har kuni \$\{freeAiLimit\} ta AI huquqiy javobni bepul olasiz/.test(botSource));
-    assert.ok(/AGENT_FREE_AI_LIMIT \|\| '3'/.test(botSource), 'Telegram daily allowance must default to three');
-    assert.ok(/bepul va cheklanmagan/.test(botSource));
+    // tariffs v2: the onboarding text comes from the plan catalogue
+    assert.ok(/tariffTexts\.START_LIMIT_TEXT\(\)/.test(botSource));
+    assert.ok(!/Har kuni \$\{|AGENT_FREE_AI_LIMIT/.test(botSource), 'no daily free allowance is promised');
+    const texts = require('../src/bot/tariff-texts');
+    assert.match(texts.START_LIMIT_TEXT(), /Sinov tarifida 5 ta huquqiy savol, 1 ta hujjat tahlili va 1 ta yuridik xulosa bepul — bir marta beriladi va yangilanmaydi/u);
+    assert.match(texts.START_LIMIT_TEXT(), /avtomatik to'lov olinmaydi/u);
     assert.ok(/callback_data: 'bot_stats'/.test(botSource), 'public anonymous user statistics must be available');
     assert.ok(/bot\.on\('pre_checkout_query'/.test(botSource), 'Telegram Stars checkout must be verified');
     assert.ok(/telegram_payment_charge_id/.test(botSource), 'successful payments must store Telegram receipt IDs');

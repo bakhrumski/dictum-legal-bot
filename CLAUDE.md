@@ -144,8 +144,53 @@ Known state of the suites (Sept 2026):
   budget ($5 default, unknown cost priced at an assumed rate, never $0) after
   which the ledger refuses new calls; ends 48 h after `TG_TEST_ACCOUNT_SINCE`.
   Status: `/api/admin/telegram-test-account?username=…` (master only).
-- `src/rag/subscription-tiers.js` — plans (bepul, sinov, silver, gold,
-  platinum), daily limits, opinion credits and the margin maths.
+- Tariffs v2 (2026-10-04, `docs/tariffs-v2.md`): `src/rag/tariff-ledger.js`
+  is the single source of prices and limits (`PLAN_CATALOG`: one-time Sinov
+  5 chat + 1 + 1; Silver 199 000 / Gold 599 000 / Platinum 999 000 so'm per
+  30-day period, Gold 3x and Platinum 5x Silver; no daily/weekly reset, no
+  rollover) and of the reserve / commit / release ledger (`tariff_usage` +
+  `tariff_periods`, atomic per payer, idempotent by job key). Linked Telegram
+  and web accounts share one allowance; Stars credits are a separate balance.
+  Document jobs are sized in units: max(pages/10, chars/40 000), signed PDF
+  page counts (`docTicket`), never silently cut. A paid period is granted only
+  by `POST /api/admin/tariff/grant` (idempotent `paymentRef`), never by the
+  user. Subscriptions sold under v1 keep their rules as `legacy_v1` until they
+  end. `src/rag/subscription-tiers.js` keeps the middleware (`enforceQuota`,
+  `meterJob`, `meterDocument`), the free-access gate and the legacy rules.
+  Every user-facing number (landing, tariff page, bot /start /help /balance)
+  comes from the catalogue; `tests/tariffs-v2*.test.js` checks it.
+  Economics: `docs/finance/tariffs-v2-report.md`, `scripts/tariff-scenarios.js`.
+  A file attached to a chat does not buy a document service
+  (`src/rag/document-job.js`): a question about it is one chat unit with
+  the matching clauses, their definitions, referred clauses and exceptions
+  (<= 20 000 chars, never just the opening pages; when that is not enough
+  the answer must say so and not conclude); an analysis takes analysis
+  units, a legal opinion opinion units, both are two jobs - each confirmed
+  first (409 `DOC_COST_CONFIRM`, `confirmedJob`), never charged as chat too;
+  two services are reserved in one transaction before any AI
+  (`reserveMany`) and each is settled on its own section of the answer
+  (`settleSections`: a delivered analysis stays paid if the opinion fails).
+  Workspace does not run full analysis/opinion: such a request is routed to
+  the AI section with no AI call and no quota (`createWorkspaceServiceRouting`);
+  a clause question is one chat unit. Telegram runs no AI on files (lawyer queue, told plainly, no
+  quota, review not promised free). Individual discounts
+  (`src/rag/tariff-pricing.js`, `tariff-offers.js`, table `tariff_offers`):
+  master only, one user, one plan, one 30-day period, final price >=
+  conservative cost / 0.80 (integers, min rounded up to 1 000, floors
+  marked unmeasured), unknown cost blocks offers; the zero payment fee is a
+  scope (no provider), so an offer is not redeemed through a provider or
+  under another fee / cost model; redeemed once by
+  `grant { offerId, paymentRef }`; `TARIFF_OFFERS=off` stops them.
+  `marginReport` keeps cash (once, at payment), carried credit (not cash)
+  and service revenue (price + credit in - credit out over the days run)
+  apart; legacy revenue and refunds are unknown, never 0. Rollback is code,
+  not data: `docs/tariffs-v2-rollback.md`; the 013 down file is for an empty
+  test database only. The pilot runs on a master-only test entitlement
+  (`grantTestEntitlement`, `tariff_periods.source = 'test'`: no price, no
+  paymentRef, no revenue, admins.tariff_* untouched, spend reported apart)
+  with a total AI budget (`src/ai/test-budget.js`): each request holds its
+  per-request limit before its first AI call, so parallel requests cannot
+  pass it; unknown-cost calls count at an assumed price, never $0.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

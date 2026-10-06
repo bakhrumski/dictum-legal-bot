@@ -338,8 +338,65 @@ async function claimTestAnswer(chatId) {
   });
 }
 
+// ── Tariffs v2 (2026-10-04, docs/tariffs-v2.md) ─────────────────────────
+// A Telegram answer draws on the same personal allowance as the web: the
+// linked account's plan, or the one-time Sinov (shared by linked Telegram
+// and web accounts). The daily free answers are retired. Stars answer
+// credits already bought stay valid and are used when the tariff allowance
+// is spent.
+function tariffLedger() { return require('../rag/tariff-ledger'); }
+
+/**
+ * Reserve one Telegram answer. identity: { telegramUserId, adminId } where
+ * adminId is the linked ordinary account (or null). Returns the same shape
+ * as claimAnswerEntitlement, with source 'tariff' | 'paid' | 'staff'.
+ */
+async function claimTelegramAnswer(chatId, identity = {}) {
+  const ledger = tariffLedger();
+  const telegramUserId = identity.telegramUserId != null ? identity.telegramUserId : (Number(chatId) > 0 ? chatId : null);
+  const r = await ledger.reserve({
+    adminId: identity.adminId != null ? identity.adminId : null,
+    telegramUserId, service: 'chat', units: 1, endpoint: '/telegram/answer', channel: 'telegram', oneAtATime: true,
+  });
+  if (r.kind === 'staff') return { allowed: true, source: 'staff', reservationId: null };
+  if (r.allowed) {
+    return { allowed: true, source: 'tariff', reservationId: r.jobKey, plan: r.plan, kind: r.kind, legacy: r.rules === 'legacy_v1',
+      used: r.used, limit: r.limit, remaining: r.remaining, endsAt: r.endsAt || null, paidCredits: 0 };
+  }
+  if (r.pending) return { allowed: false, pending: true, source: null, plan: r.plan, kind: r.kind, limit: r.limit, paidCredits: 0 };
+  // no tariff allowance left: a Stars answer credit, if any was bought
+  const wallet = await claimAnswerEntitlement(chatId, 0);
+  if (wallet.allowed || wallet.pending) return { ...wallet, plan: r.plan, kind: r.kind };
+  return { allowed: false, pending: false, source: null, reason: r.reason, plan: r.plan, kind: r.kind,
+    used: r.used, limit: r.limit, paidCredits: wallet.paidCredits || 0 };
+}
+
+/** Read-only: can this person get an answer now (before any model call)? */
+async function getTelegramAnswerStatus(chatId, identity = {}) {
+  const ledger = tariffLedger();
+  const telegramUserId = identity.telegramUserId != null ? identity.telegramUserId : (Number(chatId) > 0 ? chatId : null);
+  const b = await ledger.balance({ adminId: identity.adminId != null ? identity.adminId : null, telegramUserId });
+  const wallet = await getAnswerEntitlementStatus(chatId, 0);
+  const subjects = ledger.subjectsFor({ adminId: identity.adminId, telegramUserId });
+  const live = await pool.query(
+    `SELECT 1 FROM tariff_usage WHERE subject = ANY($1) AND service = 'chat' AND channel = 'telegram' AND status = 'reserved'
+        AND ts > now() - ($2 * interval '1 minute') LIMIT 1`, [subjects, ledger.RESERVATION_TTL_MIN]);
+  const pending = wallet.pending || live.rows.length > 0;
+  let tariffRemaining = 0;
+  if (b.kind === 'staff' || b.legacy) tariffRemaining = Infinity;
+  else if (b.kind === 'none') tariffRemaining = b.trialAvailable ? b.trialQuotas.chat : 0;
+  else tariffRemaining = b.services.chat.remaining;
+  return {
+    allowed: !pending && (tariffRemaining > 0 || wallet.paidCredits > 0),
+    pending, plan: b.plan || (b.kind === 'none' && b.trialAvailable ? 'sinov' : null), kind: b.kind,
+    tariffRemaining, limit: b.services ? b.services.chat.limit : (b.trialQuotas ? b.trialQuotas.chat : 0),
+    endsAt: b.endsAt || null, legacy: !!b.legacy, paidCredits: wallet.paidCredits,
+  };
+}
+
 /** Finalize only after every Telegram answer part was delivered successfully. */
 async function finalizeAnswerEntitlement(chatId, reservation = {}) {
+  if (reservation.source === 'tariff') return tariffLedger().commit(reservation.reservationId);
   await ensureTables();
   if (!reservation.reservationId) return false;
   const result = await pool.query(`
@@ -353,6 +410,7 @@ async function finalizeAnswerEntitlement(chatId, reservation = {}) {
 
 /** Return a reservation if generation or Telegram delivery fails. Idempotent. */
 async function releaseAnswerEntitlement(chatId, reservation = {}) {
+  if (reservation.source === 'tariff') return tariffLedger().release(reservation.reservationId, 'telegram_not_delivered');
   await ensureTables();
   if (!reservation.reservationId) return false;
   return inTransaction(async client => {
@@ -457,6 +515,8 @@ async function getTelegramUserStats() {
 }
 
 module.exports = {
+  claimTelegramAnswer,
+  getTelegramAnswerStatus,
   claimAnswerEntitlement,
   claimTestAnswer,
   finalizeAnswerEntitlement,

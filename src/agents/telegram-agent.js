@@ -78,9 +78,10 @@ function isReady() { return !!(D && D.callAI && D.retrieveLegalContext); }
 const AUTO_ANSWER      = process.env.AGENT_AUTO_ANSWER !== 'false';   // master switch
 const ESCALATE_WEAK    = process.env.AGENT_ESCALATE_WEAK !== 'false'; // hand low-confidence to humans
 const MAX_CLARIFY      = parseInt(process.env.AGENT_MAX_CLARIFY, 10) || 2;
-const parsedFreeLimit  = Number.parseInt(process.env.AGENT_FREE_AI_LIMIT || '3', 10);
-const FREE_AI_LIMIT    = Number.isFinite(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 3;
-// Backwards-compatible export name used by bot.js.
+// Retired with tariffs v2 (2026-10-04): there is no daily free allowance any
+// more (the one-time Sinov and paid periods, src/rag/tariff-ledger.js). Kept
+// as 0 for callers of the old export names.
+const FREE_AI_LIMIT    = 0;
 const DAILY_AI_LIMIT   = FREE_AI_LIMIT;
 const HISTORY_TURNS    = 8;
 const HISTORY_TTL_H    = 48;
@@ -119,13 +120,26 @@ async function ensureTable() {
 }
 
 /** Atomically reserve one of today's free answers or a purchased answer credit. */
-async function claimDailyAiAnswer(chatId) {
+/**
+ * Reserve one answer from the person's tariff allowance (tariffs v2: the
+ * linked account's plan or the one-time Sinov), else a Stars credit.
+ */
+async function claimDailyAiAnswer(chatId, identity = {}) {
   try {
-    return await telegramEconomy.claimAnswerEntitlement(chatId, FREE_AI_LIMIT);
+    return await telegramEconomy.claimTelegramAnswer(chatId, identity);
   } catch (error) {
     console.error('[TG-AGENT] answer entitlement check failed:', error.message);
-    return { allowed: false, unavailable: true, used: 0, remaining: 0, limit: FREE_AI_LIMIT, paidCredits: 0 };
+    return { allowed: false, unavailable: true, used: 0, remaining: 0, limit: 0, paidCredits: 0 };
   }
+}
+
+const TARIFF_URL = `${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}/tariff.html`;
+
+function tashkentDay(d) {
+  if (!d) return '';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric' })
+    .formatToParts(new Date(d)).map(x => [x.type, x.value]));
+  return `${p.day}.${p.month}.${p.year}`;
 }
 
 /** This request's own AI spend so far (known cost, unknown-cost calls), from the usage ledger. */
@@ -713,7 +727,7 @@ TELEGRAM FORMATI (majburiy):
  *   meta: object
  * }>}
  */
-async function handleUserMessage({ chatId, text, firstName = '', testAccount = null }) {
+async function handleUserMessage({ chatId, text, firstName = '', testAccount = null, identity = null }) {
   const skip = (reason) => ({ handled: false, reply: null, action: 'skip', escalate: true, meta: { reason } });
 
   if (!AUTO_ANSWER) return skip('auto-answer disabled');
@@ -724,28 +738,34 @@ async function handleUserMessage({ chatId, text, firstName = '', testAccount = n
   const started = Date.now();
   const { turns, clarifyCount, mode, state, context } = await loadConversation(chatId);
 
+  // Who pays: the Telegram sender, or the ordinary account linked to them
+  // (one allowance for linked Telegram and web accounts).
+  const who = identity || { telegramUserId: Number(chatId) > 0 ? chatId : null, adminId: null };
+
   const paymentRequired = (status = {}) => {
     if (status.pending) {
       return {
         handled: true,
         reply: `Oldingi huquqiy savolingiz uchun javob hali tayyorlanmoqda. Javob yuborilguncha savolni qayta jo'natmang.
 
-Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
+Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
         action: 'answer_pending',
         escalate: false,
         meta: { intent: 'huquqiy_savol', reservationPending: true },
       };
     }
-    const reportedLimit = Number(status.limit);
-    const dailyLimit = Number.isFinite(reportedLimit) && reportedLimit >= 0
-      ? reportedLimit
-      : FREE_AI_LIMIT;
+    // tariffs v2: the one-time Sinov or the paid period is used up; nothing
+    // renews by itself and nothing is charged automatically
+    const trial = status.kind === 'trial' || status.plan === 'sinov' || status.kind === 'none';
+    const reply = trial
+      ? `Sinov tarifidagi bepul huquqiy savollaringiz tugadi (Sinov bir martalik, yangilanmaydi).\n\nDavom etish uchun tarif tanlang: Silver, Gold yoki Platinum — ${TARIFF_URL}\nAvtomatik to'lov olinmaydi. Salomlashuv, menyu, /balance va yordam buyruqlari limit sarflamaydi.`
+      : `Tarifingizdagi huquqiy chat limiti tugadi${status.limit ? ` (${status.used || status.limit}/${status.limit})` : ''}.\n\n${status.endsAt ? `Joriy davr ${tashkentDay(status.endsAt)} da tugaydi; yangi davr to'lov bilan boshlanadi — avtomatik to'lov olinmaydi. ` : ''}Yuqori tarifga o'tish: ${TARIFF_URL}`;
     return {
       handled: true,
-      reply: `Bugungi ${dailyLimit} ta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi huquqiy javobni bir martalik to'lov bilan olishingiz mumkin.\n\nBepul limit Toshkent vaqti bilan soat 00:00 da yangilanadi. Salomlashuv, aniqlashtirish, menyular va xizmat bo'yicha suhbatlar bepul va cheklanmagan.`,
+      reply,
       action: 'quota_exceeded',
       escalate: false,
-      meta: { intent: 'huquqiy_savol', freeLimit: dailyLimit, paidCredits: status.paidCredits || 0 },
+      meta: { intent: 'huquqiy_savol', plan: status.plan || null, limit: status.limit || 0, paidCredits: status.paidCredits || 0 },
     };
   };
 
@@ -800,7 +820,9 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
       // unlimited and cost-free.
       if (testAccount && testAccount.exhausted) return testBudgetSpent();
       try {
-        const entitlement = await telegramEconomy.getAnswerEntitlementStatus(chatId, FREE_AI_LIMIT);
+        const entitlement = D.answerStatus
+          ? await D.answerStatus(chatId, who)
+          : await telegramEconomy.getTelegramAnswerStatus(chatId, who);
         // the test account skips the limit and credits, not the
         // one-answer-at-a-time rule
         if (testAccount ? entitlement.pending : !entitlement.allowed) return paymentRequired(entitlement);
@@ -1250,8 +1272,8 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
   const quota = testAccount
     ? await claimTestAiAnswer(chatId)
     : D.claimDailyAnswer
-      ? await D.claimDailyAnswer(chatId, FREE_AI_LIMIT)
-      : await claimDailyAiAnswer(chatId);
+      ? await D.claimDailyAnswer(chatId, who)
+      : await claimDailyAiAnswer(chatId, who);
 
   if (!quota.allowed) {
     if (!quota.unavailable) return complete(paymentRequired(quota));
@@ -1314,10 +1336,14 @@ Agar texnik uzilish yuz bersa, bepul javob huquqingiz avtomatik tiklanadi.`,
   const allowance = quota.source === 'test'
     ? `\n\n${testModeNote(testAccount, currentRequestSpend())}`
     : quota.source === 'paid'
-    ? `\n\n🎟 Pullik javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`
-    : quota.remaining > 0
-      ? `\n\n🎁 Bugun yana ${quota.remaining} ta bepul AI huquqiy javobingiz qoldi.`
-      : `\n\n🎁 Bugungi ${quota.limit || FREE_AI_LIMIT} ta bepul AI huquqiy javobingizdan foydalandingiz. Keyingi javobni bir martalik to'lov bilan olishingiz mumkin; bepul limit Toshkent vaqti bilan soat 00:00 da yangilanadi.`;
+    ? `\n\n🎟 Oldin sotib olingan javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`
+    : quota.source === 'staff' || quota.legacy
+      ? ''
+      : quota.kind === 'trial' || quota.plan === 'sinov'
+        ? (quota.remaining > 0
+          ? `\n\n🎁 Sinov: yana ${quota.remaining} ta huquqiy savol qoldi (bir martalik, yangilanmaydi).`
+          : `\n\n🎁 Sinovdagi huquqiy savollar tugadi. Davom etish uchun tarif tanlang: ${TARIFF_URL}`)
+        : `\n\n📊 ${quota.plan ? quota.plan[0].toUpperCase() + quota.plan.slice(1) : 'Tarif'}: yana ${quota.remaining} ta huquqiy savol${quota.endsAt ? ` (davr ${tashkentDay(quota.endsAt)} gacha)` : ''}.`;
   const nextActions = buildLegalNextActions({
     question: groundedQuestion,
     answer: answer.text,

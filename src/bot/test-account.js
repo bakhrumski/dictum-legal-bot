@@ -64,15 +64,18 @@ function testAccountConfig(env = process.env, now = Date.now()) {
  * Unknown-cost calls are counted, and priced at the assumed price for the
  * budget; skipped calls (nothing was called) are not.
  */
-async function testAccountSpend(db, cfg) {
+async function testAccountSpend(db, cfg, adminId = null) {
+  // its Telegram chat and, when known, its web requests (the same account):
+  // one budget for both, each row counted once
   const { rows } = await db.query(`
     SELECT COALESCE(SUM(cost_usd), 0)::float AS known_usd,
            COUNT(*) FILTER (WHERE cost_usd IS NULL AND COALESCE(status, 'success') <> 'skipped')::int AS unknown_calls,
            COUNT(*) FILTER (WHERE COALESCE(status, 'success') <> 'skipped')::int AS calls,
            COUNT(DISTINCT request_id)::int AS requests
       FROM llm_spend_log
-     WHERE chat_id = $1::bigint AND ts >= $2::timestamptz AND ts < $3::timestamptz`,
-  [cfg.userId, cfg.since, cfg.until]);
+     WHERE (chat_id = $1::bigint OR ($4::int IS NOT NULL AND user_id = $4::int))
+       AND ts >= $2::timestamptz AND ts < $3::timestamptz`,
+  [cfg.userId, cfg.since, cfg.until, adminId == null ? null : Number(adminId)]);
   const r = rows[0] || {};
   const knownUsd = Number(r.known_usd) || 0;
   const unknownCalls = Number(r.unknown_calls) || 0;
@@ -108,7 +111,7 @@ async function resolveTestAccount(db, { chatId, fromUserId, chatType = 'private'
       console.warn('[TG-TEST] the linked account is not an ordinary user; test mode refused');
       return null;
     }
-    const spend = await testAccountSpend(db, cfg);
+    const spend = await testAccountSpend(db, cfg, rows[0].id);
     return {
       userId: cfg.userId, adminId: rows[0].id, since: cfg.since, until: cfg.until,
       budgetUsd: cfg.budgetUsd, unknownCallUsd: cfg.unknownCallUsd, spend, exhausted: spend.exhausted,

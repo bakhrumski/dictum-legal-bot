@@ -14,6 +14,7 @@ const { deterministicLegalTopic } = require('../services/legal-topic-routing');
 const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { retrieveAspects } = require('../rag/question-aspects');
+const documentJob = require('../rag/document-job');
 const { hydrateMentionedOfficialActChunks } = require('../rag/official-citation-hydrator');
 const { appendRepealedNotice } = require('../rag/superseded-acts');
 const { hydrateLexAnchors } = require('../rag/lex-anchor-resolver');
@@ -310,6 +311,18 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
     if (verified.groundTruth) systemPrompt += `\n\n${verified.groundTruth}`;
     if (verified.fewShot) systemPrompt += `\n\n${verified.fewShot}`;
     systemPrompt += workspaceContextBlock(workspaceContext);
+    // Workspace documents reach the model as relevant excerpts within the
+    // chat document cap (ai-service DOCUMENT_CONTEXT_CHARS = document-job's
+    // CHAT_DOCUMENT_CONTEXT_CHARS); a request for a full analysis is not
+    // served as one under a chat unit (tariffs v2, 2026-10-05).
+    // Workspace documents reach the model as excerpts (clauses, definitions,
+    // references, exceptions); a request for a full analysis or opinion never
+    // gets here - the route answers it with a pointer, no AI, no quota
+    // (routes.js workspaceServiceRouting).
+    const hasDocuments = /(^|\n)HUJJAT: /u.test(workspaceContext);
+    if (hasDocuments) {
+      systemPrompt += "\n\nMUHIM: Workspace hujjatlaridan faqat parchalar berildi: savolga oid bandlar, ularning ta'riflari, havola qilingan bandlar va istisnolar. Javob uchun kerakli band parchalarda bo'lmasa yoki blokda \"Qat'iy xulosa bermang\" deyilgan bo'lsa, buni aniq ayting va qat'iy xulosa bermang. Butun hujjatning to'liq tahlili yoki yuridik xulosasi deb javob bermang.";
+    }
 
     const messages = [
       { role: 'system', text: systemPrompt },
@@ -454,6 +467,7 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
     });
     return {
       reply,
+      documentScope: hasDocuments ? { mode: 'chat_excerpt', excerpt: true, maxChars: documentJob.CHAT_DOCUMENT_CONTEXT_CHARS } : null,
       provider: verification.status === 'revised'
         ? `${result.provider} + Lex QA`
         : result.provider,

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const { extractUploadText } = require('./extract-text');
+const documentJob = require('../rag/document-job');
 const { WorkspaceError, sendWorkspaceError } = require('./errors');
 const {
   canCreateWorkspace,
@@ -107,6 +108,32 @@ function jsonColumn(value, fallback) {
   } catch (_) {
     return fallback;
   }
+}
+
+/**
+ * A full analysis or legal opinion of a document is not a Workspace service:
+ * such a request (it names a document, and the Workspace has documents) gets
+ * a pointer to the AI section where it runs, with no AI call and no quota -
+ * it is not presented as done. Anything else, a question about a clause
+ * included, goes on to the assistant (one chat unit). Access is checked first.
+ */
+function createWorkspaceServiceRouting({ pool, requireAccess = requireWorkspaceAccess }) {
+  return (req, res, next) => Promise.resolve((async () => {
+    const question = typeof (req.body && req.body.question) === 'string' ? req.body.question : '';
+    const services = documentJob.workspaceDocumentServices(question);
+    if (!services.length) return next();
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    await requireAccess(pool, workspaceId, actorId(req));
+    const docs = (await pool.query(
+      'SELECT 1 FROM workspace_documents WHERE workspace_id=$1 AND archived_at IS NULL LIMIT 1', [workspaceId])).rows.length;
+    if (!docs) return next();
+    res.json({
+      status: 'routed', routed: true, services, quotaUsed: false,
+      threadId: req.body.threadId || null,
+      reply: documentJob.workspaceRoutingReply(services),
+      nextActions: services.map(sv => ({ id: `service_${sv}`, kind: 'service', service: sv, label: `${documentJob.SERVICE_TITLE[sv]} — AI bo'limida` })),
+    });
+  })()).catch((error) => sendWorkspaceError(res, translateDatabaseError(error)));
 }
 
 function translateDatabaseError(error) {
@@ -1504,7 +1531,9 @@ function mountWorkspaceRoutes(app, options) {
     });
   }));
 
-  router.post('/workspaces/:workspaceId/assistant/ask', aiLimiter || ((req, res, next) => next()), workspaceAiQuota, asyncRoute(async (req, res) => {
+  const workspaceServiceRouting = createWorkspaceServiceRouting({ pool });
+
+  router.post('/workspaces/:workspaceId/assistant/ask', aiLimiter || ((req, res, next) => next()), workspaceServiceRouting, workspaceAiQuota, asyncRoute(async (req, res) => {
     const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
     const question = requiredString(req.body.question, 'question', { min: 3, max: 20000 });
     const result = await aiService.ask({
@@ -1627,6 +1656,7 @@ function mountWorkspaceRoutes(app, options) {
 }
 
 module.exports = {
+  createWorkspaceServiceRouting,
   DOCUMENT_KINDS,
   FILE_FORMATS,
   GENERATED_FILE_MIME_TYPES,

@@ -426,6 +426,19 @@
             .trial-strip { align-items: stretch; flex-direction: column; }
             .trial-strip .trial-btn { width: 100%; }
         }
+        [hidden] { display: none !important; }
+        .my-plan {
+            margin-bottom: 20px;
+            padding: 14px 18px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 14px;
+            color: var(--text-2);
+        }
+        .my-plan strong { color: var(--text-1, inherit); }
+        .my-plan-list { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+        .usage-note b { font-weight: 600; }
     </style>
     <link rel="stylesheet" href="/css/redesign-v2.css">
     <script src="/js/redesign-v2.js" defer></script>
@@ -459,24 +472,25 @@
 
     <main class="container">
         <div class="pricing-intro">
-            <p class="pricing-eyebrow">Doimo bepul reja · karta kerak emas</p>
+            <p class="pricing-eyebrow">Sinov — bepul, bir martalik · karta kerak emas</p>
             <h1>O'zingizga mos rejani tanlang</h1>
-            <p>Pullik rejalarda AI chat cheksiz. Rejalar xulosa kreditlari, hujjat yaratish hajmi va xizmat darajasi bilan farqlanadi.</p>
+            <p>Har bir pullik reja — 30 kunlik davr. Limitlar shu davr uchun; haftalik yoki kunlik yangilanish yo'q, ishlatilmagan limit keyingi davrga o'tmaydi va avtomatik qayta sotib olinmaydi.</p>
         </div>
 
         <p class="plan-note" id="planNote" style="display:none">
-            <b>Platforma sinov bosqichida.</b> To'lov tizimi hali ulanmagan —
-            hozircha barcha imkoniyatlar bepul tarifda ochiq. Pullik tarif kerak
-            bo'lsa, "Xabar berish" tugmasini bosing: ishga tushganda birinchi
-            bo'lib xabar beramiz.
+            <b>Onlayn to'lov hali ulanmagan.</b> Pullik tarifni faollashtirish
+            uchun administrator bilan bog'laning yoki "Xabar berish" tugmasini
+            bosing — to'lov ulanganda birinchi bo'lib xabar beramiz.
         </p>
 
-        <section class="trial-strip" aria-label="Bepul reja">
+        <section class="my-plan" id="myPlan" hidden aria-label="Joriy tarifingiz"></section>
+
+        <section class="trial-strip" aria-label="Sinov">
             <div>
-                <strong>Bepul</strong>
-                <span>Birinchi 30 kun kuniga 10 ta savol, keyin kuniga 3 ta — muddatsiz.</span>
+                <strong>Sinov</strong>
+                <span>Bepul, bir martalik: <b data-quota="sinov.chat">5</b> ta huquqiy savol + <b data-quota="sinov.analysis">1</b> ta hujjat tahlili + <b data-quota="sinov.opinion">1</b> ta yuridik xulosa. Yangilanmaydi; tugagach tarif tanlaysiz, avtomatik to'lov olinmaydi.</span>
             </div>
-            <button class="plan-btn trial-btn" data-plan="bepul" onclick="selectPlan('bepul')">Bepul boshlash</button>
+            <button class="plan-btn trial-btn" data-plan="sinov" onclick="selectPlan('sinov')">Sinovni boshlash</button>
         </section>
 
         <section class="plans-grid">
@@ -484,13 +498,14 @@
             <article class="plan-card" data-plan="silver">
                 <div class="plan-name">Silver</div>
                 <p class="plan-audience">Yakka yuristlar, tadbirkorlar va kichik ofislar uchun</p>
-                <div class="plan-price"><span data-price="199000">199,000</span><small>so'm</small></div>
-                <div class="plan-period">oyiga</div>
+                <div class="plan-price"><span data-price="199000">199 000</span><small>so'm</small></div>
+                <div class="plan-period">30 kun</div>
                 <ul class="features">
-                    <li>Cheksiz AI chat</li>
-                    <li>Oyiga ~39 ta yuridik xulosa krediti</li>
-                    <li>Oyiga ~95 ta hujjat tayyorlash</li>
-                    <li>O'z shablonlaringizni yuklash</li>
+                    <li><span><b data-quota="silver.chat">150</b> ta huquqiy savol</span></li>
+                    <li><span><b data-quota="silver.analysis">8</b> birlik hujjat tahlili</span></li>
+                    <li><span><b data-quota="silver.opinion">8</b> birlik AI yuridik xulosa</span></li>
+                    <li><span><b data-quota="silver.draft">10</b> ta hujjat yaratish</span></li>
+                    <li>Workspace'ga taklif bilan qo'shilish</li>
                 </ul>
                 <button class="plan-btn" data-plan="silver" onclick="selectPlan('silver')">Silver'ni tanlash</button>
             </article>
@@ -498,15 +513,15 @@
             <!-- GOLD -->
             <article class="plan-card" data-plan="gold">
                 <div class="plan-name">Gold</div>
-                <p class="plan-audience">Yuridik bo'lim, HR va buxgalteriya uchun — har kuni hujjat bilan ishlaydiganlarga</p>
-                <div class="plan-price"><span data-price="399000">399,000</span><small>so'm</small></div>
-                <div class="plan-period">oyiga</div>
+                <p class="plan-audience">Yuridik bo'lim, HR va buxgalteriya uchun — Silver limitlarining 3 barobari</p>
+                <div class="plan-price"><span data-price="599000">599 000</span><small>so'm</small></div>
+                <div class="plan-period">30 kun</div>
                 <ul class="features">
-                    <li>Cheksiz AI chat</li>
-                    <li>Oyiga ~74 ta yuridik xulosa krediti</li>
-                    <li>Oyiga ~217 ta hujjat tayyorlash</li>
-                    <li>Skan va rasmdan hujjat tahlili</li>
-                    <li>Ustuvor navbat - tezroq javob</li>
+                    <li><span><b data-quota="gold.chat">450</b> ta huquqiy savol</span></li>
+                    <li><span><b data-quota="gold.analysis">24</b> birlik hujjat tahlili</span></li>
+                    <li><span><b data-quota="gold.opinion">24</b> birlik AI yuridik xulosa</span></li>
+                    <li><span><b data-quota="gold.draft">30</b> ta hujjat yaratish</span></li>
+                    <li>Workspace'ga taklif bilan qo'shilish</li>
                 </ul>
                 <button class="plan-btn" data-plan="gold" onclick="selectPlan('gold')">Gold'ni tanlash</button>
             </article>
@@ -514,46 +529,26 @@
             <!-- PLATINUM -->
             <article class="plan-card" data-plan="platinum">
                 <div class="plan-name">Platinum</div>
-                <p class="plan-audience">Kompaniyalar va advokatlik byurolari uchun — katta hajm va integratsiya</p>
-                <div class="plan-price"><span data-price="999000">999,000</span><small>so'm</small></div>
-                <div class="plan-period">oyiga</div>
+                <p class="plan-audience">Kompaniyalar va advokatlik byurolari uchun — Silver limitlarining 5 barobari</p>
+                <div class="plan-price"><span data-price="999000">999 000</span><small>so'm</small></div>
+                <div class="plan-period">30 kun</div>
                 <ul class="features">
-                    <li>Cheksiz AI chat</li>
-                    <li>Oyiga ~182 ta yuridik xulosa krediti</li>
-                    <li>Oyiga ~542 ta hujjat tayyorlash</li>
-                    <li>Shaxsiy konsierj va o'qitish</li>
-                    <li>API orqali integratsiya</li>
+                    <li><span><b data-quota="platinum.chat">750</b> ta huquqiy savol</span></li>
+                    <li><span><b data-quota="platinum.analysis">40</b> birlik hujjat tahlili</span></li>
+                    <li><span><b data-quota="platinum.opinion">40</b> birlik AI yuridik xulosa</span></li>
+                    <li><span><b data-quota="platinum.draft">50</b> ta hujjat yaratish</span></li>
+                    <li>Workspace yaratish va jamoani taklif qilish</li>
                 </ul>
                 <button class="plan-btn" data-plan="platinum" onclick="selectPlan('platinum')">Platinum'ni tanlash</button>
             </article>
         </section>
         <aside class="pricing-notes" aria-label="Tarif izohlari">
-            <p class="usage-note">Xulosa hujjat hajmiga qarab 1–3 kredit sarflaydi; kredit va hujjat limitlari har dushanba yangilanadi. Cheksiz chat avtomatlashtirilgan foydalanish va hisobni ulashishdan himoya qiluvchi kunlik xavfsizlik chegarasiga ega.</p>
-            <p class="loyalty-note"><strong>Kam ishlatdingizmi — kamroq to'laysiz.</strong> Rejani to'liq ishlatmagan bo'lsangiz, hisoblangan farq keyingi oy uchun chegirma sifatida qaytariladi.</p>
+            <p class="usage-note"><b>Hujjat birligi:</b> bitta birlik — ko'pi bilan 10 sahifa va 40 000 belgi; sarf = max(sahifa / 10, belgi / 40 000), yuqoriga yaxlitlanadi (masalan, 25 sahifa — 3 birlik). Ish boshlanishidan oldin hajm, birlik va qoladigan limit ko'rsatiladi. Sinovda bitta hujjat ko'pi bilan 1 birlik; pullik tarifda bitta ish ko'pi bilan 30 sahifa va 120 000 belgi. Katta hujjat qisqartirilmaydi — qismlarga bo'lib yuboriladi.</p>
+            <p class="usage-note"><b>Workspace:</b> AI amalini boshlagan foydalanuvchining o'z limiti sarflanadi; natija Workspace a'zolariga ochiq. Workspace yaratish — Platinum, qo'shilish — kamida Silver.</p>
+            <p class="usage-note"><b>Rasm va skan o'qish:</b> davr uchun har bir tahlil birligiga 10 sahifa. Ovozli xabarlar alohida o'lchanadi.</p>
+            <p class="usage-note" id="legacyNote" hidden><b>Oldin sotib olingan tarif:</b> joriy davringiz tugaguncha u sotib olingan shartlar bilan ishlaydi.</p>
         </aside>
     </main>
-
-    <!-- Payment modal (for paid plans) -->
-    <div class="modal-backdrop" id="payModal">
-        <div class="modal">
-            <h2 id="payTitle">To'lov usulini tanlang</h2>
-            <p class="modal-sub" id="paySub">Tarif: <strong></strong></p>
-            <div class="pay-grid">
-                <div class="pay-option" data-pm="click">Click</div>
-                <div class="pay-option" data-pm="payme">Payme</div>
-                <div class="pay-option" data-pm="paynet">Paynet</div>
-                <div class="pay-option" data-pm="alifpay">Alifpay</div>
-                <div class="pay-option" data-pm="oson" style="grid-column: span 2">Oson</div>
-            </div>
-            <div class="modal-actions">
-                <button class="btn-cancel" onclick="closePayModal()">Bekor qilish</button>
-                <button class="btn-confirm" id="payConfirmBtn" disabled onclick="confirmPayment()">To'lash</button>
-            </div>
-            <p style="font-size:11px;color:var(--text-3);margin-top:14px;text-align:center">
-                To'lov xizmatlari hozircha test rejimida — to'g'ridan-to'g'ri aktivatsiya
-            </p>
-        </div>
-    </div>
 
     <div class="toast" id="toast"></div>
 
@@ -576,11 +571,26 @@
         }
 
         // ── Plan selection ──
-        let selectedPlan = null;
-        let selectedPaymentMethod = null;
-
-        // Set from /api/tariff/plans — the same flag the server enforces with.
+        // Prices and limits come from /api/tariff/plans — the catalogue the
+        // backend enforces (src/rag/tariff-ledger.js). The numbers in the
+        // markup are the same values for a page shown before the fetch ends.
         let paymentsEnabled = false;
+        let catalogue = null;
+
+        function fmt(n) { return Number(n).toLocaleString('ru-RU').replace(/ /g, ' '); }
+
+        function applyCatalogue(plans) {
+            document.querySelectorAll('[data-quota]').forEach(el => {
+                const [plan, key] = el.getAttribute('data-quota').split('.');
+                const p = plans[plan];
+                if (p && p.quotas && p.quotas[key] != null) el.textContent = fmt(p.quotas[key]);
+            });
+            document.querySelectorAll('.plan-card').forEach(card => {
+                const p = plans[card.dataset.plan];
+                const price = card.querySelector('[data-price]');
+                if (p && price) { price.dataset.price = p.priceUzs; price.textContent = fmt(p.priceUzs); }
+            });
+        }
 
         async function registerInterest(plan) {
             const btn = document.querySelector('.plan-btn[data-plan="' + plan + '"]');
@@ -592,7 +602,7 @@
                 });
                 if (r.ok) {
                     if (btn) btn.textContent = '✓ Xabar beramiz';
-                    toast('Rahmat! Ushbu tarif ishga tushganda sizga xabar beramiz.');
+                    toast('Rahmat! Administrator siz bilan bog\'lanadi; to\'lov ulanganda ham xabar beramiz.');
                 } else {
                     if (btn) { btn.disabled = false; btn.textContent = 'Xabar berish'; }
                     toast('Xatolik yuz berdi, qayta urinib ko\'ring.');
@@ -605,21 +615,20 @@
 
         async function selectPlan(plan) {
             const inviteToken = new URLSearchParams(window.location.search).get('invite') || sessionStorage.getItem('juristai-workspace-invite');
-            if (inviteToken && plan === 'bepul') {
+            if (inviteToken && plan === 'sinov') {
                 toast('Workspace taklifi uchun kamida Silver tarifi kerak.');
                 return;
             }
-            if (plan === 'bepul') {
-                // Free plan — activate immediately
+            if (plan === 'sinov') {
                 try {
                     const r = await fetch('/api/tariff/select', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ plan: 'bepul' }),
+                        body: JSON.stringify({ plan: 'sinov' }),
                     });
                     const data = await r.json();
                     if (r.ok) {
-                        toast('Bepul reja faollashtirildi. Dashboardga o\'tilmoqda...');
+                        toast('Sinov boshlandi. Dashboardga o\'tilmoqda...');
                         setTimeout(() => { window.location.href = '/dashboard.html'; }, 1200);
                     } else {
                         toast(data.message || data.error || 'Xatolik');
@@ -627,96 +636,62 @@
                 } catch (err) { toast('Xatolik: ' + err.message); }
                 return;
             }
-            // Paid plan — open payment modal
-            selectedPlan = plan;
-            selectedPaymentMethod = null;
-            document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
-            document.getElementById('payConfirmBtn').disabled = true;
-            document.querySelector('#paySub strong').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
-            document.getElementById('payModal').classList.add('show');
-        }
-        function closePayModal() {
-            document.getElementById('payModal').classList.remove('show');
-        }
-        document.querySelectorAll('.pay-option').forEach(opt => {
-            opt.addEventListener('click', () => {
-                document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                selectedPaymentMethod = opt.dataset.pm;
-                document.getElementById('payConfirmBtn').disabled = false;
-            });
-        });
-        async function confirmPayment() {
-            if (!selectedPlan || !selectedPaymentMethod) return;
-            const btn = document.getElementById('payConfirmBtn');
-            btn.disabled = true; btn.textContent = "To'lanmoqda...";
-            try {
-                // Real payment integration deferred — endpoint just activates the plan.
-                const r = await fetch('/api/tariff/select', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ plan: selectedPlan, payment_method: selectedPaymentMethod }),
-                });
-                const data = await r.json();
-                if (r.ok) {
-                    toast(selectedPlan.toUpperCase() + ' rejasi faollashtirildi!');
-                    const inviteToken = new URLSearchParams(window.location.search).get('invite') || sessionStorage.getItem('juristai-workspace-invite');
-                    setTimeout(() => {
-                        window.location.href = inviteToken
-                            ? '/workspace-invite.html?token=' + encodeURIComponent(inviteToken)
-                            : '/dashboard.html';
-                    }, 1200);
-                } else {
-                    toast(data.message || data.error || 'Xatolik');
-                    btn.disabled = false; btn.textContent = "To'lash";
-                }
-            } catch (err) {
-                toast('Xatolik: ' + err.message);
-                btn.disabled = false; btn.textContent = "To'lash";
-            }
+            // A paid plan is activated only after a confirmed payment; until a
+            // payment provider is connected, the administrator grants it.
+            registerInterest(plan);
         }
 
         function toast(msg) {
             const t = document.getElementById('toast');
             t.textContent = msg;
             t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 2800);
+            setTimeout(() => t.classList.remove('show'), 3200);
         }
 
-        // Paid tiers are closed until PAYMENTS_ENABLED is set server-side. The
-        // UI reads that flag rather than carrying its own, so the two cannot
-        // disagree — a dimmed card whose endpoint still sells is worse than no
-        // dimming at all.
-        async function applyPaymentsState() {
+        async function loadCatalogue() {
             try {
                 const d = await fetch('/api/tariff/plans').then(r => r.json());
                 paymentsEnabled = !!d.paymentsEnabled;
+                catalogue = d.plans || null;
+                if (catalogue) applyCatalogue(catalogue);
             } catch (_) { paymentsEnabled = false; }
-            if (paymentsEnabled) return;
-
             const note = document.getElementById('planNote');
             if (note) note.style.display = '';
             ['silver', 'gold', 'platinum'].forEach(plan => {
-                const card = document.querySelector('.plan-card[data-plan="' + plan + '"]');
-                if (!card) return;
-                card.classList.add('soon');
-                if (!card.querySelector('.badge-soon')) {
-                    const b = document.createElement('span');
-                    b.className = 'badge-soon';
-                    b.textContent = 'Tez orada';
-                    card.prepend(b);
-                }
-                const btn = card.querySelector('.plan-btn');
-                if (btn) {
-                    btn.textContent = 'Xabar berish';
-                    btn.setAttribute('onclick', "registerInterest('" + plan + "')");
-                }
+                const btn = document.querySelector('.plan-card[data-plan="' + plan + '"] .plan-btn');
+                if (btn) btn.textContent = 'Xabar berish';
             });
         }
 
-        // ── Auth check + Bepul-used check ──
+        const SERVICE_LABELS = { chat: 'Huquqiy savol', analysis: 'Hujjat tahlili (birlik)', opinion: 'Yuridik xulosa (birlik)', draft: 'Hujjat yaratish' };
+        function tashkentDay(d) {
+            return d ? new Date(d).toLocaleDateString('en-GB', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.') : '';
+        }
+        function renderMyPlan(mine) {
+            const box = document.getElementById('myPlan');
+            if (!box || !mine || !mine.balance) return;
+            const b = mine.balance;
+            const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            let html = '';
+            if (b.kind === 'staff') return;
+            if (b.kind === 'none') {
+                html = '<strong>Sinov hali boshlanmagan.</strong> Birinchi so\'rovingiz bilan boshlanadi.';
+            } else if (b.legacy) {
+                html = '<strong>' + esc(b.plan) + '</strong> — oldin sotib olingan shartlar bilan, ' + tashkentDay(b.endsAt) + ' gacha.';
+                const ln = document.getElementById('legacyNote'); if (ln) ln.hidden = false;
+            } else {
+                const name = (catalogue && catalogue[b.plan] && catalogue[b.plan].label) || b.plan;
+                html = '<strong>Joriy tarif: ' + esc(name) + '</strong>' + (b.kind === 'trial' ? ' (bir martalik)' : ' — ' + tashkentDay(b.startsAt) + ' dan ' + tashkentDay(b.endsAt) + ' gacha') + '<ul class="my-plan-list">'
+                    + Object.keys(SERVICE_LABELS).filter(k => b.services && b.services[k] && b.services[k].limit)
+                        .map(k => '<li>' + SERVICE_LABELS[k] + ': <b>' + b.services[k].remaining + '</b> / ' + b.services[k].limit + ' qoldi</li>').join('')
+                    + '</ul>';
+            }
+            box.innerHTML = html;
+            box.hidden = false;
+        }
+
         (async function init() {
-            await applyPaymentsState();
+            await loadCatalogue();
             try {
                 const r = await fetch('/api/user-info', { credentials: 'same-origin' });
                 if (!r.ok) {
@@ -724,11 +699,12 @@
                     return;
                 }
                 const mine = await fetch('/api/tariff/me').then(x => x.json()).catch(() => null);
-                if (mine && mine.plan === 'bepul') {
-                    const btn = document.querySelector('.plan-btn[data-plan="bepul"]');
+                renderMyPlan(mine);
+                if (mine && (mine.kind === 'trial' || mine.kind === 'paid')) {
+                    const btn = document.querySelector('.plan-btn[data-plan="sinov"]');
                     if (btn) {
                         btn.disabled = true;
-                        btn.textContent = "Joriy reja";
+                        btn.textContent = mine.kind === 'trial' ? 'Sinov ishlatilgan' : 'Pullik tarif faol';
                     }
                 }
             } catch (e) { /* ignore */ }

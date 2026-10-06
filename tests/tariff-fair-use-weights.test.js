@@ -1,6 +1,10 @@
 'use strict';
 
 /**
+ * LEGACY (tariffs v1). Since tariffs v2 (2026-10-04) these weights apply only
+ * to subscriptions sold under v1, until they end (tariff_periods rules
+ * 'legacy_v1'); new periods count units per service (tests/tariffs-v2.test.js).
+ *
  * Fair-use weights approved by the owner (docs/audit/DECISIONS.md D-11), and
  * the promise they exist to keep: the weekly draft and opinion allowances a
  * paid plan is sold with must be reachable without tripping fair-use.
@@ -11,7 +15,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { ENDPOINT_WEIGHT_SQL, PLANS } = require('../src/rag/subscription-tiers');
+const { ENDPOINT_WEIGHT_SQL, LEGACY_PLANS: PLANS } = require('../src/rag/subscription-tiers');
 
 const like = (p) => new RegExp('^' + p.split('%').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
 function weight(endpoint) {
@@ -49,9 +53,10 @@ test('the approved table', () => {
   for (const [endpoint, w] of Object.entries(table)) assert.strictEqual(weight(endpoint), w, endpoint);
 });
 
-test('opinion and explain requests are recorded under their own names', () => {
-  assert.ok(/'\/api\/draft\/legal-opinion', requireAuth, tariffModule\.enforceQuota\('\/api\/opinion-request'/.test(server));
-  assert.ok(/'\/api\/draft\/explain-document', requireAuth, tariffModule\.enforceQuota\('\/api\/draft\/explain-document'/.test(server));
+test('opinion and explain jobs are recorded under their own names', () => {
+  // v2: sized by the document and reserved from the handler (meterDocument)
+  assert.ok(/service: 'opinion', text: documentText, docTicket: req\.body\.docTicket, endpoint: '\/api\/draft\/legal-opinion'/.test(server));
+  assert.ok(/service: 'analysis', text: documentText, docTicket: req\.body\.docTicket, endpoint: '\/api\/draft\/explain-document'/.test(server));
 });
 
 test("an opinion request row is not counted as a spent credit", () => {

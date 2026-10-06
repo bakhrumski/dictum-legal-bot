@@ -456,7 +456,8 @@
         #answerFeedbackSection.collapsed .reg-section-body,
         #auditLogSection.collapsed .reg-section-body,
         #spendSection.collapsed .reg-section-body,
-        #aiUsageSection.collapsed .reg-section-body { display: none !important; }
+        #aiUsageSection.collapsed .reg-section-body,
+        #offersSection.collapsed .reg-section-body { display: none !important; }
 
         /* Hide chat wrapper button (chat is now a tab) */
         .header-chat-wrapper { display: none; }
@@ -2631,6 +2632,30 @@
         .au-controls .detail-select { min-width: 0; max-width: 100%; margin-right: 0; }
         .au-detail-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; margin: 14px 0 6px; }
         .au-note { font-size: 11px; color: var(--text-muted); margin: 6px 0 0; }
+        /* Individual discount offers (master) */
+        .of-intro { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; line-height: 1.55; }
+        .of-form { display: grid; gap: 10px; max-width: 560px; }
+        .of-form label { display: grid; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+        .of-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .of-input { padding: 7px 9px; border: 1px solid var(--glass-border); border-radius: 8px; background: var(--bg-card, #fff); color: var(--text-primary); font: inherit; font-size: 13px; min-width: 0; flex: 1; }
+        .of-narrow { flex: 0 0 auto; width: 90px; }
+        .of-row > .jai-select { flex: 0 0 96px; width: 96px; }
+        .of-btn { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--bg-table-header); color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer; }
+        .of-btn:disabled { opacity: .5; cursor: default; }
+        .of-primary { background: var(--navy-700, #1b3a5c); color: #fff; border-color: var(--navy-700, #1b3a5c); }
+        .of-users { display: grid; gap: 4px; }
+        .of-form .of-user { display: flex; gap: 8px; align-items: center; justify-content: flex-start; font-size: 12px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+        .of-form .of-user input { margin: 0; width: auto; flex: 0 0 auto; }
+        .of-quote { margin-top: 12px; }
+        .of-quote .au-scroll { max-height: none; }
+        .of-quote .spend-table td:first-child { color: var(--text-secondary); white-space: normal; width: 45%; }
+        .of-quote .spend-table td + td { white-space: normal; overflow-wrap: anywhere; }
+        .of-msg { font-size: 12px; margin: 8px 0 0; line-height: 1.5; }
+        .of-msg.err { color: var(--danger-700, #b42318); }
+        .of-msg.ok { color: #1f7a4a; }
+        .of-basis { margin: 0 0 8px; color: var(--warning-700, #8a5a00); }
+        .of-scope { font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.45; }
+        .of-est { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--bg-table-header); color: var(--warning-700, #8a5a00); }
         /* ── End Spend tables ── */
         /* Delete button on history items */
         .ai-history-item {
@@ -3248,6 +3273,11 @@
         .docform-col-right .docform-input { flex: 1; min-height: 190px; }
         .docform-input:focus { outline: none; border-color: var(--navy-300); box-shadow: 0 0 0 3px rgba(44,92,146,0.12); }
         .docform-input::placeholder { color: var(--text-muted); }
+        .doc-cost-card { max-width: 560px; }
+        .doc-scope-note { margin-top: 10px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+        .doc-scope-note.doc-scope-warn { color: var(--warning-700, #8a5a00); }
+        .doc-cost-card .doc-cost-body { font-size: 13px; line-height: 1.55; margin-bottom: 10px; }
+        .doc-cost-card.doc-cost-done .docform-actions { display: none; }
         .docform-actions {
             display: flex; flex-wrap: wrap; gap: 10px;
             margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-1);
@@ -7489,6 +7519,7 @@
             <button type="button" class="mg-card" data-mg-target="auditLogSection" aria-pressed="false" onclick="openManagementSection('auditLogSection', loadAuditLog, true)"><span>Xavfsizlik</span><small>Audit va muhim hodisalar</small></button>
             <button type="button" class="mg-card" data-mg-target="spendSection" aria-pressed="false" onclick="openManagementSection('spendSection', loadSpendReport, true)"><span>Xarajat</span><small>AI token va API sarfi</small></button>
             <button type="button" class="mg-card" id="aiUsageCard" data-mg-target="aiUsageSection" aria-pressed="false" onclick="openManagementSection('aiUsageSection', loadAiUsage, true)"><span>AI so'rovlar</span><small>Har so'rov: modellar, usage, xarajat</small></button>
+            <button type="button" class="mg-card" id="offersCard" data-mg-target="offersSection" aria-pressed="false" onclick="openManagementSection('offersSection', loadOffers, true)"><span>Chegirmalar</span><small>Individual tarif takliflari</small></button>
         </div>
         <script>
             // A card's count shows only when there is something waiting.
@@ -7728,6 +7759,49 @@
                 <div class="spend-section-label">So'nggi so'rovlar</div>
                 <div id="aiUsageRequests"></div>
                 <div id="aiUsageDetail"></div>
+            </div>
+        </div>
+
+        <div class="reg-section collapsed" id="offersSection" style="margin-top:16px;">
+            <div class="reg-section-header" onclick="openManagementSection('offersSection', loadOffers)">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>Individual chegirmalar</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p class="of-intro">
+                    Aniq foydalanuvchiga aniq tarif uchun bitta 30 kunlik davrga chegirmali taklif. Taklif obunani faollashtirmaydi:
+                    haqiqiy to'lov tasdiqlangach "Aktivatsiya" bilan beriladi. Chegirma limitni kamaytirmaydi va keyingi renewal'ga o'tmaydi.
+                    Minimal narx — konservativ xizmat xarajati / 0,80; xarajatlar <b>taxminiy</b> (planlash budjeti, o'lchanmagan).
+                    To'lov komissiyasi 0 — bu faqat provayder ulanmagan, qo'lda qabul qilinadigan to'lov doirasi; provayder ulanganda
+                    eski takliflar narx modeli qayta tekshirilmaguncha qo'llanmaydi.
+                </p>
+                <div class="of-form">
+                    <label>Foydalanuvchi
+                        <span class="of-row"><input id="ofUserQ" class="of-input" placeholder="username, ism yoki ID" onkeydown="if(event.key==='Enter'){event.preventDefault();offersSearchUsers();}"><button type="button" class="of-btn" onclick="offersSearchUsers()">Qidirish</button></span>
+                    </label>
+                    <div id="ofUsers" class="of-users"></div>
+                    <label>Tarif
+                        <select id="ofPlan" class="of-input"><option value="silver">Silver</option><option value="gold">Gold</option><option value="platinum">Platinum</option></select>
+                    </label>
+                    <label>Chegirma
+                        <span class="of-row"><select id="ofKind" class="of-input of-narrow"><option value="percent">%</option><option value="amount">so'm</option></select><input id="ofValue" class="of-input" inputmode="decimal" placeholder="masalan 10 yoki 20000"></span>
+                    </label>
+                    <label>Sabab
+                        <input id="ofReason" class="of-input" maxlength="500" placeholder="masalan: korporativ pilot mijoz">
+                    </label>
+                    <label>Amal qilish muddati (kun)
+                        <input id="ofDays" class="of-input of-narrow" type="number" min="1" max="30" value="7">
+                    </label>
+                    <div class="of-row">
+                        <button type="button" class="of-btn" onclick="offersQuote()">Hisoblash</button>
+                        <button type="button" class="of-btn of-primary" id="ofCreateBtn" onclick="offersCreate()" disabled>Taklif yaratish</button>
+                    </div>
+                </div>
+                <div id="ofQuote"></div>
+                <div class="spend-section-label">Takliflar</div>
+                <div id="ofList"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
             </div>
         </div>
 
@@ -8405,7 +8479,7 @@
                     spendSection.style.display = data.role === 'master' ? '' : 'none';
                 }
                 // Per-request AI usage: master only (the API refuses everyone else too)
-                ['aiUsageSection', 'aiUsageCard'].forEach(function (id) {
+                ['aiUsageSection', 'aiUsageCard', 'offersSection', 'offersCard'].forEach(function (id) {
                     const el = document.getElementById(id);
                     if (el) el.style.display = data.role === 'master' ? '' : 'none';
                 });
@@ -8457,14 +8531,18 @@
                         const r = await fetch('/api/tariff/me', { credentials: 'same-origin' });
                         if (r.ok) {
                             const m = await r.json();
-                            if (!m.plan) window.location.href = '/tariff.html';
-                            // An expired paid or trial plan now continues on Bepul; say so
-                            // once per session instead of silently changing the limits.
-                            if (m.downgradedFrom) {
-                                var seenKey = 'juristai-downgrade-' + m.downgradedFrom + '-' + (m.previousExpiresAt || '');
+                            // Tariffs v2: a new account starts on the one-time Sinov with its
+                            // first request; nothing to choose first. When the Sinov or the
+                            // paid period has nothing left, say so once per session.
+                            var b = m.balance || {};
+                            var left = b.services ? Object.keys(b.services).reduce(function (n, k) { return n + (b.services[k].remaining || 0); }, 0) : null;
+                            if ((b.kind === 'trial' || b.kind === 'paid') && left === 0) {
+                                var seenKey = 'juristai-limits-' + (b.plan || '') + '-' + (b.endsAt || '');
                                 var seen = false;
                                 try { seen = sessionStorage.getItem(seenKey) === '1'; sessionStorage.setItem(seenKey, '1'); } catch (_) {}
-                                if (!seen) showUpdateToast('Tarifingiz muddati tugadi — Bepul tarifda davom etyapsiz. Yangilash: Tariflar sahifasi.', 'info');
+                                if (!seen) showUpdateToast(b.kind === 'trial'
+                                    ? 'Sinov limitlari tugadi (bir martalik). Davom etish uchun Tariflar sahifasida tarif tanlang — avtomatik to\'lov olinmaydi.'
+                                    : 'Tarifingizdagi limitlar tugadi. Yangi davr yoki yuqori tarif: Tariflar sahifasi.', 'info');
                             }
                         }
                     } catch (e) { /* ignore */ }
@@ -12436,6 +12514,73 @@
                 '</div>');
         }
 
+        // ── Document cost, shown before the job runs (tariffs v2) ──
+        // Size (pages, characters), units, and what remains of the plan. The
+        // server enforces the same numbers; if the quote cannot be fetched
+        // the job still goes to the server, which refuses what is not allowed.
+        function confirmDocCost(service, text, docTicket) {
+            return fetch('/api/tariff/quote', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+                body: JSON.stringify({ service: service, text: text, docTicket: docTicket || null })
+            }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (q) {
+                return renderDocCostCard(service, q);
+            });
+        }
+        // The card itself, for a quote fetched here or one the server sent
+        // back (409 DOC_COST_CONFIRM from the chat). Resolves true to run.
+        // One card for one service, or for each service a chat request
+        // ordered (analysis and opinion are separate quotas). service and q
+        // may be arrays of the same length.
+        function renderDocCostCard(service, q, intro) {
+            var services = Array.isArray(service) ? service : [service];
+            return Promise.resolve(q).then(function (q) {
+                var quotes = Array.isArray(q) ? q : [q];
+                if (!quotes.length || quotes.some(function (x) { return !x; }) || quotes.every(function (x) { return x.unlimited; })) return true;
+                var messagesEl = document.getElementById('aiChatMessages');
+                if (!messagesEl) return true;
+                hideChatWelcome();
+                var size = quotes[0].size || {};
+                var lines = (intro ? escapeHtml(intro) + '<br><br>' : '') + 'Hujjat hajmi: ' + (size.pages || 0) + ' sahifa, ' + Number(size.chars || 0).toLocaleString('ru-RU') + ' belgi.';
+                var ok = true;
+                quotes.forEach(function (qq, i) {
+                    var sv = services[i] || qq.service;
+                    var label = sv === 'opinion' ? 'AI yuridik xulosa' : 'Hujjat tahlili';
+                    var quota = sv === 'opinion' ? 'xulosa' : 'tahlil';
+                    lines += '<br><b>' + label + '</b> → <b>' + qq.units + ' birlik</b> (' + quota + ' limitidan).';
+                    if (!qq.fits) {
+                        ok = false;
+                        lines += '<br>Bu hujjat bitta ish chegarasidan katta (' + qq.maxPages + ' sahifa / ' + Number(qq.maxChars || 0).toLocaleString('ru-RU') + ' belgi). Hujjat qisqartirilmaydi — uni qismlarga bo\'lib yuboring.';
+                    } else if (qq.legacy) {
+                        lines += '<br>Oldin sotib olingan tarifingiz shartlari bo\'yicha hisoblanadi.';
+                    } else if (qq.enough === false) {
+                        ok = false;
+                        lines += '<br>' + quota[0].toUpperCase() + quota.slice(1) + ' limiti yetarli emas: ' + qq.remaining + ' birlik qolgan.';
+                    } else if (qq.remaining != null) {
+                        lines += '<br>Sarflanadi: ' + qq.units + ' birlik · qoladi: ' + qq.remainingAfter + ' birlik.';
+                    }
+                });
+                var id = 'docCost' + Date.now();
+                var card = document.createElement('div');
+                card.className = 'ai-chat-msg ai doc-cost-card';
+                card.id = id;
+                card.innerHTML = '<div class="doc-cost-body">' + lines + '</div><div class="docform-actions">'
+                    + (ok ? '<button class="docflow-opt docflow-primary" type="button" data-act="go">Davom etish</button>' : '<a class="docflow-opt" href="/tariff.html">Tariflar</a>')
+                    + '<button class="docflow-opt" type="button" data-act="cancel">' + (ok ? 'Bekor qilish' : 'Yopish') + '</button></div>';
+                messagesEl.appendChild(card);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+                return new Promise(function (resolve) {
+                    card.addEventListener('click', function (ev) {
+                        var act = ev.target && ev.target.getAttribute('data-act');
+                        if (!act) return;
+                        card.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+                        if (act === 'cancel') card.remove();
+                        else card.classList.add('doc-cost-done');
+                        resolve(act === 'go');
+                    });
+                });
+            });
+        }
+
         // ── Yuridik xulosa: upload a document → structured legal opinion ──
         var opinionDoc = null;   // { name, text } of the extracted upload
         function docFlowOpinion() {
@@ -12477,12 +12622,12 @@
                     var r2 = await fetch('/api/analyze/ocr-image', { method: 'POST', credentials: 'same-origin', body: fd2 });
                     var d2 = await r2.json();
                     if (r2.ok) text = d2.text || '';
-                    else if (d2.code === 'OCR_QUOTA' || d2.code === 'QUOTA_UNAVAILABLE') throw new Error(d2.error || d2.message || 'OCR limiti');
+                    else if (['QUOTA_EXCEEDED', 'NOT_IN_PLAN', 'PLAN_REQUIRED', 'QUOTA_UNAVAILABLE'].indexOf(d2.code) !== -1) throw new Error(d2.message || d2.error || 'OCR limiti');
                 }
                 text = (text || '').trim();
                 if (text.length < 40) throw new Error('Hujjatdan yetarli matn topilmadi');
-                opinionDoc = { name: file.name, text: text };
-                st.className = 'afp-status ok'; st.textContent = '✅ Tayyor (' + text.length.toLocaleString() + ' belgi). Endi "Xulosa tayyorlash" tugmasini bosing.';
+                opinionDoc = { name: file.name, text: text, docTicket: (d.text && !d.scanned) ? d.docTicket : null };
+                st.className = 'afp-status ok'; st.textContent = '✅ Tayyor (' + (d.pageCount ? d.pageCount + ' sahifa, ' : '') + text.length.toLocaleString() + ' belgi). Endi "Xulosa tayyorlash" tugmasini bosing — avval sarf ko\'rsatiladi.';
                 btn.disabled = false;
             } catch (e) {
                 st.className = 'afp-status err'; st.textContent = '❌ ' + e.message;
@@ -12492,6 +12637,8 @@
             if (!opinionDoc) return;
             var messagesEl = document.getElementById('aiChatMessages');
             docFlowClose();
+            // Size, units and what remains are shown before the job runs.
+            if (!(await confirmDocCost('opinion', opinionDoc.text, opinionDoc.docTicket))) return;
             hideChatWelcome();
             messagesEl.innerHTML += '<div class="ai-chat-msg user">📑 Yuridik xulosa — ' + escapeHtml(opinionDoc.name) + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
@@ -12499,11 +12646,11 @@
             try {
                 var r = await fetch('/api/draft/legal-opinion', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ documentText: opinionDoc.text })
+                    body: JSON.stringify({ documentText: opinionDoc.text, docTicket: opinionDoc.docTicket || null })
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
-                if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Xulosa yaratib bo\'lmadi')); return; }
+                if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Xulosa yaratib bo\'lmadi')); return; }
                 var oTitle = 'Yuridik xulosa — ' + opinionDoc.name;
                 renderDocMessage({ rawTitle: oTitle, html: d.html, kind: 'opinion', topic: d.topic || '', docHash: d.docHash || '', usage: d.usage || null });
                 // Persist into the conversation so it survives a reload and
@@ -12993,7 +13140,7 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
                     body: JSON.stringify(payload)
                 }, showAttempt);
-                if (r.status === 429) { alert('Kunlik limit tugadi'); return; }
+                if (r.status === 429 || r.status === 402) { var qd = await r.json().catch(function () { return {}; }); alert(qd.message || qd.error || 'Limit yetarli emas'); return; }
                 var ct = r.headers.get('Content-Type') || '';
                 if (ct.indexOf('application/json') !== -1) {
                     var d = await r.json();
@@ -13256,6 +13403,7 @@
                     if (!r.ok) throw new Error(d.error || 'Fayl o\'qilmadi');
                     // A scanned PDF has no embedded text → OCR fallback (not for Word).
                     text = (att.kind === 'pdf' && (d.scanned || !d.text)) ? await ocrFile(file) : d.text;
+                    att.docTicket = (d.text && !d.scanned) ? d.docTicket : null;
                 } else {
                     text = await ocrFile(file);
                 }
@@ -13271,7 +13419,7 @@
             var fd = new FormData(); fd.append('file', file);
             var r = await fetch('/api/analyze/ocr-image', { method: 'POST', credentials: 'same-origin', body: fd });
             var d = await r.json();
-            if (!r.ok) throw new Error(d.error || 'OCR xatolik');
+            if (!r.ok) throw new Error(d.message || d.error || 'OCR xatolik');
             return d.text || '';
         }
         function removeAttachment(id) {
@@ -13326,9 +13474,12 @@
             docActionsUsed.explain = true;
             renderAttachChips();
             var name = docs.map(function (d) { return d.name; }).join(', ');
-            var text = docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
+            // one document is sent as extracted (its signed page count applies)
+            var text = docs.length === 1 ? docs[0].text : docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
+            var ticket = docs.length === 1 ? docs[0].docTicket || null : null;
             var messagesEl = document.getElementById('aiChatMessages');
             hideChatWelcome();
+            if (!(await confirmDocCost('analysis', text, ticket))) { docActionsUsed.explain = false; renderAttachChips(); return; }
             aiChatHistory.push({ role: 'user', text: '[Hujjat: ' + name + '] mazmunini oddiy tilda tushuntirib bering' });
             messagesEl.innerHTML += '<div class="ai-chat-msg user">💬 Hujjat mazmunini tushuntirish — ' + escapeHtml(name) + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
@@ -13336,11 +13487,11 @@
             try {
                 var r = await fetch('/api/draft/explain-document', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ documentText: text })
+                    body: JSON.stringify({ documentText: text, docTicket: ticket })
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
-                if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.error || 'Tushuntirib bo\'lmadi')); return; }
+                if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Tushuntirib bo\'lmadi')); return; }
                 renderAiChatReply({ reply: d.reply, provider: d.provider, ragUsed: false, rag: null, qaBank: null },
                     'Hujjat mazmunini tushuntirish: ' + name, messagesEl, true);
                 // Offer the alternative (legal opinion) as a next step.
@@ -13360,7 +13511,7 @@
         // ready ones are promoted into the session so they survive the action.
         function collectSessionDocs() {
             var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
-            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text }); });
+            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, docTicket: a.docTicket || null }); });
             if (ready.length) {
                 aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
             }
@@ -13377,7 +13528,8 @@
             renderAttachChips();
             opinionDoc = {
                 name: docs.map(function (d) { return d.name; }).join(', '),
-                text: docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n')
+                text: docs.length === 1 ? docs[0].text : docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n'),
+                docTicket: docs.length === 1 ? docs[0].docTicket || null : null
             };
             docFlowGenerateOpinion();
         }
@@ -13442,21 +13594,41 @@
             sendBtn.disabled = true;
 
             try {
-                var response = await fetch('/api/legal-chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        message: text,
-                        history: aiChatHistory.slice(0, -1),
-                        databases: selectedDatabases,
-                        topic: selectedTopic || (selectedTopics[0] || null),
-                        topics: selectedTopics.length > 0 ? selectedTopics : null,
-                        autoDetect: topicAutoDetect === true,
-                        documentText: documentText || null,
-                        stream: true
-                    })
-                });
+                // A request to analyse the attached document is a document job:
+                // the server answers 409 with its size and units first, and
+                // runs it only after the user confirms (tariffs v2).
+                var confirmedUnits = null;
+                var confirmedJob = null;
+                var response = null;
+                for (var attempt = 0; attempt < 2; attempt++) {
+                    response = await fetch('/api/legal-chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({
+                            message: text,
+                            history: aiChatHistory.slice(0, -1),
+                            databases: selectedDatabases,
+                            topic: selectedTopic || (selectedTopics[0] || null),
+                            topics: selectedTopics.length > 0 ? selectedTopics : null,
+                            autoDetect: topicAutoDetect === true,
+                            documentText: documentText || null,
+                            confirmedUnits: confirmedUnits,
+                            confirmedJob: confirmedJob,
+                            stream: true
+                        })
+                    });
+                    if (response.status !== 409 || attempt > 0) break;
+                    var conf = await response.clone().json().catch(function () { return {}; });
+                    if (conf.code !== 'DOC_COST_CONFIRM') break;
+                    var typingC = document.getElementById('aiChatTyping'); if (typingC) typingC.remove();
+                    var confServices = conf.services || [conf.service || 'analysis'];
+                    var go = await renderDocCostCard(confServices, conf.quotes || [conf.quote], conf.message);
+                    if (!go) { sendBtn.disabled = false; aiChatHistory.pop(); saveAiChatSession(); return; }
+                    messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
+                    confirmedJob = {};
+                    (conf.quotes || [conf.quote]).forEach(function (qq, i) { if (qq) confirmedJob[confServices[i]] = qq.units; });
+                }
 
                 var contentType = (response.headers.get('Content-Type') || '');
                 if (response.ok && contentType.indexOf('text/event-stream') !== -1) {
@@ -13477,8 +13649,12 @@
                     renderAiChatReply(data, currentQuestion, messagesEl, false);
                 } else if (data.code === 'CHANNEL_REQUIRED' || data.code === 'SURVEY_REQUIRED') {
                     checkAccessGate(true);
+                } else if (data.upgradeUrl || data.code === 'QUOTA_EXCEEDED' || data.code === 'PLAN_REQUIRED' || data.code === 'NOT_IN_PLAN' || data.code === 'FAIR_USE') {
+                    // a limit, not an error: the server's own explanation and the way on
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai">' + escapeHtml(data.message || 'Limit yetarli emas') +
+                        (data.upgradeUrl ? ' <a href="/tariff.html">Tariflar</a>' : '') + '</div>';
                 } else {
-                    messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:var(--danger-700);">Xatolik: ' + escapeHtml(data.error || 'Nomalum xatolik') + '</div>';
+                    messagesEl.innerHTML += '<div class="ai-chat-msg ai" style="color:var(--danger-700);">Xatolik: ' + escapeHtml(data.message || data.error || 'Nomalum xatolik') + '</div>';
                 }
             } catch (error) {
                 var typing = document.getElementById('aiChatTyping');
@@ -13536,6 +13712,10 @@
         // live, so the finished bubble renders markdown immediately).
         function renderAiChatReply(data, currentQuestion, messagesEl, instant) {
             aiChatHistory.push({ role: 'model', text: data.reply, nextActions: data.nextActions || [] });
+            // Only excerpts of an attached document were used (one chat unit);
+            // a full analysis is its own service (tariffs v2).
+            var docScopeHtml = (data.documentScope && data.documentScope.note)
+                ? '<div class="doc-scope-note' + (data.documentScope.insufficient ? ' doc-scope-warn' : '') + '">' + escapeHtml(data.documentScope.note) + '</div>' : '';
             // ── RAG source info badge — ONLY visible to Master Admin ──
             var ragBadge = '';
             var isMasterAdmin = (typeof currentUser !== 'undefined' && currentUser.role === 'master');
@@ -13611,7 +13791,7 @@
             var qaIdAttr = (data.qaBank && data.qaBank.id) ? (' data-qa-id="' + data.qaBank.id + '"') : '';
             var twId = 'tw_' + Date.now();
             var nextActionsHtml = renderLegalNextActions(data.nextActions || [], currentQuestion, data.reply);
-            messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + nextActionsHtml + ragBadge + actionsHtml + verifyRow + '</div>';
+            messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + docScopeHtml + nextActionsHtml + ragBadge + actionsHtml + verifyRow + '</div>';
             var twEl = document.getElementById(twId);
             if (twEl) {
                 twEl.removeAttribute('id');
@@ -14874,6 +15054,137 @@
                 ? '<span class="au-badge au-ok">to\'liq</span>'
                 : '<span class="au-badge au-warn" title="' + escapeHtml(r.note || '') + '">to\'liq emas</span>';
         }
+        // ── Individual discount offers (master; docs/tariffs-v2.md §9) ──
+        // Every number comes from the server's quote; the page sends only the
+        // user, plan, discount and reason, never a price.
+        var ofSelectedUser = null;
+        var ofLastQuoteKey = null;
+        function ofMoney(n) { return n == null ? '—' : Number(n).toLocaleString('ru-RU').replace(/\u00a0/g, ' ') + " so'm"; }
+        function ofPct(bp) { return bp == null ? '—' : (bp / 100).toFixed(2).replace(/\.00$/, '') + '%'; }
+        function ofDay(d) { return d ? new Date(d).toLocaleDateString('en-GB', { timeZone: 'Asia/Tashkent' }).replace(/\//g, '.') : '—'; }
+        function ofPayload() {
+            var kind = document.getElementById('ofKind').value;
+            var v = document.getElementById('ofValue').value.trim().replace(',', '.').replace(/\s/g, '');
+            var body = { userId: ofSelectedUser && ofSelectedUser.id, plan: document.getElementById('ofPlan').value };
+            if (kind === 'percent') body.discountPercent = v; else body.discountUzs = v === '' ? null : Number(v);
+            return body;
+        }
+        async function offersSearchUsers() {
+            var q = document.getElementById('ofUserQ').value.trim();
+            var box = document.getElementById('ofUsers');
+            if (q.length < 2) { box.innerHTML = '<div class="au-note">Kamida 2 belgi kiriting.</div>'; return; }
+            var r = await fetch('/api/admin/tariff/users?q=' + encodeURIComponent(q), { credentials: 'same-origin' });
+            var d = await r.json().catch(function () { return {}; });
+            var users = d.users || [];
+            if (!users.length) { box.innerHTML = '<div class="au-note">Oddiy foydalanuvchi topilmadi.</div>'; return; }
+            box.innerHTML = users.map(function (u) {
+                return '<label class="of-user"><input type="radio" name="ofUser" value="' + u.id + '" onchange="offersPickUser(' + u.id + ', this)">'
+                    + '#' + u.id + ' · ' + escapeHtml(u.username || '') + ' · ' + escapeHtml(u.full_name || '') + (u.tariff_plan ? ' · ' + escapeHtml(u.tariff_plan) : '') + '</label>';
+            }).join('');
+            box._users = users;
+        }
+        function offersPickUser(id) {
+            var box = document.getElementById('ofUsers');
+            ofSelectedUser = (box._users || []).find(function (u) { return u.id === id; }) || { id: id };
+            document.getElementById('ofCreateBtn').disabled = true;
+        }
+        function renderOfferQuote(q) {
+            var box = document.getElementById('ofQuote');
+            var c = q.cost || {};
+            var rows = [
+                ['Foydalanuvchi', q.user ? '#' + q.user.id + ' · ' + escapeHtml(q.user.username || '') : '—'],
+                ['Tarif', escapeHtml((q.plan || '').replace(/^./, function (x) { return x.toUpperCase(); }))],
+                ['Oddiy narx', ofMoney(q.listPriceUzs)],
+                ['Chegirma', q.discountUzs != null ? ofMoney(q.discountUzs) + ' (' + ofPct(q.discountPercentBp) + ')' : '—'],
+                ['Yakuniy narx', '<b>' + ofMoney(q.finalPriceUzs) + '</b>'],
+                ['Minimal ruxsat etilgan narx', ofMoney(q.minPriceUzs) + ' <span class="of-est">taxminiy</span>'],
+                ['Eng katta ruxsat etilgan chegirma', q.maxDiscountUzs != null ? ofMoney(q.maxDiscountUzs) + ' (' + (q.maxDiscountPercent != null ? q.maxDiscountPercent + '%' : '—') + ')' : '—'],
+                ['Prognoz AI xarajati (100% limit)', ofMoney(q.aiCostUzs != null ? q.aiCostUzs : ((c.components || []).find(function (x) { return x.key === 'ai'; }) || {}).uzs) + ' <span class="of-est">taxminiy</span>'],
+                ['Jami xizmat xarajati', ofMoney(q.totalCostUzs != null ? q.totalCostUzs : c.fixedUzs) + ' <span class="of-est">taxminiy</span>'],
+                ['To\'lov komissiyasi', ofMoney(q.paymentFeeUzs != null ? q.paymentFeeUzs : 0) + ' <span class="of-est">doira</span>'
+                    + (q.feeScope && q.feeScope.label ? '<div class="of-scope">' + escapeHtml(q.feeScope.label) + '</div>' : '')],
+                ['Qoladigan summa', ofMoney(q.leftUzs)],
+                ['Xizmat marjasi', ofPct(q.serviceMarginBp) + ' <span class="au-note">(sof foyda emas)</span>'],
+                ['Ishonchlilik', escapeHtml(q.costModelLabel || q.confidence || '—')],
+                ['Xarajat / kvota modeli', escapeHtml((q.costModelVersion || '—') + ' / ' + (q.quotaVersion || '—'))],
+            ];
+            if (q.change && q.change.change === 'upgrade') rows.push(['Upgrade krediti (naqd emas)', ofMoney(q.change.creditUzs) + ' → to\'lanadi: ' + ofMoney(q.change.dueUzs)]);
+            var msg = q.ok
+                ? '<p class="of-msg ok">Chegirma minimal narx doirasida. Taklif yaratilishi mumkin.</p>'
+                : '<p class="of-msg err">' + escapeHtml(q.message || q.reason || 'Rad etildi') + '</p>';
+            // the floors rest on an unmeasured planning budget: said on the screen, every time
+            var basis = q.basisNote ? '<p class="of-msg of-basis">⚠ ' + escapeHtml(q.basisNote) + (q.costMeasured ? '' : ' O\'lchangan xarajat bilan qayta tekshirilmaguncha taxminiy.') + '</p>' : '';
+            box.innerHTML = '<div class="of-quote">' + basis + '<div class="au-scroll"><table class="spend-table"><tbody>'
+                + rows.map(function (r) { return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>'; }).join('')
+                + '</tbody></table></div>' + msg + '</div>';
+        }
+        async function offersQuote() {
+            var body = ofPayload();
+            if (!body.userId) { renderOfferQuote({ ok: false, message: 'Avval foydalanuvchini tanlang.' }); return; }
+            var r = await fetch('/api/admin/tariff/offers/quote', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            var q = await r.json().catch(function () { return { ok: false, message: 'Xatolik' }; });
+            renderOfferQuote(q);
+            ofLastQuoteKey = q.ok ? JSON.stringify(body) : null;
+            document.getElementById('ofCreateBtn').disabled = !q.ok;
+        }
+        async function offersCreate() {
+            var body = ofPayload();
+            if (JSON.stringify(body) !== ofLastQuoteKey) { document.getElementById('ofCreateBtn').disabled = true; return offersQuote(); }
+            body.reason = document.getElementById('ofReason').value.trim();
+            body.validDays = Number(document.getElementById('ofDays').value || 7);
+            var r = await fetch('/api/admin/tariff/offers', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            var d = await r.json().catch(function () { return {}; });
+            if (!r.ok) { renderOfferQuote(Object.assign({}, d.quote || {}, { ok: false, message: d.message || d.reason })); return; }
+            document.getElementById('ofCreateBtn').disabled = true;
+            document.getElementById('ofQuote').insertAdjacentHTML('beforeend', '<p class="of-msg ok">Taklif yaratildi: ' + escapeHtml(d.offer.id) + ' (' + ofDay(d.offer.expires_at) + ' gacha). Obuna faollashtirilmadi — to\'lov tasdiqlangach "Aktivatsiya".</p>');
+            loadOffers();
+        }
+        async function offersRevoke(id) {
+            var reason = prompt('Bekor qilish sababi:');
+            if (reason === null) return;
+            var r = await fetch('/api/admin/tariff/offers/' + encodeURIComponent(id) + '/revoke', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason }) });
+            var d = await r.json().catch(function () { return {}; });
+            if (!r.ok) alert(d.message || d.reason || 'Bekor qilinmadi');
+            loadOffers();
+        }
+        async function offersCheck(id) {
+            var r = await fetch('/api/admin/tariff/offers/' + encodeURIComponent(id) + '/check', { credentials: 'same-origin' });
+            var d = await r.json().catch(function () { return {}; });
+            alert(d.ok ? ('Taklif amalda. Joriy minimal narx: ' + ofMoney(d.currentMinPriceUzs) + (d.stale ? ' (xarajat modeli yangilangan)' : ''))
+                : ('To\'lov boshlanmasin: ' + (d.message || d.reason || 'tekshirib bo\'lmadi') + (d.currentMinPriceUzs ? ' · joriy minimal narx ' + ofMoney(d.currentMinPriceUzs) : '')));
+        }
+        async function offersActivate(id, userId, plan, price) {
+            var ref = prompt('To\'lov tasdiqlandi. To\'lov raqami (paymentRef) — ' + ofMoney(price) + ':');
+            if (!ref) return;
+            var r = await fetch('/api/admin/tariff/grant', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adminId: userId, plan: plan, paymentRef: ref.trim(), offerId: id, provider: 'manual' }) });
+            var d = await r.json().catch(function () { return {}; });
+            alert(r.ok ? (d.duplicate ? 'Bu to\'lov allaqachon qayd etilgan — qayta berilmadi.' : 'Faollashtirildi: ' + ofDay(d.period && d.period.starts_at) + ' — ' + ofDay(d.period && d.period.ends_at) + '. Naqd: ' + ofMoney(d.cashUzs) + (d.creditUzs ? ', kredit: ' + ofMoney(d.creditUzs) : ''))
+                : (d.message || d.error || 'Faollashtirilmadi'));
+            loadOffers();
+        }
+        var OF_STATUS = { draft: 'qoralama', active: 'faol', redeemed: 'ishlatilgan', expired: 'muddati o\'tgan', revoked: 'bekor qilingan' };
+        async function loadOffers() {
+            var box = document.getElementById('ofList');
+            if (!box) return;
+            var r = await fetch('/api/admin/tariff/offers', { credentials: 'same-origin' });
+            var d = await r.json().catch(function () { return {}; });
+            var offers = d.offers || [];
+            if (!offers.length) { box.innerHTML = '<div class="reg-empty">Hali taklif yo\'q</div>'; return; }
+            box.innerHTML = '<div class="au-scroll"><table class="spend-table"><thead><tr><th>Foydalanuvchi</th><th>Tarif</th><th>Narx</th><th>Holat</th><th>Muddat</th><th>Sabab</th><th></th></tr></thead><tbody>'
+                + offers.map(function (o) {
+                    var acts = o.status === 'active'
+                        ? '<button type="button" class="of-btn" onclick="offersCheck(\'' + o.id + '\')">Tekshirish</button> '
+                          + '<button type="button" class="of-btn" onclick="offersActivate(\'' + o.id + '\',' + o.user_id + ',\'' + o.plan + '\',' + o.final_price_uzs + ')">Aktivatsiya</button> '
+                          + '<button type="button" class="of-btn" onclick="offersRevoke(\'' + o.id + '\')">Bekor qilish</button>'
+                        : (o.payment_ref ? escapeHtml(o.payment_ref) : '');
+                    return '<tr><td>#' + o.user_id + ' ' + escapeHtml(o.username || '') + '</td><td>' + escapeHtml(o.plan) + '</td>'
+                        + '<td>' + ofMoney(o.final_price_uzs) + '<div class="au-note">' + ofMoney(o.list_price_uzs) + ' − ' + ofMoney(o.discount_uzs) + '</div></td>'
+                        + '<td>' + escapeHtml(OF_STATUS[o.status] || o.status) + '</td><td>' + ofDay(o.expires_at) + '</td>'
+                        + '<td>' + escapeHtml(o.reason || '') + '</td><td>' + acts + '</td></tr>';
+                }).join('') + '</tbody></table></div>';
+        }
+
         async function loadAiUsage() {
             var reportBox = document.getElementById('aiUsageReport');
             var listBox = document.getElementById('aiUsageRequests');
