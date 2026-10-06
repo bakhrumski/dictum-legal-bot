@@ -155,7 +155,8 @@ async function crossEncoderRerank(query, chunks, model, apiKey) {
     if (cached != null) { scores[i] = cached; return; }
     const passage = String(chunk.chunk_text || chunk.text || '').substring(0, 512);
     try {
-      scores[i] = await usageLedger.track({ provider: 'huggingface', model, stage: 'rerank', batchId, retryTransient: 1 }, async () => {
+      scores[i] = await usageLedger.track({ provider: 'huggingface', model, stage: 'rerank', batchId, retryTransient: 1,
+        bound: { usd: null, reason: 'Hugging Face inference is not priced per call here' } }, async () => {
         const resp = await httpsPostJson(url, { inputs: [query, passage] }, { 'Authorization': `Bearer ${apiKey}` });
         if (resp.status !== 200) {
           const parsed = health.parseProviderError(resp.text || '');

@@ -745,7 +745,7 @@ function testQuotas(input) {
  * { ok, period, duplicate } or { ok: false, reason }.
  */
 async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 48, plan = 'silver', quotas = null,
-  budgetUsd = 5, unknownCallUsd = 0.05, perRequestUsd = null, now = new Date() }) {
+  budgetUsd = 5, unknownCallUsd = 0.05, perRequestUsd = null, budgetMode = 'strict', unboundedCallUsd = null, riskBasis = '', now = new Date() }) {
   const why = String(reason || '').trim();
   if (why.length < 3 || why.length > 500) return { ok: false, reason: 'reason_required' };
   const h = Number(hours);
@@ -759,6 +759,14 @@ async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 4
   if (!(budget > 0 && budget <= 50)) return { ok: false, reason: 'invalid_budget' };
   if (!(unknown > 0 && unknown <= budget)) return { ok: false, reason: 'invalid_unknown_reserve' };
   if (perReq != null && !(perReq > 0 && perReq <= budget)) return { ok: false, reason: 'invalid_per_request' };
+  // 'strict' (default): a call runs only within its proven maximum cost;
+  // 'estimated': calls with no proven bound run at a stated estimate - a
+  // decision with a written basis, reported as risk, never a guarantee
+  if (!['strict', 'estimated'].includes(budgetMode)) return { ok: false, reason: 'invalid_budget_mode' };
+  const unbounded = unboundedCallUsd == null ? null : Number(unboundedCallUsd);
+  if (budgetMode === 'estimated' && !(unbounded > 0 && unbounded <= budget && String(riskBasis || '').trim().length >= 10)) {
+    return { ok: false, reason: 'estimated_mode_needs_estimate_and_basis' };
+  }
   return withLock({ adminId }, async (db) => {
     const m = await db.query('SELECT role FROM admins WHERE id = $1', [grantedBy]);
     if (!m.rows[0] || m.rows[0].role !== 'master') return { ok: false, reason: 'master_only' };
@@ -777,7 +785,8 @@ async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 4
     if (paid.rows[0]) return { ok: false, reason: 'account_has_paid_period' };
     const ends = new Date(now.getTime() + Math.round(h * 3600e3));
     const meta = { kind: 'test', reason: why, grantedBy: Number(grantedBy), grantedAt: now.toISOString(),
-      budgetUsd: budget, unknownCallUsd: unknown, perRequestUsd: perReq };
+      budgetUsd: budget, unknownCallUsd: unknown, perRequestUsd: perReq,
+      budgetMode, unboundedCallUsd: budgetMode === 'estimated' ? unbounded : null, riskBasis: budgetMode === 'estimated' ? String(riskBasis).trim().slice(0, 500) : null };
     const ins = await db.query(
       `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, economics, created_by)
        VALUES ($1, $2, $3, 'v2', 'test', $4, $5, $6, $7, $8) RETURNING *`,

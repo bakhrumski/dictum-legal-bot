@@ -57,6 +57,7 @@ async function ensureSchema() {
   await tiers.initSubscriptionSchema();
   await spendLog.initSpendLog();
   await pool.query(fs.readFileSync(path.join(__dirname, '../migrations/20261004_013_tariff_periods.sql'), 'utf8'));
+  await pool.query(fs.readFileSync(path.join(__dirname, '../migrations/20261006_014_test_budget_risk.sql'), 'utf8'));
   usage.configure({ write: spendLog.writeLedgerRow, writeRequest: spendLog.writeRequestRow });
 }
 async function makeUser(role = 'user') {
@@ -195,41 +196,41 @@ async function aiCall({ inTokens = 0, unknown = false } = {}) {
     assert.ok(Math.abs(st.spent - 0.6) < 1e-9, `3 unknown calls x $0.2 = $0.6, got ${st.spent}`);
   });
 
-  await test('through the usage ledger: admitted at the first call, stopped at the hold, refused when the budget is spent - no call made', async () => {
+  // one priced call with a stated bound: gpt-6-luna input, 5e5 tokens = $0.05, bound $0.06
+  const boundedCall = (onCall) => usage.track({ provider: 'openai', model: 'gpt-6-luna', endpoint: '/api/legal-chat', stage: 'answer', bound: { usd: 0.06 } },
+    async (ctx) => { if (onCall) onCall(); ctx.usage({ inTokens: 5e5, outTokens: 0 }); return { text: 'ok' }; });
+
+  await test('strict: each call reserves its bound inside the request hold; the next request is refused before any call', async () => {
     const u = await makeUser();
     await ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'ledger', budgetUsd: 0.3, perRequestUsd: 0.15 });
     testBudget.resetCache();
     const productionPerRequest = usage.requestBudget().maxCostUsd;
-    // request 1: $0.10 + $0.10 -> the second call is past its $0.15 hold? the check is before the call:
-    // after $0.10 the next call runs (0.10 < 0.15), after $0.20 the third is refused
-    let calls = 0;
-    await usage.runWithRequest({ service: 'web', userId: u }, async (store) => {
-      assert.ok(await testBudget.attach(u));
-      for (let i = 0; i < 3; i++) {
-        await usage.track({ provider: 'openai', model: 'gpt-6-luna', endpoint: '/api/legal-chat', stage: 'answer' },
-          async (ctx) => { calls++; ctx.usage({ inTokens: 1e6, outTokens: 0 }); return { text: 'ok' }; }).catch(e => { store.lastErr = e.message; });
-      }
-      assert.strictEqual(store.budget.maxCostUsd, 0.15, 'this account\'s own per-request limit');
-      await usage.finishRequest(store);
-      assert.match(store.lastErr, /not called/u);
-    });
-    assert.strictEqual(calls, 2, 'the third call was not made');
+    const runRequest = async (n) => {
+      let calls = 0;
+      await usage.runWithRequest({ service: 'web', userId: u }, async (store) => {
+        assert.ok(await testBudget.attach(u));
+        for (let i = 0; i < n; i++) await boundedCall(() => calls++).catch(e => { store.lastErr = e.message; });
+        await usage.finishRequest(store);
+        if (store.lastErr) assert.match(store.lastErr, /not called/u);
+      });
+      return calls;
+    };
+    // hold $0.15: $0.05 + $0.06 fits, a third ($0.10 + $0.06) does not
+    assert.strictEqual(await runRequest(3), 2, 'the third call was not made');
     await settle();
     const ent = await testBudget.entitlementFor(pool, u);
-    const st = await testBudget.standing(pool, ent);
-    assert.ok(Math.abs(st.spent - 0.2) < 1e-9 && st.held === 0, JSON.stringify(st));
-    // request 2: $0.20 spent + $0.15 hold > $0.30 -> refused before any call
-    let called = false;
-    await usage.runWithRequest({ service: 'web', userId: u }, async (store) => {
-      await testBudget.attach(u);
-      await assert.rejects(usage.track({ provider: 'openai', model: 'gpt-6-luna', endpoint: '/api/legal-chat', stage: 'answer' }, async () => { called = true; return {}; }),
-        /not called: test budget \$0.3/u);
-      await usage.finishRequest(store);
-    });
-    assert.strictEqual(called, false);
+    let st = await testBudget.standing(pool, ent);
+    assert.ok(Math.abs(st.spent - 0.10) < 1e-9 && st.held === 0, JSON.stringify(st));
+    assert.strictEqual(await runRequest(3), 2, '$0.10 spent + $0.15 hold <= $0.30: admitted');
     await settle();
+    st = await testBudget.standing(pool, ent);
+    assert.ok(Math.abs(st.spent - 0.20) < 1e-9, JSON.stringify(st));
+    assert.strictEqual(await runRequest(1), 0, '$0.20 + $0.15 > $0.30: refused before any call');
+    await settle();
+    st = await testBudget.standing(pool, ent);
+    assert.ok(st.spent <= 0.3 + 1e-9, 'never past the budget');
     const skipped = await pool.query(`SELECT error_code FROM llm_spend_log WHERE user_id = $1 AND status = 'skipped'`, [u]);
-    assert.ok(skipped.rows.some(r => r.error_code === 'TEST_BUDGET'));
+    assert.ok(skipped.rows.some(r => r.error_code === 'TEST_BUDGET') && skipped.rows.some(r => r.error_code === 'CALL_RESERVE'));
     // everyone else: no admission, production limit unchanged
     const other = await makeUser();
     await usage.runWithRequest({ service: 'web', userId: other }, async (store) => {
@@ -238,11 +239,83 @@ async function aiCall({ inTokens = 0, unknown = false } = {}) {
     });
   });
 
+  await test('strict: parallel requests with parallel calls never pass the total budget; unbounded calls are not made', async () => {
+    const u = await makeUser();
+    await ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'parallel strict', budgetUsd: 0.3, perRequestUsd: 0.15 });
+    testBudget.resetCache();
+    let calls = 0;
+    let unboundedCalls = 0;
+    await Promise.all(Array.from({ length: 4 }, () => usage.runWithRequest({ service: 'web', userId: u }, async (store) => {
+      await testBudget.attach(u);
+      await Promise.allSettled([boundedCall(() => calls++), boundedCall(() => calls++), boundedCall(() => calls++),
+        usage.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'answer', bound: { usd: null, reason: 'thinking tokens are not capped by the output limit' } },
+          async () => { unboundedCalls++; return {}; })]);
+      await usage.finishRequest(store);
+    })));
+    await settle();
+    const ent = await testBudget.entitlementFor(pool, u);
+    const st = await testBudget.standing(pool, ent);
+    assert.strictEqual(unboundedCalls, 0, 'a call with no proven bound is never made in strict mode');
+    assert.ok(st.spent <= 0.3 + 1e-9, `spent $${st.spent} within $0.30`);
+    assert.strictEqual(calls, 4, '2 requests admitted ($0.15 holds), 2 calls each fit ($0.06 bounds in parallel)');
+  });
+
+  await test('estimated mode needs an explicit estimate and its basis; its calls are reported as risk, not guaranteed', async () => {
+    const u = await makeUser();
+    assert.strictEqual((await ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'est', budgetMode: 'estimated' })).reason, 'estimated_mode_needs_estimate_and_basis');
+    const g = await ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'est', budgetMode: 'estimated', unboundedCallUsd: 0.02,
+      riskBasis: 'HF rerank and Gemini embedding: owner-accepted estimate, not a bound' });
+    assert.deepStrictEqual([g.period.economics.budgetMode, g.period.economics.unboundedCallUsd], ['estimated', 0.02]);
+    testBudget.resetCache();
+    let made = 0;
+    await usage.runWithRequest({ service: 'web', userId: u }, async (store) => {
+      await testBudget.attach(u);
+      await usage.track({ provider: 'huggingface', model: 'bge-m3', stage: 'embedding', bound: { usd: null, reason: 'not priced' } }, async () => { made++; return {}; });
+      await usage.finishRequest(store);
+    });
+    await settle();
+    assert.strictEqual(made, 1);
+    const hold = await pool.query(`SELECT risk, actual_usd::float AS actual FROM test_budget_holds WHERE period_id = $1`, [g.period.id]);
+    assert.deepStrictEqual([hold.rows[0].risk.calls, hold.rows[0].risk.usd], [1, 0.02], 'recorded as estimated risk');
+  });
+
   await test('the web and Telegram hooks attach the budget only for a live test entitlement (cached id set)', () => {
     const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
     assert.match(server, /req\.session\.role === 'user' && await testBudget\.attach\(adminId\)/u);
     const bot = fs.readFileSync(path.join(__dirname, '..', 'src', 'bot', 'bot.js'), 'utf8');
     assert.match(bot, /if \(\(await testBudget\.accountsWithTest\(\)\)\.size\) \{[\s\S]*?testBudget\.attach\(ident\.adminId\)/u);
+  });
+
+  await test('scope: Sinov, paid and legacy accounts get no test budget - their unbounded provider calls run as before', async () => {
+    const sinov = await makeUser();
+    await ledger.reserve({ adminId: sinov, service: 'chat', endpoint: '/api/legal-chat' });   // starts the Sinov
+    const paid = await makeUser();
+    await ledger.grantPaidPeriod({ adminId: paid, plan: 'gold', paymentRef: `scope-${paid}` });
+    const legacy = await makeUser();
+    await pool.query(`UPDATE admins SET tariff_plan = 'silver', tariff_starts_at = now() - interval '5 days', tariff_expires_at = now() + interval '25 days' WHERE id = $1`, [legacy]);
+    assert.strictEqual((await ledger.balance({ adminId: legacy })).rules, 'legacy_v1');
+    // a live test entitlement elsewhere does not change them
+    const pilot = await makeUser();
+    assert.ok((await ledger.grantTestEntitlement({ adminId: pilot, grantedBy: master, reason: 'scope pilot', budgetUsd: 1 })).ok);
+    testBudget.resetCache();
+    for (const [who, id] of [['sinov', sinov], ['paid', paid], ['legacy', legacy]]) {
+      let calls = 0;
+      await usage.runWithRequest({ service: 'web', userId: id }, async (store) => {
+        assert.strictEqual(await testBudget.attach(id), false, who);
+        assert.strictEqual(store.admission, undefined, who);
+        await usage.track({ provider: 'voicelab', model: 'voicelab/aisha-comet', stage: 'answer', bound: { usd: null, reason: 'billed in provider credits' } }, async () => { calls++; return {}; });
+        await usage.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'answer', bound: { usd: null, reason: 'thinking tokens are not capped' } }, async () => { calls++; return {}; });
+      });
+      assert.strictEqual(calls, 2, `${who}: not blocked`);
+    }
+    // the pilot account itself is held to strict
+    let pilotCalls = 0;
+    await usage.runWithRequest({ service: 'web', userId: pilot }, async (store) => {
+      assert.strictEqual(await testBudget.attach(pilot), true, 'the pilot account is attached');
+      assert.ok(store.admission, 'admission set');
+      await assert.rejects(usage.track({ provider: 'voicelab', model: 'voicelab/aisha-comet', stage: 'answer', bound: { usd: null, reason: 'credits' } }, async () => { pilotCalls++; return {}; }));
+    });
+    assert.strictEqual(pilotCalls, 0);
   });
 
   try {

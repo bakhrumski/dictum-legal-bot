@@ -87,7 +87,7 @@ async function callVisionOCRChain(buf, mimeType, langCode) {
   // chain below, which is unchanged.
   if (voicelab.routes('vision') && /^image\//i.test(mimeType || '')) {
     try {
-      const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, stage: 'ocr' }, async (call) => {
+      const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
         const res = await voicelab.chatCompletion('vision', [{ role: 'user', content: [
           { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
           { type: 'text', text: prompt },
@@ -112,7 +112,7 @@ async function callVisionOCRChain(buf, mimeType, langCode) {
         ]}],
         generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
       };
-      const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr' }, async (call) => {
+      const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
         const resp = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
@@ -146,7 +146,7 @@ async function callVisionOCRChain(buf, mimeType, langCode) {
         max_tokens: 4096,
         temperature: 0.1,
       };
-      const text = await usageLedger.track({ provider: 'openai', model: body.model, stage: 'ocr' }, async (call) => {
+      const text = await usageLedger.track({ provider: 'openai', model: body.model, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
         const resp = await fetch('https://api.openai.com/v1/chat/completions', {
           signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
           method: 'POST',

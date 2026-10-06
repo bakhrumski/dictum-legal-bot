@@ -206,30 +206,102 @@ Xizmat bo'yicha birlik narxi ham hisoblanadi (known cost / birlik). Shunda ko'p 
 1. Alohida oddiy (role `user`) hisob ochiladi; unda pullik davr bo'lmasligi kerak.
 2. Master shunday huquq beradi:
    `POST /api/admin/tariff/test-entitlements { userId, reason: "Pilot 2026-10", hours: 48, plan: "gold", quotas: { chat: 12, analysis: 8, opinion: 6, draft: 3, ocr: 10 }, budgetUsd: 5 }`
-   - `perRequestUsd` berilmaydi, ya'ni production'dagi $0.25 qo'llanadi.
+   - `perRequestUsd` berilmaydi, ya'ni production'dagi $0.25 qo'llanadi. `budgetMode` standart bo'yicha `strict`.
    - `plan: "gold"` faqat hujjat hajmi qoidasi uchun kerak (≤ 30 sahifa). U narx ham, tushum ham emas.
 3. `GET /api/admin/tariff/test-entitlements` orqali kvota, `spent` va `held` kuzatiladi.
 4. Pilot tugagach `…/:userId/end`. Hisob avvalgidek qoladi; sarf `measuredTest` va `testEntitlements` da alohida turadi.
 
-**$5 budjet — qanday ishlaydi.** Mexanizm haqiqiy Postgres'da, pullik AI chaqirmasdan tekshirilgan (`tests/test-entitlement.db.test.js`):
-- Har so'rov birinchi AI chaqiruvidan oldin o'z so'rov limitini (hold, $0.25) rezerv qiladi.
-- Shart `sarflangan + band qilingan + hold ≤ $5`, aks holda chaqiruv qilinmaydi (`TEST_BUDGET`).
-- Testda $1 budjetga 6 ta parallel so'rov yuborildi: 4 tasi o'tdi, 2 tasi rad etildi.
-- Narxi noma'lum chaqiruv $0 emas, `unknownCallUsd` ($0.05) bilan sanaladi.
-- So'rov yakunida hold uning haqiqiy sarfi bilan almashtiriladi. Tugamay qolgan (jarayon to'xtagan) hold 15 daqiqadan keyin to'liq sarf deb sanaladi.
+**Pilot budjeti: nima kafolatlanadi, nima kafolatlanmaydi (2026-10-06).** Avvalgi "$5 qat'iy" ta'rifi olib tashlandi.
+- Ilgari tekshiruv chaqiruvdan *oldin* qilinardi, lekin chaqiruvning o'z narxi rezerv qilinmasdi. Shuning uchun narxi ma'lum oxirgi chaqiruv ham rezervdan oshib ketardi. `tests/pilot-budget.test.js` buni ko'rsatadi: $0.10 limitda ikkinchi chaqiruv $0.14 ga olib chiqdi.
+- Endi har bir provider chaqiruvi uchun chaqiruvdan oldin uning **maksimal narxi** (`callCostBound`) rezerv qilinadi. Retry va adapterning o'z retry'i ham alohida rezerv oladi; fallback ham o'z chaqiruvi sifatida rezerv oladi.
+- Shart: `so'rovda sarflangan + ishlayotgan chaqiruvlar rezervi + bu chaqiruv chegarasi ≤ so'rov hold'i`. Hold'lar yig'indisi esa ≤ umumiy budjet. Rezerv yetmasa, provider chaqirilmaydi (`CALL_RESERVE` / `TEST_BUDGET`).
 
-**$5 ning ma'lum cheklovlari (qat'iy kafolat emas):**
-1. **Oxirgi chaqiruv.** Tekshiruv har chaqiruvdan *oldin* qilinadi. Shu sababli bitta chaqiruvning o'z narxi so'rovni hold'dan oshirib yuborishi mumkin (testda $0.15 hold → $0.20 sarf). Eng yomon holatda $5 dan oshish = har bir parallel so'rovning oxirgi chaqiruvi.
-2. **Noma'lum narx.** Narxi noma'lum chaqiruvning haqiqiy narxi $0.05 dan qimmat bo'lsa, farq budjetdan tashqarida qoladi. Bu taxmin hisob-fakturaga asoslanmagan, shuning uchun $5 faqat narxi ma'lum chaqiruvlar uchun qat'iy.
-3. **Faqat shu akkaunt.** Budjet faqat test huquqi berilgan hisobning AI chaqiruvlarini qamraydi: veb so'rovlari va bog'langan Telegram chati. Boshqa foydalanuvchilar va production limitlari o'zgarmaydi.
+**Chegara qachon isbotlangan.** Chegara hisoblanishi uchun to'rt narsa kerak:
+- manbasi ma'lum narx (`model-pricing.js`, versiya va sana bilan);
+- input tokenlari chegarasi: UTF-8 baytlar + har xabar uchun qo'shimcha;
+- reasoning'ni ham cheklaydigan output limiti;
+- jadvalda yo'q boshqa to'lovli qism bo'lmasligi.
 
-**Birinchi sinov va katta hujjat.** So'rov limiti production'dagi $0.25 da qoladi va o'zgartirilmaydi. Agar u 25 sahifali tahlilni to'xtatsa, quyidagilar yoziladi:
-- qaysi bosqichda to'xtagani — `/api/admin/ai-usage/requests/:id` dagi `skipped` qatori va uning `stage` i;
-- shu paytgacha sarflangan haqiqiy pul (known va unknown alohida);
-- hujjatning qancha qismi qamralgani va natija foydalanuvchiga yetkazilgan-yetkazilmagani;
-- kvota qaytarilgani (`tariff_usage.status = released`, `release_reason`).
+GPT-6 uzun kontekstda taxminan ikki baravar narxlanadi, shuning uchun chegarada GPT-6 narxlari ×2 olinadi.
 
-Shundan keyin **faqat shu test akkaunti uchun** `perRequestUsd` ni oshirib qayta sinash taklif qilinadi (masalan, $0.60). Buning uchun yangi test huquqi beriladi; global `AI_REQUEST_MAX_COST_USD` ko'tarilmaydi.
+| Chaqiruv | Chegara | Sabab |
+|---|---|---|
+| OpenAI Responses (chat, tahlil, xulosa, draft), web search'siz | **bor** | `max_output_tokens` reasoning'ni ham cheklaydi |
+| OpenAI embedding (`text-embedding-3-small`) | **bor** | faqat input |
+| OpenAI Responses + web search | yo'q | qidiruv chaqiruvi va natija tokenlari narxlanmagan |
+| Hybrid pipeline (Chat Completions `max_tokens`) | yo'q | reasoning'ni cheklashi isbotlanmagan |
+| Gemini 2.5 (javob, OCR) | yo'q | thinking tokenlari `maxOutputTokens` ga kirmaydi |
+| VoiceLab (LLM, vision, STT, TTS) | yo'q | kredit bilan hisoblanadi; tokenga kredit nisbati tasdiqlanmagan |
+| Hugging Face embedding / rerank | yo'q | narx yo'q |
+| Gemini embedding | faqat `AI_PRICE_OVERRIDES` bo'lsa | jadvalda narx yo'q |
+| Rasmli OCR | yo'q | rasm uchun token chegarasi yo'q |
+
+**Ikki rejim:**
+1. **`strict` (standart).** Faqat chegarasi isbotlangan chaqiruvlar bajariladi, chegarasizlari rad etiladi.
+   - Kafolat: umumiy sarf ≤ budjet, *agar* narx jadvali to'g'ri bo'lsa.
+   - Narx jadvali o'zi kafolat emas. Provider narxni o'zgartirsa yoki jadval eskirgan bo'lsa, real narx chegaradan oshishi mumkin. Bunday holat `boundExceeded` bilan belgilanadi va budjet hisobiga real narxda kiradi.
+   - Shu sababli bu ham **qat'iy dollar kafolati emas**: kafolat narx jadvali bilan cheklangan.
+2. **`estimated` (alohida qaror bilan).** Chegarasiz chaqiruvlar Master yozgan taxmin bilan ishlaydi (`unboundedCallUsd` va uning asosi `riskBasis`). Ular har so'rovda "taxminiy risk" sifatida alohida yoziladi (`test_budget_holds.risk`). Bu nazorat qilinadigan taxminiy budjet, kafolat emas.
+
+**Qat'iy rejim pilotga nima qiladi** (pullik chaqiruvsiz, `callCostBound` bilan oldindan hisoblandi; production'dagi so'rov limiti $0.25).
+
+Jadvaldagi summalar — **maksimal rezerv taxmini**, real tannarx emas. Ular eng yomon holat uchun hisoblangan:
+- output limiti to'liq ishlatiladi;
+- har bir input bayti alohida token deb olinadi;
+- GPT-6 narxi ×2.
+
+Real sarf odatda ancha past bo'ladi. U faqat pilotda o'lchanadi.
+
+| Qadam (asosiy chaqiruv) | Maksimal rezerv taxmini (real narx emas) | $0.25 so'rov limiti bilan |
+|---|---:|---|
+| Chat javobi (`gpt-6-luna`, 8 192 output) | $0.0098 | o'tadi |
+| Cross-check / claim-check (`gpt-6-luna`) | $0.0057 | o'tadi |
+| Hujjat bo'yicha savol (20 000 belgilik parcha, `luna`) | $0.0134 | o'tadi |
+| Tahlil, 3 sahifa (`gpt-6-sol`) | $0.2162 | faqat asosiy chaqiruv sig'adi; qolgan bosqichlarga joy qolmaydi |
+| Tahlil, 12 sahifa (`sol`) | $0.3082 | **birinchi chaqiruvdayoq rad etiladi** |
+| Tahlil va xulosa, 25 sahifa (`sol`) | $0.4282 | **birinchi chaqiruvdayoq rad etiladi** |
+| Draft (`sol`) | $0.2002 | faqat asosiy chaqiruv |
+
+Qo'shimcha: production'da `LLM_PROVIDER=voicelab` yoki Gemini yo'li yoqilgan bo'lsa, yoki embedding/rerank HF yoki Gemini orqali ketsa, ular strict rejimda **rad etiladi**. Bunda retrieval va javob sifati pilotda production'dagidan farq qiladi. Production'dagi qaysi sozlama ishlayotganini `GET /api/admin/runtime-routing` ko'rsatadi.
+
+**Taklif: nazorat qilinadigan taxminiy budjet (alohida ruxsat uchun).**
+1. **Bosqich A — strict, $2.** Chat (8), hujjat savoli (2) va 3 sahifali tahlil (1), production limiti bilan. Narxi ma'lum yo'llarni o'lchaydi; isbotlangan chegaralar ichida qoladi.
+2. **Bosqich B — faqat shu akkaunt uchun `perRequestUsd` = $0.50, strict, $3.** 12 va 25 sahifali tahlil, xulosa va draft. Global `AI_REQUEST_MAX_COST_USD` o'zgarmaydi.
+3. **Chegarasiz xizmatlar** (VoiceLab, Gemini, HF, OCR) A va B'da o'chiq. Ularni o'lchash kerak bo'lsa, alohida `estimated` bosqichi qilinadi:
+   - har chaqiruv uchun taxmin (masalan, $0.02) va uning asosi yoziladi;
+   - risk alohida hisobotda ko'rsatiladi;
+   - avval qaror so'raladi.
+
+Umumiy reja: $5 = A $2 + B $3. Bu "taxminiy nazoratli" budjet, qat'iy emas: oshib ketish faqat narx jadvali noto'g'ri bo'lgan holda bo'lishi mumkin va bu `boundExceeded` bilan ko'rinadi.
+
+**A/B pilot nimani baholamaydi.** A va B faqat chegarasi isbotlangan yo'llarni ishlatadi: OpenAI Responses (web search'siz) va OpenAI embedding. Quyidagilar o'chiq, shuning uchun **baholanmaydi**:
+- VoiceLab (LLM, vision, STT, TTS);
+- Gemini (javob, OCR, embedding);
+- Hugging Face (embedding, rerank);
+- rasmli OCR;
+- web search;
+- hybrid pipeline.
+
+Shu sababli A/B natijasi:
+- production'dagi **butun pipeline xarajatini tasdiqlamaydi** — production'da yoqilgan VoiceLab, Gemini yoki HF yo'llari pilotdagidan boshqacha ishlaydi;
+- tariflarning **80% xarajat maqsadini tasdiqlamaydi**, chunki u production pipeline'ining 100% limitdagi to'liq xarajatiga bog'liq;
+- faqat OpenAI yo'lidagi xizmatlarning birlik narxi va sifati haqida fakt beradi.
+
+**Hisobot providerlar bo'yicha alohida bo'ladi.** Har bir provider/model uchun `/api/admin/ai-usage/report` va `llm_spend_log` bo'yicha alohida ko'rsatiladi:
+- chaqiruvlar soni;
+- known / estimated / unknown xarajat;
+- rad etilgan (`CALL_RESERVE`, `TEST_BUDGET`) va `skipped` chaqiruvlar;
+- `boundExceeded` holatlari.
+
+Sifat (reviewer ballari) ham xizmat va javob bergan provider bo'yicha alohida beriladi. O'chiq providerlar "baholanmagan" deb belgilanadi.
+
+**Pilot akkaunti doirasi.** Budjet faqat test huquqi berilgan hisobning chaqiruvlarini qamraydi: veb va bog'langan Telegram chati. Boshqa foydalanuvchilar va production limitlari o'zgarmaydi.
+
+**Katta hujjat rad etilsa nima yoziladi:**
+- qaysi bosqichda va qaysi chaqiruvda to'xtagani — `skipped` qatori, `CALL_RESERVE` va chegara summasi;
+- haqiqiy sarf (oldindan hisoblanganidek, birinchi chaqiruvda rad etilsa — 0);
+- natija yetkazilmagani;
+- kvota qaytarilgani (`release_reason`).
 
 **Tartib.** Avval har xizmatdan bittadan arzon namuna, keyin ko'p birlikli hujjatlar. Chegara erta tugasa ham har xizmat o'lchangan bo'ladi.
 

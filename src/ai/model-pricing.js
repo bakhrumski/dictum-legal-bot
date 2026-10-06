@@ -187,4 +187,71 @@ function costForUsage(model, usage = {}) {
   return { costUsd, costSource: u.estimated ? 'estimated' : 'calculated', snapshot };
 }
 
-module.exports = { MODEL_PRICING, PRICING_SOURCES, VOICELAB_CREDIT, calculateTokenCost, pricingSnapshot, costForUsage, voicelabCreditUsd };
+// ── Upper bound of one call, before it is made (pilot budget, 2026-10-06) ──
+// A strict budget can reserve a call's cost only if the call cannot cost
+// more. That needs: a price with a known source; a hard cap on billed
+// output (reasoning included); an upper bound on input tokens; and no
+// billable part the table does not carry. Where any of these is missing the
+// bound is null with the reason - never a guess.
+//
+//   - input: a byte-level BPE token is at least one UTF-8 byte, so the UTF-8
+//     byte count of the text (plus a per-message overhead) bounds the input
+//     tokens; an image, file or audio part has no such bound here;
+//   - output: OpenAI Responses max_output_tokens caps visible output AND
+//     reasoning; Gemini 2.5's maxOutputTokens does NOT cap its thinking
+//     tokens (billed as output) - unbounded unless a thinking budget is set;
+//   - VoiceLab may bill in credits whose rate per token is not confirmed -
+//     its list price is not a proven upper bound;
+//   - GPT-6 long-context requests bill at about double (not in the table):
+//     the bound doubles every GPT-6 price;
+//   - web search tool calls and their result tokens are billed on top and are
+//     not priced here: unbounded.
+const MESSAGE_OVERHEAD_TOKENS = 16;
+const REQUEST_OVERHEAD_TOKENS = 64;
+const BOUND_MULTIPLIER = Object.freeze({ 'gpt-6': 2 });
+
+/** Upper bound on input tokens for text messages, or null (a non-text part). */
+function inputTokenBound(messages) {
+  if (!Array.isArray(messages)) return null;
+  let n = REQUEST_OVERHEAD_TOKENS;
+  for (const m of messages) {
+    const content = m && (m.text != null ? m.text : m.content);
+    if (Array.isArray(content)) {
+      for (const part of content) {
+        if (!part || (part.type && !/^(text|input_text)$/u.test(part.type))) return null;
+        n += Buffer.byteLength(String(part.text || ''), 'utf8');
+      }
+    } else if (content != null && typeof content !== 'string') {
+      return null;
+    } else {
+      n += Buffer.byteLength(String(content || ''), 'utf8');
+    }
+    n += MESSAGE_OVERHEAD_TOKENS;
+  }
+  return n;
+}
+
+/**
+ * The most one call can cost: { usd, basis } or { usd: null, reason }.
+ * model: as logged ('gpt-6-luna', 'voicelab/aisha-comet', ...).
+ * inputTokensMax: from inputTokenBound; outputTokensMax: the cap sent to the
+ * provider (it must cap reasoning too); thinkingUncapped / webSearch /
+ * creditBilling: billable parts this table cannot bound.
+ */
+function callCostBound({ model, inputTokensMax = null, outputTokensMax = null, thinkingUncapped = false, webSearch = false, creditBilling = false, inputOnly = false } = {}) {
+  const key = String(model || '').toLowerCase();
+  if (webSearch) return { usd: null, reason: 'web search calls and result tokens are not priced' };
+  if (thinkingUncapped) return { usd: null, reason: 'thinking tokens are not capped by the output limit' };
+  if (creditBilling) return { usd: null, reason: 'billed in provider credits; credits per token not confirmed' };
+  const snap = pricingSnapshot(key);
+  if (!snap) return { usd: null, reason: 'no price with a known source' };
+  if (!Number.isFinite(Number(inputTokensMax)) || inputTokensMax == null) return { usd: null, reason: 'input size has no upper bound (non-text input)' };
+  // an embedding bills input only (its output price is 0)
+  if (inputOnly && Number(snap.out) === 0) outputTokensMax = 0;
+  else if (!Number.isFinite(Number(outputTokensMax)) || outputTokensMax == null || outputTokensMax <= 0) return { usd: null, reason: 'no output cap sent to the provider' };
+  const mult = Object.entries(BOUND_MULTIPLIER).reduce((m, [prefix, k]) => (key.startsWith(prefix) ? Math.max(m, k) : m), 1);
+  const usd = ((Number(inputTokensMax) * snap.in + Number(outputTokensMax) * snap.out) / 1e6) * mult;
+  return { usd, basis: { model: key, inputTokensMax: Number(inputTokensMax), outputTokensMax: Number(outputTokensMax), in: snap.in, out: snap.out, multiplier: mult, priceSource: snap.source, checkedAt: snap.checkedAt } };
+}
+
+module.exports = { MODEL_PRICING, PRICING_SOURCES, VOICELAB_CREDIT, calculateTokenCost, pricingSnapshot, costForUsage, voicelabCreditUsd, inputTokenBound, callCostBound };

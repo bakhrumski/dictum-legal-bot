@@ -517,6 +517,10 @@ bot.on('callback_query', (callbackQuery) => usageLedger.runWithRequest(
     .finally(() => usageLedger.finishRequest(store).catch(() => {}))));
 
 async function handleCallbackQuery(callbackQuery) {
+  if (require('../api/maintenance').maintenanceOn()) {
+    bot.answerCallbackQuery(callbackQuery.id, { text: require('../api/maintenance').MESSAGE }).catch(() => {});
+    return;
+  }
   const chatId = callbackQuery.message.chat.id;
   const testAccount = await testAccountFor(callbackQuery);
   const data = callbackQuery.data;
@@ -1178,6 +1182,12 @@ function telegramMessageKind(msg = {}) {
 
 async function handleTelegramMessage(msg) {
   const chatId = msg.chat.id;
+  // a rollback in progress: no AI, no usage, a short notice
+  const maintenance = require('../api/maintenance');
+  if (maintenance.maintenanceOn()) {
+    if (msg.chat && msg.chat.type === 'private') bot.sendMessage(chatId, maintenance.MESSAGE).catch(() => {});
+    return;
+  }
   const testAccount = await testAccountFor(msg);
   const username = msg.from.username || `user_${msg.from.id}`;
   const firstName = msg.from.first_name || 'Foydalanuvchi';

@@ -189,8 +189,15 @@ Known state of the suites (Sept 2026):
   (`grantTestEntitlement`, `tariff_periods.source = 'test'`: no price, no
   paymentRef, no revenue, admins.tariff_* untouched, spend reported apart)
   with a total AI budget (`src/ai/test-budget.js`): each request holds its
-  per-request limit before its first AI call, so parallel requests cannot
-  pass it; unknown-cost calls count at an assumed price, never $0.
+  per-request limit before its first AI call, and inside it every provider
+  attempt (retries and fallbacks too) reserves its maximum cost first
+  (`model-pricing.callCostBound`: known price, UTF-8 input bound, an output
+  cap that also caps reasoning, GPT-6 x2). Strict mode refuses calls with no
+  provable bound (Gemini thinking, VoiceLab credits, HF, images, web
+  search); 'estimated' mode runs them at a stated estimate as reported risk.
+  Not a hard dollar guarantee: it holds only as far as the price table is
+  right. Every `usageLedger.track()` call must pass `bound`. Rollback uses
+  `MAINTENANCE_MODE=on` (503 on the API, bot notice) before the SQL.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

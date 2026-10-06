@@ -231,12 +231,13 @@ Pilot uchun test akkauntiga kvota tijoriy to'lov grant'i orqali berilmaydi. Buni
 - **Hisobotlarda alohida:**
   - `marginReport.totals.testEntitlements` — mijoz qatoriga, tannarxga va marjaga kirmaydi;
   - `GET /api/admin/tariff/economics` → `measuredTest` — mijozlarning birlik tannarxidan alohida.
-- **Budjet** (`src/ai/test-budget.js`) — veb va bog'langan Telegram chati uchun bitta:
-  - har so'rov birinchi AI chaqiruvidan oldin o'z so'rov limitini rezerv qiladi (`test_budget_holds`);
-  - shart: `sarflangan + band qilingan + bu so'rov ≤ budjet`, aks holda AI chaqirilmaydi (`TEST_BUDGET` qatori yoziladi);
-  - narxi noma'lum chaqiruv taxminiy narxda sanaladi, hech qachon $0 emas;
+- **Budjet** (`src/ai/test-budget.js`, `usage-ledger` `reserveCall`) — veb va bog'langan Telegram chati uchun bitta:
+  - har so'rov birinchi AI chaqiruvidan oldin o'z so'rov limitini band qiladi (`test_budget_holds`);
+  - so'rov ichida har bir provider chaqiruvi — retry va fallback ham — chaqiruvdan oldin o'zining **maksimal narxini** band qiladi (`model-pricing` `callCostBound`);
+  - `strict` (standart): chegarasi isbotlanmagan chaqiruv rad etiladi;
+  - `estimated`: bunday chaqiruv Master yozgan taxmin va uning asosi bilan ishlaydi, alohida risk sifatida yoziladi;
   - so'rov limiti — production'niki (`AI_REQUEST_MAX_COST_USD`). Faqat shu akkaunt uchun `perRequestUsd` bilan o'zgartiriladi; global limit o'zgarmaydi.
-  - Cheklovlari: moliyaviy hisobot §7.
+  - Bu **qat'iy dollar kafolati emas**: kafolat narx jadvalining to'g'riligi bilan cheklangan. Cheklovlar va pilot rejasi — moliyaviy hisobot §7.
 
 ## 8. Keyingi bosqichlar (alohida PR'lar, ushbu PR'da bajarilmagan)
 

@@ -75,7 +75,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * ffmpeg is unavailable.
  */
 async function transcribe(buffer, options = {}) {
-  return usageLedger.track({ provider: 'voicelab', model: 'voicelab/stt', stage: 'stt' },
+  return usageLedger.track({ provider: 'voicelab', model: 'voicelab/stt', stage: 'stt', bound: { usd: null, reason: 'speech is billed in provider credits per audio; no bound here' } },
     (call) => transcribeOnce(buffer, options, call));
 }
 
@@ -210,7 +210,7 @@ async function synthesize(text, { language, voiceId, speed } = {}) {
   const s = speed != null ? speed : Number(process.env.VOICELAB_TTS_SPEED);
   if (Number.isFinite(s) && s > 0) params.speed = s;
 
-  const speech = await usageLedger.track({ provider: 'voicelab', model: 'voicelab/tts', stage: 'tts' }, async (call) => {
+  const speech = await usageLedger.track({ provider: 'voicelab', model: 'voicelab/tts', stage: 'tts', bound: { usd: null, reason: 'speech is billed in provider credits per character; no bound here' } }, async (call) => {
     const out = await client().tts.synthesize(params);
     call.usage({
       characters: out.charactersUsed == null ? null : out.charactersUsed,

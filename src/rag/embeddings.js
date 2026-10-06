@@ -149,7 +149,8 @@ function addE5Prefix(text, isQuery = false) {
 }
 
 async function hfEmbed(texts, apiKey, isQuery = false) {
-  return usageLedger.track({ provider: 'huggingface', model: PROVIDERS.huggingface.model, stage: 'embedding' },
+  return usageLedger.track({ provider: 'huggingface', model: PROVIDERS.huggingface.model, stage: 'embedding',
+    bound: { usd: null, reason: 'Hugging Face inference is not priced per call here' } },
     (call) => hfEmbedOnce(texts, apiKey, isQuery, call));
 }
 
@@ -222,7 +223,9 @@ async function geminiPostWithRetry(url, payload, label) {
     ? payload.requests.map(r => ((r.content && r.content.parts) || []).map(p => p.text || '').join(''))
     : [((payload.content && payload.content.parts) || []).map(p => p.text || '').join('')];
   const estimatedTokens = Math.ceil(texts.reduce((n, t) => n + String(t).length, 0) / 4);
-  return usageLedger.track({ provider: 'gemini', model: PROVIDERS.gemini.model, stage: 'embedding' }, (call) => {
+  return usageLedger.track({ provider: 'gemini', model: PROVIDERS.gemini.model, stage: 'embedding',
+    // priced only through AI_PRICE_OVERRIDES; input-only, so its bound is the input
+    bound: require('../ai/model-pricing').callCostBound({ model: PROVIDERS.gemini.model, inputTokensMax: require('../ai/model-pricing').inputTokenBound(texts.map(t => ({ text: t }))), outputTokensMax: 0, inputOnly: true }) }, (call) => {
     call.usage({ inTokens: estimatedTokens, outTokens: 0, estimated: true });
     return geminiPostWithRetryOnce(url, payload, label, call);
   });
@@ -285,7 +288,8 @@ async function geminiEmbedQuery(text, apiKey) {
 // ========== OPENAI EMBEDDINGS ==========
 
 async function openaiEmbed(texts, apiKey) {
-  return usageLedger.track({ provider: 'openai', model: PROVIDERS.openai.model, stage: 'embedding' },
+  return usageLedger.track({ provider: 'openai', model: PROVIDERS.openai.model, stage: 'embedding',
+    bound: require('../ai/model-pricing').callCostBound({ model: PROVIDERS.openai.model, inputTokensMax: require('../ai/model-pricing').inputTokenBound(texts.map(t => ({ text: t }))), outputTokensMax: 0, inputOnly: true }) },
     (call) => openaiEmbedOnce(texts, apiKey, call));
 }
 

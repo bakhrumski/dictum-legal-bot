@@ -327,7 +327,11 @@ async function callWithFallback(chain, messages, opts = {}) {
       // each attempt in the chain is one usage-ledger row; usage estimated
       // from characters (no provider usage) is marked "estimated"
       const result = await usageLedger.withChain(() => usageLedger.track(
-        { provider: isOpenAIModel(model) ? 'openai' : 'gemini', model, stage: opts.stage || 'generate', endpoint: opts.endpoint || null, userId: opts.userId || null },
+        { provider: isOpenAIModel(model) ? 'openai' : 'gemini', model, stage: opts.stage || 'generate', endpoint: opts.endpoint || null, userId: opts.userId || null,
+          // no proven maximum: Chat Completions max_tokens is not shown to
+          // cap reasoning, Gemini's thinking is uncapped, VoiceLab bills credits
+          bound: { usd: null, reason: voicelab.routes(model) ? 'billed in provider credits; credits per token not confirmed'
+            : isOpenAIModel(model) ? 'Chat Completions max_tokens is not shown to cap reasoning tokens' : 'thinking tokens are not capped by the output limit' } },
         async (call) => {
           const r = await callModel(model, messages, opts);
           call.usage({
