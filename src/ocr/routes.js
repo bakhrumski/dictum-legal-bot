@@ -24,6 +24,8 @@ const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS) || 90000;
 
 const multer = require('multer');
 const voicelab = require('../ai/voicelab');
+const scanLimits = require('./scan-limits');
+const scanStore = require('./scan-store');
 const os = require('os');
 const fs = require('fs');
 
@@ -69,29 +71,69 @@ const VISION_PROMPT = (langHint) =>
  * Vision OCR: Gemini 2.5 Flash Vision (primary) → GPT-4o Vision (fallback).
  * Accepts images (JPEG/PNG/WebP) and PDFs (Gemini reads PDFs directly).
  */
-async function callVisionOCR(buf, mimeType, langCode) {
-  return usageLedger.withChain(() => callVisionOCRChain(buf, mimeType, langCode));
+async function callVisionOCR(buf, mimeType, langCode, opts = {}) {
+  return usageLedger.withChain(() => callVisionOCRChain(buf, mimeType, langCode, opts));
 }
 
 // Each provider attempt is a usage-ledger row (stage 'ocr'); a failed attempt
 // is recorded and the chain falls through as before.
-async function callVisionOCRChain(buf, mimeType, langCode) {
+async function callVisionOCRChain(buf, mimeType, langCode, { pages = 1 } = {}) {
   const geminiKey = process.env.GEMINI_API_KEY;
   const gptKey = process.env.GPT_API_KEY;
   const prompt = VISION_PROMPT(LANG_HINTS[langCode] || '');
   const b64 = buf.toString('base64');
+  // Gemini first, with thinking off and an output cap per page: the only
+  // path whose cost per page has an estimate with a source
+  // (src/ocr/scan-limits.js). VoiceLab / OpenAI vision are used only when
+  // there is no Gemini key, or OCR_FALLBACK=on - their cost per page has no
+  // bound, and the cost model then marks OCR unknown.
+  const fallback = !geminiKey || String(process.env.OCR_FALLBACK || '').toLowerCase() === 'on';
+  const outputCap = Math.min(65536, scanLimits.OCR_OUTPUT_TOKENS_PER_PAGE * Math.max(1, pages));
+  const noBound = { usd: null, reason: 'image input tokens per page are not published; OCR cost is an estimate, not a bound' };
 
-  // VoiceLab's vision lane (Halo) first when switched on. Images only: how it
-  // takes a PDF is not part of the Chat Completions shape, so PDFs keep going
-  // to Gemini, which reads them natively. Any failure falls through to the
-  // chain below, which is unchanged.
-  if (voicelab.routes('vision') && /^image\//i.test(mimeType || '')) {
+  if (geminiKey) {
+    try {
+      const body = {
+        contents: [{ role: 'user', parts: [
+          { inlineData: { mimeType, data: b64 } },
+          { text: prompt },
+        ]}],
+        generationConfig: { temperature: 0.1, maxOutputTokens: outputCap, thinkingConfig: { thinkingBudget: 0 } },
+      };
+      const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr', bound: noBound }, async (call) => {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
+        );
+        if (!resp.ok) {
+          const err = await resp.text().catch(() => '');
+          throw Object.assign(new Error(`Gemini Vision HTTP ${resp.status}: ${err.substring(0, 200)}`), { status: resp.status });
+        }
+        const data = await resp.json();
+        call.usage({ ...usageLedger.usageFromGemini(data.usageMetadata), modelReturned: data.modelVersion || null });
+        const cand = data.candidates?.[0] || {};
+        // the page text did not fit the cap: never hand on a cut document
+        if (cand.finishReason === 'MAX_TOKENS') throw Object.assign(new Error('OCR output reached its cap: the text would be cut'), { code: 'OCR_TRUNCATED', status: 422 });
+        const parts = cand.content?.parts || [];
+        const out = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
+        if (!out) throw new Error('Gemini Vision returned empty text');
+        return out;
+      });
+      if (text) return { text, provider: 'Gemini Vision' };
+    } catch (e) {
+      console.warn('[OCR] Gemini Vision error:', e.message);
+      if (e.code === 'OCR_TRUNCATED' || !fallback) throw e;
+    }
+  }
+
+  // fallback (no Gemini key, or OCR_FALLBACK=on): images only
+  if (fallback && voicelab.routes('vision') && /^image\//i.test(mimeType || '')) {
     try {
       const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
         const res = await voicelab.chatCompletion('vision', [{ role: 'user', content: [
           { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
           { type: 'text', text: prompt },
-        ]}], { temperature: 0.1, maxTokens: 4096 });
+        ]}], { temperature: 0.1, maxTokens: outputCap });
         call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
         return res;
       });
@@ -103,38 +145,7 @@ async function callVisionOCRChain(buf, mimeType, langCode) {
     }
   }
 
-  if (geminiKey) {
-    try {
-      const body = {
-        contents: [{ role: 'user', parts: [
-          { inlineData: { mimeType, data: b64 } },
-          { text: prompt },
-        ]}],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
-      };
-      const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
-        const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
-        );
-        if (!resp.ok) {
-          const err = await resp.text().catch(() => '');
-          throw Object.assign(new Error(`Gemini Vision HTTP ${resp.status}: ${err.substring(0, 200)}`), { status: resp.status });
-        }
-        const data = await resp.json();
-        call.usage({ ...usageLedger.usageFromGemini(data.usageMetadata), modelReturned: data.modelVersion || null });
-        const parts = data.candidates?.[0]?.content?.parts || [];
-        const out = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
-        if (!out) throw new Error('Gemini Vision returned empty text');
-        return out;
-      });
-      if (text) return { text, provider: 'Gemini Vision' };
-    } catch (e) {
-      console.warn('[OCR] Gemini Vision error:', e.message);
-    }
-  }
-
-  if (gptKey) {
+  if (fallback && gptKey && /^image\//i.test(mimeType || '')) {
     try {
       const dataUrl = `data:${mimeType};base64,${b64}`;
       const body = {
@@ -143,7 +154,7 @@ async function callVisionOCRChain(buf, mimeType, langCode) {
           { type: 'image_url', image_url: { url: dataUrl } },
           { type: 'text', text: prompt },
         ]}],
-        max_tokens: 4096,
+        max_tokens: outputCap,
         temperature: 0.1,
       };
       const text = await usageLedger.track({ provider: 'openai', model: body.model, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
@@ -160,14 +171,13 @@ async function callVisionOCRChain(buf, mimeType, langCode) {
         if (!out) throw new Error('OpenAI vision returned empty text');
         return out;
       });
-      // the label now names the model that served it, not a fixed "GPT-4o"
       if (text) return { text, provider: `OpenAI Vision (${body.model})` };
     } catch (e) {
-      console.warn('[OCR] GPT-4o Vision error:', e.message);
+      console.warn('[OCR] OpenAI vision error:', e.message);
     }
   }
 
-  throw new Error('Vision OCR uchun AI kalit sozlanmagan (GEMINI_API_KEY yoki GPT_API_KEY kerak)');
+  throw new Error(geminiKey ? "Skan hujjatni o'qib bo'lmadi (OCR xizmati javob bermadi)" : 'Vision OCR uchun AI kalit sozlanmagan (GEMINI_API_KEY kerak)');
 }
 
 // How many characters to feed to the AI (keeps token cost predictable)
@@ -266,14 +276,17 @@ Rules:
 
 function mountAnalyzerRoutes(app, deps) {
   const { requireAuth, callAI, tariffModule, digestLongDocument } = deps;
+  if (!deps.pool) throw new TypeError('mountAnalyzerRoutes needs deps.pool (scan cache)');
   const ledger = tariffModule && tariffModule.ledger;
 
-  // OCR pages (tariffs v2): one page per request from the period's OCR
-  // allowance (10 pages per analysis unit), fail-closed.
-  const ocrQuota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
-    ? tariffModule.enforceQuota('/api/analyze/ocr', { failClosed: true, service: 'ocr' })
-    : (req, res, next) => next();
-
+  // OCR (tariffs v2, 2026-10-06): a paid OCR call is a step of a document
+  // service, never a free service of its own. /api/analyze/scan-quote counts
+  // the pages on the server and quotes the service (no AI); /api/analyze/
+  // ocr-image takes that signed quote back, reserves the service before the
+  // OCR and keeps the text on the server (scanId) - see scanEndpoints below.
+  const pool = deps.pool;
+  // the OCR provider call (tests pass a stub: no paid call in tests)
+  const ocrFn = typeof deps.ocr === 'function' ? deps.ocr : callVisionOCR;
   // ── PDF text extraction ──
   app.post('/api/analyze/extract', requireAuth, analyzeUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
@@ -305,9 +318,11 @@ function mountAnalyzerRoutes(app, deps) {
         return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: text.length,
           units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text }) : null });
       }
-      const pdfParse = require('pdf-parse');
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js');
       const buf = fs.readFileSync(filePath);
-      const parsed = await pdfParse(buf);
+      // own memory: a small Buffer from the shared pool made pdf.js read
+      // the wrong bytes ("bad XRef entry") on PDFs under 4 KB
+      const parsed = await pdfParse(new Uint8Array(buf));
       const text = (parsed.text || '').trim();
       const scanned = text.length < 80;
       const pages = parsed.numpages || 1;
@@ -335,28 +350,198 @@ function mountAnalyzerRoutes(app, deps) {
     }
   });
 
-  // ── AI Vision OCR — images AND scanned PDFs ──
-  app.post('/api/analyze/ocr-image', requireAuth, ocrQuota, visionUpload.single('file'), async (req, res) => {
+  // ── Scanned documents: quote, then OCR as part of a service ──
+  const SCAN_SERVICES = ['analysis', 'opinion', 'chat'];
+  const serviceTitle = { analysis: 'Hujjat tahlili', opinion: 'AI yuridik xulosa', chat: 'Chatda hujjat bo\'yicha savol' };
+
+  async function scanContext(req) {
+    const adminId = req.session && req.session.adminId;
+    const u = await tariffModule.getUserPlan(adminId);
+    const staff = !!(u && (u.plan === 'master' || u.staff));
+    const planKey = staff ? 'platinum' : (u && ledger.PLAN_CATALOG[u.plan] ? u.plan : 'sinov');
+    return { adminId, u, staff, planKey, legacy: !!(u && u.legacy), maxPages: ledger.PLAN_CATALOG[planKey].job.maxPages };
+  }
+
+  // POST /api/analyze/scan-quote  (file + service) - no AI call
+  app.post('/api/analyze/scan-quote', requireAuth, visionUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     const filePath = req.file.path;
     try {
+      const service = String((req.body && req.body.service) || '');
+      if (!SCAN_SERVICES.includes(service)) return res.status(400).json({ error: 'service', message: "Skan hujjat qaysi xizmat uchun: tahlil, xulosa yoki chat." });
+      const ctx = await scanContext(req);
       const buf = fs.readFileSync(filePath);
-      const mimeType = req.file.mimetype || 'image/jpeg';
-      const langCode = req.body.lang || 'uzb+rus';
-      const result = await callVisionOCR(buf, mimeType, langCode);
-      res.json({ text: result.text, charCount: result.text.length, provider: result.provider });
+      const m = await scanLimits.measureScan(buf, { mimetype: req.file.mimetype, filename: req.file.originalname, planMaxPages: ctx.maxPages });
+      if (m.error) {
+        const status = m.error === 'too_many_pages' || m.error === 'too_large_bytes' || m.error === 'image_too_large' ? 413 : m.error === 'text_pdf' ? 409 : 422;
+        return res.status(status).json({ error: m.error, code: `SCAN_${m.error.toUpperCase()}`, message: m.message, pages: m.pages || null, maxPages: m.maxPages || ctx.maxPages, quotaUsed: false });
+      }
+      const hash = scanStore.fileHash(buf);
+      const cached = await scanStore.findScan(pool, { adminId: ctx.adminId, fileHash: hash });
+      // a cached scan is sized by its real text too (it may need more units than its pages)
+      const units = service === 'chat' ? 1 : ledger.docUnits({ pages: m.pages, chars: cached ? cached.chars : 0 }).units;
+      // the chat scan pool is counted in pages; a legacy plan keeps its
+      // per-request rule (1 a file), as it was sold
+      const ocrPages = cached || service !== 'chat' ? 0 : (ctx.legacy ? 1 : m.pages);
+      const b = ctx.staff ? null : await ledger.balance({ adminId: ctx.adminId });
+      const svc = (b && b.services) ? b.services[service] : null;
+      const pool_ = (b && b.services) ? b.services.ocr : null;
+      const trial = b && b.kind === 'none' ? b.trialQuotas : null;
+      const remaining = ctx.staff || (b && b.legacy) ? null : (svc ? svc.remaining : trial ? trial[service] : 0);
+      const ocrRemaining = ctx.staff || (b && b.legacy) ? null : (pool_ ? pool_.remaining : trial ? trial.ocr : 0);
+      const enough = remaining == null || (remaining >= units && (ocrPages === 0 || ocrRemaining == null || ocrRemaining >= ocrPages));
+      const ticket = ledger.signScanTicket({ fileHash: hash, adminId: ctx.adminId, service, pages: m.pages, bytes: m.bytes, kind: m.kind, units, cached: !!cached });
+      res.json({
+        service, title: serviceTitle[service], kind: m.kind, pages: m.pages, bytes: m.bytes, maxPages: ctx.maxPages,
+        units, cached: !!cached, ocrPages, remaining, remainingAfter: remaining == null ? null : Math.max(0, remaining - units),
+        ocrRemaining, enough, scanTicket: ticket, ticketMinutes: ledger.SCAN_TICKET_MIN,
+        message: service === 'chat'
+          ? `Skan hujjat: ${m.pages} sahifa. ${cached ? 'Oldin o\'qilgan — qayta OCR qilinmaydi.' : `Chatdagi skan uchun ${ocrPages} sahifa ishlatiladi.`} Har bir savol — 1 chat birligi.`
+          : `${serviceTitle[service]}: skan hujjat ${m.pages} sahifa → ${units} birlik (${service === 'analysis' ? 'tahlil' : 'xulosa'} limitidan). ${cached ? 'Oldin o\'qilgan — qayta OCR qilinmaydi.' : 'Matn shu xizmat uchun o\'qiladi.'}`,
+      });
     } catch (e) {
-      console.error('[ANALYZE] Vision OCR error:', e.message);
-      res.status(500).json({ error: e.message });
+      console.error('[SCAN] quote error:', e.message);
+      res.status(500).json({ error: "Faylni o'qib bo'lmadi" });
     } finally {
       fs.unlink(filePath, () => {});
     }
   });
 
-  // ── AI analysis ──
-  app.post('/api/analyze', requireAuth, async (req, res) => {
+  // POST /api/analyze/ocr-image  (file + scanTicket + confirmed)
+  // The same file, account and service as the quote; its service reserved
+  // first (held until the service runs), then the paid OCR. The text stays
+  // on the server: the reply carries a scanId, not the text.
+  app.post('/api/analyze/ocr-image', requireAuth, visionUpload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
+    const filePath = req.file.path;
+    const jobs = [];
+    const releaseAll = (reason) => Promise.all(jobs.filter(j => j.jobKey && !j.done).map(j => { j.done = true; return ledger.release(j.jobKey, reason); }));
     try {
-      const { text, langHint, docTicket } = req.body || {};
+      const ctx = await scanContext(req);
+      const t = ledger.readScanTicket(req.body && req.body.scanTicket, { adminId: ctx.adminId });
+      if (t.error) return res.status(t.error === 'scan_ticket_expired' ? 410 : 403).json({ error: t.error, code: t.error.toUpperCase(), message: "Sarf hisobi eskirgan yoki boshqa hisobga tegishli — faylni qayta tanlang.", quotaUsed: false });
+      const confirmed = req.body && (req.body.confirmed === true || req.body.confirmed === 'true');
+      if (!confirmed) return res.status(409).json({ error: 'confirm', code: 'SCAN_CONFIRM', message: 'Avval sarfni tasdiqlang.', quotaUsed: false });
+      // the free-access gate (channel, survey) of the service this scan is
+      // for: a scan its service would refuse is not read first
+      if (!ctx.staff && typeof tariffModule.checkFreeAccess === 'function') {
+        const access = await tariffModule.checkFreeAccess(ctx.adminId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: access.code, code: access.code, quotaUsed: false, message: access.code === 'SURVEY_REQUIRED'
+            ? "Bepul foydalanishni davom ettirish uchun qisqa so'rovnomani to'ldiring."
+            : "Bepul foydalanish uchun rasmiy Telegram kanalimizga obuna bo'ling." });
+        }
+      }
+      const buf = fs.readFileSync(filePath);
+      const hash = scanStore.fileHash(buf);
+      if (hash !== t.fileHash) return res.status(409).json({ error: 'scan_ticket_other_file', code: 'SCAN_TICKET_OTHER_FILE', message: 'Bu fayl sarf hisoblangan fayl emas — qayta tanlang.', quotaUsed: false });
+      // count again, on this very file: a ticket never stands in for the count
+      const m = await scanLimits.measureScan(buf, { mimetype: req.file.mimetype, filename: req.file.originalname, planMaxPages: ctx.maxPages });
+      if (m.error || m.pages !== t.pages) return res.status(409).json({ error: 'scan_requote', code: 'SCAN_REQUOTE', message: m.message || 'Hujjat hajmi o\'zgardi — qayta tanlang.', quotaUsed: false });
+      const service = t.service;
+      let cached = await scanStore.findScan(pool, { adminId: ctx.adminId, fileHash: hash });
+      const holdUntil = new Date(Date.now() + ledger.SCAN_HOLD_MIN * 60e3).toISOString();
+
+      // reserve before any paid call: the service (held for the service call
+      // that follows), and for a chat scan the OCR pages of the chat pool
+      if (!ctx.staff) {
+        const want = [];
+        if (service === 'chat') {
+          const b = await ledger.balance({ adminId: ctx.adminId });
+          const chatLeft = b.services ? b.services.chat.remaining : (b.kind === 'none' ? b.trialQuotas.chat : b.legacy ? 1 : 0);
+          if (!(chatLeft >= 1)) {
+            const [status, body] = tariffModule.refusal({ kind: b.kind, reason: b.kind === 'none' && !b.trialAvailable ? 'no_plan' : 'limit_reached', plan: b.plan, used: 0, limit: 0, units: 1 }, 'chat');
+            return res.status(status).json({ ...body, quotaUsed: false });
+          }
+          if (!cached) want.push({ service: 'ocr', units: ctx.legacy ? 1 : m.pages, endpoint: '/api/analyze/ocr-image#chat', meta: { scanHash: hash, pages: m.pages, kind: m.kind } });
+        } else {
+          want.push({ service, units: t.units, endpoint: `/api/analyze/ocr-image#${service}`, meta: { scanHash: hash, pages: m.pages, holdUntil } });
+        }
+        if (want.length) {
+          const r = await ledger.reserveMany({ adminId: ctx.adminId, actorId: ctx.adminId, channel: 'web', jobs: want });
+          if (!r.allowed) {
+            const [status, body] = tariffModule.refusal(r, r.failed);
+            return res.status(status).json({ ...body, quotaUsed: false });
+          }
+          for (const j of r.jobs || []) jobs.push({ ...j, done: false });
+        }
+      }
+
+      if (!cached) {
+        let ocr;
+        try {
+          ocr = await ocrFn(buf, m.kind === 'pdf' ? 'application/pdf' : m.mimetype, String((req.body && req.body.lang) || 'uzb+rus'), { pages: m.pages });
+        } catch (e) {
+          await releaseAll(e.code === 'OCR_TRUNCATED' ? 'ocr_truncated' : 'ocr_failed');
+          console.error('[OCR] failed:', e.message);
+          return res.status(e.code === 'OCR_TRUNCATED' ? 422 : 502).json({
+            error: 'ocr_failed', code: e.code || 'OCR_FAILED', quotaRefunded: true,
+            message: e.code === 'OCR_TRUNCATED'
+              ? "Hujjat sahifalari juda zich: matn to'liq o'qilmadi, kesilgan matn ishlatilmaydi. Limit qaytarildi; hujjatni qismlarga bo'lib yuklang."
+              : "Skan hujjatni o'qib bo'lmadi. Limit qaytarildi.",
+          });
+        }
+        if (!ocr.text || ocr.text.length < 20) {
+          await releaseAll('ocr_empty');
+          return res.status(422).json({ error: 'ocr_empty', code: 'OCR_EMPTY', quotaRefunded: true, message: "Hujjatdan matn topilmadi. Limit qaytarildi." });
+        }
+        const store = usageLedger.current();
+        cached = await scanStore.saveScan(pool, { adminId: ctx.adminId, fileHash: hash, kind: m.kind, pages: m.pages, bytes: m.bytes, text: ocr.text, provider: ocr.provider, requestId: store ? store.requestId : null });
+      }
+      // the OCR pages of a chat scan were used: committed (the OCR was done)
+      for (const j of jobs) if (j.service === 'ocr' && !j.done) { j.done = true; await ledger.commit(j.jobKey); }
+
+      // after OCR the text may need more than the pages promised: never cut,
+      // never charged for a service that did not run
+      let units = service === 'chat' ? 1 : t.units;
+      if (service !== 'chat') {
+        const size = ledger.docUnits({ pages: m.pages, chars: cached.chars });
+        const fit = ctx.staff ? { ok: true } : ledger.jobFits(ctx.planKey, size);
+        if (!fit.ok) {
+          await releaseAll('scan_too_long');
+          return res.status(413).json({ error: 'document_too_large', code: 'DOCUMENT_TOO_LARGE', scanId: cached.id, size, quotaRefunded: true,
+            message: `O'qilgan matn ${size.chars.toLocaleString('ru-RU')} belgi — bitta ish chegarasidan katta. Hujjat qisqartirilmaydi: qismlarga bo'lib yuklang. ${serviceTitle[service]} limiti qaytarildi; OCR xarajati hisobga yozildi.` });
+        }
+        if (size.units > t.units) {
+          await releaseAll('scan_resized');
+          return res.status(409).json({ error: 'scan_resize', code: 'SCAN_RESIZE', scanId: cached.id, units: size.units, quotedUnits: t.units, quotaRefunded: true,
+            message: `O'qilgan matn ${size.units} birlik talab qiladi (${t.units} emas). Limit qaytarildi; tasdiqlasangiz, hujjat qayta OCR qilinmaydi.` });
+        }
+        units = t.units;
+      }
+      res.json({ scanId: cached.id, service, pages: cached.pages, chars: cached.chars, units, held: service !== 'chat' && !ctx.staff,
+        holdMinutes: service !== 'chat' ? ledger.SCAN_HOLD_MIN : null, provider: cached.provider });
+    } catch (e) {
+      await releaseAll('scan_error').catch(() => {});
+      console.error('[ANALYZE] scan OCR error:', e.message);
+      if (!res.headersSent) res.status(500).json({ error: "Skan hujjatni o'qib bo'lmadi", quotaRefunded: jobs.length > 0 });
+    } finally {
+      fs.unlink(filePath, () => {});
+      scanStore.purgeExpired(pool).catch(() => {});
+    }
+  });
+
+  // POST /api/analyze/scans/:id/release - the user cancelled: held service
+  // reservations of this scan are given back (the OCR cost stays recorded)
+  app.post('/api/analyze/scans/:id/release', requireAuth, async (req, res) => {
+    try {
+      const row = await scanStore.getScan(pool, { adminId: req.session.adminId, scanId: req.params.id });
+      if (!row) return res.status(404).json({ error: 'scan_not_found' });
+      const r = await pool.query(
+        `UPDATE tariff_usage SET status = 'released', finalized_at = now(), release_reason = 'scan_cancelled'
+          WHERE admin_id = $1 AND status = 'reserved' AND meta->>'scanHash' = $2 RETURNING id`, [req.session.adminId, row.file_hash]);
+      res.json({ released: r.rowCount });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── AI analysis ──
+  app.post('/api/analyze', requireAuth, scanStore.resolveScans({ pool, ledger }), async (req, res) => {
+    try {
+      const { langHint, docTicket } = req.body || {};
+      // a scan is read here from its scanId (resolveScans), never sent as text
+      const text = req.scans ? req.body.documentText : (req.body || {}).text;
       if (!text || !text.trim()) return res.status(400).json({ error: 'Matn kerak' });
       // Sized and reserved from the whole document (tariffs v2); a document
       // larger than one job on the plan is refused with its size, never cut.
@@ -410,4 +595,4 @@ function mountAnalyzerRoutes(app, deps) {
   console.log('[ANALYZE] OCR & analyzer routes mounted');
 }
 
-module.exports = { mountAnalyzerRoutes };
+module.exports = { mountAnalyzerRoutes, callVisionOCR };

@@ -46,25 +46,42 @@ function plannedAiUzs(plan) {
   return intCeilDiv(microUsd * ledger.PLANNING.uzsPerUsd, 1e6);
 }
 
+/**
+ * OCR of a plan at 100%: every analysis and opinion unit on a different
+ * scan (10 pages a unit) plus the chat-scan pool, at the per-page estimate
+ * of src/ocr/scan-limits.js. Where that estimate does not apply (no Gemini
+ * key, or the unbounded fallback switched on) the component is unknown with
+ * no reserve - and no new discount offer is made (conservativeCost).
+ */
+function ocrComponent(plan) {
+  const o = ledger.planOcr(plan);
+  const label = `OCR: skan hujjatlar, ${o.pages} sahifa (tahlil + xulosa birliklari turli skanlarda, chatdagi skan chegarasi)`;
+  if (o.status !== 'estimated') return { key: 'ocr', label, status: 'unknown', basis: o.reason };
+  return { key: 'ocr', label, uzs: Math.ceil(o.usd * ledger.PLANNING.uzsPerUsd), status: 'estimated',
+    basis: `${o.pages} pages x $${o.usdPerPage.toFixed(6)} per page (${o.estimate.model}, input ${o.estimate.inputTokens} + output ${o.estimate.outputTokens} tokens, x${o.estimate.attempts} attempts; ${o.estimate.source})` };
+}
+
 /** The default cost model: the owner's planning budgets, marked estimated. */
 function defaultCostModel() {
   const plans = {};
   for (const plan of ledger.PAID_PLAN_ORDER) {
     plans[plan] = {
       components: [
-        { key: 'ai', label: "AI: limitlarning 100% i, barcha bosqichlar (generatsiya, retrieval, embedding, tekshiruv, retry/fallback), OCR", uzs: plannedAiUzs(plan), status: 'estimated',
+        { key: 'ai', label: "AI: limitlarning 100% i, barcha bosqichlar (generatsiya, retrieval, embedding, tekshiruv, retry/fallback)", uzs: plannedAiUzs(plan), status: 'estimated',
           basis: 'catalogue quotas x owner planning unit budgets; no cache saving assumed' },
+        ocrComponent(plan),
         { key: 'ops', label: plan === 'platinum' ? 'Operatsion ulush: hosting, DB, storage, support, Workspace' : 'Operatsion ulush: hosting, DB, storage, support', uzs: ledger.PLANNING.opsUzs[plan], status: 'estimated',
           basis: "owner's operations allotment" },
       ],
     };
   }
   return {
-    version: 'cm-2026-10-05-planning-v1',
+    // OCR joined the model (2026-10-06): offers made under v1 are quoted again
+    version: require('../ocr/scan-limits').ocrCostBasis().status === 'estimated' ? 'cm-2026-10-06-planning-v2-ocr' : 'cm-2026-10-06-planning-v2-ocr-unknown',
     label: 'taxminiy (egasining planlash budjeti, o\'lchanmagan)',
     // the floors rest on planning budgets, not on measured cost
     measured: false,
-    basisNote: "Minimal narxlar (Silver 150 000, Gold 450 000, Platinum 750 000 so'm) o'lchangan xarajatga emas, egasining o'lchanmagan planlash budjetiga asoslangan.",
+    basisNote: "Minimal narxlar o'lchangan xarajatga emas, egasining o'lchanmagan planlash budjetiga va OCR sahifasi uchun manbali taxminga asoslangan.",
     // a share of the price. 0 is the scope of this model, not a measured
     // fee: no payment provider is connected and a payment is taken by hand
     // (master grant). An offer quoted under this scope is not redeemed

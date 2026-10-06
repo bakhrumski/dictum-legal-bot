@@ -14,6 +14,11 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
+// OCR is costed per page only on the Gemini path (src/ocr/scan-limits.js):
+// these floors assume that deployment; without the key OCR is unknown and no
+// offer is made (tested below)
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'assumed-for-this-test';
+delete process.env.OCR_FALLBACK;
 const pricing = require('../src/rag/tariff-pricing');
 const docJob = require('../src/rag/document-job');
 
@@ -32,14 +37,33 @@ function withModel(model, fn) {
 (async () => {
   console.log('price floor');
 
-  await test('starting budgets: Silver 120 000 -> 150 000, Gold 360 000 -> 450 000, Platinum 600 000 -> 750 000 (marked estimated)', () => {
-    for (const [plan, cost, min] of [['silver', 120000, 150000], ['gold', 360000, 450000], ['platinum', 600000, 750000]]) {
+  await test('starting budgets with OCR (2026-10-06): Silver 151 554 -> 190 000, Gold 454 660 -> 569 000, Platinum 757 767 -> 948 000 (marked estimated)', () => {
+    for (const [plan, cost, min] of [['silver', 151554, 190000], ['gold', 454660, 569000], ['platinum', 757767, 948000]]) {
       const c = pricing.conservativeCost(plan);
       assert.strictEqual(c.fixedUzs, cost, plan);
       assert.strictEqual(pricing.minimumPrice(c.fixedUzs, 0), min, plan);
       assert.ok(c.components.every(x => x.status === 'estimated'), 'planning budgets are estimates');
     }
     assert.match(pricing.costModel().label, /taxminiy/u);
+    // OCR: (analysis + opinion) x 10 pages + the chat-scan pool, at the per-page estimate
+    const ocr = pricing.conservativeCost('silver').components.find(c => c.key === 'ocr');
+    assert.deepStrictEqual([ocr.uzs, ocr.status], [31554, 'estimated']);
+    assert.match(ocr.basis, /240 pages x \$0\.010956 per page/u);
+    assert.strictEqual(pricing.costModel().version, 'cm-2026-10-06-planning-v2-ocr');
+  });
+
+  await test('OCR cost unknown (no Gemini key, or the unbounded fallback on): no offer, the reason named', () => {
+    const keep = process.env.GEMINI_API_KEY;
+    try {
+      delete process.env.GEMINI_API_KEY;
+      const q = pricing.quoteDiscount({ plan: 'silver', discountPercent: '1' });
+      assert.deepStrictEqual([q.ok, q.reason], [false, 'unknown_cost_without_reserve']);
+      assert.match(q.message, /ocr/u);
+      assert.strictEqual(pricing.costModel().version, 'cm-2026-10-06-planning-v2-ocr-unknown');
+      process.env.GEMINI_API_KEY = keep;
+      process.env.OCR_FALLBACK = 'on';
+      assert.strictEqual(pricing.quoteDiscount({ plan: 'gold', discountPercent: '1' }).reason, 'unknown_cost_without_reserve');
+    } finally { process.env.GEMINI_API_KEY = keep; delete process.env.OCR_FALLBACK; }
   });
 
   await test('the minimum rounds UP to 1 000 so\'m, in integers', () => {
@@ -61,22 +85,23 @@ function withModel(model, fn) {
   });
 
   await test('a discount to exactly the minimum passes; one so\'m more is refused with the largest allowed discount, never adjusted', () => {
-    const ok = pricing.quoteDiscount({ plan: 'silver', discountUzs: 49000 });
-    assert.deepStrictEqual([ok.ok, ok.finalPriceUzs, ok.minPriceUzs], [true, 150000, 150000]);
-    const no = pricing.quoteDiscount({ plan: 'silver', discountUzs: 49001 });
-    assert.deepStrictEqual([no.ok, no.reason, no.finalPriceUzs, no.maxDiscountUzs], [false, 'below_minimum', 149999, 49000]);
-    assert.match(no.message, /Eng katta ruxsat etilgan chegirma: 49 000 so'm \(24\.62%\)/u);
+    const ok = pricing.quoteDiscount({ plan: 'silver', discountUzs: 9000 });
+    assert.deepStrictEqual([ok.ok, ok.finalPriceUzs, ok.minPriceUzs], [true, 190000, 190000]);
+    const no = pricing.quoteDiscount({ plan: 'silver', discountUzs: 9001 });
+    assert.deepStrictEqual([no.ok, no.reason, no.finalPriceUzs, no.maxDiscountUzs], [false, 'below_minimum', 189999, 9000]);
+    assert.match(no.message, /Eng katta ruxsat etilgan chegirma: 9 000 so'm \(4\.52%\)/u);
   });
 
   await test('percent: up to 2 decimals, the discount rounds down; percent and amount are not both accepted', () => {
-    const q = pricing.quoteDiscount({ plan: 'gold', discountPercent: '12.5' });
-    assert.deepStrictEqual([q.ok, q.discountUzs, q.finalPriceUzs], [true, 74875, 524125]);
+    const q = pricing.quoteDiscount({ plan: 'gold', discountPercent: '5' });
+    assert.deepStrictEqual([q.ok, q.discountUzs, q.finalPriceUzs], [true, 29950, 569050]);
+    assert.strictEqual(pricing.quoteDiscount({ plan: 'gold', discountPercent: '5.01' }).reason, 'below_minimum');
     assert.strictEqual(pricing.parseDiscount(599000, { discountPercent: '0.01' }).discountUzs, 59);
     assert.strictEqual(pricing.parseDiscount(599000, { discountPercent: '12.345' }).error, 'invalid_percent');
     assert.strictEqual(pricing.parseDiscount(599000, { discountPercent: '100' }).error, 'invalid_percent');
     assert.strictEqual(pricing.parseDiscount(599000, { discountPercent: '10', discountUzs: 5 }).error, 'one_of_percent_or_amount');
     assert.strictEqual(pricing.parseDiscount(599000, { discountUzs: 1.5 }).error, 'invalid_amount');
-    assert.strictEqual(pricing.quoteDiscount({ plan: 'platinum', discountPercent: '25' }).ok, false, '25% of Platinum is under 750 000');
+    assert.strictEqual(pricing.quoteDiscount({ plan: 'platinum', discountPercent: '25' }).ok, false, '25% of Platinum is under 948 000');
   });
 
   await test('an unknown cost is never 0: without a reasoned reserve, no offer; with one, the reserve is counted', () => {
@@ -95,9 +120,9 @@ function withModel(model, fn) {
 
   await test('measured cost can raise the estimate, never lower it (no optimistic cache or low-usage discount)', () => {
     const low = pricing.conservativeCost('silver', { measured: [{ service: 'chat', knownUsdPerUnit: 0.001 }, { service: 'analysis', knownUsdPerUnit: 0.01 }] });
-    assert.strictEqual(low.fixedUzs, 120000, 'cheaper measurements do not lower the floor');
+    assert.strictEqual(low.fixedUzs, 151554, 'cheaper measurements do not lower the floor');
     const high = pricing.conservativeCost('silver', { measured: [{ service: 'analysis', knownUsdPerUnit: 0.45 }] });
-    assert.strictEqual(high.fixedUzs, 120000 + 8 * 0.15 * 12000);
+    assert.strictEqual(high.fixedUzs, 151554 + 8 * 0.15 * 12000);
     assert.strictEqual(high.components.find(c => c.key === 'ai').status, 'measured_above_plan');
   });
 
@@ -109,18 +134,18 @@ function withModel(model, fn) {
   });
 
   await test('the quote reports list, discount, final, minimum, AI and total cost, margin, confidence and versions', () => {
-    const q = pricing.quoteDiscount({ plan: 'silver', discountPercent: '10' });
+    const q = pricing.quoteDiscount({ plan: 'silver', discountPercent: '4' });
     for (const k of ['listPriceUzs', 'discountUzs', 'finalPriceUzs', 'minPriceUzs', 'aiCostUzs', 'totalCostUzs', 'leftUzs', 'serviceMarginBp', 'confidence', 'costModelVersion', 'quotaVersion']) {
       assert.ok(q[k] != null, k);
     }
-    assert.deepStrictEqual([q.finalPriceUzs, q.totalCostUzs, q.leftUzs, q.serviceMarginBp], [179100, 120000, 59100, 3299]);
+    assert.deepStrictEqual([q.finalPriceUzs, q.totalCostUzs, q.leftUzs, q.serviceMarginBp], [191040, 151554, 39486, 2066]);
     assert.deepStrictEqual(q.quotas, require('../src/rag/tariff-ledger').PLAN_CATALOG.silver.quotas, 'a discount does not cut the quota');
   });
 
   await test('the floors are marked unmeasured, and the zero payment fee is the scope (no provider), not a measured fee', () => {
     const q = pricing.quoteDiscount({ plan: 'gold', discountPercent: '10' });
     assert.strictEqual(q.costMeasured, false);
-    assert.match(q.basisNote, /o'lchanmagan planlash budjetiga asoslangan/u);
+    assert.match(q.basisNote, /o'lchanmagan planlash budjetiga va OCR sahifasi uchun manbali taxminga asoslangan/u);
     assert.deepStrictEqual([q.paymentFeeBp, q.feeScope.providers], [0, ['manual']]);
     assert.match(q.feeScope.label, /provayderi ulanmagan/u);
     const html = read('public/dashboard.html');
@@ -172,7 +197,7 @@ function withModel(model, fn) {
 
   await test('web chat: the middleware meters by the work, the handler sends excerpts or the whole document accordingly', () => {
     const server = read('src/api/server.js');
-    assert.match(server, /app\.post\('\/api\/legal-chat', requireAuth, tariffModule\.enforceChatQuota\('\/api\/legal-chat'\),/u);
+    assert.match(server, /app\.post\('\/api\/legal-chat', requireAuth, resolveScanDocs, tariffModule\.enforceChatQuota\('\/api\/legal-chat'\),/u);
     assert.ok(!/\.trim\(\)\.slice\(0, 15000\)/u.test(server), 'no silent first-15 000-characters cut');
     assert.match(server, /documentJob\.selectExcerpt\(rawDoc, message\)/u);
     assert.match(server, /docJobInfo\.mode === 'document'/u);

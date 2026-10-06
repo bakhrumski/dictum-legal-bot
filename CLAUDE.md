@@ -181,6 +181,19 @@ Known state of the suites (Sept 2026):
   scope (no provider), so an offer is not redeemed through a provider or
   under another fee / cost model; redeemed once by
   `grant { offerId, paymentRef }`; `TARIFF_OFFERS=off` stops them.
+  OCR (2026-10-06, `src/ocr/scan-limits.js`, `scan-store.js`) is a step of
+  analysis, opinion or chat, never a service of its own: `scan-quote` counts
+  pages on the server (no AI) and signs a ticket bound to file hash, account,
+  service, size and 15 min; `ocr-image` needs `confirmed`, re-counts, checks
+  the free-access gate and reserves the service (held 120 min, adopted by
+  the service call) before the provider; it returns a `scanId`, never text,
+  and the service endpoints load the text by `scanId` for that account only
+  (`document_scans`, 7-day cache, analysis and opinion share one OCR). One
+  document: Sinov 10, paid 30 pages. Chat scans draw the plan's `ocr` pool
+  in pages (legacy v1: 1 per file). Gemini only (thinking off, 1 536 output
+  tokens a page); `OCR_FALLBACK=on` or no Gemini key makes OCR cost unknown
+  and blocks offers. The per-page cost ($0.010956) is a sourced estimate in
+  the planning economics, not a measurement.
   `marginReport` keeps cash (once, at payment), carried credit (not cash)
   and service revenue (price + credit in - credit out over the days run)
   apart; legacy revenue and refunds are unknown, never 0. Rollback is code,

@@ -1,4 +1,4 @@
-# Tariflar v2 — moliyaviy hisobot (2026-10-04, yangilangan 2026-10-06)
+# Tariflar v2 — moliyaviy hisobot (2026-10-04, yangilangan 2026-10-06, OCR bilan)
 
 **Holat: rejalashtirish.** Bu hisobotdagi barcha xarajat raqamlari egasining
 dastlabki birlik budjetlaridan chiqadi. Ular provayderning tasdiqlangan
@@ -19,7 +19,8 @@ budjetidan qayta chiqariladi (`src/rag/tariff-ledger.js` `PLAN_CATALOG`,
 | **Fakt** | Har bir yetkazilgan ish (`tariff_usage`, `status = committed`) o'z AI so'roviga (`request_id`) bog'langan; xizmat bo'yicha o'lchangan tannarx `GET /api/admin/tariff/economics` → `measured` | `measuredServiceCost` |
 | **Taxmin (egasi)** | Kurs 12 000 so'm/$; chat $0.025; tahlil va xulosa $0.30/birlik; draft $0.06; operatsion ajratma 10 200 / 30 600 / 51 000 so'm | `PLANNING` |
 | **Taxmin (shu hisobot)** | Tasdiqlangan javob bazadan berilganda generatsiya narxining 20% (retrieval, moslik tekshiruvi, infratuzilma 0 emas) | `--hit-cost-share` |
-| **Noma'lum** | Hujjat tahlili, xulosa va draftning haqiqiy birlik narxi; OCR, STT, TTS narxi; Gemini embedding narxi (`AI_PRICE_OVERRIDES` bo'lmaguncha "estimated"); VoiceLab kredit iste'moli (kredit qaytmasa noma'lum, token narxiga aylantirilmaydi) | Benchmark va production o'lchovi kerak |
+| **Taxmin (manbali)** | OCR sahifasi $0.010956 (Gemini 2.5 Flash, Vertex AI narx sahifasi 2026-10-06; §2a) | `src/ocr/scan-limits.js` |
+| **Noma'lum** | Hujjat tahlili, xulosa va draftning haqiqiy birlik narxi; OCR sahifasining haqiqiy (o'lchangan) narxi va VoiceLab / OpenAI vision fallback narxi; STT, TTS narxi; Gemini embedding narxi (`AI_PRICE_OVERRIDES` bo'lmaguncha "estimated"); VoiceLab kredit iste'moli (kredit qaytmasa noma'lum, token narxiga aylantirilmaydi) | Benchmark va production o'lchovi kerak |
 | **Noma'lum** | Hosting (Render), Supabase (DB + storage), support, Workspace storage — operatsion ajratmani tekshirish uchun hisob-fakturalar kerak | Egasining hisoblari |
 | **Doira (scope), o'lchov emas** | To'lov komissiyasi 0: provayder ulanmagan, to'lov qo'lda (master grant). Provayder ulanganda komissiya noma'lum bo'ladi, model qayta tekshiriladi; eski takliflar shungacha qo'llanmaydi | `feeScope` (`src/rag/tariff-pricing.js`) |
 | **Noma'lum (0 emas)** | Refundlar: qaytarish oqimi va yozuvi yo'q. Hisobotda `refundsUzs: null`, `refundsStatus: 'not_tracked'` — "tasdiqlangan nol refund" emas | `marginReport` |
@@ -34,67 +35,105 @@ Asos: planning budgets at 100% use, not measured cost (src/rag/tariff-ledger.js 
 
 | Tarif | Narx | AI budjeti | Operatsion | Jami xizmat | Qoladi | Xizmat marjasi | 80% chegara |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Silver | 199 000 | 109 800 | 10 200 | 120 000 | 79 000 | 39.70% | 159 200 |
-| Gold | 599 000 | 329 400 | 30 600 | 360 000 | 239 000 | 39.90% | 479 200 |
-| Platinum | 999 000 | 549 000 | 51 000 | 600 000 | 399 000 | 39.94% | 799 200 |
+| Silver | 199 000 | 141 353 | 10 200 | 151 553 | 47 447 | 23.84% | 159 200 |
+| Gold | 599 000 | 424 060 | 30 600 | 454 660 | 144 340 | 24.10% | 479 200 |
+| Platinum | 999 000 | 706 766 | 51 000 | 757 766 | 241 234 | 24.15% | 799 200 |
 
-Bitta Sinov AI budjeti: $0.725 ≈ 8 700 so'm.
+OCR: sahifa uchun $0.010956 (Gemini 2.5 Flash, taxmin; manba: Vertex AI Generative AI pricing page (cloud.google.com/vertex-ai/generative-ai/pricing), fetched 2026-10-06). 100% da sahifalar: Sinov 30, Silver 240, Gold 720, Platinum 1200.
+
+Bitta Sinov AI budjeti (OCR bilan): $1.054 ≈ 12 644 so'm (OCR'siz 8 700 so'm).
 
 | Ssenariy | Tushum, mln | Pullik xizmat budjeti, mln | Sinov AI, mln | Natija, mln (boshqa xarajatlardan oldin) |
 |---|---:|---:|---:|---:|
-| 1. 1 000 yangi Sinov + 100 Silver (hammasi 100%) | 19.90 | 12.00 | 8.70 | -0.80 |
-| 2. 100 yangi Sinov + 100 Silver | 19.90 | 12.00 | 0.87 | 7.03 |
-| 3. 100 Silver renewal, yangi Sinovsiz | 19.90 | 12.00 | 0.00 | 7.90 |
-| 4. 100 Gold + 100 Platinum | 159.80 | 96.00 | 0.00 | 63.80 |
-| 5. 1 Platinum + 4 Silver (bitta Workspace) | 1.79 | 1.08 | 0.00 | 0.71 |
+| 1. 1 000 yangi Sinov + 100 Silver (hammasi 100%) | 19.90 | 15.16 | 12.64 | -7.90 |
+| 2. 100 yangi Sinov + 100 Silver | 19.90 | 15.16 | 1.26 | 3.48 |
+| 3. 100 Silver renewal, yangi Sinovsiz | 19.90 | 15.16 | 0.00 | 4.74 |
+| 4. 100 Gold + 100 Platinum | 159.80 | 121.24 | 0.00 | 38.56 |
+| 5. 1 Platinum + 4 Silver (bitta Workspace) | 1.79 | 1.36 | 0.00 | 0.43 |
 
-1 000 Sinovni qoplash uchun kamida 111 ta Silver xaridi kerak (har biri 79 000 so'm qoldiradi).
+1 000 Sinovni qoplash uchun kamida 267 ta Silver xaridi kerak (har biri 47 447 so'm qoldiradi).
 
 Tasdiqlangan javob hit rate (hit narxi = generatsiyaning 20% — taxmin):
 
 | Hit rate | Silver | Gold | Platinum |
 |---|---:|---:|---:|
-| 0% | 120 000 (60.3%) | 360 000 (60.1%) | 600 000 (60.1%) |
-| 25% | 111 000 (55.8%) | 333 000 (55.6%) | 555 000 (55.6%) |
-| 50% | 102 000 (51.3%) | 306 000 (51.1%) | 510 000 (51.1%) |
-| 75% | 93 000 (46.7%) | 279 000 (46.6%) | 465 000 (46.5%) |
+| 0% | 151 553 (76.2%) | 454 660 (75.9%) | 757 766 (75.9%) |
+| 25% | 142 553 (71.6%) | 427 660 (71.4%) | 712 766 (71.3%) |
+| 50% | 133 553 (67.1%) | 400 660 (66.9%) | 667 766 (66.8%) |
+| 75% | 124 553 (62.6%) | 373 660 (62.4%) | 622 766 (62.3%) |
 
 Stress (jami xizmat budjeti, narxga nisbatan; 80% chegara):
 
 | Holat | Silver | Gold | Platinum |
 |---|---:|---:|---:|
-| provider narxi yoki kurs +20% | 141 960 (71.3%) | 425 880 (71.1%) | 709 800 (71.1%) |
-| hujjat tannarxi +50% (tahlil va xulosa $0.45) | 148 800 (74.8%) | 446 400 (74.5%) | 744 000 (74.5%) |
-| storage/ops +50% | 125 100 (62.9%) | 375 300 (62.7%) | 625 500 (62.6%) |
-| hammasi birga | 181 620 (91.3% ⚠ >80%) | 544 860 (91.0% ⚠ >80%) | 908 100 (90.9% ⚠ >80%) |
+| provider narxi yoki kurs +20% | 173 513 (87.2% ⚠ >80%) | 520 540 (86.9% ⚠ >80%) | 867 566 (86.8% ⚠ >80%) |
+| hujjat tannarxi +50% (tahlil va xulosa $0.45) | 180 353 (90.6% ⚠ >80%) | 541 060 (90.3% ⚠ >80%) | 901 766 (90.3% ⚠ >80%) |
+| storage/ops +50% | 156 653 (78.7%) | 469 960 (78.5%) | 783 266 (78.4%) |
+| OCR sahifa narxi +50% | 167 330 (84.1% ⚠ >80%) | 501 990 (83.8% ⚠ >80%) | 836 650 (83.7% ⚠ >80%) |
+| hammasi birga | 228 950 (115.1% ⚠ >80%) | 686 850 (114.7% ⚠ >80%) | 1 144 750 (114.6% ⚠ >80%) |
 
-Individual chegirma chegarasi (xarajat modeli cm-2026-10-05-planning-v1, taxminiy):
+Individual chegirma chegarasi (xarajat modeli cm-2026-10-06-planning-v2-ocr, taxminiy):
 
 | Tarif | Katalog | Konservativ xarajat | Minimal narx (xarajat / 0,80, 1 000 ga yuqoriga) | Eng katta chegirma | Minimal narxda xarajat ulushi |
 |---|---:|---:|---:|---:|---:|
-| Silver | 199 000 | 120 000 | 150 000 | 49 000 (24.62%) | 80.0% |
-| Gold | 599 000 | 360 000 | 450 000 | 149 000 (24.87%) | 80.0% |
-| Platinum | 999 000 | 600 000 | 750 000 | 249 000 (24.92%) | 80.0% |
+| Silver | 199 000 | 151 554 | 190 000 | 9 000 (4.52%) | 79.8% |
+| Gold | 599 000 | 454 660 | 569 000 | 30 000 (5%) | 79.9% |
+| Platinum | 999 000 | 757 767 | 948 000 | 51 000 (5.1%) | 79.9% |
 
-100 Silver: 70 katalog narxida, 30 minimal narxda (hammasi 100%): katalog bo'yicha 19.90 mln, haqiqiy tushum 18.43 mln (chegirma 1.47 mln), xizmat budjeti 12.00 mln, natija 6.43 mln (boshqa xarajatlardan oldin).
+100 Silver: 70 katalog narxida, 30 minimal narxda (hammasi 100%): katalog bo'yicha 19.90 mln, haqiqiy tushum 19.63 mln (chegirma 0.27 mln), xizmat budjeti 15.16 mln, natija 4.47 mln (boshqa xarajatlardan oldin).
 
+### 2a. OCR (skan hujjat) — 2026-10-06 dan xizmat budjetida
+
+OCR alohida xizmat emas: skan hujjat tahlil yoki xulosa ichida o'qiladi
+(`docs/tariffs-v2.md` §4). Lekin uning provayder narxi bor, shuning uchun
+endi u har bir tarifning xizmat budjetiga, Sinovga va chegirma chegarasiga
+kiritilgan.
+
+- **Sahifalar (100% foydalanish, eng yomon holat):** har bir tahlil va xulosa
+  birligi boshqa skan hujjatda (birlik = 10 sahifa) + chatdagi skan
+  chegarasi. Sinov 1×10 + 1×10 + 10 = **30**; Silver (8+8)×10 + 80 = **240**;
+  Gold **720**; Platinum **1 200**. Bitta hujjatning tahlili va xulosasi bitta
+  OCR'ni bo'lishadi (kesh), shuning uchun bu yuqori chegara.
+- **Sahifa narxi: $0.010956 — taxmin, o'lchov emas.** Manba: Vertex AI
+  Generative AI pricing sahifasi (cloud.google.com/vertex-ai/generative-ai/pricing,
+  2026-10-06 da o'qildi): Gemini 2.5 Flash input $0.30 / 1M, output
+  (javob va reasoning) $2.50 / 1M; "PDFs are billed as image input, with one
+  PDF page equivalent to one image"; "For an 1024x1024 image, it consumes
+  1290 tokens. Per image token count varies by image resolution."
+  Sahifa uchun yuqori chegara e'lon qilinmagan, shuning uchun:
+  - input: 4 × 1 290 + 300 (prompt) = 5 460 token;
+  - output: biz yuboradigan cheklov, sahifaga 1 536 token (`maxOutputTokens`), thinking o'chiq (`thinkingBudget: 0`);
+  - ×2 — bitta qayta urinish.
+  - (5 460 × 0,30 + 1 536 × 2,50) / 1M × 2 = **$0.010956** (`src/ocr/scan-limits.js`).
+- **Taxmin qachon amal qilmaydi:** `GEMINI_API_KEY` yo'q bo'lsa (OCR VoiceLab /
+  OpenAI vision'ga o'tadi) yoki `OCR_FALLBACK=on` bo'lsa. Bu yo'llarning sahifa
+  narxi chegarasiz — xarajat modeli OCR'ni **noma'lum** deb belgilaydi
+  (`cm-2026-10-06-planning-v2-ocr-unknown`) va yangi chegirma taklifi
+  yaratilmaydi (0 deb hisoblanmaydi).
+- **Ta'siri:**
+  - Sinov: 8 700 → **12 644 so'm** (OCR 30 sahifa ≈ 3 944 so'm).
+  - Silver xizmat budjeti 120 000 → **151 553 so'm (76,2%)**, Gold 454 660 (75,9%), Platinum 757 766 (75,9%). 80% chegarasidan past, lekin zaxira ~4 foiz punkt.
+  - 1-ssenariy (1 000 Sinov + 100 Silver): −0,80 → **−7,90 mln**; qoplash uchun 111 emas, **267 Silver** kerak.
+  - Chegirma chegarasi: Silver 150 000 → **190 000**, Gold 450 000 → **569 000**, Platinum 750 000 → **948 000**; eng katta chegirma ~5% (oldin ~25%).
+  - Stress: OCR sahifa narxi +50% bo'lsa Silver 84,1% — **80% dan oshadi**. Provayder narxi yoki kurs +20% ham endi 87% ga olib chiqadi.
+- **Eski takliflar:** xarajat modeli versiyasi o'zgardi (`cm-2026-10-05-planning-v1` → `cm-2026-10-06-planning-v2-ocr`). Eski versiyada yaratilgan faol taklif `offer_cost_model_changed` bilan to'xtaydi; Master uni qayta ko'rib, yangi taklif yaratadi.
 
 ## 3. 80% xarajat maqsadi
 
-- **Planlash budjeti bo'yicha:** 100% foydalanishda xizmat budjeti narxning ~60% i (Silver 60,3%, Gold 60,1%, Platinum 60,1%) — 80% chegarasidan past. Bu **dalil emas, reja**: haqiqiy birlik narxi o'lchanmaguncha maqsad bajarilgan deb hisoblanmaydi.
-- **Bitta stress yetarli emas:** provayder narxi yoki kurs +20% → ~71%; hujjat tannarxi +50% → ~75%.
-- **Hammasi birga** (narx +20%, hujjat +50%, storage +50%) → **~91%**, chegaradan oshadi. Agar o'lchov hujjat birligini $0.45 dan qimmat ko'rsatsa, birinchi tuzatish — tahlil/xulosa limitlari yoki birlik hajmi (masalan, 1 birlik = 8 sahifa / 32 000 belgi). Narxga tegish ikkinchi.
+- **Planlash budjeti bo'yicha (OCR bilan, 2026-10-06):** 100% foydalanishda xizmat budjeti narxning ~76% i (Silver 76,2%, Gold 75,9%, Platinum 75,9%) — 80% chegarasidan past, lekin zaxira kichik. OCR'siz ~60% edi. Bu **dalil emas, reja**: haqiqiy birlik narxi o'lchanmaguncha maqsad bajarilgan deb hisoblanmaydi.
+- **Bitta stress ham yetadi:** provayder narxi yoki kurs +20% → ~87%; hujjat tannarxi +50% → ~90%; OCR sahifa narxi +50% → ~84%. Hammasi 80% dan oshadi.
+- **Hammasi birga** (narx +20%, hujjat +50%, storage +50%, OCR +50%) → **~115%**. Agar o'lchov hujjat birligini $0.45 dan qimmat ko'rsatsa, birinchi tuzatish — tahlil/xulosa limitlari yoki birlik hajmi (masalan, 1 birlik = 8 sahifa / 32 000 belgi). Narxga tegish ikkinchi.
 - **Tekshirish usuli:**
   - **Narxi ma'lum o'lchov:** `GET /api/admin/tariff/economics?days=30` → `measured[].knownUsdPerUnit` ni `planningUsdPerUnit` bilan solishtirish. `complete: false` bo'lsa (noma'lum narxli chaqiruv bor), natija faqat quyi chegara.
   - **To'liq foydalanuvchi:** `GET /api/admin/margin-report` — mijoz bo'yicha real `llm_spend_log` xarajati.
 
 ## 4. Ssenariylar talqini
 
-- **1-ssenariy** (1 000 Sinov + 100 Silver, hammasi 100%) — boshqa xarajatlardan oldin −0,8 mln. Birinchi davrni qoplash uchun kamida **111 Silver** kerak. Bu konversiya taxmini emas: 1 000 Sinovdan 111 tasi (11,1%) to'lashi kerak degani.
+- **1-ssenariy** (1 000 Sinov + 100 Silver, hammasi 100%, OCR bilan) — boshqa xarajatlardan oldin −7,90 mln. Birinchi davrni qoplash uchun kamida **267 Silver** kerak. Bu konversiya taxmini emas: 1 000 Sinovdan 267 tasi (26,7%) to'lashi kerak degani. Har bir Sinov ikkita 10 sahifali skan hujjat va 10 sahifa chat skani bilan to'liq ishlatilgan deb olingan — bu eng yomon holat.
 - **Trial conversion, retention va CAC** bu yerda aralashtirilmaydi:
   - har biri o'lchanmagan;
   - marketing xarajati xizmat marjasidan alohida.
-- **Sinov narxi** $0.725 — bu Sinovning to'liq ishlatilishi; ko'p foydalanuvchi uni oxirigacha ishlatmaydi. Haqiqiy o'rtacha qiymatni `tariff_usage` (`period.source = trial`) va `measured` beradi.
+- **Sinov narxi** $1.054 (OCR'siz $0.725) — bu Sinovning to'liq ishlatilishi; ko'p foydalanuvchi uni oxirigacha ishlatmaydi. Haqiqiy o'rtacha qiymatni `tariff_usage` (`period.source = trial`) va `measured` beradi.
 - **Telegram Stars.**
   - Narx: hozir 1 ⭐ = 4 qo'shimcha javob (`TG_PAID_ANSWER_STARS`, `TG_PAID_ANSWER_CREDITS`; D-12 bo'yicha saqlangan).
   - Muammo: 1 ⭐ dasturchiga taxminan $0.013 keltiradi (Telegram kursi, tekshirilmagan), 4 javobning planlash budjeti esa $0.10. Ya'ni bu paket chat birligining planlash narxidan ancha arzon.
@@ -107,7 +146,7 @@ Qoida: `finalPrice >= conservativeTotalServiceCost / 0.80`, minimal narx 1 000 s
 
 **Konservativ xarajat nimadan tuziladi:**
 - yangi davr limitlarining 100% ishlatilishi (planlash birlik budjetlari bilan, barcha AI bosqichlari);
-- OCR;
+- OCR: (tahlil + xulosa) × 10 sahifa + chatdagi skan chegarasi, sahifa narxi taxmini bilan (§2a); taxmin amal qilmasa — noma'lum, taklif yo'q;
 - operatsion ulush: hosting, DB, storage, support; Platinum'da Workspace ham;
 - to'lov komissiyasi — hozir doira bo'yicha 0 (pastda).
 
@@ -115,11 +154,11 @@ Qoida: `finalPrice >= conservativeTotalServiceCost / 0.80`, minimal narx 1 000 s
 
 **O'lchangan tannarx** faqat yuqoriga ta'sir qiladi: agar o'lchangan birlik narxi planlash budjetidan yuqori bo'lsa, AI qismi oshiriladi.
 
-**Asos o'lchanmagan.** 150 000 / 450 000 / 750 000 minimal narxlar egasining o'lchanmagan planlash budjetidan chiqadi; admin ekrani har quote'da buni ko'rsatadi. Pilot (§7) o'lchagan birlik narxi budjetdan yuqori chiqsa, minimal narx avtomatik ko'tariladi (o'lchov faqat yuqoriga ta'sir qiladi).
+**Asos o'lchanmagan.** 190 000 / 569 000 / 948 000 minimal narxlar egasining o'lchanmagan planlash budjetidan va OCR sahifasining manbali taxminidan chiqadi; admin ekrani har quote'da buni ko'rsatadi. Pilot (§7) o'lchagan birlik narxi budjetdan yuqori chiqsa, minimal narx avtomatik ko'tariladi (o'lchov faqat yuqoriga ta'sir qiladi).
 
 **Payment fee:**
 - Hozir 0 bp. Bu o'lchangan komissiya emas, **hisob doirasi**: provayder ulanmagan, to'lov qo'lda (master grant) qabul qilinadi (`feeScope.providers = ['manual']`). Admin ekranida "To'lov komissiyasi: 0 so'm · doira" qatori izohi bilan chiqadi.
-- Provayder ulanganda komissiya ulush sifatida kiritiladi, formula `fixed / (0.80 − fee)`. Misol: 3% fee bilan Silver minimal narxi 156 000.
+- Provayder ulanganda komissiya ulush sifatida kiritiladi, formula `fixed / (0.80 − fee)`. Misol: 3% fee bilan 120 000 so'mlik xarajatning minimal narxi 156 000.
 - Taklif o'zi hisoblangan doira va model versiyasini saqlaydi. Boshqa provayder orqali, boshqa komissiya bilan yoki boshqa model versiyasida u aktivlashtirilmaydi (`offer_fee_scope_changed`, `offer_cost_model_changed`). Master qayta tekshirib, yangi taklif yaratadi; avtomatik qayta narxlash yo'q.
 
 **Noma'lum xarajat:** asoslangan zaxirasi bo'lmasa, taklif rad etiladi (0 deb hisoblanmaydi).

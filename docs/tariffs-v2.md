@@ -125,7 +125,20 @@ Fayl biriktirilgani o'zi tahlil degani emas: xizmat amalda so'ralgan ishga qarab
 
 ## 4. OCR, ovoz
 
-- **OCR.** Cheksiz emas: davr uchun har bir tahlil birligiga 10 sahifa (Sinov 10, Silver 80, Gold 240, Platinum 400). Bitta so'rov — bitta sahifa/rasm. Narxi `llm_spend_log` da alohida o'lchanadi (stage `ocr`).
+- **OCR — skan hujjat (2026-10-06).** Alohida va bepul xizmat emas: skan PDF yoki rasm hujjat tahlili, yuridik xulosa yoki chat ichida o'qiladi va shu xizmatning birligi bilan hisoblanadi.
+  - **Sahifa chegarasi (bitta hujjat):** Sinov 10, pullik tariflar 30 sahifa (`PLAN_CATALOG[*].job.maxPages`). Oshsa, rad etiladi — hujjat qisqartirilmaydi.
+  - **Avval narx, keyin OCR.** `POST /api/analyze/scan-quote` (AI chaqiruvi yo'q) sahifalarni serverda sanaydi (PDF — `pdf-parse`, rasm — sarlavha baytlari), shifrlangan, o'qilmaydigan, matnli PDF (≥ 200 belgi/sahifa — u OCR'siz `/api/analyze/extract` bilan o'qiladi) va chegaradan oshganini rad etadi va imzolangan chipta beradi. Chipta fayl xeshi (SHA-256), hisob, xizmat, sahifa, bayt va 15 daqiqalik muddatga bog'langan — boshqa fayl yoki hisob uchun ishlamaydi.
+  - **Tasdiq va rezerv.** `POST /api/analyze/ocr-image` faqat `confirmed=true` bilan ishlaydi; faylni qayta xeshlaydi va sahifalarini qayta sanaydi; bepul kirish shartini (kanal, so'rovnoma) tekshiradi; xizmat birligini (tahlil yoki xulosa) **OCR'dan oldin** rezerv qiladi va 120 daqiqa ushlab turadi (`meta.holdUntil`, `scanHash`). Keyingi tahlil/xulosa so'rovi shu rezervni oladi (`adoptHeldScanJob`) — ikkinchi marta yechilmaydi. Mijoz yuborgan maqsad huquq dalili emas: huquq ledgerda tekshiriladi.
+  - **Matn brauzerga berilmaydi.** Javob faqat `scanId` (sahifa, belgi soni). Matn `document_scans` da (hisob + fayl xeshi bo'yicha, 7 kun) saqlanadi va faqat xizmat endpointlari (`/api/analyze`, `/api/draft/explain-document`, `/api/draft/legal-opinion`, `/api/legal-chat`) uni `scanId` bo'yicha shu hisob uchun o'qiydi. Boshqa hisob hech qachon o'qiy olmaydi (404).
+  - **Kesh.** Bitta hisob bir faylni qayta yuklasa, OCR qayta chaqirilmaydi — tahlil va xulosa bitta OCR'ni bo'lishadi, har biri o'z limitidan yechiladi.
+  - **OCR'dan keyin matn kutilganidan uzun bo'lsa:** hech qachon kesilmaydi. Birliklar haqiqiy matn bilan qayta hisoblanadi: bitta ish chegarasidan katta bo'lsa — rad etiladi va rezerv qaytariladi; ko'proq birlik kerak bo'lsa — rezerv qaytariladi va qayta narx (`SCAN_RESIZE`) so'raladi, OCR qayta chaqirilmaydi (kesh). Ikkala holatda ham OCR'ning haqiqiy xarajati `llm_spend_log` da qoladi.
+  - **OCR xatosi yoki matn chiqish chegarasiga yetsa** (`OCR_TRUNCATED`): rezerv qaytariladi, provayder xarajati ledgerda qoladi, kesilgan matn berilmaydi.
+  - **Rasm:** JPEG/PNG/WebP, ≤ 10 MB, tomoni ≤ 4 096 piksel, ≤ 16 megapiksel — bitta sahifa. PDF ≤ 20 MB.
+  - **Chatdagi skan (ichki chegara, sotiladigan xizmat emas):** savol — 1 chat birligi, OCR sahifalari esa davrning skan chegarasidan yechiladi: Sinov 10, Silver 80, Gold 240, Platinum 400 **sahifa** (oldin — so'rov soni, bu sotilgan "10 sahifa" qoidasiga mos emas edi). Chegara tugasa, OCR'dan oldin rad etiladi. Tahlil/xulosa ichidagi skan bu chegaradan yechilmaydi. Balans va `/api/tariff/me` da u xizmat sifatida emas, `scanLimits` sifatida ko'rsatiladi.
+  - **Provayder:** Gemini 2.5 Flash, thinking o'chiq (`thinkingBudget: 0`), chiqish sahifaga 1 536 token. VoiceLab / OpenAI vision faqat Gemini kaliti bo'lmasa yoki `OCR_FALLBACK=on` bo'lsa (faqat rasm) — ularning sahifa narxi chegarasiz, xarajat modeli OCR'ni noma'lum deb belgilaydi va chegirma taklifi yaratilmaydi.
+  - **Narx:** sahifaga $0.010956 — manbali taxmin, o'lchov emas (`src/ocr/scan-limits.js`, `docs/finance/tariffs-v2-report.md` §2a). Haqiqiy narx `llm_spend_log` da (stage `ocr`).
+  - **Eski (legacy_v1) obunalar:** sotib olingan shartlari o'zgarmaydi. Chatdagi skan ular uchun avvalgidek har bir fayl uchun 1 ta (kunlik OCR qoidasi), sahifa bo'yicha emas; tahlil/xulosa ichidagi skan v1 tahlil/xulosa qoidalari bilan. Yangi sahifa chegaralari (10/30) faqat bitta faylning hajmi uchun — v1 da ham chegarasiz fayl OCR'ga yuborilmaydi; bu yangi limit emas, xarajat xavfsizligi. Legacy davr tugagach, foydalanuvchi v2 qoidalariga o'tadi.
+  - **Rollback:** `migrations/20261006_015_document_scans.sql` faqat yangi jadval qo'shadi; eski kod uni o'qimaydi. Down fayli (`migrations/down/…015…`) jadvalni o'chiradi (faqat OCR keshi yo'qoladi).
 - **STT (ovozli savol).** Savol 1 chat birligi sifatida hisoblanadi. STT narxi ledgerda alohida (stage `stt`) o'lchanadi.
 - **TTS.** `VOICELAB_TTS_VOICE_ID` bo'lmasa o'chiq.
 - **Taklif.** O'lchangan STT/TTS narxi asosida alohida "ovoz paketi" (masalan, 60 daqiqa / 30 kun) yoki 1 ovozli javob = 2 chat birligi. Qaror haqiqiy sarf o'lchangandan keyin qabul qilinadi.
@@ -168,6 +181,7 @@ chat $0.025, tahlil $0.30/birlik, xulosa $0.30/birlik, draft $0.06.
 |---|---|
 | `TARIFF_RESERVATION_TTL_MIN` | Tashlab ketilgan rezerv necha daqiqadan keyin hisobdan chiqadi (30; 5–120). |
 | `DOC_TICKET_SECRET` | Hujjat chiptasi HMAC kaliti (bo'lmasa `SESSION_SECRET` / `JWT_SECRET`). |
+| `OCR_FALLBACK` | `on` — Gemini xatosida rasm VoiceLab / OpenAI vision'ga o'tadi. Ularning sahifa narxi chegarasiz: yoqilsa, xarajat modeli OCR'ni noma'lum deb belgilaydi va yangi chegirma taklifi yaratilmaydi. Default o'chiq. |
 | `PAYMENTS_ENABLED` | Hali ham `false` (D-2). Yoqilsa ham pullik tarif to'lovsiz berilmaydi (501 `CHECKOUT_UNAVAILABLE`). |
 
 `AGENT_FREE_AI_LIMIT` endi ishlatilmaydi.

@@ -17,7 +17,14 @@
  *                          (retrieval, matching and infrastructure are not 0)
  */
 
+// OCR (2026-10-06) is costed at the per-page estimate of src/ocr/scan-limits.js,
+// which holds only on the Gemini path. This offline report assumes that path
+// (GEMINI_API_KEY set, OCR_FALLBACK off); in a deployment without it the cost
+// model marks OCR unknown and makes no discount offer.
+if (!process.env.GEMINI_API_KEY) process.env.GEMINI_API_KEY = 'assumed-for-this-report';
+delete process.env.OCR_FALLBACK;
 const ledger = require('../src/rag/tariff-ledger');
+const scanLimits = require('../src/ocr/scan-limits');
 
 const arg = (name, d) => {
   const a = process.argv.find(x => x.startsWith(`--${name}=`));
@@ -32,10 +39,13 @@ function aiUsd(plan, unitUsd = P.unitUsd) {
   const q = C[plan].quotas;
   return Object.entries(unitUsd).reduce((s, [k, usd]) => s + (q[k] || 0) * usd, 0);
 }
-function serviceUzs(plan, { unitUsd = P.unitUsd, rate = P.uzsPerUsd, opsMult = 1 } = {}) {
-  return Math.round(aiUsd(plan, unitUsd) * rate) + Math.round((P.opsUzs[plan] || 0) * opsMult);
+// OCR at 100%: analysis + opinion units on different scans (10 pages a unit) + the chat-scan pool
+const ocrPageUsd = scanLimits.ocrPageUsd();
+const ocrUsd = (plan, mult = 1) => ledger.maxOcrPages(plan) * ocrPageUsd * mult;
+function serviceUzs(plan, { unitUsd = P.unitUsd, rate = P.uzsPerUsd, opsMult = 1, ocrMult = 1 } = {}) {
+  return Math.round((aiUsd(plan, unitUsd) + ocrUsd(plan, ocrMult)) * rate) + Math.round((P.opsUzs[plan] || 0) * opsMult);
 }
-const trialUzs = (unitUsd = P.unitUsd, rate = P.uzsPerUsd) => Math.round(aiUsd('sinov', unitUsd) * rate);
+const trialUzs = (unitUsd = P.unitUsd, rate = P.uzsPerUsd, ocrMult = 1) => Math.round((aiUsd('sinov', unitUsd) + ocrUsd('sinov', ocrMult)) * rate);
 const fmt = n => Math.round(n).toLocaleString('ru-RU').replace(/ /gu, ' ');
 const mln = n => (n / 1e6).toFixed(2);
 
@@ -74,7 +84,8 @@ const stress = [
   ['provider narxi yoki kurs +20%', { unitUsd: Object.fromEntries(Object.entries(P.unitUsd).map(([k, v]) => [k, v * 1.2])) }],
   ['hujjat tannarxi +50% (tahlil va xulosa $0.45)', { unitUsd: { ...P.unitUsd, analysis: 0.45, opinion: 0.45 } }],
   ['storage/ops +50%', { opsMult: 1.5 }],
-  ['hammasi birga', { unitUsd: { chat: P.unitUsd.chat * 1.2, analysis: 0.45 * 1.2, opinion: 0.45 * 1.2, draft: P.unitUsd.draft * 1.2 }, opsMult: 1.5 }],
+  ['OCR sahifa narxi +50%', { ocrMult: 1.5 }],
+  ['hammasi birga', { unitUsd: { chat: P.unitUsd.chat * 1.2, analysis: 0.45 * 1.2, opinion: 0.45 * 1.2, draft: P.unitUsd.draft * 1.2 }, opsMult: 1.5, ocrMult: 1.5 }],
 ].map(([name, o]) => ({ name, rows: ['silver', 'gold', 'platinum'].map(plan => {
   const s = serviceUzs(plan, o);
   return { plan, serviceUzs: s, share: s / C[plan].priceUzs, within80: s <= C[plan].priceUzs * P.costCeilingShare };
@@ -98,7 +109,8 @@ const discountScenario = (() => {
 
 const out = {
   basis: 'planning budgets at 100% use, not measured cost (src/rag/tariff-ledger.js PLANNING)',
-  planning: P, trialUzs: trialUzs(), trialUsd: aiUsd('sinov'),
+  planning: P, trialUzs: trialUzs(), trialUsd: aiUsd('sinov') + ocrUsd('sinov'), trialUzsWithoutOcr: Math.round(aiUsd('sinov') * P.uzsPerUsd),
+  ocr: { usdPerPage: ocrPageUsd, estimate: scanLimits.OCR_PAGE_ESTIMATE, pages: Object.fromEntries(['sinov', 'silver', 'gold', 'platinum'].map(p => [p, ledger.maxOcrPages(p)])) },
   plans: ['silver', 'gold', 'platinum'].map(p => ledger.planEconomics(p)),
   scenarios, breakEvenSilver, hitRates, hitCostShare: HIT_COST_SHARE, stress, floors, discountScenario,
   costModelVersion: pricing.costModel().version,
@@ -111,7 +123,8 @@ if (process.argv.includes('--json')) {
   L.push(`Asos: ${out.basis}. Kurs ${P.uzsPerUsd} so'm/$.`, '');
   L.push('| Tarif | Narx | AI budjeti | Operatsion | Jami xizmat | Qoladi | Xizmat marjasi | 80% chegara |', '|---|---:|---:|---:|---:|---:|---:|---:|');
   for (const e of out.plans) L.push(`| ${C[e.plan].label} | ${fmt(e.priceUzs)} | ${fmt(e.aiUzs)} | ${fmt(e.opsUzs)} | ${fmt(e.serviceUzs)} | ${fmt(e.leftUzs)} | ${(e.serviceMargin * 100).toFixed(2)}% | ${fmt(e.ceilingUzs)} |`);
-  L.push('', `Bitta Sinov AI budjeti: $${out.trialUsd.toFixed(3)} ≈ ${fmt(out.trialUzs)} so'm.`, '');
+  L.push('', `OCR: sahifa uchun $${ocrPageUsd.toFixed(6)} (Gemini 2.5 Flash, taxmin; manba: ${scanLimits.OCR_PAGE_ESTIMATE.source}). 100% da sahifalar: Sinov ${out.ocr.pages.sinov}, Silver ${out.ocr.pages.silver}, Gold ${out.ocr.pages.gold}, Platinum ${out.ocr.pages.platinum}.`);
+  L.push('', `Bitta Sinov AI budjeti (OCR bilan): $${out.trialUsd.toFixed(3)} ≈ ${fmt(out.trialUzs)} so'm (OCR'siz ${fmt(out.trialUzsWithoutOcr)} so'm).`, '');
   L.push('| Ssenariy | Tushum, mln | Pullik xizmat budjeti, mln | Sinov AI, mln | Natija, mln (boshqa xarajatlardan oldin) |', '|---|---:|---:|---:|---:|');
   for (const s of scenarios) L.push(`| ${s.name} | ${mln(s.revenue)} | ${mln(s.paidService)} | ${mln(s.trialCost)} | ${mln(s.result)} |`);
   L.push('', `1 000 Sinovni qoplash uchun kamida ${breakEvenSilver} ta Silver xaridi kerak (har biri ${fmt(silverLeft)} so'm qoldiradi).`, '');
