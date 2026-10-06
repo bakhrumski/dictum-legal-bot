@@ -14,6 +14,9 @@ export TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-123456:CI_FAKE_TOKEN_xxxxxxxxxx
 export SESSION_SECRET="${SESSION_SECRET:-ci-session-secret-ci-session-secret}"
 export JWT_SECRET="${JWT_SECRET:-ci-jwt-secret-ci-jwt-secret}"
 export REG_BOT_TOKEN=""
+# a placeholder: the offer e2e test needs the OCR cost estimate, which applies
+# only on the Gemini path; the smoke makes no OCR call (no Gemini request)
+export GEMINI_API_KEY="${GEMINI_API_KEY:-ci-placeholder-no-calls}"
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f scripts/ci/supabase-stubs.sql
 node src/database/setup.js > /tmp/boot-smoke-setup.log 2>&1

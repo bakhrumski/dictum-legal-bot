@@ -47,6 +47,8 @@ const CASES = [
   ['POST', '/api/analyze', REJECTED, 'doc analysis'],
   ['POST', '/api/analyze/extract', REJECTED, 'PDF extraction'],
   ['POST', '/api/analyze/ocr-image', REJECTED, 'OCR'],
+  ['POST', '/api/analyze/scan-quote', REJECTED, 'scan page count and quote'],
+  ['POST', '/api/analyze/scans/00000000-0000-0000-0000-000000000000/release', REJECTED, 'scan reservation release'],
 
   // ── staff-only ──
   ['GET', '/api/files/AgACAgTEST/download', REJECTED, 'client file download'],
