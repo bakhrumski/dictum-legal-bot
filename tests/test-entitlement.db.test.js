@@ -58,6 +58,7 @@ async function ensureSchema() {
   await spendLog.initSpendLog();
   await pool.query(fs.readFileSync(path.join(__dirname, '../migrations/20261004_013_tariff_periods.sql'), 'utf8'));
   await pool.query(fs.readFileSync(path.join(__dirname, '../migrations/20261006_014_test_budget_risk.sql'), 'utf8'));
+  await pool.query(fs.readFileSync(path.join(__dirname, '../migrations/20261007_016_account_credentials.sql'), 'utf8'));
   usage.configure({ write: spendLog.writeLedgerRow, writeRequest: spendLog.writeRequestRow });
 }
 async function makeUser(role = 'user') {
@@ -284,6 +285,65 @@ async function aiCall({ inTokens = 0, unknown = false } = {}) {
     assert.match(server, /req\.session\.role === 'user' && await testBudget\.attach\(adminId\)/u);
     const bot = fs.readFileSync(path.join(__dirname, '..', 'src', 'bot', 'bot.js'), 'utf8');
     assert.match(bot, /if \(\(await testBudget\.accountsWithTest\(\)\)\.size\) \{[\s\S]*?testBudget\.attach\(ident\.adminId\)/u);
+  });
+
+  // ── the channel gate (2026-10-07, test user #1549 in production) ──
+  async function gatedUser({ login = null, createdByMaster = null } = {}) {
+    // an ordinary account with no Telegram linked and no channel: the gate's case
+    const r = await pool.query(
+      `INSERT INTO admins (username, password, full_name, role, free_gate_since, created_by_master_id)
+       VALUES ($1, 'x', 'Gate', 'user', now() - interval '1 day', $2) RETURNING id`, [login || `gate_${Date.now()}_${rnd()}`, createdByMaster]);
+    made.push(r.rows[0].id);
+    return r.rows[0].id;
+  }
+
+  await test('regression: an ordinary Sinov account without the channel is gated; a login "test" or created_by_master_id changes nothing', async () => {
+    const plain = await gatedUser();
+    await ledger.reserve({ adminId: plain, service: 'chat', endpoint: '/api/legal-chat' }); // its Sinov runs
+    const a = await tiers.checkFreeAccess(plain);
+    assert.deepStrictEqual([a.allowed, a.code], [false, 'CHANNEL_REQUIRED']);
+    const named = await gatedUser({ login: `test${rnd() % 1000}`, createdByMaster: master });
+    const b = await tiers.checkFreeAccess(named);
+    assert.deepStrictEqual([b.allowed, b.code], [false, 'CHANNEL_REQUIRED'], 'a test-looking account without a test entitlement is gated like anyone');
+  });
+
+  await test('a live test entitlement lifts the channel gate (server state "test"); quota and AI budget still apply; ending it brings the gate back', async () => {
+    const u = await gatedUser({ login: `test${rnd() % 1000}`, createdByMaster: master });
+    assert.strictEqual((await tiers.checkFreeAccess(u)).code, 'CHANNEL_REQUIRED');
+    const g = await ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'fayl yuklash va OCR kartasini bekor qilish sinovi', hours: 48 });
+    assert.ok(g.ok, JSON.stringify(g));
+    assert.deepStrictEqual([g.period.price_uzs == null || Number(g.period.price_uzs) === 0, g.period.payment_ref, g.period.source], [true, null, 'test'], 'no payment, no revenue');
+    testBudget.resetCache();
+    const open = await tiers.checkFreeAccess(u);
+    assert.deepStrictEqual([open.allowed, open.state, !!open.testUntil], [true, 'test', true]);
+    // the dashboard shows the gate only for channel_required / survey_required
+    const page = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+    assert.ok(/if \(st\.state === 'channel_required'\) renderChannelGate\(st, false\);/u.test(page));
+    // quotas still apply: the test quota of a service runs out like any other
+    const lim = g.period.limits.analysis;
+    for (let i = 0; i < lim; i++) assert.ok((await ledger.reserve({ adminId: u, service: 'analysis', endpoint: '/api/analyze' })).allowed);
+    const over = await ledger.reserve({ adminId: u, service: 'analysis', endpoint: '/api/analyze' });
+    assert.strictEqual(over.allowed, false, 'the quota is not lifted');
+    // the AI budget still attaches (strict: an unbounded call is refused)
+    let calls = 0;
+    await usage.runWithRequest({ service: 'web', userId: u }, async () => {
+      assert.strictEqual(await testBudget.attach(u), true);
+      await assert.rejects(usage.track({ provider: 'voicelab', model: 'voicelab/aisha-halo', stage: 'ocr', bound: { usd: null, reason: 'image input' } }, async () => { calls++; return {}; }));
+    });
+    assert.strictEqual(calls, 0, 'no unbounded AI call');
+    // ended by the master: gated again at once
+    assert.ok((await ledger.endTestEntitlement({ adminId: u, endedBy: master })).ok);
+    testBudget.resetCache();
+    assert.strictEqual((await tiers.checkFreeAccess(u)).code, 'CHANNEL_REQUIRED');
+  });
+
+  await test('an expired test entitlement brings the gate back by itself', async () => {
+    const u = await gatedUser();
+    const g = await ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'muddat sinovi', hours: 1 });
+    assert.ok(g.ok);
+    assert.strictEqual((await tiers.checkFreeAccess(u)).state, 'test');
+    await pool.query(`UPDATE tariff_periods SET starts_at = now() - interval '2 hours', ends_at = now() - interval '1 minute' WHERE id = $1`, [g.period.id]);
+    assert.strictEqual((await tiers.checkFreeAccess(u)).code, 'CHANNEL_REQUIRED');
   });
 
   await test('scope: Sinov, paid and legacy accounts get no test budget - their unbounded provider calls run as before', async () => {
