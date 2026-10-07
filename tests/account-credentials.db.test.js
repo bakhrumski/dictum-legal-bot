@@ -592,6 +592,9 @@ const balanceOf = async (adminId) => {
       assert.ok(/status\(410\)/u.test(req_) && !/telegram_username/u.test(req_.replace(/^\/\/.*$/gmu, '')), 'no lookup by Telegram username');
       const recovery = fs.readFileSync(path.join(__dirname, '../src/auth/recovery.js'), 'utf8');
       assert.ok(/target\.role === 'user'/u.test(recovery) && /resetWithLink/u.test(server_), 'a reset link does not set an ordinary account password');
+      // a reset link unknown here (used, expired, issued before a restart) gets a plain message
+      const reset = server_.slice(server_.indexOf("app.post('/api/password-recovery/reset'"));
+      assert.ok(/if \(!code\) return res\.status\(400\)\.json\(\{ error: "Tiklash havolasi eskirgan yoki allaqachon ishlatilgan/u.test(reset));
       const regBot = fs.readFileSync(path.join(__dirname, '../src/bot/reg-bot.js'), 'utf8');
       const authStart = fs.readFileSync(path.join(__dirname, '../src/bot/auth-start.js'), 'utf8');
       assert.ok(/row\.role === 'user'/u.test(authStart) && /auth-start/u.test(regBot) && !/'APPROVED'/u.test(regBot + authStart));
