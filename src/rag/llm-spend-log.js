@@ -108,6 +108,8 @@ async function extendForUsageLedger() {
     )`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_requests_started ON ai_requests(started_at DESC)`);
   await pool.query(`ALTER TABLE ai_requests ADD COLUMN IF NOT EXISTS degraded JSONB`);
+  // why the AI ran: 'user_question' | 'service_confirmed' (src/ai/ai-trigger.js); NULL for flows that do not say
+  await pool.query(`ALTER TABLE ai_requests ADD COLUMN IF NOT EXISTS trigger VARCHAR(40)`);
   await pool.query(`ALTER TABLE ai_requests ENABLE ROW LEVEL SECURITY`);
 }
 
@@ -139,20 +141,21 @@ async function writeLedgerRow(r) {
 async function writeRequestRow(r) {
   if (!_initialized) await initSpendLog();
   await pool.query(
-    `INSERT INTO ai_requests (request_id, service, kind, user_id, chat_id, started_at, finished_at, latency_ms, outcome, legal_check, telemetry_errors, degraded)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    `INSERT INTO ai_requests (request_id, service, kind, user_id, chat_id, started_at, finished_at, latency_ms, outcome, legal_check, telemetry_errors, degraded, trigger)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      ON CONFLICT (request_id) DO UPDATE SET
        finished_at = COALESCE(EXCLUDED.finished_at, ai_requests.finished_at),
        latency_ms = COALESCE(EXCLUDED.latency_ms, ai_requests.latency_ms),
        outcome = COALESCE(EXCLUDED.outcome, ai_requests.outcome),
        legal_check = COALESCE(EXCLUDED.legal_check, ai_requests.legal_check),
        degraded = COALESCE(EXCLUDED.degraded, ai_requests.degraded),
+       trigger = COALESCE(ai_requests.trigger, EXCLUDED.trigger),
        user_id = COALESCE(ai_requests.user_id, EXCLUDED.user_id),
        telemetry_errors = GREATEST(ai_requests.telemetry_errors, EXCLUDED.telemetry_errors)`,
     [r.requestId, r.service, r.kind, r.userId, r.chatId, r.startedAt, r.finishedAt || null,
       r.finishedAt ? Math.max(0, r.finishedAt - r.startedAt) : null, r.outcome || null,
       r.legalCheck ? JSON.stringify(r.legalCheck) : null, r.telemetryErrors || 0,
-      r.degraded ? JSON.stringify(r.degraded) : null]
+      r.degraded ? JSON.stringify(r.degraded) : null, r.trigger || null]
   );
 }
 

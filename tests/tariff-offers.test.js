@@ -224,7 +224,7 @@ function withModel(model, fn) {
 
   await test('web chat: the middleware meters by the work, the handler sends excerpts or the whole document accordingly', () => {
     const server = read('src/api/server.js');
-    assert.match(server, /app\.post\('\/api\/legal-chat', requireAuth, resolveScanDocs, tariffModule\.enforceChatQuota\('\/api\/legal-chat'\),/u);
+    assert.match(server, /app\.post\('\/api\/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, tariffModule\.enforceChatQuota\('\/api\/legal-chat'\),/u);
     assert.ok(!/\.trim\(\)\.slice\(0, 15000\)/u.test(server), 'no silent first-15 000-characters cut');
     assert.match(server, /documentJob\.selectExcerpt\(rawDoc, message\)/u);
     assert.match(server, /docJobInfo\.mode === 'document'/u);
