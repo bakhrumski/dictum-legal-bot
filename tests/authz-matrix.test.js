@@ -48,6 +48,10 @@ const CASES = [
   ['POST', '/api/analyze/extract', REJECTED, 'PDF extraction'],
   ['POST', '/api/analyze/ocr-image', REJECTED, 'OCR'],
   ['POST', '/api/analyze/scan-quote', REJECTED, 'scan page count and quote'],
+  ['GET', '/api/account/credentials', REJECTED, 'account sign-in methods'],
+  ['POST', '/api/account/credentials/stepup', REJECTED, 'credential step-up'],
+  ['POST', '/api/account/credentials', REJECTED, 'set login and password'],
+  ['POST', '/api/admin/test-users', REJECTED, 'master: create a test user'],
   ['POST', '/api/analyze/scans/00000000-0000-0000-0000-000000000000/release', REJECTED, 'scan reservation release'],
 
   // ── staff-only ──

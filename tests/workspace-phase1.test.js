@@ -325,6 +325,7 @@ function transactionalPool(handler) {
       '20261004_013_tariff_periods.sql',
       '20261006_014_test_budget_risk.sql',
       '20261006_015_document_scans.sql',
+      '20261007_016_account_credentials.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

@@ -75,13 +75,34 @@ function startRegBot() {
       return;
     }
 
+    // /start stepup_TOKEN — confirm creating or changing the login/password
+    // of the account that asked; only that account's own Telegram id counts
+    if (param.startsWith('stepup_')) {
+      try {
+        const out = await require('../auth/credentials').approveStepupFromTelegram(pool, param.replace('stepup_', '').trim(), msg.from.id);
+        regBot.sendMessage(chatId, out.text);
+      } catch (e) {
+        console.error('[REG-BOT] stepup error:', e.message);
+        regBot.sendMessage(chatId, '⚠️ Xatolik yuz berdi. Iltimos, keyinroq urinib ko\'ring.');
+      }
+      return;
+    }
+
     // /start recover_TOKEN — password recovery
     if (param.startsWith('recover_')) {
       const deepToken = param.replace('recover_', '');
       const appUrl = process.env.APP_URL || ('https://' + (process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:3000'));
       const tgId = String(msg.from.id);
       try {
-        const row = (await pool.query('SELECT id FROM admins WHERE telegram_user_id = $1', [tgId])).rows[0];
+        const row = (await pool.query('SELECT id, role FROM admins WHERE telegram_user_id = $1', [tgId])).rows[0];
+        if (row && row.role === 'user') {
+          // an ordinary account: sign in with Telegram, then set a new
+          // password on the account page after a fresh confirmation
+          await regBot.sendMessage(chatId, `🔑 Parolni tiklash: saytda «Telegram bilan kirish» tugmasi orqali kiring, so'ng «Kirish usullari» sahifasida Telegram tasdig'i bilan yangi parol o'rnating.\n${appUrl}/login.html`);
+          const botInitKey = 'botinit_' + deepToken;
+          if (verificationTokens.has(botInitKey)) verificationTokens.get(botInitKey).confirmed = true;
+          return;
+        }
         if (row) {
           const resetToken = crypto.randomBytes(20).toString('hex');
           verificationTokens.set('pwreset_' + resetToken, { adminId: row.id, expiresAt: Date.now() + 15 * 60 * 1000 });
@@ -91,7 +112,7 @@ function startRegBot() {
           if (verificationTokens.has(botInitKey)) {
             const s = verificationTokens.get(botInitKey);
             s.confirmed = true;
-            s.resetToken = resetToken;
+            // the reset link went to this Telegram chat only; the browser learns "confirmed"
           }
           return;
         }

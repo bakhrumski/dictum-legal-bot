@@ -45,31 +45,14 @@
           <p class="form-subtitle">Davom etish uchun <strong>JuristAI</strong> hisobingizga kiring!</p>
 
           <div id="loginError" class="error-message"></div>
-          <form id="loginForm">
-            <div class="form-group has-icon">
-              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
-              <input type="text" id="username" placeholder="foydalanuvchi nomi" required autofocus autocomplete="username">
-            </div>
-            <div class="form-group has-icon">
-              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
-              <input type="password" id="password" placeholder="parol" required autocomplete="current-password">
-            </div>
-            <div class="form-options">
-              <label class="remember-me"><input type="checkbox" id="rememberMe" checked> Eslab qolish</label>
-              <a href="#" class="forgot-link" onclick="event.preventDefault(); showView('recovery')">Parolni unutdingizmi?</a>
-            </div>
-            <div class="btn-row">
-              <button type="submit" class="btn">Kirish</button>
-              <button type="button" class="btn btn-outline" onclick="showView('register')">Ro'yxatdan o'tish</button>
-            </div>
-          </form>
 
-          <div class="reg-divider">yoki</div>
-          <div class="socrow">
-            <button type="button" class="google-reg-toggle" onclick="startTelegramLogin()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
-              <span>Telegram</span>
-            </button>
+          <!-- Telegram: registration and the main way in -->
+          <button type="button" class="btn btn-block tg-primary" onclick="startTelegramLogin()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+            <span>Telegram bilan kirish</span>
+          </button>
+          <p class="tg-primary-note">Hisobingiz yo'qmi? <a href="#" onclick="event.preventDefault(); showView('register')">Telegram orqali ro'yxatdan o'ting</a></p>
+          <div class="socrow" data-auth="google" hidden>
             <button type="button" class="google-reg-toggle" data-auth="google" hidden onclick="window.location.href='/auth/google?mode=login'">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
               <span>Google</span>
@@ -89,6 +72,29 @@
             </div>
             <div id="loginOtpError" class="agreement-error" style="margin-top:6px;display:none;"></div>
           </div>
+
+          <!-- Login and password: for accounts whose owner turned it on, and staff -->
+          <details class="pw-login" id="pwLoginDetails">
+            <summary>Login va parol bilan kirish</summary>
+            <p class="pw-login-note">Hisobingizning «Kirish usullari» sahifasida login va parol o'rnatgan bo'lsangiz yoki xodim bo'lsangiz. Ro'yxatdan o'tish — faqat Telegram orqali.</p>
+            <form id="loginForm">
+              <div class="form-group has-icon">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
+                <input type="text" id="username" placeholder="login" required autocomplete="username">
+              </div>
+              <div class="form-group has-icon">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                <input type="password" id="password" placeholder="parol" required autocomplete="current-password">
+              </div>
+              <div class="form-options">
+                <label class="remember-me"><input type="checkbox" id="rememberMe" checked> Eslab qolish</label>
+                <a href="#" class="forgot-link" onclick="event.preventDefault(); showView('recovery')">Parolni unutdingizmi?</a>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn">Kirish</button>
+              </div>
+            </form>
+          </details>
 
           <p class="form-subtitle tg-note" style="margin-top:38px; margin-bottom:14px;">Huquqiy maslahat kerak bo'lsa quyidagi Telegram bot orqali murojaat qiling</p>
           <a class="telegram-btn" href="https://t.me/yuristga_savolbot" target="_blank" rel="noopener">
@@ -165,7 +171,8 @@
         <!-- RECOVERY -->
         <div class="recovery-form">
           <h1 class="form-heading">Parolni tiklash</h1>
-          <p class="form-subtitle">Hisobingizni tasdiqlash uchun ro'yxatdan o'tgan usulni tanlang</p>
+          <p class="form-subtitle">Hisobingizga ulangan Telegram orqali tasdiqlang</p>
+          <p class="pw-login-note recovery-note">Oddiy hisob: Telegram bilan kiring, so'ng «Kirish usullari» sahifasida Telegram tasdig'i bilan yangi parol o'rnating. Xodim hisobi: bot tiklash havolasini yuboradi.</p>
 
           <div id="recoveryError" class="error-message"></div>
 
@@ -566,6 +573,7 @@
                     } else {
                         localStorage.removeItem('juristai_remember');
                     }
+                    try { localStorage.setItem('jai-login-method', 'password'); } catch (_) {}
                     if (data.twofa) { show2faStep(data.token); return; }
                     window.location.href = '/dashboard.html';
                 } else {
@@ -643,6 +651,15 @@
             el.addEventListener('input', function() { this.classList.remove('input-invalid'); });
             el.addEventListener('change', function() { this.classList.remove('input-invalid'); });
         });
+
+        // The login/password form opens by itself for whoever used it before
+        // (staff, owners who turned it on) or comes with #parol
+        (function () {
+            var d = document.getElementById('pwLoginDetails');
+            var used = false;
+            try { used = localStorage.getItem('jai-login-method') === 'password' || !!localStorage.getItem('juristai_remember'); } catch (_) {}
+            if (d && (used || location.hash === '#parol')) d.open = true;
+        })();
 
         // Remember me: restore saved username. Older versions also stored the
         // password — scrub it from localStorage on sight.
@@ -727,12 +744,12 @@
                     try {
                         const r = await fetch('/api/recover/status/' + data.token);
                         const d = await r.json();
-                        if (d.resetToken) {
+                        // the reset link (staff) or the next step (ordinary
+                        // account) is in the Telegram chat, never handed here
+                        if (d.confirmed) {
                             clearInterval(_tgRecovPollInterval);
-                            recoveryToken = d.resetToken;
-                            document.querySelectorAll('.recovery-step').forEach(s => s.classList.remove('active'));
-                            document.getElementById('recoveryStep3').classList.add('active');
-                            statusEl.style.display = 'none';
+                            btn.disabled = false;
+                            statusEl.textContent = 'Telegram\'dagi xabarni oching: u yerda keyingi qadam yozilgan.';
                         }
                     } catch(e) {}
                 }, 2500);

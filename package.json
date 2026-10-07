@@ -34,7 +34,7 @@
     "corpus:check-freshness": "node src/rag/check-freshness.js",
     "corpus:check-freshness:dry": "node src/rag/check-freshness.js --dry-run",
     "test:authz": "node tests/authz-matrix.test.js",
-    "test:auth": "node tests/master-bootstrap.test.js && node tests/otp-and-log-secrets.test.js && node tests/file-routes.test.js && node tests/auth-flows.test.js",
+    "test:auth": "node tests/master-bootstrap.test.js && node tests/otp-and-log-secrets.test.js && node tests/file-routes.test.js && node tests/auth-flows.test.js && node tests/account-credentials.db.test.js",
     "test:verify-engine": "node tests/legal-verify.test.js",
     "model:ab": "node scripts/model-ab.js",
     "test:lex-resolve": "node tests/lex-resolve.test.js",

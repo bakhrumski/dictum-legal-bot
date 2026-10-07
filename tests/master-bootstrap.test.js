@@ -73,7 +73,8 @@ async function test(name, fn) {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'api', 'server.js'), 'utf8');
     assert.ok(!/bcrypt\.hash\(\s*['"]/.test(src), 'a literal password is hashed in server.js');
     assert.ok(!/UPDATE admins SET role = 'master' WHERE username/.test(src), 'a username is still promoted to master');
-    assert.ok(/isPublishedMasterPassword\(password\)/.test(src), 'login does not refuse published passwords');
+    const login = fs.readFileSync(path.join(__dirname, '..', 'src', 'auth', 'login-routes.js'), 'utf8');
+    assert.ok(/isPublishedMasterPassword\(password\)/.test(login), 'login does not refuse published passwords');
   });
 
   await test('setup.js prints a random password instead of a fixed one', () => {

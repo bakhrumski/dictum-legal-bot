@@ -1,0 +1,30 @@
+/* Account page: "Kirish usullari" (2026-10-07). Built on the login surface
+   (#lg-root tokens in tokens.css, fields and buttons from login.css). */
+#lg-root.acc-page { align-items:flex-start; }
+#lg-root .acc-wrap { width:100%; max-width:560px; display:grid; gap:16px; }
+#lg-root .acc-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+#lg-root .acc-back { font-size:13px; font-weight:600; }
+#lg-root .acc-card {
+  background:var(--card); border:1px solid var(--line); border-radius:16px;
+  padding:22px; box-shadow:var(--shadow); color:var(--ink);
+}
+#lg-root .acc-card h2 { margin:0 0 4px; font-size:17px; font-weight:700; letter-spacing:-.01em; }
+#lg-root .acc-sub { margin:0 0 14px; font-size:12.5px; line-height:1.55; color:var(--muted); }
+#lg-root .acc-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--line); font-size:13px; }
+#lg-root .acc-row:first-of-type { border-top:0; }
+#lg-root .acc-badge { font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:999px; border:1px solid var(--line); color:var(--ink2); white-space:nowrap; }
+#lg-root .acc-badge.on { color:#6fd39b; border-color:rgba(111,211,155,.35); }
+#lg-root .acc-step { margin-top:14px; display:grid; gap:10px; }
+#lg-root .acc-step[hidden] { display:none !important; }
+#lg-root .acc-msg { font-size:12.5px; line-height:1.5; margin:0; }
+#lg-root .acc-msg.err { color:#f08a80; }
+#lg-root .acc-msg.ok { color:#6fd39b; }
+#lg-root .acc-actions { display:flex; gap:10px; flex-wrap:wrap; }
+#lg-root .acc-actions .btn { flex:1 1 180px; }
+#lg-root .acc-card .form-group { margin-bottom:0; }
+#lg-root .acc-hint { font-size:11.5px; color:var(--muted-dim); margin:0; }
+@media (max-width:480px) {
+  /* login.css sets #lg-root { padding:0 !important } on phones for its full-bleed card */
+  #lg-root.acc-page { padding:20px 14px !important; }
+  #lg-root .acc-card { padding:18px 16px; }
+}

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kirish usullari — JuristAI</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#070a14">
+<link rel="icon" href="/favicon-256.png">
+<link rel="stylesheet" href="/css/fonts.css">
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/login.css">
+<link rel="stylesheet" href="/css/account.css">
+</head>
+<body>
+<div id="lg-root" class="acc-page" data-theme="light">
+  <main class="acc-wrap">
+    <div class="acc-top">
+      <a class="acc-back" href="/dashboard.html">← Bosh sahifa</a>
+    </div>
+
+    <section class="acc-card" aria-labelledby="accTitle">
+      <h2 id="accTitle">Kirish usullari</h2>
+      <p class="acc-sub">Telegram — ro'yxatdan o'tish va asosiy kirish yo'li. Login va parol — shu hisobga qo'shimcha kirish usuli: o'sha hisob, o'sha tarif va limitlar.</p>
+      <div class="acc-row"><span>Telegram</span><span class="acc-badge" id="accTg">…</span></div>
+      <div class="acc-row"><span>Login va parol</span><span class="acc-badge" id="accPw">…</span></div>
+      <p class="acc-msg" id="accStaffNote" hidden>Xodim hisobining login va paroli boshqaruv bo'limida o'zgartiriladi.</p>
+
+      <div class="acc-actions" id="accStart" hidden>
+        <button type="button" class="btn" id="accStartBtn" onclick="accBeginStepup()">Login va parol o'rnatish</button>
+      </div>
+
+      <!-- 1. a fresh confirmation -->
+      <div class="acc-step" id="accStep1" hidden>
+        <p class="acc-sub" style="margin:0">Davom etish uchun hisobingizni qayta tasdiqlang.</p>
+        <div class="acc-actions">
+          <button type="button" class="btn" id="accTgBtn" onclick="accStepupTelegram()" hidden>Telegram orqali tasdiqlash</button>
+        </div>
+        <p class="acc-msg" id="accTgStatus" hidden></p>
+        <div id="accPwStepup" hidden>
+          <div class="form-group"><input type="password" id="accCurrentPw" placeholder="joriy parol" autocomplete="current-password"></div>
+          <div class="acc-actions" style="margin-top:10px"><button type="button" class="btn btn-outline" onclick="accStepupPassword()">Joriy parol bilan tasdiqlash</button></div>
+        </div>
+        <p class="acc-msg err" id="accStep1Err" hidden></p>
+      </div>
+
+      <!-- 2. login and password -->
+      <form class="acc-step" id="accStep2" hidden onsubmit="event.preventDefault(); accSave();">
+        <div class="form-group"><input type="text" id="accLogin" placeholder="login (3–32 belgi, harf bilan boshlanadi)" autocomplete="username" required></div>
+        <div class="form-group"><input type="password" id="accPassword" placeholder="yangi parol (kamida 10 belgi)" autocomplete="new-password" required></div>
+        <div class="form-group"><input type="password" id="accPassword2" placeholder="yangi parol (takror)" autocomplete="new-password" required></div>
+        <p class="acc-hint">Saqlangach, boshqa qurilmalardagi kirishlar yakunlanadi. Telegram orqali kirish o'zgarmaydi.</p>
+        <div class="acc-actions"><button type="submit" class="btn" id="accSaveBtn">Saqlash</button></div>
+        <p class="acc-msg err" id="accStep2Err" hidden></p>
+      </form>
+      <p class="acc-msg ok" id="accDone" hidden></p>
+    </section>
+
+    <!-- master only: one ordinary test account -->
+    <section class="acc-card" id="accTestUser" aria-labelledby="accTestTitle" hidden>
+      <h2 id="accTestTitle">Test foydalanuvchi (role: user)</h2>
+      <p class="acc-sub">Oddiy hisob: admin huquqisiz, Sinov birinchi foydalanishda boshlanadi, to'lov yoki daromad yozilmaydi. Boshlang'ich parolni siz kiritasiz — u hech qayerda ko'rsatilmaydi. Master parolingiz bilan tasdiqlanadi.</p>
+      <form class="acc-step" onsubmit="event.preventDefault(); accCreateTestUser();">
+        <div class="form-group"><input type="text" id="tuLogin" placeholder="login" autocomplete="off" required></div>
+        <div class="form-group"><input type="text" id="tuName" placeholder="ism (ixtiyoriy)" autocomplete="off"></div>
+        <div class="form-group"><input type="password" id="tuPassword" placeholder="boshlang'ich parol (kamida 10 belgi)" autocomplete="new-password" required></div>
+        <div class="form-group"><input type="password" id="tuPassword2" placeholder="parol (takror)" autocomplete="new-password" required></div>
+        <div class="form-group"><input type="password" id="tuMaster" placeholder="Master paroli" autocomplete="current-password" required></div>
+        <div class="acc-actions"><button type="submit" class="btn" id="tuBtn">Yaratish</button></div>
+        <p class="acc-msg" id="tuMsg" hidden></p>
+      </form>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  try { if (localStorage.getItem('dictum-theme') === 'dark') document.getElementById('lg-root').setAttribute('data-theme', 'dark'); } catch (_) {}
+})();
+var accState = { status: null, stepup: null, poll: null };
+function $(id) { return document.getElementById(id); }
+function show(id, on) { $(id).hidden = !on; }
+function msg(id, text, cls) { var el = $(id); el.textContent = text || ''; el.hidden = !text; if (cls) el.className = 'acc-msg ' + cls; }
+async function api(url, opts) {
+  var r = await fetch(url, Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }, opts || {}));
+  if (r.status === 401) { location.href = '/login.html'; throw new Error('401'); }
+  var d = await r.json().catch(function () { return {}; });
+  return { ok: r.ok, status: r.status, data: d };
+}
+async function accLoad() {
+  var r = await api('/api/account/credentials');
+  var s = accState.status = r.data;
+  $('accTg').textContent = s.telegramLinked ? 'ulangan' : 'ulanmagan';
+  $('accTg').classList.toggle('on', !!s.telegramLinked);
+  $('accPw').textContent = s.enabled ? ('yoqilgan · ' + s.login) : "yoqilmagan";
+  $('accPw').classList.toggle('on', !!s.enabled);
+  show('accStaffNote', !s.canManage);
+  show('accStart', !!s.canManage);
+  $('accStartBtn').textContent = s.enabled ? "Login yoki parolni almashtirish" : "Login va parol o'rnatish";
+  if (s.role === 'master') show('accTestUser', true);
+}
+function accBeginStepup() {
+  var s = accState.status || {};
+  show('accStart', false); show('accStep1', true); msg('accStep1Err', '');
+  show('accTgBtn', (s.stepupMethods || []).indexOf('telegram') >= 0);
+  show('accPwStepup', (s.stepupMethods || []).indexOf('password') >= 0);
+  if (!(s.stepupMethods || []).length) msg('accStep1Err', "Tasdiqlash usuli yo'q: hisobga Telegram ulang.", 'err');
+}
+async function accStepupTelegram() {
+  msg('accStep1Err', '');
+  var r = await api('/api/account/credentials/stepup', { method: 'POST', body: JSON.stringify({ method: 'telegram' }) });
+  if (!r.ok) { msg('accStep1Err', r.data.message || "Tasdiqlashni boshlab bo'lmadi.", 'err'); return; }
+  accState.stepup = r.data.token;
+  var st = $('accTgStatus');
+  st.hidden = false; st.className = 'acc-msg';
+  st.innerHTML = '';
+  var a = document.createElement('a'); a.href = r.data.botUrl; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Telegram botni oching';
+  st.appendChild(a); st.appendChild(document.createTextNode(' va «Start» bosing. Tasdiqlangach shu yerda davom etasiz (5 daqiqa).'));
+  window.open(r.data.botUrl, '_blank', 'noopener');
+  if (accState.poll) clearInterval(accState.poll);
+  var started = Date.now();
+  accState.poll = setInterval(async function () {
+    if (Date.now() - started > 5 * 60 * 1000) { clearInterval(accState.poll); msg('accStep1Err', "Vaqt tugadi. Qayta urinib ko'ring.", 'err'); return; }
+    var s = await api('/api/account/credentials/stepup/' + encodeURIComponent(accState.stepup)).catch(function () { return null; });
+    if (s && s.ok && s.data.approved) { clearInterval(accState.poll); accToStep2(); }
+  }, 2500);
+}
+async function accStepupPassword() {
+  msg('accStep1Err', '');
+  var r = await api('/api/account/credentials/stepup', { method: 'POST', body: JSON.stringify({ method: 'password', currentPassword: $('accCurrentPw').value }) });
+  $('accCurrentPw').value = '';
+  if (!r.ok || !r.data.approved) { msg('accStep1Err', r.data.message || "Tasdiqlanmadi.", 'err'); return; }
+  accState.stepup = r.data.token;
+  accToStep2();
+}
+function accToStep2() {
+  show('accStep1', false); show('accStep2', true);
+  var s = accState.status || {};
+  if (s.login) $('accLogin').value = s.login;
+  $('accLogin').focus();
+}
+async function accSave() {
+  msg('accStep2Err', '');
+  $('accSaveBtn').disabled = true;
+  var r = await api('/api/account/credentials', { method: 'POST', body: JSON.stringify({
+    stepupToken: accState.stepup, login: $('accLogin').value, password: $('accPassword').value, passwordConfirm: $('accPassword2').value,
+  }) });
+  $('accSaveBtn').disabled = false;
+  if (!r.ok) {
+    msg('accStep2Err', r.data.message || 'Saqlanmadi.', 'err');
+    if (r.data.error === 'stepup_required') { show('accStep2', false); accBeginStepup(); }
+    return;
+  }
+  $('accPassword').value = ''; $('accPassword2').value = '';
+  show('accStep2', false);
+  msg('accDone', "Saqlandi. Endi «" + r.data.login + "» login va parolingiz bilan ham kira olasiz. Boshqa qurilmalardagi kirishlar yakunlandi.", 'ok');
+  accLoad();
+}
+async function accCreateTestUser() {
+  msg('tuMsg', '');
+  $('tuBtn').disabled = true;
+  var r = await api('/api/admin/test-users', { method: 'POST', body: JSON.stringify({
+    login: $('tuLogin').value, fullName: $('tuName').value, password: $('tuPassword').value,
+    passwordConfirm: $('tuPassword2').value, masterPassword: $('tuMaster').value,
+  }) });
+  $('tuBtn').disabled = false;
+  $('tuPassword').value = ''; $('tuPassword2').value = ''; $('tuMaster').value = '';
+  if (!r.ok) { msg('tuMsg', r.data.message || r.data.error || 'Yaratilmadi.', 'err'); return; }
+  msg('tuMsg', 'Yaratildi: #' + r.data.user.id + ' · ' + r.data.user.login + ' (role: ' + r.data.user.role + ').', 'ok');
+}
+accLoad();
+</script>
+</body>
+</html>

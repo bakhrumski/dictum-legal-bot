@@ -353,6 +353,15 @@ const aiLimiter = rateLimit({
 app.use(require('./maintenance').maintenanceGate());
 app.use('/api/', globalLimiter);
 app.use('/api/login', loginLimiter);
+// credential set-up, step-up and recovery: a person needs a few tries, a
+// guesser many (counted per IP, every request)
+const credentialLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 30,
+  standardHeaders: true, legacyHeaders: false,
+  skip: (req) => req.method === 'GET', // status polls; every write is counted
+  message: { error: "Juda ko'p urinish — 15 daqiqadan so'ng qayta urinib ko'ring" },
+});
+app.use(['/api/account/credentials', '/api/admin/test-users', '/api/recover', '/api/password-recovery'], credentialLimiter);
 app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat'], aiLimiter);
 
 // Public assets do not need a database-backed session. Serving them before the
@@ -546,139 +555,15 @@ function trackActivity(req, res, next) {
 }
 app.use(trackActivity);
 
-// ── Master 2FA: password alone is not enough for the account that can edit
-// the legal corpus. After a correct password, a 6-digit code goes to the
-// master's linked Telegram; the session is only created when it's confirmed.
-// In-memory pending state is fine: single-process deploy, 5-minute TTL, and a
-// restart only means re-entering the password. MASTER_2FA=off disables (e.g.
-// while the master hasn't linked Telegram yet).
-const pending2fa = new Map(); // token -> {adminId, role, username, fullName, code, expiresAt, tries}
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of pending2fa) { if (now > v.expiresAt) pending2fa.delete(k); }
-}, 60 * 1000).unref();
-
-function createSession(req, admin) {
-  req.session.isAuthenticated = true;
-  req.session.role = admin.role;
-  req.session.adminId = admin.id;
-  req.session.username = admin.username;
-  req.session.fullName = admin.full_name;
-}
-
-// Login endpoint
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-
-  try {
-    // Strip @ prefix and make case-insensitive (users may enter Telegram-style username)
-    const cleanUsername = (username || '').replace(/^@/, '').trim();
-    const result = await pool.query(
-      'SELECT * FROM admins WHERE LOWER(username) = LOWER($1)',
-      [cleanUsername]
-    );
-
-    if (result.rows.length > 0) {
-      const admin = result.rows[0];
-
-      // Compare password with hashed password
-      const passwordMatch = await bcrypt.compare(password, admin.password);
-
-      if (passwordMatch && require('../auth/master-bootstrap').isPublishedMasterPassword(password)) {
-        // This password was committed to the repository as a seeded login;
-        // anyone could use it. Refuse until it is changed.
-        logAudit(req, 'login.published_password_refused', 'admin', admin.id, admin.id);
-        return res.status(403).json({
-          code: 'PASSWORD_MUST_CHANGE',
-          error: 'Bu parol xavfsiz emas va bloklangan. Parolni tiklash orqali yangi parol o‘rnating.',
-        });
-      }
-
-      if (passwordMatch) {
-        // Master with linked Telegram → require the second factor.
-        // The bot's /link command stores telegram_chat_id; the self-signup flow
-        // stores telegram_user_id. Either works as a delivery target (for
-        // private chats chat_id === user_id), so accept both — otherwise a
-        // master linked via /link silently skipped 2FA.
-        const tgTarget = admin.telegram_user_id || admin.telegram_chat_id;
-        if (admin.role === 'master' && tgTarget && process.env.MASTER_2FA !== 'off') {
-          const authBot = getRegBot();
-          const authBotUrl = `https://t.me/${AUTH_BOT_USERNAME}`;
-          if (!authBot) {
-            console.error('[2FA] REG_BOT_TOKEN is not configured');
-            return res.status(503).json({
-              code: 'AUTH_BOT_NOT_CONFIGURED',
-              error: `Tasdiqlash boti @${AUTH_BOT_USERNAME} sozlanmagan. Administrator REG_BOT_TOKEN ni sozlashi kerak.`,
-              botUsername: AUTH_BOT_USERNAME,
-              botUrl: authBotUrl,
-            });
-          }
-          const code = require('../auth/otp').digitCode(6);
-          const token = require('crypto').randomBytes(24).toString('hex');
-          pending2fa.set(token, {
-            adminId: admin.id, role: admin.role, username: admin.username,
-            full_name: admin.full_name, code, expiresAt: Date.now() + 5 * 60 * 1000, tries: 0,
-          });
-          try {
-            await authBot.sendMessage(tgTarget,
-              `🔐 JuristAI kirish kodi: ${code}\n\n5 daqiqa amal qiladi.\nAgar bu siz bo'lmasangiz — DARHOL parolni almashtiring!`);
-          } catch (e) {
-            pending2fa.delete(token);
-            console.error(`[2FA] @${AUTH_BOT_USERNAME} send failed:`, e.message);
-            return res.status(503).json({
-              code: 'AUTH_BOT_DELIVERY_FAILED',
-              error: `Tasdiqlash kodi yuborilmadi. @${AUTH_BOT_USERNAME} botini ochib Start bosing, so'ng qayta kiring.`,
-              botUsername: AUTH_BOT_USERNAME,
-              botUrl: authBotUrl,
-            });
-          }
-          logAudit(req, 'login.2fa_sent', 'admin', admin.id, admin.id);
-          return res.json({ twofa: true, token });
-        }
-
-        createSession(req, admin);
-        logAudit(req, 'login.success', 'admin', admin.id, admin.id);
-        res.json({
-          success: true,
-          role: admin.role,
-          fullName: admin.full_name
-        });
-      } else {
-        logAudit(req, 'login.fail', 'admin', admin.id, admin.id);
-        res.status(401).json({ error: 'Noto\'g\'ri foydalanuvchi nomi yoki parol' });
-      }
-    } else {
-      logAudit(req, 'login.fail_unknown_user', 'admin', cleanUsername, null);
-      res.status(401).json({ error: 'Noto\'g\'ri foydalanuvchi nomi yoki parol' });
-    }
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
+// Login with a login name and password, and the master's Telegram second
+// factor: src/auth/login-routes.js. Login and password as a second way into
+// a Telegram account (step-up, account page, master test account):
+// src/auth/credential-routes.js.
+require('../auth/login-routes').mountLoginRoutes(app, {
+  pool, logAudit, getAuthBot: () => getRegBot(), authBotUsername: AUTH_BOT_USERNAME,
 });
-
-// Second factor confirmation (rate-limited by the /api/login limiter prefix).
-app.post('/api/login/2fa', async (req, res) => {
-  const token = String((req.body || {}).token || '');
-  const code = String((req.body || {}).code || '').trim();
-  const p = pending2fa.get(token);
-  if (!p || Date.now() > p.expiresAt) {
-    pending2fa.delete(token);
-    return res.status(401).json({ error: 'Kod muddati tugadi — qaytadan kiring', expired: true });
-  }
-  p.tries++;
-  if (p.tries > 5) {
-    pending2fa.delete(token);
-    logAudit(req, 'login.2fa_lockout', 'admin', p.adminId, p.adminId);
-    return res.status(429).json({ error: 'Juda ko\'p urinish — qaytadan kiring', expired: true });
-  }
-  if (code !== p.code) {
-    return res.status(401).json({ error: 'Kod noto\'g\'ri' });
-  }
-  pending2fa.delete(token);
-  createSession(req, { id: p.adminId, role: p.role, username: p.username, full_name: p.full_name });
-  logAudit(req, 'login.2fa_success', 'admin', p.adminId, p.adminId);
-  res.json({ success: true, role: p.role, fullName: p.full_name });
+require('../auth/credential-routes').mountCredentialRoutes(app, {
+  pool, requireAuth, requireMasterAdmin, logAudit, authBotUsername: AUTH_BOT_USERNAME,
 });
 
 // Logout endpoint
@@ -9872,11 +9757,15 @@ app.post('/api/recover/bot-init', (req, res) => {
   res.json({ token, botUsername: AUTH_BOT_USERNAME });
 });
 
+// The reset link goes only to the Telegram chat that confirmed (its own
+// account, by telegram_user_id). The browser that started the flow learns
+// only that it was confirmed: handing it the reset token let anyone who got
+// a person to open their recover_ link reset that person's password.
 app.get('/api/recover/status/:token', (req, res) => {
   const { verificationTokens: vt } = require('../verification-store');
   const s = vt.get('botinit_' + req.params.token);
   if (!s) return res.json({ confirmed: false, expired: true });
-  res.json({ confirmed: s.confirmed, resetToken: s.resetToken || null });
+  res.json({ confirmed: !!s.confirmed });
 });
 
 // ========== COMMON USER REGISTRATION (auto-approval, no master needed) ==========
@@ -10460,42 +10349,12 @@ app.post('/api/tariff/select', requireAuth, async (req, res) => {
 
 // ========== PASSWORD RECOVERY ==========
 
-// POST /api/password-recovery/request — check telegram username exists, generate code
-app.post('/api/password-recovery/request', async (req, res) => {
-  try {
-    const { telegram_username } = req.body;
-    if (!telegram_username) {
-      return res.status(400).json({ error: 'Telegram username kiriting' });
-    }
-    const cleanUsername = telegram_username.replace('@', '').trim().toLowerCase();
-
-    // Check if this telegram username exists in admins table
-    const adminResult = await pool.query(
-      'SELECT id, username, full_name FROM admins WHERE LOWER(telegram_username) = $1',
-      [cleanUsername]
-    );
-    if (adminResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Bu Telegram username bilan ro\'yxatdan o\'tgan foydalanuvchi topilmadi. Ro\'yxatdan o\'ting.' });
-    }
-
-    // Generate 4-digit code + token
-    const code = require('../auth/otp').digitCode(4);
-    const token = crypto.randomBytes(8).toString('hex');
-
-    verificationTokens.set('recovery_' + token, {
-      code,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      adminId: adminResult.rows[0].id,
-      telegramUsername: cleanUsername,
-      verified: false
-    });
-
-    console.log('[RECOVERY] Code generated');
-    res.json({ success: true, token });
-  } catch (error) {
-    console.error('[RECOVERY REQUEST] Error:', error);
-    res.status(500).json({ error: 'Xatolik yuz berdi' });
-  }
+// POST /api/password-recovery/request — closed (2026-10-07). It found the
+// account by Telegram username (a name its owner can change and someone else
+// can take) and told whether it exists. Recovery is through Telegram only:
+// /api/recover/bot-init, identified by the stable Telegram id.
+app.post('/api/password-recovery/request', (req, res) => {
+  res.status(410).json({ error: 'recovery_moved', message: "Parolni tiklash faqat Telegram orqali: \"Telegram orqali\" tugmasini bosing." });
 });
 
 const RECOVERY_MAX_TRIES = 5;
@@ -10550,6 +10409,15 @@ app.post('/api/password-recovery/reset', async (req, res) => {
       if (Date.now() > directPending.expiresAt) {
         return res.status(400).json({ error: 'Sessiya muddati o\'tgan. Qayta urinib ko\'ring.' });
       }
+      // an ordinary account changes its login and password on its account
+      // page after a fresh confirmation (src/auth/credentials.js); the reset
+      // link is for staff accounts
+      const target = (await pool.query('SELECT role FROM admins WHERE id = $1', [directPending.adminId])).rows[0];
+      if (!target || target.role === 'user') {
+        verificationTokens.delete('pwreset_' + token);
+        return res.status(403).json({ error: "Telegram bilan kiring va «Kirish usullari» sahifasida parolni almashtiring.", code: 'USE_ACCOUNT_PAGE' });
+      }
+      if (new_password.length < 10) return res.status(400).json({ error: "Parol kamida 10 belgi bo'lishi kerak" });
       const hashedPassword = await bcrypt.hash(new_password, 10);
       await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hashedPassword, directPending.adminId]);
       verificationTokens.delete('pwreset_' + token);

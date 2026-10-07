@@ -369,3 +369,20 @@ html, body { margin:0; padding:0; height:100%; }
   #lg-root .lg-hero__inner { padding-left:0; align-items:flex-start; }
   #lg-root .lg-wordmark { max-width:320px; }
 }
+
+/* ============================================================
+   Telegram first, login/password second (2026-10-07)
+   ============================================================ */
+#lg-root .tg-primary { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:10px; }
+#lg-root .tg-primary-note { margin:0 0 18px; font-size:12.5px; color:var(--muted); text-align:center; }
+#lg-root .tg-primary-note a { color:var(--ink); font-weight:700; }
+#lg-root .pw-login { margin-top:22px; border-top:1px solid var(--line); padding-top:14px; }
+#lg-root .pw-login > summary {
+  cursor:pointer; list-style:none; font-size:13px; font-weight:600; color:var(--ink);
+  display:flex; align-items:center; gap:8px;
+}
+#lg-root .pw-login > summary::-webkit-details-marker { display:none; }
+#lg-root .pw-login > summary::before { content:"›"; display:inline-block; transition:transform .15s ease; color:var(--muted); }
+#lg-root .pw-login[open] > summary::before { transform:rotate(90deg); }
+#lg-root .pw-login-note { margin:8px 0 14px; font-size:12px; line-height:1.5; color:var(--muted); }
+#lg-root .pw-login .btn-row { margin-bottom:6px; }

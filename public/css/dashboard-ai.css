@@ -757,3 +757,12 @@ body.no-tab-bar #db-root #tabAi .ai-workspace { height: calc(100dvh - 150px) !im
   #db-root .ws-tl-legend { padding: 10px 14px; gap: 6px 14px; font-size: 11.5px; }
   #db-root .ws-tl-legend-item { white-space: normal; }
 }
+
+/* Account page link in the profile pill ("Kirish usullari", 2026-10-07):
+   its own class; .profile-exit-btn is not changed. Shown on phones too. */
+#db-root .db-head .profile-account-btn {
+  width: 18px; height: 18px; display: grid; place-items: center; flex-shrink: 0;
+  color: var(--muted-dim); background: transparent; border: 0; margin: 0; padding: 0;
+}
+#db-root .db-head .profile-account-btn svg { width: 16px; height: 16px; }
+#db-root .db-head .profile-account-btn:hover { color: var(--brand); }
