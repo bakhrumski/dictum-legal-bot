@@ -55,7 +55,7 @@ const visionUpload = multer({
   },
 });
 
-const { LANG_HINTS, VISION_PROMPT } = scanLimits;
+const { LANG_HINTS, VISION_PROMPT, PAGED_PROMPT } = scanLimits;
 
 /**
  * Vision OCR of an image or a scanned PDF, in the provider order of
@@ -65,108 +65,191 @@ async function callVisionOCR(buf, mimeType, langCode, opts = {}) {
   return usageLedger.withChain(() => callVisionOCRChain(buf, mimeType, langCode, opts));
 }
 
-// Each provider attempt is a usage-ledger row (stage 'ocr', its provider),
-// so primary and fallback spend are reported apart; a failed attempt is
-// recorded and the chain moves on. The order is scanLimits.ocrProviders:
-// images VoiceLab first when its vision lane is on (as before), Gemini when
-// OCR_IMAGE_PROVIDER=gemini; PDFs Gemini; fallbacks unless OCR_FALLBACK=off.
-async function callVisionOCRChain(buf, mimeType, langCode, { pages = 1 } = {}) {
-  const prompt = VISION_PROMPT(LANG_HINTS[langCode] || '');
-  const b64 = buf.toString('base64');
-  const kind = /^image\//i.test(mimeType || '') ? 'image' : 'pdf';
-  const plan = scanLimits.ocrProviders({ kind });
-  const chain = [plan.primary, ...plan.fallbacks].filter(Boolean);
-  if (!chain.length) throw new Error('Vision OCR uchun AI kalit sozlanmagan (GEMINI_API_KEY yoki GPT_API_KEY kerak)');
-  const noBound = { usd: null, reason: 'image input tokens per page are not published; OCR cost is an estimate, not a bound' };
-  // Gemini's cap is per page (the budget in scan-limits); VoiceLab and
-  // OpenAI keep the cap they had before #411
-  const geminiCap = Math.min(65536, scanLimits.OCR_OUTPUT_TOKENS_PER_PAGE * Math.max(1, pages));
+// Each provider call is a usage-ledger row (stage 'ocr', its provider), so
+// primary, fallback, every PDF chunk and every re-reading are reported
+// apart. The order is scanLimits.ocrProviders: images VoiceLab first when
+// its vision lane is on (as before), Gemini when OCR_IMAGE_PROVIDER=gemini;
+// PDFs Gemini; fallbacks unless OCR_FALLBACK=off.
+const noBound = { usd: null, reason: 'image input tokens per page are not published; OCR cost is a planning estimate, not a bound' };
+// the provider answered: a cut reading is not a provider fault (no retry, no breaker)
+const truncated = (who) => Object.assign(new Error(`${who}: OCR output reached its cap: the text would be cut`), { code: 'OCR_TRUNCATED', providerAnswered: true });
 
-  const readers = {
-    async gemini() {
-      const body = {
-        contents: [{ role: 'user', parts: [
-          { inlineData: { mimeType, data: b64 } },
-          { text: prompt },
-        ]}],
-        generationConfig: { temperature: 0.1, maxOutputTokens: geminiCap, thinkingConfig: { thinkingBudget: 0 } },
-      };
-      const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr', bound: noBound }, async (call) => {
-        const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
-        );
-        if (!resp.ok) {
-          const err = await resp.text().catch(() => '');
-          throw Object.assign(new Error(`Gemini Vision HTTP ${resp.status}: ${err.substring(0, 200)}`), { status: resp.status });
-        }
-        const data = await resp.json();
-        call.usage({ ...usageLedger.usageFromGemini(data.usageMetadata), modelReturned: data.modelVersion || null });
-        const cand = data.candidates?.[0] || {};
-        // the page text did not fit the cap: never hand on a cut document
-        if (cand.finishReason === 'MAX_TOKENS') throw Object.assign(new Error('OCR output reached its cap: the text would be cut'), { code: 'OCR_TRUNCATED', status: 422 });
-        const parts = cand.content?.parts || [];
-        const out = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
-        if (!out) throw new Error('Gemini Vision returned empty text');
-        return out;
+const readers = {
+  // Gemini Developer API; cap = the output budget of the pages in this call
+  async gemini({ data, mimeType, prompt, cap }) {
+    const body = {
+      contents: [{ role: 'user', parts: [
+        { inlineData: { mimeType, data: data.toString('base64') } },
+        { text: prompt },
+      ]}],
+      generationConfig: { temperature: 0.1, maxOutputTokens: cap, thinkingConfig: { thinkingBudget: 0 } },
+    };
+    const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr', bound: noBound }, async (call) => {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
+      );
+      if (!resp.ok) {
+        const err = await resp.text().catch(() => '');
+        throw Object.assign(new Error(`Gemini Vision HTTP ${resp.status}: ${err.substring(0, 200)}`), { status: resp.status });
+      }
+      const json = await resp.json();
+      call.usage({ ...usageLedger.usageFromGemini(json.usageMetadata), modelReturned: json.modelVersion || null });
+      const cand = json.candidates?.[0] || {};
+      // the text did not fit the cap: never hand on a cut reading
+      if (cand.finishReason === 'MAX_TOKENS') throw truncated('gemini');
+      const parts = cand.content?.parts || [];
+      const out = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
+      if (!out) throw Object.assign(new Error('Gemini Vision returned empty text'), { code: 'OCR_EMPTY_REPLY', providerAnswered: true });
+      return out;
+    });
+    return { text, provider: 'Gemini Vision' };
+  },
+  // VoiceLab and OpenAI vision: images only, the cap they had before #411
+  async voicelab({ data, mimeType, prompt }) {
+    const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
+      const res = await voicelab.chatCompletion('vision', [{ role: 'user', content: [
+        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${data.toString('base64')}` } },
+        { type: 'text', text: prompt },
+      ]}], { temperature: 0.1, maxTokens: scanLimits.OCR_SINGLE_PAGE_CAP });
+      call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
+      return res;
+    });
+    if (r.finishReason === 'length') throw truncated('voicelab');
+    return { text: (r.text || '').trim(), provider: `VoiceLab ${r.model}` };
+  },
+  async openai({ data, mimeType, prompt }) {
+    const body = {
+      model: process.env.MODEL_VISION || process.env.MODEL_STANDARD || 'gpt-6-sol',
+      messages: [{ role: 'user', content: [
+        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${data.toString('base64')}` } },
+        { type: 'text', text: prompt },
+      ]}],
+      max_tokens: scanLimits.OCR_SINGLE_PAGE_CAP,
+      temperature: 0.1,
+    };
+    const text = await usageLedger.track({ provider: 'openai', model: body.model, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GPT_API_KEY}` },
+        body: JSON.stringify(body),
       });
-      return { text, provider: 'Gemini Vision' };
-    },
-    async voicelab() {
-      const r = await usageLedger.track({ provider: 'voicelab', model: `voicelab/${voicelab.modelFor('vision')}`, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
-        const res = await voicelab.chatCompletion('vision', [{ role: 'user', content: [
-          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
-          { type: 'text', text: prompt },
-        ]}], { temperature: 0.1, maxTokens: 4096 });
-        call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
-        return res;
-      });
-      return { text: (r.text || '').trim(), provider: `VoiceLab ${r.model}` };
-    },
-    async openai() {
-      const body = {
-        model: process.env.MODEL_VISION || process.env.MODEL_STANDARD || 'gpt-6-sol',
-        messages: [{ role: 'user', content: [
-          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${b64}` } },
-          { type: 'text', text: prompt },
-        ]}],
-        max_tokens: 4096,
-        temperature: 0.1,
-      };
-      const text = await usageLedger.track({ provider: 'openai', model: body.model, stage: 'ocr', bound: { usd: null, reason: 'image input has no token bound here' } }, async (call) => {
-        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-          signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GPT_API_KEY}` },
-          body: JSON.stringify(body),
-        });
-        if (!resp.ok) throw Object.assign(new Error(`OpenAI vision HTTP ${resp.status}`), { status: resp.status });
-        const data = await resp.json();
-        call.usage({ ...usageLedger.usageFromOpenAI(data.usage), modelReturned: data.model || null });
-        const out = (data.choices?.[0]?.message?.content || '').trim();
-        if (!out) throw new Error('OpenAI vision returned empty text');
-        return out;
-      });
-      return { text, provider: `OpenAI Vision (${body.model})` };
-    },
-  };
+      if (!resp.ok) throw Object.assign(new Error(`OpenAI vision HTTP ${resp.status}`), { status: resp.status });
+      const json = await resp.json();
+      call.usage({ ...usageLedger.usageFromOpenAI(json.usage), modelReturned: json.model || null });
+      if (json.choices?.[0]?.finish_reason === 'length') throw truncated('openai');
+      const out = (json.choices?.[0]?.message?.content || '').trim();
+      if (!out) throw new Error('OpenAI vision returned empty text');
+      return out;
+    });
+    return { text, provider: `OpenAI Vision (${body.model})` };
+  },
+};
 
+/** One reading through the provider chain; a cut reading is not read again elsewhere. */
+async function readThroughChain(chain, args) {
   let lastErr = null;
   for (let i = 0; i < chain.length; i++) {
     const who = chain[i];
     try {
-      const r = await readers[who]();
+      const r = await readers[who](args);
       if (r.text) return { ...r, providerKey: who, role: i === 0 ? 'primary' : 'fallback' };
-      lastErr = new Error(`${who}: empty text`);
+      lastErr = Object.assign(new Error(`${who}: empty text`), { code: 'OCR_EMPTY_REPLY' });
     } catch (e) {
       console.warn(`[OCR] ${who} error:`, e.message);
-      // a cut reading is refused, not read again elsewhere
       if (e.code === 'OCR_TRUNCATED') throw e;
       if (who === 'voicelab' && !voicelab.fallbackAllowed()) throw e;
       lastErr = e;
     }
   }
   throw lastErr || new Error('OCR failed');
+}
+
+/** Pages [from, from + count) of a PDF as a PDF of their own. */
+async function cutPdf(src, from, count) {
+  const { PDFDocument } = require('pdf-lib');
+  const doc = await PDFDocument.create();
+  const copied = await doc.copyPages(src, Array.from({ length: count }, (_, i) => from + i));
+  copied.forEach(pg => doc.addPage(pg));
+  return Buffer.from(await doc.save());
+}
+
+const incomplete = (missing) => Object.assign(new Error(`OCR missed page(s) ${missing.join(', ')}`), { code: 'OCR_INCOMPLETE', status: 422, missing });
+
+async function callVisionOCRChain(buf, mimeType, langCode, { pages = 1 } = {}) {
+  const hint = LANG_HINTS[langCode] || '';
+  const kind = /^image\//i.test(mimeType || '') ? 'image' : 'pdf';
+  const plan = scanLimits.ocrProviders({ kind });
+  const chain = [plan.primary, ...plan.fallbacks].filter(Boolean);
+  if (!chain.length) throw new Error('Vision OCR uchun AI kalit sozlanmagan (GEMINI_API_KEY yoki GPT_API_KEY kerak)');
+  const perPage = scanLimits.OCR_OUTPUT_TOKENS_PER_PAGE;
+  let calls = 0;
+  const read = async (args) => { calls++; return readThroughChain(chain, args); };
+
+  if (kind === 'image') {
+    const args = { data: buf, mimeType, prompt: VISION_PROMPT(hint), cap: perPage };
+    let r;
+    try {
+      r = await read(args);
+    } catch (e) {
+      // a dense page: one more Gemini reading with the single-page cap
+      if (e.code !== 'OCR_TRUNCATED' || chain[0] !== 'gemini') throw e;
+      r = await read({ ...args, cap: scanLimits.OCR_SINGLE_PAGE_CAP });
+    }
+    return { text: r.text, provider: r.provider, providerKey: r.providerKey, role: r.role, pagesRead: 1, calls };
+  }
+
+  // a PDF: chunks of at most OCR_PDF_CHUNK_PAGES pages, every page marked
+  const { PDFDocument } = require('pdf-lib');
+  let src;
+  try { src = await PDFDocument.load(buf); } catch (e) { throw Object.assign(new Error(`PDF could not be split: ${e.message}`), { code: 'OCR_PDF_SPLIT', status: 422 }); }
+  const total = src.getPageCount();
+  if (total !== pages) throw Object.assign(new Error(`PDF has ${total} pages, ${pages} were counted`), { code: 'OCR_PAGE_COUNT', status: 409 });
+  let provider = null, providerKey = null;
+  async function readRange(from, count, cap = perPage * count) {
+    let r;
+    try {
+      r = await read({ data: await cutPdf(src, from, count), mimeType: 'application/pdf', prompt: PAGED_PROMPT(hint, count), cap });
+    } catch (e) {
+      // an empty reply reads no page: those pages are missing
+      if (e.code === 'OCR_EMPTY_REPLY') {
+        if (count > 1) return split(from, count);
+        throw incomplete([from + 1]);
+      }
+      if (e.code !== 'OCR_TRUNCATED') throw e;
+      if (count > 1) return split(from, count);
+      if (cap < scanLimits.OCR_SINGLE_PAGE_CAP) return readRange(from, 1, scanLimits.OCR_SINGLE_PAGE_CAP);
+      throw e;
+    }
+    provider = provider || r.provider; providerKey = providerKey || r.providerKey;
+    const got = scanLimits.parsePagedText(r.text, count);
+    if (got.missing.length) {
+      if (count > 1) return split(from, count);
+      throw incomplete([from + 1]);
+    }
+    return got.pages;
+  }
+  async function split(from, count) {
+    const half = Math.ceil(count / 2);
+    return [...await readRange(from, half), ...await readRange(from + half, count - half)];
+  }
+  const chunks = [];
+  for (let from = 0; from < total; from += scanLimits.OCR_PDF_CHUNK_PAGES) chunks.push([from, Math.min(scanLimits.OCR_PDF_CHUNK_PAGES, total - from)]);
+  // two chunks at a time: a 30-page document is 6 calls, not one long one
+  const results = new Array(chunks.length);
+  let next = 0;
+  await Promise.all([0, 1].map(async () => {
+    while (next < chunks.length) {
+      const k = next++;
+      results[k] = await readRange(chunks[k][0], chunks[k][1]);
+    }
+  }));
+  const texts = results.flat();
+  if (texts.length !== total) throw incomplete([]);
+  if (!texts.some(t => t.trim())) throw Object.assign(new Error('no text on any page'), { code: 'OCR_EMPTY' });
+  const text = texts.map((t, i) => `[Sahifa ${i + 1}]\n${t.trim() || "(bo'sh sahifa)"}`).join('\n\n');
+  return { text, provider, providerKey, role: 'primary', pagesRead: total, calls };
 }
 
 // How many characters to feed to the AI (keeps token cost predictable)
@@ -487,13 +570,18 @@ function mountAnalyzerRoutes(app, deps) {
             await releaseAll('ocr_empty');
             return res.status(422).json({ error: 'ocr_empty', code: 'OCR_EMPTY', quotaRefunded: true, message: "Hujjatdan matn topilmadi. Limit qaytarildi." });
           }
-          await releaseAll(e.code === 'OCR_TRUNCATED' ? 'ocr_truncated' : 'ocr_failed');
-          console.error('[OCR] failed:', e.message);
-          return res.status(e.code === 'OCR_TRUNCATED' ? 422 : 502).json({
-            error: 'ocr_failed', code: e.code || 'OCR_FAILED', quotaRefunded: true,
-            message: e.code === 'OCR_TRUNCATED'
-              ? "Hujjat sahifalari juda zich: matn to'liq o'qilmadi, kesilgan matn ishlatilmaydi. Limit qaytarildi; hujjatni qismlarga bo'lib yuklang."
-              : "Skan hujjatni o'qib bo'lmadi. Limit qaytarildi.",
+          // nothing partial is stored or analysed: a cut, incomplete or
+          // failed reading gives the service back; its provider spend stays
+          // in the ledger
+          const reason = { OCR_TRUNCATED: 'ocr_truncated', OCR_INCOMPLETE: 'ocr_incomplete' }[e.code] || 'ocr_failed';
+          await releaseAll(reason);
+          console.error('[OCR] failed:', e.code || '', e.message);
+          const message = {
+            OCR_TRUNCATED: "Hujjat sahifasi juda zich: matn to'liq o'qilmadi, kesilgan matn ishlatilmaydi. Limit qaytarildi; sahifani aniqroq yoki bo'lib yuklang.",
+            OCR_INCOMPLETE: `Hujjatning ${e.missing && e.missing.length ? e.missing.join(', ') + '-sahifasi' : 'barcha sahifalari'} o'qilmadi — to'liq bo'lmagan matn tahlilga yuborilmaydi. Limit qaytarildi.`,
+          }[e.code] || "Skan hujjatni o'qib bo'lmadi. Limit qaytarildi.";
+          return res.status(e.code === 'OCR_TRUNCATED' || e.code === 'OCR_INCOMPLETE' ? 422 : 502).json({
+            error: 'ocr_failed', code: e.code || 'OCR_FAILED', quotaRefunded: true, missingPages: e.missing || undefined, message,
           });
         }
         cached = flight.row;

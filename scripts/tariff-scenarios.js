@@ -86,6 +86,8 @@ const stress = [
   ['hujjat tannarxi +50% (tahlil va xulosa $0.45)', { unitUsd: { ...P.unitUsd, analysis: 0.45, opinion: 0.45 } }],
   ['storage/ops +50%', { opsMult: 1.5 }],
   ['OCR sahifa narxi +50%', { ocrMult: 1.5 }],
+  // every OCR page a 16 MP photo (the image assumption of src/ocr/scan-limits.js)
+  ['har bir OCR sahifasi 16 MP rasm', { ocrMult: scanLimits.ocrPageBudget().image.usdAtLimit / scanLimits.ocrPageUsd() }],
   ['hammasi birga', { unitUsd: { chat: P.unitUsd.chat * 1.2, analysis: 0.45 * 1.2, opinion: 0.45 * 1.2, draft: P.unitUsd.draft * 1.2 }, opsMult: 1.5, ocrMult: 1.5 }],
 ].map(([name, o]) => ({ name, rows: ['silver', 'gold', 'platinum'].map(plan => {
   const s = serviceUzs(plan, o);
@@ -158,8 +160,9 @@ if (process.argv.includes('--json')) {
   L.push('| Tarif | Narx | AI budjeti | Operatsion | Jami xizmat | Qoladi | Xizmat marjasi | 80% chegara |', '|---|---:|---:|---:|---:|---:|---:|---:|');
   for (const e of out.plans) L.push(`| ${C[e.plan].label} | ${fmt(e.priceUzs)} | ${fmt(e.aiUzs)} | ${fmt(e.opsUzs)} | ${fmt(e.serviceUzs)} | ${fmt(e.leftUzs)} | ${(e.serviceMargin * 100).toFixed(2)}% | ${fmt(e.ceilingUzs)} |`);
   const B_ = out.ocr.budget;
-  L.push('', `OCR: sahifa uchun $${ocrPageUsd.toFixed(6)} — konservativ yuqori budjet, kutilgan narx emas (o'lchanmagan). ${B_.model}, ${B_.api}; narx $${B_.inPerM} / $${B_.outPerM} per 1M (${B_.priceSource}).`,
-    `  = ((${B_.parts.imageInputTokens.tokens} rasm + ${B_.parts.promptTokens.tokens} prompt) × $${B_.inPerM} + (${B_.parts.outputTokens.tokens} chiqish + ${B_.parts.thinkingTokens.tokens} thinking) × $${B_.outPerM}) / 1M × ${B_.attempts} urinish × ${B_.reserveFactor} zaxira = $${B_.usdPerAttempt.toFixed(7)} × ${B_.attempts}.`,
+  L.push('', `OCR: PDF sahifasi uchun $${ocrPageUsd.toFixed(6)} — rejalashtirish taxmini; real tannarx ham, qat'iy maksimal narx ham emas (o'lchanmagan). ${B_.model}, ${B_.api}; narx $${B_.inPerM} / $${B_.outPerM} per 1M (${B_.priceSource}).`,
+    `  = ((${B_.parts.pdfPageInputTokens.tokens} PDF sahifasi + ${B_.parts.promptTokens.tokens} prompt ulushi) × $${B_.inPerM} + (${B_.parts.outputTokens.tokens} chiqish + ${B_.parts.thinkingTokens.tokens} thinking) × $${B_.outPerM}) / 1M × ${B_.attempts} (retry) × ${B_.reserveFactor} = $${B_.usdPerAttempt.toFixed(7)} × ${B_.attempts}. Kirmaydi: qayta o'qishlar, fallback.`,
+    `  Alohida rasm (16 MP chegarasida, taxmin): ${B_.image.inputTokensAtLimit} input token → $${B_.image.usdAtLimit.toFixed(6)}.`,
     `  100% da sahifalar: Sinov ${out.ocr.pages.sinov}, Silver ${out.ocr.pages.silver}, Gold ${out.ocr.pages.gold}, Platinum ${out.ocr.pages.platinum}. Faqat Gemini-only yo'nalishida amal qiladi (OCR_IMAGE_PROVIDER=gemini, OCR_FALLBACK=off).`);
   L.push('', `Bitta Sinov AI budjeti (OCR bilan): $${out.trialUsd.toFixed(3)} ≈ ${fmt(out.trialUzs)} so'm (OCR'siz ${fmt(out.trialUzsWithoutOcr)} so'm).`, '');
   L.push('| Ssenariy | Tushum, mln | Pullik xizmat budjeti, mln | Sinov AI, mln | Natija, mln (boshqa xarajatlardan oldin) |', '|---|---:|---:|---:|---:|');

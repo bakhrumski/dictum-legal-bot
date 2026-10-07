@@ -58,7 +58,7 @@ function ocrComponent(plan) {
   const label = `OCR: skan hujjatlar, ${o.pages} sahifa (tahlil + xulosa birliklari turli skanlarda, chatdagi skan chegarasi)`;
   if (o.status !== 'estimated') return { key: 'ocr', label, status: 'unknown', basis: o.reason };
   return { key: 'ocr', label, uzs: Math.ceil(o.usd * ledger.PLANNING.uzsPerUsd), status: 'estimated',
-    basis: `${o.pages} pages x $${o.usdPerPage.toFixed(6)} per page - conservative upper budget, not measured (${o.estimate.model}, ${o.estimate.api}; input ${o.estimate.inputTokens} + output ${o.estimate.outputTokens} tokens, thinking 0 assumed, x${o.estimate.attempts} attempts; price: ${o.estimate.priceSource})` };
+    basis: `${o.pages} pages x $${o.usdPerPage.toFixed(6)} per page - planning estimate, not measured, not a hard maximum (${o.estimate.model}, ${o.estimate.api}; input ${o.estimate.inputTokens} + output ${o.estimate.outputTokens} tokens a PDF page, thinking 0 planned, x${o.estimate.attempts} attempts; re-readings and fallbacks not included; price: ${o.estimate.priceSource})` };
 }
 
 /** The default cost model: the owner's planning budgets, marked estimated. */
@@ -81,7 +81,7 @@ function defaultCostModel() {
     label: 'taxminiy (egasining planlash budjeti, o\'lchanmagan)',
     // the floors rest on planning budgets, not on measured cost
     measured: false,
-    basisNote: "Minimal narxlar o'lchangan xarajatga emas, egasining o'lchanmagan planlash budjetiga va OCR sahifasi uchun manbali taxminga asoslangan.",
+    basisNote: "Minimal narxlar o'lchangan xarajatga emas, egasining o'lchanmagan planlash budjetiga va (faqat Gemini-only OCR yo'nalishida) OCR sahifasining rejalashtirish taxminiga asoslangan; tasdiqlangan chegara emas.",
     // a share of the price. 0 is the scope of this model, not a measured
     // fee: no payment provider is connected and a payment is taken by hand
     // (master grant). An offer quoted under this scope is not redeemed
@@ -199,6 +199,24 @@ function parseDiscount(listPriceUzs, { discountPercent = null, discountUzs = nul
   return { error: 'discount_required' };
 }
 
+const PROVIDER_LABEL = { voicelab: 'VoiceLab vision', gemini: 'Gemini', openai: 'OpenAI vision' };
+/** The OCR route in force and its cost status (src/ocr/scan-limits.js ocrCostBasis). */
+function ocrCostStatus() {
+  const b = require('../ocr/scan-limits').ocrCostBasis();
+  const label = list => (list || []).map(p => PROVIDER_LABEL[p] || p).join(' → ') || '—';
+  return { status: b.status, imageRoute: label(b.route && b.route.image), pdfRoute: label(b.route && b.route.pdf),
+    unknownProviders: (b.providers || []).map(p => PROVIDER_LABEL[p] || p), usdPerPage: b.usdPerPage || null };
+}
+function ocrBlockedMessage(o, otherMissing = []) {
+  return "Yangi chegirma taklifi yaratilmaydi: OCR xarajati noma'lum. "
+    + (o.pdfRoute === '—' ? "Skan PDF uchun Gemini kaliti (GEMINI_API_KEY) sozlanmagan. " : '')
+    + `Hozirgi OCR yo'li — rasm: ${o.imageRoute}; skan PDF: ${o.pdfRoute}. `
+    + (o.unknownProviders.length ? `${o.unknownProviders.join(', ')} sahifa narxi e'lon qilinmagan, Gemini taxmini ularga qo'llanmaydi. ` : '')
+    + (otherMissing.length ? `Boshqa noma'lum xarajat: ${otherMissing.join(', ')}. ` : '')
+    + "Bu faqat yangi chegirmalarga tegishli: oddiy tarif xizmatlari, to'lovni qo'lda tasdiqlash (grant) va allaqachon sotib olingan davrlar o'zgarmaydi. "
+    + "Provayder yo'li chegirma uchun o'zgartirilmaydi.";
+}
+
 /**
  * The server's quote for a discount on `plan`. Never adjusts the discount:
  * a price under the floor is refused with the largest allowed discount.
@@ -215,10 +233,16 @@ function quoteDiscount({ plan, discountPercent = null, discountUzs = null, measu
     costMeasured: model.measured === true, basisNote: model.basisNote || null,
     paymentFeeBp: model.paymentFeeBp || 0, feeScope: model.feeScope || null, cost,
   };
+  // which OCR route is in force and whether it has a per-page estimate: shown
+  // on the admin screen with every quote
+  base.ocrCost = ocrCostStatus();
   if (!cost.ok) {
-    return { ...base, ok: false, reason: cost.reason, message: cost.reason === 'unknown_cost_without_reserve'
-      ? `Xarajat noma'lum va asoslangan zaxira yo'q: ${cost.missing.join(', ')}. Chegirmali taklif yaratib bo'lmaydi.`
-      : "Xarajat modeli yaroqsiz yoki bu tarif uchun yo'q. Chegirmali taklif yaratib bo'lmaydi." };
+    const ocrBlocked = cost.reason === 'unknown_cost_without_reserve' && cost.missing.includes('ocr');
+    return { ...base, ok: false, reason: cost.reason, ocrBlocked, message: ocrBlocked
+      ? ocrBlockedMessage(base.ocrCost, cost.missing.filter(k => k !== 'ocr'))
+      : cost.reason === 'unknown_cost_without_reserve'
+        ? `Xarajat noma'lum va asoslangan zaxira yo'q: ${cost.missing.join(', ')}. Chegirmali taklif yaratib bo'lmaydi.`
+        : "Xarajat modeli yaroqsiz yoki bu tarif uchun yo'q. Chegirmali taklif yaratib bo'lmaydi." };
   }
   const minPriceUzs = minimumPrice(cost.fixedUzs, base.paymentFeeBp);
   const maxDiscountUzs = Math.max(0, listPriceUzs - minPriceUzs);
@@ -248,5 +272,5 @@ function quoteDiscount({ plan, discountPercent = null, discountUzs = null, measu
 }
 
 module.exports = {
-  CEILING_BP, QUOTA_VERSION, defaultCostModel, costModel, conservativeCost, minimumPrice, parseDiscount, quoteDiscount, plannedAiUzs, offerBlockedReason,
+  CEILING_BP, QUOTA_VERSION, defaultCostModel, costModel, conservativeCost, minimumPrice, parseDiscount, quoteDiscount, plannedAiUzs, offerBlockedReason, ocrCostStatus,
 };

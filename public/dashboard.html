@@ -15166,10 +15166,15 @@
                 ['Ishonchlilik', escapeHtml(q.costModelLabel || q.confidence || '—')],
                 ['Xarajat / kvota modeli', escapeHtml((q.costModelVersion || '—') + ' / ' + (q.quotaVersion || '—'))],
             ];
+            // the OCR route in force and whether its page cost is known (docs/tariffs-v2.md §4)
+            if (q.ocrCost) rows.push(['OCR xarajati', (q.ocrCost.status === 'estimated'
+                ? '$' + Number(q.ocrCost.usdPerPage).toFixed(6) + ' / sahifa <span class="of-est">rejalashtirish taxmini</span>'
+                : "<b>noma'lum</b> <span class=\"of-est\">yangi chegirma yo'q</span>")
+                + '<div class="of-scope">Rasm: ' + escapeHtml(q.ocrCost.imageRoute || '—') + ' · skan PDF: ' + escapeHtml(q.ocrCost.pdfRoute || '—') + '</div>']);
             if (q.change && q.change.change === 'upgrade') rows.push(['Upgrade krediti (naqd emas)', ofMoney(q.change.creditUzs) + ' → to\'lanadi: ' + ofMoney(q.change.dueUzs)]);
             var msg = q.ok
                 ? '<p class="of-msg ok">Chegirma minimal narx doirasida. Taklif yaratilishi mumkin.</p>'
-                : '<p class="of-msg err">' + escapeHtml(q.message || q.reason || 'Rad etildi') + '</p>';
+                : '<p class="of-msg err">' + (q.ocrBlocked ? '<b>OCR narxi noma\'lum — chegirma bloklangan.</b> ' : '') + escapeHtml(q.message || q.reason || 'Rad etildi') + '</p>';
             // the floors rest on an unmeasured planning budget: said on the screen, every time
             var basis = q.basisNote ? '<p class="of-msg of-basis">⚠ ' + escapeHtml(q.basisNote) + (q.costMeasured ? '' : ' O\'lchangan xarajat bilan qayta tekshirilmaguncha taxminiy.') + '</p>' : '';
             box.innerHTML = '<div class="of-quote">' + basis + '<div class="au-scroll"><table class="spend-table"><tbody>'

@@ -115,9 +115,46 @@ const VISION_PROMPT = (langHint) =>
   `${langHint ? langHint + ' ' : ''}Extract all text from this document image exactly as it appears. ` +
   'Preserve the original text layout including line breaks and paragraph structure. ' +
   'Return ONLY the extracted text — no commentary, no labels, no markdown formatting.';
+
+// ── A PDF is read in chunks of pages, each page marked (2026-10-07) ───────
+// One call reads at most OCR_PDF_CHUNK_PAGES pages (a sub-PDF cut on the
+// server), with an output cap of 1 536 tokens per page of the chunk. The
+// reply must mark every page; a chunk that is cut (MAX_TOKENS) or misses a
+// page is read again in halves, down to one page; one page that is still cut
+// gets one more reading at OCR_SINGLE_PAGE_CAP. Anything still cut, empty or
+// missing fails the whole document: nothing partial is stored or analysed.
+const OCR_PDF_CHUNK_PAGES = 5;
+const OCR_SINGLE_PAGE_CAP = 4096; // the per-call cap OCR had before #411
+const EMPTY_PAGE = '[[EMPTY PAGE]]';
+const PAGED_PROMPT = (langHint, pages) => VISION_PROMPT(langHint) +
+  ` This PDF has ${pages} page${pages === 1 ? '' : 's'}. Start every page with its own line "=== PAGE n ===" (n = 1 to ${pages}, in order).` +
+  ` If a page has no text, write ${EMPTY_PAGE} under its line.`;
+const MARKER = /^[ \t]*={2,}[ \t]*PAGE[ \t]+(\d+)[ \t]*={2,}[ \t]*$/gimu;
+/**
+ * Split a paged reply into its pages: { pages: [text|''], missing: [n] }.
+ * A page counts as read when its marker is there and it has text or the
+ * empty-page sign; a missing marker, a page with nothing under it, a
+ * repeated or out-of-range number is "missing".
+ */
+function parsePagedText(text, pages) {
+  const out = Array(pages).fill(null);
+  const marks = [...String(text || '').matchAll(MARKER)];
+  for (let i = 0; i < marks.length; i++) {
+    const n = Number(marks[i][1]);
+    const body = String(text).slice(marks[i].index + marks[i][0].length, i + 1 < marks.length ? marks[i + 1].index : undefined).trim();
+    if (n < 1 || n > pages || out[n - 1] !== null) return { pages: out.map(x => x || ''), missing: Array.from({ length: pages }, (_, k) => k + 1), invalid: true };
+    out[n - 1] = body === EMPTY_PAGE ? '' : (body || null);
+  }
+  const missing = out.map((x, k) => (x === null ? k + 1 : null)).filter(Boolean);
+  return { pages: out.map(x => x || ''), missing };
+}
+
 /** Tokens of the longest prompt, bounded by its UTF-8 bytes (a token is at least one byte). */
 function promptTokenBound() {
-  return Math.max(...Object.values(LANG_HINTS).map(h => Buffer.byteLength(VISION_PROMPT(h), 'utf8')));
+  return Math.max(...Object.values(LANG_HINTS).flatMap(h => [
+    Buffer.byteLength(VISION_PROMPT(h), 'utf8'),
+    Buffer.byteLength(PAGED_PROMPT(h, OCR_PDF_CHUNK_PAGES), 'utf8'),
+  ]));
 }
 
 // ── Which provider reads a scan (2026-10-06, review of #411) ─────────────
@@ -140,63 +177,93 @@ function ocrProviders({ kind = 'image', env = process.env, voicelabVision = null
   return { primary: usable[0] || null, fallbacks: fallback ? usable.slice(1) : [], fallback };
 }
 
-// ── The cost of one OCR page ──────────────────────────────────────────────
-// Only the Gemini path has a per-page budget; every part of it is listed
-// with its basis. It is a CONSERVATIVE UPPER BUDGET (for the plans' worst
-// case and the discount floors), not an expected cost: nothing here has been
-// measured on a real reading yet (the pilot reads usageMetadata).
+// ── The cost of one OCR page: a PLANNING ESTIMATE ─────────────────────────
+// $0.010959 a page is the planning figure for the plans' worst case and the
+// discount floors. It is not a measured cost and not a hard maximum: its
+// image-token figure is an assumption, and some calls (re-readings, a
+// fallback) are outside it. The pilot measures the real figure
+// (usageMetadata of each call, one ledger row per call).
 //   model / API: gemini-2.5-flash through the Gemini Developer API
 //     (generativelanguage.googleapis.com v1beta generateContent, API key) -
 //     not Vertex AI;
 //   price: src/ai/model-pricing.js (the single price table), source
-//     ai.google.dev/gemini-api/docs/pricing, paid tier, checked 2026-08-11.
-//     It could not be re-read on 2026-10-06 (ai.google.dev is blocked from
-//     this environment). Output is billed with thinking ("response and
-//     reasoning" on the Vertex page, the only one readable here);
-//   image input: no Developer API tokens-per-page figure could be read here.
-//     The Vertex page says "For an 1024x1024 image, it consumes 1290 tokens.
-//     Per image token count varies by image resolution." - used only as a
-//     scale; the budget is 4x that (larger page images), an assumption;
-//   prompt: bounded by its UTF-8 bytes (promptTokenBound), counted per page
-//     (a one-page call is the worst case);
-//   output: the cap we send, maxOutputTokens = 1 536 x pages; a reading that
-//     reaches it is refused (OCR_TRUNCATED) but still billed;
-//   thinking: thinkingConfig.thinkingBudget = 0 is sent (tests/scan-ocr.test.js
-//     checks the request); budget 0 - NOT confirmed on a real response;
-//   attempts: the usage ledger retries a transient error of stage 'ocr' once
-//     (ESSENTIAL_STAGES), so 2 attempts, both counted as billed;
-//   extra reserve factor: 1 (none beyond the above);
-//   fallback (VoiceLab, OpenAI vision): NOT in this figure - unknown cost.
+//     ai.google.dev/gemini-api/docs/pricing, paid tier, checked 2026-08-11;
+//     not re-read on 2026-10-06/07 (ai.google.dev is blocked from here);
+//   input, a PDF page: 5 160 tokens - a planning assumption, not a proven
+//     bound. The only readable source (Vertex pricing page) says a PDF page
+//     is billed as one image and "For an 1024x1024 image, it consumes 1290
+//     tokens. Per image token count varies by image resolution." - x4 as
+//     headroom for page renderings larger than 1024x1024;
+//   input, a separate image: grows with its pixels. Assumed in proportion
+//     to that example, 1 290 x max(1, pixels / 1024^2) tokens (19 683 at the
+//     16 MP limit); also an assumption (imageInputTokens below);
+//   prompt: sent once per call. Its UTF-8 bytes bound its tokens: 305 for an
+//     image, 463 for a PDF chunk (paged prompt). A 5-page chunk is ~93 per
+//     page; the planning allowance is 305 per page, which covers chunks and
+//     images; a 1-page PDF call is 462 (+157 tokens, +$0.00005);
+//   output: maxOutputTokens = 1 536 x the pages of the call, shared by them;
+//   thinking: thinkingBudget = 0 is sent; planned 0, not confirmed on a real
+//     reply (Gemini bills thinking as output, outside candidatesTokenCount);
+//   retry: the ledger retries a transient error of a call once; the retry
+//     re-sends the whole chunk, so x2 applies to every page of it;
+//   NOT included: re-readings after a cut or missing page (halves, then
+//     one 4 096-token reading of one page - each its own ledger row, their
+//     frequency is unmeasured), and any VoiceLab / OpenAI vision call
+//     (unknown cost).
 const OCR_OUTPUT_TOKENS_PER_PAGE = 1536;
 const VERTEX_IMAGE_TOKENS_1024 = 1290;
+const PDF_PAGE_INPUT_TOKENS = 4 * VERTEX_IMAGE_TOKENS_1024;
+const PROMPT_ALLOWANCE_PER_PAGE = 305;
+/** Planning assumption for a separate image's input tokens (not a bound). */
+function imageInputTokens(width, height) {
+  return Math.ceil(VERTEX_IMAGE_TOKENS_1024 * Math.max(1, (width * height) / (1024 * 1024)));
+}
+function promptBytes() {
+  const hints = Object.values(LANG_HINTS);
+  return {
+    image: Math.max(...hints.map(h => Buffer.byteLength(VISION_PROMPT(h), 'utf8'))),
+    pdfChunk: Math.max(...hints.map(h => Buffer.byteLength(PAGED_PROMPT(h, OCR_PDF_CHUNK_PAGES), 'utf8'))),
+    pdfOnePage: Math.max(...hints.map(h => Buffer.byteLength(PAGED_PROMPT(h, 1), 'utf8'))),
+  };
+}
 function ocrPageBudget() {
   const p = require('../ai/model-pricing');
   const price = p.MODEL_PRICING['gemini-2.5-flash'];
   const src = p.PRICING_SOURCES.gemini_2026_08_11; // the source the price table names for gemini-2.5-flash
+  const pb = promptBytes();
   const parts = {
-    imageInputTokens: { tokens: 4 * VERTEX_IMAGE_TOKENS_1024, status: 'assumed_upper',
-      basis: 'Vertex page: 1 290 tokens for a 1024x1024 image, varies by resolution; x4 headroom. No Developer API per-page figure read here.' },
-    promptTokens: { tokens: promptTokenBound(), status: 'bound', basis: 'UTF-8 bytes of the longest OCR prompt (tokens <= bytes)' },
-    outputTokens: { tokens: OCR_OUTPUT_TOKENS_PER_PAGE, status: 'cap_sent', basis: 'maxOutputTokens = 1 536 x pages; MAX_TOKENS is refused but billed' },
-    thinkingTokens: { tokens: 0, status: 'assumed_zero_unverified', basis: 'thinkingBudget: 0 is sent; not confirmed on a real response' },
+    pdfPageInputTokens: { tokens: PDF_PAGE_INPUT_TOKENS, status: 'planning_assumption',
+      basis: 'Vertex page: a PDF page is billed as one image; 1 290 tokens for a 1024x1024 image, varies by resolution; x4 headroom. Not a proven bound; no Developer API per-page figure read here.' },
+    promptTokens: { tokens: PROMPT_ALLOWANCE_PER_PAGE, status: 'planning_allowance',
+      basis: `sent once per call, bounded by UTF-8 bytes: image ${pb.image}, PDF chunk ${pb.pdfChunk} (~${Math.ceil(pb.pdfChunk / OCR_PDF_CHUNK_PAGES)} a page in ${OCR_PDF_CHUNK_PAGES}-page chunks), 1-page PDF call ${pb.pdfOnePage}` },
+    outputTokens: { tokens: OCR_OUTPUT_TOKENS_PER_PAGE, status: 'cap_sent', basis: 'maxOutputTokens = 1 536 x pages of the call; a reading that reaches it is refused (billed)' },
+    thinkingTokens: { tokens: 0, status: 'planned_zero_unverified', basis: 'thinkingBudget: 0 is sent; not confirmed on a real reply' },
   };
-  const inputTokens = parts.imageInputTokens.tokens + parts.promptTokens.tokens;
+  const inputTokens = parts.pdfPageInputTokens.tokens + parts.promptTokens.tokens;
   const outputTokens = parts.outputTokens.tokens + parts.thinkingTokens.tokens;
   const attempts = 2;
   const reserveFactor = 1;
-  const oneAttemptUsd = (inputTokens * price.in + outputTokens * price.out) / 1e6;
+  const perAttempt = (inTok) => (inTok * price.in + outputTokens * price.out) / 1e6;
+  const maxImageTokens = imageInputTokens(MAX_IMAGE_SIDE, Math.floor(MAX_IMAGE_PIXELS / MAX_IMAGE_SIDE));
   return {
-    kind: 'conservative_upper_budget', expected: null, expectedStatus: 'unmeasured',
+    kind: 'planning_estimate', expected: null, expectedStatus: 'unmeasured', hardMaximum: false,
     model: 'gemini-2.5-flash', api: 'Gemini Developer API (generativelanguage.googleapis.com v1beta, API key)',
     inPerM: price.in, outPerM: price.out, priceSource: src ? `${src.source}, checked ${src.checkedAt}` : 'src/ai/model-pricing.js',
     parts, inputTokens, outputTokens,
-    attempts, attemptsBasis: "usage ledger: one transient retry for stage 'ocr'",
+    attempts, attemptsBasis: "usage ledger: one transient retry of a call (stage 'ocr'); it re-sends the whole chunk",
     reserveFactor,
+    notIncluded: ['re-readings after a cut or missing page (halves, then one 4 096-token page reading)', 'VoiceLab / OpenAI vision (unknown cost)'],
+    promptBytes: pb,
     usdInputPerAttempt: inputTokens * price.in / 1e6, usdOutputPerAttempt: outputTokens * price.out / 1e6,
-    usdPerAttempt: oneAttemptUsd, usdPerPage: oneAttemptUsd * attempts * reserveFactor,
+    usdPerAttempt: perAttempt(inputTokens), usdPerPage: perAttempt(inputTokens) * attempts * reserveFactor,
+    image: {
+      inputTokensAtLimit: maxImageTokens, status: 'planning_assumption',
+      basis: '1 290 x max(1, pixels / 1024^2), at the 16 MP limit; proportional to the Vertex example, not a published figure',
+      usdAtLimit: perAttempt(maxImageTokens + PROMPT_ALLOWANCE_PER_PAGE) * attempts * reserveFactor,
+    },
   };
 }
-/** USD per OCR page on the Gemini path: the conservative upper budget (see above). */
+/** USD per OCR page on the Gemini path: the planning estimate (see above). */
 function ocrPageUsd() { return ocrPageBudget().usdPerPage; }
 
 // Cost status of each provider for one page: only Gemini has a budget.
@@ -230,6 +297,6 @@ function ocrCostBasis(env = process.env, { voicelabVision = null } = {}) {
 
 module.exports = {
   MAX_PDF_BYTES, MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, MAX_IMAGE_PIXELS, IMAGE_TYPES, TEXT_PDF_CHARS_PER_PAGE,
-  OCR_OUTPUT_TOKENS_PER_PAGE, LANG_HINTS, VISION_PROMPT, PROVIDERS, PROVIDER_COST,
-  pdfInfo, imageInfo, measureScan, promptTokenBound, ocrProviders, ocrPageBudget, ocrPageUsd, ocrCostBasis,
+  OCR_OUTPUT_TOKENS_PER_PAGE, OCR_PDF_CHUNK_PAGES, OCR_SINGLE_PAGE_CAP, EMPTY_PAGE, LANG_HINTS, VISION_PROMPT, PAGED_PROMPT, PROVIDERS, PROVIDER_COST,
+  pdfInfo, imageInfo, measureScan, parsePagedText, promptTokenBound, imageInputTokens, ocrProviders, ocrPageBudget, ocrPageUsd, ocrCostBasis,
 };

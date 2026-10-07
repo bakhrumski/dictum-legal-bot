@@ -19,7 +19,7 @@ budjetidan qayta chiqariladi (`src/rag/tariff-ledger.js` `PLAN_CATALOG`,
 | **Fakt** | Har bir yetkazilgan ish (`tariff_usage`, `status = committed`) o'z AI so'roviga (`request_id`) bog'langan; xizmat bo'yicha o'lchangan tannarx `GET /api/admin/tariff/economics` → `measured` | `measuredServiceCost` |
 | **Taxmin (egasi)** | Kurs 12 000 so'm/$; chat $0.025; tahlil va xulosa $0.30/birlik; draft $0.06; operatsion ajratma 10 200 / 30 600 / 51 000 so'm | `PLANNING` |
 | **Taxmin (shu hisobot)** | Tasdiqlangan javob bazadan berilganda generatsiya narxining 20% (retrieval, moslik tekshiruvi, infratuzilma 0 emas) | `--hit-cost-share` |
-| **Taxmin (budjet)** | OCR sahifasi $0.010959 — Gemini-only yo'nalish uchun konservativ yuqori budjet, kutilgan narx emas (Developer API narxi, 2026-08-11; §2a) | `src/ocr/scan-limits.js` |
+| **Taxmin (rejalashtirish)** | OCR: PDF sahifasi $0.010959, 16 MP rasm $0.019673 — Gemini-only yo'nalish uchun rejalashtirish taxmini; real tannarx yoki qat'iy maksimal emas (Developer API narxi, 2026-08-11; §2a) | `src/ocr/scan-limits.js` |
 | **Noma'lum** | Hujjat tahlili, xulosa va draftning haqiqiy birlik narxi; OCR sahifasining haqiqiy (o'lchangan) narxi va VoiceLab / OpenAI vision fallback narxi; STT, TTS narxi; Gemini embedding narxi (`AI_PRICE_OVERRIDES` bo'lmaguncha "estimated"); VoiceLab kredit iste'moli (kredit qaytmasa noma'lum, token narxiga aylantirilmaydi) | Benchmark va production o'lchovi kerak |
 | **Noma'lum** | Hosting (Render), Supabase (DB + storage), support, Workspace storage — operatsion ajratmani tekshirish uchun hisob-fakturalar kerak | Egasining hisoblari |
 | **Doira (scope), o'lchov emas** | To'lov komissiyasi 0: provayder ulanmagan, to'lov qo'lda (master grant). Provayder ulanganda komissiya noma'lum bo'ladi, model qayta tekshiriladi; eski takliflar shungacha qo'llanmaydi | `feeScope` (`src/rag/tariff-pricing.js`) |
@@ -39,8 +39,9 @@ Asos: planning budgets at 100% use, not measured cost (src/rag/tariff-ledger.js 
 | Gold | 599 000 | 424 086 | 30 600 | 454 686 | 144 314 | 24.09% | 479 200 |
 | Platinum | 999 000 | 706 810 | 51 000 | 757 810 | 241 190 | 24.14% | 799 200 |
 
-OCR: sahifa uchun $0.010959 — konservativ yuqori budjet, kutilgan narx emas (o'lchanmagan). gemini-2.5-flash, Gemini Developer API (generativelanguage.googleapis.com v1beta, API key); narx $0.3 / $2.5 per 1M (https://ai.google.dev/gemini-api/docs/pricing (paid tier; the free tier bills $0), checked 2026-08-11).
-  = ((5160 rasm + 305 prompt) × $0.3 + (1536 chiqish + 0 thinking) × $2.5) / 1M × 2 urinish × 1 zaxira = $0.0054795 × 2.
+OCR: PDF sahifasi uchun $0.010959 — rejalashtirish taxmini; real tannarx ham, qat'iy maksimal narx ham emas (o'lchanmagan). gemini-2.5-flash, Gemini Developer API (generativelanguage.googleapis.com v1beta, API key); narx $0.3 / $2.5 per 1M (https://ai.google.dev/gemini-api/docs/pricing (paid tier; the free tier bills $0), checked 2026-08-11).
+  = ((5160 PDF sahifasi + 305 prompt ulushi) × $0.3 + (1536 chiqish + 0 thinking) × $2.5) / 1M × 2 (retry) × 1 = $0.0054795 × 2. Kirmaydi: qayta o'qishlar, fallback.
+  Alohida rasm (16 MP chegarasida, taxmin): 19683 input token → $0.019673.
   100% da sahifalar: Sinov 30, Silver 240, Gold 720, Platinum 1200. Faqat Gemini-only yo'nalishida amal qiladi (OCR_IMAGE_PROVIDER=gemini, OCR_FALLBACK=off).
 
 Bitta Sinov AI budjeti (OCR bilan): $1.054 ≈ 12 645 so'm (OCR'siz 8 700 so'm).
@@ -72,6 +73,7 @@ Stress (jami xizmat budjeti, narxga nisbatan; 80% chegara):
 | hujjat tannarxi +50% (tahlil va xulosa $0.45) | 180 362 (90.6% ⚠ >80%) | 541 086 (90.3% ⚠ >80%) | 901 810 (90.3% ⚠ >80%) |
 | storage/ops +50% | 156 662 (78.7%) | 469 986 (78.5%) | 783 310 (78.4%) |
 | OCR sahifa narxi +50% | 167 343 (84.1% ⚠ >80%) | 502 029 (83.8% ⚠ >80%) | 836 714 (83.8% ⚠ >80%) |
+| har bir OCR sahifasi 16 MP rasm | 176 658 (88.8% ⚠ >80%) | 529 973 (88.5% ⚠ >80%) | 883 288 (88.4% ⚠ >80%) |
 | hammasi birga | 228 963 (115.1% ⚠ >80%) | 686 889 (114.7% ⚠ >80%) | 1 144 814 (114.6% ⚠ >80%) |
 
 Individual chegirma chegarasi (xarajat modeli cm-2026-10-06-planning-v2-ocr, taxminiy):
@@ -101,29 +103,39 @@ OCR alohida xizmat emas: skan hujjat tahlil, xulosa yoki chat ichida
 o'qiladi (`docs/tariffs-v2.md` §4). Lekin provayder xarajati bor, shuning
 uchun u xizmat budjetiga, Sinovga va chegirma chegarasiga kiritilgan.
 
-**Sahifa narxi: $0.010959 — konservativ yuqori budjet, kutilgan narx emas.**
-Kutilgan (o'rtacha) narx **o'lchanmagan**; uni pilot `usageMetadata`
-(promptTokenCount, candidatesTokenCount, thoughtsTokenCount) orqali o'lchaydi.
+**PDF sahifasi: $0.010959 — rejalashtirish taxmini.** Bu real tannarx emas
+va qat'iy maksimal narx ham emas. Haqiqiy narx o'lchanmagan; uni pilot har
+chaqiruvning `usageMetadata` maydonlaridan (promptTokenCount,
+candidatesTokenCount, thoughtsTokenCount) o'lchaydi.
 
-| Qism | Token / koeffitsiyent | Holat | Asos |
+| Qism | Qiymat | Holat | Asos |
 |---|---:|---|---|
-| Model, API | gemini-2.5-flash, **Gemini Developer API** (`generativelanguage.googleapis.com/v1beta`, API key) | fakt (kod) | `src/ocr/routes.js`; Vertex AI emas |
-| Narx | $0.30 / 1M input, $2.50 / 1M output | manbali, **qayta tekshirilmagan** | `src/ai/model-pricing.js`: ai.google.dev/gemini-api/docs/pricing, paid tier, 2026-08-11. 2026-10-06 da ai.google.dev bu muhitdan ochilmadi (proxy siyosati), shuning uchun qayta o'qilmadi |
-| Sahifa rasmi (input) | 5 160 | taxmin (yuqori) | Developer API uchun sahifa token soni bu yerda o'qib bo'lmadi. Vertex sahifasidagi "1024x1024 image … 1290 tokens; varies by resolution" faqat o'lchov sifatida; ×4 — katta sahifa rasmi uchun zaxira |
-| Prompt (input) | 305 | isbotlangan yuqori chegara | eng uzun OCR promptining UTF-8 baytlari (token ≤ bayt), har sahifaga (1 sahifali chaqiruv — eng yomon holat) |
-| Chiqarilgan matn (output) | 1 536 | biz yuboradigan chegara | `maxOutputTokens = 1 536 × sahifa`; chegaraga yetgan o'qish rad etiladi (`OCR_TRUNCATED`), lekin to'lanadi |
-| Thinking (output narxida) | 0 | **taxmin, tasdiqlanmagan** | `generationConfig.thinkingConfig.thinkingBudget = 0` yuboriladi (request testi bor). Haqiqiy javobda `thoughtsTokenCount = 0` ekanini pilot tasdiqlaydi |
-| Urinishlar | ×2 | fakt (kod) | usage-ledger `ocr` bosqichida bitta vaqtinchalik xatoni qayta urinadi (`ESSENTIAL_STAGES`); ikkalasi ham to'lanadi deb olingan |
-| Qo'shimcha zaxira koeffitsiyenti | ×1 | — | yuqoridagi ×4 rasm va ×2 urinishdan tashqari zaxira yo'q |
-| Fallback (VoiceLab, OpenAI vision) | — | **noma'lum, bu raqamga kirmaydi** | pastda |
+| Model, API | gemini-2.5-flash, **Gemini Developer API** (`generativelanguage.googleapis.com/v1beta`, API key) | fakt (kod) | Vertex AI emas |
+| Narx | $0.30 / 1M input, $2.50 / 1M output | manbali, **qayta tekshirilmagan** | `src/ai/model-pricing.js`: ai.google.dev/gemini-api/docs/pricing, paid tier, 2026-08-11. 2026-10-06/07 da ai.google.dev bu muhitdan ochilmadi |
+| PDF sahifasi (input) | 5 160 token | **rejalashtirish taxmini, isbotlangan chegara emas** | Vertex sahifasi: PDF sahifasi bitta rasm sifatida hisoblanadi; "1024x1024 image … 1290 tokens; varies by resolution". ×4 — katta sahifa tasviri uchun zaxira. Developer API uchun sahifa token soni bu yerda o'qilmadi |
+| Alohida rasm (input) | 1 290 × max(1, piksel / 1024²); 16 MP chegarasida 19 683 | **rejalashtirish taxmini** | Vertex misoliga proporsional deb olingan, e'lon qilingan raqam emas. 16 MP rasm sahifasi ≈ $0.019673 |
+| Prompt | sahifaga 305 (ulush) | chaqiruv bo'yicha isbotlangan chegara, sahifaga ulush | prompt chaqiruvga bir marta yuboriladi. UTF-8 bayt chegarasi: rasm — 305, PDF bo'lagi (5 sahifa) — 463 (sahifaga ≈93), 1 sahifali PDF chaqiruvi — 462 (+157 token ≈ +$0.00005) |
+| Chiqarilgan matn | sahifaga 1 536 | biz yuboradigan chegara | `maxOutputTokens = 1 536 × chaqiruvdagi sahifalar` — har sahifa uchun, bo'lak ichida umumiy; chegaraga yetgan o'qish rad etiladi, lekin to'lanadi |
+| Thinking | 0 | **reja, tasdiqlanmagan** | `thinkingConfig.thinkingBudget = 0` yuboriladi (request testi bor). Gemini thinking'ni output narxida, `candidatesTokenCount` dan tashqarida hisoblaydi — real javobda 0 ekanini pilot tasdiqlaydi |
+| Retry | ×2 | fakt (kod) | usage-ledger chaqiruvni bitta vaqtinchalik xatoda qayta yuboradi. Retry butun bo'lakni (5 sahifa input + output) qayta yuboradi, shuning uchun ×2 bo'lakdagi har bir sahifaga qo'llanadi |
+| Qayta o'qish (kesilgan yoki yetishmagan sahifa) | — | **taxminga kirmaydi** | bo'lak yarmlarga bo'linib qayta o'qiladi, oxirida bitta sahifa 4 096 token bilan bir marta o'qiladi; har biri ledgerda alohida qator. Qanchalik tez-tez bo'lishi o'lchanmagan |
+| Fallback (VoiceLab, OpenAI vision) | — | **noma'lum, taxminga kirmaydi** | pastda |
+| Qo'shimcha zaxira | ×1 | — | yuqoridagilardan tashqari zaxira yo'q |
 
-Formula:
+Formula (PDF sahifasi):
 `((5 160 + 305) × 0.30 + (1 536 + 0) × 2.50) / 1 000 000 × 2 × 1 = 0.0054795 × 2 = $0.010959`
-(input $0.0016395 + output $0.00384 bir urinishga).
 
-Ma'lumot uchun (kutilgan narx emas): bitta urinish, Vertex misolidagi
-1024×1024 rasm va chiqish chegarasi to'liq ishlatilsa —
-`((1 290 + 305) × 0.30 + 1 536 × 2.50) / 1M = $0.0043185`.
+Ko'p sahifali faylda xarajat qanday taqsimlanadi (masalan, 30 sahifa):
+- PDF 5 sahifali bo'laklarga bo'linadi, ya'ni 6 ta chaqiruv. Har birining chiqish chegarasi 5 × 1 536 = 7 680 token.
+- Prompt har chaqiruvga bir marta ketadi: 6 × 463 = 2 778 token. Taxmin esa 30 × 305 = 9 150 token ajratadi.
+- Retry faqat xato qilgan bo'lakni qayta yuboradi, butun hujjatni emas. Taxmin har bo'lakni ikki marta to'langan deb oladi.
+- Kesilgan bo'lak yarmlarga bo'linadi (5 → 3 + 2 → … → 1). Bu qo'shimcha chaqiruvlar taxminga kirmaydi va ledgerda ko'rinadi.
+
+**PDF qamrovi.** Har bir chaqiruvga sahifa soni aytiladi va javob har sahifani `=== PAGE n ===` belgisi bilan boshlashi kerak.
+- Yetishmagan sahifa, ostida matni yo'q belgi yoki bo'sh javob — sahifa o'qilmagan deb hisoblanadi.
+- Bo'sh sahifa `[[EMPTY PAGE]]` bilan qabul qilinadi.
+- Oxirgi urinishdan keyin ham kesilgan, bo'sh yoki yetishmagan sahifa bo'lsa, butun hujjat rad etiladi (`OCR_TRUNCATED`, `OCR_INCOMPLETE`, `OCR_EMPTY`): hech narsa keshlanmaydi, qisman matn tahlilga yuborilmaydi, xizmat limiti qaytariladi, provayder sarfi ledgerda qoladi.
+- Kesilgan o'qish provayder xatosi hisoblanmaydi: retry qilinmaydi va circuit breaker ochilmaydi.
 
 **Provayder tanlash qoidasi** (`scanLimits.ocrProviders`, jimgina almashtirilmaydi):
 
@@ -147,6 +159,12 @@ Ma'lumot uchun (kutilgan narx emas): bitta urinish, Vertex misolidagi
 Qoida: OCR narxi "taxminiy" faqat sahifa yeta oladigan **har bir** provayder Gemini bo'lganda (`ocrCostBasis`). Aks holda OCR narxi noma'lum, Gemini budjeti boshqa provayderga qo'llanmaydi va chegirma taklifi yaratilmaydi.
 
 **Production uchun xulosa:** production'da VoiceLab yoqilgan. Uning vision lane'i ham yoqilganmi yoki default fallback'lar bor-yo'qligi tekshirilmagan. Agar shunday bo'lsa, production'da OCR narxi **noma'lum** bo'ladi va chegirmalar to'xtaydi. Bu jadvaldagi raqamlar Gemini-only konfiguratsiya uchun.
+
+**Chegirma holati (production yo'nalishi).** Agar OCR yo'lida VoiceLab vision (yoki OpenAI vision fallback) bo'lsa, OCR narxi noma'lum bo'ladi. Bu holatda:
+- yangi chegirma taklifi yaratilmaydi;
+- admin quote kartasida "OCR xarajati: noma'lum", amaldagi rasm/PDF yo'li va sabab yoziladi;
+- oddiy tarif xizmatlari, qo'lda grant va allaqachon sotib olingan davrlar o'zgarmaydi (`tests/tariff-offers*.test.js`);
+- provayder yo'li chegirma uchun Gemini'ga almashtirilmaydi.
 
 **Chatdagi OCR chegaralari (10/80/240/400) qayerdan:** tariflar v2 qoidasi "davr uchun har bir tahlil birligiga 10 sahifa" (`PLAN_CATALOG`: `ocr = analysis × 10`; Sinov 1, Silver 8, Gold 24, Platinum 40 tahlil). Ular chatdagi skan talabining o'lchovidan emas, tahlil kvotasidan kelib chiqqan. Bu PR ularni o'zgartirmaydi.
 

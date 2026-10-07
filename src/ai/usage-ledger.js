@@ -470,6 +470,16 @@ async function track(meta, fn) {
       return result;
     } catch (error) {
       if (error && error.code === 'CALL_RESERVE' && !reservation) throw error;   // an adapter retry was refused
+      // the provider answered, but the answer is not usable (cut at its cap,
+      // empty): a billed row, no retry, and not a provider fault - the
+      // breaker is not fed
+      if (error && error.providerAnswered) {
+        failAttempt(error, { breaker: false });
+        releaseAttempt();
+        health.recordSuccess(meta.provider, meta.model);
+        if (chain) chain.lastFailed = meta.model || meta.provider || null;
+        throw error;
+      }
       const c = failAttempt(error);
       releaseAttempt();
       if (c.kind === 'transient' && transientLeft > 0 && !budgetBlock(store, stage) && !health.openState(meta.provider, meta.model)) {

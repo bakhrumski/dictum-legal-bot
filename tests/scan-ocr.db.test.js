@@ -295,6 +295,61 @@ const rows = async (user) => (await pool.query(`SELECT service, credits, status,
       assert.strictEqual((await used(u)).analysis, 0);
     });
 
+    await test('the real reader behind the route (fetch stubbed): a missing or cut page is never stored or analysed; every call is a ledger row', async () => {
+      const { callVisionOCR } = require('../src/ocr/routes');
+      const { PDFDocument } = require('pdf-lib');
+      const keepEnv = { ...process.env };
+      Object.assign(process.env, { GEMINI_API_KEY: 'stub-no-calls', OCR_IMAGE_PROVIDER: 'gemini', OCR_FALLBACK: 'off' });
+      const realFetch = global.fetch;
+      let mode = 'drop2';
+      let calls = 0;
+      global.fetch = async (url, init) => {
+        if (!/generativelanguage\.googleapis\.com/u.test(String(url))) return realFetch(url, init); // the test's own requests
+        calls++;
+        const body = JSON.parse(init.body);
+        const n = (await PDFDocument.load(Buffer.from(body.contents[0].parts[0].inlineData.data, 'base64'))).getPageCount();
+        const pages = Array.from({ length: n }, (_, i) => i + 1).filter(p => !(mode === 'drop2' && n === 3 && p === 2) && !(mode === 'drop2' && n === 1));
+        const text = pages.map(p => `=== PAGE ${p} ===\nShartnoma ${p}-sahifa matni. ${'Band. '.repeat(20)}`).join('\n');
+        return { ok: true, json: async () => ({ candidates: [{ finishReason: mode === 'cut' ? 'MAX_TOKENS' : 'STOP', content: { parts: [{ text }] } }], usageMetadata: { promptTokenCount: 1000 * n, candidatesTokenCount: 200 * n } }) };
+      };
+      ocrBehaviour = (buf, mime, pages) => callVisionOCR(buf, mime, 'uzb', { pages });
+      require('../src/ai/provider-health').reset();
+      try {
+        const u = await makeUser();
+        const spendOf = async () => (await pool.query(`SELECT count(*)::int AS n FROM llm_spend_log WHERE user_id = $1 AND stage = 'ocr'`, [u])).rows[0].n;
+        // page 2 never comes back: refused, not stored, the analysis unit back, every call kept
+        const q = await quote(u, fx('scan-3p.pdf'), 'analysis');
+        const r = await ocr(u, fx('scan-3p.pdf'), q.body.scanTicket);
+        assert.deepStrictEqual([r.status, r.body.code, r.body.quotaRefunded, r.body.scanId], [422, 'OCR_INCOMPLETE', true, undefined], JSON.stringify(r.body));
+        assert.match(r.body.message, /to'liq bo'lmagan matn tahlilga yuborilmaydi/u);
+        await settle(150);
+        assert.deepStrictEqual((await rows(u)).map(x => [x.service, x.status, x.release_reason]), [['analysis', 'released', 'ocr_incomplete']]);
+        assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM document_scans WHERE admin_id = $1', [u])).rows[0].n, 0, 'nothing cached');
+        const afterIncomplete = await spendOf();
+        assert.ok(afterIncomplete >= 2 && afterIncomplete === calls, `one ledger row per call (${afterIncomplete} rows, ${calls} calls)`);
+        // cut at the cap at every size: refused, nothing cached
+        mode = 'cut';
+        const q2 = await quote(u, fx('scan-3p.pdf'), 'analysis');
+        const t = await ocr(u, fx('scan-3p.pdf'), q2.body.scanTicket);
+        assert.deepStrictEqual([t.status, t.body.code], [422, 'OCR_TRUNCATED']);
+        assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM document_scans WHERE admin_id = $1', [u])).rows[0].n, 0, 'nothing cached');
+        // every page read: stored with its page marks, the analysis held
+        mode = 'full';
+        const q3 = await quote(u, fx('scan-3p.pdf'), 'analysis');
+        const ok = await ocr(u, fx('scan-3p.pdf'), q3.body.scanTicket);
+        assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+        const row = (await pool.query('SELECT text, pages FROM document_scans WHERE id = $1', [ok.body.scanId])).rows[0];
+        assert.deepStrictEqual([...row.text.matchAll(/^\[Sahifa (\d+)\]$/gmu)].map(m => Number(m[1])), [1, 2, 3]);
+        await settle(150);
+        assert.strictEqual(await spendOf(), calls, 'still one row per call');
+      } finally {
+        ocrBehaviour = null;
+        global.fetch = realFetch;
+        for (const k of Object.keys(process.env)) if (!(k in keepEnv)) delete process.env[k];
+        Object.assign(process.env, keepEnv);
+      }
+    });
+
     await test('the text after OCR is longer than the pages promised: never cut - too large is refused, larger is re-quoted with no second OCR', async () => {
       // Sinov: one unit at most; 3 pages read as 50 000 characters (2 units)
       const s = await makeUser();

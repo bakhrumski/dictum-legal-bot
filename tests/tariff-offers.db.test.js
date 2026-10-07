@@ -189,6 +189,32 @@ async function makeUser(role = 'user', extra = {}) {
     assert.strictEqual(g.cashUzs, 190000);
   });
 
+  await test('OCR cost unknown (VoiceLab vision route): no new offer, but a grant without an offer, a bought period and its services are untouched', async () => {
+    const u = await makeUser();
+    const bought = await ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `ocru-a-${u}` });
+    const before = (await pool.query('SELECT plan, price_uzs, limits, starts_at, ends_at FROM tariff_periods WHERE id = $1', [bought.period.id])).rows[0];
+    const keep = { ...process.env };
+    try {
+      Object.assign(process.env, { LLM_PROVIDER: 'voicelab', VOICELAB_API_KEY: 'vl', GPT_API_KEY: 'g' });
+      delete process.env.OCR_IMAGE_PROVIDER; delete process.env.OCR_FALLBACK; delete process.env.VOICELAB_LANES;
+      const refused = await offers.createOffer({ createdBy: master, userId: u, plan: 'gold', discountUzs: 1000, reason: 'ocr unknown' });
+      assert.deepStrictEqual([refused.ok, refused.reason], [false, 'unknown_cost_without_reserve']);
+      assert.match(refused.message || (refused.quote && refused.quote.message) || '', /OCR xarajati noma'lum/u);
+      // an ordinary service still runs on the bought period
+      const r = await ledger.reserve({ adminId: u, service: 'chat', units: 1, endpoint: '/api/legal-chat', channel: 'web', actorId: u });
+      assert.strictEqual(r.allowed, true);
+      await ledger.commit(r.jobKey);
+      // a payment without an offer is still granted (a renewal at the catalogue price)
+      const renewal = await ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `ocru-b-${u}` });
+      assert.deepStrictEqual([renewal.cashUzs, renewal.duplicate], [199000, false]);
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in keep)) delete process.env[k];
+      Object.assign(process.env, keep);
+    }
+    const after = (await pool.query('SELECT plan, price_uzs, limits, starts_at, ends_at FROM tariff_periods WHERE id = $1', [bought.period.id])).rows[0];
+    assert.deepStrictEqual(after, before, 'the bought period is not changed');
+  });
+
   await test('feature flag TARIFF_OFFERS=off: no new offer, no redemption; a period already bought is untouched', async () => {
     const u = await makeUser();
     const { offer } = await offers.createOffer({ createdBy: master, userId: u, plan: 'silver', discountUzs: 9000, reason: 'flag test' });

@@ -49,7 +49,7 @@ function withModel(model, fn) {
     // OCR: (analysis + opinion) x 10 pages + the chat-scan pool, at the per-page estimate
     const ocr = pricing.conservativeCost('silver').components.find(c => c.key === 'ocr');
     assert.deepStrictEqual([ocr.uzs, ocr.status], [31562, 'estimated']);
-    assert.match(ocr.basis, /240 pages x \$0\.010959 per page - conservative upper budget, not measured/u);
+    assert.match(ocr.basis, /240 pages x \$0\.010959 per page - planning estimate, not measured, not a hard maximum/u);
     assert.strictEqual(pricing.costModel().version, 'cm-2026-10-06-planning-v2-ocr');
   });
 
@@ -59,13 +59,38 @@ function withModel(model, fn) {
       delete process.env.GEMINI_API_KEY;
       const q = pricing.quoteDiscount({ plan: 'silver', discountPercent: '1' });
       assert.deepStrictEqual([q.ok, q.reason], [false, 'unknown_cost_without_reserve']);
-      assert.match(q.message, /ocr/u);
+      assert.match(q.message, /OCR xarajati noma'lum/u);
+      assert.match(q.message, /GEMINI_API_KEY\) sozlanmagan/u);
       assert.strictEqual(pricing.costModel().version, 'cm-2026-10-06-planning-v2-ocr-unknown');
       process.env.GEMINI_API_KEY = keep;
       process.env.OCR_FALLBACK = 'on';
       process.env.GPT_API_KEY = 'fallback-reachable';
       assert.strictEqual(pricing.quoteDiscount({ plan: 'gold', discountPercent: '1' }).reason, 'unknown_cost_without_reserve');
     } finally { process.env.GEMINI_API_KEY = keep; process.env.OCR_FALLBACK = 'off'; delete process.env.GPT_API_KEY; }
+  });
+
+  await test('VoiceLab vision in the OCR route (as in production): new offers blocked, the reason and the route shown; nothing else changes', () => {
+    const keep = { ...process.env };
+    try {
+      Object.assign(process.env, { LLM_PROVIDER: 'voicelab', VOICELAB_API_KEY: 'vl', GPT_API_KEY: 'g' });
+      delete process.env.OCR_IMAGE_PROVIDER; delete process.env.OCR_FALLBACK; delete process.env.VOICELAB_LANES;
+      const q = pricing.quoteDiscount({ plan: 'gold', discountPercent: '1' });
+      assert.deepStrictEqual([q.ok, q.reason, q.ocrBlocked, q.ocrCost.status], [false, 'unknown_cost_without_reserve', true, 'unknown']);
+      assert.deepStrictEqual([q.ocrCost.imageRoute, q.ocrCost.pdfRoute], ['VoiceLab vision → Gemini → OpenAI vision', 'Gemini']);
+      assert.match(q.message, /Yangi chegirma taklifi yaratilmaydi: OCR xarajati noma'lum/u);
+      assert.match(q.message, /oddiy tarif xizmatlari, to'lovni qo'lda tasdiqlash \(grant\) va allaqachon sotib olingan davrlar o'zgarmaydi/u);
+      assert.match(q.message, /Provayder yo'li chegirma uchun o'zgartirilmaydi/u);
+      // the route itself is not changed to make offers possible
+      assert.strictEqual(require('../src/ocr/scan-limits').ocrProviders({ kind: 'image' }).primary, 'voicelab');
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in keep)) delete process.env[k];
+      Object.assign(process.env, keep);
+    }
+    const ok = pricing.quoteDiscount({ plan: 'gold', discountPercent: '1' });
+    assert.deepStrictEqual([ok.ok, ok.ocrCost.status, ok.ocrCost.imageRoute], [true, 'estimated', 'Gemini']);
+    const html = read('public/dashboard.html');
+    assert.match(html, /rows\.push\(\['OCR xarajati'/u, 'the admin quote shows the OCR route and its cost status');
+    assert.match(html, /q\.ocrBlocked \? '<b>OCR narxi noma\\'lum — chegirma bloklangan\.<\/b> '/u);
   });
 
   await test('the minimum rounds UP to 1 000 so\'m, in integers', () => {
@@ -147,7 +172,7 @@ function withModel(model, fn) {
   await test('the floors are marked unmeasured, and the zero payment fee is the scope (no provider), not a measured fee', () => {
     const q = pricing.quoteDiscount({ plan: 'gold', discountPercent: '10' });
     assert.strictEqual(q.costMeasured, false);
-    assert.match(q.basisNote, /o'lchanmagan planlash budjetiga va OCR sahifasi uchun manbali taxminga asoslangan/u);
+    assert.match(q.basisNote, /o'lchanmagan planlash budjetiga va \(faqat Gemini-only OCR yo'nalishida\) OCR sahifasining rejalashtirish taxminiga asoslangan; tasdiqlangan chegara emas/u);
     assert.deepStrictEqual([q.paymentFeeBp, q.feeScope.providers], [0, ['manual']]);
     assert.match(q.feeScope.label, /provayderi ulanmagan/u);
     const html = read('public/dashboard.html');
