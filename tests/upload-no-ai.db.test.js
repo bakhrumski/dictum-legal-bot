@@ -263,7 +263,7 @@ async function docxOf(text) {
       await settle(250);
       assert.strictEqual(calls.ai, c0 + 1, 'one explanation call (no extra verifier call)');
       assert.ok(explainPrompts[0][1].text.includes(pdf.body.text), 'the whole extracted text, with its page marks');
-      assert.deepStrictEqual([yes.body.coverage.mode, yes.body.coverage.pages, yes.body.check.ok], ['full_text', 2, true]);
+      assert.deepStrictEqual([yes.body.coverage.mode, yes.body.coverage.pages, yes.body.check.flagged, yes.body.check.verified], ['full_text', 2, 0, false]);
       const b = await ledger.balance({ adminId: u });
       assert.strictEqual(b.services.analysis.used, pdf.body.units, 'units as quoted at extract (page marks not billed)');
       const req = (await pool.query('SELECT kind, trigger FROM ai_requests WHERE user_id = $1', [u])).rows;

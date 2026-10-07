@@ -120,6 +120,66 @@ Javobda `check.scope = "figures_dates_pages_clauses_only"` qaytadi.
 - Kichik sonlar (kun, foiz) hosila deb hisoblanmaydi. Hujjatda bo'lmasa, «topilmagan» deyiladi.
 - Ko'p raqamli hujjatda o'ylab topilgan summa tasodifan «hosila» bo'lib chiqishi mumkin. U baribir ko'rsatiladi, faqat «tekshiring» belgisi bilan.
 
+## 4a. «AI izohi» ham shu qoidalarga bo'ysunadi (2026-10-07, #419 jonli sinovidan keyin)
+
+Jonli sinovda asosiy javob yaxshilandi, lekin «AI izohi» manbaga sodiqlikni
+buzdi:
+- hujjatda yo'q faktni hujjatga nisbat berdi;
+- «ariza berilmagan»ni «ro'yxatdan o'tmagan» deb almashtirdi;
+- dalilsiz «asosiy xatar» deb ustuvorlik belgiladi;
+- vaqt va manba cheklovlarini tushirib qoldirdi.
+
+**Prompt (#420):**
+- Barcha qoidalar javobning hamma qismiga, jumladan AI izohiga ham taalluqli.
+- AI izohi ixtiyoriy: foydali va hujjatga asoslangan qo'shimcha izoh bo'lmasa, umuman yozilmaydi — sarlavha ham, to'ldiruvchi ham chiqmaydi.
+- Qoidalar umumiy so'zlar bilan yozilgan, baholash to'plamidagi nomlar promptda yo'q.
+
+**Mexanik tekshiruv faqat ogohlantiradi, hech narsani o'chirmaydi.**
+- Iboraning manbada yo'qligi xatoning isboti emas, shuning uchun lug'atga qarab avtomatik o'chirish yo'q.
+- Yagona istisno — bo'sh yoki to'ldiruvchi AI izohi («AI izohi: yo'q»). U ko'rsatilmaydi: bu ma'noga emas, promptdagi «to'ldiruvchi yozma» qoidasiga taalluqli.
+
+**Bir xil mezon.** Asosiy matn va AI izohi aynan bir xil tekshiriladi (test bilan isbotlangan). Tekshiriladigan narsalar:
+- raqam, sana, sahifa va band;
+- holat iboralari: ro'yxatdan o'tmagan, ariza berilmagan, huquq yo'q, rad etilgan, mavjud emas, aniqlanmadi, tekshirilmagan, noqonuniy, majburiy, tasdiqlangan, haqiqiy emas, kuchga kirgan;
+- oqibat iboralari: jarima, javobgarlikka tortish, huquqbuzarlik, jinoiy, musodara, faoliyatni to'xtatish, mualliflik huquqi;
+- ustuvorlik iboralari: eng katta, eng muhim, asosiy xatar va boshqalar;
+- vaqt: hujjat ma'lum sana holatiga yozilgan bo'lsa, «hozir» degan gap.
+
+Lug'at o'zbekcha (lotin) va ruscha. Har bir guruhga sinonimlar kiritilgan: «ro'yxatga olinmagan» = «ro'yxatdan o'tmagan» = «не зарегистрирован». Manba shu guruhdagi iborani ishlatsa, ibora tasdiqlangan hisoblanadi.
+
+**Ogohlantirish matni.** Javob ostida har bir bo'lim uchun alohida qator chiqadi:
+
+> - Asosiy matn — manba bilan qo'lda tekshirish kerak: «…» (holat) — hujjat matnida bu ibora yoki uning sinonimi uchramadi.
+> - AI izohi — manba bilan qo'lda tekshirish kerak: …
+
+Umumiy izohda shunday deyiladi: «Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.»
+
+Hech narsa belgilanmagan bo'lsa: «Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.»
+
+API javobida `check.mode = "flag_for_manual_review"`, `check.verified = false` qaytadi. «Tasdiqlandi» deb o'qilishi mumkin bo'lgan `ok` maydoni olib tashlandi.
+
+**Asossiz ogohlantirishga qarshi.** Ibora quyidagi hollarda belgilanmaydi:
+- **Inkor yoki shubha:** «… deb xulosa chiqarib bo'lmaydi», «… degani emas», «… anglatmaydi», «hujjatda … deyilmagan», «… noma'lum», «hujjat … aytmaydi», «нельзя», «не означает».
+- **Shartli gap:** «agar … bo'lsa», «если», «в случае».
+- **Hujjatdan to'g'ridan-to'g'ri iqtibos:** manbada bor, shuning uchun qo'llab-quvvatlangan.
+- **Sinonim:** hujjat boshqa so'z bilan aytgan bo'lsa.
+- **Arifmetik hosila:** hujjatdagi raqamlarning yig'indisi, ayirmasi yoki foizi «hisobni tekshiring» deb ko'rsatiladi, «uchramagan raqam» deb emas.
+
+Bitta gapda bir ibora inkor qilinib, boshqasi tasdiqlansa, faqat tasdiqlangani belgilanadi. Hujjatda bo'lmagan «iqtibos» esa baribir tekshiriladi.
+
+**Cheklov:**
+- Bu ma'noni tekshirmaydi.
+- Lug'atda yo'q so'z bilan aytilgan asossiz da'vo belgilanmay qoladi.
+- Inkor va shart naqshlari to'liq emas.
+- Yakuniy baho yuristniki (8-bo'lim jadvalidagi «AI izohi» ustuni).
+
+**Test holatlari** (`aiNoteCases`, 6 hujjat turida 22 ta holat, har biri uch xil yozilish shaklida):
+- `flagged`: ko'rsatiladi va qo'lda tekshirishga belgilanadi;
+- `kept`: belgilanmaydi;
+- `removed`: faqat to'ldiruvchi izoh, ko'rsatilmaydi.
+
+Ulardan tashqari inkor, iqtibos, shartli gap, sinonim va arifmetik hosila uchun alohida testlar bor.
+
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
 | Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |
@@ -180,21 +240,22 @@ Taklif qilinadigan jonli benchmark:
 
 Har bir javob uchun bir qator. Ballar: 0 — xato, 1 — qisman, 2 — to'g'ri.
 
-| Hujjat | Yo'l (yashirin) | Takror | Faktlar aniqligi | Cheklov va muddatlar | Asosiy bandlar (k/n) | Dalil mosligi | Asossiz da'volar soni | Hujjat / muallif tavsiyasi / AI izohi ajratilganmi | Qamrov yoki noaniqlik aytilganmi | Kirish tokenlari | Chiqish tokenlari | Vaqt (s) | Narx ($, manba) | Izoh |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| contract-supply | A | 1 | | | /7 | | | | | | | | | |
-| due-diligence | A | 1 | | | /9 | | | | | | | | | |
-| court-decision | A | 1 | | | /5 | | | | | | | | | |
-| talabnoma | A | 1 | | | /5 | | | | | | | | | |
-| corporate-protocol | A | 1 | | | /4 | | | | | | | | | |
-| long-lease | A | 1 | | | /5 | | | | | | | | | |
+| Hujjat | Yo'l (yashirin) | Takror | Faktlar aniqligi | Cheklov va muddatlar | Asosiy bandlar (k/n) | Dalil mosligi | Asossiz da'volar soni | Hujjat / muallif tavsiyasi / AI izohi ajratilganmi | AI izohi qoidaga mos (yoki kerak bo'lmaganda yo'q) | Qamrov yoki noaniqlik aytilganmi | Kirish tokenlari | Chiqish tokenlari | Vaqt (s) | Narx ($, manba) | Izoh |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| contract-supply | A | 1 | | | /7 | | | | | | | | | | |
+| due-diligence | A | 1 | | | /9 | | | | | | | | | | |
+| court-decision | A | 1 | | | /5 | | | | | | | | | | |
+| talabnoma | A | 1 | | | /5 | | | | | | | | | | |
+| corporate-protocol | A | 1 | | | /4 | | | | | | | | | | |
+| long-lease | A | 1 | | | /5 | | | | | | | | | | |
 
 Asosiy bandlar va tuzoqlar har bir fiksturada `keyPoints` va `traps`
 maydonlarida.
 
 ## 9. Testlar va ular nimani isbotlamaydi
 
-- `tests/document-explain.test.js` (16) tekshiradi:
+- `tests/document-explain.test.js` (23) tekshiradi:
+  - AI izohi bo'yicha 22 ta holat, har biri uch shaklda; asosiy matn va AI izohida bir xil mezon; inkor, iqtibos, shartli gap, sinonim va arifmetik hosila; to'ldiruvchi izoh; ruscha yorliq;
   - qamrov va sahifalar;
   - o'qilmagan yoki kesilgan qismlar;
   - qisman natija belgisi;

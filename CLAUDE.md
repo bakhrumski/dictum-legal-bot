@@ -74,7 +74,14 @@ Known state of the suites (Sept 2026):
   cost. A document not read whole (a digest part failed or was cut) is not
   the service: explanation, opinion and chat analysis are marked partial at
   the top and their units released; a whole reading whose answer was cut is
-  marked partial and paid. Quality is unconfirmed until the lawyer-reviewed
+  marked partial and paid. The "AI izohi" is held to the same rules and is
+  optional (an empty or placeholder note is not shown). The mechanical check
+  removes nothing: the main text and the AI note are checked by the same
+  criteria (figures, dates, pages, clauses, and status / consequence /
+  ranking / "now" phrases the source does not use, unless denied,
+  conditional or a synonym of the source's word) and flagged "check by hand
+  against the source" - a missing word is never proof of an error, and no
+  section is shown as verified (`check.verified` is always false). Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

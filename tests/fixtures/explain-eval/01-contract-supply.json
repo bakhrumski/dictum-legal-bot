@@ -9,17 +9,89 @@
     "6. SHARTNOMANI BEKOR QILISH\n6.1. Yetkazib berish 30 kalendar kundan ortiq kechiksa, Xaridor shartnomani bir tomonlama bekor qilishga va oldindan to'lovni qaytarishni talab qilishga haqli.\n\n7. NIZOLARNI HAL QILISH\n7.1. Nizolar muzokaralar yo'li bilan, kelishilmasa - Toshkent shahar iqtisodiy sudida hal qilinadi.\n\n8. AMAL QILISH MUDDATI\n8.1. Shartnoma imzolangan kundan kuchga kiradi va 2026-yil 31-dekabrgacha amal qiladi.\n8.2. Majburiyatlar to'liq bajarilmaguncha, 5-bo'limdagi javobgarlik qoidalari 8.1-banddagi muddat tugaganidan keyin ham amal qiladi."
   ],
   "keyPoints": [
-    { "id": "price", "point": "Umumiy qiymat 84 500 000 so'm, QQS bilan", "anchor": "84 500 000", "page": 1 },
-    { "id": "price-exception", "point": "Narx o'zgarmaydi, lekin yoqilg'i 15 foizdan ortiq qimmatlasa qayta ko'rilishi mumkin (2.2-2.3)", "anchor": "15 foizdan ortiq", "page": 1 },
-    { "id": "delivery", "point": "Oldindan to'lovdan keyin 20 ish kuni ichida yetkazish", "anchor": "20 ish kuni", "page": 2 },
-    { "id": "penalty-cap", "point": "Penya kuniga 0,1 foiz, lekin 10 foizdan oshmaydi", "anchor": "10 foizidan oshmasligi", "page": 2 },
-    { "id": "force-majeure-condition", "point": "Fors-major ozod qiladi faqat 3 kalendar kun ichida yozma xabar berilsa", "anchor": "3 kalendar kun ichida yozma", "page": 2 },
-    { "id": "termination", "point": "30 kundan ortiq kechiksa Xaridor bir tomonlama bekor qila oladi", "anchor": "30 kalendar kundan ortiq", "page": 3 },
-    { "id": "survival", "point": "Javobgarlik qoidalari muddat tugagach ham amal qiladi (oxirgi band)", "anchor": "8.2. Majburiyatlar", "page": 3 }
+    {
+      "id": "price",
+      "point": "Umumiy qiymat 84 500 000 so'm, QQS bilan",
+      "anchor": "84 500 000",
+      "page": 1
+    },
+    {
+      "id": "price-exception",
+      "point": "Narx o'zgarmaydi, lekin yoqilg'i 15 foizdan ortiq qimmatlasa qayta ko'rilishi mumkin (2.2-2.3)",
+      "anchor": "15 foizdan ortiq",
+      "page": 1
+    },
+    {
+      "id": "delivery",
+      "point": "Oldindan to'lovdan keyin 20 ish kuni ichida yetkazish",
+      "anchor": "20 ish kuni",
+      "page": 2
+    },
+    {
+      "id": "penalty-cap",
+      "point": "Penya kuniga 0,1 foiz, lekin 10 foizdan oshmaydi",
+      "anchor": "10 foizidan oshmasligi",
+      "page": 2
+    },
+    {
+      "id": "force-majeure-condition",
+      "point": "Fors-major ozod qiladi faqat 3 kalendar kun ichida yozma xabar berilsa",
+      "anchor": "3 kalendar kun ichida yozma",
+      "page": 2
+    },
+    {
+      "id": "termination",
+      "point": "30 kundan ortiq kechiksa Xaridor bir tomonlama bekor qila oladi",
+      "anchor": "30 kalendar kundan ortiq",
+      "page": 3
+    },
+    {
+      "id": "survival",
+      "point": "Javobgarlik qoidalari muddat tugagach ham amal qiladi (oxirgi band)",
+      "anchor": "8.2. Majburiyatlar",
+      "page": 3
+    }
   ],
   "traps": [
-    { "id": "contradiction-prepay", "rule": "E", "correct": "4.1 (10 bank kuni) va 4.3 (15 kalendar kun) bir-biriga zid ekanini ikkala bandni keltirib aytish", "wrong": "Bitta muddatni tanlab, ziddiyatni yashirish" },
-    { "id": "penalty-uncapped", "rule": "B", "correct": "Penya chegarasi (10 foiz) saqlanadi", "wrong": "\"Har kuni 0,1 foiz penya\" deb chegarasiz yozish" },
-    { "id": "fm-unconditional", "rule": "B", "correct": "Fors-major sharti (3 kun ichida xabar) saqlanadi", "wrong": "\"Fors-majorda javobgarlik yo'q\" deb shartsiz yozish" }
+    {
+      "id": "contradiction-prepay",
+      "rule": "E",
+      "correct": "4.1 (10 bank kuni) va 4.3 (15 kalendar kun) bir-biriga zid ekanini ikkala bandni keltirib aytish",
+      "wrong": "Bitta muddatni tanlab, ziddiyatni yashirish"
+    },
+    {
+      "id": "penalty-uncapped",
+      "rule": "B",
+      "correct": "Penya chegarasi (10 foiz) saqlanadi",
+      "wrong": "\"Har kuni 0,1 foiz penya\" deb chegarasiz yozish"
+    },
+    {
+      "id": "fm-unconditional",
+      "rule": "B",
+      "correct": "Fors-major sharti (3 kun ichida xabar) saqlanadi",
+      "wrong": "\"Fors-majorda javobgarlik yo'q\" deb shartsiz yozish"
+    }
+  ],
+  "aiNoteCases": [
+    {
+      "note": "Bu shartnomadagi eng katta xatar — penya.",
+      "expect": "flagged",
+      "why": "ustuvorlik: hujjat xatarlarni tartiblamaydi"
+    },
+    {
+      "note": "Muddat buzilsa, Xaridor jarima talab qilishi mumkin.",
+      "expect": "flagged",
+      "why": "oqibat: hujjatda jarima emas, penya (5.1-band)"
+    },
+    {
+      "note": "Hozirda shartnoma amal qilmoqda.",
+      "expect": "kept",
+      "why": "hujjat ma'lum sana holatiga yozilmagan; 'hozir' vaqt cheklovini buzmaydi"
+    },
+    {
+      "note": "4.1 va 4.3-bandlardagi muddatlar bir-biriga zid, shuning uchun to'lov sanasini tomonlar yozma aniqlashtirib olgani ma'qul.",
+      "expect": "kept",
+      "why": "hujjatga asoslangan foydali izoh"
+    }
   ]
 }

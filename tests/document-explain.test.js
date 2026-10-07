@@ -173,18 +173,20 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     assert.deepStrictEqual(bad.clauses, ['12.3-band']);
     assert.deepStrictEqual(bad.numbers.sort(), ['0,5', '2027', '85 000 000'], JSON.stringify(bad));
     const done = ex.finishExplanation({ reply: 'Narx 85 000 000 so\'m (4-sahifa).', source: src });
-    assert.ok(done.reply.includes('Hujjat matnida topilmagan raqam: 85 000 000'));
-    assert.ok(done.reply.includes("Hujjatda bunday sahifa belgisi yo'q: 4"));
+    assert.ok(done.reply.includes("- Asosiy matn — manba bilan qo'lda tekshirish kerak: hujjat matnida uchramagan raqam 85 000 000; hujjatda bunday belgisi yo'q sahifa 4."), done.reply);
+    assert.ok(done.reply.includes("Narx 85 000 000 so'm (4-sahifa)."), 'named, not removed');
   });
 
   await test('the check says what it does NOT check, under every answer - also when it finds nothing', () => {
     const src = ex.markPages(byId('talabnoma').pages);
     const clean = ex.finishExplanation({ reply: 'Talabnomani "Mehr Logistika" MChJ yuborgan.', source: src });
-    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa va band raqamlari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.\n- Mos kelmagan raqam, sana, sahifa yoki band topilmadi."));
-    assert.strictEqual(clean.check.scope, 'figures_dates_pages_clauses_only');
-    // a wrong attribution passes the check: it is not a semantic check
-    const wrong = ex.finishExplanation({ reply: "Qarz 12 400 000 so'm ekani tasdiqlangan.", source: src });
-    assert.strictEqual(wrong.check.ok, true, 'meaning is not checked - the lawyer review is');
+    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa, band raqamlari hamda holat, oqibat, ustuvorlik va vaqt iboralari hujjat matni bilan mexanik solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.\n- Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas."), clean.reply);
+    assert.deepStrictEqual([clean.check.scope, clean.check.mode, clean.check.verified, clean.check.flagged], ['figures_dates_pages_clauses_only', 'flag_for_manual_review', false, 0]);
+    assert.ok(!('ok' in clean.check), 'no field that could read as "verified"');
+    // a wrong attribution in words outside the vocabulary passes: it is not a semantic check
+    const wrong = ex.finishExplanation({ reply: "Qarzni Yashil Vodiy o'zi hisoblab chiqqan.", source: src });
+    assert.strictEqual(wrong.check.flagged, 0, 'meaning is not checked - the lawyer review is');
+    assert.strictEqual(wrong.check.verified, false);
   });
 
   await test('no unfounded warnings: dates in other forms, percentages, money in mln/ming, clause numbers, list numbering, page ranges', () => {
@@ -216,8 +218,12 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     const t = ex.verifyExplanation("Jami 12 400 000 = 11 000 000 + 1 400 000; 12,4 mln so'm.", ex.markPages(byId('talabnoma').pages));
     assert.ok(t.ok && !t.derived.length, JSON.stringify(t));
     const done = ex.finishExplanation({ reply: "Oldindan to'lov: 25 350 000 so'm.", source: src });
-    assert.ok(done.reply.includes("Hujjatda yo'q, hujjatdagi raqamlardan hisoblanganga o'xshaydi (AI hisobi): 25 350 000"));
-    assert.strictEqual(done.check.ok, true, 'a calculation is named, not counted as invented');
+    assert.ok(done.reply.includes("Asosiy matn — manba bilan qo'lda tekshirish kerak: hujjatdagi raqamlardan hisoblanganga o'xshagan 25 350 000 (hisobni tekshiring)."), done.reply);
+    assert.strictEqual(done.check.flagged, 0, 'a calculation is named, not counted as invented');
+    // in the AI note the same: shown, named, nothing removed
+    const inNote = ex.finishExplanation({ reply: "Matn.\n\n**AI izohi:** Oldindan to'lov 30 foiz, ya'ni 25 350 000 so'm bo'ladi.", source: src });
+    assert.ok(inNote.reply.includes("**AI izohi:** Oldindan to'lov 30 foiz, ya'ni 25 350 000 so'm bo'ladi."));
+    assert.deepStrictEqual(inNote.check.sections.aiNote.derived, ['25 350 000']);
   });
 
   await test('page marks never move a threshold or a unit, and are counted in the provider input', async () => {
@@ -306,6 +312,140 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
       assert.deepStrictEqual(ledger.readDocTicket(d.docTicket, d.text), { pages: 3, scanned: false }, 'the ticket is signed over the text the client sends back');
       assert.strictEqual(calls.ai, 0, 'extract calls no AI');
     } finally { server.close(); }
+  });
+
+  await test('AI izohi: every evaluation case, in three label styles - nothing removed for a word; unsupported phrases named for a manual check; grounded notes unflagged; only a placeholder left out', () => {
+    const styles = {
+      inline: n => `**AI izohi:** ${n}`,
+      heading: n => `**AI izohi**\n${n}`,
+      list: n => `- AI izohi: ${n}`,
+    };
+    let n = 0;
+    for (const f of fixtures) {
+      assert.ok((f.aiNoteCases || []).length >= 2, `${f.id} has AI-note cases`);
+      const src = ex.markPages(f.pages);
+      for (const c of f.aiNoteCases) {
+        for (const [style, wrap] of Object.entries(styles)) {
+          const answer = `**Hujjat nima haqida**\nHujjat ${f.type} haqida.\n\n${wrap(c.note)}\n\n**Keyingi qadam**\nAsl hujjatni o'qing.`;
+          const done = ex.finishExplanation({ reply: answer, source: src });
+          const ai = done.check.sections.aiNote;
+          const where = `${f.id} / ${style} / ${c.note}`;
+          assert.ok(done.reply.includes('Hujjat ' + f.type + ' haqida.') && done.reply.includes("Asl hujjatni o'qing."), `${where}: the rest of the answer stays`);
+          assert.strictEqual(done.check.verified, false, where);
+          if (c.expect === 'removed') {
+            assert.ok(!/AI izohi:|AI izohi\*\*/u.test(done.reply.split('**Avtomatik tekshiruv')[0]), `${where}: a placeholder is not shown`);
+            assert.strictEqual(done.check.aiNote.removed, 1, where);
+          } else {
+            assert.ok(done.reply.includes(c.note), `${where}: shown as written - nothing removed for a word`);
+            const flags = ai.phrases.length + ai.numbers.length + ai.dates.length + ai.pages.length + ai.clauses.length;
+            if (c.expect === 'flagged') {
+              assert.ok(flags >= 1, `${where}: named for a manual check`);
+              assert.ok(done.reply.includes("- AI izohi — manba bilan qo'lda tekshirish kerak:"), where);
+              assert.ok(!/noto'g'ri\b(?! degani)|asossiz|olib tashlandi/u.test(done.notes.join(' ')), `${where}: never called wrong`);
+            } else {
+              assert.strictEqual(flags, 0, `${where}: grounded -> ${JSON.stringify(ai)}`);
+            }
+          }
+          n++;
+        }
+      }
+    }
+    assert.ok(n >= 60, `${n} checks`);
+  });
+
+  await test('the same criteria in the main text and the AI note: the same sentence gets the same flags in either', () => {
+    for (const f of fixtures) {
+      const src = ex.markPages(f.pages);
+      for (const c of f.aiNoteCases.filter(x => x.expect !== 'removed')) {
+        const inBody = ex.finishExplanation({ reply: `**Izoh**\n${c.note}`, source: src }).check.sections.body;
+        const inNote = ex.finishExplanation({ reply: `Matn.\n\n**AI izohi:** ${c.note}`, source: src }).check.sections.aiNote;
+        assert.deepStrictEqual(inBody, inNote, `${f.id}: ${c.note}`);
+      }
+    }
+  });
+
+  await test('no removal and no flag for a denied, doubted, quoted, conditional or synonymous phrase - a correct note is not taken for a wrong one', () => {
+    const dd = ex.markPages(byId('due-diligence').pages);
+    const silent = [
+      // negation: the note says the conclusion cannot be drawn
+      "Belgi ro'yxatdan o'tmagan deb xulosa chiqarib bo'lmaydi: hujjat faqat ariza berilmaganini aytadi.",
+      "Ariza berilmagani belgi ro'yxatdan o'tmagan degani emas.",
+      "Hujjatda belgi ro'yxatdan o'tmagan deyilmagan.",
+      "Litsenziya yo'qligi faoliyat noqonuniy ekanini anglatmaydi.",
+      "Qaysi xatar eng katta ekanini hujjat aytmaydi.",
+      'Hozirgi holat noma\'lum: xulosa 12-avgust holatiga tuzilgan.',
+      // quotation of the document itself
+      '«Ochiq manbalarda Jamiyatning soliq qarzi va majburiy ijro bo\'yicha ish yuritishlari aniqlanmadi».',
+      // conditional
+      "Agar belgi ro'yxatdan o'tmagan bo'lsa, boshqalar undan foydalanishi mumkin.",
+      "Litsenziya talab qilinadigan bo'lsa, uni olish kerak bo'ladi.",
+    ];
+    for (const sn of silent) {
+      for (const wrap of [x => x, x => `Matn.\n\n**AI izohi:** ${x}`]) {
+        const done = ex.finishExplanation({ reply: wrap(sn), source: dd });
+        assert.ok(done.reply.includes(sn), `shown: ${sn}`);
+        assert.deepStrictEqual(done.check.phrases, [], `${sn} -> ${JSON.stringify(done.check.phrases)}`);
+      }
+    }
+    // synonyms: the document's word or its synonym is support
+    const lic = ex.markPages(["Jamiyatning tovar belgisi ro'yxatga olinmagan. Ma'muriy jarima to'langan."]);
+    for (const sn of ["Belgi ro'yxatdan o'tmagan.", "Belgi ro'yxatdan o'tkazilmagan.", 'Товарный знак не зарегистрирован.', 'Был уплачен штраф.']) {
+      assert.deepStrictEqual(ex.finishExplanation({ reply: `**AI izohi:** ${sn}`, source: lic }).check.phrases, [], sn);
+    }
+    // a denied phrase does not hide an asserted one in the same sentence
+    const both = ex.finishExplanation({ reply: "**AI izohi:** Belgi noqonuniy degani emas, lekin u ro'yxatdan o'tmagan.", source: dd });
+    assert.deepStrictEqual(both.check.phrases.map(p => p.phrase), ["ro'yxatdan o'tmagan"]);
+    // a quotation that is not the document's own words is still checked
+    const misquote = ex.finishExplanation({ reply: "**AI izohi:** Hujjatda «belgi ro'yxatdan o'tmagan» deb yozilgan.", source: dd });
+    assert.strictEqual(misquote.check.phrases.length, 1);
+  });
+
+  await test('arithmetic: sums, differences and percentages of the document\'s figures are named as a calculation in either section, never as invented', () => {
+    const cp = ex.markPages(byId('corporate-protocol').pages);
+    for (const sn of ["Qatnashganlar jami 70 foiz.", "Yetishmagan ulush 5 foiz (75 - 70).", "Kapital 300 000 000 so'mga oshadi."]) {
+      for (const reply of [sn, `Matn.\n\n**AI izohi:** ${sn}`]) {
+        const done = ex.finishExplanation({ reply, source: cp });
+        assert.ok(done.reply.includes(sn));
+        const sec = /AI izohi/u.test(reply) ? done.check.sections.aiNote : done.check.sections.body;
+        assert.deepStrictEqual(sec.numbers, [], `${sn}: not "not in the document" -> ${JSON.stringify(sec)}`);
+      }
+    }
+  });
+
+  await test('a placeholder AI note is left out (the prompt asks for none); a figure or page the document lacks is named, not removed; Russian label too', () => {
+    const src = ex.markPages(byId('contract-supply').pages);
+    for (const ph of ["**AI izohi:** Yo'q.", '**AI izohi:** —', "**AI izohi:** Qo'shimcha izoh yo'q.", '**AI izohi**\n\n**Xulosa**']) {
+      const done = ex.finishExplanation({ reply: `Matn.\n\n${ph}`, source: src });
+      assert.ok(!/AI izohi:\*\*|AI izohi\*\*\n/u.test(done.reply.split('**Avtomatik')[0]), ph);
+      assert.ok(done.reply.includes("«AI izohi» bo'sh yoki to'ldiruvchi edi — ko'rsatilmadi."), ph);
+    }
+    const r = ex.finishExplanation({ reply: "Matn.\n\n**AI izohi:** Narx 90 000 000 so'm bo'lishi kerak edi (7-sahifa).", source: src });
+    assert.ok(r.reply.includes("**AI izohi:** Narx 90 000 000 so'm bo'lishi kerak edi (7-sahifa)."));
+    assert.ok(r.reply.includes("- AI izohi — manba bilan qo'lda tekshirish kerak: hujjat matnida uchramagan raqam 90 000 000; hujjatda bunday belgisi yo'q sahifa 7."), r.reply);
+    const ru = ex.finishExplanation({ reply: 'Текст.\n\n**Комментарий ИИ:** Главный риск — штраф за просрочку.', source: src });
+    assert.ok(ru.reply.includes('Главный риск — штраф за просрочку.'));
+    assert.deepStrictEqual(ru.check.sections.aiNote.phrases.map(p => p.kind).sort(), ['oqibat', 'ustuvorlik']);
+  });
+
+  await test('the main text: an unsupported status, consequence or ranking is named for a manual check, not removed and not called wrong', () => {
+    const src = ex.markPages(byId('due-diligence').pages);
+    const done = ex.finishExplanation({ reply: "**Intellektual mulk**\nBelgi ro'yxatdan o'tmagan. Bu eng katta xatar.", source: src });
+    assert.ok(done.reply.includes("Belgi ro'yxatdan o'tmagan. Bu eng katta xatar."), 'not removed');
+    assert.ok(done.reply.includes("- Asosiy matn — manba bilan qo'lda tekshirish kerak: «ro'yxatdan o'tmagan» (holat), «eng katta» (ustuvorlik) — hujjat matnida bu ibora yoki uning sinonimi uchramadi."), done.reply);
+    const ok = ex.finishExplanation({ reply: "Ariza berilmagan. Reklama faoliyati uchun litsenziya mavjud emas. Qarz va majburiy ijro aniqlanmadi (2026-yil 12-avgust holatiga).", source: src });
+    assert.deepStrictEqual(ok.check.phrases, []);
+    assert.ok(ok.reply.includes("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas."), ok.reply);
+  });
+
+  await test('the prompt applies every rule to the AI izohi and makes it optional - in general words, no evaluation names', () => {
+    const p = ex.explainSystem('Uzbek');
+    for (const s2 of ['Every rule here applies to every part of the answer, the "AI izohi" included',
+      'never attribute to the document something it does not say', 'an application not filed is not "not registered"',
+      'never rank anything as the main, biggest or most important risk or issue unless the document itself ranks it',
+      'keep the document\'s time limits', 'The "AI izohi" is optional', 'leave it out entirely - no heading, no placeholder']) {
+      assert.ok(p.includes(s2), s2);
+    }
+    for (const f of fixtures) for (const c of f.aiNoteCases) assert.ok(!p.includes(c.note), c.note);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

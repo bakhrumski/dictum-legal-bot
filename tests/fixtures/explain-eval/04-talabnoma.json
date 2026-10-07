@@ -7,15 +7,72 @@
     "TALABNOMA\n2026-yil 2-sentabr, № 45\n\nKimga: \"Yashil Vodiy\" MChJ direktori F. Usmonovga\nKimdan: \"Mehr Logistika\" MChJ\n\n2026-yil 10-yanvardagi № 3/26 tashish xizmatlari shartnomasiga ko'ra \"Mehr Logistika\" MChJ xizmatlarni to'liq ko'rsatgan, deb hisoblaymiz. Bizning hisob-kitobimizga ko'ra, \"Yashil Vodiy\" MChJning qarzi 11 000 000 so'm asosiy qarz va shartnomaning 5.2-bandiga asosan hisoblangan 1 400 000 so'm penyadan, jami 12 400 000 so'mdan iborat.\n\nTalab qilamiz: ushbu talabnoma olingan kundan boshlab 10 kalendar kun ichida 12 400 000 so'mni to'lash.\n\nAks holda biz nizoni hal qilish uchun sudga murojaat qilishga majbur bo'lamiz va sud xarajatlari ham Sizdan undirilishini so'raymiz.\n\nIlova: dalolatnomalar nusxalari (4 varaq).\nDirektor: J. Ergashev"
   ],
   "keyPoints": [
-    { "id": "sender", "point": "Talabnomani \"Mehr Logistika\" MChJ yuborgan", "anchor": "Kimdan: \"Mehr Logistika\" MChJ", "page": 1 },
-    { "id": "amount-breakdown", "point": "11 000 000 asosiy qarz + 1 400 000 penya = 12 400 000", "anchor": "jami 12 400 000", "page": 1 },
-    { "id": "deadline", "point": "Talabnoma olingan kundan 10 kalendar kun ichida", "anchor": "10 kalendar kun ichida", "page": 1 },
-    { "id": "basis-clause", "point": "Penya shartnomaning 5.2-bandiga asoslangan (shartnoma matni ilova qilinmagan)", "anchor": "5.2-bandiga asosan", "page": 1 },
-    { "id": "consequence", "point": "To'lanmasa - sudga murojaat qilish niyati", "anchor": "sudga murojaat qilishga majbur", "page": 1 }
+    {
+      "id": "sender",
+      "point": "Talabnomani \"Mehr Logistika\" MChJ yuborgan",
+      "anchor": "Kimdan: \"Mehr Logistika\" MChJ",
+      "page": 1
+    },
+    {
+      "id": "amount-breakdown",
+      "point": "11 000 000 asosiy qarz + 1 400 000 penya = 12 400 000",
+      "anchor": "jami 12 400 000",
+      "page": 1
+    },
+    {
+      "id": "deadline",
+      "point": "Talabnoma olingan kundan 10 kalendar kun ichida",
+      "anchor": "10 kalendar kun ichida",
+      "page": 1
+    },
+    {
+      "id": "basis-clause",
+      "point": "Penya shartnomaning 5.2-bandiga asoslangan (shartnoma matni ilova qilinmagan)",
+      "anchor": "5.2-bandiga asosan",
+      "page": 1
+    },
+    {
+      "id": "consequence",
+      "point": "To'lanmasa - sudga murojaat qilish niyati",
+      "anchor": "sudga murojaat qilishga majbur",
+      "page": 1
+    }
   ],
   "traps": [
-    { "id": "claim-not-fact", "rule": "A", "correct": "Qarz summasi yuboruvchining hisob-kitobi/da'vosi sifatida", "wrong": "\"Sizning qarzingiz 12 400 000\" deb tasdiqlangan fakt sifatida yozish" },
-    { "id": "unread-contract", "rule": "F", "correct": "Shartnoma va 5.2-band matni ilova qilinmagani, penya hisobi tekshirib bo'lmasligi", "wrong": "5.2-band mazmunini o'ylab topish" },
-    { "id": "deadline-start", "rule": "B", "correct": "Muddat talabnoma OLINGAN kundan", "wrong": "Muddat 2-sentabrdan (sanadan) boshlanadi deb yozish" }
+    {
+      "id": "claim-not-fact",
+      "rule": "A",
+      "correct": "Qarz summasi yuboruvchining hisob-kitobi/da'vosi sifatida",
+      "wrong": "\"Sizning qarzingiz 12 400 000\" deb tasdiqlangan fakt sifatida yozish"
+    },
+    {
+      "id": "unread-contract",
+      "rule": "F",
+      "correct": "Shartnoma va 5.2-band matni ilova qilinmagani, penya hisobi tekshirib bo'lmasligi",
+      "wrong": "5.2-band mazmunini o'ylab topish"
+    },
+    {
+      "id": "deadline-start",
+      "rule": "B",
+      "correct": "Muddat talabnoma OLINGAN kundan",
+      "wrong": "Muddat 2-sentabrdan (sanadan) boshlanadi deb yozish"
+    }
+  ],
+  "aiNoteCases": [
+    {
+      "note": "Qarz summasi tasdiqlangan, uni to'lash kerak.",
+      "expect": "flagged",
+      "why": "holat: summa yuboruvchining hisobi, tasdiqlanmagan"
+    },
+    {
+      "note": "To'lanmasa, kompaniya jinoiy javobgarlikka tortilishi mumkin.",
+      "expect": "flagged",
+      "why": "oqibat: hujjatda faqat sudga murojaat"
+    },
+    {
+      "note": "Penya 5.2-bandga asoslangan, lekin shartnoma matni ilova qilinmagan, shuning uchun hisobni shartnoma bilan solishtirib ko'rish kerak.",
+      "expect": "kept",
+      "why": "hujjatga asoslangan, manba cheklovini saqlaydi"
+    }
   ]
 }
