@@ -37,7 +37,7 @@ function markPages(pageTexts) {
 function emptyPages(text) {
   const s = String(text || '');
   const marks = [...s.matchAll(PAGE_MARK)];
-  return marks.filter((m, i) => !s.slice(m.index + m[0].length, i + 1 < marks.length ? marks[i + 1].index : s.length).trim())
+  return marks.filter((m, i) => /^(\(bo'sh sahifa\))?$/u.test(s.slice(m.index + m[0].length, i + 1 < marks.length ? marks[i + 1].index : s.length).trim()))
     .map(m => Number(m[1]));
 }
 
@@ -59,12 +59,21 @@ const MAX_CHUNKS = 11; // 11 x 11 600 + 400 = 128 000 chars: the 120 000-char jo
  * that before here, src/rag/tariff-ledger.js jobFits).
  */
 function digestChunks(text, { chunk = CHUNK, overlap = OVERLAP, maxChunks = MAX_CHUNKS } = {}) {
+  const snapped = cutChunks(text, { chunk, overlap, maxChunks, snap: true });
+  const fixed = cutChunks(text, { chunk, overlap, maxChunks, snap: false });
+  // ending chunks at page or paragraph breaks must never cost coverage or an
+  // extra AI call: if it would leave the end unread or need one more chunk,
+  // cut at fixed lengths (as before)
+  return snapped.covered && snapped.chunks.length <= fixed.chunks.length ? snapped : fixed;
+}
+
+function cutChunks(text, { chunk, overlap, maxChunks, snap }) {
   const s = String(text || '');
   const out = [];
   let start = 0;
   while (start < s.length && out.length < maxChunks) {
     let end = Math.min(s.length, start + chunk);
-    if (end < s.length) {
+    if (snap && end < s.length) {
       // end at the last page mark or blank line in the last fifth of the chunk
       const window = s.slice(start + Math.floor(chunk * 0.8), end);
       const lastPage = window.lastIndexOf('\n[Sahifa ');
@@ -102,7 +111,8 @@ const DIGEST_SYSTEM = [
   '- every exception, limitation, cancellation or termination condition, liability rule and penalty;',
   '- every finding, statement or claim WITH its source as the document gives it (who said, reported, checked or found it) and WITH its qualifiers kept verbatim (for example "according to", "within the scope of the review", "was not identified", "as of the date of the document");',
   '- every recommendation or conclusion WITH its author as the document names it;',
-  '- missing information, open questions, contradictions between clauses, and references to laws or court decisions;',
+  '- missing information, open questions and contradictions between clauses;',
+  '- every reference to laws, regulations (qonun, kodeks, VM qarori, farmon, PQ, PF) or court decisions, with its number, date and article exactly as written, and what the document says about it;',
   '- the page: when the excerpt has "[Sahifa N]" lines, end each bullet with "(N-sahifa)"; never guess a page or a clause number.',
   'Do not interpret, judge, add consequences or merge separate items. Do not turn "not identified" into "does not exist". No preamble.',
 ].join('\n');
@@ -159,54 +169,158 @@ const digitsOf = s => String(s || '').replace(/[^\d]/gu, '');
 // a figure: thousands groups ("15 000 000", "1,500"), decimals, dates ("01.03.2026")
 const NUMBER = /\d{1,3}(?:[  ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,/]\d+)*/gu;
 
+// ── Dates in any of the forms documents and answers use ──
+const MONTHS = [
+  ['yanvar', 'январ'], ['fevral', 'феврал'], ['mart', 'март'], ['aprel', 'апрел'], ['may', 'ма[йя]'], ['iyun', 'июн'],
+  ['iyul', 'июл'], ['avgust', 'август'], ['sent[ya]?abr', 'сентябр'], ['okt[ya]?abr', 'октябр'], ['noyabr', 'ноябр'], ['dekabr', 'декабр'],
+];
+const MONTH_RE = MONTHS.map(([uz, ru]) => `${uz}|${ru}`).join('|');
+const monthOf = w => {
+  const l = String(w || '').toLowerCase();
+  const i = MONTHS.findIndex(([uz, ru]) => new RegExp(`^(?:${uz}|${ru})`, 'u').test(l));
+  return i >= 0 ? i + 1 : null;
+};
+const DATE_FORMS = [
+  // 01.03.2026, 1/3/2026
+  { re: /\b(\d{1,2})[./](\d{1,2})[./](\d{4})\b/gu, get: m => [m[3], m[2], m[1]] },
+  // 2026-03-01
+  { re: /\b(\d{4})-(\d{2})-(\d{2})\b/gu, get: m => [m[1], m[2], m[3]] },
+  // 2026-yil 1-mart, 2026 yil 1 martdagi
+  { re: new RegExp(`\\b(\\d{4})\\s*-?\\s*yil\\p{L}*\\s+(\\d{1,2})\\s*-?\\s*(${MONTH_RE})\\p{L}*`, 'giu'), get: m => [m[1], monthOf(m[3]), m[2]] },
+  // 1-mart 2026-yil, 1 марта 2026, 1-mart (no year)
+  { re: new RegExp(`\\b(\\d{1,2})\\s*-?\\s*(${MONTH_RE})\\p{L}*(?:\\s+(\\d{4}))?`, 'giu'), get: m => [m[3] || null, monthOf(m[2]), m[1]] },
+];
+/** Dates in a text: [{ start, end, y, m, d }], longest form first, no overlaps. */
+function datesIn(text) {
+  const out = [];
+  for (const f of DATE_FORMS) {
+    for (const m of String(text || '').matchAll(f.re)) {
+      const [y, mo, d] = f.get(m).map(v => (v == null ? null : Number(v)));
+      if (!mo || mo > 12 || !d || d > 31) continue;
+      const start = m.index, end = m.index + m[0].length;
+      if (out.some(o => start < o.end && end > o.start)) continue;
+      out.push({ start, end, y, m: mo, d });
+    }
+  }
+  return out;
+}
+
+// a figure with its scale word: "84,5 mln" -> 84 500 000, "500 ming" -> 500 000
+const SCALE = [[/^\s*(mlrd|milliard|млрд)/iu, 1e9], [/^\s*(mln|million|млн)/iu, 1e6], [/^\s*(ming|тыс)/iu, 1e3]];
+function valueOf(raw, after = '') {
+  let s = String(raw).replace(/[\s ]/gu, '');
+  // "84,5" / "0.1" decimal; "1,500" thousands is rare in Uzbek texts: a
+  // comma or point followed by exactly three digits and nothing else counts
+  // as a thousands separator
+  if (/^\d{1,3}([.,]\d{3})+$/u.test(s) && !/[.,]\d{1,2}$/u.test(s)) s = s.replace(/[.,]/gu, '');
+  else s = s.replace(',', '.');
+  let v = Number(s);
+  if (!Number.isFinite(v)) return null;
+  for (const [re, k] of SCALE) if (re.test(after)) { v *= k; break; }
+  return v;
+}
+const near = (a, b) => Math.abs(a - b) <= Math.max(0.5, Math.abs(b) * 0.001);
+
 /**
- * Flag what the answer states that the source does not support:
- *   numbers - amounts, percentages, dates and other figures of 2+ digits
- *             whose digits do not appear in the source;
- *   pages   - "N-sahifa" / "sahifa N" / "[Sahifa N]" when the source has no
- *             such page mark (or no page marks at all);
+ * Flag what the answer states that the source does not support. MECHANICAL
+ * ONLY: it compares figures, dates, page and clause numbers with the source
+ * text. It does not check meaning, attribution, qualifiers or legal
+ * correctness - a lawyer reviews that (docs/quality/explain-benchmark.md).
+ *   numbers - amounts, percentages and other figures of 2+ digits not in
+ *             the source (scale words "mln", "ming" understood);
+ *   derived - figures not in the source that equal a sum, difference,
+ *             product, ratio or percentage of two source figures: the
+ *             model's own arithmetic, named apart, not called invented;
+ *   dates   - dates (any form: 01.03.2026, 2026-03-01, 1-mart 2026) whose
+ *             day/month/year the source does not have;
+ *   pages   - "N-sahifa" / "N–M-sahifa" / "[Sahifa N]" with no such mark;
  *   clauses - "N-band" / "N.M-band" / "N-modda" / "N-bo'lim" not in the source.
- * It does not judge meaning; a lawyer reviews that (docs/quality).
+ * Not checked as figures: page and clause references, a markdown list's own
+ * numbering, figures in `allowed` (the coverage note's own numbers).
  */
-function verifyExplanation(answer, source) {
+function verifyExplanation(answer, source, { allowed = [] } = {}) {
   const a = String(answer || '');
   const src = String(source || '');
+  const srcText = src.replace(/\[Sahifa \d+\]/gu, ' ');
   // each figure of the source as its digits ("15 000 000" -> 15000000,
-  // "01.03.2026" -> 01032026 plus its parts)
-  const srcFigures = [];
-  for (const m of src.replace(/\[Sahifa \d+\]/gu, ' ').matchAll(NUMBER)) {
+  // "01.03.2026" -> 01032026 plus its parts) and as a value
+  const srcFigures = allowed.map(x => digitsOf(x));
+  const srcValues = [];
+  for (const m of srcText.matchAll(NUMBER)) {
     srcFigures.push(digitsOf(m[0]));
     for (const p of m[0].split(/[.,/\s -]/u)) if (p) srcFigures.push(digitsOf(p));
+    const v = valueOf(m[0], srcText.slice(m.index + m[0].length, m.index + m[0].length + 12));
+    if (v != null && v !== 0) srcValues.push(v);
   }
+  const srcDates = datesIn(srcText);
+  const hasDate = (y, m, d) => srcDates.some(x => x.m === m && x.d === d && (y == null || x.y == null || x.y === y));
   const srcNorm = norm(src);
   const pages = new Set(pagesIn(src));
-  const numbers = [];
+
+  const skip = []; // spans already judged (dates, page and clause refs, list numbers)
+  const inSkip = i => skip.some(s => i >= s.start && i < s.end);
+  const dates = [];
+  for (const dt of datesIn(a)) {
+    skip.push(dt);
+    if (!hasDate(dt.y, dt.m, dt.d) || (dt.y != null && !srcFigures.includes(String(dt.y)))) dates.push(a.slice(dt.start, dt.end));
+  }
+  const badPages = [];
+  for (const m of a.matchAll(/(\d+)\s*[–-]\s*(\d+)\s*-\s*sahifa|(\d+)\s*-\s*sahifa|sahifa\s+(\d+)|\[Sahifa (\d+)\]/giu)) {
+    skip.push({ start: m.index, end: m.index + m[0].length });
+    for (const n of (m[1] ? [m[1], m[2]] : [m[3] || m[4] || m[5]]).map(Number)) if (!pages.has(n)) badPages.push(n);
+  }
+  const badClauses = [];
+  for (const m of a.matchAll(/(\d+(?:\.\d+)*)\s*-\s*(band|modda|bo['’ʻ]?lim|qism)/giu)) {
+    skip.push({ start: m.index, end: m.index + m[0].length });
+    if (/^qism/iu.test(m[2])) continue; // the digest's own parts
+    const ref = m[1];
+    const re = new RegExp(`(^|[^\\d.])${ref.replace(/\./gu, '\\.')}(?![\\d])`, 'u');
+    if (!re.test(srcText)) badClauses.push(`${ref}-${m[2]}`);
+  }
+  // a markdown list's own numbering ("10. ...", "3) ...")
+  for (const m of a.matchAll(/^[ \t>*-]*(\d{1,3})[.)][ \t]/gmu)) skip.push({ start: m.index, end: m.index + m[0].length });
+
+  const candidates = [];
   for (const m of a.matchAll(NUMBER)) {
+    if (inSkip(m.index)) continue;
     const raw = m[0].trim();
-    // a page or clause reference is checked below, not as a figure
-    const after = a.slice(m.index + m[0].length, m.index + m[0].length + 12).toLowerCase();
-    const before = a.slice(Math.max(0, m.index - 10), m.index).toLowerCase();
-    if (/^\s*-?\s*(sahifa|band|modda|bo['’ʻ]?lim|qism)/u.test(after) || /sahifa\s*$/u.test(before)) continue;
     const d = digitsOf(raw);
     if (d.length < 2) continue;
     // "15 mln" for "15 000 000": a figure's leading digits count as found
-    if (!srcFigures.some(f => f === d || (f.startsWith(d) && /^0*$/u.test(f.slice(d.length))) || f.includes(d) && d.length >= 4)
-      && !srcNorm.includes(norm(raw))) numbers.push(raw);
+    if (srcFigures.some(f => f === d || (f.startsWith(d) && /^0*$/u.test(f.slice(d.length))) || (f.includes(d) && d.length >= 4))
+      || srcNorm.includes(norm(raw))) continue;
+    candidates.push({ raw, v: valueOf(raw, a.slice(m.index + m[0].length, m.index + m[0].length + 12)) });
   }
-  const badPages = [];
-  for (const m of a.matchAll(/(\d+)\s*-\s*sahifa|sahifa\s+(\d+)|\[Sahifa (\d+)\]/giu)) {
-    const n = Number(m[1] || m[2] || m[3]);
-    if (!pages.has(n)) badPages.push(n);
+  // the model's own arithmetic on the document's figures, two steps deep
+  // ("30% of 84 500 000 = 25 350 000", then "84 500 000 - 25 350 000")
+  const pool = srcValues.slice(0, 300);
+  const fromPool = v => {
+    for (let i = 0; i < pool.length; i++) {
+      for (let j = 0; j < pool.length; j++) {
+        const x = pool[i], y = pool[j];
+        if (near(v, x + y) || near(v, Math.abs(x - y)) || near(v, x * y) || near(v, x * y / 100)
+          || (y && near(v, x / y)) || (y && near(v, (x / y) * 100))) return true;
+      }
+    }
+    return false;
+  };
+  const derivedSet = new Set();
+  for (let step = 0; step < 2; step++) {
+    for (const c of candidates) {
+      // arithmetic on amounts only: small figures (days, percentages) are
+      // explained by nearly any pair, and a year is a date, not a sum
+      if (derivedSet.has(c) || c.v == null || Math.abs(c.v) < 1000 || /^(19|20)\d\d$/u.test(c.raw) || !fromPool(c.v)) continue;
+      derivedSet.add(c);
+      pool.push(c.v);
+    }
   }
-  const badClauses = [];
-  for (const m of a.matchAll(/(\d+(?:\.\d+)*)\s*-\s*(band|modda|bo['’ʻ]?lim)/giu)) {
-    const ref = m[1];
-    const re = new RegExp(`(^|[^\\d.])${ref.replace(/\./gu, '\\.')}(?![\\d])`, 'u');
-    if (!re.test(src)) badClauses.push(`${ref}-${m[2]}`);
-  }
+  const numbers = candidates.filter(c => !derivedSet.has(c)).map(c => c.raw);
+  const derived = candidates.filter(c => derivedSet.has(c)).map(c => c.raw);
   const uniq = arr => [...new Set(arr)];
-  return { numbers: uniq(numbers), pages: uniq(badPages), clauses: uniq(badClauses),
-    ok: !numbers.length && !badPages.length && !badClauses.length };
+  const out = { numbers: uniq(numbers), derived: uniq(derived), dates: uniq(dates), pages: uniq(badPages), clauses: uniq(badClauses) };
+  out.ok = !out.numbers.length && !out.dates.length && !out.pages.length && !out.clauses.length;
+  out.scope = 'figures_dates_pages_clauses_only';
+  return out;
 }
 
 /** The last full sentence of a cut answer (as the legal-claim guard does). */
@@ -216,26 +330,35 @@ function cutToLastSentence(text) {
   return i > t.length * 0.5 ? t.slice(0, i + 1) : t;
 }
 
+const CHECK_SCOPE = "faqat raqam, sana, sahifa va band raqamlari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.";
+const partLabel = c => `${c.index + 1}-qism${c.pages ? ` (${c.pages.from === c.pages.to ? c.pages.from : `${c.pages.from}–${c.pages.to}`}-sahifa)` : ''}`;
+
 /**
- * The answer as delivered: cut answers end on a full sentence; references
- * the source does not support and unread parts are named under it.
+ * The answer as delivered. A partial result says so at the TOP (parts of the
+ * document not read, or an answer cut at the token cap) and is never shown
+ * as a full analysis; a cut answer ends on a full sentence. Under every
+ * answer: what the mechanical check did and did not check, and what it found.
  */
-function finishExplanation({ reply, truncated = false, source, digest = null }) {
+function finishExplanation({ reply, truncated = false, source, digest = null, allowed = [] }) {
   let text = String(reply || '').trim();
   const notes = [];
+  const unread = digest ? digest.failed.concat(digest.truncated) : [];
+  const partial = [];
+  if (unread.length) partial.push(`hujjatning ${unread.map(partLabel).join(', ')} o'qilmadi yoki to'liq o'qilmadi — u qismlar tushuntirishga kirmagan`);
   if (truncated) {
     text = cutToLastSentence(text);
-    notes.push("Javob uzunlik chegarasida to'xtadi: oxirgi to'liq gapgacha ko'rsatildi.");
+    partial.push("javob uzunlik chegarasida to'xtadi va oxirgi to'liq gapgacha ko'rsatildi — hujjatning oxirgi qismlari tushuntirilmagan bo'lishi mumkin");
   }
-  const v = verifyExplanation(text, source);
-  if (v.numbers.length) notes.push(`Hujjat matnida topilmagan raqam/sana: ${v.numbers.slice(0, 8).join(', ')} — ularni asl hujjatdan tekshiring.`);
+  const v = verifyExplanation(text, source, { allowed });
+  if (v.numbers.length) notes.push(`Hujjat matnida topilmagan raqam: ${v.numbers.slice(0, 8).join(', ')} — asl hujjatdan tekshiring.`);
+  if (v.derived.length) notes.push(`Hujjatda yo'q, hujjatdagi raqamlardan hisoblanganga o'xshaydi (AI hisobi): ${v.derived.slice(0, 8).join(', ')} — hisobni tekshiring.`);
+  if (v.dates.length) notes.push(`Hujjat matnida topilmagan sana: ${v.dates.slice(0, 8).join(', ')}.`);
   if (v.pages.length) notes.push(`Hujjatda bunday sahifa belgisi yo'q: ${v.pages.slice(0, 8).join(', ')}.`);
   if (v.clauses.length) notes.push(`Hujjat matnida topilmagan band/modda: ${v.clauses.slice(0, 8).join(', ')}.`);
-  if (digest && (digest.failed.length || digest.truncated.length) && !/o['’ʻ]?qilmadi|to['’ʻ]?liq o['’ʻ]?qilmadi/iu.test(text)) {
-    notes.push(`Hujjatning ${digest.failed.concat(digest.truncated).map(c => `${c.index + 1}-qismi`).join(', ')} o'qilmadi yoki to'liq o'qilmadi — u qismlar tushuntirishga kirmagan.`);
-  }
-  if (notes.length) text += `\n\n**Avtomatik tekshiruv (AI emas):**\n${notes.map(n => `- ${n}`).join('\n')}`;
-  return { reply: text, check: v, notes };
+  if (!notes.length) notes.push("Mos kelmagan raqam, sana, sahifa yoki band topilmadi.");
+  if (partial.length) text = `⚠️ **Qisman natija — to'liq tahlil emas:** ${partial.join('; ')}.\n\n${text}`;
+  text += `\n\n**Avtomatik tekshiruv (AI emas):** ${CHECK_SCOPE}\n${notes.map(n => `- ${n}`).join('\n')}`;
+  return { reply: text, check: v, notes, partial: partial.length > 0 };
 }
 
 /** Characters of the document itself: page marks are ours, never billed. */
@@ -274,6 +397,20 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
   return { text: body, chunks: n, failed, truncated, covered: plan.covered, totalChars: plan.totalChars };
 }
 
+/**
+ * The parts of a digest that were not read (failed, or cut at the token
+ * cap), as labels: ["2-qism (5–8-sahifa)", ...]. Empty for a full reading.
+ * Shared by the explanation, the legal opinion and the chat's document
+ * analysis: a document not read whole is not the service - its units are
+ * released and the result is marked partial (as an OCR with a missing page).
+ */
+function unreadParts(digest) {
+  if (!digest) return [];
+  const parts = digest.failed.concat(digest.truncated).sort((x, y) => x.index - y.index).map(partLabel);
+  if (digest.covered === false) parts.push('hujjat oxiri');
+  return parts;
+}
+
 const EXPLAIN_FULL_TEXT_MAX = 14000;
 const EXPLAIN_MAX_TOKENS = 3000;
 
@@ -283,11 +420,13 @@ const EXPLAIN_MAX_TOKENS = 3000;
  * finishExplanation. `digest(text)` returns { text, chunks, failed, ... }.
  */
 async function explainDocument({ documentText, langName, callAI, digest, userId = null, endpoint = '/api/draft/explain-document' }) {
-  const full = documentText.length <= EXPLAIN_FULL_TEXT_MAX;
+  // the document's own size decides (page marks are ours), as for units
+  const chars = contentChars(documentText);
+  const full = chars <= EXPLAIN_FULL_TEXT_MAX;
   const d = full ? null : await digest(documentText);
   const pages = pagesIn(documentText);
   const empty = emptyPages(documentText);
-  const note = coverageNote({ totalChars: documentText.length, digest: d, pages, empty });
+  const note = coverageNote({ totalChars: chars, digest: d, pages, empty });
   const result = await callAI([
     { role: 'system', text: explainSystem(langName) },
     { role: 'user', text: `${note}\n\n─── HUJJAT ───\n${full ? documentText : d.text}\n─── HUJJAT TUGADI ───\n\nUshbu hujjatni oddiy tilda, manbasiga bog'lab tushuntirib bering.` },
@@ -296,17 +435,21 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   if (!raw) return { reply: '', provider: result && result.provider };
   // checked against what the model was given AND the full text: a figure in
   // the full text that the digest lost is not invented
-  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d });
+  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d,
+    allowed: [String(chars), String(documentText.length), String(pages.length), d ? String(d.chunks) : ''].filter(Boolean) });
+  const unread = d ? d.failed.concat(d.truncated).map(c => ({ part: c.index + 1, pages: c.pages })) : [];
   return {
     reply: done.reply, provider: result.provider, check: done.check,
-    coverage: { mode: full ? 'full_text' : 'digest', chars: documentText.length, pages: pages.length || null, emptyPages: empty,
-      chunks: d ? d.chunks : null, unread: d ? d.failed.concat(d.truncated).map(c => ({ part: c.index + 1, pages: c.pages })) : [],
-      answerTruncated: !!result.truncated },
+    coverage: { mode: full ? 'full_text' : 'digest', chars, pages: pages.length || null, emptyPages: empty,
+      chunks: d ? d.chunks : null, unread, answerTruncated: !!result.truncated,
+      // the document was not read whole: not the service (released by the route)
+      documentFullyRead: unread.length === 0 && (!d || d.covered !== false),
+      partial: done.partial },
   };
 }
 
 module.exports = {
   PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
   markPages, pagesIn, emptyPages, contentChars, digestChunks, pagesSpanned, buildDigest, coverageNote, explainSystem,
-  verifyExplanation, cutToLastSentence, finishExplanation, explainDocument,
+  unreadParts, verifyExplanation, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
 };

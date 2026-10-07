@@ -142,17 +142,22 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     assert.ok(final.includes('UZUNLIK CHEGARASIDA KESILDI'));
     assert.ok(!final.includes('Ikkinchi band chala'), 'a cut digest part ends on its last full sentence');
     assert.deepStrictEqual(r.coverage.unread.map(u => u.part), [2, 3]);
+    assert.strictEqual(r.coverage.documentFullyRead, false);
+    assert.strictEqual(r.coverage.partial, true);
+    // the user sees it first, and it is never presented as a full analysis
+    assert.ok(/^⚠️ \*\*Qisman natija — to'liq tahlil emas:\*\* hujjatning 2-qism \(\d+–\d+-sahifa\), 3-qism \(\d+–\d+-sahifa\) o'qilmadi/u.test(r.reply), r.reply.slice(0, 200));
     assert.ok(r.reply.includes('**Avtomatik tekshiruv (AI emas):**'));
-    assert.ok(r.reply.includes("2-qismi, 3-qismi o'qilmadi"));
   });
 
   await test('an answer cut at the token cap ends on a full sentence and says so', async () => {
     const ai = recorder(() => ({ text: 'Birinchi gap. Ikkinchi gap ham to\'liq. Uchinchi gap kesil', truncated: true, provider: 'stub' }));
     const r = await ex.explainDocument({ documentText: ex.markPages(byId('talabnoma').pages), langName: 'Uzbek', callAI: ai, digest: digestWith(ai) });
-    assert.ok(r.reply.startsWith("Birinchi gap. Ikkinchi gap ham to'liq.\n"));
-    assert.ok(!r.reply.includes('kesil\n'));
-    assert.ok(r.reply.includes("uzunlik chegarasida to'xtadi"));
+    assert.ok(/^⚠️ \*\*Qisman natija — to'liq tahlil emas:\*\* javob uzunlik chegarasida to'xtadi/u.test(r.reply), r.reply.slice(0, 200));
+    assert.ok(r.reply.includes("\n\nBirinchi gap. Ikkinchi gap ham to'liq.\n\n**Avtomatik tekshiruv"));
+    assert.ok(!r.reply.includes('kesil'));
     assert.strictEqual(r.coverage.answerTruncated, true);
+    assert.strictEqual(r.coverage.documentFullyRead, true, 'the document itself was read whole');
+    assert.strictEqual(r.coverage.partial, true);
   });
 
   await test('the check flags invented figures, pages and clauses - and not faithful ones', () => {
@@ -166,10 +171,82 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     const bad = ex.verifyExplanation('Narx 85 000 000 so\'m (4-sahifa). Penya 0,5 foiz (12.3-band). Muddat 2027-yil.', src);
     assert.deepStrictEqual(bad.pages, [4]);
     assert.deepStrictEqual(bad.clauses, ['12.3-band']);
-    assert.ok(bad.numbers.includes('85 000 000') && bad.numbers.includes('2027'), JSON.stringify(bad));
+    assert.deepStrictEqual(bad.numbers.sort(), ['0,5', '2027', '85 000 000'], JSON.stringify(bad));
     const done = ex.finishExplanation({ reply: 'Narx 85 000 000 so\'m (4-sahifa).', source: src });
-    assert.ok(done.reply.includes('Hujjat matnida topilmagan raqam/sana: 85 000 000'));
+    assert.ok(done.reply.includes('Hujjat matnida topilmagan raqam: 85 000 000'));
     assert.ok(done.reply.includes("Hujjatda bunday sahifa belgisi yo'q: 4"));
+  });
+
+  await test('the check says what it does NOT check, under every answer - also when it finds nothing', () => {
+    const src = ex.markPages(byId('talabnoma').pages);
+    const clean = ex.finishExplanation({ reply: 'Talabnomani "Mehr Logistika" MChJ yuborgan.', source: src });
+    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa va band raqamlari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.\n- Mos kelmagan raqam, sana, sahifa yoki band topilmadi."));
+    assert.strictEqual(clean.check.scope, 'figures_dates_pages_clauses_only');
+    // a wrong attribution passes the check: it is not a semantic check
+    const wrong = ex.finishExplanation({ reply: "Qarz 12 400 000 so'm ekani tasdiqlangan.", source: src });
+    assert.strictEqual(wrong.check.ok, true, 'meaning is not checked - the lawyer review is');
+  });
+
+  await test('no unfounded warnings: dates in other forms, percentages, money in mln/ming, clause numbers, list numbering, page ranges', () => {
+    const src = ex.markPages(byId('contract-supply').pages);
+    const cases = [
+      'Shartnoma 05.02.2026 da tuzilgan.', 'Shartnoma 2026-02-05 da tuzilgan.', 'Shartnoma 5-fevral 2026-yilda tuzilgan.',
+      'Amal qilish: 31.12.2026 gacha.', 'Amal qilish: 31 декабря 2026 г.',
+      'Penya 0,1% kuniga, 10% dan oshmaydi.', 'Penya 0.1 %.', 'Yoqilg\'i 15% dan ortiq qimmatlasa.',
+      'Narx 84,5 mln so\'m.', 'Narx 84 500 ming so\'m.', 'Narx 84 500 000 so\'m.', 'Narx 84.5 mln.',
+      '4.1 va 4.3-bandlar zid.', '8.2-band muddat tugagach ham amal qiladi.', '5-bo\'lim javobgarlik.', '2.3-bandda istisno bor.',
+      '1. Narx\n2. Muddat\n10. Javobgarlik\n11. Nizolar\n12) Bekor qilish', '1–3-sahifalarda.', '2-3-sahifa.',
+      'Shartnoma № 17/2026.',
+    ];
+    for (const c of cases) {
+      const v = ex.verifyExplanation(c, src);
+      assert.ok(v.ok && !v.derived.length, `${c} -> ${JSON.stringify(v)}`);
+    }
+    // a date the document does not have, in any form, is flagged
+    for (const c of ['Shartnoma 06.02.2026 da tuzilgan.', 'Shartnoma 5-mart 2026-yilda tuzilgan.', 'Shartnoma 2025-02-05 da.']) {
+      assert.ok(ex.verifyExplanation(c, src).dates.length === 1, c);
+    }
+  });
+
+  await test('arithmetic on the document\'s amounts is named as the AI\'s calculation, not as an invented figure', () => {
+    const src = ex.markPages(byId('contract-supply').pages);
+    const v = ex.verifyExplanation("Oldindan to'lov (30 foiz): 25 350 000 so'm. Qolgan summa: 59 150 000 so'm. Narx 90 000 000 so'm.", src);
+    assert.deepStrictEqual(v.derived, ['25 350 000', '59 150 000']);
+    assert.deepStrictEqual(v.numbers, ['90 000 000']);
+    const t = ex.verifyExplanation("Jami 12 400 000 = 11 000 000 + 1 400 000; 12,4 mln so'm.", ex.markPages(byId('talabnoma').pages));
+    assert.ok(t.ok && !t.derived.length, JSON.stringify(t));
+    const done = ex.finishExplanation({ reply: "Oldindan to'lov: 25 350 000 so'm.", source: src });
+    assert.ok(done.reply.includes("Hujjatda yo'q, hujjatdagi raqamlardan hisoblanganga o'xshaydi (AI hisobi): 25 350 000"));
+    assert.strictEqual(done.check.ok, true, 'a calculation is named, not counted as invented');
+  });
+
+  await test('page marks never move a threshold or a unit, and are counted in the provider input', async () => {
+    // 13 990 characters of document on 12 pages: full text, not a digest, though marks push it over 14 000
+    const pages = Array.from({ length: 12 }, (_, i) => `${i + 1}. ` + 'Band matni. '.repeat(Math.floor((13990 / 12 - 4) / 12)));
+    const marked = ex.markPages(pages);
+    assert.ok(marked.length > ex.EXPLAIN_FULL_TEXT_MAX && ex.contentChars(marked) <= ex.EXPLAIN_FULL_TEXT_MAX, `${marked.length} / ${ex.contentChars(marked)}`);
+    const ai = recorder();
+    const r = await ex.explainDocument({ documentText: marked, langName: 'Uzbek', callAI: ai, digest: digestWith(ai) });
+    assert.strictEqual(r.coverage.mode, 'full_text');
+    assert.strictEqual(r.coverage.chars, ex.contentChars(marked));
+    // the provider gets (and is billed for) the marks: the cost bound counts them
+    const pricing = require('../src/ai/model-pricing');
+    const withMarks = pricing.inputTokenBound(ai.calls[0].messages);
+    const plainMsgs = ai.calls[0].messages.map(m => ({ ...m, text: m.text.replace(/^\[Sahifa \d+\]\n/gmu, '') }));
+    assert.ok(withMarks - pricing.inputTokenBound(plainMsgs) >= 12 * 11, 'marks are in the input token bound');
+    // a paid job's 120 000 characters on 30 pages, marks included, is still covered whole
+    const big = ex.markPages(Array.from({ length: 30 }, () => 'x'.repeat(3998)));
+    assert.ok(ex.contentChars(big) <= 120000 && ex.contentChars(big) > 119900 && ex.digestChunks(big).covered);
+    // paragraph breaks placed so every chunk would end early: coverage still whole
+    const para = Array.from({ length: 30 }, () => `${'z'.repeat(1750)}\n\n${'z'.repeat(2240)}`);
+    const early = ex.markPages(para);
+    assert.ok(ex.contentChars(early) <= 120000 && ex.digestChunks(early).covered);
+    assert.strictEqual(ex.digestChunks(early).chunks[0].text.length, ex.CHUNK, 'fell back to fixed cuts rather than leave the end unread');
+    // chat: excerpt threshold on the document's own size
+    const dj = require('../src/rag/document-job');
+    const chat = ex.markPages(Array.from({ length: 10 }, () => 'y'.repeat(1995)));
+    assert.ok(chat.length > 20000 - 200 && ex.contentChars(chat) <= 20000);
+    assert.strictEqual(dj.selectExcerpt(chat, 'savol').excerpt, false);
   });
 
   await test('a text without page marks (DOCX): the model is told so, and any page number is flagged', async () => {

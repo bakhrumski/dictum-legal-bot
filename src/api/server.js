@@ -6367,8 +6367,13 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     let documentScope = null;
     let docContext = '';
     if (rawDoc && docJobInfo.mode === 'document') {
-      docContext = rawDoc.length > 30000 ? await digestLongDocument(rawDoc, req.session?.adminId || null) : rawDoc;
-      documentScope = { mode: 'document', services: docJobInfo.services, units: docJobInfo.units, totalChars: rawDoc.length, excerpt: false };
+      const docDigest = require('../rag/document-explain').contentChars(rawDoc) > 30000 ? await digestLongDocumentDetailed(rawDoc, req.session?.adminId || null) : null;
+      docContext = docDigest ? docDigest.text : rawDoc;
+      // a document not read whole is not the service: units released, the
+      // answer and its note say it is partial (src/rag/document-explain.js)
+      const unread = require('../rag/document-explain').unreadParts(docDigest);
+      if (unread.length && typeof tariffModule.refundUsage === 'function') tariffModule.refundUsage(res, 'digest_partial_read');
+      documentScope = { mode: 'document', services: docJobInfo.services, units: docJobInfo.units, totalChars: rawDoc.length, excerpt: false, unread };
     } else if (rawDoc) {
       const ex = documentJob.selectExcerpt(rawDoc, message);
       docContext = ex.text;
@@ -7067,7 +7072,8 @@ async function digestLongDocument(documentText, userId) {
 // buildDigest): parts that failed or were cut are named, and a digest with
 // such a part is never cached. null for a document short enough to pass whole.
 async function digestLongDocumentDetailed(documentText, userId) {
-  if (documentText.length <= 14000) return null;
+  // the document's own size (page marks are ours and never move a threshold)
+  if (require('../rag/document-explain').contentChars(documentText) <= 14000) return null;
   const cacheKey = `${userId || 'anon'}|${require('crypto').createHash('sha256').update(documentText).digest('hex')}`;
   const hit = userId ? DIGEST_CACHE.get(cacheKey) : null;
   if (hit && Date.now() - hit.at < DIGEST_TTL_MS) {
@@ -7188,7 +7194,17 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
       console.log(`[Legal Opinion] references: ${documentRefs.length} (regex ${scanned.length}, llm ${llmRefs.length} over ${windows.length} window(s)) — ${documentRefs.slice(0, 15).map(r => r.number || r.name).join(', ')}`);
     } catch (e) { console.warn('[Legal Opinion] reference extraction failed:', e.message); }
 
-    const docForAnalysis = await digestLongDocument(documentText, req.session?.adminId || null);
+    const docDigest = await digestLongDocumentDetailed(documentText, req.session?.adminId || null);
+    const docForAnalysis = docDigest ? docDigest.text : documentText;
+    // a document not read whole is not the service: units released now, the
+    // opinion opens with what was not read (src/rag/document-explain.js)
+    const unreadParts = require('../rag/document-explain').unreadParts(docDigest);
+    if (unreadParts.length) {
+      console.warn(`[Legal Opinion] digest incomplete: ${unreadParts.join(', ')} - units released, opinion marked partial`);
+      if (typeof tariffModule.refundUsage === 'function') tariffModule.refundUsage(res, 'digest_partial_read');
+    }
+    // query snippets come from the document's own text, not our page marks
+    const docHead = documentText.replace(/^\[Sahifa \d+\]\n?/gmu, '');
 
     // Classify the field, then retrieve grounding law from the corpus.
     let topic = null;
@@ -7212,7 +7228,7 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
       // EVERY code (cross-law fallback) — run 7 cited six codes' article 69.
       const { sanitizeActName } = require('../rag/lex-resolve');
       const ragQuery = [
-        documentText.slice(0, 220).replace(/\s+/g, ' '),
+        docHead.slice(0, 220).replace(/\s+/g, ' '),
         ...documentRefs.slice(0, 8)
           .filter(r => !r.foreign)
           .map(r => [sanitizeActName(r.name), r.number && `${r.number}-son`].filter(Boolean).join(' ')),
@@ -7229,7 +7245,7 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
       // context at all (the prompt handles an empty KONTEKST honestly).
       try {
         const { prefixOverlap } = require('../rag/lex-resolve');
-        const docSubject = documentText.slice(0, 300).replace(/\s+/g, ' ') + ' '
+        const docSubject = docHead.slice(0, 300).replace(/\s+/g, ' ') + ' '
           + documentRefs.slice(0, 8).map(r => sanitizeActName(r.name)).filter(Boolean).join(' ');
         const kept = ragChunks.filter(c =>
           prefixOverlap(docSubject, `${c.law_name || ''} ${String(c.chunk_text || '').slice(0, 300)}`) >= 1);
@@ -7400,7 +7416,7 @@ ${groundingRule}
       ? `\n\nXORIJIY MANBALAR (O'zbekiston qonunchiligi emas — lex.uz'da bo'lishi mumkin emas; hujjatning o'z bayoniga tayanib tavsiflang, normativ asos sifatida ishlatmang):\n${lexForeign.map(l => `- ${l}`).join('\n')}`
       : '');
     const userText =
-`KONTEKST (O'zbekiston qonunchiligidan tegishli parchalar):\n${ragContext || '(kontekst topilmadi — faqat ishonchli umumiy normalarga tayaning, modda raqamini taxmin qilmang)'}${unresolvedBlock}\n\nTASDIQLANGAN LEX.UZ MANBALARI (havola va rasmiy identifikatorni aynan shu ro'yxatdan oling):\n${verifiedSourceDirectory.join('\n') || '- Tasdiqlangan Lex.uz manbasi topilmadi; huquqiy manba yoki raqam o\'ylab topmang.'}\n\n─── YUKLANGAN HUJJAT (yoki uning to'liq dayjesti) ───\n${docForAnalysis}\n─── HUJJAT TUGADI ───\n\nYuqoridagi hujjat bo'yicha to'liq yuridik xulosa tayyorlang.`;
+`KONTEKST (O'zbekiston qonunchiligidan tegishli parchalar):\n${ragContext || '(kontekst topilmadi — faqat ishonchli umumiy normalarga tayaning, modda raqamini taxmin qilmang)'}${unresolvedBlock}\n\nTASDIQLANGAN LEX.UZ MANBALARI (havola va rasmiy identifikatorni aynan shu ro'yxatdan oling):\n${verifiedSourceDirectory.join('\n') || '- Tasdiqlangan Lex.uz manbasi topilmadi; huquqiy manba yoki raqam o\'ylab topmang.'}\n\n─── YUKLANGAN HUJJAT (yoki uning dayjesti${unreadParts.length ? `; O'QILMAGAN QISMLAR: ${unreadParts.join(', ')} — ular haqida xulosa chiqarmang va buni xulosada ayting` : ''}) ───\n${docForAnalysis}\n─── HUJJAT TUGADI ───\n\nYuqoridagi hujjat bo'yicha to'liq yuridik xulosa tayyorlang.`;
 
     console.log(`[Legal Opinion] topic=${topic} ragChunks=${ragChunks.length} ragWeak=${ragWeak} lexLive=${lexLiveSources.length} digest=${docForAnalysis === documentText ? 'no' : 'yes'}`);
     // Premium model for the synthesis (Claude via callPremiumAI when
@@ -7475,6 +7491,9 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
       }
     }
 
+    if (unreadParts.length) {
+      html = `<p><strong>⚠️ Qisman xulosa — to'liq emas:</strong> hujjatning ${unreadParts.map(x => String(x).replace(/[<>&]/g, '')).join(', ')} o'qilmadi; xulosa u qismlarni hisobga olmaydi. Limit qaytarildi — hujjatni qayta yuborib, to'liq xulosa olishingiz mumkin.</p>` + html;
+    }
     logAudit(req, 'legal_opinion.generate', 'document', documentText.length + ' chars');
     // Units were reserved before generation (meterDocument); the response
     // commits them when it succeeds and releases them when it fails.
@@ -7499,6 +7518,7 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
     const isMasterViewer = req.session && req.session.role === 'master';
     res.json({
       html, provider: result.provider, topic, docHash,
+      partial: unreadParts.length > 0, unreadParts, quotaRefunded: unreadParts.length > 0 || undefined,
       usage: (isMasterViewer && result.usage) ? result.usage : null,
       // Master-only: true when the synthesis was NOT produced by the model
       // this plan promises (e.g. Sol fell back to Terra even after retries).

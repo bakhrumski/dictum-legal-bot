@@ -1,146 +1,186 @@
-# Hujjat mazmunini tushuntirish: aniqlik, qamrov va dalil (2026-10-07)
+# Hujjat mazmunini tushuntirish: aniqlik, qamrov va dalil (2026-10-07, #419)
 
-Bu hujjat uch narsani o'z ichiga oladi: tushuntirish xizmatining sifatini
-nima buzayotgani (koddagi dalil bilan), nima o'zgartirilgani, va yurist
-baholashi uchun benchmark rejasi bilan jadval. **Haqiqiy model bilan
-benchmark hali o'tkazilmagan.** Quyidagi testlarning hammasi stub AI bilan
-ishlaydi. Ular modelga nima yetib borishini va server javob bilan nima
-qilishini isbotlaydi, javob sifatini emas.
+Bu hujjatda uch narsa bor:
+- tushuntirish xizmatining sifati nimadan buzilayotgani (koddagi dalil bilan);
+- nima o'zgartirilgani;
+- yurist baholashi uchun benchmark rejasi va baholash jadvali.
+
+**Haqiqiy model bilan benchmark hali o'tkazilmagan.** Bu yerdagi testlarning
+hammasi stub AI bilan ishlaydi. Ular modelga nima yetib borishini va server
+javob bilan nima qilishini isbotlaydi, javob sifatini isbotlamaydi.
 
 ## 1. Tushuntirish yo'llari
 
-| Kanal | Yo'l | AI | O'zgardimi |
+| Kanal | Yo'l | AI | Bu PR'da |
 |---|---|---|---|
-| Veb (dashboard) | Fayl biriktiriladi → `/api/analyze/extract` (AI'siz) → «Hujjat mazmunini tushuntirish» → narx kartasi → `POST /api/draft/explain-document` (`confirmed: true`) | Qisqa hujjatga 1 ta arzon chaqiruv. Uzun hujjatga N ta dayjest chaqiruvi + 1 ta | Ha: prompt, qamrov, sahifalar, javob tekshiruvi |
-| Veb — yuridik xulosa | `/api/draft/legal-opinion` | Umumiy `digestLongDocument` dayjestidan foydalanadi | Faqat dayjest (bu xulosaning qamrovi yaxshilanadi), xulosa prompti o'zgarmagan |
-| Veb — chatda hujjat (tahlil buyurilganda) | `/api/legal-chat` document mode (> 30 000 belgi) | Umumiy dayjest | Faqat dayjest |
-| `/api/analyze` (JSON tahlil) | Dashboard'dan chaqirilmaydi (grep) | Umumiy dayjest | Faqat dayjest |
-| Telegram | Fayllarda AI ishlamaydi (yuristlar navbatiga ketadi) | — | Yo'q |
-| Workspace | To'liq tahlil yoki xulosa AI bo'limiga yo'naltiriladi (`createWorkspaceServiceRouting`) | — | Yo'q |
+| Veb, «Hujjat mazmunini tushuntirish» | extract (AI'siz) → narx kartasi → `POST /api/draft/explain-document` (`confirmed: true`) | ≤ 14 000 belgi: 1 arzon chaqiruv; undan uzun: N ta dayjest + 1 | prompt, qamrov, sahifalar, tekshiruv, qisman natija qoidasi |
+| Veb, yuridik xulosa | `/api/draft/legal-opinion` | umumiy dayjest (> 14 000) | faqat dayjest va qisman natija qoidasi; xulosa prompti o'zgarmagan (faqat «to'liq dayjest» so'zi olib tashlandi) |
+| Veb, chatda hujjat tahlili | `/api/legal-chat`, document mode (> 30 000) | umumiy dayjest | dayjest va qisman natija qoidasi |
+| Veb, chatda hujjat haqida savol | `selectExcerpt` (> 20 000 belgida parchalar) | — (parcha tanlashda AI yo'q) | parchalar sahifa belgisi bilan beriladi; band tanlash o'zgarmagan |
+| `/api/analyze` (JSON) | dashboard'dan chaqirilmaydi | umumiy dayjest | faqat dayjest |
+| Telegram | fayllarda AI yo'q | — | o'zgarmagan |
+| Workspace | tahlil yoki xulosa AI bo'limiga yo'naltiriladi | — | o'zgarmagan |
 
-Yangi xizmat yoki kanal qo'shilmagan. Routing, tarif, kvota va tasdiq avvalgidek
-qoldi. Bu DB testi bilan tekshirilgan (`tests/upload-no-ai.db.test.js`):
-- tasdiqsiz so'rov → 409, AI chaqirilmaydi;
-- tasdiqlangan so'rov → bitta analysis birligi olinadi, trigger `service_confirmed`;
-- bo'sh javob → birlik qaytariladi.
+Yangi xizmat yoki kanal qo'shilmagan. Quyidagilar avvalgidek ishlaydi:
+routing, tariflar, tasdiq (409) va fayl yuklanganda AI ishlamasligi.
 
-## 2. Sabablar: prompt yoki qamrov (koddagi dalil)
+Qo'shimcha AI chaqiruvi yo'q, ikkinchi tekshiruvchi model ham yo'q.
 
-Eski kod — `main` 5d57b4d, `src/api/server.js`.
+## 2. Sabablar: MIMORAM namunasi va uzun hujjatlar alohida
 
-**Qamrov muammolari (promptni o'zgartirish bilan tuzalmaydi):**
+### 2a. MIMORAM namunasi (3 617 belgi): dayjest ishlamagan
+
+3 617 belgi 14 000 belgidan kam. Shuning uchun eski yo'lda ham hujjatning
+**to'liq matni** bitta chaqiruvda modelga berilgan, dayjest ishga tushmagan.
+Shu sabab namunadagi xatolar qamrov yoki dayjest xatosi emas. Ular **prompt
+va model xatolari**:
+
+| Namunadagi xato | Turi | Eski promptdagi sabab |
+|---|---|---|
+| Tekshiruvni investorlar o'tkazgan deb yozilgan | o'ylab topilgan shaxs yoki tekshiruv | «Kim nima dedi»ni saqlash va hujjatda yo'q odam qo'shmaslik qoidasi yo'q edi |
+| Sud ma'lumoti kompaniya vakillariga tegishli ekani yo'qolgan | atributsiya | atributsiya qoidasi yo'q edi |
+| «Aniqlanmadi» → «yo'q» | cheklov yo'qolgan | cheklovlar va sanani saqlash qoidasi yo'q edi |
+| «Ariza berilmagan» → huquq yo'q yoki rad etilgan | ma'no siljigan | «ariza yo'q ≠ ro'yxat yo'q ≠ huquq yo'q» qoidasi yo'q edi |
+| Ro'yxatdan o'tkazish tavsiyasi xulosa muallifiga tegishli ekani yo'qolgan | tavsiya muallifi | fakt, muallif tavsiyasi va AI talqinini ajratish qoidasi yo'q edi |
+| Mualliflik huquqi oqibati qo'shilgan | o'ylab topilgan oqibat | «⚠️ Nimalarga e'tibor berish kerak» bo'limi maslahatga undardi |
+| Litsenziya yo'q → litsenziya majburiy yoki faoliyat noqonuniy | asossiz xulosa | hujjat chiqarmagan xulosani taqiqlovchi qoida yo'q edi |
+| «Ilhomovaga tegishli» | to'g'ri edi | — |
+
+Bu namuna uchun ta'sir qiladigan o'zgarish faqat **yangi prompt** (A–C
+qoidalari). Mexanik tekshiruv bu xatolardan birortasini ham ushlamaydi:
+ularning hammasi ma'no xatosi. **Yangi prompt bu xatolarni amalda tuzatadimi —
+tasdiqlanmagan.** Buni faqat jonli benchmark ko'rsatadi (5–6-bo'lim).
+Namunaning o'zi repoga qo'yilmagan. Testlarda anonim sintetik o'xshashi bor:
+`02-due-diligence.json`, unda 8 ta tuzoq.
+
+### 2b. Uzun hujjatlar (14 000 belgidan ortiq): qamrov va dayjest kamchiliklari
+
+Bular promptni o'zgartirish bilan tuzalmaydi:
 
 1. **Sahifa yo'q edi.**
-   - Matnli PDF `pdf-parse` orqali sahifa chegarasiz bitta matn bo'lib modelga borardi.
-   - Shu sababli model sahifaga faqat uni o'ylab topib havola qila olardi.
-   - Skanlarda `[Sahifa n]` belgisi bor edi (#411), matnli PDF'da yo'q edi.
-2. **Dayjest atributsiyani tashlab yuborardi.**
-   - Eski dayjest prompti faqat majburiyat, huquq, sana va muddatni so'rardi.
-   - Quyidagilar model ko'rishidan oldin yo'qolardi:
-     - kim aytgani («vakillarining ma'lumotiga ko'ra»);
-     - cheklov va sana bilan aytilgan gaplar («aniqlanmadi», «… holatiga»);
-     - istisnolar;
-     - tavsiya va uning muallifi.
-   - Hujjat 14 000 belgidan uzun bo'lsa, MIMORAM namunasidagi xatolar shu yerda paydo bo'lishi mumkin edi.
+   - Matnli PDF modelga sahifa chegarasiz yetib borardi.
+   - Shuning uchun model sahifa raqamini faqat o'ylab topishi mumkin edi.
+2. **Eski dayjest muhim ma'lumotni tashlab yuborardi.**
+   - Eski dayjest faqat majburiyat, huquq, sana va muddatni so'rardi.
+   - Model ko'rishidan oldin yo'qolgan narsalar: kim aytgani, cheklovlar, istisnolar, tavsiya va uning muallifi.
+   - Uzun hujjatda 2a dagi xatolar shu yerdan ham kelib chiqishi mumkin edi.
 3. **O'qilmagan qism sezilmasdi.**
-   - Muvaffaqiyatsiz dayjest bo'lagi modelga shunchaki «(o'qib bo'lmadi)» deb borardi. Javobda bu aytilmasdi.
-   - Token chegarasida kesilgan bo'lak e'tiborsiz qolardi (`truncated` o'qilmasdi).
-   - Kesilgan yakuniy javob ham shunday qaytarilardi.
-4. Chegaralar har xil:
-   - tushuntirish 14 000 belgidan uzun hujjatni dayjest qiladi, chat 30 000 belgidan uzunini;
-   - bu o'zgartirilmadi (routing), faqat qayd etildi.
+   - Muvaffaqiyatsiz yoki kesilgan dayjest qismi, kesilgan javob jimgina o'tib ketardi.
+   - Bunday natija baribir to'liq deb ko'rsatilib, limit yechilardi.
+4. **Matn jimgina kesilmagan.**
+   - Eski bo'laklar ham 120 000 belgini to'liq qoplardi.
+   - Dry-run'da kalit iqtiboslar eski va yangi yo'lda bir xil: 5/5.
 
-**Eski kod qilmagan narsa:** matnni jimgina kesmagan. Eski bo'laklar ham
-120 000 belgini to'liq qoplardi. `scripts/explain-benchmark.js` ham buni
-ko'rsatadi: eski va yangi yo'lda «key anchors in input» 5/5. Demak,
-muammo hujjat oxirining yo'qolishida emas edi. Dayjest nimani
-saqlayotganida, sahifa yo'qligida va o'qilmagan qismlar yashirilganida edi.
+## 3. Nima o'zgardi
 
-**Prompt muammolari:**
-
-5. Prompt to'rtta qat'iy bo'lim va 150–350 so'z talab qilardi. Shu sababli istisno va cheklovlar qisqartirilardi.
-6. «⚠️ Nimalarga e'tibor berish kerak» bo'limi hujjatda yo'q maslahat va oqibatlarni qo'shishga undardi.
-   - Masalan, «mualliflik huquqi buziladi» yoki «litsenziyasiz faoliyat noqonuniy».
-7. Uch narsani ajratish qoidasi yo'q edi:
-   - hujjat mazmuni;
-   - hujjat muallifining tavsiyasi;
-   - AI talqini.
-8. «Aniqlanmadi» ≠ «yo'q», tarixiy holat ≠ hozirgi holat va «ariza berilmagan» ≠ «huquq yo'q» qoidalari yo'q edi.
-9. Dalil (sahifa, band yoki iqtibos) qoidasi yo'q edi. Ziddiyatni ko'rsatish talabi ham yo'q edi.
-
-## 3. Nima o'zgardi (umumiy, hujjatga xos emas)
+Hammasi umumiy qoidalar, hujjatga xos emas. Promptda baholash to'plamidagi
+nomlar yoki raqamlar yo'q, buni test tekshiradi.
 
 | # | O'zgarish | Fayl |
 |---|---|---|
-| 1 | Matnli PDF har sahifa oldidan `[Sahifa n]` bilan qaytadi. Matnsiz sahifalar qamrov eslatmasida nomlanadi. Belgilar hisobga kirmaydi (`contentChars`): birlik avvalgidek | `src/ocr/routes.js`, `src/rag/subscription-tiers.js` |
-| 2 | Dayjest prompti quyidagilarni saqlaydi: kim aytgani, cheklovlar (so'zma-so'z), istisnolar, tavsiya + muallif, ziddiyat, yetishmayotgan ma'lumot, `(N-sahifa)`. Bo'laklar sahifa yoki paragraf chegarasida kesiladi va o'z sahifalarini biladi | `src/rag/document-explain.js` (`DIGEST_SYSTEM`, `digestChunks`, `buildDigest`) |
-| 3 | Muvaffaqiyatsiz yoki kesilgan bo'lak dayjest matnida nomlanadi va keshga yozilmaydi. Bu dayjest xulosa va chat bilan umumiy | `server.js` `digestLongDocumentDetailed` |
-| 4 | Modelga mexanik `QAMROV` eslatmasi beriladi: to'liq matnmi yoki dayjestmi, qaysi qismlar o'qilmagan, sahifa belgilari bor-yo'qligi | `coverageNote` |
-| 5 | Tushuntirish prompti: A–F qoidalari, hujjat turiga mos sarlavhalar, «AI izohi:» belgisi, 250–700 so'z | `explainSystem` |
-| 6 | Javob AI'siz tekshiriladi: manbada yo'q raqam yoki sana, mavjud bo'lmagan sahifa, matnda yo'q band yoki modda. Kesilgan javob oxirgi to'liq gapgacha qisqartiriladi. Bular javob ostida «Avtomatik tekshiruv (AI emas)» bo'lib chiqadi | `verifyExplanation`, `finishExplanation` |
-| 7 | Route alohida modulga ko'chirildi, tasdiq, skan va kvota zanjiri o'zgarmadi | `src/rag/document-explain-route.js` |
+| 1 | Matnli PDF har sahifa oldidan `[Sahifa n]` bilan qaytadi | `src/ocr/routes.js` |
+| 2 | **Sahifa belgilari xizmat hajmiga kirmaydi.** Ular quyidagilarni oshirmaydi: birliklar (`contentChars`), reja chegarasi (`jobFits`), to'liq matn/dayjest chegarasi (14 000), chat chegaralari (30 000 va 20 000). **Provider kirishida va xarajat hisobida esa saqlanadi:** belgilar modelga boradi, `inputTokenBound`/`callCostBound` ularni sanaydi (test), ledger provider qaytargan usage'ni yozadi | `subscription-tiers.js`, `document-explain.js`, `document-job.js`, `server.js` |
+| 3 | Dayjest kim aytganini, cheklovlarni, istisnolarni, tavsiya va uning muallifini, ziddiyatlarni, qonun havolalarini (raqami bilan) va sahifani saqlaydi. Bo'lak sahifa chegarasida kesiladi, lekin bu qamrovni kamaytirsa yoki bitta ortiqcha chaqiruv talab qilsa, eskicha qat'iy kesish ishlaydi | `DIGEST_SYSTEM`, `digestChunks` |
+| 4 | Modelga «QAMROV» eslatmasi beriladi: to'liq matnmi yoki dayjestmi, o'qilmagan qismlar, matnsiz sahifalar, sahifaga havola qilish mumkinmi | `coverageNote` |
+| 5 | Tushuntirish prompti: A–F qoidalari, hujjat turiga mos sarlavhalar, «AI izohi:» belgisi | `explainSystem` |
+| 6 | Mexanik tekshiruv (4-bo'lim) | `verifyExplanation` |
+| 7 | Qisman natija qoidasi (5-bo'lim) | route, `server.js`, `document-job.js`, dashboard |
+| 8 | Chat parchalarida har bir band o'zi boshlangan sahifa belgisi bilan beriladi; band tanlash belgilar bilan ham, belgisiz ham bir xil (test) | `document-job.js` |
 
-Promptda MIMORAM'ga xos ism, raqam yoki ibora yo'q. Buni test tekshiradi:
-baholash to'plamidagi hech bir ism yoki raqam promptda uchramaydi.
+## 4. Mexanik tekshiruv nimani tekshiradi va nimani tekshirmaydi
 
-**Qo'shimcha AI chaqiruvi qo'shilmagan.** Token chegaralari oshirildi:
-- dayjest bo'lagi 1300 → 1600, chunki endi atributsiya va cheklovlar ham olinadi;
-- javob 2500 → 3000, chunki 250–700 so'z o'zbekchada ~2000 tokengacha boradi.
+**Faqat solishtiradi:** javobdagi raqam, sana, sahifa va band raqamlarini
+hujjat matni bilan. **Ma'noni, kim nima deganini, cheklovlarni, talqinni va
+huquqiy to'g'rilikni tekshirmaydi.**
 
-Bu narx chegarasini oshiradi (4-bo'lim).
+Masalan, «qarz tasdiqlangan» degan noto'g'ri atributsiya tekshiruvdan o'tib
+ketadi (test bor). Har bir javob ostida, xato topilmaganda ham, shu yozuv
+chiqadi:
 
-**Taklif — bajarilmagan:** ikkinchi tekshiruvchi AI chaqiruvi.
-- U javobdagi har bir da'voni manba bilan solishtiradi.
-- Foydasi: mexanik tekshiruv ilg'amaydigan ma'no xatolarini ushlaydi, masalan atributsiya yo'qolishi va «aniqlanmadi → yo'q».
-- Kechikish: arzon model bilan +3–8 s.
-- Narx chegarasi: hujjat uchun ~$0.004–0.03 (dayjest yoki to'liq matn + javob kirish sifatida).
-- Benchmark mexanik tekshiruv yetmasligini ko'rsatsa, alohida ruxsat bilan qo'shiladi.
+> **Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa va band raqamlari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.
 
-## 4. Benchmark byudjeti (dry-run, chaqiruvsiz)
+Javobda `check.scope = "figures_dates_pages_clauses_only"` qaytadi.
 
-`node scripts/explain-benchmark.js` narxlarni `src/ai/model-pricing.js` →
-`callCostBound` dan oladi. Bu yuqori chegaradir: kirish UTF-8 baytlarda,
-chiqish esa providerga yuborilgan cap. Bu o'lchangan sarf emas va dollar
-kafolati ham emas. VoiceLab kreditda hisoblaydi; bu yerda uning ro'yxat
-narxi rejalash raqami sifatida olingan.
+**Asossiz ogohlantirishlarga qarshi tekshirilgan holatlar (test):**
 
-| Bitta ishga chegara | voicelab/aisha-comet | gpt-6-luna |
+| Holat | Misol | Natija |
 |---|---|---|
-| Qisqa hujjat (1–3 sahifa), eski | ~$0.003 | ~$0.003 |
-| Qisqa hujjat, yangi | ~$0.004 | ~$0.004 |
-| 26 sahifali sintetik ijara, eski / yangi | $0.027 / $0.031 | $0.017 / $0.020 |
-| 30 sahifa (~75 000 belgi), eski / yangi | $0.050 / $0.058 | $0.030 / $0.037 |
+| Sanalar boshqa shaklda | 05.02.2026 / 2026-02-05 / 5-fevral 2026 / 31 декабря 2026 ↔ «2026-yil 5-fevral» | ogohlantirish yo'q |
+| Hujjatda yo'q sana | 06.02.2026; 5-mart; 2025-02-05 | sana sifatida belgilanadi |
+| Foizlar | 0,1% / 0.1 % / 10% / 15% ↔ «0,1 foizi», «10 foizidan» | ogohlantirish yo'q |
+| Pul | 84,5 mln / 84 500 ming / 84.5 mln ↔ «84 500 000» | ogohlantirish yo'q |
+| Band raqamlari | «4.1 va 4.3-bandlar», 8.2-band, 5-bo'lim, 2.3-bandda | ogohlantirish yo'q |
+| Markdown raqamlangan ro'yxat | «10. …», «12) …» | raqam sifatida tekshirilmaydi |
+| Sahifa oralig'i | 1–3-sahifalar, 2-3-sahifa | ikkala sahifa tekshiriladi |
+| Arifmetik hosila | 30% × 84 500 000 = 25 350 000; 84 500 000 − 25 350 000 = 59 150 000 | «o'ylab topilgan» deyilmaydi, «AI hisobi — tekshiring» deb alohida ko'rsatiladi |
+| Hujjatdagi summa | 11 000 000 + 1 400 000 = 12 400 000 | ogohlantirish yo'q |
+
+**Cheklovlar:**
+- Hosila faqat summalar uchun (≥ 1 000) va ikki qadamgacha tekshiriladi.
+- Kichik sonlar (kun, foiz) hosila deb hisoblanmaydi. Hujjatda bo'lmasa, «topilmagan» deyiladi.
+- Ko'p raqamli hujjatda o'ylab topilgan summa tasodifan «hosila» bo'lib chiqishi mumkin. U baribir ko'rsatiladi, faqat «tekshiring» belgisi bilan.
+
+## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
+
+| Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |
+|---|---|---|---|
+| Dayjestning bir qismi o'qilmadi yoki uzunlik chegarasida kesildi (hujjat to'liq o'qilmagan) | Javob boshida: «⚠️ **Qisman natija — to'liq tahlil emas:** hujjatning N-qism (a–b-sahifa) o'qilmadi…» va «limit qaytarildi» xabari | **qaytariladi** (`released`) | OCR qoidasi (2026-10-06): sahifasi yetishmagan hujjat — xizmat emas, limit qaytariladi |
+| Hujjat to'liq o'qildi, lekin javob token chegarasida kesildi | Javob boshida: «⚠️ **Qisman natija — to'liq tahlil emas:** javob uzunlik chegarasida to'xtadi…»; javob oxirgi to'liq gapgacha qisqartiriladi | **yechiladi** (`committed`) | claim-guard qoidasi: kesilib, oxirgi to'liq gapgacha qisqartirilgan javob yetkazilgan hisoblanadi |
+| Bo'sh javob yoki xato | xato xabari | qaytariladi | avvalgidek |
+
+- Yuridik xulosa va chatdagi hujjat tahlilida ham shu qoida ishlaydi:
+  - dayjestda o'qilmagan qism bo'lsa, birliklar qaytariladi;
+  - modelga o'qilmagan qismlar aytiladi;
+  - xulosa «⚠️ Qisman xulosa — to'liq emas» bilan boshlanadi;
+  - chat izohi «⚠️ Qisman natija…» deb chiqadi (ogohlantirish rangida).
+- Testlar haqiqiy Postgres'da: `released` va `committed` holatlari tekshiriladi (`tests/upload-no-ai.db.test.js`).
+- Muqobil variant ham bor: kesilgan javobda ham limitni qaytarish. Egasi tanlasa, bu bir qatorlik o'zgarish.
+
+## 6. Token limitlari va xarajat (dry-run, chaqiruvsiz)
+
+`node scripts/explain-benchmark.js`. Raqamlar `src/ai/model-pricing.js`
+(`callCostBound`) narx jadvalidan hisoblangan **rejalash raqamlari**:
+- kirish UTF-8 baytlarda, chiqish providerga yuborilgan cap bo'yicha hisoblangan;
+- bu **haqiqiy sarf emas va kafolatlangan maksimum ham emas**: jadval noto'g'ri bo'lishi mumkin;
+- VoiceLab kreditda hisoblaydi, ro'yxat narxi taxminiy olingan.
+
+Token cap'lari o'zgardi: dayjest qismi 1300 → 1600, javob 2500 → 3000.
+
+| Sahifa (~2 500 belgi/sahifa) | Sahifa belgilari (bayt, kirishda) | Yo'l | Chaqiruvlar | Eski | Yangi prompt + eski cap | Yangi | comet: eski → yangi | luna: eski → yangi |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 22 | to'liq matn | 1 | cap 2 500 | 2 500 | 3 000 | $0.0045 → $0.0056 | $0.0037 → $0.0045 |
+| 10 | 111 | dayjest | 4 | 6 400 | 6 400 | 7 800 | $0.0193 → $0.0226 | $0.0130 → $0.0154 |
+| 30 | 351 | dayjest | 8 | 11 600 | 11 600 | 14 200 | $0.0498 → $0.0560 | $0.0301 → $0.0347 |
+
+O'sishning qariyb yarmi uzunroq promptdan, qolgani cap'lardan. Chaqiruvlar
+soni o'zgarmagan.
 
 Taklif qilinadigan jonli benchmark:
-- 6 sintetik hujjat + 10 ta anonimlashtirilgan haqiqiy hujjat (har biri ~30 sahifa);
+- 6 ta sintetik hujjat va 10 ta anonim haqiqiy hujjat (har biri 30 sahifa);
 - eski va yangi yo'l, har biri 3 marta;
-- **yuqori chegara: VoiceLab comet ≈ $3.5, gpt-6-luna ≈ $2.2.**
+- rejalash raqami: VoiceLab comet ≈ $3.5, gpt-6-luna ≈ $2.2.
 
-Real sarf odatda pastroq bo'ladi, chunki model capgacha yozmaydi. Lekin bu
-o'lchanmagan.
+## 7. Eski va yangi yo'lni solishtirish rejasi (ruxsatdan keyin)
 
-## 5. Eski va yangi yo'lni solishtirish rejasi (ruxsatdan keyin)
+1. **Hujjatlar:**
+   - `tests/fixtures/explain-eval` (6 ta tur);
+   - siz tanlagan 10 ta anonim hujjat (repoga qo'yilmaydi), jumladan MIMORAM namunasi.
+2. **Ishga tushirish:**
+   - eski yo'l (5d57b4d) va yangi yo'l;
+   - bir xil model, 3 marta;
+   - token, vaqt va narx `llm_spend_log` usage'idan olinadi.
+3. Javoblar qaysi yo'ldan ekani yashirilgan holda yuristga beriladi (8-bo'limdagi jadval).
+4. **Mezon:**
+   - tuzoqlar bo'yicha yangi yo'l eskisidan yomon bo'lmasligi;
+   - asossiz da'volar kamayishi;
+   - xarajat 6-bo'limdagi raqamlar oralig'ida qolishi.
+5. Mexanik tekshiruv yetmasa, tekshiruvchi AI chaqiruvi alohida ruxsat bilan ko'rib chiqiladi (hozir qo'shilmagan).
 
-1. Hujjatlar:
-   - `tests/fixtures/explain-eval/*.json` (sintetik, 6 tur);
-   - egasi tanlagan 10 ta haqiqiy hujjat. Ular anonimlashtiriladi va repoga qo'yilmaydi.
-2. Har bir hujjat ikkala yo'ldan o'tkaziladi:
-   - **eski** — prompt va dayjest `main` 5d57b4d dagi kabi, matn sahifa belgisisiz;
-   - **yangi** — shu PR.
-   - Model bir xil bo'ladi (prod'dagi cheap lane), 3 tadan takror.
-   - Har bir chaqiruv `llm_spend_log` ga yoziladi va tokenlar, vaqt, narx real usage'dan olinadi.
-3. Javoblar aralashtirilib, qaysi yo'ldan ekani yashirin holda yuristga beriladi (6-bo'limdagi jadval).
-4. Qaror mezoni:
-   - yangi yo'l «tuzoq» qatorlarida eskisidan yomon bo'lmasligi kerak;
-   - asossiz da'volar soni kamayishi kerak;
-   - narx 4-bo'limdagi chegaradan oshmasligi kerak.
-5. Natijaga qarab: tekshiruvchi AI chaqiruvi kerakmi yoki yo'qmi (3-bo'lim, taklif).
+## 8. Yurist uchun jadval
 
-## 6. Yurist uchun jadval
+Har bir javob uchun bir qator. Ballar: 0 — xato, 1 — qisman, 2 — to'g'ri.
 
-Har bir javobga bitta qator. Ballar 0–2 (0 — xato, 1 — qisman, 2 — to'g'ri).
-
-| Hujjat | Yo'l (yashirin) | Takror | Faktlar aniqligi (ism, summa, sana, band) | Cheklov va muddatlar saqlangan | Asosiy bandlar qamrovi (k/n) | Dalil mosligi (sahifa/band/iqtibos to'g'ri) | Asossiz da'volar soni | Hujjat / muallif tavsiyasi / AI izohi ajratilgan | Qamrov yoki noaniqlik aytilgan | Kirish tokenlari | Chiqish tokenlari | Vaqt (s) | Narx ($, manba) | Izoh |
+| Hujjat | Yo'l (yashirin) | Takror | Faktlar aniqligi | Cheklov va muddatlar | Asosiy bandlar (k/n) | Dalil mosligi | Asossiz da'volar soni | Hujjat / muallif tavsiyasi / AI izohi ajratilganmi | Qamrov yoki noaniqlik aytilganmi | Kirish tokenlari | Chiqish tokenlari | Vaqt (s) | Narx ($, manba) | Izoh |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | contract-supply | A | 1 | | | /7 | | | | | | | | | |
 | due-diligence | A | 1 | | | /9 | | | | | | | | | |
@@ -149,53 +189,33 @@ Har bir javobga bitta qator. Ballar 0–2 (0 — xato, 1 — qisman, 2 — to'g'
 | corporate-protocol | A | 1 | | | /4 | | | | | | | | | |
 | long-lease | A | 1 | | | /5 | | | | | | | | | |
 
-«Asosiy bandlar» va «tuzoqlar» har bir fiksturaning `keyPoints` va `traps`
-maydonlarida yozilgan. Ularning qisqa ro'yxati:
+Asosiy bandlar va tuzoqlar har bir fiksturada `keyPoints` va `traps`
+maydonlarida.
 
-- **contract-supply:**
-  - 4.1 va 4.3 o'rtasidagi ziddiyat (E);
-  - penya chegarasi 10% (B);
-  - fors-major sharti — 3 kun ichida xabar (B).
-- **due-diligence:**
-  - kim tekshirgani (A);
-  - sud ma'lumotining manbai — kompaniya vakillari (A);
-  - «aniqlanmadi» ≠ «yo'q» (B);
-  - «ariza berilmagan» ≠ «huquq yo'q» (B);
-  - tavsiya muallifi (C);
-  - qo'shilgan oqibat (A);
-  - litsenziya yo'qligidan xulosa chiqarish (A);
-  - tarixiy direktor (B).
-- **court-decision:**
-  - javobgarning e'tirozi fakt emas (A);
-  - qaror hali kuchga kirmagan (B);
-  - undirilgan summa (A).
-- **talabnoma:**
-  - qarz — yuboruvchining da'vosi (A);
-  - ilova qilinmagan shartnoma (F);
-  - muddat talabnoma olingan kundan boshlanadi (B).
-- **corporate-protocol:**
-  - kvorum ziddiyati, 70% va 75% (E);
-  - qaror bir ovozdan emas (A).
-- **long-lease:**
-  - oxirgi sahifadagi kompensatsiya (D);
-  - uning istisnosi (B);
-  - o'ylab topilgan sahifa (E).
+## 9. Testlar va ular nimani isbotlamaydi
 
-## 7. Testlar va ular nimani isbotlamaydi
+- `tests/document-explain.test.js` (16) tekshiradi:
+  - qamrov va sahifalar;
+  - o'qilmagan yoki kesilgan qismlar;
+  - qisman natija belgisi;
+  - tekshiruv doirasi;
+  - asossiz ogohlantirishlar;
+  - arifmetik hosila;
+  - belgilar chegara va birlikni o'zgartirmasligi, lekin provider kirishida qolishi;
+  - promptda hujjatga xos matn yo'qligi.
+- `tests/document-digest-shared.test.js` (6) — yuridik xulosa va chat regressiyalari:
+  - havolalar belgilar bilan ham, belgisiz ham bir xil topilishi;
+  - dayjest qonun havolalarini saqlashi;
+  - qisman natija qoidasi;
+  - chat parchalarida sahifa belgilari.
+- `tests/upload-no-ai.db.test.js` (12, haqiqiy Postgres) tekshiradi:
+  - tasdiq (409);
+  - birliklar;
+  - trigger;
+  - uzun hujjat oxirigacha o'qilishi;
+  - o'qilmagan qismda `released`, kesilgan javobda `committed`;
+  - bo'sh javobda limit qaytarilishi.
 
-- `tests/document-explain.test.js` (12) tekshiradi:
-  - har bir asosiy bandning anchor'i modelga yetib boradi;
-  - oxirgi sahifadagi band dayjestga sahifasi bilan kiradi;
-  - o'qilmagan yoki kesilgan qism modelga, javobga va `coverage`'ga nomlanadi;
-  - kesilgan javob to'liq gapda tugaydi;
-  - o'ylab topilgan raqam, sahifa yoki band belgilanadi;
-  - sahifasiz (DOCX) matn uchun sahifa raqami taqiqlanadi;
-  - extract sahifa belgilarini beradi va birlik o'zgarmaydi;
-  - promptda baholash to'plamiga xos matn yo'q.
-- `tests/upload-no-ai.db.test.js` (+2) haqiqiy Postgres'da tekshiradi: tasdiq, kvota, trigger, uzun hujjatning to'liq o'qilishi va bo'sh javobda birlikning qaytarilishi.
-
-**Tasdiqlanmagan:** haqiqiy model 1–9-sabablarni amalda tuzatadimi —
-atributsiya, «aniqlanmadi», tavsiya muallifi, qo'shilgan oqibatlar. Bu
-faqat 5–6-bo'limdagi jonli benchmark va yurist bahosi bilan tasdiqlanadi.
-Mexanik tekshiruv ma'no xatosini ushlamaydi. U faqat raqam, sana, sahifa
-va band havolalarini manba bilan solishtiradi.
+**Tasdiqlanmagan:**
+- Haqiqiy model 2a va 2b dagi xatolarni amalda tuzatadimi.
+- Bu faqat 7–8-bo'limlardagi jonli benchmark va yurist bahosi bilan tasdiqlanadi.

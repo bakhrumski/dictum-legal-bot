@@ -167,6 +167,28 @@ function parseClauses(body) {
   return clauses.map((c, i) => ({ i, id: c.id || null, text: c.lines.join('\n').trim() }));
 }
 
+// A page mark line of an extracted PDF or scan ("[Sahifa 3]").
+const PAGE_LINE = /^\[Sahifa \d+\]\n?/gmu;
+
+/**
+ * Each clause carries the page it starts on: a page mark that ends the
+ * clause before it (a page break between two clauses) is moved to the clause
+ * it belongs to, so an excerpt never shows a clause under another clause's
+ * page. Marks inside a clause stay where they are.
+ */
+function withPages(full, from, clauses) {
+  if (!/^\[Sahifa \d+\]$/mu.test(full)) return clauses;
+  const marks = [...full.matchAll(/^\[Sahifa (\d+)\]$/gmu)].map(m => ({ at: m.index, page: Number(m[1]) }));
+  let cursor = from;
+  return clauses.map(c => {
+    const body = c.text.replace(/(\n\[Sahifa \d+\]\s*)+$/u, '').replace(/^(\[Sahifa \d+\]\s*\n)+/u, '');
+    const at = full.indexOf(body.split('\n')[0], cursor);
+    if (at >= 0) cursor = at;
+    const before = marks.filter(m => m.at <= (at >= 0 ? at : cursor)).pop();
+    return { ...c, text: before ? `[Sahifa ${before.page}]\n${body}` : body };
+  });
+}
+
 /**
  * The parts of `doc` that bear on `question`, in document order, at most
  * maxChars. Returns { text, usedChars, totalChars, excerpt, matched,
@@ -179,13 +201,15 @@ function parseClauses(body) {
  */
 function selectExcerpt(doc = '', question = '', maxChars = CHAT_DOCUMENT_CONTEXT_CHARS) {
   const full = String(doc || '').trim();
-  const base = { totalChars: full.length, matched: [], referenced: [], missingReferences: [], definitions: 0, exceptions: 0, insufficient: false };
-  if (full.length <= maxChars) return { ...base, text: full, usedChars: full.length, excerpt: false };
+  // the document's own size: "[Sahifa n]" marks (src/ocr/routes.js) are ours
+  const ownChars = full.replace(PAGE_LINE, '').length;
+  const base = { totalChars: ownChars, matched: [], referenced: [], missingReferences: [], definitions: 0, exceptions: 0, insufficient: false };
+  if (ownChars <= maxChars) return { ...base, text: full, usedChars: full.length, excerpt: false };
 
   const firstClause = full.search(new RegExp(CLAUSE_START.source, 'imu'));
   const headEnd = Math.min(HEAD_CHARS, firstClause > 0 ? firstClause : HEAD_CHARS);
   const head = full.slice(0, headEnd).trim();
-  const clauses = parseClauses(full.slice(headEnd));
+  const clauses = withPages(full, headEnd, parseClauses(full.slice(headEnd)));
   const low = clauses.map(c => lower(c.text));
   const byId = new Map();
   clauses.forEach(c => { if (c.id && !byId.has(c.id)) byId.set(c.id, c); });
@@ -307,6 +331,11 @@ function selectExcerpt(doc = '', question = '', maxChars = CHAT_DOCUMENT_CONTEXT
 
 /** The instruction the model gets when it only sees excerpts of a document. */
 function excerptInstruction(scope, lang = 'uz') {
+  if (scope && scope.mode === 'document' && Array.isArray(scope.unread) && scope.unread.length) {
+    return lang === 'ru'
+      ? `\n\nВАЖНО: часть документа не прочитана (${scope.unread.join(', ')}). Начните ответ с этого, не делайте выводов об этих частях и не выдавайте ответ за полный анализ.`
+      : `\n\nMUHIM: hujjatning bir qismi o'qilmadi (${scope.unread.join(', ')}). Javobni shu bilan boshlang, u qismlar haqida xulosa chiqarmang va javobni to'liq tahlil deb ko'rsatmang.`;
+  }
   if (!scope || !scope.excerpt) return '';
   const missing = (scope.missingReferences || []).join(', ');
   if (lang === 'ru') {
@@ -323,6 +352,9 @@ function excerptInstruction(scope, lang = 'uz') {
 
 /** The note the user sees under such an answer. */
 function excerptNote(scope, analysisUnits = null) {
+  if (scope && scope.mode === 'document' && Array.isArray(scope.unread) && scope.unread.length) {
+    return `⚠️ Qisman natija — to'liq tahlil emas: hujjatning ${scope.unread.join(', ')} o'qilmadi. Limit qaytarildi; hujjatni qayta yuborib, to'liq tahlil olishingiz mumkin.`;
+  }
   if (scope && scope.mode === 'document' && Array.isArray(scope.services) && scope.services.length) {
     return `✅ ${scope.services.map(sv => `${SERVICE_TITLE[sv]}: ${scope.units} birlik ${sv === 'analysis' ? 'tahlil' : 'xulosa'} limitidan`).join('; ')}. Chat limiti yechilmadi.`;
   }

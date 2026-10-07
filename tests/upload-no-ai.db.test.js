@@ -65,13 +65,16 @@ async function callAI(messages, opts = {}) {
 }
 // the explanation's AI (digest parts and the answer) is a stub that records its prompts
 let explainAnswer = () => 'Bu hujjat 2 sahifadan iborat. Unda shartnoma shartlari bor.';
+let explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' });
 const explainPrompts = [];
 async function explainAI(messages, opts = {}) {
   return usage.track({ provider: 'stub', model: 'stub-model', endpoint: opts.endpoint || null, bound: { usd: 0, reason: 'stub' } }, async (call) => {
     calls.ai += 1;
     explainPrompts.push(messages);
     call.usage({ inTokens: 100, outTokens: 20 });
-    return { text: /^Excerpt /u.test(messages[1].text) ? '- band (1-sahifa)' : explainAnswer(messages), provider: 'stub' };
+    if (/^Excerpt /u.test(messages[1].text)) return explainDigestPart(messages[1].text);
+    const a = explainAnswer(messages);
+    return typeof a === 'object' ? { provider: 'stub', ...a } : { text: a, provider: 'stub' };
   });
 }
 async function ocrStub() { calls.ocr += 1; return { text: 'x'.repeat(500), provider: 'stub' }; }
@@ -289,6 +292,39 @@ async function docxOf(text) {
       } finally { explainAnswer = () => 'Izoh.'; }
       await settle(250);
       assert.strictEqual((await ledger.balance({ adminId: v })).services.analysis.used, 0, 'no answer, no charge');
+    });
+
+    await test('a long document with a digest part not read: the explanation says "Qisman natija" first and the analysis unit is released', async () => {
+      const f = loadAll().find(x => x.id === 'long-lease');
+      const u = await makeUser();
+      explainDigestPart = user => { if (/^Excerpt 2\//u.test(user)) throw new Error('provider down'); return { text: '- band', provider: 'stub' }; };
+      let r;
+      try {
+        r = await post('/api/draft/explain-document', u, { json: { documentText: explain.markPages(f.pages), confirmed: true } });
+      } finally { explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' }); }
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.deepStrictEqual([r.body.partial, r.body.quotaRefunded, r.body.coverage.documentFullyRead], [true, true, false]);
+      assert.ok(/^⚠️ \*\*Qisman natija — to'liq tahlil emas:\*\* hujjatning 2-qism/u.test(r.body.reply), r.body.reply.slice(0, 160));
+      await settle(300);
+      const b = await ledger.balance({ adminId: u });
+      assert.strictEqual(b.services.analysis.used, 0, 'released: the document was not read whole');
+      const rows = (await pool.query("SELECT status FROM tariff_usage WHERE admin_id = $1 AND status IS NOT NULL", [u])).rows.map(x => x.status);
+      assert.deepStrictEqual(rows, ['released']);
+    });
+
+    await test('a document read whole whose answer was cut: marked partial at the top, the unit is committed (delivered, as a cut chat answer)', async () => {
+      const u = await makeUser();
+      explainAnswer = () => ({ text: "Birinchi gap to'liq yozilgan. Ikkinchi gap ham to'liq yozilgan. Uchinchi gap kes", truncated: true });
+      let r;
+      try {
+        r = await post('/api/draft/explain-document', u, { json: { documentText: explain.markPages(loadAll()[0].pages), confirmed: true } });
+      } finally { explainAnswer = () => 'Izoh.'; }
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.deepStrictEqual([r.body.partial, r.body.quotaRefunded, r.body.coverage.documentFullyRead, r.body.coverage.answerTruncated], [true, undefined, true, true]);
+      assert.ok(r.body.reply.startsWith("⚠️ **Qisman natija — to'liq tahlil emas:** javob uzunlik chegarasida to'xtadi"));
+      assert.ok(!r.body.reply.includes('Uchinchi gap kes'));
+      await settle(300);
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
     });
 
     await test('the master\'s AI usage list and request view show the user, the endpoint and why the AI ran', () => {

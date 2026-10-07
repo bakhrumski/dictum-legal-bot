@@ -4,13 +4,14 @@
  * POST /api/draft/explain-document - the plain-language explanation of an
  * uploaded document (web; Telegram runs no AI on files, Workspace routes
  * analysis to the AI section). Mounted from server.js; tests mount it with
- * stub AI on a real database (tests/document-explain.db.test.js).
+ * stub AI on a real database (tests/upload-no-ai.db.test.js).
  *
  * Unchanged from before: the service runs only when confirmed
  * (requireServiceConfirm), a scan is read by its scanId (resolveScanDocs),
  * and the job is sized and reserved as an analysis by meterDocument before
  * any AI call. What changed is what the model is given and what is checked
- * on the way out (src/rag/document-explain.js).
+ * on the way out (src/rag/document-explain.js), and that a document not read
+ * whole releases its units (below).
  */
 
 const { explainDocument } = require('./document-explain');
@@ -43,7 +44,18 @@ function mountExplainDocument(app, deps) {
       const result = await explainDocument({ documentText, langName, callAI, userId, digest: t => digest(t, userId) });
       if (!result.reply) return res.status(500).json({ error: 'Tushuntirib bo\'lmadi — qayta urinib ko\'ring' });
       if (logAudit) logAudit(req, 'document.explain', 'document', documentText.length + ' chars');
-      res.json({ reply: result.reply, provider: result.provider, coverage: result.coverage, check: result.check });
+      // Settling, by the existing rules: a document that was not read whole
+      // is not the service - as an OCR with a missing page (tariffs v2,
+      // 2026-10-06) its units are released; the partial explanation is
+      // still shown, marked partial at its top. A document read whole whose
+      // answer was cut at the token cap is delivered and paid, as an answer
+      // the claim guard cuts to its last full sentence.
+      let refund = {};
+      if (!result.coverage.documentFullyRead && typeof tariffModule.refundUsage === 'function') {
+        refund = tariffModule.refundUsage(res, 'explain_partial_read');
+      }
+      res.json({ reply: result.reply, provider: result.provider, coverage: result.coverage, check: result.check,
+        partial: result.coverage.partial, ...refund });
     } catch (e) {
       console.error('[Explain Doc] error:', e.message);
       res.status(500).json({ error: 'Tushuntirish xatoligi: ' + e.message });
