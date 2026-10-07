@@ -1,0 +1,25 @@
+{
+  "id": "contract-supply",
+  "type": "shartnoma",
+  "title": "Yetkazib berish shartnomasi (sintetik)",
+  "synthetic": true,
+  "pages": [
+    "YETKAZIB BERISH SHARTNOMASI № 17/2026\nToshkent shahri, 2026-yil 5-fevral\n\n\"Sharq Savdo\" MChJ (keyingi o'rinlarda - Yetkazib beruvchi) direktor A. Tursunov nomidan va \"Bog'ot Agro\" MChJ (keyingi o'rinlarda - Xaridor) direktor M. Qodirova nomidan quyidagilar haqida shartnoma tuzdilar.\n\n1. SHARTNOMA PREDMETI\n1.1. Yetkazib beruvchi Xaridorga 1-ilovada ko'rsatilgan mineral o'g'itlarni yetkazib beradi, Xaridor esa ularni qabul qilib, haqini to'laydi.\n\n2. NARX\n2.1. Shartnomaning umumiy qiymati 84 500 000 (sakson to'rt million besh yuz ming) so'm, QQS bilan.\n2.2. Narx shartnoma amal qilish davomida o'zgarmaydi, 2.3-bandda nazarda tutilgan holat bundan mustasno.\n2.3. Yoqilg'i narxi 15 foizdan ortiq oshsa, tomonlar narxni qo'shimcha kelishuv bilan qayta ko'rib chiqishi mumkin.",
+    "3. YETKAZIB BERISH\n3.1. Tovar oldindan to'lov kelib tushgan kundan boshlab 20 ish kuni ichida Xaridorning omboriga yetkazib beriladi.\n3.2. Tovarni qabul qilish tovar-transport yuk xati asosida amalga oshiriladi.\n\n4. TO'LOV\n4.1. Xaridor shartnoma qiymatining 30 foizini shartnoma imzolangan kundan boshlab 10 bank kuni ichida oldindan to'laydi.\n4.2. Qolgan summa tovar qabul qilingandan keyin to'lanadi.\n4.3. Oldindan to'lov shartnoma imzolangan kundan boshlab 15 kalendar kun ichida amalga oshiriladi.\n\n5. JAVOBGARLIK\n5.1. Yetkazib berish muddati buzilsa, Yetkazib beruvchi kechiktirilgan har bir kun uchun yetkazilmagan tovar qiymatining 0,1 foizi miqdorida penya to'laydi, biroq penya umumiy miqdori yetkazilmagan tovar qiymatining 10 foizidan oshmasligi kerak.\n5.2. Tomonlar fors-major holatlarida javobgarlikdan ozod qilinadi, agar bunday holat yuz bergani haqida ikkinchi tomonni 3 kalendar kun ichida yozma xabardor qilgan bo'lsa.",
+    "6. SHARTNOMANI BEKOR QILISH\n6.1. Yetkazib berish 30 kalendar kundan ortiq kechiksa, Xaridor shartnomani bir tomonlama bekor qilishga va oldindan to'lovni qaytarishni talab qilishga haqli.\n\n7. NIZOLARNI HAL QILISH\n7.1. Nizolar muzokaralar yo'li bilan, kelishilmasa - Toshkent shahar iqtisodiy sudida hal qilinadi.\n\n8. AMAL QILISH MUDDATI\n8.1. Shartnoma imzolangan kundan kuchga kiradi va 2026-yil 31-dekabrgacha amal qiladi.\n8.2. Majburiyatlar to'liq bajarilmaguncha, 5-bo'limdagi javobgarlik qoidalari 8.1-banddagi muddat tugaganidan keyin ham amal qiladi."
+  ],
+  "keyPoints": [
+    { "id": "price", "point": "Umumiy qiymat 84 500 000 so'm, QQS bilan", "anchor": "84 500 000", "page": 1 },
+    { "id": "price-exception", "point": "Narx o'zgarmaydi, lekin yoqilg'i 15 foizdan ortiq qimmatlasa qayta ko'rilishi mumkin (2.2-2.3)", "anchor": "15 foizdan ortiq", "page": 1 },
+    { "id": "delivery", "point": "Oldindan to'lovdan keyin 20 ish kuni ichida yetkazish", "anchor": "20 ish kuni", "page": 2 },
+    { "id": "penalty-cap", "point": "Penya kuniga 0,1 foiz, lekin 10 foizdan oshmaydi", "anchor": "10 foizidan oshmasligi", "page": 2 },
+    { "id": "force-majeure-condition", "point": "Fors-major ozod qiladi faqat 3 kalendar kun ichida yozma xabar berilsa", "anchor": "3 kalendar kun ichida yozma", "page": 2 },
+    { "id": "termination", "point": "30 kundan ortiq kechiksa Xaridor bir tomonlama bekor qila oladi", "anchor": "30 kalendar kundan ortiq", "page": 3 },
+    { "id": "survival", "point": "Javobgarlik qoidalari muddat tugagach ham amal qiladi (oxirgi band)", "anchor": "8.2. Majburiyatlar", "page": 3 }
+  ],
+  "traps": [
+    { "id": "contradiction-prepay", "rule": "E", "correct": "4.1 (10 bank kuni) va 4.3 (15 kalendar kun) bir-biriga zid ekanini ikkala bandni keltirib aytish", "wrong": "Bitta muddatni tanlab, ziddiyatni yashirish" },
+    { "id": "penalty-uncapped", "rule": "B", "correct": "Penya chegarasi (10 foiz) saqlanadi", "wrong": "\"Har kuni 0,1 foiz penya\" deb chegarasiz yozish" },
+    { "id": "fm-unconditional", "rule": "B", "correct": "Fors-major sharti (3 kun ichida xabar) saqlanadi", "wrong": "\"Fors-majorda javobgarlik yo'q\" deb shartsiz yozish" }
+  ]
+}

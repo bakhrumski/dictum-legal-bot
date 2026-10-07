@@ -27,6 +27,7 @@ const multer = require('multer');
 const voicelab = require('../ai/voicelab');
 const scanLimits = require('./scan-limits');
 const scanStore = require('./scan-store');
+const { markPages } = require('../rag/document-explain');
 const os = require('os');
 const fs = require('fs');
 
@@ -346,6 +347,21 @@ Rules:
 - Cite exact article numbers where you know them. Do not invent citations.
 - Return ONLY the JSON object. Any extra text will break the parser.`;
 
+// pdf-parse's own page renderer, keeping each page's text at its index
+// (pages render one after another; the index keeps the order regardless)
+function pageText(sink) {
+  return pageData => pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false })
+    .then(tc => {
+      let lastY, text = '';
+      for (const item of tc.items) {
+        text += (lastY == item.transform[5] || !lastY) ? item.str : '\n' + item.str; // eslint-disable-line eqeqeq
+        lastY = item.transform[5];
+      }
+      sink[pageData.pageIndex] = text;
+      return text;
+    });
+}
+
 function mountAnalyzerRoutes(app, deps) {
   const { requireAuth, callAI, tariffModule, digestLongDocument } = deps;
   if (!deps.pool) throw new TypeError('mountAnalyzerRoutes needs deps.pool (scan cache)');
@@ -392,20 +408,25 @@ function mountAnalyzerRoutes(app, deps) {
       }
       const pdfParse = require('pdf-parse/lib/pdf-parse.js');
       const buf = fs.readFileSync(filePath);
+      // each page's text in order, so the text carries "[Sahifa n]" marks
+      // and an explanation can cite a page without inventing it
+      const pageTexts = [];
       // own memory: a small Buffer from the shared pool made pdf.js read
       // the wrong bytes ("bad XRef entry") on PDFs under 4 KB
-      const parsed = await pdfParse(new Uint8Array(buf));
-      const text = (parsed.text || '').trim();
-      const scanned = text.length < 80;
+      const parsed = await pdfParse(new Uint8Array(buf), { pagerender: pageText(pageTexts) });
+      const pagesRead = Array.from({ length: Math.max(pageTexts.length, parsed.numpages || 0) }, (_, i) => pageTexts[i] || '');
+      const plain = pagesRead.join('\n').trim() || (parsed.text || '').trim();
+      const text = plain && pageTexts.length ? markPages(pagesRead).trim() : plain;
+      const scanned = plain.length < 80;
       const pages = parsed.numpages || 1;
       // the PDF's own page count, signed with the text so the analysis is
       // billed by max(pages / 10, characters / 40 000)
-      const size = ledger && !scanned ? ledger.docUnits({ chars: text.length, pages }) : null;
+      const size = ledger && !scanned ? ledger.docUnits({ chars: plain.length, pages }) : null;
       res.json({
         text: scanned ? '' : text,
         pageCount: pages,
         scanned,
-        charCount: text.length,
+        charCount: plain.length,
         units: size ? size.units : null,
         docTicket: ledger && !scanned ? ledger.signDocTicket({ text, pages }) : null,
       });
@@ -697,4 +718,4 @@ function mountAnalyzerRoutes(app, deps) {
   console.log('[ANALYZE] OCR & analyzer routes mounted');
 }
 
-module.exports = { mountAnalyzerRoutes, callVisionOCR };
+module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText };

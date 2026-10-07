@@ -1,0 +1,28 @@
+{
+  "id": "long-lease",
+  "type": "shartnoma (uzun)",
+  "title": "Noturar joy ijarasi shartnomasi, asosiy band oxirgi sahifada (sintetik)",
+  "synthetic": true,
+  "pages": [
+    "NOTURAR JOY IJARASI SHARTNOMASI № 8-I/2026\nNamangan shahri, 2026-yil 1-aprel\n\n\"Chorsu Mulk\" MChJ (Ijaraga beruvchi) va YaTT G. Rasulova (Ijarachi) quyidagilar haqida shartnoma tuzdilar.\n\n1. PREDMET\n1.1. Ijaraga beruvchi Namangan shahri, Navoiy ko'chasi, 14-uydagi 120 kv.m noturar joyni savdo faoliyati uchun ijaraga beradi.\n1.2. Ijara muddati - 3 yil.\n1.3. Oylik ijara haqi 9 000 000 so'm, har oyning 5-sanasigacha to'lanadi.",
+    "40. SHARTNOMANI MUDDATIDAN OLDIN BEKOR QILISH\n40.1. Ijarachi shartnomani muddatidan oldin bir tomonlama bekor qilsa, Ijaraga beruvchiga 6 oylik ijara haqi miqdorida kompensatsiya to'laydi.\n40.2. Agar joydan Ijarachiga bog'liq bo'lmagan sabablarga ko'ra (avariya, Ijaraga beruvchi aybi bilan elektr yoki suv ta'minoti 10 kundan ortiq to'xtashi) foydalanib bo'lmasa, 40.1-banddagi kompensatsiya to'lanmaydi.\n40.3. Kafolat puli (bir oylik ijara haqi) shartnoma bekor qilinganda 40.1-banddagi kompensatsiyaga hisoblanadi.\n\nTomonlarning imzolari:\nIjaraga beruvchi: ________  Ijarachi: ________"
+  ],
+  "filler": {
+    "afterPage": 1,
+    "count": 24,
+    "firstClause": 2,
+    "template": "{n}. UMUMIY QOIDALAR ({n}-bo'lim)\n{n}.1. Tomonlar ushbu bo'lim bo'yicha o'zaro hamkorlik qiladi va bir-birini yozma ravishda xabardor qiladi; xabarnoma shartnomada ko'rsatilgan manzilga yuboriladi va olingan kundan boshlab kuchga kiradi.\n{n}.2. Ijarachi joydan maqsadiga muvofiq foydalanadi, sanitariya va yong'in xavfsizligi qoidalariga rioya qiladi, joyni toza saqlaydi va ishchi holatda qaytaradi; joriy ta'mir xarajatlari Ijarachi zimmasida.\n{n}.3. Ijaraga beruvchi joyni ko'rish uchun Ijarachini kamida bir kun oldin ogohlantiradi; ko'rik Ijarachining odatdagi faoliyatiga to'sqinlik qilmasligi kerak.\n{n}.4. Kommunal xizmatlar haqi hisoblagich ko'rsatkichlari bo'yicha Ijarachi tomonidan alohida to'lanadi; hisob-varaqlar nusxasi Ijaraga beruvchiga taqdim etiladi.\n{n}.5. Tomonlar ushbu bo'limni bajarishda olingan tijorat ma'lumotlarini oshkor qilmaydi, qonunda nazarda tutilgan hollar bundan mustasno.\n{n}.6. Ushbu bo'limga o'zgartirishlar faqat yozma qo'shimcha kelishuv bilan kiritiladi va tomonlar imzolagan kundan kuchga kiradi.\n{n}.7. Bo'lim qoidalari shartnomaning boshqa bo'limlari bilan birga talqin qilinadi; sarlavhalar faqat qulaylik uchun.\n{n}.8. Tomonlar har chorakda o'zaro hisob-kitoblarni solishtirish dalolatnomasini imzolaydi va farqlarni 10 ish kuni ichida bartaraf etadi; kelishmovchilik bo'lsa, muzokaralar o'tkaziladi.\n{n}.9. Ijarachi joyda qayta qurish yoki rejalashtirish ishlarini faqat Ijaraga beruvchining yozma roziligi bilan amalga oshiradi; ruxsatsiz o'zgarishlar Ijarachi hisobidan avvalgi holatga keltiriladi."
+  },
+  "keyPoints": [
+    { "id": "rent", "point": "Oylik ijara 9 000 000 so'm, har oyning 5-sanasigacha", "anchor": "9 000 000 so'm", "page": 1 },
+    { "id": "term", "point": "Ijara muddati 3 yil", "anchor": "Ijara muddati - 3 yil", "page": 1 },
+    { "id": "early-exit", "point": "Muddatidan oldin bekor qilsa - 6 oylik ijara miqdorida kompensatsiya (oxirgi sahifa)", "anchor": "6 oylik ijara haqi miqdorida kompensatsiya", "page": "last" },
+    { "id": "early-exit-exception", "point": "Istisno: Ijarachiga bog'liq bo'lmagan sabab bilan foydalanib bo'lmasa kompensatsiya yo'q", "anchor": "kompensatsiya to'lanmaydi", "page": "last" },
+    { "id": "deposit-offset", "point": "Kafolat puli kompensatsiyaga hisoblanadi", "anchor": "Kafolat puli", "page": "last" }
+  ],
+  "traps": [
+    { "id": "end-clause-dropped", "rule": "D", "correct": "Oxirgi sahifadagi bekor qilish kompensatsiyasi va uning istisnosi tushuntirishda bor", "wrong": "Faqat boshlang'ich sahifalarni tushuntirib, 40-bo'limni tashlab ketish" },
+    { "id": "exception-dropped", "rule": "B", "correct": "Kompensatsiya istisnosi (40.2) saqlanadi", "wrong": "\"Har qanday holatda 6 oylik to'laysiz\"" },
+    { "id": "invented-page", "rule": "E", "correct": "Sahifa raqami faqat [Sahifa N] belgilaridan", "wrong": "Mavjud bo'lmagan sahifa yoki band raqamini keltirish" }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "court-decision",
+  "type": "sud qarori",
+  "title": "Fuqarolik ishi bo'yicha hal qiluv qarori (sintetik)",
+  "synthetic": true,
+  "pages": [
+    "HAL QILUV QARORI\nIsh № 2-1104-2601/2026\n2026-yil 18-iyun, Yunusobod tumanlararo fuqarolik ishlari sudi\n\nSud, raislik qiluvchi sudya R. Saidov, da'vogar K. Nazarova va javobgar \"Uy Qurilish Servis\" MChJ o'rtasidagi pudrat shartnomasi bo'yicha nizoni ko'rib chiqib,\n\nANIQLADI:\nDa'vogar ta'mirlash ishlari sifatsiz bajarilgani uchun 46 000 000 so'm zarar va 10 000 000 so'm ma'naviy ziyon undirishni so'ragan. Javobgar vakili ishlar shartnomaga muvofiq bajarilganini va kamchiliklar da'vogarning o'zi tomonidan qilingan o'zgarishlar oqibatida yuzaga kelganini bildirdi.\nSud tayinlagan ekspertiza xulosasiga ko'ra, kamchiliklarni bartaraf etish qiymati 31 200 000 so'mni tashkil etadi.",
+    "Sud ma'naviy ziyon bo'yicha talabni asoslanmagan deb topdi, chunki da'vogar ma'naviy ziyon yetkazilganini tasdiqlovchi dalil taqdim etmadi.\n\nQAROR QILDI:\n1. Da'vo qisman qanoatlantirilsin.\n2. Javobgardan da'vogar foydasiga 31 200 000 so'm zarar undirilsin.\n3. Ma'naviy ziyon undirish haqidagi talab rad etilsin.\n4. Sud xarajatlari tomonlar zimmasiga qanoatlantirilgan talablarga mutanosib ravishda yuklansin.\n5. Hal qiluv qarori ustidan u qabul qilingan kundan boshlab bir oy ichida Toshkent shahar sudiga apellyatsiya shikoyati berilishi mumkin. Qaror apellyatsiya muddati o'tgach qonuniy kuchga kiradi, agar shikoyat berilmagan bo'lsa."
+  ],
+  "keyPoints": [
+    { "id": "partial", "point": "Da'vo qisman qanoatlantirildi", "anchor": "qisman qanoatlantirilsin", "page": 2 },
+    { "id": "awarded", "point": "31 200 000 so'm undirildi (so'ralgan 46 000 000 emas)", "anchor": "31 200 000 so'm zarar undirilsin", "page": 2 },
+    { "id": "moral-rejected", "point": "Ma'naviy ziyon rad etildi - dalil taqdim etilmagani uchun", "anchor": "dalil taqdim etmadi", "page": 2 },
+    { "id": "costs", "point": "Sud xarajatlari mutanosib taqsimlanadi", "anchor": "mutanosib ravishda", "page": 2 },
+    { "id": "appeal", "point": "Bir oy ichida apellyatsiya; qaror shikoyat berilmasa muddat o'tgach kuchga kiradi", "anchor": "bir oy ichida", "page": 2 }
+  ],
+  "traps": [
+    { "id": "defendant-claim", "rule": "A", "correct": "Javobgarning e'tirozi - javobgar vakilining da'vosi sifatida", "wrong": "Kamchiliklar da'vogar aybi bilan yuzaga kelgan deb fakt qilib yozish" },
+    { "id": "in-force-now", "rule": "B", "correct": "Qaror apellyatsiya muddati o'tgach, shikoyat berilmasa kuchga kiradi", "wrong": "\"Qaror kuchga kirdi\" deb yozish" },
+    { "id": "amount-swap", "rule": "A", "correct": "Undirilgan summa 31 200 000", "wrong": "46 000 000 yoki 56 000 000 undirildi deb yozish" }
+  ]
+}

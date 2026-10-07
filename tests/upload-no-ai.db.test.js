@@ -34,7 +34,10 @@ const ledger = require('../src/rag/tariff-ledger');
 const usage = require('../src/ai/usage-ledger');
 const spendLog = require('../src/rag/llm-spend-log');
 const { mountAnalyzerRoutes } = require('../src/ocr/routes');
-const { markTrigger } = require('../src/ai/ai-trigger');
+const { markTrigger, requireServiceConfirm } = require('../src/ai/ai-trigger');
+const { mountExplainDocument } = require('../src/rag/document-explain-route');
+const explain = require('../src/rag/document-explain');
+const { loadAll } = require('./fixtures/explain-eval/load');
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -58,6 +61,20 @@ async function callAI(messages, opts = {}) {
     calls.ai += 1;
     call.usage({ inTokens: 100, outTokens: 20 });
     return { text: JSON.stringify({ docType: 'Shartnoma', summary: 'ok', riskItems: [], missingClauses: [], complianceIssues: [], strengths: [] }), provider: 'stub' };
+  });
+}
+// the explanation's AI (digest parts and the answer) is a stub that records its prompts
+let explainAnswer = () => 'Bu hujjat 2 sahifadan iborat. Unda shartnoma shartlari bor.';
+let explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' });
+const explainPrompts = [];
+async function explainAI(messages, opts = {}) {
+  return usage.track({ provider: 'stub', model: 'stub-model', endpoint: opts.endpoint || null, bound: { usd: 0, reason: 'stub' } }, async (call) => {
+    calls.ai += 1;
+    explainPrompts.push(messages);
+    call.usage({ inTokens: 100, outTokens: 20 });
+    if (/^Excerpt /u.test(messages[1].text)) return explainDigestPart(messages[1].text);
+    const a = explainAnswer(messages);
+    return typeof a === 'object' ? { provider: 'stub', ...a } : { text: a, provider: 'stub' };
   });
 }
 async function ocrStub() { calls.ocr += 1; return { text: 'x'.repeat(500), provider: 'stub' }; }
@@ -95,6 +112,9 @@ async function startApp() {
   app.use('/api/', usage.expressScope('web'));
   const requireAuth = (req, res, next) => (req.session.isAuthenticated ? next() : res.status(401).json({ error: 'Unauthorized' }));
   mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule: tiers, digestLongDocument: async t => t, pool, ocr: ocrStub });
+  // the explanation as server.js mounts it, with the shared digest uncached
+  mountExplainDocument(app, { requireAuth, requireServiceConfirm, resolveScanDocs: (q, r, n) => n(), tariffModule: tiers,
+    callAI: explainAI, digest: t => explain.buildDigest(t, { callAI: explainAI }), lexLangForText: () => 'uz', logAudit: null });
   // the chat's middleware chain as server.js mounts it (question -> trigger
   // -> chat quota); the answer pipeline itself is a stub AI call
   app.post('/api/legal-chat', requireAuth,
@@ -226,6 +246,87 @@ async function docxOf(text) {
       assert.strictEqual(calls.ai, c0 + 1, 'no AI before the confirm');
     });
 
+    await test('explanation: no confirm -> 409 and no AI; confirmed -> the page-marked text reaches the model whole, one analysis unit, trigger "service_confirmed"', async () => {
+      const u = await makeUser();
+      const pdf = await post('/api/analyze/extract', u, { file: fx('text-2p.pdf') });
+      assert.deepStrictEqual(explain.pagesIn(pdf.body.text), [1, 2]);
+      const before = await snapshot(u);
+      const c0 = calls.ai;
+      const no = await post('/api/draft/explain-document', u, { json: { documentText: pdf.body.text, docTicket: pdf.body.docTicket } });
+      assert.deepStrictEqual([no.status, no.body.code], [409, 'SERVICE_CONFIRM']);
+      await settle();
+      assert.strictEqual(calls.ai, c0);
+      assert.deepStrictEqual(await snapshot(u), before);
+      explainPrompts.length = 0;
+      const yes = await post('/api/draft/explain-document', u, { json: { documentText: pdf.body.text, docTicket: pdf.body.docTicket, confirmed: true } });
+      assert.strictEqual(yes.status, 200, JSON.stringify(yes.body));
+      await settle(250);
+      assert.strictEqual(calls.ai, c0 + 1, 'one explanation call (no extra verifier call)');
+      assert.ok(explainPrompts[0][1].text.includes(pdf.body.text), 'the whole extracted text, with its page marks');
+      assert.deepStrictEqual([yes.body.coverage.mode, yes.body.coverage.pages, yes.body.check.ok], ['full_text', 2, true]);
+      const b = await ledger.balance({ adminId: u });
+      assert.strictEqual(b.services.analysis.used, pdf.body.units, 'units as quoted at extract (page marks not billed)');
+      const req = (await pool.query('SELECT kind, trigger FROM ai_requests WHERE user_id = $1', [u])).rows;
+      assert.deepStrictEqual(req.map(r => [r.kind, r.trigger]), [['POST /api/draft/explain-document', 'service_confirmed']]);
+    });
+
+    await test('explanation of a long document: every part digested, the last page reaches the model, still one unit; an empty answer releases it', async () => {
+      const f = loadAll().find(x => x.id === 'long-lease');
+      const text = explain.markPages(f.pages);
+      const u = await makeUser();
+      const c0 = calls.ai;
+      explainPrompts.length = 0;
+      const r = await post('/api/draft/explain-document', u, { json: { documentText: text, confirmed: true } });
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      await settle(250);
+      const parts = explain.digestChunks(text).chunks.length;
+      assert.strictEqual(calls.ai, c0 + parts + 1, 'the digest calls as before, plus one answer');
+      assert.ok(explainPrompts.some(m => m[1].text.includes('6 oylik ijara haqi miqdorida kompensatsiya')), 'the last page was read');
+      assert.deepStrictEqual([r.body.coverage.mode, r.body.coverage.chunks], ['digest', parts]);
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
+      const v = await makeUser();
+      explainAnswer = () => '';
+      try {
+        const e = await post('/api/draft/explain-document', v, { json: { documentText: explain.markPages(loadAll()[0].pages), confirmed: true } });
+        assert.strictEqual(e.status, 500);
+      } finally { explainAnswer = () => 'Izoh.'; }
+      await settle(250);
+      assert.strictEqual((await ledger.balance({ adminId: v })).services.analysis.used, 0, 'no answer, no charge');
+    });
+
+    await test('a long document with a digest part not read: the explanation says "Qisman natija" first and the analysis unit is released', async () => {
+      const f = loadAll().find(x => x.id === 'long-lease');
+      const u = await makeUser();
+      explainDigestPart = user => { if (/^Excerpt 2\//u.test(user)) throw new Error('provider down'); return { text: '- band', provider: 'stub' }; };
+      let r;
+      try {
+        r = await post('/api/draft/explain-document', u, { json: { documentText: explain.markPages(f.pages), confirmed: true } });
+      } finally { explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' }); }
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.deepStrictEqual([r.body.partial, r.body.quotaRefunded, r.body.coverage.documentFullyRead], [true, true, false]);
+      assert.ok(/^⚠️ \*\*Qisman natija — to'liq tahlil emas:\*\* hujjatning 2-qism/u.test(r.body.reply), r.body.reply.slice(0, 160));
+      await settle(300);
+      const b = await ledger.balance({ adminId: u });
+      assert.strictEqual(b.services.analysis.used, 0, 'released: the document was not read whole');
+      const rows = (await pool.query("SELECT status FROM tariff_usage WHERE admin_id = $1 AND status IS NOT NULL", [u])).rows.map(x => x.status);
+      assert.deepStrictEqual(rows, ['released']);
+    });
+
+    await test('a document read whole whose answer was cut: marked partial at the top, the unit is committed (delivered, as a cut chat answer)', async () => {
+      const u = await makeUser();
+      explainAnswer = () => ({ text: "Birinchi gap to'liq yozilgan. Ikkinchi gap ham to'liq yozilgan. Uchinchi gap kes", truncated: true });
+      let r;
+      try {
+        r = await post('/api/draft/explain-document', u, { json: { documentText: explain.markPages(loadAll()[0].pages), confirmed: true } });
+      } finally { explainAnswer = () => 'Izoh.'; }
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.deepStrictEqual([r.body.partial, r.body.quotaRefunded, r.body.coverage.documentFullyRead, r.body.coverage.answerTruncated], [true, undefined, true, true]);
+      assert.ok(r.body.reply.startsWith("⚠️ **Qisman natija — to'liq tahlil emas:** javob uzunlik chegarasida to'xtadi"));
+      assert.ok(!r.body.reply.includes('Uchinchi gap kes'));
+      await settle(300);
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
+    });
+
     await test('the master\'s AI usage list and request view show the user, the endpoint and why the AI ran', () => {
       const page = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
       assert.ok(/<th>Kim · endpoint · sabab<\/th>/u.test(page));
@@ -237,8 +338,10 @@ async function docxOf(text) {
 
     await test('server and page: explain/opinion need the confirm; the cost card never runs AI by itself; attaching calls only extract / scan-quote', () => {
       const server_ = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
-      for (const route of ["app.post('/api/draft/explain-document', requireAuth, require('../ai/ai-trigger').requireServiceConfirm,",
-        "app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').requireServiceConfirm,"]) assert.ok(server_.includes(route), route);
+      assert.ok(server_.includes("app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').requireServiceConfirm,"));
+      assert.ok(server_.includes("mountExplainDocument(app, {\n  requireAuth, requireServiceConfirm: require('../ai/ai-trigger').requireServiceConfirm, resolveScanDocs, tariffModule,"));
+      const route = fs.readFileSync(path.join(__dirname, '../src/rag/document-explain-route.js'), 'utf8');
+      assert.ok(route.includes("app.post('/api/draft/explain-document', requireAuth, requireServiceConfirm, resolveScanDocs, async"));
       const page = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
       const card = page.slice(page.indexOf('function renderDocCostCard('), page.indexOf('// ── Yuridik xulosa: upload a document'));
       assert.ok(!/return true;/u.test(card.slice(0, card.indexOf('var id = '))), 'no path that runs the service without the card');

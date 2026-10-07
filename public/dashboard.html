@@ -12669,6 +12669,7 @@
                 if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Xulosa yaratib bo\'lmadi')); return; }
                 var oTitle = 'Yuridik xulosa — ' + opinionDoc.name;
                 renderDocMessage({ rawTitle: oTitle, html: d.html, kind: 'opinion', topic: d.topic || '', docHash: d.docHash || '', usage: d.usage || null });
+                showRefundNotice(d); // a partial opinion (document not read whole): units came back
                 // Persist into the conversation so it survives a reload and
                 // appears in Suhbatlar tarixi (docs are rendered from `kind`).
                 aiChatHistory.push({ role: 'user', text: '📄 ' + oTitle });
@@ -13560,6 +13561,8 @@
                 if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Tushuntirib bo\'lmadi')); return; }
                 renderAiChatReply({ reply: d.reply, provider: d.provider, ragUsed: false, rag: null, qaBank: null },
                     'Hujjat mazmunini tushuntirish: ' + name, messagesEl, true);
+                // a document not read whole: the reply opens with "Qisman natija" and the units came back
+                showRefundNotice(d);
                 // Offer the alternative (legal opinion) as a next step.
                 renderDocNextSteps(messagesEl, 'explain');
                 saveAiChatSession();
@@ -13784,7 +13787,7 @@
             // Only excerpts of an attached document were used (one chat unit);
             // a full analysis is its own service (tariffs v2).
             var docScopeHtml = (data.documentScope && data.documentScope.note)
-                ? '<div class="doc-scope-note' + (data.documentScope.insufficient ? ' doc-scope-warn' : '') + '">' + escapeHtml(data.documentScope.note) + '</div>' : '';
+                ? '<div class="doc-scope-note' + ((data.documentScope.insufficient || (data.documentScope.unread && data.documentScope.unread.length)) ? ' doc-scope-warn' : '') + '">' + escapeHtml(data.documentScope.note) + '</div>' : '';
             // ── RAG source info badge — ONLY visible to Master Admin ──
             var ragBadge = '';
             var isMasterAdmin = (typeof currentUser !== 'undefined' && currentUser.role === 'master');

@@ -292,7 +292,10 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.ok(!/text\.trim\(\)\.slice\(0, MAX_ANALYSIS_CHARS\);/.test(ocr), 'analysis no longer cuts at 9 000 characters');
     assert.ok(/digestLongDocument\(full, req\.session && req\.session\.adminId\)/.test(ocr));
     assert.ok(!/documentText\.replace\(\/\\u0000\/g, ''\)\.trim\(\)\.slice\(0, 120000\)/.test(server), 'opinion and explain no longer cut at 120 000');
-    assert.ok(/const CHUNK = 12000, OVERLAP = 400, MAX_CHUNKS = 11;/.test(server), 'the digest covers the whole 120 000 characters');
+    const explain = require('../src/rag/document-explain');
+    assert.deepStrictEqual([explain.CHUNK, explain.OVERLAP, explain.MAX_CHUNKS], [12000, 400, 11]);
+    assert.ok(/require\('\.\.\/rag\/document-explain'\)\.buildDigest\(documentText/.test(server));
+    assert.ok(explain.digestChunks('x'.repeat(120000)).covered, 'the digest covers the whole 120 000 characters');
     assert.ok(/docTicket: ledger \? ledger\.signDocTicket\(\{ text \}\) : null/.test(ocr) && /signDocTicket\(\{ text, pages \}\)/.test(ocr));
   });
 
