@@ -129,7 +129,9 @@ async function startStepup(db, { adminId, sid, method, currentPassword = null, n
     if (now - t.createdAt > LOGIN_WINDOW_MS) { t.tries = 0; t.createdAt = now; }
     if (t.tries >= STEPUP_PASSWORD_TRIES) return { error: 'throttled', status: 429, message: THROTTLED_ERROR };
     const ok = await bcrypt.compare(String(currentPassword || ''), row.password || DUMMY_HASH);
-    if (!ok) { t.tries += 1; stepups.set(key, t); return { error: 'wrong_password', status: 401, message: "Joriy parol noto'g'ri." }; }
+    // 403, not 401: the session is fine, only the re-entered password is
+    // wrong (a 401 reads as "signed out" to the page)
+    if (!ok) { t.tries += 1; stepups.set(key, t); return { error: 'wrong_password', status: 403, message: "Joriy parol noto'g'ri." }; }
     stepups.delete(key);
     stepups.set(token, { adminId: Number(adminId), sid: String(sid), method, approved: true, approvedAt: now, createdAt: now, used: false });
     return { token, method, approved: true, expiresInSec: STEPUP_TTL_MS / 1000 };
@@ -239,9 +241,18 @@ async function createTestUser(pool, { masterId, masterPassword, login: rawLogin,
   const m = await pool.query('SELECT id, role, password FROM admins WHERE id = $1', [masterId]);
   const master = m.rows[0];
   if (!master || master.role !== 'master') return { status: 403, error: 'master_only' };
+  // the master's own password again; 5 wrong in 15 minutes stop it. 403,
+  // not 401: the master stays signed in, only this confirmation failed
+  const key = `master-reauth:${masterId}`;
+  const now = Date.now();
+  const t = stepups.get(key) || { tries: 0, createdAt: now };
+  if (now - t.createdAt > LOGIN_WINDOW_MS) { t.tries = 0; t.createdAt = now; }
+  if (t.tries >= STEPUP_PASSWORD_TRIES) return { status: 429, error: 'throttled', message: THROTTLED_ERROR };
   if (!(await bcrypt.compare(String(masterPassword || ''), master.password || DUMMY_HASH))) {
-    return { status: 401, error: 'master_password', message: "Master paroli noto'g'ri." };
+    t.tries += 1; stepups.set(key, t);
+    return { status: 403, error: 'master_password', message: "Master paroli noto'g'ri. Hisob yaratilmadi; siz tizimda qolasiz." };
   }
+  stepups.delete(key);
   const v = validateLogin(rawLogin);
   if (v.error) return { status: 400, ...v };
   const p = validatePassword(password, confirm, v.login);
@@ -270,9 +281,27 @@ async function createTestUser(pool, { masterId, masterPassword, login: rawLogin,
   }
 }
 
+/**
+ * Master diagnostics: test accounts created by masters, or one login looked
+ * up. Ids, logins, roles and dates only - never a password, a hash, a
+ * session or a Telegram id.
+ */
+async function testUserDiagnostics(db, { login = null } = {}) {
+  const cols = `id, username AS login, role, created_by_master_id AS "createdByMaster",
+                credentials_set_at IS NOT NULL AS "credentialsSet", created_at AS "createdAt",
+                (telegram_user_id IS NOT NULL OR telegram_chat_id IS NOT NULL) AS "telegramLinked"`;
+  const created = (await db.query(`SELECT ${cols} FROM admins WHERE created_by_master_id IS NOT NULL ORDER BY id DESC LIMIT 20`)).rows;
+  let lookup = null;
+  if (login != null && String(login).trim()) {
+    const r = await db.query(`SELECT ${cols} FROM admins WHERE LOWER(username) = LOWER($1)`, [String(login).trim().replace(/^@/u, '')]);
+    lookup = { login: String(login).trim().toLowerCase(), exists: r.rows.length > 0, account: r.rows[0] || null };
+  }
+  return { created, lookup };
+}
+
 module.exports = {
   BCRYPT_COST, STEPUP_TTL_MS, LOGIN_FAILS, LOGIN_WINDOW_MS, GENERIC_LOGIN_ERROR, THROTTLED_ERROR,
   validateLogin, validatePassword, checkPassword, loginThrottled, loginFailed, loginSucceeded, resetThrottle,
   startStepup, approveStepupFromTelegram, stepupStatus, consumeStepup, setCredentials, credentialStatus, createTestUser,
-  telegramIdsOf, _stepups: stepups,
+  telegramIdsOf, testUserDiagnostics, _stepups: stepups,
 };
