@@ -40,6 +40,10 @@ BASE_URL="http://localhost:$PORT" node tests/authz-matrix.test.js
 if [ -f tests/offer-flow.e2e.test.js ]; then
   BASE_URL="http://localhost:$PORT" TEST_DATABASE_URL="$DATABASE_URL" node tests/offer-flow.e2e.test.js
 fi
+# a master creates an ordinary test account through the running server
+if [ -f tests/test-user.e2e.test.js ]; then
+  BASE_URL="http://localhost:$PORT" TEST_DATABASE_URL="$DATABASE_URL" node tests/test-user.e2e.test.js
+fi
 # test entitlement for the pilot through the running server (no payment, no AI)
 if [ -f tests/test-entitlement.e2e.test.js ]; then
   BASE_URL="http://localhost:$PORT" TEST_DATABASE_URL="$DATABASE_URL" node tests/test-entitlement.e2e.test.js

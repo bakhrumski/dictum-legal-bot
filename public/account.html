@@ -61,14 +61,18 @@
       <h2 id="accTestTitle">Test foydalanuvchi (role: user)</h2>
       <p class="acc-sub">Oddiy hisob: admin huquqisiz, Sinov birinchi foydalanishda boshlanadi, to'lov yoki daromad yozilmaydi. Boshlang'ich parolni siz kiritasiz — u hech qayerda ko'rsatilmaydi. Master parolingiz bilan tasdiqlanadi.</p>
       <form class="acc-step" onsubmit="event.preventDefault(); accCreateTestUser();">
-        <div class="form-group"><input type="text" id="tuLogin" placeholder="login" autocomplete="off" required></div>
-        <div class="form-group"><input type="text" id="tuName" placeholder="ism (ixtiyoriy)" autocomplete="off"></div>
+        <div class="form-group"><input type="text" id="tuLogin" name="new-test-login" placeholder="yangi login" autocomplete="off" autocapitalize="none" spellcheck="false" required></div>
+        <div class="form-group"><input type="text" id="tuName" name="new-test-name" placeholder="ism (ixtiyoriy)" autocomplete="off"></div>
         <div class="form-group"><input type="password" id="tuPassword" placeholder="boshlang'ich parol (kamida 10 belgi)" autocomplete="new-password" required></div>
         <div class="form-group"><input type="password" id="tuPassword2" placeholder="parol (takror)" autocomplete="new-password" required></div>
         <div class="form-group"><input type="password" id="tuMaster" placeholder="Master paroli" autocomplete="current-password" required></div>
         <div class="acc-actions"><button type="submit" class="btn" id="tuBtn">Yaratish</button></div>
         <p class="acc-msg" id="tuMsg" hidden></p>
       </form>
+      <div class="acc-step">
+        <p class="acc-sub" style="margin:0">Yaratilgan test hisoblar</p>
+        <div id="tuList" class="acc-hint">—</div>
+      </div>
     </section>
   </main>
 </div>
@@ -82,8 +86,10 @@ function show(id, on) { $(id).hidden = !on; }
 function msg(id, text, cls) { var el = $(id); el.textContent = text || ''; el.hidden = !text; if (cls) el.className = 'acc-msg ' + cls; }
 async function api(url, opts) {
   var r = await fetch(url, Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }, opts || {}));
-  if (r.status === 401) { location.href = '/login.html'; throw new Error('401'); }
   var d = await r.json().catch(function () { return {}; });
+  // only a missing session sends the page to sign-in; a wrong password or
+  // any other refusal is shown where it happened
+  if (r.status === 401 && (!d || !d.error || d.error === 'Unauthorized')) { location.href = '/login.html'; throw new Error('401'); }
   return { ok: r.ok, status: r.status, data: d };
 }
 async function accLoad() {
@@ -96,7 +102,20 @@ async function accLoad() {
   show('accStaffNote', !s.canManage);
   show('accStart', !!s.canManage);
   $('accStartBtn').textContent = s.enabled ? "Login yoki parolni almashtirish" : "Login va parol o'rnatish";
-  if (s.role === 'master') show('accTestUser', true);
+  if (s.role === 'master') { show('accTestUser', true); tuLoadList(); }
+}
+async function tuLoadList() {
+  var r = await api('/api/admin/test-users').catch(function () { return null; });
+  var box = $('tuList');
+  if (!r || !r.ok) { box.textContent = "Ro'yxatni olib bo'lmadi."; return; }
+  var rows = r.data.created || [];
+  box.textContent = '';
+  if (!rows.length) { box.textContent = "Hali yo'q."; return; }
+  rows.forEach(function (u) {
+    var line = document.createElement('div');
+    line.textContent = '#' + u.id + ' · ' + u.login + ' · ' + u.role + (u.credentialsSet ? '' : ' · parolsiz') + ' · ' + new Date(u.createdAt).toLocaleString('uz-UZ');
+    box.appendChild(line);
+  });
 }
 function accBeginStepup() {
   var s = accState.status || {};
@@ -164,8 +183,10 @@ async function accCreateTestUser() {
   }) });
   $('tuBtn').disabled = false;
   $('tuPassword').value = ''; $('tuPassword2').value = ''; $('tuMaster').value = '';
-  if (!r.ok) { msg('tuMsg', r.data.message || r.data.error || 'Yaratilmadi.', 'err'); return; }
+  if (!r.ok) { msg('tuMsg', (r.data.message || r.data.error || 'Yaratilmadi.') + ' (' + r.status + ')', 'err'); return; }
+  $('tuLogin').value = ''; $('tuName').value = '';
   msg('tuMsg', 'Yaratildi: #' + r.data.user.id + ' · ' + r.data.user.login + ' (role: ' + r.data.user.role + ').', 'ok');
+  tuLoadList();
 }
 accLoad();
 </script>

@@ -9,6 +9,7 @@
  *   GET  /api/account/credentials/stepup/:token    { approved, expired } for this session only
  *   POST /api/account/credentials                  { stepupToken, login, password, passwordConfirm }
  *   POST /api/admin/test-users                     master: an ordinary test account
+ *   GET  /api/admin/test-users?login=              master: accounts made so, or one login (no secrets)
  *
  * No reply carries a password or a hash; audit rows name the action and
  * the account, never the password. Every POST here must come from this
@@ -72,6 +73,16 @@ function mountCredentialRoutes(app, { pool, requireAuth, requireMasterAdmin, log
     }
   });
 
+  // master: did a test account get created? ids, logins, roles, dates only
+  app.get('/api/admin/test-users', requireMasterAdmin, async (req, res) => {
+    try {
+      res.json(await credentials.testUserDiagnostics(pool, { login: req.query.login || null }));
+    } catch (e) {
+      console.error('[TEST USER] diagnostics:', e.message);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
   app.post('/api/admin/test-users', requireSameOrigin, requireMasterAdmin, async (req, res) => {
     try {
       const b = req.body || {};
@@ -80,7 +91,8 @@ function mountCredentialRoutes(app, { pool, requireAuth, requireMasterAdmin, log
         login: b.login, fullName: b.fullName, password: b.password, confirm: b.passwordConfirm,
       });
       if (!out.ok) {
-        if (out.error === 'master_password') logAudit(req, 'admin.test_user_reauth_failed', 'admin', req.session.adminId);
+        if (out.error === 'master_password' || out.error === 'throttled') logAudit(req, 'admin.test_user_reauth_failed', 'admin', req.session.adminId);
+        else logAudit(req, `admin.test_user_refused.${out.error}`, 'admin', req.session.adminId);
         return res.status(out.status || 400).json({ error: out.error, message: out.message || null });
       }
       logAudit(req, 'admin.test_user_create', 'admin', out.user.id);

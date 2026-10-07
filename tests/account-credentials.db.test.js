@@ -275,7 +275,7 @@ const balanceOf = async (adminId) => {
       const c = client(); assert.strictEqual((await c.login(u.username, pw)).status, 200);
       assert.deepStrictEqual((await c.get('/api/account/credentials')).body.stepupMethods, ['telegram', 'password']);
       const bad = await c.post('/api/account/credentials/stepup', { method: 'password', currentPassword: `${pw}-no` });
-      assert.deepStrictEqual([bad.status, bad.body.error], [401, 'wrong_password']);
+      assert.deepStrictEqual([bad.status, bad.body.error], [403, 'wrong_password']);
       const good = await c.post('/api/account/credentials/stepup', { method: 'password', currentPassword: pw });
       assert.deepStrictEqual([good.status, good.body.approved], [200, true]);
       const pw2 = secret('Pw2');
@@ -367,7 +367,7 @@ const balanceOf = async (adminId) => {
       const login = `sinovtest${rnd()}`;
       const tpw = secret('Test');
       const wrong = await cm.post('/api/admin/test-users', { login, password: tpw, passwordConfirm: tpw, masterPassword: `${mpw}x` });
-      assert.deepStrictEqual([wrong.status, wrong.body.error], [401, 'master_password']);
+      assert.deepStrictEqual([wrong.status, wrong.body.error], [403, 'master_password']);
       const made_ = await cm.post('/api/admin/test-users', { login, fullName: 'Sinov Tester', password: tpw, passwordConfirm: tpw, masterPassword: mpw });
       assert.deepStrictEqual([made_.status, made_.body.user.role, made_.body.user.login], [200, 'user', login]);
       const id = made_.body.user.id; made.push(id);
@@ -397,6 +397,55 @@ const balanceOf = async (adminId) => {
       const b2 = await ledger.balance({ adminId: id });
       assert.strictEqual(b2.services.chat.limit, ledger.PLAN_CATALOG.sinov.quotas.chat, 'no second Sinov, no new quota');
       assert.ok(b2.services.chat.used >= 1);
+    });
+
+    await test('PRODUCTION CASE: master (password + Telegram 2FA) creates "test": the master stays signed in, the new account is role user and signs in with its own password', async () => {
+      credentials.resetThrottle();
+      const mpw = secret('Master');
+      const master = await makeAccount({ role: 'master', login: `own2fa${rnd()}`, password: mpw });
+      const cm = client();
+      const s1 = await cm.login(master.username, mpw);
+      assert.strictEqual(s1.body.twofa, true);
+      const code = /(\d{6})/u.exec(botMessages.filter(m => m.to === String(master.telegram_user_id)).pop().text)[1];
+      assert.strictEqual((await cm.post('/api/login/2fa', { token: s1.body.token, code })).status, 200);
+      assert.deepStrictEqual((await cm.get('/whoami')).body.role, 'master');
+      const login = `test${rnd() % 100000}`;
+      const tpw = secret('Tst');
+      // a wrong master password: nothing created, the master stays signed in,
+      // and the reply is not a 401 (the page read a 401 as "signed out")
+      const wrong = await cm.post('/api/admin/test-users', { login, password: tpw, passwordConfirm: tpw, masterPassword: `${mpw}x` });
+      assert.deepStrictEqual([wrong.status, wrong.body.error], [403, 'master_password']);
+      assert.match(wrong.body.message, /Hisob yaratilmadi; siz tizimda qolasiz/u);
+      assert.deepStrictEqual((await cm.get(`/api/admin/test-users?login=${login}`)).body.lookup.exists, false, 'no account');
+      const me1 = await cm.get('/whoami');
+      assert.deepStrictEqual([me1.status, me1.body.adminId, me1.body.role], [200, master.id, 'master'], 'master session kept');
+      // the right one
+      const ok = await cm.post('/api/admin/test-users', { login, fullName: 'Test', password: tpw, passwordConfirm: tpw, masterPassword: mpw });
+      assert.deepStrictEqual([ok.status, ok.body.user.role, ok.body.user.login], [200, 'user', login]);
+      made.push(ok.body.user.id);
+      assert.ok(ok.body.user.id !== master.id);
+      const me2 = await cm.get('/whoami');
+      assert.deepStrictEqual([me2.status, me2.body.adminId, me2.body.role, me2.body.sid], [200, master.id, 'master', me1.body.sid], 'the same master session, not the new user\'s');
+      // diagnostics: ids, logins, roles, dates; never a secret
+      const diag = await cm.get(`/api/admin/test-users?login=${login.toUpperCase()}`);
+      assert.deepStrictEqual([diag.body.lookup.exists, diag.body.lookup.account.id, diag.body.lookup.account.role, diag.body.lookup.account.createdByMaster, diag.body.lookup.account.credentialsSet],
+        [true, ok.body.user.id, 'user', master.id, true]);
+      assert.ok(diag.body.created.some(u => u.id === ok.body.user.id));
+      assert.ok(!/password|hash|\$2[aby]\$|sess|telegram_user_id/iu.test(JSON.stringify(diag.body).replace(/"telegramLinked"/gu, '')), 'no secrets in diagnostics');
+      // the new account signs in with its own password, in its own session
+      const cu = client();
+      const lu = await cu.login(login, tpw);
+      assert.deepStrictEqual([lu.status, lu.body.role], [200, 'user']);
+      assert.strictEqual((await cu.get('/whoami')).body.adminId, ok.body.user.id);
+      assert.strictEqual((await cm.get('/whoami')).body.adminId, master.id, 'and the master is still the master');
+      // five wrong master passwords stop the form for 15 minutes; still signed in
+      for (let i = 0; i < 5; i++) await cm.post('/api/admin/test-users', { login: `${login}z`, password: tpw, passwordConfirm: tpw, masterPassword: `bad${i}` });
+      assert.strictEqual((await cm.post('/api/admin/test-users', { login: `${login}z`, password: tpw, passwordConfirm: tpw, masterPassword: mpw })).status, 429);
+      assert.strictEqual((await cm.get('/whoami')).status, 200);
+      // the page sends only a missing session to sign-in
+      const page = fs.readFileSync(path.join(__dirname, '../public/account.html'), 'utf8');
+      assert.ok(/if \(r\.status === 401 && \(!d \|\| !d\.error \|\| d\.error === 'Unauthorized'\)\)/u.test(page));
+      assert.ok(!/if \(r\.status === 401\) \{ location\.href/u.test(page));
     });
 
     // ── Telegram sign-in: a link opened by someone else signs no one in ──
