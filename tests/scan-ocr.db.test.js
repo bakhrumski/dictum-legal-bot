@@ -317,6 +317,13 @@ const rows = async (user) => (await pool.query(`SELECT service, credits, status,
       try {
         const u = await makeUser();
         const spendOf = async () => (await pool.query(`SELECT count(*)::int AS n FROM llm_spend_log WHERE user_id = $1 AND stage = 'ocr'`, [u])).rows[0].n;
+        // ledger rows are written after the response; wait for them (up to
+        // 5 s) rather than a fixed pause a slow CI runner can outlast
+        const spendSettled = async want => {
+          let n = await spendOf();
+          for (let i = 0; i < 50 && n < want; i++) { await settle(100); n = await spendOf(); }
+          return n;
+        };
         // page 2 never comes back: refused, not stored, the analysis unit back, every call kept
         const q = await quote(u, fx('scan-3p.pdf'), 'analysis');
         const r = await ocr(u, fx('scan-3p.pdf'), q.body.scanTicket);
@@ -325,7 +332,7 @@ const rows = async (user) => (await pool.query(`SELECT service, credits, status,
         await settle(150);
         assert.deepStrictEqual((await rows(u)).map(x => [x.service, x.status, x.release_reason]), [['analysis', 'released', 'ocr_incomplete']]);
         assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM document_scans WHERE admin_id = $1', [u])).rows[0].n, 0, 'nothing cached');
-        const afterIncomplete = await spendOf();
+        const afterIncomplete = await spendSettled(calls);
         assert.ok(afterIncomplete >= 2 && afterIncomplete === calls, `one ledger row per call (${afterIncomplete} rows, ${calls} calls)`);
         // cut at the cap at every size: refused, nothing cached
         mode = 'cut';
@@ -341,7 +348,7 @@ const rows = async (user) => (await pool.query(`SELECT service, credits, status,
         const row = (await pool.query('SELECT text, pages FROM document_scans WHERE id = $1', [ok.body.scanId])).rows[0];
         assert.deepStrictEqual([...row.text.matchAll(/^\[Sahifa (\d+)\]$/gmu)].map(m => Number(m[1])), [1, 2, 3]);
         await settle(150);
-        assert.strictEqual(await spendOf(), calls, 'still one row per call');
+        assert.strictEqual(await spendSettled(calls), calls, 'still one row per call');
       } finally {
         ocrBehaviour = null;
         global.fetch = realFetch;
