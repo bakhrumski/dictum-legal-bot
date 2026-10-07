@@ -74,7 +74,11 @@ Known state of the suites (Sept 2026):
   cost. A document not read whole (a digest part failed or was cut) is not
   the service: explanation, opinion and chat analysis are marked partial at
   the top and their units released; a whole reading whose answer was cut is
-  marked partial and paid. Quality is unconfirmed until the lawyer-reviewed
+  marked partial and paid. The "AI izohi" is held to the same rules and is
+  optional: `guardAiNote` withholds its sentences with a figure, date, page or
+  clause the source lacks, or a status, consequence, ranking or "now" phrase
+  the source does not use, and leaves the section out when nothing grounded
+  is left; such phrases elsewhere are named, not removed. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

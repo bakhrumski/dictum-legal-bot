@@ -180,7 +180,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
   await test('the check says what it does NOT check, under every answer - also when it finds nothing', () => {
     const src = ex.markPages(byId('talabnoma').pages);
     const clean = ex.finishExplanation({ reply: 'Talabnomani "Mehr Logistika" MChJ yuborgan.', source: src });
-    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa va band raqamlari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.\n- Mos kelmagan raqam, sana, sahifa yoki band topilmadi."));
+    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa, band raqamlari hamda holat, oqibat, ustuvorlik va vaqt iboralari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.\n- Mos kelmagan raqam, sana, sahifa, band yoki holat iborasi topilmadi."));
     assert.strictEqual(clean.check.scope, 'figures_dates_pages_clauses_only');
     // a wrong attribution passes the check: it is not a semantic check
     const wrong = ex.finishExplanation({ reply: "Qarz 12 400 000 so'm ekani tasdiqlangan.", source: src });
@@ -306,6 +306,87 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
       assert.deepStrictEqual(ledger.readDocTicket(d.docTicket, d.text), { pages: 3, scanned: false }, 'the ticket is signed over the text the client sends back');
       assert.strictEqual(calls.ai, 0, 'extract calls no AI');
     } finally { server.close(); }
+  });
+
+  await test('AI izohi: every evaluation case, in three label styles - unsupported sentences withheld, grounded ones kept, an empty or placeholder note left out', () => {
+    const styles = {
+      inline: n => `**AI izohi:** ${n}`,
+      heading: n => `**AI izohi**\n${n}`,
+      list: n => `- AI izohi: ${n}`,
+    };
+    let n = 0;
+    for (const f of fixtures) {
+      assert.ok((f.aiNoteCases || []).length >= 2, `${f.id} has AI-note cases`);
+      const src = ex.markPages(f.pages);
+      for (const c of f.aiNoteCases) {
+        for (const [style, wrap] of Object.entries(styles)) {
+          const answer = `**Hujjat nima haqida**\nHujjat ${f.type} haqida.\n\n${wrap(c.note)}\n\n**Keyingi qadam**\nAsl hujjatni o'qing.`;
+          const r = ex.guardAiNote(answer, src);
+          const where = `${f.id} / ${style} / ${c.note}`;
+          assert.ok(r.text.includes('Hujjat ' + f.type + ' haqida.') && r.text.includes("Asl hujjatni o'qing."), `${where}: the rest of the answer stays`);
+          if (c.expect === 'kept') {
+            assert.ok(r.text.includes(c.note) && /AI izohi/u.test(r.text) && !r.withheld.length, `${where}: kept -> ${JSON.stringify(r.withheld)}`);
+          } else {
+            assert.ok(!r.text.includes(c.note.replace(/[.]$/u, '')), `${where}: not shown`);
+            assert.ok(!/AI izohi/u.test(r.text), `${where}: an empty note is left out entirely`);
+            assert.strictEqual(r.removed, 1, where);
+            if (c.expect === 'withheld') assert.strictEqual(r.withheld.length, 1, `${where}: named`);
+          }
+          n++;
+        }
+      }
+    }
+    assert.ok(n >= 60, `${n} checks`);
+  });
+
+  await test('AI izohi: a mixed note keeps its grounded sentence and drops the rest; the answer names what was withheld and why', () => {
+    const f = byId('due-diligence');
+    const src = ex.markPages(f.pages);
+    const good = "Sud ishlari haqidagi ma'lumot faqat jamiyat vakillarining og'zaki so'ziga asoslangan, shuning uchun uni sud reyestridan alohida tekshirish foydali bo'lishi mumkin.";
+    const reply = `**Asosiy mazmun**\nXulosa 2026-yil 12-avgust holatiga tuzilgan.\n\n**AI izohi:** ${good} Asosiy xatar — belgi ro'yxatdan o'tmagani. Hozirda soliq qarzi yo'q.`;
+    const done = ex.finishExplanation({ reply, source: src });
+    assert.ok(done.reply.includes(`**AI izohi:** ${good}`));
+    assert.ok(!done.reply.includes('Asosiy xatar') && !done.reply.includes('Hozirda soliq'));
+    assert.strictEqual(done.check.aiNote.withheld.length, 2);
+    assert.ok(/«AI izohi»dan 2 ta gap olib tashlandi — hujjatda asosi yo'q: holat: «ro'yxatdan o'tmagan», ustuvorlik: «asosiy xatar»; vaqt: «hozirda»/u.test(done.reply), done.reply);
+    // a note with nothing useful left: the section is not shown, and the answer says why
+    const empty = ex.finishExplanation({ reply: '**Asosiy mazmun**\nXulosa.\n\n**AI izohi**\nEng katta xatar — sud ishlari.', source: src });
+    assert.ok(!/\*\*AI izohi\*\*/u.test(empty.reply));
+    assert.ok(empty.reply.includes("«AI izohi» bo'limi chiqarilmadi: unda hujjatga asoslangan foydali qo'shimcha izoh qolmadi."));
+  });
+
+  await test('AI izohi: a placeholder is left out; a figure or page the document lacks is withheld; Russian label too', () => {
+    const src = ex.markPages(byId('contract-supply').pages);
+    for (const ph of ["**AI izohi:** Yo'q.", '**AI izohi:** —', "**AI izohi:** Qo'shimcha izoh yo'q.", '**AI izohi**\n\n**Xulosa**']) {
+      const r = ex.guardAiNote(`Matn.\n\n${ph}`, src);
+      assert.ok(!/AI izohi/u.test(r.text), ph);
+    }
+    const r = ex.guardAiNote("**AI izohi:** Narx 90 000 000 so'm bo'lishi kerak edi (7-sahifa).", src);
+    assert.ok(!/AI izohi/u.test(r.text) && /raqam: 90 000 000/u.test(r.withheld[0].reasons.join(' ')) && /sahifa: 7/u.test(r.withheld[0].reasons.join(' ')));
+    const ru = ex.guardAiNote('**Комментарий ИИ:** Главный риск — штраф за просрочку.', src);
+    assert.ok(!/Комментарий ИИ/u.test(ru.text) && ru.withheld.length === 1, JSON.stringify(ru));
+  });
+
+  await test('the rest of the answer: an unsupported status, consequence or ranking is named under it (not removed)', () => {
+    const src = ex.markPages(byId('due-diligence').pages);
+    const done = ex.finishExplanation({ reply: "**Intellektual mulk**\nBelgi ro'yxatdan o'tmagan. Bu eng katta xatar.", source: src });
+    assert.ok(done.reply.includes("Belgi ro'yxatdan o'tmagan. Bu eng katta xatar."), 'body text is not removed');
+    assert.ok(/Hujjatda bunday ibora yo'q: holat: «ro'yxatdan o'tmagan», ustuvorlik: «eng katta» — asl hujjatdan tekshiring\./u.test(done.reply), done.reply);
+    // the same words where the document itself uses them: nothing to say
+    const ok = ex.finishExplanation({ reply: "Ariza berilmagan. Reklama faoliyati uchun litsenziya mavjud emas. Qarz va majburiy ijro aniqlanmadi (2026-yil 12-avgust holatiga).", source: src });
+    assert.deepStrictEqual(ok.check.phrases, []);
+    assert.ok(ok.reply.includes("Mos kelmagan raqam, sana, sahifa, band yoki holat iborasi topilmadi."), ok.reply);
+  });
+
+  await test('the prompt applies every rule to the AI izohi and makes it optional - in general words, no evaluation names', () => {
+    const p = ex.explainSystem('Uzbek');
+    for (const s2 of ['Every rule here applies to every part of the answer, the "AI izohi" included',
+      'never attribute to the document something it does not say', 'an application not filed is not "not registered"',
+      'never rank anything as the main, biggest or most important risk or issue unless the document itself ranks it',
+      'keep the document\'s time limits', 'The "AI izohi" is optional', 'leave it out entirely - no heading, no placeholder']) {
+      assert.ok(p.includes(s2), s2);
+    }
+    for (const f of fixtures) for (const c of f.aiNoteCases) assert.ok(!p.includes(c.note), c.note);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

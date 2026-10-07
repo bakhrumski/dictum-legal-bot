@@ -120,6 +120,55 @@ Javobda `check.scope = "figures_dates_pages_clauses_only"` qaytadi.
 - Kichik sonlar (kun, foiz) hosila deb hisoblanmaydi. Hujjatda bo'lmasa, «topilmagan» deyiladi.
 - Ko'p raqamli hujjatda o'ylab topilgan summa tasodifan «hosila» bo'lib chiqishi mumkin. U baribir ko'rsatiladi, faqat «tekshiring» belgisi bilan.
 
+## 4a. «AI izohi» ham shu qoidalarga bo'ysunadi (2026-10-07, #419 jonli sinovidan keyin)
+
+Jonli sinovda asosiy javob yaxshilandi, lekin «AI izohi» manbaga sodiqlikni
+buzdi:
+- hujjatda yo'q faktni hujjatga nisbat berdi;
+- «ariza berilmagan»ni «ro'yxatdan o'tmagan» deb almashtirdi;
+- dalilsiz «asosiy xatar» deb ustuvorlik belgiladi;
+- vaqt va manba cheklovlarini tushirib qoldirdi.
+
+**Prompt:**
+- Barcha qoidalar javobning hamma qismiga, jumladan AI izohiga ham taalluqli.
+- AI izohi ixtiyoriy. Foydali va hujjatga asoslangan qo'shimcha izoh bo'lmasa, u umuman yozilmaydi: sarlavha ham, «AI izohi: yo'q» kabi to'ldiruvchi ham chiqmaydi.
+- Bu qoidalar umumiy so'zlarda yozilgan, baholash to'plamidagi nomlar yoki iboralar yo'q (test tekshiradi).
+
+**Mexanik himoya (AI'siz, `guardAiNote`):** AI izohidagi gap quyidagi
+hollardan birida olib tashlanadi:
+1. Manbada yo'q raqam, sana, sahifa yoki band bor.
+2. Manbada ishlatilmagan **holat** iborasi bor:
+   - ro'yxatdan o'tmagan, ariza berilmagan, huquq yo'q, rad etilgan;
+   - mavjud emas, aniqlanmadi, tekshirilmagan;
+   - noqonuniy, majburiy, tasdiqlangan/isbotlangan, haqiqiy emas, kuchga kirgan.
+3. Manbada yo'q **oqibat** iborasi bor: jarima, javobgarlikka tortish, huquqbuzarlik, jinoiy, musodara, faoliyatni to'xtatish, mualliflik huquqi.
+4. Manba ustuvorlik bermagan holda **ustuvorlik** iborasi bor: eng katta, eng muhim, asosiy xatar, birinchi navbatda.
+5. Hujjat ma'lum sana holatiga yozilgan, gap esa «hozir/hozirda» deydi (**vaqt**).
+
+Lug'at o'zbekcha (lotin) va ruscha. Ibora manba ham shunday ibora ishlatganda
+qo'llab-quvvatlangan hisoblanadi, ya'ni hujjatga xos emas.
+
+Gap olib tashlangach, AI izohida foydali matn qolmasa, butun bo'lim
+chiqarilmaydi. Javob ostida nechta gap olib tashlangani va sababi yoziladi.
+
+Javobning qolgan qismidagi shunday iboralar o'chirilmaydi, faqat «Hujjatda
+bunday ibora yo'q: …» deb nomlanadi. U yerda lug'at torroq: «majburiy»,
+«mavjud emas», «aniqlanmadi», «tekshirilmagan» asosiy matnda tekshirilmaydi,
+chunki ular u yerda tabiiy ravishda tez-tez uchraydi.
+
+Hujjatdagi ikki kichik butun sonning yig'indisi yoki ayirmasi, masalan
+45 + 25 = 70 foiz, o'ylab topilgan raqam deb hisoblanmaydi.
+
+**Cheklov:**
+- Bu ma'noni tekshirmaydi.
+- Lug'atda yo'q so'z bilan aytilgan asossiz da'vo o'tib ketadi.
+- Lug'atdagi ibora manbaning boshqa joyida uchrasa, u «qo'llab-quvvatlangan» hisoblanadi.
+- Yakuniy baho yuristniki (8-bo'lim jadvalidagi «AI izohi» ustuni).
+
+**Test holatlari:** har bir fiksturaning `aiNoteCases` maydonida, 6 ta hujjat
+turida 22 ta holat. Har biri uch xil yozilish shaklida tekshiriladi: qator
+ichida, sarlavha va ro'yxat.
+
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
 | Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |
@@ -180,21 +229,22 @@ Taklif qilinadigan jonli benchmark:
 
 Har bir javob uchun bir qator. Ballar: 0 — xato, 1 — qisman, 2 — to'g'ri.
 
-| Hujjat | Yo'l (yashirin) | Takror | Faktlar aniqligi | Cheklov va muddatlar | Asosiy bandlar (k/n) | Dalil mosligi | Asossiz da'volar soni | Hujjat / muallif tavsiyasi / AI izohi ajratilganmi | Qamrov yoki noaniqlik aytilganmi | Kirish tokenlari | Chiqish tokenlari | Vaqt (s) | Narx ($, manba) | Izoh |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| contract-supply | A | 1 | | | /7 | | | | | | | | | |
-| due-diligence | A | 1 | | | /9 | | | | | | | | | |
-| court-decision | A | 1 | | | /5 | | | | | | | | | |
-| talabnoma | A | 1 | | | /5 | | | | | | | | | |
-| corporate-protocol | A | 1 | | | /4 | | | | | | | | | |
-| long-lease | A | 1 | | | /5 | | | | | | | | | |
+| Hujjat | Yo'l (yashirin) | Takror | Faktlar aniqligi | Cheklov va muddatlar | Asosiy bandlar (k/n) | Dalil mosligi | Asossiz da'volar soni | Hujjat / muallif tavsiyasi / AI izohi ajratilganmi | AI izohi qoidaga mos (yoki kerak bo'lmaganda yo'q) | Qamrov yoki noaniqlik aytilganmi | Kirish tokenlari | Chiqish tokenlari | Vaqt (s) | Narx ($, manba) | Izoh |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| contract-supply | A | 1 | | | /7 | | | | | | | | | | |
+| due-diligence | A | 1 | | | /9 | | | | | | | | | | |
+| court-decision | A | 1 | | | /5 | | | | | | | | | | |
+| talabnoma | A | 1 | | | /5 | | | | | | | | | | |
+| corporate-protocol | A | 1 | | | /4 | | | | | | | | | | |
+| long-lease | A | 1 | | | /5 | | | | | | | | | | |
 
 Asosiy bandlar va tuzoqlar har bir fiksturada `keyPoints` va `traps`
 maydonlarida.
 
 ## 9. Testlar va ular nimani isbotlamaydi
 
-- `tests/document-explain.test.js` (16) tekshiradi:
+- `tests/document-explain.test.js` (21) tekshiradi:
+  - AI izohi bo'yicha 22 ta holat, har biri uch shaklda; aralash izoh; to'ldiruvchi izoh; ruscha yorliq; asosiy matndagi iboralar;
   - qamrov va sahifalar;
   - o'qilmagan yoki kesilgan qismlar;
   - qisman natija belgisi;

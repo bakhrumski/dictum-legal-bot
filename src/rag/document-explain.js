@@ -146,6 +146,8 @@ function explainSystem(langName) {
     '',
     'Fact, recommendation, interpretation:',
     '- Keep apart: what the document says; what its author recommends (name the author as the document does); and any interpretation of your own - mark it "AI izohi:" and keep it short. Add no new legal claim without a basis in the document.',
+    '- Every rule here applies to every part of the answer, the "AI izohi" included. In it: never attribute to the document something it does not say; never change a status (an application not filed is not "not registered"; "not identified" is not "none"); never rank anything as the main, biggest or most important risk or issue unless the document itself ranks it; keep the document\'s time limits ("as of" a date) and source limits (what was or was not checked, who said it); add no consequence, sanction or obligation the document does not state.',
+    '- The "AI izohi" is optional. Write it only when it adds something useful that rests on the document; otherwise leave it out entirely - no heading, no placeholder such as "AI izohi: yo\'q".',
     '',
     'What to cover:',
     '- Pick by the document\'s type: obligations, deadlines, amounts, liability, exceptions, termination conditions, risks, findings, recommendations, open questions. A clause at the end matters as much as one at the start. Even when short, do not drop a limit or an exception that changes the reader\'s decision.',
@@ -304,12 +306,18 @@ function verifyExplanation(answer, source, { allowed = [] } = {}) {
     }
     return false;
   };
+  const smalls = srcValues.filter(x => Number.isInteger(x) && x > 0 && x < 1000 && !/^(19|20)\d\d$/u.test(String(x)));
+  const sumOfTwo = v => smalls.some((x, i) => smalls.some((y, j) => i !== j && (x + y === v || Math.abs(x - y) === v)));
   const derivedSet = new Set();
   for (let step = 0; step < 2; step++) {
     for (const c of candidates) {
-      // arithmetic on amounts only: small figures (days, percentages) are
-      // explained by nearly any pair, and a year is a date, not a sum
-      if (derivedSet.has(c) || c.v == null || Math.abs(c.v) < 1000 || /^(19|20)\d\d$/u.test(c.raw) || !fromPool(c.v)) continue;
+      // amounts: any of the four operations; small whole figures (shares,
+      // days): only the sum or difference of two the document states
+      // (45 + 25 = 70), as products and ratios of small numbers explain
+      // nearly anything; a year is a date, not a sum
+      if (derivedSet.has(c) || c.v == null || /^(19|20)\d\d$/u.test(c.raw)) continue;
+      const small = Math.abs(c.v) < 1000;
+      if (small ? !(Number.isInteger(c.v) && sumOfTwo(c.v)) : !fromPool(c.v)) continue;
       derivedSet.add(c);
       pool.push(c.v);
     }
@@ -330,7 +338,7 @@ function cutToLastSentence(text) {
   return i > t.length * 0.5 ? t.slice(0, i + 1) : t;
 }
 
-const CHECK_SCOPE = "faqat raqam, sana, sahifa va band raqamlari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.";
+const CHECK_SCOPE = "faqat raqam, sana, sahifa, band raqamlari hamda holat, oqibat, ustuvorlik va vaqt iboralari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.";
 const partLabel = c => `${c.index + 1}-qism${c.pages ? ` (${c.pages.from === c.pages.to ? c.pages.from : `${c.pages.from}–${c.pages.to}`}-sahifa)` : ''}`;
 
 /**
@@ -349,16 +357,145 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
     text = cutToLastSentence(text);
     partial.push("javob uzunlik chegarasida to'xtadi va oxirgi to'liq gapgacha ko'rsatildi — hujjatning oxirgi qismlari tushuntirilmagan bo'lishi mumkin");
   }
+  // the AI's own note first: it follows the same rules or is left out
+  const ai = guardAiNote(text, source, { allowed });
+  text = ai.text;
   const v = verifyExplanation(text, source, { allowed });
+  if (ai.withheld.length) {
+    notes.push(`«AI izohi»dan ${ai.withheld.length} ta gap olib tashlandi — hujjatda asosi yo'q: ${ai.withheld.slice(0, 4).map(w => w.reasons.join(', ')).join('; ')}.`);
+  }
+  if (ai.removed) notes.push("«AI izohi» bo'limi chiqarilmadi: unda hujjatga asoslangan foydali qo'shimcha izoh qolmadi.");
+  // the rest of the answer: named, not removed
+  const bodyFlags = [];
+  for (const sn of text.split(/(?<=[.!?])\s+|\n+/u)) for (const r of unsupportedPhrases(sn, source, { body: true })) bodyFlags.push(`${r.kind}: «${r.phrase}»`);
+  if (bodyFlags.length) notes.push(`Hujjatda bunday ibora yo'q: ${[...new Set(bodyFlags)].slice(0, 6).join(', ')} — asl hujjatdan tekshiring.`);
   if (v.numbers.length) notes.push(`Hujjat matnida topilmagan raqam: ${v.numbers.slice(0, 8).join(', ')} — asl hujjatdan tekshiring.`);
   if (v.derived.length) notes.push(`Hujjatda yo'q, hujjatdagi raqamlardan hisoblanganga o'xshaydi (AI hisobi): ${v.derived.slice(0, 8).join(', ')} — hisobni tekshiring.`);
   if (v.dates.length) notes.push(`Hujjat matnida topilmagan sana: ${v.dates.slice(0, 8).join(', ')}.`);
   if (v.pages.length) notes.push(`Hujjatda bunday sahifa belgisi yo'q: ${v.pages.slice(0, 8).join(', ')}.`);
   if (v.clauses.length) notes.push(`Hujjat matnida topilmagan band/modda: ${v.clauses.slice(0, 8).join(', ')}.`);
-  if (!notes.length) notes.push("Mos kelmagan raqam, sana, sahifa yoki band topilmadi.");
+  if (!notes.length) notes.push("Mos kelmagan raqam, sana, sahifa, band yoki holat iborasi topilmadi.");
   if (partial.length) text = `⚠️ **Qisman natija — to'liq tahlil emas:** ${partial.join('; ')}.\n\n${text}`;
   text += `\n\n**Avtomatik tekshiruv (AI emas):** ${CHECK_SCOPE}\n${notes.map(n => `- ${n}`).join('\n')}`;
-  return { reply: text, check: v, notes, partial: partial.length > 0 };
+  return { reply: text, check: { ...v, aiNote: { found: ai.found, withheld: ai.withheld, removed: ai.removed }, phrases: [...new Set(bodyFlags)] }, notes, partial: partial.length > 0 };
+}
+
+// ── The answer's own claims, checked against the source with no AI ──
+// General legal-status, consequence, priority and time vocabulary (Uzbek
+// Latin and Russian). A phrase is supported when the source uses the same
+// kind of phrase; it says nothing about any one document.
+const lowerNorm = t => String(t || '').toLowerCase().replace(/[ʻʼ‘’`ʹ]/gu, "'").replace(/\s+/gu, ' ');
+const STATUS_PHRASES = [
+  { id: 'not_registered', label: "ro'yxatdan o'tmagan", re: /ro'yxatdan o'(?:tmagan|tkazilmagan)|ro'yxatga olinmagan|не зарегистрирован|регистраци\p{L}* не (?:проведен|произведен)/u, body: true },
+  { id: 'not_filed', label: 'ariza berilmagan', re: /ariza (?:berilmagan|bermagan|topshirilmagan)|заявк\p{L}* не (?:подан|подава)|не пода\p{L}* заявк/u, body: true },
+  { id: 'no_right', label: "huquq yo'q", re: /huquq(?:i|ga)? (?:yo'q|ega emas)|huquqiga ega emas|не име\p{L}* прав|нет прав/u, body: true },
+  { id: 'rejected', label: 'rad etilgan', re: /rad etil|отказан\p{L}*|отклонен\p{L}*/u, body: true },
+  { id: 'absent', label: 'mavjud emas', re: /mavjud emas|отсутству/u, body: false },
+  { id: 'not_found', label: 'aniqlanmadi', re: /aniqlanma(?:di|gan)|не выявлен|не обнаружен/u, body: false },
+  { id: 'not_checked', label: 'tekshirilmagan', re: /tekshirilma(?:di|gan)|не провер\p{L}*/u, body: false },
+  { id: 'unlawful', label: 'noqonuniy', re: /noqonuniy|qonunga zid|g'ayriqonuniy|незаконн|противоправн/u, body: true },
+  { id: 'mandatory', label: 'majburiy', re: /majburiy|talab qilinadi|обязательн|требуется/u, body: false },
+  { id: 'confirmed', label: 'tasdiqlangan', re: /tasdiqlangan|isbotlangan|подтвержд[её]н|доказан/u, body: true },
+  { id: 'invalid', label: 'haqiqiy emas', re: /haqiqiy emas|haqiqiy sanalmaydi|kuchga ega emas|недействител/u, body: true },
+  { id: 'in_force', label: 'kuchga kirgan', re: /kuchga kirgan|вступил\p{L}* в (?:законную )?силу/u, body: true },
+];
+const CONSEQUENCE_PHRASES = [
+  { id: 'fine', label: 'jarima', re: /jarima|штраф/u },
+  { id: 'liability', label: 'javobgarlikka tortish', re: /javobgarlikka tortil|привлеч\p{L}* к (?:\p{L}+ )?ответственност/u },
+  { id: 'offence', label: 'huquqbuzarlik', re: /huquqbuzarlik|правонарушени/u },
+  { id: 'criminal', label: 'jinoiy', re: /jinoiy|уголовн/u },
+  { id: 'confiscation', label: 'musodara', re: /musodara|конфискац/u },
+  { id: 'suspension', label: "faoliyatni to'xtatish", re: /faoliyat\p{L}* to'xtatil|приостановлен\p{L}* деятельност/u },
+  { id: 'copyright', label: 'mualliflik huquqi', re: /mualliflik huquq|авторск\p{L}* прав/u },
+];
+const PRIORITY = /eng (?:katta|asosiy|muhim|jiddiy|xavfli|og'ir)|asosiy (?:xatar|xavf|risk|muammo|kamchilik)|birinchi navbatda|главн\p{L}* (?:риск|проблем|угроз)|наибольш|самы\p{L}* (?:важн|серь[её]зн|больш|опасн)|основн\p{L}* (?:риск|проблем)/u;
+const PRESENT = /(?:^|[^\p{L}'])(?:hozir(?:da|gi)?|ayni (?:paytda|vaqtda)|bugungi kunda)(?![\p{L}'])|в настоящее время|на сегодняшний день|(?:^|[^\p{L}])сейчас(?!\p{L})/u;
+const AS_OF = /holatiga|holati bo'yicha|по состоянию на/u;
+
+/** The phrases of one sentence that its source does not support, with why. */
+function unsupportedPhrases(sentence, source, { body = false } = {}) {
+  const s = lowerNorm(sentence), src = lowerNorm(source);
+  const out = [];
+  for (const p of STATUS_PHRASES) {
+    if (body && !p.body) continue;
+    const m = s.match(p.re);
+    if (m && !p.re.test(src)) out.push({ kind: 'holat', phrase: m[0], label: p.label });
+  }
+  for (const p of CONSEQUENCE_PHRASES) {
+    const m = s.match(p.re);
+    if (m && !p.re.test(src)) out.push({ kind: 'oqibat', phrase: m[0] });
+  }
+  const pr = s.match(PRIORITY);
+  if (pr && !PRIORITY.test(src)) out.push({ kind: 'ustuvorlik', phrase: pr[0] });
+  const now = s.match(PRESENT);
+  if (now && AS_OF.test(src)) out.push({ kind: 'vaqt', phrase: now[0].trim() });
+  return out;
+}
+
+const AI_LABEL = /^(\s*(?:[-*>]\s*)?(?:#{1,6}\s*)?(?:\*\*|__)?\s*(?:🤖\s*)?(?:AI izohi|AI-izoh|AI izoh|Комментарий ИИ|Izoh \(AI\))\s*:?\s*(?:\*\*|__)?\s*:?\s*)/iu;
+const HEADING = /^\s*(?:#{1,6}\s+\S|(?:\*\*|__)[^*_]+(?:\*\*|__)\s*:?\s*$)/u;
+const PLACEHOLDER = /^[\s\-–—:.*_]*(?:yo'q|mavjud emas|qo'shimcha (?:izoh|ma'lumot)(?:lar)? yo'q|izoh yo'q|нет|отсутствует|n\/a)?[\s.!]*$/iu;
+
+/**
+ * The "AI izohi" held to the same rules as the rest of the answer, with no
+ * AI call: a sentence in it that states a figure, date, page or clause the
+ * source does not have, a status, consequence or ranking the source does not
+ * use, or "now" about a document written as of a date, is withheld. When
+ * nothing useful is left (or it was a placeholder) the whole section goes.
+ * Returns { text, withheld: [{ sentence, reasons }], removed }.
+ */
+function guardAiNote(answer, source, { allowed = [] } = {}) {
+  const lines = String(answer || '').split('\n');
+  const out = [];
+  const withheld = [];
+  let removed = 0, found = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(AI_LABEL);
+    if (!m) { out.push(lines[i]); continue; }
+    found++;
+    const prefix = m[1];
+    const inline = lines[i].slice(prefix.length);
+    // the block: the label's own line (inline) and what follows, up to the
+    // next heading, label or (for an inline note) blank line
+    const block = [];
+    if (inline.trim()) block.push(inline);
+    let j = i + 1;
+    for (; j < lines.length; j++) {
+      const l = lines[j];
+      if (AI_LABEL.test(l) || HEADING.test(l) || /^\*\*Avtomatik tekshiruv/u.test(l)) break;
+      if (inline.trim() && !l.trim()) break;
+      block.push(l);
+    }
+    const kept = block.map(line => {
+      if (!line.trim()) return line;
+      const lead = (line.match(/^\s*(?:[-*]|\d+[.)])\s+/u) || [''])[0];
+      const sentences = line.slice(lead.length).split(/(?<=[.!?])\s+/u);
+      const keep = sentences.filter(sn => {
+        const v = verifyExplanation(sn, source, { allowed });
+        const reasons = unsupportedPhrases(sn, source).map(r => `${r.kind}: «${r.phrase}»`);
+        if (v.numbers.length) reasons.push(`raqam: ${v.numbers.join(', ')}`);
+        if (v.dates.length) reasons.push(`sana: ${v.dates.join(', ')}`);
+        if (v.pages.length) reasons.push(`sahifa: ${v.pages.join(', ')}`);
+        if (v.clauses.length) reasons.push(`band: ${v.clauses.join(', ')}`);
+        if (reasons.length) { withheld.push({ sentence: sn.trim(), reasons }); return false; }
+        return true;
+      });
+      return keep.length ? lead + keep.join(' ') : null;
+    }).filter(l => l !== null);
+    const body = kept.join('\n').replace(/[*_#>]/gu, '').trim();
+    const substantive = (body.match(/\p{L}/gu) || []).length >= 25 && !PLACEHOLDER.test(lowerNorm(body));
+    if (!substantive) {
+      removed++;
+      while (out.length && !out[out.length - 1].trim()) out.pop();
+    } else if (inline.trim()) {
+      out.push(prefix + kept[0].trimStart(), ...kept.slice(1));
+    } else {
+      out.push(lines[i], ...kept);
+    }
+    if (inline.trim() && j < lines.length && !lines[j].trim()) { out.push(''); j++; }
+    i = j - 1;
+  }
+  return { text: out.join('\n').replace(/\n{3,}/gu, '\n\n').trim(), withheld, removed, found };
 }
 
 /** Characters of the document itself: page marks are ours, never billed. */
@@ -451,5 +588,5 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
 module.exports = {
   PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
   markPages, pagesIn, emptyPages, contentChars, digestChunks, pagesSpanned, buildDigest, coverageNote, explainSystem,
-  unreadParts, verifyExplanation, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
+  unreadParts, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
 };
