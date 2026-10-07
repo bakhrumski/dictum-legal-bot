@@ -15108,6 +15108,7 @@
         // ── Per-request AI usage (master) ──────────────────────────────────
         var AU_STATUS = { success: 'muvaffaqiyatli', error: 'xato', timeout: 'timeout', skipped: 'chaqirilmadi' };
         var AU_KIND = { permanent: 'doimiy', transient: 'vaqtinchalik', unknown: 'noma\'lum', skipped: 'o\'tkazildi' };
+        var AU_TRIGGER = { user_question: 'savol', service_confirmed: 'tasdiqlangan xizmat' };
         var AU_SOURCE = { provider_reported: 'provayder', calculated: 'hisoblangan', estimated: 'taxminiy', unknown: "noma'lum" };
         function auUsd(v) { return v == null ? '—' : '$' + Number(v).toFixed(Number(v) < 0.01 ? 6 : 4); }
         function auMs(v) { return v == null ? '—' : (v >= 1000 ? (v / 1000).toFixed(1) + ' s' : v + ' ms'); }
@@ -15295,14 +15296,18 @@
                 var reqs = list.requests || [];
                 listBox.innerHTML = reqs.length ? (
                     '<div class="au-scroll"><table class="spend-table"><thead><tr>' +
-                    '<th>Vaqt</th><th>Xizmat</th><th>Natija</th><th>Huquqiy tekshiruv</th><th>Modellar</th><th class="sp-num">Chaqiruv</th>' +
+                    '<th>Vaqt</th><th>Xizmat</th><th>Kim · endpoint · sabab</th><th>Natija</th><th>Huquqiy tekshiruv</th><th>Modellar</th><th class="sp-num">Chaqiruv</th>' +
                     '<th class="sp-num">Retry / fallback</th><th class="sp-num">Xarajat</th><th class="sp-num">Latency</th></tr></thead><tbody>' +
                     reqs.map(function (r) {
                         var lc = r.legal_check || {};
                         var legal = lc.claimGuard || lc.confidence || '—';
                         return '<tr class="au-row" tabindex="0" data-au-id="' + escapeHtml(r.request_id) + '" onclick="loadAiUsageRequest(this.dataset.auId)" onkeydown="if(event.key===\'Enter\')loadAiUsageRequest(this.dataset.auId)">' +
                             '<td>' + escapeHtml(new Date(r.started_at).toLocaleString('uz-UZ')) + '</td>' +
-                            '<td>' + escapeHtml(r.service) + '</td><td>' + escapeHtml(r.outcome || '—') + '</td><td>' + escapeHtml(legal) + '</td>' +
+                            '<td>' + escapeHtml(r.service) + '</td>' +
+                            // who, which endpoint and why the AI ran (ai_requests.trigger)
+                            '<td class="au-who">' + escapeHtml(r.user_id != null ? '#' + r.user_id : (r.telegram ? 'Telegram' : '—')) + ' · ' + escapeHtml(r.kind || '—') +
+                                ' · ' + escapeHtml(AU_TRIGGER[r.trigger] || r.trigger || 'sabab yozilmagan') + '</td>' +
+                            '<td>' + escapeHtml(r.outcome || '—') + '</td><td>' + escapeHtml(legal) + '</td>' +
                             '<td class="au-models" title="' + escapeHtml((r.models || []).join(' → ')) + '">' + escapeHtml((r.models || []).join(' → ')) + '</td>' +
                             '<td class="sp-num">' + r.calls + (r.skipped_calls ? ' <span class="au-badge" title="Chaqirilmadi">+' + r.skipped_calls + '</span>' : '') + '</td>' +
                             '<td class="sp-num">' + (r.retry_calls || 0) + '/' + (r.fallback_calls || 0) + (r.failed_calls ? ' <span class="au-badge au-warn">' + r.failed_calls + ' xato</span>' : '') + (r.degraded ? ' <span class="au-badge au-warn" title="' + escapeHtml((r.degraded || []).join(', ')) + '">degraded</span>' : '') + '</td>' +
@@ -15327,7 +15332,10 @@
                     '<div>' + auUsd(s.known_cost_usd) + ' ' + auComplete(s) + ' · ' + s.calls + ' chaqiruv' + (s.skipped_calls ? ' (+' + s.skipped_calls + ' chaqirilmadi)' : '') +
                     ' · ' + (s.failed_calls || 0) + ' xato · ' + (s.retry_calls || 0) + ' retry · ' + (s.fallback_calls || 0) + ' fallback' + (s.batches ? ' · ' + s.batches + ' batch' : '') +
                     (s.voicelab_credits_unknown_calls ? ' · VoiceLab krediti noma\'lum: ' + s.voicelab_credits_unknown_calls : '') +
-                    (s.provider_credits ? ' · ' + s.provider_credits + ' kredit' : '') + (d.request && d.request.latency_ms != null ? ' · ' + auMs(d.request.latency_ms) : '') + '</div></div>' +
+                    (s.provider_credits ? ' · ' + s.provider_credits + ' kredit' : '') + (d.request && d.request.latency_ms != null ? ' · ' + auMs(d.request.latency_ms) : '') + '</div>' +
+                    // who asked, which endpoint, why the AI ran
+                    (d.request ? '<div class="au-note">' + escapeHtml((d.request.user_id != null ? 'Foydalanuvchi #' + d.request.user_id : (d.request.chat_id != null ? 'Telegram chat' : 'Foydalanuvchi —')) +
+                        ' · ' + (d.request.kind || '—') + ' · sabab: ' + (AU_TRIGGER[d.request.trigger] || d.request.trigger || 'yozilmagan')) + '</div>' : '') + '</div>' +
                     '<div class="au-scroll"><table class="spend-table"><thead><tr>' +
                     '<th>#</th><th>Bosqich</th><th>Provayder / model</th><th>Usage</th><th class="sp-num">Kredit</th><th class="sp-num">USD</th>' +
                     '<th>Aniqlik</th><th class="sp-num">Latency</th><th>Holat</th></tr></thead><tbody>' +

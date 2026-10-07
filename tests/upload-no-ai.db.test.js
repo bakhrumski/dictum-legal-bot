@@ -193,6 +193,48 @@ async function docxOf(text) {
       assert.deepStrictEqual(req.map(x => [x.kind, x.trigger]), [['POST /api/legal-chat', 'user_question']]);
     });
 
+    await test('confirmed: true is consent only: no quota left or a document too large for the plan is still refused, with no AI', async () => {
+      const u = await makeUser(); // Sinov: one analysis unit, one unit per job
+      const c0 = calls.ai;
+      const ok = await post('/api/analyze', u, { json: { text: 'Ijara shartnomasi. '.repeat(200), confirmed: true } });
+      assert.strictEqual(ok.status, 200);
+      await settle(250);
+      assert.strictEqual(calls.ai, c0 + 1);
+      const again = await post('/api/analyze', u, { json: { text: 'Boshqa shartnoma. '.repeat(200), confirmed: true } });
+      assert.ok([402, 429].includes(again.status), `quota still applies: ${again.status}`);
+      // the units are counted on the server from the text, not from the client
+      const v = await makeUser();
+      const big = await post('/api/analyze', v, { json: { text: 'Katta hujjat matni. '.repeat(3000), confirmed: true, units: 1, pages: 1 } });
+      assert.deepStrictEqual([big.status, big.body.code], [413, 'DOCUMENT_TOO_LARGE']);
+      await settle();
+      assert.strictEqual(calls.ai, c0 + 1, 'no AI for either refusal');
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
+    });
+
+    await test('chat with a document: a question takes one chat unit and runs AI; asking for an analysis still goes to the cost card (409), no AI', async () => {
+      const u = await makeUser();
+      const doc = 'Shartnoma 5-bandi: ijarachi har oy to\'laydi. '.repeat(60);
+      const c0 = calls.ai;
+      const q = await post('/api/legal-chat', u, { json: { message: '5-bandda to\'lov qachon?', documentText: doc } });
+      assert.strictEqual(q.status, 200, JSON.stringify(q.body));
+      await settle(250);
+      assert.strictEqual(calls.ai, c0 + 1);
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.chat.used, 1);
+      const svc = await post('/api/legal-chat', u, { json: { message: 'Ushbu hujjatni tahlil qilib bering', documentText: doc } });
+      assert.deepStrictEqual([svc.status, svc.body.code], [409, 'DOC_COST_CONFIRM']);
+      await settle();
+      assert.strictEqual(calls.ai, c0 + 1, 'no AI before the confirm');
+    });
+
+    await test('the master\'s AI usage list and request view show the user, the endpoint and why the AI ran', () => {
+      const page = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+      assert.ok(/<th>Kim · endpoint · sabab<\/th>/u.test(page));
+      assert.ok(/'#' \+ r\.user_id[\s\S]{0,120}r\.kind[\s\S]{0,120}AU_TRIGGER\[r\.trigger\]/u.test(page));
+      assert.ok(/'Foydalanuvchi #' \+ d\.request\.user_id[\s\S]{0,200}d\.request\.kind[\s\S]{0,120}AU_TRIGGER\[d\.request\.trigger\]/u.test(page));
+      const report = fs.readFileSync(path.join(__dirname, '../src/ai/usage-report.js'), 'utf8');
+      assert.ok(/r\.user_id, r\.trigger/u.test(report));
+    });
+
     await test('server and page: explain/opinion need the confirm; the cost card never runs AI by itself; attaching calls only extract / scan-quote', () => {
       const server_ = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
       for (const route of ["app.post('/api/draft/explain-document', requireAuth, require('../ai/ai-trigger').requireServiceConfirm,",
