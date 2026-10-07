@@ -45,31 +45,14 @@
           <p class="form-subtitle">Davom etish uchun <strong>JuristAI</strong> hisobingizga kiring!</p>
 
           <div id="loginError" class="error-message"></div>
-          <form id="loginForm">
-            <div class="form-group has-icon">
-              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
-              <input type="text" id="username" placeholder="foydalanuvchi nomi" required autofocus autocomplete="username">
-            </div>
-            <div class="form-group has-icon">
-              <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
-              <input type="password" id="password" placeholder="parol" required autocomplete="current-password">
-            </div>
-            <div class="form-options">
-              <label class="remember-me"><input type="checkbox" id="rememberMe" checked> Eslab qolish</label>
-              <a href="#" class="forgot-link" onclick="event.preventDefault(); showView('recovery')">Parolni unutdingizmi?</a>
-            </div>
-            <div class="btn-row">
-              <button type="submit" class="btn">Kirish</button>
-              <button type="button" class="btn btn-outline" onclick="showView('register')">Ro'yxatdan o'tish</button>
-            </div>
-          </form>
 
-          <div class="reg-divider">yoki</div>
-          <div class="socrow">
-            <button type="button" class="google-reg-toggle" onclick="startTelegramLogin()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
-              <span>Telegram</span>
-            </button>
+          <!-- Telegram: registration and the main way in -->
+          <button type="button" class="btn btn-block tg-primary" onclick="startTelegramLogin()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
+            <span>Telegram bilan kirish</span>
+          </button>
+          <p class="tg-primary-note">Hisobingiz yo'qmi? <a href="#" onclick="event.preventDefault(); showView('register')">Telegram orqali ro'yxatdan o'ting</a></p>
+          <div class="socrow" data-auth="google" hidden>
             <button type="button" class="google-reg-toggle" data-auth="google" hidden onclick="window.location.href='/auth/google?mode=login'">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M17.7 7.1A7 7 0 1 0 19 15.9V12h-7"/></svg>
               <span>Google</span>
@@ -82,13 +65,36 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
               Telegram botni oching
             </a>
-            <p class="status-note" style="margin-bottom:8px;">Botdan kelgan 4 raqamli kodni kiriting:</p>
+            <p class="status-note" style="margin-bottom:8px;">Botdan kelgan 6 raqamli kodni shu yerga kiriting. Kodni hech kimga bermang.</p>
             <div class="otp-controls">
-              <input type="text" id="loginOtpInput" class="otp-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" onkeydown="if(event.key==='Enter')verifyLoginOtp()">
+              <input type="text" id="loginOtpInput" class="otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="000000" onkeydown="if(event.key==='Enter')verifyLoginOtp()">
               <button type="button" id="loginOtpVerifyBtn" class="otp-verify" aria-label="Kodni tasdiqlash" onclick="verifyLoginOtp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></button>
             </div>
             <div id="loginOtpError" class="agreement-error" style="margin-top:6px;display:none;"></div>
           </div>
+
+          <!-- Login and password: for accounts whose owner turned it on, and staff -->
+          <details class="pw-login" id="pwLoginDetails">
+            <summary>Login va parol bilan kirish</summary>
+            <p class="pw-login-note">Hisobingizning «Kirish usullari» sahifasida login va parol o'rnatgan bo'lsangiz yoki xodim bo'lsangiz. Ro'yxatdan o'tish — faqat Telegram orqali.</p>
+            <form id="loginForm">
+              <div class="form-group has-icon">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
+                <input type="text" id="username" placeholder="login" required autocomplete="username">
+              </div>
+              <div class="form-group has-icon">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
+                <input type="password" id="password" placeholder="parol" required autocomplete="current-password">
+              </div>
+              <div class="form-options">
+                <label class="remember-me"><input type="checkbox" id="rememberMe" checked> Eslab qolish</label>
+                <a href="#" class="forgot-link" onclick="event.preventDefault(); showView('recovery')">Parolni unutdingizmi?</a>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn">Kirish</button>
+              </div>
+            </form>
+          </details>
 
           <p class="form-subtitle tg-note" style="margin-top:38px; margin-bottom:14px;">Huquqiy maslahat kerak bo'lsa quyidagi Telegram bot orqali murojaat qiling</p>
           <a class="telegram-btn" href="https://t.me/yuristga_savolbot" target="_blank" rel="noopener">
@@ -139,7 +145,7 @@
               </a>
               <div id="otpStatus" class="status-note" style="margin-bottom:8px;"></div>
               <div class="otp-controls">
-                <input type="text" id="otpInput" class="otp-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" onkeydown="if(event.key==='Enter')verifyTelegramOtp()">
+                <input type="text" id="otpInput" class="otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="000000" onkeydown="if(event.key==='Enter')verifyTelegramOtp()">
                 <button type="button" id="otpVerifyBtn" class="otp-verify" aria-label="Kodni tasdiqlash" onclick="verifyTelegramOtp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></button>
               </div>
               <div id="otpError" class="agreement-error" style="margin-top:6px;display:none;"></div>
@@ -165,7 +171,8 @@
         <!-- RECOVERY -->
         <div class="recovery-form">
           <h1 class="form-heading">Parolni tiklash</h1>
-          <p class="form-subtitle">Hisobingizni tasdiqlash uchun ro'yxatdan o'tgan usulni tanlang</p>
+          <p class="form-subtitle">Hisobingizga ulangan Telegram orqali tasdiqlang</p>
+          <p class="pw-login-note recovery-note">Oddiy hisob: Telegram bilan kiring, so'ng «Kirish usullari» sahifasida Telegram tasdig'i bilan yangi parol o'rnating. Xodim hisobi: bot tiklash havolasini yuboradi.</p>
 
           <div id="recoveryError" class="error-message"></div>
 
@@ -566,6 +573,7 @@
                     } else {
                         localStorage.removeItem('juristai_remember');
                     }
+                    try { localStorage.setItem('jai-login-method', 'password'); } catch (_) {}
                     if (data.twofa) { show2faStep(data.token); return; }
                     window.location.href = '/dashboard.html';
                 } else {
@@ -643,6 +651,15 @@
             el.addEventListener('input', function() { this.classList.remove('input-invalid'); });
             el.addEventListener('change', function() { this.classList.remove('input-invalid'); });
         });
+
+        // The login/password form opens by itself for whoever used it before
+        // (staff, owners who turned it on) or comes with #parol
+        (function () {
+            var d = document.getElementById('pwLoginDetails');
+            var used = false;
+            try { used = localStorage.getItem('jai-login-method') === 'password' || !!localStorage.getItem('juristai_remember'); } catch (_) {}
+            if (d && (used || location.hash === '#parol')) d.open = true;
+        })();
 
         // Remember me: restore saved username. Older versions also stored the
         // password — scrub it from localStorage on sight.
@@ -727,12 +744,12 @@
                     try {
                         const r = await fetch('/api/recover/status/' + data.token);
                         const d = await r.json();
-                        if (d.resetToken) {
+                        // the reset link (staff) or the next step (ordinary
+                        // account) is in the Telegram chat, never handed here
+                        if (d.confirmed) {
                             clearInterval(_tgRecovPollInterval);
-                            recoveryToken = d.resetToken;
-                            document.querySelectorAll('.recovery-step').forEach(s => s.classList.remove('active'));
-                            document.getElementById('recoveryStep3').classList.add('active');
-                            statusEl.style.display = 'none';
+                            btn.disabled = false;
+                            statusEl.textContent = 'Telegram\'dagi xabarni oching: u yerda keyingi qadam yozilgan.';
                         }
                     } catch(e) {}
                 }, 2500);
@@ -931,9 +948,11 @@
                 try {
                     const resp = await fetch('/api/telegram-auth/status/' + mode + '/' + token);
                     const data = await resp.json();
-                    if (data.approved) {
+                    // the server says only that a code went to Telegram;
+                    // the code itself is typed here by the person
+                    if (data.codeSent) {
                         clearInterval(_telegramAuthPoll);
-                        if (statusEl) statusEl.textContent = 'Tasdiqlandi. Kirish yakunlanmoqda…';
+                        if (statusEl) statusEl.textContent = 'Kod Telegramga yuborildi. 6 raqamli kodni kiriting (5 daqiqa).';
                         onApproved();
                     } else if (data.expired || attempts > 120) {
                         clearInterval(_telegramAuthPoll);
@@ -958,21 +977,21 @@
                 const botUsername = data.botUsername || 'juristAI_registration_bot';
                 const deepLink = 'https://t.me/' + botUsername + '?start=login_' + _loginToken;
                 document.getElementById('loginBotLink').href = deepLink;
-                otpStatus.textContent = 'Telegramda “Start” ni bosing va ruxsat bering. Bu sahifa avtomatik davom etadi.';
+                otpStatus.textContent = 'Telegramda “Start” ni bosing: bot 6 raqamli kod yuboradi.';
                 window.open(deepLink, '_blank', 'noopener');
-                pollTelegramApproval('login', _loginToken, function(){ verifyLoginOtp('APPROVED'); }, otpStatus);
+                pollTelegramApproval('login', _loginToken, function(){ document.getElementById('loginOtpInput').focus(); }, otpStatus);
             } catch(err) {
                 otpStatus.innerHTML = '<span style="color:#d9534f;"></span>'; otpStatus.firstChild.textContent = err.message || 'Xatolik';
             }
         }
 
-        async function verifyLoginOtp(approvedCode) {
-            const code = approvedCode || document.getElementById('loginOtpInput').value.trim();
+        async function verifyLoginOtp() {
+            const code = document.getElementById('loginOtpInput').value.trim();
             const otpError = document.getElementById('loginOtpError');
             const verifyBtn = document.getElementById('loginOtpVerifyBtn');
             otpError.style.display = 'none';
-            if (!approvedCode && (!code || code.length !== 4)) {
-                otpError.textContent = '4 raqamli kodni to\'liq kiriting';
+            if (!/^\d{6}$/.test(code)) {
+                otpError.textContent = '6 raqamli kodni to\'liq kiriting';
                 otpError.style.display = 'block';
                 return;
             }
@@ -1031,12 +1050,12 @@
                 const botUsername = data.botUsername || 'juristAI_registration_bot';
                 const deepLink = 'https://t.me/' + botUsername + '?start=reg_' + _regToken;
                 document.getElementById('regBotLink').href = deepLink;
-                otpStatus.textContent = 'Telegramda “Start” ni bosing va ruxsat bering. Bu sahifa avtomatik davom etadi.';
+                otpStatus.textContent = 'Telegramda “Start” ni bosing: bot 6 raqamli kod yuboradi.';
                 otpBlock.style.display = 'block';
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
                 window.open(deepLink, '_blank', 'noopener');
-                pollTelegramApproval('register', _regToken, function(){ verifyTelegramOtp('APPROVED'); }, otpStatus);
+                pollTelegramApproval('register', _regToken, function(){ document.getElementById('otpInput').focus(); }, otpStatus);
             } catch(err) {
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
@@ -1045,13 +1064,13 @@
             }
         }
 
-        async function verifyTelegramOtp(approvedCode) {
-            const code = approvedCode || document.getElementById('otpInput').value.trim();
+        async function verifyTelegramOtp() {
+            const code = document.getElementById('otpInput').value.trim();
             const otpError = document.getElementById('otpError');
             const verifyBtn = document.getElementById('otpVerifyBtn');
             otpError.style.display = 'none';
-            if (!approvedCode && (!code || code.length !== 4)) {
-                otpError.textContent = '4 raqamli kodni to\'liq kiriting';
+            if (!/^\d{6}$/.test(code)) {
+                otpError.textContent = '6 raqamli kodni to\'liq kiriting';
                 otpError.style.display = 'block';
                 return;
             }

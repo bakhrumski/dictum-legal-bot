@@ -769,7 +769,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
 
   // Authentication never happens in the public legal-question bot. Preserve
   // the deep-link payload and send the user to the dedicated auth bot.
-  if (/^(login_|reg_|recover_|legacy_recover_)/.test(param)) {
+  if (/^(login_|reg_|recover_|legacy_recover_|stepup_)/.test(param)) {
     const authUrl = `https://t.me/${AUTH_BOT_USERNAME}?start=${encodeURIComponent(param)}`;
     await bot.sendMessage(chatId,
       'Kirish, ro\'yxatdan o\'tish va parolni tiklash uchun maxsus JuristAI botidan foydalaning.',
@@ -958,7 +958,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
         if (verificationTokens.has(botInitKey)) {
           const s = verificationTokens.get(botInitKey);
           s.confirmed = true;
-          s.resetToken = resetToken;
+          // the reset link went to this Telegram chat only; the browser learns "confirmed"
         }
         return;
       }
