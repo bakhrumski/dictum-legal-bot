@@ -56,7 +56,9 @@ test('the approved table', () => {
 test('opinion and explain jobs are recorded under their own names', () => {
   // v2: sized by the document and reserved from the handler (meterDocument)
   assert.ok(/service: 'opinion', text: documentText, docTicket: req\.body\.docTicket, endpoint: '\/api\/draft\/legal-opinion'/.test(server));
-  assert.ok(/service: 'analysis', text: documentText, docTicket: req\.body\.docTicket, endpoint: '\/api\/draft\/explain-document'/.test(server));
+  const route = require('fs').readFileSync(require('path').join(__dirname, '../src/rag/document-explain-route.js'), 'utf8');
+  assert.ok(/service: 'analysis', text: documentText, docTicket: req\.body\.docTicket, endpoint: '\/api\/draft\/explain-document'/.test(route));
+  assert.ok(/mountExplainDocument\(app, \{/.test(server));
 });
 
 test("an opinion request row is not counted as a spent credit", () => {

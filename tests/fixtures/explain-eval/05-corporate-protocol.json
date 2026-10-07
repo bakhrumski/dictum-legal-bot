@@ -1,0 +1,20 @@
+{
+  "id": "corporate-protocol",
+  "type": "korporativ hujjat (umumiy yig'ilish bayonnomasi)",
+  "title": "Ishtirokchilar umumiy yig'ilishi bayonnomasi (sintetik)",
+  "synthetic": true,
+  "pages": [
+    "\"Tong Yulduzi\" MChJ ishtirokchilari umumiy yig'ilishining\nBAYONNOMASI № 3\nSamarqand shahri, 2026-yil 20-may\n\nYig'ilishda qatnashdi:\n- L. Hamidov - ustav kapitalining 45 foizi;\n- O. Sobirova - ustav kapitalining 25 foizi.\nQatnashmadi: \"Ipak Yo'li Kapital\" MChJ - ustav kapitalining 30 foizi.\n\nYig'ilish raisi L. Hamidov kvorum mavjudligini e'lon qildi.\nJamiyat ustavining 9.4-bandiga ko'ra, ustav kapitalini o'zgartirish masalasi ovozlarning kamida 75 foizi qatnashganda ko'riladi.",
+    "KUN TARTIBI:\n1. Ustav kapitalini 200 000 000 so'mdan 500 000 000 so'mga oshirish.\n2. Direktorning 2025-yil hisobotini tasdiqlash.\n\n1-masala bo'yicha: \"Ma'qul\" - L. Hamidov; \"Qarshi\" - O. Sobirova. QAROR: ustav kapitali 500 000 000 so'mga oshirilsin.\n2-masala bo'yicha: bir ovozdan tasdiqlandi.\n\nQo'shimcha kapital ishtirokchilar tomonidan 2026-yil 1-sentabrgacha kiritiladi; kiritilmagan ulush bo'yicha qaror 2026-yil 1-oktabrdan boshlab o'z kuchini yo'qotadi.\n\nRais: L. Hamidov\nKotib: O. Sobirova"
+  ],
+  "keyPoints": [
+    { "id": "attendance", "point": "Qatnashganlar 45 + 25 = 70 foiz; 30 foizli ishtirokchi qatnashmagan", "anchor": "Qatnashmadi", "page": 1 },
+    { "id": "quorum-rule", "point": "Ustav 9.4-band: kapitalni o'zgartirish uchun kamida 75 foiz qatnashishi kerak", "anchor": "kamida 75 foizi", "page": 1 },
+    { "id": "decision", "point": "Kapitalni 500 000 000 so'mga oshirish qarori; O. Sobirova qarshi", "anchor": "\"Qarshi\" - O. Sobirova", "page": 2 },
+    { "id": "deadline-lapse", "point": "Kapital 1-sentabrgacha kiritilmasa, qaror 1-oktabrdan kuchini yo'qotadi (oxirgi shart)", "anchor": "o'z kuchini yo'qotadi", "page": 2 }
+  ],
+  "traps": [
+    { "id": "quorum-contradiction", "rule": "E", "correct": "Rais kvorum bor dedi, lekin qatnashganlar 70 foiz, ustav 75 foiz talab qiladi - ziddiyat ikkala joy keltirilib aytiladi", "wrong": "\"Kvorum bor edi\" deb yozish yoki ziddiyatni o'zi hal qilish (qaror haqiqiy emas deb hukm chiqarish)" },
+    { "id": "unanimous", "rule": "A", "correct": "1-masala bir ovozdan emas", "wrong": "Barcha qarorlar bir ovozdan qabul qilindi deb yozish" }
+  ]
+}

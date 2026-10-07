@@ -1,0 +1,32 @@
+{
+  "id": "due-diligence",
+  "type": "huquqiy ekspertiza xulosasi",
+  "title": "Jamiyat bo'yicha huquqiy ekspertiza xulosasi (sintetik)",
+  "synthetic": true,
+  "pages": [
+    "HUQUQIY EKSPERTIZA XULOSASI\n\"Navro'z Media\" MChJ bo'yicha\n2026-yil 14-avgust\n\nTayyorlagan: \"Adolat Konsalting\" MChJ yuristi B. Karimova.\n\n1. KIRISH\n1.1. Ushbu xulosa \"Navro'z Media\" MChJ (keyingi o'rinlarda - Jamiyat) tomonidan taqdim etilgan hujjatlar va ochiq manbalar asosida tayyorlandi. Taqdim etilmagan hujjatlar ko'rib chiqilmadi.\n1.2. Xulosa 2026-yil 12-avgust holatiga tuzilgan.\n\n2. KORPORATIV MA'LUMOTLAR\n2.1. Jamiyat ustav kapitalining 60 foizi D. Abdullayevaga tegishli, 40 foizi \"Orzu Invest\" MChJga tegishli.\n2.2. 2024-yilda Jamiyat direktori S. Rahimov bo'lgan; 2025-yil 3-martdan direktor - N. Yo'ldoshev.",
+    "3. SUD ISHLARI\n3.1. Jamiyat vakillarining og'zaki ma'lumotiga ko'ra, Jamiyat ishtirokida ko'rilayotgan sud ishlari mavjud emas. Bu ma'lumot sud reyestrlari orqali tekshirilmadi.\n\n4. QARZLAR VA MAJBURIY IJRO\n4.1. Ochiq manbalarda Jamiyatning soliq qarzi va majburiy ijro bo'yicha ish yuritishlari aniqlanmadi (2026-yil 12-avgust holatiga).\n\n5. INTELLEKTUAL MULK\n5.1. Jamiyat o'z faoliyatida \"Navro'z\" belgisidan foydalanadi. Ushbu belgini tovar belgisi sifatida ro'yxatdan o'tkazish uchun Jamiyat tomonidan ariza berilmagan.\n5.2. Xulosa muallifining tavsiyasi: \"Navro'z\" belgisini tovar belgisi sifatida ro'yxatdan o'tkazish uchun ariza berish maqsadga muvofiq.",
+    "6. LITSENZIYALAR\n6.1. Jamiyatda reklama faoliyati uchun litsenziya mavjud emas.\n6.2. Ushbu faoliyat turi uchun litsenziya talab qilinishi yoki qilinmasligi ushbu xulosa doirasida tekshirilmadi.\n\n7. XULOSA\n7.1. Taqdim etilgan hujjatlar doirasida Jamiyatning korporativ hujjatlarida jiddiy kamchilik aniqlanmadi.\n7.2. 3.1, 4.1 va 6.2-bandlardagi cheklovlar hisobga olinishi kerak."
+  ],
+  "keyPoints": [
+    { "id": "author", "point": "Xulosani \"Adolat Konsalting\" yuristi B. Karimova tayyorlagan; tekshiruvni kim buyurtma qilgani aytilmagan", "anchor": "Tayyorlagan: \"Adolat Konsalting\" MChJ yuristi B. Karimova", "page": 1 },
+    { "id": "scope", "point": "Faqat Jamiyat taqdim etgan hujjatlar va ochiq manbalar; boshqalari ko'rilmagan", "anchor": "Taqdim etilmagan hujjatlar ko'rib chiqilmadi", "page": 1 },
+    { "id": "share", "point": "60 foiz D. Abdullayevaga tegishli", "anchor": "60 foizi D. Abdullayevaga tegishli", "page": 1 },
+    { "id": "director-history", "point": "2024-yilda direktor S. Rahimov, 2025-yil 3-martdan N. Yo'ldoshev", "anchor": "2025-yil 3-martdan direktor", "page": 1 },
+    { "id": "court-source", "point": "Sud ishlari yo'qligi - Jamiyat vakillarining og'zaki ma'lumoti, reyestrdan tekshirilmagan", "anchor": "Jamiyat vakillarining og'zaki ma'lumotiga ko'ra", "page": 2 },
+    { "id": "debts-not-found", "point": "Qarz va majburiy ijro ochiq manbalarda aniqlanmadi, 12-avgust holatiga", "anchor": "aniqlanmadi (2026-yil 12-avgust holatiga)", "page": 2 },
+    { "id": "no-application", "point": "Tovar belgisi uchun ariza berilmagan", "anchor": "ariza berilmagan", "page": 2 },
+    { "id": "recommendation-author", "point": "Ro'yxatdan o'tkazish - xulosa muallifining tavsiyasi", "anchor": "Xulosa muallifining tavsiyasi", "page": 2 },
+    { "id": "licence-not-checked", "point": "Litsenziya yo'q; talab qilinishi tekshirilmagan", "anchor": "ushbu xulosa doirasida tekshirilmadi", "page": 3 }
+  ],
+  "traps": [
+    { "id": "who-checked", "rule": "A", "correct": "Tekshiruvni xulosa muallifi o'tkazgan; buyurtmachi yoki investorlar aytilmagan", "wrong": "\"Investorlar tekshirdi\" yoki boshqa tekshiruvchi qo'shish" },
+    { "id": "court-attribution", "rule": "A", "correct": "\"Jamiyat vakillarining ma'lumotiga ko'ra\" saqlanadi, tekshirilmagani aytiladi", "wrong": "\"Sud ishlari yo'q\" deb tasdiqlangan fakt sifatida yozish" },
+    { "id": "not-found-vs-none", "rule": "B", "correct": "Qarz \"aniqlanmadi\", sana bilan", "wrong": "\"Qarzi yo'q\" / \"majburiy ijro mavjud emas\"" },
+    { "id": "no-application-vs-no-right", "rule": "B", "correct": "Ariza berilmagan", "wrong": "\"Belgiga huquq yo'q\", \"ro'yxatdan o'tkazish rad etilgan\"" },
+    { "id": "recommendation-owner", "rule": "C", "correct": "Tavsiya xulosa muallifiniki deb ko'rsatiladi", "wrong": "Tavsiyani hujjat fakti yoki AI maslahati qilib berish" },
+    { "id": "added-consequence", "rule": "A", "correct": "Hujjatda yo'q oqibat qo'shilmaydi", "wrong": "Mualliflik huquqi buzilishi, jarima va hokazo oqibatlarni qo'shish" },
+    { "id": "licence-inference", "rule": "A", "correct": "Litsenziya yo'qligi = faoliyat noqonuniy degan xulosa chiqarilmaydi; talab tekshirilmagani aytiladi", "wrong": "\"Litsenziya majburiy\", \"faoliyat noqonuniy\"" },
+    { "id": "historical-director", "rule": "B", "correct": "S. Rahimov 2024-yildagi direktor, hozirgi emas", "wrong": "S. Rahimovni hozirgi direktor deb yozish" }
+  ]
+}

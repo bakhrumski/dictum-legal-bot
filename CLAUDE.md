@@ -63,6 +63,13 @@ Known state of the suites (Sept 2026):
   sources" read as "not in the law", and removes empty headings / cuts a
   truncated answer to its last full sentence. `citationCheck` is the format
   check only; `semanticCheck` is the guard's verdict.
+  `src/rag/document-explain.js` (2026-10-07) is the document explanation:
+  text PDFs carry `[Sahifa n]` marks (never billed, `contentChars`), the
+  long-document digest (shared with opinion and chat) keeps attribution,
+  qualifiers, exceptions and recommendation authors and names parts it could
+  not read, and the answer is checked with no AI call for figures, pages and
+  clauses not in the source. Quality is unconfirmed until the lawyer-reviewed
+  benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).
