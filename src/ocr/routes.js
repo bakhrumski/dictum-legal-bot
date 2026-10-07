@@ -639,7 +639,7 @@ function mountAnalyzerRoutes(app, deps) {
   });
 
   // ── AI analysis ──
-  app.post('/api/analyze', requireAuth, scanStore.resolveScans({ pool, ledger }), async (req, res) => {
+  app.post('/api/analyze', requireAuth, require('../ai/ai-trigger').requireServiceConfirm, scanStore.resolveScans({ pool, ledger }), async (req, res) => {
     try {
       const { langHint, docTicket } = req.body || {};
       // a scan is read here from its scanId (resolveScans), never sent as text

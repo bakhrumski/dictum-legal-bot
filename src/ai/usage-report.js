@@ -82,7 +82,7 @@ function mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger }) {
       const service = req.query.service ? String(req.query.service).slice(0, 20) : null;
       const { rows } = await pool.query(`
         WITH totals AS (${REQUEST_TOTALS} AND l.ts > NOW() - ($1 || ' days')::interval GROUP BY l.request_id)
-        SELECT r.request_id, r.service, r.kind, r.user_id, r.chat_id IS NOT NULL AS telegram,
+        SELECT r.request_id, r.service, r.kind, r.user_id, r.trigger, r.chat_id IS NOT NULL AS telegram,
                r.started_at, r.finished_at, r.latency_ms, r.outcome, r.legal_check, r.telemetry_errors, r.degraded,
                t.calls, t.skipped_calls, t.failed_calls, t.retry_calls, t.fallback_calls, t.batches,
                t.unknown_cost_calls, t.voicelab_credits_unknown_calls, t.known_cost_usd, t.provider_credits,

@@ -540,6 +540,7 @@ async function finishRequest(store, fields = {}) {
       finishedAt: new Date(),
       outcome: data.outcome || null,
       legalCheck: data.legalCheck || null,
+      trigger: data.trigger || null,
       degraded: store.shared.degraded.size ? [...store.shared.degraded] : null,
       telemetryErrors: store.shared.telemetryErrors,
     });

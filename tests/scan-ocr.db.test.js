@@ -159,7 +159,7 @@ const rows = async (user) => (await pool.query(`SELECT service, credits, status,
       assert.strictEqual(ocrCalls[ocrCalls.length - 1].pages, 3, 'the provider gets the counted pages (its output cap)');
       assert.deepStrictEqual((await rows(u)).map(x => [x.service, x.status]), [['analysis', 'reserved']], 'reserved before the OCR, held for the service');
       // the analysis of that scan uses the held reservation: one unit, not two
-      const a = await post('/api/analyze', u, { json: { scanId: r.body.scanId } });
+      const a = await post('/api/analyze', u, { json: { scanId: r.body.scanId, confirmed: true } });
       assert.strictEqual(a.status, 200, JSON.stringify(a.body));
       await settle();
       assert.deepStrictEqual((await rows(u)).map(x => [x.service, x.credits, x.status]), [['analysis', 1, 'committed']]);
@@ -406,7 +406,7 @@ const rows = async (user) => (await pool.query(`SELECT service, credits, status,
       const b = await makeUser();
       const q = await quote(a, fx('scan-3p.pdf'), 'chat');
       const r = await ocr(a, fx('scan-3p.pdf'), q.body.scanTicket);
-      const res = await post('/api/analyze', b, { json: { scanId: r.body.scanId } });
+      const res = await post('/api/analyze', b, { json: { scanId: r.body.scanId, confirmed: true } });
       assert.deepStrictEqual([res.status, res.body.code], [404, 'SCAN_NOT_FOUND']);
       // and the same file uploaded by b is b's own OCR, not a's cached text
       const qb = await quote(b, fx('scan-3p.pdf'), 'chat');

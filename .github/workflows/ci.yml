@@ -71,6 +71,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/test-entitlement.db.test.js
       - name: Scanned documents - page count, ticket, held reservation and OCR cache on real Postgres (stub OCR)
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/scan-ocr.db.test.js
+      - name: Attaching a file never calls AI; services only when confirmed (real routes, stub providers)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/upload-no-ai.db.test.js
       - name: Login and password on a Telegram account - step-up, sessions, master 2FA, test account on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/account-credentials.db.test.js
       - name: Safe re-ingest on real Postgres

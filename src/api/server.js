@@ -6309,7 +6309,12 @@ async function classifyLegalTopic(message, opts = {}) {
   }
 }
 
-app.post('/api/legal-chat', requireAuth, resolveScanDocs, tariffModule.enforceChatQuota('/api/legal-chat'), async (req, res) => {
+// why this chat request runs AI: the person's question (ai_requests.trigger)
+const markQuestionTrigger = (req, res, next) => {
+  if (String((req.body && req.body.message) || '').trim()) require('../ai/ai-trigger').markTrigger('user_question');
+  next();
+};
+app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, tariffModule.enforceChatQuota('/api/legal-chat'), async (req, res) => {
   try {
     const { message, history, databases, topic: rawTopic, topics, autoDetect } = req.body;
     if (!message || typeof message !== 'string') {
@@ -7095,7 +7100,7 @@ async function buildDigest(documentText, userId) {
 // retrieve grounding law from the corpus (lex.uz), and produce a formal
 // opinion in the fixed Kirish / Asosiy ma'lumotlar / Tahlil / Xulosa /
 // Manbalar structure. Returns HTML rendered as an editable, exportable doc.
-app.post('/api/draft/legal-opinion', requireAuth, resolveScanDocs, async (req, res) => {
+app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').requireServiceConfirm, resolveScanDocs, async (req, res) => {
   try {
     // Whole-document coverage. One job is at most 30 pages / 120 000
     // characters on a paid plan and 1 unit on Sinov (tariffs v2); a larger
@@ -7533,7 +7538,7 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // NOT the legal-analysis format (no Huquqiy asos/Tahlil sections, no statutes
 // required). Long documents go through the shared map-reduce digest so the
 // whole document is covered.
-app.post('/api/draft/explain-document', requireAuth, resolveScanDocs, async (req, res) => {
+app.post('/api/draft/explain-document', requireAuth, require('../ai/ai-trigger').requireServiceConfirm, resolveScanDocs, async (req, res) => {
   try {
     const documentText = (typeof req.body.documentText === 'string')
       ? req.body.documentText.replace(/\u0000/g, '').trim() : '';
