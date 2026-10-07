@@ -10265,8 +10265,10 @@ app.post('/api/password-recovery/reset', require('../auth/same-origin').requireS
       return res.status(direct.status).json(direct.success ? { success: true } : { error: direct.error, code: direct.code || null });
     }
 
-    // Legacy flow: code-verified token
-    if (!code) return res.status(400).json({ error: 'Tasdiqlash kodi kerak' });
+    // Legacy flow: code-verified token. Without a code this is a reset link
+    // that is no longer known: used, expired, or issued before a restart
+    // (links live in memory) - say so plainly.
+    if (!code) return res.status(400).json({ error: "Tiklash havolasi eskirgan yoki allaqachon ishlatilgan. «Parolni unutdingizmi?» orqali qayta boshlang.", code: 'RESET_LINK_EXPIRED' });
     const pending = verificationTokens.get('recovery_' + token);
     if (!pending || Date.now() > pending.expiresAt) {
       return res.status(400).json({ error: 'Sessiya muddati o\'tgan. Qayta urinib ko\'ring.' });
