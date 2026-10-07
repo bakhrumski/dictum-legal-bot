@@ -67,14 +67,16 @@ async function callAI(messages, opts = {}) {
 let explainAnswer = () => 'Bu hujjat 2 sahifadan iborat. Unda shartnoma shartlari bor.';
 let explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' });
 const explainPrompts = [];
+// priced like the cheap lane, so the ledger shows a calculated cost; it
+// reports finish_reason and truncated as the real adapters do
 async function explainAI(messages, opts = {}) {
-  return usage.track({ provider: 'stub', model: 'stub-model', endpoint: opts.endpoint || null, bound: { usd: 0, reason: 'stub' } }, async (call) => {
+  return usage.track({ provider: 'stub', model: 'gpt-6-luna', endpoint: opts.endpoint || null, detail: opts.detail || null, bound: { usd: 0.01, reason: 'stub' } }, async (call) => {
     calls.ai += 1;
     explainPrompts.push(messages);
-    call.usage({ inTokens: 100, outTokens: 20 });
-    if (/^Excerpt /u.test(messages[1].text)) return explainDigestPart(messages[1].text);
-    const a = explainAnswer(messages);
-    return typeof a === 'object' ? { provider: 'stub', ...a } : { text: a, provider: 'stub' };
+    const r = /^Excerpt /u.test(messages[1].text) ? explainDigestPart(messages[1].text) : explainAnswer(messages);
+    const out = typeof r === 'object' ? { provider: 'stub', ...r } : { text: r, provider: 'stub' };
+    call.usage({ inTokens: 3000, outTokens: out.truncated ? 1600 : 200, finishReason: out.truncated ? 'length' : 'stop', truncated: !!out.truncated });
+    return out;
   });
 }
 async function ocrStub() { calls.ocr += 1; return { text: 'x'.repeat(500), provider: 'stub' }; }
@@ -310,6 +312,53 @@ async function docxOf(text) {
       assert.strictEqual(b.services.analysis.used, 0, 'released: the document was not read whole');
       const rows = (await pool.query("SELECT status FROM tariff_usage WHERE admin_id = $1 AND status IS NOT NULL", [u])).rows.map(x => x.status);
       assert.deepStrictEqual(rows, ['released']);
+    });
+
+    await test('a long document none of whose parts is read whole (an ordinary user): no final call, 422, the unit released, every digest call kept in the ledger with its part, finish_reason and cost', async () => {
+      const f = loadAll().find(x => x.id === 'long-lease');
+      const text = explain.markPages(f.pages);
+      const u = await makeUser();
+      const c0 = calls.ai;
+      explainPrompts.length = 0;
+      explainDigestPart = () => ({ text: '- band, kesilgan', truncated: true });
+      let r;
+      try {
+        r = await post('/api/draft/explain-document', u, { json: { documentText: text, confirmed: true } });
+      } finally { explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' }); }
+      assert.strictEqual(r.status, 422, JSON.stringify(r.body));
+      assert.deepStrictEqual([r.body.code, r.body.quotaRefunded, r.body.coverage.finalRun], ['DOCUMENT_NOT_READ', true, false]);
+      const n = explain.digestChunks(text).chunks.length;
+      assert.strictEqual(calls.ai - c0, n + explain.DIGEST_LIMITS.maxExtraCalls, 'the parts and the bounded re-reads only');
+      assert.ok(explainPrompts.every(m => /^Excerpt /u.test(m[1].text)), 'no explanation generated');
+      await settle(400);
+      // the service is not delivered: its unit is released
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 0);
+      assert.deepStrictEqual((await pool.query('SELECT status FROM tariff_usage WHERE admin_id = $1 AND status IS NOT NULL', [u])).rows.map(x => x.status), ['released']);
+      // the provider's calls are kept with their cost, stage, part and why they stopped
+      const rows = (await pool.query(`SELECT stage, finish_reason, truncated, call_detail, cost_usd::float AS cost, cost_source, status
+                                        FROM llm_spend_log WHERE user_id = $1 ORDER BY seq`, [u])).rows;
+      assert.strictEqual(rows.length, n + explain.DIGEST_LIMITS.maxExtraCalls);
+      assert.ok(rows.every(x => x.stage === 'document_digest' && x.finish_reason === 'length' && x.truncated === true && x.call_detail.phase === 'digest'), JSON.stringify(rows[0]));
+      assert.ok(rows.every(x => x.cost > 0 && x.cost_source === 'calculated'), 'the cost stays in the ledger');
+      assert.deepStrictEqual(rows.slice(0, n).map(x => x.call_detail.part), Array.from({ length: n }, (_, i) => String(i + 1)));
+      assert.ok(rows.slice(n).every(x => /^[0-9]+[ab]$/u.test(x.call_detail.part)));
+      const req = (await pool.query('SELECT doc_coverage, outcome FROM ai_requests WHERE user_id = $1', [u])).rows[0];
+      assert.deepStrictEqual([req.doc_coverage.read, req.doc_coverage.finalRun, req.doc_coverage.fullyRead, req.outcome], [0, false, false, 'http_422']);
+    });
+
+    await test('a long document read whole: digest rows and the final row are separate stages; the request records what was read', async () => {
+      const f = loadAll().find(x => x.id === 'long-lease');
+      const u = await makeUser();
+      const r = await post('/api/draft/explain-document', u, { json: { documentText: explain.markPages(f.pages), confirmed: true } });
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      await settle(400);
+      const rows = (await pool.query('SELECT stage, finish_reason, truncated, call_detail FROM llm_spend_log WHERE user_id = $1 ORDER BY seq', [u])).rows;
+      const final = rows[rows.length - 1];
+      assert.deepStrictEqual([final.stage, final.call_detail.phase, final.finish_reason, final.truncated], ['document', 'final', 'stop', false]);
+      assert.ok(rows.slice(0, -1).every(x => x.stage === 'document_digest' && x.truncated === false));
+      const req = (await pool.query('SELECT doc_coverage FROM ai_requests WHERE user_id = $1', [u])).rows[0];
+      assert.deepStrictEqual([req.doc_coverage.fullyRead, req.doc_coverage.finalRun, req.doc_coverage.read], [true, true, rows.length - 1]);
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
     });
 
     await test('a document read whole whose answer was cut: marked partial at the top, the unit is committed (delivered, as a cut chat answer)', async () => {

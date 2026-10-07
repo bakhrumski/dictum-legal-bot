@@ -11,10 +11,12 @@
  * and the job is sized and reserved as an analysis by meterDocument before
  * any AI call. What changed is what the model is given and what is checked
  * on the way out (src/rag/document-explain.js), and that a document not read
- * whole releases its units (below).
+ * whole releases its units (below); when no part was read whole, no
+ * explanation is generated at all (422 DOCUMENT_NOT_READ, units released).
  */
 
 const { explainDocument } = require('./document-explain');
+const usageLedger = require('../ai/usage-ledger');
 
 function mountExplainDocument(app, deps) {
   const { requireAuth, requireServiceConfirm, resolveScanDocs, tariffModule, callAI, digest, lexLangForText, logAudit } = deps;
@@ -42,6 +44,17 @@ function mountExplainDocument(app, deps) {
       // full text up to 14 000 chars, the shared digest above it; one
       // explanation call; the answer is checked against the source with no AI
       const result = await explainDocument({ documentText, langName, callAI, userId, digest: t => digest(t, userId) });
+      // what was read goes to the request's ledger row (ai_requests.doc_coverage)
+      if (result.coverage) usageLedger.annotate({ docCoverage: result.coverage.summary || null });
+      // no part of the document read whole: no explanation was generated; the
+      // status releases the units (attachRefundOnFailure), the provider calls
+      // already made stay in the ledger with their cost
+      if (result.aborted) {
+        return res.status(422).json({
+          error: 'document_not_read', code: 'DOCUMENT_NOT_READ', coverage: result.coverage,
+          message: "Hujjatning hech bir qismi to'liq o'qilmadi, shuning uchun tushuntirish tayyorlanmadi. Limit qaytarildi. Qayta urinib ko'ring yoki hujjatni qismlarga bo'lib yuboring.",
+        });
+      }
       if (!result.reply) return res.status(500).json({ error: 'Tushuntirib bo\'lmadi — qayta urinib ko\'ring' });
       if (logAudit) logAudit(req, 'document.explain', 'document', documentText.length + ' chars');
       // Settling, by the existing rules: a document that was not read whole

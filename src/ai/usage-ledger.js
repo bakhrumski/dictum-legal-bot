@@ -78,7 +78,7 @@ function requestBudget(override = {}) {
   };
 }
 
-const ESSENTIAL_STAGES = new Set(['answer', 'answer_fallback', 'cross_check', 'claim_check', 'stt', 'tts', 'document', 'ocr']);
+const ESSENTIAL_STAGES = new Set(['answer', 'answer_fallback', 'cross_check', 'claim_check', 'stt', 'tts', 'document', 'document_digest', 'ocr']);
 
 /** Why a new call may not start for this request, or null. */
 function budgetBlock(store, stage) {
@@ -216,7 +216,10 @@ const STAGE_BY_ENDPOINT = [
   [/classify-topic/u, 'topic'],
   [/source-suggest/u, 'source_suggestion'],
   [/fallback/u, 'answer_fallback'],
-  [/doc-digest|explain-document|legal-opinion|draft/u, 'document'],
+  // a long document's per-part digest is its own stage, apart from the
+  // service's final generation (2026-10-07)
+  [/doc-digest/u, 'document_digest'],
+  [/explain-document|legal-opinion|draft/u, 'document'],
   [/legal-verify/u, 'verification'],
   [/screening/u, 'screening'],
   [/ocr|vision/u, 'ocr'],
@@ -265,8 +268,10 @@ async function write(row, store) {
  * Record one AI call. event: { callId?, provider, model, modelReturned?,
  * endpoint?, stage?, status, errorCode?, error?, startedAt, finishedAt,
  * usage: { inTokens, outTokens, cachedTokens, reasoningTokens, audioMs,
- * characters, credits, providerCostUsd, estimated }, attempt?, retryReason?,
- * fallbackFrom?, userId? }. Never throws; resolves to the row written.
+ * characters, credits, providerCostUsd, estimated, finishReason, truncated },
+ * attempt?, retryReason?, fallbackFrom?, userId?, detail? }. detail is what
+ * the call was for (e.g. { phase: 'digest', part: '3', of: 7, chars }).
+ * Never throws; resolves to the row written.
  */
 async function record(event = {}) {
   const store = current();
@@ -311,6 +316,11 @@ async function record(event = {}) {
     userId: event.userId != null ? event.userId : (store ? store.userIdOf() : null),
     chatId: store ? store.chatId : null,
     endpoint: event.endpoint || null,
+    // why the provider stopped ('stop', 'length', 'MAX_TOKENS', ...) and
+    // whether the text was cut at the output cap - as the provider said it
+    finishReason: usage.finishReason == null ? null : String(usage.finishReason).slice(0, 30),
+    truncated: usage.truncated == null ? null : !!usage.truncated,
+    detail: event.detail && typeof event.detail === 'object' ? event.detail : null,
   };
   if (store) {
     store.shared.calls++;
@@ -541,6 +551,7 @@ async function finishRequest(store, fields = {}) {
       outcome: data.outcome || null,
       legalCheck: data.legalCheck || null,
       trigger: data.trigger || null,
+      docCoverage: data.docCoverage || null,
       degraded: store.shared.degraded.size ? [...store.shared.degraded] : null,
       telemetryErrors: store.shared.telemetryErrors,
     });

@@ -180,6 +180,111 @@ Bitta gapda bir ibora inkor qilinib, boshqasi tasdiqlansa, faqat tasdiqlangani b
 
 Ulardan tashqari inkor, iqtibos, shartli gap, sinonim va arifmetik hosila uchun alohida testlar bor.
 
+## 4b. Uzun hujjat dayjesti: #420 jonli sinovi (2026-10-07)
+
+**Holat:** 13 sahifali DOCX, 51 398 belgi. 5 ta dayjest chaqiruvining har
+biri aynan 1 600 output token sarfladi. Yakuniy javob bilan birga 6 ta
+chaqiruv bo'ldi, hisoblangan xarajat $0.0201. 5 ta qismning hammasi
+«to'liq o'qilmagan» deb belgilandi, lekin yakuniy javob baribir yaratildi.
+
+### Sabab: ehtimoliy, tasdiqlanmagan
+
+Production trace'ni ko'rmadim: bu muhitdan production bazasi ochilmaydi.
+Bundan oldin ledger `finish_reason` va `truncated`ni umuman yozmagan.
+
+**Ma'lum faktlar:**
+- 51 398 belgi o'sha paytdagi 12 000 belgilik bo'laklarda (400 belgi ustma-ust) aynan 5 qism bo'ladi.
+- 1 600 — dayjest chaqiruvining output chegarasi. Har bir chaqiruv aynan shu chegarada to'xtagan, bu «chegaraga yetdi» degani.
+
+**Ehtimoliy sabab 1 — ko'rinadigan matn chegaraga sig'madi.** #419 dagi
+dayjest prompti har bir bandni hujjat so'zlariga yaqin ro'yxat qilib
+yozishni so'raydi. Dry-run taxmini (o'lchanmagan): 12 000 belgilik qism
+uchun bunday dayjest 1 714–4 320 tokenni talab qiladi. Bu taxminning eng
+quyi chegarasi ham 1 600 dan oshadi.
+
+**Ehtimoliy sabab 2 — ko'rinmas «reasoning» tokenlari byudjetni yedi.**
+Bu Orbit modelida avval kuzatilgan. Comet modelida ham shunday bo'lishi
+mumkin, lekin tasdiqlanmagan.
+
+**Ikkalasini ajratish uchun production'da shu so'rovni bajaring** (faqat o'qiydi):
+
+```sql
+SELECT seq, stage, status, error_code, out_tokens, reasoning_tokens, error_message
+  FROM llm_spend_log WHERE request_id = '<so''rov id>' ORDER BY seq;
+```
+
+- `status = error`, `error_code = EMPTY_RESPONSE` va xabarda `finish_reason: length` bo'lsa — matn bo'sh, butun byudjetni reasoning olgan.
+- `status = success` bo'lsa va `reasoning_tokens` kichik yoki NULL bo'lsa — ko'rinadigan matn kesilgan.
+
+Bu PR'dan keyin har bir qatorda `finish_reason`, `truncated` va
+`call_detail` (qaysi qism) ham bo'ladi.
+
+### Nima o'zgardi
+
+1. **Hech bir qism to'liq o'qilmasa, yakuniy generatsiya yo'q.** Bu
+   tushuntirish, yuridik xulosa va chatdagi hujjat tahliliga taalluqli.
+   - Javob: `422 DOCUMENT_NOT_READ`, xizmat limiti qaytariladi.
+   - Bajarilgan dayjest chaqiruvlari xarajati bilan ledger'da qoladi.
+   - Bu oddiy foydalanuvchi bilan haqiqiy Postgres'da DB testida tekshirilgan:
+     - `tariff_usage.status = released`;
+     - har bir qism uchun `llm_spend_log` qatori, `cost_source = calculated`;
+     - yakuniy chaqiruv yo'q.
+2. **Kesilgan qism siyosati: umuman ishlatilmaydi.**
+   - Kesilgan dayjestning qaytgan parchasi ham yakuniy modelga berilmaydi. Parcha qaysi bandlarni qamraganini va qaysi istisno yoki chegara kesilib qolganini bilib bo'lmaydi.
+   - Bunday qism «o'qilmadi» deb nomlanadi: modelga ham, javob boshida («Qisman natija») ham, `coverage.parts`da ham.
+   - Model u qismlarga havola qilmasligi va xulosa chiqarmasligi kerak.
+3. **Kichikroq bo'lak va ixcham dayjest.** Output chegarasi 1 600'ligicha qoldi, ko'r-ko'rona oshirilmadi.
+   - Bo'lak hajmi 12 000 → 8 000 belgi. 120 000 belgilik ish 13 bo'lakka sig'ishi uchungina kattalashadi (eng ko'pi ~9 500).
+   - Dayjest formati: har band — bitta qator, «nima | kim | shart yoki istisno | band», qator ~30 so'zdan oshmaydi.
+   - Dayjest qism uzunligining taxminan uchdan biridan oshmasligi so'raladi.
+4. **Cheklangan qayta o'qish.** Chegarada kesilgan qism bir marta, ikki yarmiga bo'linib qayta o'qiladi.
+   - Bitta dayjestga eng ko'pi 4 ta qo'shimcha chaqiruv (2 ta qism).
+   - Ular faqat dayjest boshlangandan keyin 75 soniya ichida boshlanadi.
+   - Bir vaqtda 8 tadan ortiq chaqiruv yuborilmaydi.
+   - Yarmi ham kesilsa, u ishlatilmaydi.
+   - Provider xatosi qayta bo'linmaydi (ledger'ning bitta vaqtinchalik retry'i avvalgidek).
+   - So'rovning umumiy byudjeti (`AI_REQUEST_*`: 30+6 chaqiruv, 120 soniya, $0.25) ustidan turadi: u rad etgan chaqiruv «o'qilmagan qism» bo'ladi, cheksiz takror bo'lmaydi.
+5. **Umumiy qoidalar** (dayjest va tushuntirish promptlarida, hujjatga xos emas):
+   - shablon va to'ldirilmagan joylar tanib olinadi; ular AI'siz sanaladi va modelga aytiladi;
+   - «ariza topshirish» ≠ «ro'yxatdan o'tish» ≠ huquq;
+   - to'lov shartlari, istisnolar, penya va uning chegarasi, jami (kumulyativ) javobgarlik chegarasi, zid bandlar (ikkalasi ham) va ilova jadvallari saqlanadi.
+6. **Ledger:**
+   - Dayjest `document_digest` bosqichida, yakuniy javob `document` bosqichida yoziladi.
+   - Har qatorda: `finish_reason`, `truncated` va `call_detail` (`{ phase: 'digest', part: '3a', of: 7, chars }` yoki `{ phase: 'final' }`).
+   - `ai_requests.doc_coverage` xizmat hujjatni qancha o'qiganini saqlaydi: qismlar, o'qilgan, kesilgan, xato, yakuniy javob yaratildimi.
+   - Master'ning «AI so'rovlar» oynasi uch narsani alohida ko'rsatadi: provider javob berdimi, xizmat qamrovi va xarajat aniqligi. Masalan, VoiceLab ro'yxat narxi bilan hisoblanadi, haqiqiy kredit tasdiqlanmagan.
+
+### Dry-run taqqoslash (chaqiruvsiz, taxminlar bilan)
+
+`node scripts/explain-benchmark.js` — «Long-document digest» bo'limi.
+
+**Taxminlar** (o'lchanmagan):
+- 1 token = 2.5–3.5 belgi;
+- dayjest/qism nisbati: #420 uchun 0.5–0.9, ixcham uchun 0.15–0.33;
+- reasoning tokenlari hisobga olinmagan.
+
+| Hujjat | Tartib | Qismlar | Eng katta qism | Kutilgan dayjest tokeni / qism | 1 600 ga yetadimi | Chaqiruvlar (eng ko'pi) | comet: odatiy / eng ko'pi | luna: odatiy / eng ko'pi |
+|---|---|---|---|---|---|---|---|---|
+| 51 398 belgi | #420 | 5 | 12 000 | 1 714–4 320 | ha, quyi chegarada ham | 6 | $0.0400 | $0.0254 |
+| 51 398 belgi | yangi | 7 | 8 000 | 343–1 056 | yo'q (zaxira bilan) | 8 (12) | $0.0470 / $0.0623 | $0.0307 / $0.0419 |
+| 75 000 belgi | #420 | 7 | 12 000 | 1 714–4 320 | ha | 8 | $0.0560 | $0.0347 |
+| 75 000 belgi | yangi | 10 | 8 000 | 343–1 056 | yo'q | 11 (15) | $0.0663 / $0.0816 | $0.0425 / $0.0538 |
+| 120 000 belgi | #420 | 11 | 12 000 | 1 714–4 320 | ha | 12 | $0.0870 | $0.0528 |
+| 120 000 belgi | yangi | 13 | 9 508 | 407–1 255 | yo'q | 14 (18) | $0.0952 / $0.1119 | $0.0587 / $0.0705 |
+
+Xarajat ustunlari narx jadvali bo'yicha **rejalash chegarasi**: haqiqiy sarf
+ham, kafolatlangan maksimum ham emas. Jonli sinovdagi haqiqiy hisoblangan
+xarajat ($0.0201) shu chegaradan ($0.0400) past.
+
+**To'lov:**
+- Qismlar ko'paygani uchun chaqiruvlar soni va kirish tokenlari biroz oshadi.
+- Bir vaqtda 8 ta chaqiruv bo'lgani uchun 13 qism ikki to'lqinda o'qiladi (avval 11 qism bitta to'lqinda edi), shuning uchun kechikish oshishi mumkin.
+- Yuridik xulosada dayjest chaqiruvlari 11 tadan 13 tagacha (qayta o'qish bilan 17 tagacha) oshishi mumkin. So'rovning 30+6 chaqiruv chegarasiga yaqinlashsa, ortiqcha chaqiruv rad etiladi va qism «o'qilmadi» bo'ladi.
+
+**Tasdiqlanmagan:**
+- Yangi format haqiqiy modelda chegaraga sig'adimi va dayjest sifati yetarlimi — buni faqat jonli sinov ko'rsatadi (pullik, ruxsat kerak).
+- Taklif: bitta 51 000 belgilik anonim hujjatda eski va yangi tartibni solishtirish. Rejalash chegarasi bo'yicha bu ~$0.11 dan oshmaydi.
+
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
 | Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |
@@ -254,7 +359,8 @@ maydonlarida.
 
 ## 9. Testlar va ular nimani isbotlamaydi
 
-- `tests/document-explain.test.js` (23) tekshiradi:
+- `tests/document-explain.test.js` (27) tekshiradi:
+  - uzun hujjat: 8 000 belgilik qismlar, cheklangan qayta o'qish, kesilgan parcha ishlatilmasligi, hech qism o'qilmasa yakuniy chaqiruv yo'qligi, shablon belgilari, uzun DOCX (ilova jadvali, ariza ≠ ro'yxat, jami javobgarlik, zid bandlar);
   - AI izohi bo'yicha 22 ta holat, har biri uch shaklda; asosiy matn va AI izohida bir xil mezon; inkor, iqtibos, shartli gap, sinonim va arifmetik hosila; to'ldiruvchi izoh; ruscha yorliq;
   - qamrov va sahifalar;
   - o'qilmagan yoki kesilgan qismlar;
@@ -269,7 +375,8 @@ maydonlarida.
   - dayjest qonun havolalarini saqlashi;
   - qisman natija qoidasi;
   - chat parchalarida sahifa belgilari.
-- `tests/upload-no-ai.db.test.js` (12, haqiqiy Postgres) tekshiradi:
+- `tests/upload-no-ai.db.test.js` (14, haqiqiy Postgres) tekshiradi:
+  - oddiy foydalanuvchi: hech qism o'qilmasa 422, limit `released`, har qism ledger'da (`document_digest`, `finish_reason`, `truncated`, `call_detail`, xarajat), `ai_requests.doc_coverage`; to'liq o'qilganda digest va final alohida bosqich;
   - tasdiq (409);
   - birliklar;
   - trigger;

@@ -15322,6 +15322,29 @@
                 reportBox.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
             }
         }
+        // Provider success, the service's coverage of the document and the
+        // cost's exactness are three different things (2026-10-07)
+        function auThreeWay(s) {
+            var lines = [];
+            if (s.provider && s.provider.by_stage) {
+                lines.push('Provayder: ' + Object.keys(s.provider.by_stage).map(function (k) {
+                    var v = s.provider.by_stage[k];
+                    return k + ' ' + v.success + '/' + v.calls + ' javob berdi' + (v.cut_at_cap ? ', ' + v.cut_at_cap + ' tasi chegarada kesildi' : '');
+                }).join('; '));
+            }
+            var cov = s.service_coverage;
+            if (cov) {
+                lines.push('Xizmat qamrovi: ' + (cov.mode === 'digest'
+                    ? cov.read + '/' + cov.parts + ' qism to\'liq o\'qildi' + (cov.cut ? ', ' + cov.cut + ' kesildi' : '') + (cov.failed ? ', ' + cov.failed + ' xato' : '') +
+                      (cov.finalRun ? ' · yakuniy javob yaratildi' : ' · yakuniy javob yaratilmadi') + (cov.fullyRead ? '' : ' · hujjat to\'liq o\'qilmadi')
+                    : 'to\'liq matn'));
+            }
+            if (s.cost_accuracy) {
+                lines.push('Xarajat aniqligi: ' + Object.keys(s.cost_accuracy.by_source || {}).map(function (k) { return (AU_SOURCE[k] || k) + ' ' + s.cost_accuracy.by_source[k]; }).join(', ') +
+                    (s.cost_accuracy.note ? ' — ' + s.cost_accuracy.note : ''));
+            }
+            return lines.map(function (l) { return '<div class="au-note">' + escapeHtml(l) + '</div>'; }).join('');
+        }
         async function loadAiUsageRequest(id) {
             var box = document.getElementById('aiUsageDetail');
             if (!box || !id) return;
@@ -15338,7 +15361,9 @@
                     (s.provider_credits ? ' · ' + s.provider_credits + ' kredit' : '') + (d.request && d.request.latency_ms != null ? ' · ' + auMs(d.request.latency_ms) : '') + '</div>' +
                     // who asked, which endpoint, why the AI ran
                     (d.request ? '<div class="au-note">' + escapeHtml((d.request.user_id != null ? 'Foydalanuvchi #' + d.request.user_id : (d.request.chat_id != null ? 'Telegram chat' : 'Foydalanuvchi —')) +
-                        ' · ' + (d.request.kind || '—') + ' · sabab: ' + (AU_TRIGGER[d.request.trigger] || d.request.trigger || 'yozilmagan')) + '</div>' : '') + '</div>' +
+                        ' · ' + (d.request.kind || '—') + ' · sabab: ' + (AU_TRIGGER[d.request.trigger] || d.request.trigger || 'yozilmagan')) + '</div>' : '') +
+                    // three separate answers: provider, the document read by the service, the cost's exactness
+                    auThreeWay(s) + '</div>' +
                     '<div class="au-scroll"><table class="spend-table"><thead><tr>' +
                     '<th>#</th><th>Bosqich</th><th>Provayder / model</th><th>Usage</th><th class="sp-num">Kredit</th><th class="sp-num">USD</th>' +
                     '<th>Aniqlik</th><th class="sp-num">Latency</th><th>Holat</th></tr></thead><tbody>' +
@@ -15348,7 +15373,10 @@
                             (c.error_message && c.status !== 'success' ? ' — ' + c.error_message : '') +
                             (c.attempt > 1 ? ' · urinish ' + c.attempt + (c.retry_reason ? ' (' + c.retry_reason + ')' : '') : '') +
                             (c.fallback_from ? ' · fallback: ' + c.fallback_from : '') + (c.batch_id ? ' · batch ' + String(c.batch_id).slice(0, 8) : '');
-                        return '<tr><td class="sp-num">' + (c.seq || '') + '</td><td>' + escapeHtml(c.stage || '') + '</td>' +
+                        var det = c.call_detail || null;
+                        var stageCell = (c.stage || '') + (det && det.phase === 'digest' ? ' · qism ' + det.part + '/' + det.of : (det && det.phase === 'final' ? ' · yakuniy' : ''));
+                        status += (c.finish_reason ? ' · finish: ' + c.finish_reason : '') + (c.truncated ? ' · chegarada kesildi' : '');
+                        return '<tr><td class="sp-num">' + (c.seq || '') + '</td><td>' + escapeHtml(stageCell) + '</td>' +
                             '<td>' + escapeHtml(c.provider || '') + ' / ' + model + '</td><td>' + escapeHtml(auUsage(c)) + '</td>' +
                             '<td class="sp-num">' + (c.provider_credits == null ? '—' : c.provider_credits) + '</td>' +
                             '<td class="sp-cost">' + auUsd(c.cost_usd) + '</td>' +
