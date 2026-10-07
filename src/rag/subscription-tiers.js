@@ -692,8 +692,33 @@ async function meterDocument(req, res, { service, text = '', docTicket = null, e
     });
     return { allowed: false, size };
   }
+  // a scanned document whose OCR already reserved this service (before the
+  // paid OCR call): that held reservation is the job - not a second one
+  const adopted = await adoptHeldScanJob(req, res, { service, units: size.units, endpoint });
+  if (adopted) return { allowed: true, adopted: true, size, units: adopted.units };
   const r = await meterJob(req, res, { service, units: size.units, endpoint, meta: { pages: size.pages, chars: size.chars, ticket: !!ticket } });
   return { ...r, size };
+}
+
+/**
+ * When the request's document is one scan (req.scans) and its OCR held a
+ * reservation for `service` covering `units`, make it this response's job:
+ * committed when the service is delivered, released when it is not.
+ */
+async function adoptHeldScanJob(req, res, { service, units, endpoint }) {
+  const adminId = req.session && req.session.adminId;
+  if (!adminId || !Array.isArray(req.scans) || req.scans.length !== 1) return null;
+  if (req.session.role && req.session.role !== 'user') return null;
+  const held = await ledger.heldScanJob({ adminId, fileHash: req.scans[0].file_hash, service });
+  if (!held || Number(held.units) < Number(units)) return null;
+  const job = { jobKey: held.job_key, adminId, endpoint, service, units: Number(held.units), refunded: false, committed: false };
+  if (!res.locals.tariffUsage) res.locals.tariffUsage = job;
+  res.locals.tariffJobs = [...(res.locals.tariffJobs || []), job];
+  if (!res.locals.tariffRefundAttached) {
+    res.locals.tariffRefundAttached = true;
+    attachRefundOnFailure(res);
+  }
+  return job;
 }
 
 /**
@@ -731,9 +756,18 @@ async function meterDocuments(req, res, { services = [], text = '', docTicket = 
     return { allowed: false, size };
   }
   const meta = { pages: size.pages, chars: size.chars, ticket: !!ticket, together: services };
+  // services whose reservation a scan's OCR already holds are adopted; the
+  // rest are reserved together
+  const adoptedJobs = [];
+  for (const sv of services) {
+    const a = await adoptHeldScanJob(req, res, { service: sv, units: size.units, endpoint: `${endpoint}#${sv}` });
+    if (a) { a.section = true; adoptedJobs.push(sv); }
+  }
+  const rest = services.filter(sv => !adoptedJobs.includes(sv));
+  if (!rest.length) return { allowed: true, size, jobs: res.locals.tariffJobs };
   const r = await ledger.reserveMany({
     adminId, actorId: adminId, channel: 'web',
-    jobs: services.map(sv => ({ service: sv, units: size.units, endpoint: `${endpoint}#${sv}`, meta })),
+    jobs: rest.map(sv => ({ service: sv, units: size.units, endpoint: `${endpoint}#${sv}`, meta })),
   });
   if (r.kind === 'staff') return { allowed: true, staff: true, size };
   if (!r.allowed) {

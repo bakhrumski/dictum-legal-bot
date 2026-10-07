@@ -9,7 +9,7 @@
 const ledger = require('../rag/tariff-ledger');
 
 const SERVICE_NAMES = {
-  chat: 'huquqiy savol', analysis: 'hujjat tahlili (birlik)', opinion: 'AI yuridik xulosa (birlik)', draft: 'hujjat yaratish', ocr: "rasm/skan o'qish (sahifa)",
+  chat: 'huquqiy savol', analysis: 'hujjat tahlili (birlik)', opinion: 'AI yuridik xulosa (birlik)', draft: 'hujjat yaratish', ocr: "chatdagi skan hujjat (sahifa, ichki chegara)",
 };
 
 function money(n) {
@@ -66,7 +66,8 @@ function balanceText({ balance: b, paidCredits = 0, pending = false, testAccount
       ? `Tarif: ${label} (bir martalik, yangilanmaydi).`
       : `Tarif: ${label}, davr ${tashkentDay(b.startsAt)} — ${tashkentDay(b.endsAt)}.`);
     for (const [k, v] of Object.entries(b.services || {})) {
-      if (!v.limit) continue;
+      // OCR is a step of a document service, not a service of its own
+      if (!v.limit || k === 'ocr') continue;
       lines.push(`• ${SERVICE_NAMES[k] || k}: ${v.remaining} / ${v.limit} qoldi`);
     }
     if (b.kind === 'trial') lines.push("Sinov tugagach tarif tanlanadi; avtomatik to'lov olinmaydi.");

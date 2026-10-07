@@ -181,6 +181,30 @@ Known state of the suites (Sept 2026):
   scope (no provider), so an offer is not redeemed through a provider or
   under another fee / cost model; redeemed once by
   `grant { offerId, paymentRef }`; `TARIFF_OFFERS=off` stops them.
+  OCR (2026-10-06, `src/ocr/scan-limits.js`, `scan-store.js`) is a step of
+  analysis, opinion or chat, never a service of its own: `scan-quote` counts
+  pages on the server (no AI) and signs a ticket bound to file hash, account,
+  service, size and 15 min; `ocr-image` needs `confirmed`, re-counts, checks
+  the free-access gate and reserves the service (held 120 min, adopted by
+  the service call) before the provider; it returns a `scanId`, never text,
+  and the service endpoints load the text by `scanId` for that account only
+  (`document_scans`, 7-day cache, analysis and opinion share one OCR). One
+  document: Sinov 10, paid 30 pages. Chat scans draw the plan's `ocr` pool
+  in pages (legacy v1: 1 per file). Providers (`scanLimits.ocrProviders`):
+  images VoiceLab vision first when that lane is on (as before #411), Gemini
+  with `OCR_IMAGE_PROVIDER=gemini`; PDFs Gemini (Developer API, thinking
+  off); fallbacks unless `OCR_FALLBACK=off`. A PDF is read in 5-page chunks
+  cut with `pdf-lib` (cap 1 536 x pages of the call, every page marked
+  `=== PAGE n ===`); a cut or incomplete chunk is re-read in halves, one cut
+  page once at 4 096; anything still cut, empty or missing fails the whole
+  document - never cached, never analysed, service released, every call in
+  the ledger. A cut reading is `providerAnswered` (no retry, no breaker).
+  Only the Gemini-only route has a per-page figure ($0.010959 a PDF page, a
+  planning estimate - not measured, not a hard maximum; images grow with
+  pixels); any route reaching VoiceLab / OpenAI vision makes OCR cost
+  unknown: offers blocked and the admin quote says why, nothing else
+  changes. Parallel requests for one account and file share one OCR
+  (in-process single flight - one Node process only).
   `marginReport` keeps cash (once, at payment), carried credit (not cash)
   and service revenue (price + credit in - credit out over the days run)
   apart; legacy revenue and refunds are unknown, never 0. Rollback is code,

@@ -76,11 +76,20 @@ async function test(name, fn) {
     assert.strictEqual(weight('/api/workspace-ai'), 1);
   });
 
-  await test('the OCR route reserves an OCR page and fails closed', () => {
+  await test('OCR runs only after a quote, a confirm and a reservation of the service it is for (2026-10-06)', () => {
     const src = read('src/ocr/routes.js');
-    assert.ok(/enforceQuota\('\/api\/analyze\/ocr', \{ failClosed: true, service: 'ocr' \}\)/.test(src));
-    assert.ok(/app\.post\('\/api\/analyze\/ocr-image', requireAuth, ocrQuota,/.test(src));
-    assert.ok(!/checkOcrQuota/.test(src), 'no second, unlocked check after the reservation');
+    // the per-request OCR quota is gone: a scan is a step of analysis, opinion or chat
+    assert.ok(!/enforceQuota\('\/api\/analyze\/ocr'/.test(src));
+    assert.ok(/app\.post\('\/api\/analyze\/scan-quote', requireAuth/.test(src));
+    const route = src.slice(src.indexOf("app.post('/api/analyze/ocr-image'"), src.indexOf("app.post('/api/analyze/scans/:id/release'"));
+    const at = re => { const m = re.exec(route); assert.ok(m, String(re)); return m.index; };
+    const ocrCall = at(/await ocrFn\(/);
+    assert.ok(at(/readScanTicket\(/) < ocrCall, 'ticket first');
+    assert.ok(at(/SCAN_CONFIRM/) < ocrCall, 'confirmed first');
+    assert.ok(at(/checkFreeAccess\(/) < ocrCall, 'the free-access gate first');
+    assert.ok(at(/measureScan\(buf/) < ocrCall, 'pages counted again on this file first');
+    assert.ok(at(/ledger\.reserve(Many)?\(/) < ocrCall, 'reserved first');
+    for (const reply of route.match(/res\.json\(\{[^)]*\}\)/gu) || []) assert.ok(!/\btext\b/u.test(reply), `the OCR text is not returned: ${reply}`);
     assert.strictEqual(tiers.serviceFor('/api/analyze/ocr'), 'ocr');
   });
 

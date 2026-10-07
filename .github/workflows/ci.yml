@@ -69,6 +69,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/document-jobs.db.test.js
       - name: Test entitlement (pilot) and its AI budget on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/test-entitlement.db.test.js
+      - name: Scanned documents - page count, ticket, held reservation and OCR cache on real Postgres (stub OCR)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/scan-ocr.db.test.js
       - name: Safe re-ingest on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/rag-safe-reingest.db.test.js
       - name: Query indexes and margin report on real Postgres

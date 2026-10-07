@@ -140,6 +140,33 @@ function signDocTicket({ text = '', pages = null, scanned = false } = {}) {
   const sig = crypto.createHmac('sha256', ticketSecret()).update(payload).digest('base64url').slice(0, 32);
   return `${payload}.${sig}`;
 }
+// ── Scan tickets (2026-10-06) ─────────────────────────────────────────────
+// Before a paid OCR the server counts a scan's pages itself and quotes the
+// service; the signed ticket binds that quote to the file (SHA-256 of its
+// bytes), the account, the service, the size and a short expiry. The OCR
+// call must bring the same file from the same account for the same service
+// within the expiry - another file, account or service is refused.
+const SCAN_TICKET_MIN = 15;
+function signScanTicket({ fileHash, adminId, service, pages, bytes, kind, units, cached = false, now = Date.now() } = {}) {
+  const body = { k: 'scan', h: fileHash, a: Number(adminId), s: service, p: pages, b: bytes, f: kind, u: units, c: cached ? 1 : 0, e: now + SCAN_TICKET_MIN * 60e3 };
+  const payload = Buffer.from(JSON.stringify(body)).toString('base64url');
+  const sig = crypto.createHmac('sha256', ticketSecret()).update(`scan.${payload}`).digest('base64url');
+  return `${payload}.${sig}`;
+}
+/** The ticket's quote if it is genuine, unexpired and for this account, else { error }. */
+function readScanTicket(ticket, { adminId, now = Date.now() } = {}) {
+  if (!ticket || typeof ticket !== 'string' || !ticket.includes('.')) return { error: 'scan_ticket_missing' };
+  const [payload, sig] = ticket.split('.');
+  const want = crypto.createHmac('sha256', ticketSecret()).update(`scan.${payload}`).digest('base64url');
+  if (!sig || sig.length !== want.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want))) return { error: 'scan_ticket_invalid' };
+  let body;
+  try { body = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); } catch (_) { return { error: 'scan_ticket_invalid' }; }
+  if (body.k !== 'scan') return { error: 'scan_ticket_invalid' };
+  if (now > Number(body.e)) return { error: 'scan_ticket_expired' };
+  if (Number(body.a) !== Number(adminId)) return { error: 'scan_ticket_other_account' };
+  return { fileHash: body.h, adminId: body.a, service: body.s, pages: body.p, bytes: body.b, kind: body.f, units: body.u, cached: !!body.c, expiresAt: body.e };
+}
+
 /** Pages from a valid ticket for exactly this text, else null. Tickets last 24 h. */
 function readDocTicket(ticket, text) {
   if (!ticket || typeof ticket !== 'string' || !ticket.includes('.')) return null;
@@ -164,16 +191,39 @@ const PLANNING = Object.freeze({
   costCeilingShare: 0.80,
 });
 
-/** AI budget, operations allotment, service margin and the 80% ceiling of a plan at 100% use. */
+/**
+ * OCR pages a period can use at 100% (2026-10-06): every analysis and every
+ * opinion unit on a different scanned document (10 pages a unit - the
+ * analysis and the opinion of one scan share one OCR, so this is the worst
+ * case), plus the chat-scan page pool. OCR is a step of those services, not
+ * a service sold on its own.
+ */
+function maxOcrPages(plan) {
+  const q = (PLAN_CATALOG[plan] || {}).quotas || {};
+  return ((q.analysis || 0) + (q.opinion || 0)) * OCR_PAGES_PER_ANALYSIS_UNIT + (q.ocr || 0);
+}
+
+/** OCR cost of a plan at 100% use: { pages, usd, status, basis } - unknown stays unknown, never 0. */
+function planOcr(plan) {
+  const pages = maxOcrPages(plan);
+  const basis = require('../ocr/scan-limits').ocrCostBasis();
+  if (basis.status !== 'estimated') return { pages, usd: null, status: 'unknown', reason: basis.reason };
+  return { pages, usd: pages * basis.usdPerPage, usdPerPage: basis.usdPerPage, status: 'estimated', estimate: basis.estimate };
+}
+
+/** AI budget (OCR included), operations allotment, service margin and the 80% ceiling of a plan at 100% use. */
 function planEconomics(plan, planning = PLANNING) {
   const cfg = PLAN_CATALOG[plan];
   if (!cfg) return null;
-  const aiUsd = Object.entries(planning.unitUsd).reduce((s, [k, usd]) => s + (cfg.quotas[k] || 0) * usd, 0);
+  const textAiUsd = Object.entries(planning.unitUsd).reduce((s, [k, usd]) => s + (cfg.quotas[k] || 0) * usd, 0);
+  const ocr = planOcr(plan);
+  const aiUsd = textAiUsd + (ocr.usd || 0);
   const aiUzs = Math.round(aiUsd * planning.uzsPerUsd);
   const opsUzs = planning.opsUzs[plan] || 0;
   const serviceUzs = aiUzs + opsUzs;
   return {
     plan, priceUzs: cfg.priceUzs, aiUsd: Number(aiUsd.toFixed(4)), aiUzs, opsUzs, serviceUzs,
+    textAiUsd: Number(textAiUsd.toFixed(4)), ocr, costComplete: ocr.status !== 'unknown',
     leftUzs: cfg.priceUzs - serviceUzs,
     serviceMargin: cfg.priceUzs ? Number(((cfg.priceUzs - serviceUzs) / cfg.priceUzs).toFixed(4)) : null,
     ceilingUzs: Math.round(cfg.priceUzs * planning.costCeilingShare),
@@ -215,7 +265,12 @@ async function withLock(identity, fn) {
 // (the process stopped): it no longer counts against the limit. The
 // provider cost of that work stays in the AI usage ledger regardless.
 const RESERVATION_TTL_MIN = Math.max(5, Math.min(120, Number(process.env.TARIFF_RESERVATION_TTL_MIN) || 30));
-const LIVE_USAGE_SQL = `(u.status IS NULL OR u.status = 'committed' OR (u.status = 'reserved' AND u.ts > now() - interval '${RESERVATION_TTL_MIN} minutes'))`;
+// A scan job's service reservation is held until the service runs (it is
+// made before the paid OCR, the analysis or opinion comes a few minutes
+// later): meta.holdUntil keeps it live; past it, it no longer counts and is
+// marked released ('scan_hold_expired') on the person's next reservation.
+const SCAN_HOLD_MIN = 120;
+const LIVE_USAGE_SQL = `(u.status IS NULL OR u.status = 'committed' OR (u.status = 'reserved' AND (u.ts > now() - interval '${RESERVATION_TTL_MIN} minutes' OR (u.meta ? 'holdUntil' AND (u.meta->>'holdUntil')::timestamptz > now()))))`;
 
 let legacyCheck = null;
 /** subscription-tiers registers how a legacy_v1 period is checked. */
@@ -398,6 +453,7 @@ async function reserve({
     if (ent.kind === 'none') return { allowed: false, kind: 'none', reason: ent.reason || 'no_plan', jobKey: key };
 
     const subject = ent.subjects[0];
+    await releaseExpiredScanHolds(db, ent.subjects);
     if (oneAtATime) {
       // one answer at a time per person (Telegram): a live reservation blocks
       const busy = await db.query(
@@ -458,6 +514,7 @@ async function reserveMany({
     if (ent.kind === 'staff') return { allowed: true, kind: 'staff', unlimited: true, jobs: list.map(j => ({ service: j.service, units: j.units, jobKey: null })) };
     if (ent.kind === 'none') return { allowed: false, kind: 'none', reason: ent.reason || 'no_plan', failed: list[0].service };
     const periodId = ent.period ? ent.period.id : ent.periods[0].id;
+    await releaseExpiredScanHolds(db, ent.subjects);
     const taken = {};
     const checks = [];
     for (const j of list) {
@@ -489,6 +546,28 @@ async function reserveMany({
     }
     return { allowed: true, kind: ent.kind, plan: ent.plan, rules: ent.rules, periodId, jobs: out };
   });
+}
+
+/** Held scan reservations past their hold are given back (they stopped counting already). */
+async function releaseExpiredScanHolds(db, subjects) {
+  await db.query(
+    `UPDATE tariff_usage SET status = 'released', finalized_at = now(), release_reason = 'scan_hold_expired'
+      WHERE subject = ANY($1) AND status = 'reserved' AND meta ? 'holdUntil'
+        AND (meta->>'holdUntil')::timestamptz <= now() AND ts <= now() - interval '${RESERVATION_TTL_MIN} minutes'`, [subjects]);
+}
+
+/**
+ * The held reservation a scan job made for `service` (before its OCR), if it
+ * is still live and belongs to this account; the service then commits it
+ * instead of reserving again.
+ */
+async function heldScanJob({ adminId, fileHash, service, db = pool }) {
+  const r = await db.query(
+    `SELECT u.job_key, u.credits AS units FROM tariff_usage u
+      WHERE u.admin_id = $1 AND u.service = $2 AND u.status = 'reserved' AND u.meta->>'scanHash' = $3
+        AND ${LIVE_USAGE_SQL}
+      ORDER BY u.id DESC LIMIT 1`, [adminId, service, String(fileHash)]);
+  return r.rows[0] || null;
 }
 
 /** The job was delivered: the reserved units are spent. Idempotent. */
@@ -908,8 +987,8 @@ module.exports = {
   measuredServiceCost,
   SERVICES, PLAN_CATALOG, PAID_PLAN_ORDER, MULTIPLIER, SILVER_QUOTAS, OCR_PAGES_PER_ANALYSIS_UNIT,
   DOC_UNIT, DRAFT_UNIT, STANDARD_PAGE_CHARS, PLANNING, RESERVATION_TTL_MIN,
-  docUnits, draftUnits, jobFits, planEconomics, subjectsFor, lockKey,
-  signDocTicket, readDocTicket, textHash,
+  docUnits, draftUnits, jobFits, planEconomics, maxOcrPages, planOcr, subjectsFor, lockKey,
+  signDocTicket, readDocTicket, textHash, signScanTicket, readScanTicket, heldScanJob, SCAN_HOLD_MIN, SCAN_TICKET_MIN,
   setLegacyCheck, resolveEntitlement, balance, reserve, commit, release,
   reserveMany, grantPaidPeriod, grantTestEntitlement, endTestEntitlement, listTestEntitlements, TEST_DEFAULT_QUOTAS, quotePlanChange, syncAccountPlan, usedUnits, periodValue, upgradeCredit, allocateCredit, withLock,
 };

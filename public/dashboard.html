@@ -12518,10 +12518,13 @@
         // Size (pages, characters), units, and what remains of the plan. The
         // server enforces the same numbers; if the quote cannot be fetched
         // the job still goes to the server, which refuses what is not allowed.
-        function confirmDocCost(service, text, docTicket) {
+        function confirmDocCost(service, text, docTicket, size) {
+            // a scanned document's text stays on the server: it is quoted by its size
+            var body = text ? { service: service, text: text, docTicket: docTicket || null }
+                : { service: service, chars: (size && size.chars) || 0, pages: (size && size.pages) || null };
             return fetch('/api/tariff/quote', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                body: JSON.stringify({ service: service, text: text, docTicket: docTicket || null })
+                body: JSON.stringify(body)
             }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (q) {
                 return renderDocCostCard(service, q);
             });
@@ -12616,13 +12619,14 @@
                 if (!r.ok) throw new Error(d.error || 'O\'qib bo\'lmadi');
                 var text = d.text || '';
                 if ((!text || d.scanned) && /\.pdf$/i.test(file.name)) {
-                    // scanned PDF → OCR fallback
-                    st.textContent = 'Skaner qilingan — matn aniqlanmoqda (OCR)...';
-                    var fd2 = new FormData(); fd2.append('file', file);
-                    var r2 = await fetch('/api/analyze/ocr-image', { method: 'POST', credentials: 'same-origin', body: fd2 });
-                    var d2 = await r2.json();
-                    if (r2.ok) text = d2.text || '';
-                    else if (['QUOTA_EXCEEDED', 'NOT_IN_PLAN', 'PLAN_REQUIRED', 'QUOTA_UNAVAILABLE'].indexOf(d2.code) !== -1) throw new Error(d2.message || d2.error || 'OCR limiti');
+                    // a scanned PDF is read for the opinion itself: its opinion
+                    // units are quoted, confirmed and reserved before the OCR
+                    st.textContent = 'Skaner qilingan — sarf hisoblanmoqda...';
+                    var sc = await scanFile(file, 'opinion');
+                    opinionDoc = { name: file.name, scanId: sc.scanId, pages: sc.pages, chars: sc.chars, held: !!sc.held };
+                    st.className = 'afp-status ok'; st.textContent = '✅ Skan o\'qildi (' + sc.pages + ' sahifa, ' + Number(sc.chars || 0).toLocaleString() + ' belgi). "Xulosa tayyorlash" — limit allaqachon band qilingan.';
+                    btn.disabled = false;
+                    return;
                 }
                 text = (text || '').trim();
                 if (text.length < 40) throw new Error('Hujjatdan yetarli matn topilmadi');
@@ -12638,7 +12642,8 @@
             var messagesEl = document.getElementById('aiChatMessages');
             docFlowClose();
             // Size, units and what remains are shown before the job runs.
-            if (!(await confirmDocCost('opinion', opinionDoc.text, opinionDoc.docTicket))) return;
+            // a scan's opinion units were confirmed and reserved before its OCR
+            if (!opinionDoc.held && !(await confirmDocCost('opinion', opinionDoc.text || '', opinionDoc.docTicket, opinionDoc.scanId ? { chars: opinionDoc.chars, pages: opinionDoc.pages } : null))) return;
             hideChatWelcome();
             messagesEl.innerHTML += '<div class="ai-chat-msg user">📑 Yuridik xulosa — ' + escapeHtml(opinionDoc.name) + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
@@ -12646,7 +12651,7 @@
             try {
                 var r = await fetch('/api/draft/legal-opinion', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ documentText: opinionDoc.text, docTicket: opinionDoc.docTicket || null })
+                    body: JSON.stringify(opinionDoc.scanId ? { scanId: opinionDoc.scanId } : { documentText: opinionDoc.text, docTicket: opinionDoc.docTicket || null })
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
@@ -13234,7 +13239,8 @@
             // Reuse the composer's attachment pipeline: it already extracts
             // text from PDF/Word/images and registers the document with the
             // session, so the explain step finds it exactly like an attachment.
-            addAttachment(file);
+            // a scan here is read for the analysis (its unit, confirmed once), not as a chat scan
+            addAttachment(file, 'analysis');
             var tries = 0;
             var wait = setInterval(function () {
                 tries++;
@@ -13381,14 +13387,14 @@
             Array.prototype.slice.call(input.files || []).forEach(addAttachment);
             input.value = '';
         }
-        function addAttachment(file) {
+        function addAttachment(file, scanService) {
             var ext = (file.name.split('.').pop() || '').toLowerCase();
             var isImg = /^image\//.test(file.type) || ['jpg', 'jpeg', 'png', 'webp'].indexOf(ext) !== -1;
             var isPdf = file.type === 'application/pdf' || ext === 'pdf';
             var isDoc = ext === 'doc' || ext === 'docx';
             if (!isImg && !isPdf && !isDoc) { alert('Faqat PDF, Word (doc/docx) va rasm (JPG, PNG) fayllar qo\'llab-quvvatlanadi.'); return; }
             if (file.size > ATTACH_MAX) { alert('Fayl hajmi juda katta! Maksimal: 20 MB'); return; }
-            var att = { id: ++aiAttachSeq, name: file.name, kind: isPdf ? 'pdf' : isDoc ? 'doc' : 'image', status: 'processing', text: '', error: '' };
+            var att = { id: ++aiAttachSeq, name: file.name, kind: isPdf ? 'pdf' : isDoc ? 'doc' : 'image', status: 'processing', text: '', error: '', scanService: scanService || 'chat' };
             aiAttachments.push(att);
             renderAttachChips();
             extractAttachment(file, att);
@@ -13401,26 +13407,68 @@
                     var r = await fetch('/api/analyze/extract', { method: 'POST', credentials: 'same-origin', body: fd });
                     var d = await r.json();
                     if (!r.ok) throw new Error(d.error || 'Fayl o\'qilmadi');
-                    // A scanned PDF has no embedded text → OCR fallback (not for Word).
-                    text = (att.kind === 'pdf' && (d.scanned || !d.text)) ? await ocrFile(file) : d.text;
-                    att.docTicket = (d.text && !d.scanned) ? d.docTicket : null;
+                    // A scanned PDF has no embedded text → read as a chat scan (not for Word).
+                    if (att.kind === 'pdf' && (d.scanned || !d.text)) {
+                        var sc = await scanFile(file, att.scanService);
+                        att.scanId = sc.scanId; att.pages = sc.pages; att.chars = sc.chars; att.held = !!sc.held;
+                    } else {
+                        text = d.text;
+                        att.docTicket = d.docTicket || null;
+                    }
                 } else {
-                    text = await ocrFile(file);
+                    var sci = await scanFile(file, att.scanService);
+                    att.scanId = sci.scanId; att.pages = sci.pages; att.chars = sci.chars; att.held = !!sci.held;
                 }
                 att.text = (text || '').trim();
-                att.status = att.text ? 'ready' : 'error';
-                if (!att.text) att.error = 'Matn topilmadi';
+                att.status = (att.text || att.scanId) ? 'ready' : 'error';
+                if (att.status === 'error') att.error = 'Matn topilmadi';
             } catch (e) {
                 att.status = 'error'; att.error = e.message || 'Xato';
             }
             renderAttachChips();
         }
-        async function ocrFile(file) {
-            var fd = new FormData(); fd.append('file', file);
-            var r = await fetch('/api/analyze/ocr-image', { method: 'POST', credentials: 'same-origin', body: fd });
-            var d = await r.json();
-            if (!r.ok) throw new Error(d.message || d.error || 'OCR xatolik');
-            return d.text || '';
+        // A scan (image or scanned PDF) is read only as a step of a service:
+        // the server counts its pages and quotes the service, the user
+        // confirms, then the OCR runs and the text stays on the server
+        // (scanId). Nothing is read, and nothing spent, without the confirm.
+        async function scanFile(file, service, retried) {
+            var fd = new FormData(); fd.append('file', file); fd.append('service', service);
+            var r = await fetch('/api/analyze/scan-quote', { method: 'POST', credentials: 'same-origin', body: fd });
+            var q = await r.json().catch(function () { return {}; });
+            if (!r.ok) throw new Error(q.message || q.error || 'Skan hujjatni hisoblab bo\'lmadi');
+            if (q.enough === false) throw new Error('Limit yetarli emas: ' + (q.message || ''));
+            var go = await renderScanConfirm(q, file.name);
+            if (!go) throw new Error('Bekor qilindi — limit sarflanmadi');
+            var fd2 = new FormData(); fd2.append('file', file); fd2.append('scanTicket', q.scanTicket); fd2.append('confirmed', 'true');
+            var r2 = await fetch('/api/analyze/ocr-image', { method: 'POST', credentials: 'same-origin', body: fd2 });
+            var d = await r2.json().catch(function () { return {}; });
+            if (r2.status === 409 && d.code === 'SCAN_RESIZE' && !retried) return scanFile(file, service, true);
+            if (!r2.ok) throw new Error(d.message || d.error || 'OCR xatolik');
+            return d;   // { scanId, pages, chars, units, held }
+        }
+        function renderScanConfirm(q, name) {
+            var messagesEl = document.getElementById('aiChatMessages');
+            if (!messagesEl) return Promise.resolve(window.confirm(q.message));
+            hideChatWelcome();
+            var lines = '<b>' + escapeHtml(q.title || 'Skan hujjat') + '</b> — ' + escapeHtml(name) + '<br>' + escapeHtml(q.message || '')
+                + (q.remaining != null && q.service !== 'chat' ? '<br>Sarflanadi: ' + q.units + ' birlik · qoladi: ' + q.remainingAfter + ' birlik.' : '')
+                + (q.service === 'chat' && q.ocrRemaining != null && q.ocrPages ? '<br>Chatdagi skan sahifalari: ' + q.ocrPages + ' · qoladi: ' + Math.max(0, q.ocrRemaining - q.ocrPages) + '.' : '');
+            var card = document.createElement('div');
+            card.className = 'ai-chat-msg ai doc-cost-card scan-cost-card';
+            card.innerHTML = '<div class="doc-cost-body">' + lines + '</div><div class="docform-actions">'
+                + '<button class="docflow-opt docflow-primary" type="button" data-act="go">Davom etish</button>'
+                + '<button class="docflow-opt" type="button" data-act="cancel">Bekor qilish</button></div>';
+            messagesEl.appendChild(card);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            return new Promise(function (resolve) {
+                card.addEventListener('click', function (ev) {
+                    var act = ev.target && ev.target.getAttribute('data-act');
+                    if (!act) return;
+                    card.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+                    if (act === 'cancel') card.remove(); else card.classList.add('doc-cost-done');
+                    resolve(act === 'go');
+                });
+            });
         }
         function removeAttachment(id) {
             aiAttachments = aiAttachments.filter(function (a) { return a.id !== id; });
@@ -13475,11 +13523,18 @@
             renderAttachChips();
             var name = docs.map(function (d) { return d.name; }).join(', ');
             // one document is sent as extracted (its signed page count applies)
-            var text = docs.length === 1 ? docs[0].text : docs.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
-            var ticket = docs.length === 1 ? docs[0].docTicket || null : null;
+            var typed = docs.filter(function (d) { return !d.scanId; });
+            var scans = docs.filter(function (d) { return d.scanId; });
+            var text = typed.length === 1 && !scans.length ? typed[0].text : typed.map(function (d) { return '【' + d.name + '】\n' + d.text; }).join('\n\n');
+            var ticket = typed.length === 1 && !scans.length ? typed[0].docTicket || null : null;
+            var scanIds = scans.map(function (d) { return { id: d.scanId, name: d.name }; });
+            // a scan is quoted by its size (its text is on the server)
+            var scanSize = scans.length ? { chars: scans.reduce(function (n, d) { return n + (d.chars || 0); }, text.length), pages: scans.length === 1 && !typed.length ? scans[0].pages : null } : null;
             var messagesEl = document.getElementById('aiChatMessages');
             hideChatWelcome();
-            if (!(await confirmDocCost('analysis', text, ticket))) { docActionsUsed.explain = false; renderAttachChips(); return; }
+            // a scan read for this analysis was confirmed and its unit reserved before the OCR
+            var heldScan = scans.length === 1 && !typed.length && scans[0].held;
+            if (!heldScan && !(await confirmDocCost('analysis', scans.length ? '' : text, ticket, scanSize))) { docActionsUsed.explain = false; renderAttachChips(); return; }
             aiChatHistory.push({ role: 'user', text: '[Hujjat: ' + name + '] mazmunini oddiy tilda tushuntirib bering' });
             messagesEl.innerHTML += '<div class="ai-chat-msg user">💬 Hujjat mazmunini tushuntirish — ' + escapeHtml(name) + '</div>';
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
@@ -13487,7 +13542,7 @@
             try {
                 var r = await fetch('/api/draft/explain-document', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ documentText: text, docTicket: ticket })
+                    body: JSON.stringify({ documentText: text, docTicket: ticket, scanIds: scanIds.length ? scanIds : null })
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
@@ -13511,7 +13566,7 @@
         // ready ones are promoted into the session so they survive the action.
         function collectSessionDocs() {
             var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
-            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, docTicket: a.docTicket || null }); });
+            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, docTicket: a.docTicket || null, scanId: a.scanId || null, pages: a.pages || null, chars: a.chars || null, held: !!a.held }); });
             if (ready.length) {
                 aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
             }
@@ -13559,10 +13614,12 @@
 
             // Document context = conversation-persistent docs + newly attached.
             // Follow-up questions keep working against the same document(s).
-            var allDocs = sessionDocs.concat(readyDocs.map(function (a) { return { name: a.name, text: a.text }; }));
-            var documentText = allDocs.map(function (d) {
+            var allDocs = sessionDocs.concat(readyDocs.map(function (a) { return { name: a.name, text: a.text, scanId: a.scanId || null }; }));
+            // typed documents go as text; scans as ids (their text is on the server)
+            var documentText = allDocs.filter(function (d) { return !d.scanId; }).map(function (d) {
                 return '【' + d.name + '】\n' + d.text;
             }).join('\n\n');
+            var scanIds = allDocs.filter(function (d) { return d.scanId; }).map(function (d) { return { id: d.scanId, name: d.name }; });
             var attachLine = readyDocs.length
                 ? '<div class="ai-msg-files">' + readyDocs.map(function (a) {
                     return '<span class="ai-msg-file">📎 ' + escapeHtml(a.name) + '</span>';
@@ -13576,7 +13633,7 @@
             input.style.height = 'auto';
             // Newly sent docs persist for the rest of the conversation
             // (removable via the × on their "suhbatda" chip).
-            readyDocs.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text }); });
+            readyDocs.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, scanId: a.scanId || null, pages: a.pages || null, chars: a.chars || null }); });
             aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
             renderAttachChips();
 
@@ -13613,6 +13670,7 @@
                             topics: selectedTopics.length > 0 ? selectedTopics : null,
                             autoDetect: topicAutoDetect === true,
                             documentText: documentText || null,
+                            scanIds: scanIds.length ? scanIds : null,
                             confirmedUnits: confirmedUnits,
                             confirmedJob: confirmedJob,
                             stream: true
@@ -15108,10 +15166,15 @@
                 ['Ishonchlilik', escapeHtml(q.costModelLabel || q.confidence || '—')],
                 ['Xarajat / kvota modeli', escapeHtml((q.costModelVersion || '—') + ' / ' + (q.quotaVersion || '—'))],
             ];
+            // the OCR route in force and whether its page cost is known (docs/tariffs-v2.md §4)
+            if (q.ocrCost) rows.push(['OCR xarajati', (q.ocrCost.status === 'estimated'
+                ? '$' + Number(q.ocrCost.usdPerPage).toFixed(6) + ' / sahifa <span class="of-est">rejalashtirish taxmini</span>'
+                : "<b>noma'lum</b> <span class=\"of-est\">yangi chegirma yo'q</span>")
+                + '<div class="of-scope">Rasm: ' + escapeHtml(q.ocrCost.imageRoute || '—') + ' · skan PDF: ' + escapeHtml(q.ocrCost.pdfRoute || '—') + '</div>']);
             if (q.change && q.change.change === 'upgrade') rows.push(['Upgrade krediti (naqd emas)', ofMoney(q.change.creditUzs) + ' → to\'lanadi: ' + ofMoney(q.change.dueUzs)]);
             var msg = q.ok
                 ? '<p class="of-msg ok">Chegirma minimal narx doirasida. Taklif yaratilishi mumkin.</p>'
-                : '<p class="of-msg err">' + escapeHtml(q.message || q.reason || 'Rad etildi') + '</p>';
+                : '<p class="of-msg err">' + (q.ocrBlocked ? '<b>OCR narxi noma\'lum — chegirma bloklangan.</b> ' : '') + escapeHtml(q.message || q.reason || 'Rad etildi') + '</p>';
             // the floors rest on an unmeasured planning budget: said on the screen, every time
             var basis = q.basisNote ? '<p class="of-msg of-basis">⚠ ' + escapeHtml(q.basisNote) + (q.costMeasured ? '' : ' O\'lchangan xarajat bilan qayta tekshirilmaguncha taxminiy.') + '</p>' : '';
             box.innerHTML = '<div class="of-quote">' + basis + '<div class="au-scroll"><table class="spend-table"><tbody>'

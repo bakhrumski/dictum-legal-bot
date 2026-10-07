@@ -55,6 +55,9 @@ const { oauthRedirectUri, canonicalAuthRedirect } = require('../auth/oauth-host'
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
 const { retrieveAspects } = require('../rag/question-aspects');
 const documentJob = require('../rag/document-job');
+// scanned documents are referred to by scanId; their OCR text is read here,
+// for the session's own account (src/ocr/scan-store.js)
+const resolveScanDocs = (req, res, next) => require('../ocr/scan-store').resolveScans({ pool, ledger: tariffModule.ledger })(req, res, next);
 const { legalForceOf, legalForceLabel, sortByLegalForce } = require('../rag/legal-force');
 // Acts an answer's live lex.uz check found that the corpus lacks go to the
 // dashboard's suggested sources (src/rag/source-suggestions.js).
@@ -6421,7 +6424,7 @@ async function classifyLegalTopic(message, opts = {}) {
   }
 }
 
-app.post('/api/legal-chat', requireAuth, tariffModule.enforceChatQuota('/api/legal-chat'), async (req, res) => {
+app.post('/api/legal-chat', requireAuth, resolveScanDocs, tariffModule.enforceChatQuota('/api/legal-chat'), async (req, res) => {
   try {
     const { message, history, databases, topic: rawTopic, topics, autoDetect } = req.body;
     if (!message || typeof message !== 'string') {
@@ -7207,7 +7210,7 @@ async function buildDigest(documentText, userId) {
 // retrieve grounding law from the corpus (lex.uz), and produce a formal
 // opinion in the fixed Kirish / Asosiy ma'lumotlar / Tahlil / Xulosa /
 // Manbalar structure. Returns HTML rendered as an editable, exportable doc.
-app.post('/api/draft/legal-opinion', requireAuth, async (req, res) => {
+app.post('/api/draft/legal-opinion', requireAuth, resolveScanDocs, async (req, res) => {
   try {
     // Whole-document coverage. One job is at most 30 pages / 120 000
     // characters on a paid plan and 1 unit on Sinov (tariffs v2); a larger
@@ -7645,7 +7648,7 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // NOT the legal-analysis format (no Huquqiy asos/Tahlil sections, no statutes
 // required). Long documents go through the shared map-reduce digest so the
 // whole document is covered.
-app.post('/api/draft/explain-document', requireAuth, async (req, res) => {
+app.post('/api/draft/explain-document', requireAuth, resolveScanDocs, async (req, res) => {
   try {
     const documentText = (typeof req.body.documentText === 'string')
       ? req.body.documentText.replace(/\u0000/g, '').trim() : '';
@@ -10068,7 +10071,18 @@ app.get('/api/tariff/me', requireAuth, async (req, res) => {
     const quota = await tariffModule.checkQuota(req.session.adminId);
     const balance = await tariffModule.ledger.balance({ adminId: req.session.adminId });
     const usage = await tariffModule.getUsageStats(req.session.adminId);
-    res.json({ ...userPlan, quota, balance, usage });
+    // OCR is a step of a document service, not something sold on its own: it
+    // is shown as the chat-scan page limit it is, apart from the services
+    const scanLimits = { chatScanPages: null, perDocumentPages: tariffModule.ledger.PLAN_CATALOG[(userPlan && tariffModule.ledger.PLAN_CATALOG[userPlan.plan]) ? userPlan.plan : 'sinov'].job.maxPages,
+      note: "Skan hujjat tahlil yoki xulosa ichida o'qiladi; chatdagi skan uchun sahifa chegarasi." };
+    if (balance && balance.services && balance.services.ocr) { scanLimits.chatScanPages = balance.services.ocr; delete balance.services.ocr; }
+    if (balance && balance.trialQuotas && balance.trialQuotas.ocr != null) {
+      scanLimits.chatScanPages = { limit: balance.trialQuotas.ocr, used: 0, remaining: balance.trialQuotas.ocr };
+      balance.trialQuotas = { ...balance.trialQuotas };
+      delete balance.trialQuotas.ocr;
+    }
+    if (quota && quota.services && quota.services.ocr) { quota.services = { ...quota.services }; delete quota.services.ocr; }
+    res.json({ ...userPlan, quota, balance, usage, scanLimits });
   } catch (err) {
     console.error('[TARIFF ME] Error:', err);
     res.status(500).json({ error: err.message });
@@ -11251,7 +11265,7 @@ async function runMigrations() {
     // Mount OCR & AI Document Analyzer routes
     try {
       const { mountAnalyzerRoutes } = require('../ocr/routes');
-      mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule, digestLongDocument });
+      mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule, digestLongDocument, pool });
     } catch (e) { console.log('[ANALYZE] Mount skipped:', e.message); }
 
     // Mount Enterprise Uzbekistan / TIFC English-law routes

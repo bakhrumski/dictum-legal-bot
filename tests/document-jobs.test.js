@@ -78,7 +78,8 @@ function contract({ dropClause = null } = {}) {
     assert.match(fn, /docJob\.requestedServices\(body\.message\)/u);
     assert.match(fn, /const m = await meterDocuments\(req, res, \{ services, text: doc,/u, 'all ordered services reserved together');
     const md = tiers.slice(tiers.indexOf('async function meterDocuments'), tiers.indexOf('async function quoteDocument'));
-    assert.match(md, /ledger\.reserveMany\(\{[\s\S]*?jobs: services\.map\(sv => \(\{ service: sv, units: size\.units/u, 'one job per service, each its own service, one transaction');
+    assert.match(md, /ledger\.reserveMany\(\{[\s\S]*?jobs: rest\.map\(sv => \(\{ service: sv, units: size\.units/u, 'one job per service, each its own service, one transaction');
+    assert.match(md, /adoptHeldScanJob\(req, res, \{ service: sv, units: size\.units/u, 'a service a scan\'s OCR already reserved is adopted, not reserved twice');
     assert.match(md, /section: true/u, 'each settled on its own section');
     assert.match(fn, /code: 'DOC_COST_CONFIRM', service: services\[0\], services, quote: quotes\[0\], quotes/u);
     assert.ok(!/service: 'analysis'/u.test(fn), 'an opinion is never metered as analysis');
