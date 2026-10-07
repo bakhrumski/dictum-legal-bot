@@ -340,7 +340,13 @@ async function checkFreeAccess(adminId) {
   const u = await getUserPlan(adminId);
   if (!u) return { allowed: true, state: 'unknown' };
   if (u.role && u.role !== 'user') return { allowed: true, state: 'staff' };
-  if (PAID_PLANS.has(u.plan)) return { allowed: true, state: 'paid' };
+  // a live test entitlement granted by a master (tariff_periods.source =
+  // 'test'): the channel and survey gate wait while it runs. Decided by the
+  // entitlement itself - never by the login or created_by_master_id - and
+  // gone the moment it ends or is ended: the account is gated as before.
+  // Its quotas and its AI budget still apply (src/ai/test-budget.js).
+  if (u.kind === 'test') return { allowed: true, state: 'test', testUntil: u.expiresAt || null };
+  if (u.kind === 'paid' && PAID_PLANS.has(u.plan)) return { allowed: true, state: 'paid' };
 
   const r = await pool.query(
     `SELECT telegram_user_id, telegram_username, channel_verified_at, survey_completed_at,
