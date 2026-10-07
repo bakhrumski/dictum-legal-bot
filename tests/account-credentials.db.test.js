@@ -34,6 +34,10 @@ const ledger = require('../src/rag/tariff-ledger');
 const credentials = require('../src/auth/credentials');
 const { mountLoginRoutes } = require('../src/auth/login-routes');
 const { mountCredentialRoutes } = require('../src/auth/credential-routes');
+const { mountTelegramAuthRoutes } = require('../src/auth/telegram-auth-routes');
+const { handleAuthStart, createRecoverLink } = require('../src/bot/auth-start');
+const { resetWithLink } = require('../src/auth/recovery');
+const { verificationTokens, regSessions, loginSessions } = require('../src/verification-store');
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -51,7 +55,8 @@ const secret = (tag) => `${tag}-${require('crypto').randomBytes(9).toString('bas
 async function ensureSchema() {
   await pool.query(`CREATE TABLE IF NOT EXISTS admins (id serial PRIMARY KEY, username varchar(255) UNIQUE NOT NULL, password varchar(255) NOT NULL, full_name varchar(255) NOT NULL, role varchar(50) NOT NULL DEFAULT 'student')`);
   for (const col of ['created_at timestamptz DEFAULT now()', 'telegram_username varchar(100)', 'tariff_plan varchar(20)', 'tariff_starts_at timestamptz', 'tariff_expires_at timestamptz',
-    'telegram_user_id bigint', 'telegram_chat_id bigint', 'channel_verified_at timestamptz', 'survey_completed_at timestamptz', 'free_gate_since timestamptz']) {
+    'telegram_user_id bigint', 'telegram_chat_id bigint', 'channel_verified_at timestamptz', 'survey_completed_at timestamptz', 'free_gate_since timestamptz',
+    'device_fingerprint varchar(64)', 'bepul_used boolean DEFAULT false']) {
     await pool.query(`ALTER TABLE admins ADD COLUMN IF NOT EXISTS ${col}`);
   }
   await tiers.initSubscriptionSchema();
@@ -87,6 +92,7 @@ async function startApp() {
   const logAudit = (req, ...args) => audits.push(args);
   mountLoginRoutes(app, { pool, logAudit, getAuthBot: () => stubBot });
   mountCredentialRoutes(app, { pool, requireAuth, requireMasterAdmin, logAudit });
+  mountTelegramAuthRoutes(app, { pool, loginSessions, regSessions, logAudit });
   app.get('/whoami', requireAuth, (req, res) => res.json({ adminId: req.session.adminId, role: req.session.role, sid: req.sessionID }));
   // a Telegram sign-in, as /api/login/telegram-otp does after the bot approved it
   app.post('/test/telegram-signin', async (req, res) => {
@@ -101,18 +107,24 @@ async function startApp() {
 }
 
 /** A browser: keeps its own cookie. */
-function client() {
-  let cookie = '';
-  const call = async (method, p, json) => {
-    const r = await fetch(base + p, { method, headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) }, body: json ? JSON.stringify(json) : undefined });
-    const set = r.headers.get('set-cookie');
-    if (set) cookie = set.split(';')[0];
+function client({ origin } = {}) {
+  const jar = new Map(); // a browser keeps every cookie it is given
+  const call = async (method, p, json, extra = {}) => {
+    const cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+    const o = origin === undefined ? base : origin; // a browser sends its page's Origin on POST
+    const r = await fetch(base + p, { method, headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(method !== 'GET' && o ? { origin: o } : {}), ...extra },
+      body: json ? JSON.stringify(json) : undefined });
+    for (const c of r.headers.getSetCookie ? r.headers.getSetCookie() : []) {
+      const [kv] = c.split(';'); const i = kv.indexOf('=');
+      jar.set(kv.slice(0, i).trim(), kv.slice(i + 1).trim());
+    }
     return { status: r.status, body: await r.json().catch(() => ({})) };
   };
   return {
-    get: p => call('GET', p), post: (p, j) => call('POST', p, j || {}),
+    get: p => call('GET', p), post: (p, j, extra) => call('POST', p, j || {}, extra),
     login: (username, password) => call('POST', '/api/login', { username, password }),
     tg: (row) => call('POST', '/test/telegram-signin', { tg: String(row.telegram_user_id) }),
+    jar,
   };
 }
 
@@ -387,6 +399,184 @@ const balanceOf = async (adminId) => {
       assert.ok(b2.services.chat.used >= 1);
     });
 
+    // ── Telegram sign-in: a link opened by someone else signs no one in ──
+    const appUrl = 'https://juristai.example';
+    const bot = (param, from) => handleAuthStart(param, from, { pool, loginSessions, regSessions, verificationTokens, appUrl });
+    const codeIn = (text) => { const m = /kod[a-z' ]*: (\d{6})/iu.exec(text || ''); return m ? m[1] : null; };
+    const tgFrom = (row) => ({ id: Number(row.telegram_user_id), first_name: 'T', username: row.telegram_username || null });
+
+    await test('ATTACK: A starts a Telegram sign-in, B opens the link in B\'s Telegram -> A is NOT signed in to B; the code goes to B only', async () => {
+      const victim = await makeAccount();
+      const a = client();
+      const start = await a.post('/api/login-session');
+      assert.strictEqual(start.status, 200);
+      assert.ok(a.jar.has('jai_tga_login'), 'the starting browser is marked by a cookie');
+      const text = await bot(`login_${start.body.token}`, tgFrom(victim));
+      const code = codeIn(text);
+      assert.ok(code, 'B gets a code in B\'s own chat');
+      assert.match(text, /KIRISH uchun/u, 'the bot names the action');
+      assert.match(text, /hech kimga bermang/u, 'and warns not to give the code away');
+      // A only learns that a code was sent - never the code, never "approved"
+      const st = await a.get(`/api/telegram-auth/status/login/${start.body.token}`);
+      assert.deepStrictEqual(st.body, { codeSent: true, expired: false });
+      assert.ok(!JSON.stringify(st.body).includes(code));
+      // what the old page did ("APPROVED") and guessing do not sign A in
+      const old = await a.post('/api/login/telegram-otp', { token: start.body.token, otp_code: 'APPROVED' });
+      assert.strictEqual(old.status, 400);
+      assert.strictEqual((await a.get('/whoami')).status, 401, 'A is not signed in');
+      for (let i = 0; i < 3; i++) await a.post('/api/login/telegram-otp', { token: start.body.token, otp_code: String(100000 + i) });
+      assert.strictEqual((await a.get('/whoami')).status, 401);
+    });
+
+    await test('the right person: the code from their own Telegram, typed in the browser that started -> their account, a new session id', async () => {
+      const u = await makeAccount();
+      const c = client();
+      const start = await c.post('/api/login-session');
+      const code = codeIn(await bot(`login_${start.body.token}`, tgFrom(u)));
+      const ok = await c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: code });
+      assert.deepStrictEqual([ok.status, ok.body.success], [200, true]);
+      assert.strictEqual((await c.get('/whoami')).body.adminId, u.id);
+      // the same code again: spent
+      const again = await c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: code });
+      assert.strictEqual(again.status, 400, 'used once');
+    });
+
+    await test('a code works only in the browser that started it, only for its flow, only for the Telegram id that opened the link', async () => {
+      const u = await makeAccount();
+      const other = await makeAccount();
+      const c = client();
+      const start = await c.post('/api/login-session');
+      const code = codeIn(await bot(`login_${start.body.token}`, tgFrom(u)));
+      // another Telegram account cannot take over a link already opened
+      const second = await bot(`login_${start.body.token}`, tgFrom(other));
+      assert.match(second, /boshqa Telegram hisobi uchun allaqachon ochilgan/u);
+      assert.strictEqual(codeIn(second), null);
+      // another browser (no cookie, or its own cookie) with the right token and code
+      const thief = client();
+      await thief.post('/api/login-session');
+      const t1 = await thief.post('/api/login/telegram-otp', { token: start.body.token, otp_code: code });
+      assert.deepStrictEqual([t1.status, t1.body.code], [400, 'other_browser']);
+      // another flow: the login link at the registration endpoint, and the other way round
+      const asReg = await c.post('/api/register/telegram-otp', { token: start.body.token, otp_code: code });
+      assert.deepStrictEqual([asReg.status, asReg.body.code], [400, 'not_found']);
+      const reg = await c.post('/api/reg-session');
+      const regCode = codeIn(await bot(`reg_${reg.body.token}`, tgFrom(u)));
+      const regAsLogin = await c.post('/api/login/telegram-otp', { token: reg.body.token, otp_code: regCode });
+      assert.deepStrictEqual([regAsLogin.status, regAsLogin.body.code], [400, 'not_found']);
+      // tokens of one flow do nothing in the bot under another prefix
+      assert.match(await bot(`reg_${start.body.token}`, tgFrom(u)), /topilmadi|muddati/u);
+      assert.match(await bot(`stepup_${start.body.token}`, tgFrom(u)), /topilmadi|muddati/u);
+      assert.match(await bot(`recover_${start.body.token}`, tgFrom(u)), /topilmadi|muddati/u);
+      // the real browser still signs in with its code
+      const ok = await c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: code });
+      assert.strictEqual(ok.status, 200);
+      assert.strictEqual((await c.get('/whoami')).body.adminId, u.id);
+    });
+
+    await test('expired codes, five wrong tries, at most three codes a link; two parallel requests with one code -> only one passes', async () => {
+      const u = await makeAccount();
+      const c = client();
+      let start = await c.post('/api/login-session');
+      let code = codeIn(await bot(`login_${start.body.token}`, tgFrom(u)));
+      loginSessions.get(start.body.token).codeIssuedAt -= 5 * 60 * 1000 + 1000;
+      assert.deepStrictEqual((await c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: code })).body.code, 'expired');
+      start = await c.post('/api/login-session');
+      code = codeIn(await bot(`login_${start.body.token}`, tgFrom(u)));
+      for (let i = 0; i < 4; i++) assert.strictEqual((await c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: '000000' === code ? '111111' : '000000' })).body.code, 'wrong_code');
+      assert.deepStrictEqual((await c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: '999999' === code ? '888888' : '999999' })).status, 429);
+      assert.strictEqual((await c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: code })).status, 400, 'locked: even the right code');
+      start = await c.post('/api/login-session');
+      for (let i = 0; i < 3; i++) assert.ok(codeIn(await bot(`login_${start.body.token}`, tgFrom(u))));
+      assert.match(await bot(`login_${start.body.token}`, tgFrom(u)), /kodlar soni tugadi/u);
+      start = await c.post('/api/login-session');
+      code = codeIn(await bot(`login_${start.body.token}`, tgFrom(u)));
+      const both = await Promise.all([c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: code }), c.post('/api/login/telegram-otp', { token: start.body.token, otp_code: code })]);
+      assert.deepStrictEqual(both.map(x => x.status).sort(), [200, 400], 'exactly one');
+    });
+
+    await test('registration: a new Telegram user gets an account by the code; an existing one is signed in; the link never approves by itself', async () => {
+      const c = client();
+      const reg = await c.post('/api/reg-session');
+      const tg = { id: 6800000000 + rnd(), first_name: 'Yangi', last_name: 'User', username: `new${rnd()}` };
+      const text = await bot(`reg_${reg.body.token}`, tg);
+      assert.match(text, /RO'YXATDAN O'TISH uchun/u);
+      assert.deepStrictEqual((await c.get(`/api/telegram-auth/status/register/${reg.body.token}`)).body, { codeSent: true, expired: false });
+      assert.strictEqual((await c.get('/whoami')).status, 401, 'opening the link created no session');
+      const r = await c.post('/api/register/telegram-otp', { token: reg.body.token, otp_code: codeIn(text) });
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      const row = (await pool.query('SELECT id, role FROM admins WHERE telegram_user_id = $1', [tg.id])).rows[0];
+      made.push(row.id);
+      assert.deepStrictEqual([row.role, (await c.get('/whoami')).body.adminId], ['user', row.id]);
+    });
+
+    await test('recovery: an ordinary account gets no reset link; a staff account gets a single-use one in its own chat; the browser learns only "confirmed"', async () => {
+      const user = await makeAccount();
+      const t1 = createRecoverLink(verificationTokens);
+      const before = [...verificationTokens.keys()].filter(k => k.startsWith('pwreset_')).length;
+      const textU = await bot(`recover_${t1}`, tgFrom(user));
+      assert.match(textU, /Kirish usullari/u);
+      assert.ok(!/recover=/u.test(textU), 'no reset link for an ordinary account');
+      assert.strictEqual([...verificationTokens.keys()].filter(k => k.startsWith('pwreset_')).length, before);
+      assert.match(await bot(`recover_${t1}`, tgFrom(user)), /topilmadi|muddati/u, 'a recovery link is used once');
+      // staff
+      const pw = secret('Staff');
+      const lawyer = await makeAccount({ role: 'lawyer', login: `law${rnd()}`, password: pw });
+      const session1 = client(); assert.strictEqual((await session1.login(lawyer.username, pw)).status, 200);
+      const t2 = createRecoverLink(verificationTokens);
+      const textS = await bot(`recover_${t2}`, tgFrom(lawyer));
+      const link = /recover=([0-9a-f]{40})/u.exec(textS);
+      assert.ok(link, 'a reset link in the staff member\'s own chat');
+      assert.match(textS, /hech kimga yubormang/u);
+      assert.deepStrictEqual(verificationTokens.get(`botinit_${t2}`).confirmed, true);
+      // somebody else opening the same staff link later gets nothing
+      assert.match(await bot(`recover_${t2}`, tgFrom(user)), /topilmadi|muddati/u);
+      const npw = secret('NewStaff');
+      const both = await Promise.all([resetWithLink(pool, verificationTokens, link[1], npw), resetWithLink(pool, verificationTokens, link[1], npw)]);
+      assert.deepStrictEqual(both.map(x => (x ? x.status : null)).sort(), [200, null], 'single use, also in parallel');
+      assert.strictEqual((await session1.get('/whoami')).status, 401, 'sessions end');
+      credentials.resetThrottle();
+      assert.strictEqual((await client().login(lawyer.username, npw)).status, 200);
+      // a reset link made for an ordinary account (as Google recovery could) is refused
+      verificationTokens.set('pwreset_forged', { adminId: user.id, expiresAt: Date.now() + 60000 });
+      assert.deepStrictEqual((await resetWithLink(pool, verificationTokens, 'forged', npw)).code, 'USE_ACCOUNT_PAGE');
+      // a master who reset still gets the Telegram second factor
+      const mpw = secret('Mst');
+      const master = await makeAccount({ role: 'master', login: `rm${rnd()}`, password: mpw });
+      const t3 = createRecoverLink(verificationTokens);
+      const ml = /recover=([0-9a-f]{40})/u.exec(await bot(`recover_${t3}`, tgFrom(master)))[1];
+      const mpw2 = secret('Mst2');
+      assert.strictEqual((await resetWithLink(pool, verificationTokens, ml, mpw2)).status, 200);
+      const mc = client();
+      const m1 = await mc.login(master.username, mpw2);
+      assert.deepStrictEqual([m1.status, m1.body.twofa], [200, true], 'master 2FA kept after a reset');
+      assert.strictEqual((await mc.get('/whoami')).status, 401);
+    });
+
+    await test('CSRF: a cross-site page cannot set credentials, step up, create a test user or finish a Telegram sign-in with the cookie', async () => {
+      const pw = secret('Pw');
+      const u = await makeAccount({ login: `csrf${rnd()}`, password: pw });
+      const evil = client({ origin: 'https://evil.example' });
+      // the evil page rides on a real signed-in cookie
+      const good = client(); assert.strictEqual((await good.login(u.username, pw)).status, 200);
+      for (const [k, v] of good.jar) evil.jar.set(k, v);
+      const none = client({ origin: null }); for (const [k, v] of good.jar) none.jar.set(k, v);
+      for (const c of [evil, none]) {
+        assert.strictEqual((await c.post('/api/account/credentials/stepup', { method: 'password', currentPassword: pw })).status, 403);
+        assert.strictEqual((await c.post('/api/account/credentials', { stepupToken: 'x', login: `z${rnd()}`, password: pw, passwordConfirm: pw })).status, 403);
+        assert.strictEqual((await c.post('/api/admin/test-users', { login: `z${rnd()}` })).status, 403);
+        assert.strictEqual((await c.post('/api/login/telegram-otp', { token: 'x', otp_code: '123456' })).status, 403);
+        assert.strictEqual((await c.post('/api/register/telegram-otp', { token: 'x', otp_code: '123456' })).status, 403);
+      }
+      assert.deepStrictEqual((await evil.post('/api/account/credentials/stepup', { method: 'password', currentPassword: pw })).body.error, 'cross_site');
+      // a Referer from this site is enough when Origin is missing
+      const refOnly = client({ origin: null }); for (const [k, v] of good.jar) refOnly.jar.set(k, v);
+      assert.strictEqual((await refOnly.post('/api/account/credentials/stepup', { method: 'password', currentPassword: pw }, { referer: `${base}/account.html` })).status, 200);
+      // the same site goes through
+      assert.strictEqual((await good.post('/api/account/credentials/stepup', { method: 'password', currentPassword: pw })).status, 200);
+      const sess = (await pool.query('SELECT sess FROM user_sessions LIMIT 1')).rows[0];
+      assert.ok(sess, 'sessions are stored');
+    });
+
     await test('no reply, audit row or bot message carries a password or a hash', async () => {
       const text = JSON.stringify([replies, audits, botMessages]);
       assert.ok(!/\$2[aby]\$\d\d\$/u.test(text), 'no bcrypt hash');
@@ -400,9 +590,11 @@ const balanceOf = async (adminId) => {
       assert.ok(!/resetToken/u.test(status.replace(/^\/\/.*$/gmu, '')), 'status hands no reset token to the browser');
       const req_ = server_.slice(server_.indexOf("app.post('/api/password-recovery/request'"), server_.indexOf('const RECOVERY_MAX_TRIES'));
       assert.ok(/status\(410\)/u.test(req_) && !/telegram_username/u.test(req_.replace(/^\/\/.*$/gmu, '')), 'no lookup by Telegram username');
-      assert.ok(/target\.role === 'user'/u.test(server_), 'a reset link does not set an ordinary account password');
+      const recovery = fs.readFileSync(path.join(__dirname, '../src/auth/recovery.js'), 'utf8');
+      assert.ok(/target\.role === 'user'/u.test(recovery) && /resetWithLink/u.test(server_), 'a reset link does not set an ordinary account password');
       const regBot = fs.readFileSync(path.join(__dirname, '../src/bot/reg-bot.js'), 'utf8');
-      assert.ok(/row && row\.role === 'user'/u.test(regBot) && /stepup_/u.test(regBot));
+      const authStart = fs.readFileSync(path.join(__dirname, '../src/bot/auth-start.js'), 'utf8');
+      assert.ok(/row\.role === 'user'/u.test(authStart) && /auth-start/u.test(regBot) && !/'APPROVED'/u.test(regBot + authStart));
       assert.ok(!/s\.resetToken = resetToken/u.test(regBot + fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8')));
       const login = fs.readFileSync(path.join(__dirname, '../public/login.html'), 'utf8');
       assert.ok(!/d\.resetToken/u.test(login));

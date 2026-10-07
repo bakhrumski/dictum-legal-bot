@@ -65,9 +65,9 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.2 18-4.1-7.1L3 10.2 21 3Z"/><path d="m9.7 13.9 4.4-4.4"/></svg>
               Telegram botni oching
             </a>
-            <p class="status-note" style="margin-bottom:8px;">Botdan kelgan 4 raqamli kodni kiriting:</p>
+            <p class="status-note" style="margin-bottom:8px;">Botdan kelgan 6 raqamli kodni shu yerga kiriting. Kodni hech kimga bermang.</p>
             <div class="otp-controls">
-              <input type="text" id="loginOtpInput" class="otp-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" onkeydown="if(event.key==='Enter')verifyLoginOtp()">
+              <input type="text" id="loginOtpInput" class="otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="000000" onkeydown="if(event.key==='Enter')verifyLoginOtp()">
               <button type="button" id="loginOtpVerifyBtn" class="otp-verify" aria-label="Kodni tasdiqlash" onclick="verifyLoginOtp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></button>
             </div>
             <div id="loginOtpError" class="agreement-error" style="margin-top:6px;display:none;"></div>
@@ -145,7 +145,7 @@
               </a>
               <div id="otpStatus" class="status-note" style="margin-bottom:8px;"></div>
               <div class="otp-controls">
-                <input type="text" id="otpInput" class="otp-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" onkeydown="if(event.key==='Enter')verifyTelegramOtp()">
+                <input type="text" id="otpInput" class="otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="000000" onkeydown="if(event.key==='Enter')verifyTelegramOtp()">
                 <button type="button" id="otpVerifyBtn" class="otp-verify" aria-label="Kodni tasdiqlash" onclick="verifyTelegramOtp()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></button>
               </div>
               <div id="otpError" class="agreement-error" style="margin-top:6px;display:none;"></div>
@@ -948,9 +948,11 @@
                 try {
                     const resp = await fetch('/api/telegram-auth/status/' + mode + '/' + token);
                     const data = await resp.json();
-                    if (data.approved) {
+                    // the server says only that a code went to Telegram;
+                    // the code itself is typed here by the person
+                    if (data.codeSent) {
                         clearInterval(_telegramAuthPoll);
-                        if (statusEl) statusEl.textContent = 'Tasdiqlandi. Kirish yakunlanmoqda…';
+                        if (statusEl) statusEl.textContent = 'Kod Telegramga yuborildi. 6 raqamli kodni kiriting (5 daqiqa).';
                         onApproved();
                     } else if (data.expired || attempts > 120) {
                         clearInterval(_telegramAuthPoll);
@@ -975,21 +977,21 @@
                 const botUsername = data.botUsername || 'juristAI_registration_bot';
                 const deepLink = 'https://t.me/' + botUsername + '?start=login_' + _loginToken;
                 document.getElementById('loginBotLink').href = deepLink;
-                otpStatus.textContent = 'Telegramda “Start” ni bosing va ruxsat bering. Bu sahifa avtomatik davom etadi.';
+                otpStatus.textContent = 'Telegramda “Start” ni bosing: bot 6 raqamli kod yuboradi.';
                 window.open(deepLink, '_blank', 'noopener');
-                pollTelegramApproval('login', _loginToken, function(){ verifyLoginOtp('APPROVED'); }, otpStatus);
+                pollTelegramApproval('login', _loginToken, function(){ document.getElementById('loginOtpInput').focus(); }, otpStatus);
             } catch(err) {
                 otpStatus.innerHTML = '<span style="color:#d9534f;"></span>'; otpStatus.firstChild.textContent = err.message || 'Xatolik';
             }
         }
 
-        async function verifyLoginOtp(approvedCode) {
-            const code = approvedCode || document.getElementById('loginOtpInput').value.trim();
+        async function verifyLoginOtp() {
+            const code = document.getElementById('loginOtpInput').value.trim();
             const otpError = document.getElementById('loginOtpError');
             const verifyBtn = document.getElementById('loginOtpVerifyBtn');
             otpError.style.display = 'none';
-            if (!approvedCode && (!code || code.length !== 4)) {
-                otpError.textContent = '4 raqamli kodni to\'liq kiriting';
+            if (!/^\d{6}$/.test(code)) {
+                otpError.textContent = '6 raqamli kodni to\'liq kiriting';
                 otpError.style.display = 'block';
                 return;
             }
@@ -1048,12 +1050,12 @@
                 const botUsername = data.botUsername || 'juristAI_registration_bot';
                 const deepLink = 'https://t.me/' + botUsername + '?start=reg_' + _regToken;
                 document.getElementById('regBotLink').href = deepLink;
-                otpStatus.textContent = 'Telegramda “Start” ni bosing va ruxsat bering. Bu sahifa avtomatik davom etadi.';
+                otpStatus.textContent = 'Telegramda “Start” ni bosing: bot 6 raqamli kod yuboradi.';
                 otpBlock.style.display = 'block';
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
                 window.open(deepLink, '_blank', 'noopener');
-                pollTelegramApproval('register', _regToken, function(){ verifyTelegramOtp('APPROVED'); }, otpStatus);
+                pollTelegramApproval('register', _regToken, function(){ document.getElementById('otpInput').focus(); }, otpStatus);
             } catch(err) {
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
@@ -1062,13 +1064,13 @@
             }
         }
 
-        async function verifyTelegramOtp(approvedCode) {
-            const code = approvedCode || document.getElementById('otpInput').value.trim();
+        async function verifyTelegramOtp() {
+            const code = document.getElementById('otpInput').value.trim();
             const otpError = document.getElementById('otpError');
             const verifyBtn = document.getElementById('otpVerifyBtn');
             otpError.style.display = 'none';
-            if (!approvedCode && (!code || code.length !== 4)) {
-                otpError.textContent = '4 raqamli kodni to\'liq kiriting';
+            if (!/^\d{6}$/.test(code)) {
+                otpError.textContent = '6 raqamli kodni to\'liq kiriting';
                 otpError.style.display = 'block';
                 return;
             }

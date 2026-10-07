@@ -282,7 +282,14 @@ Known state of the suites (Sept 2026):
   (`src/auth/login-routes.js`) keeps the master's Telegram 2FA and the
   published-password refusal, gives one reply for unknown login and wrong
   password, locks a login after 10 failures in 15 minutes and starts a new
-  session id. Recovery: the browser never receives a reset token; an
+  session id. Telegram web sign-in and registration
+  (`src/auth/telegram-auth-routes.js`, `telegram-confirm.js`, bot side
+  `src/bot/auth-start.js`): opening a `login_`/`reg_` link never signs in -
+  the bot sends a 6-digit code to the chat that opened it, typed into the
+  browser that started (bound by a per-flow `jai_tga_<flow>` cookie); the
+  code is never in an API reply, is per flow, per Telegram id, 5 minutes,
+  5 tries, used once. Credential, test-user and Telegram-code POSTs need
+  this site's Origin/Referer (`src/auth/same-origin.js`). Recovery: the browser never receives a reset token; an
   ordinary account resets on its account page after Telegram sign-in; the
   reset link is for staff. A master may create an ordinary test account
   (`POST /api/admin/test-users`, master password re-entered, initial password

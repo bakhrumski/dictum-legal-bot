@@ -11,10 +11,12 @@
  *   POST /api/admin/test-users                     master: an ordinary test account
  *
  * No reply carries a password or a hash; audit rows name the action and
- * the account, never the password.
+ * the account, never the password. Every POST here must come from this
+ * site (Origin / Referer, src/auth/same-origin.js) besides the Lax cookie.
  */
 
 const credentials = require('./credentials');
+const { requireSameOrigin } = require('./same-origin');
 
 function mountCredentialRoutes(app, { pool, requireAuth, requireMasterAdmin, logAudit = () => {}, authBotUsername = 'juristAI_registration_bot' }) {
   const who = req => ({ adminId: req.session.adminId, sid: req.sessionID });
@@ -30,7 +32,7 @@ function mountCredentialRoutes(app, { pool, requireAuth, requireMasterAdmin, log
     }
   });
 
-  app.post('/api/account/credentials/stepup', requireAuth, async (req, res) => {
+  app.post('/api/account/credentials/stepup', requireSameOrigin, requireAuth, async (req, res) => {
     try {
       const b = req.body || {};
       const out = await credentials.startStepup(pool, { ...who(req), method: String(b.method || ''), currentPassword: b.currentPassword });
@@ -53,7 +55,7 @@ function mountCredentialRoutes(app, { pool, requireAuth, requireMasterAdmin, log
     res.json({ approved: s.approved, expired: s.expired });
   });
 
-  app.post('/api/account/credentials', requireAuth, async (req, res) => {
+  app.post('/api/account/credentials', requireSameOrigin, requireAuth, async (req, res) => {
     try {
       const b = req.body || {};
       if (!credentials.consumeStepup(b.stepupToken, who(req))) {
@@ -70,7 +72,7 @@ function mountCredentialRoutes(app, { pool, requireAuth, requireMasterAdmin, log
     }
   });
 
-  app.post('/api/admin/test-users', requireMasterAdmin, async (req, res) => {
+  app.post('/api/admin/test-users', requireSameOrigin, requireMasterAdmin, async (req, res) => {
     try {
       const b = req.body || {};
       const out = await credentials.createTestUser(pool, {

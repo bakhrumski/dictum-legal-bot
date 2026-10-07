@@ -9422,150 +9422,12 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
   }
 });
 
-// ========== TELEGRAM OTP REGISTRATION SESSIONS ==========
-
-app.post('/api/reg-session', (req, res) => {
-  const token = crypto.randomBytes(12).toString('hex');
-  regSessions.set(token, { verified: false, telegramUserId: null, createdAt: Date.now() });
-  setTimeout(() => regSessions.delete(token), 10 * 60 * 1000);
-  res.json({ token, botUsername: AUTH_BOT_USERNAME });
-});
-
-// POST /api/login-session — create a Telegram login OTP session
-app.post('/api/login-session', (req, res) => {
-  const token = crypto.randomBytes(12).toString('hex');
-  loginSessions.set(token, { otp: null, telegramUserId: null, createdAt: Date.now() });
-  setTimeout(() => loginSessions.delete(token), 10 * 60 * 1000);
-  res.json({ token, botUsername: AUTH_BOT_USERNAME });
-});
-
-app.get('/api/telegram-auth/status/:mode/:token', (req, res) => {
-  const store = req.params.mode === 'register' ? regSessions : req.params.mode === 'login' ? loginSessions : null;
-  if (!store) return res.status(400).json({ error: 'Noto‘g‘ri tasdiqlash turi' });
-  const authSession = store.get(req.params.token);
-  if (!authSession) return res.json({ approved: false, expired: true });
-  res.json({ approved: !!authSession.approved, expired: Date.now() > authSession.createdAt + 10 * 60 * 1000 });
-});
-
-// POST /api/login/telegram-otp — verify OTP and log user in
-app.post('/api/login/telegram-otp', async (req, res) => {
-  try {
-    const { token, otp_code } = req.body || {};
-    const session = loginSessions.get(token);
-    if (!session || !session.otp || !session.otpSentAt) {
-      return res.status(400).json({ error: 'Sessiya topilmadi. Telegram tugmasini qayta bosing.' });
-    }
-    if (Date.now() > session.otpSentAt + 10 * 60 * 1000) {
-      loginSessions.delete(token);
-      return res.status(400).json({ error: 'OTP muddati o\'tgan. Qayta urinib ko\'ring.' });
-    }
-    if (String(otp_code).trim() !== session.otp) {
-      return res.status(400).json({ error: 'OTP noto\'g\'ri. Qayta tekshirib kiriting.' });
-    }
-    const tgUserId = session.telegramUserId;
-    if (!tgUserId) return res.status(400).json({ error: 'Telegram hisob aniqlanmadi.' });
-
-    const row = (await pool.query('SELECT id, role, full_name, username FROM admins WHERE telegram_user_id = $1', [tgUserId])).rows[0];
-    if (!row) {
-      return res.status(404).json({ error: 'Bu Telegram hisob bilan ro\'yxatdan o\'tilmagan. Iltimos, avval ro\'yxatdan o\'ting.' });
-    }
-
-    req.session.isAuthenticated = true;
-    req.session.role = row.role;
-    req.session.adminId = row.id;
-    req.session.username = row.username;
-    req.session.fullName = row.full_name;
-    await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
-    loginSessions.delete(token);
-    res.json({ success: true, redirect: '/dashboard.html' });
-  } catch (err) {
-    console.error('[login/telegram-otp]', err.message);
-    res.status(500).json({ error: 'Kirishda xatolik: ' + err.message });
-  }
-});
-
-app.get('/api/reg-session/:token', (req, res) => {
-  const s = regSessions.get(req.params.token);
-  if (!s) return res.json({ verified: false, expired: true });
-  res.json({ verified: !!s.otp, telegramUserId: s.telegramUserId || null });
-});
-
-// POST /api/register/telegram-otp — verify OTP sent by bot and create account
-app.post('/api/register/telegram-otp', async (req, res) => {
-  try {
-    const { token, otp_code, device_fingerprint } = req.body || {};
-    const dfp = typeof device_fingerprint === 'string' ? device_fingerprint.slice(0, 64) : null;
-
-    const session = regSessions.get(token);
-    if (!session || !session.otp || !session.otpSentAt) {
-      return res.status(400).json({ error: 'Sessiya topilmadi. Telegram tugmasini qayta bosing.' });
-    }
-    if (Date.now() > session.otpSentAt + 10 * 60 * 1000) {
-      regSessions.delete(token);
-      return res.status(400).json({ error: 'OTP muddati o\'tgan. Qayta urinib ko\'ring.' });
-    }
-    if (String(otp_code).trim() !== session.otp) {
-      return res.status(400).json({ error: 'OTP noto\'g\'ri. Qayta tekshirib kiriting.' });
-    }
-
-    const tgUserId = session.telegramUserId;
-    if (!tgUserId) return res.status(400).json({ error: 'Telegram hisob aniqlanmadi.' });
-
-    // Sinov abuse: same Telegram user_id
-    const existing = await pool.query('SELECT id, bepul_used, role, full_name FROM admins WHERE telegram_user_id = $1', [tgUserId]);
-    if (existing.rows.length > 0) {
-      // The account exists: log its owner in. The trial limit stops a SECOND
-      // account, never the owner of the first one (2026-10-03: a user whose
-      // trial had ended could no longer sign in at all).
-      const u = existing.rows[0];
-      req.session.isAuthenticated = true;
-      req.session.role = u.role;
-      req.session.adminId = u.id;
-      req.session.fullName = u.full_name;
-      await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
-      regSessions.delete(token);
-      return res.json({ success: true, redirect: '/dashboard.html' });
-    }
-
-    // Sinov abuse: same device fingerprint
-    if (dfp) {
-      const fpAbuse = await pool.query('SELECT id FROM admins WHERE device_fingerprint = $1 AND bepul_used = TRUE', [dfp]);
-      if (fpAbuse.rows.length > 0) return res.status(409).json({ error: 'sinov_used' });
-    }
-
-    // Build unique username
-    const baseName = session.username || `tg${tgUserId}`;
-    const safeBase = baseName.replace(/[^a-z0-9._-]/gi, '').toLowerCase() || `tg${tgUserId}`;
-    let username = safeBase;
-    for (let i = 1; i <= 200; i++) {
-      const dup = await pool.query('SELECT id FROM admins WHERE LOWER(username) = $1', [username]);
-      if (dup.rows.length === 0) break;
-      username = `${safeBase}${i}`;
-    }
-
-    const fullName = `${session.firstName || ''} ${session.lastName || ''}`.trim() || baseName;
-    const randomPwd = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
-    const insert = await pool.query(
-      `INSERT INTO admins (username, password, full_name, role, telegram_username, telegram_chat_id, telegram_user_id, device_fingerprint)
-       VALUES ($1, $2, $3, 'user', $4, $5, $6, $7) RETURNING id, username, full_name, role`,
-      [username, randomPwd, fullName, session.username || null,
-       parseInt(tgUserId, 10), BigInt(tgUserId), dfp || null]
-    );
-    const admin = insert.rows[0];
-
-    req.session.isAuthenticated = true;
-    req.session.role = admin.role;
-    req.session.adminId = admin.id;
-    req.session.username = admin.username;
-    req.session.fullName = admin.full_name;
-    await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
-    regSessions.delete(token);
-
-    res.json({ success: true, role: admin.role, fullName: admin.full_name, redirect: '/tariff.html' });
-  } catch (err) {
-    console.error('[register/telegram-otp]', err.message);
-    res.status(500).json({ error: 'Ro\'yxatdan o\'tishda xatolik: ' + err.message });
-  }
+// ========== TELEGRAM SIGN-IN AND REGISTRATION ==========
+// The auth bot sends a 6-digit code to the Telegram chat that opens the link;
+// the person types it into the browser that started it. Opening the link
+// never signs anyone in, and no API returns the code (src/auth/telegram-confirm.js).
+require('../auth/telegram-auth-routes').mountTelegramAuthRoutes(app, {
+  pool, loginSessions, regSessions, logAudit, authBotUsername: AUTH_BOT_USERNAME,
 });
 
 // ========== GOOGLE OAUTH ==========
@@ -9747,13 +9609,8 @@ app.post('/api/recover/init', async (req, res) => {
 // POST /api/recover/bot-init — anonymous Telegram recovery (no username needed)
 // Bot identifies user by their permanent telegram_user_id when they open the bot.
 app.post('/api/recover/bot-init', (req, res) => {
-  const { botRecoverSessions } = require('../verification-store');
-  const token = require('crypto').randomBytes(14).toString('hex');
-  botRecoverSessions.set(token, { confirmed: false, resetToken: null, createdAt: Date.now() });
-  setTimeout(() => botRecoverSessions.delete(token), 10 * 60 * 1000);
-  // Also store under botinit_ key so bot.js can signal back via verificationTokens
-  const { verificationTokens: vt } = require('../verification-store');
-  vt.set('botinit_' + token, { confirmed: false, resetToken: null, expiresAt: Date.now() + 10 * 60 * 1000 });
+  // a recovery-only link (src/bot/auth-start.js): live 10 minutes, used once
+  const token = require('../bot/auth-start').createRecoverLink(require('../verification-store').verificationTokens);
   res.json({ token, botUsername: AUTH_BOT_USERNAME });
 });
 
@@ -9787,7 +9644,7 @@ app.post('/api/send-email-code', async (req, res) => {
 
 // POST /api/register/common — common user self-registration (NO master approval)
 // Accepts telegram_user_id from Telegram OTP flow.
-app.post('/api/register/common', async (req, res) => {
+app.post('/api/register/common', require('../auth/same-origin').requireSameOrigin, async (req, res) => {
   try {
     const {
       first_name, last_name, phone, telegram_username, email,
@@ -9833,15 +9690,12 @@ app.post('/api/register/common', async (req, res) => {
       // The Telegram id must be the one the auth bot verified for this
       // browser's registration session, not whatever the request body says
       // (Astra audit S3): same proof as /api/register/telegram-otp.
-      const regSession = regSessions.get(String(req.body.reg_token || ''));
-      const otpOk = regSession && regSession.otp && regSession.otpSentAt
-        && Date.now() <= regSession.otpSentAt + 10 * 60 * 1000
-        && String(req.body.otp_code || '').trim() === regSession.otp
-        && String(regSession.telegramUserId || '') === tgUserId;
-      if (!otpOk) {
+      // the code the auth bot sent to that Telegram chat, typed in the
+      // browser that started the link; spent once (src/auth/telegram-confirm.js)
+      const v = require('../auth/telegram-confirm').verifyCode(regSessions, 'register', req.body.reg_token, req.body.otp_code, req);
+      if (!v.ok || String(v.telegramUserId || '') !== tgUserId) {
         return res.status(400).json({ error: 'Telegram tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta urinib ko\'ring.' });
       }
-      regSessions.delete(String(req.body.reg_token));
       // Check sinov abuse: if this Telegram user already used bepul plan
       const existing = await pool.query('SELECT id, bepul_used FROM admins WHERE telegram_user_id = $1', [tgUserId]);
       if (existing.rows.length > 0) {
@@ -10393,7 +10247,7 @@ app.post('/api/password-recovery/verify', async (req, res) => {
 
 // POST /api/password-recovery/reset — set new password
 // Accepts both legacy code-verified tokens and new direct pwreset_ tokens
-app.post('/api/password-recovery/reset', async (req, res) => {
+app.post('/api/password-recovery/reset', require('../auth/same-origin').requireSameOrigin, async (req, res) => {
   try {
     const { token, code, new_password } = req.body;
     if (!token || !new_password) {
@@ -10403,26 +10257,12 @@ app.post('/api/password-recovery/reset', async (req, res) => {
       return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
     }
 
-    // New flow: direct token from Google OAuth or bot recovery (no code)
-    const directPending = verificationTokens.get('pwreset_' + token);
-    if (directPending) {
-      if (Date.now() > directPending.expiresAt) {
-        return res.status(400).json({ error: 'Sessiya muddati o\'tgan. Qayta urinib ko\'ring.' });
-      }
-      // an ordinary account changes its login and password on its account
-      // page after a fresh confirmation (src/auth/credentials.js); the reset
-      // link is for staff accounts
-      const target = (await pool.query('SELECT role FROM admins WHERE id = $1', [directPending.adminId])).rows[0];
-      if (!target || target.role === 'user') {
-        verificationTokens.delete('pwreset_' + token);
-        return res.status(403).json({ error: "Telegram bilan kiring va «Kirish usullari» sahifasida parolni almashtiring.", code: 'USE_ACCOUNT_PAGE' });
-      }
-      if (new_password.length < 10) return res.status(400).json({ error: "Parol kamida 10 belgi bo'lishi kerak" });
-      const hashedPassword = await bcrypt.hash(new_password, 10);
-      await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hashedPassword, directPending.adminId]);
-      verificationTokens.delete('pwreset_' + token);
-      await revokeSessionsFor(directPending.adminId);
-      return res.json({ success: true });
+    // A staff account's reset link from its own Telegram chat: single use,
+    // 15 minutes, never for an ordinary account (src/auth/recovery.js)
+    const direct = await require('../auth/recovery').resetWithLink(pool, verificationTokens, token, new_password);
+    if (direct) {
+      if (direct.success) logAudit(req, 'password.reset_link', 'admin', direct.adminId, direct.adminId);
+      return res.status(direct.status).json(direct.success ? { success: true } : { error: direct.error, code: direct.code || null });
     }
 
     // Legacy flow: code-verified token

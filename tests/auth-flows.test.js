@@ -24,12 +24,15 @@ async function test(name, fn) {
 (async () => {
   console.log('auth flows');
 
-  await test('S3: register/common accepts a Telegram id only with the verified registration session', () => {
+  await test('S3: register/common accepts a Telegram id only with the code sent to that Telegram chat, typed in the starting browser', () => {
     const route = between("app.post('/api/register/common'", "// Build a unique username");
-    assert.ok(/regSessions\.get\(String\(req\.body\.reg_token/.test(route));
-    assert.ok(/String\(req\.body\.otp_code \|\| ''\)\.trim\(\) === regSession\.otp/.test(route));
-    assert.ok(/String\(regSession\.telegramUserId \|\| ''\) === tgUserId/.test(route));
-    assert.ok(/regSessions\.delete\(/.test(route), 'the session is single use');
+    assert.ok(/requireSameOrigin/.test(server.slice(server.indexOf("app.post('/api/register/common'"), server.indexOf("app.post('/api/register/common'") + 200)));
+    assert.ok(/verifyCode\(regSessions, 'register', req\.body\.reg_token, req\.body\.otp_code, req\)/.test(route));
+    assert.ok(/String\(v\.telegramUserId \|\| ''\) !== tgUserId/.test(route));
+    assert.ok(!/=== regSession\.otp/.test(route), 'no comparison with a stored "APPROVED"');
+    // single use, per flow and per browser: src/auth/telegram-confirm.js (tests/account-credentials.db.test.js)
+    const tc = fs.readFileSync(path.join(__dirname, '..', 'src', 'auth', 'telegram-confirm.js'), 'utf8');
+    assert.ok(/s\.used = true;\s*store\.delete\(String\(token\)\)/.test(tc));
   });
 
   await test('S4: Google OAuth state is random, stored in the session, single use and compared in constant time', () => {
@@ -68,9 +71,11 @@ async function test(name, fn) {
   });
 
   await test('an existing account signs in through the Telegram code whatever its trial state', () => {
-    const route = between("const existing = await pool.query('SELECT id, bepul_used, role, full_name FROM admins WHERE telegram_user_id = $1'", "// Sinov abuse: same device fingerprint");
+    const tg = fs.readFileSync(path.join(__dirname, '..', 'src', 'auth', 'telegram-auth-routes.js'), 'utf8');
+    const route = tg.slice(tg.indexOf("const existing = await pool.query('SELECT id, bepul_used, role, full_name, username FROM admins WHERE telegram_user_id = $1'"), tg.indexOf('// Sinov abuse: same device fingerprint'));
+    assert.ok(route.length > 50);
     assert.ok(!/bepul_used\) return res\.status\(409\)/.test(route), 'the owner of a used trial is not refused');
-    assert.ok(/req\.session\.isAuthenticated = true/.test(route));
+    assert.ok(/await startSession\(req, existing\.rows\[0\]\)/.test(route));
   });
 
   await test('Google sign-in is closed unless GOOGLE_AUTH_ENABLED=true: buttons hidden, routes refuse', () => {
@@ -95,7 +100,10 @@ async function test(name, fn) {
   await test('S5: password reset, role or password change and deletion end old sessions', () => {
     assert.ok(/DELETE FROM user_sessions WHERE \(sess->>'adminId'\) = \$1::text/.test(server));
     const reset = between("app.post('/api/password-recovery/reset'", "\n});");
-    assert.strictEqual((reset.match(/await revokeSessionsFor\(/g) || []).length, 2, 'both reset paths');
+    assert.strictEqual((reset.match(/await revokeSessionsFor\(/g) || []).length, 1, 'the code path');
+    assert.ok(/resetWithLink\(/.test(reset), 'the link path: src/auth/recovery.js');
+    const rec = fs.readFileSync(path.join(__dirname, '..', 'src', 'auth', 'recovery.js'), 'utf8');
+    assert.ok(/DELETE FROM user_sessions WHERE \(sess->>'adminId'\) = \$1::text/.test(rec), 'the link path ends sessions too');
     assert.ok(/if \(roleChanged \|\| \(password && password\.length > 0\)\) await revokeSessionsFor\(id, req\.sessionID\)/.test(server));
     assert.ok(/DELETE FROM admins WHERE id = \$1', \[adminId\]\);\s*await revokeSessionsFor\(adminId\)/.test(server));
   });
