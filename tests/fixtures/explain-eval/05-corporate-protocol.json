@@ -50,12 +50,12 @@
   "aiNoteCases": [
     {
       "note": "Kvorum bo'lmagani uchun qaror haqiqiy emas.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "holat: hujjat ziddiyatni ko'rsatadi, hukm chiqarmaydi"
     },
     {
       "note": "Eng muhim masala — ustav kapitali.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "ustuvorlik: dalilsiz"
     },
     {

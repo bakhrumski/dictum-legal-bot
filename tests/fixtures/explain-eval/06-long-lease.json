@@ -68,7 +68,7 @@
   "aiNoteCases": [
     {
       "note": "Eng xavfli band — 40.1-banddagi kompensatsiya.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "ustuvorlik: dalilsiz"
     },
     {

@@ -62,12 +62,12 @@
   "aiNoteCases": [
     {
       "note": "Qaror kuchga kirgan, endi uni ijro etish mumkin.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "holat: qaror apellyatsiya muddati o'tgach kuchga kiradi"
     },
     {
       "note": "Kamchiliklar da'vogar aybi bilan yuzaga kelgani isbotlangan.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "holat: bu javobgar vakilining da'vosi, isbotlanmagan"
     },
     {

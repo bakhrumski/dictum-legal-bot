@@ -61,12 +61,12 @@
   "aiNoteCases": [
     {
       "note": "Qarz summasi tasdiqlangan, uni to'lash kerak.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "holat: summa yuboruvchining hisobi, tasdiqlanmagan"
     },
     {
       "note": "To'lanmasa, kompaniya jinoiy javobgarlikka tortilishi mumkin.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "oqibat: hujjatda faqat sudga murojaat"
     },
     {

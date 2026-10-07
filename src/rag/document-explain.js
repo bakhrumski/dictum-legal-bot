@@ -338,14 +338,40 @@ function cutToLastSentence(text) {
   return i > t.length * 0.5 ? t.slice(0, i + 1) : t;
 }
 
-const CHECK_SCOPE = "faqat raqam, sana, sahifa, band raqamlari hamda holat, oqibat, ustuvorlik va vaqt iboralari hujjat matni bilan solishtirildi. Mazmun, kim nima degani, talqin va huquqiy to'g'rilik tekshirilmagan.";
+const CHECK_SCOPE = "faqat raqam, sana, sahifa, band raqamlari hamda holat, oqibat, ustuvorlik va vaqt iboralari hujjat matni bilan mexanik solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.";
 const partLabel = c => `${c.index + 1}-qism${c.pages ? ` (${c.pages.from === c.pages.to ? c.pages.from : `${c.pages.from}–${c.pages.to}`}-sahifa)` : ''}`;
+
+/** One section's mechanical flags: figures, dates, pages, clauses, phrases. */
+function reviewSection(text, source, allowed) {
+  const v = verifyExplanation(text, source, { allowed });
+  const phrases = [];
+  for (const sn of String(text || '').split(/(?<=[.!?])\s+|\n+/u)) for (const r of unsupportedPhrases(sn, source)) phrases.push(r);
+  const seen = new Set();
+  const uniq = phrases.filter(r => { const k = `${r.kind}|${r.phrase}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  return { numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses, phrases: uniq };
+}
+
+/** "Asosiy matn — manba bilan qo'lda tekshirish kerak: ..." or null. */
+function sectionNote(name, r) {
+  const parts = [];
+  if (r.numbers.length) parts.push(`hujjat matnida uchramagan raqam ${r.numbers.slice(0, 8).join(', ')}`);
+  if (r.derived.length) parts.push(`hujjatdagi raqamlardan hisoblanganga o'xshagan ${r.derived.slice(0, 8).join(', ')} (hisobni tekshiring)`);
+  if (r.dates.length) parts.push(`hujjat matnida uchramagan sana ${r.dates.slice(0, 8).join(', ')}`);
+  if (r.pages.length) parts.push(`hujjatda bunday belgisi yo'q sahifa ${r.pages.slice(0, 8).join(', ')}`);
+  if (r.clauses.length) parts.push(`hujjat matnida uchramagan band/modda ${r.clauses.slice(0, 8).join(', ')}`);
+  if (r.phrases.length) parts.push(`${r.phrases.slice(0, 6).map(x => `«${x.phrase}» (${x.kind})`).join(', ')} — hujjat matnida bu ibora yoki uning sinonimi uchramadi`);
+  return parts.length ? `${name} — manba bilan qo'lda tekshirish kerak: ${parts.join('; ')}.` : null;
+}
 
 /**
  * The answer as delivered. A partial result says so at the TOP (parts of the
  * document not read, or an answer cut at the token cap) and is never shown
- * as a full analysis; a cut answer ends on a full sentence. Under every
- * answer: what the mechanical check did and did not check, and what it found.
+ * as a full analysis; a cut answer ends on a full sentence. An empty or
+ * placeholder "AI izohi" is not shown. Under every answer: what the
+ * mechanical check compared and what it did not, and - for the main text
+ * and the AI note alike, by the same criteria - what to check by hand. It
+ * removes nothing for a missing word: a flag is a reason to look, not proof
+ * of an error, and no section is ever presented as verified.
  */
 function finishExplanation({ reply, truncated = false, source, digest = null, allowed = [] }) {
   let text = String(reply || '').trim();
@@ -357,47 +383,47 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
     text = cutToLastSentence(text);
     partial.push("javob uzunlik chegarasida to'xtadi va oxirgi to'liq gapgacha ko'rsatildi — hujjatning oxirgi qismlari tushuntirilmagan bo'lishi mumkin");
   }
-  // the AI's own note first: it follows the same rules or is left out
-  const ai = guardAiNote(text, source, { allowed });
+  const ai = guardAiNote(text);
   text = ai.text;
   const v = verifyExplanation(text, source, { allowed });
-  if (ai.withheld.length) {
-    notes.push(`«AI izohi»dan ${ai.withheld.length} ta gap olib tashlandi — hujjatda asosi yo'q: ${ai.withheld.slice(0, 4).map(w => w.reasons.join(', ')).join('; ')}.`);
-  }
-  if (ai.removed) notes.push("«AI izohi» bo'limi chiqarilmadi: unda hujjatga asoslangan foydali qo'shimcha izoh qolmadi.");
-  // the rest of the answer: named, not removed
-  const bodyFlags = [];
-  for (const sn of text.split(/(?<=[.!?])\s+|\n+/u)) for (const r of unsupportedPhrases(sn, source, { body: true })) bodyFlags.push(`${r.kind}: «${r.phrase}»`);
-  if (bodyFlags.length) notes.push(`Hujjatda bunday ibora yo'q: ${[...new Set(bodyFlags)].slice(0, 6).join(', ')} — asl hujjatdan tekshiring.`);
-  if (v.numbers.length) notes.push(`Hujjat matnida topilmagan raqam: ${v.numbers.slice(0, 8).join(', ')} — asl hujjatdan tekshiring.`);
-  if (v.derived.length) notes.push(`Hujjatda yo'q, hujjatdagi raqamlardan hisoblanganga o'xshaydi (AI hisobi): ${v.derived.slice(0, 8).join(', ')} — hisobni tekshiring.`);
-  if (v.dates.length) notes.push(`Hujjat matnida topilmagan sana: ${v.dates.slice(0, 8).join(', ')}.`);
-  if (v.pages.length) notes.push(`Hujjatda bunday sahifa belgisi yo'q: ${v.pages.slice(0, 8).join(', ')}.`);
-  if (v.clauses.length) notes.push(`Hujjat matnida topilmagan band/modda: ${v.clauses.slice(0, 8).join(', ')}.`);
-  if (!notes.length) notes.push("Mos kelmagan raqam, sana, sahifa, band yoki holat iborasi topilmadi.");
+  const sections = { body: reviewSection(ai.bodyText, source, allowed), aiNote: reviewSection(ai.notes.join('\n'), source, allowed) };
+  const bodyNote = sectionNote('Asosiy matn', sections.body);
+  const aiNote = sectionNote('AI izohi', sections.aiNote);
+  if (bodyNote) notes.push(bodyNote);
+  if (aiNote) notes.push(aiNote);
+  if (ai.removed) notes.push("«AI izohi» bo'sh yoki to'ldiruvchi edi — ko'rsatilmadi.");
+  if (!bodyNote && !aiNote) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
   if (partial.length) text = `⚠️ **Qisman natija — to'liq tahlil emas:** ${partial.join('; ')}.\n\n${text}`;
   text += `\n\n**Avtomatik tekshiruv (AI emas):** ${CHECK_SCOPE}\n${notes.map(n => `- ${n}`).join('\n')}`;
-  return { reply: text, check: { ...v, aiNote: { found: ai.found, withheld: ai.withheld, removed: ai.removed }, phrases: [...new Set(bodyFlags)] }, notes, partial: partial.length > 0 };
+  const check = {
+    numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses,
+    phrases: [...sections.body.phrases, ...sections.aiNote.phrases],
+    sections, aiNote: { found: ai.found, removed: ai.removed },
+    scope: v.scope, mode: 'flag_for_manual_review', verified: false,
+  };
+  check.flagged = check.numbers.length + check.dates.length + check.pages.length + check.clauses.length + check.phrases.length;
+  return { reply: text, check, notes, partial: partial.length > 0 };
 }
 
-// ── The answer's own claims, checked against the source with no AI ──
+// ── Phrases of the answer, compared with the source (no AI) ──
 // General legal-status, consequence, priority and time vocabulary (Uzbek
-// Latin and Russian). A phrase is supported when the source uses the same
-// kind of phrase; it says nothing about any one document.
+// Latin and Russian); a group holds a phrase and its synonyms. A phrase the
+// source does not use is a reason to check by hand - never proof that the
+// claim is wrong, and never removed.
 const lowerNorm = t => String(t || '').toLowerCase().replace(/[ʻʼ‘’`ʹ]/gu, "'").replace(/\s+/gu, ' ');
 const STATUS_PHRASES = [
-  { id: 'not_registered', label: "ro'yxatdan o'tmagan", re: /ro'yxatdan o'(?:tmagan|tkazilmagan)|ro'yxatga olinmagan|не зарегистрирован|регистраци\p{L}* не (?:проведен|произведен)/u, body: true },
-  { id: 'not_filed', label: 'ariza berilmagan', re: /ariza (?:berilmagan|bermagan|topshirilmagan)|заявк\p{L}* не (?:подан|подава)|не пода\p{L}* заявк/u, body: true },
-  { id: 'no_right', label: "huquq yo'q", re: /huquq(?:i|ga)? (?:yo'q|ega emas)|huquqiga ega emas|не име\p{L}* прав|нет прав/u, body: true },
-  { id: 'rejected', label: 'rad etilgan', re: /rad etil|отказан\p{L}*|отклонен\p{L}*/u, body: true },
-  { id: 'absent', label: 'mavjud emas', re: /mavjud emas|отсутству/u, body: false },
-  { id: 'not_found', label: 'aniqlanmadi', re: /aniqlanma(?:di|gan)|не выявлен|не обнаружен/u, body: false },
-  { id: 'not_checked', label: 'tekshirilmagan', re: /tekshirilma(?:di|gan)|не провер\p{L}*/u, body: false },
-  { id: 'unlawful', label: 'noqonuniy', re: /noqonuniy|qonunga zid|g'ayriqonuniy|незаконн|противоправн/u, body: true },
-  { id: 'mandatory', label: 'majburiy', re: /majburiy|talab qilinadi|обязательн|требуется/u, body: false },
-  { id: 'confirmed', label: 'tasdiqlangan', re: /tasdiqlangan|isbotlangan|подтвержд[её]н|доказан/u, body: true },
-  { id: 'invalid', label: 'haqiqiy emas', re: /haqiqiy emas|haqiqiy sanalmaydi|kuchga ega emas|недействител/u, body: true },
-  { id: 'in_force', label: 'kuchga kirgan', re: /kuchga kirgan|вступил\p{L}* в (?:законную )?силу/u, body: true },
+  { id: 'not_registered', label: "ro'yxatdan o'tmagan", re: /ro'yxatdan o'(?:tmagan|tkazilmagan)|ro'yxatga olinmagan|не зарегистрирован|регистраци\p{L}* не (?:проведен|произведен)/u },
+  { id: 'not_filed', label: 'ariza berilmagan', re: /ariza (?:berilmagan|bermagan|topshirilmagan)|заявк\p{L}* не (?:подан|подава)|не пода\p{L}* заявк/u },
+  { id: 'no_right', label: "huquq yo'q", re: /huquq(?:i|ga)? (?:yo'q|ega emas)|huquqiga ega emas|не име\p{L}* прав|нет прав/u },
+  { id: 'rejected', label: 'rad etilgan', re: /rad (?:etil|qilin)|отказан\p{L}*|отклонен\p{L}*/u },
+  { id: 'absent', label: 'mavjud emas', re: /mavjud emas|отсутству/u },
+  { id: 'not_found', label: 'aniqlanmadi', re: /aniqlanma(?:di|gan)|не выявлен|не обнаружен/u },
+  { id: 'not_checked', label: 'tekshirilmagan', re: /tekshirilma(?:di|gan)|не провер\p{L}*/u },
+  { id: 'unlawful', label: 'noqonuniy', re: /noqonuniy|qonunga zid|g'ayriqonuniy|незаконн|противоправн/u },
+  { id: 'mandatory', label: 'majburiy', re: /majburiy|talab qilinadi|обязательн|требуется/u },
+  { id: 'confirmed', label: 'tasdiqlangan', re: /tasdiqlangan|isbotlangan|подтвержд[её]н|доказан/u },
+  { id: 'invalid', label: 'haqiqiy emas', re: /haqiqiy emas|haqiqiy sanalmaydi|kuchga ega emas|недействител/u },
+  { id: 'in_force', label: 'kuchga kirgan', re: /kuchga kirgan|вступил\p{L}* в (?:законную )?силу/u },
 ];
 const CONSEQUENCE_PHRASES = [
   { id: 'fine', label: 'jarima', re: /jarima|штраф/u },
@@ -411,24 +437,42 @@ const CONSEQUENCE_PHRASES = [
 const PRIORITY = /eng (?:katta|asosiy|muhim|jiddiy|xavfli|og'ir)|asosiy (?:xatar|xavf|risk|muammo|kamchilik)|birinchi navbatda|главн\p{L}* (?:риск|проблем|угроз)|наибольш|самы\p{L}* (?:важн|серь[её]зн|больш|опасн)|основн\p{L}* (?:риск|проблем)/u;
 const PRESENT = /(?:^|[^\p{L}'])(?:hozir(?:da|gi)?|ayni (?:paytda|vaqtda)|bugungi kunda)(?![\p{L}'])|в настоящее время|на сегодняшний день|(?:^|[^\p{L}])сейчас(?!\p{L})/u;
 const AS_OF = /holatiga|holati bo'yicha|по состоянию на/u;
+// The phrase is denied, doubted or only discussed, not asserted: what
+// follows it in the sentence says so ("... deb xulosa chiqarib bo'lmaydi",
+// "... degani emas", "... noma'lum", "... hujjatda aytilmagan")
+const NEGATED_AFTER = /^[^.!?;]{0,80}?(?:xulosa (?:chiqarib|qilib) bo'lmaydi|aytib bo'lmaydi|hisoblab bo'lmaydi|deb bo'lmaydi|degani emas|ma'nosini (?:bildirmaydi|bermaydi)|anglatmaydi|aytilmagan|deyilmagan|yozilmagan|ko'rsatilmagan|noma'lum|aniq emas|ko'rinmaydi|aytmaydi|ko'rsatmaydi|belgilamaydi|tartiblamaydi|hujjatda yo'q|asos yo'q|нельзя|не означает|не значит|не следует|не указ|неизвестн)/u;
+// ... or what comes before it does ("Hujjatda ... deyilmagan", "... deb aytish mumkin emas")
+const NEGATED_BEFORE = /(?:deyilmagan|aytilmagan|deb aytish mumkin emas|xulosa qilish mumkin emas|нельзя (?:сказать|утверждать|сделать вывод)|не (?:указано|сказано))[^.!?;]{0,40}$/u;
+// ... or it is a condition, not a statement ("agar ... bo'lsa", "если")
+const CONDITIONAL_BEFORE = /(?:^|[^\p{L}'])(?:agar|basharti)(?![\p{L}'])|если|в случае/u;
+const CONDITIONAL_AFTER = /^\s*(?:bo'lsa|bo'lganda|bo'lgan taqdirda|ekan,)/u;
 
-/** The phrases of one sentence that its source does not support, with why. */
-function unsupportedPhrases(sentence, source, { body = false } = {}) {
+/** Is the match at `idx` in sentence `s` asserted (not denied, doubted or conditional)? */
+function asserted(s, idx, len) {
+  const before = s.slice(0, idx), after = s.slice(idx + len);
+  if (NEGATED_AFTER.test(after) || NEGATED_BEFORE.test(before)) return false;
+  if (CONDITIONAL_BEFORE.test(before) || CONDITIONAL_AFTER.test(after)) return false;
+  return true;
+}
+
+/**
+ * The phrases of one sentence whose kind the source does not use, when the
+ * sentence asserts them: [{ kind, phrase, label }]. `kind` is holat,
+ * oqibat, ustuvorlik or vaqt. A flag means "check by hand", not "wrong".
+ */
+function unsupportedPhrases(sentence, source) {
   const s = lowerNorm(sentence), src = lowerNorm(source);
   const out = [];
-  for (const p of STATUS_PHRASES) {
-    if (body && !p.body) continue;
-    const m = s.match(p.re);
-    if (m && !p.re.test(src)) out.push({ kind: 'holat', phrase: m[0], label: p.label });
-  }
-  for (const p of CONSEQUENCE_PHRASES) {
-    const m = s.match(p.re);
-    if (m && !p.re.test(src)) out.push({ kind: 'oqibat', phrase: m[0] });
-  }
-  const pr = s.match(PRIORITY);
-  if (pr && !PRIORITY.test(src)) out.push({ kind: 'ustuvorlik', phrase: pr[0] });
-  const now = s.match(PRESENT);
-  if (now && AS_OF.test(src)) out.push({ kind: 'vaqt', phrase: now[0].trim() });
+  const add = (re, kind, label) => {
+    // every occurrence: a denied one does not hide an asserted one
+    for (const m of s.matchAll(new RegExp(re.source, `${re.flags}g`))) {
+      if (asserted(s, m.index, m[0].length)) { out.push({ kind, phrase: m[0].trim(), label: label || m[0].trim() }); break; }
+    }
+  };
+  for (const p of STATUS_PHRASES) if (!p.re.test(src)) add(p.re, 'holat', p.label);
+  for (const p of CONSEQUENCE_PHRASES) if (!p.re.test(src)) add(p.re, 'oqibat', p.label);
+  if (!PRIORITY.test(src)) add(PRIORITY, 'ustuvorlik');
+  if (AS_OF.test(src)) add(PRESENT, 'vaqt');
   return out;
 }
 
@@ -437,21 +481,19 @@ const HEADING = /^\s*(?:#{1,6}\s+\S|(?:\*\*|__)[^*_]+(?:\*\*|__)\s*:?\s*$)/u;
 const PLACEHOLDER = /^[\s\-–—:.*_]*(?:yo'q|mavjud emas|qo'shimcha (?:izoh|ma'lumot)(?:lar)? yo'q|izoh yo'q|нет|отсутствует|n\/a)?[\s.!]*$/iu;
 
 /**
- * The "AI izohi" held to the same rules as the rest of the answer, with no
- * AI call: a sentence in it that states a figure, date, page or clause the
- * source does not have, a status, consequence or ranking the source does not
- * use, or "now" about a document written as of a date, is withheld. When
- * nothing useful is left (or it was a placeholder) the whole section goes.
- * Returns { text, withheld: [{ sentence, reasons }], removed }.
+ * Finds the "AI izohi" blocks of an answer. An empty or placeholder note
+ * ("AI izohi: yo'q") is left out - the prompt asks for none rather than a
+ * placeholder; nothing else is removed. Returns { text, bodyText, notes,
+ * found, removed }: `notes` are the AI-note blocks, `bodyText` the rest, so
+ * both are checked by the same criteria (reviewSection).
  */
-function guardAiNote(answer, source, { allowed = [] } = {}) {
+function guardAiNote(answer) {
   const lines = String(answer || '').split('\n');
-  const out = [];
-  const withheld = [];
+  const out = [], body = [], notes = [];
   let removed = 0, found = 0;
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(AI_LABEL);
-    if (!m) { out.push(lines[i]); continue; }
+    if (!m) { out.push(lines[i]); body.push(lines[i]); continue; }
     found++;
     const prefix = m[1];
     const inline = lines[i].slice(prefix.length);
@@ -466,36 +508,17 @@ function guardAiNote(answer, source, { allowed = [] } = {}) {
       if (inline.trim() && !l.trim()) break;
       block.push(l);
     }
-    const kept = block.map(line => {
-      if (!line.trim()) return line;
-      const lead = (line.match(/^\s*(?:[-*]|\d+[.)])\s+/u) || [''])[0];
-      const sentences = line.slice(lead.length).split(/(?<=[.!?])\s+/u);
-      const keep = sentences.filter(sn => {
-        const v = verifyExplanation(sn, source, { allowed });
-        const reasons = unsupportedPhrases(sn, source).map(r => `${r.kind}: «${r.phrase}»`);
-        if (v.numbers.length) reasons.push(`raqam: ${v.numbers.join(', ')}`);
-        if (v.dates.length) reasons.push(`sana: ${v.dates.join(', ')}`);
-        if (v.pages.length) reasons.push(`sahifa: ${v.pages.join(', ')}`);
-        if (v.clauses.length) reasons.push(`band: ${v.clauses.join(', ')}`);
-        if (reasons.length) { withheld.push({ sentence: sn.trim(), reasons }); return false; }
-        return true;
-      });
-      return keep.length ? lead + keep.join(' ') : null;
-    }).filter(l => l !== null);
-    const body = kept.join('\n').replace(/[*_#>]/gu, '').trim();
-    const substantive = (body.match(/\p{L}/gu) || []).length >= 25 && !PLACEHOLDER.test(lowerNorm(body));
-    if (!substantive) {
+    const content = block.join('\n').replace(/[*_#>]/gu, '').trim();
+    if ((content.match(/\p{L}/gu) || []).length < 3 || PLACEHOLDER.test(lowerNorm(content))) {
       removed++;
       while (out.length && !out[out.length - 1].trim()) out.pop();
-    } else if (inline.trim()) {
-      out.push(prefix + kept[0].trimStart(), ...kept.slice(1));
     } else {
-      out.push(lines[i], ...kept);
+      notes.push(block.join('\n'));
+      out.push(lines[i], ...lines.slice(i + 1, j));
     }
-    if (inline.trim() && j < lines.length && !lines[j].trim()) { out.push(''); j++; }
     i = j - 1;
   }
-  return { text: out.join('\n').replace(/\n{3,}/gu, '\n\n').trim(), withheld, removed, found };
+  return { text: out.join('\n').replace(/\n{3,}/gu, '\n\n').trim(), bodyText: body.join('\n'), notes, found, removed };
 }
 
 /** Characters of the document itself: page marks are ours, never billed. */

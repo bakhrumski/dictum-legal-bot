@@ -75,12 +75,12 @@
   "aiNoteCases": [
     {
       "note": "Bu shartnomadagi eng katta xatar — penya.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "ustuvorlik: hujjat xatarlarni tartiblamaydi"
     },
     {
       "note": "Muddat buzilsa, Xaridor jarima talab qilishi mumkin.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "oqibat: hujjatda jarima emas, penya (5.1-band)"
     },
     {

@@ -117,27 +117,27 @@
   "aiNoteCases": [
     {
       "note": "Belgi ro'yxatdan o'tmagan, shuning uchun uni boshqalar ham ishlatishi mumkin.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "holat: hujjatda 'ariza berilmagan', 'ro'yxatdan o'tmagan' emas"
     },
     {
       "note": "Litsenziyasiz reklama faoliyati noqonuniy hisoblanadi.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "holat: hujjat bunday xulosa chiqarmaydi, talab tekshirilmagan"
     },
     {
       "note": "Hozirda jamiyatning soliq qarzi yo'q.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "vaqt: hujjat ma'lum sana holatiga; 'hozir' deb bo'lmaydi"
     },
     {
       "note": "Bu holat mualliflik huquqi buzilishiga olib kelishi mumkin.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "oqibat: hujjatda yo'q"
     },
     {
       "note": "Asosiy xatar — sud ishlari.",
-      "expect": "withheld",
+      "expect": "flagged",
       "why": "ustuvorlik: hujjat xatarlarni tartiblamaydi"
     },
     {
