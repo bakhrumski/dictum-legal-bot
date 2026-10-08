@@ -258,7 +258,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
   await test('the check says what it does NOT check, under every answer - also when it finds nothing', () => {
     const src = ex.markPages(byId('talabnoma').pages);
     const clean = ex.finishExplanation({ reply: 'Talabnomani "Mehr Logistika" MChJ yuborgan.', source: src });
-    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa, band raqamlari hamda holat, oqibat, ustuvorlik va vaqt iboralari hujjat matni bilan mexanik solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.\n- Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas."), clean.reply);
+    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa, band raqamlari, holat, oqibat, ustuvorlik va vaqt iboralari hamda muddat/sana qaysi harakatga bog'langani, inkor, tartib, «va/yoki», ehtimollik, ta'rif chegarasi va mezonlar hujjat matni bilan mexanik (so'z bo'yicha) solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.\n- Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas."), clean.reply);
     assert.deepStrictEqual([clean.check.scope, clean.check.mode, clean.check.verified, clean.check.flagged], ['figures_dates_pages_clauses_only', 'flag_for_manual_review', false, 0]);
     assert.ok(!('ok' in clean.check), 'no field that could read as "verified"');
     // a wrong attribution in words outside the vocabulary passes: it is not a semantic check
@@ -415,7 +415,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
             assert.strictEqual(done.check.aiNote.removed, 1, where);
           } else {
             assert.ok(done.reply.includes(c.note), `${where}: shown as written - nothing removed for a word`);
-            const flags = ai.phrases.length + ai.numbers.length + ai.dates.length + ai.pages.length + ai.clauses.length;
+            const flags = ai.phrases.length + ai.numbers.length + ai.dates.length + ai.pages.length + ai.clauses.length + ai.relations.length;
             if (c.expect === 'flagged') {
               assert.ok(flags >= 1, `${where}: named for a manual check`);
               assert.ok(done.reply.includes("- AI izohi — manba bilan qo'lda tekshirish kerak:"), where);

@@ -443,7 +443,8 @@ async function docxOf(text) {
         assert.strictEqual(r.headers.get('cache-control'), 'no-store');
         assert.ok(/^HUJJAT DAYJESTI/u.test(body.trace.digest));
         assert.ok(body.trace.scopeLines.some(l => l.includes('jumladan Investor')));
-        assert.deepStrictEqual(Object.keys(body.trace.scopeCounts).sort(), ['candidates', 'dropped', 'selected', 'shortened']);
+        assert.deepStrictEqual(Object.keys(body.trace.scopeCounts).sort(), ['candidates', 'dropped', 'referenced', 'savedChars', 'selected', 'shortened']);
+        assert.ok(Array.isArray(body.trace.scopeSent) && Array.isArray(body.trace.scopeDropped));
         assert.strictEqual(body.trace.conflictCandidates.length, 1);
         await settle(300);
         // nothing of the text reaches the ledger or the request row
@@ -454,10 +455,15 @@ async function docxOf(text) {
       } finally {
         await pool.query("UPDATE admins SET role = 'user' WHERE id = $1", [u]);
       }
-      // the page asks for it only on the master's console opt-in
+      // the page asks for it only on a master's opt-in ("Diagnostika" or the console flag),
+      // keeps it in memory and offers it as a JSON download
       const page = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
-      assert.ok(page.includes('confirmed: true, trace: window.__JAI_TRACE === true })'));
-      assert.ok(page.includes('window.__lastExplain = { source: text || null, response: d };'));
+      assert.ok(page.includes('var wantTrace = isMasterUi() && (explainDiagnostics === true || window.__JAI_TRACE === true);'));
+      assert.ok(page.includes('confirmed: true, trace: wantTrace })'));
+      assert.ok(page.includes('lastExplainTrace = { source: text || null, response: d };'));
+      assert.ok(page.includes("if (isMasterUi()) {\n                    html += '<label class=\"ai-diag-toggle'"));
+      assert.ok(page.includes('onclick="downloadExplainTrace()">JSON yuklab olish</button>'));
+      assert.ok(!/localStorage[^\n]*(?:lastExplainTrace|explainDiagnostics)|sessionStorage[^\n]*(?:lastExplainTrace|explainDiagnostics)/u.test(page), 'never stored in the browser');
     });
 
     await test('a document read whole whose answer was cut: marked partial at the top, the unit is committed (delivered, as a cut chat answer)', async () => {

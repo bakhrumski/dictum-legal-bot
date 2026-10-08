@@ -3137,6 +3137,20 @@
         .ai-attach-suggest:hover { background: var(--navy-300); color: #fff; }
         [data-theme="dark"] .ai-attach-suggest { background: rgba(122,160,198,0.15); color: var(--brass-300); border-color: var(--brass-300); }
         @media (pointer: coarse) { .ai-attach-suggest { padding: 11px 16px; } }
+        /* master-only diagnostics opt-in for the document explanation (trace) */
+        .ai-diag-toggle {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 7px 12px; border: 1px dashed var(--border-1); border-radius: 999px;
+            background: transparent; color: var(--text-secondary);
+            font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; user-select: none;
+        }
+        .ai-diag-toggle input { margin: 0; width: 15px; height: 15px; accent-color: var(--navy-700); cursor: pointer; }
+        .ai-diag-toggle.on { border-style: solid; border-color: var(--navy-300); color: var(--navy-700); background: var(--navy-100, #E1ECF6); }
+        [data-theme="dark"] .ai-diag-toggle.on { background: rgba(122,160,198,0.15); color: var(--brass-300); border-color: var(--brass-300); }
+        @media (pointer: coarse) { .ai-diag-toggle { padding: 10px 14px; } }
+        .ai-diag-card .ai-diag-title { font-weight: 700; margin-bottom: 4px; }
+        .ai-diag-card .ai-diag-note { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 4px 0 0; }
+        .ai-diag-card .ai-diag-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         /* attached-file chips shown inside a sent user bubble */
         .ai-msg-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
         .ai-msg-file { font-size: 12px; opacity: .9; background: rgba(255,255,255,0.16); border-radius: 8px; padding: 3px 8px; }
@@ -13521,8 +13535,52 @@
                     html += '<button class="ai-attach-suggest" type="button" onclick="explainFromAttachment()">' +
                         'Hujjat mazmunini tushuntirib berishimni xohlaysizmi?</button>';
                 }
+                // Master only: opt in to the explanation's stage trace (the
+                // server re-checks the role in the database)
+                if (isMasterUi()) {
+                    html += '<label class="ai-diag-toggle' + (explainDiagnostics ? ' on' : '') + '" title="Faqat Master: keyingi tushuntirish bilan dayjest, tanlangan qatorlar va xom javob qaytadi. Serverda saqlanmaydi.">' +
+                        '<input type="checkbox" id="aiDiagToggle" onchange="toggleExplainDiagnostics(this)"' + (explainDiagnostics ? ' checked' : '') + '>' +
+                        '🔬 Diagnostika</label>';
+                }
             }
             box.innerHTML = html;
+        }
+
+        // Diagnostics of the explanation (master only, opt-in): the stage trace
+        // - digest, key lines, raw answer - of the NEXT explanation. Kept in
+        // this tab's memory only (never in the chat history or storage); the
+        // server returns it only to an account that is master in the database,
+        // with no-store. The JSON is for scripts/explain-trace.js --bundle.
+        var explainDiagnostics = false;
+        var lastExplainTrace = null;
+        function isMasterUi() { return typeof currentUser !== 'undefined' && !!currentUser && currentUser.role === 'master'; }
+        function toggleExplainDiagnostics(el) { explainDiagnostics = !!(el && el.checked); renderAttachChips(); }
+        function downloadExplainTrace() {
+            if (!lastExplainTrace) { showUpdateToast("Diagnostika ma'lumoti yo'q — tushuntirishni Diagnostika yoqilgan holda qayta ishga tushiring.", 'info'); return; }
+            var blob = new Blob([JSON.stringify(lastExplainTrace, null, 2)], { type: 'application/json' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'explain-trace-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+        }
+        function clearExplainTrace() {
+            lastExplainTrace = null;
+            try { delete window.__lastExplain; } catch (_) { window.__lastExplain = undefined; }
+            showUpdateToast("Diagnostika ma'lumoti xotiradan o'chirildi.", 'info');
+        }
+        function explainTraceCard(d, hasSource) {
+            var t = d.trace || {};
+            var c = t.scopeCounts || {};
+            return '<div class="ai-diag-card"><div class="ai-diag-title">🔬 Diagnostika tayyor</div>' +
+                '<p class="ai-diag-note">Rejim: ' + escapeHtml(t.mode === 'digest' ? 'dayjest' : "to'liq matn") +
+                '; kalit qatorlar: ' + escapeHtml(String(c.candidates || 0)) + ' nomzoddan ' + escapeHtml(String(c.selected || 0)) + ' tasi' +
+                (c.dropped ? ', ' + escapeHtml(String(c.dropped)) + ' tasi sig\'madi' : '') + '.</p>' +
+                '<p class="ai-diag-note">Faqat shu brauzer xotirasida; serverda saqlanmaydi. Ichida hujjat matni bor — uni repoga, chatga yoki boshqa joyga qo\'ymang. Tekshirish: <code>node scripts/explain-trace.js --bundle fayl.json</code> (so\'z bo\'yicha mexanik signal, ma\'no hukmi emas).' +
+                (hasSource ? '' : ' Skan hujjat: manba matni JSON\'da yo\'q — OCR matnini <code>--source</code> bilan bering.') + '</p>' +
+                '<div class="ai-diag-actions"><button class="ai-attach-suggest" type="button" onclick="downloadExplainTrace()">JSON yuklab olish</button>' +
+                '<button class="ai-diag-toggle" type="button" onclick="clearExplainTrace()">Xotiradan o\'chirish</button></div></div>';
         }
 
         // Plain-language explanation of the attached document(s). Attachments
@@ -13552,22 +13610,28 @@
             messagesEl.innerHTML += '<div class="ai-chat-typing" id="aiChatTyping"><span></span><span></span><span></span></div>';
             messagesEl.scrollTop = messagesEl.scrollHeight;
             try {
+                // trace: a master's explicit opt-in - the "Diagnostika" toggle (or
+                // window.__JAI_TRACE = true in the console); the server checks the
+                // role in the database and returns it for this request only
+                var wantTrace = isMasterUi() && (explainDiagnostics === true || window.__JAI_TRACE === true);
                 var r = await fetch('/api/draft/explain-document', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    // trace: a master's explicit opt-in from the console (window.__JAI_TRACE = true);
-                    // the server checks the role itself and returns it for this request only
-                    body: JSON.stringify({ documentText: text, docTicket: ticket, scanIds: scanIds.length ? scanIds : null, confirmed: true, trace: window.__JAI_TRACE === true })
+                    body: JSON.stringify({ documentText: text, docTicket: ticket, scanIds: scanIds.length ? scanIds : null, confirmed: true, trace: wantTrace })
                 });
                 var d = await r.json();
                 if (d && d.trace) {
-                    // kept in this tab only, for scripts/explain-trace.js --bundle (copy it from the console)
-                    window.__lastExplain = { source: text || null, response: d };
-                    console.info('[JuristAI] trace saved: copy(JSON.stringify(window.__lastExplain))');
+                    // kept in this tab only, for scripts/explain-trace.js --bundle
+                    lastExplainTrace = { source: text || null, response: d };
+                    window.__lastExplain = lastExplainTrace;
                 }
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
                 if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Tushuntirib bo\'lmadi')); return; }
                 renderAiChatReply({ reply: d.reply, provider: d.provider, ragUsed: false, rag: null, qaBank: null },
                     'Hujjat mazmunini tushuntirish: ' + name, messagesEl, true);
+                if (wantTrace) {
+                    docInfoCard(d.trace ? explainTraceCard(d, !!text)
+                        : '🔬 Diagnostika berilmadi: server bu hisobni bazada Master deb tasdiqlamadi.');
+                }
                 // a document not read whole: the reply opens with "Qisman natija" and the units came back
                 showRefundNotice(d);
                 // Offer the alternative (legal opinion) as a next step.

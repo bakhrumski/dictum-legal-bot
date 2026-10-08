@@ -3,7 +3,11 @@
 
 /**
  * Which terms are found word for word in each stage: source -> digest ->
- * answer. MECHANICAL, no AI call: it does not say whether meaning was kept or
+ * answer; and, for the source's key clauses, which of their relations (who,
+ * act, status, condition, period, exception, consequence, criteria) each
+ * stage keeps word for word, and where a stage ties a period, status,
+ * order, "and/or", possibility or threshold differently
+ * (src/rag/clause-relations.js). MECHANICAL, no AI call: it does not say whether meaning was kept or
  * lost (a synonym reads as "not found"; a negated sentence or "or" written
  * for "and" that repeats the words reads as "found"). A lawyer compares the
  * meaning.
@@ -15,8 +19,9 @@
  *   node scripts/explain-trace.js --source doc.txt --digest digest.txt --answer answer.txt --checks checks.json
  *   node scripts/explain-trace.js --fixture investment-agreement --digest digest.txt --answer answer.txt
  *
- * explain-trace.json: what the dashboard saves for a master who asked for a
- * trace (window.__JAI_TRACE = true): { source, response }. trace.json: the
+ * explain-trace.json: what the dashboard's "Diagnostika" download saves for
+ * a master who switched it on (or window.__JAI_TRACE = true): { source,
+ * response }. trace.json: the
  * response alone. Nothing of either is stored on the server. checks.json: [{ "id": "...", "terms": ["word",
  * ["alternative", "alternative"]] }] - a term group passes when one of its
  * alternatives is present. Keep real client documents out of the repository.
@@ -24,6 +29,7 @@
 
 const fs = require('fs');
 const ex = require('../src/rag/document-explain');
+const rel = require('../src/rag/clause-relations');
 
 const args = process.argv.slice(2);
 const arg = name => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
@@ -33,11 +39,13 @@ let source = read(arg('--source'));
 let digest = read(arg('--digest'));
 let answer = read(arg('--answer'));
 let checks = arg('--checks') ? JSON.parse(read(arg('--checks'))) : null;
+let bundleTrace = null;
 
 if (arg('--bundle')) {
   const b = JSON.parse(read(arg('--bundle')));
   source = source || b.source || null;
   const t = (b.response && b.response.trace) || {};
+  bundleTrace = t;
   digest = digest || t.digest || null;
   answer = answer || t.answer || (b.response && b.response.reply) || '';
 }
@@ -85,3 +93,24 @@ for (const r of rows) {
   console.log(`${r.id.padEnd(28)} ${label[r.firstNotFoundAt]}${miss.length ? `  (not found: ${miss.join('; ')})` : ''}`);
 }
 console.log('\nA synonym reads as "not found"; a negated sentence or "or" written for "and" that repeats the words reads as "found". A lawyer compares the meaning.');
+
+// ── Relations inside the key clauses: who -> act -> condition -> when -> exception -> consequence ──
+const list = (o) => Object.entries(o || {}).map(([k, v]) => `${k}: ${v.join(', ')}`).join('; ');
+console.log('\nRELATIONS - MECHANICAL, word for word (an act by its word, a period by its figure, a condition or an exception by its marker); a reason to check by hand, never a verdict on meaning.');
+console.log('Key clauses of the source and the slots not found word for word in each stage:');
+for (const r of rel.relationTrace({ source, digest, answer })) {
+  const d = r.notFound.digest == null ? 'no digest (full text)' : (list(r.notFound.digest) || 'all found');
+  console.log(`${(r.ref ? `band ${r.ref}` : r.clause.slice(0, 24)).padEnd(28)} digest: ${d} | answer: ${list(r.notFound.answer) || 'all found'}`);
+}
+const src = rel.analyseText(source);
+for (const [stage, text] of [['dayjest', digest], ['javob', answer]]) {
+  if (text == null) continue;
+  const flags = rel.relationFlags(text, src, { stage });
+  console.log(`\nTied differently than in the source - ${stage === 'dayjest' ? 'digest' : 'answer'} (${flags.length}):`);
+  for (const f of flags) console.log(`  [${f.kind}] ${f.note}`);
+}
+if (bundleTrace && bundleTrace.scopeCounts) {
+  const c = bundleTrace.scopeCounts;
+  console.log(`\nKey-line list given to the final model: ${c.candidates} candidates, ${c.selected} selected (${c.referenced || 0} as references to text the model already had), ${c.dropped} not fitted, ${c.shortened} shortened.`);
+  for (const l of bundleTrace.scopeDropped || []) console.log(`  not fitted: ${l}`);
+}

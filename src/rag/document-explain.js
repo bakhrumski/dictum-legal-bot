@@ -26,6 +26,8 @@
  *     answer, without another AI call.
  */
 
+const relations = require('./clause-relations');
+
 const PAGE_MARK = /^\[Sahifa (\d+)\]$/gmu;
 
 /** Page texts -> one text with a "[Sahifa n]" line before each page. */
@@ -120,7 +122,7 @@ function pagesSpanned(text, start, end) {
 // bullets asked for before #420 filled the token cap on dense contracts.
 const DIGEST_SYSTEM = [
   'You extract, from one excerpt of a longer document, a COMPACT digest that a faithful plain-language explanation and a legal opinion can rely on. Same language as the excerpt.',
-  'Format: one line per item: "- <what> | <who / whose words> | <condition, exception or qualifier> | <clause or heading>"; leave out an empty field. Keep lines short (about 30 words), but a rule with several conditions, criteria or remedies gets the words it needs: never drop one of them to fit. Keep names, amounts, currencies, dates, percentages, periods and clause numbers exactly; quote decisive words exactly, never whole clauses.',
+  'Format: one line per item: "- <clause or heading> | <who> → <act> | shart: <condition> | muddat: <period or date> | istisno: <exception> | oqibat: <consequence> | <whose words / qualifier>"; leave out an empty field. Each period, date, condition, exception and consequence goes on the line of the act the excerpt attaches it to; two acts with their own periods are two lines. Keep lines short (about 30 words), but a rule with several conditions, criteria or remedies gets the words it needs: never drop one of them to fit. Keep names, amounts, currencies, dates, percentages, periods and clause numbers exactly; quote decisive words exactly, never whole clauses.',
   'Keep exactly the words that set a rule\'s scope - "including" (jumladan, shu jumladan), "only" (faqat), "except" / "apart from" (bundan tashqari, bundan mustasno), "in addition" / "separately" (alohida, qo\'shimcha ravishda), "at least" / "no more than" (kamida, ko\'pi bilan, oshmaydi), "all" (barcha) - and whether conditions are joined by "and" or "or" (both "declared and unpaid" is not "unpaid").',
   'Include:',
   '- obligations, rights, deadlines and conditions; payment terms: amount, currency, advance, schedule, deadline, penalty and its cap; who shares in a payment or distribution, with every party the document names;',
@@ -136,7 +138,7 @@ const DIGEST_SYSTEM = [
   '- unfilled template fields (blank lines, "____", "[...]", "XX") as "TO\'LDIRILMAGAN: <field>"; say once if the excerpt looks like a template;',
   '- the page: when the excerpt has "[Sahifa N]" lines, end each line with "(N-sahifa)"; never guess a page or a clause number.',
   'Leave out signatures, bank details, a definition that only repeats one already listed in this excerpt, and wording that creates no right or duty - but never the criteria of a defined term.',
-  'Keep different acts apart: filing an application is not registration, and registration is not a right; "not identified" is not "does not exist".',
+  'Keep different acts and states apart: filing an application is not registration, and registration is not a right; a deadline to reply is not a deadline to conclude the deal; "no case or application was found" says nothing about financial health or anything not checked; "not identified" is not "does not exist"; damage that "may" occur is not damage caused; a threshold inside a definition is not a penalty; "and" is not "or". Keep which act must come first ("before", "after", "on condition that").',
   'Do not interpret, judge, add consequences or merge separate items. No preamble. Keep the digest compact - about a third of the excerpt\'s length - but a complete condition wins over a short line.',
 ].join('\n');
 
@@ -177,6 +179,7 @@ function explainSystem(langName) {
     '- A statement the document attributes to someone stays attributed ("according to X", "X stated"). A claim in the document is not a verified fact - say who claims it.',
     '- Keep every qualifier and time limit: "within the scope of the review", "was not identified", "as of the date of the document". "Not identified" never becomes "does not exist". A past state is not today\'s state. "No application was filed", "not registered" and "no right exists" are different things - do not merge them.',
     '- Do not draw conclusions the document does not draw (for example that something missing makes an activity unlawful or makes something mandatory).',
+    '- Keep each period, date, condition, exception and consequence on the act the document attaches it to: a deadline to reply is not a deadline to conclude; what must happen before what stays in that order. "No case or application was found" says nothing about financial health or anything the document did not check. Damage or a risk the document says "may" arise stays possible, never caused. A threshold inside a definition is not a penalty. "And" is not "or".',
     '',
     'Fact, recommendation, interpretation:',
     '- Keep apart: what the document says; what its author recommends (name the author as the document does); and any interpretation of your own - mark it "AI izohi:" and keep it short. Add no new legal claim without a basis in the document.',
@@ -377,17 +380,20 @@ function cutToLastSentence(text) {
   return i > t.length * 0.5 ? t.slice(0, i + 1) : t;
 }
 
-const CHECK_SCOPE = "faqat raqam, sana, sahifa, band raqamlari hamda holat, oqibat, ustuvorlik va vaqt iboralari hujjat matni bilan mexanik solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.";
+const CHECK_SCOPE = "faqat raqam, sana, sahifa, band raqamlari, holat, oqibat, ustuvorlik va vaqt iboralari hamda muddat/sana qaysi harakatga bog'langani, inkor, tartib, «va/yoki», ehtimollik, ta'rif chegarasi va mezonlar hujjat matni bilan mexanik (so'z bo'yicha) solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.";
 const partLabel = c => `${c.label || c.index + 1}-qism${c.pages ? ` (${c.pages.from === c.pages.to ? c.pages.from : `${c.pages.from}–${c.pages.to}`}-sahifa)` : ''}`;
 
-/** One section's mechanical flags: figures, dates, pages, clauses, phrases. */
-function reviewSection(text, source, allowed) {
+/** One section's mechanical flags: figures, dates, pages, clauses, phrases, relations. */
+function reviewSection(text, source, allowed, srcRelations = null) {
   const v = verifyExplanation(text, source, { allowed });
   const phrases = [];
   for (const sn of String(text || '').split(/(?<=[.!?])\s+|\n+/u)) for (const r of unsupportedPhrases(sn, source)) phrases.push(r);
   const seen = new Set();
   const uniq = phrases.filter(r => { const k = `${r.kind}|${r.phrase}`; if (seen.has(k)) return false; seen.add(k); return true; });
-  return { numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses, phrases: uniq };
+  // a period, status, order, "and/or", possibility, threshold or criterion
+  // tied differently than in the source (src/rag/clause-relations.js)
+  const rel = String(text || '').trim() ? relations.relationFlags(text, srcRelations || relations.analyseText(source), { asserted }) : [];
+  return { numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses, phrases: uniq, relations: rel };
 }
 
 /** "Asosiy matn — manba bilan qo'lda tekshirish kerak: ..." or null. */
@@ -399,6 +405,7 @@ function sectionNote(name, r) {
   if (r.pages.length) parts.push(`hujjatda bunday belgisi yo'q sahifa ${r.pages.slice(0, 8).join(', ')}`);
   if (r.clauses.length) parts.push(`hujjat matnida uchramagan band/modda ${r.clauses.slice(0, 8).join(', ')}`);
   if (r.phrases.length) parts.push(`${r.phrases.slice(0, 6).map(x => `«${x.phrase}» (${x.kind})`).join(', ')} — hujjat matnida bu ibora yoki uning sinonimi uchramadi`);
+  if (r.relations && r.relations.length) parts.push(`hujjatdagidan boshqacha bog'langan bo'lishi mumkin: ${r.relations.slice(0, 6).map(x => `${x.note} (${x.kind})`).join('; ')}`);
   return parts.length ? `${name} — manba bilan qo'lda tekshirish kerak: ${parts.join('; ')}.` : null;
 }
 
@@ -425,7 +432,8 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
   const ai = guardAiNote(text);
   text = ai.text;
   const v = verifyExplanation(text, source, { allowed });
-  const sections = { body: reviewSection(ai.bodyText, source, allowed), aiNote: reviewSection(ai.notes.join('\n'), source, allowed) };
+  const srcRelations = relations.analyseText(source);
+  const sections = { body: reviewSection(ai.bodyText, source, allowed, srcRelations), aiNote: reviewSection(ai.notes.join('\n'), source, allowed, srcRelations) };
   const bodyNote = sectionNote('Asosiy matn', sections.body);
   const aiNote = sectionNote('AI izohi', sections.aiNote);
   if (bodyNote) notes.push(bodyNote);
@@ -442,10 +450,11 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
   const check = {
     numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses,
     phrases: [...sections.body.phrases, ...sections.aiNote.phrases],
+    relations: [...sections.body.relations, ...sections.aiNote.relations],
     sections, aiNote: { found: ai.found, removed: ai.removed }, scopeWordsMissing: scopeMissing,
     scope: v.scope, mode: 'flag_for_manual_review', verified: false,
   };
-  check.flagged = check.numbers.length + check.dates.length + check.pages.length + check.clauses.length + check.phrases.length;
+  check.flagged = check.numbers.length + check.dates.length + check.pages.length + check.clauses.length + check.phrases.length + check.relations.length;
   return { reply: text, check, notes, partial: partial.length > 0 };
 }
 
@@ -468,6 +477,9 @@ const STATUS_PHRASES = [
   { id: 'confirmed', label: 'tasdiqlangan', re: /tasdiqlangan|isbotlangan|подтвержд[её]н|доказан/u },
   { id: 'invalid', label: 'haqiqiy emas', re: /haqiqiy emas|haqiqiy sanalmaydi|kuchga ega emas|недействител/u },
   { id: 'in_force', label: 'kuchga kirgan', re: /kuchga kirgan|вступил\p{L}* в (?:законную )?силу/u },
+  // "no case / no application found" is not a verdict on finances or risk
+  { id: 'financial_ok', label: 'moliyaviy holat barqaror', re: /moliyaviy (?:holat\p{L}*|ahvol\p{L}*|jihatdan) (?:barqaror|yaxshi|sog'lom|ijobiy|ishonchli|tasdiqlan\p{L}*)|to'lovga qobil|финансов\p{L}* (?:положени\p{L}* )?(?:устойчив|стабильн|надежн|надёжн)|платежеспособ/u },
+  { id: 'no_risk', label: "xavf yo'q", re: /(?:xavf|xatar|risk|muammo)\p{L}* (?:yo'q|mavjud emas|aniqlanmagan emas)|xavfsiz bitim|рисков нет|риски отсутству|без риска/u },
 ];
 const CONSEQUENCE_PHRASES = [
   { id: 'fine', label: 'jarima', re: /jarima|штраф/u },
@@ -586,53 +598,110 @@ const SCOPE_GROUPS = [
 ];
 
 /**
- * The lines (digest lines, or sentences of a full text) that carry a scope
- * word, in document order, at most `max`, each at most `maxLen` chars - picked
- * with no AI and given to the final model to keep intact.
+ * The document's key lines, picked with no AI and given to the final model to
+ * keep intact: lines with a scope word, and lines that tie an act to a
+ * condition, a period, an exception or a consequence, or define a term
+ * (src/rag/clause-relations.js relationScore). Ranked by how many such
+ * relations a line carries (a figure adds one), at most `max` lines and
+ * `maxChars` characters, each at most `maxLen` (longer ones shortened, "…").
+ *
+ * Repetition (2026-10-08): a line the model already has word for word - the
+ * full text, or a digest line of the same clause with all its scope words,
+ * figures, acts, conditions and exceptions - is sent as a short reference
+ * (clause number and opening words), not repeated. In full-text mode every
+ * line is in the text, so the list is a checklist of references; the
+ * characters saved let more key lines fit in the same `maxChars`. `full` are
+ * the selected lines in full (for the answer's check and the trace).
  */
-function scopeSelection(text, { max = 25, maxLen = 320, maxChars = 6000 } = {}) {
-  // sentences end after a word, never after a clause number ("3.1. ...")
-  const parts = String(text || '').split(/\n+|(?<=[\p{L})»"'][.;])\s+(?=\S)/u).map(t => t.trim()).filter(t => t.length > 12);
+function scopeSelection(text, { max = 40, maxLen = 320, maxChars = 6000, given = null } = {}) {
+  // sentences end after a word, never after a clause number ("3.1. ...");
+  // a ";" stays inside: "ariza topshirgan; ro'yxatdan o'tkazilmagan" is one finding
+  const parts = String(text || '').split(/\n+|(?<=[\p{L})»"'][.!?])\s+(?=\S)/u).map(t => t.trim()).filter(t => t.length > 12);
   const found = [];
   const seen = new Set();
   parts.forEach((p, order) => {
     if (/^\[(?:Qism|Sahifa) /u.test(p) || /^HUJJAT DAYJESTI/u.test(p)) return;
     const n = lowerNorm(p);
     const groups = SCOPE_GROUPS.filter(g => g.re.test(n)).length;
-    if (!groups) return;
+    const rel = p.length < 1200 ? relations.relationScore(p) : 0;
+    if (!groups && rel < 2) return;
     // a boilerplate clause repeated under other numbers is one line
     const key = n.replace(/[^\p{L}]+/gu, ' ').trim();
     if (seen.has(key)) return;
     seen.add(key);
-    // more scope words and a figure (amount, share, period) rank higher, so
-    // a long document's key clauses are not crowded out by boilerplate
-    const score = groups + (/\d/u.test(p.replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '')) ? 1 : 0);
-    found.push({ p, order, score });
+    // more scope words, relations and a figure (amount, share, period) rank
+    // higher, so a long document's key clauses are not crowded out by boilerplate
+    const score = groups + rel + (/\d/u.test(p.replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '')) ? 1 : 0);
+    found.push({ p, order, score, groups });
   });
+  const where = given == null ? null : carriedIn(given);
   // a long sentence or table row is shortened (marked "…"), and the whole
   // list stays within maxChars; what does not fit is counted, never hidden
   const ranked = found.sort((a, b) => b.score - a.score || a.order - b.order);
   const chosen = [];
-  let chars = 0, cut = 0;
+  const dropped = [];
+  let chars = 0, cut = 0, referenced = 0, savedChars = 0;
   for (const f of ranked) {
-    if (chosen.length >= max) break;
+    if (chosen.length >= max) { dropped.push(f); continue; }
     let line = f.p;
-    if (line.length > maxLen) {
-      const at = line.lastIndexOf(' ', maxLen);
-      line = `${line.slice(0, at > maxLen * 0.6 ? at : maxLen)} …`;
+    const at = where && where(f.p);
+    if (at) {
+      // the model already has it: a reference, not a repeat
+      const ref = (f.p.match(/^\s*(\d+(?:\.\d+)*)\.?\s/u) || [])[1];
+      const head = f.p.replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '');
+      const sp = head.lastIndexOf(' ', 70);
+      line = `${ref ? `${ref}. ` : ''}${head.length > 80 ? `${head.slice(0, sp > 40 ? sp : 70)} …` : head} [${at}]`;
+      savedChars += Math.max(0, Math.min(f.p.length, maxLen) - line.length);
+      referenced++;
+    } else if (line.length > maxLen) {
+      const sp = line.lastIndexOf(' ', maxLen);
+      line = `${line.slice(0, sp > maxLen * 0.6 ? sp : maxLen)} …`;
       cut++;
     }
-    if (chars + line.length > maxChars) continue;
+    if (chars + line.length > maxChars) { dropped.push(f); continue; }
     chars += line.length;
     chosen.push({ ...f, line });
   }
-  const lines = chosen.sort((a, b) => a.order - b.order).map(c => c.line);
-  return { lines, candidates: found.length, selected: lines.length, dropped: found.length - lines.length, shortened: cut, chars, limits: { max, maxLen, maxChars } };
+  chosen.sort((a, b) => a.order - b.order);
+  const lines = chosen.map(c => c.line);
+  return { lines, full: chosen.map(c => c.p), candidates: found.length, selected: lines.length, dropped: found.length - lines.length,
+    droppedLines: dropped.sort((a, b) => a.order - b.order).map(d => (d.p.length > 120 ? `${d.p.slice(0, 120)} …` : d.p)),
+    shortened: cut, referenced, savedChars, chars, limits: { max, maxLen, maxChars } };
+}
+
+/**
+ * Does the model already have `line`? "matnda" when `given` holds it word for
+ * word (the full text); "dayjestda" when a digest line of the same clause (by
+ * its number, else most of its words) holds all its scope words, figures,
+ * acts, conditions and exceptions; otherwise null (the line is sent whole).
+ */
+function carriedIn(given) {
+  const flat = t => lowerNorm(t).replace(/\s+/gu, ' ').trim();
+  const all = flat(given);
+  const lines = relations.sentencesOf(given).map(l => ({ text: l, flat: flat(l), stems: relations.analyseSentence(l).stems }));
+  return (line) => {
+    const f = flat(line);
+    if (all.includes(f)) return 'matnda';
+    const ref = (line.match(/^\s*(\d+(?:\.\d+)+)\.?\s/u) || [])[1];
+    const refRe = ref ? new RegExp(`(^|[^\\d.])${ref.replace(/\./gu, '\\.')}(?![\\d])`, 'u') : null;
+    const st = relations.analyseSentence(line).stems;
+    const near = lines.filter(l => {
+      if (refRe) return refRe.test(l.text);
+      let n = 0; for (const w of st) if (l.stems.has(w)) n++;
+      return n >= 3 && n / Math.max(1, st.size) >= 0.6;
+    });
+    if (!near.length) return null;
+    const there = near.map(l => l.flat).join(' ');
+    if (SCOPE_GROUPS.some(g => g.re.test(f) && !g.re.test(there))) return null;
+    const need = relations.slotsOf(line), got = relations.slotsOf(there);
+    for (const k of ['acts', 'condition', 'exception', 'consequence', 'figures']) if (need[k].some(x => !got[k].includes(x))) return null;
+    return 'dayjestda';
+  };
 }
 
 /** The selected lines only (see scopeSelection for the counts). */
 function scopeLines(text, opts) {
-  return scopeSelection(text, opts).lines;
+  return scopeSelection(text, opts).full;
 }
 
 /** Scope words in the lines given to the model that the answer never uses: a reason to check by hand. */
@@ -887,10 +956,12 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   // the final model gets their original wording even where a digest line
   // compressed them
   const given = full ? documentText : d.text;
-  const sel = scopeSelection(documentText);
-  const scope = sel.lines;
-  const scopeBlock = scope.length
-    ? `\n\nSAQLANADIGAN SHARTLAR (hujjatdan AI'siz tanlandi: ularda qamrov so'zlari bor; ${sel.candidates} ta nomzoddan ${sel.selected} tasi shu yerda${sel.dropped ? `, ${sel.dropped} tasi ro'yxat chegarasiga sig'madi - ular hujjat matnida yoki dayjestda, xuddi shu qoidalar ularga ham taalluqli` : ''}${sel.shortened ? `; "…" bilan tugaganlari qisqartirilgan` : ''}. Har birini shu so'zlari, shartlari, mezonlari va oqibatlari bilan tushuntir):\n${scope.map(l => `- ${l}`).join('\n')}`
+  // a line the model already has word for word (the full text, or a digest
+  // line that keeps all its parts) is a short reference, not a repeat
+  const sel = scopeSelection(documentText, { given });
+  const scope = sel.full;
+  const scopeBlock = sel.lines.length
+    ? `\n\nSAQLANADIGAN SHARTLAR (hujjatdan AI'siz tanlandi: ularda qamrov so'zlari yoki harakat bilan shart, muddat, istisno, oqibat yoki ta'rif bor; ${sel.candidates} ta nomzoddan ${sel.selected} tasi shu yerda${sel.dropped ? `, ${sel.dropped} tasi ro'yxat chegarasiga sig'madi - ular hujjat matnida yoki dayjestda, xuddi shu qoidalar ularga ham taalluqli` : ''}${sel.shortened ? `; "…" bilan tugaganlari qisqartirilgan` : ''}${sel.referenced ? `; [matnda] / [dayjestda] belgilisi yuqorida to'liq bor, bu yerda faqat havola - o'sha to'liq matn bo'yicha tushuntir` : ''}. Har birini shu so'zlari, shartlari, muddatlari (o'z harakati bilan), istisnolari, mezonlari va oqibatlari bilan tushuntir):\n${sel.lines.map(l => `- ${l}`).join('\n')}`
     : '';
   // from the whole document, so a pair split across digest parts is seen
   const conflicts = conflictCandidates(documentText);
@@ -912,12 +983,12 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
     reply: done.reply, provider: result.provider, check: done.check,
     // what each stage held, for a trace (src/rag/document-explain-route.js
     // returns it to a master only; nothing is stored)
-    trace: { mode: full ? 'full_text' : 'digest', digest: d ? d.text : null, scopeLines: scope,
-      scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened }, conflictCandidates: conflicts, answer: raw },
+    trace: { mode: full ? 'full_text' : 'digest', digest: d ? d.text : null, scopeLines: scope, scopeSent: sel.lines, scopeDropped: sel.droppedLines,
+      scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, savedChars: sel.savedChars }, conflictCandidates: conflicts, answer: raw },
     coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
       chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated,
       placeholders: placeholders.count, finalRun: true, summary: coverageSummary(d, { finalRun: true }),
-      scopeLines: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, limits: sel.limits },
+      scopeLines: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, limits: sel.limits },
       // the document was not read whole: not the service (released by the route)
       documentFullyRead: unread.length === 0 && (!d || d.covered !== false),
       partial: done.partial },
@@ -928,5 +999,5 @@ module.exports = {
   PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
   markPages, pagesIn, emptyPages, contentChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
   placeholdersIn, coverageNote, coverageStatus, explainSystem,
-  unreadParts, scopeLines, scopeSelection, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
+  unreadParts, scopeLines, scopeSelection, carriedIn, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
 };

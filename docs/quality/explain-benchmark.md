@@ -363,14 +363,17 @@ yo'qolganini aytmaydi:
 - Javob `Cache-Control: no-store` bilan keladi.
 - Matn log, audit, ledger, `ai_requests` yoki boshqa keshga tushmaydi; DB testi buni tekshiradi.
 
-**Master brauzerida trace olish:**
+**Master brauzerida trace olish (2026-10-08 dan: «Diagnostika» tugmasi):**
 1. juristai.uz'ga master akkaunt bilan kiring va dashboard'ni oching.
-2. Brauzer konsolini oching (F12 → Console) va kiriting: `window.__JAI_TRACE = true`.
-3. Hujjatni (matnli PDF yoki DOCX) chatga biriktiring → «Hujjat mazmunini tushuntirish» → narx kartasida «Davom etish».
-4. Javob kelgach, konsolda `[JuristAI] trace saved` yozuvi chiqadi. Kiriting: `copy(JSON.stringify(window.__lastExplain))`. Bu buferga `{ source, response }` ni nusxalaydi.
-5. Nusxani kompyuteringizda `explain-trace.json` faylga saqlang. **Uni repoga qo'ymang.**
-6. Tekshiring: `node scripts/explain-trace.js --bundle explain-trace.json` — tekshiruvlar tanlangan qatorlardan avtomatik tuziladi. Yoki o'zingizning ro'yxatingiz bilan: `--checks checks.json`, format: `[{"id":"...","terms":["so'z",["muqobil","muqobil"]]}]`.
-7. Trace'ni o'chirish: sahifani yangilang, yoki `window.__JAI_TRACE = false` va `delete window.__lastExplain`.
+2. Hujjatni (matnli PDF yoki DOCX) AI chatga biriktiring. Hujjat chiplari ostida **«🔬 Diagnostika»** belgisi chiqadi (faqat Master interfeysida); uni yoqing.
+3. «Hujjat mazmunini tushuntirish» → narx kartasida «Davom etish».
+4. Javob ostida «🔬 Diagnostika tayyor» kartasi chiqadi → **«JSON yuklab olish»**. Fayl `{ source, response }` ko'rinishida, faqat shu brauzer xotirasidan olinadi. **Uni repoga, chatga yoki boshqa joyga qo'ymang.**
+5. Tekshiring: `node scripts/explain-trace.js --bundle explain-trace-….json`. Chiqishda ikki qism bor:
+   - so'zma-so'z atamalar (tanlangan qatorlardan avtomatik yoki `--checks checks.json`);
+   - **RELATIONS**: kalit bandlarning kim / harakat / holat / shart / muddat / istisno / oqibat / mezonlari har bosqichda so'zma-so'z topildimi; dayjest va javobda muddat, holat, tartib, «va/yoki», ehtimollik yoki ta'rif chegarasi boshqacha bog'langan joylar; ro'yxatga sig'magan qatorlar.
+6. Diagnostikani o'chirish: belgini o'chiring yoki kartadagi «Xotiradan o'chirish»ni bosing; sahifani yangilash ham hammasini o'chiradi (hech narsa brauzer xotirasiga yoki serverga yozilmaydi).
+
+Server tomoni o'zgarmagan: trace faqat `trace: true` so'ralganda, faqat bazada `master` rolidagi akkauntga, `Cache-Control: no-store` bilan qaytadi. Tugma faqat interfeysdagi qulaylik; Master bo'lmagan hisob uni ko'rmaydi, ko'rsa ham server trace bermaydi. Konsol yo'li ham ishlaydi: `window.__JAI_TRACE = true`, keyin `window.__lastExplain`.
 
 Skanerlangan hujjatda manba matni brauzerda bo'lmaydi (u serverda turadi), shuning uchun `--source` bilan OCR matnini alohida berish kerak.
 
@@ -431,6 +434,110 @@ DB testida tekshirildi: trace faqat aniq so'ralganda va bazada master bo'lgan ak
 **Tasdiqlanmagan:**
 - Haqiqiy model bu qoidalar bilan 6 holatni saqlaydimi — buni jonli sinov va yurist bahosi ko'rsatadi.
 - Mexanik tekshiruv faqat so'z borligini ko'radi, ma'no to'g'riligini emas.
+
+## 4d. Band ichidagi munosabatlar: kim → harakat → shart → muddat → istisno → oqibat (2026-10-08, #422 jonli sinovidan keyin)
+
+#422 jonli javobida so'zlar ko'pincha saqlangan, lekin ular boshqa harakatga bog'langan: shart, holat va vaqt farqlari yo'qolgan. Bu bo'limdagi hamma narsa **AI'siz**, **ogohlantirish rejimida** ishlaydi. Belgi «qo'lda tekshiring» degani, xato isboti emas. Hech narsa o'chirilmaydi.
+
+### Umumiy xatolar sintetik misollarda (`tests/fixtures/explain-eval/09-relations-memorandum.json`)
+
+| Xato turi | Noto'g'ri gap (sintetik) | Mexanik belgi |
+|---|---|---|
+| Ariza topshirish ≠ ro'yxatdan o'tish | «Oqtosh-Lux» belgisi ro'yxatdan o'tmagan (hujjatda: ariza topshirilmagan) | `holat` |
+| Sana boshqa harakatga | 10-iyunda ro'yxatdan o'tkazilgan (hujjatda: 10-iyunda ariza topshirilgan) | `bog'lanish`, `holat` |
+| Javob muddati ≠ bitim muddati | Bitim 10 ish kuni ichida tuziladi (hujjatda 10 ish kuni — javob, bitim — 60 kalendar kun) | `bog'lanish` |
+| «Aniqlanmadi» ≠ moliyaviy holat tasdiqlangan | Moliyaviy holati barqaror | ibora (`holat: moliyaviy holat barqaror`) |
+| Shart noto'g'ri harakatga / tartib teskari | Dalolatnoma to'lovdan keyin imzolanadi | `tartib` |
+| «va» ↔ «yoki» | Investor yoki direktor imzolaganda | `va/yoki` |
+| Ehtimoliy zarar → yetkazilgan zarar | 300 000 000 so'm zarar yetkaziladi | `ehtimollik` |
+| Ta'rifdagi chegara ≠ jarima | 1 000 000 000 so'm jarima (hujjatda bu yirik bitim ta'rifining chegarasi) | `ta'rif` |
+| Qo'shimcha mezon tushib qolgan | Nazorat qiluvchi shaxs — faqat 50 foiz mezoni | `mezon` |
+| Istisno tushib qolgan | (dayjest bosqichida) | trace: `exception` topilmadi |
+
+Shu bandlarning to'g'ri bayoni hech qanday belgi olmaydi. 9 ta baholash hujjatining har biri o'z matniga qarshi tekshirilganda soxta belgi chiqmaydi. Inkor qilingan, shubha bildirilgan yoki shartli gap ham belgilanmaydi.
+
+### Qanday tekshiriladi (`src/rag/clause-relations.js`)
+
+Harakatlar umumiy lug'atdan olinadi (o'zbek lotin va rus): ariza, ro'yxat, javob, bitim, to'lov, imzolash, taqdim etish, xabardor qilish, yetkazib berish, qaytarish, bekor qilish, begonalashtirish, rozilik, garov. Bitta hujjatga xos so'z yo'q.
+
+- **Muddat yoki sana** gapda o'zidan keyingi eng yaqin harakatga bog'lanadi («10 kun ichida javob beradi»). Topilmasa, oldingi harakatga bog'lanadi; bunda «…dan keyin / boshlab» hodisasi o'tkazib yuboriladi.
+- **Holat:** harakat yonidagi inkor («o'tmagan», «topshirilmagan»), «aniqlanmadi» yoki o'tgan zamon. Javob gapi hujjatdagi xuddi shu masala bilan solishtiriladi: avval qo'shtirnoqdagi nom bo'yicha, bo'lmasa umumiy so'zlar bo'yicha.
+- **Tartib:** «A oldidan B», «A dan keyin B», «A sharti bilan B».
+- **«va/yoki»** bir xil ikki so'z orasida solishtiriladi.
+- **Ehtimollik:** hujjat zarar, xavf yoki yo'qotishni faqat «mumkin/ehtimoliy» deb aytgan bo'lsa-yu, javob aniq deb aytsa, belgilanadi.
+- **Ta'rif:** chegara raqami javobda jarima yonida kelsa, hujjatda esa faqat ta'rifda bo'lsa, belgilanadi.
+- **Mezon:** «X deganda … tushuniladi» ta'rifining mezonlaridan faqat bir qismi javobda uchrasa, belgilanadi.
+
+Bular mexanik signallar. Lug'atda yo'q sinonim ko'rinmaydi. To'g'ri ma'no boshqa so'z bilan yozilsa, belgilanishi mumkin. Noto'g'ri ma'no hujjat so'zlari bilan yozilsa, o'tib ketishi mumkin. Ma'noni yurist baholaydi.
+
+### Dayjest munosabatlarni saqladimi
+
+- Dayjest qatori endi `- <band> | <kim> → <harakat> | shart: … | muddat: … | istisno: … | oqibat: … | <kimning so'zi>` ko'rinishida. Har bir muddat, shart va oqibat o'z harakati qatorida turadi; o'z muddati bor ikki harakat ikki qatorga yoziladi.
+- `scripts/explain-trace.js --bundle` hujjatning kalit bandlari uchun har bosqichda (dayjest, javob) qaysi qism so'zma-so'z topilmaganini ko'rsatadi. Kalit band — kamida ikki xil munosabati bor band, ta'rif yoki istisno. Qismlar: kim, harakat, holat, shart, muddat, istisno, oqibat, mezon.
+- Dayjestning o'zi ham javob kabi bog'lanish, holat, tartib va boshqa turlar bo'yicha tekshiriladi.
+
+### 25 qatorlik tanlov: nima chiqib qolardi va nima o'zgardi
+
+#422 tanlovi faqat qamrov so'zi bor qatorlarni olgan va `;` da bo'lgan. Shuning uchun quyidagilar ro'yxatga umuman tushmasdi:
+- holatlar: «ariza topshirilmagan», «aniqlanmadi», «tekshirilmadi»;
+- harakat va muddat: «10 ish kuni ichida javob beradi»;
+- tartib: «imzolanganidan keyin to'laydi»;
+- «va» bilan bog'langan imzolovchilar;
+- ehtimoliy zarar;
+- narx.
+
+«Ariza topshirgan; ro'yxatdan o'tkazilmagan» ham ikki bo'lakka ajralardi. Kalit bandlar (`keyPoints` langari) ro'yxatda:
+
+| Hujjat | Yo'l | #422 | #423 |
+|---|---|---|---|
+| contract-supply | to'liq matn | 1/7 | 5/7 |
+| due-diligence | to'liq matn | 0/9 | 5/9 |
+| long-lease | dayjest | 1/5 | 4/5 |
+| long-service-docx | dayjest | 1/8 | 7/8 |
+| investment-agreement | dayjest | 5/6 | 6/6 |
+| relations-memorandum | dayjest | 3/10 | 10/10 |
+
+Hali ham ro'yxatga kirmaydiganlar: muallif, jo'natuvchi, ulush, direktorlar tarixi, ilova jadvali. Bular munosabat emas, identifikatsiya; ular to'liq matnda yoki dayjestda bor.
+
+**Takrorlanish:** model allaqachon so'zma-so'z ega bo'lgan qator endi qayta yuborilmaydi, o'rniga qisqa havola (band raqami va boshlanishi, `[matnda]` / `[dayjestda]`) beriladi:
+- to'liq matn yo'lida har bir qator matnda bor, shuning uchun ro'yxat havolalardan iborat (#422 ularni to'liq takrorlardi);
+- dayjest yo'lida havola faqat dayjestning o'sha band qatori uning barcha qamrov so'zlari, raqamlari, harakatlari, shartlari va istisnolarini saqlagan bo'lsa beriladi; aks holda manba qatori to'liq yuboriladi.
+
+Tejalgan joy hisobiga ro'yxat chegarasi 25 dan 40 qatorga ko'tarildi. Belgi chegarasi o'zgarmadi (6 000 belgi), shuning uchun yakuniy chaqiruvning narx jadvalidagi chegarasi ro'yxat sababli o'smaydi. 120 000 belgili sinov matnida 56 nomzoddan 40 tasi tanlandi, 16 tasi sig'madi. Sig'maganlar soni modelga va javob ostida aytiladi, ro'yxati esa trace'da (`scopeDropped`) beriladi.
+
+### Xarajat taqqoslash (#423 va #422, dry-run, chaqiruvsiz)
+
+`node scripts/explain-benchmark.js`. Yangi chaqiruv yo'q, hech bir token chegarasi oshirilmagan. Narx jadvali chegarasi bo'yicha (kirish = UTF-8 bayt):
+
+| Hujjat | Yo'l | Yakuniy chaqiruv +bayt | Dayjest chaqiruvlari +bayt | Dayjest chiqishi +token (taxmin) | aisha-comet +$ | gpt-6-luna +$ |
+|---|---|---|---|---|---|---|
+| contract-supply | to'liq matn | 890 | 0 | 0 | 0.0004 | 0.0001 |
+| due-diligence | to'liq matn | 1 219 | 0 | 0 | 0.0005 | 0.0001 |
+| long-lease (37 888) | dayjest, 5 qism | 1 741 | 2 930 | 0–625 | 0.0025 | 0.0008 |
+| long-service-docx (53 538) | dayjest, 7 qism | 1 808 | 4 102 | 0–885 | 0.0033 | 0.0010 |
+| investment-agreement (21 934) | dayjest, 3 qism | 1 114 | 1 758 | 0–361 | 0.0015 | 0.0005 |
+
+Qayerdan keladi:
+- dayjest prompti +586 bayt har bir qismga;
+- tushuntirish prompti +461 bayt;
+- ro'yxat ko'proq turdagi qatorlarni oladi; dayjest yo'lida havola hisobga olinmagan (eng yomon holat);
+- dayjest qatoridagi maydon belgilari («shart:», «muddat:» …). Bu taxmin: qatorga 0–10 belgi, har 400–250 manba belgisiga bir qator. O'lchanmagan.
+
+**Xavf:** bir qismning kutilgan chiqishi #422 dagi 343–1 280 tokendan 343–1 408 tokenga o'sadi. Eng katta ish (120 000 belgi, qism 9 508 belgi) uchun yuqori chegara 1 521 dan 1 673 ga chiqadi, bu 1 600 tokenlik o'zgarmagan cheklovdan oshishi mumkin. Unda kesilgan qism `DIGEST_LIMITS` doirasida ikki yarmida qayta o'qiladi; baribir kesilsa, ishlatilmaydi va nomi aytiladi. Haqiqiy sarf va `finish_reason` keyingi jonli sinovda ledger'dan o'lchanadi. Chegara ko'tarilmagan.
+
+VoiceLab credit'da hisoblaydi; bu yerdagi narx — ro'yxat narxi, tasdiqlangan kurs emas.
+
+### Testlar va tasdiqlanmagan
+
+- `tests/explain-relations.test.js` (11 ta): har bir xato turi sintetik gapda belgilanadi, to'g'ri bayon belgilanmaydi, o'z matniga qarshi soxta belgi yo'q, inkor/shartli gap belgilanmaydi, ogohlantirish rejimi, asosiy matn va AI izohi bir xil mezonda, dayjest munosabatlari trace'da, kalit qatorlar ro'yxati, takrorlanish, promptlarda hujjatga xos so'z yo'q, trace skripti.
+- DB testi (`upload-no-ai.db.test.js`): trace faqat bazadagi Master'ga, `no-store`; sahifa uni faqat Master opt-in bilan so'raydi va brauzer xotirasiga yozmaydi.
+- Brauzerda tekshirildi (Chromium, desktop 1280 px va telefon 390 px, `/api` o'rniga soxta javoblar):
+  - tugma faqat Master interfeysida chiqadi;
+  - so'rov `trace: true` bilan ketadi;
+  - JSON yuklab olinadi;
+  - gorizontal toshish yo'q.
+- Haqiqiy iPhone/Safari'da tekshirilmagan. Production'da ham tekshirilmagan.
+- **Tasdiqlanmagan:** jonli modelda munosabatlar haqiqatan saqlanishi. Bu yurist ko'rib chiqadigan benchmark va bitta jonli sinov (Master trace) bilan tekshiriladi; pullik sinov egasining ruxsatisiz boshlanmaydi.
 
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
