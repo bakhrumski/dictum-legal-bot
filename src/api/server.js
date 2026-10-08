@@ -3751,7 +3751,11 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
     const opts = { temperature, maxTokens };
     const label = `voicelab/${voicelab.modelFor(model)}`;
     const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null, ...(onToken ? { retryTransient: 0 } : {}),
-      bound: modelPricing.callCostBound({ model: label, creditBilling: true }) }, async (call) => {
+      bound: modelPricing.callCostBound({ model: label, creditBilling: true }),
+      // credits per token are not confirmed, so there is no provable bound;
+      // the request's cost limit still reserves the list-price figure the
+      // ledger itself counts for this call (a planning figure, not credits)
+      planUsd: modelPricing.callCostBound({ model: label, inputTokensMax: modelPricing.inputTokenBound(messages), outputTokensMax: opts.maxTokens }).usd }, async (call) => {
       let res;
       try {
         res = onToken

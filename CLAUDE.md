@@ -90,7 +90,15 @@ Known state of the suites (Sept 2026):
   fragment) and is named; no part read whole -> no final call, 422
   `DOCUMENT_NOT_READ`, units released (explanation, opinion, chat
   analysis). Ledger: stage `document_digest` vs `document`, `finish_reason`,
-  `truncated`, `call_detail`, `ai_requests.doc_coverage`. Quality is unconfirmed until the lawyer-reviewed
+  `truncated`, `call_detail`, `ai_requests.doc_coverage` (coverage is
+  technical: all_read / some_excluded / none_read, `not_recorded` when the
+  column is missing - never "complete"; the writers drop a column they
+  cannot write rather than lose a row). The request budget is atomic under
+  parallel calls: a call slot and its cost (bound, else the list-price
+  `planUsd`) are taken in the same step as the check; a call with neither
+  is limited by count only, so `AI_REQUEST_MAX_COST_USD` is not a hard
+  dollar cap (VoiceLab credits unconfirmed). Past `AI_REQUEST_MAX_MS` no
+  call starts; running calls finish and are written. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

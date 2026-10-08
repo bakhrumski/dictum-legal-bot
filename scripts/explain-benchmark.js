@@ -180,8 +180,14 @@ function digestCompare(len) {
     // the final call reads the digest: at most every part's cap
     calls.push({ maxTokens: ex.EXPLAIN_MAX_TOKENS, digestTokens: L.chunks.length * cap, messages: [{ role: 'system', text: ex.explainSystem('Uzbek') }, { role: 'user', text: '' }] });
     const reread = Array.from({ length: L.extra }, () => ({ maxTokens: cap, messages: [{ role: 'system', text: L.system }, { role: 'user', text: 'x'.repeat(Math.ceil(biggest / 2)) }] }));
+    const inTok = list => list.reduce((t, c) => t + pricing.inputTokenBound(c.messages) + (c.digestTokens || 0), 0);
+    const outLow = L.chunks.reduce((t, c) => t + Math.min(cap, Math.round(c * L.ratio[0] / ASSUME.charsPerToken[1])), 0);
+    const outHigh = L.chunks.reduce((t, c) => t + Math.min(cap, Math.round(c * L.ratio[1] / ASSUME.charsPerToken[0])), 0);
     out[which] = {
       parts: L.chunks.length, biggestChunk: biggest, expectedDigestTokens: [tokLow, tokHigh], cap,
+      inputTokensBound: inTok(calls), inputTokensBoundWorst: inTok(calls.concat(reread)),
+      digestOutputExpected: [outLow, outHigh], outputCapTotal: calls.reduce((t, c) => t + c.maxTokens, 0),
+      outputCapTotalWorst: calls.concat(reread).reduce((t, c) => t + c.maxTokens, 0),
       reachesCap: tokLow >= cap ? 'yes, even at the low end' : tokHigh >= cap ? 'possible at the high end' : 'no (with margin)',
       calls: calls.length, worstCaseCalls: calls.length + reread.length,
       ...Object.fromEntries(MODELS.map(m => [m, { usual: bound({ calls }, m).usd, worstCase: bound({ calls: calls.concat(reread) }, m).usd }])),
@@ -225,11 +231,13 @@ if (args.includes('--json')) {
     console.log([r.pages, r.chars, r.pageMarkBytes, k, v.path, v.calls, v.outputCapTokens, ...MODELS.map(m => fmt(v[m]))].join(' | '));
   }
   console.log(`\nLong-document digest, #420 vs this change (assumptions, not measured: ${ASSUME.charsPerToken.join('-')} chars/token; digest/excerpt ratio #420 ${ASSUME.ratio420.join('-')}, compact ${ASSUME.ratioCompact.join('-')}; hidden reasoning not modelled):`);
-  console.log(['document', 'layout', 'parts', 'biggest part (chars)', 'expected digest tokens/part', 'cap', 'reaches cap?', 'calls', 'worst case calls', ...MODELS.map(m => `${m} usual / worst`)].join(' | '));
+  console.log(['document', 'layout', 'parts', 'biggest part (chars)', 'expected digest tokens/part', 'cap', 'reaches cap?', 'calls usual / with re-reads',
+    'input tokens bound usual / with re-reads', 'expected digest output tokens (all parts)', 'output caps usual / with re-reads', ...MODELS.map(m => `${m} usual / with re-reads`)].join(' | '));
   for (const r of digestRows) for (const k of ['420', 'new']) {
     const v = r[k];
-    console.log([`${r.label} (${r.chars})`, k === '420' ? '#420' : 'new', v.parts, v.biggestChunk, `${v.expectedDigestTokens[0]}-${v.expectedDigestTokens[1]}`, v.cap, v.reachesCap, v.calls, v.worstCaseCalls,
-      ...MODELS.map(m => `${fmt(v[m].usual)} / ${fmt(v[m].worstCase)}`)].join(' | '));
+    console.log([`${r.label} (${r.chars})`, k === '420' ? '#420' : 'new', v.parts, v.biggestChunk, `${v.expectedDigestTokens[0]}-${v.expectedDigestTokens[1]}`, v.cap, v.reachesCap,
+      `${v.calls} / ${v.worstCaseCalls}`, `${v.inputTokensBound} / ${v.inputTokensBoundWorst}`, `${v.digestOutputExpected[0]}-${v.digestOutputExpected[1]}`,
+      `${v.outputCapTotal} / ${v.outputCapTotalWorst}`, ...MODELS.map(m => `${fmt(v[m].usual)} / ${fmt(v[m].worstCase)}`)].join(' | '));
   }
   console.log(`\nA ${REAL_PAGES}-page document (~${REAL_PAGES * 2500} chars), bound per run: old ${MODELS.map(m => `${m} ${fmt(realOld[m])}`).join(', ')}; new ${MODELS.map(m => `${m} ${fmt(realNew[m])}`).join(', ')}`);
   console.log(`\nBenchmark budget (old + new, ${REPEATS} repeats; eval set + ${REAL_DOCS} anonymised real documents of ${REAL_PAGES} pages):`);

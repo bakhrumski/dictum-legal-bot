@@ -667,10 +667,21 @@ function digestUnusable(digest) {
 }
 
 /** What a service read of a document, for the ledger (ai_requests.doc_coverage) and the response. */
+// Coverage is technical: which parts reached the model whole. A part read
+// whole is not a semantic or legal confirmation of anything in it.
+const COVERAGE_MEANING = 'technical';
+/** all_read | some_excluded | none_read */
+function coverageStatus(digest) {
+  if (!digest) return 'all_read';
+  if (digestUnusable(digest)) return 'none_read';
+  return unreadParts(digest).length ? 'some_excluded' : 'all_read';
+}
+
 function coverageSummary(digest, { finalRun, mode } = {}) {
-  if (!digest) return { mode: mode || 'full_text', fullyRead: true, finalRun: finalRun !== false };
+  if (!digest) return { mode: mode || 'full_text', status: 'all_read', meaning: COVERAGE_MEANING, fullyRead: true, finalRun: finalRun !== false };
   return {
-    mode: 'digest', parts: digest.parts.length, chunks: digest.chunks, read: digest.readParts,
+    mode: 'digest', status: coverageStatus(digest), meaning: COVERAGE_MEANING,
+    parts: digest.parts.length, chunks: digest.chunks, read: digest.readParts,
     cut: digest.truncated.length, failed: digest.failed.length, covered: digest.covered,
     fullyRead: unreadParts(digest).length === 0, finalRun: !!finalRun,
     digestCalls: digest.calls, extraCalls: digest.extraCalls, elapsedMs: digest.elapsedMs, policy: digest.policy,
@@ -711,7 +722,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   // the route answers with the parts and releases the units
   if (digestUnusable(d)) {
     return { reply: '', aborted: true,
-      coverage: { mode: 'digest', chars, pages: pages.length || null, chunks: d.chunks, parts: d.parts,
+      coverage: { mode: 'digest', status: 'none_read', meaning: COVERAGE_MEANING, chars, pages: pages.length || null, chunks: d.chunks, parts: d.parts,
         unread: unreadParts(d), documentFullyRead: false, finalRun: false, partial: true,
         summary: coverageSummary(d, { finalRun: false }) } };
   }
@@ -730,7 +741,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   const unread = unreadParts(d);
   return {
     reply: done.reply, provider: result.provider, check: done.check,
-    coverage: { mode: full ? 'full_text' : 'digest', chars, pages: pages.length || null, emptyPages: empty,
+    coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
       chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated,
       placeholders: placeholders.count, finalRun: true, summary: coverageSummary(d, { finalRun: true }),
       // the document was not read whole: not the service (released by the route)
@@ -742,6 +753,6 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
 module.exports = {
   PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
   markPages, pagesIn, emptyPages, contentChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
-  placeholdersIn, coverageNote, explainSystem,
+  placeholdersIn, coverageNote, coverageStatus, explainSystem,
   unreadParts, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
 };

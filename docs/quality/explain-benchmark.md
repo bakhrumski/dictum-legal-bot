@@ -254,6 +254,44 @@ Bu PR'dan keyin har bir qatorda `finish_reason`, `truncated` va
    - `ai_requests.doc_coverage` xizmat hujjatni qancha o'qiganini saqlaydi: qismlar, o'qilgan, kesilgan, xato, yakuniy javob yaratildimi.
    - Master'ning «AI so'rovlar» oynasi uch narsani alohida ko'rsatadi: provider javob berdimi, xizmat qamrovi va xarajat aniqligi. Masalan, VoiceLab ro'yxat narxi bilan hisoblanadi, haqiqiy kredit tasdiqlanmagan.
 
+### Byudjet, vaqt va qamrov (#421 ko'rib chiqilgandan keyin)
+
+**Chaqiruvlar soni — atomar.**
+- Avval chaqiruvlar limiti chaqiruv *tugagach* sanalardi, shuning uchun bir vaqtda boshlangan parallel chaqiruvlar uni chetlab o'ta olardi (testda: limit 5 bo'lsa ham 8 tasi ishlagan).
+- Endi tekshiruv va «slot» bitta sinxron qadamda olinadi (`usage-ledger` → `callsInFlight`), slot chaqiruv yozilganda qaytariladi. Testda 8 ta parallel chaqiruvdan aynan 5 tasi ishlaydi, 3 tasi `skipped` qatori bo'ladi.
+- Vaqtinchalik xatodan keyingi retry slotni kutish oldidan oladi.
+
+**Xarajat chegarasi ($0.25) qanday ishlaydi:**
+- Har chaqiruv boshlanishidan oldin uning eng ko'p narxi rezerv qilinadi: tugagan narx + ishlayotganlar rezervi + shu chaqiruv ≤ $0.25.
+- Eng ko'p narx — `callCostBound` chegarasi. U yo'q bo'lsa (VoiceLab kreditda hisoblaydi), ledger shu chaqiruvni baholaydigan ro'yxat narxi bo'yicha rejalash raqami (`planUsd`) olinadi.
+- **Bu qat'iy dollar kafolati emas:**
+  - VoiceLab uchun $0.25 ro'yxat narxi bilan hisoblanadi, haqiqiy kredit tasdiqlanmagan;
+  - chegarasi ham, rejalash raqami ham yo'q chaqiruv (masalan, «thinking»i cheklanmagan Gemini zaxirasi) rezervsiz boshlanadi. Uni faqat chaqiruvlar limiti to'xtatadi, narxi tugagach ma'lum bo'ladi.
+- Testda: 8 ta parallel $0.005 lik chaqiruv $0.02 chegarasida → 4 tasi ishlaydi (chegara bilan ham, rejalash raqami bilan ham).
+- Parallellik 8 da qoldi. Uni 4 ga tushirish 13 qismni to'rt to'lqinga cho'zib, 120 soniyalik so'rov chegarasiga urardi. Atomar slot va rezerv bilan 8 xavfsiz: xarajatni chegara yoki rejalash raqami bilan baholab bo'lmaydigan chaqiruvlar limitni bir martada eng ko'pi 8 ta chaqiruv narxicha oshirishi mumkin, holos.
+
+**Vaqt chegaralari:**
+- **75 soniya** (dayjest boshidan): faqat yangi qayta o'qish boshlanishini to'xtatadi. Ishlab turgan qism uzilmaydi (test bor).
+- **120 soniya** (so'rov boshidan, `AI_REQUEST_MAX_MS`): undan keyin hech bir yangi chaqiruv boshlanmaydi — qism, qayta o'qish, yakuniy javob, retry. Har biri `skipped` qatori bo'ladi, qism «o'qilmadi» hisoblanadi.
+  - Yakuniy chaqiruv boshlanmasa, xizmat 500 bilan tugaydi va limit qaytariladi.
+- **Ishlab turgan chaqiruvlar to'xtatilmaydi.** Ular o'z provider timeout'igacha (VoiceLab 120 s) davom etadi va usage'i kelganda yoziladi, javob foydalanuvchiga ketgandan keyin ham (testda tasdiqlangan).
+- Timeout bo'lgan chaqiruv `status = timeout` qatori bo'ladi, narxi NULL (noma'lum), $0 emas. Provider bu chaqiruv uchun haq olgan bo'lishi mumkin — ledger buni noma'lum deb ko'rsatadi.
+- Vaqt chegarasidan keyin timeout'ga retry qilinmaydi (test bor).
+
+**Qamrov (texnik) — uch holat:**
+- `all_read` — barcha qismlar to'liq o'qildi;
+- `some_excluded` — ayrim qismlar chiqarildi (natija «qisman», limit qaytariladi);
+- `none_read` — hech biri o'qilmadi (yakuniy chaqiruv yo'q, 422).
+
+«To'liq o'qilgan qism» faqat qism modelga butun yetganini bildiradi. Bu mazmun yoki huquqiy tasdiq emas (`meaning: 'technical'`, oynada «texnik, mazmun tasdig'i emas»).
+
+**`doc_coverage` ustuni qo'shilmasa:**
+- `ALTER` xatosi tizimni to'xtatmaydi.
+- `ai_requests` va `llm_spend_log` qatorlari yangi ustunlarsiz yoziladi, hech bir qator yo'qolmaydi.
+- Master oynasida qamrov «yozilmagan — to'liq deb hisoblanmaydi» (`not_recorded`) bo'ladi, hech qachon «to'liq» emas.
+- Foydalanuvchiga ketadigan javobdagi qamrov ustunga bog'liq emas.
+- DB testida ustunlar haqiqatan olib tashlab tekshirildi.
+
 ### Dry-run taqqoslash (chaqiruvsiz, taxminlar bilan)
 
 `node scripts/explain-benchmark.js` — «Long-document digest» bo'limi.
@@ -261,29 +299,30 @@ Bu PR'dan keyin har bir qatorda `finish_reason`, `truncated` va
 **Taxminlar** (o'lchanmagan):
 - 1 token = 2.5–3.5 belgi;
 - dayjest/qism nisbati: #420 uchun 0.5–0.9, ixcham uchun 0.15–0.33;
-- reasoning tokenlari hisobga olinmagan.
+- reasoning tokenlari hisobga olinmagan;
+- kirish tokeni — UTF-8 bayt bo'yicha yuqori chegara;
+- «qayta o'qish bilan» — 4 ta qo'shimcha chaqiruv sarflanadigan eng og'ir holat.
 
-| Hujjat | Tartib | Qismlar | Eng katta qism | Kutilgan dayjest tokeni / qism | 1 600 ga yetadimi | Chaqiruvlar (eng ko'pi) | comet: odatiy / eng ko'pi | luna: odatiy / eng ko'pi |
-|---|---|---|---|---|---|---|---|---|
-| 51 398 belgi | #420 | 5 | 12 000 | 1 714–4 320 | ha, quyi chegarada ham | 6 | $0.0400 | $0.0254 |
-| 51 398 belgi | yangi | 7 | 8 000 | 343–1 056 | yo'q (zaxira bilan) | 8 (12) | $0.0470 / $0.0623 | $0.0307 / $0.0419 |
-| 75 000 belgi | #420 | 7 | 12 000 | 1 714–4 320 | ha | 8 | $0.0560 | $0.0347 |
-| 75 000 belgi | yangi | 10 | 8 000 | 343–1 056 | yo'q | 11 (15) | $0.0663 / $0.0816 | $0.0425 / $0.0538 |
-| 120 000 belgi | #420 | 11 | 12 000 | 1 714–4 320 | ha | 12 | $0.0870 | $0.0528 |
-| 120 000 belgi | yangi | 13 | 9 508 | 407–1 255 | yo'q | 14 (18) | $0.0952 / $0.1119 | $0.0587 / $0.0705 |
+| Hujjat | Tartib | Qismlar | Eng katta qism | Dayjest tokeni / qism | 1 600 ga yetadimi | Chaqiruvlar: odatiy / qayta o'qish bilan | Kirish tokeni chegarasi: odatiy / qayta o'qish | Kutilgan dayjest output (hammasi) | Output cap jami: odatiy / qayta o'qish | comet: odatiy / qayta o'qish | luna: odatiy / qayta o'qish |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 51 398 | #420 | 5 | 12 000 | 1 714–4 320 | ha, quyi chegarada ham | 6 / 6 | 71 869 / 71 869 | 7 114–8 000 (cap) | 11 000 / 11 000 | $0.0400 / $0.0400 | $0.0254 / $0.0254 |
+| 51 398 | yangi | 7 | 8 000 | 343–1 056 | yo'q | 8 / 12 | 82 291 / 106 455 | 2 281–7 022 | 14 200 / 20 600 | $0.0470 / $0.0623 | $0.0307 / $0.0419 |
+| 120 000 | #420 | 11 | 12 000 | 1 714–4 320 | ha | 12 / 12 | 161 189 / 161 189 | 16 571–17 440 (cap) | 20 600 / 20 600 | $0.0870 / $0.0870 | $0.0528 / $0.0528 |
+| 120 000 | yangi | 13 | 9 508 | 407–1 255 | yo'q | 14 / 18 | 174 539 / 201 719 | 5 291–16 315 | 23 800 / 30 200 | $0.0952 / $0.1119 | $0.0587 / $0.0705 |
 
 Xarajat ustunlari narx jadvali bo'yicha **rejalash chegarasi**: haqiqiy sarf
-ham, kafolatlangan maksimum ham emas. Jonli sinovdagi haqiqiy hisoblangan
-xarajat ($0.0201) shu chegaradan ($0.0400) past.
+ham, kafolatlangan maksimum ham emas. VoiceLab narxi ro'yxat narxi, kredit
+tasdiqlanmagan. Jonli sinovdagi haqiqiy hisoblangan xarajat ($0.0201) shu
+chegaradan ($0.0400) past.
 
 **To'lov:**
-- Qismlar ko'paygani uchun chaqiruvlar soni va kirish tokenlari biroz oshadi.
-- Bir vaqtda 8 ta chaqiruv bo'lgani uchun 13 qism ikki to'lqinda o'qiladi (avval 11 qism bitta to'lqinda edi), shuning uchun kechikish oshishi mumkin.
-- Yuridik xulosada dayjest chaqiruvlari 11 tadan 13 tagacha (qayta o'qish bilan 17 tagacha) oshishi mumkin. So'rovning 30+6 chaqiruv chegarasiga yaqinlashsa, ortiqcha chaqiruv rad etiladi va qism «o'qilmadi» bo'ladi.
+- Qismlar ko'paygani uchun chaqiruvlar soni va kirish tokenlari oshadi.
+- 13 qism ikki to'lqinda o'qiladi (avval 11 qism bitta to'lqinda edi), shuning uchun kechikish oshishi mumkin.
+- Yuridik xulosada dayjest chaqiruvlari 11 tadan 13 tagacha, qayta o'qish bilan 17 tagacha oshishi mumkin. So'rovning 30+6 chaqiruv chegarasidan oshgani atomar rad etiladi va qism «o'qilmadi» bo'ladi.
 
 **Tasdiqlanmagan:**
-- Yangi format haqiqiy modelda chegaraga sig'adimi va dayjest sifati yetarlimi — buni faqat jonli sinov ko'rsatadi (pullik, ruxsat kerak).
-- Taklif: bitta 51 000 belgilik anonim hujjatda eski va yangi tartibni solishtirish. Rejalash chegarasi bo'yicha bu ~$0.11 dan oshmaydi.
+- Yangi format haqiqiy modelda chegaraga sig'adimi va dayjest sifati yetarlimi — buni faqat jonli sinov ko'rsatadi.
+- Reja: deploy tasdiqlangach, bitta uzun anonim hujjatni yangi tartibda sinash.
 
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
@@ -375,7 +414,13 @@ maydonlarida.
   - dayjest qonun havolalarini saqlashi;
   - qisman natija qoidasi;
   - chat parchalarida sahifa belgilari.
-- `tests/upload-no-ai.db.test.js` (14, haqiqiy Postgres) tekshiradi:
+- `tests/digest-budget.test.js` (8) tekshiradi:
+  - parallel chaqiruvlar limiti va xarajat rezervi (atomar);
+  - 120 s'dan keyin yangi chaqiruv yo'qligi, ishlayotganlar yozilishi;
+  - timeout = narx NULL;
+  - so'rov tugagandan keyin kelgan usage.
+- `tests/upload-no-ai.db.test.js` (15, haqiqiy Postgres) tekshiradi:
+  - qamrovning uch holati; `doc_coverage` va chaqiruv ustunlari olib tashlanganda qatorlar yo'qolmasligi va «yozilmagan» ko'rinishi;
   - oddiy foydalanuvchi: hech qism o'qilmasa 422, limit `released`, har qism ledger'da (`document_digest`, `finish_reason`, `truncated`, `call_detail`, xarajat), `ai_requests.doc_coverage`; to'liq o'qilganda digest va final alohida bosqich;
   - tasdiq (409);
   - birliklar;

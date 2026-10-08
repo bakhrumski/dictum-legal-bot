@@ -15334,10 +15334,12 @@
             }
             var cov = s.service_coverage;
             if (cov) {
-                lines.push('Xizmat qamrovi: ' + (cov.mode === 'digest'
-                    ? cov.read + '/' + cov.parts + ' qism to\'liq o\'qildi' + (cov.cut ? ', ' + cov.cut + ' kesildi' : '') + (cov.failed ? ', ' + cov.failed + ' xato' : '') +
-                      (cov.finalRun ? ' · yakuniy javob yaratildi' : ' · yakuniy javob yaratilmadi') + (cov.fullyRead ? '' : ' · hujjat to\'liq o\'qilmadi')
-                    : 'to\'liq matn'));
+                // technical coverage: which parts reached the model whole - not a semantic or legal check
+                var st = { all_read: 'barcha qismlar o\'qildi', some_excluded: 'ayrim qismlar chiqarildi', none_read: 'hech bir qism o\'qilmadi', not_recorded: 'yozilmagan — to\'liq deb hisoblanmaydi' }[cov.status] || 'noma\'lum';
+                lines.push('Xizmat qamrovi (texnik, mazmun tasdig\'i emas): ' + st + (cov.mode === 'digest'
+                    ? ' · ' + cov.read + '/' + cov.parts + ' qism' + (cov.cut ? ', ' + cov.cut + ' kesildi' : '') + (cov.failed ? ', ' + cov.failed + ' xato' : '') +
+                      (cov.finalRun ? ' · yakuniy javob yaratildi' : ' · yakuniy javob yaratilmadi')
+                    : (cov.mode === 'full_text' ? ' · to\'liq matn berildi' : '')));
             }
             if (s.cost_accuracy) {
                 lines.push('Xarajat aniqligi: ' + Object.keys(s.cost_accuracy.by_source || {}).map(function (k) { return (AU_SOURCE[k] || k) + ' ' + s.cost_accuracy.by_source[k]; }).join(', ') +
