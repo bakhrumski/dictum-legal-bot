@@ -74,13 +74,19 @@ function chunkSizeFor(length, { chunk = CHUNK, overlap = OVERLAP, maxChunks = MA
  */
 function digestChunks(text, { chunk, overlap = OVERLAP, maxChunks = MAX_CHUNKS } = {}) {
   const size = chunk || chunkSizeFor(String(text || '').length, { overlap, maxChunks });
-  const snapped = cutChunks(text, { chunk: size, overlap, maxChunks, snap: true });
   const fixed = cutChunks(text, { chunk: size, overlap, maxChunks, snap: false });
-  // ending chunks at page or paragraph breaks must never cost coverage or an
-  // extra AI call: if it would leave the end unread or need one more chunk,
-  // cut at fixed lengths (as before)
-  return snapped.covered && snapped.chunks.length <= fixed.chunks.length ? snapped : fixed;
+  // ending chunks at page, paragraph, clause or line breaks must never cost
+  // coverage or an extra AI call: of the layouts that cover the text in no
+  // more chunks than fixed lengths, the one that cuts the fewest lines wins
+  // (2026-10-08: a clause cut in two is reported, coverage read_with_splits)
+  const ok = [cutChunks(text, { chunk: size, overlap, maxChunks, snap: true }), cutChunks(text, { chunk: size, overlap, maxChunks, snap: 'forward' }), fixed]
+    .filter(v => v.covered && v.chunks.length <= fixed.chunks.length);
+  const splits = v => v.chunks.filter(c => c.splitAtEnd).length;
+  return ok.reduce((best, v) => (splits(v) < splits(best) ? v : best), ok[0] || fixed);
 }
+
+// a chunk may run on to the end of its line, by at most this share of its size
+const LINE_END_SLACK = 0.05;
 
 function cutChunks(text, { chunk, overlap, maxChunks, snap }) {
   const s = String(text || '');
@@ -88,7 +94,7 @@ function cutChunks(text, { chunk, overlap, maxChunks, snap }) {
   let start = 0;
   while (start < s.length && out.length < maxChunks) {
     let end = Math.min(s.length, start + chunk);
-    if (snap && end < s.length) {
+    if (snap === true && end < s.length) {
       // end at the last page mark or blank line in the last fifth of the chunk
       const window = s.slice(start + Math.floor(chunk * 0.8), end);
       const lastPage = window.lastIndexOf('\n[Sahifa ');
@@ -100,13 +106,39 @@ function cutChunks(text, { chunk, overlap, maxChunks, snap }) {
       const cut = lastPage >= 0 ? lastPage : lastPara >= 0 ? lastPara : lastClause;
       if (cut >= 0) end = start + Math.floor(chunk * 0.8) + cut + 1;
     }
+    if (snap && end < s.length && s[end - 1] !== '\n') {
+      // still inside a line: run on to its end when that is near (never
+      // fewer characters, so never one more chunk)
+      const nl = s.indexOf('\n', end);
+      if (nl >= 0 && nl + 1 - end <= Math.floor(chunk * LINE_END_SLACK)) end = nl + 1;
+    }
     const body = s.slice(start, end);
-    out.push({ index: out.length, start, end, text: body, pages: pagesSpanned(s, start, end) });
+    // a cut inside a line: a clause (or sentence) continues in the next part
+    out.push({ index: out.length, start, end, text: body, pages: pagesSpanned(s, start, end), ...splitAt(s, end) });
     if (end >= s.length) break;
     start = Math.max(end - overlap, start + 1);
   }
   const last = out[out.length - 1];
   return { chunks: out, covered: !!last && last.end >= s.length, totalChars: s.length };
+}
+
+/**
+ * Does a cut at `end` fall inside a line? Then the clause on that line is
+ * read in two parts (its start in one, the rest in the next): no text is
+ * lost (the parts overlap), but the reading is not a whole-clause reading
+ * and is reported as such. `splitRef` is the clause number of that line,
+ * when it has one.
+ */
+function splitAt(s, end) {
+  if (end >= s.length || end <= 0 || s[end - 1] === '\n' || s[end] === '\n') return { splitAtEnd: false };
+  const lineStart = s.lastIndexOf('\n', end - 1) + 1;
+  const ref = (s.slice(lineStart, lineStart + 40).match(/^\s*(\d+(?:\.\d+)*)\.?\s/u) || [])[1] || null;
+  return { splitAtEnd: true, splitRef: ref };
+}
+
+/** The clauses a digest read in pieces, once each: "1.1-band", "3-qism oxiridagi gap". */
+function splitLabels(digest) {
+  return [...new Set((digest.splits || []).map(x => (x.ref ? `${x.ref}-band` : `${x.after}-qism oxiridagi gap`)))].join(', ');
 }
 
 /** Pages a [start, end) slice of `text` belongs to (from the marks before and inside it). */
@@ -141,7 +173,7 @@ const DIGEST_SYSTEM = [
   '- annexes and tables: one line each, naming what it lists and its totals or key rows;',
   '- unfilled template fields (blank lines, "____", "[...]", "XX") as "TO\'LDIRILMAGAN: <field>"; say once if the excerpt looks like a template;',
   '- the page: when the excerpt has "[Sahifa N]" lines, end each line with "(N-sahifa)"; never guess a page or a clause number.',
-  'Leave out signatures, bank details, a definition that only repeats one already listed in this excerpt, and wording that creates no right or duty - but never the criteria of a defined term. A clause that repeats another with only its number or a name changed is one line naming all its clause numbers. Leave out <who> when it is the same as on the line above.',
+  'Leave out signatures, bank details, a definition that only repeats one already listed in this excerpt, and wording that creates no right or duty - but never the criteria of a defined term. A clause that repeats another word for word except its own clause number is one line naming all its clause numbers; if any amount, date, percentage, period, name or clause reference differs, they stay separate lines. Leave out <who> when it is the same as on the line above.',
   'Text under "[KONTEKST]" was digested with the previous excerpt: read it only to understand what follows, and list nothing from it.',
   'Keep different acts and states apart: filing an application is not registration, and registration is not a right; a deadline to reply is not a deadline to conclude the deal; "no case or application was found" says nothing about financial health or anything not checked; "not identified" is not "does not exist"; damage that "may" occur is not damage caused; a threshold inside a definition is not a penalty; "and" is not "or". Keep which act must come first ("before", "after", "on condition that").',
   'Do not interpret, judge, add consequences or merge separate items. No preamble. Keep the digest compact - about a third of the excerpt\'s length - but a complete condition wins over a short line.',
@@ -171,7 +203,10 @@ function coverageNote({ totalChars, digest = null, pages = [], empty = [], place
   const gaps = missing.length
     ? ` DIQQAT: ${missing.join(', ')} o'qilmadi yoki uzunlik chegarasida kesildi — bu qismlar senga umuman berilmadi (kesilgan parcha ham ishlatilmadi). Javob boshida buni aniq ayt, u qismlar haqida xulosa chiqarma va ularga havola qilma.`
     : '';
-  return `QAMROV: hujjat ${totalChars} belgi; u ${digest.chunks} qismga bo'linib, har bir qismdan qisqa dayjest olindi — bu to'liq matn emas.${digest.covered ? '' : ' Hujjat oxiri qamrovdan tashqarida qoldi.'}${gaps}${pageInfo}${pagesNote}${emptyInfo}${tplInfo}`;
+  const splits = (digest.splits || []).length
+    ? ` DIQQAT: ${splitLabels(digest)} ikki qism chegarasida bo'lingan — boshi bir qismda, davomi keyingisida. Ularni bitta band sifatida o'qi; sharti, istisnosi yoki oqibatini ajratib yuborma, bandning qismlarda yo'q joyini to'ldirma.`
+    : '';
+  return `QAMROV: hujjat ${totalChars} belgi; u ${digest.chunks} qismga bo'linib, har bir qismdan qisqa dayjest olindi — bu to'liq matn emas.${digest.covered ? '' : ' Hujjat oxiri qamrovdan tashqarida qoldi.'}${gaps}${splits}${pageInfo}${pagesNote}${emptyInfo}${tplInfo}`;
 }
 
 /** The explanation instructions: the general rules A-F, no document-specific text. */
@@ -448,8 +483,11 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
   if (scopeStats && scopeStats.dropped) {
     notes.push(`Saqlanadigan shartlar: ${scopeStats.candidates} ta nomzoddan ${scopeStats.selected} tasi modelga alohida berildi, ${scopeStats.dropped} tasi ro'yxat chegarasiga (${scopeStats.limits.max} qator / ${scopeStats.limits.maxChars} belgi) sig'madi — ular faqat hujjat matni yoki dayjest orqali berilgan; qo'lda tekshiring.`);
   }
+  if (digest && (digest.splits || []).length) {
+    notes.push(`Qamrov — qo'lda tekshirish kerak: ${splitLabels(digest)} hujjat qismlari chegarasida bo'lingan va bo'laklarda o'qilgan (matn yo'qolmagan, lekin bu bandning shartlari bir butun holda o'qilmagan).`);
+  }
   if (ai.removed) notes.push("«AI izohi» bo'sh yoki to'ldiruvchi edi — ko'rsatilmadi.");
-  if (!bodyNote && !aiNote && !scopeMissing.length && !(scopeStats && scopeStats.dropped)) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
+  if (!bodyNote && !aiNote && !scopeMissing.length && !(scopeStats && scopeStats.dropped) && !(digest && (digest.splits || []).length)) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
   if (partial.length) text = `⚠️ **Qisman natija — to'liq tahlil emas:** ${partial.join('; ')}.\n\n${text}`;
   text += `\n\n**Avtomatik tekshiruv (AI emas):** ${CHECK_SCOPE}\n${notes.map(n => `- ${n}`).join('\n')}`;
   const check = {
@@ -469,6 +507,12 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
 // source does not use is a reason to check by hand - never proof that the
 // claim is wrong, and never removed.
 const lowerNorm = t => String(t || '').toLowerCase().replace(/[ʻʼ‘’`ʹ]/gu, "'").replace(/\s+/gu, ' ');
+/**
+ * Two lines are one repeated clause only when nothing but their own list
+ * number differs: an amount, date, percentage, period, name or clause
+ * reference that differs keeps them apart (2026-10-08, #423 review).
+ */
+const repeatKey = line => lowerNorm(String(line || '').replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '')).trim();
 const STATUS_PHRASES = [
   { id: 'not_registered', label: "ro'yxatdan o'tmagan", re: /ro'yxatdan o'(?:tmagan|tkazilmagan)|ro'yxatga olinmagan|не зарегистрирован|регистраци\p{L}* не (?:проведен|произведен)/u },
   { id: 'not_filed', label: 'ariza berilmagan', re: /ariza (?:berilmagan|bermagan|topshirilmagan)|заявк\p{L}* не (?:подан|подава)|не пода\p{L}* заявк/u },
@@ -649,8 +693,9 @@ function scopeSelection(text, { max = 40, maxLen = 320, maxChars = 6000, given =
     const groups = SCOPE_GROUPS.filter(g => g.re.test(n)).length;
     const rel = p.length < 1200 ? relations.relationScore(p) : 0;
     if (!groups && rel < 2) return;
-    // a boilerplate clause repeated under other numbers is one line
-    const key = n.replace(/[^\p{L}]+/gu, ' ').trim();
+    // a boilerplate clause repeated under other numbers is one line - only
+    // when nothing but its list number differs
+    const key = repeatKey(p);
     if (seen.has(key)) return;
     seen.add(key);
     // more scope words, relations and a figure (amount, share, period) rank
@@ -818,7 +863,7 @@ const DIGEST_LIMITS = Object.freeze({ concurrency: 8, maxExtraCalls: 4, timeMs: 
 
 // A part's digest size, predicted with no AI (2026-10-08, #423 review): one
 // line per distinct clause or key line (a clause repeated with only its
-// number changed counts once), at DIGEST_TOKENS_PER_ITEM - an assumption
+// list number changed counts once), at DIGEST_TOKENS_PER_ITEM - an assumption
 // (about 30 words of Uzbek with the field labels), not a measurement. A part
 // predicted above preSplitAt x the cap is read as two halves from the start:
 // one extra call, instead of a cut call thrown away plus two re-reads. It
@@ -835,7 +880,7 @@ function predictDigestTokens(text) {
     if (t.length < 15 || /^\[(?:Sahifa|KONTEKST)/u.test(t)) continue;
     const numbered = /^\d+(?:\.\d+)*\.\s/u.test(t);
     if (!numbered && (t.length > 600 || !/\s/u.test(t) || !relations.relationScore(t))) continue;
-    const key = lowerNorm(t).replace(/[^\p{L}]+/gu, ' ').trim();
+    const key = repeatKey(t);
     if (seen.has(key)) continue;
     seen.add(key);
     // a long clause may need a second line
@@ -865,7 +910,7 @@ function halvesOf(u, full) {
   const near = [u.text.lastIndexOf('\n\n', mid + 800), u.text.lastIndexOf('\n', mid + 400)].find(i => i > mid - 1500 && i > 0);
   const cut = near > 0 ? near + 1 : mid;
   return [
-    { ...u, label: `${u.label}a`, end: u.start + cut, text: u.text.slice(0, cut), pages: pagesSpanned(full, u.start, u.start + cut), half: true },
+    { ...u, label: `${u.label}a`, end: u.start + cut, text: u.text.slice(0, cut), pages: pagesSpanned(full, u.start, u.start + cut), half: true, ...splitAt(full, u.start + cut) },
     { ...u, label: `${u.label}b`, start: u.start + cut, text: u.text.slice(cut), pages: pagesSpanned(full, u.start + cut, u.end), half: true, context: 0 },
   ];
 }
@@ -942,13 +987,19 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
     (r.status === 'cut' ? truncated : failed).push(r.u);
     return `${head}\n(BU QISM O'QILMADI${r.status === 'cut' ? ' — dayjest uzunlik chegarasida kesildi, kesilgan parcha ishlatilmadi' : ''}. Undagi bandlar haqida xulosa chiqarilmaydi.)`;
   });
+  const splits = results.filter(r => r.u.splitAtEnd).map(r => ({ after: r.u.label, ref: r.u.splitRef || null }));
+  // a clause read in pieces is named in the digest itself, so the
+  // explanation, the opinion and the chat analysis all see it
+  const splitNote = splits.length ? `\n\n(DIQQAT: ${splitLabels({ splits })} qismlar chegarasida bo'lingan — boshi bir qismda, davomi keyingisida; uni bitta band sifatida o'qing, sharti va istisnosini ajratmang.)` : '';
   const body = 'HUJJAT DAYJESTI (har bir qismdan qisqa ajratma; to\'liq matn emas):\n\n' + blocks.join('\n\n')
-    + (plan.covered ? '' : '\n\n(HUJJAT OXIRI DAYJESTGA KIRMADI)');
+    + (plan.covered ? '' : '\n\n(HUJJAT OXIRI DAYJESTGA KIRMADI)') + splitNote;
   return {
     text: body, chunks: n, failed, truncated, covered: plan.covered, totalChars: plan.totalChars,
     parts: results.map(r => ({ part: r.u.label, pages: r.u.pages, chars: r.u.text.length, status: r.status, retried: !!r.retried, preSplit: !!r.u.preSplit, reason: r.reason || null })),
     readParts: results.filter(r => r.status === 'read').length,
     calls, extraCalls, preSplits: pre.size, elapsedMs: Date.now() - started, policy: 'cut_parts_not_used',
+    // clauses read in two parts (a cut inside a line): no text lost, but not a whole-clause reading
+    splits,
   };
 }
 
@@ -962,10 +1013,13 @@ function digestUnusable(digest) {
 // whole is not a semantic or legal confirmation of anything in it.
 const COVERAGE_MEANING = 'technical';
 /** all_read | some_excluded | none_read */
+// read_with_splits: every part read whole, but a clause was cut between two
+// parts (read in pieces) - never shown as a complete reading
 function coverageStatus(digest) {
   if (!digest) return 'all_read';
   if (digestUnusable(digest)) return 'none_read';
-  return unreadParts(digest).length ? 'some_excluded' : 'all_read';
+  if (unreadParts(digest).length) return 'some_excluded';
+  return (digest.splits || []).length ? 'read_with_splits' : 'all_read';
 }
 
 function coverageSummary(digest, { finalRun, mode } = {}) {
@@ -975,7 +1029,7 @@ function coverageSummary(digest, { finalRun, mode } = {}) {
     parts: digest.parts.length, chunks: digest.chunks, read: digest.readParts,
     cut: digest.truncated.length, failed: digest.failed.length, covered: digest.covered,
     fullyRead: unreadParts(digest).length === 0, finalRun: !!finalRun,
-    digestCalls: digest.calls, extraCalls: digest.extraCalls, preSplits: digest.preSplits || 0, elapsedMs: digest.elapsedMs, policy: digest.policy,
+    digestCalls: digest.calls, extraCalls: digest.extraCalls, preSplits: digest.preSplits || 0, clauseSplits: (digest.splits || []).length, elapsedMs: digest.elapsedMs, policy: digest.policy,
   };
 }
 
@@ -1053,7 +1107,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
     trace: { mode: full ? 'full_text' : 'digest', digest: d ? d.text : null, scopeLines: scope, scopeSent: sel.lines, scopeDropped: sel.droppedLines,
       scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, savedChars: sel.savedChars }, conflictCandidates: conflicts, answer: raw },
     coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
-      chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated,
+      chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated, clauseSplits: d ? (d.splits || []) : [],
       placeholders: placeholders.count, finalRun: true, summary: coverageSummary(d, { finalRun: true }),
       scopeLines: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, limits: sel.limits },
       // the document was not read whole: not the service (released by the route)
@@ -1066,5 +1120,5 @@ module.exports = {
   PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, DIGEST_TOKENS_PER_ITEM, predictDigestTokens, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
   markPages, pagesIn, emptyPages, contentChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
   placeholdersIn, coverageNote, coverageStatus, explainSystem,
-  unreadParts, scopeLines, scopeSelection, carriedIn, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
+  unreadParts, splitLabels, scopeLines, scopeSelection, carriedIn, repeatKey, splitAt, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
 };

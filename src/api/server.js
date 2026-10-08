@@ -7519,6 +7519,11 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
       }
     }
 
+    const splitClauses = docDigest ? require('../rag/document-explain').splitLabels(docDigest) : '';
+    if (splitClauses) {
+      // read whole, but a clause was read in pieces: said, never shown as a whole reading
+      html = `<p><strong>⚠️ Qamrov:</strong> ${splitClauses.replace(/[<>&]/g, '')} hujjat qismlari chegarasida bo'lingan va bo'laklarda o'qilgan; bu bandni asl matn bilan qo'lda tekshiring.</p>` + html;
+    }
     if (unreadParts.length) {
       html = `<p><strong>⚠️ Qisman xulosa — to'liq emas:</strong> hujjatning ${unreadParts.map(x => String(x).replace(/[<>&]/g, '')).join(', ')} o'qilmadi; xulosa u qismlarni hisobga olmaydi. Limit qaytarildi — hujjatni qayta yuborib, to'liq xulosa olishingiz mumkin.</p>` + html;
     }

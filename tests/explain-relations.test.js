@@ -242,6 +242,66 @@ const kinds = text => ex.finishExplanation({ reply: text, source: doc }).check;
     assert.strictEqual(code, 3);
   });
 
+  await test('repeated clauses are joined only when nothing but their list number differs: an amount, date, percentage, period, name or clause reference keeps them apart', () => {
+    const base = "Ijarachi oylik haqni 9 000 000 so'm miqdorida har oyning 5-sanasigacha to'laydi, kechiksa 0,1 foiz penya va 10 kun ichida xabar, 4.2-bandga muvofiq «Alfa» MChJga.";
+    const variants = {
+      same: base,
+      amount: base.replace('9 000 000', '12 000 000'),
+      date: base.replace('5-sanasigacha', '10-sanasigacha'),
+      percent: base.replace('0,1 foiz', '0,2 foiz'),
+      period: base.replace('10 kun', '15 kun'),
+      reference: base.replace('4.2-bandga', '4.3-bandga'),
+      name: base.replace('«Alfa»', '«Beta»'),
+    };
+    const text = Object.values(variants).map((v, i) => `${i + 1}.1. ${v}`).join('\n') + `\n9.1. ${base}`;
+    const sel = ex.scopeSelection(text);
+    // 8 lines: 1.1 and 9.1 differ only in their number -> one; the six others stay
+    assert.strictEqual(sel.candidates, 7, sel.full.join('\n'));
+    for (const k of ['12 000 000', '10-sanasigacha', '0,2 foiz', '15 kun', '4.3-bandga', '«Beta»']) assert.ok(sel.full.some(l => l.includes(k)), k);
+    assert.strictEqual(ex.repeatKey('1.1. Tomon 5 kun ichida.'), ex.repeatKey('27.4. Tomon 5 kun ichida.'));
+    assert.notStrictEqual(ex.repeatKey('1.1. Tomon 5 kun ichida.'), ex.repeatKey('1.1. Tomon 6 kun ichida.'));
+    // the digest size estimate counts them the same way
+    assert.strictEqual(ex.predictDigestTokens(text), 7 * ex.DIGEST_TOKENS_PER_ITEM);
+    // the trace keeps both clauses of a pair that differs in a figure
+    const refs = rel.relationTrace({ source: text, answer: 'x' }).map(r => r.ref);
+    assert.ok(refs.includes('1.1') && refs.includes('2.1') && !refs.includes('9.1'), refs.join(','));
+    // the digest prompt says the same
+    assert.ok(ex.DIGEST_SYSTEM.includes('word for word except its own clause number is one line naming all its clause numbers; if any amount, date, percentage, period, name or clause reference differs, they stay separate lines'));
+    assert.ok(!ex.DIGEST_SYSTEM.includes('or a name changed'));
+  });
+
+  await test('one clause longer than a part: no character lost, and the reading is reported as split - never as a whole reading', async () => {
+    const words = Array.from({ length: 3000 }, (_, i) => `soz${i}`).join(' ');
+    const long = `1.1. Ijarachi ${words} bundan mustasno.\n2.1. Oxirgi band 5 kun ichida bajariladi.`;
+    const plan = ex.digestChunks(long);
+    assert.ok(plan.covered);
+    const seen = new Uint8Array(long.length);
+    for (const c of plan.chunks) { assert.strictEqual(c.text, long.slice(c.start, c.end)); seen.fill(1, c.start, c.end); }
+    assert.strictEqual(seen.reduce((a, b) => a + b, 0), long.length, 'every character is in some part');
+    const cuts = plan.chunks.filter(c => c.splitAtEnd);
+    assert.ok(cuts.length >= 1 && cuts.every(c => c.splitRef === '1.1'), JSON.stringify(cuts.map(c => [c.index, c.splitRef])));
+    // the digest, the coverage and the answer say so
+    const ai = async (m) => (/^Excerpt /u.test(m[1].text) ? { text: '- band', provider: 'stub' } : { text: 'Izoh.', provider: 'stub' });
+    const d = await ex.buildDigest(long, { callAI: ai });
+    assert.ok(d.splits.length >= 1 && d.splits.every(x => x.ref === '1.1'));
+    assert.strictEqual(ex.coverageStatus(d), 'read_with_splits');
+    assert.strictEqual(ex.coverageSummary(d, { finalRun: true }).clauseSplits, d.splits.length);
+    const calls = [];
+    const r = await ex.explainDocument({ documentText: long, langName: 'Uzbek', callAI: async (m, o) => { calls.push(m); return ai(m, o); }, digest: t => ex.buildDigest(t, { callAI: ai }) });
+    assert.strictEqual(r.coverage.status, 'read_with_splits');
+    assert.notStrictEqual(r.coverage.status, 'all_read');
+    assert.ok(calls[calls.length - 1][1].text.includes("1.1-band ikki qism chegarasida bo'lingan"), 'the final model is told');
+    assert.ok(r.reply.includes("Qamrov — qo'lda tekshirish kerak: 1.1-band hujjat qismlari chegarasida bo'lingan"), r.reply.slice(-500));
+    // every part was read whole: nothing unread, so not a partial service
+    assert.deepStrictEqual(r.coverage.unread, []);
+    // a normal document whose lines fit: no split, all_read as before
+    const lease = ex.markPages(fixtures.find(f => f.id === 'long-lease').pages);
+    assert.ok(ex.digestChunks(lease).chunks.every(c => !c.splitAtEnd));
+    // the dashboard names the state and never as complete
+    const page = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+    assert.ok(page.includes("read_with_splits: 'qismlar o\\'qildi, lekin band(lar) qismlar chegarasida bo\\'lingan — to\\'liq deb hisoblanmaydi'"));
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();
