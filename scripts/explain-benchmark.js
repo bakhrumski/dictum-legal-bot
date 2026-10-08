@@ -159,7 +159,10 @@ const DIGEST_SYSTEM_420 = [
   'Do not interpret, judge, add consequences or merge separate items. Do not turn "not identified" into "does not exist". No preamble.',
 ].join('\n');
 
-const ASSUME = { charsPerToken: [2.5, 3.5], ratio420: [0.5, 0.9], ratioCompact: [0.15, 0.33] };
+// ratioCompact: the digest asks for about a third; since 2026-10-08 a rule
+// with several conditions may take the words it needs, so the upper end is
+// put at 0.40 rather than 0.33
+const ASSUME = { charsPerToken: [2.5, 3.5], ratio420: [0.5, 0.9], ratioCompact: [0.15, 0.40] };
 function digestLayout(len, which) {
   const text = 'x'.repeat(len);
   if (which === '420') {
@@ -188,7 +191,7 @@ function digestCompare(len) {
       inputTokensBound: inTok(calls), inputTokensBoundWorst: inTok(calls.concat(reread)),
       digestOutputExpected: [outLow, outHigh], outputCapTotal: calls.reduce((t, c) => t + c.maxTokens, 0),
       outputCapTotalWorst: calls.concat(reread).reduce((t, c) => t + c.maxTokens, 0),
-      reachesCap: tokLow >= cap ? 'yes, even at the low end' : tokHigh >= cap ? 'possible at the high end' : 'no (with margin)',
+      reachesCap: tokLow >= cap ? 'yes, even at the low end' : tokHigh >= cap ? 'possible at the high end' : tokHigh >= cap * 0.85 ? 'no, but close at the high end' : 'no (with margin)',
       calls: calls.length, worstCaseCalls: calls.length + reread.length,
       ...Object.fromEntries(MODELS.map(m => [m, { usual: bound({ calls }, m).usd, worstCase: bound({ calls: calls.concat(reread) }, m).usd }])),
     };
@@ -197,6 +200,25 @@ function digestCompare(len) {
 }
 const DIGEST_DOCS = [{ label: '13-page DOCX (#420 live run size)', chars: 51398 }, { label: '30 pages', chars: 75000 }, { label: 'paid job maximum', chars: 120000 }];
 const digestRows = DIGEST_DOCS.map(d => ({ ...d, ...digestCompare(d.chars) }));
+
+// ── Scope lines and contradiction candidates (2026-10-08): what they add ──
+// Both are picked with no AI and only add input to the one final call; the
+// longer digest prompt adds input to every digest call. Bound = UTF-8 bytes
+// (an upper bound on tokens), priced at the list price - planning figures.
+const PROMPT_421_BYTES = 1945; // DIGEST_SYSTEM as merged in #421, UTF-8 bytes (measured from 304589c)
+function scopeCost(label, text) {
+  const scope = ex.scopeLines(text);
+  const pairs = ex.conflictCandidates(text);
+  const finalBytes = Buffer.byteLength(scope.join('\n')) + Buffer.byteLength(pairs.map(p => p.join(' <> ')).join('\n')) + 400;
+  const parts = ex.contentChars(text) > ex.EXPLAIN_FULL_TEXT_MAX ? ex.digestChunks(text).chunks.length : 0;
+  const digestBytes = parts * Math.max(0, Buffer.byteLength(ex.DIGEST_SYSTEM) - PROMPT_421_BYTES);
+  const usd = m => ((finalBytes + digestBytes) * (pricing.pricingSnapshot(m) || { in: 0 }).in) / 1e6;
+  return { label, chars: ex.contentChars(text), scopeLines: scope.length, conflictPairs: pairs.length, finalExtraBytes: finalBytes, digestCalls: parts,
+    digestExtraBytes: digestBytes, ...Object.fromEntries(MODELS.map(m => [m, usd(m)])) };
+}
+const scopeRows = [
+  ...fixtures.filter(f => f.traceChecks || f.id.startsWith('long-')).map(f => scopeCost(f.id, f.pages.join('\n\n'))),
+];
 
 const real = syntheticRealDoc(REAL_PAGES);
 const realNew = Object.fromEntries(MODELS.map(m => [m, bound(plan(real, 'new'), m).usd]));
@@ -218,7 +240,7 @@ if (args.includes('--prompts')) {
 }
 
 if (args.includes('--json')) {
-  console.log(JSON.stringify({ rows, sizes, digest: { assumptions: ASSUME, rows: digestRows }, real: { pages: REAL_PAGES, old: realOld, new: realNew }, repeats: REPEATS, realDocs: REAL_DOCS, budget }, null, 2));
+  console.log(JSON.stringify({ rows, sizes, digest: { assumptions: ASSUME, rows: digestRows }, scopeCost: scopeRows, real: { pages: REAL_PAGES, old: realOld, new: realNew }, repeats: REPEATS, realDocs: REAL_DOCS, budget }, null, 2));
 } else {
   const fmt = v => (typeof v === 'number' ? `$${v.toFixed(4)}` : v);
   console.log('DRY RUN - no AI call. Planning figures from src/ai/model-pricing.js (callCostBound): not measured spend, not a guaranteed maximum.\n');
@@ -239,6 +261,9 @@ if (args.includes('--json')) {
       `${v.calls} / ${v.worstCaseCalls}`, `${v.inputTokensBound} / ${v.inputTokensBoundWorst}`, `${v.digestOutputExpected[0]}-${v.digestOutputExpected[1]}`,
       `${v.outputCapTotal} / ${v.outputCapTotalWorst}`, ...MODELS.map(m => `${fmt(v[m].usual)} / ${fmt(v[m].worstCase)}`)].join(' | '));
   }
+  console.log('\nScope lines + contradiction candidates (no AI; input only, no new call, no cap raised) - extra input bound per document:');
+  console.log(['document', 'chars', 'scope lines', 'conflict pairs', 'final call +bytes', 'digest calls', 'digest calls +bytes (longer prompt)', ...MODELS.map(m => `${m} +$ (bound)`)].join(' | '));
+  for (const r of scopeRows) console.log([r.label, r.chars, r.scopeLines, r.conflictPairs, r.finalExtraBytes, r.digestCalls, r.digestExtraBytes, ...MODELS.map(m => fmt(r[m]))].join(' | '));
   console.log(`\nA ${REAL_PAGES}-page document (~${REAL_PAGES * 2500} chars), bound per run: old ${MODELS.map(m => `${m} ${fmt(realOld[m])}`).join(', ')}; new ${MODELS.map(m => `${m} ${fmt(realNew[m])}`).join(', ')}`);
   console.log(`\nBenchmark budget (old + new, ${REPEATS} repeats; eval set + ${REAL_DOCS} anonymised real documents of ${REAL_PAGES} pages):`);
   for (const m of MODELS) console.log(`  ${m}: eval set ${fmt(budget[m].evalSetUsd)} + real docs ${fmt(budget[m].realDocsUsd)} = ${fmt(budget[m].totalUsd)} (planning figure)`);

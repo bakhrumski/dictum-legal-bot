@@ -82,7 +82,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
   });
 
   await test('short documents: the model gets the full text with every key clause, page marks and a coverage note', async () => {
-    for (const f of fixtures.filter(x => !x.id.startsWith('long-'))) {
+    for (const f of fixtures.filter(x => ex.contentChars(ex.markPages(x.pages)) <= ex.EXPLAIN_FULL_TEXT_MAX)) {
       const ai = recorder();
       const text = ex.markPages(f.pages);
       const r = await ex.explainDocument({ documentText: text, langName: 'Uzbek', callAI: ai, digest: digestWith(ai) });
@@ -208,7 +208,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     const big = ex.digestChunks('x'.repeat(120400));
     assert.ok(big.covered && big.chunks.length <= 13);
     for (const rule of ['COMPACT', 'one line per item', 'payment terms', 'cumulative or aggregate liability cap', 'contradict each other',
-      'annexes and tables', "TO'LDIRILMAGAN", 'filing an application is not registration', 'under about a third of the excerpt']) {
+      'annexes and tables', "TO'LDIRILMAGAN", 'filing an application is not registration', 'a complete condition wins over a short line', 'conditions precedent', 'never the criteria of a defined term', 'in addition to each other or instead of each other', 'jumladan']) {
       assert.ok(ex.DIGEST_SYSTEM.includes(rule), rule);
     }
     const p = ex.explainSystem('Uzbek');

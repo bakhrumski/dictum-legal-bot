@@ -324,6 +324,96 @@ chegaradan ($0.0400) past.
 - Yangi format haqiqiy modelda chegaraga sig'adimi va dayjest sifati yetarlimi — buni faqat jonli sinov ko'rsatadi.
 - Reja: deploy tasdiqlangach, bitta uzun anonim hujjatni yangi tartibda sinash.
 
+## 4c. Qamrov so'zlari, oldingi shartlar, mezonlar, oqibatlar va zid bandlar (2026-10-08, #421 jonli sinovidan keyin)
+
+**Jonli sinov natijasi:**
+- 7 ta dayjest qismining hammasi `finish: stop`, texnik qamrov 7/7.
+- 8 ta chaqiruv, $0.0195 hisoblangan xarajat, 51.3 soniya.
+- Lekin yakuniy javobda 6 ta muhim shart yo'qolgan.
+
+### Ma'no qaysi bosqichda yo'qoldi — nimani bilaman va nimani bilmayman
+
+**Production dayjest matni hech qayerda saqlanmaydi.** Ledger faqat usage
+yozadi; server xotirasida esa bir soatlik kesh bor. Shuning uchun aynan shu
+hujjat uchun manba → dayjest → javob zanjirini **ko'ra olmadim**. Quyidagisi
+promptlar va tuzilma bo'yicha **ehtimoliy** tahlil:
+
+| Holat | Ehtimoliy bosqich | Sabab (#421 dagi qoidalar) |
+|---|---|---|
+| Qolgan summa «barcha ishtirokchilar, jumladan Investor» o'rtasida | dayjest, keyin yakuniy javob | Dayjest «qator ~30 so'z», «faqat hal qiluvchi so'zlarni keltir» der edi. «jumladan» qamrov so'zi alohida nomlanmagan edi |
+| «E'lon qilingan **va** to'lanmagan» dividendlar | dayjest | Ikki shart birlashtirilib, «to'lanmagan»ga qisqartirilishi mumkin edi; «va»/«yoki» qoidasi yo'q edi |
+| Sezilarli aktiv mezonlari | dayjest | «Takroriy ta'riflarni tashla» qoidasi mezonli ta'rifni ham tashlab yuborishga yo'l qo'yardi |
+| Birinchi transh oldidan davlat ro'yxatidan o'tkazish | dayjest yoki yakuniy javob | «Oldingi shart» toifasi yo'q edi, «oldidan» so'zi umumiy «shart» ichida yo'qolardi |
+| Qaytarish + xarajat/zarar + alohida 25% jarima | dayjest va yakuniy javob | Bitta qisqa qator «qaytarish va jarima»ga siqiladi. Oqibatlar qo'shiladimi yoki o'rnini bosadimi — bu qoida yo'q edi |
+| O'zaro nomuvofiq bandlar | **tuzilmaviy** | Zid bandlar odatda turli dayjest qismlariga tushadi. Har qism faqat o'zini ko'radi, shuning uchun ziddiyatni hech bir qism ko'ra olmaydi. Yakuniy modelga esa faqat siqilgan qatorlar boradi |
+
+Yakuniy javob 250–700 so'zlik chegarada bo'lgani uchun u ham siqardi.
+
+**Endi aniq bosqichni ko'rish mumkin.** Master o'z hujjatini sinaganda
+javobda `trace` qaytadi (dayjest matni, tanlangan qatorlar, ehtimoliy
+ziddiyatlar, xom javob). U serverda saqlanmaydi, boshqa hech kimga
+qaytmaydi. Uni `scripts/explain-trace.js` bilan tekshirish mumkin:
+
+```bash
+node scripts/explain-trace.js --source hujjat.txt --response javob.json --checks checks.json
+```
+
+Natijada har bir shart uchun «kept», «LOST IN DIGEST» yoki «LOST IN FINAL
+ANSWER» chiqadi. Haqiqiy hujjat va javob repoga qo'yilmaydi.
+
+### Nima o'zgardi (umumiy, hujjatga xos emas)
+
+1. **Dayjest prompti:**
+   - qamrov so'zlari aynan saqlanadi: «jumladan», «faqat», «bundan tashqari/mustasno», «alohida/qo'shimcha», «kamida/ko'pi bilan», «barcha» va shartlar orasidagi «va»/«yoki»;
+   - to'lov yoki taqsimotda ishtirok etuvchi har bir tomon nomlanadi;
+   - oldingi shartlar (nima nimadan oldin) alohida yoziladi;
+   - ta'rif mezonlari hammasi saqlanadi, ular hech qachon tashlab yuborilmaydi;
+   - bitta buzilishning barcha oqibatlari bitta qatorda, ular qo'shiladimi yoki o'rnini bosadimi aytiladi;
+   - boshqa bandga havola nomlanadi;
+   - ixchamlik maqsadi «taxminan uchdan bir», lekin to'liq shart qisqa qatordan muhimroq.
+2. **Yakuniy prompt:**
+   - xuddi shu qoidalar;
+   - turli qismlardagi bir masalaga oid bandlarni solishtirish;
+   - joy yetmasa, sodda tilni qisqartirish, lekin shart, mezon, istisno, oqibat va ziddiyatni hech qachon tashlamaslik.
+3. **«SAQLANADIGAN SHARTLAR» (AI'siz):**
+   - asl hujjatdan qamrov so'zi yoki ta'rif belgisi bor gaplar tanlanadi (eng ko'pi 25 ta, har biri 320 belgigacha, muhimligi bo'yicha saralanadi, takroriy shablon bandlar bitta hisoblanadi);
+   - ular yakuniy modelga asl so'zlari bilan beriladi, shuning uchun dayjest siqib yuborgan so'z ham yetib boradi.
+4. **«EHTIMOLIY ZIDDIYATLAR» (AI'siz):**
+   - butun hujjatdan bir masala haqidagi (mazmun so'zlarining ≥60% umumiy), lekin boshqa muddat, foiz yoki summa aytgan gap juftlari topiladi;
+   - modelga «nomzod, tekshir» deb beriladi, hukm sifatida emas;
+   - cheklov: boshqacha so'z bilan yozilgan zid bandlarni topmaydi (masalan, sintetik shartnomadagi 4.1 va 4.3).
+5. **Javob ostidagi tekshiruv:** saqlanadigan qatorlardagi qamrov so'zi javobda umuman uchramasa, «manba bilan qo'lda tekshirish kerak» deb yoziladi. Javobdan hech narsa o'chirilmaydi.
+
+### Xarajat ta'siri (dry-run, chaqiruvsiz)
+
+- **Yangi AI chaqiruvi yo'q.** Token cap'lar oshirilmadi (dayjest 1 600, javob 3 000).
+- **Qo'shimcha kirish** (UTF-8 bayt chegarasi, ro'yxat narxi — rejalash raqami):
+
+| Hujjat | Belgilar | Saqlanadigan qatorlar | Ziddiyat juftlari | Yakuniy chaqiruv + bayt | Dayjest chaqiruvlari | Dayjest + bayt (uzunroq prompt) | comet + $ | luna + $ |
+|---|---|---|---|---|---|---|---|---|
+| long-lease | 37 888 | 8 | 0 | 1 209 | 5 | 6 440 | $0.0034 | $0.0008 |
+| long-service-docx | 53 538 | 4 | 1 | 1 021 | 7 | 9 016 | $0.0045 | $0.0010 |
+| investment-agreement | 21 934 | 8 | 1 | 1 770 | 3 | 3 864 | $0.0025 | $0.0006 |
+
+- **Output xavfi:** dayjest endi ko'p shartli qoidaga to'liq yozishga ruxsat beradi, shuning uchun taxminiy siqish nisbatining yuqori chegarasi 0.33 → 0.40 ga ko'tarildi.
+  - 51 398 belgi: qism 343–1 280 token, 1 600 dan zaxira bilan past.
+  - 120 000 belgi (qism ~9 500): 407–1 521 token, ya'ni yuqori taxminda **cap'ga yaqin**. Oshib ketsa, cheklangan qayta o'qish (yarmilar) uni ushlaydi; u ham yetmasa, qism «o'qilmadi» bo'ladi.
+
+### Testlar va tasdiqlanmagan
+
+**Testlar:** `tests/explain-scope.test.js` (7) va yangi anonim sintetik fikstura `08-investment-agreement.json` (uch dayjest qismi, oltita holat, `traceChecks`). Ular tekshiradi:
+- yo'qotuvchi dayjest bilan ham asl so'zlar yakuniy modelga yetadi;
+- zid juftlik turli qismlarda turibdi va topiladi;
+- javob ostidagi qamrov so'zi ogohlantirishi ishlaydi;
+- trace funksiyasi va skript dayjest yo'qotishini yakuniy javob yo'qotishidan farqlaydi;
+- xarajat: faqat kirish qo'shiladi.
+
+DB testida trace faqat master'ga qaytishi tekshirildi.
+
+**Tasdiqlanmagan:**
+- Haqiqiy model bu qoidalar bilan 6 holatni saqlaydimi — buni jonli sinov va yurist bahosi ko'rsatadi.
+- Mexanik tekshiruv faqat so'z borligini ko'radi, ma'no to'g'riligini emas.
+
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
 | Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |

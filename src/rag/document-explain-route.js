@@ -67,8 +67,12 @@ function mountExplainDocument(app, deps) {
       if (!result.coverage.documentFullyRead && typeof tariffModule.refundUsage === 'function') {
         refund = tariffModule.refundUsage(res, 'explain_partial_read');
       }
+      // a master testing their own document gets what each stage held
+      // (digest, the scope lines, the raw answer) to see where meaning was
+      // lost; nothing is stored, and no one else ever receives it
+      const trace = req.session && req.session.role === 'master' ? result.trace : undefined;
       res.json({ reply: result.reply, provider: result.provider, coverage: result.coverage, check: result.check,
-        partial: result.coverage.partial, ...refund });
+        partial: result.coverage.partial, trace, ...refund });
     } catch (e) {
       console.error('[Explain Doc] error:', e.message);
       res.status(500).json({ error: 'Tushuntirish xatoligi: ' + e.message });

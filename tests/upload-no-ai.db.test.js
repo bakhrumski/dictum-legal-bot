@@ -108,7 +108,7 @@ async function startApp() {
   app.use(express.json({ limit: '2mb' }));
   app.use((req, res, next) => {
     const id = req.get('x-user');
-    req.session = id ? { adminId: Number(id), role: 'user', isAuthenticated: true } : {};
+    req.session = id ? { adminId: Number(id), role: req.get('x-role') || 'user', isAuthenticated: true } : {};
     next();
   });
   app.use('/api/', usage.expressScope('web'));
@@ -129,8 +129,8 @@ async function startApp() {
   base = `http://127.0.0.1:${server.address().port}`;
   return server;
 }
-async function post(p, user, { file = null, name = 'f.pdf', type = 'application/pdf', fields = {}, json = null } = {}) {
-  let body; const headers = { 'x-user': String(user) };
+async function post(p, user, { file = null, name = 'f.pdf', type = 'application/pdf', fields = {}, json = null, role = null } = {}) {
+  let body; const headers = { 'x-user': String(user), ...(role ? { 'x-role': role } : {}) };
   if (json) { body = JSON.stringify(json); headers['content-type'] = 'application/json'; }
   else { body = new FormData(); if (file) body.append('file', new Blob([file], { type }), name); for (const [k, v] of Object.entries(fields)) body.append(k, String(v)); }
   const r = await realFetch(base + p, { method: 'POST', headers, body });
@@ -414,6 +414,21 @@ async function docxOf(text) {
         spendLog.schemaGaps.callColumns = false;
         spendLog.schemaGaps.docCoverage = false;
       }
+    });
+
+    await test('the stage trace (digest, scope lines, raw answer) goes back to a master only; an ordinary user never receives it', async () => {
+      const f = loadAll().find(x => x.id === 'investment-agreement');
+      const text = f.pages.join('\n\n');
+      const u = await makeUser();
+      const asUser = await post('/api/draft/explain-document', u, { json: { documentText: text, confirmed: true } });
+      assert.strictEqual(asUser.status, 200, JSON.stringify(asUser.body));
+      assert.strictEqual(asUser.body.trace, undefined);
+      const asMaster = await post('/api/draft/explain-document', u, { role: 'master', json: { documentText: text, confirmed: true } });
+      assert.strictEqual(asMaster.status, 200, JSON.stringify(asMaster.body));
+      assert.ok(asMaster.body.trace && /^HUJJAT DAYJESTI/u.test(asMaster.body.trace.digest));
+      assert.ok(asMaster.body.trace.scopeLines.some(l => l.includes('jumladan Investor')));
+      assert.strictEqual(asMaster.body.trace.conflictCandidates.length, 1);
+      assert.strictEqual(typeof asMaster.body.trace.answer, 'string');
     });
 
     await test('a document read whole whose answer was cut: marked partial at the top, the unit is committed (delivered, as a cut chat answer)', async () => {
