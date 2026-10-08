@@ -106,9 +106,13 @@ Known state of the suites (Sept 2026):
   breach; `scopeLines` picks the document's own lines with scope words (no
   AI, max 25) and `conflictCandidates` finds same-matter sentences with
   different figures across the whole document (no AI) - both go to the
-  final call as input only; scope words the answer drops are flagged. A
-  master gets `trace` (digest, scope lines, raw answer; not stored) for
-  `scripts/explain-trace.js`. Quality is unconfirmed until the lawyer-reviewed
+  final call as input only, with the list's limit stated (candidates,
+  selected, not fitted, shortened); scope words the answer drops are
+  flagged. The stage `trace` (digest, scope lines, raw answer) is returned
+  only on `trace: true` to an account that is master in the database, with
+  `no-store`, never logged or stored (dashboard: `window.__JAI_TRACE = true`,
+  then `window.__lastExplain`); `scripts/explain-trace.js` reports word-for-
+  word presence per stage - never that meaning was kept or lost. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

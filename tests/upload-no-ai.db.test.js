@@ -116,7 +116,8 @@ async function startApp() {
   mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule: tiers, digestLongDocument: async t => t, pool, ocr: ocrStub });
   // the explanation as server.js mounts it, with the shared digest uncached
   mountExplainDocument(app, { requireAuth, requireServiceConfirm, resolveScanDocs: (q, r, n) => n(), tariffModule: tiers,
-    callAI: explainAI, digest: t => explain.buildDigest(t, { callAI: explainAI }), lexLangForText: () => 'uz', logAudit: null });
+    callAI: explainAI, digest: t => explain.buildDigest(t, { callAI: explainAI }), lexLangForText: () => 'uz', logAudit: null,
+    verifyMaster: async id => (await pool.query('SELECT role FROM admins WHERE id = $1', [id])).rows.some(r => r.role === 'master') });
   // the master's request view (no master check in this test app)
   require('../src/ai/usage-report').mountUsageReportRoutes(app, { requireMasterAdmin: (q, r, n) => n(), pool });
   // the chat's middleware chain as server.js mounts it (question -> trigger
@@ -416,19 +417,47 @@ async function docxOf(text) {
       }
     });
 
-    await test('the stage trace (digest, scope lines, raw answer) goes back to a master only; an ordinary user never receives it', async () => {
+    await test('the stage trace: only on explicit request (trace: true), only to an account that is master in the database, only for this request, not stored', async () => {
       const f = loadAll().find(x => x.id === 'investment-agreement');
       const text = f.pages.join('\n\n');
       const u = await makeUser();
-      const asUser = await post('/api/draft/explain-document', u, { json: { documentText: text, confirmed: true } });
+      const call = async (opts) => post('/api/draft/explain-document', u, opts);
+      // an ordinary user asking for it: none
+      const asUser = await call({ json: { documentText: text, confirmed: true, trace: true } });
       assert.strictEqual(asUser.status, 200, JSON.stringify(asUser.body));
       assert.strictEqual(asUser.body.trace, undefined);
-      const asMaster = await post('/api/draft/explain-document', u, { role: 'master', json: { documentText: text, confirmed: true } });
-      assert.strictEqual(asMaster.status, 200, JSON.stringify(asMaster.body));
-      assert.ok(asMaster.body.trace && /^HUJJAT DAYJESTI/u.test(asMaster.body.trace.digest));
-      assert.ok(asMaster.body.trace.scopeLines.some(l => l.includes('jumladan Investor')));
-      assert.strictEqual(asMaster.body.trace.conflictCandidates.length, 1);
-      assert.strictEqual(typeof asMaster.body.trace.answer, 'string');
+      // a session that says "master" for an account that is not master in the database: none
+      const forged = await call({ role: 'master', json: { documentText: text, confirmed: true, trace: true } });
+      assert.strictEqual(forged.body.trace, undefined, 'the database role decides, not the session alone');
+      await pool.query("UPDATE admins SET role = 'master' WHERE id = $1", [u]);
+      try {
+        // a master who did not ask: none
+        const noOptIn = await call({ role: 'master', json: { documentText: text, confirmed: true } });
+        assert.strictEqual(noOptIn.status, 200);
+        assert.strictEqual(noOptIn.body.trace, undefined);
+        // a master who asked: this request's trace, not cacheable
+        const r = await realFetch(base + '/api/draft/explain-document', { method: 'POST', headers: { 'x-user': String(u), 'x-role': 'master', 'content-type': 'application/json' },
+          body: JSON.stringify({ documentText: text, confirmed: true, trace: true }) });
+        const body = await r.json();
+        assert.strictEqual(r.status, 200);
+        assert.strictEqual(r.headers.get('cache-control'), 'no-store');
+        assert.ok(/^HUJJAT DAYJESTI/u.test(body.trace.digest));
+        assert.ok(body.trace.scopeLines.some(l => l.includes('jumladan Investor')));
+        assert.deepStrictEqual(Object.keys(body.trace.scopeCounts).sort(), ['candidates', 'dropped', 'selected', 'shortened']);
+        assert.strictEqual(body.trace.conflictCandidates.length, 1);
+        await settle(300);
+        // nothing of the text reaches the ledger or the request row
+        const rows = (await pool.query('SELECT call_detail::text AS d, error_message FROM llm_spend_log WHERE user_id = $1', [u])).rows;
+        assert.ok(rows.every(x => !/jumladan|Investor/u.test(`${x.d || ''} ${x.error_message || ''}`)));
+        const reqRows = (await pool.query('SELECT doc_coverage::text AS c, legal_check::text AS l FROM ai_requests WHERE user_id = $1', [u])).rows;
+        assert.ok(reqRows.every(x => !/HUJJAT DAYJESTI|jumladan|Investor/u.test(`${x.c || ''} ${x.l || ''}`)));
+      } finally {
+        await pool.query("UPDATE admins SET role = 'user' WHERE id = $1", [u]);
+      }
+      // the page asks for it only on the master's console opt-in
+      const page = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+      assert.ok(page.includes('confirmed: true, trace: window.__JAI_TRACE === true })'));
+      assert.ok(page.includes('window.__lastExplain = { source: text || null, response: d };'));
     });
 
     await test('a document read whole whose answer was cut: marked partial at the top, the unit is committed (delivered, as a cut chat answer)', async () => {
@@ -466,7 +495,7 @@ async function docxOf(text) {
       assert.ok(!/return true;/u.test(card.slice(0, card.indexOf('var id = '))), 'no path that runs the service without the card');
       assert.ok(/quotes\.some\(function \(x\) \{ return !x; \}\)\) \{[\s\S]*?return false;/u.test(card), 'no quote: no AI');
       assert.ok(/Cheklovsiz hisob: limit yechilmaydi\. AI faqat «Davom etish»dan keyin ishlaydi\./u.test(card), 'staff see the card too');
-      assert.ok(/fetch\('\/api\/draft\/explain-document'[\s\S]{0,300}confirmed: true/u.test(page));
+      assert.ok(/fetch\('\/api\/draft\/explain-document'[\s\S]{0,600}confirmed: true/u.test(page));
       assert.ok(/fetch\('\/api\/draft\/legal-opinion', \{[\s\S]{0,400}confirmed: true/u.test(page));
       const attach = page.slice(page.indexOf('async function extractAttachment('), page.indexOf('async function scanFile('));
       assert.deepStrictEqual([...attach.matchAll(/fetch\('([^']+)'/gu)].map(m => m[1]), ['/api/analyze/extract'], 'attaching calls extract only (a scan goes through scanFile: quote, then the card)');

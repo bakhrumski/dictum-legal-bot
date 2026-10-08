@@ -412,7 +412,7 @@ function sectionNote(name, r) {
  * removes nothing for a missing word: a flag is a reason to look, not proof
  * of an error, and no section is ever presented as verified.
  */
-function finishExplanation({ reply, truncated = false, source, digest = null, allowed = [], scope = [] }) {
+function finishExplanation({ reply, truncated = false, source, digest = null, allowed = [], scope = [], scopeStats = null }) {
   let text = String(reply || '').trim();
   const notes = [];
   const unread = digest ? digest.failed.concat(digest.truncated) : [];
@@ -432,8 +432,11 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
   if (aiNote) notes.push(aiNote);
   const scopeMissing = scopeWordsMissing(scope, text);
   if (scopeMissing.length) notes.push(`Qamrov so'zlari — manba bilan qo'lda tekshirish kerak: hujjatning saqlanadigan shartlarida bor, javobda uchramadi: ${scopeMissing.map(w => `«${w}»`).join(', ')}. Shart, istisno yoki mezon tushib qolmaganini tekshiring.`);
+  if (scopeStats && scopeStats.dropped) {
+    notes.push(`Saqlanadigan shartlar: ${scopeStats.candidates} ta nomzoddan ${scopeStats.selected} tasi modelga alohida berildi, ${scopeStats.dropped} tasi ro'yxat chegarasiga (${scopeStats.limits.max} qator / ${scopeStats.limits.maxChars} belgi) sig'madi — ular faqat hujjat matni yoki dayjest orqali berilgan; qo'lda tekshiring.`);
+  }
   if (ai.removed) notes.push("«AI izohi» bo'sh yoki to'ldiruvchi edi — ko'rsatilmadi.");
-  if (!bodyNote && !aiNote && !scopeMissing.length) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
+  if (!bodyNote && !aiNote && !scopeMissing.length && !(scopeStats && scopeStats.dropped)) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
   if (partial.length) text = `⚠️ **Qisman natija — to'liq tahlil emas:** ${partial.join('; ')}.\n\n${text}`;
   text += `\n\n**Avtomatik tekshiruv (AI emas):** ${CHECK_SCOPE}\n${notes.map(n => `- ${n}`).join('\n')}`;
   const check = {
@@ -587,7 +590,7 @@ const SCOPE_GROUPS = [
  * word, in document order, at most `max`, each at most `maxLen` chars - picked
  * with no AI and given to the final model to keep intact.
  */
-function scopeLines(text, { max = 25, maxLen = 320 } = {}) {
+function scopeSelection(text, { max = 25, maxLen = 320, maxChars = 6000 } = {}) {
   // sentences end after a word, never after a clause number ("3.1. ...")
   const parts = String(text || '').split(/\n+|(?<=[\p{L})»"'][.;])\s+(?=\S)/u).map(t => t.trim()).filter(t => t.length > 12);
   const found = [];
@@ -606,9 +609,30 @@ function scopeLines(text, { max = 25, maxLen = 320 } = {}) {
     const score = groups + (/\d/u.test(p.replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '')) ? 1 : 0);
     found.push({ p, order, score });
   });
-  return found.sort((a, b) => b.score - a.score || a.order - b.order).slice(0, max)
-    .sort((a, b) => a.order - b.order)
-    .map(({ p }) => (p.length > maxLen ? `${p.slice(0, p.lastIndexOf(' ', maxLen) > maxLen * 0.6 ? p.lastIndexOf(' ', maxLen) : maxLen)} …` : p));
+  // a long sentence or table row is shortened (marked "…"), and the whole
+  // list stays within maxChars; what does not fit is counted, never hidden
+  const ranked = found.sort((a, b) => b.score - a.score || a.order - b.order);
+  const chosen = [];
+  let chars = 0, cut = 0;
+  for (const f of ranked) {
+    if (chosen.length >= max) break;
+    let line = f.p;
+    if (line.length > maxLen) {
+      const at = line.lastIndexOf(' ', maxLen);
+      line = `${line.slice(0, at > maxLen * 0.6 ? at : maxLen)} …`;
+      cut++;
+    }
+    if (chars + line.length > maxChars) continue;
+    chars += line.length;
+    chosen.push({ ...f, line });
+  }
+  const lines = chosen.sort((a, b) => a.order - b.order).map(c => c.line);
+  return { lines, candidates: found.length, selected: lines.length, dropped: found.length - lines.length, shortened: cut, chars, limits: { max, maxLen, maxChars } };
+}
+
+/** The selected lines only (see scopeSelection for the counts). */
+function scopeLines(text, opts) {
+  return scopeSelection(text, opts).lines;
 }
 
 /** Scope words in the lines given to the model that the answer never uses: a reason to check by hand. */
@@ -662,20 +686,25 @@ function conflictCandidates(text, { max = 5, maxLen = 260 } = {}) {
 }
 
 /**
- * For each check { id, terms: [term | [alternatives]] }: is every term in
- * the source, in the digest (when there is one), in the answer - and where
- * was it first lost? 'digest', 'final', or null when kept. No AI.
+ * MECHANICAL: for each check { id, terms: [term | [alternatives]] }, is each
+ * term found word for word (case and apostrophe forms aside) in the source,
+ * the digest (when there is one) and the answer? `firstNotFoundAt` names the
+ * first stage where a term is not found verbatim - 'digest', 'answer', or
+ * 'source' (the term itself is wrong) - or null when every term is found.
+ * It never says meaning was kept or lost: a synonym reads as "not found",
+ * and a negated or "or"-for-"and" sentence that repeats the words reads as
+ * "found". A lawyer compares the meaning (docs/quality/explain-benchmark.md).
  */
 function traceStages({ source, digest = null, answer, checks = [] }) {
   const has = (text, term) => (Array.isArray(term) ? term : [term]).some(x => lowerNorm(text).includes(lowerNorm(x)));
-  const stage = (text, terms) => (text == null ? null : terms.filter(t => !has(text, t)).map(t => (Array.isArray(t) ? t.join(' | ') : t)));
+  const notFound = (text, terms) => (text == null ? null : terms.filter(t => !has(text, t)).map(t => (Array.isArray(t) ? t.join(' | ') : t)));
   return checks.map(c => {
-    const missing = { source: stage(source, c.terms), digest: stage(digest, c.terms), answer: stage(answer, c.terms) };
-    let lostAt = null;
-    if (missing.source.length) lostAt = 'not_in_source';
-    else if (missing.digest && missing.digest.length) lostAt = 'digest';
-    else if (missing.answer.length) lostAt = 'final';
-    return { id: c.id, lostAt, missing };
+    const notFoundVerbatim = { source: notFound(source, c.terms), digest: notFound(digest, c.terms), answer: notFound(answer, c.terms) };
+    let firstNotFoundAt = null;
+    if (notFoundVerbatim.source.length) firstNotFoundAt = 'source';
+    else if (notFoundVerbatim.digest && notFoundVerbatim.digest.length) firstNotFoundAt = 'digest';
+    else if (notFoundVerbatim.answer.length) firstNotFoundAt = 'answer';
+    return { id: c.id, kind: 'verbatim_terms', firstNotFoundAt, notFoundVerbatim };
   });
 }
 
@@ -858,9 +887,10 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   // the final model gets their original wording even where a digest line
   // compressed them
   const given = full ? documentText : d.text;
-  const scope = scopeLines(documentText);
+  const sel = scopeSelection(documentText);
+  const scope = sel.lines;
   const scopeBlock = scope.length
-    ? `\n\nSAQLANADIGAN SHARTLAR (hujjatdan AI'siz tanlandi: ularda qamrov so'zlari bor; har birini shu so'zlari, shartlari, mezonlari va oqibatlari bilan tushuntir):\n${scope.map(l => `- ${l}`).join('\n')}`
+    ? `\n\nSAQLANADIGAN SHARTLAR (hujjatdan AI'siz tanlandi: ularda qamrov so'zlari bor; ${sel.candidates} ta nomzoddan ${sel.selected} tasi shu yerda${sel.dropped ? `, ${sel.dropped} tasi ro'yxat chegarasiga sig'madi - ular hujjat matnida yoki dayjestda, xuddi shu qoidalar ularga ham taalluqli` : ''}${sel.shortened ? `; "…" bilan tugaganlari qisqartirilgan` : ''}. Har birini shu so'zlari, shartlari, mezonlari va oqibatlari bilan tushuntir):\n${scope.map(l => `- ${l}`).join('\n')}`
     : '';
   // from the whole document, so a pair split across digest parts is seen
   const conflicts = conflictCandidates(documentText);
@@ -875,17 +905,19 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   if (!raw) return { reply: '', provider: result && result.provider };
   // checked against what the model was given AND the full text: a figure in
   // the full text that the digest lost is not invented
-  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d, scope,
+  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel,
     allowed: [String(chars), String(documentText.length), String(pages.length), d ? String(d.chunks) : ''].filter(Boolean) });
   const unread = unreadParts(d);
   return {
     reply: done.reply, provider: result.provider, check: done.check,
     // what each stage held, for a trace (src/rag/document-explain-route.js
     // returns it to a master only; nothing is stored)
-    trace: { mode: full ? 'full_text' : 'digest', digest: d ? d.text : null, scopeLines: scope, conflictCandidates: conflicts, answer: raw },
+    trace: { mode: full ? 'full_text' : 'digest', digest: d ? d.text : null, scopeLines: scope,
+      scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened }, conflictCandidates: conflicts, answer: raw },
     coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
       chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated,
       placeholders: placeholders.count, finalRun: true, summary: coverageSummary(d, { finalRun: true }),
+      scopeLines: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, limits: sel.limits },
       // the document was not read whole: not the service (released by the route)
       documentFullyRead: unread.length === 0 && (!d || d.covered !== false),
       partial: done.partial },
@@ -896,5 +928,5 @@ module.exports = {
   PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
   markPages, pagesIn, emptyPages, contentChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
   placeholdersIn, coverageNote, coverageStatus, explainSystem,
-  unreadParts, scopeLines, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
+  unreadParts, scopeLines, scopeSelection, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
 };

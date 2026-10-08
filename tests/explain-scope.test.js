@@ -65,10 +65,10 @@ const faithfulDigest = (m) => ({ text: m[1].text.split('\n').filter(l => /^\d+\.
       assert.ok(block.includes(must), must);
     }
     // the digest itself lost them: the trace says where
-    const lost = Object.fromEntries(ex.traceStages({ source: doc, digest: r.trace.digest, answer: final, checks: fx.traceChecks }).map(x => [x.id, x.lostAt]));
-    assert.strictEqual(lost['distribution-including'], 'digest');
-    assert.strictEqual(lost['declared-unpaid'], 'digest');
-    assert.strictEqual(lost['condition-precedent'], 'digest');
+    const first = Object.fromEntries(ex.traceStages({ source: doc, digest: r.trace.digest, answer: final, checks: fx.traceChecks }).map(x => [x.id, x.firstNotFoundAt]));
+    assert.strictEqual(first['distribution-including'], 'digest');
+    assert.strictEqual(first['declared-unpaid'], 'digest');
+    assert.strictEqual(first['condition-precedent'], 'digest');
   });
 
   await test('contradictions across parts are found on the whole document with no AI and named to the final model as candidates', async () => {
@@ -106,24 +106,70 @@ const faithfulDigest = (m) => ({ text: m[1].text.split('\n').filter(l => /^\d+\.
     assert.deepStrictEqual(ex.finishExplanation({ reply: kept, source: doc, scope }).check.scopeWordsMissing, []);
   });
 
-  await test('the trace tells digest losses from final-answer losses, as a function and as a script', () => {
-    const faithful = doc;
+  await test('the trace is a MECHANICAL word-for-word signal, as a function and as a script - never a judgement of meaning', () => {
     const answerLossy = "Qolgan summa ishtirokchilar o'rtasida taqsimlanadi; muddat 30 kun.";
-    const rows = ex.traceStages({ source: doc, digest: faithful, answer: answerLossy, checks: fx.traceChecks });
+    const rows = ex.traceStages({ source: doc, digest: doc, answer: answerLossy, checks: fx.traceChecks });
     const by = Object.fromEntries(rows.map(r => [r.id, r]));
-    assert.strictEqual(by['distribution-including'].lostAt, 'final');
-    assert.deepStrictEqual(by['distribution-including'].missing.answer, ['barcha ishtirokchi', 'jumladan', 'investor']);
-    assert.strictEqual(by.contradiction.lostAt, 'final');
+    assert.ok(rows.every(r => r.kind === 'verbatim_terms'));
+    assert.strictEqual(by['distribution-including'].firstNotFoundAt, 'answer');
+    assert.deepStrictEqual(by['distribution-including'].notFoundVerbatim.answer, ['barcha ishtirokchi', 'jumladan', 'investor']);
+    assert.ok(!('lostAt' in by['distribution-including']), 'no field that reads as "meaning lost"');
     const full = ex.traceStages({ source: doc, digest: null, answer: doc, checks: fx.traceChecks });
-    assert.ok(full.every(r => r.lostAt === null));
+    assert.ok(full.every(r => r.firstNotFoundAt === null));
     // the script, on files (synthetic texts only)
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-'));
     fs.writeFileSync(path.join(dir, 'digest.txt'), doc.replace(/, jumladan Investor,/u, ''));
     fs.writeFileSync(path.join(dir, 'answer.txt'), 'Izoh.');
     const out = execFileSync(process.execPath, [path.join(__dirname, '../scripts/explain-trace.js'), '--fixture', 'investment-agreement',
       '--digest', path.join(dir, 'digest.txt'), '--answer', path.join(dir, 'answer.txt')], { encoding: 'utf8' });
-    assert.ok(/distribution-including\s+LOST IN DIGEST/u.test(out), out);
-    assert.ok(/declared-unpaid\s+LOST IN FINAL ANSWER/u.test(out), out);
+    assert.ok(/^MECHANICAL check: word-for-word presence only - not a judgement of meaning\./mu.test(out), out);
+    assert.ok(/distribution-including\s+NOT FOUND VERBATIM first in: digest/u.test(out), out);
+    assert.ok(/declared-unpaid\s+NOT FOUND VERBATIM first in: answer/u.test(out), out);
+    assert.ok(!/LOST|meaning (was )?(kept|lost)/iu.test(out.replace(/not a judgement of meaning|A lawyer compares the meaning/gu, '')), 'no semantic verdict in the output');
+    // a bundle saved from the dashboard ({ source, response }), with no checks file: one check per scope line
+    const bundle = { source: doc, response: { reply: 'Izoh.', trace: { digest: doc, scopeLines: ex.scopeLines(doc), answer: "Qolgan summa barcha ishtirokchilar, jumladan Investor, o'rtasida taqsimlanadi." } } };
+    fs.writeFileSync(path.join(dir, 'bundle.json'), JSON.stringify(bundle));
+    const out2 = execFileSync(process.execPath, [path.join(__dirname, '../scripts/explain-trace.js'), '--bundle', path.join(dir, 'bundle.json')], { encoding: 'utf8' });
+    assert.ok(/band 5\.4\s+found verbatim in every stage/u.test(out2), out2);
+    assert.ok(/band 11\.2\s+NOT FOUND VERBATIM first in: answer/u.test(out2), out2);
+  });
+
+  await test('synonyms, negation and "or" for "and": the trace reports word presence only, so a lawyer must judge these', () => {
+    const check = [{ id: 'distribution', terms: ['barcha ishtirokchi', 'jumladan', 'investor'] }, { id: 'dividends', terms: ["e'lon qilingan", "to'lanmagan", 'dividend'] }];
+    const run = answer => Object.fromEntries(ex.traceStages({ source: doc, answer, checks: check }).map(r => [r.id, r.firstNotFoundAt]));
+    // a synonym keeps the meaning but reads as "not found verbatim"
+    assert.deepStrictEqual(run("Qolgan summa barcha ishtirokchilarga, Investorga ham, taqsimlanadi. E'lon qilingan, ammo to'lanmagan dividendlar to'lanadi.").distribution, 'answer');
+    // a negation changes the meaning but the words are there: "found"
+    assert.strictEqual(run("Qolgan summa barcha ishtirokchilar, jumladan Investor o'rtasida taqsimlanMAYDI.").distribution, null);
+    // "or" written for "and" changes the meaning but the words are there: "found"
+    assert.strictEqual(run("E'lon qilingan yoki to'lanmagan dividendlar to'lanadi.").dividends, null);
+    // the answer's own mechanical check says the same: these are flags to check by hand, never a verdict
+    const done = ex.finishExplanation({ reply: "E'lon qilingan yoki to'lanmagan dividendlar to'lanadi.", source: doc, scope: ex.scopeLines(doc) });
+    assert.strictEqual(done.check.verified, false);
+  });
+
+  await test('the scope list is open about its limit: candidates, selected, not fitted and shortened are counted and told to the model and under the answer', async () => {
+    // 40 distinct scope-word clauses, some very long: more than the list holds
+    // distinct in their words (clauses that differ only in numbers count as one repeated clause)
+    const word = i => 'abcdefghij'[i % 10] + 'klmnop'[Math.floor(i / 10)] + 'ruxsat';
+    const many = Array.from({ length: 40 }, (_, i) => `${i + 1}.1. Tomon ${word(i)} majburiyatini faqat yozma kelishuv bilan bajaradi, bundan tashqari ${i + 10} kun ichida xabar beradi${i % 7 === 0 ? `, ${'qo\'shimcha izoh '.repeat(40)}` : ''}.`).join('\n');
+    const sel = ex.scopeSelection(many);
+    assert.strictEqual(sel.candidates, 40);
+    assert.ok(sel.selected <= sel.limits.max && sel.chars <= sel.limits.maxChars);
+    assert.strictEqual(sel.dropped, sel.candidates - sel.selected);
+    assert.ok(sel.dropped > 0 && sel.shortened > 0, JSON.stringify(sel));
+    assert.ok(sel.lines.every(l => l.length <= sel.limits.maxLen + 2));
+    const ai = recorder(() => ({ text: 'Izoh.', provider: 'stub' }));
+    const r = await ex.explainDocument({ documentText: many, langName: 'Uzbek', callAI: ai, digest: t => ex.buildDigest(t, { callAI: ai }) });
+    const final = ai.calls[ai.calls.length - 1].messages[1].text;
+    assert.ok(final.includes(`${sel.candidates} ta nomzoddan ${sel.selected} tasi shu yerda, ${sel.dropped} tasi ro'yxat chegarasiga sig'madi`), final.slice(final.indexOf('SAQLANADIGAN'), final.indexOf('SAQLANADIGAN') + 300));
+    assert.ok(final.includes('"…" bilan tugaganlari qisqartirilgan'));
+    assert.deepStrictEqual([r.coverage.scopeLines.candidates, r.coverage.scopeLines.dropped], [40, sel.dropped]);
+    assert.ok(r.reply.includes(`Saqlanadigan shartlar: 40 ta nomzoddan ${sel.selected} tasi modelga alohida berildi, ${sel.dropped} tasi ro'yxat chegarasiga (25 qator / 6000 belgi) sig'madi`), r.reply.slice(-600));
+    // nothing dropped -> no such note
+    const small = await ex.explainDocument({ documentText: doc, langName: 'Uzbek', callAI: recorder(() => ({ text: 'Izoh.', provider: 'stub' })), digest: t => ex.buildDigest(t, { callAI: recorder(() => ({ text: '- band' })) }) });
+    assert.strictEqual(small.coverage.scopeLines.dropped, 0);
+    assert.ok(!small.reply.includes('ro\'yxat chegarasiga'));
   });
 
   await test('cost of the change: the two blocks add input only, no call and no output cap', async () => {

@@ -349,17 +349,30 @@ promptlar va tuzilma bo'yicha **ehtimoliy** tahlil:
 
 Yakuniy javob 250–700 so'zlik chegarada bo'lgani uchun u ham siqardi.
 
-**Endi aniq bosqichni ko'rish mumkin.** Master o'z hujjatini sinaganda
-javobda `trace` qaytadi (dayjest matni, tanlangan qatorlar, ehtimoliy
-ziddiyatlar, xom javob). U serverda saqlanmaydi, boshqa hech kimga
-qaytmaydi. Uni `scripts/explain-trace.js` bilan tekshirish mumkin:
+**Trace — mexanik signal.** U har bir bosqichda so'z **so'zma-so'z
+topildimi yoki topilmadimi**, shuni ko'rsatadi; ma'no saqlanganini yoki
+yo'qolganini aytmaydi:
+- sinonim «topilmadi» bo'lib chiqadi;
+- inkor qilingan gap yoki «va» o'rniga «yoki» yozilgan gap, agar so'zlarni takrorlasa, «topildi» bo'lib chiqadi (testlar bor);
+- ma'noni yurist solishtiradi.
 
-```bash
-node scripts/explain-trace.js --source hujjat.txt --response javob.json --checks checks.json
-```
+**Trace qanday olinadi:**
+- Faqat aniq so'ralganda (`trace: true`) qaytadi.
+- Faqat **bazada** roli `master` bo'lgan akkauntga: sessiyadagi rol yetarli emas, server bazadan qayta tekshiradi.
+- Faqat shu so'rovdagi hujjat uchun.
+- Javob `Cache-Control: no-store` bilan keladi.
+- Matn log, audit, ledger, `ai_requests` yoki boshqa keshga tushmaydi; DB testi buni tekshiradi.
 
-Natijada har bir shart uchun «kept», «LOST IN DIGEST» yoki «LOST IN FINAL
-ANSWER» chiqadi. Haqiqiy hujjat va javob repoga qo'yilmaydi.
+**Master brauzerida trace olish:**
+1. juristai.uz'ga master akkaunt bilan kiring va dashboard'ni oching.
+2. Brauzer konsolini oching (F12 → Console) va kiriting: `window.__JAI_TRACE = true`.
+3. Hujjatni (matnli PDF yoki DOCX) chatga biriktiring → «Hujjat mazmunini tushuntirish» → narx kartasida «Davom etish».
+4. Javob kelgach, konsolda `[JuristAI] trace saved` yozuvi chiqadi. Kiriting: `copy(JSON.stringify(window.__lastExplain))`. Bu buferga `{ source, response }` ni nusxalaydi.
+5. Nusxani kompyuteringizda `explain-trace.json` faylga saqlang. **Uni repoga qo'ymang.**
+6. Tekshiring: `node scripts/explain-trace.js --bundle explain-trace.json` — tekshiruvlar tanlangan qatorlardan avtomatik tuziladi. Yoki o'zingizning ro'yxatingiz bilan: `--checks checks.json`, format: `[{"id":"...","terms":["so'z",["muqobil","muqobil"]]}]`.
+7. Trace'ni o'chirish: sahifani yangilang, yoki `window.__JAI_TRACE = false` va `delete window.__lastExplain`.
+
+Skanerlangan hujjatda manba matni brauzerda bo'lmaydi (u serverda turadi), shuning uchun `--source` bilan OCR matnini alohida berish kerak.
 
 ### Nima o'zgardi (umumiy, hujjatga xos emas)
 
@@ -376,8 +389,12 @@ ANSWER» chiqadi. Haqiqiy hujjat va javob repoga qo'yilmaydi.
    - turli qismlardagi bir masalaga oid bandlarni solishtirish;
    - joy yetmasa, sodda tilni qisqartirish, lekin shart, mezon, istisno, oqibat va ziddiyatni hech qachon tashlamaslik.
 3. **«SAQLANADIGAN SHARTLAR» (AI'siz):**
-   - asl hujjatdan qamrov so'zi yoki ta'rif belgisi bor gaplar tanlanadi (eng ko'pi 25 ta, har biri 320 belgigacha, muhimligi bo'yicha saralanadi, takroriy shablon bandlar bitta hisoblanadi);
-   - ular yakuniy modelga asl so'zlari bilan beriladi, shuning uchun dayjest siqib yuborgan so'z ham yetib boradi.
+   - asl hujjatdan qamrov so'zi yoki ta'rif belgisi bor gaplar tanlanadi;
+   - ular yakuniy modelga asl so'zlari bilan beriladi, shuning uchun dayjest siqib yuborgan so'z ham yetib boradi;
+   - chegara: 25 qator, har biri 320 belgigacha, jami 6 000 belgi;
+   - saralash: avval qamrov so'zi ko'p va raqami bor gaplar, keyin hujjat tartibi; faqat raqami bilan farq qiladigan takroriy shablon bandlar bitta nomzod hisoblanadi;
+   - chegara **ochiq**: modelga va javob ostida «N ta nomzoddan M tasi berildi, K tasi sig'madi» deb yoziladi; qisqartirilgan uzun gap yoki jadval qatori «…» bilan tugaydi; sonlar `coverage.scopeLines` va trace'da ham bor;
+   - sig'magan nomzodlar hujjat matni yoki dayjest orqali beriladi, ularga ham shu qoidalar taalluqli.
 4. **«EHTIMOLIY ZIDDIYATLAR» (AI'siz):**
    - butun hujjatdan bir masala haqidagi (mazmun so'zlarining ≥60% umumiy), lekin boshqa muddat, foiz yoki summa aytgan gap juftlari topiladi;
    - modelga «nomzod, tekshir» deb beriladi, hukm sifatida emas;
@@ -405,10 +422,11 @@ ANSWER» chiqadi. Haqiqiy hujjat va javob repoga qo'yilmaydi.
 - yo'qotuvchi dayjest bilan ham asl so'zlar yakuniy modelga yetadi;
 - zid juftlik turli qismlarda turibdi va topiladi;
 - javob ostidagi qamrov so'zi ogohlantirishi ishlaydi;
-- trace funksiyasi va skript dayjest yo'qotishini yakuniy javob yo'qotishidan farqlaydi;
+- trace (mexanik, so'zma-so'z) sinonim, inkor va «va/yoki» holatlarida qanday natija berishi; skriptda semantik hukm yo'qligi;
+- tanlov sonlari va chegaraning ochiqligi;
 - xarajat: faqat kirish qo'shiladi.
 
-DB testida trace faqat master'ga qaytishi tekshirildi.
+DB testida tekshirildi: trace faqat aniq so'ralganda va bazada master bo'lgan akkauntga qaytadi; soxta sessiya roli yetmaydi; `no-store`; matn ledger va so'rov qatoriga tushmaydi. Brauzerda (390px, stub API) tekshirildi: flag bo'lmasa `trace: false`, flag bo'lsa `trace: true` yuboriladi va `window.__lastExplain` saqlanadi.
 
 **Tasdiqlanmagan:**
 - Haqiqiy model bu qoidalar bilan 6 holatni saqlaydimi — buni jonli sinov va yurist bahosi ko'rsatadi.
