@@ -297,7 +297,7 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.ok(/require\('\.\.\/rag\/document-explain'\)\.buildDigest\(documentText/.test(server));
     assert.ok(explain.digestChunks('x'.repeat(120000)).covered, 'the digest covers the whole 120 000 characters');
     // the billable size is measured on the server and signed with the text
-    assert.ok(/docTicket: ledger \? ledger\.signDocTicket\(\{ text, chars \}\) : null/.test(ocr) && /signDocTicket\(\{ text, pages, chars: plain\.length \}\)/.test(ocr));
+    assert.ok(/docTicket: ledger \? ledger\.signDocTicket\(\{ text, chars, tables \}\) : null/.test(ocr) && /signDocTicket\(\{ text, pages, chars: plain\.length \}\)/.test(ocr));
   });
 
   await test('a paid plan is never granted by the user\'s own request; a master grant is idempotent by payment reference', () => {

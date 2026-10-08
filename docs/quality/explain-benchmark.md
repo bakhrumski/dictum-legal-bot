@@ -657,7 +657,7 @@ VoiceLab credit'da hisoblaydi; bu yerdagi narx — ro'yxat narxi, tasdiqlangan k
 | «barcha ishtirokchilar, jumladan X» → «boshqa ishtirokchilar» | dayjestda to'g'ri, javobda o'zgargan | dayjest → javob: qamrov so'zi |
 | Bir buzilishning oqibatlari: xarajatlar va «zarardan tashqari alohida» tushib qolgan | dayjestda to'g'ri, javobda o'zgargan | dayjest → javob: oqibat / qamrov so'zi |
 | Muddat «yuborilgan sanadan» → «olgan sanadan»; «yuborishi mumkin» → «javob berishi kerak» | dayjestda to'g'ri, javobda o'zgargan | muddat boshlanishi; `majburiyat` |
-| Hisobot uchun ikki xil muddat (majburiyat va huquq) bitta muddatga qo'shilgan | dayjest ikkalasini alohida saqlagan, javob qo'shgan | «ikki muddat» signali; ziddiyat nomzodi |
+| Hisobot uchun ikki xil muddat (bir tomonning majburiyati, boshqasining huquqi) javobda bitta muddatga qo'shilgan. Bu **tasdiqlangan ziddiyat emas** — turli bandlar bo'lishi mumkin | dayjest ikkalasini alohida saqlagan, javob qo'shgan | «ikki muddat» — nomuvofiqlik nomzodi, qo'lda tekshiriladi |
 | Jadvalning oxirgi qatoriga boshqa qatorning muddati bog'langan | dayjestda | jadval o'qilishi (qator/ustun) va `jadval` signali |
 | Jadval qatorlari soni noto'g'ri («1–6», aslida 7 ta) | dayjestda | jadval qatorlari endi raqamlangan |
 | Natija ustuni shart deb yozilgan | dayjestda | ustun sarlavhasi har bir qiymat yonida |
@@ -697,6 +697,57 @@ VoiceLab credit'da hisoblaydi; bu yerdagi narx — ro'yxat narxi, tasdiqlangan k
   - ikki muddat ikkalasi aytiladi;
   - qisman ro'yxat «qisman» deb aytiladi.
 
+### Qaysi o'zgarish noto'g'ri bayonning oldini oladi, qaysi biri faqat belgilaydi
+
+**Oldini oluvchi** — modelga boradigan narsani o'zgartiradi. Ta'siri faqat jonli sinovda ko'rinadi; mexanik testlar uni tasdiqlamaydi:
+- **DOCX jadvali qatorlab o'qiladi.** Qiymat modelga o'z qatori va ustun sarlavhasi bilan boradi. Tuzilish saqlanmasa, model buni bilmaydi, lekin foydalanuvchiga aytiladi.
+- **Dayjest prompti** quyidagilarni talab qiladi:
+  - jadval qatori va ustunini saqlash;
+  - shartdagi subyekt;
+  - muddat qaysi hodisadan boshlanishi (yuborilgan yoki olingan);
+  - «mumkin» va «kerak» farqi.
+- **Yakuniy prompt** dayjest yoki hujjatdagidek saqlashni talab qiladi:
+  - subyekt («barcha ishtirokchilar, jumladan X» ≠ «boshqa ishtirokchilar»);
+  - muddat boshlanishi;
+  - «mumkin» / «kerak»;
+  - «va» bilan bog'langan har bir shart;
+  - har bir istisno;
+  - bitta buzilishning barcha oqibatlari;
+  - ikki muddat bo'lsa, ikkalasi ham, kimniki ekani bilan;
+  - qisman ro'yxat bo'lsa, «qisman» ekani va to'liq ro'yxat qayerdaligi.
+
+  Bu talablar `tests/explain-regression.test.js` da tekshiriladi.
+- **Ziddiyat nomzodlari** aniqroq tanlanadi va modelga «tekshir, o'zing hal qilma» degan nomzod sifatida beriladi.
+- **Qismdan uzun jadval qatori** keyingi qismga qator identifikatori bilan boradi.
+
+**Faqat belgilovchi** — tayyor javobni o'zgartirmaydi, ostiga «qo'lda tekshiring» eslatmasini qo'shadi:
+- dayjest → javob signallari;
+- «ikki muddat»;
+- `majburiyat` (mumkin → kerak);
+- `jadval` (qiymat boshqa qatorda);
+- jadval tuzilishi saqlanmagani yoki qatorlab o'qilgani haqidagi eslatma.
+
+Bunday eslatma qo'shilgani «mazmun xatosi tuzatildi» degani **emas**: noto'g'ri gap javobda qoladi, faqat ko'rsatiladi.
+
+**Soxta belgini olib tashlovchi:** `[Qism n/m]` havolasi endi «hujjatda yo'q raqam» deb ko'rsatilmaydi. Kalit qatorlar sanog'i ham tuzatildi.
+
+### Hajm ticket'i va mammoth fallback'i (#425 ko'rib chiqilgandan keyin)
+
+**Ticket aniq matnga bog'langan.**
+- Imzo matnning SHA-256 xeshini o'z ichiga oladi (bosh va oxirdagi bo'shliqlarsiz).
+- Boshqa matn bilan kelgan ticket o'qilmaydi va server hajmni yuborilgan matndan qayta o'lchaydi. Bu holda jadval belgilari ham sanaladi.
+- DB testi (HTTP orqali): kichik DOCX ticket'i taxminan 80 000 belgili boshqa matn bilan yuborilganda Sinov tarifida 413 `DOCUMENT_TOO_LARGE` qaytadi, AI chaqirilmaydi. Kichik matn o'z ticket'i bilan 1 birlikka ishlaydi.
+
+**Mammoth fallback'i:**
+- Jadval o'quvchisi matn uzunligi bo'yicha emas, so'zlar bo'yicha tekshiriladi. Mammoth o'qigan har bir so'z jadval o'quvchisi matnida kamida shuncha marta bo'lishi kerak.
+- Bitta so'z yetishmasa ham mammoth matni ishlatiladi. Bunda tuzilish holati `lost` bo'ladi va u quyidagilarda ko'rsatiladi:
+  - extract javobi (`tableStructure`);
+  - imzolangan ticket;
+  - qamrov (`coverage.tables`) va ledger'dagi `doc_coverage`;
+  - diagnostika JSON'i;
+  - javob ostidagi «qator va ustun tuzilishi saqlanmadi — qo'lda tekshiring» eslatmasi.
+- Qatorlab o'qilgan jadval uchun ham «kataklar to'liq va to'g'ri o'qilgani tasdiqlanmagan» deb yoziladi. So'zlar to'liq bo'lishi kataklar to'g'ri joylashganini isbotlamaydi.
+
 ### Production javobini yangi tekshiruvdan o'tkazish (AI'siz)
 
 - `[Qism 5/7]` endi belgilanmaydi.
@@ -712,13 +763,13 @@ Bu mexanik signal, model sifati tasdig'i emas.
 
 Yangi AI chaqiruvi yo'q, cheklovlar o'zgarmagan. Narx jadvali chegarasi (aisha-comet).
 
-| Hujjat | Belgilar (to'lanmaydi, lekin yuboriladi) | Qismlar | #424 → #425 oddiy | qayta o'qish ehtimoli p = 0,14 / 0,5 | barcha qo'shimcha chaqiruvlar |
+| Hujjat | Belgilar (to'lanmaydi, lekin yuboriladi) | Qismlar | #424 → #425 oddiy | qayta o'qish ssenariysi p = 0,14 / 0,5 | barcha qo'shimcha chaqiruvlar |
 |---|---|---|---|---|---|
 | Faqat matn, 51 398 | 0 | 7 → 7 | $0.0571 → $0.0593 | $0.0668 / $0.0765 → $0.0696 / $0.0798 | $0.0765 → $0.0798 |
 | 51 398, 3 jadval (34 qator) | 4 793 | 7 → 8 | $0.0572 → $0.0658 | $0.0670 / $0.0767 → $0.0775 / $0.0863 | $0.0767 → $0.0863 |
 | 120 000, 2 ilova jadvali (80 qator) | 12 686 | 13 → 13 | $0.1111 → $0.1206 | $0.1303 / $0.1318 → $0.1416 / $0.1432 | $0.1318 → $0.1432 |
 
-- p = 0,14 — bitta production so'rovidagi kuzatuv (7 qismdan 1 tasi qayta o'qilgan). **Kalibrlanmagan**, kafolatlangan maksimum emas.
+- p = 0,14 — **ssenariy**, bitta production so'rovidan olingan (7 qismdan 1 tasi qayta o'qilgan). Bu statistik ehtimollik emas, kafolatlangan maksimum ham emas.
 - Jadval belgilari foydalanuvchi limitiga kirmaydi, lekin provayderga yuboriladi: kirish narxi va qismlar soni oshishi mumkin.
 - 120 000 belgili ishda qismlar kattalashadi va 1 600 tokenlik cheklovga yaqinlashadi.
 - VoiceLab credit'da hisoblaydi; narx ro'yxat narxi bo'yicha.

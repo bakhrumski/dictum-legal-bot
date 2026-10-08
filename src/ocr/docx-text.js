@@ -176,20 +176,40 @@ function bodyBlocks(body) {
   return out;
 }
 
+/** Words of a text (letters and digits), counted - to compare two readings word by word. */
+function wordCounts(text) {
+  const m = new Map();
+  for (const w of String(text || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []) m.set(w, (m.get(w) || 0) + 1);
+  return m;
+}
+
 /**
- * The text of a DOCX buffer. Returns { text, tables, reader, fallbackReason? }:
- * reader 'mammoth' (no table, or the safety net) or 'tables'.
+ * The text of a DOCX buffer. Returns { text, tables, reader, structure,
+ * fallbackReason?, wordCheck? }:
+ *   reader 'mammoth', structure 'none'  - no table: mammoth, as before;
+ *   reader 'tables',  structure 'rows'  - tables read row by row with their
+ *                                         headers (mechanical: that the cells
+ *                                         were read fully and correctly is not
+ *                                         proven - only that no word of the
+ *                                         document's own text is missing);
+ *   reader 'mammoth', structure 'lost'  - the table reader missed words, so
+ *                                         mammoth's text is used: the text is
+ *                                         kept, the rows and columns are NOT
+ *                                         (each cell is a line of its own).
+ * The safety net compares words, not lengths: every word mammoth reads must
+ * be in the table reader's text as often (its own markup aside).
  */
 async function docxText(buffer, { mammoth = require('mammoth') } = {}) {
   const zip = await JSZip.loadAsync(buffer);
   const file = zip.file('word/document.xml');
   const raw = async () => String((await mammoth.extractRawText({ buffer })).value || '').trim();
-  if (!file) return { text: await raw(), tables: 0, reader: 'mammoth' };
+  const plain = async () => ({ text: await raw(), tables: 0, reader: 'mammoth', structure: 'none' });
+  if (!file) return plain();
   const xml = await file.async('string');
-  if (!/<w:tbl[\s>]/u.test(xml)) return { text: await raw(), tables: 0, reader: 'mammoth' };
+  if (!/<w:tbl[\s>]/u.test(xml)) return plain();
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   const body = doc.getElementsByTagNameNS(W, 'body')[0];
-  if (!body) return { text: await raw(), tables: 0, reader: 'mammoth' };
+  if (!body) return plain();
   const lines = [];
   let n = 0;
   for (const b of bodyBlocks(body)) {
@@ -198,12 +218,17 @@ async function docxText(buffer, { mammoth = require('mammoth') } = {}) {
     lines.push('', ...tableLines(tableGrid(b), n), '');
   }
   const text = lines.join('\n').replace(/\n{3,}/gu, '\n\n').trim();
-  // never lose text to this reader: compare with mammoth's
+  // never lose text to this reader: every word mammoth reads must be here
   const mammothText = await raw();
-  const ours = withoutMarkup(text).replace(/\s+/gu, '').length;
-  const theirs = mammothText.replace(/\s+/gu, '').length;
-  if (ours < theirs * 0.97) return { text: mammothText, tables: n, reader: 'mammoth', fallbackReason: `table reader kept ${ours} of ${theirs} non-space characters` };
-  return { text, tables: n, reader: 'tables' };
+  const ours = wordCounts(withoutMarkup(text));
+  let total = 0, missing = 0;
+  for (const [w, c] of wordCounts(mammothText)) { total += c; missing += Math.max(0, c - (ours.get(w) || 0)); }
+  const wordCheck = { words: total, missing };
+  if (missing > 0) {
+    return { text: mammothText, tables: n, reader: 'mammoth', structure: 'lost', wordCheck,
+      fallbackReason: `the table reader missed ${missing} of ${total} words; mammoth's text is used and the tables' rows and columns are not kept` };
+  }
+  return { text, tables: n, reader: 'tables', structure: 'rows', wordCheck };
 }
 
-module.exports = { docxText, tableGrid, tableLines, withoutMarkup, paragraphText };
+module.exports = { docxText, tableGrid, tableLines, withoutMarkup, paragraphText, wordCounts };

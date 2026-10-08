@@ -147,7 +147,13 @@ Known state of the suites (Sept 2026):
   the doc ticket as `chars`, `billableChars` uses it; without a ticket the
   markup counts). Digest -> answer signals, two periods for one matter,
   "may" stated as "must" and a table value on another row are mechanical
-  signals only; contradiction candidates need the same object, role,
+  signals only (they flag, they do not correct; two periods are a mismatch
+  candidate, never a confirmed contradiction); the ticket binds the size to
+  the exact text (sha256) - another text is re-measured; when the table
+  reader misses a word, mammoth's text is used and the tables are reported
+  `lost` (extract `tableStructure`, ticket, `coverage.tables`, a note under
+  the answer); a row reading is never called proof of correct cells;
+  contradiction candidates need the same object, role,
   base, act and stage; `[Qism n/m]` labels are not figures. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,

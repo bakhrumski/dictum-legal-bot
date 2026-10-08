@@ -476,7 +476,7 @@ function sectionNote(name, r) {
  * removes nothing for a missing word: a flag is a reason to look, not proof
  * of an error, and no section is ever presented as verified.
  */
-function finishExplanation({ reply, truncated = false, source, digest = null, allowed = [], scope = [], scopeStats = null }) {
+function finishExplanation({ reply, truncated = false, source, digest = null, allowed = [], scope = [], scopeStats = null, tables = null }) {
   let text = String(reply || '').trim();
   const notes = [];
   const unread = digest ? digest.failed.concat(digest.truncated) : [];
@@ -500,6 +500,13 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
   if (scopeStats && scopeStats.dropped) {
     notes.push(`Saqlanadigan shartlar: ${scopeStats.candidates} ta nomzoddan ${scopeStats.selected} tasi modelga alohida berildi, ${scopeStats.dropped} tasi ro'yxat chegarasiga (${scopeStats.limits.max} qator / ${scopeStats.limits.maxChars} belgi) sig'madi — ular faqat hujjat matni yoki dayjest orqali berilgan; qo'lda tekshiring.`);
   }
+  // DOCX tables: never shown as kept when they were not; and reading rows is
+  // not a proof that every cell was read fully and correctly
+  if (tables && tables.count) {
+    notes.push(tables.structure === 'rows'
+      ? `Jadvallar: ${tables.count} ta jadval qatorlab, ustun sarlavhalari bilan o'qildi (mexanik; kataklar to'liq va to'g'ri o'qilgani tasdiqlanmagan) — muhim qiymatni asl jadval bilan tekshiring.`
+      : `Jadvallar — qo'lda tekshirish kerak: hujjatda ${tables.count} ta jadval bor, lekin ularning qator va ustun tuzilishi saqlanmadi (kataklar alohida qatorlar sifatida o'qildi) — qiymat, mezon yoki muddat qaysi qatorga tegishli ekanini asl hujjat bilan tekshiring.`);
+  }
   // digest -> answer: parts of a digest line the answer, where it speaks of
   // the same thing, does not hold word for word (a signal, not a verdict)
   const digestSignals = digest && digest.text ? relations.digestAnswerSignals(digest.text, text) : [];
@@ -513,7 +520,7 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
     notes.push(`Qamrov — qo'lda tekshirish kerak: ${splitLabels(digest)} hujjat qismlari chegarasida bo'lingan va bo'laklarda o'qilgan (matn yo'qolmagan, lekin bu bandning shartlari bir butun holda o'qilmagan).`);
   }
   if (ai.removed) notes.push("«AI izohi» bo'sh yoki to'ldiruvchi edi — ko'rsatilmadi.");
-  if (!bodyNote && !aiNote && !scopeMissing.length && !(scopeStats && scopeStats.dropped) && !(digest && (digest.splits || []).length) && !digestSignals.length && !periodChoices.length) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
+  if (!bodyNote && !aiNote && !scopeMissing.length && !(scopeStats && scopeStats.dropped) && !(digest && (digest.splits || []).length) && !digestSignals.length && !periodChoices.length && !(tables && tables.count && tables.structure !== 'rows')) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
   if (partial.length) text = `⚠️ **Qisman natija — to'liq tahlil emas:** ${partial.join('; ')}.\n\n${text}`;
   text += `\n\n**Avtomatik tekshiruv (AI emas):** ${CHECK_SCOPE}\n${notes.map(n => `- ${n}`).join('\n')}`;
   const check = {
@@ -917,7 +924,9 @@ function silentPeriodChoice(source, answer) {
     if (shared < 3) continue; // the answer does not discuss this matter
     const has = sig => sig.split(' ').every(w => al.includes(w));
     if (has(tx) && has(ty)) continue; // both stated
-    out.push({ kind: 'ikki_muddat', a: tx, b: ty, note: `hujjatda shu masala bo'yicha ikki xil muddat bor («${tx}» va «${ty}»); javobda ikkalasi ham to'liq uchramadi — biri tanlangan yoki ikkalasi qo'shilgan bo'lishi mumkin` });
+    // a candidate of a mismatch, never a confirmed contradiction: the two may
+    // be different clauses (one party's duty, another's right)
+    out.push({ kind: 'ikki_muddat', a: tx, b: ty, note: `nomuvofiqlik nomzodi (tasdiqlangan ziddiyat emas): hujjatda shu masala bo'yicha ikki xil muddat bor («${tx}» va «${ty}») — ular turli bandlar (masalan, bir tomonning majburiyati va boshqasining huquqi) bo'lishi mumkin; javobda ikkalasi to'liq uchramadi, biri tanlangan yoki ikkalasi qo'shilgan bo'lishi mumkin` });
   }
   return out;
 }
@@ -1175,7 +1184,7 @@ const EXPLAIN_MAX_TOKENS = 3000;
  * the shared digest above it; one explanation call; the answer finished by
  * finishExplanation. `digest(text)` returns { text, chunks, failed, ... }.
  */
-async function explainDocument({ documentText, langName, callAI, digest, userId = null, endpoint = '/api/draft/explain-document' }) {
+async function explainDocument({ documentText, langName, callAI, digest, userId = null, endpoint = '/api/draft/explain-document', tables = null }) {
   // the document's own size decides (page marks are ours), as for units
   const chars = contentChars(documentText);
   const full = chars <= EXPLAIN_FULL_TEXT_MAX;
@@ -1216,7 +1225,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   if (!raw) return { reply: '', provider: result && result.provider };
   // checked against what the model was given AND the full text: a figure in
   // the full text that the digest lost is not invented
-  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel,
+  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel, tables,
     allowed: [String(chars), String(documentText.length), String(pages.length), d ? String(d.chunks) : ''].filter(Boolean) });
   const unread = unreadParts(d);
   return {
@@ -1227,7 +1236,11 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
       scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, savedChars: sel.savedChars }, conflictCandidates: conflicts, answer: raw },
     coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
       chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated, clauseSplits: d ? (d.splits || []) : [],
-      placeholders: placeholders.count, finalRun: true, summary: coverageSummary(d, { finalRun: true }),
+      // DOCX tables: 'rows' read row by row (mechanical - cells not proven), 'lost' read as loose lines
+      tables: tables ? { count: tables.count, structure: tables.structure, meaning: COVERAGE_MEANING } : null,
+      placeholders: placeholders.count, finalRun: true,
+      // the ledger's doc_coverage carries the table reading too (master views)
+      summary: { ...coverageSummary(d, { finalRun: true }), ...(tables ? { tables: { count: tables.count, structure: tables.structure } } : {}) },
       scopeLines: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, limits: sel.limits },
       // the document was not read whole: not the service (released by the route)
       documentFullyRead: unread.length === 0 && (!d || d.covered !== false),

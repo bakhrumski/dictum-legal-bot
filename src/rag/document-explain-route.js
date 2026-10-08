@@ -55,7 +55,10 @@ function mountExplainDocument(app, deps) {
       const userId = (req.session && req.session.adminId) || null;
       // full text up to 14 000 chars, the shared digest above it; one
       // explanation call; the answer is checked against the source with no AI
-      const result = await explainDocument({ documentText, langName, callAI, userId, digest: t => digest(t, userId) });
+      // DOCX tables, as the server read them at extraction (signed with this exact text)
+      const ticket = tariffModule.ledger && typeof tariffModule.ledger.readDocTicket === 'function'
+        ? tariffModule.ledger.readDocTicket(req.body.docTicket, documentText) : null;
+      const result = await explainDocument({ documentText, langName, callAI, userId, digest: t => digest(t, userId), tables: ticket && ticket.tables ? ticket.tables : null });
       // what was read goes to the request's ledger row (ai_requests.doc_coverage)
       if (result.coverage) usageLedger.annotate({ docCoverage: result.coverage.summary || null });
       // no part of the document read whole: no explanation was generated; the

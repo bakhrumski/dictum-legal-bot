@@ -83,7 +83,9 @@ async function kpiDocx({ longRow = 0 } = {}) {
 
   await test('two periods for one matter: an answer that states one, or blends them, is flagged; one that states both is not', () => {
     assert.strictEqual(finish(fx.answerWrong).check.periodChoices.length, 1);
-    assert.ok(finish(fx.answerWrong).reply.includes("Muddatlar — qo'lda tekshirish kerak: hujjatda shu masala bo'yicha ikki xil muddat bor"));
+    const note = finish(fx.answerWrong).notes.find(n => n.startsWith('Muddatlar'));
+    assert.ok(note.startsWith("Muddatlar — qo'lda tekshirish kerak: nomuvofiqlik nomzodi (tasdiqlangan ziddiyat emas): hujjatda shu masala bo'yicha ikki xil muddat bor"), note);
+    assert.ok(note.includes("ular turli bandlar (masalan, bir tomonning majburiyati va boshqasining huquqi) bo'lishi mumkin"));
     assert.deepStrictEqual(finish(fx.answerFaithful).check.periodChoices, []);
   });
 
@@ -140,7 +142,7 @@ async function kpiDocx({ longRow = 0 } = {}) {
     assert.strictEqual(ex.billableChars(wrapped, null), 5002);
     // the route signs its own measure
     const routes = fs.readFileSync(path.join(__dirname, '../src/ocr/routes.js'), 'utf8');
-    assert.ok(routes.includes("const chars = contentChars(text);") && routes.includes('ledger.signDocTicket({ text, chars })'));
+    assert.ok(routes.includes("const chars = contentChars(text);") && routes.includes('ledger.signDocTicket({ text, chars, tables })'));
     const tiers = fs.readFileSync(path.join(__dirname, '../src/rag/subscription-tiers.js'), 'utf8');
     assert.ok((tiers.match(/billableChars\(clean, ticket\)/gu) || []).length >= 2);
   });
@@ -166,6 +168,48 @@ async function kpiDocx({ longRow = 0 } = {}) {
       assert.strictEqual(ledger.readDocTicket(d.docTicket, d.text).chars, d.charCount);
       assert.strictEqual(ai, 0);
     } finally { server.close(); }
+  });
+
+  await test('prevention, not only flags: the final prompt requires keeping what the digest kept (subject, start event, may/must, conditions joined by "and", exceptions, every consequence, both periods, table rows, partial lists said to be partial)', () => {
+    const p = ex.explainSystem('Uzbek');
+    for (const rule of [
+      'Keep, as the digest or the document gives them: who acts',
+      '"all participants, including X" is not "the other participants"',
+      'the event a period runs from (sent is not received)',
+      '"may" versus "must"',
+      'every condition joined by "and", every exception and every consequence of one breach',
+      'If you list only some items of a list or a table, say that the list is partial and where the whole is',
+      'state both with whose they are; never choose one silently or blend them into one',
+      'A value, criterion or deadline from a table row stays with that row',
+    ]) assert.ok(p.includes(rule), rule);
+    const d = ex.DIGEST_SYSTEM;
+    for (const rule of ['keep who does each act and the exact event a period runs from (sent or received, signed or registered)', 'whether something "may" or "must" be done', 'never move one to another row, never merge rows']) assert.ok(d.includes(rule), rule);
+    // general words only: nothing of the production document or of this fixture
+    for (const w of ['Sarvar', 'Nurli', 'KPI', 'MRR', 'transh']) assert.ok(!(p + d).includes(w), w);
+  });
+
+  await test('mammoth fallback: when the table reader misses words, the text is kept but the table structure is reported as LOST - in the extract result, the ticket, the coverage and under the answer; a row reading is never called proof of correct cells', async () => {
+    const buf = await kpiDocx();
+    // a reading where mammoth sees a word the table reader does not
+    const realMammoth = require('mammoth');
+    const stub = { extractRawText: async (o) => ({ value: `${(await realMammoth.extractRawText(o)).value}\nqo'shimchaso'z` }) };
+    const lost = await docxText(buf, { mammoth: stub });
+    assert.deepStrictEqual([lost.reader, lost.structure, lost.tables], ['mammoth', 'lost', 1]);
+    assert.ok(lost.wordCheck.missing >= 1 && /rows and columns are not kept/u.test(lost.fallbackReason));
+    assert.ok(!lost.text.includes('⟦Jadval'), 'no row markup claimed');
+    // equal length is not enough: a word missing while the length matches still falls back
+    const swapped = { extractRawText: async (o) => ({ value: (await realMammoth.extractRawText(o)).value.replace('Sinov', 'Sinoq') }) };
+    assert.strictEqual((await docxText(buf, { mammoth: swapped })).structure, 'lost');
+    // the ticket carries it; the explanation reports it
+    const t = ledger.readDocTicket(ledger.signDocTicket({ text: lost.text, chars: ex.contentChars(lost.text), tables: { count: 1, structure: 'lost' } }), lost.text);
+    assert.deepStrictEqual(t.tables, { count: 1, structure: 'lost' });
+    const r = await ex.explainDocument({ documentText: lost.text, langName: 'Uzbek', callAI: async () => ({ text: 'Izoh.', provider: 'stub' }), digest: async () => null, tables: t.tables });
+    assert.deepStrictEqual(r.coverage.tables, { count: 1, structure: 'lost', meaning: 'technical' });
+    assert.ok(r.reply.includes("Jadvallar — qo'lda tekshirish kerak: hujjatda 1 ta jadval bor, lekin ularning qator va ustun tuzilishi saqlanmadi"), r.reply.slice(-600));
+    assert.ok(!r.reply.includes('belgilanadigan joy topilmadi'));
+    // a row reading: said, with its limit
+    const ok = await ex.explainDocument({ documentText: 'Matn. '.repeat(20), langName: 'Uzbek', callAI: async () => ({ text: 'Izoh.', provider: 'stub' }), digest: async () => null, tables: { count: 1, structure: 'rows' } });
+    assert.ok(ok.reply.includes("kataklar to'liq va to'g'ri o'qilgani tasdiqlanmagan"));
   });
 
   await test('a table value stated with another row is flagged (digest or answer); the right row is not', async () => {

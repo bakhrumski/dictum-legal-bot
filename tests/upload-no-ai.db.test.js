@@ -237,6 +237,53 @@ async function docxOf(text) {
       assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
     });
 
+    await test('the size ticket is bound to the exact text: a small document\'s ticket sent with a large text is not used - the server re-measures the text it got (refused as too large here), no AI', async () => {
+      const md = require('./helpers/mini-docx');
+      const u = await makeUser(); // Sinov: one unit per job
+      const small = await post('/api/analyze/extract', u, { file: await md.docx(md.p('Kichik shartnoma: 1.1. Narx 5 000 000 so\'m.')), name: 'kichik.docx', type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      assert.strictEqual(small.status, 200, JSON.stringify(small.body));
+      assert.ok(small.body.docTicket && small.body.units === 1);
+      const big = 'Katta hujjat bandi, boshqa matn. '.repeat(2500); // ~80 000 chars: 2 units
+      assert.strictEqual(ledger.readDocTicket(small.body.docTicket, big), null, 'the ticket does not fit another text');
+      const c0 = calls.ai;
+      const r = await post('/api/draft/explain-document', u, { json: { documentText: big, docTicket: small.body.docTicket, confirmed: true } });
+      assert.deepStrictEqual([r.status, r.body.code], [413, 'DOCUMENT_TOO_LARGE'], JSON.stringify(r.body));
+      assert.ok(r.body.size.chars >= big.trim().length, `sized from the text sent: ${r.body.size.chars}`);
+      // the small text with its own ticket runs, at the size the server signed
+      const ok = await post('/api/draft/explain-document', u, { json: { documentText: small.body.text, docTicket: small.body.docTicket, confirmed: true } });
+      assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+      await settle(250);
+      assert.strictEqual(calls.ai, c0 + 1, 'no AI for the refused one');
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
+    });
+
+    await test('DOCX tables over HTTP: the extract signs how the tables were read; the explanation reports it in coverage and under the answer - "rows" with its limit, "lost" when they were not kept', async () => {
+      const md = require('./helpers/mini-docx');
+      const docxBuf = await md.docx(md.p('Ilova.') + md.table([
+        md.row([md.cell('Ish'), md.cell('Muddat')], { header: true }),
+        md.row([md.cell('Hisobot topshirish'), md.cell('mart oyi')]),
+        md.row([md.cell('Audit o\'tkazish'), md.cell('iyun oyi')]),
+      ]));
+      const u = await makeUser();
+      const x = await post('/api/analyze/extract', u, { file: docxBuf, name: 'ilova.docx', type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      assert.deepStrictEqual([x.status, x.body.tables, x.body.tableStructure], [200, 1, 'rows'], JSON.stringify(x.body));
+      const r = await post('/api/draft/explain-document', u, { json: { documentText: x.body.text, docTicket: x.body.docTicket, confirmed: true } });
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.deepStrictEqual(r.body.coverage.tables, { count: 1, structure: 'rows', meaning: 'technical' });
+      assert.ok(r.body.reply.includes("qatorlab, ustun sarlavhalari bilan o'qildi (mexanik; kataklar to'liq va to'g'ri o'qilgani tasdiqlanmagan)"));
+      // a reading that lost the table structure (the server's own signed record)
+      const v = await makeUser();
+      const flat = 'Ilova.\n\nIsh\n\nMuddat\n\nHisobot topshirish\n\nmart oyi\n\nAudit o\'tkazish\n\niyun oyi';
+      const lostTicket = ledger.signDocTicket({ text: flat, chars: flat.length, tables: { count: 1, structure: 'lost' } });
+      const l = await post('/api/draft/explain-document', v, { json: { documentText: flat, docTicket: lostTicket, confirmed: true } });
+      assert.strictEqual(l.status, 200, JSON.stringify(l.body));
+      assert.deepStrictEqual(l.body.coverage.tables, { count: 1, structure: 'lost', meaning: 'technical' });
+      assert.ok(l.body.reply.includes("qator va ustun tuzilishi saqlanmadi"));
+      // without a ticket nothing is claimed about tables
+      const n = await post('/api/draft/explain-document', await makeUser(), { json: { documentText: flat, confirmed: true } });
+      assert.strictEqual(n.body.coverage.tables, null);
+    });
+
     await test('chat with a document: a question takes one chat unit and runs AI; asking for an analysis still goes to the cost card (409), no AI', async () => {
       const u = await makeUser();
       const doc = 'Shartnoma 5-bandi: ijarachi har oy to\'laydi. '.repeat(60);

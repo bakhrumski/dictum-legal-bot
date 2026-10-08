@@ -401,7 +401,10 @@ function mountAnalyzerRoutes(app, deps) {
         // tables keep their rows, columns and headers (src/ocr/docx-text.js);
         // a document with no table reads exactly as before (mammoth)
         const docx = await require('./docx-text').docxText(fs.readFileSync(filePath));
+        // the table reader missed words: mammoth's text is used - the text is
+        // kept, the tables' rows and columns are not, and the answer says so
         if (docx.fallbackReason) console.warn('[ANALYZE] docx table reader not used:', docx.fallbackReason);
+        const tables = docx.tables ? { count: docx.tables, structure: docx.structure } : null;
         const text = docx.text;
         // the billable size is the document's own text, measured here: the
         // markup the table reader adds (row ids, column headers, merged and
@@ -411,7 +414,8 @@ function mountAnalyzerRoutes(app, deps) {
         const chars = contentChars(text);
         const size = ledger ? ledger.docUnits({ chars }) : null;
         return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: chars, tables: docx.tables,
-          units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text, chars }) : null });
+          tableStructure: tables ? tables.structure : 'none',
+          units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text, chars, tables }) : null });
       }
       const pdfParse = require('pdf-parse/lib/pdf-parse.js');
       const buf = fs.readFileSync(filePath);

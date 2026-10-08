@@ -134,11 +134,13 @@ function ticketSecret() {
 function textHash(text = '') {
   return crypto.createHash('sha256').update(String(text || '').trim()).digest('hex');
 }
-function signDocTicket({ text = '', pages = null, scanned = false, chars = null } = {}) {
+function signDocTicket({ text = '', pages = null, scanned = false, chars = null, tables = null } = {}) {
   // c: the billable characters the server measured at extraction (without
   // the system's own page marks and table markup) - never the client's figure
   const body = { h: textHash(text), p: Number(pages) > 0 ? Math.ceil(Number(pages)) : null, s: scanned ? 1 : 0, t: Date.now(),
-    ...(Number.isFinite(Number(chars)) && chars !== null ? { c: Math.max(0, Math.round(Number(chars))) } : {}) };
+    ...(Number.isFinite(Number(chars)) && chars !== null ? { c: Math.max(0, Math.round(Number(chars))) } : {}),
+    // DOCX tables: how many, and whether their rows and columns were kept ('rows') or lost ('lost')
+    ...(tables && tables.count ? { tb: Number(tables.count), ts: tables.structure === 'rows' ? 'rows' : 'lost' } : {}) };
   const payload = Buffer.from(JSON.stringify(body)).toString('base64url');
   const sig = crypto.createHmac('sha256', ticketSecret()).update(payload).digest('base64url').slice(0, 32);
   return `${payload}.${sig}`;
@@ -179,7 +181,8 @@ function readDocTicket(ticket, text) {
   try {
     const body = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     if (body.h !== textHash(text) || Date.now() - body.t > 24 * 3600e3) return null;
-    return { pages: body.p, scanned: !!body.s, chars: Number.isFinite(body.c) ? body.c : null };
+    return { pages: body.p, scanned: !!body.s, chars: Number.isFinite(body.c) ? body.c : null,
+      ...(body.tb ? { tables: { count: body.tb, structure: body.ts } } : {}) };
   } catch (_) { return null; }
 }
 
