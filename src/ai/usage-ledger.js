@@ -57,7 +57,11 @@ function newRequest(meta = {}) {
     // shared by every nested scope (withStage / withChain copy the store)
     shared: { calls: 0, providerCalls: 0, knownCostUsd: 0, unknownCostCalls: 0, telemetryErrors: 0, annotations: {}, opened: false, degraded: new Set(),
       // per-call reservations under a strict pool (pilot budget)
-      inflightUsd: 0, reservedUnknownUsd: 0, boundExceeded: 0, estimatedRiskCalls: 0, estimatedRiskUsd: 0 },
+      inflightUsd: 0, reservedUnknownUsd: 0, boundExceeded: 0, estimatedRiskCalls: 0, estimatedRiskUsd: 0,
+      // calls started and not yet recorded, and the cost they may still add
+      // (their bound, or the list-price plan figure): checked with the
+      // finished ones, so parallel calls cannot pass the request's limits
+      callsInFlight: 0, costInFlightUsd: 0 },
     budget: requestBudget(meta.budget),
   };
 }
@@ -78,16 +82,31 @@ function requestBudget(override = {}) {
   };
 }
 
-const ESSENTIAL_STAGES = new Set(['answer', 'answer_fallback', 'cross_check', 'claim_check', 'stt', 'tts', 'document', 'ocr']);
+const ESSENTIAL_STAGES = new Set(['answer', 'answer_fallback', 'cross_check', 'claim_check', 'stt', 'tts', 'document', 'document_digest', 'ocr']);
 
-/** Why a new call may not start for this request, or null. */
-function budgetBlock(store, stage) {
+/**
+ * Why a new call may not start for this request, or null. `reserveUsd` is
+ * the most the new call may cost (its bound, or the list-price plan figure;
+ * 0 when neither is known). Calls already started count with the finished
+ * ones - the check and the slot it grants happen in one synchronous step
+ * (track), so calls started at the same moment cannot together pass the
+ * call or cost limit. A call whose cost cannot be bounded (reserveUsd 0)
+ * still takes a call slot; its cost is known only when it ends.
+ */
+function budgetBlock(store, stage, reserveUsd = 0) {
   if (!store || !store.budget) return null;
   const b = store.budget;
   if (Date.now() - store.startedAt > b.maxMs) return `time limit ${b.maxMs} ms reached`;
-  if (store.shared.knownCostUsd >= b.maxCostUsd) return `known cost limit $${b.maxCostUsd} reached`;
+  const sh = store.shared;
+  if (sh.knownCostUsd >= b.maxCostUsd) return `known cost limit $${b.maxCostUsd} reached`;
+  // under the pilot's strict per-call pool, reserveCall already holds each
+  // attempt's bound against the request and the pool (CALL_RESERVE)
+  const pilotReserves = !!(b.sharedPool && b.sharedPool.perCall);
+  if (!pilotReserves && reserveUsd > 0 && sh.knownCostUsd + (sh.costInFlightUsd || 0) + reserveUsd > b.maxCostUsd + 1e-12) {
+    return `cost limit $${b.maxCostUsd}: $${sh.knownCostUsd.toFixed(4)} spent + $${(sh.costInFlightUsd || 0).toFixed(4)} in flight + $${reserveUsd.toFixed(4)} for this call`;
+  }
   const limit = b.maxCalls + (ESSENTIAL_STAGES.has(stage) ? b.essentialReserve : 0);
-  if (store.shared.providerCalls >= limit) return `call limit ${limit} reached`;
+  if (sh.providerCalls + (sh.callsInFlight || 0) >= limit) return `call limit ${limit} reached`;
   const pool = b.sharedPool;
   if (pool) {
     const committed = sharedPoolCommitted(store);
@@ -216,7 +235,10 @@ const STAGE_BY_ENDPOINT = [
   [/classify-topic/u, 'topic'],
   [/source-suggest/u, 'source_suggestion'],
   [/fallback/u, 'answer_fallback'],
-  [/doc-digest|explain-document|legal-opinion|draft/u, 'document'],
+  // a long document's per-part digest is its own stage, apart from the
+  // service's final generation (2026-10-07)
+  [/doc-digest/u, 'document_digest'],
+  [/explain-document|legal-opinion|draft/u, 'document'],
   [/legal-verify/u, 'verification'],
   [/screening/u, 'screening'],
   [/ocr|vision/u, 'ocr'],
@@ -265,8 +287,10 @@ async function write(row, store) {
  * Record one AI call. event: { callId?, provider, model, modelReturned?,
  * endpoint?, stage?, status, errorCode?, error?, startedAt, finishedAt,
  * usage: { inTokens, outTokens, cachedTokens, reasoningTokens, audioMs,
- * characters, credits, providerCostUsd, estimated }, attempt?, retryReason?,
- * fallbackFrom?, userId? }. Never throws; resolves to the row written.
+ * characters, credits, providerCostUsd, estimated, finishReason, truncated },
+ * attempt?, retryReason?, fallbackFrom?, userId?, detail? }. detail is what
+ * the call was for (e.g. { phase: 'digest', part: '3', of: 7, chars }).
+ * Never throws; resolves to the row written.
  */
 async function record(event = {}) {
   const store = current();
@@ -311,6 +335,11 @@ async function record(event = {}) {
     userId: event.userId != null ? event.userId : (store ? store.userIdOf() : null),
     chatId: store ? store.chatId : null,
     endpoint: event.endpoint || null,
+    // why the provider stopped ('stop', 'length', 'MAX_TOKENS', ...) and
+    // whether the text was cut at the output cap - as the provider said it
+    finishReason: usage.finishReason == null ? null : String(usage.finishReason).slice(0, 30),
+    truncated: usage.truncated == null ? null : !!usage.truncated,
+    detail: event.detail && typeof event.detail === 'object' ? event.detail : null,
   };
   if (store) {
     store.shared.calls++;
@@ -410,8 +439,17 @@ async function track(meta, fn) {
   }
   const open = health.openState(meta.provider, meta.model);
   if (open) throw skip('CIRCUIT_OPEN', `${open.code}: ${open.reason || 'circuit open'} (until ${new Date(open.until).toISOString()})`);
-  const blocked = budgetBlock(store, stage);
+  // the most this call may cost: its bound, else the list-price plan figure
+  // (VoiceLab bills credits: meta.planUsd), else unknown (0 reserved)
+  const reserveUsd = [meta.bound && meta.bound.usd, meta.planUsd].map(Number).find(v => Number.isFinite(v) && v > 0) || 0;
+  let holding = false;
+  // a call slot (and its cost) is taken in the same synchronous step as the
+  // check, and given back when the attempt is recorded
+  const takeSlot = () => { if (store && !holding) { store.shared.callsInFlight++; store.shared.costInFlightUsd += reserveUsd; holding = true; } };
+  const giveSlot = () => { if (store && holding) { store.shared.callsInFlight--; store.shared.costInFlightUsd = Math.max(0, store.shared.costInFlightUsd - reserveUsd); holding = false; } };
+  const blocked = budgetBlock(store, stage, reserveUsd);
   if (blocked) throw skip('REQUEST_BUDGET', blocked);
+  takeSlot();
 
   // per-attempt reservation (strict pilot budget): every attempt - the
   // first, a transient retry, an adapter's own retry - reserves its own
@@ -427,11 +465,12 @@ async function track(meta, fn) {
     unknownBefore = store ? store.shared.unknownCostCalls : 0;
   };
   const releaseAttempt = () => { if (reservation) reservation.release(knownBefore, unknownBefore); reservation = null; };
-  reserveAttempt();
+  try { reserveAttempt(); } catch (e) { giveSlot(); throw e; }
 
   const failAttempt = (error, { breaker = true } = {}) => {
     const c = health.classifyError(error);
     record({ ...base, callId, parentCallId, modelReturned, status: c.code === 'TIMEOUT' ? 'timeout' : 'error', errorCode: c.code, errorKind: c.kind, errorReason: c.reason, startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason });
+    giveSlot();
     if (breaker) health.recordOutcome(meta.provider, meta.model, c);
     return c;
   };
@@ -452,6 +491,7 @@ async function track(meta, fn) {
       releaseAttempt();
       nextAttempt(reason);
       reserveAttempt();
+      takeSlot();
     },
   };
 
@@ -464,6 +504,7 @@ async function track(meta, fn) {
     try {
       const result = await fn(call);
       record({ ...base, callId, parentCallId, modelReturned, status: 'success', startedAt, finishedAt: Date.now(), usage: usage || {}, attempt, retryReason });
+      giveSlot();
       releaseAttempt();
       health.recordSuccess(meta.provider, meta.model);
       if (chain) chain.lastFailed = null;
@@ -482,12 +523,13 @@ async function track(meta, fn) {
       }
       const c = failAttempt(error);
       releaseAttempt();
-      if (c.kind === 'transient' && transientLeft > 0 && !budgetBlock(store, stage) && !health.openState(meta.provider, meta.model)) {
+      if (c.kind === 'transient' && transientLeft > 0 && !budgetBlock(store, stage, reserveUsd) && !health.openState(meta.provider, meta.model)) {
         transientLeft--;
+        takeSlot(); // held through the wait: the retry is already counted
         const wait = Math.min(4000, c.retryAfterMs != null ? c.retryAfterMs : 400 + Math.floor(Math.random() * 600));
         await new Promise(r => setTimeout(r, wait));
         nextAttempt(`transient:${c.code}`);
-        reserveAttempt();
+        try { reserveAttempt(); } catch (e) { giveSlot(); throw e; }
         continue;
       }
       if (chain) chain.lastFailed = meta.model || meta.provider || null;
@@ -541,6 +583,7 @@ async function finishRequest(store, fields = {}) {
       outcome: data.outcome || null,
       legalCheck: data.legalCheck || null,
       trigger: data.trigger || null,
+      docCoverage: data.docCoverage || null,
       degraded: store.shared.degraded.size ? [...store.shared.degraded] : null,
       telemetryErrors: store.shared.telemetryErrors,
     });

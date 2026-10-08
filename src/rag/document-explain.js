@@ -47,9 +47,21 @@ function pagesIn(text) {
 }
 
 // ── Digest chunks: the whole text, each chunk with its char and page range ──
-const CHUNK = 12000;
-const OVERLAP = 400;
-const MAX_CHUNKS = 11; // 11 x 11 600 + 400 = 128 000 chars: the 120 000-char job
+// 2026-10-07 (#420 live run: a 51 398-char DOCX in 5 chunks of 12 000; every
+// digest call used exactly its 1 600-token cap and all 5 parts came back
+// incomplete). A chunk is now 8 000 characters - growing only as far as a
+// 120 000-character job needs to fit in MAX_CHUNKS - and the digest is a
+// compact one-line-per-item list, so the expected digest of a chunk stays
+// well under the unchanged 1 600-token cap (scripts/explain-benchmark.js).
+const CHUNK = 8000;
+const OVERLAP = 300;
+const MAX_CHUNKS = 13; // 13 chunks cover the 120 000-character job: chunkSizeFor() grows them to fit
+
+/** The chunk length for a text of `length` characters: CHUNK, or larger so MAX_CHUNKS cover it. */
+function chunkSizeFor(length, { chunk = CHUNK, overlap = OVERLAP, maxChunks = MAX_CHUNKS } = {}) {
+  const need = Math.ceil(Math.max(0, length - overlap) / maxChunks) + overlap;
+  return Math.max(chunk, need);
+}
 
 /**
  * Cut `text` into chunks that cover all of it (overlapping by OVERLAP),
@@ -58,9 +70,10 @@ const MAX_CHUNKS = 11; // 11 x 11 600 + 400 = 128 000 chars: the 120 000-char jo
  * the text is longer than MAX_CHUNKS can hold (the plan's job size refuses
  * that before here, src/rag/tariff-ledger.js jobFits).
  */
-function digestChunks(text, { chunk = CHUNK, overlap = OVERLAP, maxChunks = MAX_CHUNKS } = {}) {
-  const snapped = cutChunks(text, { chunk, overlap, maxChunks, snap: true });
-  const fixed = cutChunks(text, { chunk, overlap, maxChunks, snap: false });
+function digestChunks(text, { chunk, overlap = OVERLAP, maxChunks = MAX_CHUNKS } = {}) {
+  const size = chunk || chunkSizeFor(String(text || '').length, { overlap, maxChunks });
+  const snapped = cutChunks(text, { chunk: size, overlap, maxChunks, snap: true });
+  const fixed = cutChunks(text, { chunk: size, overlap, maxChunks, snap: false });
   // ending chunks at page or paragraph breaks must never cost coverage or an
   // extra AI call: if it would leave the end unread or need one more chunk,
   // cut at fixed lengths (as before)
@@ -101,36 +114,53 @@ function pagesSpanned(text, start, end) {
   return first == null ? null : { from: first, to: last };
 }
 
-// The digest keeps what the explanation needs to stay faithful: who says
+// The digest keeps what the explanation needs to stay faithful - who says
 // what, its qualifiers, exceptions, recommendations and their authors, and
-// where each item is - not only obligations and dates.
+// where each item is - in a compact one-line-per-item form: the near-verbatim
+// bullets asked for before #420 filled the token cap on dense contracts.
 const DIGEST_SYSTEM = [
-  'You extract, from one excerpt of a longer document, the material a faithful plain-language explanation and a legal opinion need.',
-  'Write one bullet per item, in the same language as the excerpt, as close to its wording as possible:',
-  '- every obligation, right, condition, deadline, term, amount, share, date, party and role - with the clause/section number or heading when present;',
-  '- every exception, limitation, cancellation or termination condition, liability rule and penalty;',
-  '- every finding, statement or claim WITH its source as the document gives it (who said, reported, checked or found it) and WITH its qualifiers kept verbatim (for example "according to", "within the scope of the review", "was not identified", "as of the date of the document");',
-  '- every recommendation or conclusion WITH its author as the document names it;',
-  '- missing information, open questions and contradictions between clauses;',
-  '- every reference to laws, regulations (qonun, kodeks, VM qarori, farmon, PQ, PF) or court decisions, with its number, date and article exactly as written, and what the document says about it;',
-  '- the page: when the excerpt has "[Sahifa N]" lines, end each bullet with "(N-sahifa)"; never guess a page or a clause number.',
-  'Do not interpret, judge, add consequences or merge separate items. Do not turn "not identified" into "does not exist". No preamble.',
+  'You extract, from one excerpt of a longer document, a COMPACT digest that a faithful plain-language explanation and a legal opinion can rely on. Same language as the excerpt.',
+  'Format: one line per item: "- <what> | <who / whose words> | <condition, exception or qualifier> | <clause or heading>"; leave out an empty field. About 30 words a line at most. Keep names, amounts, currencies, dates, percentages, periods and clause numbers exactly; quote only short decisive words (a qualifier, an exception trigger), never whole clauses.',
+  'Include:',
+  '- obligations, rights, deadlines and conditions; payment terms: amount, currency, advance, schedule, deadline, penalty and its cap;',
+  '- every exception, limitation, termination condition and liability rule, and any cumulative or aggregate liability cap;',
+  '- findings or claims WITH their source ("according to X") and qualifiers ("not identified", "as of <date>", "within the scope of the review");',
+  '- recommendations WITH their author as the document names it;',
+  '- clauses that contradict each other: name both;',
+  '- every reference to laws, regulations (qonun, kodeks, VM qarori, farmon, PQ, PF) or court decisions, with its number, date and article as written;',
+  '- annexes and tables: one line each, naming what it lists and its totals or key rows;',
+  '- unfilled template fields (blank lines, "____", "[...]", "XX") as "TO\'LDIRILMAGAN: <field>"; say once if the excerpt looks like a template;',
+  '- the page: when the excerpt has "[Sahifa N]" lines, end each line with "(N-sahifa)"; never guess a page or a clause number.',
+  'Leave out signatures, bank details, repeated definitions and wording that creates no right or duty.',
+  'Keep different acts apart: filing an application is not registration, and registration is not a right; "not identified" is not "does not exist".',
+  'Do not interpret, judge, add consequences or merge separate items. No preamble. The whole digest should stay under about a third of the excerpt\'s length.',
 ].join('\n');
+
+// Unfilled template fields: blank lines, dotted lines, "[sana]", "XX.XX.20XX"
+const PLACEHOLDER_RE = /_{4,}|\.{8,}|…{3,}|\[\s*(?:_+|\.+|sana|ism|f\.?\s*i\.?\s*sh\.?|summa|raqam|manzil|nomi|дата|сумма|фио)\s*\]|«\s*_+\s*»|\bX{2,}(?:[./]X{2,})*(?:[./](?:20)?X{2,})?\b/giu;
+/** How many unfilled template fields a text has, with up to 3 examples. */
+function placeholdersIn(text) {
+  const found = String(text || '').match(PLACEHOLDER_RE) || [];
+  return { count: found.length, examples: [...new Set(found.map(f => f.slice(0, 20)))].slice(0, 3) };
+}
 
 /**
  * The note the explanation prompt gets about what it was given. Mechanical:
  * from the digest's own record, never from the model.
  */
-function coverageNote({ totalChars, digest = null, pages = [], empty = [] }) {
+function coverageNote({ totalChars, digest = null, pages = [], empty = [], placeholders = null }) {
   const emptyInfo = empty.length ? ` Matni yo'q (o'qilmagan, ehtimol rasm/skan) sahifalar: ${empty.join(', ')} — ularning mazmuni haqida hech narsa dema, faqat o'qilmaganini ayt.` : '';
   const pageInfo = pages.length ? ` Sahifa belgilari bor: 1–${Math.max(...pages)}.` : ' Sahifa belgilari yo\'q: sahifa raqamini keltirma; band raqami, sarlavha yoki qisqa iqtibosdan foydalan.';
-  if (!digest) return `QAMROV: hujjatning to'liq matni berildi (${totalChars} belgi).${pageInfo}${emptyInfo}`;
-  const missing = digest.failed.concat(digest.truncated);
+  const tplInfo = placeholders && placeholders.count
+    ? ` Hujjatda to'ldirilmagan joylar bor (${placeholders.count} ta, masalan ${placeholders.examples.map(x => `«${x}»`).join(', ')}): bu shablon yoki to'ldirilmagan nusxa bo'lishi mumkin — buni ayt va to'ldirilmagan joyni kelishilgan shart deb tushuntirma.`
+    : '';
+  if (!digest) return `QAMROV: hujjatning to'liq matni berildi (${totalChars} belgi).${pageInfo}${emptyInfo}${tplInfo}`;
+  const missing = unreadParts(digest);
   const pagesNote = pages.length ? ' Dayjestdagi "(N-sahifa)" va "[Qism … · N-sahifa]" belgilari asl sahifalardan olingan.' : '';
   const gaps = missing.length
-    ? ` DIQQAT: ${missing.map(c => `${c.index + 1}-qism${c.pages ? ` (${c.pages.from === c.pages.to ? c.pages.from : `${c.pages.from}–${c.pages.to}`}-sahifa)` : ''}${digest.truncated.includes(c) ? ' qisman' : ''}`).join(', ')} o'qilmadi yoki to'liq o'qilmadi — javobda buni aniq ayt va u qismlar haqida xulosa chiqarma.`
+    ? ` DIQQAT: ${missing.join(', ')} o'qilmadi yoki uzunlik chegarasida kesildi — bu qismlar senga umuman berilmadi (kesilgan parcha ham ishlatilmadi). Javob boshida buni aniq ayt, u qismlar haqida xulosa chiqarma va ularga havola qilma.`
     : '';
-  return `QAMROV: hujjat ${totalChars} belgi; u ${digest.chunks} qismga bo'linib, har bir qismdan asl matnga yaqin dayjest olindi — bu to'liq matn emas.${digest.covered ? '' : ' Hujjat oxiri qamrovdan tashqarida qoldi.'}${gaps}${pageInfo}${pagesNote}${emptyInfo}`;
+  return `QAMROV: hujjat ${totalChars} belgi; u ${digest.chunks} qismga bo'linib, har bir qismdan qisqa dayjest olindi — bu to'liq matn emas.${digest.covered ? '' : ' Hujjat oxiri qamrovdan tashqarida qoldi.'}${gaps}${pageInfo}${pagesNote}${emptyInfo}${tplInfo}`;
 }
 
 /** The explanation instructions: the general rules A-F, no document-specific text. */
@@ -151,6 +181,8 @@ function explainSystem(langName) {
     '',
     'What to cover:',
     '- Pick by the document\'s type: obligations, deadlines, amounts, liability, exceptions, termination conditions, risks, findings, recommendations, open questions. A clause at the end matters as much as one at the start. Even when short, do not drop a limit or an exception that changes the reader\'s decision.',
+    '- Keep, when the document has them: payment terms (amount, currency, advance, schedule, deadline), exceptions, penalties with their caps, any cumulative or aggregate liability cap, clauses that contradict each other, and what annexes and tables list.',
+    '- If the document is a template or has unfilled fields (blank lines, "____", "[...]"), say so; an unfilled field is not an agreed term.',
     '- Use only the headings this document needs; no fixed template. If the type is uncertain, say so rather than guess.',
     '',
     'Evidence:',
@@ -339,7 +371,7 @@ function cutToLastSentence(text) {
 }
 
 const CHECK_SCOPE = "faqat raqam, sana, sahifa, band raqamlari hamda holat, oqibat, ustuvorlik va vaqt iboralari hujjat matni bilan mexanik solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.";
-const partLabel = c => `${c.index + 1}-qism${c.pages ? ` (${c.pages.from === c.pages.to ? c.pages.from : `${c.pages.from}–${c.pages.to}`}-sahifa)` : ''}`;
+const partLabel = c => `${c.label || c.index + 1}-qism${c.pages ? ` (${c.pages.from === c.pages.to ? c.pages.from : `${c.pages.from}–${c.pages.to}`}-sahifa)` : ''}`;
 
 /** One section's mechanical flags: figures, dates, pages, clauses, phrases. */
 function reviewSection(text, source, allowed) {
@@ -526,35 +558,134 @@ function contentChars(text) {
   return String(text || '').replace(/^\[Sahifa \d+\]\n?/gmu, '').length;
 }
 
-const DIGEST_MAX_TOKENS = 1600;
+const DIGEST_MAX_TOKENS = 1600; // unchanged on purpose: the parts got smaller, not the cap larger
 const pageLabel = p => (p ? ` · ${p.from === p.to ? p.from : `${p.from}–${p.to}`}-sahifa` : '');
 
+// Limits of one digest: parallel calls, the extra calls a re-read of cut
+// parts may make (each re-read is two calls), and the time after which no
+// re-read starts. Every call is a ledger row and also counts against the
+// request's own budget (usage-ledger AI_REQUEST_*): a call it refuses is a
+// part not read, never an unbounded retry.
+const DIGEST_LIMITS = Object.freeze({ concurrency: 8, maxExtraCalls: 4, timeMs: 75000, minSplitChars: 2000 });
+
+/** Did the call stop at its output cap? (a cut text, or an empty one at "length") */
+function cutAtCap(e) {
+  const m = String((e && (e.providerCode || e.message)) || '');
+  return /^length$|finish_reason: length|MAX_TOKENS|max_output_tokens|reached its cap/iu.test(m);
+}
+
+/** Run `fn` over `items`, at most `n` at a time, keeping their order. */
+async function inPool(items, fn, n) {
+  const out = new Array(items.length);
+  let next = 0;
+  const worker = async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(n, items.length)) }, worker));
+  return out;
+}
+
+/** Two halves of a part, cut at the paragraph or line break nearest its middle. */
+function halvesOf(u, full) {
+  const mid = Math.floor(u.text.length / 2);
+  const near = [u.text.lastIndexOf('\n\n', mid + 800), u.text.lastIndexOf('\n', mid + 400)].find(i => i > mid - 1500 && i > 0);
+  const cut = near > 0 ? near + 1 : mid;
+  return [
+    { ...u, label: `${u.label}a`, end: u.start + cut, text: u.text.slice(0, cut), pages: pagesSpanned(full, u.start, u.start + cut), half: true },
+    { ...u, label: `${u.label}b`, start: u.start + cut, text: u.text.slice(cut), pages: pagesSpanned(full, u.start + cut, u.end), half: true },
+  ];
+}
+
 /**
- * The digest of a long document, one cheap call per chunk (as before), with
- * a record of what was read: chunks that failed or were cut at the token cap
- * are named in the digest text and in `failed` / `truncated`.
- * `callAI(messages, opts)` is the server's cheap router.
+ * The digest of a long document: one cheap call per part, at most
+ * DIGEST_LIMITS.concurrency at a time. A part cut at the token cap is read
+ * once more as two halves while the extra-call and time limits allow; a
+ * part (or half) still cut or failed is NOT used - not even the fragment
+ * that came back, as nobody can tell which clauses, exceptions or caps that
+ * fragment left out - and is named in the digest text, in `failed` /
+ * `truncated` and in `parts`. `callAI(messages, opts)` is the server's cheap
+ * router; opts.detail tells the ledger which part a call read.
  */
-async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft/doc-digest' } = {}) {
-  const plan = digestChunks(text);
+async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft/doc-digest', limits = {} } = {}) {
+  const L = { ...DIGEST_LIMITS, ...limits };
+  const full = String(text || '');
+  const started = Date.now();
+  const plan = digestChunks(full);
   const n = plan.chunks.length;
-  const results = await Promise.all(plan.chunks.map(c =>
-    callAI([
-      { role: 'system', text: DIGEST_SYSTEM },
-      { role: 'user', text: `Excerpt ${c.index + 1}/${n}${pageLabel(c.pages)}:\n\n${c.text}` },
-    ], { temperature: 0.1, maxTokens: DIGEST_MAX_TOKENS, userId, endpoint })
-      .then(r => ({ c, text: String((r && r.text) || '').trim(), truncated: !!(r && r.truncated) }))
-      .catch(e => ({ c, error: e && e.message || 'error' }))));
+  let calls = 0;
+  const read = async (u) => {
+    calls++;
+    try {
+      const r = await callAI([
+        { role: 'system', text: DIGEST_SYSTEM },
+        { role: 'user', text: `Excerpt ${u.label}/${n}${pageLabel(u.pages)}:\n\n${u.text}` },
+      ], { temperature: 0.1, maxTokens: DIGEST_MAX_TOKENS, userId, endpoint,
+        detail: { phase: 'digest', part: u.label, of: n, chars: u.text.length } });
+      const t = String((r && r.text) || '').trim();
+      if (r && r.truncated) return { u, status: 'cut' };
+      if (!t) return { u, status: 'failed', reason: 'empty' };
+      return { u, status: 'read', text: t };
+    } catch (e) {
+      return { u, status: cutAtCap(e) ? 'cut' : 'failed', reason: String((e && (e.code || e.message)) || 'error').slice(0, 80) };
+    }
+  };
+  const first = await inPool(plan.chunks.map(c => ({ ...c, label: String(c.index + 1) })), read, L.concurrency);
+  // the re-reads: the first cut parts the extra-call limit allows, all at
+  // once, and only while the time limit has not passed
+  let extraCalls = 0;
+  const split = new Set();
+  if (Date.now() - started < L.timeMs) {
+    for (const r of first) {
+      if (r.status === 'cut' && extraCalls + 2 <= L.maxExtraCalls && r.u.text.length >= L.minSplitChars) { split.add(r); extraCalls += 2; }
+    }
+  }
+  const halves = [...split].flatMap(r => halvesOf(r.u, full));
+  const reread = await inPool(halves, read, L.concurrency);
+  const results = [];
+  for (const r of first) {
+    if (!split.has(r)) { results.push(r); continue; }
+    for (const h of reread.filter(x => x.u.label === `${r.u.label}a` || x.u.label === `${r.u.label}b`)) results.push({ ...h, retried: true });
+  }
   const failed = [], truncated = [];
-  const parts = results.map(r => {
-    const head = `[Qism ${r.c.index + 1}/${n}${pageLabel(r.c.pages)}]`;
-    if (r.error || !r.text) { failed.push(r.c); return `${head}\n(BU QISM O'QILMADI — undagi bandlar dayjestda yo'q)`; }
-    if (r.truncated) { truncated.push(r.c); return `${head}\n${cutToLastSentence(r.text)}\n(BU QISM DAYJESTI UZUNLIK CHEGARASIDA KESILDI — oxiri yo'q bo'lishi mumkin)`; }
-    return `${head}\n${r.text}`;
+  const blocks = results.map(r => {
+    const head = `[Qism ${r.u.label}/${n}${pageLabel(r.u.pages)}]`;
+    if (r.status === 'read') return `${head}\n${r.text}`;
+    (r.status === 'cut' ? truncated : failed).push(r.u);
+    return `${head}\n(BU QISM O'QILMADI${r.status === 'cut' ? ' — dayjest uzunlik chegarasida kesildi, kesilgan parcha ishlatilmadi' : ''}. Undagi bandlar haqida xulosa chiqarilmaydi.)`;
   });
-  const body = 'HUJJAT DAYJESTI (har bir qismdan asl matnga yaqin ajratma; to\'liq matn emas):\n\n' + parts.join('\n\n')
+  const body = 'HUJJAT DAYJESTI (har bir qismdan qisqa ajratma; to\'liq matn emas):\n\n' + blocks.join('\n\n')
     + (plan.covered ? '' : '\n\n(HUJJAT OXIRI DAYJESTGA KIRMADI)');
-  return { text: body, chunks: n, failed, truncated, covered: plan.covered, totalChars: plan.totalChars };
+  return {
+    text: body, chunks: n, failed, truncated, covered: plan.covered, totalChars: plan.totalChars,
+    parts: results.map(r => ({ part: r.u.label, pages: r.u.pages, chars: r.u.text.length, status: r.status, retried: !!r.retried, reason: r.reason || null })),
+    readParts: results.filter(r => r.status === 'read').length,
+    calls, extraCalls, elapsedMs: Date.now() - started, policy: 'cut_parts_not_used',
+  };
+}
+
+/** No part of the document was read whole: nothing to explain or analyse. */
+function digestUnusable(digest) {
+  return !!digest && Array.isArray(digest.parts) && digest.parts.length > 0 && digest.readParts === 0;
+}
+
+/** What a service read of a document, for the ledger (ai_requests.doc_coverage) and the response. */
+// Coverage is technical: which parts reached the model whole. A part read
+// whole is not a semantic or legal confirmation of anything in it.
+const COVERAGE_MEANING = 'technical';
+/** all_read | some_excluded | none_read */
+function coverageStatus(digest) {
+  if (!digest) return 'all_read';
+  if (digestUnusable(digest)) return 'none_read';
+  return unreadParts(digest).length ? 'some_excluded' : 'all_read';
+}
+
+function coverageSummary(digest, { finalRun, mode } = {}) {
+  if (!digest) return { mode: mode || 'full_text', status: 'all_read', meaning: COVERAGE_MEANING, fullyRead: true, finalRun: finalRun !== false };
+  return {
+    mode: 'digest', status: coverageStatus(digest), meaning: COVERAGE_MEANING,
+    parts: digest.parts.length, chunks: digest.chunks, read: digest.readParts,
+    cut: digest.truncated.length, failed: digest.failed.length, covered: digest.covered,
+    fullyRead: unreadParts(digest).length === 0, finalRun: !!finalRun,
+    digestCalls: digest.calls, extraCalls: digest.extraCalls, elapsedMs: digest.elapsedMs, policy: digest.policy,
+  };
 }
 
 /**
@@ -566,7 +697,8 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
  */
 function unreadParts(digest) {
   if (!digest) return [];
-  const parts = digest.failed.concat(digest.truncated).sort((x, y) => x.index - y.index).map(partLabel);
+  const order = u => (u.start != null ? u.start : u.index * 1e9);
+  const parts = digest.failed.concat(digest.truncated).sort((x, y) => order(x) - order(y)).map(partLabel);
   if (digest.covered === false) parts.push('hujjat oxiri');
   return parts;
 }
@@ -586,22 +718,32 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   const d = full ? null : await digest(documentText);
   const pages = pagesIn(documentText);
   const empty = emptyPages(documentText);
-  const note = coverageNote({ totalChars: chars, digest: d, pages, empty });
+  // no part read whole: the explanation is not generated (no final call);
+  // the route answers with the parts and releases the units
+  if (digestUnusable(d)) {
+    return { reply: '', aborted: true,
+      coverage: { mode: 'digest', status: 'none_read', meaning: COVERAGE_MEANING, chars, pages: pages.length || null, chunks: d.chunks, parts: d.parts,
+        unread: unreadParts(d), documentFullyRead: false, finalRun: false, partial: true,
+        summary: coverageSummary(d, { finalRun: false }) } };
+  }
+  const placeholders = placeholdersIn(documentText);
+  const note = coverageNote({ totalChars: chars, digest: d, pages, empty, placeholders });
   const result = await callAI([
     { role: 'system', text: explainSystem(langName) },
     { role: 'user', text: `${note}\n\n─── HUJJAT ───\n${full ? documentText : d.text}\n─── HUJJAT TUGADI ───\n\nUshbu hujjatni oddiy tilda, manbasiga bog'lab tushuntirib bering.` },
-  ], { useSearch: false, temperature: 0.2, maxTokens: EXPLAIN_MAX_TOKENS, userId, endpoint });
+  ], { useSearch: false, temperature: 0.2, maxTokens: EXPLAIN_MAX_TOKENS, userId, endpoint, detail: { phase: 'final', mode: full ? 'full_text' : 'digest' } });
   const raw = String((result && result.text) || '').trim();
   if (!raw) return { reply: '', provider: result && result.provider };
   // checked against what the model was given AND the full text: a figure in
   // the full text that the digest lost is not invented
   const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d,
     allowed: [String(chars), String(documentText.length), String(pages.length), d ? String(d.chunks) : ''].filter(Boolean) });
-  const unread = d ? d.failed.concat(d.truncated).map(c => ({ part: c.index + 1, pages: c.pages })) : [];
+  const unread = unreadParts(d);
   return {
     reply: done.reply, provider: result.provider, check: done.check,
-    coverage: { mode: full ? 'full_text' : 'digest', chars, pages: pages.length || null, emptyPages: empty,
-      chunks: d ? d.chunks : null, unread, answerTruncated: !!result.truncated,
+    coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
+      chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated,
+      placeholders: placeholders.count, finalRun: true, summary: coverageSummary(d, { finalRun: true }),
       // the document was not read whole: not the service (released by the route)
       documentFullyRead: unread.length === 0 && (!d || d.covered !== false),
       partial: done.partial },
@@ -609,7 +751,8 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
 }
 
 module.exports = {
-  PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
-  markPages, pagesIn, emptyPages, contentChars, digestChunks, pagesSpanned, buildDigest, coverageNote, explainSystem,
+  PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
+  markPages, pagesIn, emptyPages, contentChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
+  placeholdersIn, coverageNote, coverageStatus, explainSystem,
   unreadParts, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
 };

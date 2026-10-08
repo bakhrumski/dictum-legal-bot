@@ -138,6 +138,66 @@ const sizes = SIZES.map(n => {
   return row;
 });
 
+// ── Long-document digest: #420 (in production) vs this change ───────────────
+// The #420 live run: a 13-page DOCX of 51 398 characters, 5 digest calls that
+// each used exactly the 1 600-token cap, every part incomplete. What each
+// layout asks of the cap, under stated assumptions (not measured): output
+// tokens = digest characters / chars-per-token, digest characters = chunk
+// characters x a compression ratio. The ratios are assumptions about what
+// each prompt asks for, not measurements; hidden reasoning tokens (if the
+// model spends any) come on top and are not modelled.
+const DIGEST_SYSTEM_420 = [
+  'You extract, from one excerpt of a longer document, the material a faithful plain-language explanation and a legal opinion need.',
+  'Write one bullet per item, in the same language as the excerpt, as close to its wording as possible:',
+  '- every obligation, right, condition, deadline, term, amount, share, date, party and role - with the clause/section number or heading when present;',
+  '- every exception, limitation, cancellation or termination condition, liability rule and penalty;',
+  '- every finding, statement or claim WITH its source as the document gives it (who said, reported, checked or found it) and WITH its qualifiers kept verbatim (for example "according to", "within the scope of the review", "was not identified", "as of the date of the document");',
+  '- every recommendation or conclusion WITH its author as the document names it;',
+  '- missing information, open questions and contradictions between clauses;',
+  '- every reference to laws, regulations (qonun, kodeks, VM qarori, farmon, PQ, PF) or court decisions, with its number, date and article exactly as written, and what the document says about it;',
+  '- the page: when the excerpt has "[Sahifa N]" lines, end each bullet with "(N-sahifa)"; never guess a page or a clause number.',
+  'Do not interpret, judge, add consequences or merge separate items. Do not turn "not identified" into "does not exist". No preamble.',
+].join('\n');
+
+const ASSUME = { charsPerToken: [2.5, 3.5], ratio420: [0.5, 0.9], ratioCompact: [0.15, 0.33] };
+function digestLayout(len, which) {
+  const text = 'x'.repeat(len);
+  if (which === '420') {
+    const chunks = []; for (let i = 0; i < len && chunks.length < 11; i += 11600) chunks.push(text.slice(i, i + 12000));
+    return { chunks: chunks.map(c => c.length), system: DIGEST_SYSTEM_420, ratio: ASSUME.ratio420, extra: 0 };
+  }
+  return { chunks: ex.digestChunks(text).chunks.map(c => c.text.length), system: ex.DIGEST_SYSTEM, ratio: ASSUME.ratioCompact, extra: ex.DIGEST_LIMITS.maxExtraCalls };
+}
+function digestCompare(len) {
+  const out = {};
+  for (const which of ['420', 'new']) {
+    const L = digestLayout(len, which);
+    const biggest = Math.max(...L.chunks);
+    const tokLow = Math.round(biggest * L.ratio[0] / ASSUME.charsPerToken[1]);
+    const tokHigh = Math.round(biggest * L.ratio[1] / ASSUME.charsPerToken[0]);
+    const cap = ex.DIGEST_MAX_TOKENS;
+    const calls = L.chunks.map(c => ({ maxTokens: cap, messages: [{ role: 'system', text: L.system }, { role: 'user', text: 'x'.repeat(c) }] }));
+    // the final call reads the digest: at most every part's cap
+    calls.push({ maxTokens: ex.EXPLAIN_MAX_TOKENS, digestTokens: L.chunks.length * cap, messages: [{ role: 'system', text: ex.explainSystem('Uzbek') }, { role: 'user', text: '' }] });
+    const reread = Array.from({ length: L.extra }, () => ({ maxTokens: cap, messages: [{ role: 'system', text: L.system }, { role: 'user', text: 'x'.repeat(Math.ceil(biggest / 2)) }] }));
+    const inTok = list => list.reduce((t, c) => t + pricing.inputTokenBound(c.messages) + (c.digestTokens || 0), 0);
+    const outLow = L.chunks.reduce((t, c) => t + Math.min(cap, Math.round(c * L.ratio[0] / ASSUME.charsPerToken[1])), 0);
+    const outHigh = L.chunks.reduce((t, c) => t + Math.min(cap, Math.round(c * L.ratio[1] / ASSUME.charsPerToken[0])), 0);
+    out[which] = {
+      parts: L.chunks.length, biggestChunk: biggest, expectedDigestTokens: [tokLow, tokHigh], cap,
+      inputTokensBound: inTok(calls), inputTokensBoundWorst: inTok(calls.concat(reread)),
+      digestOutputExpected: [outLow, outHigh], outputCapTotal: calls.reduce((t, c) => t + c.maxTokens, 0),
+      outputCapTotalWorst: calls.concat(reread).reduce((t, c) => t + c.maxTokens, 0),
+      reachesCap: tokLow >= cap ? 'yes, even at the low end' : tokHigh >= cap ? 'possible at the high end' : 'no (with margin)',
+      calls: calls.length, worstCaseCalls: calls.length + reread.length,
+      ...Object.fromEntries(MODELS.map(m => [m, { usual: bound({ calls }, m).usd, worstCase: bound({ calls: calls.concat(reread) }, m).usd }])),
+    };
+  }
+  return out;
+}
+const DIGEST_DOCS = [{ label: '13-page DOCX (#420 live run size)', chars: 51398 }, { label: '30 pages', chars: 75000 }, { label: 'paid job maximum', chars: 120000 }];
+const digestRows = DIGEST_DOCS.map(d => ({ ...d, ...digestCompare(d.chars) }));
+
 const real = syntheticRealDoc(REAL_PAGES);
 const realNew = Object.fromEntries(MODELS.map(m => [m, bound(plan(real, 'new'), m).usd]));
 const realOld = Object.fromEntries(MODELS.map(m => [m, bound(plan(real, 'old'), m).usd]));
@@ -158,7 +218,7 @@ if (args.includes('--prompts')) {
 }
 
 if (args.includes('--json')) {
-  console.log(JSON.stringify({ rows, sizes, real: { pages: REAL_PAGES, old: realOld, new: realNew }, repeats: REPEATS, realDocs: REAL_DOCS, budget }, null, 2));
+  console.log(JSON.stringify({ rows, sizes, digest: { assumptions: ASSUME, rows: digestRows }, real: { pages: REAL_PAGES, old: realOld, new: realNew }, repeats: REPEATS, realDocs: REAL_DOCS, budget }, null, 2));
 } else {
   const fmt = v => (typeof v === 'number' ? `$${v.toFixed(4)}` : v);
   console.log('DRY RUN - no AI call. Planning figures from src/ai/model-pricing.js (callCostBound): not measured spend, not a guaranteed maximum.\n');
@@ -169,6 +229,15 @@ if (args.includes('--json')) {
   for (const r of sizes) for (const k of ['old', 'new prompts, old caps', 'new']) {
     const v = r[k];
     console.log([r.pages, r.chars, r.pageMarkBytes, k, v.path, v.calls, v.outputCapTokens, ...MODELS.map(m => fmt(v[m]))].join(' | '));
+  }
+  console.log(`\nLong-document digest, #420 vs this change (assumptions, not measured: ${ASSUME.charsPerToken.join('-')} chars/token; digest/excerpt ratio #420 ${ASSUME.ratio420.join('-')}, compact ${ASSUME.ratioCompact.join('-')}; hidden reasoning not modelled):`);
+  console.log(['document', 'layout', 'parts', 'biggest part (chars)', 'expected digest tokens/part', 'cap', 'reaches cap?', 'calls usual / with re-reads',
+    'input tokens bound usual / with re-reads', 'expected digest output tokens (all parts)', 'output caps usual / with re-reads', ...MODELS.map(m => `${m} usual / with re-reads`)].join(' | '));
+  for (const r of digestRows) for (const k of ['420', 'new']) {
+    const v = r[k];
+    console.log([`${r.label} (${r.chars})`, k === '420' ? '#420' : 'new', v.parts, v.biggestChunk, `${v.expectedDigestTokens[0]}-${v.expectedDigestTokens[1]}`, v.cap, v.reachesCap,
+      `${v.calls} / ${v.worstCaseCalls}`, `${v.inputTokensBound} / ${v.inputTokensBoundWorst}`, `${v.digestOutputExpected[0]}-${v.digestOutputExpected[1]}`,
+      `${v.outputCapTotal} / ${v.outputCapTotalWorst}`, ...MODELS.map(m => `${fmt(v[m].usual)} / ${fmt(v[m].worstCase)}`)].join(' | '));
   }
   console.log(`\nA ${REAL_PAGES}-page document (~${REAL_PAGES * 2500} chars), bound per run: old ${MODELS.map(m => `${m} ${fmt(realOld[m])}`).join(', ')}; new ${MODELS.map(m => `${m} ${fmt(realNew[m])}`).join(', ')}`);
   console.log(`\nBenchmark budget (old + new, ${REPEATS} repeats; eval set + ${REAL_DOCS} anonymised real documents of ${REAL_PAGES} pages):`);

@@ -82,7 +82,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
   });
 
   await test('short documents: the model gets the full text with every key clause, page marks and a coverage note', async () => {
-    for (const f of fixtures.filter(x => x.id !== 'long-lease')) {
+    for (const f of fixtures.filter(x => !x.id.startsWith('long-'))) {
       const ai = recorder();
       const text = ex.markPages(f.pages);
       const r = await ex.explainDocument({ documentText: text, langName: 'Uzbek', callAI: ai, digest: digestWith(ai) });
@@ -126,27 +126,105 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     assert.deepStrictEqual(r.coverage.unread, []);
   });
 
-  await test('a digest part that fails or is cut is named to the model, in the answer and in coverage', async () => {
+  await test('a part cut at the cap is re-read once as two halves; a failed part is not; a part still cut is not used at all - not even its fragment', async () => {
     const text = ex.markPages(byId('long-lease').pages);
-    const ai = recorder((messages, n) => {
+    const ai = recorder((messages) => {
       const user = messages[1].text;
       if (/^Excerpt 2\//u.test(user)) throw new Error('provider down');
-      if (/^Excerpt 3\//u.test(user)) return { text: 'Birinchi band to\'liq yozilgan gap. Ikkinchi band chala', truncated: true, provider: 'stub' };
+      if (/^Excerpt 3\//u.test(user)) return { text: "Birinchi band to'liq yozilgan gap. Ikkinchi band chala", truncated: true, provider: 'stub' };
+      if (/^Excerpt 4[ab]\//u.test(user)) return { text: 'Yarim qism kesilgan FRAGMENT', truncated: true, provider: 'stub' };
+      if (/^Excerpt 4\//u.test(user)) return { text: 'Kesilgan FRAGMENT', truncated: true, provider: 'stub' };
       if (/^Excerpt /u.test(user)) return { text: '- band', provider: 'stub' };
       return { text: 'Hujjat ijara haqida.', provider: 'stub' };
     });
     const r = await ex.explainDocument({ documentText: text, langName: 'Uzbek', callAI: ai, digest: digestWith(ai) });
+    const excerpts = ai.calls.filter(c => /^Excerpt /u.test(c.messages[1].text)).map(c => c.messages[1].text.match(/^Excerpt (\S+)\//u)[1]);
+    const n = ex.digestChunks(text).chunks.length;
+    // each part once; parts 3 and 4 (cut) once more as halves; part 2 (failed) not again
+    assert.deepStrictEqual(excerpts.filter(x => /^\d+$/u.test(x)).length, n);
+    assert.deepStrictEqual(excerpts.filter(x => /[ab]$/u.test(x)).sort(), ['3a', '3b', '4a', '4b']);
+    assert.ok(!excerpts.includes('2a'));
+    const parts = Object.fromEntries(r.coverage.parts.map(p => [p.part, p.status]));
+    assert.deepStrictEqual([parts['2'], parts['3a'], parts['3b'], parts['4a'], parts['4b']], ['failed', 'read', 'read', 'cut', 'cut']);
     const final = ai.calls[ai.calls.length - 1].messages[1].text;
-    assert.ok(/DIQQAT: 2-qism \(\d+–\d+-sahifa\), 3-qism \(\d+–\d+-sahifa\) qisman o'qilmadi/u.test(final), final.slice(0, 400));
-    assert.ok(final.includes("BU QISM O'QILMADI"));
-    assert.ok(final.includes('UZUNLIK CHEGARASIDA KESILDI'));
-    assert.ok(!final.includes('Ikkinchi band chala'), 'a cut digest part ends on its last full sentence');
-    assert.deepStrictEqual(r.coverage.unread.map(u => u.part), [2, 3]);
-    assert.strictEqual(r.coverage.documentFullyRead, false);
-    assert.strictEqual(r.coverage.partial, true);
-    // the user sees it first, and it is never presented as a full analysis
-    assert.ok(/^⚠️ \*\*Qisman natija — to'liq tahlil emas:\*\* hujjatning 2-qism \(\d+–\d+-sahifa\), 3-qism \(\d+–\d+-sahifa\) o'qilmadi/u.test(r.reply), r.reply.slice(0, 200));
-    assert.ok(r.reply.includes('**Avtomatik tekshiruv (AI emas):**'));
+    assert.ok(!/FRAGMENT|Ikkinchi band chala/u.test(final), 'a cut fragment is never given to the model');
+    assert.ok(/DIQQAT: 2-qism \(\d+–\d+-sahifa\), 4a-qism \(\d+–\d+-sahifa\), 4b-qism \(\d+–\d+-sahifa\) o'qilmadi yoki uzunlik chegarasida kesildi — bu qismlar senga umuman berilmadi \(kesilgan parcha ham ishlatilmadi\)/u.test(final), final.slice(0, 400));
+    assert.ok(final.includes("BU QISM O'QILMADI — dayjest uzunlik chegarasida kesildi, kesilgan parcha ishlatilmadi"));
+    assert.deepStrictEqual([r.coverage.documentFullyRead, r.coverage.partial, r.coverage.finalRun], [false, true, true]);
+    assert.ok(/^⚠️ \*\*Qisman natija — to'liq tahlil emas:\*\* hujjatning 2-qism \(\d+–\d+-sahifa\), 4a-qism/u.test(r.reply), r.reply.slice(0, 200));
+    // the ledger is told which part each call read
+    const d = ai.calls.find(c => /^Excerpt 3a\//u.test(c.messages[1].text)).opts.detail;
+    assert.deepStrictEqual([d.phase, d.part, d.of], ['digest', '3a', n]);
+    assert.deepStrictEqual(ai.calls[ai.calls.length - 1].opts.detail, { phase: 'final', mode: 'digest' });
+  });
+
+  await test('a long DOCX (no page marks, ~50 000 chars, annex table at the end): 7 compact parts, every key clause reaches a part, no page numbers asked for, a substituted status flagged', async () => {
+    const f = byId('long-service-docx');
+    const text = f.pages.join('\n\n');
+    assert.ok(text.length > 50000 && ex.pagesIn(text).length === 0);
+    const ai = recorder((m) => /^Excerpt /u.test(m[1].text) ? { text: '- band', provider: 'stub' } : { text: 'Izoh.', provider: 'stub' });
+    const r = await ex.explainDocument({ documentText: text, langName: 'Uzbek', callAI: ai, digest: digestWith(ai) });
+    const parts = ai.calls.filter(c => /^Excerpt /u.test(c.messages[1].text));
+    assert.strictEqual(parts.length, 7);
+    assert.ok(parts.every(c => c.messages[1].text.length < 8200 && c.opts.maxTokens === 1600));
+    const all = parts.map(c => c.messages[1].text).join('\n');
+    for (const k of f.keyPoints) assert.ok(all.includes(k.anchor), `${k.id} reaches a digest part`);
+    assert.ok(parts[parts.length - 1].messages[1].text.includes('Jami: 48 000 000'), 'the annex table is in the last part');
+    assert.ok(ai.calls[ai.calls.length - 1].messages[1].text.includes("Sahifa belgilari yo'q: sahifa raqamini keltirma"));
+    assert.deepStrictEqual([r.coverage.mode, r.coverage.chunks, r.coverage.documentFullyRead], ['digest', 7, true]);
+    // "application filed" is not "registered": a substitution is flagged for a manual check
+    const sub = ex.finishExplanation({ reply: "Tovar belgisi ro'yxatdan o'tmagan.", source: text });
+    assert.deepStrictEqual(sub.check.phrases.map(p => p.phrase), ["ro'yxatdan o'tmagan"]);
+    const faithful = ex.finishExplanation({ reply: "Tovar belgisi uchun ariza topshirilgan, ro'yxatdan o'tkazish yakunlanmagan (8.1-band). Jami javobgarlik 20 foiz bilan cheklangan (7.3-band). 3.2 va 7.4-bandlar zid: 10 va 20 kun.", source: text });
+    assert.strictEqual(faithful.check.flagged, 0, JSON.stringify(faithful.check));
+  });
+
+  await test('re-reads are bounded: at most the extra-call limit, none after the time limit; every part cut -> no final call at all', async () => {
+    const text = ex.markPages(byId('long-lease').pages);
+    const allCut = recorder(() => ({ text: '- band, kesilgan', truncated: true, provider: 'stub' }));
+    const r = await ex.explainDocument({ documentText: text, langName: 'Uzbek', callAI: allCut, digest: digestWith(allCut) });
+    const n = ex.digestChunks(text).chunks.length;
+    assert.strictEqual(r.aborted, true);
+    assert.strictEqual(r.reply, '');
+    assert.strictEqual(allCut.calls.length, n + ex.DIGEST_LIMITS.maxExtraCalls, `${n} parts + ${ex.DIGEST_LIMITS.maxExtraCalls} re-read calls, and no final call`);
+    assert.ok(allCut.calls.every(c => /^Excerpt /u.test(c.messages[1].text)), 'no explanation call');
+    assert.deepStrictEqual([r.coverage.finalRun, r.coverage.documentFullyRead, r.coverage.summary.read, r.coverage.summary.finalRun], [false, false, 0, false]);
+    // no re-read once the time limit has passed
+    const slow = recorder(() => ({ text: 'x', truncated: true, provider: 'stub' }));
+    const d = await ex.buildDigest(text, { callAI: slow, limits: { timeMs: 0 } });
+    assert.strictEqual(slow.calls.length, n);
+    assert.strictEqual(d.extraCalls, 0);
+    // an empty answer at the cap (hidden reasoning used it) counts as cut, a provider error as failed
+    const empty = recorder((m) => { if (/^Excerpt 1\//u.test(m[1].text)) throw Object.assign(new Error('VoiceLab x empty response (finish_reason: length)'), { code: 'EMPTY_RESPONSE', providerCode: 'length' }); throw new Error('upstream 503'); });
+    const e = await ex.buildDigest(text, { callAI: empty, limits: { maxExtraCalls: 0 } });
+    assert.deepStrictEqual(e.parts.slice(0, 2).map(p => p.status), ['cut', 'failed']);
+    assert.ok(ex.digestUnusable(e));
+  });
+
+  await test('chunks are 8 000 characters (larger only so 13 cover a 120 000-character job); the digest prompt is compact and keeps the general rules', () => {
+    assert.deepStrictEqual([ex.CHUNK, ex.OVERLAP, ex.MAX_CHUNKS, ex.DIGEST_MAX_TOKENS], [8000, 300, 13, 1600], 'the output cap is not raised');
+    assert.strictEqual(ex.digestChunks('x'.repeat(51398)).chunks.length, 7);
+    assert.ok(ex.digestChunks('x'.repeat(51398)).chunks.every(c => c.text.length <= 8000));
+    const big = ex.digestChunks('x'.repeat(120400));
+    assert.ok(big.covered && big.chunks.length <= 13);
+    for (const rule of ['COMPACT', 'one line per item', 'payment terms', 'cumulative or aggregate liability cap', 'contradict each other',
+      'annexes and tables', "TO'LDIRILMAGAN", 'filing an application is not registration', 'under about a third of the excerpt']) {
+      assert.ok(ex.DIGEST_SYSTEM.includes(rule), rule);
+    }
+    const p = ex.explainSystem('Uzbek');
+    for (const rule of ['payment terms', 'cumulative or aggregate liability cap', 'contradict each other', 'what annexes and tables list', 'an unfilled field is not an agreed term']) {
+      assert.ok(p.includes(rule), rule);
+    }
+  });
+
+  await test('templates: unfilled fields are counted with no AI and named to the model', async () => {
+    const tpl = ex.markPages(["SHARTNOMA № ____\nToshkent sh., «____» ________ 20__ y.\n1.1. Ijara haqi [summa] so'm, har oyning ____ sanasigacha to'lanadi.\n1.2. Tomonlar: __________ (Ijarachi)."]);
+    const found = ex.placeholdersIn(tpl);
+    assert.ok(found.count >= 4, JSON.stringify(found));
+    const ai = recorder();
+    await ex.explainDocument({ documentText: tpl, langName: 'Uzbek', callAI: ai, digest: digestWith(ai) });
+    assert.ok(/Hujjatda to'ldirilmagan joylar bor \(\d+ ta, masalan «____»/u.test(ai.calls[0].messages[1].text), ai.calls[0].messages[1].text.slice(0, 300));
+    assert.strictEqual(ex.placeholdersIn(ex.markPages(byId('contract-supply').pages)).count, 0, 'a filled contract has none');
   });
 
   await test('an answer cut at the token cap ends on a full sentence and says so', async () => {
@@ -247,7 +325,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     const para = Array.from({ length: 30 }, () => `${'z'.repeat(1750)}\n\n${'z'.repeat(2240)}`);
     const early = ex.markPages(para);
     assert.ok(ex.contentChars(early) <= 120000 && ex.digestChunks(early).covered);
-    assert.strictEqual(ex.digestChunks(early).chunks[0].text.length, ex.CHUNK, 'fell back to fixed cuts rather than leave the end unread');
+    assert.strictEqual(ex.digestChunks(early).chunks[0].text.length, ex.chunkSizeFor(early.length), 'fell back to fixed cuts rather than leave the end unread');
     // chat: excerpt threshold on the document's own size
     const dj = require('../src/rag/document-job');
     const chat = ex.markPages(Array.from({ length: 10 }, () => 'y'.repeat(1995)));

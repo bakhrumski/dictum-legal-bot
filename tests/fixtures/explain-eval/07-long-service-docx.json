@@ -1,0 +1,105 @@
+{
+  "id": "long-service-docx",
+  "type": "shartnoma (uzun, DOCX, sahifa belgisiz)",
+  "title": "Xizmat ko'rsatish shartnomasi, ~50 000 belgi, ilova jadvali oxirida (sintetik)",
+  "synthetic": true,
+  "format": "docx",
+  "pages": [
+    "XIZMAT KO'RSATISH SHARTNOMASI № 41-X/2026\nToshkent shahri, 2026-yil 3-mart\n\n\"Raqam Yechim\" MChJ (Ijrochi) va \"Oqtepa Savdo\" AJ (Buyurtmachi) quyidagilar haqida shartnoma tuzdilar.\n\n1. PREDMET\n1.1. Ijrochi 1-ilovadagi jadvalda ko'rsatilgan axborot tizimini joriy etish xizmatlarini ko'rsatadi.\n\n2. TO'LOV SHARTLARI\n2.1. Shartnoma qiymati 48 000 000 so'm, QQS bilan.\n2.2. Buyurtmachi shartnoma qiymatining 30 foizini shartnoma imzolangan kundan boshlab 5 bank kuni ichida oldindan to'laydi.\n2.3. Qolgan summa bajarilgan ishlar dalolatnomasi imzolangan kundan boshlab 15 bank kuni ichida to'lanadi.\n\n3. QABUL QILISH\n3.2. Buyurtmachi dalolatnomani olgan kundan boshlab 10 kalendar kun ichida imzolaydi yoki asoslantirilgan rad javobini beradi.",
+    "7. JAVOBGARLIK\n7.1. To'lov muddati buzilsa, Buyurtmachi kechiktirilgan har bir kun uchun to'lanmagan summaning 0,05 foizi miqdorida penya to'laydi.\n7.2. Tomonlar fors-major holatlarida javobgarlikdan ozod qilinadi, bundan ikkinchi tomonni 5 kalendar kun ichida yozma xabardor qilish holi mustasno.\n7.3. Tomonlarning ushbu shartnoma bo'yicha jami javobgarligi shartnoma qiymatining 20 foizidan oshmaydi.\n7.4. Buyurtmachi dalolatnomani olgan kundan boshlab 20 kalendar kun ichida imzolaydi.\n\n8. INTELLEKTUAL MULK\n8.1. Buyurtmachi tizim nomini tovar belgisi sifatida ro'yxatdan o'tkazish uchun ariza topshirgan; ro'yxatdan o'tkazish jarayoni yakunlanmagan.\n\n1-ILOVA. XIZMATLAR JADVALI\n№ | Xizmat | Muddat | Narx (so'm)\n1 | Tahlil va loyiha | 20 ish kuni | 12 000 000\n2 | Joriy etish | 40 ish kuni | 28 000 000\n3 | O'qitish | 10 ish kuni | 8 000 000\nJami: 48 000 000"
+  ],
+  "filler": {
+    "afterPage": 1,
+    "count": 47,
+    "firstClause": 10,
+    "template": "{n}. UMUMIY QOIDALAR ({n}-bo'lim)\n{n}.1. Tomonlar ushbu bo'lim bo'yicha o'zaro hamkorlik qiladi va bir-birini yozma ravishda xabardor qiladi; xabarnoma shartnomada ko'rsatilgan manzilga yuboriladi va olingan kundan boshlab kuchga kiradi.\n{n}.2. Ijrochi xizmatlarni sifatli va o'z vaqtida ko'rsatadi, Buyurtmachining asosli ko'rsatmalariga rioya qiladi va ish jarayoni haqida so'rov bo'yicha axborot beradi.\n{n}.3. Buyurtmachi Ijrochiga xizmat ko'rsatish uchun zarur ma'lumot va hujjatlarni o'z vaqtida taqdim etadi; kechikish oqibatida xizmat muddati mutanosib ravishda uzaytiriladi.\n{n}.4. Tomonlar ushbu bo'limni bajarishda olingan tijorat ma'lumotlarini oshkor qilmaydi, qonunda nazarda tutilgan hollar bundan mustasno.\n{n}.5. Ushbu bo'limga o'zgartirishlar faqat yozma qo'shimcha kelishuv bilan kiritiladi va tomonlar imzolagan kundan kuchga kiradi.\n{n}.6. Bo'lim qoidalari shartnomaning boshqa bo'limlari bilan birga talqin qilinadi; sarlavhalar faqat qulaylik uchun.\n{n}.7. Tomonlar har chorakda o'zaro hisob-kitoblarni solishtirish dalolatnomasini imzolaydi va farqlarni 10 ish kuni ichida bartaraf etadi."
+  },
+  "keyPoints": [
+    {
+      "id": "price",
+      "point": "Qiymat 48 000 000 so'm, QQS bilan",
+      "anchor": "48 000 000 so'm, QQS bilan",
+      "page": 1
+    },
+    {
+      "id": "advance",
+      "point": "30 foiz oldindan, 5 bank kuni ichida",
+      "anchor": "30 foizini",
+      "page": 1
+    },
+    {
+      "id": "balance",
+      "point": "Qoldiq dalolatnoma imzolangach 15 bank kuni ichida",
+      "anchor": "15 bank kuni ichida",
+      "page": 1
+    },
+    {
+      "id": "fm-exception",
+      "point": "Fors-major ozod qiladi, 5 kunda xabar berish sharti bilan",
+      "anchor": "bundan ikkinchi tomonni 5 kalendar kun",
+      "page": "last"
+    },
+    {
+      "id": "aggregate-cap",
+      "point": "Jami javobgarlik shartnoma qiymatining 20 foizidan oshmaydi",
+      "anchor": "jami javobgarligi",
+      "page": "last"
+    },
+    {
+      "id": "contradiction",
+      "point": "Dalolatnomani imzolash: 3.2 — 10 kun, 7.4 — 20 kun (zid)",
+      "anchor": "7.4. Buyurtmachi dalolatnomani",
+      "page": "last"
+    },
+    {
+      "id": "application-not-registration",
+      "point": "Tovar belgisi uchun ariza topshirilgan, ro'yxatdan o'tkazish yakunlanmagan",
+      "anchor": "ariza topshirgan",
+      "page": "last"
+    },
+    {
+      "id": "annex-table",
+      "point": "1-ilova jadvali: 3 xizmat, jami 48 000 000",
+      "anchor": "1-ILOVA. XIZMATLAR JADVALI",
+      "page": "last"
+    }
+  ],
+  "traps": [
+    {
+      "id": "contradiction-acceptance",
+      "rule": "E",
+      "correct": "3.2 (10 kun) va 7.4 (20 kun) zid ekani ikkala band bilan aytiladi",
+      "wrong": "Bitta muddatni tanlash"
+    },
+    {
+      "id": "cumulative-cap",
+      "rule": "B",
+      "correct": "Jami javobgarlik chegarasi (20 foiz) saqlanadi",
+      "wrong": "Penya va zararni chegarasiz deb yozish"
+    },
+    {
+      "id": "filed-not-registered",
+      "rule": "B",
+      "correct": "Ariza topshirilgan, ro'yxatdan o'tkazish yakunlanmagan",
+      "wrong": "\"Ro'yxatdan o'tgan\" yoki \"ariza berilmagan\" deb yozish"
+    },
+    {
+      "id": "annex-dropped",
+      "rule": "D",
+      "correct": "Oxiridagi ilova jadvali (xizmatlar, narxlar, jami) tushuntirishda bor",
+      "wrong": "Ilovani tashlab ketish"
+    }
+  ],
+  "aiNoteCases": [
+    {
+      "note": "Tovar belgisi ro'yxatdan o'tmagan, shuning uchun nomdan foydalanish xavfli.",
+      "expect": "flagged",
+      "why": "holat: hujjatda ariza topshirilgan, jarayon yakunlanmagan"
+    },
+    {
+      "note": "Tomonlarning jami javobgarligi shartnoma qiymatining 20 foizi bilan cheklangan.",
+      "expect": "kept",
+      "why": "hujjatga asoslangan"
+    }
+  ]
+}

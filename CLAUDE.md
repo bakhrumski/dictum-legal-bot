@@ -81,7 +81,24 @@ Known state of the suites (Sept 2026):
   ranking / "now" phrases the source does not use, unless denied,
   conditional or a synonym of the source's word) and flagged "check by hand
   against the source" - a missing word is never proof of an error, and no
-  section is shown as verified (`check.verified` is always false). Quality is unconfirmed until the lawyer-reviewed
+  section is shown as verified (`check.verified` is always false).
+  Long documents (2026-10-07, after a 51 398-char DOCX had all 5 digest parts
+  stop at the 1 600-token cap): parts of 8 000 chars (grown only so 13 cover
+  120 000), a compact one-line-per-item digest, the cap unchanged; a part cut
+  at the cap is re-read once in halves within `DIGEST_LIMITS` (4 extra calls,
+  75 s, 8 at a time); a part still cut is not used at all (not even its
+  fragment) and is named; no part read whole -> no final call, 422
+  `DOCUMENT_NOT_READ`, units released (explanation, opinion, chat
+  analysis). Ledger: stage `document_digest` vs `document`, `finish_reason`,
+  `truncated`, `call_detail`, `ai_requests.doc_coverage` (coverage is
+  technical: all_read / some_excluded / none_read, `not_recorded` when the
+  column is missing - never "complete"; the writers drop a column they
+  cannot write rather than lose a row). The request budget is atomic under
+  parallel calls: a call slot and its cost (bound, else the list-price
+  `planUsd`) are taken in the same step as the check; a call with neither
+  is limited by count only, so `AI_REQUEST_MAX_COST_USD` is not a hard
+  dollar cap (VoiceLab credits unconfirmed). Past `AI_REQUEST_MAX_MS` no
+  call starts; running calls finish and are written. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

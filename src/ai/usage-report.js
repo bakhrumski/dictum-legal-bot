@@ -102,15 +102,16 @@ function mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger }) {
     try {
       const id = String(req.params.id || '');
       if (!/^[0-9a-f-]{36}$/iu.test(id)) return res.status(400).json({ error: 'request_id must be a UUID' });
-      const [reqRow, calls] = await Promise.all([
-        pool.query('SELECT * FROM ai_requests WHERE request_id = $1', [id]),
-        pool.query(`
-          SELECT call_id, seq, stage, service, provider, model_requested, model_returned, status, error_code, error_kind, error_message,
+      const callColumns = `call_id, seq, stage, service, provider, model_requested, model_returned, status, error_code, error_kind, error_message,
                  attempt, retry_reason, fallback_from, stage_run_id, parent_call_id, batch_id, started_at, finished_at, latency_ms,
                  in_tokens, cached_in_tokens, out_tokens, reasoning_tokens, audio_ms, characters, provider_credits,
-                 cost_usd::float AS cost_usd, cost_source, pricing, endpoint
-            FROM llm_spend_log WHERE request_id = $1
-           ORDER BY seq NULLS LAST, started_at`, [id]),
+                 cost_usd::float AS cost_usd, cost_source, pricing, endpoint`;
+      const callsQuery = extra => pool.query(`SELECT ${callColumns}${extra} FROM llm_spend_log WHERE request_id = $1 ORDER BY seq NULLS LAST, started_at`, [id]);
+      const [reqRow, calls] = await Promise.all([
+        pool.query('SELECT * FROM ai_requests WHERE request_id = $1', [id]),
+        // finish_reason / truncated / call_detail (2026-10-07) may be missing
+        // where they could not be added: the calls are still listed
+        callsQuery(', finish_reason, truncated, call_detail').catch(e => (e && e.code === '42703' ? callsQuery('') : Promise.reject(e))),
       ]);
       if (!reqRow.rows.length && !calls.rows.length) return res.status(404).json({ error: 'not found' });
       const called = calls.rows.filter(c => c.status !== 'skipped');
@@ -130,6 +131,31 @@ function mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger }) {
         retry_or_fallback_calls: called.filter(c => (c.attempt || 1) > 1 || c.fallback_from).length,
       };
       const request = reqRow.rows[0] || null;
+      // three separate answers (2026-10-07): did the provider answer, how much
+      // of the document did the service read, and how exact is the cost
+      const byStage = {};
+      for (const c of called) {
+        const st = byStage[c.stage] || (byStage[c.stage] = { calls: 0, success: 0, error: 0, cut_at_cap: 0 });
+        st.calls++;
+        if (c.status === 'success') st.success++; else st.error++;
+        if (c.truncated) st.cut_at_cap++;
+      }
+      const costSources = {};
+      for (const c of called) costSources[c.cost_source || 'unknown'] = (costSources[c.cost_source || 'unknown'] || 0) + 1;
+      summary.provider = { by_stage: byStage, note: "provayder javob bergani matn to'liq ekanini anglatmaydi: har chaqiruvning finish_reason va truncated ustunlariga qarang" };
+      // a document service with no recorded coverage (the column missing, or
+      // an older row) is "not recorded" - never read as complete
+      const documentRequest = called.some(c => c.stage === 'document' || c.stage === 'document_digest');
+      summary.service_coverage = request && request.doc_coverage
+        ? request.doc_coverage
+        : (documentRequest ? { status: 'not_recorded', meaning: 'technical', note: "qamrov yozilmagan: hujjat to'liq o'qilgan deb hisoblanmaydi" } : null);
+      summary.cost_accuracy = {
+        by_source: costSources,
+        unknown_calls: unknown,
+        note: called.some(c => c.provider === 'voicelab')
+          ? "VoiceLab chaqiruvlari token ro'yxat narxi bilan hisoblangan (rejalash raqami); haqiqiy yechilgan kredit tasdiqlanmagan"
+          : null,
+      };
       res.json({ request, summary: { ...summary, ...completeness({ ...summary, telemetry_errors: request ? request.telemetry_errors : 0 }) }, calls: calls.rows });
     } catch (err) {
       res.status(500).json({ error: err.message });

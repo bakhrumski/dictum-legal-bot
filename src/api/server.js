@@ -3420,7 +3420,7 @@ function providerError(prefix, resp, errBody = '') {
 const { usageFromGemini: geminiUsage, usageFromOpenAI: openaiUsage } = usageLedger;
 
 async function callGemini(messages, options = {}) {
-  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint, userId: options.userId || null,
+  return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null,
     bound: modelPricing.callCostBound({ model: 'gemini-2.5-flash', thinkingUncapped: true }) },
     (call) => callGeminiOnce(messages, options, call));
 }
@@ -3488,6 +3488,7 @@ async function callGeminiOnce(messages, options, call) {
     throw new Error(`Gemini blocked: ${blockReason}`);
   }
 
+  call.usage({ finishReason: candidate.finishReason || null, truncated: candidate.finishReason === 'MAX_TOKENS' });
   // finishReason: SAFETY means content was filtered
   if (candidate.finishReason === 'SAFETY') {
     const ratings = (candidate.safetyRatings || []).map(r => `${r.category}:${r.probability}`).join(', ');
@@ -3749,8 +3750,12 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
     const { temperature = 0.2, maxTokens = 8192 } = options;
     const opts = { temperature, maxTokens };
     const label = `voicelab/${voicelab.modelFor(model)}`;
-    const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null, ...(onToken ? { retryTransient: 0 } : {}),
-      bound: modelPricing.callCostBound({ model: label, creditBilling: true }) }, async (call) => {
+    const r = await usageLedger.track({ provider: 'voicelab', model: label, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null, ...(onToken ? { retryTransient: 0 } : {}),
+      bound: modelPricing.callCostBound({ model: label, creditBilling: true }),
+      // credits per token are not confirmed, so there is no provable bound;
+      // the request's cost limit still reserves the list-price figure the
+      // ledger itself counts for this call (a planning figure, not credits)
+      planUsd: modelPricing.callCostBound({ model: label, inputTokensMax: modelPricing.inputTokenBound(messages), outputTokensMax: opts.maxTokens }).usd }, async (call) => {
       let res;
       try {
         res = onToken
@@ -3759,10 +3764,11 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
       } catch (e) {
         // usage the provider reported on a failed call (e.g. empty text at
         // finish_reason "length") is billed: record it, do not leave it unknown
-        if (e && e.usage) call.usage(e.usage);
+        if (e && e.usage) call.usage({ ...e.usage, finishReason: e.providerCode || null, truncated: e.providerCode === 'length' });
         throw e;
       }
-      call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null });
+      call.usage({ ...res.usage, modelReturned: (res.raw && res.raw.model) ? `voicelab/${res.raw.model}` : null,
+        finishReason: res.finishReason || null, truncated: res.finishReason === 'length' });
       return res;
     });
     return { text: r.text, provider: r.provider, truncated: r.finishReason === 'length', usage: {
@@ -3814,7 +3820,7 @@ async function callOpenAI(messages, options = {}) {
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard);
     if (viaVoiceLab) return viaVoiceLab;
     const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
-    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint, userId: options.userId || null,
+    return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null,
       // the most this call can cost (Responses: max_output_tokens caps
       // reasoning too); a web search tool makes it unbounded
       bound: modelPricing.callCostBound({ model, inputTokensMax: modelPricing.inputTokenBound(messages),
@@ -3890,7 +3896,10 @@ async function callOpenAIOnce(messages, options, call) {
   }
 
   const data = await resp.json();
-  call.usage({ ...openaiUsage(data.usage), modelReturned: data.model || null });
+  call.usage({ ...openaiUsage(data.usage), modelReturned: data.model || null,
+    // why it stopped, recorded before an empty answer can throw
+    finishReason: data.status === 'incomplete' ? `incomplete:${(data.incomplete_details && data.incomplete_details.reason) || '?'}` : (data.status || null),
+    truncated: data.status === 'incomplete' && !!(data.incomplete_details && /max_output_tokens/u.test(String(data.incomplete_details.reason || ''))) });
   const text = (data.output || [])
     .filter(o => o.type === 'message')
     .flatMap(o => o.content || [])
@@ -6367,7 +6376,18 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     let documentScope = null;
     let docContext = '';
     if (rawDoc && docJobInfo.mode === 'document') {
-      const docDigest = require('../rag/document-explain').contentChars(rawDoc) > 30000 ? await digestLongDocumentDetailed(rawDoc, req.session?.adminId || null) : null;
+      const explainMod = require('../rag/document-explain');
+      const docDigest = explainMod.contentChars(rawDoc) > 30000 ? await digestLongDocumentDetailed(rawDoc, req.session?.adminId || null) : null;
+      if (docDigest) usageLedger.annotate({ docCoverage: explainMod.coverageSummary(docDigest, { finalRun: !explainMod.digestUnusable(docDigest) }) });
+      // no part read whole: no analysis is generated; units released, the
+      // digest calls already made stay in the ledger
+      if (explainMod.digestUnusable(docDigest)) {
+        const body = { error: 'document_not_read', code: 'DOCUMENT_NOT_READ', parts: docDigest.parts,
+          message: "Hujjatning hech bir qismi to'liq o'qilmadi, shuning uchun tahlil tayyorlanmadi. Limit qaytarildi.",
+          ...tariffModule.refundUsage(res, 'digest_not_read') };
+        if (sse) { sse({ type: 'error', ...body }); return res.end(); }
+        return res.status(422).json(body);
+      }
       docContext = docDigest ? docDigest.text : rawDoc;
       // a document not read whole is not the service: units released, the
       // answer and its note say it is partial (src/rag/document-explain.js)
@@ -7195,6 +7215,14 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
     } catch (e) { console.warn('[Legal Opinion] reference extraction failed:', e.message); }
 
     const docDigest = await digestLongDocumentDetailed(documentText, req.session?.adminId || null);
+    const explainMod = require('../rag/document-explain');
+    if (docDigest) usageLedger.annotate({ docCoverage: explainMod.coverageSummary(docDigest, { finalRun: !explainMod.digestUnusable(docDigest) }) });
+    // no part read whole: no opinion is generated; the status releases the
+    // units, the digest calls already made stay in the ledger
+    if (explainMod.digestUnusable(docDigest)) {
+      return res.status(422).json({ error: 'document_not_read', code: 'DOCUMENT_NOT_READ', parts: docDigest.parts,
+        message: "Hujjatning hech bir qismi to'liq o'qilmadi, shuning uchun yuridik xulosa tayyorlanmadi. Limit qaytarildi." });
+    }
     const docForAnalysis = docDigest ? docDigest.text : documentText;
     // a document not read whole is not the service: units released now, the
     // opinion opens with what was not read (src/rag/document-explain.js)

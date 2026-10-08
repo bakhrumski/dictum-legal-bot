@@ -77,9 +77,19 @@ async function extendForUsageLedger() {
     // 2026-10-04: what kind of failure, and which rows are attempts of one
     // logical call (stage_run_id, parent_call_id) or pairs of one batch
     'error_kind VARCHAR(12)', 'stage_run_id UUID', 'parent_call_id UUID', 'batch_id UUID',
+    // 2026-10-07: why the provider stopped, whether the text was cut at its
+    // cap, and what the call was for (a long document's part: phase, part, of)
+    'finish_reason VARCHAR(30)', 'truncated BOOLEAN', 'call_detail JSONB',
   ];
+  // 2026-10-07 columns are optional: if one cannot be added, rows are still
+  // written without it (writeLedgerRow) and nothing reads it as present
+  const optional = new Set(['finish_reason VARCHAR(30)', 'truncated BOOLEAN', 'call_detail JSONB']);
   for (const column of columns) {
-    await pool.query(`ALTER TABLE llm_spend_log ADD COLUMN IF NOT EXISTS ${column}`);
+    if (!optional.has(column)) { await pool.query(`ALTER TABLE llm_spend_log ADD COLUMN IF NOT EXISTS ${column}`); continue; }
+    try { await pool.query(`ALTER TABLE llm_spend_log ADD COLUMN IF NOT EXISTS ${column}`); } catch (e) {
+      schemaGaps.callColumns = true;
+      console.warn(`[SPEND-LOG] could not add llm_spend_log ${column.split(' ')[0]} (rows are written without it):`, e.message);
+    }
   }
   // unknown is not zero: tokens and cost may be NULL; small calls need more scale
   await pool.query(`ALTER TABLE llm_spend_log ALTER COLUMN in_tokens DROP NOT NULL, ALTER COLUMN out_tokens DROP NOT NULL, ALTER COLUMN cost_usd DROP NOT NULL`);
@@ -110,12 +120,33 @@ async function extendForUsageLedger() {
   await pool.query(`ALTER TABLE ai_requests ADD COLUMN IF NOT EXISTS degraded JSONB`);
   // why the AI ran: 'user_question' | 'service_confirmed' (src/ai/ai-trigger.js); NULL for flows that do not say
   await pool.query(`ALTER TABLE ai_requests ADD COLUMN IF NOT EXISTS trigger VARCHAR(40)`);
+  // how much of a document the service read: parts, read whole, cut, failed, final run or not
+  try { await pool.query(`ALTER TABLE ai_requests ADD COLUMN IF NOT EXISTS doc_coverage JSONB`); } catch (e) {
+    schemaGaps.docCoverage = true;
+    console.warn('[SPEND-LOG] could not add ai_requests.doc_coverage (coverage is then reported as not recorded):', e.message);
+  }
   await pool.query(`ALTER TABLE ai_requests ENABLE ROW LEVEL SECURITY`);
 }
+
+// Columns that could not be added (an ALTER refused): the writers leave
+// them out, so a row is never lost for a column it does not need.
+const schemaGaps = { callColumns: false, docCoverage: false };
+const UNDEFINED_COLUMN = '42703';
 
 /** One AI call (usage-ledger row). Duplicate call_id: ignored. Throws on DB error. */
 async function writeLedgerRow(r) {
   if (!_initialized) await initSpendLog();
+  if (schemaGaps.callColumns) return writeLedgerRowLegacy(r);
+  try {
+    return await writeLedgerRowFull(r);
+  } catch (e) {
+    if (e && e.code === UNDEFINED_COLUMN) { schemaGaps.callColumns = true; return writeLedgerRowLegacy(r); }
+    throw e;
+  }
+}
+
+/** The row without the 2026-10-07 columns (finish_reason, truncated, call_detail). */
+async function writeLedgerRowLegacy(r) {
   const ts = r.startedAt || new Date();
   await pool.query(
     `INSERT INTO llm_spend_log (
@@ -126,20 +157,47 @@ async function writeLedgerRow(r) {
        error_kind, stage_run_id, parent_call_id, batch_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
      ON CONFLICT (call_id) WHERE call_id IS NOT NULL DO NOTHING`,
-    [ts, ts.toISOString().slice(0, 10), ts.toISOString().slice(0, 7),
-      String(r.modelRequested || r.provider || 'unknown').slice(0, 80), String(r.stage || 'other').slice(0, 30),
-      r.inTokens, r.outTokens, r.costUsd, r.userId, r.endpoint ? String(r.endpoint).slice(0, 80) : null,
-      r.requestId, r.callId, r.seq, r.service, r.provider, r.modelRequested, r.modelReturned, r.status, r.errorCode,
-      r.errorMessage, r.attempt, r.retryReason, r.fallbackFrom, r.startedAt, r.finishedAt, r.latencyMs,
-      r.cachedTokens, r.reasoningTokens, r.audioMs, r.characters, r.credits, r.costSource,
-      r.pricing ? JSON.stringify(r.pricing) : null, r.chatId,
-      r.errorKind || null, r.stageRunId || null, r.parentCallId || null, r.batchId || null]
+    ledgerValues(r, ts));
+}
+
+function ledgerValues(r, ts) {
+  return [ts, ts.toISOString().slice(0, 10), ts.toISOString().slice(0, 7),
+    String(r.modelRequested || r.provider || 'unknown').slice(0, 80), String(r.stage || 'other').slice(0, 30),
+    r.inTokens, r.outTokens, r.costUsd, r.userId, r.endpoint ? String(r.endpoint).slice(0, 80) : null,
+    r.requestId, r.callId, r.seq, r.service, r.provider, r.modelRequested, r.modelReturned, r.status, r.errorCode,
+    r.errorMessage, r.attempt, r.retryReason, r.fallbackFrom, r.startedAt, r.finishedAt, r.latencyMs,
+    r.cachedTokens, r.reasoningTokens, r.audioMs, r.characters, r.credits, r.costSource,
+    r.pricing ? JSON.stringify(r.pricing) : null, r.chatId,
+    r.errorKind || null, r.stageRunId || null, r.parentCallId || null, r.batchId || null];
+}
+
+async function writeLedgerRowFull(r) {
+  const ts = r.startedAt || new Date();
+  await pool.query(
+    `INSERT INTO llm_spend_log (
+       ts, day, month, model, stage, in_tokens, out_tokens, cost_usd, user_id, endpoint,
+       request_id, call_id, seq, service, provider, model_requested, model_returned, status, error_code,
+       error_message, attempt, retry_reason, fallback_from, started_at, finished_at, latency_ms,
+       cached_in_tokens, reasoning_tokens, audio_ms, characters, provider_credits, cost_source, pricing, chat_id,
+       error_kind, stage_run_id, parent_call_id, batch_id, finish_reason, truncated, call_detail)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
+     ON CONFLICT (call_id) WHERE call_id IS NOT NULL DO NOTHING`,
+    [...ledgerValues(r, ts),
+      r.finishReason || null, r.truncated == null ? null : r.truncated, r.detail ? JSON.stringify(r.detail) : null]
   );
 }
 
 /** Open or close a request's summary row. Throws on DB error. */
 async function writeRequestRow(r) {
   if (!_initialized) await initSpendLog();
+  if (!schemaGaps.docCoverage) {
+    try { return await writeRequestRowFull(r); } catch (e) {
+      if (!(e && e.code === UNDEFINED_COLUMN)) throw e;
+      schemaGaps.docCoverage = true;
+    }
+  }
+  // without doc_coverage: the request row is still written; its coverage
+  // then reads as "not recorded", never as complete
   await pool.query(
     `INSERT INTO ai_requests (request_id, service, kind, user_id, chat_id, started_at, finished_at, latency_ms, outcome, legal_check, telemetry_errors, degraded, trigger)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
@@ -152,10 +210,31 @@ async function writeRequestRow(r) {
        trigger = COALESCE(ai_requests.trigger, EXCLUDED.trigger),
        user_id = COALESCE(ai_requests.user_id, EXCLUDED.user_id),
        telemetry_errors = GREATEST(ai_requests.telemetry_errors, EXCLUDED.telemetry_errors)`,
-    [r.requestId, r.service, r.kind, r.userId, r.chatId, r.startedAt, r.finishedAt || null,
-      r.finishedAt ? Math.max(0, r.finishedAt - r.startedAt) : null, r.outcome || null,
-      r.legalCheck ? JSON.stringify(r.legalCheck) : null, r.telemetryErrors || 0,
-      r.degraded ? JSON.stringify(r.degraded) : null, r.trigger || null]
+    requestValues(r).slice(0, 13));
+}
+
+function requestValues(r) {
+  return [r.requestId, r.service, r.kind, r.userId, r.chatId, r.startedAt, r.finishedAt || null,
+    r.finishedAt ? Math.max(0, r.finishedAt - r.startedAt) : null, r.outcome || null,
+    r.legalCheck ? JSON.stringify(r.legalCheck) : null, r.telemetryErrors || 0,
+    r.degraded ? JSON.stringify(r.degraded) : null, r.trigger || null, r.docCoverage ? JSON.stringify(r.docCoverage) : null];
+}
+
+async function writeRequestRowFull(r) {
+  await pool.query(
+    `INSERT INTO ai_requests (request_id, service, kind, user_id, chat_id, started_at, finished_at, latency_ms, outcome, legal_check, telemetry_errors, degraded, trigger, doc_coverage)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+     ON CONFLICT (request_id) DO UPDATE SET
+       finished_at = COALESCE(EXCLUDED.finished_at, ai_requests.finished_at),
+       latency_ms = COALESCE(EXCLUDED.latency_ms, ai_requests.latency_ms),
+       outcome = COALESCE(EXCLUDED.outcome, ai_requests.outcome),
+       legal_check = COALESCE(EXCLUDED.legal_check, ai_requests.legal_check),
+       degraded = COALESCE(EXCLUDED.degraded, ai_requests.degraded),
+       trigger = COALESCE(ai_requests.trigger, EXCLUDED.trigger),
+       doc_coverage = COALESCE(EXCLUDED.doc_coverage, ai_requests.doc_coverage),
+       user_id = COALESCE(ai_requests.user_id, EXCLUDED.user_id),
+       telemetry_errors = GREATEST(ai_requests.telemetry_errors, EXCLUDED.telemetry_errors)`,
+    requestValues(r)
   );
 }
 
@@ -263,6 +342,7 @@ async function getSpendByUser({ days = 30 } = {}) {
 }
 
 module.exports = {
+  schemaGaps,
   initSpendLog,
   writeLedgerRow,
   writeRequestRow,
