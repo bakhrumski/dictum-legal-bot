@@ -106,7 +106,7 @@ const LEGACY_PLANS = {
 
 const ledger = require('./tariff-ledger');
 // page marks ("[Sahifa n]") are added by the extract, never billed
-const { contentChars } = require('./document-explain');
+const { contentChars, billableChars } = require('./document-explain');
 
 // The plan catalogue the UI, the bot and the API show: one source.
 const PLANS = Object.freeze(Object.fromEntries(Object.entries(ledger.PLAN_CATALOG).map(([k, v]) => [k, Object.freeze({
@@ -670,7 +670,7 @@ async function meterJob(req, res, { service, units = 1, endpoint = null, workspa
 async function meterDocument(req, res, { service, text = '', docTicket = null, endpoint = null } = {}) {
   const clean = String(text || '').replace(/\u0000/gu, '').trim();
   const ticket = ledger.readDocTicket(docTicket, clean);
-  const size = ledger.docUnits({ chars: contentChars(clean), pages: ticket ? ticket.pages : null });
+  const size = ledger.docUnits({ chars: billableChars(clean, ticket), pages: ticket ? ticket.pages : null });
   if (!size.units) {
     res.status(400).json({ error: "Hujjat matni bo'sh yoki o'qib bo'lmadi — limit sarflanmadi.", code: 'EMPTY_DOCUMENT', quotaRefunded: true });
     return { allowed: false, size };
@@ -741,7 +741,7 @@ async function meterDocuments(req, res, { services = [], text = '', docTicket = 
   if (services.length === 1) return meterDocument(req, res, { service: services[0], text, docTicket, endpoint: `${endpoint}#${services[0]}` });
   const clean = String(text || '').replace(/\u0000/gu, '').trim();
   const ticket = ledger.readDocTicket(docTicket, clean);
-  const size = ledger.docUnits({ chars: contentChars(clean), pages: ticket ? ticket.pages : null });
+  const size = ledger.docUnits({ chars: billableChars(clean, ticket), pages: ticket ? ticket.pages : null });
   if (!size.units) {
     res.status(400).json({ error: "Hujjat matni bo'sh yoki o'qib bo'lmadi — limit sarflanmadi.", code: 'EMPTY_DOCUMENT', quotaRefunded: true });
     return { allowed: false, size };
@@ -801,7 +801,7 @@ async function meterDocuments(req, res, { services = [], text = '', docTicket = 
 async function quoteDocument(adminId, { service = 'analysis', text = '', chars = null, pages = null, docTicket = null } = {}) {
   const clean = String(text || '').trim();
   const ticket = clean ? ledger.readDocTicket(docTicket, clean) : null;
-  const size = ledger.docUnits({ chars: chars != null ? chars : contentChars(clean), pages: ticket ? ticket.pages : pages });
+  const size = ledger.docUnits({ chars: ticket && ticket.chars != null ? ticket.chars : (chars != null ? chars : billableChars(clean, null)), pages: ticket ? ticket.pages : pages });
   const u = await getUserPlan(adminId);
   if (u && (u.plan === 'master' || u.staff)) return { service, size, units: size.units, fits: true, unlimited: true };
   const plan = u && u.plan && PLANS[u.plan] ? u.plan : 'sinov';
@@ -847,7 +847,7 @@ function enforceChatQuota(endpoint, opts = {}) {
     try {
       const adminId = req.session && req.session.adminId;
       const ticket = ledger.readDocTicket(body.docTicket, doc);
-      const size = ledger.docUnits({ chars: contentChars(doc), pages: ticket ? ticket.pages : null });
+      const size = ledger.docUnits({ chars: billableChars(doc, ticket), pages: ticket ? ticket.pages : null });
       res.locals.documentJob = { mode: 'document', services, units: size.units, size };
       if (!adminId || (req.session.role && req.session.role !== 'user')) return next();
       const confirmed = body.confirmedJob && typeof body.confirmedJob === 'object' ? body.confirmedJob : {};

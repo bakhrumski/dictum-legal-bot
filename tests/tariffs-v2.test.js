@@ -117,7 +117,7 @@ const tick = () => new Promise(r => setImmediate(r));
   await test('a document ticket carries the PDF page count only for exactly that text', () => {
     const text = 'Shartnoma matni '.repeat(200);
     const t = ledger.signDocTicket({ text, pages: 25 });
-    assert.deepStrictEqual(ledger.readDocTicket(t, text), { pages: 25, scanned: false });
+    assert.deepStrictEqual(ledger.readDocTicket(t, text), { pages: 25, scanned: false, chars: null });
     assert.strictEqual(ledger.readDocTicket(t, text + ' boshqa'), null, 'another text');
     const [payload, sig] = t.split('.');
     const forged = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(payload, 'base64url')), p: 1 })).toString('base64url');
@@ -296,7 +296,8 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.deepStrictEqual([explain.CHUNK, explain.OVERLAP, explain.MAX_CHUNKS], [8000, 300, 13]);
     assert.ok(/require\('\.\.\/rag\/document-explain'\)\.buildDigest\(documentText/.test(server));
     assert.ok(explain.digestChunks('x'.repeat(120000)).covered, 'the digest covers the whole 120 000 characters');
-    assert.ok(/docTicket: ledger \? ledger\.signDocTicket\(\{ text \}\) : null/.test(ocr) && /signDocTicket\(\{ text, pages \}\)/.test(ocr));
+    // the billable size is measured on the server and signed with the text
+    assert.ok(/docTicket: ledger \? ledger\.signDocTicket\(\{ text, chars \}\) : null/.test(ocr) && /signDocTicket\(\{ text, pages, chars: plain\.length \}\)/.test(ocr));
   });
 
   await test('a paid plan is never granted by the user\'s own request; a master grant is idempotent by payment reference', () => {

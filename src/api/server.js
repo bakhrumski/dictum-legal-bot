@@ -6399,7 +6399,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       docContext = ex.text;
       documentScope = { mode: 'chat_excerpt', excerpt: ex.excerpt, usedChars: ex.usedChars, totalChars: ex.totalChars,
         matched: ex.matched, referenced: ex.referenced, missingReferences: ex.missingReferences, insufficient: ex.insufficient,
-        analysisUnits: tariffModule.ledger.docUnits({ chars: require('../rag/document-explain').contentChars(rawDoc) }).units };
+        // the size the server signed at extraction, never one the client sends
+        analysisUnits: tariffModule.ledger.docUnits({ chars: require('../rag/document-explain').billableChars(rawDoc, tariffModule.ledger.readDocTicket(req.body.docTicket, rawDoc)) }).units };
     }
     const hasDocument = docContext.length > 0;
 

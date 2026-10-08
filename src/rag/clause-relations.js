@@ -61,7 +61,7 @@ function tokens(s) {
 /** Sentences (and digest lines) of a text; page marks and list bullets removed. A ";" stays inside: it bounds a clause, not the matter. */
 function sentencesOf(text) {
   return String(text || '').replace(/\[Sahifa \d+\]/gu, ' ')
-    .split(/\n+|(?<=[\p{L})»"'][.!?])\s+(?=\S)/u)
+    .split(/\n+|(?<=[\p{L})\]»"'][.!?])\s+(?=\S)/u)
     .map(x => x.replace(/^[\s>*•-]+/u, '').trim()).filter(x => x.length > 8);
 }
 
@@ -295,14 +295,17 @@ function matching(a, src) {
     const byName = src.sentences.filter(s => a.quoted.some(q => s.quoted.includes(q)));
     if (byName.length) return [...new Set(byName.flatMap(s => (s.next ? [s, s.next] : [s])))];
   }
-  let best = 0, out = [];
+  // the best match and those close to it: a long answer sentence may speak
+  // of two neighbouring source sentences
+  const scored = [];
   for (const s of src.sentences) {
     let shared = 0;
     for (const w of a.stems) if (s.stems.has(w)) shared++;
     if (shared < 2 || shared / Math.max(1, a.stems.size) < 0.4) continue;
-    if (shared > best) { best = shared; out = [s]; } else if (shared === best) out.push(s);
+    scored.push({ s, shared });
   }
-  return out;
+  const best = Math.max(0, ...scored.map(x => x.shared));
+  return scored.filter(x => x.shared >= Math.max(2, best * 0.75)).map(x => x.s);
 }
 
 /**
@@ -550,7 +553,182 @@ function relationTrace({ source, digest = null, answer, max = 40 }) {
   });
 }
 
+// ── Digest -> answer: what a digest line holds that the answer, where it
+// speaks of the same thing, does not hold word for word (2026-10-08, a
+// production run: the digest kept "declared and unpaid", "all participants,
+// including the investor", "costs" and "separately from damages", and a
+// period counted from sending; the answer dropped them or counted from
+// receipt). MECHANICAL: a word or a part not found is a reason to check by
+// hand, never a verdict that meaning was lost; nothing is removed.
+const KEEP_WORDS = [
+  { label: 'jumladan', re: /shu jumladan|jumladan|в том числе|включая/u },
+  { label: 'barcha', re: /(?:^|[^\p{L}'])barcha(?![\p{L}'])|(?:^|[^\p{L}])все(?!\p{L})/u },
+  { label: 'faqat', re: /(?:^|[^\p{L}'])faqat(?![\p{L}'])|только/u },
+  { label: "e'lon qilingan", re: /e'lon qilingan|объявленн/u },
+  { label: 'alohida', re: /alohida|отдельно/u },
+  { label: 'bundan tashqari', re: /bundan tashqari|...dan tashqari|tashqari alohida|помимо/u },
+  { label: 'kamida', re: /kamida|не менее/u },
+  { label: "ko'pi bilan / oshmaydi", re: /ko'pi bilan|oshmaydi|oshmasligi|не более|не превыша/u },
+  { label: 'birinchi navbatda', re: /birinchi navbatda|в первую очередь/u },
+  { label: 'solidar', re: /solidar|солидарн/u },
+];
+const START = /([\p{L}'-]+)\s+(?:sana|kun|payt)\p{L}*\s+(?:boshlab|dan)?/u;
+const PERMIT = /mumkin|haqli|huquqiga ega|вправе|может/u;
+const OBLIGE = /kerak|shart(?! bilan)|majbur|lozim|обязан|должн/u;
+
+/** One digest line in the structured format: its topic, who, act and labelled fields. */
+function parseDigestLine(line) {
+  const t = String(line || '').replace(/^\s*-\s*/u, '');
+  if (!t.includes('|')) return null;
+  const fields = t.split(/\s+\|\s+/u).map(x => x.trim());
+  const out = { raw: t, topic: fields[0] || '', who: '', act: '', fields: {} };
+  for (const f of fields.slice(1)) {
+    const m = f.match(/^(shart|muddat|istisno|oqibat|miqdor|natija|mablag')\s*:\s*(.+)$/u);
+    if (m) out.fields[m[1]] = m[2];
+    else if (f.includes('→')) { const [w, a] = f.split('→'); out.who = w.trim(); out.act = (a || '').trim(); }
+  }
+  return out;
+}
+/** The items of a list field: "A, B va C" -> [A, B, C] (a parenthesis stays with its item). */
+function listItems(text) {
+  return String(text || '').replace(/\([^)]*\)/gu, m => m.replace(/,| va /gu, ' ')).split(/,\s*|\s+va\s+|\s+hamda\s+|;\s*/u).map(x => x.trim()).filter(x => x.length > 3);
+}
+const stemsOf = t => new Set(tokens(lower(t)).filter(x => !x.punct && contentWord(x.w)).map(x => stem(x.w)));
+const covered = (item, text) => { const st = [...stemsOf(item)]; if (!st.length) return true; const tt = stemsOf(text); return st.filter(x => tt.has(x)).length >= Math.min(2, st.length); };
+
+// parts ranked by how much a loss changes the clause; the conditions of a
+// line are not listed (an answer rephrases them; scope words, periods and
+// exceptions inside them are checked through their own parts)
+const PART_WEIGHT = { 'qamrov so\'zi': 5, 'muddat boshlanishi': 5, oqibat: 4, istisno: 4, 'boshqa qiymat': 4, subyekt: 3 };
+const GENERIC_WHO = /^(?:taraflar|tomonlar|har bir taraf|taraf|стороны)$/u;
+function digestAnswerSignals(digestText, answer, { max = 6 } = {}) {
+  const ans = sentencesOf(answer).map(x => ({ text: x, lower: lower(x), stems: stemsOf(x) }));
+  // the actors the digest names (not "the parties")
+  // named actors only: a capitalised party ("Investor", "Jamiyat"), not "shaxs" or "-"
+  const actors = [...new Set(String(digestText || '').split('\n').map(parseDigestLine).filter(Boolean)
+    .map(d => d.who.replace(/\([^)]*\)/gu, '').trim()).filter(w => /^[«"“]?\p{Lu}/u.test(w) && !GENERIC_WHO.test(lower(w)) && w.split(/\s+/u).length <= 3))];
+  const out = [];
+  for (const raw of String(digestText || '').split('\n')) {
+    const d = parseDigestLine(raw);
+    if (!d || !(d.act || Object.keys(d.fields).length)) continue;
+    const key = stemsOf(`${d.topic} ${d.who} ${d.act}`);
+    if (key.size < 2) continue;
+    // the answer's sentences on the same thing (and the one after each)
+    let best = 0, idx = [];
+    ans.forEach((a, i) => {
+      let n = 0; for (const w of key) if (a.stems.has(w)) n++;
+      if (n < 2 || (n / key.size < 0.3 && n / Math.max(1, a.stems.size) < 0.3)) return;
+      if (n > best) { best = n; idx = [i]; } else if (n === best) idx.push(i);
+    });
+    if (!idx.length) continue; // the answer does not speak of it: coverage, not a change
+    const near = idx.flatMap(i => [ans[i], ans[i + 1]]).filter(Boolean);
+    const nl = near.map(x => x.lower).join(' ');
+    const lineL = lower(d.raw);
+    const lost = [];
+    for (const w of KEEP_WORDS) if (w.re.test(lineL) && !w.re.test(nl)) lost.push({ part: 'qamrov so\'zi', value: w.label });
+    // the same kind of figure with another value where the answer speaks of it
+    const nearFigs = figuresIn(nl);
+    for (const f of figuresIn(lineL)) {
+      if (nearFigs.some(g => g.key === f.key)) continue;
+      // only where the answer states one value of that kind (a list of values is not one claim)
+      const same = nearFigs.filter(g => g.key.split('|')[1] === f.key.split('|')[1] && g.kind === f.kind);
+      const other = same.length === 1 ? same[0] : null;
+      if (other) lost.push({ part: 'boshqa qiymat', value: `dayjestda «${f.raw}», javobda «${other.raw}»` });
+    }
+    for (const k of ['oqibat', 'istisno']) for (const item of listItems(d.fields[k])) if (!covered(item, nl)) lost.push({ part: k, value: item });
+    // the event a period counts from ("yuborilgan sanadan" vs "olgan sanadan")
+    const ds = (lower(d.fields.muddat || '').match(START) || [])[1];
+    const as = (nl.match(START) || [])[1];
+    if (ds && as && stem(ds) !== stem(as)) lost.push({ part: 'muddat boshlanishi', value: `dayjestda «${ds} …dan», javobda «${as} …dan»` });
+    // who acts: the answer, on this act, names another actor the digest knows
+    const who = d.who.replace(/\([^)]*\)/gu, '').trim();
+    const nearRaw = near.map(x => x.text).join(' ');
+    if (actors.includes(who) && !nearRaw.includes(who)) {
+      const otherActor = actors.find(x => x !== who && !who.includes(x) && !x.includes(who) && nearRaw.includes(x));
+      if (otherActor) lost.push({ part: 'subyekt', value: `dayjestda «${who}», javobda «${otherActor}»` });
+    }
+    if (!lost.length) continue;
+    lost.sort((x, y) => PART_WEIGHT[y.part] - PART_WEIGHT[x.part]);
+    // how surely the answer's sentence is about this line, and how much is missing
+    const strength = best / key.size;
+    const weight = lost.reduce((t, l) => t + PART_WEIGHT[l.part], 0) * strength;
+    out.push({ kind: 'dayjest_javob', topic: d.topic.slice(0, 80), weight, lost: lost.slice(0, 4) });
+  }
+  return out.sort((x, y) => y.weight - x.weight).slice(0, max);
+}
+
+/**
+ * Permission stated as an obligation: the answer says "must" (kerak, shart,
+ * majbur) where the source's sentences on the same matter only say "may"
+ * (mumkin, haqli). Same source matching as the status check. A flag means
+ * "check by hand".
+ */
+function permissionFlags(answer, src, { asserted = () => true } = {}) {
+  const out = [];
+  for (const a of sentencesOf(answer).map(analyseSentence)) {
+    const m = a.lower.match(OBLIGE);
+    if (!m || !asserted(a.lower, m.index, m[0].length)) continue;
+    const srcs = matching(a, src);
+    if (srcs.length && srcs.every(x => PERMIT.test(x.lower) && !OBLIGE.test(x.lower))) {
+      const at = Math.max(0, m.index - 50);
+      out.push({ kind: 'majburiyat', note: `javobda «…${a.text.slice(at, m.index + m[0].length).replace(/^\S*\s/u, '')}», hujjatning shu bandida faqat imkoniyat («mumkin» / «haqli»)` });
+    }
+  }
+  return out;
+}
+
+// ── Table rows (src/ocr/docx-text.js): a value of one row stated with another ──
+/** The rows of the table reader's lines: { table, label, values: [{ header, value }] }. */
+function tableRows(source) {
+  const rows = [];
+  for (const line of String(source || '').split('\n')) {
+    const m = line.match(/^⟦Jadval (\d+) · (\d+)-qator[^⟧]*⟧ (.*)$/u);
+    if (!m) continue;
+    const cells = m[3].split(' ¦ ').map(c => { const x = c.match(/^⟨([^⟩]*)⟩ ?(.*)$/u); return x ? { header: x[1], value: x[2].replace(/^⟨↑ |⟩$/gu, '') } : { header: '', value: c }; });
+    // the row's name: its first cell with letters that is not a bare number
+    const named = cells.find(c => /\p{L}{3,}/u.test(c.value) && !/^⟨/u.test(c.value));
+    rows.push({ table: Number(m[1]), row: Number(m[2]), label: named ? named.value : '', cells });
+  }
+  return rows;
+}
+const valueKey = v => lower(v).replace(/[\s.,;:()'"«»-]+/gu, ' ').trim();
+/**
+ * A sentence of the answer (or digest) that names one table row and states
+ * a value (figure, period, date) found in another row of that table but not
+ * in this one: [{ kind: 'jadval', note }]. MECHANICAL: a reason to check by hand.
+ */
+function tableFlags(text, source, { stage = 'javob' } = {}) {
+  const rows = tableRows(source).filter(r => r.label);
+  if (!rows.length) return [];
+  const out = [];
+  const seen = new Set();
+  for (const sent of sentencesOf(text)) {
+    const sk = ` ${valueKey(sent)} `;
+    const sSt = stemsOf(sent);
+    const named = rows.filter(r => { const st = [...stemsOf(r.label)]; return st.length >= 2 && st.filter(x => sSt.has(x)).length >= Math.min(3, st.length); });
+    if (!named.length) continue;
+    for (const r of named) {
+      const own = new Set(r.cells.map(c => valueKey(c.value)));
+      for (const o of rows.filter(x => x.table === r.table && x !== r && !named.includes(x))) {
+        for (const c of o.cells) {
+          const v = valueKey(c.value);
+          if (v.length < 4 || !/\d/u.test(v) || own.has(v) || [...own].some(w => w.includes(v))) continue;
+          if (!sk.includes(` ${v} `)) continue;
+          const k = `${r.label}|${v}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          out.push({ kind: 'jadval', note: `${stage}da «${r.label.slice(0, 60)}» qatori bilan «${c.value.slice(0, 50)}» (${c.header || 'ustun'}) — hujjatda bu qiymat «${o.label.slice(0, 60)}» qatorida` });
+        }
+      }
+    }
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 module.exports = {
+  tableRows, tableFlags,
+  digestAnswerSignals, parseDigestLine, permissionFlags,
   POLARITY_LABEL, ACTS, ACT_LABEL, actOf, sentencesOf, figuresIn, analyseSentence, analyseText, relationFlags, relationTrace, relationScore, slotsOf,
   definitionsIn, partiesOf, DEFINITION,
 };
