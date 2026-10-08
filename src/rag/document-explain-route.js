@@ -19,7 +19,7 @@ const { explainDocument } = require('./document-explain');
 const usageLedger = require('../ai/usage-ledger');
 
 function mountExplainDocument(app, deps) {
-  const { requireAuth, requireServiceConfirm, resolveScanDocs, tariffModule, callAI, digest, lexLangForText, logAudit } = deps;
+  const { requireAuth, requireServiceConfirm, resolveScanDocs, tariffModule, callAI, digest, lexLangForText, logAudit, verifyMaster } = deps;
   app.post('/api/draft/explain-document', requireAuth, requireServiceConfirm, resolveScanDocs, async (req, res) => {
     try {
       const documentText = (typeof req.body.documentText === 'string')
@@ -67,8 +67,19 @@ function mountExplainDocument(app, deps) {
       if (!result.coverage.documentFullyRead && typeof tariffModule.refundUsage === 'function') {
         refund = tariffModule.refundUsage(res, 'explain_partial_read');
       }
+      // The stage trace (digest, scope lines, raw answer of THIS request)
+      // goes back only when asked for explicitly (body.trace === true) by an
+      // account whose role is master in the database, not only in the
+      // session. It is not logged, audited, stored or cached: it lives in
+      // this response alone (Cache-Control: no-store).
+      let trace;
+      if (req.body && req.body.trace === true && req.session && req.session.role === 'master'
+        && typeof verifyMaster === 'function' && await verifyMaster(userId).catch(() => false)) {
+        trace = result.trace;
+        res.set('Cache-Control', 'no-store');
+      }
       res.json({ reply: result.reply, provider: result.provider, coverage: result.coverage, check: result.check,
-        partial: result.coverage.partial, ...refund });
+        partial: result.coverage.partial, trace, ...refund });
     } catch (e) {
       console.error('[Explain Doc] error:', e.message);
       res.status(500).json({ error: 'Tushuntirish xatoligi: ' + e.message });

@@ -98,7 +98,21 @@ Known state of the suites (Sept 2026):
   `planUsd`) are taken in the same step as the check; a call with neither
   is limited by count only, so `AI_REQUEST_MAX_COST_USD` is not a hard
   dollar cap (VoiceLab credits unconfirmed). Past `AI_REQUEST_MAX_MS` no
-  call starts; running calls finish and are written. Quality is unconfirmed until the lawyer-reviewed
+  call starts; running calls finish and are written.
+  Scope (2026-10-08, the #421 live run lost "including X", "declared and
+  unpaid", criteria, a condition precedent, cumulative remedies and
+  contradictory clauses): the digest and final prompts keep scope words,
+  conditions precedent, a defined term's criteria and every remedy of one
+  breach; `scopeLines` picks the document's own lines with scope words (no
+  AI, max 25) and `conflictCandidates` finds same-matter sentences with
+  different figures across the whole document (no AI) - both go to the
+  final call as input only, with the list's limit stated (candidates,
+  selected, not fitted, shortened); scope words the answer drops are
+  flagged. The stage `trace` (digest, scope lines, raw answer) is returned
+  only on `trace: true` to an account that is master in the database, with
+  `no-store`, never logged or stored (dashboard: `window.__JAI_TRACE = true`,
+  then `window.__lastExplain`); `scripts/explain-trace.js` reports word-for-
+  word presence per stage - never that meaning was kept or lost. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

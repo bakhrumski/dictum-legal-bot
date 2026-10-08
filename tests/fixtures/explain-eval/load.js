@@ -17,7 +17,7 @@ function expand(fx) {
   const { afterPage, count, firstClause, template } = fx.filler;
   const filler = Array.from({ length: count }, (_, i) => template.replace(/\{n\}/gu, String(firstClause + i)));
   const pages = [...fx.pages.slice(0, afterPage), ...filler, ...fx.pages.slice(afterPage)];
-  const keyPoints = fx.keyPoints.map(k => ({ ...k, page: k.page === 'last' ? pages.length : k.page }));
+  const keyPoints = fx.keyPoints.map(k => ({ ...k, page: k.page === 'last' ? pages.length : k.page === 'last-1' ? pages.length - 1 : k.page }));
   return { ...fx, pages, keyPoints, pageCount: pages.length };
 }
 

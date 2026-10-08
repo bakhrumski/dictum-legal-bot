@@ -132,8 +132,14 @@ const used = async (user) => {
     const rows = await pool.query(`SELECT service, status FROM tariff_usage WHERE admin_id = $1 AND service IN ('analysis','opinion') AND status = 'reserved' ORDER BY id`, [user]);
     assert.deepStrictEqual(rows.rows.map(r => r.service), ['analysis', 'opinion'], 'both reserved before the AI starts');
     await deliver(out);
-    await settle();
-    const st = await pool.query(`SELECT service, status, release_reason FROM tariff_usage WHERE admin_id = $1 AND service IN ('analysis','opinion') ORDER BY id DESC LIMIT 2`, [user]);
+    // commit / release run after the response: wait for them to land (up to
+    // 5 s) rather than a fixed pause a slow CI runner can outlast
+    let st;
+    for (let i = 0; i < 50; i++) {
+      await settle();
+      st = await pool.query(`SELECT service, status, release_reason FROM tariff_usage WHERE admin_id = $1 AND service IN ('analysis','opinion') ORDER BY id DESC LIMIT 2`, [user]);
+      if (!st.rows.some(r => r.status === 'reserved')) break;
+    }
     return Object.fromEntries(st.rows.map(r => [r.service, r.status]));
   }
   const section = (title) => `## ${title}\n` + `${title} bo'yicha batafsil matn, bandlar va asoslar. `.repeat(8);

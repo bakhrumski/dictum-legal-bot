@@ -1,0 +1,178 @@
+{
+  "id": "investment-agreement",
+  "type": "investitsiya shartnomasi (uzun, DOCX)",
+  "title": "Investitsiya shartnomasi: qamrov so'zlari, oldingi shartlar, mezonlar, kumulyativ oqibatlar, uzoq joylashgan zid bandlar (sintetik)",
+  "synthetic": true,
+  "format": "docx",
+  "pages": [
+    "INVESTITSIYA SHARTNOMASI № 7-INV/2026\nToshkent shahri, 2026-yil 14-sentabr\n\n\"Shamol Texnologiyalari\" MChJ (Jamiyat), uning ishtirokchilari va \"Bahor Kapital\" MChJ (Investor) quyidagilar haqida shartnoma tuzdilar.\n\n4. AXBOROT BERISH\n4.2. Jamiyat Investorga moliyaviy hisobotni chorak tugaganidan keyin 30 kalendar kun ichida taqdim etadi.\n\n5. TAQSIMLASH VA ULUSHNI SOTIB OLISH\n5.4. Jamiyat tugatilganda kreditorlar talablari qanoatlantirilgandan keyin qolgan summa barcha ishtirokchilar, jumladan Investor, o'rtasida ularning ulushlariga mutanosib ravishda taqsimlanadi.\n5.5. Investor ulushi sotib olinganda unga e'lon qilingan, lekin to'lanmagan dividendlar ham to'lanadi.",
+    "7. SEZILARLI AKTIVLAR\n7.1. Sezilarli aktiv deganda balans qiymati Jamiyat aktivlarining 25 foizidan yoki 2 000 000 000 so'mdan ortiq bo'lgan aktiv, shuningdek 12 oy ichida bir-biriga bog'liq bitimlar orqali o'tkazilgan aktivlar tushuniladi.\n7.3. Jamiyat Investorning yozma roziligisiz sezilarli aktivni o'tkazmaydi.\n\n8. MOLIYALASHTIRISH\n8.2. Investor ulushi davlat ro'yxatidan o'tkazilishi birinchi transh oldidan amalga oshirilishi shart; birinchi transh shundan keyin, lekin 2026-yil 1-dekabrdan kechiktirmay to'lanadi.",
+    "11. JAVOBGARLIK\n11.2. Jamiyat 7.3-bandni buzsa, Investor investitsiya summasini qaytarishni, unga yetkazilgan xarajat va zararlarni qoplashni hamda bundan tashqari investitsiya summasining 25 foizi miqdorida alohida jarima to'lashni talab qilishga haqli.\n\n12. YAKUNIY QOIDALAR\n12.3. Moliyaviy hisobot har chorak tugaganidan keyin 45 kalendar kun ichida Investorga taqdim etiladi."
+  ],
+  "filler": {
+    "afterPage": 1,
+    "count": 26,
+    "firstClause": 20,
+    "template": "{n}. UMUMIY QOIDALAR ({n}-bo'lim)\n{n}.1. Tomonlar ushbu bo'lim bo'yicha o'zaro hamkorlik qiladi va bir-birini yozma ravishda xabardor qiladi; xabarnoma shartnomada ko'rsatilgan manzilga yuboriladi va olingan kundan boshlab kuchga kiradi.\n{n}.2. Jamiyat o'z faoliyatini ustav va qonun hujjatlariga muvofiq yuritadi, Investorning asosli so'rovlariga javob beradi va ish jarayoni haqida axborot beradi.\n{n}.3. Tomonlar ushbu bo'limni bajarishda olingan tijorat ma'lumotlarini oshkor qilmaydi, qonunda nazarda tutilgan hollar bundan mustasno.\n{n}.4. Ushbu bo'limga o'zgartirishlar faqat yozma qo'shimcha kelishuv bilan kiritiladi va tomonlar imzolagan kundan kuchga kiradi.\n{n}.5. Bo'lim qoidalari shartnomaning boshqa bo'limlari bilan birga talqin qilinadi; sarlavhalar faqat qulaylik uchun."
+  },
+  "keyPoints": [
+    {
+      "id": "distribution-including",
+      "point": "Qolgan summa barcha ishtirokchilar, jumladan Investor, o'rtasida ulushlarga mutanosib taqsimlanadi",
+      "anchor": "barcha ishtirokchilar, jumladan Investor",
+      "page": 1
+    },
+    {
+      "id": "declared-unpaid",
+      "point": "Ulush sotib olinganda e'lon qilingan, lekin to'lanmagan dividendlar ham to'lanadi",
+      "anchor": "e'lon qilingan, lekin to'lanmagan dividendlar",
+      "page": 1
+    },
+    {
+      "id": "criteria",
+      "point": "Sezilarli aktiv: aktivlarning 25 foizidan yoki 2 000 000 000 so'mdan ortiq; 12 oy ichidagi bog'liq bitimlar ham",
+      "anchor": "Sezilarli aktiv deganda",
+      "page": "last-1"
+    },
+    {
+      "id": "condition-precedent",
+      "point": "Davlat ro'yxatidan o'tkazish birinchi transh oldidan; transh shundan keyin, 1-dekabrdan kechiktirmay",
+      "anchor": "birinchi transh oldidan",
+      "page": "last-1"
+    },
+    {
+      "id": "cumulative-remedies",
+      "point": "Qaytarish + xarajat va zararlar + bundan tashqari alohida 25 foiz jarima",
+      "anchor": "bundan tashqari investitsiya summasining 25 foizi miqdorida alohida jarima",
+      "page": "last"
+    },
+    {
+      "id": "contradiction",
+      "point": "Hisobot muddati: 4.2 — 30 kun, 12.3 — 45 kun (zid)",
+      "anchor": "45 kalendar kun ichida Investorga",
+      "page": "last"
+    }
+  ],
+  "traps": [
+    {
+      "id": "including-dropped",
+      "rule": "A",
+      "correct": "Barcha ishtirokchilar, jumladan Investor",
+      "wrong": "\"Ishtirokchilar o'rtasida\" (Investor tushib qolgan)"
+    },
+    {
+      "id": "declared-dropped",
+      "rule": "B",
+      "correct": "E'lon qilingan VA to'lanmagan dividendlar",
+      "wrong": "\"To'lanmagan dividendlar\""
+    },
+    {
+      "id": "criteria-dropped",
+      "rule": "D",
+      "correct": "Sezilarli aktivning uchala mezoni",
+      "wrong": "Mezonlarsiz \"sezilarli aktiv\""
+    },
+    {
+      "id": "cp-dropped",
+      "rule": "B",
+      "correct": "Ro'yxatdan o'tkazish birinchi transh OLDIDAN",
+      "wrong": "Shartsiz \"birinchi transh 1-dekabrgacha\""
+    },
+    {
+      "id": "remedies-merged",
+      "rule": "B",
+      "correct": "Uchala oqibat va jarima alohida (qo'shimcha)",
+      "wrong": "\"Qaytarish yoki jarima\""
+    },
+    {
+      "id": "contradiction-hidden",
+      "rule": "E",
+      "correct": "4.2 (30 kun) va 12.3 (45 kun) zid ekani ikkala band bilan",
+      "wrong": "Bitta muddatni aytish"
+    }
+  ],
+  "traceChecks": [
+    {
+      "id": "distribution-including",
+      "terms": [
+        "barcha ishtirokchi",
+        "jumladan",
+        "investor"
+      ]
+    },
+    {
+      "id": "declared-unpaid",
+      "terms": [
+        "e'lon qilingan",
+        "to'lanmagan",
+        "dividend"
+      ]
+    },
+    {
+      "id": "criteria",
+      "terms": [
+        [
+          "25 foiz",
+          "25%"
+        ],
+        [
+          "2 000 000 000",
+          "2 mlrd"
+        ],
+        "12 oy"
+      ]
+    },
+    {
+      "id": "condition-precedent",
+      "terms": [
+        "davlat ro'yxatidan o'tkaz",
+        "birinchi transh",
+        [
+          "oldidan",
+          "oldin",
+          "avval"
+        ]
+      ]
+    },
+    {
+      "id": "cumulative-remedies",
+      "terms": [
+        "qaytar",
+        [
+          "xarajat",
+          "zarar"
+        ],
+        [
+          "25 foiz",
+          "25%"
+        ],
+        [
+          "alohida",
+          "bundan tashqari",
+          "qo'shimcha"
+        ]
+      ]
+    },
+    {
+      "id": "contradiction",
+      "terms": [
+        "30",
+        "45",
+        "4.2",
+        "12.3"
+      ]
+    }
+  ],
+  "aiNoteCases": [
+    {
+      "note": "Investor dividendlarni to'liq olishi kafolatlangan.",
+      "expect": "kept",
+      "why": "lug'atda yo'q so'z bilan asossiz da'vo: mexanik tekshiruv ushlamaydi - yurist bahosi kerak"
+    },
+    {
+      "note": "Jarima bo'yicha javobgarlikka tortilishi mumkin.",
+      "expect": "flagged",
+      "why": "oqibat: «javobgarlikka tortil» hujjatda yo'q"
+    }
+  ]
+}

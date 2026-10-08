@@ -13554,9 +13554,16 @@
             try {
                 var r = await fetch('/api/draft/explain-document', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ documentText: text, docTicket: ticket, scanIds: scanIds.length ? scanIds : null, confirmed: true })
+                    // trace: a master's explicit opt-in from the console (window.__JAI_TRACE = true);
+                    // the server checks the role itself and returns it for this request only
+                    body: JSON.stringify({ documentText: text, docTicket: ticket, scanIds: scanIds.length ? scanIds : null, confirmed: true, trace: window.__JAI_TRACE === true })
                 });
                 var d = await r.json();
+                if (d && d.trace) {
+                    // kept in this tab only, for scripts/explain-trace.js --bundle (copy it from the console)
+                    window.__lastExplain = { source: text || null, response: d };
+                    console.info('[JuristAI] trace saved: copy(JSON.stringify(window.__lastExplain))');
+                }
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
                 if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Tushuntirib bo\'lmadi')); return; }
                 renderAiChatReply({ reply: d.reply, provider: d.provider, ragUsed: false, rag: null, qaBank: null },
